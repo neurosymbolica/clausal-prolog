@@ -99,7 +99,7 @@ def _run_trampoline(fn, *args):
     trail = Trail()
     parent = object()
     results = []
-    for gen, val in fn(None, parent, *args, trail):
+    for gen, val in fn(None, parent, parent, parent, *args, trail):
         if gen is parent and val is None:
             results.append(None)
         elif gen is parent:
@@ -182,7 +182,7 @@ class TestSQLiteCurrentConnection:
         parent = object()
         v = Var()
         results = []
-        for gen, val in _sqlite_current_connection_1(None, parent, v, trail):
+        for gen, val in _sqlite_current_connection_1(None, parent, parent, parent, v, trail):
             if gen is parent and val is None:
                 results.append(deref(v))
             elif gen is parent:
@@ -195,7 +195,7 @@ class TestSQLiteCurrentConnection:
         trail = Trail()
         parent = object()
         solutions = []
-        for gen, val in _sqlite_current_connection_1(None, parent, "cc3", trail):
+        for gen, val in _sqlite_current_connection_1(None, parent, parent, parent, "cc3", trail):
             if gen is parent and val is None:
                 solutions.append(True)
             elif gen is parent:
@@ -207,7 +207,7 @@ class TestSQLiteCurrentConnection:
         trail = Trail()
         parent = object()
         solutions = []
-        for gen, val in _sqlite_current_connection_1(None, parent, "nope", trail):
+        for gen, val in _sqlite_current_connection_1(None, parent, parent, parent, "nope", trail):
             if gen is parent and val is None:
                 solutions.append(True)
             elif gen is parent:
@@ -240,7 +240,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_3(None, parent, "q1", "SELECT * FROM people", v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q1", "SELECT * FROM people", v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -254,7 +254,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_3(None, parent, "q2", "SELECT name FROM people", v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q2", "SELECT name FROM people", v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -269,7 +269,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_3(None, parent, "q3", "SELECT * FROM people WHERE age > 100", v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q3", "SELECT * FROM people WHERE age > 100", v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -283,8 +283,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_4(
-            None, parent, "q4",
+        for gen, val in _sqlite_query_4(None, parent, parent, parent, "q4",
             "SELECT name FROM people WHERE age > ?", [26], v, trail
         ):
             if gen is parent and val is None:
@@ -300,8 +299,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_4(
-            None, parent, "q5",
+        for gen, val in _sqlite_query_4(None, parent, parent, parent, "q5",
             "SELECT name FROM people WHERE age >= ? AND age <= ?", [25, 30], v, trail
         ):
             if gen is parent and val is None:
@@ -322,7 +320,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_3(None, parent, "q6", "SELECT * FROM types", v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q6", "SELECT * FROM types", v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -345,7 +343,7 @@ class TestSQLiteQuery:
         v = Var()
         rows = []
         sql = "SELECT emp.name, dept.name FROM emp JOIN dept ON emp.dept_id = dept.id"
-        for gen, val in _sqlite_query_3(None, parent, "q7", sql, v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q7", sql, v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -359,7 +357,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_3(None, parent, "q8", "SELECT COUNT(*) FROM people", v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q8", "SELECT COUNT(*) FROM people", v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -372,7 +370,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         with pytest.raises(ValueError, match="No SQLite connection"):
-            list(_sqlite_query_3(None, parent, "nonexistent", "SELECT 1", v, trail))
+            list(_sqlite_query_3(None, parent, parent, parent, "nonexistent", "SELECT 1", v, trail))
 
 
 class TestSQLiteExec:
@@ -486,7 +484,7 @@ class TestSQLiteTable:
         parent = object()
         v = Var()
         tables = []
-        for gen, val in _sqlite_table_2(None, parent, "t1", v, trail):
+        for gen, val in _sqlite_table_2(None, parent, parent, parent, "t1", v, trail):
             if gen is parent and val is None:
                 tables.append(deref(v))
             elif gen is parent:
@@ -499,7 +497,7 @@ class TestSQLiteTable:
         trail = Trail()
         parent = object()
         solutions = []
-        for gen, val in _sqlite_table_2(None, parent, "t2", "people", trail):
+        for gen, val in _sqlite_table_2(None, parent, parent, parent, "t2", "people", trail):
             if gen is parent and val is None:
                 solutions.append(True)
             elif gen is parent:
@@ -512,7 +510,7 @@ class TestSQLiteTable:
         trail = Trail()
         parent = object()
         solutions = []
-        for gen, val in _sqlite_table_2(None, parent, "t3", "nope", trail):
+        for gen, val in _sqlite_table_2(None, parent, parent, parent, "t3", "nope", trail):
             if gen is parent and val is None:
                 solutions.append(True)
             elif gen is parent:
@@ -531,8 +529,7 @@ class TestSQLiteColumn:
         name_v = Var()
         type_v = Var()
         cols = []
-        for gen, val in _sqlite_column_4(
-            None, parent, "c1", "people", name_v, type_v, trail
+        for gen, val in _sqlite_column_4(None, parent, parent, parent, "c1", "people", name_v, type_v, trail
         ):
             if gen is parent and val is None:
                 cols.append((deref(name_v), deref(type_v)))
@@ -548,8 +545,7 @@ class TestSQLiteColumn:
         parent = object()
         type_v = Var()
         results = []
-        for gen, val in _sqlite_column_4(
-            None, parent, "c2", "people", "name", type_v, trail
+        for gen, val in _sqlite_column_4(None, parent, parent, parent, "c2", "people", "name", type_v, trail
         ):
             if gen is parent and val is None:
                 results.append(deref(type_v))

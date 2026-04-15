@@ -45,16 +45,16 @@ from clausal.modules.py.torch import _ensure_torch, _th
 
 def _property_2(getter):
     """Property predicate: (+dist, -value)."""
-    def dispatch(this_generator, parent, dist_var, value_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, dist_var, value_var, trail):
         d = _deep_deref(dist_var)
         try:
             actual = getter(d)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(value_var, actual, trail):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 

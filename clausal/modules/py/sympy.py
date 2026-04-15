@@ -554,7 +554,7 @@ def _factor_2(term, result, trail, k):
 # -- Predicate: Solve/3 -- nondeterministic ----------------------------------
 
 
-def _solve_3(this_generator, parent, equation, var, solution, trail):
+def _solve_3(this_generator, _proceed, _fail, _catcher, equation, var, solution, trail):
     """Solve/3: solve equation=0 for var, yielding one solution per answer."""
     equation = deref(equation)
     var = deref(var)
@@ -562,15 +562,15 @@ def _solve_3(this_generator, parent, equation, var, solution, trail):
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
         solutions = _sp.solve(eq_expr, var_expr)
     except (TypeError, ValueError):
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     for sol in solutions:
         mark = trail.mark()
         out = _to_pyval(sol)
         if unify(solution, out, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # -- Predicate: SolveAll/3 --------------------------------------------------
@@ -928,7 +928,7 @@ def _coeffs_3(term, var, result, trail, k):
         yield None
 
 
-def _roots_3(this_generator, parent, equation, var, root, trail):
+def _roots_3(this_generator, _proceed, _fail, _catcher, equation, var, root, trail):
     """Roots/3: nondeterministic -- yields (root, multiplicity) pairs."""
     equation = deref(equation)
     var = deref(var)
@@ -936,15 +936,15 @@ def _roots_3(this_generator, parent, equation, var, root, trail):
         ctx, eq_expr, var_expr = _convert_multi(equation, var)
         root_dict = _sp.roots(eq_expr, var_expr)
     except (TypeError, ValueError):
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     for r, mult in root_dict.items():
         mark = trail.mark()
         pair = (_to_pyval(r), int(mult))
         if unify(root, pair, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # -- Trig --------------------------------------------------------------------

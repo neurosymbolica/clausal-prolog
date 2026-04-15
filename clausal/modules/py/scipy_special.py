@@ -113,15 +113,15 @@ def _dispatch_fn(call: Callable) -> Callable:
     ``call`` receives the dereffed positional inputs (all args except RESULT
     and trail) and should return the scalar/array result.
     """
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         # args layout: (input_0, ..., input_{n-1}, result_var, trail)
         trail = args[-1]
         result_var = args[-2]
         inputs = [deref(x) for x in args[:-2]]
         out = call(*inputs)
         if unify(result_var, out, trail):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 

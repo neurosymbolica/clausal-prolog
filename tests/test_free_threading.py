@@ -335,8 +335,8 @@ class TestCExtensionPresence:
         # nv
         from clausal.logic.trampoline import StepGenerator, DONE
 
-        def dummy(this_gen, parent):
-            yield (parent, DONE)
+        def dummy(this_gen, _proceed, _fail, _catcher):
+            yield (_fail, DONE)
 
         sg = StepGenerator(dummy, None, None, None)
         for attr in ("proceed", "fail", "catcher"):

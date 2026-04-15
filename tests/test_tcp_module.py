@@ -32,7 +32,7 @@ def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
     dispatch = pred._get_dispatch()
-    gen = dispatch(None, None, *args, trail)
+    gen = dispatch(None, None, None, None, *args, trail)
     solutions = []
     for parent, value in gen:
         if value is DONE:

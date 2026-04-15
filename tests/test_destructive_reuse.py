@@ -386,7 +386,7 @@ class TestAppendDR:
     def _run(self, l1, l2, l3, trail):
         """Collect solutions from _append_dr__3."""
         solutions = []
-        gen = _append_dr__3(None, None, l1, l2, l3, trail)
+        gen = _append_dr__3(None, None, None, None, l1, l2, l3, trail)
         for parent, value in gen:
             if value is not DONE:
                 solutions.append(deref(l3))
@@ -444,7 +444,7 @@ class TestAppendDR:
         l1, l2 = Var(), Var()
 
         solutions = []
-        gen = _append_dr__3(None, None, l1, l2, [1, 2, 3], trail)
+        gen = _append_dr__3(None, None, None, None, l1, l2, [1, 2, 3], trail)
         for parent, value in gen:
             if value is not DONE:
                 solutions.append((
@@ -470,7 +470,7 @@ class TestDictPutDR:
 
         result_var = Var()
         solutions = []
-        gen = _dict_put_dr__4(None, None, "b", 2, source_var, result_var, trail)
+        gen = _dict_put_dr__4(None, None, None, None, "b", 2, source_var, result_var, trail)
         for parent, value in gen:
             if value is not DONE:
                 solutions.append(deref(result_var))
@@ -492,7 +492,7 @@ class TestDictPutDR:
 
         result_var = Var()
         solutions = []
-        gen = _dict_put_dr__4(None, None, "b", 2, source_var, result_var, trail)
+        gen = _dict_put_dr__4(None, None, None, None, "b", 2, source_var, result_var, trail)
         for parent, value in gen:
             if value is not DONE:
                 solutions.append(deref(result_var))
@@ -518,7 +518,7 @@ class TestSetUnionDR:
 
         result_var = Var()
         solutions = []
-        gen = _set_union_dr__3(None, None, source_var, SetTerm([3]), result_var, trail)
+        gen = _set_union_dr__3(None, None, None, None, source_var, SetTerm([3]), result_var, trail)
         for parent, value in gen:
             if value is not DONE:
                 solutions.append(deref(result_var))
@@ -540,7 +540,7 @@ class TestSetUnionDR:
 
         result_var = Var()
         solutions = []
-        gen = _set_union_dr__3(None, None, source_var, SetTerm([3]), result_var, trail)
+        gen = _set_union_dr__3(None, None, None, None, source_var, SetTerm([3]), result_var, trail)
         for parent, value in gen:
             if value is not DONE:
                 solutions.append(deref(result_var))

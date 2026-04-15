@@ -29,7 +29,7 @@ def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
     dispatch = pred._get_dispatch()
-    gen = dispatch(None, None, *args, trail)
+    gen = dispatch(None, None, None, None, *args, trail)
     solutions = []
     for parent, value in gen:
         if value is DONE:
@@ -307,7 +307,7 @@ class TestMaybe:
         _rng.seed(1)
         trail = Trail()
         dispatch = Maybe._get_dispatch()
-        gen = dispatch(None, None, trail)
+        gen = dispatch(None, None, None, None, trail)
         results = []
         for parent, value in gen:
             if value is DONE:
@@ -317,7 +317,7 @@ class TestMaybe:
 
         # Arity 1 — always succeed
         trail = Trail()
-        gen = dispatch(None, None, 1.0, trail)
+        gen = dispatch(None, None, None, None, 1.0, trail)
         results = []
         for parent, value in gen:
             if value is DONE:

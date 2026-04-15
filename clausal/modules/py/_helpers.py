@@ -41,18 +41,18 @@ def _deep_deref(val):
 
 def _pure(fn: Callable) -> Callable:
     """Wrap a pure function: deep-deref all inputs, call fn(*inputs), unify RESULT."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         inputs = [_deep_deref(x) for x in args[:-2]]
         try:
             out = fn(*inputs)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(result_var, out, trail):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -64,7 +64,7 @@ def _fact_table_2(get_facts):
     """
     cache = {}
 
-    def dispatch(this_generator, parent, name_var, value_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, name_var, value_var, trail):
         if not cache:
             facts = get_facts()
             cache["facts"] = facts
@@ -76,20 +76,20 @@ def _fact_table_2(get_facts):
         if not is_var(n) and is_var(v):
             cls = cache["by_name"].get(n)
             if cls is not None and unify(value_var, cls, trail):
-                yield (parent, None)
+                yield (_proceed, None)
         elif is_var(n) and not is_var(v):
             key = cache["by_value"].get(id(v))
             if key is not None and unify(name_var, key, trail):
-                yield (parent, None)
+                yield (_proceed, None)
         elif is_var(n) and is_var(v):
             for name, value in cache["facts"]:
                 mark = trail.mark()
                 if unify(name_var, name, trail) and unify(value_var, value, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
         else:
             cls = cache["by_name"].get(n)
             if cls is not None and cls is v:
-                yield (parent, None)
-        yield (parent, DONE)
+                yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch

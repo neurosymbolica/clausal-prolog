@@ -400,12 +400,15 @@ def _make_joint_dispatch_trampoline(
     and, when *tro_state* is supplied, an inner TRO tail-call loop that
     restarts dispatch when a clause signals a tail call.
     """
-    offset_i = pos_i + 2
-    offset_j = pos_j + 2
+    # Phase 2: trampoline layout is
+    # (this_generator, _proceed, _fail, _catcher, arg0, ..., trail).
+    # Skip four slots (this_generator + three continuations) to reach arg0.
+    offset_i = pos_i + 4
+    offset_j = pos_j + 4
 
     if tro_state is not None:
         def dispatch(*args):
-            parent = args[1]
+            _fail = args[2]
             args_list = list(args)
             while True:
                 tro_state[0] = False
@@ -433,18 +436,18 @@ def _make_joint_dispatch_trampoline(
                     break  # fallback has internal TRO loop
                 if tro_state[0]:
                     for _i in range(arity):
-                        args_list[_i + 2] = tro_state[_i + 1]
+                        args_list[_i + 4] = tro_state[_i + 1]
                     continue
                 break
-            yield (parent, done)
+            yield (_fail, done)
     else:
         def dispatch(*args):
-            parent = args[1]
+            _fail = args[2]
             yield from _joint_dispatch_body(
                 args, offset_i, offset_j, joint_dict, joint_default_fn,
                 single_i_dispatch, single_j_dispatch, fallback_fn,
             )
-            yield (parent, done)
+            yield (_fail, done)
 
     dispatch.__name__ = fallback_fn.__name__
     dispatch.__qualname__ = fallback_fn.__qualname__
@@ -593,8 +596,8 @@ def _make_secondary_dispatch_trampoline(
     """Build a two-level hierarchical dispatch for trampoline mode.  (Phase 9c)"""
     return _make_secondary_dispatch_impl(
         sec_idx, level0_compiled, level0_default_fn, fallback_fn,
-        arg_offset=2,
-        tail_yield=lambda args: (args[1], done),
+        arg_offset=4,
+        tail_yield=lambda args: (args[2], done),
     )
 
 
@@ -656,8 +659,8 @@ def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
     """
     return _make_indexed_dispatch_impl(
         all_fn, idx_dict, default_fn,
-        arg_offset=2,
-        tail_yield=lambda args: (args[1], done),
+        arg_offset=4,
+        tail_yield=lambda args: (args[2], done),
     )
 
 
@@ -747,8 +750,10 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
     """Build a groundness-keyed dispatch selector for trampoline mode.
 
     Same logic as :func:`_make_groundness_dispatch_simple` but accounts for
-    the trampoline arg layout ``(this_generator, parent, arg0, ..., trail)``
-    and emits a trailing ``yield (parent, done)`` after search exhaustion.
+    the trampoline arg layout
+    ``(this_generator, _proceed, _fail, _catcher, arg0, ..., trail)``
+    (Phase 2 split-continuation) and emits a trailing
+    ``yield (_fail, done)`` after search exhaustion.
 
     when *tro_state* is not None, the dispatch loops: after each bucket
     ``yield from`` completes, it checks ``tro_state[0]``.  If True, updates
@@ -757,10 +762,10 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
     """
     if len(plans) == 1:
         pos, idx_dict, dflt_fn = plans[0]
-        offset = pos + 2  # skip this_generator, parent
+        offset = pos + 4  # skip this_generator, _proceed, _fail, _catcher
         if tro_state is not None:
             def dispatch(*args):
-                parent = args[1]
+                _fail = args[2]
                 args_list = None
                 while True:
                     tro_state[0] = False
@@ -782,31 +787,31 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                         if args_list is None:
                             args_list = list(args)
                         for _i in range(arity):
-                            args_list[_i + 2] = tro_state[_i + 1]
+                            args_list[_i + 4] = tro_state[_i + 1]
                         continue
                     break
-                yield (parent, done)
+                yield (_fail, done)
         else:
             def dispatch(*args):
-                parent = args[1]
+                _fail = args[2]
                 yield from _groundness_dispatch_body_single(
                     args, offset, idx_dict, dflt_fn, fallback_fn,
                 )
-                yield (parent, done)
+                yield (_fail, done)
         dispatch.__name__ = fallback_fn.__name__
         dispatch.__qualname__ = fallback_fn.__qualname__
         return dispatch
 
     if tro_state is not None:
         def dispatch(*args):
-            parent = args[1]
+            _fail = args[2]
             args_list = None
             while True:
                 tro_state[0] = False
                 _current = args_list if args_list is not None else args
                 _dispatched = False
                 for _pos, _idx_dict, _dflt_fn in plans:
-                    _a = deref(_current[_pos + 2])
+                    _a = deref(_current[_pos + 4])
                     if not is_var(_a):
                         _k = _runtime_arg_key(_a)
                         try:
@@ -826,17 +831,17 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                     if args_list is None:
                         args_list = list(args)
                     for _i in range(arity):
-                        args_list[_i + 2] = tro_state[_i + 1]
+                        args_list[_i + 4] = tro_state[_i + 1]
                     continue
                 break
-            yield (parent, done)
+            yield (_fail, done)
     else:
         def dispatch(*args):
-            parent = args[1]
+            _fail = args[2]
             yield from _groundness_dispatch_body_multi(
-                args, plans, fallback_fn, arg_offset=2,
+                args, plans, fallback_fn, arg_offset=4,
             )
-            yield (parent, done)
+            yield (_fail, done)
     dispatch.__name__ = fallback_fn.__name__
     dispatch.__qualname__ = fallback_fn.__qualname__
     return dispatch

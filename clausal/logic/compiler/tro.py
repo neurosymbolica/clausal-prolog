@@ -34,7 +34,8 @@ from ._ast_helpers import (
     _name, _call, _assign, _assign_mark, _undo_stmt, _if,
     _yield_none_stmt,
     _MARK_PREFIX, _TRAIL_PARAM_NAME,
-    _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
+    _PROCEED_PARAM_NAME, _FAIL_PARAM_NAME, _CATCHER_PARAM_NAME,
+    _THIS_GEN_NAME,
 )
 from .compile_ctx import CompilationContext
 from ._vars import _collect_var_ids, _collect_bound_vars
@@ -507,7 +508,9 @@ def _compile_tro_tail(
     tro_mode: str = "loop",
     check_indices: frozenset[int] | None = None,
     self_name: str = _THIS_GEN_NAME,
-    parent_name: str = _TRAMP_PARENT_NAME,
+    proceed_name: str = _PROCEED_PARAM_NAME,
+    fail_name: str = _FAIL_PARAM_NAME,
+    catcher_name: str = _CATCHER_PARAM_NAME,
 ) -> list[ast.stmt]:
     """Compile TRO tail-call: snapshot new args, set TRO flag/state.
 
@@ -549,7 +552,8 @@ def _compile_tro_tail(
     # ``ctx.fresh`` generator is preserved by ``replace()``.
     _hoist_ctx = ctx.replace(
         db=db, var_context=var_context, trail_name=trail_name,
-        self_name=self_name, parent_name=parent_name,
+        self_name=self_name,
+        proceed_name=proceed_name, fail_name=fail_name, catcher_name=catcher_name,
     )
     ordered_args, lambda_defs = _hoist_lambda_args(_hoist_ctx, ordered_args)
 
@@ -599,11 +603,12 @@ def _compile_tro_tail(
         fname = tail_call.func.name
         _fallback_ctx = ctx.replace(
             db=db, var_context=var_context, trail_name=trail_name,
-            self_name=self_name, parent_name=parent_name,
+            self_name=self_name,
+            proceed_name=proceed_name, fail_name=fail_name, catcher_name=catcher_name,
         )
         fallback_stmts = _compile_predicate_call_impl(
             _fallback_ctx, fname, [None] * arity, [],
-            [_yield_step_stmt(_name(parent_name), ast.Constant(None))],
+            [_yield_step_stmt(_name(proceed_name), ast.Constant(None))],
         )
         # Patch the arg expressions in the StepGenerator call to use _tro_arg values.
         # The simplest approach: build the call directly.
@@ -613,7 +618,7 @@ def _compile_tro_tail(
         gen_assign = _assign(gen_name, call_expr)
         first_step = _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
         loop_body = [
-            _yield_step_stmt(_name(parent_name), ast.Constant(None)),
+            _yield_step_stmt(_name(proceed_name), ast.Constant(None)),
             _assign_yield_step(status_name, _name(gen_name), ast.Constant(None)),
         ]
         fallback_loop = ast.While(

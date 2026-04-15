@@ -481,20 +481,20 @@ def _make_queens_module(n: int) -> Module:
     # Register a pure-Python safe check as a predicate (trampoline protocol).
     from clausal.logic.trampoline import StepGenerator, DONE
 
-    def safe_dispatch(this_generator, parent, qs, trail):
+    def safe_dispatch(this_generator, _proceed, _fail, _catcher, qs, trail):
         """safe(Qs): check no two queens attack each other."""
         qs_val = deref(qs)
         if not isinstance(qs_val, list):
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         cols = [deref(c) for c in qs_val]
         for i in range(len(cols)):
             for j in range(i + 1, len(cols)):
                 if abs(cols[i] - cols[j]) == abs(i - j):
-                    yield (parent, DONE)
+                    yield (_fail, DONE)
                     return
-        yield (parent, None)
-        yield (parent, DONE)
+        yield (_proceed, None)
+        yield (_fail, DONE)
 
     db.set_dispatch("safe", 1, safe_dispatch)
 
@@ -502,11 +502,11 @@ def _make_queens_module(n: int) -> Module:
     # Build the Ns list in the goal using between/3 enumeration is complex.
     # Simplest: build Ns as a Python list directly in a wrapper predicate.
 
-    def queens_dispatch(this_generator, parent, n_arg, qs_arg, trail):
+    def queens_dispatch(this_generator, _proceed, _fail, _catcher, n_arg, qs_arg, trail):
         """queens(N, Qs): generate all N-queens solutions."""
         n_val = deref(n_arg)
         if not isinstance(n_val, int) or n_val < 0:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         ns = list(range(1, n_val + 1))
 
@@ -519,10 +519,10 @@ def _make_queens_module(n: int) -> Module:
             safe_sg = StepGenerator(safe_dispatch, this_generator, this_generator, this_generator, qs_val, trail)
             safe_st = yield (safe_sg, None)
             while safe_st is not DONE:
-                yield (parent, None)
+                yield (_proceed, None)
                 safe_st = yield (safe_sg, None)
             perm_st = yield (perm_sg, None)
-        yield (parent, DONE)
+        yield (_fail, DONE)
 
     db.set_dispatch("queens", 2, queens_dispatch)
 

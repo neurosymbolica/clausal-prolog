@@ -60,13 +60,13 @@ class ModulePredicate:
             return next(iter(self._dispatch_fns.values()))
         return self._multi_dispatch
 
-    def _multi_dispatch(self, this_generator, parent, *args):
+    def _multi_dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         arity = len(args) - 1  # exclude trail
         fn = self._dispatch_fns.get(arity)
         if fn is None:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
-        yield from fn(this_generator, parent, *args)
+        yield from fn(this_generator, _proceed, _fail, _catcher, *args)
 
     def __repr__(self) -> str:
         arities = sorted(self._dispatch_fns)
@@ -84,10 +84,10 @@ def simple_to_trampoline(simple_fn):
     The ``k`` (continuation) parameter is passed as ``None`` since
     trampoline-mode predicates don't use continuations.
     """
-    def trampoline_fn(this_generator, parent, *args):
+    def trampoline_fn(this_generator, _proceed, _fail, _catcher, *args):
         for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return trampoline_fn
 
 

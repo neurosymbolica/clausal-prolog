@@ -78,10 +78,9 @@ static PyTypeObject *StepGenType = NULL;   /* heap type, set at module init */
 /* ── StepGenerator.__init__(func, proceed, fail, catcher, *args) ─────────
  *
  * Stores the three continuation slots, then calls
- *   func(self, proceed, *args)
- * to build the inner generator.  Phase 1 forwards only ``proceed`` so
- * compiled predicates with the legacy single-parent signature remain
- * callable; Phase 2 will switch to forwarding all three.
+ *   func(self, proceed, fail, catcher, *args)
+ * to build the inner generator.  Compiled-predicate signature is
+ * (this_generator, _proceed, _fail, _catcher, *args, trail).
  */
 static int
 StepGen_init(StepGenObject *self, PyObject *args, PyObject *kwds)
@@ -111,21 +110,26 @@ StepGen_init(StepGenObject *self, PyObject *args, PyObject *kwds)
     Py_XDECREF(self->catcher);
     self->catcher = catcher;
 
-    /* Phase 1: func(self, proceed, *args[4:])
-     * so generator body sees (this_generator, _tramp_parent, *rest). */
+    /* func(self, proceed, fail, catcher, *args[4:])
+     * — generator body sees
+     * (this_generator, _proceed, _fail, _catcher, *rest). */
     Py_ssize_t n_rest = nargs - 4;
-    PyObject *call_args = PyTuple_New(n_rest + 2);
+    PyObject *call_args = PyTuple_New(n_rest + 4);
     if (!call_args) return -1;
 
     Py_INCREF((PyObject *)self);
     PyTuple_SET_ITEM(call_args, 0, (PyObject *)self);
     Py_INCREF(proceed);
     PyTuple_SET_ITEM(call_args, 1, proceed);
+    Py_INCREF(fail);
+    PyTuple_SET_ITEM(call_args, 2, fail);
+    Py_INCREF(catcher);
+    PyTuple_SET_ITEM(call_args, 3, catcher);
 
     for (Py_ssize_t i = 0; i < n_rest; i++) {
         PyObject *a = PyTuple_GET_ITEM(args, i + 4);
         Py_INCREF(a);
-        PyTuple_SET_ITEM(call_args, i + 2, a);
+        PyTuple_SET_ITEM(call_args, i + 4, a);
     }
 
     PyObject *gen = PyObject_Call(func, call_args, kwds);

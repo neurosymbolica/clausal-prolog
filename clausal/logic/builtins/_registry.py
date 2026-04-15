@@ -26,11 +26,11 @@ def _simple_to_trampoline(simple_fn):
     Simple-mode signature:  ``fn(*args, trail, k)`` → yields ``None``
     Trampoline signature:   ``fn(this_gen, parent, *args, trail)`` → yields ``(parent, None)`` / ``(parent, DONE)``
     """
-    def trampoline_fn(this_generator, parent, *args):
+    def trampoline_fn(this_generator, _proceed, _fail, _catcher, *args):
         # args = (*pred_args, trail)  — trail is always last
         for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return trampoline_fn
 
 
@@ -58,9 +58,13 @@ def _extract_fields_simple(fn: Callable) -> tuple[str, ...]:
 
 
 def _extract_fields_trampoline(fn: Callable) -> tuple[str, ...]:
-    """Extract field names from a trampoline builtin (strip this_generator, parent, trail)."""
+    """Extract field names from a trampoline builtin.
+
+    Strips ``this_generator`` + three continuation slots (``_proceed`` /
+    ``_fail`` / ``_catcher``) from the front and ``trail`` from the back.
+    """
     params = list(inspect.signature(fn).parameters)
-    return tuple(params[2:-1])  # drop this_generator, parent, and trail
+    return tuple(params[4:-1])  # drop this_generator, _proceed, _fail, _catcher, and trail
 
 
 def _builtin(functor: str, arity: int, *, fields: tuple[str, ...] | None = None):
@@ -242,7 +246,7 @@ class BuiltinPredicate:
                 )
         return self._dispatch_fn
 
-    def _arity_dispatch(self, this_generator, parent, *args):
+    def _arity_dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         """Dispatch to the correct arity handler based on arg count.
 
         Trampoline protocol: args = (*pred_args, trail).
@@ -252,9 +256,9 @@ class BuiltinPredicate:
         fn = self._arity_map.get(arity)
         if fn is None:
             from clausal.logic.trampoline import DONE as _DONE
-            yield (parent, _DONE)
+            yield (_fail, _DONE)
             return
-        yield from fn(this_generator, parent, *args)
+        yield from fn(this_generator, _proceed, _fail, _catcher, *args)
 
     def _merge(self, other: "BuiltinPredicate") -> None:
         """Merge another BuiltinPredicate into this one for multi-arity dispatch."""
@@ -349,13 +353,13 @@ class MultiArityBuiltin:
         """Return an arity-dispatching function for the trampoline."""
         fns = self._arity_dispatch_fns
 
-        def _dispatch(this_generator, parent, *args):
+        def _dispatch(this_generator, _proceed, _fail, _catcher, *args):
             arity = len(args) - 1  # exclude trail
             fn = fns.get(arity)
             if fn is None:
-                yield (parent, DONE)
+                yield (_fail, DONE)
                 return
-            yield from fn(this_generator, parent, *args)
+            yield from fn(this_generator, _proceed, _fail, _catcher, *args)
 
         return _dispatch
 

@@ -10,7 +10,7 @@ from clausal.logic.builtins._registry import _trampoline_builtin
 
 
 @_trampoline_builtin("phrase", 2)
-def _phrase__2(this_generator, parent, rule_body, list_arg, trail):
+def _phrase__2(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, trail):
     """phrase(RuleBody, List) — invoke DCG rule, must consume entire list."""
     rule_val = deref(rule_body)
     list_val = deref(list_arg)
@@ -30,18 +30,18 @@ def _phrase__2(this_generator, parent, rule_body, list_arg, trail):
         user_args = [deref(getattr(rule_val, f)) for f in fields[:-2]]
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *user_args, list_val, [], trail)
     else:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
 
     _st = yield (sg, None)
     while _st is not DONE:
-        yield (parent, None)
+        yield (_proceed, None)
         _st = yield (sg, None)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("phrase", 3)
-def _phrase__3(this_generator, parent, rule_body, list_arg, rest_arg, trail):
+def _phrase__3(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, rest_arg, trail):
     """phrase(RuleBody, List, Rest) — invoke DCG rule, partial parse."""
     rule_val = deref(rule_body)
     list_val = deref(list_arg)
@@ -60,18 +60,18 @@ def _phrase__3(this_generator, parent, rule_body, list_arg, rest_arg, trail):
         user_args = [deref(getattr(rule_val, f)) for f in fields[:-2]]
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *user_args, list_val, rest_val, trail)
     else:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
 
     _st = yield (sg, None)
     while _st is not DONE:
-        yield (parent, None)
+        yield (_proceed, None)
         _st = yield (sg, None)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("sequence", 3, fields=("list", "s0", "s"))
-def _sequence__3(this_generator, parent, lst, s0, s, trail):
+def _sequence__3(this_generator, _proceed, _fail, _catcher, lst, s0, s, trail):
     """sequence//1 — DCG non-terminal that matches a list of terminals.
 
     sequence(List, S0, S) succeeds when S0 = List ++ S.
@@ -79,7 +79,7 @@ def _sequence__3(this_generator, parent, lst, s0, s, trail):
     """
     lst_val = deref(lst)
     if is_var(lst_val) or not isinstance(lst_val, (list, str)):
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     # Normalise to list for uniform element comparison
     if isinstance(lst_val, str):
@@ -94,7 +94,7 @@ def _sequence__3(this_generator, parent, lst, s0, s, trail):
         if len(s0_val) >= n and s0_val[:n] == lst_val:
             mark = trail.mark()
             if unify(s, s0_val[n:], trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
     elif isinstance(s_val, (list, str)):
         if isinstance(s_val, str):
@@ -103,7 +103,7 @@ def _sequence__3(this_generator, parent, lst, s0, s, trail):
         expected = lst_val + s_val
         mark = trail.mark()
         if unify(s0, expected, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
     else:
         # Both S0 and S are unbound — build a partial list: S0 = List ++ S
@@ -111,6 +111,6 @@ def _sequence__3(this_generator, parent, lst, s0, s, trail):
         sl = SegList([ConcreteSeg(lst_val), VarSeg(s_val)])
         mark = trail.mark()
         if unify(s0, sl, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)

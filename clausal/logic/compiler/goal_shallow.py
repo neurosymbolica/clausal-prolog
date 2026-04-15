@@ -40,7 +40,7 @@ from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
     _yield_none_stmt, _in_iter_expr,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
-    _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
+    _THIS_GEN_NAME,
     _EXTRA_FUNCDEF,
 )
 from ._vars import _var_python_name, _collect_vars, _collect_bound_vars

@@ -307,24 +307,24 @@ def _day_of_week_2(d, dow, trail, k):
 # ── DateBetween/3 — nondeterministic date range ─────────────────────────
 
 
-def _date_between_3(this_generator, parent, start, end, d, trail):
+def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, trail):
     """DateBetween/3: nondeterministic — generates each date from start to end.
 
     DateBetween(Start, End, D) succeeds once for each date D in [Start, End].
     """
     start, end = deref(start), deref(end)
     if not isinstance(start, _dt.date) or not isinstance(end, _dt.date):
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     current = start
     one_day = _dt.timedelta(days=1)
     while current <= end:
         mark = trail.mark()
         if unify(d, current, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
         current += one_day
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Build and export predicate objects ───────────────────────────────────

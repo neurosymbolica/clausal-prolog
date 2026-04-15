@@ -45,7 +45,7 @@ def _drive(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, *args, result, trail)
+    gen = dispatch(None, None, None, None, *args, result, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -59,14 +59,14 @@ def _fails(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, *args, result, trail)
+    gen = dispatch(None, None, None, None, *args, result, trail)
     return all(sentinel is DONE for _, sentinel in gen)
 
 
 def _free(handle):
     dispatch = Free._get_dispatch()
     trail = Trail()
-    list(dispatch(None, None, handle, trail))
+    list(dispatch(None, None, None, None, handle, trail))
 
 
 # ── Sample data ───────────────────────────────────────────────────────────
@@ -602,7 +602,7 @@ class TestFree:
         # nv
         dispatch = Free._get_dispatch()
         trail = Trail()
-        results = list(dispatch(None, None, 999999, trail))
+        results = list(dispatch(None, None, None, None, 999999, trail))
         assert any(sentinel is None for _, sentinel in results)
 
     def test_free_twice_succeeds(self):

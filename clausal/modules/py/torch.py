@@ -244,29 +244,29 @@ def _th():
 
 def _property_2(getter):
     """Multi-mode property predicate: query (+T,-V) or check (+T,+V)."""
-    def dispatch(this_generator, parent, tensor_var, value_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, tensor_var, value_var, trail):
         t = deref(tensor_var)
         v = deref(value_var)
         try:
             actual = getter(t)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if is_var(v):
             # Query mode: unify value_var with actual
             if unify(value_var, actual, trail):
-                yield (parent, None)
+                yield (_proceed, None)
         else:
             # Check mode: succeed if values match
             if actual == v:
-                yield (parent, None)
-        yield (parent, DONE)
+                yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
 def _bidir_2(forward, backward):
     """Bidirectional predicate: (+X,-Y) forward, (-X,+Y) backward, (+X,+Y) check."""
-    def dispatch(this_generator, parent, x_raw, y_raw, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, x_raw, y_raw, trail):
         x = deref(x_raw)
         y = deref(y_raw)
 
@@ -274,37 +274,37 @@ def _bidir_2(forward, backward):
             try:
                 out = forward(x)
             except Exception:
-                yield (parent, DONE)
+                yield (_fail, DONE)
                 return
             if unify(y_raw, out, trail):
-                yield (parent, None)
+                yield (_proceed, None)
 
         elif is_var(x) and not is_var(y):
             try:
                 out = backward(y)
             except Exception:
-                yield (parent, DONE)
+                yield (_fail, DONE)
                 return
             if unify(x_raw, out, trail):
-                yield (parent, None)
+                yield (_proceed, None)
 
         elif not is_var(x) and not is_var(y):
             # Both ground: check via forward
             try:
                 out = forward(x)
                 if unify(y_raw, out, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
             except Exception:
                 pass
 
         # Both unbound: fail
-        yield (parent, DONE)
+        yield (_fail, DONE)
     return dispatch
 
 
 def _bidir_3_mid(forward, backward):
     """Bidirectional with a middle arg: (+X,+M,-Y) forward, (-X,+M,+Y) backward."""
-    def dispatch(this_generator, parent, x_raw, mid_raw, y_raw, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, x_raw, mid_raw, y_raw, trail):
         x = deref(x_raw)
         m = _deep_deref(mid_raw)
         y = deref(y_raw)
@@ -313,29 +313,29 @@ def _bidir_3_mid(forward, backward):
             try:
                 out = forward(x, m)
             except Exception:
-                yield (parent, DONE)
+                yield (_fail, DONE)
                 return
             if unify(y_raw, out, trail):
-                yield (parent, None)
+                yield (_proceed, None)
 
         elif is_var(x) and not is_var(y):
             try:
                 out = backward(y, m)
             except Exception:
-                yield (parent, DONE)
+                yield (_fail, DONE)
                 return
             if unify(x_raw, out, trail):
-                yield (parent, None)
+                yield (_proceed, None)
 
         elif not is_var(x) and not is_var(y):
             try:
                 out = forward(x, m)
                 if unify(y_raw, out, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
             except Exception:
                 pass
 
-        yield (parent, DONE)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -420,14 +420,14 @@ requires_gradient = _pred("requires_gradient",
 
 def _check_1(predicate_fn):
     """Predicate that succeeds if predicate_fn(tensor) is truthy, fails otherwise."""
-    def dispatch(this_generator, parent, tensor_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, tensor_var, trail):
         t = deref(tensor_var)
         try:
             if predicate_fn(t):
-                yield (parent, None)
+                yield (_proceed, None)
         except Exception:
             pass
-        yield (parent, DONE)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -438,42 +438,42 @@ is_contiguous = _pred("is_contiguous",
 
 def _check_2(predicate_fn):
     """Check predicate on two tensors: succeed if predicate_fn(a, b) is truthy."""
-    def dispatch(this_generator, parent, a_var, b_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, a_var, b_var, trail):
         a = _deep_deref(deref(a_var))
         b = _deep_deref(deref(b_var))
         try:
             if predicate_fn(a, b):
-                yield (parent, None)
+                yield (_proceed, None)
         except Exception:
             pass
-        yield (parent, DONE)
+        yield (_fail, DONE)
     return dispatch
 
 
 def _check_bool(fn):
     """Check predicate: succeed if fn(tensor) is truthy."""
-    def dispatch(this_generator, parent, tensor_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, tensor_var, trail):
         t = _deep_deref(deref(tensor_var))
         try:
             if fn(t):
-                yield (parent, None)
+                yield (_proceed, None)
         except Exception:
             pass
-        yield (parent, DONE)
+        yield (_fail, DONE)
     return dispatch
 
 
 def _check_bool_dim(fn):
     """Check predicate with dim: succeed if fn(tensor, dim) is truthy."""
-    def dispatch(this_generator, parent, tensor_var, dim_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, tensor_var, dim_var, trail):
         t = _deep_deref(deref(tensor_var))
         d = int(deref(dim_var))
         try:
             if fn(t, d):
-                yield (parent, None)
+                yield (_proceed, None)
         except Exception:
             pass
-        yield (parent, DONE)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -658,35 +658,35 @@ def _dtype_properties(dt):
     return info
 
 
-def _dtype_info_3(this_generator, parent, dtype_var, key_var, value_var, trail):
+def _dtype_info_3(this_generator, _proceed, _fail, _catcher, dtype_var, key_var, value_var, trail):
     dt = deref(dtype_var)
     k = deref(key_var)
     v = deref(value_var)
 
     if is_var(dt):
         # dtype unbound: fail (too many dtypes to enumerate usefully)
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
 
     try:
         props = _dtype_properties(dt)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
 
     if not is_var(k):
         # Key bound: look up single property
         val = props.get(k)
         if val is not None and unify(value_var, val, trail):
-            yield (parent, None)
+            yield (_proceed, None)
     else:
         # Key unbound: enumerate all properties
         for key, val in props.items():
             mark = trail.mark()
             if unify(key_var, key, trail) and unify(value_var, val, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 dtype_info = _pred("dtype_info",
@@ -698,28 +698,28 @@ dtype_info = _pred("dtype_info",
 # IO (impure)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _save_2(this_generator, parent, obj_var, path_var, trail):
+def _save_2(this_generator, _proceed, _fail, _catcher, obj_var, path_var, trail):
     obj = deref(obj_var)
     path = str(deref(path_var))
     try:
         _th().save(obj, path)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
-    yield (parent, None)
-    yield (parent, DONE)
+    yield (_proceed, None)
+    yield (_fail, DONE)
 
 
-def _load_2(this_generator, parent, path_var, result_var, trail):
+def _load_2(this_generator, _proceed, _fail, _catcher, path_var, result_var, trail):
     path = str(deref(path_var))
     try:
         obj = _th().load(path, weights_only=True)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     if unify(result_var, obj, trail):
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 
 save = _pred("save",
@@ -880,17 +880,17 @@ equal = _pred("equal",
 )
 
 
-def _allclose_4(this_generator, parent, a_var, b_var, atol_var, rtol_var, trail):
+def _allclose_4(this_generator, _proceed, _fail, _catcher, a_var, b_var, atol_var, rtol_var, trail):
     a = _deep_deref(deref(a_var))
     b = _deep_deref(deref(b_var))
     atol = float(deref(atol_var))
     rtol = float(deref(rtol_var))
     try:
         if _th().allclose(a, b, atol=atol, rtol=rtol):
-            yield (parent, None)
+            yield (_proceed, None)
     except Exception:
         pass
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 allclose = _pred("allclose",

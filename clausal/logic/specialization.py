@@ -1084,10 +1084,10 @@ def _make_solve_goal_predicate(
     if goal_map:
         handlers.update(goal_map)
 
-    def _solve_goal_dispatch(this_generator, parent, goal, trail):
+    def _solve_goal_dispatch(this_generator, _proceed, _fail, _catcher, goal, trail):
         goal = walk(deref(goal))
         if not isinstance(goal, list) or not goal:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
 
         functor = goal[0]
@@ -1096,8 +1096,8 @@ def _make_solve_goal_predicate(
         handler = handlers.get(functor)
         if handler is not None:
             for _ in handler(args, trail):
-                yield (parent, None)
-            yield (parent, DONE)
+                yield (_proceed, None)
+            yield (_fail, DONE)
             return
 
         # Fallback: try module_dict for user-defined predicates.
@@ -1109,13 +1109,13 @@ def _make_solve_goal_predicate(
                 sg = StepGenerator(dispatch_fn, this_generator, this_generator, this_generator, *args, trail)
                 st = yield (sg, None)
                 while st is not DONE:
-                    yield (parent, None)
+                    yield (_proceed, None)
                     st = yield (sg, None)
-                yield (parent, DONE)
+                yield (_fail, DONE)
                 return
 
         # Unknown goal — fail silently.
-        yield (parent, DONE)
+        yield (_fail, DONE)
 
     return BuiltinPredicate(name, 1, dispatch_fn=_solve_goal_dispatch)
 

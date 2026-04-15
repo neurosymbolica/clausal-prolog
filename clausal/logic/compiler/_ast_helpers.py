@@ -234,7 +234,12 @@ _MARK_PREFIX = "_m"            # fresh mark variable prefix (ctx.fresh(_MARK_PRE
 _TRAIL_PARAM_NAME = "trail"    # compiled-function trail parameter
 _K_PARAM_NAME = "k"            # shallow-strategy continuation parameter
 _DISP_PREFIX = "_disp_"        # locked-dispatch globals-key prefix
-_TRAMP_PARENT_NAME = "_tramp_parent"   # trampoline parent-generator parameter
+# Phase 2: split-continuation protocol — the old single ``_tramp_parent``
+# parameter is replaced by three named slots.  See
+# ``implementation_plans/CONTINUATION_TCO_PLAN.md`` §3.
+_PROCEED_PARAM_NAME = "_proceed"       # trampoline: solution target
+_FAIL_PARAM_NAME    = "_fail"          # trampoline: exhaustion target
+_CATCHER_PARAM_NAME = "_catcher"       # trampoline: exception handler chain
 _THIS_GEN_NAME = "this_generator"      # trampoline self-reference parameter
 
 

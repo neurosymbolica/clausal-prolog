@@ -54,10 +54,10 @@ def _goal_dispatch_and_args(goal_val):
 
 
 @_trampoline_builtin("time_goal", 1)
-def _time_goal__1(this_generator, parent, goal, trail):
+def _time_goal__1(this_generator, _proceed, _fail, _catcher, goal, trail):
     """time_goal(Goal) — call Goal and print wall/CPU time after it completes.
 
-    Analogous to SWI-Prolog time/1.  Each solution is forwarded to the parent;
+    Analogous to SWI-Prolog time/1.  Each solution is forwarded to the _proceed;
     timing is printed (to stderr) once the goal is exhausted.
 
     Goal may be:
@@ -68,7 +68,7 @@ def _time_goal__1(this_generator, parent, goal, trail):
     goal_val = deref(goal)
     dispatch, goal_args = _goal_dispatch_and_args(goal_val)
     if dispatch is None:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
 
     wall_start = _time.perf_counter()
@@ -79,7 +79,7 @@ def _time_goal__1(this_generator, parent, goal, trail):
     solution_count = 0
     while _st is not DONE:
         solution_count += 1
-        yield (parent, None)
+        yield (_proceed, None)
         _st = yield (sg, None)
 
     wall_elapsed = _time.perf_counter() - wall_start
@@ -89,11 +89,11 @@ def _time_goal__1(this_generator, parent, goal, trail):
         f"{wall_elapsed:.6f}s wall, {cpu_elapsed:.6f}s CPU",
         file=_sys.stderr,
     )
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("time_goal", 2)
-def _time_goal__2(this_generator, parent, goal, elapsed, trail):
+def _time_goal__2(this_generator, _proceed, _fail, _catcher, goal, elapsed, trail):
     """time_goal(Goal, Elapsed) — run Goal; unify Elapsed with wall-clock seconds.
 
     Elapsed is unified after each solution of Goal.  If Goal fails, time_goal/2
@@ -104,7 +104,7 @@ def _time_goal__2(this_generator, parent, goal, elapsed, trail):
     goal_val = deref(goal)
     dispatch, goal_args = _goal_dispatch_and_args(goal_val)
     if dispatch is None:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
 
     wall_start = _time.perf_counter()
@@ -115,11 +115,11 @@ def _time_goal__2(this_generator, parent, goal, elapsed, trail):
         elapsed_val = _time.perf_counter() - wall_start
         save = trail.mark()
         if unify(elapsed, elapsed_val, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(save)
         _st = yield (sg, None)
 
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Runtime builtins ──────────────────────────────────────────────────────

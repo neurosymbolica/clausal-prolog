@@ -35,7 +35,7 @@ def _drive(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, *args, result, trail)
+    gen = dispatch(None, None, None, None, *args, result, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -52,7 +52,7 @@ def _drive_bwd(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, result, *args, trail)
+    gen = dispatch(None, None, None, None, result, *args, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -69,7 +69,7 @@ def _drive_bwd_n(pred, n, spectrum):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, result, n, spectrum, trail)
+    gen = dispatch(None, None, None, None, result, n, spectrum, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -83,7 +83,7 @@ def _fails_with_wrong_result(pred, *args):
     trail = Trail()
     result_bound = object()  # will not unify with any numpy array
     dispatch = pred._get_dispatch()
-    gen = dispatch(None, None, *args, result_bound, trail)
+    gen = dispatch(None, None, None, None, *args, result_bound, trail)
     solutions = [s for s in gen if s[1] is None]
     return len(solutions) == 0
 
@@ -165,7 +165,7 @@ class TestInverseFFT:
         wrong_x = np.array([9.0, 9.0, 9.0, 9.0])
         trail = Trail()
         dispatch = FFTransform._get_dispatch()
-        gen = dispatch(None, None, wrong_x, spectrum, trail)
+        gen = dispatch(None, None, None, None, wrong_x, spectrum, trail)
         solutions = [s for s in gen if s[1] is None]
         assert len(solutions) == 0
 
@@ -222,7 +222,7 @@ class TestInverseFFT2D:
         wrong_x = np.full((2, 2), 99.0)
         trail = Trail()
         dispatch = FFTransform2D._get_dispatch()
-        gen = dispatch(None, None, wrong_x, spectrum, trail)
+        gen = dispatch(None, None, None, None, wrong_x, spectrum, trail)
         solutions = [s for s in gen if s[1] is None]
         assert len(solutions) == 0
 
@@ -335,7 +335,7 @@ class TestInverseRealFFT:
         wrong_x = np.array([9.0, 9.0, 9.0, 9.0])
         trail = Trail()
         dispatch = RealFFT._get_dispatch()
-        gen = dispatch(None, None, wrong_x, spectrum, trail)
+        gen = dispatch(None, None, None, None, wrong_x, spectrum, trail)
         solutions = [s for s in gen if s[1] is None]
         assert len(solutions) == 0
 
@@ -403,7 +403,7 @@ class TestInverseDiscreteCosineTransform:
         wrong_x = np.array([9.0, 9.0, 9.0, 9.0])
         trail = Trail()
         dispatch = DiscreteCosineTransform._get_dispatch()
-        gen = dispatch(None, None, wrong_x, coeffs, trail)
+        gen = dispatch(None, None, None, None, wrong_x, coeffs, trail)
         solutions = [s for s in gen if s[1] is None]
         assert len(solutions) == 0
 
@@ -534,7 +534,7 @@ class TestInverseFFTShift:
         wrong_x = np.array([9.0, 9.0, 9.0, 9.0])
         trail = Trail()
         dispatch = FFTShift._get_dispatch()
-        gen = dispatch(None, None, wrong_x, shifted, trail)
+        gen = dispatch(None, None, None, None, wrong_x, shifted, trail)
         solutions = [s for s in gen if s[1] is None]
         assert len(solutions) == 0
 

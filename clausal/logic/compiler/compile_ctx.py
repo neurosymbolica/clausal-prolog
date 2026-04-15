@@ -15,8 +15,12 @@ every goal / body / predicate compilation routine:
                      parameterised for historical reasons).
 - ``self_name``    — (trampoline only) name of the self-generator
                      parameter — ``"this_generator"`` by default.
-- ``parent_name``  — (trampoline only) name of the parent-generator
-                     parameter — ``"_tramp_parent"`` by default.
+- ``proceed_name`` — (trampoline only) name of the solution-target
+                     parameter — ``"_proceed"`` by default.
+- ``fail_name``    — (trampoline only) name of the exhaustion-target
+                     parameter — ``"_fail"`` by default.
+- ``catcher_name`` — (trampoline only) name of the exception-handler
+                     parameter — ``"_catcher"`` by default.
 
 Plus three fields shared across all clauses of one predicate
 compilation:
@@ -73,7 +77,9 @@ from typing import Any, TYPE_CHECKING
 from ._ast_helpers import (
     FreshNames,
     _THIS_GEN_NAME,
-    _TRAMP_PARENT_NAME,
+    _PROCEED_PARAM_NAME,
+    _FAIL_PARAM_NAME,
+    _CATCHER_PARAM_NAME,
     _current_position,
     _pop_position,
     _push_position,
@@ -111,7 +117,9 @@ class CompilationContext:
     var_context: dict[int, str]
     trail_name: str
     self_name: str = _THIS_GEN_NAME
-    parent_name: str = _TRAMP_PARENT_NAME
+    proceed_name: str = _PROCEED_PARAM_NAME
+    fail_name: str = _FAIL_PARAM_NAME
+    catcher_name: str = _CATCHER_PARAM_NAME
 
     # ── Per-predicate shared state (populated before any clause compiles)
     #

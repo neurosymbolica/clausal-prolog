@@ -9,7 +9,7 @@ from clausal.logic.builtins._registry import _trampoline_builtin
 
 
 @_trampoline_builtin("pairs_keys_values", 3)
-def _pairs_keys_values__3(this_generator, parent, pairs, keys, values, trail):
+def _pairs_keys_values__3(this_generator, _proceed, _fail, _catcher, pairs, keys, values, trail):
     """pairs_keys_values(Pairs, Keys, Values) — Pairs is a list of [K, V] lists."""
     pairs_val = deref(pairs)
     if isinstance(pairs_val, list):
@@ -17,7 +17,7 @@ def _pairs_keys_values__3(this_generator, parent, pairs, keys, values, trail):
         vs = [deref(p)[1] for p in pairs_val if isinstance(deref(p), list)]
         mark = trail.mark()
         if unify(keys, ks, trail) and unify(values, vs, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
     else:
         ks_val = deref(keys)
@@ -26,39 +26,39 @@ def _pairs_keys_values__3(this_generator, parent, pairs, keys, values, trail):
             result = [[k, v] for k, v in zip(ks_val, vs_val)]
             mark = trail.mark()
             if unify(pairs, result, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("pairs_keys", 2)
-def _pairs_keys__2(this_generator, parent, pairs, keys, trail):
+def _pairs_keys__2(this_generator, _proceed, _fail, _catcher, pairs, keys, trail):
     """pairs_keys(Pairs, Keys) — Keys are the first elements of each pair."""
     pairs_val = deref(pairs)
     if isinstance(pairs_val, list):
         ks = [deref(p)[0] for p in pairs_val if isinstance(deref(p), list)]
         mark = trail.mark()
         if unify(keys, ks, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("pairs_values", 2)
-def _pairs_values__2(this_generator, parent, pairs, values, trail):
+def _pairs_values__2(this_generator, _proceed, _fail, _catcher, pairs, values, trail):
     """pairs_values(Pairs, Values) — Values are the second elements of each pair."""
     pairs_val = deref(pairs)
     if isinstance(pairs_val, list):
         vs = [deref(p)[1] for p in pairs_val if isinstance(deref(p), list)]
         mark = trail.mark()
         if unify(values, vs, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("group_pairs_by_key", 2)
-def _group_pairs_by_key__2(this_generator, parent, pairs, groups, trail):
+def _group_pairs_by_key__2(this_generator, _proceed, _fail, _catcher, pairs, groups, trail):
     """group_pairs_by_key(Pairs, Groups) — group [Key, Value] pairs by key.
 
     Groups is a list of [Key, Values] where Values collects all values for that key.
@@ -66,14 +66,14 @@ def _group_pairs_by_key__2(this_generator, parent, pairs, groups, trail):
     """
     pairs_val = deref(pairs)
     if not isinstance(pairs_val, list):
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     grouped: dict = {}
     order: list = []
     for pair in pairs_val:
         p = deref(pair)
         if not isinstance(p, list) or len(p) < 2:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         key = deref(p[0])
         value = deref(p[1])
@@ -89,6 +89,6 @@ def _group_pairs_by_key__2(this_generator, parent, pairs, groups, trail):
     result = [[grouped[k][0], grouped[k][1]] for k in order]
     mark = trail.mark()
     if unify(groups, result, trail):
-        yield (parent, None)
+        yield (_proceed, None)
     trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)

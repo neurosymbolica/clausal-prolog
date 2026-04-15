@@ -108,7 +108,7 @@ def _la():
 
 def _dispatch_fn(call: Callable) -> Callable:
     """Trampoline dispatch for a predicate: inputs → scalar/array → unify RESULT."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         # args: (input_0, ..., input_{n-1}, result, trail)
         trail = args[-1]
         result_var = args[-2]
@@ -120,8 +120,8 @@ def _dispatch_fn(call: Callable) -> Callable:
             # numpy array comparison returns an array; treat as failed unification
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -442,22 +442,22 @@ class _ResultGetPredicate:
     def _get_dispatch(self) -> Callable:
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, result, field, value, trail):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, result, field, value, trail):
         result = deref(result)
         field = deref(field)
         if not isinstance(result, dict) or not isinstance(field, str):
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if field not in result:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(value, result[field], trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
 
     def __repr__(self) -> str:
         return "ResultGet/3"

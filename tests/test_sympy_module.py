@@ -29,7 +29,8 @@ def _collect_solutions(predicate, *args):
 
     parent = _FakeGen()
     results = []
-    gen = dispatch(None, parent, *args, trail)
+    # Phase 2: dispatch takes (this_gen, _proceed, _fail, _catcher, *args).
+    gen = dispatch(None, parent, parent, parent, *args, trail)
     for pair in gen:
         g, val = pair
         if val is DONE:

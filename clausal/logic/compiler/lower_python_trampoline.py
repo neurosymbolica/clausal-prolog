@@ -65,18 +65,27 @@ def _lower_body(
             trail_name = ctx.trail_name
             cond_fn_name = ctx.fresh("_ite_cond_fn")
             cond_self = "_ite_self"
-            cond_parent = "_ite_parent"
-            cond_k = [_yield_step_stmt(_name(cond_parent), ast.Constant(None))]
-            cond_ctx = ctx.replace(self_name=cond_self, parent_name=cond_parent)
+            cond_proceed = "_ite_proceed"
+            cond_fail = "_ite_fail"
+            cond_catcher = "_ite_catcher"
+            cond_k = [_yield_step_stmt(_name(cond_proceed), ast.Constant(None))]
+            cond_ctx = ctx.replace(
+                self_name=cond_self,
+                proceed_name=cond_proceed, fail_name=cond_fail,
+                catcher_name=cond_catcher,
+            )
             cond_stmts = lower(t_op, cond_ctx, cond_k)
             cond_body = cond_stmts + [
-                _yield_step_stmt(_name(cond_parent), _name("_DONE")),
+                _yield_step_stmt(_name(cond_fail), _name("_DONE")),
             ]
             cond_fn_def = ast.FunctionDef(
                 name=cond_fn_name,
                 args=ast.arguments(
                     posonlyargs=[],
-                    args=[ast.arg(arg=cond_self), ast.arg(arg=cond_parent),
+                    args=[ast.arg(arg=cond_self),
+                          ast.arg(arg=cond_proceed),
+                          ast.arg(arg=cond_fail),
+                          ast.arg(arg=cond_catcher),
                           ast.arg(arg=trail_name)],
                     vararg=None,
                     kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
@@ -216,20 +225,28 @@ def _lower_body(
             naf_sg = ctx.fresh("_naf_sg")
             naf_g = ctx.fresh("_naf_g")
             naf_v = ctx.fresh("_naf_v")
-            inner_k = [_yield_step_stmt(_name("_naf_parent"), ast.Constant(None))]
+            inner_k = [_yield_step_stmt(_name("_naf_proceed"), ast.Constant(None))]
             inner_stmts = lower(
                 inner,
-                ctx.replace(self_name="_naf_self", parent_name="_naf_parent"),
+                ctx.replace(
+                    self_name="_naf_self",
+                    proceed_name="_naf_proceed",
+                    fail_name="_naf_fail",
+                    catcher_name="_naf_catcher",
+                ),
                 inner_k,
             )
             naf_body = inner_stmts + [
-                _yield_step_stmt(_name("_naf_parent"), _name("_DONE")),
+                _yield_step_stmt(_name("_naf_fail"), _name("_DONE")),
             ]
             naf_fn_def = ast.FunctionDef(
                 name=naf_gen_fn,
                 args=ast.arguments(
                     posonlyargs=[],
-                    args=[ast.arg(arg="_naf_self"), ast.arg(arg="_naf_parent"),
+                    args=[ast.arg(arg="_naf_self"),
+                          ast.arg(arg="_naf_proceed"),
+                          ast.arg(arg="_naf_fail"),
+                          ast.arg(arg="_naf_catcher"),
                           ast.arg(arg=trail_name)],
                     vararg=None,
                     kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],

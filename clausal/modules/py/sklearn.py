@@ -440,16 +440,16 @@ def _deref_params(params):
 # Layer 1: Algorithm introspection (nondeterministic fact tables)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _algorithm_2(this_generator, parent, algo_var, role_var, trail):
+def _algorithm_2(this_generator, _proceed, _fail, _catcher, algo_var, role_var, trail):
     """Algorithm/2: enumerate (algorithm, role) pairs."""
     algo_v = deref(algo_var)
     role_v = deref(role_var)
     for name, role in _ALGORITHM_FACTS:
         mark = trail.mark()
         if unify(algo_var, name, trail) and unify(role_var, role, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 def _default_params_2(algo, params_var, trail, k):
@@ -467,12 +467,12 @@ def _default_params_2(algo, params_var, trail, k):
         yield None
 
 
-def _param_key_3(this_generator, parent, algo_var, key_var, domain_var, trail):
+def _param_key_3(this_generator, _proceed, _fail, _catcher, algo_var, key_var, domain_var, trail):
     """ParamKey/3: enumerate valid parameter keys for an algorithm."""
     algo = str(deref(algo_var))
     algo = _resolve_algorithm(algo)
     if algo == "pipeline":
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     cls = _get_sklearn_class(algo)
     instance = cls()
@@ -480,9 +480,9 @@ def _param_key_3(this_generator, parent, algo_var, key_var, domain_var, trail):
     for key in sorted(params.keys()):
         mark = trail.mark()
         if unify(key_var, key, trail) and unify(domain_var, "any", trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -591,7 +591,7 @@ def _split_data_4(dataset, test_size, seed, split_var, trail, k):
         yield None
 
 
-def _kfold_split_3(this_generator, parent, dataset, k_val, split_var, trail):
+def _kfold_split_3(this_generator, _proceed, _fail, _catcher, dataset, k_val, split_var, trail):
     """KFoldSplit/3: K-fold splits via backtracking."""
     _ensure_sklearn()
     KFold = _sk_model_selection.KFold
@@ -606,12 +606,12 @@ def _kfold_split_3(this_generator, parent, dataset, k_val, split_var, trail):
         y_test = y[test_idx] if y is not None else None
         result = Split(Dataset(X_train, y_train), Dataset(X_test, y_test))
         if unify(split_var, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _stratified_split_3(this_generator, parent, dataset, k_val, split_var, trail):
+def _stratified_split_3(this_generator, _proceed, _fail, _catcher, dataset, k_val, split_var, trail):
     """StratifiedSplit/3: stratified K-fold via backtracking."""
     _ensure_sklearn()
     StratifiedKFold = _sk_model_selection.StratifiedKFold
@@ -624,9 +624,9 @@ def _stratified_split_3(this_generator, parent, dataset, k_val, split_var, trail
         y_train, y_test = y[train_idx], y[test_idx]
         result = Split(Dataset(X_train, y_train), Dataset(X_test, y_test))
         if unify(split_var, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

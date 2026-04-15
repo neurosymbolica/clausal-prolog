@@ -103,12 +103,12 @@ class TrampolineStrategy:
     def emit_leaf_yield(self, ctx):
         from ._ast_helpers import _name
         from .goal_trampoline import _yield_step_stmt
-        return _yield_step_stmt(_name(ctx.parent_name), ast.Constant(None))
+        return _yield_step_stmt(_name(ctx.proceed_name), ast.Constant(None))
 
     def emit_exhaustion_yield(self, ctx):
         from ._ast_helpers import _name
         from .goal_trampoline import _yield_step_stmt
-        return _yield_step_stmt(_name(ctx.parent_name), _name("_DONE"))
+        return _yield_step_stmt(_name(ctx.fail_name), _name("_DONE"))
 
     def emit_sub_call(self, ctx, fname, arity, arg_exprs, k_stmts, *, direct_bucket_ref=None, direct_joint_bucket_ref=None):
         from ._ast_helpers import _name, _assign
@@ -144,4 +144,8 @@ class TrampolineStrategy:
 
     def function_params(self, ctx, arg_names):
         from ._ast_helpers import _TRAIL_PARAM_NAME
-        return [ctx.self_name, ctx.parent_name] + arg_names + [_TRAIL_PARAM_NAME]
+        return (
+            [ctx.self_name, ctx.proceed_name, ctx.fail_name, ctx.catcher_name]
+            + arg_names
+            + [_TRAIL_PARAM_NAME]
+        )

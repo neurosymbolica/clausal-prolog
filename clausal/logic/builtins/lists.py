@@ -66,7 +66,7 @@ def _seq_result(items, was_string):
 
 
 @_trampoline_builtin("in_", 2)
-def _member__2(this_generator, parent, elem, lst, trail):
+def _member__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
     """member(Elem, List) — Elem is a member of List; enumerates on backtrack."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
@@ -78,40 +78,40 @@ def _member__2(this_generator, parent, elem, lst, trail):
                 if result is None:
                     break
                 idx, mark = result
-                yield (parent, None)
+                yield (_proceed, None)
                 trail.undo(mark)
         else:
             for item in items:
                 mark = trail.mark()
                 if unify(elem, item, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("in_check", 2)
-def _memberchk__2(this_generator, parent, elem, lst, trail):
+def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
     """memberchk(Elem, List) — like member/2 but commits to the first match."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
         if _c_memberchk_find is not None:
             if _c_memberchk_find(items, elem, trail):
-                yield (parent, None)
-                yield (parent, DONE)
+                yield (_proceed, None)
+                yield (_fail, DONE)
                 return
         else:
             for item in items:
                 mark = trail.mark()
                 if unify(elem, item, trail):
-                    yield (parent, None)
-                    yield (parent, DONE)
+                    yield (_proceed, None)
+                    yield (_fail, DONE)
                     return
                 trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _append_dr__3(this_generator, parent, l1, l2, l3, trail):
+def _append_dr__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     """Destructive-reuse variant of append/3.
 
     When the first list (l1) has a reference count low enough to prove it is
@@ -129,16 +129,16 @@ def _append_dr__3(this_generator, parent, l1, l2, l3, trail):
             l1_val.extend(l2_items)
             mark = trail.mark()
             if unify(l3, l1_val, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
     # Fallback to standard append
-    yield from _append__3(this_generator, parent, l1, l2, l3, trail)
+    yield from _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail)
 
 
 @_trampoline_builtin("append", 3)
-def _append__3(this_generator, parent, l1, l2, l3, trail):
+def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     """append(L1, L2, L3) — L3 is the concatenation of L1 and L2.
 
     Modes:
@@ -163,7 +163,7 @@ def _append__3(this_generator, parent, l1, l2, l3, trail):
         result = _seq_result(l1_items + l2_items, _out_str)
         mark = trail.mark()
         if unify(l3, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
     elif l1_items is not None and l3_items is not None:
         # L1 and L3 known: compute L2
@@ -172,7 +172,7 @@ def _append__3(this_generator, parent, l1, l2, l3, trail):
             remainder = _seq_result(l3_items[n:], _out_str)
             mark = trail.mark()
             if unify(l2, remainder, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
     elif l3_items is not None:
         # Only L3 known: enumerate all splits
@@ -184,7 +184,7 @@ def _append__3(this_generator, parent, l1, l2, l3, trail):
                 if result is None:
                     break
                 idx, mark = result
-                yield (parent, None)
+                yield (_proceed, None)
                 trail.undo(mark)
         else:
             for i in range(len(l3_items) + 1):
@@ -192,44 +192,44 @@ def _append__3(this_generator, parent, l1, l2, l3, trail):
                 suffix = _seq_result(l3_items[i:], _out_str)
                 mark = trail.mark()
                 if unify(l1, prefix, trail) and unify(l2, suffix, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("length", 2)
-def _length__2(this_generator, parent, lst, n, trail):
+def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
     """length(List, N) — N is the length of List."""
     lst_val = deref(lst)
     n_val = deref(n)
     if isinstance(lst_val, (list, str)):
         mark = trail.mark()
         if unify(n, len(lst_val), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
     elif not is_var(n_val) and isinstance(n_val, int) and n_val >= 0:
         result = [Var() for _ in range(n_val)]
         mark = trail.mark()
         if unify(lst, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("last", 2)
-def _last__2(this_generator, parent, lst, elem, trail):
+def _last__2(this_generator, _proceed, _fail, _catcher, lst, elem, trail):
     """last(List, Elem) — Elem is the last element of List."""
     lst_val = deref(lst)
     if isinstance(lst_val, (list, str)) and len(lst_val) > 0:
         mark = trail.mark()
         if unify(elem, lst_val[-1], trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("reverse", 2)
-def _reverse__2(this_generator, parent, lst, rev, trail):
+def _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
     """reverse(List, Rev) — Rev is the reverse of List."""
     lst_val = deref(lst)
     if isinstance(lst_val, (list, str)):
@@ -237,13 +237,13 @@ def _reverse__2(this_generator, parent, lst, rev, trail):
         result = _seq_result(list(reversed(lst_val)), was_str)
         mark = trail.mark()
         if unify(rev, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("get_item", 3)
-def _nth0__3(this_generator, parent, n, lst, elem, trail):
+def _nth0__3(this_generator, _proceed, _fail, _catcher, n, lst, elem, trail):
     """nth0(N, List, Elem) — Elem is the N-th element of List (0-based)."""
     n_val = deref(n)
     lst_val = deref(lst)
@@ -253,7 +253,7 @@ def _nth0__3(this_generator, parent, n, lst, elem, trail):
             if isinstance(n_val, int) and 0 <= n_val < len(items):
                 mark = trail.mark()
                 if unify(elem, items[n_val], trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
         else:
             if _c_nth0_find is not None:
@@ -263,19 +263,19 @@ def _nth0__3(this_generator, parent, n, lst, elem, trail):
                     if result is None:
                         break
                     idx, mark = result
-                    yield (parent, None)
+                    yield (_proceed, None)
                     trail.undo(mark)
             else:
                 for i, item in enumerate(items):
                     mark = trail.mark()
                     if unify(n, i, trail) and unify(elem, item, trail):
-                        yield (parent, None)
+                        yield (_proceed, None)
                     trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("flatten", 2)
-def _flatten__2(this_generator, parent, lst, flat, trail):
+def _flatten__2(this_generator, _proceed, _fail, _catcher, lst, flat, trail):
     """flatten(List, Flat) — Flat is the flat list of all atoms in List.
 
     Strings are treated as atoms (not flattened into characters).
@@ -296,13 +296,13 @@ def _flatten__2(this_generator, parent, lst, flat, trail):
         _do_flat(lst_val)
         mark = trail.mark()
         if unify(flat, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("msort", 2)
-def _msort__2(this_generator, parent, lst, sorted_lst, trail):
+def _msort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     """msort(List, Sorted) — Sorted is List sorted, preserving duplicates."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
@@ -314,13 +314,13 @@ def _msort__2(this_generator, parent, lst, sorted_lst, trail):
         out = _seq_result(result, isinstance(lst_val, str))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("sort", 2)
-def _sort__2(this_generator, parent, lst, sorted_lst, trail):
+def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     """sort(List, Sorted) — Sorted is List sorted with duplicates removed."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
@@ -336,13 +336,13 @@ def _sort__2(this_generator, parent, lst, sorted_lst, trail):
         out = _seq_result(result, isinstance(lst_val, str))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("permutation", 2)
-def _permutation__2(this_generator, parent, lst, perm, trail):
+def _permutation__2(this_generator, _proceed, _fail, _catcher, lst, perm, trail):
     """permutation(List, Perm) — Perm is a permutation of List."""
     import itertools
     lst_val = deref(lst)
@@ -355,19 +355,19 @@ def _permutation__2(this_generator, parent, lst, perm, trail):
                 mark = _c_permutation_find(perm_iter, perm, was_str, trail)
                 if mark is None:
                     break
-                yield (parent, None)
+                yield (_proceed, None)
                 trail.undo(mark)
         else:
             for p in itertools.permutations(items):
                 mark = trail.mark()
                 if unify(perm, _seq_result(list(p), was_str), trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("select", 3)
-def _select__3(this_generator, parent, elem, lst, rest, trail):
+def _select__3(this_generator, _proceed, _fail, _catcher, elem, lst, rest, trail):
     """select(Elem, List, Rest) — Elem is in List, Rest is List without one occurrence."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
@@ -381,20 +381,20 @@ def _select__3(this_generator, parent, elem, lst, rest, trail):
                 if result is None:
                     break
                 idx, mark = result
-                yield (parent, None)
+                yield (_proceed, None)
                 trail.undo(mark)
         else:
             for i, item in enumerate(items):
                 mark = trail.mark()
                 remainder = _seq_result(items[:i] + items[i + 1:], was_str)
                 if unify(elem, item, trail) and unify(rest, remainder, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("subtract", 3)
-def _subtract__3(this_generator, parent, set1, set2, diff, trail):
+def _subtract__3(this_generator, _proceed, _fail, _catcher, set1, set2, diff, trail):
     """subtract(Set1, Set2, Diff) — Diff is Set1 minus elements in Set2."""
     s1 = deref(set1)
     s2 = deref(set2)
@@ -405,13 +405,13 @@ def _subtract__3(this_generator, parent, set1, set2, diff, trail):
         result = _seq_result([x for x in s1_items if x not in s2_items], _out_str)
         mark = trail.mark()
         if unify(diff, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("intersection", 3)
-def _intersection__3(this_generator, parent, set1, set2, inter, trail):
+def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inter, trail):
     """intersection(Set1, Set2, Inter) — Inter is the intersection of Set1 and Set2."""
     s1 = deref(set1)
     s2 = deref(set2)
@@ -422,13 +422,13 @@ def _intersection__3(this_generator, parent, set1, set2, inter, trail):
         result = _seq_result([x for x in s1_items if x in s2_items], _out_str)
         mark = trail.mark()
         if unify(inter, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("union", 3)
-def _union__3(this_generator, parent, set1, set2, uni, trail):
+def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail):
     """union(Set1, Set2, union) — union is Set1 ∪ Set2 (no duplicates)."""
     s1 = deref(set1)
     s2 = deref(set2)
@@ -443,13 +443,13 @@ def _union__3(this_generator, parent, set1, set2, uni, trail):
         out = _seq_result(result, _out_str)
         mark = trail.mark()
         if unify(uni, out, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("list_to_set", 2)
-def _list_to_set__2(this_generator, parent, lst, set_out, trail):
+def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, trail):
     """list_to_set(List, Set) — Set is List with duplicates removed (order preserved)."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
@@ -461,13 +461,13 @@ def _list_to_set__2(this_generator, parent, lst, set_out, trail):
         out = _seq_result(seen, isinstance(lst_val, str))
         mark = trail.mark()
         if unify(set_out, out, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("sum_list", 2)
-def _sum_list__2(this_generator, parent, lst, total, trail):
+def _sum_list__2(this_generator, _proceed, _fail, _catcher, lst, total, trail):
     """sum_list(List, Total) — Total is the sum of all numbers in List."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
@@ -475,17 +475,17 @@ def _sum_list__2(this_generator, parent, lst, total, trail):
         try:
             s = sum(deref(x) for x in items)
         except TypeError:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         mark = trail.mark()
         if unify(total, s, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("max_list", 2)
-def _max_list__2(this_generator, parent, lst, maximum, trail):
+def _max_list__2(this_generator, _proceed, _fail, _catcher, lst, maximum, trail):
     """max_list(List, max_) — max_ is the maximum element of List."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
@@ -493,17 +493,17 @@ def _max_list__2(this_generator, parent, lst, maximum, trail):
         try:
             m = max(deref(x) for x in items)
         except TypeError:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         mark = trail.mark()
         if unify(maximum, m, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("min_list", 2)
-def _min_list__2(this_generator, parent, lst, minimum, trail):
+def _min_list__2(this_generator, _proceed, _fail, _catcher, lst, minimum, trail):
     """min_list(List, min_) — min_ is the minimum element of List."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
@@ -511,20 +511,20 @@ def _min_list__2(this_generator, parent, lst, minimum, trail):
         try:
             m = min(deref(x) for x in items)
         except TypeError:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         mark = trail.mark()
         if unify(minimum, m, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── V3-5: Extended list predicates ────────────────────────────────────────────
 
 
 @_trampoline_builtin("take", 3)
-def _take__3(this_generator, parent, n, lst, taken, trail):
+def _take__3(this_generator, _proceed, _fail, _catcher, n, lst, taken, trail):
     """take(N, List, Taken) — Taken is the first N elements of List."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
@@ -533,13 +533,13 @@ def _take__3(this_generator, parent, n, lst, taken, trail):
         result = _seq_result(items[:n_val] if n_val >= 0 else [], was_str)
         mark = trail.mark()
         if unify(taken, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("drop", 3)
-def _drop__3(this_generator, parent, n, lst, rest, trail):
+def _drop__3(this_generator, _proceed, _fail, _catcher, n, lst, rest, trail):
     """drop(N, List, Rest) — Rest is List after dropping the first N elements."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
@@ -548,13 +548,13 @@ def _drop__3(this_generator, parent, n, lst, rest, trail):
         result = _seq_result(items[n_val:] if n_val >= 0 else items, was_str)
         mark = trail.mark()
         if unify(rest, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("split_at", 4)
-def _split_at__4(this_generator, parent, n, lst, left, right, trail):
+def _split_at__4(this_generator, _proceed, _fail, _catcher, n, lst, left, right, trail):
     """split_at(N, List, Left, Right) — split List at index N."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
@@ -565,13 +565,13 @@ def _split_at__4(this_generator, parent, n, lst, left, right, trail):
         r_out = _seq_result(items[idx:], was_str)
         mark = trail.mark()
         if unify(left, l_out, trail) and unify(right, r_out, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("zip_", 3)
-def _zip__3(this_generator, parent, l1, l2, pairs, trail):
+def _zip__3(this_generator, _proceed, _fail, _catcher, l1, l2, pairs, trail):
     """zip_(L1, L2, Pairs) — Pairs is a list of [X, Y] from L1 and L2."""
     l1_val, l2_val = deref(l1), deref(l2)
     l1_items = _as_items(l1_val)
@@ -580,13 +580,13 @@ def _zip__3(this_generator, parent, l1, l2, pairs, trail):
         result = [[a, b] for a, b in zip(l1_items, l2_items)]
         mark = trail.mark()
         if unify(pairs, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("replicate", 3)
-def _replicate__3(this_generator, parent, n, elem, lst, trail):
+def _replicate__3(this_generator, _proceed, _fail, _catcher, n, elem, lst, trail):
     """replicate(N, Elem, List) — List is N copies of Elem."""
     n_val = deref(n)
     elem_val = deref(elem)
@@ -594,13 +594,13 @@ def _replicate__3(this_generator, parent, n, elem, lst, trail):
         result = [elem_val] * n_val
         mark = trail.mark()
         if unify(lst, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("split_with", 3)
-def _split_with__3(this_generator, parent, sep, lst, parts, trail):
+def _split_with__3(this_generator, _proceed, _fail, _catcher, sep, lst, parts, trail):
     """split_with(Sep, List, Parts) — split List by separator Sep into sublists.
 
     Modes:
@@ -625,7 +625,7 @@ def _split_with__3(this_generator, parent, sep, lst, parts, trail):
             result = [_seq_result(part, True) for part in result]
         mark = trail.mark()
         if unify(parts, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
     elif isinstance(parts_val, list):
         # Join mode: interleave parts with separator
@@ -638,9 +638,9 @@ def _split_with__3(this_generator, parent, sep, lst, parts, trail):
                 joined.append(sep_val)
         mark = trail.mark()
         if unify(lst, joined, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_builtin("numlist", 3)

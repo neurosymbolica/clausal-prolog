@@ -74,7 +74,7 @@ def _vq():
 
 def _dispatch_fn(call: Callable) -> Callable:
     """Trampoline dispatch: inputs → result → unify RESULT."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         # args: (input_0, ..., input_{n-1}, result, trail)
         trail = args[-1]
         result_var = args[-2]
@@ -82,15 +82,15 @@ def _dispatch_fn(call: Callable) -> Callable:
         try:
             out = call(*inputs)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, out, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -241,24 +241,24 @@ class _ResultGetPredicate:
     def _get_dispatch(self) -> Callable:
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, result, field, value, trail):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, result, field, value, trail):
         result = deref(result)
         field = deref(field)
         if not isinstance(field, str):
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             val = result[field]
         except (KeyError, TypeError):
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(value, val, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
 
     def __repr__(self) -> str:
         return "ResultGet/3"

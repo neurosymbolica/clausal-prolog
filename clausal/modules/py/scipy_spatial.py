@@ -224,18 +224,18 @@ def _pred(name: str, *arity_fns) -> ModulePredicate:
 
 def _pure(fn: Callable) -> Callable:
     """Wrap a pure function: deref all inputs, call fn(*inputs), unify RESULT."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         inputs = [deref(x) for x in args[:-2]]
         try:
             out = fn(*inputs)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(result_var, out, trail):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -243,7 +243,7 @@ def _pure(fn: Callable) -> Callable:
 
 def _make(constructor: Callable) -> Callable:
     """Deref inputs, construct object, alloc handle, unify RESULT."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         inputs = [deref(x) for x in args[:-2]]
@@ -251,17 +251,17 @@ def _make(constructor: Callable) -> Callable:
             obj = constructor(*inputs)
             handle = _alloc_handle(obj)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(result_var, handle, trail):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
 def _query(evaluator: Callable) -> Callable:
     """Deref inputs, look up handle from first input, call evaluator, unify."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         raw = [deref(x) for x in args[:-2]]
@@ -269,11 +269,11 @@ def _query(evaluator: Callable) -> Callable:
             obj = _lookup_handle(raw[0])
             out = evaluator(obj, *raw[1:])
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(result_var, out, trail):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -453,7 +453,7 @@ def _make_rotation(method, data):
         raise ValueError(f"Unknown rotation method: {method!r}")
     return constructor(data)
 
-def _make_rotation_dispatch(this_generator, parent, *args):
+def _make_rotation_dispatch(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
     result_var = args[-2]
     method = deref(args[0])
@@ -462,11 +462,11 @@ def _make_rotation_dispatch(this_generator, parent, *args):
         rot = _make_rotation(method, data)
         handle = _alloc_handle(rot)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     if unify(result_var, handle, trail):
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 # MakeRotation(METHOD, DATA, RESULT) → arity 3
 MakeRotation = _pred("MakeRotation",
@@ -512,7 +512,7 @@ RotationAs = _pred("RotationAs",
 
 # ── RotationCompose ───────────────────────────────────────────────────────
 
-def _rotation_compose_dispatch(this_generator, parent, *args):
+def _rotation_compose_dispatch(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
     result_var = args[-2]
     handle_a = int(deref(args[0]))
@@ -523,11 +523,11 @@ def _rotation_compose_dispatch(this_generator, parent, *args):
         composed = rot_a * rot_b
         handle = _alloc_handle(composed)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     if unify(result_var, handle, trail):
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 # RotationCompose(HANDLE_A, HANDLE_B, RESULT) → arity 3
 RotationCompose = _pred("RotationCompose",
@@ -536,7 +536,7 @@ RotationCompose = _pred("RotationCompose",
 
 # ── RotationInverse ───────────────────────────────────────────────────────
 
-def _rotation_inverse_dispatch(this_generator, parent, *args):
+def _rotation_inverse_dispatch(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
     result_var = args[-2]
     handle = int(deref(args[0]))
@@ -545,11 +545,11 @@ def _rotation_inverse_dispatch(this_generator, parent, *args):
         inv_rot = rot.inv()
         new_handle = _alloc_handle(inv_rot)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     if unify(result_var, new_handle, trail):
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 # RotationInverse(HANDLE, RESULT) → arity 2
 RotationInverse = _pred("RotationInverse",
@@ -561,14 +561,14 @@ RotationInverse = _pred("RotationInverse",
 # Lifecycle — Free
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _free_dispatch(this_generator, parent, handle, trail):
+def _free_dispatch(this_generator, _proceed, _fail, _catcher, handle, trail):
     try:
         with _registry_lock:
             _SPATIAL_REGISTRY.pop(int(deref(handle)), None)
     except Exception:
         pass
-    yield (parent, None)
-    yield (parent, DONE)
+    yield (_proceed, None)
+    yield (_fail, DONE)
 
 Free = _pred("Free",
     (1, _free_dispatch),

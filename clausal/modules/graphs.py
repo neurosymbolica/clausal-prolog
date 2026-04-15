@@ -47,13 +47,13 @@ class _GraphPredicate:
             return next(iter(self._dispatch_fns.values()))
         return self._multi_dispatch
 
-    def _multi_dispatch(self, this_generator, parent, *args):
+    def _multi_dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         arity = len(args) - 1  # exclude trail
         fn = self._dispatch_fns.get(arity)
         if fn is None:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
-        yield from fn(this_generator, parent, *args)
+        yield from fn(this_generator, _proceed, *args)
 
     def __repr__(self) -> str:
         arities = sorted(self._dispatch_fns)
@@ -121,19 +121,19 @@ def _build_weighted_adj(edges):
 # ── Graph Query ──────────────────────────────────────────────────────────────
 
 
-def _vertices__2(this_generator, parent, edges, verts, trail):
+def _vertices__2(this_generator, _proceed, _fail, _catcher, edges, verts, trail):
     """Vertices(Edges, Verts) — extract unique vertex list from edges."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
         result = _extract_vertices(edges_val)
         mark = trail.mark()
         if unify(verts, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _neighbors__3(this_generator, parent, edges, node, nbrs, trail):
+def _neighbors__3(this_generator, _proceed, _fail, _catcher, edges, node, nbrs, trail):
     """Neighbors(Edges, Node, Nbrs) — list of adjacent nodes for Node."""
     edges_val = deref(edges)
     node_val = deref(node)
@@ -142,12 +142,12 @@ def _neighbors__3(this_generator, parent, edges, node, nbrs, trail):
         result = adj.get(node_val, [])
         mark = trail.mark()
         if unify(nbrs, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _has_edge__3(this_generator, parent, edges, u, v, trail):
+def _has_edge__3(this_generator, _proceed, _fail, _catcher, edges, u, v, trail):
     """HasEdge(Edges, U, V) — succeeds if edge [U,V] exists."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
@@ -157,12 +157,12 @@ def _has_edge__3(this_generator, parent, edges, u, v, trail):
                 eu, ev = deref(e[0]), deref(e[1])
                 mark = trail.mark()
                 if unify(u, eu, trail) and unify(v, ev, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _degree__3(this_generator, parent, edges, node, deg, trail):
+def _degree__3(this_generator, _proceed, _fail, _catcher, edges, node, deg, trail):
     """Degree(Edges, Node, Deg) — degree of Node (count of incident edges)."""
     edges_val = deref(edges)
     node_val = deref(node)
@@ -175,22 +175,22 @@ def _degree__3(this_generator, parent, edges, node, deg, trail):
                     count += 1
         mark = trail.mark()
         if unify(deg, count, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Graph Properties ─────────────────────────────────────────────────────────
 
 
-def _is_connected__1(this_generator, parent, edges, trail):
+def _is_connected__1(this_generator, _proceed, _fail, _catcher, edges, trail):
     """IsConnected(Edges) — succeeds if graph is connected."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
         verts = _extract_vertices(edges_val)
         if len(verts) == 0:
-            yield (parent, None)
-            yield (parent, DONE)
+            yield (_proceed, None)
+            yield (_fail, DONE)
             return
         adj = _build_adj(edges_val)
         visited = set()
@@ -203,11 +203,11 @@ def _is_connected__1(this_generator, parent, edges, trail):
                     visited.add(neighbor)
                     queue.append(neighbor)
         if len(visited) == len(verts):
-            yield (parent, None)
-    yield (parent, DONE)
+            yield (_proceed, None)
+    yield (_fail, DONE)
 
 
-def _is_isolated__2(this_generator, parent, edges, node, trail):
+def _is_isolated__2(this_generator, _proceed, _fail, _catcher, edges, node, trail):
     """IsIsolated(Edges, Node) — check/enumerate isolated nodes (degree 0)."""
     edges_val = deref(edges)
     node_val = deref(node)
@@ -215,22 +215,22 @@ def _is_isolated__2(this_generator, parent, edges, node, trail):
         adj = _build_adj(edges_val)
         if not is_var(node_val):
             if node_val not in adj or len(adj[node_val]) == 0:
-                yield (parent, None)
+                yield (_proceed, None)
         else:
             verts = _extract_vertices(edges_val)
             for v in verts:
                 if len(adj.get(v, [])) == 0:
                     mark = trail.mark()
                     if unify(node, v, trail):
-                        yield (parent, None)
+                        yield (_proceed, None)
                     trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Traversal ────────────────────────────────────────────────────────────────
 
 
-def _breadth_first_nodes__3(this_generator, parent, edges, source, nodes, trail):
+def _breadth_first_nodes__3(this_generator, _proceed, _fail, _catcher, edges, source, nodes, trail):
     """BreadthFirstNodes(Edges, Source, Nodes) — BFS node ordering from Source."""
     edges_val = deref(edges)
     source_val = deref(source)
@@ -249,12 +249,12 @@ def _breadth_first_nodes__3(this_generator, parent, edges, source, nodes, trail)
                     queue.append(neighbor)
         mark = trail.mark()
         if unify(nodes, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _depth_first_nodes__3(this_generator, parent, edges, source, nodes, trail):
+def _depth_first_nodes__3(this_generator, _proceed, _fail, _catcher, edges, source, nodes, trail):
     """DepthFirstNodes(Edges, Source, Nodes) — DFS preorder node ordering from Source."""
     edges_val = deref(edges)
     source_val = deref(source)
@@ -273,15 +273,15 @@ def _depth_first_nodes__3(this_generator, parent, edges, source, nodes, trail):
                         stack.append(neighbor)
         mark = trail.mark()
         if unify(nodes, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Pathfinding ──────────────────────────────────────────────────────────────
 
 
-def _find_path__4(this_generator, parent, edges, start, end, path, trail):
+def _find_path__4(this_generator, _proceed, _fail, _catcher, edges, start, end, path, trail):
     """FindPath(Edges, Start, End, Path) — enumerate simple paths via backtracking."""
     edges_val = deref(edges)
     start_val = deref(start)
@@ -302,12 +302,12 @@ def _find_path__4(this_generator, parent, edges, start, end, path, trail):
         for p in _dfs(start_val, end_val, [start_val]):
             mark = trail.mark()
             if unify(path, p, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _shortest_path__4(this_generator, parent, edges, start, end, path, trail):
+def _shortest_path__4(this_generator, _proceed, _fail, _catcher, edges, start, end, path, trail):
     """ShortestPath(Edges, Start, End, Path) — shortest path.
 
     Uses BFS for unweighted graphs (2-element edges),
@@ -347,7 +347,7 @@ def _shortest_path__4(this_generator, parent, edges, start, end, path, trail):
                 result.reverse()
                 mark = trail.mark()
                 if unify(path, result, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
         else:
             adj = _build_adj(edges_val)
@@ -372,12 +372,12 @@ def _shortest_path__4(this_generator, parent, edges, start, end, path, trail):
                 result.reverse()
                 mark = trail.mark()
                 if unify(path, result, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _path_cost__3(this_generator, parent, edges, path, cost, trail):
+def _path_cost__3(this_generator, _proceed, _fail, _catcher, edges, path, cost, trail):
     """PathCost(Edges, Path, Cost) — cost of a path in a weighted graph."""
     edges_val = deref(edges)
     path_val = deref(path)
@@ -406,15 +406,15 @@ def _path_cost__3(this_generator, parent, edges, path, cost, trail):
         if valid:
             mark = trail.mark()
             if unify(cost, total, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Components & Ordering ────────────────────────────────────────────────────
 
 
-def _connected_components__2(this_generator, parent, edges, components, trail):
+def _connected_components__2(this_generator, _proceed, _fail, _catcher, edges, components, trail):
     """ConnectedComponents(Edges, Components) — list of components (each a vertex list)."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
@@ -437,12 +437,12 @@ def _connected_components__2(this_generator, parent, edges, components, trail):
                 result.append(component)
         mark = trail.mark()
         if unify(components, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _topological_sort__2(this_generator, parent, edges, order, trail):
+def _topological_sort__2(this_generator, _proceed, _fail, _catcher, edges, order, trail):
     """TopologicalSort(Edges, Order) — topological ordering of DAG (Kahn's algorithm).
 
     Fails if graph has a cycle.
@@ -471,12 +471,12 @@ def _topological_sort__2(this_generator, parent, edges, order, trail):
         if len(result) == len(all_nodes):
             mark = trail.mark()
             if unify(order, result, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _has_cycle__1(this_generator, parent, edges, trail):
+def _has_cycle__1(this_generator, _proceed, _fail, _catcher, edges, trail):
     """HasCycle(Edges) — succeeds if graph contains a cycle."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
@@ -505,14 +505,14 @@ def _has_cycle__1(this_generator, parent, edges, trail):
                 _dfs(n)
 
         if has_cycle:
-            yield (parent, None)
-    yield (parent, DONE)
+            yield (_proceed, None)
+    yield (_fail, DONE)
 
 
 # ── Tree Operations ──────────────────────────────────────────────────────────
 
 
-def _spanning_tree__2(this_generator, parent, edges, tree, trail):
+def _spanning_tree__2(this_generator, _proceed, _fail, _catcher, edges, tree, trail):
     """SpanningTree(Edges, Tree) — a spanning tree (edge subset) via BFS."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
@@ -520,9 +520,9 @@ def _spanning_tree__2(this_generator, parent, edges, tree, trail):
         if len(verts) == 0:
             mark = trail.mark()
             if unify(tree, [], trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         adj = _build_adj(edges_val)
         visited = {verts[0]}
@@ -537,12 +537,12 @@ def _spanning_tree__2(this_generator, parent, edges, tree, trail):
                     queue.append(neighbor)
         mark = trail.mark()
         if unify(tree, tree_edges, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _min_spanning_tree__3(this_generator, parent, edges, tree, total_cost, trail):
+def _min_spanning_tree__3(this_generator, _proceed, _fail, _catcher, edges, tree, total_cost, trail):
     """MinSpanningTree(Edges, Tree, TotalCost) — MST via Prim's algorithm."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
@@ -550,9 +550,9 @@ def _min_spanning_tree__3(this_generator, parent, edges, tree, total_cost, trail
         if len(verts) == 0:
             mark = trail.mark()
             if unify(tree, [], trail) and unify(total_cost, 0, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         wadj = _build_weighted_adj(edges_val)
         visited = {verts[0]}
@@ -573,15 +573,15 @@ def _min_spanning_tree__3(this_generator, parent, edges, tree, total_cost, trail
                     heapq.heappush(heap, (nw, v, neighbor))
         mark = trail.mark()
         if unify(tree, tree_edges, trail) and unify(total_cost, cost, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Graph Transformation ─────────────────────────────────────────────────────
 
 
-def _reverse_edges__2(this_generator, parent, edges, reversed_edges, trail):
+def _reverse_edges__2(this_generator, _proceed, _fail, _catcher, edges, reversed_edges, trail):
     """ReverseEdges(Edges, Reversed) — reverse all edge directions."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
@@ -594,12 +594,12 @@ def _reverse_edges__2(this_generator, parent, edges, reversed_edges, trail):
                 result.append([deref(e[1]), deref(e[0])])
         mark = trail.mark()
         if unify(reversed_edges, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _merge_graphs__3(this_generator, parent, edges1, edges2, merged, trail):
+def _merge_graphs__3(this_generator, _proceed, _fail, _catcher, edges1, edges2, merged, trail):
     """MergeGraphs(Edges1, Edges2, Merged) — union of two edge lists."""
     e1 = deref(edges1)
     e2 = deref(edges2)
@@ -607,9 +607,9 @@ def _merge_graphs__3(this_generator, parent, edges1, edges2, merged, trail):
         result = list(e1) + list(e2)
         mark = trail.mark()
         if unify(merged, result, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Build and export predicate objects ───────────────────────────────────────

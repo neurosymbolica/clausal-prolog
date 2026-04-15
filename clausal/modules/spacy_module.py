@@ -82,13 +82,13 @@ class _SpacyPredicate:
             return next(iter(self._dispatch_fns.values()))
         return self._multi_dispatch
 
-    def _multi_dispatch(self, this_generator, parent, *args):
+    def _multi_dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         arity = len(args) - 1  # exclude trail
         fn = self._dispatch_fns.get(arity)
         if fn is None:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
-        yield from fn(this_generator, parent, *args)
+        yield from fn(this_generator, _proceed, _fail, _catcher, *args)
 
     def __repr__(self) -> str:
         arities = sorted(self._dispatch_fns)
@@ -99,10 +99,10 @@ class _SpacyPredicate:
 
 def _simple_to_trampoline(simple_fn):
     """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
+    def trampoline_fn(this_generator, _proceed, _fail, _catcher, *args):
         for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return trampoline_fn
 
 
@@ -184,22 +184,22 @@ def _unload_model_1(alias, trail, k):
     yield None
 
 
-def _current_model_1(this_generator, parent, alias, trail):
+def _current_model_1(this_generator, _proceed, _fail, _catcher, alias, trail):
     """CurrentModel/1: enumerate registered model aliases."""
     alias = deref(alias)
     if not is_var(alias):
         if str(alias) in _MODELS:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
         return
     with _LOCK:
         aliases = list(_MODELS.keys())
     for a in aliases:
         mark = trail.mark()
         if unify(alias, a, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Layer 2: Document processing ─────────────────────────────────────────
@@ -216,19 +216,19 @@ def _process_3(alias, text, doc_var, trail, k):
 
 # ── Layer 3: Tokens ──────────────────────────────────────────────────────
 
-def _token_2(this_generator, parent, doc, tok_var, trail):
+def _token_2(this_generator, _proceed, _fail, _catcher, doc, tok_var, trail):
     """Token/2: backtrack over all tokens in a Doc."""
     doc = deref(doc)
     for tok in doc:
         mark = trail.mark()
         d = _token_to_dict(tok)
         if unify(tok_var, d, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _token_3(this_generator, parent, doc, index, tok_var, trail):
+def _token_3(this_generator, _proceed, _fail, _catcher, doc, index, tok_var, trail):
     """Token/3: get token by index, or iterate with index."""
     doc = deref(doc)
     index = deref(index)
@@ -239,18 +239,18 @@ def _token_3(this_generator, parent, doc, index, tok_var, trail):
             mark = trail.mark()
             d = _token_to_dict(doc[idx])
             if unify(tok_var, d, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     # Iterate all with index
     for tok in doc:
         mark = trail.mark()
         d = _token_to_dict(tok)
         if unify(index, tok.i, trail) and unify(tok_var, d, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 def _token_text_2(tok, text_var, trail, k):
@@ -329,19 +329,19 @@ def _is_stop_1(tok, trail, k):
 
 # ── Layer 5: NER ─────────────────────────────────────────────────────────
 
-def _entity_2(this_generator, parent, doc, ent_var, trail):
+def _entity_2(this_generator, _proceed, _fail, _catcher, doc, ent_var, trail):
     """Entity/2: backtrack over all entities in a Doc."""
     doc = deref(doc)
     for ent in doc.ents:
         mark = trail.mark()
         d = _ent_to_dict(ent)
         if unify(ent_var, d, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _entity_3(this_generator, parent, doc, label, ent_var, trail):
+def _entity_3(this_generator, _proceed, _fail, _catcher, doc, label, ent_var, trail):
     """Entity/3: backtrack over entities filtered by label."""
     doc = deref(doc)
     label = deref(label)
@@ -351,9 +351,9 @@ def _entity_3(this_generator, parent, doc, label, ent_var, trail):
             mark = trail.mark()
             d = _ent_to_dict(ent)
             if unify(ent_var, d, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 def _entity_list_2(doc, ents_var, trail, k):
@@ -366,15 +366,15 @@ def _entity_list_2(doc, ents_var, trail, k):
 
 # ── Layer 6: Sentences ───────────────────────────────────────────────────
 
-def _sentence_2(this_generator, parent, doc, sent_var, trail):
+def _sentence_2(this_generator, _proceed, _fail, _catcher, doc, sent_var, trail):
     """Sentence/2: backtrack over sentences as strings."""
     doc = deref(doc)
     for sent in doc.sents:
         mark = trail.mark()
         if unify(sent_var, sent.text, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 def _sentence_list_2(doc, sents_var, trail, k):
@@ -402,16 +402,16 @@ def _similarity_4(alias, text1, text2, score_var, trail, k):
 
 # ── Layer 8: Noun chunks ────────────────────────────────────────────────
 
-def _noun_chunk_2(this_generator, parent, doc, chunk_var, trail):
+def _noun_chunk_2(this_generator, _proceed, _fail, _catcher, doc, chunk_var, trail):
     """NounChunk/2: backtrack over noun chunks."""
     doc = deref(doc)
     for chunk in doc.noun_chunks:
         mark = trail.mark()
         d = _chunk_to_dict(chunk)
         if unify(chunk_var, d, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Build and export predicate objects ───────────────────────────────────

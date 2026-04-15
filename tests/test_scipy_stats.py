@@ -43,7 +43,7 @@ def _drive(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, *args, result, trail)
+    gen = dispatch(None, None, None, None, *args, result, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -57,7 +57,7 @@ def _drive_result_get(result_dict, field):
     value = Var()
     dispatch = ResultGet._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, result_dict, field, value, trail)
+    gen = dispatch(None, None, None, None, result_dict, field, value, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -71,7 +71,7 @@ def _fails_with_wrong_result(pred, *args):
     trail = Trail()
     result_bound = object()  # will not unify with any result
     dispatch = pred._get_dispatch()
-    gen = dispatch(None, None, *args, result_bound, trail)
+    gen = dispatch(None, None, None, None, *args, result_bound, trail)
     solutions = [s for s in gen if s[1] is None]
     return len(solutions) == 0
 
@@ -578,7 +578,7 @@ class TestStatsDist:
         result = Var()
         dispatch = StatsDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', 'pdf', 0.0, result, trail)
+        gen = dispatch(None, None, None, None, 'norm', 'pdf', 0.0, result, trail)
         val = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -593,7 +593,7 @@ class TestStatsDist:
         result = Var()
         dispatch = StatsDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', 'cdf', 0.0, result, trail)
+        gen = dispatch(None, None, None, None, 'norm', 'cdf', 0.0, result, trail)
         val = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -608,7 +608,7 @@ class TestStatsDist:
         result = Var()
         dispatch = StatsDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', 'entropy', result, trail)
+        gen = dispatch(None, None, None, None, 'norm', 'entropy', result, trail)
         val = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -681,7 +681,7 @@ class TestStatsNormalRvs:
         result = Var()
         dispatch = StatsNormalRvs._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, result, trail)
+        gen = dispatch(None, None, None, None, result, trail)
         val = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -709,7 +709,7 @@ class TestStatsFreezeDist:
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
+        gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -725,7 +725,7 @@ class TestStatsFreezeDist:
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
+        gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -736,7 +736,7 @@ class TestStatsFreezeDist:
         pdf_result = Var()
         pdf_dispatch = StatsFrozenPdf._get_dispatch()
         trail2 = Trail()
-        gen2 = pdf_dispatch(None, None, handle, 0.0, pdf_result, trail2)
+        gen2 = pdf_dispatch(None, None, None, None, handle, 0.0, pdf_result, trail2)
         val = None
         for parent, sentinel in gen2:
             if sentinel is None:
@@ -755,7 +755,7 @@ class TestStatsFreezeDist:
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', {'loc': 3.0, 'scale': 2.0}, result, trail)
+        gen = dispatch(None, None, None, None, 'norm', {'loc': 3.0, 'scale': 2.0}, result, trail)
         handle = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -765,7 +765,7 @@ class TestStatsFreezeDist:
         stats_result = Var()
         stats_dispatch = StatsFrozenStats._get_dispatch()
         trail2 = Trail()
-        gen2 = stats_dispatch(None, None, handle, stats_result, trail2)
+        gen2 = stats_dispatch(None, None, None, None, handle, stats_result, trail2)
         val = None
         for parent, sentinel in gen2:
             if sentinel is None:
@@ -784,7 +784,7 @@ class TestStatsFreezeDist:
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
+        gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -795,7 +795,7 @@ class TestStatsFreezeDist:
 
         free_dispatch = StatsFrozenFree._get_dispatch()
         trail2 = Trail()
-        gen2 = free_dispatch(None, None, handle, trail2)
+        gen2 = free_dispatch(None, None, None, None, handle, trail2)
         for _ in gen2:
             pass
 
@@ -806,7 +806,7 @@ class TestStatsFreezeDist:
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
+        gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -816,7 +816,7 @@ class TestStatsFreezeDist:
         cdf_result = Var()
         cdf_dispatch = StatsFrozenCdf._get_dispatch()
         trail2 = Trail()
-        gen2 = cdf_dispatch(None, None, handle, 0.0, cdf_result, trail2)
+        gen2 = cdf_dispatch(None, None, None, None, handle, 0.0, cdf_result, trail2)
         val = None
         for parent, sentinel in gen2:
             if sentinel is None:
@@ -832,7 +832,7 @@ class TestStatsFreezeDist:
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
+        gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -844,7 +844,7 @@ class TestStatsFreezeDist:
         ppf_result = Var()
         cdf_dispatch = StatsFrozenCdf._get_dispatch()
         trail2 = Trail()
-        gen2 = cdf_dispatch(None, None, handle, ppf_result, 0.5, trail2)
+        gen2 = cdf_dispatch(None, None, None, None, handle, ppf_result, 0.5, trail2)
         val = None
         for parent, sentinel in gen2:
             if sentinel is None:
@@ -860,7 +860,7 @@ class TestStatsFreezeDist:
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
+        gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -870,7 +870,7 @@ class TestStatsFreezeDist:
         rvs_result = Var()
         rvs_dispatch = StatsFrozenRvs._get_dispatch()
         trail2 = Trail()
-        gen2 = rvs_dispatch(None, None, handle, rvs_result, trail2)
+        gen2 = rvs_dispatch(None, None, None, None, handle, rvs_result, trail2)
         val = None
         for parent, sentinel in gen2:
             if sentinel is None:
@@ -886,7 +886,7 @@ class TestStatsFreezeDist:
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
+        gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
         for parent, sentinel in gen:
             if sentinel is None:
@@ -896,7 +896,7 @@ class TestStatsFreezeDist:
         rvs_result = Var()
         rvs_dispatch = StatsFrozenRvs._get_dispatch()
         trail2 = Trail()
-        gen2 = rvs_dispatch(None, None, handle, 10, rvs_result, trail2)
+        gen2 = rvs_dispatch(None, None, None, None, handle, 10, rvs_result, trail2)
         val = None
         for parent, sentinel in gen2:
             if sentinel is None:
@@ -930,7 +930,7 @@ class TestResultGet:
         dispatch = ResultGet._get_dispatch()
         trail = Trail()
         field_var = Var()
-        gen = dispatch(None, None, {'x': 1}, field_var, value, trail)
+        gen = dispatch(None, None, None, None, {'x': 1}, field_var, value, trail)
         solutions = [s for s in gen if s[1] is None]
         assert len(solutions) == 0
 
@@ -940,7 +940,7 @@ class TestResultGet:
         value = 0.05
         dispatch = ResultGet._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, d, 'pvalue', value, trail)
+        gen = dispatch(None, None, None, None, d, 'pvalue', value, trail)
         solutions = [s for s in gen if s[1] is None]
         assert len(solutions) == 1
 
@@ -949,7 +949,7 @@ class TestResultGet:
         d = {'pvalue': 0.05}
         dispatch = ResultGet._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, d, 'pvalue', 0.99, trail)
+        gen = dispatch(None, None, None, None, d, 'pvalue', 0.99, trail)
         solutions = [s for s in gen if s[1] is None]
         assert len(solutions) == 0
 

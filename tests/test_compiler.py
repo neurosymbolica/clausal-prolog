@@ -586,10 +586,10 @@ class TestCompilePredicate:
         db = _make_db_with_clause(Compound("multi", ()))
 
         def double_yield(clause, var_context):
-            # Trampoline protocol: yield (_tramp_parent, value)
+            # Trampoline protocol: yield (_proceed, value)
             def _make_yield(val):
                 return ast.Expr(value=ast.Yield(value=ast.Tuple(
-                    elts=[ast.Name(id="_tramp_parent", ctx=ast.Load()),
+                    elts=[ast.Name(id="_proceed", ctx=ast.Load()),
                           ast.Constant(value=val)],
                     ctx=ast.Load(),
                 )))

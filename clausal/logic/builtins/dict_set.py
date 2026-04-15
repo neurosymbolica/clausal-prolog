@@ -79,32 +79,32 @@ def _is_dict__1(term, trail, k):
 
 
 @_trampoline_builtin("dict_size", 2)
-def _dict_size__2(this_generator, parent, d, n, trail):
+def _dict_size__2(this_generator, _proceed, _fail, _catcher, d, n, trail):
     """dict_size(Dict, N) — N is the number of keys in Dict."""
     d_val = deref(d)
     if isinstance(d_val, DictTerm):
         mark = trail.mark()
         if unify(n, len(d_val), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("dict_keys", 2)
-def _dict_keys__2(this_generator, parent, d, keys, trail):
+def _dict_keys__2(this_generator, _proceed, _fail, _catcher, d, keys, trail):
     """dict_keys(Dict, Keys) — Keys is the sorted list of keys in Dict."""
     d_val = deref(d)
     if isinstance(d_val, DictTerm):
         sorted_keys = sorted(d_val.keys(), key=repr)
         mark = trail.mark()
         if unify(keys, sorted_keys, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("dict_values", 2)
-def _dict_values__2(this_generator, parent, d, values, trail):
+def _dict_values__2(this_generator, _proceed, _fail, _catcher, d, values, trail):
     """dict_values(Dict, Values) — Values is the list of values in key-sorted order."""
     d_val = deref(d)
     if isinstance(d_val, DictTerm):
@@ -112,13 +112,13 @@ def _dict_values__2(this_generator, parent, d, values, trail):
         vals = [d_val[k] for k in sorted_keys]
         mark = trail.mark()
         if unify(values, vals, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("dict_pairs", 2)
-def _dict_pairs__2(this_generator, parent, d, pairs, trail):
+def _dict_pairs__2(this_generator, _proceed, _fail, _catcher, d, pairs, trail):
     """dict_pairs(Dict, Pairs) — Dict ↔ list of [Key, Value] 2-element lists.
 
     Modes:
@@ -134,7 +134,7 @@ def _dict_pairs__2(this_generator, parent, d, pairs, trail):
         pair_list = [[k, d_val[k]] for k in sorted_keys]
         mark = trail.mark()
         if unify(pairs, pair_list, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
 
     elif isinstance(pairs_val, list):
@@ -156,26 +156,26 @@ def _dict_pairs__2(this_generator, parent, d, pairs, trail):
         if ok:
             mark = trail.mark()
             if unify(d, DictTerm(data), trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
 
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("dict_get", 3)
-def _dict_get__3(this_generator, parent, key, d, value, trail):
+def _dict_get__3(this_generator, _proceed, _fail, _catcher, key, d, value, trail):
     """dict_get(Key, Dict, Value) — semidet: Value is Dict[Key]."""
     key_val = deref(key)
     d_val = deref(d)
     if not is_var(key_val) and isinstance(d_val, DictTerm) and key_val in d_val:
         mark = trail.mark()
         if unify(value, d_val[key_val], trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _dict_put_dr__4(this_generator, parent, key, value, old_dict, new_dict, trail):
+def _dict_put_dr__4(this_generator, _proceed, _fail, _catcher, key, value, old_dict, new_dict, trail):
     """Destructive-reuse variant of dict_put/4.
 
     When the old DictTerm has a low reference count (not shared), mutate its
@@ -189,16 +189,16 @@ def _dict_put_dr__4(this_generator, parent, key, value, old_dict, new_dict, trai
         old_val._data[key_val] = deref(value)
         mark = trail.mark()
         if unify(new_dict, old_val, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     # Fallback to standard dict_put
-    yield from _dict_put__4(this_generator, parent, key, value, old_dict, new_dict, trail)
+    yield from _dict_put__4(this_generator, _proceed, _fail, _catcher, key, value, old_dict, new_dict, trail)
 
 
 @_trampoline_builtin("dict_put", 4)
-def _dict_put__4(this_generator, parent, key, value, old_dict, new_dict, trail):
+def _dict_put__4(this_generator, _proceed, _fail, _catcher, key, value, old_dict, new_dict, trail):
     """dict_put(Key, Value, OldDict, NewDict) — NewDict is OldDict with Key→Value."""
     key_val = deref(key)
     old_val = deref(old_dict)
@@ -207,13 +207,13 @@ def _dict_put__4(this_generator, parent, key, value, old_dict, new_dict, trail):
         new_data[key_val] = deref(value)
         mark = trail.mark()
         if unify(new_dict, DictTerm(new_data), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("dict_put_pairs", 3)
-def _dict_put_pairs__3(this_generator, parent, pairs, old_dict, new_dict, trail):
+def _dict_put_pairs__3(this_generator, _proceed, _fail, _catcher, pairs, old_dict, new_dict, trail):
     """dict_put(Pairs, OldDict, NewDict) — bulk update from [[Key, Value], ...] list."""
     pairs_val = deref(pairs)
     old_val = deref(old_dict)
@@ -235,13 +235,13 @@ def _dict_put_pairs__3(this_generator, parent, pairs, old_dict, new_dict, trail)
         if ok:
             mark = trail.mark()
             if unify(new_dict, DictTerm(new_data), trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("dict_remove", 3)
-def _dict_remove__3(this_generator, parent, key, old_dict, new_dict, trail):
+def _dict_remove__3(this_generator, _proceed, _fail, _catcher, key, old_dict, new_dict, trail):
     """dict_remove(Key, OldDict, NewDict) — NewDict is OldDict without Key."""
     key_val = deref(key)
     old_val = deref(old_dict)
@@ -249,13 +249,13 @@ def _dict_remove__3(this_generator, parent, key, old_dict, new_dict, trail):
         new_data = {k: v for k, v in old_val.items() if k != key_val}
         mark = trail.mark()
         if unify(new_dict, DictTerm(new_data), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("dict_merge", 3)
-def _dict_merge__3(this_generator, parent, d1, d2, merged, trail):
+def _dict_merge__3(this_generator, _proceed, _fail, _catcher, d1, d2, merged, trail):
     """dict_merge(D1, D2, Merged) — Merged is D1 updated with D2's key-value pairs."""
     d1_val = deref(d1)
     d2_val = deref(d2)
@@ -264,29 +264,29 @@ def _dict_merge__3(this_generator, parent, d1, d2, merged, trail):
         new_data.update(d2_val.data)
         mark = trail.mark()
         if unify(merged, DictTerm(new_data), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("gen_dict", 3)
-def _gen_dict__3(this_generator, parent, key, d, value, trail):
+def _gen_dict__3(this_generator, _proceed, _fail, _catcher, key, d, value, trail):
     """gen_dict(Key, Dict, Value) — enumerate all key-value pairs on backtracking."""
     d_val = deref(d)
     if isinstance(d_val, DictTerm):
         for k, v in d_val.items():
             mark = trail.mark()
             if unify(key, k, trail) and unify(value, v, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── sub_dict: partial dict matching ───────────────────────────────────────────
 
 
 @_trampoline_builtin("sub_dict", 2)
-def _sub_dict__2(this_generator, parent, pattern, full_dict, trail):
+def _sub_dict__2(this_generator, _proceed, _fail, _catcher, pattern, full_dict, trail):
     """sub_dict(Pattern, Dict) — Pattern's keys are a subset of Dict's keys.
 
     Values for Pattern's keys unify pairwise with corresponding values in Dict.
@@ -308,9 +308,9 @@ def _sub_dict__2(this_generator, parent, pattern, full_dict, trail):
                 ok = False
                 break
         if ok:
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Set builtins ─────────────────────────────────────────────────────────────
@@ -324,19 +324,19 @@ def _is_set__1(term, trail, k):
 
 
 @_trampoline_builtin("set_size", 2)
-def _set_size__2(this_generator, parent, s, n, trail):
+def _set_size__2(this_generator, _proceed, _fail, _catcher, s, n, trail):
     """set_size(Set, N) — N is the cardinality of Set."""
     s_val = deref(s)
     if isinstance(s_val, SetTerm):
         mark = trail.mark()
         if unify(n, len(s_val), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("set_list", 2)
-def _set_list__2(this_generator, parent, s, lst, trail):
+def _set_list__2(this_generator, _proceed, _fail, _catcher, s, lst, trail):
     """set_list(Set, List) — Set ↔ sorted list of elements.
 
     Modes:
@@ -350,7 +350,7 @@ def _set_list__2(this_generator, parent, s, lst, trail):
         sorted_elems = sorted(s_val.elements, key=repr)
         mark = trail.mark()
         if unify(lst, sorted_elems, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
 
     elif isinstance(lst_val, list):
@@ -358,13 +358,13 @@ def _set_list__2(this_generator, parent, s, lst, trail):
         if all(not is_var(e) for e in elems):
             mark = trail.mark()
             if unify(s, SetTerm(elems), trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
 
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _set_union_dr__3(this_generator, parent, s1, s2, union, trail):
+def _set_union_dr__3(this_generator, _proceed, _fail, _catcher, s1, s2, union, trail):
     """Destructive-reuse variant of set_union/3.
 
     When the first SetTerm has a low reference count (not shared), replace its
@@ -382,64 +382,64 @@ def _set_union_dr__3(this_generator, parent, s1, s2, union, trail):
         s1_val._elements = s1_val._elements | s2_val._elements
         mark = trail.mark()
         if unify(union, s1_val, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     # Fallback to standard set_union
-    yield from _set_union__3(this_generator, parent, s1, s2, union, trail)
+    yield from _set_union__3(this_generator, _proceed, _fail, _catcher, s1, s2, union, trail)
 
 
 @_trampoline_builtin("set_union", 3)
-def _set_union__3(this_generator, parent, s1, s2, union, trail):
+def _set_union__3(this_generator, _proceed, _fail, _catcher, s1, s2, union, trail):
     """set_union(S1, S2, union) — union is the union of S1 and S2."""
     s1_val = deref(s1)
     s2_val = deref(s2)
     if isinstance(s1_val, SetTerm) and isinstance(s2_val, SetTerm):
         mark = trail.mark()
         if unify(union, SetTerm(s1_val.elements | s2_val.elements), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("set_intersection", 3)
-def _set_intersection__3(this_generator, parent, s1, s2, inter, trail):
+def _set_intersection__3(this_generator, _proceed, _fail, _catcher, s1, s2, inter, trail):
     """set_intersection(S1, S2, Inter) — Inter is the intersection of S1 and S2."""
     s1_val = deref(s1)
     s2_val = deref(s2)
     if isinstance(s1_val, SetTerm) and isinstance(s2_val, SetTerm):
         mark = trail.mark()
         if unify(inter, SetTerm(s1_val.elements & s2_val.elements), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("set_subtract", 3)
-def _set_subtract__3(this_generator, parent, s1, s2, diff, trail):
+def _set_subtract__3(this_generator, _proceed, _fail, _catcher, s1, s2, diff, trail):
     """set_subtract(S1, S2, Diff) — Diff is S1 minus S2."""
     s1_val = deref(s1)
     s2_val = deref(s2)
     if isinstance(s1_val, SetTerm) and isinstance(s2_val, SetTerm):
         mark = trail.mark()
         if unify(diff, SetTerm(s1_val.elements - s2_val.elements), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("set_sym_diff", 3)
-def _set_symdiff__3(this_generator, parent, s1, s2, sym, trail):
+def _set_symdiff__3(this_generator, _proceed, _fail, _catcher, s1, s2, sym, trail):
     """set_symdiff(S1, S2, Sym) — Sym is the symmetric difference of S1 and S2."""
     s1_val = deref(s1)
     s2_val = deref(s2)
     if isinstance(s1_val, SetTerm) and isinstance(s2_val, SetTerm):
         mark = trail.mark()
         if unify(sym, SetTerm(s1_val.elements ^ s2_val.elements), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_builtin("set_subset", 2)
@@ -463,40 +463,40 @@ def _set_disjoint__2(s1, s2, trail, k):
 
 
 @_trampoline_builtin("set_add", 3)
-def _set_add__3(this_generator, parent, elem, old_set, new_set, trail):
+def _set_add__3(this_generator, _proceed, _fail, _catcher, elem, old_set, new_set, trail):
     """set_add(Elem, OldSet, NewSet) — NewSet is OldSet with Elem added."""
     elem_val = deref(elem)
     old_val = deref(old_set)
     if not is_var(elem_val) and isinstance(old_val, SetTerm):
         mark = trail.mark()
         if unify(new_set, SetTerm(old_val.elements | {elem_val}), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("set_remove", 3)
-def _set_remove__3(this_generator, parent, elem, old_set, new_set, trail):
+def _set_remove__3(this_generator, _proceed, _fail, _catcher, elem, old_set, new_set, trail):
     """set_remove(Elem, OldSet, NewSet) — NewSet is OldSet without Elem."""
     elem_val = deref(elem)
     old_val = deref(old_set)
     if not is_var(elem_val) and isinstance(old_val, SetTerm):
         mark = trail.mark()
         if unify(new_set, SetTerm(old_val.elements - {elem_val}), trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 @_trampoline_builtin("gen_set", 2)
-def _gen_set__2(this_generator, parent, elem, s, trail):
+def _gen_set__2(this_generator, _proceed, _fail, _catcher, elem, s, trail):
     """gen_set(Elem, Set) — enumerate all elements of Set on backtracking."""
     s_val = deref(s)
     if isinstance(s_val, SetTerm):
         for e in sorted(s_val.elements, key=repr):
             mark = trail.mark()
             if unify(elem, e, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 

@@ -12,7 +12,7 @@ def _bidir_dispatch(fwd_call, bwd_call, n_fixed=0):
     n_fixed args are leading and always ground (e.g. 'a' in GammaInc(A,X,Y)).
     x_raw and result_var are the variable pair.
     """
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail   = args[-1]
         fixed   = [deref(args[i]) for i in range(n_fixed)]
         x_raw   = args[n_fixed]           # forward input / backward output
@@ -23,12 +23,12 @@ def _bidir_dispatch(fwd_call, bwd_call, n_fixed=0):
         if not is_var(x) and is_var(y):
             out = fwd_call(*fixed, x)
             if unify(y_raw, out, trail):
-                yield (parent, None)
+                yield (_proceed, None)
 
         elif is_var(x) and not is_var(y):
             out = bwd_call(*fixed, y)
             if unify(x_raw, out, trail):
-                yield (parent, None)
+                yield (_proceed, None)
 
         elif not is_var(x) and not is_var(y):
             # both ground: consistency check via forward
@@ -39,10 +39,10 @@ def _bidir_dispatch(fwd_call, bwd_call, n_fixed=0):
             except (ValueError, TypeError):
                 ok = False
             if ok:
-                yield (parent, None)
+                yield (_proceed, None)
 
         # both unbound: fail silently
-        yield (parent, DONE)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -52,7 +52,7 @@ def _fft_bidir_n(fwd_fn, bwd_fn):
     N sits between the two variable args, so n_fixed cannot be used.
     N must always be ground; X and RESULT are the variable pair.
     """
-    def dispatch(this_generator, parent, x_raw, n_raw, result_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, x_raw, n_raw, result_var, trail):
         n = deref(n_raw)
         x = deref(x_raw)
         y = deref(result_var)
@@ -60,12 +60,12 @@ def _fft_bidir_n(fwd_fn, bwd_fn):
         if not is_var(x) and is_var(y):
             out = fwd_fn(x, n)
             if unify(result_var, out, trail):
-                yield (parent, None)
+                yield (_proceed, None)
 
         elif is_var(x) and not is_var(y):
             out = bwd_fn(y, n)
             if unify(x_raw, out, trail):
-                yield (parent, None)
+                yield (_proceed, None)
 
         elif not is_var(x) and not is_var(y):
             # both ground: consistency check via forward
@@ -76,7 +76,7 @@ def _fft_bidir_n(fwd_fn, bwd_fn):
             except (ValueError, TypeError):
                 ok = False
             if ok:
-                yield (parent, None)
+                yield (_proceed, None)
 
-        yield (parent, DONE)
+        yield (_fail, DONE)
     return dispatch

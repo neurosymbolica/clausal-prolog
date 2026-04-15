@@ -133,11 +133,11 @@ class TableEntry:
 
 class SuspendedConsumer:
     """A consumer generator parked waiting for new answers."""
-    __slots__ = ("generator", "parent", "args", "trail", "answers_seen")
+    __slots__ = ("generator", "_proceed", "args", "trail", "answers_seen")
 
-    def __init__(self, generator, parent, args, trail, answers_seen):
+    def __init__(self, generator, _proceed, args, trail, answers_seen):
         self.generator = generator    # the consumer's StepGenerator
-        self.parent = parent          # routing key for intercepting yields
+        self._proceed = _proceed      # solution routing key for intercepting yields
         self.args = args              # call args (for unification with new answers)
         self.trail = trail
         self.answers_seen: int = answers_seen
@@ -426,7 +426,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
     """
     from clausal.logic.trampoline import StepGenerator, DONE
 
-    def tabled_dispatch(this_generator, parent, *args_trail):
+    def tabled_dispatch(this_generator, _proceed, _fail, _catcher, *args_trail):
         args = args_trail[:arity]
         trail = args_trail[arity]
 
@@ -441,9 +441,9 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, stored, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
 
         # ── CONSUMER: yield known answers, then SUSPEND ──
@@ -453,17 +453,17 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, stored, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
 
             # Register as suspended consumer
             sc = SuspendedConsumer(
-                this_generator, parent, args, trail, len(entry.answers)
+                this_generator, _proceed, args, trail, len(entry.answers)
             )
             entry.suspended.append(sc)
 
-            # SUSPEND — trampoline intercepts this, sends DONE to parent
-            signal = yield (parent, _TABLING_SUSPEND)
+            # SUSPEND — trampoline intercepts this, sends DONE to _proceed
+            signal = yield (_proceed, _TABLING_SUSPEND)
 
             # Resumed by leader's completion phase with _TABLING_RESUME
             while signal is _TABLING_RESUME:
@@ -475,15 +475,15 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                         continue
                     mark = trail.mark()
                     if _unify_answer(args, stored, trail):
-                        yield (parent, None)
+                        yield (_proceed, None)
                     trail.undo(mark)
                 # If table still evaluating, re-suspend for more answers
                 if entry.status == "evaluating":
-                    signal = yield (parent, _TABLING_SUSPEND)
+                    signal = yield (_proceed, _TABLING_SUSPEND)
                 else:
                     break
 
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
 
         # ── LEADER: drive original dispatch, then complete ──
@@ -500,7 +500,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                 delay_set = frozenset(entry._current_delays)
                 entry._current_delays.clear()
                 if entry.add_answer(answer, delay_set):
-                    yield (parent, None)  # new answer to leader's caller (incremental)
+                    yield (_proceed, None)  # new answer to leader's caller (incremental)
                 _st = yield (_gen, None)
             entry._current_delays.clear()
 
@@ -520,13 +520,13 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     gen, value = sc.generator.send(_TABLING_RESUME)
 
                     while True:
-                        if gen is sc.parent:
+                        if gen is sc._proceed:
                             if value is None:
                                 answer = freeze_args(sc.args, sc.trail)
                                 delay_set = frozenset(entry._current_delays)
                                 entry._current_delays.clear()
                                 if entry.add_answer(answer, delay_set):
-                                    yield (parent, None)
+                                    yield (_proceed, None)
                                 gen, value = sc.generator.send(None)
                             elif value is DONE:
                                 break
@@ -555,7 +555,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             pop_leader()
 
         entry.status = "complete"
-        yield (parent, DONE)
+        yield (_fail, DONE)
 
     return tabled_dispatch
 

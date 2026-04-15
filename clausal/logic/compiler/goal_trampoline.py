@@ -38,7 +38,8 @@ from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
     _yield_none_stmt, _in_iter_expr,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
-    _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
+    _PROCEED_PARAM_NAME, _FAIL_PARAM_NAME, _CATCHER_PARAM_NAME,
+    _THIS_GEN_NAME,
     _EXTRA_FUNCDEF,
 )
 from ._vars import _var_python_name, _collect_vars, _collect_bound_vars
@@ -500,7 +501,9 @@ def compile_goal_trampoline(
     trail_name: str,
     k_stmts: list[ast.stmt],
     self_name: str = _THIS_GEN_NAME,
-    parent_name: str = _TRAMP_PARENT_NAME,
+    proceed_name: str = _PROCEED_PARAM_NAME,
+    fail_name: str = _FAIL_PARAM_NAME,
+    catcher_name: str = _CATCHER_PARAM_NAME,
     *,
     ctx: CompilationContext | None = None,
 ) -> list[ast.stmt]:
@@ -519,7 +522,8 @@ def compile_goal_trampoline(
     if ctx is None:
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
-            self_name=self_name, parent_name=parent_name,
+            self_name=self_name,
+            proceed_name=proceed_name, fail_name=fail_name, catcher_name=catcher_name,
             strategy=TrampolineStrategy(),
         )
     elif ctx.strategy is None:
@@ -538,8 +542,10 @@ def compile_body_trampoline(
     db: Database,
     var_context: dict[int, str],
     trail_name: str,
-    parent_name: str = _TRAMP_PARENT_NAME,
     self_name: str = _THIS_GEN_NAME,
+    proceed_name: str = _PROCEED_PARAM_NAME,
+    fail_name: str = _FAIL_PARAM_NAME,
+    catcher_name: str = _CATCHER_PARAM_NAME,
     *,
     ctx: CompilationContext | None = None,
 ) -> list[ast.stmt]:
@@ -558,17 +564,21 @@ def compile_body_trampoline(
     from .strategy import TrampolineStrategy
     if ctx is not None:
         # Caller supplied per-predicate ctx; use it but overlay the
-        # per-clause trail/var_context/self_name/parent_name.
+        # per-clause trail/var_context/self_name/continuation names.
         ctx = ctx.replace(
             db=db, var_context=var_context, trail_name=trail_name,
-            self_name=self_name, parent_name=parent_name,
+            self_name=self_name,
+            proceed_name=proceed_name, fail_name=fail_name,
+            catcher_name=catcher_name,
         )
         if ctx.strategy is None:
             ctx = ctx.replace(strategy=TrampolineStrategy())
     else:
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
-            self_name=self_name, parent_name=parent_name,
+            self_name=self_name,
+            proceed_name=proceed_name, fail_name=fail_name,
+            catcher_name=catcher_name,
             strategy=TrampolineStrategy(),
         )
 

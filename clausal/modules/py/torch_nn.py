@@ -56,37 +56,37 @@ from clausal.modules.py.torch import _ensure_torch, _th
 
 def _enumerate_2(iter_fn):
     """Nondeterministic enumeration: yield each element from iter_fn(model)."""
-    def dispatch(this_generator, parent, model_var, elem_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, model_var, elem_var, trail):
         model = deref(model_var)
         try:
             items = iter_fn(model)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         for item in items:
             mark = trail.mark()
             if unify(elem_var, item, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-        yield (parent, DONE)
+        yield (_fail, DONE)
     return dispatch
 
 
 def _enumerate_3(iter_fn):
     """Nondeterministic enumeration: yield (name, value) pairs from iter_fn(model)."""
-    def dispatch(this_generator, parent, model_var, name_var, value_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, model_var, name_var, value_var, trail):
         model = deref(model_var)
         try:
             items = iter_fn(model)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         for name, value in items:
             mark = trail.mark()
             if unify(name_var, name, trail) and unify(value_var, value, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-        yield (parent, DONE)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -98,7 +98,7 @@ def _fact_table_2(get_facts):
     """
     cache = {}
 
-    def dispatch(this_generator, parent, name_var, value_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, name_var, value_var, trail):
         if not cache:
             facts = get_facts()
             cache["facts"] = facts
@@ -112,25 +112,25 @@ def _fact_table_2(get_facts):
             # Lookup by name
             cls = cache["by_name"].get(n)
             if cls is not None and unify(value_var, cls, trail):
-                yield (parent, None)
+                yield (_proceed, None)
         elif is_var(n) and not is_var(v):
             # Reverse lookup by value
             key = cache["by_value"].get(id(v))
             if key is not None and unify(name_var, key, trail):
-                yield (parent, None)
+                yield (_proceed, None)
         elif is_var(n) and is_var(v):
             # Enumerate all
             for name, value in facts:
                 mark = trail.mark()
                 if unify(name_var, name, trail) and unify(value_var, value, trail):
-                    yield (parent, None)
+                    yield (_proceed, None)
                 trail.undo(mark)
         else:
             # Both ground: check
             cls = cache["by_name"].get(n)
             if cls is not None and cls is v:
-                yield (parent, None)
-        yield (parent, DONE)
+                yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -261,21 +261,21 @@ scheduler_type = _pred("scheduler_type",
 
 def _property_2(getter):
     """Property predicate: (+obj, -value) or (+obj, +value) check."""
-    def dispatch(this_generator, parent, obj_var, value_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, obj_var, value_var, trail):
         obj = deref(obj_var)
         v = deref(value_var)
         try:
             actual = getter(obj)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if is_var(v):
             if unify(value_var, actual, trail):
-                yield (parent, None)
+                yield (_proceed, None)
         else:
             if actual == v:
-                yield (parent, None)
-        yield (parent, DONE)
+                yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -294,17 +294,17 @@ clip_grad_norm = _pred("clip_grad_norm",
 )
 
 
-def _clip_grad_value_dispatch(this_generator, parent, params_var, clip_var, trail):
+def _clip_grad_value_dispatch(this_generator, _proceed, _fail, _catcher, params_var, clip_var, trail):
     """Impure: clip gradient values in-place, always succeeds."""
     params = _deep_deref(params_var)
     clip_value = deref(clip_var)
     try:
         _th().nn.utils.clip_grad_value_(list(params), clip_value)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
-    yield (parent, None)
-    yield (parent, DONE)
+    yield (_proceed, None)
+    yield (_fail, DONE)
 
 
 clip_grad_value = _pred("clip_grad_value",

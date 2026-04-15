@@ -40,7 +40,7 @@ def _drive(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, *args, result, trail)
+    gen = dispatch(None, None, None, None, *args, result, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -57,7 +57,7 @@ def _drive_bwd(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, result, *args, trail)
+    gen = dispatch(None, None, None, None, result, *args, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -92,7 +92,7 @@ class TestGamma:
         trail = Trail()
         result = 999.0  # ground value, won't unify with gamma(5)
         dispatch = Gamma._get_dispatch()
-        solutions = list(dispatch(None, None, 5.0, result, trail))
+        solutions = list(dispatch(None, None, None, None, 5.0, result, trail))
         assert len([s for s in solutions if s[1] is None]) == 0
 
 
@@ -608,7 +608,7 @@ class TestPredicateMeta:
         trail = Trail()
         result = Var()
         dispatch = Factorial._get_dispatch()
-        gen = dispatch(None, None, 5, True, "extra", result, trail)
+        gen = dispatch(None, None, None, None, 5, True, "extra", result, trail)
         items = list(gen)
         assert any(s[1] is DONE for s in items)
 

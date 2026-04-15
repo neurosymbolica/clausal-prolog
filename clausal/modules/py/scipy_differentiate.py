@@ -96,7 +96,7 @@ def _rich_result_to_dict(r, output_key: str) -> dict:
 
 def _dispatch_fn(call: Callable, output_key: str) -> Callable:
     """Trampoline dispatch: call scipy function, convert result to dict, unify."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         inputs = [deref(x) for x in args[:-2]]
@@ -106,12 +106,12 @@ def _dispatch_fn(call: Callable, output_key: str) -> Callable:
         except UnitsMismatch:
             raise
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         ok = bool(unify(result_var, out, trail))
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -237,7 +237,7 @@ def _hessian_quantity_call(f, x):
 
 def _dispatch_fn_quantity(call: Callable, output_key: str) -> Callable:
     """Like _dispatch_fn but for calls that return a dict directly (quantity path)."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         inputs = [deref(x) for x in args[:-2]]
@@ -252,12 +252,12 @@ def _dispatch_fn_quantity(call: Callable, output_key: str) -> Callable:
         except UnitsMismatch:
             raise
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         ok = bool(unify(result_var, out, trail))
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -285,19 +285,19 @@ Hessian = _pred("Hessian",
 
 # ── ResultGet ─────────────────────────────────────────────────────────────
 
-def _result_get_dispatch(this_generator, parent, result, field, value, trail):
+def _result_get_dispatch(this_generator, _proceed, _fail, _catcher, result, field, value, trail):
     result = deref(result)
     field = deref(field)
     value_var = value
     try:
         out = result[field]
     except (KeyError, TypeError):
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     ok = bool(unify(value_var, out, trail))
     if ok:
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 
 class _ResultGetPredicate:

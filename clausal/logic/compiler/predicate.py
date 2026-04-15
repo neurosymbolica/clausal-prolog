@@ -58,7 +58,7 @@ from clausal.logic.runtime.tramp_call import _tramp_call  # noqa: F401
 from ._ast_helpers import (
     _name, _call, _assign, _assign_mark, _undo_stmt, _if,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
-    _TRAMP_PARENT_NAME, _THIS_GEN_NAME, _DISP_PREFIX,
+    _THIS_GEN_NAME, _DISP_PREFIX,
     _EXTRA_FUNCDEF,
     maybe_assert_located,
     stamp_predicate_funcdef,
@@ -1180,11 +1180,11 @@ def _shallow_to_trampoline(shallow_fn: Callable, func_name: str) -> Callable:
     The internal for-loop body of the shallow function is unchanged; the
     overhead is one extra generator frame at the call boundary.
     """
-    def _trampoline_wrapper(this_generator, parent, *args):
+    def _trampoline_wrapper(this_generator, _proceed, _fail, _catcher, *args):
         # args = (arg0, ..., argN, trail) in trampoline calling convention.
         for _ in shallow_fn(*args, None):   # k=None (shallow mode ignores k)
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
 
     _trampoline_wrapper.__name__ = func_name
     _trampoline_wrapper.__qualname__ = func_name

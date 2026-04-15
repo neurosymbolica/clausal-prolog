@@ -46,7 +46,7 @@ def _drive(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, *args, result, trail)
+    gen = dispatch(None, None, None, None, *args, result, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -60,7 +60,7 @@ def _fails_with_wrong_result(pred, *args):
     trail = Trail()
     result_bound = object()
     dispatch = pred._get_dispatch()
-    gen = dispatch(None, None, *args, result_bound, trail)
+    gen = dispatch(None, None, None, None, *args, result_bound, trail)
     solutions = [s for s in gen if s[1] is None]
     return len(solutions) == 0
 
@@ -69,7 +69,7 @@ def _free(handle):
     """Release a handle via Free."""
     dispatch = Free._get_dispatch()
     trail = Trail()
-    list(dispatch(None, None, handle, trail))
+    list(dispatch(None, None, None, None, handle, trail))
 
 
 # Sample data
@@ -469,7 +469,7 @@ class TestFree:
         # nv
         dispatch = Free._get_dispatch()
         trail = Trail()
-        solutions = [(p, s) for p, s in dispatch(None, None, 9999999, trail) if s is None]
+        solutions = [(p, s) for p, s in dispatch(None, None, None, None, 9999999, trail) if s is None]
         assert len(solutions) == 1
 
     def test_free_prevents_eval(self):

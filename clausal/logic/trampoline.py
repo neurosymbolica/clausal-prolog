@@ -76,10 +76,9 @@ except ImportError:
         caller's own ``proceed`` while keeping ``fail`` / ``catcher`` pointed
         at the caller.  See ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
 
-        Phase 1 forwarding note: the generator body receives ``proceed`` as
-        its single parent parameter (``pred_fn(sg, proceed, *args)``) so
-        compiled predicates with the legacy single-parent signature remain
-        callable.  Phase 2 switches to forwarding all three.
+        The generator body receives the three continuation slots as its
+        first three parameters after ``this_generator``:
+        ``pred_fn(sg, proceed, fail, catcher, *args)``.
 
         ``send(value)`` handles first-call bootstrapping transparently: the
         first call does ``next(inner_gen)``; subsequent calls delegate to
@@ -98,9 +97,10 @@ except ImportError:
             self.proceed = proceed
             self.fail = fail
             self.catcher = catcher
-            # Phase 1: forward only ``proceed`` to the generator body.
-            # Compiled-predicate signature stays (this_generator, _tramp_parent, *args).
-            self._gen: Generator = func(self, proceed, *args)
+            # Forward all three continuation slots to the generator body.
+            # Compiled-predicate signature is
+            # (this_generator, _proceed, _fail, _catcher, *args, trail).
+            self._gen: Generator = func(self, proceed, fail, catcher, *args)
             self._started: bool = False
 
         def send(self, value: Any) -> tuple:
@@ -254,17 +254,29 @@ except ImportError:
 #   factorial  →  factorial    [self]    n = 1, acc = 24
 #   factorial  →  None         [done]    return 24
 
-def validate(this_generator: StepGenerator, parent: StepGenerator | None, n: int) -> Generator:
+def validate(
+    this_generator: StepGenerator,
+    proceed: StepGenerator | None,
+    fail: StepGenerator | None,
+    catcher: StepGenerator | None,
+    n: int,
+) -> Generator:
     """
-    Leaf sub-computation: assert n >= 0, then echo it back to parent.
+    Leaf sub-computation: assert n >= 0, then echo it back to proceed.
     Exists solely to demonstrate the 'new generator' (child) target.
     """
     if n < 0:
         raise ValueError(f"n must be >= 0, got {n}")
-    yield (parent, n)
+    yield (proceed, n)
 
 
-def factorial(this_generator: StepGenerator, parent: StepGenerator | None, n: int) -> Generator:
+def factorial(
+    this_generator: StepGenerator,
+    proceed: StepGenerator | None,
+    fail: StepGenerator | None,
+    catcher: StepGenerator | None,
+    n: int,
+) -> Generator:
     """Compute n! while exercising all three targets."""
 
     # ① (child, …) — delegate to a fresh generator for input validation
@@ -276,8 +288,8 @@ def factorial(this_generator: StepGenerator, parent: StepGenerator | None, n: in
         # ② (this_generator, …) — the trampoline drives the loop; no recursion depth
         n = yield (this_generator, n - 1)
 
-    # ③ (parent, …) — surface the answer to whoever called us
-    yield (parent, acc)
+    # ③ (proceed, …) — surface the answer to whoever called us
+    yield (proceed, acc)
 
 
 # ── Tests ────────────────────────────────────────────────────────────────────

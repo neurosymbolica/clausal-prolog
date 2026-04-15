@@ -81,7 +81,7 @@ def _ndi():
 
 def _dispatch_fn(call: Callable) -> Callable:
     """Trampoline dispatch: dereference inputs, call scipy, unify RESULT."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         # args: (input_0, ..., input_{n-1}, result, trail)
         trail = args[-1]
         result_var = args[-2]
@@ -89,15 +89,15 @@ def _dispatch_fn(call: Callable) -> Callable:
         try:
             out = call(*inputs)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, out, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -139,12 +139,12 @@ Convolve = _pred("Convolve",
 
 # ── Connected-component labelling ──────────────────────────────────────────
 
-def _label_fn(this_generator, parent, inp, result_var, trail):
+def _label_fn(this_generator, _proceed, _fail, _catcher, inp, result_var, trail):
     inp = deref(inp)
     try:
         labeled_array, num_features = _ndi().label(inp)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     out = {"label_array": labeled_array, "num_features": num_features}
     try:
@@ -152,8 +152,8 @@ def _label_fn(this_generator, parent, inp, result_var, trail):
     except (ValueError, TypeError):
         ok = False
     if ok:
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 
 label = ModulePredicate("label")

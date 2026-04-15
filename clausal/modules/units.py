@@ -53,10 +53,10 @@ from clausal.modules.py import ModulePredicate
 
 def _simple_to_trampoline(simple_fn: Callable) -> Callable:
     """Wrap a simple-mode generator fn(*args, trail) → trampoline."""
-    def trampoline_fn(this_generator, parent, *args):
+    def trampoline_fn(this_generator, _proceed, _fail, _catcher, *args):
         for _ in simple_fn(*args):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return trampoline_fn
 
 

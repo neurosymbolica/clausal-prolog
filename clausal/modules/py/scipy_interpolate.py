@@ -151,7 +151,7 @@ def _lookup_handle(handle: int) -> tuple:
 
 def _make_dispatch(constructor: Callable) -> Callable:
     """Dispatch fn: deref all inputs, call constructor, alloc handle, unify."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         inputs = [deref(x) for x in args[:-2]]
@@ -161,21 +161,21 @@ def _make_dispatch(constructor: Callable) -> Callable:
         except UnitsMismatch:
             raise
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, handle, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
 def _make_dispatch_units(constructor: Callable) -> Callable:
     """Like _make_dispatch but extracts Quantity dims from the first two inputs (x, y)."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         inputs = [deref(x) for x in args[:-2]]
@@ -188,15 +188,15 @@ def _make_dispatch_units(constructor: Callable) -> Callable:
         except UnitsMismatch:
             raise
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, handle, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -205,7 +205,7 @@ def _eval_dispatch(evaluator: Callable) -> Callable:
 
     The evaluator receives ``(interpolant, x_dims, y_dims, *remaining_inputs)``.
     """
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         raw_inputs = [deref(x) for x in args[:-2]]
@@ -216,15 +216,15 @@ def _eval_dispatch(evaluator: Callable) -> Callable:
         except UnitsMismatch:
             raise
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, out, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -283,7 +283,7 @@ MakeAkima = _pred("MakeAkima",
 # ── MakeLinear1D ─────────────────────────────────────────────────────
 # scipy.interpolate.interp1d(x, y, kind=...) — deprecated in SciPy ≥ 1.14
 
-def _make_linear1d_arity3(this_generator, parent, *args):
+def _make_linear1d_arity3(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
     result_var = args[-2]
     x, y = deref(args[0]), deref(args[1])
@@ -301,18 +301,18 @@ def _make_linear1d_arity3(this_generator, parent, *args):
     except UnitsMismatch:
         raise
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     try:
         ok = bool(unify(result_var, handle, trail))
     except (ValueError, TypeError):
         ok = False
     if ok:
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 
-def _make_linear1d_arity4(this_generator, parent, *args):
+def _make_linear1d_arity4(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
     result_var = args[-2]
     x, y, kind = deref(args[0]), deref(args[1]), deref(args[2])
@@ -330,15 +330,15 @@ def _make_linear1d_arity4(this_generator, parent, *args):
     except UnitsMismatch:
         raise
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     try:
         ok = bool(unify(result_var, handle, trail))
     except (ValueError, TypeError):
         ok = False
     if ok:
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 
 MakeLinear1D = _pred("MakeLinear1D",
@@ -392,7 +392,7 @@ def _eval_spline_bwd(interp, y_target):
             f"target {y_target} may be outside range")
 
 
-def _eval_spline_bidir(this_generator, parent, *args):
+def _eval_spline_bidir(this_generator, _proceed, _fail, _catcher, *args):
     """Bidirectional dispatch for EvalSpline(HANDLE, X, RESULT).
 
     HANDLE always ground.
@@ -411,7 +411,7 @@ def _eval_spline_bidir(this_generator, parent, *args):
     try:
         obj, x_dims, y_dims = _lookup_handle(int(handle))
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
 
     if not is_var(x) and is_var(y):
@@ -422,10 +422,10 @@ def _eval_spline_bidir(this_generator, parent, *args):
         except UnitsMismatch:
             raise
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(result_raw, out, trail):
-            yield (parent, None)
+            yield (_proceed, None)
 
     elif is_var(x) and not is_var(y):
         try:
@@ -435,10 +435,10 @@ def _eval_spline_bidir(this_generator, parent, *args):
         except UnitsMismatch:
             raise
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(x_raw, out, trail):
-            yield (parent, None)
+            yield (_proceed, None)
 
     elif not is_var(x) and not is_var(y):
         # both ground: consistency check
@@ -449,16 +449,16 @@ def _eval_spline_bidir(this_generator, parent, *args):
         except UnitsMismatch:
             raise
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_raw, out, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
+            yield (_proceed, None)
 
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 def _eval_spline_nu(obj, x_dims, y_dims, x, nu):
@@ -527,7 +527,7 @@ SplineIntegral = _pred("SplineIntegral",
 # arity 2: (handle, result)   — default order=1
 # arity 3: (handle, order, result)
 
-def _spline_derivative_arity2(this_generator, parent, *args):
+def _spline_derivative_arity2(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
     result_var = args[-2]
     handle_val = deref(args[0])
@@ -539,18 +539,18 @@ def _spline_derivative_arity2(this_generator, parent, *args):
     except UnitsMismatch:
         raise
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     try:
         ok = bool(unify(result_var, new_handle, trail))
     except (ValueError, TypeError):
         ok = False
     if ok:
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 
-def _spline_derivative_arity3(this_generator, parent, *args):
+def _spline_derivative_arity3(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
     result_var = args[-2]
     handle_val = deref(args[0])
@@ -563,15 +563,15 @@ def _spline_derivative_arity3(this_generator, parent, *args):
     except UnitsMismatch:
         raise
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     try:
         ok = bool(unify(result_var, new_handle, trail))
     except (ValueError, TypeError):
         ok = False
     if ok:
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 
 SplineDerivative = _pred("SplineDerivative",
@@ -608,12 +608,12 @@ class _FreePredicate(ModulePredicate):
     def _get_dispatch(self) -> Callable:
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, *args):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         handle_val = deref(args[0])
         with _registry_lock:
             _INTERP_REGISTRY.pop(int(handle_val), None)
-        yield (parent, None)
-        yield (parent, DONE)
+        yield (_proceed, None)
+        yield (_fail, DONE)
 
     def __repr__(self) -> str:
         return "scipy.interpolate.Free/1"

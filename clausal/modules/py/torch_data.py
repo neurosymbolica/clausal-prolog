@@ -35,31 +35,31 @@ from clausal.modules.py.torch import _ensure_torch, _th
 
 def _property_2(getter):
     """Property predicate: (+obj, -value) or (+obj, +value) check."""
-    def dispatch(this_generator, parent, obj_var, value_var, trail):
+    def dispatch(this_generator, _proceed, _fail, _catcher, obj_var, value_var, trail):
         obj = deref(obj_var)
         v = deref(value_var)
         try:
             actual = getter(obj)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if is_var(v):
             if unify(value_var, actual, trail):
-                yield (parent, None)
+                yield (_proceed, None)
         else:
             if actual == v:
-                yield (parent, None)
-        yield (parent, DONE)
+                yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
-def _enumerate_items_2(this_generator, parent, ds_var, item_var, trail):
+def _enumerate_items_2(this_generator, _proceed, _fail, _catcher, ds_var, item_var, trail):
     """Nondeterministic: enumerate dataset items."""
     ds = deref(ds_var)
     try:
         n = len(ds)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     for i in range(n):
         mark = trail.mark()
@@ -69,18 +69,18 @@ def _enumerate_items_2(this_generator, parent, ds_var, item_var, trail):
             trail.undo(mark)
             continue
         if unify(item_var, item, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _enumerate_items_3(this_generator, parent, ds_var, idx_var, item_var, trail):
+def _enumerate_items_3(this_generator, _proceed, _fail, _catcher, ds_var, idx_var, item_var, trail):
     """Nondeterministic: enumerate (index, item) pairs."""
     ds = deref(ds_var)
     try:
         n = len(ds)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     for i in range(n):
         mark = trail.mark()
@@ -90,9 +90,9 @@ def _enumerate_items_3(this_generator, parent, ds_var, idx_var, item_var, trail)
             trail.undo(mark)
             continue
         if unify(idx_var, i, trail) and unify(item_var, item, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

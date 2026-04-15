@@ -80,14 +80,14 @@ def _sqlite_disconnect_1(alias, trail, k):
     yield None
 
 
-def _sqlite_current_connection_1(this_generator, parent, alias, trail):
+def _sqlite_current_connection_1(this_generator, _proceed, _fail, _catcher, alias, trail):
     """SQLiteCurrentConnection/1: enumerate open connection aliases."""
     alias = deref(alias)
     if not is_var(alias):
         # Check if this specific alias exists
         if str(alias) in _CONNECTIONS:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
         return
     # Nondeterministic: iterate all aliases
     with _LOCK:
@@ -95,14 +95,14 @@ def _sqlite_current_connection_1(this_generator, parent, alias, trail):
     for a in aliases:
         mark = trail.mark()
         if unify(alias, a, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Layer 2: Raw SQL queries ─────────────────────────────────────────────
 
-def _sqlite_query_3(this_generator, parent, alias, sql, row_var, trail):
+def _sqlite_query_3(this_generator, _proceed, _fail, _catcher, alias, sql, row_var, trail):
     """SQLiteQuery/3: execute SQL, backtrack over result rows as tuples."""
     alias = deref(alias)
     sql = deref(sql)
@@ -113,12 +113,12 @@ def _sqlite_query_3(this_generator, parent, alias, sql, row_var, trail):
         # Single-column rows unwrap to the value itself
         value = row[0] if len(row) == 1 else row
         if unify(row_var, value, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _sqlite_query_4(this_generator, parent, alias, sql, params, row_var, trail):
+def _sqlite_query_4(this_generator, _proceed, _fail, _catcher, alias, sql, params, row_var, trail):
     """SQLiteQuery/4: parameterized query with ? placeholders."""
     alias = deref(alias)
     sql = deref(sql)
@@ -134,9 +134,9 @@ def _sqlite_query_4(this_generator, parent, alias, sql, params, row_var, trail):
         mark = trail.mark()
         value = row[0] if len(row) == 1 else row
         if unify(row_var, value, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 def _sqlite_exec_2(alias, sql, trail, k):
@@ -177,7 +177,7 @@ def _sqlite_row_count_3(alias, sql, count_var, trail, k):
 
 # ── Layer 3: Schema introspection ────────────────────────────────────────
 
-def _sqlite_table_2(this_generator, parent, alias, table_var, trail):
+def _sqlite_table_2(this_generator, _proceed, _fail, _catcher, alias, table_var, trail):
     """SQLiteTable/2: enumerate table names (nondeterministic)."""
     alias = deref(alias)
     table_var_d = deref(table_var)
@@ -191,21 +191,21 @@ def _sqlite_table_2(this_generator, parent, alias, table_var, trail):
         table_name = str(table_var_d)
         for (name,) in cur:
             if name == table_name:
-                yield (parent, None)
-                yield (parent, DONE)
+                yield (_proceed, None)
+                yield (_fail, DONE)
                 return
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     # Nondeterministic: iterate all tables
     for (name,) in cur:
         mark = trail.mark()
         if unify(table_var, name, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
-def _sqlite_column_4(this_generator, parent, alias, table, col_name, col_type, trail):
+def _sqlite_column_4(this_generator, _proceed, _fail, _catcher, alias, table, col_name, col_type, trail):
     """SQLiteColumn/4: enumerate columns of a table with their types."""
     alias = deref(alias)
     table = deref(table)
@@ -217,9 +217,9 @@ def _sqlite_column_4(this_generator, parent, alias, table, col_name, col_type, t
         typ = row[2]
         mark = trail.mark()
         if unify(col_name, name, trail) and unify(col_type, typ, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Build and export predicate objects ───────────────────────────────────

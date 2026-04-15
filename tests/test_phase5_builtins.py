@@ -426,7 +426,7 @@ class TestTFilter:
         dispatch = self._make_eq_1_dispatch()
         trail = Trail()
         filtered = Var()
-        gen = _tfilter__3(None, None, dispatch, lst, filtered, trail)
+        gen = _tfilter__3(None, None, None, None, dispatch, lst, filtered, trail)
         results = []
         for parent, value in gen:
             if value is DONE:
@@ -476,7 +476,7 @@ class TestTPartition:
         dispatch = self._make_eq_1_dispatch()
         trail = Trail()
         yes, no = Var(), Var()
-        gen = _tpartition__4(None, None, dispatch, lst, yes, no, trail)
+        gen = _tpartition__4(None, None, None, None, dispatch, lst, yes, no, trail)
         results = []
         for parent, value in gen:
             if value is DONE:
@@ -911,7 +911,7 @@ class TestSequence:
         from clausal.logic.builtins.dcg import _sequence__3
         from clausal.logic.trampoline import DONE
         trail = Trail()
-        gen = _sequence__3(None, None, ["a", "b", "c"], ["a", "b", "c"], [], trail)
+        gen = _sequence__3(None, None, None, None, ["a", "b", "c"], ["a", "b", "c"], [], trail)
         results = []
         for parent, value in gen:
             if value is DONE:
@@ -926,7 +926,7 @@ class TestSequence:
         from clausal.logic.trampoline import DONE
         trail = Trail()
         rest = Var()
-        gen = _sequence__3(None, None, ["a", "b"], ["a", "b", "c"], rest, trail)
+        gen = _sequence__3(None, None, None, None, ["a", "b"], ["a", "b", "c"], rest, trail)
         results = []
         for parent, value in gen:
             if value is DONE:
@@ -941,7 +941,7 @@ class TestSequence:
         from clausal.logic.builtins.dcg import _sequence__3
         from clausal.logic.trampoline import DONE
         trail = Trail()
-        gen = _sequence__3(None, None, ["a"], ["b"], [], trail)
+        gen = _sequence__3(None, None, None, None, ["a"], ["b"], [], trail)
         results = []
         for parent, value in gen:
             if value is DONE:
@@ -955,7 +955,7 @@ class TestSequence:
         from clausal.logic.builtins.dcg import _sequence__3
         from clausal.logic.trampoline import DONE
         trail = Trail()
-        gen = _sequence__3(None, None, [], [], [], trail)
+        gen = _sequence__3(None, None, None, None, [], [], [], trail)
         results = []
         for parent, value in gen:
             if value is DONE:
@@ -969,7 +969,7 @@ class TestSequence:
         from clausal.logic.builtins.dcg import _sequence__3
         from clausal.logic.trampoline import DONE
         trail = Trail()
-        gen = _sequence__3(None, None, ["a", "b", "c"], ["a", "b"], [], trail)
+        gen = _sequence__3(None, None, None, None, ["a", "b", "c"], ["a", "b"], [], trail)
         results = []
         for parent, value in gen:
             if value is DONE:

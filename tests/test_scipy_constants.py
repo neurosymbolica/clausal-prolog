@@ -41,7 +41,7 @@ def _drive_pred(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, *args, result, trail)
+    gen = dispatch(None, None, None, None, *args, result, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -219,7 +219,7 @@ class TestLookupPredicate:
         v, u_str, unc = Var(), Var(), Var()
         dispatch = Lookup._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, "electron mass", v, u_str, unc, trail)
+        gen = dispatch(None, None, None, None, "electron mass", v, u_str, unc, trail)
         for parent, sentinel in gen:
             if sentinel is None:
                 assert deref(v) == pytest.approx(9.1093837139e-31)
@@ -232,7 +232,7 @@ class TestLookupPredicate:
         v, u_str, unc = Var(), Var(), Var()
         dispatch = Lookup._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, "not real xyz", v, u_str, unc, trail)
+        gen = dispatch(None, None, None, None, "not real xyz", v, u_str, unc, trail)
         solutions = [s for s in gen if s[1] is None]
         assert len(solutions) == 0
 

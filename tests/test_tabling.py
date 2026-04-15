@@ -672,12 +672,12 @@ class TestTabledWrapperDirect:
         # nv
         table_store = {}
 
-        def my_pred(this_gen, parent, arg0, trail):
+        def my_pred(this_gen, _proceed, _fail, _catcher, arg0, trail):
             mark = trail.mark()
             if unify(arg0, 42, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-            yield (parent, DONE)
+            yield (_fail, DONE)
 
         wrapped = make_tabled_wrapper_trampoline(my_pred, "my_pred", 1, table_store)
 
@@ -696,16 +696,16 @@ class TestTabledWrapperDirect:
         # nv
         table_store = {}
 
-        def my_pred(this_gen, parent, arg0, trail):
+        def my_pred(this_gen, _proceed, _fail, _catcher, arg0, trail):
             mark = trail.mark()
             if unify(arg0, 1, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
             mark = trail.mark()
             if unify(arg0, 2, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-            yield (parent, DONE)
+            yield (_fail, DONE)
 
         wrapped = make_tabled_wrapper_trampoline(my_pred, "my_pred", 1, table_store)
 
@@ -719,16 +719,16 @@ class TestTabledWrapperDirect:
         # nv
         table_store = {}
 
-        def my_pred(this_gen, parent, arg0, trail):
+        def my_pred(this_gen, _proceed, _fail, _catcher, arg0, trail):
             mark = trail.mark()
             if unify(arg0, 1, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
             mark = trail.mark()
             if unify(arg0, 2, trail):
-                yield (parent, None)
+                yield (_proceed, None)
             trail.undo(mark)
-            yield (parent, DONE)
+            yield (_fail, DONE)
 
         wrapped_trampoline = make_tabled_wrapper_trampoline(
             my_pred, "my_pred", 1, table_store)

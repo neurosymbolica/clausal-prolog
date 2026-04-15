@@ -59,18 +59,18 @@ def _sc():
 
 
 def _lookup_fn(call: Callable) -> Callable:
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         inputs = [deref(x) for x in args[:-2]]
         try:
             out = call(*inputs)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if bool(unify(result_var, out, trail)):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -96,18 +96,18 @@ Precision = _pred("Precision",
 )
 
 
-def _lookup_dispatch(this_generator, parent, name, value_var, unit_var, uncertainty_var, trail):
+def _lookup_dispatch(this_generator, _proceed, _fail, _catcher, name, value_var, unit_var, uncertainty_var, trail):
     name = deref(name)
     try:
         val, unit_str, uncertainty = _sc().physical_constants[name]
     except KeyError:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     if (bool(unify(value_var, val, trail))
             and bool(unify(unit_var, unit_str, trail))
             and bool(unify(uncertainty_var, uncertainty, trail))):
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 
 class _LookupPredicate:
@@ -117,26 +117,26 @@ class _LookupPredicate:
 Lookup = _LookupPredicate()
 
 
-def _find_dispatch(this_generator, parent, substring, names_var, trail):
+def _find_dispatch(this_generator, _proceed, _fail, _catcher, substring, names_var, trail):
     try:
         names = _sc().find(deref(substring), disp=False)
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     if bool(unify(names_var, list(names), trail)):
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 
-def _find_all_dispatch(this_generator, parent, names_var, trail):
+def _find_all_dispatch(this_generator, _proceed, _fail, _catcher, names_var, trail):
     try:
         names = list(_sc().physical_constants.keys())
     except Exception:
-        yield (parent, DONE)
+        yield (_fail, DONE)
         return
     if bool(unify(names_var, names, trail)):
-        yield (parent, None)
-    yield (parent, DONE)
+        yield (_proceed, None)
+    yield (_fail, DONE)
 
 
 class _FindPredicate:

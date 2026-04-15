@@ -72,7 +72,7 @@ def _st():
 
 def _dispatch_fn(call: Callable) -> Callable:
     """Trampoline dispatch: inputs → result → unify RESULT."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         # args: (input_0, ..., input_{n-1}, result, trail)
         trail = args[-1]
         result_var = args[-2]
@@ -80,15 +80,15 @@ def _dispatch_fn(call: Callable) -> Callable:
         try:
             out = call(*inputs)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, out, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -338,7 +338,7 @@ class _StatsDistPredicate(ModulePredicate):
     def _get_dispatch(self) -> Callable:
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, *args):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         arity = len(args) - 1  # exclude trail
         if arity == 4:
@@ -347,7 +347,7 @@ class _StatsDistPredicate(ModulePredicate):
             try:
                 out = _dist_method_x(dist_name, method_name, x)
             except Exception:
-                yield (parent, DONE)
+                yield (_fail, DONE)
                 return
         elif arity == 3:
             # StatsDist(DIST, METHOD, RESULT)
@@ -355,18 +355,18 @@ class _StatsDistPredicate(ModulePredicate):
             try:
                 out = _dist_method_no_x(dist_name, method_name)
             except Exception:
-                yield (parent, DONE)
+                yield (_fail, DONE)
                 return
         else:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, out, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
 
 
 StatsDist = _StatsDistPredicate()
@@ -431,7 +431,7 @@ class _StatsFreezePredicate(ModulePredicate):
     def _get_dispatch(self) -> Callable:
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, *args):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         dist_name = deref(args[0])
         params_dict = deref(args[1])
@@ -439,15 +439,15 @@ class _StatsFreezePredicate(ModulePredicate):
         try:
             handle = _freeze_dist(dist_name, params_dict)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, handle, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
 
 
 StatsFreezeDist = _StatsFreezePredicate()
@@ -463,7 +463,7 @@ class _StatsFrozenMethodPredicate(ModulePredicate):
     def _get_dispatch(self) -> Callable:
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, *args):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         handle = deref(args[0])
         x = deref(args[1])
@@ -473,15 +473,15 @@ class _StatsFrozenMethodPredicate(ModulePredicate):
             fn = getattr(dist, self._method_name)
             out = float(fn(x))
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, out, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
 
 
 StatsFrozenPdf = _StatsFrozenMethodPredicate("StatsFrozenPdf", "pdf")
@@ -502,7 +502,7 @@ class _StatsFrozenCdfPredicate(ModulePredicate):
     def _get_dispatch(self):
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, *args):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         trail      = args[-1]
         handle_raw = args[0]
         x_raw      = args[1]
@@ -514,18 +514,18 @@ class _StatsFrozenCdfPredicate(ModulePredicate):
         try:
             dist = _lookup_handle(int(handle))
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
 
         if not is_var(x) and is_var(p):
             out = float(dist.cdf(x))
             if unify(p_raw, out, trail):
-                yield (parent, None)
+                yield (_proceed, None)
 
         elif is_var(x) and not is_var(p):
             out = float(dist.ppf(p))
             if unify(x_raw, out, trail):
-                yield (parent, None)
+                yield (_proceed, None)
 
         elif not is_var(x) and not is_var(p):
             out = float(dist.cdf(x))
@@ -534,9 +534,9 @@ class _StatsFrozenCdfPredicate(ModulePredicate):
             except (ValueError, TypeError):
                 ok = False
             if ok:
-                yield (parent, None)
+                yield (_proceed, None)
 
-        yield (parent, DONE)
+        yield (_fail, DONE)
 
 
 StatsFrozenCdf = _StatsFrozenCdfPredicate()
@@ -551,7 +551,7 @@ class _StatsFrozenRvsPredicate(ModulePredicate):
     def _get_dispatch(self) -> Callable:
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, *args):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         arity = len(args) - 1  # exclude trail
         if arity == 2:
@@ -563,21 +563,21 @@ class _StatsFrozenRvsPredicate(ModulePredicate):
             size = deref(args[1])
             result_var = args[2]
         else:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             dist = _lookup_handle(int(handle))
             out = dist.rvs(size=size) if size is not None else float(dist.rvs())
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, out, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
 
 
 StatsFrozenRvs = _StatsFrozenRvsPredicate()
@@ -592,7 +592,7 @@ class _StatsFrozenStatsPredicate(ModulePredicate):
     def _get_dispatch(self) -> Callable:
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, *args):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         handle = deref(args[0])
         result_var = args[1]
@@ -601,15 +601,15 @@ class _StatsFrozenStatsPredicate(ModulePredicate):
             mean, var = dist.stats(moments='mv')
             out = {'mean': float(mean), 'var': float(var)}
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         try:
             ok = bool(unify(result_var, out, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
 
 
 StatsFrozenStats = _StatsFrozenStatsPredicate()
@@ -624,13 +624,13 @@ class _StatsFrozenFreePredicate(ModulePredicate):
     def _get_dispatch(self) -> Callable:
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, *args):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         handle = deref(args[0])
         with _frozen_lock:
             _FROZEN_DIST_REGISTRY.pop(int(handle), None)
-        yield (parent, None)
-        yield (parent, DONE)
+        yield (_proceed, None)
+        yield (_fail, DONE)
 
 
 StatsFrozenFree = _StatsFrozenFreePredicate()
@@ -649,11 +649,11 @@ class _ResultGetPredicate:
     def _get_dispatch(self) -> Callable:
         return self._dispatch
 
-    def _dispatch(self, this_generator, parent, result, field, value, trail):
+    def _dispatch(self, this_generator, _proceed, _fail, _catcher, result, field, value, trail):
         result = deref(result)
         field = deref(field)
         if not isinstance(field, str):
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         # Try getattr first, then dict subscript
         val = _MISSING = object()
@@ -663,15 +663,15 @@ class _ResultGetPredicate:
             try:
                 val = result[field]
             except (KeyError, TypeError):
-                yield (parent, DONE)
+                yield (_fail, DONE)
                 return
         try:
             ok = bool(unify(value, val, trail))
         except (ValueError, TypeError):
             ok = False
         if ok:
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
 
     def __repr__(self) -> str:
         return "ResultGet/3"

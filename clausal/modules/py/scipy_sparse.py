@@ -201,7 +201,7 @@ def _pred(name: str, *arity_fns) -> ModulePredicate:
 
 def _make(constructor: Callable) -> Callable:
     """Deref inputs, construct sparse object, alloc handle, unify RESULT."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         inputs = [deref(x) for x in args[:-2]]
@@ -209,17 +209,17 @@ def _make(constructor: Callable) -> Callable:
             obj = constructor(*inputs)
             handle = _alloc_handle(obj)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(result_var, handle, trail):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
 def _query(evaluator: Callable) -> Callable:
     """Deref inputs, look up handle from first input, call evaluator, unify."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         raw = [deref(x) for x in args[:-2]]
@@ -227,17 +227,17 @@ def _query(evaluator: Callable) -> Callable:
             obj = _lookup_handle(raw[0])
             out = evaluator(obj, *raw[1:])
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(result_var, out, trail):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
 def _linalg_op(evaluator: Callable) -> Callable:
     """Like _query but first arg is a HANDLE to sparse matrix; rest are plain values."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         raw = [deref(x) for x in args[:-2]]
@@ -245,28 +245,28 @@ def _linalg_op(evaluator: Callable) -> Callable:
             sparse_mat = _lookup_handle(raw[0])
             out = evaluator(sparse_mat, *raw[1:])
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(result_var, out, trail):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
 def _pure(fn: Callable) -> Callable:
     """Wrap a pure function: deref all inputs, call fn(*inputs), unify RESULT."""
-    def dispatch(this_generator, parent, *args):
+    def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
         inputs = [deref(x) for x in args[:-2]]
         try:
             out = fn(*inputs)
         except Exception:
-            yield (parent, DONE)
+            yield (_fail, DONE)
             return
         if unify(result_var, out, trail):
-            yield (parent, None)
-        yield (parent, DONE)
+            yield (_proceed, None)
+        yield (_fail, DONE)
     return dispatch
 
 
@@ -458,14 +458,14 @@ SingularValueDecompose = _pred("SingularValueDecompose",
 # Lifecycle — Free
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _free_dispatch(this_generator, parent, handle, trail):
+def _free_dispatch(this_generator, _proceed, _fail, _catcher, handle, trail):
     try:
         with _registry_lock:
             _SPARSE_REGISTRY.pop(int(deref(handle)), None)
     except Exception:
         pass
-    yield (parent, None)
-    yield (parent, DONE)
+    yield (_proceed, None)
+    yield (_fail, DONE)
 
 Free = _pred("Free",
     (1, _free_dispatch),

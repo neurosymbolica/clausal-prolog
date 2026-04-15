@@ -138,7 +138,7 @@ def _split_3(pat, string, parts, trail, k):
 # ── findall ──────────────────────────────────────────────────────────────────
 
 
-def _findall_3(this_generator, parent, pat, string, match_var, trail):
+def _findall_3(this_generator, _proceed, _fail, _catcher, pat, string, match_var, trail):
     """findall/3: nondeterministic — one solution per non-overlapping match.
 
     No groups → each match is a string.
@@ -156,9 +156,9 @@ def _findall_3(this_generator, parent, pat, string, match_var, trail):
         else:
             value = m.group()
         if unify(match_var, value, trail):
-            yield (parent, None)
+            yield (_proceed, None)
         trail.undo(mark)
-    yield (parent, DONE)
+    yield (_fail, DONE)
 
 
 # ── Build and export predicate objects ───────────────────────────────────────

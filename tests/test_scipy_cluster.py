@@ -30,7 +30,7 @@ def _drive(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, *args, result, trail)
+    gen = dispatch(None, None, None, None, *args, result, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -44,7 +44,7 @@ def _drive_result_get(result_dict, field):
     value = Var()
     dispatch = ResultGet._get_dispatch()
     trail = Trail()
-    gen = dispatch(None, None, result_dict, field, value, trail)
+    gen = dispatch(None, None, None, None, result_dict, field, value, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -58,7 +58,7 @@ def _fails_with_wrong_result(pred, *args):
     trail = Trail()
     result_bound = object()
     dispatch = pred._get_dispatch()
-    gen = dispatch(None, None, *args, result_bound, trail)
+    gen = dispatch(None, None, None, None, *args, result_bound, trail)
     solutions = [s for s in gen if s[1] is None]
     return len(solutions) == 0
 
@@ -454,7 +454,7 @@ class TestResultGet:
         value = Var()
         dispatch = ResultGet._get_dispatch()
         trail = Trail()
-        gen = dispatch(None, None, d, 42, value, trail)
+        gen = dispatch(None, None, None, None, d, 42, value, trail)
         solutions = [s for s in gen if s[1] is None]
         assert len(solutions) == 0
 
