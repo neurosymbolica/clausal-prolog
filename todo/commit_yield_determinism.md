@@ -73,16 +73,17 @@ multi-frame scenarios.
 
 ### Under the current tuple-yielding trampoline
 
-A third sentinel value alongside `None` and `_DONE`:
+A third sentinel value alongside `None` and `DONE` (named `FINAL`
+in code; the "commit" terminology survives at the concept level):
 
 ```python
-yield (parent, _COMMIT)   # "here's a solution, I'm done after this"
+yield (parent, FINAL)   # "here's a solution, I'm done after this"
 # Note: the value also rides in the tuple; either carry it in a
-# triple `(parent, _COMMIT, value)`, or continue using the leaf-yield
+# triple `(parent, FINAL, value)`, or continue using the leaf-yield
 # bindings-through-trail convention and only change the marker.
 ```
 
-Consumer's while-loop detects `_st is _COMMIT` and breaks after
+Consumer's while-loop detects `_st is FINAL` and breaks after
 processing.  No additional pull needed.
 
 ### Under an LLVM backend with an explicit CP stack

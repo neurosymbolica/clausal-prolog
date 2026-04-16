@@ -20,14 +20,14 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-/* ── DONE sentinel ──────────────────────────────────────────────────────── */
+/* ── DONE / FINAL sentinels ─────────────────────────────────────────────── */
 
-static PyObject *g_DONE = NULL;     /* module-level singleton */
-static PyObject *g_COMMIT = NULL;   /* third yield-action sentinel; see
-                                     * trampoline.py and CONTINUATION_TCO_PLAN.md
-                                     * §4.1.  Phase 4a lands sentinel + root
-                                     * driver handling; no producer emits it
-                                     * yet. */
+static PyObject *g_DONE = NULL;    /* module-level singleton */
+static PyObject *g_FINAL = NULL;   /* third yield-action sentinel; see
+                                    * trampoline.py and CONTINUATION_TCO_PLAN.md
+                                    * §4.1.  Phase 4a lands sentinel + root
+                                    * driver handling; no producer emits it
+                                    * yet. */
 
 /* ── Lazily-cached exception / sentinel types ─────────────────────────── */
 
@@ -539,10 +539,10 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
                 Py_DECREF(step);
                 return results;
             }
-            if (value == g_COMMIT) {
-                /* Producer committed: deliver this final solution and
-                 * stop — no further pull from the (now-retired) root.
-                 * _COMMIT is a sentinel, not a payload, so when
+            if (value == g_FINAL) {
+                /* Producer is retiring with its last solution: deliver
+                 * it and stop — no further pull from the (now-retired)
+                 * root.  FINAL is a sentinel, not a payload, so when
                  * snapshot is None there is no raw value to record. */
                 Py_DECREF(step);
                 if (snapshot_fn != Py_None) {
@@ -774,11 +774,11 @@ static struct PyModuleDef moduledef = {
 PyMODINIT_FUNC
 PyInit__trampoline(void)
 {
-    /* DONE / _COMMIT sentinels */
+    /* DONE / FINAL sentinels */
     g_DONE = PyObject_CallNoArgs((PyObject *)&PyBaseObject_Type);
     if (!g_DONE) return NULL;
-    g_COMMIT = PyObject_CallNoArgs((PyObject *)&PyBaseObject_Type);
-    if (!g_COMMIT) return NULL;
+    g_FINAL = PyObject_CallNoArgs((PyObject *)&PyBaseObject_Type);
+    if (!g_FINAL) return NULL;
 
     /* Create StepGenerator as a heap type (mutable — allows __init__ override) */
     StepGenType = (PyTypeObject *)PyType_FromSpec(&StepGen_spec);
@@ -805,9 +805,9 @@ PyInit__trampoline(void)
         return NULL;
     }
 
-    Py_INCREF(g_COMMIT);
-    if (PyModule_AddObject(m, "_COMMIT", g_COMMIT) < 0) {
-        Py_DECREF(g_COMMIT);
+    Py_INCREF(g_FINAL);
+    if (PyModule_AddObject(m, "FINAL", g_FINAL) < 0) {
+        Py_DECREF(g_FINAL);
         Py_DECREF(m);
         return NULL;
     }

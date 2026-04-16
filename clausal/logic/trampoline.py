@@ -51,18 +51,24 @@ class Step:
 # trampoline, and solutions.  Fall back to pure-Python implementations below.
 
 try:
-    from clausal.logic.runtime._trampoline import DONE, _COMMIT, StepGenerator, trampoline, solutions, _drive_until_yield  # type: ignore[import-untyped]
+    from clausal.logic.runtime._trampoline import DONE, FINAL, StepGenerator, trampoline, solutions, _drive_until_yield  # type: ignore[import-untyped]
 except ImportError:
-    # ── DONE / _COMMIT sentinels ─────────────────────────────────────────
-    # _COMMIT is the third yield-action sentinel (alongside ``None`` for
-    # solution and ``DONE`` for exhaustion).  A producer yielding
-    # ``(_proceed, _COMMIT)`` means "here's a solution AND I'm retiring —
-    # don't pull again".  See ``implementation_plans/CONTINUATION_TCO_PLAN.md``
-    # §4.1 / Phase 4.  Phase 4a (this commit) lands the sentinel and
-    # root-driver handling only; no producer emits ``_COMMIT`` yet, so
-    # the new branches are cold and existing call sites pay zero overhead.
+    # ── DONE / FINAL sentinels ───────────────────────────────────────────
+    # ``FINAL`` is the third yield-action sentinel.  The three producer
+    # postures the protocol carries:
+    #
+    #   yield (proceed, None)   — here's a solution, pull again for more
+    #   yield (fail,    DONE)   — no solution, I'm exhausted
+    #   yield (proceed, FINAL)  — here's a solution AND I'm retiring;
+    #                             don't pull again.
+    #
+    # See ``implementation_plans/CONTINUATION_TCO_PLAN.md`` §4.1 / Phase 4
+    # (historically called the ``commit`` variant in design docs).
+    # Phase 4a (this commit) lands the sentinel and root-driver handling
+    # only; no producer emits ``FINAL`` yet, so the new branches are cold
+    # and existing call sites pay zero overhead.
     DONE: object = object()
-    _COMMIT: object = object()
+    FINAL: object = object()
 
     # ── StepGenerator ─────────────────────────────────────────────────────
 
@@ -186,11 +192,12 @@ except ImportError:
             if gen is None:
                 if value is DONE:
                     return results
-                if value is _COMMIT:
-                    # Producer committed: deliver this final solution and
-                    # stop — no further pull from the (now-retired) root.
-                    # ``_COMMIT`` is a sentinel, not a payload, so when
-                    # *snapshot* is None there's no raw value to record.
+                if value is FINAL:
+                    # Producer is retiring with its last solution: deliver
+                    # it and stop — no further pull from the (now-retired)
+                    # root.  ``FINAL`` is a sentinel, not a payload, so
+                    # when *snapshot* is None there's no raw value to
+                    # record.
                     if snapshot is not None:
                         results.append(snapshot())
                     return results

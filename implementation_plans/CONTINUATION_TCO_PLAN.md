@@ -145,7 +145,7 @@ exceptions.
 Leaf yields split by action:
 
 - solution:   `yield (proceed, None)`
-- commit:     `yield (proceed, _COMMIT)`
+- commit:     `yield (proceed, FINAL)`
 - exhaustion: `yield (fail, _DONE)`
 - throw: `LogicException` propagation driven by the trampoline's
   handler walk along the `catcher` chain (not `parent.parent…`).
@@ -163,8 +163,8 @@ Python host — skip this micro-optimisation.
 
 The existing `_trampoline.c` StepGenerator gains two extra slots.
 Driver loop reads `(target, value)` unchanged; routing remains
-literal (target IS the generator to resume).  `_COMMIT` is a new
-sentinel handled like `_DONE` but also de-registering the callee
+literal (target IS the generator to resume).  `FINAL` is a new
+sentinel handled like `DONE` but also de-registering the callee
 from future pulls (wake the consumer's loop-exit path immediately
 after value delivery).
 
@@ -364,9 +364,9 @@ the recursion structure above is reusable for the commit rule.
 
 **Phase 4 — `commit` variant.**
 
-- New `_COMMIT` sentinel; structural analysis pass.
-- Lowering emits `yield (_proceed, _COMMIT)` at detected sites.
-- Trampoline driver handles `_COMMIT` (deliver value, de-register
+- New `FINAL` sentinel; structural analysis pass.
+- Lowering emits `yield (_proceed, FINAL)` at detected sites.
+- Trampoline driver handles `FINAL` (deliver value, de-register
   callee from future pulls).
 - Validation: green suite; further measurable wins on
   semi-deterministic code.
