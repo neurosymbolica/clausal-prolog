@@ -42,7 +42,7 @@ Two output shapes exist, selected per-predicate at compile time:
   `-shallow([...])` directive.
 - **Trampoline** (`compile_predicate_trampoline`) — a generator that
   speaks the *Step protocol*: it yields `(parent, None)` for each
-  solution and `(parent, _DONE)` at exhaustion; sub-predicate calls
+  solution and `(parent, DONE)` at exhaustion; sub-predicate calls
   suspend via `StepGenerator(...)` + `yield (gen, None)` so the
   Python call stack stays flat under recursion. The **production
   default**; drives everything unless `-shallow` says otherwise.
@@ -296,13 +296,13 @@ def functor__arity(this_generator, parent, arg0, ..., argN, trail):
             try:
                 _gen_N = StepGenerator(sub_dispatch, this_generator, ..., trail)
                 _st_N = (yield (_gen_N, None))        # suspend
-                while _st_N is not _DONE:
+                while _st_N is not DONE:
                     <k_stmts>
                     yield (parent, None)               # solution
                     _st_N = (yield (_gen_N, None))     # next
             finally:
                 trail.undo(_mark)
-    yield (parent, _DONE)                              # exhaustion
+    yield (parent, DONE)                              # exhaustion
 ```
 
 - Sub-predicate calls go through `StepGenerator` + `yield` handoff.
@@ -310,9 +310,9 @@ def functor__arity(this_generator, parent, arg0, ..., argN, trail):
   driver pumps the generators.
 - Every compiled trampoline function speaks the *Step protocol*:
   - Each solution: `yield (parent, None)`
-  - Exhaustion: `yield (parent, _DONE)`
+  - Exhaustion: `yield (parent, DONE)`
   - Sub-call: `yield (child_gen, None)`; receive `None` to continue,
-    `_DONE` to know the child exhausted.
+    `DONE` to know the child exhausted.
 - Default for all predicates. Supports unbounded recursion depth.
 
 ### How solutions reach the caller
@@ -510,11 +510,11 @@ Signature: `functor__arity(this_generator, parent, arg0, ..., argN, trail)`.
 
 **Function promises:**
 - Every solution: `yield (parent, None)`. The generator suspends and
-  resumes when sent any value other than `_DONE`.
-- Exhaustion: `yield (parent, _DONE)` exactly once, after which the
+  resumes when sent any value other than `DONE`.
+- Exhaustion: `yield (parent, DONE)` exactly once, after which the
   generator returns.
 - Sub-call protocol: `yield (child_gen, None)` suspends until the
-  caller sends back `None` (child produced a solution) or `_DONE`
+  caller sends back `None` (child produced a solution) or `DONE`
   (child exhausted).
 - Trail discipline: every mark has a matching undo on the same code
   path. `try/finally` is used for `_mark` blocks that bracket a
@@ -554,9 +554,9 @@ Things that are true at phase boundaries, and where they are enforced.
    `_undo_stmt` come in pairs; ITE and catch arms wrap with
    `try/finally` or emit the undo on every branch).
 
-4. **Trampoline generators yield `(parent, _DONE)` exactly once per
+4. **Trampoline generators yield `(parent, DONE)` exactly once per
    call, after all solutions.** Enforced by `_build_predicate_trampoline_funcdef`
-   appending the `_DONE` yield at the end of the funcdef.
+   appending the `DONE` yield at the end of the funcdef.
 
 5. **TRO rewrites preserve observable behaviour.** Enforced by
    `_tro_args_safe` refusing rewrite when any prefix goal is
@@ -574,7 +574,7 @@ Things that are true at phase boundaries, and where they are enforced.
    `_ast_helpers._POSITION_STACK`, entered by `CompilationContext
    .at_position(pos)` around every IR → AST emission), or — for
    genuinely synthesised compiler scaffolding (arg nodes, dispatch
-   `Match` boilerplate, trampoline `_DONE` yield, bucket selectors)
+   `Match` boilerplate, trampoline `DONE` yield, bucket selectors)
    — inherited from the enclosing `FunctionDef`'s position via
    `propagate_synthetic_positions` and marked `_g_synthetic=True`.
    Enforced by `assert_all_nodes_located(..., allow_synthetic=True)`

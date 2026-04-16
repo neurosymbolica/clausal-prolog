@@ -177,7 +177,7 @@ class TestCompileGoalTrampolineCallStructure:
         assert len(stmts) == 3
         assert isinstance(stmts[0], ast.Assign)   # _gen_N = dispatch(...)
         assert isinstance(stmts[1], ast.Assign)   # _st_N = (yield Step(...))
-        assert isinstance(stmts[2], ast.While)    # while _st_N is not _DONE:
+        assert isinstance(stmts[2], ast.While)    # while _st_N is not DONE:
 
     def test_while_body_ends_with_step_assign(self):
         """The While body ends with _st = (yield Step(gen, None)) — ask for more."""

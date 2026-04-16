@@ -365,7 +365,11 @@ the recursion structure above is reusable for the commit rule.
 **Phase 4 — `commit` variant.**
 
 - New `FINAL` sentinel; structural analysis pass.
-- Lowering emits `yield (_proceed, FINAL)` at detected sites.
+- Lowering emits `yield (_proceed, FINAL)` at detected sites — the
+  generated-code alias uses the `$`-prefixed unparseable-identifier
+  convention (see `$DONE` / `DONE`): `Name(id='$FINAL')` in the AST,
+  `globals_={'$FINAL': FINAL, ...}` in the injected builtins dict.
+  Hand-written source everywhere else uses the plain `FINAL` name.
 - Trampoline driver handles `FINAL` (deliver value, de-register
   callee from future pulls).
 - Validation: green suite; further measurable wins on

@@ -21,13 +21,13 @@ Every compiled predicate is a Python generator with this signature:
 The trampoline protocol uses two kinds of yield:
 
     yield (_tramp_parent, None)   →  solution found; parent resumes
-    yield (_tramp_parent, _DONE)  →  search exhausted; parent can stop
+    yield (_tramp_parent, DONE)  →  search exhausted; parent can stop
 
 A sub-call is driven by:
 
     _gen = StepGenerator(callee._get_dispatch(), this_generator, args..., trail)
     _st  = yield (_gen, None)           # hand off to callee
-    while _st is not _DONE:
+    while _st is not DONE:
         <use solution>
         _st = yield (_gen, None)        # ask for next solution
 
@@ -114,7 +114,7 @@ and then calls unify() to attempt binding it to the literal.
 The trail.mark() / trail.undo() pair around each arm ensures that any
 bindings made during that clause are rolled back on backtracking.
 
-The final `yield (_tramp_parent, _DONE)` signals to the trampoline that
+The final `yield (_tramp_parent, DONE)` signals to the trampoline that
 there are no more solutions to try.
 
 Note: below the indexing threshold these fall-through matches are the only
@@ -169,7 +169,7 @@ nested continuation references a variable allocated deeper in the chain.
 Each recursive call becomes a StepGenerator loop:
   _gen = StepGenerator(fib._get_dispatch(), this_generator, _v7, _v8, trail)
   _st  = yield (_gen, None)
-  while _st is not _DONE:
+  while _st is not DONE:
       <body>
       _st = yield (_gen, None)
 

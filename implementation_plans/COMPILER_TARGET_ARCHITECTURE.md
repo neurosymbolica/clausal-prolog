@@ -912,7 +912,7 @@ class TrampolineStrategy:
         return _yield_step(_name(ctx.parent_name), ast.Constant(None))
 
     def emit_exhaustion_yield(self, ctx):
-        return _yield_step(_name(ctx.parent_name), _name("_DONE"))
+        return _yield_step(_name(ctx.parent_name), _name("$DONE"))
 
     def emit_sub_call(self, ctx, fname, arity, arg_exprs, k_stmts):
         return build_trampoline_sub_call(ctx, fname, arity, arg_exprs, k_stmts)

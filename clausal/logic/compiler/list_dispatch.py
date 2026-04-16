@@ -181,7 +181,7 @@ def _build_list_dispatch_guard(
                 <cons_clauses + var_clauses>
         elif is_var(_d_pos):        # unbound — try all clauses
             <all clauses>
-        # non-list, non-var → falls through to yield _DONE
+        # non-list, non-var → falls through to yield DONE
 
     ``var_clauses`` (wildcard heads) appear in both the nil and cons branches
     because a wildcard matches any list.  They also appear in the is_var

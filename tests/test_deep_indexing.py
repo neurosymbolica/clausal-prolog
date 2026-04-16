@@ -23,7 +23,7 @@ the generated code should look roughly like:
         elif is_var(_d0):           # unbound — try all clauses
             match (_d0, _d1): ...
             match (_d0, _d1): ...
-        yield (_tramp_parent, _DONE)
+        yield (_tramp_parent, DONE)
 
 instead of two unconditional match blocks.
 

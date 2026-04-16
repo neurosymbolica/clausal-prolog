@@ -127,7 +127,7 @@ class TrampolineStrategy:
     def emit_exhaustion_yield(self, ctx):
         from ._ast_helpers import _name
         from .goal_trampoline import _yield_step_stmt
-        return _yield_step_stmt(_name(ctx.fail_name), _name("_DONE"))
+        return _yield_step_stmt(_name(ctx.fail_name), _name("$DONE"))
 
     def emit_sub_call(self, ctx, fname, arity, arg_exprs, k_stmts, *, direct_bucket_ref=None, direct_joint_bucket_ref=None, tail_position=False):
         from ._ast_helpers import _name, _assign
@@ -175,7 +175,7 @@ class TrampolineStrategy:
             test=ast.Compare(
                 left=_name(status_name),
                 ops=[ast.IsNot()],
-                comparators=[_name("_DONE")],
+                comparators=[_name("$DONE")],
             ),
             body=loop_body,
             orelse=[],

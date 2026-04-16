@@ -625,7 +625,7 @@ def _compile_tro_tail(
             test=ast.Compare(
                 left=_name(status_name),
                 ops=[ast.IsNot()],
-                comparators=[_name("_DONE")],
+                comparators=[_name("$DONE")],
             ),
             body=loop_body,
             orelse=[],

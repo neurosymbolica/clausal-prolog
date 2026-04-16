@@ -227,11 +227,11 @@ def assert_trampoline_done_yield_present(funcdef: Any) -> None:
     """README §10 invariant 4 — Phase 6 post (trampoline only).
 
     Every trampoline-protocol funcdef built with ``emit_done=True``
-    must contain at least one ``yield (X, _DONE)`` expression.  The
+    must contain at least one ``yield (X, DONE)`` expression.  The
     runtime contract is: a trampoline generator yields
-    ``(parent, _DONE)`` exactly once after exhausting all
+    ``(parent, DONE)`` exactly once after exhausting all
     solutions, which the calling generator detects to terminate
-    its ``while _st is not _DONE`` loop.
+    its ``while _st is not DONE`` loop.
 
     Bucket sub-functions (``emit_done=False``) are consumed via
     ``yield from`` by an outer wrapper that emits its own DONE,
@@ -249,7 +249,7 @@ def assert_trampoline_done_yield_present(funcdef: Any) -> None:
             isinstance(v, _ast.Tuple)
             and len(v.elts) == 2
             and isinstance(v.elts[1], _ast.Name)
-            and v.elts[1].id == "_DONE"
+            and v.elts[1].id == "$DONE"
         ):
             found = True
             break
@@ -257,7 +257,7 @@ def assert_trampoline_done_yield_present(funcdef: Any) -> None:
         raise InvariantError(
             "Phase 6 post: trampoline-DONE-yield invariant violated. "
             f"Funcdef {funcdef.name!r} was built with emit_done=True "
-            "but contains no ``yield (..., _DONE)`` expression. "
+            "but contains no ``yield (..., DONE)`` expression. "
             "Without it the trampoline driver loop never sees the "
             "termination signal and hangs."
         )

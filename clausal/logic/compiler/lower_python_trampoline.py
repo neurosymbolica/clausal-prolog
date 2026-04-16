@@ -76,7 +76,7 @@ def _lower_body(
             )
             cond_stmts = lower(t_op, cond_ctx, cond_k)
             cond_body = cond_stmts + [
-                _yield_step_stmt(_name(cond_fail), _name("_DONE")),
+                _yield_step_stmt(_name(cond_fail), _name("$DONE")),
             ]
             cond_fn_def = ast.FunctionDef(
                 name=cond_fn_name,
@@ -136,7 +136,7 @@ def _lower_body(
                     ctx=ast.Store(),
                 )],
                 value=_call(ast.Attribute(value=_name(g_name), attr="send", ctx=ast.Load()),
-                            _name("_DONE")),
+                            _name("$DONE")),
             )
             step_send = ast.If(
                 test=ast.Compare(
@@ -158,7 +158,7 @@ def _lower_body(
                         test=ast.Compare(
                             left=_name(v_name),
                             ops=[ast.Is()],
-                            comparators=[_name("_DONE")],
+                            comparators=[_name("$DONE")],
                         ),
                         body=[ast.Break()],
                         orelse=[],
@@ -237,7 +237,7 @@ def _lower_body(
                 inner_k,
             )
             naf_body = inner_stmts + [
-                _yield_step_stmt(_name("_naf_fail"), _name("_DONE")),
+                _yield_step_stmt(_name("_naf_fail"), _name("$DONE")),
             ]
             naf_fn_def = ast.FunctionDef(
                 name=naf_gen_fn,
@@ -279,7 +279,7 @@ def _lower_body(
                         test=ast.Compare(
                             left=_name(naf_v),
                             ops=[ast.Is()],
-                            comparators=[_name("_DONE")],
+                            comparators=[_name("$DONE")],
                         ),
                         body=[ast.Break()],
                         orelse=[],

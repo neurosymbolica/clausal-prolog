@@ -69,11 +69,11 @@ def _undo(name: str) -> ast.Expr:
 
 
 def _yield_done(parent: str = "parent") -> ast.Expr:
-    """``yield (<parent>, _DONE)`` synthetic AST."""
+    """``yield (<parent>, $DONE)`` synthetic AST."""
     return ast.Expr(value=ast.Yield(value=ast.Tuple(
         elts=[
             ast.Name(id=parent, ctx=ast.Load()),
-            ast.Name(id="_DONE", ctx=ast.Load()),
+            ast.Name(id="$DONE", ctx=ast.Load()),
         ],
         ctx=ast.Load(),
     )))

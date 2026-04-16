@@ -320,7 +320,7 @@ def _build_predicate_trampoline_funcdef(
     Returns the fixed-up FunctionDef without executing it.  Used by both
     ``compile_predicate_trampoline`` and ``compile_predicate_trampoline_ast``.
 
-    when *emit_done* is False the trailing ``yield (parent, _DONE)`` is
+    when *emit_done* is False the trailing ``yield (parent, DONE)`` is
     omitted — used for indexed-dispatch sub-functions that are consumed via
     ``yield from`` by an outer wrapper which emits its own DONE.
 
@@ -512,7 +512,7 @@ def _build_predicate_trampoline_funcdef(
     # a trail mark without consuming it, which would silently leak
     # trail entries on backtracking.  F4 (DONE yield) catches a
     # trampoline funcdef built with emit_done=True but missing the
-    # terminal ``yield (parent, _DONE)`` — without it the driver
+    # terminal ``yield (parent, DONE)`` — without it the driver
     # loop never sees the termination signal and hangs.
     from .invariants import (
         assert_mark_undo_paired,
@@ -546,7 +546,7 @@ def compile_predicate_trampoline(
     - At each solution: ``yield (parent, None)`` — suspends; the calling
       generator (via the trampoline) processes the solution, then resumes
       this generator to find more.
-    - After all clauses exhausted: ``yield (parent, _DONE)`` — signals
+    - After all clauses exhausted: ``yield (parent, DONE)`` — signals
       end of search for this predicate.
 
     Sub-predicate calls within clause bodies use the coroutine-backtracking
@@ -554,7 +554,7 @@ def compile_predicate_trampoline(
 
         _gen  = StepGenerator(dispatch, this_generator, this_generator, this_generator, args, trail)
         _st   = (yield (_gen, None))
-        while _st is not _DONE:
+        while _st is not DONE:
             <continuation>
             _st = (yield (_gen, None))
 
@@ -564,7 +564,7 @@ def compile_predicate_trampoline(
 
         def {functor}__{arity}(this_generator, parent, arg0, …, argN, trail):
             …              # clause match arms
-            yield (parent, _DONE)
+            yield (parent, DONE)
 
     The trampoline (``clausal.logic.trampoline.trampoline``) drives execution
     via ``StepGenerator`` wrappers.
@@ -612,7 +612,7 @@ def compile_predicate_trampoline(
         "deref": deref,
         "is_var": is_var,
         "StepGenerator": StepGenerator,
-        "_DONE": DONE,
+        "$DONE": DONE,
         "_dif": _dif_fn,
         "_reify_eq": _reify_eq_fn,
         "_structural_eq": _structural_eq_fn,
@@ -1046,7 +1046,7 @@ def compile_predicate_trampoline_ast(
 def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
     """Trampoline variant: generator that immediately yields (_tramp_parent, DONE)."""
     func_def = _empty_predicate_funcdef(functor, arity, None, TrampolineStrategy())
-    return functiondef_to_function(func_def, globals_={"_DONE": DONE})
+    return functiondef_to_function(func_def, globals_={"$DONE": DONE})
 
 
 # ── head_to_match_pattern et al (moved to .head_match) ───────────────────────
