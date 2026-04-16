@@ -7,7 +7,7 @@ consumer:
 
 - **`proceed(value)`** (encoded `yield (parent, None)`) — here's a
   solution; I may have more.
-- **`fail`** (encoded `yield (parent, _DONE)`) — no more solutions;
+- **`fail`** (encoded `yield (parent, DONE)`) — no more solutions;
   run your fail continuation.
 
 There is a genuine third path that is neither:
