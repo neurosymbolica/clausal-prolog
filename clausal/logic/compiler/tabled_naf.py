@@ -67,12 +67,12 @@ def _compile_tabled_naf_simple(ctx: CompilationContext, inner_goal, k_stmts):
     mark = ctx.fresh(_MARK_PREFIX)
 
     naf_call = _call(
-        _name("_naf_tabled"),
+        _name("$naf_tabled"),
         ast.Constant(value=fname),
         ast.Constant(value=arity),
         args_tuple,
         _name(trail_name),
-        _name("_table_store"),
+        _name("$table_store"),
     )
     return [
         _assign_mark(mark, trail_name),

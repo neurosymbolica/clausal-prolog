@@ -203,8 +203,8 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
         ),
         body=[
             ast.Raise(exc=_call(
-                _name("_LogicException"),
-                _call(_name("_type_error"), ast.Constant(value="positive_integer"),
+                _name("$LogicException"),
+                _call(_name("$type_error"), ast.Constant(value="positive_integer"),
                       _name(n_var), ast.Constant(value="call_nth/2")),
             )),
         ],
@@ -429,7 +429,7 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
 
     get_old = _assign(
         old_var,
-        _call(_name("_get_attr"), _name(x_var), ast.Constant(value="freeze")),
+        _call(_name("$get_attr"), _name(x_var), ast.Constant(value="freeze")),
     )
 
     make_goals = _assign(
@@ -450,7 +450,7 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
 
     put_attr_stmt = ast.Expr(
         value=_call(
-            _name("_put_attr"),
+            _name("$put_attr"),
             _name(x_var),
             ast.Constant(value="freeze"),
             _name(goals_var),
@@ -524,7 +524,7 @@ def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
             and cond.func.name == "ground"
             and len(cond.args) == 1):
         install_call = ast.Expr(value=_call(
-            _name("_install_when_ground"),
+            _name("$install_when_ground"),
             term_to_ast_expr(cond.args[0], var_context, eval_arith=False),
             _name(thunk_name),
             _name(trail_name),
@@ -535,7 +535,7 @@ def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
         c1_expr = term_to_ast_expr(cond.left, var_context, eval_arith=False)
         c2_expr = term_to_ast_expr(cond.right, var_context, eval_arith=False)
         install_call = ast.Expr(value=_call(
-            _name("_install_when_disjunction"),
+            _name("$install_when_disjunction"),
             c1_expr,
             c2_expr,
             _name(thunk_name),
@@ -544,7 +544,7 @@ def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
         return [thunk_fn, install_call] + (k_stmts or [])
 
     install_call = ast.Expr(value=_call(
-        _name("_install_when_condition"),
+        _name("$install_when_condition"),
         cond_expr,
         _name(thunk_name),
         _name(trail_name),
@@ -591,7 +591,7 @@ def _compile_find_all_core(
 
     append_call = ast.Expr(value=_call(
         _attr(results_var, "append"),
-        _call(_name("_deref_walk"), template_expr),
+        _call(_name("$deref_walk"), template_expr),
     ))
     collect_loop = ast.For(
         target=_name("_", ast.Store()),
@@ -621,7 +621,7 @@ def _compile_find_all_core(
     if dedup:
         stmts.append(_assign(
             results_var,
-            _call(_name("_set_of_dedup"), _name(results_var)),
+            _call(_name("$set_of_dedup"), _name(results_var)),
         ))
 
     if fail_on_empty:
@@ -655,7 +655,7 @@ def _compile_throw(
     var_context = ctx.var_context
     term_expr = term_to_ast_expr(term_arg, var_context, eval_arith=False)
     return [
-        ast.Raise(exc=_call(_name("_LogicException"), term_expr)),
+        ast.Raise(exc=_call(_name("$LogicException"), term_expr)),
     ]
 
 
@@ -680,9 +680,9 @@ def _compile_catch_impl(
     term_extract = _assign(
         term_name,
         ast.IfExp(
-            test=_call(_name("isinstance"), _name(exc_name), _name("_LogicException")),
+            test=_call(_name("isinstance"), _name(exc_name), _name("$LogicException")),
             body=ast.Attribute(value=_name(exc_name), attr="term", ctx=ast.Load()),
-            orelse=_call(_name("_python_error_term"), _name(exc_name)),
+            orelse=_call(_name("$python_error_term"), _name(exc_name)),
         ),
     )
 

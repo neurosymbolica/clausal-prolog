@@ -76,7 +76,7 @@ def _compile_single_star_is(
         _assign_mark(mark, trail_name),
         _if(
             _call(
-                _name("_body_star_unify"),
+                _name("$body_star_unify"),
                 other_expr,
                 ast.List(elts=before_exprs, ctx=ast.Load()),
                 star_expr,
@@ -122,7 +122,7 @@ def _compile_multi_star_is(
         ast.For(
             target=_name("_", ast.Store()),
             iter=_call(
-                _name("_body_multi_star_unify"),
+                _name("$body_multi_star_unify"),
                 other_expr,
                 segments_expr,
                 _name(trail_name),

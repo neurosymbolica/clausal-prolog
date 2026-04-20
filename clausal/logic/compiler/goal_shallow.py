@@ -91,7 +91,7 @@ def _dispatch_call_iter(
         )
     args_tuple = ast.Tuple(elts=arg_exprs, ctx=ast.Load())
     return ast.Call(
-        func=_name("_tramp_call"),
+        func=_name("$tramp_call"),
         args=[dispatch_expr, args_tuple, _name(ctx.trail_name)],
         keywords=[],
     )

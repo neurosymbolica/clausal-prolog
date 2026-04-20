@@ -233,7 +233,7 @@ def _locate(node: ast.AST, pos=None) -> ast.AST:
 _MARK_PREFIX = "_m"            # fresh mark variable prefix (ctx.fresh(_MARK_PREFIX))
 _TRAIL_PARAM_NAME = "trail"    # compiled-function trail parameter
 _K_PARAM_NAME = "k"            # shallow-strategy continuation parameter
-_DISP_PREFIX = "_disp_"        # locked-dispatch globals-key prefix
+_DISP_PREFIX = "$disp_"        # locked-dispatch globals-key prefix
 # Phase 2: split-continuation protocol — the old single ``_tramp_parent``
 # parameter is replaced by three named slots.  See
 # ``implementation_plans/CONTINUATION_TCO_PLAN.md`` §3.
@@ -345,7 +345,7 @@ def _in_iter_expr(elem: Any, coll_expr: ast.expr) -> ast.expr:
     """
     if isinstance(elem, TupleLiteral):
         return _call(
-            _name("_in_iter"),
+            _name("$in_iter"),
             _call(_name("deref"), coll_expr),
             _locate(ast.Constant(value=True)),
         )

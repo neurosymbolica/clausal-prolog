@@ -44,7 +44,7 @@ from .terms_to_ast import (
 )
 # Runtime helpers (``_head_list_unify_input`` / ``_head_list_unify_output``
 # / ``_head_multi_star_error``) are referenced by name string in the AST
-# this module emits — e.g. ``_call(_name("_head_list_unify_input"), ...)``.
+# this module emits — e.g. ``_call(_name("$head_list_unify_input"), ...)``.
 # The compiled predicate resolves those names via ``base_globals`` at
 # call time, not via Python-level imports here.  So this module
 # intentionally does NOT import from ``clausal.logic.runtime``; see the
@@ -728,7 +728,7 @@ def _compile_multi_star_guard(
         test=_call(_name("is_var"), _name(d_name)),
         body=[
             _assign_mark(var_build_mark, trail_name),
-            _assign(var_sl_name, _call(_name("_build_multi_star_list"), segments_ast)),
+            _assign(var_sl_name, _call(_name("$build_multi_star_list"), segments_ast)),
             ast.If(
                 test=_call(_name("unify"), _name(cap_name), _name(var_sl_name), _name(trail_name)),
                 body=body_stmts,
@@ -969,7 +969,7 @@ def compile_head_to_match_case(
                 args = _list_guard_args(cap_name, before, star, after, _vc)
                 all_guard_args.append(args)
                 input_check_stmts.append(
-                    _assign(lr_name, _call(_name("_head_list_unify_input"), *args))
+                    _assign(lr_name, _call(_name("$head_list_unify_input"), *args))
                 )
 
             gate_tests = []
@@ -995,7 +995,7 @@ def compile_head_to_match_case(
                             ops=[ast.IsNot()],
                             comparators=[ast.Constant(value=None)],
                         ),
-                        _call(_name("_head_list_unify_output"), *args),
+                        _call(_name("$head_list_unify_output"), *args),
                     ],
                 ))
             if len(output_conditions) == 1:

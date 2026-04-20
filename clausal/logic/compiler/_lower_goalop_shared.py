@@ -56,12 +56,12 @@ from clausal.logic.compiler.terms_to_ast import (
 
 
 _FD_RUNTIME: dict[FDOp, str] = {
-    "eq": "_fd_eq",
-    "ne": "_fd_ne",
-    "lt": "_fd_lt",
-    "le": "_fd_le",
-    "gt": "_fd_gt",
-    "ge": "_fd_ge",
+    "eq": "$fd_eq",
+    "ne": "$fd_ne",
+    "lt": "$fd_lt",
+    "le": "$fd_le",
+    "gt": "$fd_gt",
+    "ge": "$fd_ge",
 }
 
 
@@ -69,12 +69,12 @@ _FD_RUNTIME: dict[FDOp, str] = {
 # ``_FD_REIFY_INFO`` carries, keyed here by :data:`ReifiedKind` literal
 # rather than ``clausal.terms`` type so the IR has no term-level dep.
 _FD_REIFY: dict[str, tuple[str, str, str]] = {
-    "fd_eq": ("eq", "_fd_eq", "_fd_ne"),
-    "fd_ne": ("ne", "_fd_ne", "_fd_eq"),
-    "fd_lt": ("lt", "_fd_lt", "_fd_ge"),
-    "fd_le": ("le", "_fd_le", "_fd_gt"),
-    "fd_gt": ("gt", "_fd_gt", "_fd_le"),
-    "fd_ge": ("ge", "_fd_ge", "_fd_lt"),
+    "fd_eq": ("eq", "$fd_eq", "$fd_ne"),
+    "fd_ne": ("ne", "$fd_ne", "$fd_eq"),
+    "fd_lt": ("lt", "$fd_lt", "$fd_ge"),
+    "fd_le": ("le", "$fd_le", "$fd_gt"),
+    "fd_gt": ("gt", "$fd_gt", "$fd_le"),
+    "fd_ge": ("ge", "$fd_ge", "$fd_lt"),
 }
 
 
@@ -160,18 +160,18 @@ def _lower_shared_body(
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
-                _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), k_stmts),
+                _if(_call(_name("$dif"), l_expr, r_expr, _name(trail_name)), k_stmts),
             ]
 
         case StructuralEq(l=l, r=r, negate=False):
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [_if(_call(_name("_structural_eq"), l_expr, r_expr), k_stmts)]
+            return [_if(_call(_name("$structural_eq"), l_expr, r_expr), k_stmts)]
 
         case StructuralEq(l=l, r=r, negate=True):
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [_if(_call(_name("_structural_neq"), l_expr, r_expr), k_stmts)]
+            return [_if(_call(_name("$structural_neq"), l_expr, r_expr), k_stmts)]
 
         case FDCompare(op=op, l=l, r=r):
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
@@ -244,9 +244,9 @@ def _lower_shared_body(
             # the rename is always resolvable.
             if ir.destructive_reuse:
                 _DR_NAME_MAP = {
-                    "append": "_dr_append__3",
-                    "dict_put": "_dr_dict_put__4",
-                    "set_union": "_dr_set_union__3",
+                    "append": "$dr_append__3",
+                    "dict_put": "$dr_dict_put__4",
+                    "set_union": "$dr_set_union__3",
                 }
                 fname = _DR_NAME_MAP.get(fname, fname)
             return _compile_predicate_call_impl(
@@ -346,9 +346,9 @@ def _lower_reified_branch(
             _assign_mark(mark, trail_name),
             _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), true_stmts),
             _undo_stmt(mark, trail_name),
-            _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), false_stmts),
+            _if(_call(_name("$dif"), l_expr, r_expr, _name(trail_name)), false_stmts),
         ]
-        reif_call = _call(_name("_reify_eq"), l_expr, r_expr, _name(trail_name))
+        reif_call = _call(_name("$reify_eq"), l_expr, r_expr, _name(trail_name))
         return _three_way_reif_branch(
             reif_var, reif_call, true_stmts, false_stmts, undetermined,
         )
@@ -365,7 +365,7 @@ def _lower_reified_branch(
         _undo_stmt(mark, trail_name),
     ]
     reif_call = _call(
-        _name("_reify_fd"), ast.Constant(op_name), l_expr, r_expr, _name(trail_name),
+        _name("$reify_fd"), ast.Constant(op_name), l_expr, r_expr, _name(trail_name),
     )
     return _three_way_reif_branch(
         reif_var, reif_call, then_stmts, else_stmts, undetermined,

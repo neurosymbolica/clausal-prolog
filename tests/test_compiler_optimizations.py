@@ -359,10 +359,10 @@ class TestITENoDuplication:
         stmts = self._compile_ite(test, then, else_)
         module = ast.Module(body=stmts, type_ignores=[])
         ast.fix_missing_locations(module)
-        assert _count_calls_to("_reify_eq", module) == 1
+        assert _count_calls_to("$reify_eq", module) == 1
         # unify from the undetermined block (one for the test, one per Is branch)
-        # The key: only 1 '_dif' call (else compiled once)
-        assert _count_calls_to("_dif", module) == 1
+        # The key: only 1 '$dif' call (else compiled once)
+        assert _count_calls_to("$dif", module) == 1
 
     # ── Reified FD ITE ────────────────────────────────────────────────────────
 
@@ -417,7 +417,7 @@ class TestITENoDuplication:
         stmts = self._compile_ite(test, then, else_)
         module = ast.Module(body=stmts, type_ignores=[])
         ast.fix_missing_locations(module)
-        assert _count_calls_to("_reify_fd", module) == 1
+        assert _count_calls_to("$reify_fd", module) == 1
 
 
 # ── Phase 3: Or mark elimination ──────────────────────────────────────────────
@@ -643,8 +643,8 @@ class TestLockedDispatchCaching:
             )
         ]
         fn = compile_predicate_trampoline("Foo", 1, clauses, db=db, globals_={"Bar": Bar})
-        assert "_disp_Bar_1" in fn.__globals__, (
-            "_disp_Bar_1 should be pre-captured in compiled function globals for locked Bar"
+        assert "$disp_Bar_1" in fn.__globals__, (
+            "$disp_Bar_1 should be pre-captured in compiled function globals for locked Bar"
         )
 
     def test_no_get_dispatch_call_in_bytecode_for_locked(self):
@@ -665,7 +665,7 @@ class TestLockedDispatchCaching:
         out = io.StringIO()
         dis.dis(fn, file=out)
         bytecode = out.getvalue()
-        assert "_disp_Bar_1" in bytecode, "Compiled code should reference _disp_Bar_1"
+        assert "$disp_Bar_1" in bytecode, "Compiled code should reference $disp_Bar_1"
         assert "get_dispatch" not in bytecode, (
             "Compiled code should NOT call _get_dispatch() for locked predicate"
         )
@@ -693,8 +693,8 @@ class TestLockedDispatchCaching:
         assert "get_dispatch" in bytecode, (
             "Unlocked predicate should still use _get_dispatch() at runtime"
         )
-        assert "_disp_Baz_1" not in fn.__globals__, (
-            "_disp_Baz_1 should NOT be cached for unlocked predicate"
+        assert "$disp_Baz_1" not in fn.__globals__, (
+            "$disp_Baz_1 should NOT be cached for unlocked predicate"
         )
 
     def test_locked_dispatch_correctness(self):

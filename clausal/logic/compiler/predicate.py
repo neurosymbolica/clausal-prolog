@@ -456,7 +456,7 @@ def _build_predicate_trampoline_funcdef(
         loop_stmts.append(
             ast.If(
                 test=ast.Subscript(
-                    value=_name("_tro_state"), slice=ast.Constant(0), ctx=ast.Load(),
+                    value=_name("$tro_state"), slice=ast.Constant(0), ctx=ast.Load(),
                 ),
                 body=[ast.Return(value=ast.Constant(None))],
                 orelse=[],
@@ -613,48 +613,48 @@ def compile_predicate_trampoline(
         "is_var": is_var,
         "StepGenerator": StepGenerator,
         "$DONE": DONE,
-        "_dif": _dif_fn,
-        "_reify_eq": _reify_eq_fn,
-        "_structural_eq": _structural_eq_fn,
-        "_structural_neq": _structural_neq_fn,
-        "_reify_fd": _reify_fd_fn,
-        "_fd_eq": _fd_eq_fn,
-        "_fd_ne": _fd_ne_fn,
-        "_fd_lt": _fd_lt_fn,
-        "_fd_le": _fd_le_fn,
-        "_fd_gt": _fd_gt_fn,
-        "_fd_ge": _fd_ge_fn,
-        "_head_list_unify_input": _head_list_unify_input,
-        "_head_list_unify_output": _head_list_unify_output,
-        "_head_multi_star_error": _head_multi_star_error,
-        "_body_star_unify": _body_star_unify,
-        "_body_multi_star_unify": _body_multi_star_unify,
-        "_build_star_list": _build_star_list,
-        "_build_multi_star_list": _build_multi_star_list,
-        "_tramp_call": _tramp_call,
-        "_deref_walk": _deref_walk_fn,
-        "_set_of_dedup": _set_of_dedup,
-        "_LogicException": _LogicException_cls,
-        "_python_error_term": _python_error_term_fn,
-        "_in_iter": _in_iter,
-        "_type_error": _type_error_fn,
-        "_get_attr": _get_attr_fn,
-        "_put_attr": _put_attr_fn,
+        "$dif": _dif_fn,
+        "$reify_eq": _reify_eq_fn,
+        "$structural_eq": _structural_eq_fn,
+        "$structural_neq": _structural_neq_fn,
+        "$reify_fd": _reify_fd_fn,
+        "$fd_eq": _fd_eq_fn,
+        "$fd_ne": _fd_ne_fn,
+        "$fd_lt": _fd_lt_fn,
+        "$fd_le": _fd_le_fn,
+        "$fd_gt": _fd_gt_fn,
+        "$fd_ge": _fd_ge_fn,
+        "$head_list_unify_input": _head_list_unify_input,
+        "$head_list_unify_output": _head_list_unify_output,
+        "$head_multi_star_error": _head_multi_star_error,
+        "$body_star_unify": _body_star_unify,
+        "$body_multi_star_unify": _body_multi_star_unify,
+        "$build_star_list": _build_star_list,
+        "$build_multi_star_list": _build_multi_star_list,
+        "$tramp_call": _tramp_call,
+        "$deref_walk": _deref_walk_fn,
+        "$set_of_dedup": _set_of_dedup,
+        "$LogicException": _LogicException_cls,
+        "$python_error_term": _python_error_term_fn,
+        "$in_iter": _in_iter,
+        "$type_error": _type_error_fn,
+        "$get_attr": _get_attr_fn,
+        "$put_attr": _put_attr_fn,
         "SegList": SegList,
         "ConcreteSeg": ConcreteSeg,
         "VarSeg": VarSeg,
-        "_seglist_unify_gen": _seglist_unify_gen,
-        "_Fraction": Fraction,
+        "$seglist_unify_gen": _seglist_unify_gen,
+        "$Fraction": Fraction,
     }
     # Ensure freeze/when hooks are registered.
-    base_globals["_install_when_ground"] = _install_when_ground_fn
-    base_globals["_install_when_disjunction"] = _install_when_disjunction_fn
-    base_globals["_install_when_condition"] = _install_when_condition_fn
-    # WFS: inject _naf_tabled, _table_store, and _TABLING_SUSPEND for tabled NAF
+    base_globals["$install_when_ground"] = _install_when_ground_fn
+    base_globals["$install_when_disjunction"] = _install_when_disjunction_fn
+    base_globals["$install_when_condition"] = _install_when_condition_fn
+    # WFS: inject $naf_tabled, $table_store, and $TABLING_SUSPEND for tabled NAF
     if db is not None:
-        base_globals["_naf_tabled"] = _naf_tabled_fn
-        base_globals["_table_store"] = db.table_store
-        base_globals["_TABLING_SUSPEND"] = _TABLING_SUSPEND
+        base_globals["$naf_tabled"] = _naf_tabled_fn
+        base_globals["$table_store"] = db.table_store
+        base_globals["$TABLING_SUSPEND"] = _TABLING_SUSPEND
     # Phase 6: single combined traversal replacing three separate walks.
     _head_types, _py_thunks, _call_targets = _collect_globals_info(clauses)
     base_globals.update(_head_types)
@@ -693,17 +693,16 @@ def compile_predicate_trampoline(
     # Destructive-reuse: inject DR dispatch functions into base_globals so
     # that rewritten goal names (e.g. _dr_append__3) resolve at runtime via
     # the locked-dispatch fast path.
-    base_globals[_disp_key("_dr_append__3", 3)] = _dr_append_fn
-    base_globals[_disp_key("_dr_dict_put__4", 4)] = _dr_dict_put_fn
-    base_globals[_disp_key("_dr_set_union__3", 3)] = _dr_set_union_fn
+    base_globals[_disp_key("$dr_append__3", 3)] = _dr_append_fn
+    base_globals[_disp_key("$dr_dict_put__4", 4)] = _dr_dict_put_fn
+    base_globals[_disp_key("$dr_set_union__3", 3)] = _dr_set_union_fn
+
 
     # Phase 7: set compile context so _dispatch_call_trampoline can emit
     # cached dispatch names instead of fname._get_dispatch() for locked predicates.
     _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
     ctx_template.locked_dispatch_keys = _locked_keys
     ctx_template.base_globals = base_globals
-    # Phase 10f: bucket-ref maps live on ctx_template; populated by
-    # _inject_bucket_refs_trampoline below.
     try:
         # Slice E6b: ``_inject_bucket_refs_trampoline`` retired.  The
         # IR-path per-body populator in ``goal_shallow.
@@ -737,7 +736,7 @@ def compile_predicate_trampoline(
                     _idx_tro_indices = _tro_set
                     # Shared mutable TRO state: [flag, arg0, arg1, ..., argN-1]
                     _tro_state_obj = [False] + [None] * arity
-                    base_globals["_tro_state"] = _tro_state_obj
+                    base_globals["$tro_state"] = _tro_state_obj
 
             # Compile fallback (all clauses, for when no arg is ground).
             # Fallback uses "loop" mode TRO (has all clauses, can restart internally).
@@ -1256,45 +1255,45 @@ def compile_predicate_shallow(
         "unify": unify,
         "deref": deref,
         "is_var": is_var,
-        "_dif": _dif_fn_s,
-        "_reify_eq": _reify_eq_fn_s,
-        "_reify_fd": _reify_fd_fn_s,
-        "_fd_eq": _fd_eq_fn_s,
-        "_fd_ne": _fd_ne_fn_s,
-        "_fd_lt": _fd_lt_fn_s,
-        "_fd_le": _fd_le_fn_s,
-        "_fd_gt": _fd_gt_fn_s,
-        "_fd_ge": _fd_ge_fn_s,
-        "_head_list_unify_input": _head_list_unify_input,
-        "_head_list_unify_output": _head_list_unify_output,
-        "_head_multi_star_error": _head_multi_star_error,
-        "_body_star_unify": _body_star_unify,
-        "_body_multi_star_unify": _body_multi_star_unify,
-        "_build_star_list": _build_star_list,
-        "_build_multi_star_list": _build_multi_star_list,
-        "_tramp_call": _tramp_call,
-        "_deref_walk": _deref_walk_fn,
-        "_set_of_dedup": _set_of_dedup,
-        "_LogicException": _LogicException_cls,
-        "_python_error_term": _python_error_term_fn_s,
-        "_in_iter": _in_iter,
-        "_type_error": _type_error_fn_s,
-        "_get_attr": _get_attr_fn_s,
-        "_put_attr": _put_attr_fn_s,
+        "$dif": _dif_fn_s,
+        "$reify_eq": _reify_eq_fn_s,
+        "$reify_fd": _reify_fd_fn_s,
+        "$fd_eq": _fd_eq_fn_s,
+        "$fd_ne": _fd_ne_fn_s,
+        "$fd_lt": _fd_lt_fn_s,
+        "$fd_le": _fd_le_fn_s,
+        "$fd_gt": _fd_gt_fn_s,
+        "$fd_ge": _fd_ge_fn_s,
+        "$head_list_unify_input": _head_list_unify_input,
+        "$head_list_unify_output": _head_list_unify_output,
+        "$head_multi_star_error": _head_multi_star_error,
+        "$body_star_unify": _body_star_unify,
+        "$body_multi_star_unify": _body_multi_star_unify,
+        "$build_star_list": _build_star_list,
+        "$build_multi_star_list": _build_multi_star_list,
+        "$tramp_call": _tramp_call,
+        "$deref_walk": _deref_walk_fn,
+        "$set_of_dedup": _set_of_dedup,
+        "$LogicException": _LogicException_cls,
+        "$python_error_term": _python_error_term_fn_s,
+        "$in_iter": _in_iter,
+        "$type_error": _type_error_fn_s,
+        "$get_attr": _get_attr_fn_s,
+        "$put_attr": _put_attr_fn_s,
         "SegList": SegList,
         "ConcreteSeg": ConcreteSeg,
         "VarSeg": VarSeg,
-        "_seglist_unify_gen": _seglist_unify_gen,
-        "_Fraction": Fraction,
+        "$seglist_unify_gen": _seglist_unify_gen,
+        "$Fraction": Fraction,
     }
     # Ensure freeze/when hooks are registered.
-    base_globals["_install_when_ground"] = _install_when_ground_fn_s
-    base_globals["_install_when_disjunction"] = _install_when_disjunction_fn_s
-    base_globals["_install_when_condition"] = _install_when_condition_fn_s
-    # WFS: inject _naf_tabled and _table_store for tabled NAF
+    base_globals["$install_when_ground"] = _install_when_ground_fn_s
+    base_globals["$install_when_disjunction"] = _install_when_disjunction_fn_s
+    base_globals["$install_when_condition"] = _install_when_condition_fn_s
+    # WFS: inject $naf_tabled and $table_store for tabled NAF
     if db is not None:
-        base_globals["_naf_tabled"] = _naf_tabled_fn_s
-        base_globals["_table_store"] = db.table_store
+        base_globals["$naf_tabled"] = _naf_tabled_fn_s
+        base_globals["$table_store"] = db.table_store
     # Phase 6: single combined traversal replacing three separate walks.
     _head_types, _py_thunks, _call_targets = _collect_globals_info(clauses)
     base_globals.update(_head_types)

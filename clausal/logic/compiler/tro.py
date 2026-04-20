@@ -571,7 +571,7 @@ def _compile_tro_tail(
         tro_set_stmts: list[ast.stmt] = [
             ast.Assign(
                 targets=[ast.Subscript(
-                    value=_name("_tro_state"), slice=ast.Constant(0), ctx=ast.Store(),
+                    value=_name("$tro_state"), slice=ast.Constant(0), ctx=ast.Store(),
                 )],
                 value=ast.Constant(True),
             ),
@@ -579,7 +579,7 @@ def _compile_tro_tail(
         for i in range(arity):
             tro_set_stmts.append(ast.Assign(
                 targets=[ast.Subscript(
-                    value=_name("_tro_state"), slice=ast.Constant(i + 1), ctx=ast.Store(),
+                    value=_name("$tro_state"), slice=ast.Constant(i + 1), ctx=ast.Store(),
                 )],
                 value=_name(f"_tro_arg{i}"),
             ))

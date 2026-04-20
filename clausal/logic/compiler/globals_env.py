@@ -334,7 +334,7 @@ def _disp_key(fname: str, arity: int) -> str:
     reference ``_disp_Foo_2`` directly instead of ``Foo._get_dispatch()``
     on every invocation.
     """
-    return f"_disp_{fname.replace('.', '_')}_{arity}"
+    return f"$disp_{fname.replace('.', '_')}_{arity}"
 
 
 def _merge_builtin(base_globals: dict, name: str, builtin) -> None:

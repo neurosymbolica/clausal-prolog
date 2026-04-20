@@ -142,7 +142,7 @@ def _lower_body(
                 test=ast.Compare(
                     left=_name(v_name),
                     ops=[ast.Is()],
-                    comparators=[_name("_TABLING_SUSPEND")],
+                    comparators=[_name("$TABLING_SUSPEND")],
                 ),
                 body=[step_send_done],
                 orelse=[step_send_normal],
@@ -189,12 +189,12 @@ def _lower_body(
                     for a in t_op.args
                 ]
                 naf_call = _call(
-                    _name("_naf_tabled"),
+                    _name("$naf_tabled"),
                     ast.Constant(t_op.fname),
                     ast.Constant(t_op.arity),
                     ast.List(elts=arg_exprs, ctx=ast.Load()),
                     _name(trail_name),
-                    _name("_table_store"),
+                    _name("$table_store"),
                 )
                 naf_mark = ctx.fresh(_MARK_PREFIX)
                 false_block = [

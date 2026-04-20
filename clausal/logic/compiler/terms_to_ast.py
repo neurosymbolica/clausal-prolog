@@ -158,7 +158,7 @@ def term_to_ast_expr(
             star_val = term[star_idx].value
             after = term[star_idx + 1:]
             return ast.Call(
-                func=_name("_build_star_list"),
+                func=_name("$build_star_list"),
                 args=[
                     ast.List(
                         elts=[_rec(e) for e in before],
@@ -191,7 +191,7 @@ def term_to_ast_expr(
                         ctx=ast.Load(),
                     ))
             return ast.Call(
-                func=_name("_build_multi_star_list"),
+                func=_name("$build_multi_star_list"),
                 args=[ast.List(elts=seg_elts, ctx=ast.Load())],
                 keywords=[],
             )
@@ -428,7 +428,7 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
         if (isinstance(left_t, int) and not isinstance(left_t, bool)
                 and isinstance(right_t, int) and not isinstance(right_t, bool)):
             return ast.Call(
-                func=_name("_Fraction"),
+                func=_name("$Fraction"),
                 args=[ast.Constant(value=left_t), ast.Constant(value=right_t)],
                 keywords=[],
             )
