@@ -23,6 +23,10 @@ for use in .clausal files via::
                           logical_and, logical_or, logical_not, logical_xor,
                           any, all,
                           where, masked_select, take, put_along_axis,
+                          einsum, logarithm, sine, cosine, tangent,
+                          sqrt, pow, atan2, sinh, cosh, tanh,
+                          sigmoid, softmax, log_softmax, logsumexp,
+                          floor, ceil, round, sign, cumsum, cumprod,
                           float32, float64, int32, newaxis])
 
 Phase 1 — Array Core
@@ -121,6 +125,24 @@ Comparisons, logic, and selection (Phase 6):
     masked_select(A, MASK, R)      Select elements where MASK is true (1-D)
     take(A, INDICES, AXIS, R)      Gather elements along AXIS
     put_along_axis(A, IDX, VAL, AXIS, R)   Scatter VAL at IDX along AXIS (copy)
+
+Einsum and advanced math (Phase 7):
+    einsum(EQ, ARRS, R)        jnp.einsum(eq, *arrs) — ARRS is a list
+    logarithm(X, Y)            Bijective log <-> exp (Y = log X)
+    sine(ANGLE, VALUE)         Bijective sin <-> arcsin (partial range)
+    cosine(ANGLE, VALUE)       Bijective cos <-> arccos (partial range)
+    tangent(ANGLE, VALUE)      Bijective tan <-> arctan (partial range)
+    sqrt(A, R)                 Element-wise square root
+    pow(A, E, R)               Element-wise A ** E
+    atan2(Y, X, R)             Two-arg arctangent jnp.arctan2(y, x)
+    sinh / cosh / tanh(A, R)   Hyperbolic functions
+    sigmoid(A, R)              jax.nn.sigmoid
+    softmax(A, AXIS, R)        jax.nn.softmax along AXIS
+    log_softmax(A, AXIS, R)    jax.nn.log_softmax along AXIS
+    logsumexp(A, AXIS, R)      jax.scipy.special.logsumexp along AXIS
+    floor / ceil / round / sign(A, R)   Rounding / sign
+    cumsum(A, AXIS, R)         Cumulative sum along AXIS
+    cumprod(A, AXIS, R)        Cumulative product along AXIS
 
 FFT (jnp.fft) — bijective pairs exposed as single multi-mode predicates:
     fft_transform(T, F) / fft_transform(T, AXIS, F)
@@ -724,6 +746,139 @@ put_along_axis = _pred("put_along_axis",
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Einsum and Advanced Math (Phase 7)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# einsum is pure; bijective trig/exp pairs collapse into _bidir_2 predicates
+# named after the natural reading of the second arg (logarithm(EXP, VAL):
+# VAL is the log of EXP). softmax, log_softmax, sigmoid live in jax.nn.
+# logsumexp lives in jax.scipy.special (no numpy.logsumexp exists).
+
+_jnn_mod_cache = None
+_jss_mod_cache = None
+
+
+def _jnn():
+    global _jnn_mod_cache
+    if _jnn_mod_cache is None:
+        _ensure_jax()
+        from clausal.modules.py import _import_stdlib
+        _jnn_mod_cache = _import_stdlib("jax.nn")
+    return _jnn_mod_cache
+
+
+def _jss():
+    global _jss_mod_cache
+    if _jss_mod_cache is None:
+        _ensure_jax()
+        from clausal.modules.py import _import_stdlib
+        _jss_mod_cache = _import_stdlib("jax.scipy.special")
+    return _jss_mod_cache
+
+
+einsum = _pred("einsum",
+    (3, _pure(lambda eq, arrs: _jnp_mod().einsum(eq, *arrs))),
+)
+
+# -- Bijective pairs --
+
+logarithm = _pred("logarithm",
+    (2, _bidir_2(
+        lambda x: _jnp_mod().log(x),
+        lambda y: _jnp_mod().exp(y),
+    )),
+)
+
+sine = _pred("sine",
+    (2, _bidir_2(
+        lambda angle: _jnp_mod().sin(angle),
+        lambda value: _jnp_mod().arcsin(value),
+    )),
+)
+
+cosine = _pred("cosine",
+    (2, _bidir_2(
+        lambda angle: _jnp_mod().cos(angle),
+        lambda value: _jnp_mod().arccos(value),
+    )),
+)
+
+tangent = _pred("tangent",
+    (2, _bidir_2(
+        lambda angle: _jnp_mod().tan(angle),
+        lambda value: _jnp_mod().arctan(value),
+    )),
+)
+
+# -- Non-bijective math --
+
+sqrt = _pred("sqrt",
+    (2, _pure(lambda a: _jnp_mod().sqrt(a))),
+)
+
+pow = _pred("pow",
+    (3, _pure(lambda a, e: _jnp_mod().power(a, e))),
+)
+
+atan2 = _pred("atan2",
+    (3, _pure(lambda y, x: _jnp_mod().arctan2(y, x))),
+)
+
+sinh = _pred("sinh",
+    (2, _pure(lambda a: _jnp_mod().sinh(a))),
+)
+
+cosh = _pred("cosh",
+    (2, _pure(lambda a: _jnp_mod().cosh(a))),
+)
+
+tanh = _pred("tanh",
+    (2, _pure(lambda a: _jnp_mod().tanh(a))),
+)
+
+sigmoid = _pred("sigmoid",
+    (2, _pure(lambda a: _jnn().sigmoid(a))),
+)
+
+softmax = _pred("softmax",
+    (3, _pure(lambda a, axis: _jnn().softmax(a, axis=int(axis)))),
+)
+
+log_softmax = _pred("log_softmax",
+    (3, _pure(lambda a, axis: _jnn().log_softmax(a, axis=int(axis)))),
+)
+
+logsumexp = _pred("logsumexp",
+    (3, _pure(lambda a, axis: _jss().logsumexp(a, axis=int(axis)))),
+)
+
+floor = _pred("floor",
+    (2, _pure(lambda a: _jnp_mod().floor(a))),
+)
+
+ceil = _pred("ceil",
+    (2, _pure(lambda a: _jnp_mod().ceil(a))),
+)
+
+# round is a Python builtin — module-scoped import prevents collision
+round = _pred("round",
+    (2, _pure(lambda a: _jnp_mod().round(a))),
+)
+
+sign = _pred("sign",
+    (2, _pure(lambda a: _jnp_mod().sign(a))),
+)
+
+cumsum = _pred("cumsum",
+    (3, _pure(lambda a, axis: _jnp_mod().cumsum(a, axis=int(axis)))),
+)
+
+cumprod = _pred("cumprod",
+    (3, _pure(lambda a, axis: _jnp_mod().cumprod(a, axis=int(axis)))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Dtype and numeric constants (re-exported from jax.numpy)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -779,6 +934,14 @@ __all__ = [
     "logical_and", "logical_or", "logical_not", "logical_xor",
     "any", "all",
     "where", "masked_select", "take", "put_along_axis",
+    # Einsum + advanced math (Phase 7)
+    "einsum",
+    "logarithm", "sine", "cosine", "tangent",
+    "sqrt", "pow", "atan2",
+    "sinh", "cosh", "tanh",
+    "sigmoid", "softmax", "log_softmax", "logsumexp",
+    "floor", "ceil", "round", "sign",
+    "cumsum", "cumprod",
     # Dtype constants (via __getattr__)
     "float16", "float32", "float64", "bfloat16",
     "int8", "int16", "int32", "int64",

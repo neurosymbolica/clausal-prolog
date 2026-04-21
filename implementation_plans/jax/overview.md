@@ -27,7 +27,7 @@ shims.
 - [Phase 4 — Linear Algebra](phase4_linalg.md) ✅ **Implemented**: `det`, `inv`, `solve`, `svd`, `eig`, `eigh`, `cholesky`, `qr`, `norm`, `pinv`
 - [Phase 5 — FFT](phase5_fft.md) ✅ **Implemented**: `fft_transform`, `real_fft`, `fft_shift`, `fft_frequencies` — bijective pairs
 - [Phase 6 — Comparisons and Selection](phase6_comparisons.md) ✅ **Implemented**: `eq`, `gt`, `where`, `allclose`, logical ops, `masked_select`, `take`, `put_along_axis`
-- [Phase 7 — Einsum and Advanced Math](phase7_advanced_math.md) — Planned: `einsum`, `logarithm`, `sine`/`cosine`/`tangent` (bijective), `sigmoid`, `softmax`
+- [Phase 7 — Einsum and Advanced Math](phase7_advanced_math.md) ✅ **Implemented**: `einsum`, `logarithm`, `sine`/`cosine`/`tangent` (bijective), `sqrt`, `pow`, `atan2`, `sinh`/`cosh`/`tanh`, `sigmoid`, `softmax`, `log_softmax`, `logsumexp`, `floor`/`ceil`/`round`/`sign`, `cumsum`, `cumprod`
 - [Phase 8 — Shape Extras](phase8_shape_extras.md) — Planned: `split`, `stack`, `tile`, `flip`, `roll`, `repeat`, `broadcast_to`
 - [Phase 9 — Pytrees](phase9_pytrees.md) — Planned: `leaf/2`, `leaf_with_path/3`, `tree_flatten/3` (bijective), `tree_map`, `tree_structure`
 - [Phase 10 — Neural-Net Activations and Initializers](phase10_nn.md) — Planned: `activation/2` registry, `initializer/2` registry, `init_params`

@@ -29,6 +29,10 @@ state. JAX itself is functional, so the wrapper is a thin shim.
     logical_and, logical_or, logical_not, logical_xor,
     any, all,
     where, masked_select, take, put_along_axis,
+    einsum, logarithm, sine, cosine, tangent,
+    sqrt, pow, atan2, sinh, cosh, tanh,
+    sigmoid, softmax, log_softmax, logsumexp,
+    floor, ceil, round, sign, cumsum, cumprod,
     float32, float64, int32, newaxis
 ])
 ```
@@ -616,6 +620,112 @@ Test("take along axis 0") <- (
   in both directions.
 
 See the [Phase 6 implementation plan](../implementation_plans/jax/phase6_comparisons.md)
+for the predicate catalogue and design notes.
+
+---
+
+## Advanced Math
+
+Einstein summation, bijective exp/log and trig pairs, plus common
+non-bijective math. All Tier 1 pure.
+
+### einsum
+
+```clausal
+einsum(EQUATION, ARRAYS, R)
+```
+
+`ARRAYS` is a Clausal list of arrays. The equation is standard NumPy
+einsum syntax.
+
+```clausal
+einsum("ij,jk->ik", [A, B], R)   # matmul
+einsum("ii->",      [A],    R)   # trace
+einsum("ii->i",     [A],    R)   # diagonal extract
+einsum("i,i->",     [A, B], R)   # dot product
+```
+
+### Bijective exp/log and trig
+
+Each pair collapses into a single multi-mode predicate. The **noun
+name** describes the natural reading of the second argument:
+`logarithm(X, Y)` means "Y is the log of X", so forward is `log` and
+backward is `exp`.
+
+| Predicate | Forward | Backward | Backward domain |
+|---|---|---|---|
+| `logarithm(X, Y)` | `jnp.log(X)` | `jnp.exp(Y)` | all reals |
+| `sine(ANGLE, VALUE)` | `jnp.sin(ANGLE)` | `jnp.arcsin(VALUE)` | `VALUE ∈ [-1, 1]` |
+| `cosine(ANGLE, VALUE)` | `jnp.cos(ANGLE)` | `jnp.arccos(VALUE)` | `VALUE ∈ [-1, 1]` |
+| `tangent(ANGLE, VALUE)` | `jnp.tan(ANGLE)` | `jnp.arctan(VALUE)` | all reals, single branch |
+
+Values outside the backward-mode domain return `NaN` — the JAX
+functions don't raise. Guard with `allclose/4` or a range check if you
+need strictness.
+
+```clausal
+Test("logarithm forward") <- (
+    array(1.0, X),
+    logarithm(X, Y),
+    array_list(Y, 0.0)
+)
+
+Test("logarithm backward") <- (
+    array(0.0, Y),
+    logarithm(X, Y),
+    array_list(X, 1.0)
+)
+```
+
+Partial bijection: `sine(ANGLE, VALUE)` in backward mode only recovers
+a principal-branch angle. Round-tripping `sin` then `arcsin` on
+`ANGLE = π` yields `0`, not `π`.
+
+### Non-bijective math
+
+| Predicate | JAX call | Notes |
+|---|---|---|
+| `sqrt(A, R)` | `jnp.sqrt` | Element-wise |
+| `pow(A, E, R)` | `jnp.power(A, E)` | Broadcasts exponent |
+| `atan2(Y, X, R)` | `jnp.arctan2(Y, X)` | Two-arg arctan with correct quadrant |
+| `sinh(A, R)` / `cosh` / `tanh` | `jnp.sinh` / `.cosh` / `.tanh` | Hyperbolic |
+| `sigmoid(A, R)` | `jax.nn.sigmoid` | Logistic |
+| `softmax(A, AXIS, R)` | `jax.nn.softmax` | Sums to 1 along `AXIS` |
+| `log_softmax(A, AXIS, R)` | `jax.nn.log_softmax` | Numerically stable `log(softmax)` |
+| `logsumexp(A, AXIS, R)` | `jax.scipy.special.logsumexp` | Numerically stable `log(sum(exp(A)))` |
+| `floor(A, R)` / `ceil` / `round` / `sign` | `jnp.floor` / `ceil` / `round` / `sign` | |
+| `cumsum(A, AXIS, R)` | `jnp.cumsum` | Along `AXIS` |
+| `cumprod(A, AXIS, R)` | `jnp.cumprod` | |
+
+`softmax`, `log_softmax`, and `sigmoid` live in `jax.nn`;
+`logsumexp` lives in `jax.scipy.special`. The wrapper imports lazily
+and the user doesn't see the submodule split.
+
+```clausal
+Test("softmax sums to 1 along axis") <- (
+    array([1.0, 2.0, 3.0, 4.0], A),
+    softmax(A, 0, R),
+    sum(R, S),
+    array(1.0, ONE),
+    allclose(S, ONE, 0.0001, 0.0)
+)
+```
+
+### Caveats
+
+- **Non-integer operands silently promote.** `softmax` on an int array
+  produces a float result; `pow` with integer exponents returns floats
+  when the base is float.
+- **Out-of-domain NaN.** `sqrt(-1)`, `logarithm(-1, _)`, `arcsin(2)` and
+  similar all return `nan` without raising. Test with `all_finite` (once
+  Phase 15 lands) or an explicit range check.
+- **`round` is half-to-even.** JAX follows NumPy's banker's rounding:
+  `round(0.5) == 0`, `round(1.5) == 2`. Not a bug — a spec match.
+- **`round` shadows Python's builtin.** Module-scoped import prevents
+  collision in user code; the module name can't also serve as the
+  builtin.
+
+See the [Phase 7 implementation plan](../implementation_plans/jax/phase7_advanced_math.md)
 for the predicate catalogue and design notes.
 
 ---

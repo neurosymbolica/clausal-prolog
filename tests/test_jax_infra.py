@@ -314,6 +314,63 @@ class TestJaxComparisonFixture:
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# Phase 7 — Einsum + advanced math .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxMathFixture:
+    """Run Test predicates from tests/fixtures/jax_math_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_math_tests")
+
+    @pytest.mark.parametrize("name", [
+        # einsum
+        "einsum matmul",
+        "einsum trace",
+        "einsum diag extract",
+        "einsum dot product",
+        # Bijective logarithm
+        "logarithm forward",
+        "logarithm backward",
+        "logarithm backward recovers e from Y=1",
+        # Bijective trig
+        "sine forward at 0",
+        "sine backward at 0",
+        "sine roundtrip",
+        "cosine forward at 0 is 1",
+        "cosine backward at 1 is 0",
+        "tangent forward at 0 is 0",
+        "tangent backward at 0 is 0",
+        # Non-bijective math
+        "sqrt of 4 is 2",
+        "pow element-wise",
+        "atan2 of (1,1) is pi/4",
+        "sinh at 0 is 0",
+        "cosh at 0 is 1",
+        "tanh at 0 is 0",
+        "sigmoid at 0 is 0.5",
+        "softmax sums to 1 along axis",
+        "softmax on 2d along axis 1",
+        "log_softmax on 1d",
+        "logsumexp of [0,0,0] is log(3)",
+        # Rounding / sign
+        "floor truncates down",
+        "ceil rounds up",
+        "round to nearest",
+        "sign extracts sign",
+        # Cumulative
+        "cumsum along axis 0",
+        "cumsum along axis 1",
+        "cumprod along axis 0",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # Phase 2 — PRNG .clausal integration tests
 # ════════════════════════════════════════════════════════════════════════════
 
