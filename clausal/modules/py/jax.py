@@ -19,6 +19,10 @@ for use in .clausal files via::
                           fft_transform, real_fft,
                           fft_transform_2d, fft_transform_nd, fft_shift,
                           fft_frequencies, real_fft_frequencies,
+                          eq, ne, gt, lt, ge, le, equal, array_equal, allclose,
+                          logical_and, logical_or, logical_not, logical_xor,
+                          any, all,
+                          where, masked_select, take, put_along_axis,
                           float32, float64, int32, newaxis])
 
 Phase 1 — Array Core
@@ -96,6 +100,28 @@ Linear algebra (jnp.linalg):
     matrix_power(A, N, B)    A ** N (integer N)
     cross(A, B, C)           Cross product
 
+Comparisons, logic, and selection (Phase 6):
+    eq(A, B, C)             Element-wise == → bool array
+    ne(A, B, C)             Element-wise !=
+    gt(A, B, C)             Element-wise >
+    lt(A, B, C)             Element-wise <
+    ge(A, B, C)             Element-wise >=
+    le(A, B, C)             Element-wise <=
+    equal(A, B)             Check: every element equal (shape + values)
+    array_equal(A, B)       Check: alias for equal/2
+    allclose(A, B)          Check: approximately equal (default tol)
+    allclose(A, B, ATOL, RTOL)     Check: approximately equal with tolerances
+    logical_and(A, B, C)    Element-wise AND
+    logical_or(A, B, C)     Element-wise OR
+    logical_not(A, B)       Element-wise NOT
+    logical_xor(A, B, C)    Element-wise XOR
+    any(A) / any(A, AXIS)   Check: any element true (Python bool)
+    all(A) / all(A, AXIS)   Check: all elements true (Python bool)
+    where(COND, X, Y, R)    Element-wise jnp.where(cond, x, y)
+    masked_select(A, MASK, R)      Select elements where MASK is true (1-D)
+    take(A, INDICES, AXIS, R)      Gather elements along AXIS
+    put_along_axis(A, IDX, VAL, AXIS, R)   Scatter VAL at IDX along AXIS (copy)
+
 FFT (jnp.fft) — bijective pairs exposed as single multi-mode predicates:
     fft_transform(T, F) / fft_transform(T, AXIS, F)
                               Complex FFT (fft <-> ifft)
@@ -148,6 +174,7 @@ import threading as _threading
 
 from clausal.modules.py._helpers import (
     _pred, _pure, _property_2, _bidir_2, _bidir_3_mid,
+    _check_2, _check_4, _check_1, _check_axis_1,
 )
 
 
@@ -591,6 +618,112 @@ real_fft_frequencies = _pred("real_fft_frequencies",
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Comparisons, Logic, and Selection (Phase 6)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Element-wise comparison predicates return bool JAX arrays. Check-style
+# predicates (equal/2, allclose, array_equal, any, all) return Python bools
+# via reduction and are wrapped as _check_* dispatchers.
+
+# -- Element-wise comparisons --
+
+eq = _pred("eq",
+    (3, _pure(lambda a, b: _jnp_mod().equal(a, b))),
+)
+
+ne = _pred("ne",
+    (3, _pure(lambda a, b: _jnp_mod().not_equal(a, b))),
+)
+
+gt = _pred("gt",
+    (3, _pure(lambda a, b: _jnp_mod().greater(a, b))),
+)
+
+lt = _pred("lt",
+    (3, _pure(lambda a, b: _jnp_mod().less(a, b))),
+)
+
+ge = _pred("ge",
+    (3, _pure(lambda a, b: _jnp_mod().greater_equal(a, b))),
+)
+
+le = _pred("le",
+    (3, _pure(lambda a, b: _jnp_mod().less_equal(a, b))),
+)
+
+# -- Check predicates --
+
+equal = _pred("equal",
+    (2, _check_2(lambda a, b: bool(_jnp_mod().array_equal(a, b)))),
+)
+
+array_equal = _pred("array_equal",
+    (2, _check_2(lambda a, b: bool(_jnp_mod().array_equal(a, b)))),
+)
+
+allclose = _pred("allclose",
+    (2, _check_2(lambda a, b: bool(_jnp_mod().allclose(a, b)))),
+    (4, _check_4(lambda a, b, atol, rtol:
+                 bool(_jnp_mod().allclose(a, b, atol=float(atol), rtol=float(rtol))))),
+)
+
+# -- Logical operations --
+
+logical_and = _pred("logical_and",
+    (3, _pure(lambda a, b: _jnp_mod().logical_and(a, b))),
+)
+
+logical_or = _pred("logical_or",
+    (3, _pure(lambda a, b: _jnp_mod().logical_or(a, b))),
+)
+
+logical_not = _pred("logical_not",
+    (2, _pure(lambda a: _jnp_mod().logical_not(a))),
+)
+
+logical_xor = _pred("logical_xor",
+    (3, _pure(lambda a, b: _jnp_mod().logical_xor(a, b))),
+)
+
+# any / all — /1 reduces over all elements (Python-bool check); /2 adds an axis.
+
+any = _pred("any",
+    (1, _check_1(lambda a: bool(_jnp_mod().any(a)))),
+    (2, _check_axis_1(lambda a, axis: bool(_jnp_mod().any(_jnp_mod().any(a, axis=axis))))),
+)
+
+all = _pred("all",
+    (1, _check_1(lambda a: bool(_jnp_mod().all(a)))),
+    (2, _check_axis_1(lambda a, axis: bool(_jnp_mod().all(_jnp_mod().all(a, axis=axis))))),
+)
+
+# -- Selection --
+
+where = _pred("where",
+    (4, _pure(lambda cond, x, y: _jnp_mod().where(cond, x, y))),
+)
+
+# masked_select: arr[mask]. Not jit-safe because the output size depends on
+# mask values — document this caveat. For a jit-safe alternative, callers
+# can use `jnp.where(mask, a, 0.0)` directly.
+masked_select = _pred("masked_select",
+    (3, _pure(lambda a, mask: a[mask])),
+)
+
+take = _pred("take",
+    (4, _pure(lambda a, indices, axis: _jnp_mod().take(a, indices, axis=int(axis)))),
+)
+
+# put_along_axis in JAX requires inplace=False (its API difference from numpy:
+# JAX's immutable arrays mean "in-place" is impossible; the caller must
+# acknowledge this explicitly).
+put_along_axis = _pred("put_along_axis",
+    (5, _pure(lambda a, indices, values, axis:
+              _jnp_mod().put_along_axis(a, indices, values, axis=int(axis), inplace=False))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Dtype and numeric constants (re-exported from jax.numpy)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -640,6 +773,12 @@ __all__ = [
     "fft_transform_2d", "fft_transform_nd",
     "fft_shift",
     "fft_frequencies", "real_fft_frequencies",
+    # Comparisons, logic, selection (Phase 6)
+    "eq", "ne", "gt", "lt", "ge", "le",
+    "equal", "array_equal", "allclose",
+    "logical_and", "logical_or", "logical_not", "logical_xor",
+    "any", "all",
+    "where", "masked_select", "take", "put_along_axis",
     # Dtype constants (via __getattr__)
     "float16", "float32", "float64", "bfloat16",
     "int8", "int16", "int32", "int64",

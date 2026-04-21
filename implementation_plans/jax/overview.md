@@ -21,23 +21,21 @@ shims.
 
 ## Phases
 
-All phases are **Planned**.
-
-- [Phase 1 — Array Core](phase1_array_core.md): creation, properties, math, shape ops, conversions
-- [Phase 2 — PRNG Keys and Randomness](phase2_random.md): `key/1`, `split_key/2`, `fold_in/3`, samplers
-- [Phase 3 — Functional Updates (`.at`)](phase3_functional_updates.md): `at_set`, `at_add`, `at_mul`, `at_get` as pure predicates
-- [Phase 4 — Linear Algebra](phase4_linalg.md): `det`, `inv`, `solve`, `svd`, `eig`, `eigh`, `cholesky`, `qr`, `norm`, `pinv`
-- [Phase 5 — FFT](phase5_fft.md): `fft_transform`, `real_fft`, `fft_shift`, `fft_frequencies` — bijective pairs
-- [Phase 6 — Comparisons and Selection](phase6_comparisons.md): `eq`, `gt`, `where`, `allclose`, logical ops, `masked_select`
-- [Phase 7 — Einsum and Advanced Math](phase7_advanced_math.md): `einsum`, `logarithm`, `sine`/`cosine`/`tangent` (bijective), `sigmoid`, `softmax`
-- [Phase 8 — Shape Extras](phase8_shape_extras.md): `split`, `stack`, `tile`, `flip`, `roll`, `repeat`, `broadcast_to`
-- [Phase 9 — Pytrees](phase9_pytrees.md): `leaf/2`, `leaf_with_path/3`, `tree_flatten/3` (bijective), `tree_map`, `tree_structure`
-- [Phase 10 — Neural-Net Activations and Initializers](phase10_nn.md): `activation/2` registry, `initializer/2` registry, `init_params`
-- [Phase 11 — jax.scipy Special and Stats](phase11_scipy.md): `gamma`, `erf`, `logsumexp`, distribution registry with `pdf`/`cdf`/`logpdf`
-- [Phase 12 — Function Transforms](phase12_transforms.md): `grad_value`, `value_and_grad`, `vmap_apply`, `jit_compile`, `jvp`, `vjp`
-- [Phase 13 — Sharding and Devices](phase13_sharding.md): device enumeration, `make_mesh`, sharding queries, `device_put`
-- [Phase 14 — Creation Variants and Arithmetic Gaps](phase14_creation_arith.md): `zeros_like`, `ones_like`, `full_like`, `sub`, `div`, `neg`, `rand`, `randint`
-- [Phase 15 — Statistics and Selection](phase15_stats_selection.md): `median`, `std`, `var`, `argmin`/`argmax`, `sort`, `argsort`, `topk`, `unique`
+- [Phase 1 — Array Core](phase1_array_core.md) ✅ **Implemented**: creation, properties, math, shape ops, conversions
+- [Phase 2 — PRNG Keys and Randomness](phase2_random.md) ✅ **Implemented**: `key/1`, `split_key/2`, `fold_in/3`, samplers
+- [Phase 3 — Functional Updates (`.at`)](phase3_functional_updates.md) ✅ **Implemented**: `at_set`, `at_add`, `at_mul`, `at_get` as pure predicates
+- [Phase 4 — Linear Algebra](phase4_linalg.md) ✅ **Implemented**: `det`, `inv`, `solve`, `svd`, `eig`, `eigh`, `cholesky`, `qr`, `norm`, `pinv`
+- [Phase 5 — FFT](phase5_fft.md) ✅ **Implemented**: `fft_transform`, `real_fft`, `fft_shift`, `fft_frequencies` — bijective pairs
+- [Phase 6 — Comparisons and Selection](phase6_comparisons.md) ✅ **Implemented**: `eq`, `gt`, `where`, `allclose`, logical ops, `masked_select`, `take`, `put_along_axis`
+- [Phase 7 — Einsum and Advanced Math](phase7_advanced_math.md) — Planned: `einsum`, `logarithm`, `sine`/`cosine`/`tangent` (bijective), `sigmoid`, `softmax`
+- [Phase 8 — Shape Extras](phase8_shape_extras.md) — Planned: `split`, `stack`, `tile`, `flip`, `roll`, `repeat`, `broadcast_to`
+- [Phase 9 — Pytrees](phase9_pytrees.md) — Planned: `leaf/2`, `leaf_with_path/3`, `tree_flatten/3` (bijective), `tree_map`, `tree_structure`
+- [Phase 10 — Neural-Net Activations and Initializers](phase10_nn.md) — Planned: `activation/2` registry, `initializer/2` registry, `init_params`
+- [Phase 11 — jax.scipy Special and Stats](phase11_scipy.md) — Planned: `gamma`, `erf`, `logsumexp`, distribution registry with `pdf`/`cdf`/`logpdf`
+- [Phase 12 — Function Transforms](phase12_transforms.md) — Planned: `grad_value`, `value_and_grad`, `vmap_apply`, `jit_compile`, `jvp`, `vjp`
+- [Phase 13 — Sharding and Devices](phase13_sharding.md) — Planned: device enumeration, `make_mesh`, sharding queries, `device_put`
+- [Phase 14 — Creation Variants and Arithmetic Gaps](phase14_creation_arith.md) — Planned: `zeros_like`, `ones_like`, `full_like`, `sub`, `div`, `neg`, `rand`, `randint`
+- [Phase 15 — Statistics and Selection](phase15_stats_selection.md) — Planned: `median`, `std`, `var`, `argmin`/`argmax`, `sort`, `argsort`, `topk`, `unique`
 
 ---
 

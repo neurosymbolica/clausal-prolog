@@ -213,6 +213,67 @@ def _bidir_3_mid(forward, backward):
     return dispatch
 
 
+def _check_1(predicate_fn):
+    """Check predicate on one value: succeed if predicate_fn(x) is truthy."""
+    def dispatch(this_generator, _proceed, _fail, _catcher, x_var, trail):
+        x = _deep_deref(deref(x_var))
+        try:
+            if predicate_fn(x):
+                yield (_proceed, None)
+        except Exception:
+            pass
+        yield (_fail, DONE)
+    return dispatch
+
+
+def _check_2(predicate_fn):
+    """Check predicate on two values: succeed if predicate_fn(a, b) is truthy."""
+    def dispatch(this_generator, _proceed, _fail, _catcher, a_var, b_var, trail):
+        a = _deep_deref(deref(a_var))
+        b = _deep_deref(deref(b_var))
+        try:
+            if predicate_fn(a, b):
+                yield (_proceed, None)
+        except Exception:
+            pass
+        yield (_fail, DONE)
+    return dispatch
+
+
+def _check_4(predicate_fn):
+    """Check predicate on four values: succeed if predicate_fn(a, b, c, d) is truthy."""
+    def dispatch(this_generator, _proceed, _fail, _catcher, a_var, b_var, c_var, d_var, trail):
+        a = _deep_deref(deref(a_var))
+        b = _deep_deref(deref(b_var))
+        c = _deep_deref(deref(c_var))
+        d = _deep_deref(deref(d_var))
+        try:
+            if predicate_fn(a, b, c, d):
+                yield (_proceed, None)
+        except Exception:
+            pass
+        yield (_fail, DONE)
+    return dispatch
+
+
+def _check_axis_1(fn):
+    """Check predicate with an axis/dim int arg: succeed if fn(x, axis) is truthy."""
+    def dispatch(this_generator, _proceed, _fail, _catcher, x_var, axis_var, trail):
+        x = _deep_deref(deref(x_var))
+        try:
+            axis = int(deref(axis_var))
+        except Exception:
+            yield (_fail, DONE)
+            return
+        try:
+            if fn(x, axis):
+                yield (_proceed, None)
+        except Exception:
+            pass
+        yield (_fail, DONE)
+    return dispatch
+
+
 def _fact_table_2(get_facts):
     """Nondeterministic fact table: enumerate (name, value) pairs.
 

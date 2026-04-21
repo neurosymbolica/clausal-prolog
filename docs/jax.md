@@ -25,6 +25,10 @@ state. JAX itself is functional, so the wrapper is a thin shim.
     fft_transform, real_fft,
     fft_transform_2d, fft_transform_nd, fft_shift,
     fft_frequencies, real_fft_frequencies,
+    eq, ne, gt, lt, ge, le, equal, array_equal, allclose,
+    logical_and, logical_or, logical_not, logical_xor,
+    any, all,
+    where, masked_select, take, put_along_axis,
     float32, float64, int32, newaxis
 ])
 ```
@@ -506,6 +510,112 @@ Test("frequencies of length-4 signal") <- (
   helper still calls the correct inverse in each direction.
 
 See the [Phase 5 implementation plan](../implementation_plans/jax/phase5_fft.md)
+for the predicate catalogue and design notes.
+
+---
+
+## Comparisons, Logic, and Selection
+
+Element-wise comparisons produce bool arrays; check predicates reduce to a
+single Python bool and succeed / fail accordingly. All predicates are
+Tier 1 pure.
+
+### Element-wise comparisons
+
+| Predicate | JAX call | Output |
+|---|---|---|
+| `eq(A, B, C)` | `jnp.equal` | bool array |
+| `ne(A, B, C)` | `jnp.not_equal` | bool array |
+| `gt(A, B, C)` | `jnp.greater` | bool array |
+| `lt(A, B, C)` | `jnp.less` | bool array |
+| `ge(A, B, C)` | `jnp.greater_equal` | bool array |
+| `le(A, B, C)` | `jnp.less_equal` | bool array |
+
+```clausal
+array([1, 2, 3], A),
+array([1, 5, 3], B),
+eq(A, B, C),
+array_list(C, [True, False, True])
+```
+
+Both operands broadcast — a scalar vs. an array compares each element.
+
+### Check predicates
+
+These succeed iff the reduction is true; failure under `not(...)`.
+
+| Predicate | Semantics |
+|---|---|
+| `equal(A, B)` | Same shape **and** every element equal |
+| `array_equal(A, B)` | Alias for `equal/2` |
+| `allclose(A, B)` | `jnp.allclose` with default tolerances |
+| `allclose(A, B, ATOL, RTOL)` | Explicit absolute / relative tolerances |
+| `any(A)` / `any(A, AXIS)` | Any element truthy (optionally reduced over `AXIS`) |
+| `all(A)` / `all(A, AXIS)` | All elements truthy |
+
+```clausal
+Test("allclose within tolerance") <- (
+    array([1.0, 2.0], A),
+    array([1.0000001, 2.0], B),
+    allclose(A, B)
+)
+```
+
+### Logical operations
+
+| Predicate | JAX call |
+|---|---|
+| `logical_and(A, B, C)` | `jnp.logical_and` |
+| `logical_or(A, B, C)` | `jnp.logical_or` |
+| `logical_not(A, B)` | `jnp.logical_not` |
+| `logical_xor(A, B, C)` | `jnp.logical_xor` |
+
+### Selection
+
+| Predicate | Semantics |
+|---|---|
+| `where(COND, X, Y, R)` | `jnp.where(cond, x, y)` — element-wise pick |
+| `masked_select(A, MASK, R)` | Elements of `A` where `MASK` is true (1-D result) |
+| `take(A, INDICES, AXIS, R)` | Gather along `AXIS` — `jnp.take(a, indices, axis=AXIS)` |
+| `put_along_axis(A, IDX, VAL, AXIS, R)` | Scatter `VAL` into `A` at `IDX` along `AXIS` (returns a new array) |
+
+```clausal
+Test("where selects") <- (
+    array([True, False, True], COND),
+    array([10, 20, 30], X),
+    array([1, 2, 3], Y),
+    where(COND, X, Y, R),
+    array_list(R, [10, 2, 30])
+)
+
+Test("take along axis 0") <- (
+    array([[1, 2], [3, 4], [5, 6]], A),
+    array([0, 2], IDX),
+    take(A, IDX, 0, R),
+    array_list(R, [[1, 2], [5, 6]])
+)
+```
+
+### Caveats
+
+- **`masked_select` is not `jit`-safe.** The output length depends on the
+  mask values, so JAX's tracer can't fix it at trace time. For a
+  `jit`-compatible alternative, use `where(MASK, A, 0, R)` to build a
+  fixed-shape array where unwanted entries are zeroed out.
+
+- **`put_along_axis` is a copy.** JAX's immutable arrays mean
+  "in-place" isn't possible — the wrapper passes `inplace=False` for you
+  (a JAX API requirement). The original `A` is untouched.
+
+- **Broadcasting.** `where`, comparison, and logical predicates follow
+  NumPy broadcasting. Shape mismatches surface as predicate failure via
+  the underlying `_pure` wrapper.
+
+- **Bool arrays via `array_list`.** JAX bool arrays round-trip to Python
+  bools via `.tolist()`, so `array_list(C, [True, False, True])` works
+  in both directions.
+
+See the [Phase 6 implementation plan](../implementation_plans/jax/phase6_comparisons.md)
 for the predicate catalogue and design notes.
 
 ---

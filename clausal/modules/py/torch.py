@@ -219,6 +219,7 @@ from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import (
     _pred, _deep_deref, _pure, _property_2, _bidir_2, _bidir_3_mid,
+    _check_1, _check_2, _check_axis_1,
 )
 
 
@@ -323,63 +324,9 @@ requires_gradient = _pred("requires_gradient",
 )
 
 
-def _check_1(predicate_fn):
-    """Predicate that succeeds if predicate_fn(tensor) is truthy, fails otherwise."""
-    def dispatch(this_generator, _proceed, _fail, _catcher, tensor_var, trail):
-        t = deref(tensor_var)
-        try:
-            if predicate_fn(t):
-                yield (_proceed, None)
-        except Exception:
-            pass
-        yield (_fail, DONE)
-    return dispatch
-
-
 is_contiguous = _pred("is_contiguous",
     (1, _check_1(lambda t: t.is_contiguous())),
 )
-
-
-def _check_2(predicate_fn):
-    """Check predicate on two tensors: succeed if predicate_fn(a, b) is truthy."""
-    def dispatch(this_generator, _proceed, _fail, _catcher, a_var, b_var, trail):
-        a = _deep_deref(deref(a_var))
-        b = _deep_deref(deref(b_var))
-        try:
-            if predicate_fn(a, b):
-                yield (_proceed, None)
-        except Exception:
-            pass
-        yield (_fail, DONE)
-    return dispatch
-
-
-def _check_bool(fn):
-    """Check predicate: succeed if fn(tensor) is truthy."""
-    def dispatch(this_generator, _proceed, _fail, _catcher, tensor_var, trail):
-        t = _deep_deref(deref(tensor_var))
-        try:
-            if fn(t):
-                yield (_proceed, None)
-        except Exception:
-            pass
-        yield (_fail, DONE)
-    return dispatch
-
-
-def _check_bool_dim(fn):
-    """Check predicate with dim: succeed if fn(tensor, dim) is truthy."""
-    def dispatch(this_generator, _proceed, _fail, _catcher, tensor_var, dim_var, trail):
-        t = _deep_deref(deref(tensor_var))
-        d = int(deref(dim_var))
-        try:
-            if fn(t, d):
-                yield (_proceed, None)
-        except Exception:
-            pass
-        yield (_fail, DONE)
-    return dispatch
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -822,13 +769,13 @@ logical_xor = _pred("logical_xor",
 )
 
 any = _pred("any",
-    (1, _check_bool(lambda t: _th().any(t).item())),
-    (2, _check_bool_dim(lambda t, d: _th().any(t, dim=d).any().item())),
+    (1, _check_1(lambda t: _th().any(t).item())),
+    (2, _check_axis_1(lambda t, d: _th().any(t, dim=d).any().item())),
 )
 
 all = _pred("all",
-    (1, _check_bool(lambda t: _th().all(t).item())),
-    (2, _check_bool_dim(lambda t, d: _th().all(t, dim=d).all().item())),
+    (1, _check_1(lambda t: _th().all(t).item())),
+    (2, _check_axis_1(lambda t, d: _th().all(t, dim=d).all().item())),
 )
 
 # -- Selection --
@@ -1115,15 +1062,15 @@ isfinite = _pred("isfinite",
 )
 
 has_nan = _pred("has_nan",
-    (1, _check_bool(lambda t: _th().isnan(t).any().item())),
+    (1, _check_1(lambda t: _th().isnan(t).any().item())),
 )
 
 has_inf = _pred("has_inf",
-    (1, _check_bool(lambda t: _th().isinf(t).any().item())),
+    (1, _check_1(lambda t: _th().isinf(t).any().item())),
 )
 
 all_finite = _pred("all_finite",
-    (1, _check_bool(lambda t: _th().isfinite(t).all().item())),
+    (1, _check_1(lambda t: _th().isfinite(t).all().item())),
 )
 
 

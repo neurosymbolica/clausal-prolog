@@ -258,6 +258,62 @@ class TestJaxLinalgFixture:
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# Phase 6 — Comparisons, logic, selection .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxComparisonFixture:
+    """Run Test predicates from tests/fixtures/jax_comparison_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_comparison_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Element-wise comparisons
+        "eq element-wise",
+        "ne element-wise",
+        "gt element-wise",
+        "lt element-wise",
+        "ge element-wise",
+        "le element-wise",
+        # Check predicates
+        "equal check succeeds",
+        "equal check fails",
+        "equal check fails on different shapes",
+        "array_equal succeeds",
+        "array_equal fails",
+        "allclose within tolerance",
+        "allclose fails outside tolerance",
+        "allclose with explicit tolerances succeeds",
+        "allclose with explicit tolerances fails",
+        # Logical
+        "logical_and",
+        "logical_or",
+        "logical_not",
+        "logical_xor",
+        # any / all
+        "any true",
+        "any fails when all false",
+        "all true",
+        "all fails with false",
+        "any with axis",
+        "all with axis",
+        # Selection
+        "where selects",
+        "where broadcasts scalar branches",
+        "masked_select",
+        "masked_select non-contiguous mask",
+        "take along axis 0",
+        "take along axis 1",
+        "put_along_axis scatter",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # Phase 2 — PRNG .clausal integration tests
 # ════════════════════════════════════════════════════════════════════════════
 
