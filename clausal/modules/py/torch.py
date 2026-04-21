@@ -217,7 +217,9 @@ import threading as _threading
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.py._helpers import _pred, _deep_deref, _pure
+from clausal.modules.py._helpers import (
+    _pred, _deep_deref, _pure, _property_2, _bidir_2, _bidir_3_mid,
+)
 
 
 # ── Lazy torch import ────────────────────────────────────────────────────
@@ -240,103 +242,6 @@ def _ensure_torch():
 def _th():
     _ensure_torch()
     return _torch
-
-
-def _property_2(getter):
-    """Multi-mode property predicate: query (+T,-V) or check (+T,+V)."""
-    def dispatch(this_generator, _proceed, _fail, _catcher, tensor_var, value_var, trail):
-        t = deref(tensor_var)
-        v = deref(value_var)
-        try:
-            actual = getter(t)
-        except Exception:
-            yield (_fail, DONE)
-            return
-        if is_var(v):
-            # Query mode: unify value_var with actual
-            if unify(value_var, actual, trail):
-                yield (_proceed, None)
-        else:
-            # Check mode: succeed if values match
-            if actual == v:
-                yield (_proceed, None)
-        yield (_fail, DONE)
-    return dispatch
-
-
-def _bidir_2(forward, backward):
-    """Bidirectional predicate: (+X,-Y) forward, (-X,+Y) backward, (+X,+Y) check."""
-    def dispatch(this_generator, _proceed, _fail, _catcher, x_raw, y_raw, trail):
-        x = deref(x_raw)
-        y = deref(y_raw)
-
-        if not is_var(x) and is_var(y):
-            try:
-                out = forward(x)
-            except Exception:
-                yield (_fail, DONE)
-                return
-            if unify(y_raw, out, trail):
-                yield (_proceed, None)
-
-        elif is_var(x) and not is_var(y):
-            try:
-                out = backward(y)
-            except Exception:
-                yield (_fail, DONE)
-                return
-            if unify(x_raw, out, trail):
-                yield (_proceed, None)
-
-        elif not is_var(x) and not is_var(y):
-            # Both ground: check via forward
-            try:
-                out = forward(x)
-                if unify(y_raw, out, trail):
-                    yield (_proceed, None)
-            except Exception:
-                pass
-
-        # Both unbound: fail
-        yield (_fail, DONE)
-    return dispatch
-
-
-def _bidir_3_mid(forward, backward):
-    """Bidirectional with a middle arg: (+X,+M,-Y) forward, (-X,+M,+Y) backward."""
-    def dispatch(this_generator, _proceed, _fail, _catcher, x_raw, mid_raw, y_raw, trail):
-        x = deref(x_raw)
-        m = _deep_deref(mid_raw)
-        y = deref(y_raw)
-
-        if not is_var(x) and is_var(y):
-            try:
-                out = forward(x, m)
-            except Exception:
-                yield (_fail, DONE)
-                return
-            if unify(y_raw, out, trail):
-                yield (_proceed, None)
-
-        elif is_var(x) and not is_var(y):
-            try:
-                out = backward(y, m)
-            except Exception:
-                yield (_fail, DONE)
-                return
-            if unify(x_raw, out, trail):
-                yield (_proceed, None)
-
-        elif not is_var(x) and not is_var(y):
-            try:
-                out = forward(x, m)
-                if unify(y_raw, out, trail):
-                    yield (_proceed, None)
-            except Exception:
-                pass
-
-        yield (_fail, DONE)
-    return dispatch
 
 
 # ═══════════════════════════════════════════════════════════════════════════
