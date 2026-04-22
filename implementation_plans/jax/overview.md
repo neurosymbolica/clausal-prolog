@@ -36,7 +36,9 @@ shims.
 - [Phase 13 — Sharding and Devices](phase13_sharding.md) ✅ **Implemented**: `jax_device`/`local_device` enumeration, `device_count`/`local_device_count`, `device_id`, `device_platform`, `device_of`, `make_mesh` + mesh inspection, `partition_spec`, `named_sharding`, `single_device_sharding`, `sharding` + `device_put`, check predicates (`is_committed`, `is_fully_addressable`, `is_deleted`) — in `py.jax_sharding`
 - [Phase 14 — Creation Variants and Arithmetic Gaps](phase14_creation_arith.md) ✅ **Implemented**: `zeros_like`, `ones_like`, `full_like`, `empty`, `logspace`, `geomspace`, `meshgrid`, `diag`, `identity`, `sub`, `div`, `floor_div`, `mod`, `neg`, `reciprocal`
 - [Phase 15 — Statistics and Selection](phase15_stats_selection.md) ✅ **Implemented**: `median`, `std`, `var`, `percentile`, `quantile`, `cov`, `corrcoef`, `argmin`, `argmax`, `sort`, `argsort`, `topk`, `nonzero`, `unique`, `argpartition`
-- [Phase 16 — Optax (Optimisers, Schedules, Losses)](phase16_optax.md) ✅ **Implemented**: optimiser constructors (`sgd`, `adam`, `adamw`, …), gradient transforms (`chain`, `clip_by_global_norm`, `ema`, `scale_by_schedule`, …), schedules (`cosine_decay_schedule`, `warmup_cosine_decay_schedule`, …), training-loop trio (`init_optimizer`, `update_optimizer`, `apply_updates`), loss functions (`softmax_cross_entropy`, `huber_loss`, …) — in `py.jax_optax`
+- [Phase 16 — Optax (Optimisers, Schedules, Losses)](phase16_optax.md) ✅ **Implemented**: optimiser constructors (`sgd`, `adam`, `adamw`, …), gradient transforms (`chain`, `clip_by_global_norm`, `ema`, `scale_by_schedule`, …), schedules (`cosine_decay_schedule`, `warmup_cosine_decay_schedule`, …), training-loop trio (`init_optimizer`, `update_optimizer`, `apply_updates`), loss functions (`softmax_cross_entropy`, `huber_loss`, …) — in `py.jax_optax`. `apply_updates` lives canonically in `py.jax_tree` since it's a pure pytree op.
+- [Phase 17 — Equinox (Models, Filter Transforms)](phase17_equinox.md) ✅ **Implemented (stateless surface)**: ~33 per-class layer constructors (`linear`, `mlp`, `conv2d`, `layer_norm`, `multihead_attention`, …), `apply_module`, filter transforms (`filter_grad_value`, `filter_value_and_grad`, `filter_jit_compile`, `filter_vmap_apply`, …), `partition`/`combine`, `tree_at_set`/`tree_at_apply`, leaf checks (`is_array`, `tree_equal`, …), `serialise`/`deserialise`, `layer_class` discovery registry — in `py.jax_equinox`
+- [Phase 17b — Equinox Stateful Modules](phase17b_equinox_stateful.md) ⏸ **Deferred**: `BatchNorm`, training-mode `Dropout`, `StateIndex`, `StatefulLayer`, `make_with_state`, `apply_stateful_module`. Promote to a full plan when a real caller surfaces.
 
 ---
 
@@ -249,10 +251,10 @@ no equivalent carve-out.
 
 | Tier | Operations |
 |---|---|
-| **1 — Pure** | All `jnp` math, shape ops, type conversions, `.at` updates, linalg, FFT, activations, pytree ops, samplers, transforms, optax optimisers/schedules/transforms/losses |
-| **2 — Fact tables** | Activation registry, initializer registry, distribution registry, sampler registry, dtype catalogue, device enumeration, optax `optimizer`/`schedule`/`gradient_transform`/`loss_function` registries |
-| **3 — State-threaded** | PRNG keys (`split_key`), device placement (`device_put`), optax training loop (`init_optimizer`/`update_optimizer`). No handles — JAX values are first-class. |
-| **4 — IO/Impure** | `clear_caches`, `block_until_ready`, `jax.distributed` initialization. Stay as `++()`. |
+| **1 — Pure** | All `jnp` math, shape ops, type conversions, `.at` updates, linalg, FFT, activations, pytree ops, samplers, transforms, optax optimisers/schedules/transforms/losses, Equinox layer constructors / filter transforms / partition / combine / tree_at / leaf checks |
+| **2 — Fact tables** | Activation registry, initializer registry, distribution registry, sampler registry, dtype catalogue, device enumeration, optax `optimizer`/`schedule`/`gradient_transform`/`loss_function` registries, Equinox `layer_class` registry |
+| **3 — State-threaded** | PRNG keys (`split_key`), device placement (`device_put`), optax training loop (`init_optimizer`/`update_optimizer`). No handles — JAX values are first-class. (Equinox stateful modules — `BatchNorm`, training-mode `Dropout`, `eqx.nn.State` — land in Phase 17b.) |
+| **4 — IO/Impure** | `clear_caches`, `block_until_ready`, `jax.distributed` initialization, Equinox `serialise`/`deserialise`. Stay as `++()` for the JAX ones; the Equinox IO predicates are wrapped but documented as not backtracking-safe. |
 
 Note the absence of a handle tier: JAX has no persistent stateful objects
 like PyTorch's `nn.Module` or `optim.Optimizer`. The closest thing is a
@@ -314,10 +316,11 @@ how Clausal-side classes round-trip.
 **Shape-polymorphic constraints.** Using Clausal's solver infrastructure
 to reason about JAX shapes. Research project.
 
-**Flax / Equinox integration.** Neural-network libraries built on JAX.
-Flax is functional (pytree of params). Equinox treats models as pytrees.
-Both map cleanly onto the pytree phase — worth a wrapper plan of their
-own.
+**Flax integration.** Neural-network library built on JAX. Flax is
+functional (pytree of params), with explicit `init` / `apply` and
+mutable state collections. Maps cleanly onto the pytree phase but
+has different conventions from Equinox (Phase 17). Worth a wrapper
+plan of its own.
 
 ---
 
@@ -656,6 +659,7 @@ clausal/modules/py/jax_tree.py        # Pytree enumeration, flatten/unflatten, t
 clausal/modules/py/jax_transforms.py  # grad, vmap, jit, jvp, vjp
 clausal/modules/py/jax_sharding.py    # Devices, meshes, sharding specs, device_put
 clausal/modules/py/jax_optax.py       # Optimisers, schedules, gradient transforms, losses
+clausal/modules/py/jax_equinox.py     # Equinox: layer constructors, filter transforms, partition/combine, tree_at, serialisation
 ```
 
 `jax.py` is the main module and mirrors `torch.py`'s scope — array
@@ -664,9 +668,9 @@ since JAX keeps them accessible via `jnp.linalg` / `jnp.fft` rather than
 a separate library.
 
 `jax_random.py`, `jax_nn.py`, `jax_scipy.py`, `jax_tree.py`,
-`jax_transforms.py`, `jax_sharding.py`, `jax_optax.py` are all small
-focused modules following the `torch_nn.py` / `torch_distributions.py`
-pattern.
+`jax_transforms.py`, `jax_sharding.py`, `jax_optax.py`,
+`jax_equinox.py` are all small focused modules following the
+`torch_nn.py` / `torch_distributions.py` pattern.
 
 Shared helpers (`_pure`, `_property_2`, `_bidir_2`, `_fact_table_2`,
 `_deep_deref`, `_pred`) live in `clausal/modules/py/_helpers.py` —

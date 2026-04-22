@@ -252,9 +252,15 @@ tree_reduce = _pred("tree_reduce",
 # implementation lives here. `py.jax_optax.apply_updates` aliases this
 # definition for backwards compatibility.
 def _apply_updates_3(params, updates):
+    # Three None-handling cases:
+    #   u is None   → leaf is non-differentiable (e.g. an Equinox
+    #                 activation function); keep p unchanged
+    #   p is None   → optax convention for "no update for this slot";
+    #                 result stays None
+    #   else        → add updates to params
     jtu = _jtu()
     return jtu.tree_map(
-        lambda p, u: None if p is None else p + u,
+        lambda p, u: p if u is None else (None if p is None else p + u),
         params, updates,
         is_leaf=lambda x: x is None,
     )

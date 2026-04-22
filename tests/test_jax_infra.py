@@ -1136,3 +1136,108 @@ class TestJaxOptaxInfrastructure:
         assert {3, 4} <= set(impl.huber_loss._dispatch_fns.keys())
         # zero_nans: /1
         assert 1 in impl.zero_nans._dispatch_fns
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 17 — Equinox .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxEquinoxFixture:
+    """Run Test predicates from tests/fixtures/jax_equinox_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_equinox_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Layer construction
+        "linear forward shape",
+        "linear with use_bias=False opts",
+        "mlp forward shape",
+        "layer_norm forward preserves shape",
+        "sequential of linear, layer_norm, linear",
+        "identity is a no-op",
+        "lambda_layer wraps a callable",
+        "dropout defaults to inference (no-op)",
+        "conv2d forward shape",
+        "max_pool2d shape with stride=2 opts",
+        "avg_pool1d shape with stride=2 opts",
+        "adaptive_avg_pool2d shape",
+        "embedding lookup shape",
+        "lstm_cell single-step shape",
+        # Filter transforms
+        "filter_grad_value over a Linear loss",
+        "filter_value_and_grad tuple decomposition",
+        "filter_jit_compile produces equivalent callable",
+        # Partition / combine
+        "partition splits and combine rebuilds",
+        # tree_at
+        "tree_at_set replaces a single leaf",
+        "tree_at_apply transforms a leaf",
+        # Leaf checks
+        "is_array succeeds on a JAX array",
+        "is_array fails on a Python int",
+        "is_inexact_array succeeds on a float array",
+        "is_inexact_array fails on an int array",
+        "tree_equal on identical models",
+        # Serialisation
+        "serialise then deserialise round-trip",
+        # End-to-end
+        "MLP one optax SGD step changes the model",
+        # Registry
+        "layer_class registry exposes Linear, MLP, Conv2d",
+        "layer_class findall has at least 40 entries",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+class TestJaxEquinoxInfrastructure:
+    """Module-level invariants for jax_equinox."""
+
+    def test_lazy_import(self):
+        # nv
+        import clausal.modules.py.jax_equinox as impl
+        assert hasattr(impl, "_ensure_equinox")
+        assert callable(impl._ensure_equinox)
+
+    def test_all_exports_resolve(self):
+        # nv
+        import clausal.modules.py.jax_equinox as impl
+        for name in impl.__all__:
+            obj = getattr(impl, name)
+            assert obj is not None, f"{name} is None"
+
+    def test_pred_arities(self):
+        # nv
+        import clausal.modules.py.jax_equinox as impl
+        # linear: /4 (with key) and /5 (with opts + key)
+        assert {4, 5} <= set(impl.linear._dispatch_fns.keys())
+        # mlp: /6 and /7
+        assert {6, 7} <= set(impl.mlp._dispatch_fns.keys())
+        # layer_norm: /2 and /3
+        assert {2, 3} <= set(impl.layer_norm._dispatch_fns.keys())
+        # apply_module: /3 and /4
+        assert {3, 4} <= set(impl.apply_module._dispatch_fns.keys())
+        # partition: /4
+        assert 4 in impl.partition._dispatch_fns
+        # is_array: /1
+        assert 1 in impl.is_array._dispatch_fns
+
+    def test_layer_class_registry_has_known(self):
+        # nv
+        import clausal.modules.py.jax_equinox as impl
+        # The registry uses TitleCase Equinox class names.
+        from clausal.logic.variables import Var, deref
+        from clausal.logic.database import Module
+        mod = Module("eq", module_dict=vars(impl))
+        out = Var()
+        succeeded = False
+        for _ in call("layer_class", "Linear", out, module=mod):
+            cls = deref(out)
+            assert cls.__name__ == "Linear"
+            succeeded = True
+            break
+        assert succeeded
