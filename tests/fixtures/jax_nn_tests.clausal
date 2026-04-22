@@ -47,13 +47,15 @@ Test("activation reverse lookup") <- (
 Test("relu zeroes negatives") <- (
     array([-1.0, 0.0, 1.0, 2.0], A),
     relu_apply(A, R),
-    array_list(R, [0.0, 0.0, 1.0, 2.0])
+    array([0.0, 0.0, 1.0, 2.0], EXPECTED),
+    allclose(R, EXPECTED, 0.000001, 0.0)
 )  # nv
 
 Test("relu leaves positives unchanged") <- (
     array([0.5, 1.5, 10.0], A),
     relu_apply(A, R),
-    array_list(R, [0.5, 1.5, 10.0])
+    array([0.5, 1.5, 10.0], EXPECTED),
+    allclose(R, EXPECTED, 0.000001, 0.0)
 )  # nv
 
 Test("sigmoid at 0 is 0.5") <- (
@@ -65,7 +67,8 @@ Test("sigmoid at 0 is 0.5") <- (
 Test("tanh at 0 is 0") <- (
     array([0.0], A),
     tanh_apply(A, R),
-    array_list(R, [0.0])
+    array([0.0], EXPECTED),
+    allclose(R, EXPECTED, 0.000001, 0.0)
 )  # nv
 
 Test("softmax sums to 1") <- (
@@ -116,7 +119,8 @@ Test("leaky_relu default slope") <- (
 Test("leaky_relu custom slope") <- (
     array([-10.0, 0.0, 5.0], A),
     leaky_relu_apply(A, 0.5, R),
-    array_list(R, [-5.0, 0.0, 5.0])
+    array([-5.0, 0.0, 5.0], EXPECTED),
+    allclose(R, EXPECTED, 0.000001, 0.0)
 )  # nv
 
 Test("selu shape") <- (
@@ -134,7 +138,8 @@ Test("softplus positive") <- (
 Test("silu at 0 is 0") <- (
     array([0.0], A),
     silu_apply(A, R),
-    array_list(R, [0.0])
+    array([0.0], EXPECTED),
+    allclose(R, EXPECTED, 0.000001, 0.0)
 )  # nv
 
 # --- One-hot encoding ---

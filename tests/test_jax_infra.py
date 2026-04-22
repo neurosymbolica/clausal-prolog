@@ -840,6 +840,29 @@ class TestJaxNnFixture:
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# Phase 9 + 10 — jax_tree × jax_nn composition .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxNnTreeIntegrationFixture:
+    """Run Test predicates from tests/fixtures/jax_nn_tree_integration.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_nn_tree_integration")
+
+    @pytest.mark.parametrize("name", [
+        "init a two-layer param pytree",
+        "tree_map preserves structure over an init'd param pytree",
+        "tree_reduce sums element counts across param leaves",
+        "tree_leaves_list preserves leaf order by dict key",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # Phase 2 — PRNG .clausal integration tests
 # ════════════════════════════════════════════════════════════════════════════
 

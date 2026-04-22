@@ -100,6 +100,44 @@ Test("one_hot basic") <- (
 
 ---
 
+## Defaults cheatsheet — JAX vs PyTorch
+
+Defaults used by the two-arg `_apply` predicates (and the three-arg
+`softmax_apply`/`log_softmax_apply`), alongside PyTorch's
+`torch.nn.functional` equivalents. Call out the ones in **bold** —
+those disagree between the libraries, so a PyTorch migrator relying on
+defaults will get a different numeric result.
+
+| Predicate | JAX default | PyTorch default | Notes |
+|---|---|---|---|
+| `relu_apply(A, R)` | — | — | Same |
+| `sigmoid_apply(A, R)` | — | — | Same |
+| `tanh_apply(A, R)` | — | — | Same |
+| `softmax_apply(A, AXIS, R)` | axis is required | `dim=None` (warns, infers) | Clausal requires the axis explicitly — no silent default |
+| `log_softmax_apply(A, AXIS, R)` | axis is required | `dim=None` (warns, infers) | Same story |
+| **`gelu_apply(A, R)`** | **`approximate=True` (tanh form)** | **`approximate='none'` (exact)** | Different numerics. Pass `gelu_apply(A, 0, R)` to force the exact form. |
+| `gelu_apply(A, APPROX, R)` | bool; `0` → exact, `1` → tanh | string `'none'` / `'tanh'` | Type of the flag differs — Clausal uses a truthy int/bool, PyTorch a string |
+| `elu_apply(A, R)` | `alpha=1.0` | `alpha=1.0` | Same. No arity with `alpha` — wrap via `++()` to override |
+| `leaky_relu_apply(A, R)` | `negative_slope=0.01` | `negative_slope=0.01` | Same |
+| `leaky_relu_apply(A, NEG_SLOPE, R)` | explicit | explicit | Same numeric meaning |
+| `selu_apply(A, R)` | — | — | Same (fixed `alpha`/`scale`) |
+| `softplus_apply(A, R)` | `beta=1`, no threshold | `beta=1.0`, `threshold=20.0` | JAX has no threshold override, PyTorch clips for large `x`; numerically indistinguishable at typical magnitudes |
+| `silu_apply(A, R)` | — | — | Same. PyTorch's `silu` == JAX's `silu` == "swish" |
+| `one_hot(X, NUM_CLASSES, R)` | axis defaults to `-1`; float dtype | same axis; float dtype | `num_classes` is required in both (PyTorch accepts `-1` to auto-size, which JAX doesn't) |
+
+`gelu` is the one real trap. Phase 10 preserves JAX's default, so
+`gelu_apply(A, R)` matches `jax.nn.gelu(x)` bit-for-bit; that's the
+right default if you're writing JAX-native code, and the wrong one if
+you're porting a PyTorch model. For ports, make the approximation
+explicit:
+
+```clausal
+gelu_apply(A, 0, R)    # exact — matches torch.nn.functional.gelu(x)
+gelu_apply(A, 1, R)    # tanh — matches jax.nn.gelu(x) default
+```
+
+---
+
 ## Initializer registry
 
 ### `initializer(NAME, FACTORY)`
