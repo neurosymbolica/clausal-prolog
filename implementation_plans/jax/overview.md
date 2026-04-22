@@ -36,6 +36,7 @@ shims.
 - [Phase 13 — Sharding and Devices](phase13_sharding.md) ✅ **Implemented**: `jax_device`/`local_device` enumeration, `device_count`/`local_device_count`, `device_id`, `device_platform`, `device_of`, `make_mesh` + mesh inspection, `partition_spec`, `named_sharding`, `single_device_sharding`, `sharding` + `device_put`, check predicates (`is_committed`, `is_fully_addressable`, `is_deleted`) — in `py.jax_sharding`
 - [Phase 14 — Creation Variants and Arithmetic Gaps](phase14_creation_arith.md) ✅ **Implemented**: `zeros_like`, `ones_like`, `full_like`, `empty`, `logspace`, `geomspace`, `meshgrid`, `diag`, `identity`, `sub`, `div`, `floor_div`, `mod`, `neg`, `reciprocal`
 - [Phase 15 — Statistics and Selection](phase15_stats_selection.md) ✅ **Implemented**: `median`, `std`, `var`, `percentile`, `quantile`, `cov`, `corrcoef`, `argmin`, `argmax`, `sort`, `argsort`, `topk`, `nonzero`, `unique`, `argpartition`
+- [Phase 16 — Optax (Optimisers, Schedules, Losses)](phase16_optax.md) ✅ **Implemented**: optimiser constructors (`sgd`, `adam`, `adamw`, …), gradient transforms (`chain`, `clip_by_global_norm`, `ema`, `scale_by_schedule`, …), schedules (`cosine_decay_schedule`, `warmup_cosine_decay_schedule`, …), training-loop trio (`init_optimizer`, `update_optimizer`, `apply_updates`), loss functions (`softmax_cross_entropy`, `huber_loss`, …) — in `py.jax_optax`
 
 ---
 
@@ -248,9 +249,9 @@ no equivalent carve-out.
 
 | Tier | Operations |
 |---|---|
-| **1 — Pure** | All `jnp` math, shape ops, type conversions, `.at` updates, linalg, FFT, activations, pytree ops, samplers, transforms |
-| **2 — Fact tables** | Activation registry, initializer registry, distribution registry, sampler registry, dtype catalogue, device enumeration |
-| **3 — State-threaded** | PRNG keys (`split_key`), device placement (`device_put`). No handles — JAX values are first-class. |
+| **1 — Pure** | All `jnp` math, shape ops, type conversions, `.at` updates, linalg, FFT, activations, pytree ops, samplers, transforms, optax optimisers/schedules/transforms/losses |
+| **2 — Fact tables** | Activation registry, initializer registry, distribution registry, sampler registry, dtype catalogue, device enumeration, optax `optimizer`/`schedule`/`gradient_transform`/`loss_function` registries |
+| **3 — State-threaded** | PRNG keys (`split_key`), device placement (`device_put`), optax training loop (`init_optimizer`/`update_optimizer`). No handles — JAX values are first-class. |
 | **4 — IO/Impure** | `clear_caches`, `block_until_ready`, `jax.distributed` initialization. Stay as `++()`. |
 
 Note the absence of a handle tier: JAX has no persistent stateful objects
@@ -312,11 +313,6 @@ how Clausal-side classes round-trip.
 
 **Shape-polymorphic constraints.** Using Clausal's solver infrastructure
 to reason about JAX shapes. Research project.
-
-**Optax integration.** Optax is the functional optimizer library for
-JAX. Each optimizer is a pure `(grads, opt_state, params) -> (updates,
-new_state)`, mapping one-to-one onto state-threaded predicates.
-Tracked for a later phase cluster.
 
 **Flax / Equinox integration.** Neural-network libraries built on JAX.
 Flax is functional (pytree of params). Equinox treats models as pytrees.
@@ -659,6 +655,7 @@ clausal/modules/py/jax_scipy.py       # scipy.special, scipy.stats distributions
 clausal/modules/py/jax_tree.py        # Pytree enumeration, flatten/unflatten, tree_map
 clausal/modules/py/jax_transforms.py  # grad, vmap, jit, jvp, vjp
 clausal/modules/py/jax_sharding.py    # Devices, meshes, sharding specs, device_put
+clausal/modules/py/jax_optax.py       # Optimisers, schedules, gradient transforms, losses
 ```
 
 `jax.py` is the main module and mirrors `torch.py`'s scope — array
@@ -667,8 +664,9 @@ since JAX keeps them accessible via `jnp.linalg` / `jnp.fft` rather than
 a separate library.
 
 `jax_random.py`, `jax_nn.py`, `jax_scipy.py`, `jax_tree.py`,
-`jax_transforms.py`, `jax_sharding.py` are all small focused modules
-following the `torch_nn.py` / `torch_distributions.py` pattern.
+`jax_transforms.py`, `jax_sharding.py`, `jax_optax.py` are all small
+focused modules following the `torch_nn.py` / `torch_distributions.py`
+pattern.
 
 Shared helpers (`_pure`, `_property_2`, `_bidir_2`, `_fact_table_2`,
 `_deep_deref`, `_pred`) live in `clausal/modules/py/_helpers.py` —

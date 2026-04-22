@@ -46,13 +46,24 @@ def _deep_deref(val):
     Tuples are preserved as tuples (not converted to lists) — library code
     that distinguishes tuple-of-ints from list-of-ints relies on this, e.g.
     ``a.at[(1, 2)]`` vs ``a.at[[1, 2]]`` in JAX have different semantics.
+
+    NamedTuple subclasses are reconstructed via their own constructor so
+    attribute access (``.init`` / ``.update`` on optax's
+    ``GradientTransformation``, etc.) survives a deref round-trip.
     """
     from clausal.terms import DictTerm
     val = deref(val)
     if isinstance(val, list):
         return [_deep_deref(x) for x in val]
     if isinstance(val, tuple):
-        return tuple(_deep_deref(x) for x in val)
+        items = tuple(_deep_deref(x) for x in val)
+        if type(val) is tuple:
+            return items
+        # NamedTuple — preserve subclass so attribute access survives.
+        try:
+            return type(val)(*items)
+        except TypeError:
+            return items
     if isinstance(val, DictTerm):
         return {k: _deep_deref(v) for k, v in val.items()}
     if isinstance(val, dict):

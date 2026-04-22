@@ -1038,3 +1038,101 @@ class TestJaxInfra:
             succeeded = True
             break
         assert succeeded
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 16 — Optax .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxOptaxFixture:
+    """Run Test predicates from tests/fixtures/jax_optax_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_optax_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Training-loop trio
+        "sgd one step on a flat array",
+        "sgd opts: momentum",
+        "adam step using value_and_grad",
+        "two-step training reduces loss for x^2",
+        "apply_updates on pytree of params",
+        "init_optimizer on pytree params returns matching state",
+        # Composition
+        "chain of clip then sgd builds and steps",
+        "scale alone",
+        "zero_nans replaces nan grads with 0",
+        # Schedules
+        "constant_schedule returns same value at every step",
+        "linear_schedule interpolates",
+        "exponential_decay shrinks",
+        "cosine_decay_schedule endpoints",
+        "warmup_cosine_decay_schedule peaks at end of warmup",
+        "piecewise_constant_schedule steps at boundary",
+        "polynomial_schedule",
+        "scale_by_schedule wired into chain decays effective LR",
+        # Losses
+        "softmax_cross_entropy on one-hot label",
+        "softmax_cross_entropy_with_integer_labels matches one-hot form",
+        "sigmoid_binary_cross_entropy on logit 0 with label 1",
+        "l2_loss with target",
+        "huber_loss small residual ≈ quadratic",
+        "huber_loss with custom delta",
+        "cosine_similarity of identical vectors is 1",
+        "hinge_loss correct margin gives 0",
+        "smooth_labels with alpha=0.1 on 3-class one-hot",
+        # Registries
+        "optimizer registry has known names",
+        "optimizer findall returns full list",
+        "optimizer lookup by name returns the constructor",
+        "schedule registry has known names",
+        "gradient_transform registry has known names",
+        "loss_function registry has known names",
+        # multi_steps
+        "multi_steps accumulates K gradients before applying",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 16 — jax_optax module unit tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxOptaxInfrastructure:
+    """Module-level invariants for jax_optax."""
+
+    def test_lazy_import(self):
+        # nv
+        # Importing the wrapper module must not eagerly import optax.
+        # We can't easily un-import optax in a running process, so just
+        # verify the wrapper exposes its lazy hook.
+        import clausal.modules.py.jax_optax as impl
+        assert hasattr(impl, "_ensure_optax")
+        assert callable(impl._ensure_optax)
+
+    def test_all_exports_resolve(self):
+        # nv
+        import clausal.modules.py.jax_optax as impl
+        for name in impl.__all__:
+            obj = getattr(impl, name)
+            assert obj is not None, f"{name} is None"
+
+    def test_pred_arities(self):
+        # nv
+        import clausal.modules.py.jax_optax as impl
+        # sgd/adam: /2 and /3
+        assert {2, 3} <= set(impl.sgd._dispatch_fns.keys())
+        assert {2, 3} <= set(impl.adam._dispatch_fns.keys())
+        # update_optimizer: /4 and /5
+        assert {4, 5} <= set(impl.update_optimizer._dispatch_fns.keys())
+        # l2_loss: /2 and /3
+        assert {2, 3} <= set(impl.l2_loss._dispatch_fns.keys())
+        # huber_loss: /3 and /4
+        assert {3, 4} <= set(impl.huber_loss._dispatch_fns.keys())
+        # zero_nans: /1
+        assert 1 in impl.zero_nans._dispatch_fns
