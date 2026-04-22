@@ -1240,3 +1240,80 @@ class TestJaxEquinoxInfrastructure:
             succeeded = True
             break
         assert succeeded
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 18 — Flax Linen .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxFlaxFixture:
+    """Run Test predicates from tests/fixtures/jax_flax_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_flax_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Init / apply basics
+        "Dense init returns params, apply produces correct shape",
+        "Dense with use_bias=False opts",
+        "Conv 2-spatial init+apply",
+        "LayerNorm preserves shape",
+        "Embed lookup shape",
+        "Sequential composes Dense + Dense",
+        # init_with_output
+        "init_with_output gives same result as init then apply",
+        # Stochastic / stateful apply
+        "Dropout in inference mode (no RNG needed) is identity",
+        "Dropout in training mode needs apply_with_rngs",
+        "BatchNorm apply_mutable returns (out, new_state)",
+        # Pool functions
+        "max_pool with stride=2 halves spatial dims",
+        "avg_pool default stride=window",
+        # End-to-end
+        "MLP one optax SGD step changes the variables",
+        # Pytree predicates on variables
+        "leaf enumerates Dense variable arrays",
+        # Registry
+        "layer_class exposes Dense, Conv, LayerNorm",
+        "layer_class findall has at least 30 entries",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+class TestJaxFlaxInfrastructure:
+    """Module-level invariants for jax_flax."""
+
+    def test_lazy_import(self):
+        # nv
+        import clausal.modules.py.jax_flax as impl
+        assert hasattr(impl, "_ensure_flax")
+        assert callable(impl._ensure_flax)
+
+    def test_all_exports_resolve(self):
+        # nv
+        import clausal.modules.py.jax_flax as impl
+        for name in impl.__all__:
+            obj = getattr(impl, name)
+            assert obj is not None, f"{name} is None"
+
+    def test_pred_arities(self):
+        # nv
+        import clausal.modules.py.jax_flax as impl
+        # dense: /2 and /3
+        assert {2, 3} <= set(impl.dense._dispatch_fns.keys())
+        # conv: /3 and /4
+        assert {3, 4} <= set(impl.conv._dispatch_fns.keys())
+        # layer_norm: /1 and /2 (no required positional args)
+        assert {1, 2} <= set(impl.layer_norm._dispatch_fns.keys())
+        # init / apply: /4
+        assert 4 in impl.init._dispatch_fns
+        assert 4 in impl.apply._dispatch_fns
+        # apply_mutable / apply_with_rngs: /5
+        assert 5 in impl.apply_mutable._dispatch_fns
+        assert 5 in impl.apply_with_rngs._dispatch_fns
+        # max_pool: /3 and /4
+        assert {3, 4} <= set(impl.max_pool._dispatch_fns.keys())

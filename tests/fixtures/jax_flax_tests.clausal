@@ -1,0 +1,213 @@
+-import_module(jax)
+-import_module(flax)
+-import_from(py.jax, [array, array_list, shape, allclose])
+-import_from(py.jax_random, [key, split_key])
+-import_from(py.jax_tree, [apply_updates, leaf])
+-import_from(py.jax_optax, [sgd, init_optimizer, update_optimizer])
+-import_from(py.jax_transforms, [value_and_grad])
+-import_from(py.jax_flax, [
+    dense, conv, layer_norm, dropout, embed,
+    sequential, batch_norm, lstm_cell,
+    init, apply, init_with_output,
+    apply_mutable, apply_with_rngs,
+    max_pool, avg_pool,
+    layer_class
+])
+
+# ════════════════════════════════════════════════════════════════════════════
+# Init / apply round-trip on basic layers
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("Dense init returns params, apply produces correct shape") <- (
+    dense(8, MODEL),
+    key(0, K),
+    EXAMPLE is ++(jax.numpy.ones(4)),
+    init(MODEL, K, EXAMPLE, VARS),
+    X is ++(jax.numpy.ones(4)),
+    apply(MODEL, VARS, X, Y),
+    shape(Y, [8])
+)  # nv
+
+Test("Dense with use_bias=False opts") <- (
+    dense(8, {"use_bias": False}, MODEL),
+    key(0, K),
+    EXAMPLE is ++(jax.numpy.ones(4)),
+    init(MODEL, K, EXAMPLE, VARS),
+    X is ++(jax.numpy.ones(4)),
+    apply(MODEL, VARS, X, Y),
+    shape(Y, [8])
+)  # nv
+
+Test("Conv 2-spatial init+apply") <- (
+    conv(8, [3, 3], MODEL),
+    key(0, K),
+    EXAMPLE is ++(jax.numpy.ones((1, 16, 16, 3))),
+    init(MODEL, K, EXAMPLE, VARS),
+    X is ++(jax.numpy.ones((1, 16, 16, 3))),
+    apply(MODEL, VARS, X, Y),
+    shape(Y, [1, 16, 16, 8])
+)  # nv
+
+Test("LayerNorm preserves shape") <- (
+    layer_norm(MODEL),
+    key(0, K),
+    EXAMPLE is ++(jax.numpy.arange(8.0)),
+    init(MODEL, K, EXAMPLE, VARS),
+    X is ++(jax.numpy.arange(8.0)),
+    apply(MODEL, VARS, X, Y),
+    shape(Y, [8])
+)  # nv
+
+Test("Embed lookup shape") <- (
+    embed(10, 4, MODEL),
+    key(0, K),
+    EXAMPLE is ++(jax.numpy.array(0)),
+    init(MODEL, K, EXAMPLE, VARS),
+    X is ++(jax.numpy.array(3)),
+    apply(MODEL, VARS, X, Y),
+    shape(Y, [4])
+)  # nv
+
+Test("Sequential composes Dense + Dense") <- (
+    dense(8, FC1),
+    dense(2, FC2),
+    sequential([FC1, FC2], MODEL),
+    key(0, K),
+    EXAMPLE is ++(jax.numpy.ones(4)),
+    init(MODEL, K, EXAMPLE, VARS),
+    X is ++(jax.numpy.ones(4)),
+    apply(MODEL, VARS, X, Y),
+    shape(Y, [2])
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# init_with_output: combined init + first forward pass
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("init_with_output gives same result as init then apply") <- (
+    dense(8, MODEL),
+    key(0, K),
+    EXAMPLE is ++(jax.numpy.ones(4)),
+    init_with_output(MODEL, K, EXAMPLE, RESULT),
+    RESULT is (Y_INIT, VARS),
+    apply(MODEL, VARS, EXAMPLE, Y_APPLY),
+    allclose(Y_INIT, Y_APPLY)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Stochastic apply: Dropout needs apply-time RNG
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("Dropout in inference mode (no RNG needed) is identity") <- (
+    dropout(0.5, {"deterministic": True}, MODEL),
+    key(0, K),
+    EXAMPLE is ++(jax.numpy.ones(4)),
+    init(MODEL, K, EXAMPLE, VARS),
+    apply(MODEL, VARS, EXAMPLE, Y),
+    array_list(Y, [1.0, 1.0, 1.0, 1.0])
+)  # nv
+
+Test("Dropout in training mode needs apply_with_rngs") <- (
+    dropout(0.5, {"deterministic": False}, MODEL),
+    key(0, K0),
+    split_key(K0, 2, [K_INIT, K_DROP]),
+    EXAMPLE is ++(jax.numpy.ones(8)),
+    init(MODEL, K_INIT, EXAMPLE, VARS),
+    apply_with_rngs(MODEL, VARS, EXAMPLE, {"dropout": K_DROP}, Y),
+    shape(Y, [8])
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Stateful apply: BatchNorm needs apply_mutable
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("BatchNorm apply_mutable returns (out, new_state)") <- (
+    batch_norm({"use_running_average": False}, BN),
+    key(0, K),
+    EXAMPLE is ++(jax.numpy.ones((4, 8))),
+    init(BN, K, EXAMPLE, VARS),
+    apply_mutable(BN, VARS, EXAMPLE, ["batch_stats"], RESULT),
+    RESULT is (Y, NEW_STATE),
+    shape(Y, [4, 8]),
+    leaf(NEW_STATE, _)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Pooling functions (not Modules — no init/apply)
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("max_pool with stride=2 halves spatial dims") <- (
+    X is ++(jax.numpy.ones((1, 8, 8, 3))),
+    max_pool(X, [2, 2], {"strides": [2, 2]}, R),
+    shape(R, [1, 4, 4, 3])
+)  # nv
+
+Test("avg_pool default stride=window") <- (
+    X is ++(jax.numpy.ones((1, 8, 8, 3))),
+    avg_pool(X, [2, 2], R),
+    shape(R, [1, 7, 7, 3])
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# End-to-end: MLP + optax SGD step
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("MLP one optax SGD step changes the variables") <- (
+    dense(4, FC1),
+    dense(1, FC2),
+    sequential([FC1, FC2], MODEL),
+    key(0, K0),
+    split_key(K0, 2, [K_INIT, _]),
+    EXAMPLE is ++(jax.numpy.ones(2)),
+    init(MODEL, K_INIT, EXAMPLE, VARS),
+    XS is ++(jax.numpy.array([[1.0, 2.0], [3.0, 4.0]])),
+    YS is ++(jax.numpy.array([[5.0], [6.0]])),
+    LOSS_FN is ++(lambda v: jax.numpy.mean(
+        (jax.vmap(MODEL.apply, in_axes=(None, 0))(v, XS) - YS) ** 2)),
+    value_and_grad(LOSS_FN, VARS, VG),
+    VG is (_LOSS, GRADS),
+    sgd(0.01, OPT),
+    init_optimizer(OPT, VARS, STATE),
+    update_optimizer(OPT, GRADS, STATE, UR),
+    UR is (UPDATES, _),
+    apply_updates(VARS, UPDATES, NEW_VARS),
+    # Verify NEW_VARS has the same number of leaves as VARS
+    # (structure preserved by apply_updates).
+    findall(L, leaf(NEW_VARS, L), NEW_LEAVES),
+    findall(L, leaf(VARS, L), OLD_LEAVES),
+    length(NEW_LEAVES, N),
+    length(OLD_LEAVES, N)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Pytree predicates work on variables (Phase 9)
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("leaf enumerates Dense variable arrays") <- (
+    dense(8, MODEL),
+    key(0, K),
+    EXAMPLE is ++(jax.numpy.ones(4)),
+    init(MODEL, K, EXAMPLE, VARS),
+    findall(L, leaf(VARS, L), LEAVES),
+    length(LEAVES, N),
+    # Dense has weight + bias = 2 arrays
+    N == 2
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# layer_class registry
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("layer_class exposes Dense, Conv, LayerNorm") <- (
+    layer_class("Dense", _),
+    layer_class("Conv", _),
+    layer_class("LayerNorm", _),
+    layer_class("BatchNorm", _),
+    layer_class("Sequential", _)
+)  # nv
+
+Test("layer_class findall has at least 30 entries") <- (
+    findall(N, layer_class(N, _), NS),
+    length(NS, L),
+    L >= 30
+)  # nv

@@ -39,6 +39,7 @@ shims.
 - [Phase 16 — Optax (Optimisers, Schedules, Losses)](phase16_optax.md) ✅ **Implemented**: optimiser constructors (`sgd`, `adam`, `adamw`, …), gradient transforms (`chain`, `clip_by_global_norm`, `ema`, `scale_by_schedule`, …), schedules (`cosine_decay_schedule`, `warmup_cosine_decay_schedule`, …), training-loop trio (`init_optimizer`, `update_optimizer`, `apply_updates`), loss functions (`softmax_cross_entropy`, `huber_loss`, …) — in `py.jax_optax`. `apply_updates` lives canonically in `py.jax_tree` since it's a pure pytree op.
 - [Phase 17 — Equinox (Models, Filter Transforms)](phase17_equinox.md) ✅ **Implemented (stateless surface)**: ~33 per-class layer constructors (`linear`, `mlp`, `conv2d`, `layer_norm`, `multihead_attention`, …), `apply_module`, filter transforms (`filter_grad_value`, `filter_value_and_grad`, `filter_jit_compile`, `filter_vmap_apply`, …), `partition`/`combine`, `tree_at_set`/`tree_at_apply`, leaf checks (`is_array`, `tree_equal`, …), `serialise`/`deserialise`, `layer_class` discovery registry — in `py.jax_equinox`
 - [Phase 17b — Equinox Stateful Modules](phase17b_equinox_stateful.md) ⏸ **Deferred**: `BatchNorm`, training-mode `Dropout`, `StateIndex`, `StatefulLayer`, `make_with_state`, `apply_stateful_module`. Promote to a full plan when a real caller surfaces.
+- [Phase 18 — Flax Linen](phase18_flax.md) ✅ **Implemented**: ~28 per-class layer constructors (`dense`, `conv`, `layer_norm`, `batch_norm`, `multi_head_attention`, …), `init`/`apply`/`init_with_output`/`apply_mutable`/`apply_with_rngs`, pool functions (`max_pool`, `avg_pool`), `layer_class` discovery registry — in `py.jax_flax`. Flax NNX deferred (Phase 18b).
 
 ---
 
@@ -251,9 +252,9 @@ no equivalent carve-out.
 
 | Tier | Operations |
 |---|---|
-| **1 — Pure** | All `jnp` math, shape ops, type conversions, `.at` updates, linalg, FFT, activations, pytree ops, samplers, transforms, optax optimisers/schedules/transforms/losses, Equinox layer constructors / filter transforms / partition / combine / tree_at / leaf checks |
-| **2 — Fact tables** | Activation registry, initializer registry, distribution registry, sampler registry, dtype catalogue, device enumeration, optax `optimizer`/`schedule`/`gradient_transform`/`loss_function` registries, Equinox `layer_class` registry |
-| **3 — State-threaded** | PRNG keys (`split_key`), device placement (`device_put`), optax training loop (`init_optimizer`/`update_optimizer`). No handles — JAX values are first-class. (Equinox stateful modules — `BatchNorm`, training-mode `Dropout`, `eqx.nn.State` — land in Phase 17b.) |
+| **1 — Pure** | All `jnp` math, shape ops, type conversions, `.at` updates, linalg, FFT, activations, pytree ops, samplers, transforms, optax optimisers/schedules/transforms/losses, Equinox layer constructors / filter transforms / partition / combine / tree_at / leaf checks, Flax layer constructors / pool functions |
+| **2 — Fact tables** | Activation registry, initializer registry, distribution registry, sampler registry, dtype catalogue, device enumeration, optax `optimizer`/`schedule`/`loss_function` registries, Equinox and Flax `layer_class` registries |
+| **3 — State-threaded** | PRNG keys (`split_key`), device placement (`device_put`), optax training loop (`init_optimizer`/`update_optimizer`), Flax `init`/`apply`/`apply_mutable`/`apply_with_rngs` (variables flow through). No handles — JAX values are first-class. (Equinox stateful modules — `BatchNorm`, training-mode `Dropout`, `eqx.nn.State` — land in Phase 17b.) |
 | **4 — IO/Impure** | `clear_caches`, `block_until_ready`, `jax.distributed` initialization, Equinox `serialise`/`deserialise`. Stay as `++()` for the JAX ones; the Equinox IO predicates are wrapped but documented as not backtracking-safe. |
 
 Note the absence of a handle tier: JAX has no persistent stateful objects
@@ -316,11 +317,11 @@ how Clausal-side classes round-trip.
 **Shape-polymorphic constraints.** Using Clausal's solver infrastructure
 to reason about JAX shapes. Research project.
 
-**Flax integration.** Neural-network library built on JAX. Flax is
-functional (pytree of params), with explicit `init` / `apply` and
-mutable state collections. Maps cleanly onto the pytree phase but
-has different conventions from Equinox (Phase 17). Worth a wrapper
-plan of its own.
+**Flax NNX.** The newer mutable-state API for Flax (alongside the
+Linen API wrapped in Phase 18). Different state-threading
+discipline (mutable references), different mental model. Track as
+Phase 18b with its own `jax_flax_nnx.py` wrapper when a real
+caller surfaces.
 
 ---
 
@@ -660,6 +661,7 @@ clausal/modules/py/jax_transforms.py  # grad, vmap, jit, jvp, vjp
 clausal/modules/py/jax_sharding.py    # Devices, meshes, sharding specs, device_put
 clausal/modules/py/jax_optax.py       # Optimisers, schedules, gradient transforms, losses
 clausal/modules/py/jax_equinox.py     # Equinox: layer constructors, filter transforms, partition/combine, tree_at, serialisation
+clausal/modules/py/jax_flax.py        # Flax Linen: layer constructors, init/apply, pool functions
 ```
 
 `jax.py` is the main module and mirrors `torch.py`'s scope — array
@@ -669,8 +671,8 @@ a separate library.
 
 `jax_random.py`, `jax_nn.py`, `jax_scipy.py`, `jax_tree.py`,
 `jax_transforms.py`, `jax_sharding.py`, `jax_optax.py`,
-`jax_equinox.py` are all small focused modules following the
-`torch_nn.py` / `torch_distributions.py` pattern.
+`jax_equinox.py`, `jax_flax.py` are all small focused modules
+following the `torch_nn.py` / `torch_distributions.py` pattern.
 
 Shared helpers (`_pure`, `_property_2`, `_bidir_2`, `_fact_table_2`,
 `_deep_deref`, `_pred`) live in `clausal/modules/py/_helpers.py` —
