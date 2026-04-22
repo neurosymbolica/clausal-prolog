@@ -199,6 +199,26 @@ Test("tree_reduce sums leaves") <- (
 )
 ```
 
+### `apply_updates(PARAMS, UPDATES, NEW_PARAMS)`
+
+Element-wise add updates to a params pytree, leaf by leaf. Both
+`optax.apply_updates` and `eqx.apply_updates` are thin wrappers
+around the same `tree_map`, so the canonical predicate lives here —
+not behind any optimiser library. `py.jax_optax.apply_updates` is
+re-exported for backwards compatibility.
+
+```clausal
+Test("apply_updates on a dict pytree") <- (
+    PARAMS is ++({"w": jax.numpy.array([1.0, 2.0]), "b": jax.numpy.array(0.5)}),
+    UPDATES is ++({"w": jax.numpy.array([-0.1, -0.2]), "b": jax.numpy.array(-0.05)}),
+    apply_updates(PARAMS, UPDATES, NEW)
+)
+```
+
+`None` leaves in `PARAMS` (the optax convention for "no update for
+this slot") are passed through unchanged, matching `optax.apply_updates`'s
+behaviour.
+
 ---
 
 ## Idiom — `findall` over pytree leaves

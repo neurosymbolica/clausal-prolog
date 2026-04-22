@@ -64,6 +64,13 @@ Otherwise either arity works.
 Element-wise add updates to params, leaf by leaf — handles arbitrary
 pytrees.
 
+> **Canonical home:** `py.jax_tree.apply_updates`. The same predicate
+> is re-exported from `py.jax_optax` so existing imports keep
+> working, but it is a pure pytree operation (not optimiser-specific).
+> Both `optax.apply_updates` and `eqx.apply_updates` are thin wrappers
+> around the same `tree_map`. Prefer the `py.jax_tree` import in new
+> code.
+
 ### Minimal example
 
 ```clausal

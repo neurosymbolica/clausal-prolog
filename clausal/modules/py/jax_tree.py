@@ -10,6 +10,7 @@ Clausal's relational and enumerative idioms:
         tree_flatten, tree_structure, tree_leaves_list,
         all_leaves, treedef_is_leaf,
         tree_map, tree_map_n, tree_reduce,
+        apply_updates,
         keystr,
     ])
 
@@ -35,6 +36,11 @@ Mapping and reducing:
     tree_map(F, TREE, TREE2)               Map F over every leaf
     tree_map_n(F, TREES, TREE2)            Map F over N trees sharing structure
     tree_reduce(F, TREE, INIT, R)          Reduce leaves with F and INIT
+
+Element-wise updates (canonical home for ``optax.apply_updates`` /
+``eqx.apply_updates``; both libraries are thin wrappers around
+``tree_map``):
+    apply_updates(PARAMS, UPDATES, NEW_PARAMS)
 
 Paths:
     keystr(PATH, STR)                      Render a key-path as '[\"a\"][0]'
@@ -240,6 +246,25 @@ tree_reduce = _pred("tree_reduce",
 )
 
 
+# Element-wise add updates to a params pytree, leaf by leaf. Both
+# `optax.apply_updates` and `eqx.apply_updates` are thin wrappers
+# around this — neither library owns the operation, so the canonical
+# implementation lives here. `py.jax_optax.apply_updates` aliases this
+# definition for backwards compatibility.
+def _apply_updates_3(params, updates):
+    jtu = _jtu()
+    return jtu.tree_map(
+        lambda p, u: None if p is None else p + u,
+        params, updates,
+        is_leaf=lambda x: x is None,
+    )
+
+
+apply_updates = _pred("apply_updates",
+    (3, _pure(_apply_updates_3)),
+)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Key-path rendering
 # ═══════════════════════════════════════════════════════════════════════════
@@ -281,6 +306,8 @@ __all__ = [
     "tree_structure", "tree_leaves_list", "all_leaves", "treedef_is_leaf",
     # Mapping and reducing
     "tree_map", "tree_map_n", "tree_reduce",
+    # Element-wise updates
+    "apply_updates",
     # Key paths
     "keystr",
 ]

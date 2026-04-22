@@ -70,7 +70,7 @@ Training loop (Tier 3 — state-threaded):
     init_optimizer(TX, PARAMS, STATE)
     update_optimizer(TX, GRADS, STATE, RESULT)        % RESULT is (UPDATES, NEW_STATE)
     update_optimizer(TX, GRADS, STATE, PARAMS, RESULT)
-    apply_updates(PARAMS, UPDATES, NEW_PARAMS)
+    apply_updates(PARAMS, UPDATES, NEW_PARAMS)        % canonical home: py.jax_tree
 
 Loss functions (Tier 1 pure):
     softmax_cross_entropy(LOGITS, LABELS, L)
@@ -328,9 +328,11 @@ update_optimizer = _pred("update_optimizer",
               tuple(tx.update(grads, state, params)))),
 )
 
-apply_updates = _pred("apply_updates",
-    (3, _pure(lambda params, updates: _ox().apply_updates(params, updates))),
-)
+# `apply_updates` is a pure pytree operation, not optimiser-specific —
+# canonical implementation lives in py.jax_tree. Re-exported here so
+# callers who import from py.jax_optax don't break.
+from clausal.modules.py.jax_tree import apply_updates as _apply_updates
+apply_updates = _apply_updates
 
 
 # ═══════════════════════════════════════════════════════════════════════════

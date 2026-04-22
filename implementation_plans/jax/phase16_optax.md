@@ -125,7 +125,7 @@ without wrapping it in a transform. Use it for logging or assertions.
 | `init_optimizer` | `/3` | `(+TX, +PARAMS, -STATE)` | `tx.init(params)` — build initial state |
 | `update_optimizer` | `/4` | `(+TX, +GRADS, +STATE, -RESULT)` | `tx.update(grads, state)` — `RESULT is (UPDATES, NEW_STATE)` |
 | `update_optimizer` | `/5` | `(+TX, +GRADS, +STATE, +PARAMS, -RESULT)` | `tx.update(grads, state, params)` — for transforms that need params (e.g. `add_decayed_weights`) |
-| `apply_updates` | `/3` | `(+PARAMS, +UPDATES, -NEW_PARAMS)` | `optax.apply_updates(params, updates)` |
+| `apply_updates` | `/3` | `(+PARAMS, +UPDATES, -NEW_PARAMS)` | Pure pytree op; canonical home `py.jax_tree.apply_updates`, re-exported here for ergonomics |
 
 The two arities of `update_optimizer` reflect optax's own signature.
 Most transforms accept both shapes; the `/5` form is required for
