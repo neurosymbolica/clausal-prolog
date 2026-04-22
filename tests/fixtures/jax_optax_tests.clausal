@@ -14,7 +14,7 @@
     sigmoid_binary_cross_entropy,
     l2_loss, huber_loss, cosine_similarity, hinge_loss, smooth_labels,
     multi_steps,
-    optimizer, schedule, gradient_transform, loss_function,
+    optimizer, schedule, loss_function,
     schedule_at
 ])
 
@@ -336,13 +336,6 @@ Test("schedule registry has known names") <- (
     schedule("constant_schedule", _),
     schedule("cosine_decay_schedule", _),
     schedule("warmup_cosine_decay_schedule", _)
-)  # nv
-
-Test("gradient_transform registry has known names") <- (
-    gradient_transform("clip_by_global_norm", _),
-    gradient_transform("ema", _),
-    gradient_transform("scale_by_schedule", _),
-    gradient_transform("chain", _)
 )  # nv
 
 Test("loss_function registry has known names") <- (

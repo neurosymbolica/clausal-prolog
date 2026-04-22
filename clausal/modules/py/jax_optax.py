@@ -29,7 +29,6 @@ Phase 16 — Optax
 Registries (Tier 2 — fact tables, nondeterministic):
     optimizer(NAME, CTOR)            Optimiser constructor by name
     schedule(NAME, CTOR)             Schedule constructor by name
-    gradient_transform(NAME, CTOR)   Gradient-transform constructor by name
     loss_function(NAME, FN)          Loss function by name
 
 Optimiser constructors (Tier 1 pure):
@@ -408,14 +407,6 @@ _SCHEDULE_NAMES = (
     "join_schedules",
 )
 
-_GRADIENT_TRANSFORM_NAMES = (
-    "scale", "scale_by_schedule", "scale_by_adam",
-    "clip", "clip_by_global_norm", "clip_by_block_rms",
-    "add_decayed_weights", "ema", "add_noise",
-    "zero_nans", "keep_params_nonnegative",
-    "chain", "masked", "multi_transform",
-)
-
 _LOSS_NAMES = (
     "softmax_cross_entropy",
     "softmax_cross_entropy_with_integer_labels",
@@ -447,10 +438,6 @@ optimizer = _pred("optimizer",
 
 schedule = _pred("schedule",
     (2, _fact_table_2(_build_named_facts(_SCHEDULE_NAMES))),
-)
-
-gradient_transform = _pred("gradient_transform",
-    (2, _fact_table_2(_build_named_facts(_GRADIENT_TRANSFORM_NAMES))),
 )
 
 loss_function = _pred("loss_function",
@@ -486,5 +473,5 @@ __all__ = [
     "kl_divergence", "hinge_loss",
     "smooth_labels",
     # Registries
-    "optimizer", "schedule", "gradient_transform", "loss_function",
+    "optimizer", "schedule", "loss_function",
 ]

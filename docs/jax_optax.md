@@ -167,8 +167,6 @@ Transforms available as Tier 1 constructors (each returns a
 | `multi_transform(TXS_BY_LABEL, LABELS, TX)` | Apply different TXs to parameter groups |
 | `multi_steps(TX, EVERY_K, TX2)` | Accumulate gradients over K micro-batches |
 
-Enumerate via `gradient_transform/2`.
-
 ---
 
 ## Schedules
@@ -335,7 +333,6 @@ For relational queries about what's available:
 |---|---|---|
 | `optimizer(NAME, CTOR)` | `(+,-)`, `(-,-)`, `(+,+)` | Optimiser constructor by name |
 | `schedule(NAME, CTOR)` | same | Schedule constructor by name |
-| `gradient_transform(NAME, CTOR)` | same | Transform constructor by name |
 | `loss_function(NAME, FN)` | same | Loss function by name |
 
 ```clausal

@@ -1088,7 +1088,6 @@ class TestJaxOptaxFixture:
         "optimizer findall returns full list",
         "optimizer lookup by name returns the constructor",
         "schedule registry has known names",
-        "gradient_transform registry has known names",
         "loss_function registry has known names",
         # multi_steps
         "multi_steps accumulates K gradients before applying",

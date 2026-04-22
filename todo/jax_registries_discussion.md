@@ -164,9 +164,12 @@ don't add the registry.
 
 ## Action items
 
-- [ ] **Remove `gradient_transform/2`** from `py.jax_optax`. Cost
-  ~20 lines, no caller depends on it. Suggested as a small standalone
-  commit.
+- [x] **Remove `gradient_transform/2`** from `py.jax_optax`.
+  Resolved 2026-04-22: deleted the predicate, the
+  `_GRADIENT_TRANSFORM_NAMES` tuple, the `gradient_transform
+  registry has known names` fixture test, and all doc/plan mentions.
+  581 JAX tests still pass (one fewer than before — the removed
+  test).
 - [ ] (Optional, not now) Capture this audit's "when to add a
   registry" checklist somewhere user-facing — maybe in the wrapper
   authoring section of the docs, or in the

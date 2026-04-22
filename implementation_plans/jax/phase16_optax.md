@@ -158,7 +158,6 @@ surface. No overlap with Phase 10.
 | Name | Arity | Modes | Description |
 |---|---|---|---|
 | `loss_function` | `/2` | `(+N, -FN)`, `(-N, -FN)` | Enumerate losses |
-| `gradient_transform` | `/2` | `(+N, -CTOR)`, `(-N, -CTOR)` | Enumerate transform constructors (clip / scale / ema / …) — for relational queries about which transforms exist |
 
 ---
 
@@ -359,8 +358,10 @@ Test("enumerate available optimisers") <- (
 - Pytree params: `init_optimizer` and `update_optimizer` work with
   a `{"w": …, "b": …}` pytree — assert `NEW_PARAMS` keys match
 - Registry enumeration: `optimizer/2`, `schedule/2`,
-  `gradient_transform/2`, `loss_function/2` — `length(NS, K)` matches
-  the wrapper's curated list
+  `loss_function/2` — `length(NS, K)` matches the wrapper's curated
+  list. (`gradient_transform/2` was removed as a follow-up — see
+  `todo/jax_registries_discussion.md`; gradient transforms compose
+  positionally with `chain`, no name-as-data use case.)
 - `multi_steps`: gradient accumulation over 4 micro-batches equals one
   big-batch step
 
@@ -521,7 +522,7 @@ Update `implementation_plans/jax/overview.md`:
 | Schedule constructors + `schedule_at` | ~9 |
 | Training loop (`init`, `update`, `apply_updates`) | 3 (with `update` ×2 arities) |
 | Loss functions | ~10 |
-| Registries | 4 (`optimizer`, `schedule`, `gradient_transform`, `loss_function`) |
+| Registries | 3 (`optimizer`, `schedule`, `loss_function`) |
 | **Total predicate names** | ~50 |
 | **Total registered arities** | ~70 |
 
