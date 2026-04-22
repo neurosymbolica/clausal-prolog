@@ -15,6 +15,8 @@
     tree_at_set, tree_at_apply,
     is_array, is_inexact_array, tree_equal,
     serialise, deserialise,
+    batch_norm, make_with_state, apply_stateful_module,
+    dropout_train, inference_mode, is_stateful,
     layer_class
 ])
 
@@ -273,6 +275,77 @@ Test("MLP one optax SGD step changes the model") <- (
     UR is (UPDATES, _),
     apply_updates(MODEL, UPDATES, NEW_MODEL),
     not tree_equal(MODEL, NEW_MODEL)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Stateful modules (Phase 17b)
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("batch_norm constructs model and state") <- (
+    batch_norm(3, "batch", BN, STATE),
+    is_stateful(BN)
+)  # nv
+
+Test("batch_norm with mode=batch opts") <- (
+    batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
+    is_stateful(BN)
+)  # nv
+
+Test("apply_stateful_module in inference mode preserves shape") <- (
+    batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
+    inference_mode(BN, BN_EVAL),
+    X is ++(jax.numpy.ones(3)),
+    apply_stateful_module(BN_EVAL, X, STATE, Y, _NEW_STATE),
+    shape(Y, [3])
+)  # nv
+
+Test("apply_stateful_module under vmap preserves batch shape") <- (
+    batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
+    X is ++(jax.numpy.ones((4, 3))),
+    VMAPPED is ++(jax.vmap(BN, axis_name="batch",
+                           in_axes=(0, None), out_axes=(0, None))),
+    apply_stateful_module(VMAPPED, X, STATE, Y, _NEW_STATE),
+    shape(Y, [4, 3])
+)  # nv
+
+Test("dropout_train differs from its input under a key") <- (
+    dropout_train(0.5, D),
+    X is ++(jax.numpy.ones(64)),
+    key(42, K),
+    apply_module(D, X, {"key": K}, Y),
+    # With p=0.5 over 64 elements the output almost-surely has zeros
+    not allclose(Y, X)
+)  # nv
+
+Test("inference_mode flips inference field to True") <- (
+    batch_norm(3, "batch", BN, _STATE),
+    inference_mode(BN, BN_EVAL),
+    ++(BN.inference) == False,
+    ++(BN_EVAL.inference) == True
+)  # nv
+
+Test("inference_mode/3 with value=False switches back") <- (
+    batch_norm(3, "batch", BN, _STATE),
+    inference_mode(BN, BN_EVAL),
+    inference_mode(BN_EVAL, False, BN_TRAIN),
+    ++(BN_TRAIN.inference) == False
+)  # nv
+
+Test("is_stateful discriminates BatchNorm vs Linear") <- (
+    batch_norm(3, "batch", BN, _STATE),
+    key(0, K),
+    linear(3, 3, K, LIN),
+    is_stateful(BN),
+    not is_stateful(LIN)
+)  # nv
+
+Test("make_with_state generic form equals batch_norm/5") <- (
+    BN_CLS is ++(equinox.nn.BatchNorm),
+    make_with_state(BN_CLS, {"input_size": 3, "axis_name": "batch",
+                             "mode": "batch"}, BN_A, STATE_A),
+    batch_norm(3, "batch", {"mode": "batch"}, BN_B, STATE_B),
+    tree_equal(BN_A, BN_B),
+    tree_equal(STATE_A, STATE_B)
 )  # nv
 
 # ════════════════════════════════════════════════════════════════════════════

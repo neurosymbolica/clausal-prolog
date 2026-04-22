@@ -26,9 +26,10 @@ Import usage::
 
 Phase 17 — Equinox (stateless surface)
 ---------------------------------------
-All predicates are Tier 1 pure or Tier 4 IO (serialisation only).
-Stateful modules (``BatchNorm``, training-mode ``Dropout``,
-``StateIndex``, ``StatefulLayer``) are tracked under Phase 17b — see
+All stateless predicates are Tier 1 pure or Tier 4 IO (serialisation
+only). Phase 17b extends the module with stateful layers
+(``BatchNorm``, training-mode ``Dropout``, the ``inference_mode``
+toggle, ``make_with_state``) — see
 ``implementation_plans/jax/phase17b_equinox_stateful.md``.
 
 Layer constructors (all key-required ones take KEY as the last
@@ -99,6 +100,22 @@ Leaf checks (Tier 1 pure check predicates):
 Serialisation (Tier 4 IO — side-effecting; not backtracking-safe):
     serialise(TREE, PATH)
     deserialise(PATH, LIKE_TREE, TREE)
+
+Stateful modules (Phase 17b — Tier 3 state-threaded):
+    batch_norm(INPUT_SIZE, AXIS_NAME, MODEL, STATE)
+                                            % + opts variant with OPTS dict
+    make_with_state(CLS, KWARGS, MODEL, STATE)
+                                            % generic escape for any
+                                              stateful class
+    apply_stateful_module(M, X, STATE, Y, NEW_STATE)
+                                            % + kwargs variant
+    dropout_train(P, M)                     / dropout_train(P, OPTS, M)
+                                            % Dropout(p, inference=False);
+                                              apply via apply_module/4
+                                              with {"key": K}
+    inference_mode(PYTREE, NEW_PYTREE)      % value=True default
+    inference_mode(PYTREE, VALUE, NEW_PYTREE)
+    is_stateful(X)                          % eqx.nn.StatefulLayer check
 
 Layer enumeration (registry, side-channel for discovery only):
     layer_class(NAME, CLS)                  % +/-, -/-
@@ -513,6 +530,143 @@ deserialise = _pred("deserialise",
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Phase 17b — Stateful modules
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Stateful Equinox pairs a model pytree with a separate State pytree,
+# threaded through applications and produced by `make_with_state`.
+# Constructors and apply use two output slots (MODEL, STATE / Y,
+# NEW_STATE) following the partition/4 precedent — state threading is
+# visually explicit, no tuple decomposition at every call site.
+
+
+def _batch_norm_4_dispatch(this_generator, _proceed, _fail, _catcher,
+                           input_size_var, axis_name_var,
+                           model_var, state_var, trail):
+    input_size = _deep_deref(input_size_var)
+    axis_name = _deep_deref(axis_name_var)
+    try:
+        model, state = _enn().make_with_state(_enn().BatchNorm)(
+            input_size=input_size, axis_name=axis_name)
+    except Exception:
+        yield (_fail, DONE)
+        return
+    if unify(model_var, model, trail) and unify(state_var, state, trail):
+        yield (_proceed, None)
+    yield (_fail, DONE)
+
+
+def _batch_norm_5_dispatch(this_generator, _proceed, _fail, _catcher,
+                           input_size_var, axis_name_var, opts_var,
+                           model_var, state_var, trail):
+    input_size = _deep_deref(input_size_var)
+    axis_name = _deep_deref(axis_name_var)
+    opts = _deep_deref(opts_var)
+    try:
+        model, state = _enn().make_with_state(_enn().BatchNorm)(
+            input_size=input_size, axis_name=axis_name, **opts)
+    except Exception:
+        yield (_fail, DONE)
+        return
+    if unify(model_var, model, trail) and unify(state_var, state, trail):
+        yield (_proceed, None)
+    yield (_fail, DONE)
+
+
+batch_norm = _pred("batch_norm",
+    (4, _batch_norm_4_dispatch),
+    (5, _batch_norm_5_dispatch),
+)
+
+
+def _make_with_state_4_dispatch(this_generator, _proceed, _fail, _catcher,
+                                cls_var, kwargs_var,
+                                model_var, state_var, trail):
+    cls = _deep_deref(cls_var)
+    kwargs = _deep_deref(kwargs_var)
+    try:
+        model, state = _enn().make_with_state(cls)(**kwargs)
+    except Exception:
+        yield (_fail, DONE)
+        return
+    if unify(model_var, model, trail) and unify(state_var, state, trail):
+        yield (_proceed, None)
+    yield (_fail, DONE)
+
+
+make_with_state = _pred("make_with_state",
+    (4, _make_with_state_4_dispatch),
+)
+
+
+def _apply_stateful_module_5_dispatch(this_generator, _proceed, _fail,
+                                      _catcher,
+                                      m_var, x_var, state_var,
+                                      y_var, new_state_var, trail):
+    m = _deep_deref(m_var)
+    x = _deep_deref(x_var)
+    state = _deep_deref(state_var)
+    try:
+        y, new_state = m(x, state)
+    except Exception:
+        yield (_fail, DONE)
+        return
+    if unify(y_var, y, trail) and unify(new_state_var, new_state, trail):
+        yield (_proceed, None)
+    yield (_fail, DONE)
+
+
+def _apply_stateful_module_6_dispatch(this_generator, _proceed, _fail,
+                                      _catcher,
+                                      m_var, x_var, kwargs_var, state_var,
+                                      y_var, new_state_var, trail):
+    m = _deep_deref(m_var)
+    x = _deep_deref(x_var)
+    kwargs = _deep_deref(kwargs_var)
+    state = _deep_deref(state_var)
+    try:
+        y, new_state = m(x, state, **kwargs)
+    except Exception:
+        yield (_fail, DONE)
+        return
+    if unify(y_var, y, trail) and unify(new_state_var, new_state, trail):
+        yield (_proceed, None)
+    yield (_fail, DONE)
+
+
+apply_stateful_module = _pred("apply_stateful_module",
+    (5, _apply_stateful_module_5_dispatch),
+    (6, _apply_stateful_module_6_dispatch),
+)
+
+
+# Training-mode Dropout: stateless (no State pytree), but consumes a
+# per-call PRNG key. Applied via apply_module/4 with {"key": K}.
+# Named distinctly from Phase 17's dropout/2 so the inference/training
+# choice is explicit at construction time — opts with inference=False
+# would not be visible at the call site.
+dropout_train = _pred("dropout_train",
+    (2, _pure(lambda p: _enn().Dropout(p, inference=False))),
+    (3, _pure(lambda p, opts:
+              _enn().Dropout(p, **{"inference": False, **opts}))),
+)
+
+
+# inference_mode flips the `inference` field on any stateful layer in
+# the tree. /2 defaults value=True (the common eval-time swap); /3 is
+# explicit.
+inference_mode = _pred("inference_mode",
+    (2, _pure(lambda tree: _enn().inference_mode(tree, value=True))),
+    (3, _pure(lambda tree, value: _enn().inference_mode(tree, value=value))),
+)
+
+
+is_stateful = _pred("is_stateful",
+    (1, _check_1(lambda x: isinstance(x, _enn().StatefulLayer))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Layer-class registry (discovery side-channel)
 # ═══════════════════════════════════════════════════════════════════════════
 #
@@ -573,6 +727,11 @@ __all__ = [
     "is_array", "is_inexact_array", "is_array_like", "tree_equal",
     # Serialisation
     "serialise", "deserialise",
+    # Stateful modules (Phase 17b)
+    "batch_norm", "make_with_state",
+    "apply_stateful_module",
+    "dropout_train", "inference_mode",
+    "is_stateful",
     # Registry
     "layer_class",
 ]

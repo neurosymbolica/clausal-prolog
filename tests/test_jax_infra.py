@@ -1192,6 +1192,16 @@ class TestJaxEquinoxFixture:
         "serialise then deserialise round-trip",
         # End-to-end
         "MLP one optax SGD step changes the model",
+        # Stateful modules (Phase 17b)
+        "batch_norm constructs model and state",
+        "batch_norm with mode=batch opts",
+        "apply_stateful_module in inference mode preserves shape",
+        "apply_stateful_module under vmap preserves batch shape",
+        "dropout_train differs from its input under a key",
+        "inference_mode flips inference field to True",
+        "inference_mode/3 with value=False switches back",
+        "is_stateful discriminates BatchNorm vs Linear",
+        "make_with_state generic form equals batch_norm/5",
         # Registry
         "layer_class registry exposes Linear, MLP, Conv2d",
         "layer_class findall has at least 40 entries",
@@ -1232,6 +1242,13 @@ class TestJaxEquinoxInfrastructure:
         assert 4 in impl.partition._dispatch_fns
         # is_array: /1
         assert 1 in impl.is_array._dispatch_fns
+        # Phase 17b — stateful
+        assert {4, 5} <= set(impl.batch_norm._dispatch_fns.keys())
+        assert 4 in impl.make_with_state._dispatch_fns
+        assert {5, 6} <= set(impl.apply_stateful_module._dispatch_fns.keys())
+        assert {2, 3} <= set(impl.dropout_train._dispatch_fns.keys())
+        assert {2, 3} <= set(impl.inference_mode._dispatch_fns.keys())
+        assert 1 in impl.is_stateful._dispatch_fns
 
     def test_layer_class_registry_has_known(self):
         # nv

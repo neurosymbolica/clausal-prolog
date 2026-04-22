@@ -98,12 +98,138 @@ X is ++(jax.numpy.ones(4)),
 apply_module(M, X, Y)
 ```
 
-For modules taking extra kwargs (e.g. `Dropout` with a per-call
-key in training mode — Phase 17b), use the `/4` form:
+For modules taking extra kwargs (e.g. training-mode `Dropout` with
+a per-call key — see Phase 17b below), use the `/4` form:
 
 ```clausal
 apply_module(MODEL, X, {"key": K}, Y)
 ```
+
+---
+
+## Stateful modules (Phase 17b)
+
+Equinox's stateful layers pair a model pytree with a separate
+`State` pytree, threaded explicitly. `BatchNorm` needs running
+mean/variance; training-mode `Dropout` needs a per-call PRNG key;
+both require a distinct contract from the stateless layers above.
+
+### Constructors return `(MODEL, STATE)`
+
+`batch_norm/4,/5` returns the model **and** its state as two output
+slots (mirroring `partition/4`):
+
+```clausal
+batch_norm(3, "batch", BN, STATE),
+batch_norm(3, "batch", {"mode": "batch"}, BN, STATE)
+```
+
+The axis name is a string (or a sequence of strings — BatchNorm
+supports multi-axis reduction). `mode="batch"` is Equinox's
+recommendation for new code; the `/4` arity falls back to
+`mode="ema"` and triggers a deprecation warning.
+
+Other stateful layers go through the generic `make_with_state/4`,
+which takes a class value and a kwargs dict:
+
+```clausal
+BN_CLS is ++(equinox.nn.BatchNorm),
+make_with_state(BN_CLS, {"input_size": 3, "axis_name": "batch",
+                         "mode": "batch"}, BN, STATE)
+```
+
+This is the escape for user-defined `StatefulLayer` subclasses or
+stateful variants of `SpectralNorm`.
+
+### Apply threads state in and out
+
+`apply_stateful_module/5` calls `m(x, state)` and unifies `Y` with
+the output, `NEW_STATE` with the updated state:
+
+```clausal
+apply_stateful_module(M, X, STATE, Y, NEW_STATE)
+apply_stateful_module(M, X, {"key": K}, STATE, Y, NEW_STATE)
+```
+
+Two output slots — state threading is the primary flow, not an
+afterthought.
+
+### BatchNorm needs `vmap` for training mode
+
+BatchNorm's `axis_name` is a *named batch axis* that only exists
+under `jax.vmap` or `jax.shard_map`. Calling a training-mode
+BatchNorm on a raw input errors with "Found an unbound axis name".
+Wrap it yourself and pass the vmapped module to
+`apply_stateful_module`:
+
+```clausal
+batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
+X is ++(jax.numpy.ones((4, 3))),
+VMAPPED is ++(jax.vmap(BN, axis_name="batch",
+                       in_axes=(0, None), out_axes=(0, None))),
+apply_stateful_module(VMAPPED, X, STATE, Y, NEW_STATE)
+```
+
+Inference mode skips the reduction and applies to unbatched inputs
+— the usual eval path.
+
+### `inference_mode` flips `inference` fields across the tree
+
+`eqx.nn.inference_mode` walks the pytree and sets each
+`.inference` field to the target value. Use it to swap a trained
+model for evaluation:
+
+```clausal
+inference_mode(MODEL, EVAL_MODEL),         % value=True default
+inference_mode(EVAL_MODEL, False, TRAIN_MODEL) % explicit switch back
+```
+
+The `/2` arity defaults to `value=True` since that's the common
+swap direction.
+
+### Training-mode Dropout: `dropout_train` + per-call key
+
+`dropout_train/2,/3` constructs `Dropout(p, inference=False)`. It
+has no `State` pytree (dropout is stochastic, not stateful) but
+consumes a per-call PRNG key — applied via `apply_module/4`:
+
+```clausal
+dropout_train(0.5, D),
+apply_module(D, X, {"key": K}, Y)
+```
+
+Split from Phase 17's `dropout/2` (inference-mode default) so the
+train/eval choice is explicit at construction time. Mixing them is
+a common bug; two names is clearer than a boolean hidden in an
+opts dict.
+
+### `is_stateful` check predicate
+
+Mirrors `is_array`:
+
+```clausal
+batch_norm(3, "batch", BN, _STATE),
+is_stateful(BN),        % succeeds
+
+key(0, K),
+linear(3, 3, K, LIN),
+not is_stateful(LIN)    % succeeds (Linear is stateless)
+```
+
+### `State` inspection via Phase 9 pytree predicates
+
+`eqx.nn.State` is a registered pytree; Phase 9's `leaf/2`,
+`tree_flatten/3` work on it unchanged:
+
+```clausal
+batch_norm(3, "batch", _BN, STATE),
+findall(L, leaf(STATE, L), LEAVES)
+```
+
+Useful when debugging running statistics or serialising state
+alongside a model.
+
+---
 
 ---
 
@@ -249,18 +375,6 @@ which is why having one canonical home for the operation in
 ---
 
 ## Caveats
-
-### Stateful modules (BatchNorm, training-mode Dropout) — deferred
-
-Phase 17 ships **stateless-only**. `BatchNorm`, training-mode
-`Dropout`, `StateIndex`, and `StatefulLayer` need a separate
-state-threading contract via `eqx.nn.make_with_state` — this is
-tracked as Phase 17b
-([`implementation_plans/jax/phase17b_equinox_stateful.md`](../implementation_plans/jax/phase17b_equinox_stateful.md)).
-
-`dropout/2` defaults to `inference=True`, so the no-op variant works
-out of the box. For training-mode dropout, use `++()` until Phase
-17b lands.
 
 ### Pooling defaults to stride=1
 
