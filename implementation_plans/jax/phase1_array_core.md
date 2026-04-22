@@ -63,7 +63,7 @@ Note: `sharding/2` is deferred to Phase 13.
 | `swapaxes` | `/4` | `(+A, +A0, +A1, -A2)` | Swap two axes |
 | `moveaxis` | `/4` | `(+A, +SRC, +DEST, -A2)` | Move an axis |
 | `concatenate` | `/3` | `(+ARRS, +AXIS, -A)` | Concatenate |
-| `stack` | `/3` | `(+ARRS, +AXIS, -A)` | Stack along new axis |
+| `stack` | `/3` | `(+ARRS, +AXIS, -A)` | Stack along new axis. **Superseded in Phase 8** by the bidirectional `stacked/3` |
 | `broadcast_to` | `/3` | `(+A, +SHAPE, -A2)` | Broadcast |
 | `astype` | `/3` | `(+A, +DTYPE, -A2)` | Cast to dtype |
 
@@ -280,7 +280,7 @@ _EXPORTED_CONSTS = frozenset({"pi", "e", "inf", "nan", "newaxis"})
                       shape, dtype, device, dim, element_count,
                       matmul, add, mul, sum, mean, abs, clip,
                       reshape, squeeze, expand_dims, transpose,
-                      concatenate, stack, broadcast_to, astype,
+                      concatenate, stacked, broadcast_to, astype,
                       jax_numpy, array_list,
                       float32, float64, int32])
 -import_module(numpy)

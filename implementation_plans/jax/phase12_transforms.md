@@ -262,46 +262,54 @@ Create `docs/jax_transforms.md`:
 
 ## Issues
 
-_To be populated during implementation._
+1. **Tuple-decomposition arity chosen.** `value_and_grad/3`,
+   `jvp_value/4`, `vjp_value/3` all return tuples — users decompose
+   with `RESULT is (V, G)` syntax. Matches `svd`, `qr`, `eig` in
+   Phase 4.
 
-Known items to validate:
+2. **`grad` of non-scalar outputs.** `jax.grad(f)` requires `f` to
+   return a scalar. Vector-valued `f` raises, which `_pure`'s exception
+   handler surfaces as predicate failure — covered by the
+   `grad of vector output fails` test. For vector-valued functions,
+   use `jacobian/3` instead.
 
-1. **`value_and_grad` / `jvp` arity decision.** The plan above lists
-   arity `/4` (four predicate args: F, X, V, G) *and* arity `/3` with
-   tuple decomposition. Pick one. Recommendation: use **tuple
-   decomposition** (`/3`) for consistency with `svd`, `qr`, `eig` in
-   Phase 4 — all decompositions return tuples in this wrapper.
+3. **Pytree inputs to grad work cleanly.** `grad_value(F, PARAMS, G)`
+   with a dict `PARAMS` produces a dict `G` with matching structure.
+   Users extract entries via `GA is ++(G["a"])`. Combines with Phase 9
+   pytree predicates for structural traversal.
 
-2. **`grad` of non-scalar outputs.** `jax.grad(f)` requires f to return
-   a scalar. For vector-valued f, users want `jacobian`. Document
-   clearly; the predicate will raise if the function isn't scalar-valued
-   and we translate that to predicate failure via `_pure`.
+4. **`jvp` primals/tangents shape.** `jax.jvp(f, primals, tangents)`
+   requires both to be tuples, one element per positional arg of `f`.
+   Implementation wraps Clausal-side lists with `tuple(...)` so either
+   `[x]` or `(x,)` works.
 
-3. **Closures and traced values.** Under `jit`, JAX replaces array
-   arguments with abstract tracers. Python closures that capture
-   concrete arrays get "baked in" at trace time. This is JAX
-   semantics, not a wrapper issue — but worth documenting because
-   users may be surprised.
+5. **`vjp_fn` callback from Clausal.** `vjp_value` returns
+   `(primal, vjp_fn)` — `vjp_fn` is a callable that users invoke via
+   `++(vjp_fn(cotangent))`. This is the only predicate that
+   deliberately hands back a closure; the value goes back through
+   `++()` the next time it's applied.
 
-4. **Pytree inputs to `grad`.** `jax.grad(f)` accepts pytree inputs.
-   The Clausal-side dict/list representation works as long as the
-   user's Python lambda expects the same structure. Test with a dict
-   input.
+6. **`jit_compile` returns a callable.** Unlike other transforms,
+   users *do* want the JIT'd function as a value — it's the whole
+   point of the compilation. Invoke via `++(F_JIT(x))`.
 
-5. **`pmap_apply` needs multi-device.** On single-device hosts (CPU,
-   single GPU), `pmap` fails or degenerates. Tests must skip on
-   single-device setups or use `xla_force_host_platform_device_count=8`
-   as in JAX's own testing.
+7. **`pmap_apply` needs multi-device.** On single-device hosts (CPU,
+   single GPU) `pmap` reduces to a degenerate case. Tests currently
+   exercise `vmap_apply` only. Multi-device testing deferred to
+   Phase 13 when `make_mesh` lands.
 
-6. **Reusing a `jit`-compiled callable.** The cache lives on the
-   function object. Repeatedly calling `jit_compile(F, ...)` with the
-   same `F` should return the same cached JIT. JAX handles this —
-   verify.
+8. **Closures baked at trace time.** Under `jit`, Python closures that
+   capture concrete arrays bake in those arrays at trace time — if the
+   captured value changes, re-compile. Standard JAX semantics, not a
+   wrapper concern. Flagged in `docs/jax_transforms.md`.
 
-7. **`grad_value` under backtracking.** If the same call is made
-   multiple times (re-execution on backtracking), `jax.grad(f)` is
-   idempotent — same f, same x, same g. Pure.
+9. **Memory of JAX caches.** `jax.jit` caches compiled programs per
+   function object. Tests compile many one-off lambdas — total memory
+   stays bounded because each lambda's cache is small, but for a
+   long-lived Clausal session users can call
+   `jax.clear_caches()` via `++()` if needed.
 
-8. **Memory of JAX caches.** `jax.jit` caches compiled programs. If
-   tests compile many one-off lambdas, memory grows. Use
-   `jax.clear_caches()` between test suites if this becomes an issue.
+10. **`ShapeDtypeStruct` and `make_jaxpr` return JAX types.** The
+    predicates pass them through unchanged — users poke attributes via
+    `++(SD.shape)` / `++(JP.jaxpr)`. No Clausal-side wrapping; these
+    objects are inspection artifacts, not data.

@@ -28,14 +28,14 @@ shims.
 - [Phase 5 — FFT](phase5_fft.md) ✅ **Implemented**: `fft_transform`, `real_fft`, `fft_shift`, `fft_frequencies` — bijective pairs
 - [Phase 6 — Comparisons and Selection](phase6_comparisons.md) ✅ **Implemented**: `eq`, `gt`, `where`, `allclose`, logical ops, `masked_select`, `take`, `put_along_axis`
 - [Phase 7 — Einsum and Advanced Math](phase7_advanced_math.md) ✅ **Implemented**: `einsum`, `logarithm`, `sine`/`cosine`/`tangent` (bijective), `sqrt`, `pow`, `atan2`, `sinh`/`cosh`/`tanh`, `sigmoid`, `softmax`, `log_softmax`, `logsumexp`, `floor`/`ceil`/`round`/`sign`, `cumsum`, `cumprod`
-- [Phase 8 — Shape Extras](phase8_shape_extras.md) — Planned: `split`, `stack`, `tile`, `flip`, `roll`, `repeat`, `broadcast_to`
-- [Phase 9 — Pytrees](phase9_pytrees.md) — Planned: `leaf/2`, `leaf_with_path/3`, `tree_flatten/3` (bijective), `tree_map`, `tree_structure`
-- [Phase 10 — Neural-Net Activations and Initializers](phase10_nn.md) — Planned: `activation/2` registry, `initializer/2` registry, `init_params`
-- [Phase 11 — jax.scipy Special and Stats](phase11_scipy.md) — Planned: `gamma`, `erf`, `logsumexp`, distribution registry with `pdf`/`cdf`/`logpdf`
-- [Phase 12 — Function Transforms](phase12_transforms.md) — Planned: `grad_value`, `value_and_grad`, `vmap_apply`, `jit_compile`, `jvp`, `vjp`
-- [Phase 13 — Sharding and Devices](phase13_sharding.md) — Planned: device enumeration, `make_mesh`, sharding queries, `device_put`
-- [Phase 14 — Creation Variants and Arithmetic Gaps](phase14_creation_arith.md) — Planned: `zeros_like`, `ones_like`, `full_like`, `sub`, `div`, `neg`, `rand`, `randint`
-- [Phase 15 — Statistics and Selection](phase15_stats_selection.md) — Planned: `median`, `std`, `var`, `argmin`/`argmax`, `sort`, `argsort`, `topk`, `unique`
+- [Phase 8 — Shape Extras](phase8_shape_extras.md) ✅ **Implemented**: `partition` (bidirectional, subsumes `split` + narrow use of `concatenate`), `array_split`, `hsplit`, `vsplit`, `dsplit`, `tile`, `repeat`, `flip` (bidirectional), `roll`, `pad`. Also merges `stack`+`unstack` into the bidirectional `stacked/3` (replacing Phase 1's `stack/3`).
+- [Phase 9 — Pytrees](phase9_pytrees.md) ✅ **Implemented**: `leaf/2`, `leaf_with_path/3`, `tree_flatten/3` (bijective), `tree_structure`, `tree_leaves_list`, `all_leaves`, `treedef_is_leaf`, `tree_map`, `tree_map_n`, `tree_reduce`, `keystr` — in `py.jax_tree`
+- [Phase 10 — Neural-Net Activations and Initializers](phase10_nn.md) ✅ **Implemented**: `activation/2` and `initializer/2` registries, `init_array/4,/5`, applied activations (`relu_apply`, `gelu_apply`, `leaky_relu_apply`, `one_hot`, etc.) — in `py.jax_nn`
+- [Phase 11 — jax.scipy Special and Stats](phase11_scipy.md) ✅ **Implemented**: 22 special functions (`gamma_fn`, `gammaln`, `erf`, `expit`, `i0`, `logsumexp`, `beta_fn`, `polygamma`, …), `distribution/2` registry (23 distributions), and per-method predicates `pdf`/`logpdf`/`cdf`/`logcdf`/`sf`/`logsf`/`ppf`/`pmf`/`logpmf` — in `py.jax_scipy`
+- [Phase 12 — Function Transforms](phase12_transforms.md) ✅ **Implemented**: `grad_value`, `value_and_grad`, `jvp_value`, `vjp_value`, `jacobian`/`jacfwd`/`jacrev`, `hessian`, `vmap_apply`/`pmap_apply`, `jit_compile`, `make_jaxpr`, `eval_shape` — in `py.jax_transforms`
+- [Phase 13 — Sharding and Devices](phase13_sharding.md) ✅ **Implemented**: `jax_device`/`local_device` enumeration, `device_count`/`local_device_count`, `device_id`, `device_platform`, `device_of`, `make_mesh` + mesh inspection, `partition_spec`, `named_sharding`, `single_device_sharding`, `sharding` + `device_put`, check predicates (`is_committed`, `is_fully_addressable`, `is_deleted`) — in `py.jax_sharding`
+- [Phase 14 — Creation Variants and Arithmetic Gaps](phase14_creation_arith.md) ✅ **Implemented**: `zeros_like`, `ones_like`, `full_like`, `empty`, `logspace`, `geomspace`, `meshgrid`, `diag`, `identity`, `sub`, `div`, `floor_div`, `mod`, `neg`, `reciprocal`
+- [Phase 15 — Statistics and Selection](phase15_stats_selection.md) ✅ **Implemented**: `median`, `std`, `var`, `percentile`, `quantile`, `cov`, `corrcoef`, `argmin`, `argmax`, `sort`, `argsort`, `topk`, `nonzero`, `unique`, `argpartition`
 
 ---
 
@@ -133,6 +133,9 @@ describing its distribution across devices. Meshes name logical axes;
 | `jtu.tree_flatten(t)` / `jtu.tree_unflatten(td, ls)` | `tree_flatten(TREE, TREEDEF, LEAVES)` | Strict |
 | `jnp.linalg.inv(A)` | `inv(A, B)` | Self-inverse: `inv(inv(A)) == A` |
 | `arr.T` / `arr.T` | `transpose(A, B)` | Self-inverse |
+| `jnp.flip(a)` / `jnp.flip(a)` | `flip(A, R)` / `flip(A, AXIS, R)` | Self-inverse |
+| `jnp.stack(ls, axis)` / `jnp.unstack(a, axis)` | `stacked(LS, AXIS, A)` | Bidirectional along `AXIS` |
+| `jnp.split(a, n)` / `jnp.concatenate(ls, axis)` | `partition(A, N_OR_IDX, LS)` / `(A, N_OR_IDX, AXIS, LS)` | Bidirectional; `concatenate/3` stays for arbitrary-piece joins |
 | `jr.key(seed)` / `jr.key_data(k)` | `key_bytes(KEY, BYTES)` | Bidirectional |
 
 ### Multi-mode property queries (query or constrain)
@@ -544,7 +547,7 @@ Everything else flows through JAX's native types.
 | `swapaxes` | `/4` | `(+A,+A0,+A1,-A2)` | pure | self-inverse | Swap two axes |
 | `broadcast_to` | `/3` | `(+A,+SHAPE,-A2)` | pure | no | Broadcast to shape |
 | `concatenate` | `/3` | `(+ARRS,+AXIS,-A)` | pure | no | Concatenate |
-| `stack` | `/3` | | pure | with unstack | Stack |
+| `stacked` | `/3` | `(+LS,+AXIS,-A)`, `(-LS,+AXIS,+A)` | pure | bijective | Forward `jnp.stack`, backward `jnp.unstack` |
 
 ### Math
 

@@ -148,11 +148,50 @@ Update `docs/jax.md`.
 
 ## Issues
 
-_To be populated during implementation._
+### 1. `nonzero` returns a tuple of index arrays — NOTED
 
-1. **`nonzero` return type.** `jnp.nonzero(a)` returns a tuple of
-   index arrays (one per dim). Even for 1-d input it's a 1-tuple — tests
-   decompose with `NZ is (I,)`.
-2. **`sort` only returns values.** For values+indices, use
-   `argsort` then `take`.
-3. **`topk` axis limitation.** Only last axis supported natively.
+`jnp.nonzero(a)` returns one 1-D index array per dimension, always
+packaged as a tuple — even a 1-D input gives a 1-tuple. Tests decompose
+with `NZ is (I,)` for 1-D and `NZ is (ROWS, COLS)` for 2-D. Documented
+in `docs/jax.md` "Sorting and selection" table.
+
+### 2. `sort` returns values only — NOTED
+
+Not a bug — `jnp.sort` returns the sorted array. If the caller needs
+indices too, use `argsort` then `take`. The fixture exercises this
+pattern in the "sort and argsort consistent via take" test.
+
+### 3. `topk` is last-axis only — NOTED
+
+`jax.lax.top_k` doesn't accept an axis argument; the plan's `/4` axis
+variant isn't implementable without transposing in the wrapper, which
+would surprise callers who think of `topk` as a cheap primitive. Only
+`/3` is offered. Users transpose around the call when they need a
+different axis. Documented in code and in `docs/jax.md` caveats.
+
+### 4. `topk` returns a list; wrap to tuple for Clausal decomposition — RESOLVED
+
+`jax.lax.top_k` returns `[values, indices]` (a Python list). The
+wrapper wraps with `tuple()` so `RES is (VS, IS)` destructures cleanly.
+The same fix was needed for NumPy-style tuple returns (`slogdet`,
+`svd`, `qr`, `lstsq`).
+
+### 5. `unique` and `nonzero` have data-dependent output shapes — NOTED
+
+Neither is jit-safe. For `nonzero`, `jnp.where(cond, a, 0)` is a
+jit-safe alternative (keeps shape fixed, marks elements). For `unique`,
+there is no direct substitute inside `jit`. Both caveats are in
+`docs/jax.md`.
+
+### 6. `argmin`/`argmax` on empty input raises — NOTED
+
+Inherited from NumPy (`ValueError: attempt to get argmin of an empty
+sequence`). The `_pure` wrapper turns this into predicate failure —
+which is correct behaviour, but callers whose inputs might be empty
+should size-check first.
+
+### 7. `percentile` takes Q ∈ [0, 100]; `quantile` takes Q ∈ [0, 1] — NOTED
+
+NumPy convention. `percentile(A, 50.0, M)` and `quantile(A, 0.5, M)`
+both give the median. Easy to confuse — documented in the Statistics
+table.

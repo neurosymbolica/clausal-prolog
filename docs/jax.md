@@ -15,7 +15,7 @@ state. JAX itself is functional, so the wrapper is a thin shim.
     shape, dtype, device, dim, element_count,
     matmul, dot, add, mul, sum, mean, max, min, clip, abs,
     reshape, squeeze, expand_dims, transpose,
-    swapaxes, moveaxis, concatenate, stack, broadcast_to, astype,
+    swapaxes, moveaxis, concatenate, stacked, broadcast_to, astype,
     at_set, at_add, at_mul, at_min, at_max, at_get,
     jax_numpy, array_list,
     det, slogdet, inv, solve, svd,
@@ -33,6 +33,13 @@ state. JAX itself is functional, so the wrapper is a thin shim.
     sqrt, pow, atan2, sinh, cosh, tanh,
     sigmoid, softmax, log_softmax, logsumexp,
     floor, ceil, round, sign, cumsum, cumprod,
+    partition, array_split, hsplit, vsplit, dsplit,
+    tile, repeat, flip, roll, pad,
+    zeros_like, ones_like, full_like, empty,
+    logspace, geomspace, meshgrid, diag, identity,
+    sub, div, floor_div, mod, neg, reciprocal,
+    median, std, var, percentile, quantile, cov, corrcoef,
+    argmin, argmax, sort, argsort, topk, nonzero, unique, argpartition,
     float32, float64, int32, newaxis
 ])
 ```
@@ -76,6 +83,64 @@ Or set `JAX_ENABLE_X64=1` in the environment before Python starts. See
 [JAX's gotcha
 docs](https://docs.jax.dev/en/latest/notebooks/Common_Gotchas_in_JAX.html#double-64bit-precision)
 for the full story.
+
+---
+
+## Gotcha — predicates that shadow Python builtins
+
+`-import_from(py.jax, [...])` brings predicate objects into the
+importing clause's namespace *by name*. Eight of them have the same
+name as a Python builtin:
+
+| Imported | Shadows | Semantics |
+|---|---|---|
+| `abs` | `builtins.abs` | Element-wise `jnp.abs` |
+| `all` | `builtins.all` | Reduce-to-bool (`jnp.all`) — a **check** predicate, not a value producer |
+| `any` | `builtins.any` | Reduce-to-bool (`jnp.any`) — same |
+| `max` | `builtins.max` | Reduction `jnp.max(a)` / `jnp.max(a, axis=…)` |
+| `min` | `builtins.min` | Reduction `jnp.min(a)` / `jnp.min(a, axis=…)` |
+| `pow` | `builtins.pow` | Element-wise `jnp.power` |
+| `round` | `builtins.round` | Element-wise rounding (half-to-even — NumPy spec) |
+| `sum` | `builtins.sum` | Reduction `jnp.sum(a)` / `jnp.sum(a, axis=…)` |
+
+Only names you **import explicitly** are shadowed — Python code using
+`py.jax` as a module (e.g. `from clausal.modules.py import jax;
+jax.sum(...)`) is unaffected, and clauses that don't `-import_from`
+these names keep the Python builtin.
+
+### Where the trap bites
+
+```clausal
+-import_from(py.jax, [sum])
+
+Test("fragile") <- (
+    sum([1, 2, 3], S)        # py.jax.sum: treats [1,2,3] as a 1-D
+                             # array literal and reduces. S is a JAX
+                             # scalar array (6), *not* the Python int 6.
+    S == 6                   # fails: JAX scalar != Python int
+)
+```
+
+Two distinct surprises:
+
+1. **Input coercion.** JAX will happily arrays-ify a Python list, so
+   the call doesn't error — it just goes through a different code path
+   than you intended.
+2. **Result type.** Reductions return JAX *arrays* (even if 0-D), not
+   Python scalars. Unify with `array_list(S, 6)` or compare via
+   `allclose/2`, not direct `==`.
+
+### Mixing with the Python builtin
+
+If you genuinely need Python's `sum` / `max` / etc. in the same clause:
+
+- Don't import the JAX name: `-import_from(py.jax, [mean, std])` and
+  call `++(sum(list))` when you want Python's reduction.
+- Or escape explicitly: `S is ++(sum([1, 2, 3]))`.
+
+The shadowing is the whole point of `-import_from` — not a bug — but
+worth knowing about when you write a clause that thinks it's acting on
+a Python list but ends up in JAX.
 
 ---
 
@@ -151,6 +216,110 @@ eye(N, M, OPTS, A)
 
 Identity matrix, square (`N` × `N`) or rectangular (`N` × `M`).
 
+### zeros_like, ones_like, full_like
+
+```clausal
+zeros_like(A, R)
+ones_like(A, R)
+full_like(A, VALUE, R)
+```
+
+Construct a new array matching the shape *and* dtype of `A`. `full_like`
+takes a scalar fill value.
+
+```clausal
+ones([3, 4], A), zeros_like(A, Z)        # Z has shape [3, 4], dtype float32
+ones([2], {"dtype": int32}, A),
+  zeros_like(A, Z), dtype(Z, int32)      # dtype is preserved
+```
+
+### empty
+
+```clausal
+empty(SHAPE, A)
+empty(SHAPE, OPTS, A)
+```
+
+Allocate an array of the given shape. **Caveat:** JAX cannot expose
+uninitialised accelerator memory, so `empty` returns zeros. The
+predicate exists for API symmetry with NumPy and PyTorch — prefer
+`zeros` when the zero-fill matters semantically.
+
+### logspace, geomspace
+
+```clausal
+logspace(START, END, STEPS, A)
+logspace(START, END, STEPS, OPTS, A)
+geomspace(START, END, STEPS, A)
+geomspace(START, END, STEPS, OPTS, A)
+```
+
+`logspace` returns values evenly spaced on a **log scale** between
+`base**START` and `base**END` (default base = 10). `geomspace` returns
+`STEPS` values in a **geometric progression** from `START` to `END`.
+
+```clausal
+logspace(0.0, 2.0, 3, A)                 # [1.0, 10.0, 100.0]
+logspace(0.0, 3.0, 4, {"base": 2.0}, A)  # [1.0, 2.0, 4.0, 8.0]
+geomspace(1.0, 1000.0, 4, A)             # [1.0, 10.0, 100.0, 1000.0]
+```
+
+### meshgrid
+
+```clausal
+meshgrid(ARRS, MESH)
+meshgrid(ARRS, OPTS, MESH)
+```
+
+Build coordinate arrays from 1-D input vectors. `ARRS` is a list of
+input arrays, `MESH` is a list of output coordinate arrays (one per
+input). Pass `{"indexing": "ij"}` for matrix-layout axes (default is
+`"xy"`).
+
+```clausal
+array([1.0, 2.0, 3.0], X),
+array([4.0, 5.0], Y),
+meshgrid([X, Y], [XX, YY]),
+shape(XX, [2, 3])                        # xy default: Y broadcast first
+
+meshgrid([X, Y], {"indexing": "ij"}, [XX, YY]),
+shape(XX, [3, 2])                        # ij: X broadcast first
+```
+
+### diag
+
+```clausal
+diag(A, R)
+diag(A, K, R)
+```
+
+Input-polymorphic — **not** bijective:
+
+- 1-D `A` → 2-D diagonal matrix with `A` on the main diagonal.
+- 2-D `A` → 1-D vector of the main diagonal of `A`.
+
+`K` offsets the diagonal (`K > 0` picks a super-diagonal; `K < 0` a
+sub-diagonal). You bind the input; the output direction follows the
+input's dimensionality. Use `array_list` in tests rather than trying
+to round-trip through a bound output.
+
+```clausal
+array([1, 2, 3], V), diag(V, M), shape(M, [3, 3])   # create
+array([[1, 2], [3, 4]], M), diag(M, V)              # extract → [1, 4]
+array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], M),
+  diag(M, 1, V)                                      # → [2, 6]
+```
+
+### identity
+
+```clausal
+identity(N, A)
+identity(N, OPTS, A)
+```
+
+Square identity matrix of side `N`. Equivalent to `eye(N, A)`; exposed
+for NumPy/JAX naming symmetry.
+
 ---
 
 ## Array Properties (Multi-Mode)
@@ -211,7 +380,13 @@ element_count(A, N)   # total number of elements (size)
 | `matmul(A, B, C)` | Matrix multiply |
 | `dot(A, B, C)` | Dot product |
 | `add(A, B, C)` | Element-wise add |
+| `sub(A, B, C)` | Element-wise subtract |
 | `mul(A, B, C)` | Element-wise multiply |
+| `div(A, B, C)` | Element-wise true divide (integer operands promote to float) |
+| `floor_div(A, B, C)` | Element-wise floor divide |
+| `mod(A, B, C)` | Element-wise remainder |
+| `neg(A, R)` | Negate |
+| `reciprocal(A, R)` | `1 / A` |
 | `sum(A, S)` / `sum(A, AXIS, S)` | Sum, optionally along an axis |
 | `mean(A, M)` / `mean(A, AXIS, M)` | Mean |
 | `max(A, M)` / `max(A, AXIS, M)` | Max |
@@ -237,7 +412,7 @@ sum(T, 0, S)                        # S = [4.0, 6.0]
 | `swapaxes(A, I, J, A2)` | Swap two axes |
 | `moveaxis(A, SRC, DEST, A2)` | Move one axis |
 | `concatenate(ARRS, AXIS, A)` | Concat along existing axis |
-| `stack(ARRS, AXIS, A)` | Stack along a new axis |
+| `stacked(LS, AXIS, A)` | Bidirectional: `A` is `LS` stacked along `AXIS`. Forward `jnp.stack`; backward `jnp.unstack` (requires JAX ≥ 0.4.28) |
 | `broadcast_to(A, SHAPE, A2)` | Broadcast to a target shape |
 | `astype(A, DTYPE, A2)` | Cast to a new dtype |
 
@@ -250,6 +425,173 @@ expand_dims(A2, 1, A3), shape(A3, [3, 1, 4])
 ```
 
 `transpose` is self-inverse on 2-D arrays (no-axes form).
+
+---
+
+## Shape Extras
+
+Additional shape-manipulating predicates beyond the core set. All are
+pure. `partition`, `array_split`, and the `hsplit`/`vsplit`/`dsplit`
+trio return a **list** of arrays (JAX's `jnp.split` returns a tuple;
+the wrapper unwraps it so `length/2` and list-pattern matching work
+directly).
+
+| Predicate | Semantics |
+|---|---|
+| `partition(A, N_OR_IDX, LS)` / `(A, N_OR_IDX, AXIS, LS)` | Bidirectional: forward `jnp.split`, backward `jnp.concatenate`. "LS is the partition of A at N_OR_IDX along AXIS" |
+| `array_split(A, N_OR_IDX, LS)` / `(A, N_OR_IDX, AXIS, LS)` | Like `partition` forward but tolerates uneven division (forward-only) |
+| `hsplit(A, N, LS)` | Column-wise split (axis 1) |
+| `vsplit(A, N, LS)` | Row-wise split (axis 0) |
+| `dsplit(A, N, LS)` | Depth-wise split (axis 2) |
+| `tile(A, REPS, R)` | Replicate `A` across axes |
+| `repeat(A, REPS, AXIS, R)` | Repeat elements along `AXIS` |
+| `flip(A, R)` / `flip(A, AXIS, R)` | Bidirectional self-inverse reversal along `AXIS` (int or tuple); no-axis form reverses every axis |
+| `roll(A, SHIFTS, R)` / `roll(A, SHIFTS, AXIS, R)` | Cyclic shift |
+| `pad(A, PAD_WIDTH, R)` / `pad(A, PAD_WIDTH, MODE, R)` | Pad an array; `MODE` is a JAX/NumPy mode string |
+
+`partition` collapses the `split` + `concatenate` pair into a single
+bidirectional noun predicate. Forward mode splits, backward mode
+concatenates:
+
+```clausal
+Test("partition forward") <- (
+    arange(0, 6, A),
+    partition(A, 3, [P0, P1, P2]),          # LS bound by forward
+    array_list(P0, [0, 1])
+)
+
+Test("partition backward") <- (
+    array([0, 1], P0), array([2, 3], P1), array([4, 5], P2),
+    partition(A, 3, [P0, P1, P2]),          # A bound by backward
+    array_list(A, [0, 1, 2, 3, 4, 5])
+)
+```
+
+`concatenate/3` is still available as a separate forward-only predicate
+for joining arbitrary-sized pieces — `partition`'s backward direction
+only covers the narrower case where LS is a valid split of A.
+
+`stacked/3` is the declarative form of `stack` + `unstack`. It reads
+"A is LS stacked along AXIS" and runs in either direction depending on
+which side is bound:
+
+```clausal
+Test("stacked forward") <- (
+    zeros([3], Z), ones([3], O),
+    stacked([Z, O], 0, A),             # A has shape [2, 3]
+    shape(A, [2, 3])
+)
+
+Test("stacked backward") <- (
+    array([[1, 2], [3, 4], [5, 6]], A),
+    stacked([R0, R1, R2], 0, A),
+    array_list(R0, [1, 2])             # R1 = [3,4], R2 = [5,6]
+)
+```
+
+This subsumes the older forward-only `stack/3` and `unstack/3`
+predicates; neither is exported any more.
+
+### `partition` vs `array_split`
+
+`partition(A, N, LS)` forward mode raises (and therefore fails the
+predicate) when `A`'s length along the axis doesn't divide evenly by
+`N`. `array_split` accepts uneven divisions — earlier pieces get one
+extra element:
+
+```clausal
+Test("array_split uneven") <- (
+    arange(0, 7, A),
+    array_split(A, 3, LS),
+    length(LS, 3)                       # pieces are [0,1,2], [3,4], [5,6]
+)
+```
+
+Both forms also accept a list of indices in place of `N`:
+
+```clausal
+Test("partition by indices") <- (
+    arange(0, 10, A),
+    partition(A, [3, 7], [P0, P1, P2])  # [0..2], [3..6], [7..9]
+)
+```
+
+### `flip` and `roll` axis arguments
+
+`flip` and `roll` accept either a single int axis or a tuple of axes.
+A plain Clausal list works too — `_deep_deref` passes it through to JAX,
+which treats it as an iterable of axes:
+
+```clausal
+Test("flip with tuple axes") <- (
+    array([[1, 2], [3, 4]], A),
+    flip(A, (0, 1), R)                  # reverse both rows and columns
+)
+```
+
+`flip` is self-inverse and wired bidirectionally — either A or R may
+be bound. `flip/2` (no axis) reverses **every** axis; same shorthand
+as passing a tuple of all axes:
+
+```clausal
+Test("flip/2 bidirectional") <- (
+    array([[1, 2, 3], [4, 5, 6]], A),
+    flip(A, R),                         # forward: R = [[6,5,4], [3,2,1]]
+    flip(A2, R)                         # backward: A2 equals A
+)
+```
+
+`roll/3` (no axis) has a surprise: on multi-dim arrays it **flattens**,
+rolls the flat sequence, then reshapes back. This is `jnp.roll`'s own
+behaviour, not an artefact of the wrapper. Use `roll/4` with an
+explicit axis when you want per-axis rolling:
+
+```clausal
+Test("roll/3 vs roll/4 on 2d") <- (
+    array([[0, 1, 2], [3, 4, 5]], A),
+    roll(A, 1, R),                      # R = [[5,0,1], [2,3,4]] — flat
+    roll(A, 1, 0, R2)                   # R2 = [[3,4,5], [0,1,2]] — axis 0
+)
+```
+
+### `repeat` requires an explicit axis
+
+`repeat/4` takes the axis as a mandatory int. `jnp.repeat` without an
+axis flattens first — a different operation that would need its own
+predicate. In practice, compose with `reshape/3` or `ravel` when you
+want that:
+
+```clausal
+Test("flatten-then-repeat via reshape") <- (
+    array([[1, 2], [3, 4]], A),
+    reshape(A, [4], A1),                # [1, 2, 3, 4]
+    repeat(A1, 2, 0, R)                 # [1,1,2,2,3,3,4,4]
+)
+```
+
+### Minimum JAX version for `stacked` backward mode
+
+`jnp.unstack` — the function that implements `stacked/3`'s backward
+direction — was added in JAX 0.4.28. Older installs will fail with
+`AttributeError` the first time `stacked(LS, AXIS, A)` is run with `A`
+bound. The forward direction (`jnp.stack`) works on any modern JAX.
+
+### `pad` modes
+
+`MODE` is a string matching NumPy / JAX's `numpy.pad` modes:
+`"constant"` (zeros — the default when `MODE` is omitted), `"edge"`,
+`"reflect"`, `"symmetric"`, `"wrap"`, `"maximum"`, `"minimum"`,
+`"mean"`, `"median"`. `PAD_WIDTH` may be an int, a `(before, after)`
+pair, or a per-axis list/tuple of pairs:
+
+```clausal
+Test("pad modes") <- (
+    array([1, 2, 3], A),
+    pad(A, [1, 2], R),                  # [0,1,2,3,0,0] (constant is default)
+    pad(A, [1, 2], "edge", R2),         # [1,1,2,3,3,3]
+    pad(A, [2, 2], "reflect", R3)       # reflect uses interior as mirror
+)
+```
 
 ---
 
@@ -717,15 +1059,86 @@ Test("softmax sums to 1 along axis") <- (
   produces a float result; `pow` with integer exponents returns floats
   when the base is float.
 - **Out-of-domain NaN.** `sqrt(-1)`, `logarithm(-1, _)`, `arcsin(2)` and
-  similar all return `nan` without raising. Test with `all_finite` (once
-  Phase 15 lands) or an explicit range check.
+  similar all return `nan` without raising. Use an explicit range check
+  before calling, or `allclose(R, R)` to detect a NaN (NaN ≠ NaN) if you
+  only need a detection signal.
 - **`round` is half-to-even.** JAX follows NumPy's banker's rounding:
   `round(0.5) == 0`, `round(1.5) == 2`. Not a bug — a spec match.
-- **`round` shadows Python's builtin.** Module-scoped import prevents
-  collision in user code; the module name can't also serve as the
-  builtin.
+- **`round`, `pow`, `sum`, `any`, `all`, `abs`, `max`, `min` shadow
+  Python builtins.** See the [shadowed-builtin gotcha
+  section](#gotcha--predicates-that-shadow-python-builtins) above —
+  easy to write a clause that thinks it's reducing a Python list but
+  is actually building a 0-D JAX array.
 
 See the [Phase 7 implementation plan](../implementation_plans/jax/phase7_advanced_math.md)
+for the predicate catalogue and design notes.
+
+---
+
+## Statistics and Selection
+
+Axis-aware statistical reductions and sort/selection utilities. All
+pure.
+
+### Statistical reductions
+
+| Predicate | Semantics |
+|---|---|
+| `median(A, R)` / `median(A, AXIS, R)` | Median |
+| `std(A, R)` / `std(A, AXIS, R)` | Standard deviation |
+| `var(A, R)` / `var(A, AXIS, R)` | Variance |
+| `percentile(A, Q, R)` / `percentile(A, Q, AXIS, R)` | `Q` ∈ `[0, 100]` (NumPy convention) |
+| `quantile(A, Q, R)` / `quantile(A, Q, AXIS, R)` | `Q` ∈ `[0, 1]` |
+| `cov(A, R)` | Covariance matrix (rows as variables) |
+| `corrcoef(A, R)` | Correlation coefficient matrix |
+
+```clausal
+array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
+median(T, 1, M)                              # M = [2.0, 5.0]
+percentile(T, 25.0, 1, P)                    # P = [1.5, 4.5]
+```
+
+### Sorting and selection
+
+| Predicate | Semantics |
+|---|---|
+| `argmin(A, I)` / `argmin(A, AXIS, I)` | Index of minimum |
+| `argmax(A, I)` / `argmax(A, AXIS, I)` | Index of maximum |
+| `sort(A, R)` / `sort(A, AXIS, R)` | Sorted **values** (no indices) |
+| `argsort(A, I)` / `argsort(A, AXIS, I)` | Indices that would sort `A` |
+| `topk(A, K, (VALUES, INDICES))` | `jax.lax.top_k` — last axis only |
+| `nonzero(A, (I_1, ..., I_N))` | One index array per dim (always a tuple) |
+| `unique(A, R)` | Sorted unique values |
+| `argpartition(A, KTH, R)` | Indices such that `A[R[KTH]]` sits at its sorted position |
+
+```clausal
+array([3.0, 1.0, 4.0, 1.0, 5.0], A),
+sort(A, SORTED),                             # SORTED = [1,1,3,4,5]
+argsort(A, IDX),                             # IDX = [1,3,0,2,4]
+take(A, IDX, 0, VIA_IDX)                     # VIA_IDX == SORTED
+```
+
+`topk` packs its output into a tuple so Clausal's `RES is (VS, IS)`
+pattern extracts both values and indices:
+
+```clausal
+topk(A, 2, RES),
+RES is (VS, IS)                              # VS = top-2 values, IS = their indices
+```
+
+### Caveats
+
+- **`topk` is last-axis only.** `jax.lax.top_k` doesn't accept an axis
+  argument. Transpose before/after if you need another axis.
+- **`nonzero` output shape is data-dependent.** Not jit-safe. For a
+  jit-safe alternative use `where(cond, a, 0)` to keep shape fixed.
+- **`unique` output shape is data-dependent.** Same jit caveat.
+- **`sort` returns values only.** Use `argsort` + `take` if you also
+  need the permutation.
+- **`argmin` / `argmax` on empty input raise.** JAX inherits NumPy's
+  behaviour — wrap in a size check if input may be empty.
+
+See the [Phase 15 implementation plan](../implementation_plans/jax/phase15_stats_selection.md)
 for the predicate catalogue and design notes.
 
 ---

@@ -61,43 +61,24 @@ hits it. No code change required to ship Phases 8+.
 
 ---
 
-## 2. `logsumexp` placement vs. Phase 11
+## 2. `logsumexp` placement vs. Phase 11 — RESOLVED (2026-04-21)
 
-**Current state:** `logsumexp/3` is in `py.jax` (Phase 7), backed by
-`jax.scipy.special.logsumexp` via a lazy `_jss()` accessor.
+**Final state:** the canonical `logsumexp` lives in
+`clausal/modules/py/jax.py` (Phase 7), with arities `/2` (full reduce)
+and `/3` (along AXIS). `clausal/modules/py/jax_scipy.py` imports it
+via `from clausal.modules.py.jax import logsumexp as _jax_logsumexp`
+and assigns `logsumexp = _jax_logsumexp`, so
+`py.jax.logsumexp is py.jax_scipy.logsumexp` — one implementation,
+reachable from either import path. Drift is impossible without touching
+both files in the same commit.
 
-**Plan assumption:** Phase 11 (`jax.scipy` wrapper — `phase11_scipy.md`)
-is supposed to cover `jax.scipy.special` and `jax.scipy.stats`.
-`logsumexp` is the natural flagship entry for `py.jax_scipy`.
+Import direction is `py.jax_scipy → py.jax`, matching the existing
+`_ensure_jax` import. No cycle.
 
-### Risk
-
-When Phase 11 lands, the obvious thing is to re-implement `logsumexp`
-in `clausal/modules/py/jax_scipy.py`. If that re-implementation drifts
-from the Phase 7 version (different kwargs, different arity), we end up
-with two predicates named `logsumexp` that behave differently depending
-on which module the user imports from.
-
-### What to do in Phase 11
-
-Pick **one** of:
-
-- **Re-export.** `py.jax_scipy` imports `logsumexp` from `py.jax` and
-  re-exports. Single implementation; users can import from either
-  module. Simplest.
-- **Move and re-export the other direction.** Move the implementation to
-  `py.jax_scipy`, have `py.jax` import from it. Slightly more natural
-  ordering (scipy lives in its own module) but means `py.jax` depends
-  on `py.jax_scipy`.
-- **Delete from `py.jax`.** Keep only the `py.jax_scipy` version. A
-  breaking change for anyone who imported it from `py.jax` — which
-  right now is only the Phase 7 test fixture, so easy to update.
-
-### Recommendation
-
-Re-export from `py.jax_scipy` (`py.jax_scipy.logsumexp is
-py.jax.logsumexp`). Matches how dtype constants are re-exported from
-`py.jax`.
+All 508 jax tests pass against the aliased version
+(`tests/test_jax_infra.py`), including both the Phase 7 fixture
+(imports from `py.jax`) and the Phase 11 fixture (imports from
+`py.jax_scipy`).
 
 ---
 
@@ -129,42 +110,66 @@ sweep.
 
 ---
 
-## 4. Python-builtin shadowing list is growing
+## 4. Python-builtin shadowing list — RESOLVED (Phase 15)
 
-**Current shadowed names** at the `py.jax` module level (via
-`-import_from`):
+**Final shadowed set** at the `py.jax` module level (enumerated against
+`builtins` after the full 15-phase rollout):
 
-- `sum`, `mean`, `max`, `min`, `abs`, `clip` — Phase 1
-- `any`, `all` — Phase 6
-- `round`, `pow` — Phase 7
+`abs`, `all`, `any`, `max`, `min`, `pow`, `round`, `sum`.
+
+Phase 14 and Phase 15 introduced no new shadows (`sub`, `div`,
+`floor_div`, `mod`, `neg`, `reciprocal`, `median`, `std`, `var`,
+`argmin`, `argmax`, `sort`, `argsort`, `topk`, `nonzero`, `unique`,
+`argpartition` — none are Python builtins). The submodules
+(`jax_random`, `jax_nn`, `jax_scipy`, `jax_tree`, `jax_transforms`,
+`jax_sharding`) shadow nothing.
+
+**Resolution:** documented in `docs/jax.md` under
+"Gotcha — predicates that shadow Python builtins", including the
+JAX-coerces-Python-lists trap and how to mix in Python's builtin
+`sum`/`max` when needed. The Advanced Math caveat that referenced only
+`round` now links to the central section.
+
+The original preamble is kept below for historical context.
+
+### Original preamble
 
 These only shadow inside Clausal code that imports them. Python code
 using `py.jax` as a module (`from clausal.modules.py import jax`)
 is unaffected — `jax.sum` is a `ModulePredicate`, not the builtin.
+The shadowing is the whole point of `-import_from`, not a bug.
 
-### When it bites
+---
 
-Clausal user writes, in a `.clausal` file:
+## 5. `*_like` predicates don't accept opts
 
-```
--import_from(py.jax, [sum, round])
-Test("range sum") <- (
-    sum([1, 2, 3], S),          # py.jax.sum — array reducer, not Python's!
-    round(3.7, R)               # py.jax.round — array rounder
+**Affects:** `zeros_like/2`, `ones_like/2`, `full_like/3` (Phase 14).
+
+**Current state:** each wraps the corresponding `jnp.*_like` with no opts
+arity, mirroring the PyTorch Phase 13 shape of the plan.
+
+**Gap:** JAX's `jnp.zeros_like(a, dtype=None, shape=None, device=None)`
+accepts kwargs that let a caller reuse the template array's shape while
+overriding its dtype (or vice versa). Clausal users who want "same
+shape as A but float64" currently have to escape to `++()`.
+
+### Fix when it matters
+
+Add a higher-arity variant with opts, same pattern as `zeros/3` and
+`ones/3`:
+
+```python
+zeros_like = _pred("zeros_like",
+    (2, _pure(lambda a: _jnp_mod().zeros_like(a))),
+    (3, _pure(lambda a, opts: _jnp_mod().zeros_like(a, **opts))),
 )
 ```
 
-`sum([1, 2, 3], _)` will actually work because JAX happily arrays-ifies
-Python lists. But the semantics is "reduce this array", not "add these
-numbers" — a subtle semantic trap when users think they're calling
-Python's `sum`.
+`full_like` would gain a `/4` variant `(+A, +VALUE, +OPTS, -R)`.
 
-### Disposition
-
-**Not a bug.** The shadowing is the whole point of `-import_from`.
-Worth a docs bullet in `docs/jax.md` listing the full shadow set so
-users know what they're importing. Deferred until the list stabilizes
-at the end of the phase rollout.
+Tiny, non-breaking. Wait for the first caller who asks — the opts path
+is a nice-to-have, not a gap the typical "build a zeroed params tree"
+user runs into.
 
 ---
 
@@ -173,6 +178,7 @@ at the end of the phase rollout.
 | # | Item | Severity | Action |
 |---|---|---|---|
 | 1 | `_bidir_2` float check fragility | Low | Docs note this quarter; revisit if a caller hits it |
-| 2 | `logsumexp` placement for Phase 11 | Low | Decide at Phase 11 start; re-export preferred |
+| 2 | `logsumexp` placement for Phase 11 | Resolved | ✅ Aliased: `py.jax_scipy.logsumexp is py.jax.logsumexp` (2026-04-21) |
 | 3 | Partial-bijection NaN silence | Low | Add regression tests next time we touch Phase 7 predicates |
-| 4 | Shadowed-builtin docs bullet | Low | Write at end of phase rollout (Phases 14/15) |
+| 4 | Shadowed-builtin docs bullet | Resolved | ✅ Docs section added post-Phase-15 (2026-04-21) |
+| 5 | `*_like` predicates lack opts arity | Low | Add when a caller wants dtype override without `++()` |

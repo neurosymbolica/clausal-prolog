@@ -8,7 +8,7 @@ for use in .clausal files via::
                           matmul, dot, add, mul, sum, mean, max, min,
                           clip, abs,
                           reshape, squeeze, expand_dims, transpose,
-                          swapaxes, moveaxis, concatenate, stack,
+                          swapaxes, moveaxis, concatenate, stacked,
                           broadcast_to, astype,
                           at_set, at_add, at_mul, at_min, at_max, at_get,
                           jax_numpy, array_list,
@@ -27,6 +27,15 @@ for use in .clausal files via::
                           sqrt, pow, atan2, sinh, cosh, tanh,
                           sigmoid, softmax, log_softmax, logsumexp,
                           floor, ceil, round, sign, cumsum, cumprod,
+                          partition, array_split, hsplit, vsplit, dsplit,
+                          tile, repeat, flip, roll, pad,
+                          zeros_like, ones_like, full_like, empty,
+                          logspace, geomspace, meshgrid, diag, identity,
+                          sub, div, floor_div, mod, neg, reciprocal,
+                          median, std, var, percentile, quantile,
+                          cov, corrcoef,
+                          argmin, argmax, sort, argsort, topk,
+                          nonzero, unique, argpartition,
                           float32, float64, int32, newaxis])
 
 Phase 1 — Array Core
@@ -69,7 +78,10 @@ Shape operations:
     swapaxes(A, A0, A1, A2)         Swap two axes
     moveaxis(A, SRC, DEST, A2)      Move an axis
     concatenate(ARRS, AXIS, A)      Concatenate
-    stack(ARRS, AXIS, A)            Stack along new axis
+    stacked(LS, AXIS, A)            Bidirectional: A is LS stacked along AXIS
+                                    (forward uses jnp.stack, backward uses
+                                    jnp.unstack — subsumes the old stack/3
+                                    and unstack/3)
     broadcast_to(A, SHAPE, A2)      Broadcast to shape
     astype(A, DTYPE, A2)            Cast to dtype
 
@@ -144,6 +156,80 @@ Einsum and advanced math (Phase 7):
     cumsum(A, AXIS, R)         Cumulative sum along AXIS
     cumprod(A, AXIS, R)        Cumulative product along AXIS
 
+Creation variants (Phase 14):
+    zeros_like(A, R) / ones_like(A, R) / full_like(A, VALUE, R)
+                              New array matching shape/dtype of A
+    empty(SHAPE, A)  /  empty(SHAPE, OPTS, A)
+                              Caveat: JAX's empty returns zeros — no
+                              uninitialised memory exposed by the
+                              accelerator runtime
+    logspace(START, END, STEPS, A)  /  logspace(..., OPTS, A)
+    geomspace(START, END, STEPS, A) / geomspace(..., OPTS, A)
+                              Log- and geometric-spaced ranges
+    meshgrid(ARRS, MESH)   /  meshgrid(ARRS, OPTS, MESH)
+                              Coordinate arrays; OPTS pass `indexing`
+                              ("xy" default, "ij" for matrix layout)
+    diag(A, R)  /  diag(A, K, R)
+                              1-D input → 2-D diagonal matrix; 2-D
+                              input → diagonal vector. Input-polymorphic
+                              (not bijective).
+    identity(N, A)  /  identity(N, OPTS, A)
+                              Square identity (alias for eye/2)
+
+Arithmetic gaps (Phase 14):
+    sub(A, B, C)              Element-wise subtract
+    div(A, B, C)              Element-wise true divide
+    floor_div(A, B, C)        Element-wise floor divide
+    mod(A, B, C)              Element-wise remainder
+    neg(A, R)                 Negate
+    reciprocal(A, R)          1 / A
+
+Statistics (Phase 15):
+    median(A, R)    /  median(A, AXIS, R)
+    std(A, R)       /  std(A, AXIS, R)
+    var(A, R)       /  var(A, AXIS, R)
+    percentile(A, Q, R)  /  percentile(A, Q, AXIS, R)
+                              Q in [0, 100] (numpy-style)
+    quantile(A, Q, R)    /  quantile(A, Q, AXIS, R)
+                              Q in [0, 1]
+    cov(A, R)                 Covariance matrix (rows as variables)
+    corrcoef(A, R)            Correlation coefficient matrix
+
+Selection and sorting (Phase 15):
+    argmin(A, I)    /  argmin(A, AXIS, I)
+    argmax(A, I)    /  argmax(A, AXIS, I)
+    sort(A, R)      /  sort(A, AXIS, R)   Returns sorted values only
+    argsort(A, I)   /  argsort(A, AXIS, I)
+    topk(A, K, (VALUES, INDICES))  jax.lax.top_k — last axis only
+    nonzero(A, IS)            1-tuple of index arrays (per dim)
+    unique(A, R)              Sorted unique values — variable shape,
+                              not jit-safe
+    argpartition(A, KTH, R)   Indices of K-th smallest partition
+
+Shape extras (Phase 8):
+    partition(A, N_OR_IDX, LS)  / partition(A, N_OR_IDX, AXIS, LS)
+                                   Bidirectional: forward uses jnp.split,
+                                   backward uses jnp.concatenate. "LS is
+                                   the partition of A at N_OR_IDX along
+                                   AXIS."
+    array_split(A, N_OR_IDX, LS)  / array_split(A, N_OR_IDX, AXIS, LS)
+                                   jnp.array_split (uneven OK)
+    hsplit(A, N, LS)           Horizontal split
+    vsplit(A, N, LS)           Vertical split
+    dsplit(A, N, LS)           Depth split
+    tile(A, REPS, R)           Tile array
+    repeat(A, REPS, AXIS, R)   Repeat elements along AXIS
+    flip(A, R)  / flip(A, AXIS, R)
+                                   Bidirectional self-inverse: flip along
+                                   AXIS (int or tuple); no-axis form
+                                   reverses every axis
+    roll(A, SHIFTS, R)  / roll(A, SHIFTS, AXIS, R)
+                                   Roll elements; no-axis form flattens,
+                                   rolls, and reshapes back
+    pad(A, PAD_WIDTH, R)  / pad(A, PAD_WIDTH, MODE, R)
+                                   Pad array; MODE is a string atom
+                                   ("constant", "edge", "reflect", ...)
+
 FFT (jnp.fft) — bijective pairs exposed as single multi-mode predicates:
     fft_transform(T, F) / fft_transform(T, AXIS, F)
                               Complex FFT (fft <-> ifft)
@@ -195,7 +281,7 @@ from __future__ import annotations
 import threading as _threading
 
 from clausal.modules.py._helpers import (
-    _pred, _pure, _property_2, _bidir_2, _bidir_3_mid,
+    _pred, _pure, _property_2, _bidir_2, _bidir_3_mid, _bidir_4_mid2,
     _check_2, _check_4, _check_1, _check_axis_1,
 )
 
@@ -396,8 +482,15 @@ concatenate = _pred("concatenate",
     (3, _pure(lambda arrs, axis: _jnp_mod().concatenate(arrs, axis=int(axis)))),
 )
 
-stack = _pred("stack",
-    (3, _pure(lambda arrs, axis: _jnp_mod().stack(arrs, axis=int(axis)))),
+# stack + unstack are a clean bijection given AXIS — collapsed into a
+# single noun predicate `stacked(LS, AXIS, A)` ("A is LS stacked along
+# AXIS"). Forward binds A from LS; backward binds LS from A. Data is only
+# shuffled, so the roundtrip is bit-exact for any dtype.
+stacked = _pred("stacked",
+    (3, _bidir_3_mid(
+        lambda ls, axis: _jnp_mod().stack(ls, axis=int(axis)),
+        lambda a, axis: list(_jnp_mod().unstack(a, axis=int(axis))),
+    )),
 )
 
 broadcast_to = _pred("broadcast_to",
@@ -849,6 +942,7 @@ log_softmax = _pred("log_softmax",
 )
 
 logsumexp = _pred("logsumexp",
+    (2, _pure(lambda a: _jss().logsumexp(a))),
     (3, _pure(lambda a, axis: _jss().logsumexp(a, axis=int(axis)))),
 )
 
@@ -875,6 +969,303 @@ cumsum = _pred("cumsum",
 
 cumprod = _pred("cumprod",
     (3, _pure(lambda a, axis: _jnp_mod().cumprod(a, axis=int(axis)))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Shape Extras (Phase 8)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Additional shape operations beyond Phase 1: partition, tile, flip,
+# roll, repeat, pad. All pure.
+#
+# Each splitter returns a list (jnp.split returns a tuple, but Clausal
+# pattern-matching and findall want plain lists). Splits that would be
+# empty (e.g. split an N-element 1-D array into N) still yield N arrays.
+#
+# partition/3,/4 is bidirectional — backward direction concatenates LS
+# to recover A. array_split tolerates uneven divisors where split would
+# raise. hsplit / vsplit / dsplit specialise to axis=1 / axis=0 / axis=2
+# respectively; all three are forward-only.
+#
+# flip is self-inverse: flipping twice recovers the original. Wrapped
+# bidirectionally so either side of `flip(A, AXIS, R)` may be bound.
+#
+# roll accepts either an int shift/axis or a tuple — pass through
+# without int() coercion.
+#
+# pad's MODE arg is the JAX/NumPy string constant ("constant", "edge",
+# "reflect", "symmetric", "wrap", ...). With no MODE, numpy.pad's default
+# is "constant" (zeros).
+
+# partition/3,/4 — bidirectional noun for the split + concatenate pair.
+# Forward uses `jnp.split` (A split by N_OR_IDX into LS along AXIS);
+# backward uses `jnp.concatenate` (LS joined along AXIS to produce A).
+# N_OR_IDX is redundant for computing A in the backward direction but is
+# accepted as part of the predicate signature — its consistency with LS
+# is not explicitly verified here (pass it through to keep the forward
+# and backward modes symmetric).
+#
+# `partition` only covers the slice of `concatenate`'s surface that
+# corresponds to splits — `concatenate/3` is kept separately for joining
+# arbitrary-sized pieces. `array_split`, `hsplit`/`vsplit`/`dsplit`
+# stay forward-only; they cover non-trivially-invertible cases or are
+# axis-specialised.
+partition = _pred("partition",
+    (3, _bidir_3_mid(
+        lambda a, n: list(_jnp_mod().split(a, n)),
+        lambda ls, _n: _jnp_mod().concatenate(ls, axis=0),
+    )),
+    (4, _bidir_4_mid2(
+        lambda a, n, axis: list(_jnp_mod().split(a, n, axis=int(axis))),
+        lambda ls, _n, axis: _jnp_mod().concatenate(ls, axis=int(axis)),
+    )),
+)
+
+array_split = _pred("array_split",
+    (3, _pure(lambda a, n: list(_jnp_mod().array_split(a, n)))),
+    (4, _pure(lambda a, n, axis: list(_jnp_mod().array_split(a, n, axis=int(axis))))),
+)
+
+hsplit = _pred("hsplit",
+    (3, _pure(lambda a, n: list(_jnp_mod().hsplit(a, n)))),
+)
+
+vsplit = _pred("vsplit",
+    (3, _pure(lambda a, n: list(_jnp_mod().vsplit(a, n)))),
+)
+
+dsplit = _pred("dsplit",
+    (3, _pure(lambda a, n: list(_jnp_mod().dsplit(a, n)))),
+)
+
+tile = _pred("tile",
+    (3, _pure(lambda a, reps: _jnp_mod().tile(a, reps))),
+)
+
+repeat = _pred("repeat",
+    (4, _pure(lambda a, reps, axis: _jnp_mod().repeat(a, reps, axis=int(axis)))),
+)
+
+# flip is self-inverse: flip(flip(a)) == a, bit-exactly (data is only
+# reordered). Wrapped as a bidirectional predicate so `flip(A, AXIS, R)`
+# may be run with either A or R bound.
+flip = _pred("flip",
+    (2, _bidir_2(
+        lambda a: _jnp_mod().flip(a),
+        lambda r: _jnp_mod().flip(r),
+    )),
+    (3, _bidir_3_mid(
+        lambda a, axis: _jnp_mod().flip(a, axis=axis),
+        lambda r, axis: _jnp_mod().flip(r, axis=axis),
+    )),
+)
+
+roll = _pred("roll",
+    (3, _pure(lambda a, shifts: _jnp_mod().roll(a, shifts))),
+    (4, _pure(lambda a, shifts, axis: _jnp_mod().roll(a, shifts, axis=axis))),
+)
+
+pad = _pred("pad",
+    (3, _pure(lambda a, pad_width: _jnp_mod().pad(a, pad_width))),
+    (4, _pure(lambda a, pad_width, mode: _jnp_mod().pad(a, pad_width, mode=mode))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Creation variants (Phase 14)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# `empty` in JAX is not really "uninitialised" — `jnp.empty(shape)` returns
+# zeros because JAX can't expose uninitialised accelerator memory safely.
+# Kept for API symmetry with NumPy / PyTorch; users who care about the
+# distinction should prefer `zeros`.
+#
+# `meshgrid` returns a list of coordinate arrays; `indexing` ("xy"/"ij")
+# goes through the /3 opts dict.
+#
+# `diag` is input-polymorphic, not bijective: with a 1-D input it builds a
+# 2-D diagonal; with a 2-D input it extracts the diagonal. Wrapped with
+# `_pure` — users bind the input, read the output, not the reverse.
+
+zeros_like = _pred("zeros_like",
+    (2, _pure(lambda a: _jnp_mod().zeros_like(a))),
+)
+
+ones_like = _pred("ones_like",
+    (2, _pure(lambda a: _jnp_mod().ones_like(a))),
+)
+
+full_like = _pred("full_like",
+    (3, _pure(lambda a, value: _jnp_mod().full_like(a, value))),
+)
+
+empty = _pred("empty",
+    (2, _pure(lambda shape: _jnp_mod().empty(shape))),
+    (3, _pure(lambda shape, opts: _jnp_mod().empty(shape, **opts))),
+)
+
+logspace = _pred("logspace",
+    (4, _pure(lambda start, end, steps:
+              _jnp_mod().logspace(start, end, int(steps)))),
+    (5, _pure(lambda start, end, steps, opts:
+              _jnp_mod().logspace(start, end, int(steps), **opts))),
+)
+
+geomspace = _pred("geomspace",
+    (4, _pure(lambda start, end, steps:
+              _jnp_mod().geomspace(start, end, int(steps)))),
+    (5, _pure(lambda start, end, steps, opts:
+              _jnp_mod().geomspace(start, end, int(steps), **opts))),
+)
+
+meshgrid = _pred("meshgrid",
+    (2, _pure(lambda arrs: list(_jnp_mod().meshgrid(*arrs)))),
+    (3, _pure(lambda arrs, opts: list(_jnp_mod().meshgrid(*arrs, **opts)))),
+)
+
+diag = _pred("diag",
+    (2, _pure(lambda a: _jnp_mod().diag(a))),
+    (3, _pure(lambda a, k: _jnp_mod().diag(a, k=int(k)))),
+)
+
+identity = _pred("identity",
+    (2, _pure(lambda n: _jnp_mod().identity(int(n)))),
+    (3, _pure(lambda n, opts: _jnp_mod().identity(int(n), **opts))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Arithmetic gaps (Phase 14)
+# ═══════════════════════════════════════════════════════════════════════════
+
+sub = _pred("sub",
+    (3, _pure(lambda a, b: _jnp_mod().subtract(a, b))),
+)
+
+div = _pred("div",
+    (3, _pure(lambda a, b: _jnp_mod().divide(a, b))),
+)
+
+floor_div = _pred("floor_div",
+    (3, _pure(lambda a, b: _jnp_mod().floor_divide(a, b))),
+)
+
+mod = _pred("mod",
+    (3, _pure(lambda a, b: _jnp_mod().mod(a, b))),
+)
+
+neg = _pred("neg",
+    (2, _pure(lambda a: _jnp_mod().negative(a))),
+)
+
+reciprocal = _pred("reciprocal",
+    (2, _pure(lambda a: _jnp_mod().reciprocal(a))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Statistics (Phase 15)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Axis-aware reductions — /2 reduces the whole array, /3 reduces along a
+# single axis. `percentile` / `quantile` take their quantile value as the
+# second positional arg (NumPy convention: `jnp.percentile(a, q, axis=...)`).
+# `cov` and `corrcoef` treat rows as variables by default; /2 is enough
+# for the common "sample covariance matrix of M" use-case.
+
+median = _pred("median",
+    (2, _pure(lambda a: _jnp_mod().median(a))),
+    (3, _pure(lambda a, axis: _jnp_mod().median(a, axis=int(axis)))),
+)
+
+std = _pred("std",
+    (2, _pure(lambda a: _jnp_mod().std(a))),
+    (3, _pure(lambda a, axis: _jnp_mod().std(a, axis=int(axis)))),
+)
+
+var = _pred("var",
+    (2, _pure(lambda a: _jnp_mod().var(a))),
+    (3, _pure(lambda a, axis: _jnp_mod().var(a, axis=int(axis)))),
+)
+
+percentile = _pred("percentile",
+    (3, _pure(lambda a, q: _jnp_mod().percentile(a, q))),
+    (4, _pure(lambda a, q, axis: _jnp_mod().percentile(a, q, axis=int(axis)))),
+)
+
+quantile = _pred("quantile",
+    (3, _pure(lambda a, q: _jnp_mod().quantile(a, q))),
+    (4, _pure(lambda a, q, axis: _jnp_mod().quantile(a, q, axis=int(axis)))),
+)
+
+cov = _pred("cov",
+    (2, _pure(lambda a: _jnp_mod().cov(a))),
+)
+
+corrcoef = _pred("corrcoef",
+    (2, _pure(lambda a: _jnp_mod().corrcoef(a))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Selection and sorting (Phase 15)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# `sort` / `argsort` / `argmin` / `argmax` take an optional axis; without
+# it NumPy flattens, JAX matches. `topk` uses `jax.lax.top_k`, which only
+# supports the last axis — no /4 variant is offered, users transpose
+# first if they need a different axis. Result is wrapped into a tuple so
+# `RES is (VS, IS)` decomposes in Clausal (lax.top_k returns a list).
+#
+# `nonzero` returns a 1-tuple of index arrays per dim — tests decompose
+# with `NZ is (I,)` for 1-D input. Output shape depends on input values,
+# so it's not jit-safe.
+#
+# `unique` returns sorted unique values. Also not jit-safe (variable
+# output shape). argpartition only supports last axis via its `kth` arg.
+
+
+def _lax():
+    _ensure_jax()
+    from clausal.modules.py import _import_stdlib
+    return _import_stdlib("jax.lax")
+
+
+argmin = _pred("argmin",
+    (2, _pure(lambda a: _jnp_mod().argmin(a))),
+    (3, _pure(lambda a, axis: _jnp_mod().argmin(a, axis=int(axis)))),
+)
+
+argmax = _pred("argmax",
+    (2, _pure(lambda a: _jnp_mod().argmax(a))),
+    (3, _pure(lambda a, axis: _jnp_mod().argmax(a, axis=int(axis)))),
+)
+
+sort = _pred("sort",
+    (2, _pure(lambda a: _jnp_mod().sort(a))),
+    (3, _pure(lambda a, axis: _jnp_mod().sort(a, axis=int(axis)))),
+)
+
+argsort = _pred("argsort",
+    (2, _pure(lambda a: _jnp_mod().argsort(a))),
+    (3, _pure(lambda a, axis: _jnp_mod().argsort(a, axis=int(axis)))),
+)
+
+topk = _pred("topk",
+    (3, _pure(lambda a, k: tuple(_lax().top_k(a, int(k))))),
+)
+
+nonzero = _pred("nonzero",
+    (2, _pure(lambda a: _jnp_mod().nonzero(a))),
+)
+
+unique = _pred("unique",
+    (2, _pure(lambda a: _jnp_mod().unique(a))),
+)
+
+argpartition = _pred("argpartition",
+    (3, _pure(lambda a, kth: _jnp_mod().argpartition(a, int(kth)))),
 )
 
 
@@ -912,7 +1303,7 @@ __all__ = [
     "clip", "abs",
     # Shape operations
     "reshape", "squeeze", "expand_dims", "transpose",
-    "swapaxes", "moveaxis", "concatenate", "stack",
+    "swapaxes", "moveaxis", "concatenate", "stacked",
     "broadcast_to", "astype",
     # Functional updates
     "at_set", "at_add", "at_mul", "at_min", "at_max", "at_get",
@@ -942,6 +1333,20 @@ __all__ = [
     "sigmoid", "softmax", "log_softmax", "logsumexp",
     "floor", "ceil", "round", "sign",
     "cumsum", "cumprod",
+    # Shape extras (Phase 8)
+    "partition", "array_split", "hsplit", "vsplit", "dsplit",
+    "tile", "repeat", "flip", "roll", "pad",
+    # Creation variants (Phase 14)
+    "zeros_like", "ones_like", "full_like", "empty",
+    "logspace", "geomspace", "meshgrid", "diag", "identity",
+    # Arithmetic gaps (Phase 14)
+    "sub", "div", "floor_div", "mod", "neg", "reciprocal",
+    # Statistics (Phase 15)
+    "median", "std", "var", "percentile", "quantile",
+    "cov", "corrcoef",
+    # Selection / sorting (Phase 15)
+    "argmin", "argmax", "sort", "argsort", "topk",
+    "nonzero", "unique", "argpartition",
     # Dtype constants (via __getattr__)
     "float16", "float32", "float64", "bfloat16",
     "int8", "int16", "int32", "int64",

@@ -279,31 +279,64 @@ Create `docs/jax_sharding.md`:
 
 ## Issues
 
-_To be populated during implementation._
+1. **`is_deleted` is a method, not a property.** Modern JAX exposes
+   `arr.is_deleted()` as a bound method. Wrapper calls it via
+   `_check_1(lambda a: bool(a.is_deleted()))`. The other two checks
+   (`committed`, `is_fully_addressable`) are properties — accessed
+   directly.
 
-Known items to validate:
+2. **Single-device CI constraint.** `make_mesh([2], …)` fails on a
+   1-device host because JAX requires `prod(shape) ≤ device_count`.
+   Tests stick to `[1]` shapes. Multi-device mesh tests deferred.
 
-1. **Multi-host sharding.** `pmap`, `shard_map`, and global-host
-   meshes are out of scope for this phase. A single-host multi-device
-   test is enough; multi-host is a production deployment concern.
+3. **`PartitionSpec` with `None`.** Users pass `++(None)` inside the
+   axes list for an unsharded dim, e.g.
+   `partition_spec(["x", ++(None)], P)`. `_deep_deref` resolves the
+   `++` escape to Python `None` before reaching `PartitionSpec(*axes)`.
 
-2. **`PartitionSpec` with `None`.** `None` means "unsharded over this
-   axis". Clausal user must pass `none` which `_deep_deref` resolves
-   to Python `None`. Verify.
+4. **`NamedSharding` equality works.** Two shardings built from
+   meshes with the same shape/axes and identical specs compare equal
+   via `==` — tested with `named_sharding equal when built from
+   equal mesh/spec`. `sharding/2`'s check mode still falls back to
+   `repr` equality for the rare case of equivalent-but-not-`==`
+   shardings constructed via `++()`.
 
-3. **Mesh axis name atoms.** Mesh axis names are Python strings in
-   JAX. Clausal atoms and strings unify — test that
-   `make_mesh([2], ["data"], ...)` works with both `"data"` and `data`
-   depending on how the user writes it.
+5. **`device_put` returns a new array.** The original is never
+   mutated — Clausal backtracking safe. Async completion is JAX's own
+   concern; `jax.block_until_ready(arr)` is still reachable via
+   `++()` if users need synchronous transfer semantics.
 
-4. **Sharding equality.** Two `NamedSharding` instances built from
-   equal meshes and equal specs should compare equal with `==`. If not,
-   fall back to `repr` equality. Tests prefer `repr` for robustness.
+6. **Multi-host and `pjit`/`shard_map` deferred.** Out of scope for
+   this phase. `pmap_apply` shipped in Phase 12 but is a no-op on
+   single-device hosts. Multi-device testing infrastructure would
+   unlock those; tracked for a later revisit, not a near-term
+   blocker.
 
-5. **`device_put` may be async.** Under some backends the operation
-   returns before the transfer finishes. `block_until_ready(arr)` can
-   force completion; add it as an impure helper if needed.
+7. **`local_device` vs `jax_device` on single-host.** They're
+   identical on a single-host machine (all devices are locally
+   addressable). Both are wrapped anyway for future multi-host
+   correctness.
 
-6. **On CPU-only hosts, `pmap`-related predicates are no-ops.**
-   Out of scope for Phase 13 — tracked for a later phase once
-   multi-device testing infrastructure exists.
+8. **`device_id/2` fully-relational.** Supports `(+D, +ID)`,
+   `(+D, -ID)`, `(-D, +ID)`, and `(-D, -ID)`. The last mode
+   enumerates `(device, id)` pairs — useful for `findall(ID, device_id(_, ID), IDS)`.
+
+9. **`mesh_shape/2` returns a plain `dict`, not an `OrderedDict`.**
+   The underlying `jax.sharding.Mesh.shape` is an `OrderedDict`, but
+   the wrapper converts to a plain dict so `S["x"]` and unification
+   work naturally. Insertion order is preserved by Python 3.7+ dict
+   semantics.
+
+10. **`device_put` requires a Device or Sharding object, not a
+    numeric index.** Users must resolve the id first with
+    `device_id(D, ID), device_put(A, D, A2)`. JAX's own constraint,
+    but common pitfall — documented.
+
+11. **`device_of/2` on multi-device arrays fails.** `arr.device`
+    returns a set (or raises) for sharded arrays; `_pure`'s
+    exception handler turns that into predicate failure. The
+    documented guidance is to query `sharding/2` instead.
+
+12. **`jax_device/1` check mode tested.** The dispatch's
+    `if d in devices:` branch is exercised by binding a device from
+    the first call and checking in a second.

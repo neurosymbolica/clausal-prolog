@@ -4,7 +4,7 @@
     shape, dtype, device, dim, element_count,
     matmul, dot, add, mul, sum, mean, max, min, clip, abs,
     reshape, squeeze, expand_dims, transpose,
-    swapaxes, moveaxis, concatenate, stack, broadcast_to, astype,
+    swapaxes, moveaxis, concatenate, stacked, broadcast_to, astype,
     at_set, at_add, at_mul, at_min, at_max, at_get,
     jax_numpy, array_list,
     float32, float64, int32
@@ -300,11 +300,28 @@ Test("concatenate along axis 1") <- (
     shape(C, [2, 7])
 )  # nv
 
-Test("stack along axis") <- (
+Test("stacked forward") <- (
     zeros([3], A),
     ones([3], B),
-    stack([A, B], 0, C),
+    stacked([A, B], 0, C),
     shape(C, [2, 3])
+)  # nv
+
+Test("stacked backward recovers slices") <- (
+    array([[1, 2], [3, 4], [5, 6]], C),
+    stacked([A, B, D], 0, C),
+    array_list(A, [1, 2]),
+    array_list(B, [3, 4]),
+    array_list(D, [5, 6])
+)  # nv
+
+Test("stacked roundtrip") <- (
+    zeros([3], A0),
+    ones([3], B0),
+    stacked([A0, B0], 0, C),
+    stacked([A1, B1], 0, C),
+    array_list(A1, [0.0, 0.0, 0.0]),
+    array_list(B1, [1.0, 1.0, 1.0])
 )  # nv
 
 Test("broadcast_to") <- (

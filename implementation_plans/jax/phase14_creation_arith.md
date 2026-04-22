@@ -123,7 +123,39 @@ Extend `docs/jax.md` creation section.
 
 ## Issues
 
-_To be populated during implementation._
+### 1. `empty` returns zeros, not uninitialised memory — NOTED
 
-1. `empty` doesn't return uninitialised memory — document.
-2. `meshgrid` indexing mode (`'xy'` vs `'ij'`) — pass via opts.
+`jnp.empty(shape)` allocates zeros because JAX cannot expose
+uninitialised accelerator memory safely. Documented in both `jax.py`
+and `docs/jax.md`; users who care about the distinction should prefer
+`zeros`. Kept for NumPy/PyTorch API symmetry.
+
+### 2. `meshgrid` indexing mode via opts — RESOLVED
+
+`indexing` ("xy" default vs "ij" for matrix layout) is passed through
+the `/3` opts dict: `meshgrid(ARRS, {"indexing": "ij"}, MESH)`.
+Predicate returns a plain Python list so `[XX, YY]` pattern-matching
+works.
+
+### 3. `diag` is input-polymorphic, not bijective — NOTED
+
+Mirrors the PyTorch Phase 13 finding: with a 1-D input `diag` creates
+a 2-D diagonal matrix; with a 2-D input it extracts the diagonal.
+Wrapped with `_pure` — forward-only. Users bind the input and read the
+output; they can't recover the input from the output. The plan's
+"multi-mode" wording refers to this input polymorphism, not to
+Clausal's bidirectional mode dispatch.
+
+### 4. `logspace` / `geomspace` are float32 by default — NOTED
+
+Like every other JAX creation op, these produce float32 unless x64 is
+enabled. Tests use `allclose/4` with an explicit tolerance (≈1e-3) to
+accommodate drift in `geomspace(1, 1000, 4)` (middle samples land at
+10.000003 / 100.00005 on float32). Callers who need exact log-spaced
+integers should enable x64 first.
+
+### 5. `div` always true-divides — NOTED
+
+Matches `jnp.divide`. Integer operands promote to float32, so
+`div([7, 5], [2, 2], C)` gives `[3.5, 2.5]`. Use `floor_div` for the
+integer truncation behaviour.

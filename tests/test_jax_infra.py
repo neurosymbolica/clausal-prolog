@@ -90,7 +90,9 @@ class TestJaxArrayFixture:
         "moveaxis",
         "concatenate along axis",
         "concatenate along axis 1",
-        "stack along axis",
+        "stacked forward",
+        "stacked backward recovers slices",
+        "stacked roundtrip",
         "broadcast_to",
         "astype",
         # Conversions (bijective)
@@ -364,6 +366,473 @@ class TestJaxMathFixture:
         "cumsum along axis 0",
         "cumsum along axis 1",
         "cumprod along axis 0",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 8 — Shape extras .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxShapeExtrasFixture:
+    """Run Test predicates from tests/fixtures/jax_shape_extras_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_shape_extras_tests")
+
+    @pytest.mark.parametrize("name", [
+        # partition (bidirectional split + concatenate)
+        "partition forward into 3 equal parts",
+        "partition forward produces correct pieces",
+        "partition forward into 1 returns list of 1",
+        "partition forward by indices",
+        "partition backward concatenates pieces",
+        "partition backward along axis 1",
+        "partition roundtrip",
+        "partition forward along axis 1",
+        # array_split
+        "array_split uneven",
+        "array_split even matches split",
+        "array_split along axis",
+        # hsplit / vsplit / dsplit
+        "hsplit 2x4 into 2",
+        "hsplit on 2x4 matrix splits columns",
+        "vsplit on 4x2 matrix splits rows",
+        "dsplit on 2x3x4 into 2",
+        # tile
+        "tile 1d",
+        "tile by 1 is identity",
+        "tile with int reps",
+        "tile 2d with 2-tuple reps",
+        # repeat
+        "repeat each element twice",
+        "repeat along axis 0 of 2d",
+        "repeat along axis 1 of 2d",
+        # flip
+        "flip along axis 0",
+        "flip along axis 1",
+        "flip 1d reverses",
+        "flip multiple axes via tuple",
+        "flip no axis reverses all dims",
+        "flip no axis on 1d",
+        # roll
+        "roll 1d by 1",
+        "roll 1d by 2",
+        "roll by 0 is identity",
+        "roll with axis",
+        "roll no axis on 2d flattens and reshapes",
+        "roll along axis 1",
+        # stacked backward (subsumes the old unstack)
+        "stacked backward along axis 0",
+        "stacked backward produces correct slices",
+        "stacked backward along axis 1",
+        # pad
+        "pad 1d constant default",
+        "pad 1d constant explicit mode",
+        "pad 1d edge mode",
+        "pad 2d with per-axis widths",
+        "pad reflects",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 14 — Creation variants + arithmetic gaps .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxCreation2Fixture:
+    """Run Test predicates from tests/fixtures/jax_creation2_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_creation2_tests")
+
+    @pytest.mark.parametrize("name", [
+        # *_like
+        "zeros_like preserves shape",
+        "zeros_like preserves dtype",
+        "ones_like preserves shape",
+        "full_like fills with value",
+        # empty
+        "empty shape",
+        "empty with dtype option",
+        # logspace / geomspace
+        "logspace default base 10",
+        "logspace with base option",
+        "geomspace endpoints",
+        # meshgrid
+        "meshgrid default xy indexing",
+        "meshgrid ij indexing",
+        # diag
+        "diag from 1d creates square matrix",
+        "diag extracts from 2d",
+        "diag with k offset extracts super-diagonal",
+        "diag with k offset extracts sub-diagonal",
+        # identity
+        "identity 3x3",
+        "identity with dtype option",
+        # Arithmetic gaps
+        "sub element-wise",
+        "sub broadcasts scalar",
+        "div true divides",
+        "div of ints produces floats",
+        "floor_div truncates",
+        "mod remainder",
+        "neg negates values",
+        "neg twice recovers",
+        "reciprocal inverts",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 15 — Statistics + selection .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxStatsFixture:
+    """Run Test predicates from tests/fixtures/jax_stats_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_stats_tests")
+
+    @pytest.mark.parametrize("name", [
+        # median
+        "median odd length",
+        "median even length averages middle",
+        "median along axis",
+        # std / var
+        "std of [2,4,4,4,5,5,7,9] is 2.0",
+        "var of [2,4,4,4,5,5,7,9] is 4.0",
+        "std along axis 0",
+        # percentile / quantile
+        "percentile 50 is median",
+        "quantile 0.5 is median",
+        "percentile along axis",
+        # cov / corrcoef
+        "cov shape on 3-variable matrix",
+        "corrcoef diagonal is ones",
+        # argmin / argmax
+        "argmin returns index of smallest",
+        "argmax returns index of largest",
+        "argmin along axis 0 on 2d",
+        "argmax along axis 1 on 2d",
+        # sort / argsort
+        "sort 1d ascending",
+        "argsort 1d gives permutation",
+        "sort along axis 1 of 2d",
+        "sort and argsort consistent via take",
+        # topk
+        "topk returns (values, indices) tuple",
+        "topk k=1 is argmax+value",
+        # nonzero
+        "nonzero 1d returns 1-tuple of indices",
+        "nonzero of all zeros returns empty indices",
+        "nonzero on 2d returns per-dim indices",
+        # unique
+        "unique sorts and dedupes",
+        "unique of single repeated value",
+        # argpartition
+        "argpartition pivot value matches sorted position",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 9 — Pytrees .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxTreeFixture:
+    """Run Test predicates from tests/fixtures/jax_tree_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_tree_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Leaf enumeration
+        "leaf enumerates flat list",
+        "leaf enumerates nested dict",
+        "leaf on a single value",
+        "leaf on empty list has no leaves",
+        "leaf on empty dict has no leaves",
+        # leaf_with_path
+        "leaf_with_path on flat list yields index paths",
+        "leaf_with_path exposes dict key",
+        "leaf_with_path on nested dict yields correct depth",
+        "leaf_with_path dict path then list index",
+        # Bijective flatten
+        "tree_flatten forward count",
+        "tree_flatten roundtrip dict",
+        "tree_flatten roundtrip list",
+        "unflatten with modified leaves",
+        "tree_flatten on single value",
+        # Structure queries
+        "tree_structure returns PyTreeDef",
+        "tree_leaves_list flat list",
+        "tree_leaves_list nested",
+        "all_leaves accepts flat list of leaves",
+        "all_leaves rejects nested list",
+        "treedef_is_leaf on scalar flatten",
+        "treedef_is_leaf false on list flatten",
+        # Mapping
+        "tree_map doubles leaves",
+        "tree_map preserves structure",
+        "tree_map_n adds leaves of two trees",
+        # Reducing
+        "tree_reduce sums leaves",
+        "tree_reduce with max and init",
+        "tree_reduce counts leaves",
+        # Key-path rendering
+        "keystr renders dict + index path",
+        "keystr on empty path",
+        # Showcase
+        "findall scalar leaves greater than 2",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 13 — Sharding and Devices .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxShardingFixture:
+    """Run Test predicates from tests/fixtures/jax_sharding_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_sharding_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Device enumeration
+        "jax_device finds at least one",
+        "device_count matches enumeration",
+        "local_device finds at least one",
+        "local_device_count matches",
+        "jax_device check mode",
+        "device_id forward",
+        "device_id reverse",
+        "device_id enumerates all pairs when unbound",
+        "device_platform is cpu on CI",
+        # device_of
+        "device_of returns a Device",
+        # Mesh
+        "make_mesh creates 1x mesh",
+        "mesh_shape check mode with dict literal",
+        "mesh_shape reach-through by key",
+        "mesh_devices has length matching mesh size",
+        "mesh_devices list pattern match",
+        # PartitionSpec / shardings
+        "partition_spec single axis",
+        "partition_spec with None unsharded",
+        "named_sharding construction succeeds",
+        "named_sharding equal when built from equal mesh/spec",
+        "single_device_sharding construction",
+        # sharding/2 query
+        "sharding query on fresh array",
+        # device_put
+        "device_put to specific device",
+        "device_put preserves values",
+        "device_put with named sharding",
+        "device_put with single-device sharding",
+        # Check predicates
+        "is_fully_addressable on fresh array",
+        "is_committed after device_put",
+        "is_deleted false on live array",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 12 — Function Transforms .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxTransformsFixture:
+    """Run Test predicates from tests/fixtures/jax_transforms_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_transforms_tests")
+
+    @pytest.mark.parametrize("name", [
+        # grad_value
+        "grad of x^2 at 3 is 6",
+        "grad of sum(x^2) gives 2x",
+        "grad of sin at 0 is 1",
+        # value_and_grad
+        "value_and_grad of x^3 at 2",
+        "value_and_grad on vector sum(x^2)",
+        # jvp
+        "jvp of x^2 at 3 with tangent 1 gives 6",
+        "jvp sum(x^2) along [1,0,0] gives 2",
+        # vjp
+        "vjp value matches forward eval",
+        "vjp_fn applied gives gradient",
+        # Jacobian / Hessian
+        "jacobian of elementwise square",
+        "jacfwd matches jacrev for pointwise fn",
+        "hessian of sum(x^2) is 2I",
+        # vmap
+        "vmap doubles each element",
+        "vmap preserves shape",
+        "vmap with explicit in_axes=0",
+        # jit
+        "jit_compile returns callable that produces correct output",
+        "jit_compile of grad gives same value as grad_value",
+        # make_jaxpr
+        "make_jaxpr returns a Jaxpr",
+        # eval_shape
+        "eval_shape of matmul",
+        "eval_shape cheap — doesn't allocate the huge result",
+        # pytree grad
+        "grad with dict input",
+        # scalar-only grad
+        "grad of vector output fails (not scalar)",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 11 — jax.scipy Special + Stats .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxScipyFixture:
+    """Run Test predicates from tests/fixtures/jax_scipy_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_scipy_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Special functions
+        "gamma_fn at 1 is 1",
+        "gamma_fn at 5 is 24",
+        "gammaln at 1 is 0",
+        "gammaln at 2 is 0",
+        "digamma at 1 is -euler_mascheroni",
+        "erf at 0 is 0",
+        "erf approaches 1 at large x",
+        "erfc at 0 is 1",
+        "erfinv roundtrips erf",
+        "expit at 0 is 0.5",
+        "logit at 0.5 is 0",
+        "logit is inverse of expit",
+        "i0 at 0 is 1",
+        "i1 at 0 is 0",
+        "logsumexp of [0, 0, 0] is log(3)",
+        "logsumexp along axis",
+        "beta_fn at (1,1) is 1",
+        "betainc at x=1 is 1",
+        "polygamma order 1 at 1 is pi^2/6",
+        "rel_entr with identical args is 0",
+        "xlogy at x=0 is 0",
+        "zeta at (2,1) is pi^2/6",
+        "factorial of 5 is 120",
+        "spence at 1 is 0",
+        # Distribution registry
+        "distribution lookup by name",
+        "distribution registry includes common names",
+        "distribution findall enumerates registry",
+        "distribution reverse lookup",
+        # Distribution methods
+        "normal pdf at mean",
+        "normal logpdf at mean",
+        "normal cdf at mean is 0.5",
+        "normal sf at mean is 0.5",
+        "normal ppf at 0.5 is mean",
+        "normal logsf at mean is log(0.5)",
+        "normal logcdf at mean is log(0.5)",
+        "exp of logpdf equals pdf for normal",
+        "beta pdf at 0.5 with a=b=2 is 1.5",
+        "gamma cdf at 0 is 0",
+        "uniform pdf in range",
+        "uniform pdf outside range is 0",
+        "bernoulli pmf at 1",
+        "bernoulli pmf at 0",
+        "poisson pmf at 0 for lam=1",
+        # Missing-method failure paths
+        "bernoulli has no pdf — failure",
+        "t has no cdf in this JAX — failure",
+    ])
+    def test_fixture(self, name):
+        # nv
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Phase 10 — Activations and Initializers .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestJaxNnFixture:
+    """Run Test predicates from tests/fixtures/jax_nn_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("jax_nn_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Activation registry
+        "activation lookup by name",
+        "activation registry contains common names",
+        "activation registry contains leaky_relu and selu",
+        "activation findall enumerates full registry",
+        "activation reverse lookup",
+        # Applied activations
+        "relu zeroes negatives",
+        "relu leaves positives unchanged",
+        "sigmoid at 0 is 0.5",
+        "tanh at 0 is 0",
+        "softmax sums to 1",
+        "softmax on 2d along axis 1",
+        "log_softmax shape preserved",
+        "gelu at 0 is 0",
+        "gelu with approximate flag",
+        "elu negative gets smooth",
+        "leaky_relu default slope",
+        "leaky_relu custom slope",
+        "selu shape",
+        "softplus positive",
+        "silu at 0 is 0",
+        # One-hot
+        "one_hot basic",
+        "one_hot single index",
+        # Initializer registry
+        "initializer lookup by name",
+        "initializer registry contains common names",
+        "initializer findall enumerates full registry",
+        "initializer reverse lookup",
+        # init_array
+        "init_array with glorot_uniform produces correct shape",
+        "init_array with he_normal",
+        "init_array with zeros (direct initializer)",
+        "init_array with ones (direct initializer)",
+        "init_array accepts scalar shape",
+        "init_array determinism — same key, same sample",
+        "init_array different keys differ",
+        "configured initializer via ++()",
     ])
     def test_fixture(self, name):
         # nv

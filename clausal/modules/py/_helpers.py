@@ -23,6 +23,22 @@ def _pred(name: str, *arity_fns) -> ModulePredicate:
     return p
 
 
+def _any_unbound(val):
+    """True if `val` is an unbound Var, or a list/tuple/dict containing any.
+
+    `is_var` only sees the top level — `[Var, Var]` and `(Var, Var)` both
+    return False, which is wrong for bidirectional predicates that want
+    to recognise a list-of-unbound-vars as the backward-mode signal.
+    """
+    if is_var(val):
+        return True
+    if isinstance(val, (list, tuple)):
+        return any(_any_unbound(e) for e in val)
+    if isinstance(val, dict):
+        return any(_any_unbound(v) for v in val.values())
+    return False
+
+
 def _deep_deref(val):
     """Deref a value, recursively deref-ing list, tuple, and dict elements.
 
@@ -125,12 +141,16 @@ def _bidir_2(forward, backward):
     ``unify`` can raise on array-typed operands (JAX / numpy /
     multi-element torch tensors — `==` yields element-wise bool), in
     which case `_values_equal` is used as a fallback.
+
+    Uses `_deep_deref` so that list / tuple arguments with bound Vars
+    inside (e.g. `stacked([A, B], 0, C)` where A and B are bound
+    elsewhere) are resolved before reaching forward/backward.
     """
     def dispatch(this_generator, _proceed, _fail, _catcher, x_raw, y_raw, trail):
-        x = deref(x_raw)
-        y = deref(y_raw)
+        x = _deep_deref(x_raw)
+        y = _deep_deref(y_raw)
 
-        if not is_var(x) and is_var(y):
+        if not _any_unbound(x) and _any_unbound(y):
             try:
                 out = forward(x)
             except Exception:
@@ -139,7 +159,7 @@ def _bidir_2(forward, backward):
             if unify(y_raw, out, trail):
                 yield (_proceed, None)
 
-        elif is_var(x) and not is_var(y):
+        elif _any_unbound(x) and not _any_unbound(y):
             try:
                 out = backward(y)
             except Exception:
@@ -148,7 +168,7 @@ def _bidir_2(forward, backward):
             if unify(x_raw, out, trail):
                 yield (_proceed, None)
 
-        elif not is_var(x) and not is_var(y):
+        elif not _any_unbound(x) and not _any_unbound(y):
             try:
                 out = forward(x)
             except Exception:
@@ -169,13 +189,17 @@ def _bidir_2(forward, backward):
 
 
 def _bidir_3_mid(forward, backward):
-    """Bidirectional with a middle arg: (+X,+M,-Y) forward, (-X,+M,+Y) backward."""
-    def dispatch(this_generator, _proceed, _fail, _catcher, x_raw, mid_raw, y_raw, trail):
-        x = deref(x_raw)
-        m = _deep_deref(mid_raw)
-        y = deref(y_raw)
+    """Bidirectional with a middle arg: (+X,+M,-Y) forward, (-X,+M,+Y) backward.
 
-        if not is_var(x) and is_var(y):
+    Uses `_deep_deref` on X and Y so list / tuple arguments with bound
+    Vars inside are resolved before reaching forward/backward.
+    """
+    def dispatch(this_generator, _proceed, _fail, _catcher, x_raw, mid_raw, y_raw, trail):
+        x = _deep_deref(x_raw)
+        m = _deep_deref(mid_raw)
+        y = _deep_deref(y_raw)
+
+        if not _any_unbound(x) and _any_unbound(y):
             try:
                 out = forward(x, m)
             except Exception:
@@ -184,7 +208,7 @@ def _bidir_3_mid(forward, backward):
             if unify(y_raw, out, trail):
                 yield (_proceed, None)
 
-        elif is_var(x) and not is_var(y):
+        elif _any_unbound(x) and not _any_unbound(y):
             try:
                 out = backward(y, m)
             except Exception:
@@ -193,9 +217,59 @@ def _bidir_3_mid(forward, backward):
             if unify(x_raw, out, trail):
                 yield (_proceed, None)
 
-        elif not is_var(x) and not is_var(y):
+        elif not _any_unbound(x) and not _any_unbound(y):
             try:
                 out = forward(x, m)
+            except Exception:
+                yield (_fail, DONE)
+                return
+            mark = trail.mark()
+            unified = False
+            try:
+                unified = unify(y_raw, out, trail)
+            except Exception:
+                trail.undo(mark)
+                unified = _values_equal(out, y)
+            if unified:
+                yield (_proceed, None)
+
+        yield (_fail, DONE)
+    return dispatch
+
+
+def _bidir_4_mid2(forward, backward):
+    """Bidirectional with two middle args: (+X,+M1,+M2,-Y) forward, (-X,+M1,+M2,+Y) backward.
+
+    Uses `_deep_deref` on X and Y and `_any_unbound` for boundness checks
+    so list/tuple arguments with inner Vars route correctly.
+    """
+    def dispatch(this_generator, _proceed, _fail, _catcher, x_raw, m1_raw, m2_raw, y_raw, trail):
+        x = _deep_deref(x_raw)
+        m1 = _deep_deref(m1_raw)
+        m2 = _deep_deref(m2_raw)
+        y = _deep_deref(y_raw)
+
+        if not _any_unbound(x) and _any_unbound(y):
+            try:
+                out = forward(x, m1, m2)
+            except Exception:
+                yield (_fail, DONE)
+                return
+            if unify(y_raw, out, trail):
+                yield (_proceed, None)
+
+        elif _any_unbound(x) and not _any_unbound(y):
+            try:
+                out = backward(y, m1, m2)
+            except Exception:
+                yield (_fail, DONE)
+                return
+            if unify(x_raw, out, trail):
+                yield (_proceed, None)
+
+        elif not _any_unbound(x) and not _any_unbound(y):
+            try:
+                out = forward(x, m1, m2)
             except Exception:
                 yield (_fail, DONE)
                 return

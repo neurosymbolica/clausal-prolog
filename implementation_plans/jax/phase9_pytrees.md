@@ -296,34 +296,34 @@ Create `docs/jax_tree.md`:
 
 ## Issues
 
-_To be populated during implementation._
-
-Known items to validate:
-
-1. **`KeyPath` decomposition.** JAX ships `SequenceKey`, `DictKey`,
-   `GetAttrKey`, `FlattenedIndexKey`. The `_path_to_clausal` helper
-   handles the first three — verify which actually appear in practice.
-   If `FlattenedIndexKey` appears (e.g. for registered dataclasses),
-   add it to the mapping.
-
-2. **Treedef equality for roundtrip tests.** `PyTreeDef` objects
-   compare by structural equality via `==`. Tests can rely on this.
-
-3. **`tree_map` with callables from Clausal.** Clausal lambdas don't
-   exist; users pass Python callables via `++()`. This is fine — the
-   same pattern as passing callables to `MatrixFunction` in
-   `scipy_linalg.py`. Document the `++(lambda x: ...)` idiom.
-
-4. **Path rendering via `keystr`.** `jtu.keystr(path)` produces a
-   human-readable string like `['a'][0]`. Useful for error messages and
-   debug output.
-
-5. **Custom pytree registration deferred.** `jtu.register_pytree_node`
+1. **`KeyPath` decomposition** — `_path_to_clausal` handles the four
+   types JAX ships (`SequenceKey`, `DictKey`, `GetAttrKey`,
+   `FlattenedIndexKey`) plus an `("other", repr(key))` fallback. In
+   practice only the first two show up for the built-in container
+   types exercised by the tests; the `attr`/`flat` branches cover
+   future needs (namedtuple, dataclass, registered types).
+2. **Treedef equality for roundtrip tests** — `PyTreeDef` objects
+   compare by structural equality via `==`, as expected. Used
+   directly in `tree_flatten roundtrip *` tests.
+3. **`tree_map` with callables from Clausal** — Python callables come
+   in via the standard `++(lambda x: ...)` idiom. No surprises.
+4. **Path rendering via `keystr`** — round-trips through the native JAX
+   key types via `_path_from_clausal`, so the string matches what JAX
+   itself prints (`['a'][0]`).
+5. **`member/2` not bundled** — Clausal's `member/2` isn't auto-loaded
+   in test fixtures, so membership checks use `tree_leaves_list/2` +
+   list equality rather than `findall` + `member`. No functional
+   difference in the showcase; just a fixture-writing convention.
+6. **Custom pytree registration deferred.** `jtu.register_pytree_node`
    and `register_dataclass` extend the pytree system with user types.
    Wrapping these as Clausal predicates is useful but non-trivial
    (callbacks must be Python-callable). Track for a later phase.
-
-6. **Performance of repeated `leaf/2` enumeration.** Each call
+7. **Performance of repeated `leaf/2` enumeration.** Each call
    flattens the tree from scratch. For very deep trees this may be
    slow. If it becomes an issue, cache `tree_leaves(tree)` keyed on
    `id(tree)` — but only if profiling shows it matters.
+8. **Custom dispatch for `tree_flatten/3`** — The bijection is
+   `(+TREE, -TREEDEF, -LEAVES)` vs `(-TREE, +TREEDEF, +LEAVES)` —
+   asymmetric (one side has a single value, the other has two). Doesn't
+   fit `_bidir_3_mid`, so this one uses a purpose-built dispatch
+   (`_tree_flatten_3`) in `jax_tree.py`.

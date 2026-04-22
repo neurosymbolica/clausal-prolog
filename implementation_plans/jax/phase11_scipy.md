@@ -216,13 +216,34 @@ Create `docs/jax_scipy.md`:
 
 ## Issues
 
-_To be populated during implementation._
-
-1. **Name clash: `gamma`, `beta`.** These are both samplers (Phase 2)
-   and special functions (here). Using `gamma_fn` / `beta_fn` in this
-   phase to avoid collisions when users import both modules.
+1. **Name clash: `gamma`, `beta`.** These are in three JAX namespaces —
+   `jax.random` (samplers, Phase 2), `jax.scipy.special` (functions,
+   here), `jax.scipy.stats` (distributions). Predicates are
+   module-scoped, so the collision only materialises when one user
+   imports all three. Resolved with `_fn` suffix for the special
+   functions (`gamma_fn`, `beta_fn`). The distribution family uses the
+   string atom ``"gamma"`` / ``"beta"`` via `pdf` / `cdf` / …, so no
+   Clausal-level predicate named `gamma`/`beta` is defined here.
 2. **`multivariate_normal` params** include `mean` and `cov` arrays,
-   not scalars. Params dict still works but tests must pass arrays.
-3. **No `ppf` (inverse CDF) in all distributions.** JAX's scipy.stats
-   is a subset of scipy's. Predicate fails (via `_pure`'s
-   except-handler) for unsupported methods.
+   not scalars. Params dict still works — arrays just pass through
+   as dict values.
+3. **Missing methods fail cleanly.** JAX's `scipy.stats` is a subset
+   of scipy's. E.g. `bernoulli` has no `pdf`, `t` has no `cdf`, many
+   discrete distributions have no `ppf`. `_pure`'s exception handler
+   turns the `AttributeError` into predicate failure, so
+   `not pdf("bernoulli", ...)` succeeds as expected. Not a bug; worth
+   mentioning in docs so users aren't surprised.
+4. **Tests use `allclose` with `atol=0.0001` almost everywhere.**
+   `factorial` drifts further (`120.00012` at float32), needing
+   `atol=0.01`. JAX's default float32 precision explains the drift;
+   users wanting bit-exact integer factorial should enable x64 first.
+5. **Registry enumeration tested directly.** `distribution findall
+   enumerates registry` uses `length(NS, 23)` — matches `_DISTRIBUTION_NAMES`
+   cardinality. If JAX adds or removes a distribution upstream the
+   test flags it immediately.
+6. **`py.scipy_special` / `py.scipy_stats` naming divergence.** The
+   existing Clausal scipy wrappers still use TitleCase (`Gamma`,
+   `StatsNormalPdf`, …) — a remnant from before the lowercase refactor.
+   This phase uses lowercase matching JAX's own names. The scipy
+   wrappers will be renamed to match in a separate pass; see
+   `todo/scipy_wrapper_lowercase_refactor.md`.

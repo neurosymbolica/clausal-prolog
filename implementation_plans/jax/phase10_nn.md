@@ -228,12 +228,27 @@ Create `docs/jax_nn.md`:
 
 ## Issues
 
-_To be populated during implementation._
-
-1. **`variance_scaling` initializer** takes config args. The simple
-   `init_array` path calls the factory with no args — which fails for
-   variance_scaling. Document that configured initializers need a
-   `++()` escape, or add a variant that passes through kwargs.
-2. **Activation name collisions with Phase 7 math.** `sigmoid_apply`
-   vs `sigmoid` — the former lives here, the latter in Phase 7.
-   Document the split.
+1. **`zeros` and `ones` are direct initializers, not factories** —
+   they're already callable as `(key, shape[, dtype])`, unlike
+   `glorot_uniform` et al. which return an initializer when called
+   with no args. `init_array` handles both: introspects the callable's
+   signature and, if the first required positional arg is named `key`,
+   calls it directly; otherwise calls with no args first.
+2. **Configured initializers via `++()`.** `constant(0.5)`,
+   `variance_scaling(2.0, "fan_in", "normal")`, etc. require config
+   args that `init_array` doesn't know about. Users build the
+   configured initializer with `++(jax.nn.initializers.constant(0.5))`
+   and pass the result — it then looks like a direct initializer to
+   the introspection path.
+3. **Shape requirements.** `glorot_*`/`xavier_*`/`he_*`/`kaiming_*`/
+   `lecun_*` need at least 2-D shapes (they compute fan-in / fan-out).
+   1-D calls raise `ValueError` from JAX; `_pure` surfaces this as
+   predicate failure. Tests use `[4, 2]` or similar.
+4. **Activation name collisions with Phase 7 math.** `sigmoid_apply`
+   vs `sigmoid`, `softmax_apply` vs `softmax`, `log_softmax_apply`
+   vs `log_softmax`, `silu_apply` (Phase 10 only) — the `_apply`
+   suffix in Phase 10 prevents collision when both modules are
+   imported in the same file. Documented in `docs/jax_nn.md`.
+5. **`member/2` not bundled in fixtures.** `activation`/`initializer`
+   registry-enumeration tests use explicit `lookup("name", _)` rather
+   than `findall` + `member` (same convention as Phase 9).
