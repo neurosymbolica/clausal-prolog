@@ -366,6 +366,11 @@ class TestJaxMathFixture:
         "cumsum along axis 0",
         "cumsum along axis 1",
         "cumprod along axis 0",
+        # Partial-bijection NaN silence (locks in Caveat doc entry)
+        "logarithm of -1 is NaN (not a raise)",
+        "sine backward on 2.0 is NaN (out of [-1, 1])",
+        "cosine backward on 2.0 is NaN (out of [-1, 1])",
+        "tangent backward on any real succeeds (arctan has no domain gap)",
     ])
     def test_fixture(self, name):
         # nv
@@ -460,6 +465,9 @@ class TestJaxCreation2Fixture:
         "zeros_like preserves dtype",
         "ones_like preserves shape",
         "full_like fills with value",
+        "zeros_like opts overrides dtype",
+        "ones_like opts overrides dtype",
+        "full_like opts overrides dtype",
         # empty
         "empty shape",
         "empty with dtype option",

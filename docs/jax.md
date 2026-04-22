@@ -86,6 +86,38 @@ for the full story.
 
 ---
 
+## Gotcha — bidirectional check mode is bit-exact
+
+Every bidirectional predicate in the wrapper (`logarithm`, `sine`,
+`cosine`, `tangent`, `fft_transform`, `real_fft`, `fft_transform_2d`,
+`fft_transform_nd`, `fft_shift`, `jax_numpy`, `array_list`, `stacked`,
+`partition`, `flip`, …) supports a check mode: bind both sides and the
+predicate runs the forward direction, then compares the computed output
+to the supplied argument.
+
+The comparison is **bit-exact**. For floating-point round-trips that's
+almost never what you want — `arcsin(sin(0.5))` differs from `0.5` at
+the last-ULP level, `ifft(fft(x))` picks up imaginary float noise, etc.
+So `sine(0.5, 0.479426)` or `fft_transform(X, Y)` with a numerically
+correct `Y` will *fail* the check.
+
+Use `allclose/2` or `allclose/4` when you want a tolerant check:
+
+```clausal
+# Instead of relying on check mode —
+array(0.5, ANGLE), sine(ANGLE, 0.479426)   # FAILS: last-ULP drift
+
+# Compute forward, then compare with tolerance —
+array(0.5, ANGLE), sine(ANGLE, VALUE),
+array(0.479426, EXPECTED),
+allclose(VALUE, EXPECTED, 0.0001, 0.0)
+```
+
+Exact check mode still works for integer or zero-exact round-trips
+(`logarithm(1.0, 0.0)` passes — `log(1) == 0` exactly).
+
+---
+
 ## Gotcha — predicates that shadow Python builtins
 
 `-import_from(py.jax, [...])` brings predicate objects into the
@@ -220,17 +252,25 @@ Identity matrix, square (`N` × `N`) or rectangular (`N` × `M`).
 
 ```clausal
 zeros_like(A, R)
+zeros_like(A, OPTS, R)
 ones_like(A, R)
+ones_like(A, OPTS, R)
 full_like(A, VALUE, R)
+full_like(A, VALUE, OPTS, R)
 ```
 
 Construct a new array matching the shape *and* dtype of `A`. `full_like`
-takes a scalar fill value.
+takes a scalar fill value. The `OPTS` arity passes kwargs through to
+`jnp.*_like` — use `{"dtype": …}` to keep `A`'s shape but override the
+dtype, or `{"shape": …}` to keep `A`'s dtype with a different shape.
 
 ```clausal
 ones([3, 4], A), zeros_like(A, Z)        # Z has shape [3, 4], dtype float32
 ones([2], {"dtype": int32}, A),
   zeros_like(A, Z), dtype(Z, int32)      # dtype is preserved
+ones([2], A),
+  zeros_like(A, {"dtype": int32}, Z),
+  dtype(Z, int32)                        # dtype overridden
 ```
 
 ### empty
@@ -1069,6 +1109,10 @@ Test("softmax sums to 1 along axis") <- (
   section](#gotcha--predicates-that-shadow-python-builtins) above —
   easy to write a clause that thinks it's reducing a Python list but
   is actually building a 0-D JAX array.
+- **Check mode on `logarithm` / `sine` / `cosine` / `tangent` is
+  bit-exact.** Don't rely on `sine(0.5, 0.479426)` succeeding — use
+  forward-mode with `allclose/4` instead. See [Gotcha — bidirectional
+  check mode is bit-exact](#gotcha--bidirectional-check-mode-is-bit-exact).
 
 See the [Phase 7 implementation plan](../implementation_plans/jax/phase7_advanced_math.md)
 for the predicate catalogue and design notes.

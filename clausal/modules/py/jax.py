@@ -157,8 +157,13 @@ Einsum and advanced math (Phase 7):
     cumprod(A, AXIS, R)        Cumulative product along AXIS
 
 Creation variants (Phase 14):
-    zeros_like(A, R) / ones_like(A, R) / full_like(A, VALUE, R)
-                              New array matching shape/dtype of A
+    zeros_like(A, R)  /  zeros_like(A, OPTS, R)
+    ones_like(A, R)   /  ones_like(A, OPTS, R)
+    full_like(A, VALUE, R)  /  full_like(A, VALUE, OPTS, R)
+                              New array matching shape/dtype of A.
+                              OPTS overrides dtype/shape — e.g.
+                              {"dtype": float64} keeps A's shape but
+                              casts the fill to float64.
     empty(SHAPE, A)  /  empty(SHAPE, OPTS, A)
                               Caveat: JAX's empty returns zeros — no
                               uninitialised memory exposed by the
@@ -1090,14 +1095,17 @@ pad = _pred("pad",
 
 zeros_like = _pred("zeros_like",
     (2, _pure(lambda a: _jnp_mod().zeros_like(a))),
+    (3, _pure(lambda a, opts: _jnp_mod().zeros_like(a, **opts))),
 )
 
 ones_like = _pred("ones_like",
     (2, _pure(lambda a: _jnp_mod().ones_like(a))),
+    (3, _pure(lambda a, opts: _jnp_mod().ones_like(a, **opts))),
 )
 
 full_like = _pred("full_like",
     (3, _pure(lambda a, value: _jnp_mod().full_like(a, value))),
+    (4, _pure(lambda a, value, opts: _jnp_mod().full_like(a, value, **opts))),
 )
 
 empty = _pred("empty",

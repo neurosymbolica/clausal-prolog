@@ -225,3 +225,34 @@ Test("cumprod along axis 0") <- (
     cumprod(A, 0, R),
     array_list(R, [[1.0, 2.0], [3.0, 8.0]])
 )  # nv
+
+# --- Partial-bijection: out-of-domain returns NaN silently ---
+#
+# Lock in the behaviour documented in "Advanced Math → Caveats":
+# logarithm forward on negatives, sine/cosine backward outside [-1, 1]
+# return NaN without raising. `allclose(R, R)` fails iff R contains NaN
+# (NaN ≠ NaN), so `not allclose(R, R)` is a NaN-detection signal.
+
+Test("logarithm of -1 is NaN (not a raise)") <- (
+    array(-1.0, X),
+    logarithm(X, Y),
+    not allclose(Y, Y)
+)  # nv
+
+Test("sine backward on 2.0 is NaN (out of [-1, 1])") <- (
+    array(2.0, VALUE),
+    sine(ANGLE, VALUE),
+    not allclose(ANGLE, ANGLE)
+)  # nv
+
+Test("cosine backward on 2.0 is NaN (out of [-1, 1])") <- (
+    array(2.0, VALUE),
+    cosine(ANGLE, VALUE),
+    not allclose(ANGLE, ANGLE)
+)  # nv
+
+Test("tangent backward on any real succeeds (arctan has no domain gap)") <- (
+    array(99.0, VALUE),
+    tangent(ANGLE, VALUE),
+    allclose(ANGLE, ANGLE)
+)  # nv

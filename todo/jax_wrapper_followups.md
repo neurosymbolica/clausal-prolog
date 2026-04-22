@@ -6,58 +6,18 @@ they came from; collected here so they're not lost.
 
 ---
 
-## 1. `_bidir_2` check mode is fragile for floats
+## 1. `_bidir_2` check mode is fragile for floats — RESOLVED (2026-04-22)
 
-**Affects:** every bijective predicate in the wrapper —
-`logarithm`, `sine`, `cosine`, `tangent` (Phase 7); `fft_transform`,
-`real_fft`, `fft_transform_2d`, `fft_transform_nd`, `fft_shift`
-(Phase 5); `jax_numpy`, `array_list` (Phase 1); likely `tree_flatten`
-when Phase 9 lands.
+**Resolution:** Option 1 (docs). Added a dedicated gotcha section to
+`docs/jax.md` — "Gotcha — bidirectional check mode is bit-exact" —
+that enumerates every affected predicate, shows the failure mode, and
+points users at `allclose/2` / `allclose/4` for tolerant checks. The
+Phase 7 Advanced Math caveat list now links to that section.
 
-**Helper:** `clausal/modules/py/_helpers.py:_bidir_2` (and
-`_bidir_3_mid`).
-
-### What happens
-
-When both arguments are bound, `_bidir_2` runs `forward(x)`, then:
-
-1. Tries `unify(y_raw, out, trail)`.
-2. On exception (e.g. JAX's elementwise `==` returning a bool array),
-   falls back to `_values_equal(out, y)` which does
-   `bool((out == y).all())`.
-
-For floating-point round-trips, bit-exact equality almost never
-holds — `arcsin(sin(0.5))` ≠ `0.5` at the last-ULP level, `ifft(fft(x))`
-has imaginary noise, etc. So `sine(0.5, 0.479426)` or
-`fft_transform(X, Y)` with numerically-correct `Y` will *fail* the
-check.
-
-### What's OK right now
-
-- Forward-only (`sine(ANGLE, -VALUE)`) and backward-only modes work.
-- Integer / exact round-trips (e.g. `logarithm(1.0, 0.0)` in tests)
-  happen to land on zero, so they pass.
-- `allclose/2,/4` (Phase 6) exists and works correctly.
-
-### Options
-
-1. **Document and move on.** Add a note to `docs/jax.md` and each
-   phase's implementation plan: "for float check mode on bijective
-   predicates, use `allclose/2` explicitly." Lowest effort.
-
-2. **Make `_bidir_2` tolerance-aware.** Accept an optional `atol`/`rtol`
-   kwarg at construction time and use `jnp.allclose` in the check
-   fallback. More invasive; requires deciding sensible defaults.
-
-3. **Split check mode off.** Drop the `(+X, +Y)` check mode from
-   `_bidir_2` entirely; require callers to use `allclose`. Breaking
-   change for whatever already relies on it (likely nothing —
-   integer-only check-mode tests are rare).
-
-### Recommendation
-
-Option 1 (docs) for now. Revisit with option 2 if a concrete caller
-hits it. No code change required to ship Phases 8+.
+No code change. `_bidir_2` still does bit-exact comparison when both
+sides are bound; callers who need tolerance use `allclose`. If a
+concrete caller ever needs tolerance inside a single predicate, revisit
+Option 2 (tolerance-aware `_bidir_2`).
 
 ---
 
@@ -82,31 +42,23 @@ All 508 jax tests pass against the aliased version
 
 ---
 
-## 3. Partial-bijection domain is silent
+## 3. Partial-bijection domain is silent — RESOLVED (2026-04-22)
 
-**Affects:** `sine`, `cosine`, `tangent` (Phase 7) backward mode;
-`logarithm` (Phase 7) forward mode.
+**Resolution:** Added four regression tests to
+`tests/fixtures/jax_math_tests.clausal` (registered in
+`TestJaxMathFixture` in `tests/test_jax_infra.py`) that lock in
+NaN-silence:
 
-`arcsin(2.0)` returns `nan`; `log(-1.0)` returns `nan`. Neither raises.
-The predicate succeeds and `nan` propagates through the rest of the
-clause until something else fails (or silently doesn't).
+- `logarithm of -1 is NaN (not a raise)` — `log(-1) → NaN`
+- `sine backward on 2.0 is NaN (out of [-1, 1])` — `arcsin(2) → NaN`
+- `cosine backward on 2.0 is NaN (out of [-1, 1])` — `arccos(2) → NaN`
+- `tangent backward on any real succeeds (arctan has no domain gap)` —
+  asserts tangent backward does *not* produce NaN on large inputs
 
-### What's documented
-
-`docs/jax.md` "Advanced Math → Caveats" has a bullet: "Out-of-domain
-NaN." Good enough for now.
-
-### What's missing
-
-A regression test that locks in the NaN-silence behavior. If someone
-later wraps these with explicit domain checks, existing callers who
-(wrongly) relied on NaN propagation would break without warning.
-
-### Cost
-
-One test per predicate per direction. Cheap. Bundle with whatever phase
-next touches these predicates, or with a general "numeric edge cases"
-sweep.
+Uses `not allclose(R, R)` as the NaN detector (NaN ≠ NaN, so
+`allclose(nan, nan)` is false). If someone later wraps these with
+explicit domain checks, the first three tests will fail and force a
+deliberate decision about the behaviour change.
 
 ---
 
@@ -141,35 +93,23 @@ The shadowing is the whole point of `-import_from`, not a bug.
 
 ---
 
-## 5. `*_like` predicates don't accept opts
+## 5. `*_like` predicates don't accept opts — RESOLVED (2026-04-22)
 
-**Affects:** `zeros_like/2`, `ones_like/2`, `full_like/3` (Phase 14).
+**Resolution:** Added opts arities, matching the `zeros/3` / `ones/3` /
+`full/4` pattern:
 
-**Current state:** each wraps the corresponding `jnp.*_like` with no opts
-arity, mirroring the PyTorch Phase 13 shape of the plan.
+- `zeros_like(A, R)` → `zeros_like(A, OPTS, R)` (/2 + /3)
+- `ones_like(A, R)` → `ones_like(A, OPTS, R)` (/2 + /3)
+- `full_like(A, VALUE, R)` → `full_like(A, VALUE, OPTS, R)` (/3 + /4)
 
-**Gap:** JAX's `jnp.zeros_like(a, dtype=None, shape=None, device=None)`
-accepts kwargs that let a caller reuse the template array's shape while
-overriding its dtype (or vice versa). Clausal users who want "same
-shape as A but float64" currently have to escape to `++()`.
+`OPTS` passes through to `jnp.*_like(**opts)`, so callers can override
+`dtype` or `shape` while reusing the template array.
 
-### Fix when it matters
-
-Add a higher-arity variant with opts, same pattern as `zeros/3` and
-`ones/3`:
-
-```python
-zeros_like = _pred("zeros_like",
-    (2, _pure(lambda a: _jnp_mod().zeros_like(a))),
-    (3, _pure(lambda a, opts: _jnp_mod().zeros_like(a, **opts))),
-)
-```
-
-`full_like` would gain a `/4` variant `(+A, +VALUE, +OPTS, -R)`.
-
-Tiny, non-breaking. Wait for the first caller who asks — the opts path
-is a nice-to-have, not a gap the typical "build a zeroed params tree"
-user runs into.
+Documented in `docs/jax.md` "zeros_like, ones_like, full_like" and
+covered by three new tests in
+`tests/fixtures/jax_creation2_tests.clausal` (`zeros_like opts
+overrides dtype`, `ones_like opts overrides dtype`, `full_like opts
+overrides dtype`).
 
 ---
 
@@ -177,8 +117,10 @@ user runs into.
 
 | # | Item | Severity | Action |
 |---|---|---|---|
-| 1 | `_bidir_2` float check fragility | Low | Docs note this quarter; revisit if a caller hits it |
+| 1 | `_bidir_2` float check fragility | Resolved | ✅ Docs gotcha section added + linked from Phase 7 caveats (2026-04-22) |
 | 2 | `logsumexp` placement for Phase 11 | Resolved | ✅ Aliased: `py.jax_scipy.logsumexp is py.jax.logsumexp` (2026-04-21) |
-| 3 | Partial-bijection NaN silence | Low | Add regression tests next time we touch Phase 7 predicates |
+| 3 | Partial-bijection NaN silence | Resolved | ✅ 4 regression tests locking in NaN behaviour (2026-04-22) |
 | 4 | Shadowed-builtin docs bullet | Resolved | ✅ Docs section added post-Phase-15 (2026-04-21) |
-| 5 | `*_like` predicates lack opts arity | Low | Add when a caller wants dtype override without `++()` |
+| 5 | `*_like` predicates lack opts arity | Resolved | ✅ `/3` (zeros_like, ones_like) and `/4` (full_like) added (2026-04-22) |
+
+All items resolved. File can be deleted once a human reads the history.

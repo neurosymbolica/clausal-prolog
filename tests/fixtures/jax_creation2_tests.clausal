@@ -36,6 +36,27 @@ Test("full_like fills with value") <- (
     array_list(R, [[7.0, 7.0, 7.0], [7.0, 7.0, 7.0]])
 )  # nv
 
+Test("zeros_like opts overrides dtype") <- (
+    ones([2, 3], A),
+    zeros_like(A, {"dtype": int32}, R),
+    shape(R, [2, 3]),
+    dtype(R, int32)
+)  # nv
+
+Test("ones_like opts overrides dtype") <- (
+    zeros([3], A),
+    ones_like(A, {"dtype": int32}, R),
+    dtype(R, int32),
+    array_list(R, [1, 1, 1])
+)  # nv
+
+Test("full_like opts overrides dtype") <- (
+    ones([2], A),
+    full_like(A, 7, {"dtype": int32}, R),
+    dtype(R, int32),
+    array_list(R, [7, 7])
+)  # nv
+
 # --- empty (JAX actually returns zeros) ---
 
 Test("empty shape") <- (
