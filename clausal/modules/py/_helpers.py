@@ -248,6 +248,65 @@ def _bidir_3_mid(forward, backward):
     return dispatch
 
 
+def _bidir_3_split(forward, backward):
+    """Bidirectional predicate that splits one value into two.
+
+    (+X,-A,-B) forward: A, B = forward(X)
+    (-X,+A,+B) backward: X = backward(A, B)
+    (+X,+A,+B) check: compute forward(X), unify/value-equal vs (A, B)
+
+    Mirror of `_bidir_2`'s check-mode fallback: `unify` can raise on
+    array-typed operands; `_values_equal` is used as the fallback.
+    """
+    def dispatch(this_generator, _proceed, _fail, _catcher, x_raw, a_raw, b_raw, trail):
+        x = _deep_deref(x_raw)
+        a = _deep_deref(a_raw)
+        b = _deep_deref(b_raw)
+
+        x_unbound = _any_unbound(x)
+        a_unbound = _any_unbound(a)
+        b_unbound = _any_unbound(b)
+
+        if not x_unbound and (a_unbound or b_unbound):
+            try:
+                out_a, out_b = forward(x)
+            except Exception:
+                yield (_fail, DONE)
+                return
+            if unify(a_raw, out_a, trail) and unify(b_raw, out_b, trail):
+                yield (_proceed, None)
+
+        elif x_unbound and not a_unbound and not b_unbound:
+            try:
+                out_x = backward(a, b)
+            except Exception:
+                yield (_fail, DONE)
+                return
+            if unify(x_raw, out_x, trail):
+                yield (_proceed, None)
+
+        elif not x_unbound and not a_unbound and not b_unbound:
+            try:
+                out_a, out_b = forward(x)
+            except Exception:
+                yield (_fail, DONE)
+                return
+            mark = trail.mark()
+            unified = False
+            try:
+                unified = (unify(a_raw, out_a, trail)
+                           and unify(b_raw, out_b, trail))
+            except Exception:
+                trail.undo(mark)
+                unified = (_values_equal(out_a, a)
+                           and _values_equal(out_b, b))
+            if unified:
+                yield (_proceed, None)
+
+        yield (_fail, DONE)
+    return dispatch
+
+
 def _bidir_4_mid2(forward, backward):
     """Bidirectional with two middle args: (+X,+M1,+M2,-Y) forward, (-X,+M1,+M2,+Y) backward.
 

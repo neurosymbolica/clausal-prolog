@@ -1,5 +1,5 @@
 -import_module(jax)
--import_from(py.jax, [array, shape, array_list, sum, allclose])
+-import_from(py.jax, [array, shape, array_list, sum, allclose, null])
 -import_from(py.jax_random, [key])
 -import_from(py.jax_nn, [
     activation, initializer, init_array,
@@ -14,7 +14,7 @@
 
 Test("activation lookup by name") <- (
     activation("relu", FN),
-    FN != ++(None)
+    FN != null
 )  # nv
 
 Test("activation registry contains common names") <- (
@@ -160,7 +160,7 @@ Test("one_hot single index") <- (
 
 Test("initializer lookup by name") <- (
     initializer("glorot_uniform", F),
-    F != ++(None)
+    F != null
 )  # nv
 
 Test("initializer registry contains common names") <- (

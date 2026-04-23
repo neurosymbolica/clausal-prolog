@@ -1,5 +1,5 @@
 -import_module(jax)
--import_from(py.jax, [array, array_list, zeros, shape, allclose, NaN])
+-import_from(py.jax, [array, array_list, zeros, shape, allclose, NaN, null])
 -import_from(py.jax_random, [key])
 -import_from(py.jax_transforms, [value_and_grad])
 -import_from(py.jax_optax, [
@@ -93,7 +93,7 @@ Test("init_optimizer on pytree params returns matching state") <- (
     sgd(0.1, OPT),
     PARAMS is ++({"w": jax.numpy.array([1.0, 2.0]), "b": jax.numpy.array(0.0)}),
     init_optimizer(OPT, PARAMS, STATE),
-    STATE != ++(None)
+    STATE != null
 )  # nv
 
 # ════════════════════════════════════════════════════════════════════════════

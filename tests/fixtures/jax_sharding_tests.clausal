@@ -1,5 +1,5 @@
 -import_module(jax)
--import_from(py.jax, [array, shape, array_list])
+-import_from(py.jax, [array, shape, array_list, null])
 -import_from(py.jax_sharding, [
     jax_device, local_device,
     device_count, local_device_count,
@@ -115,21 +115,21 @@ Test("mesh_devices list pattern match") <- (
 
 Test("partition_spec single axis") <- (
     partition_spec(["x"], P),
-    S is ++(str(P)),
-    S == "P('x',)"
+    partition_spec(AXES, P),
+    AXES == ["x"]
 )  # nv
 
 Test("partition_spec with None unsharded") <- (
-    partition_spec(["x", ++(None)], P),
-    S is ++(str(P)),
-    S == "P('x', None)"
+    partition_spec(["x", null], P),
+    partition_spec(AXES, P),
+    AXES == ["x", null]
 )  # nv
 
 Test("named_sharding construction succeeds") <- (
     make_mesh([1], ["x"], MESH),
     partition_spec(["x"], P),
     named_sharding(MESH, P, S),
-    S != ++(None)
+    S != null
 )  # nv
 
 Test("named_sharding equal when built from equal mesh/spec") <- (
@@ -144,7 +144,7 @@ Test("named_sharding equal when built from equal mesh/spec") <- (
 Test("single_device_sharding construction") <- (
     jax_device(D),
     single_device_sharding(D, S),
-    S != ++(None)
+    S != null
 )  # nv
 
 # --- sharding/2 in query mode ---
@@ -152,7 +152,7 @@ Test("single_device_sharding construction") <- (
 Test("sharding query on fresh array") <- (
     array([1.0, 2.0, 3.0], A),
     sharding(A, S),
-    S != ++(None)
+    S != null
 )  # nv
 
 # --- device_put ---

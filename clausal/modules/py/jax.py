@@ -96,6 +96,9 @@ Functional updates (`.at`, pure — returns a new array, leaves A untouched):
 Conversions (bijective):
     jax_numpy(A, N)          jax.Array <-> numpy.ndarray
     array_list(A, L)         jax.Array <-> nested Python list
+    complex_split(C, R, I)   complex array <-> (real, imag) pair
+                             Forward: C bound → R, I = C.real, C.imag
+                             Backward: R, I bound → C = R + 1j * I
 
 Linear algebra (jnp.linalg):
     det(A, D)                Determinant
@@ -256,8 +259,10 @@ Exported constants (via __getattr__):
             int8, int16, int32, int64,
             uint8, uint16, uint32, uint64,
             bool_, complex64, complex128
-    Math constants: pi, e, inf, nan
+    Math constants: pi, e, inf, nan, NaN, Inf
     Indexing: newaxis
+    Python None alias: null — for `partition_spec(["x", null], P)` and
+                       `S != null` patterns where ++() is otherwise needed.
 
 Gotcha — float64 is silent-downcast to float32 by default
 ----------------------------------------------------------
@@ -286,7 +291,8 @@ from __future__ import annotations
 import threading as _threading
 
 from clausal.modules.py._helpers import (
-    _pred, _pure, _property_2, _bidir_2, _bidir_3_mid, _bidir_4_mid2,
+    _pred, _pure, _property_2, _bidir_2, _bidir_3_mid, _bidir_3_split,
+    _bidir_4_mid2,
     _check_2, _check_4, _check_1, _check_axis_1,
 )
 
@@ -557,6 +563,17 @@ array_list = _pred("array_list",
     (2, _bidir_2(
         lambda a: a.tolist(),
         lambda l: _jnp_mod().array(l),
+    )),
+)
+
+# complex_split: (+C, -R, -I) pulls .real and .imag from a complex
+# JAX array; (-C, +R, +I) reconstructs C = R + 1j * I. Covers the
+# common FFT / eig pattern where a real-part check is easier than
+# comparing complex values directly.
+complex_split = _pred("complex_split",
+    (3, _bidir_3_split(
+        lambda c: (c.real, c.imag),
+        lambda r, i: r + 1j * i,
     )),
 )
 
@@ -1296,6 +1313,12 @@ _EXPORTED_CONSTS = frozenset({"pi", "e", "inf", "nan", "newaxis"})
 # to true AST-level builtins in todo/builtin_numeric_constants.md.
 _CONST_ALIASES = {"NaN": "nan", "Inf": "inf"}
 
+# Python None alias. Clausal has no atomic None, so without this fixtures
+# reach for ++(None) in "is not null" checks and structural positions
+# like partition_spec(["x", null], P) where None means "this dim is not
+# sharded".
+null = None
+
 
 def __getattr__(name):
     if name in _EXPORTED_DTYPES or name in _EXPORTED_CONSTS:
@@ -1325,7 +1348,7 @@ __all__ = [
     # Functional updates
     "at_set", "at_add", "at_mul", "at_min", "at_max", "at_get",
     # Conversions
-    "jax_numpy", "array_list",
+    "jax_numpy", "array_list", "complex_split",
     # Linear algebra
     "det", "slogdet", "inv", "solve", "svd",
     "eig", "eigh", "eigvals", "eigvalsh",
@@ -1371,4 +1394,6 @@ __all__ = [
     "bool_", "complex64", "complex128",
     # Math and indexing constants
     "pi", "e", "inf", "nan", "newaxis",
+    # Python None alias
+    "null",
 ]

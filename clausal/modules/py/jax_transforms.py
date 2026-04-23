@@ -24,6 +24,8 @@ All predicates are Tier 1 pure.
 Differentiation:
     grad_value(F, X, G)                Gradient of F at X
     value_and_grad(F, X, (V, G))       Value and gradient — tuple result
+    grad_fn(F, G)                      Return jax.grad(F) as a callable
+    value_and_grad_fn(F, G)            Return jax.value_and_grad(F) as a callable
     jvp_value(F, PRIMALS, TANGENTS, (P, T))
                                        Forward-mode JVP; tuple (primal, tangent)
     vjp_value(F, X, (V, VJP_FN))       Reverse-mode VJP; vjp_fn is a callable
@@ -86,6 +88,17 @@ grad_value = _pred("grad_value",
 
 value_and_grad = _pred("value_and_grad",
     (3, _pure(lambda f, x: tuple(_jx().value_and_grad(f)(x)))),
+)
+
+# Return-the-function forms — mirror `jit_compile/2`. Use these when
+# composing transforms (e.g. jit the grad of f) where `grad_value/3`
+# would force a wasted call.
+grad_fn = _pred("grad_fn",
+    (2, _pure(lambda f: _jx().grad(f))),
+)
+
+value_and_grad_fn = _pred("value_and_grad_fn",
+    (2, _pure(lambda f: _jx().value_and_grad(f))),
 )
 
 # PRIMALS and TANGENTS must be tuples for jax.jvp; accept either list
@@ -155,6 +168,7 @@ eval_shape = _pred("eval_shape",
 __all__ = [
     # Differentiation
     "grad_value", "value_and_grad",
+    "grad_fn", "value_and_grad_fn",
     "jvp_value", "vjp_value",
     "jacobian", "jacfwd", "jacrev", "hessian",
     # Vectorisation + compilation

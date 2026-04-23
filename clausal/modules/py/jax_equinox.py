@@ -90,6 +90,8 @@ Partition / combine (functional split of a pytree by filter spec):
 Functional updates by callable path:
     tree_at_set(WHERE, TREE, REPLACE, NEW_TREE)
     tree_at_apply(WHERE, TREE, FN, NEW_TREE)
+    tree_at_get(WHERE, TREE, VALUE)        % Mirror of tree_at_set — read
+                                             the leaf named by WHERE
 
 Leaf checks (Tier 1 pure check predicates):
     is_array(X)                             % eqx.is_array
@@ -475,6 +477,13 @@ tree_at_apply = _pred("tree_at_apply",
               _eqx().tree_at(where, tree, replace_fn=fn))),
 )
 
+# Mirror of tree_at_set: read the leaf named by the callable `where`
+# rather than replacing it. Composes visually with tree_at_set — the
+# same WHERE lambda names the same leaf.
+tree_at_get = _pred("tree_at_get",
+    (3, _pure(lambda where, tree: where(tree))),
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Leaf checks
@@ -722,7 +731,7 @@ __all__ = [
     # Partition / combine
     "partition", "combine",
     # Functional updates
-    "tree_at_set", "tree_at_apply",
+    "tree_at_set", "tree_at_apply", "tree_at_get",
     # Leaf checks
     "is_array", "is_inexact_array", "is_array_like", "tree_equal",
     # Serialisation

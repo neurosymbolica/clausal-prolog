@@ -985,9 +985,11 @@ class TestJaxInfra:
     def test_exports_exist(self):
         # nv
         import clausal.modules.py.jax as impl
+        # newaxis is legitimately None (jnp.newaxis == None) and null is an
+        # explicit alias for Python None — accept both.
+        _NONE_OK = {"newaxis", "null"}
         for name in impl.__all__:
-            # newaxis is legitimately None (jnp.newaxis == None), so accept it
-            if name == "newaxis":
+            if name in _NONE_OK:
                 assert getattr(impl, name) is None
                 continue
             obj = getattr(impl, name)

@@ -12,7 +12,7 @@
     apply_module,
     filter_grad_value, filter_value_and_grad, filter_jit_compile,
     partition, combine,
-    tree_at_set, tree_at_apply,
+    tree_at_set, tree_at_apply, tree_at_get,
     is_array, is_inexact_array, tree_equal,
     serialise, deserialise,
     batch_norm, make_with_state, apply_stateful_module,
@@ -195,7 +195,7 @@ Test("tree_at_set replaces a single leaf") <- (
     WHERE is ++(lambda m: m.bias),
     zeros(3, NEW_BIAS),
     tree_at_set(WHERE, MODEL, NEW_BIAS, NEW_MODEL),
-    NB is ++(NEW_MODEL.bias),
+    tree_at_get(WHERE, NEW_MODEL, NB),
     array_list(NB, [0.0, 0.0, 0.0])
 )  # nv
 
@@ -205,7 +205,7 @@ Test("tree_at_apply transforms a leaf") <- (
     WHERE is ++(lambda m: m.bias),
     FN is ++(lambda b: b * 0),
     tree_at_apply(WHERE, MODEL, FN, NEW_MODEL),
-    NB is ++(NEW_MODEL.bias),
+    tree_at_get(WHERE, NEW_MODEL, NB),
     array_list(NB, [0.0, 0.0, 0.0])
 )  # nv
 

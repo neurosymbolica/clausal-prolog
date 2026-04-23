@@ -1,4 +1,4 @@
--import_from(py.jax, [array, array_list, allclose])
+-import_from(py.jax, [array, array_list, allclose, null])
 -import_from(py.jax_scipy, [
     gamma_fn, gammaln, digamma,
     erf, erfc, erfinv,
@@ -191,7 +191,7 @@ Test("spence at 1 is 0") <- (
 
 Test("distribution lookup by name") <- (
     distribution("norm", M),
-    M != ++(None)
+    M != null
 )  # nv
 
 Test("distribution registry includes common names") <- (

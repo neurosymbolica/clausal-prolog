@@ -1,6 +1,6 @@
 -import_from(py.jax, [
     array, eye, zeros, shape, dtype, matmul, array_list,
-    at_get, sum,
+    at_get, sum, complex_split,
     det, slogdet, inv, solve, svd,
     eig, eigh, eigvals, eigvalsh,
     cholesky, qr, lstsq,
@@ -347,7 +347,7 @@ Test("inv of singular matrix succeeds with non-finite values") <- (
 Test("eigvals of diagonal matrix has correct real parts") <- (
     array([[1.0, 0.0], [0.0, 2.0]], A),
     eigvals(A, E),
-    E_REAL is ++(E.real),
+    complex_split(E, E_REAL, _),
     at_get(E_REAL, 0, E0),
     at_get(E_REAL, 1, E1),
     array_list(E0, V0),

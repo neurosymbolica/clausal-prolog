@@ -39,7 +39,10 @@ Mesh construction and inspection:
     mesh_devices(MESH, DEVS)         Device array backing the mesh
 
 Partition specs and shardings:
-    partition_spec(AXES, P)                       PartitionSpec(*axes)
+    partition_spec(AXES, P)                       PartitionSpec(*axes);
+                                                  bidirectional — backward
+                                                  recovers AXES via list(p)
+                                                  (None entries preserved)
     named_sharding(MESH, P, S)                    NamedSharding(mesh, p)
     single_device_sharding(DEV, S)                SingleDeviceSharding(dev)
 
@@ -78,7 +81,7 @@ import threading as _threading
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.py._helpers import _pred, _pure, _check_1, _deep_deref
+from clausal.modules.py._helpers import _pred, _pure, _bidir_2, _check_1, _deep_deref
 from clausal.modules.py.jax import _ensure_jax, _jx
 from clausal.terms import DictTerm
 
@@ -236,8 +239,15 @@ mesh_devices = _pred("mesh_devices",
 # PartitionSpec(None, "y"). Users pass a list of axis names (strings)
 # or None entries for unsharded dimensions.
 
+# Bidirectional: forward constructs PartitionSpec(*axes); backward
+# recovers the axes list via list(p). PartitionSpec is tuple-like so
+# list(p) yields [axis_or_None, ...] in order — enough for a structural
+# check against the original axes list.
 partition_spec = _pred("partition_spec",
-    (2, _pure(lambda axes: _jsh().PartitionSpec(*axes))),
+    (2, _bidir_2(
+        lambda axes: _jsh().PartitionSpec(*axes),
+        lambda p: list(p),
+    )),
 )
 
 named_sharding = _pred("named_sharding",

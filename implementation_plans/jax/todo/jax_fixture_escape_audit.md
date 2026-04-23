@@ -33,8 +33,28 @@ across 12 files (−48%).
   promotion to true AST-level builtins in
   `todo/builtin_numeric_constants.md`.
 
-Ranks 4–7 (`tree_at_get`, `complex_split`, `grad_fn`/`jit_fn`, etc.)
-still open.
+**Update (2026-04-23, ranks 4–7 + bonus):** 131 → 107 occurrences (−18%).
+
+- **Rank 4** — `tree_at_get/3` added to `py.jax_equinox`; the two
+  `NB is ++(NEW_MODEL.bias)` sites after `tree_at_set`/`tree_at_apply`
+  now use the mirror predicate. The three `++(BN.inference)` sites
+  were left alone — tree_at_get doesn't improve readability when the
+  caller isn't already composing with `tree_at_set`.
+- **Rank 5** — `complex_split/3` added to `py.jax` (bidirectional:
+  forward splits `.real`/`.imag`, backward reconstructs via
+  `r + 1j*i`). New `_bidir_3_split` helper in `_helpers.py` to give
+  the shape `(+X) ↔ (+A, +B)` a reusable dispatch. Eliminated 9 FFT
+  and 1 linalg escape.
+- **Rank 6** — `grad_fn/2` and `value_and_grad_fn/2` added to
+  `py.jax_transforms` alongside `jit_compile/2`. The `jit-of-grad`
+  composition site in `jax_transforms_tests.clausal` uses `grad_fn/2`.
+- **Rank 7** — `null = None` exposed as a module attribute on
+  `py.jax`. Nine `++(None)` sites across sharding, optax, nn, scipy,
+  transforms rewritten to `null`.
+- **Bonus** — `partition_spec/2` now bidirectional (backward = `list(p)`).
+  The 2 `++(str(P))` survivors in `jax_sharding_tests.clausal` became
+  structural round-trips: `partition_spec(["x"], P), partition_spec(AXES, P),
+  AXES == ["x"]` — stronger than the old string check.
 
 ---
 
@@ -250,23 +270,27 @@ predicate.
 
 ## Priority ranking (ROI on predicate work)
 
-| Rank | Change | Uses fixed | Cost |
-|---|---|---|---|
-| 1 | Accept scalar/int shorthand in `array/2`, `ones/2`, `zeros/2`, `full/3`, `arange/N` | ~80 | Low — update existing dispatches |
-| 2 | Rewrite tuple-indexing sites to use pattern unification (`R is (H, _)`) | ~5 | Trivial — fixture edits only |
-| 3 | Add `to_float/2`, `to_int/2`, `to_string/2` | ~10 | Low — new module, maybe `py.jax` itself |
-| 4 | Add `tree_at_get/3` (mirror of `tree_at_set/4`) | ~8 | Low — mirrors existing pattern |
-| 5 | Add `complex_split/3` (real/imag bidirectional) | ~3 | Low |
-| 6 | Add `grad_fn/2`, `jit_fn/2` (return-the-function forms) | ~3 | Low |
-| 7 | Export `null` atom from `py.jax_sharding` for Python `None` | ~2 | Trivial |
+| Rank | Change | Uses fixed | Cost | Status |
+|---|---|---|---|---|
+| 1 | Accept scalar/int shorthand in `array/2`, `ones/2`, `zeros/2`, `full/3`, `arange/N` | ~80 | Low — update existing dispatches | ✅ done 2026-04-23 |
+| 2 | Rewrite tuple-indexing sites to use pattern unification (`R is (H, _)`) | ~5 | Trivial — fixture edits only | ✅ done 2026-04-23 |
+| 3 | Rewrite `++(float(V))` sites to `array_list/2` (no new predicate — 0-D arrays already `.tolist()` to Python float) | ~12 | Trivial | ✅ done 2026-04-23 |
+| 4 | Add `tree_at_get/3` (mirror of `tree_at_set/4`) | 2 | Low | ✅ done 2026-04-23 |
+| 5 | Add `complex_split/3` (real/imag bidirectional) | ~10 | Low — `_bidir_3_split` helper added | ✅ done 2026-04-23 |
+| 6 | Add `grad_fn/2`, `value_and_grad_fn/2` | 1 | Low | ✅ done 2026-04-23 |
+| 7 | Export `null` = `None` from `py.jax` | ~9 | Trivial | ✅ done 2026-04-23 |
+| Bonus | `partition_spec/2` bidirectional (backward = `list(p)`) | 2 | Medium — first bidirectional `py.jax_sharding` predicate | ✅ done 2026-04-23 |
 
-Ranks 1–3 together eliminate ~95 escapes for ~day of work. Ranks 4–7
-are cleanup but lower ROI.
+Ranks 1–3 together eliminated ~95 escapes. Ranks 4–7 added 4 small
+predicates + 1 atom for another ~22.
 
-**Not worth doing:** lambda-construction replacement (category B),
-vmap-axis-name wrapper (part of category E), generic field-access
-predicate (category C alt 2). All are semantically-right escapes or
-have very few sites.
+**Not worth doing:** lambda-construction replacement (category B — 41
+sites), vmap-axis-name wrapper (part of category E), generic field-access
+predicate (category C alt 2), and `tree_at_get`-rewrite of the 3
+`++(BN.inference)` sites in `jax_equinox_tests.clausal` (tree_at_get
+makes them longer, not shorter — one-off field read with no paired
+`tree_at_set`). All are semantically-right escapes or have very few
+sites.
 
 ---
 

@@ -1,5 +1,5 @@
 -import_from(py.jax, [
-    array, zeros, shape, array_list, at_get,
+    array, zeros, shape, array_list, at_get, complex_split,
     fft_transform, real_fft,
     fft_transform_2d, fft_transform_nd,
     fft_shift,
@@ -20,8 +20,7 @@ Test("fft_transform of impulse is all ones") <- (
     fft_transform(T, F),
     at_get(F, 0, F0),
     array_list(F0, V),
-    V_REAL is ++(V.real),
-    V_IMAG is ++(V.imag),
+    complex_split(V, V_REAL, V_IMAG),
     V_REAL > 0.99,
     V_REAL < 1.01,
     V_IMAG > -0.01,
@@ -37,8 +36,8 @@ Test("fft_transform roundtrip recovers real part") <- (
     at_get(T2, 1, T1),
     array_list(T0, V0),
     array_list(T1, V1),
-    V0_REAL is ++(V0.real),
-    V1_REAL is ++(V1.real),
+    complex_split(V0, V0_REAL, _),
+    complex_split(V1, V1_REAL, _),
     V0_REAL > 0.99,
     V0_REAL < 1.01,
     V1_REAL > 1.99,
@@ -162,8 +161,8 @@ Test("fft_transform/3 roundtrip along axis 1 recovers real parts") <- (
     at_get(T2, (1, 3), T13),
     array_list(T00, V00),
     array_list(T13, V13),
-    V00_REAL is ++(V00.real),
-    V13_REAL is ++(V13.real),
+    complex_split(V00, V00_REAL, _),
+    complex_split(V13, V13_REAL, _),
     V00_REAL > 0.99,
     V00_REAL < 1.01,
     V13_REAL > 7.99,
@@ -178,8 +177,8 @@ Test("fft_transform_2d of impulse is all ones") <- (
     at_get(F, (1, 1), F11),
     array_list(F00, C00),
     array_list(F11, C11),
-    C00_REAL is ++(C00.real),
-    C11_REAL is ++(C11.real),
+    complex_split(C00, C00_REAL, _),
+    complex_split(C11, C11_REAL, _),
     C00_REAL > 0.99, C00_REAL < 1.01,
     C11_REAL > 0.99, C11_REAL < 1.01
 )  # nv
@@ -190,7 +189,7 @@ Test("fft_transform_nd of impulse is all ones") <- (
     fft_transform_nd(T, F),
     at_get(F, (0, 0, 0), F000),
     array_list(F000, C),
-    C_REAL is ++(C.real),
+    complex_split(C, C_REAL, _),
     C_REAL > 0.99,
     C_REAL < 1.01
 )  # nv
