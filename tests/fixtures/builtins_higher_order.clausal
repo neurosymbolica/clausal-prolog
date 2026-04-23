@@ -7,9 +7,9 @@ IsPositive(X) <- (X > 0)
 
 IsNegative(X) <- (X < 0)
 
-Double(X, Y) <- (Y := X * 2)
+Double(X, Y) <- (Y == X * 2)
 
-AddStep(NUMBER, ACCUMULATOR, NEXT) <- (NEXT := ACCUMULATOR + NUMBER)
+AddStep(NUMBER, ACCUMULATOR, NEXT) <- (NEXT == ACCUMULATOR + NUMBER)
 
 # maplist/2 — Goal(Elem) holds for all elements
 AllPositive(LIST) <- maplist(IsPositive, LIST)

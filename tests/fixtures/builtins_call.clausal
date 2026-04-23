@@ -11,12 +11,12 @@ RunGoal(GOAL) <- call(GOAL)
 
 # Example: call member via a goal variable
 MemberViaCall(X, LIST) <- (
-    GOAL := (X) <- in_(X, LIST),
+    GOAL := (X) <- (X in LIST),
     call(GOAL, X)
 )
 
 # map using call/3
-DoubleViaCall(X, Y) <- (Y := X * 2)
+DoubleViaCall(X, Y) <- (Y == X * 2)
 
 MappedDoubles(LIST, RESULT) <- maplist(
     (X, Y) <- call(DoubleViaCall, X, Y),
@@ -25,7 +25,16 @@ MappedDoubles(LIST, RESULT) <- maplist(
 )
 
 
-Test("double via call") <- (DoubleViaCall(3, Y), Y == 6)  # nv
-Test("mapped doubles") <- (MappedDoubles([1, 2, 3], RESULT), RESULT == [2, 4, 6])  # nv
-Test("apply binary double") <- (ApplyBinary(DoubleViaCall, 5, RESULT), RESULT == 10)  # nv
-Test("run goal lambda") <- RunGoal((() <- True))  # nv
+Test("unmapped double via call") <- (
+    DoubleViaCall(3, Y),
+    Y == 6
+)  # v
+Test("mapped doubles") <- (
+    MappedDoubles([1, 2, 3], RESULT),
+    RESULT == [2, 4, 6]
+)  # v
+Test("apply binary double") <- (
+    ApplyBinary(DoubleViaCall, 5, RESULT),
+    RESULT == 10
+)  # v
+Test("run goal lambda") <- RunGoal(() <- True)  # v

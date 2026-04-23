@@ -17,9 +17,9 @@
 ])
 
 # Arithmetic helper predicates.
-Double(X, Y) <- (Y := X * 2)
-Square(X, Y) <- (Y := X * X)
-TriangleNumber(N, T) <- (T := N * (N + 1) // 2)
+Double(X, Y) <- (Y == X * 2)
+Square(X, Y) <- (Y == X * X)
+TriangleNumber(N, T) <- (T == N * (N + 1) // 2)
 
 # ── := (arithmetic evaluation) ───────────────────────────────────────────────
 

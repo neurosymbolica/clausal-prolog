@@ -137,7 +137,7 @@ Test("float_: string fails") <- (not float_("1.0"))  # nv
 Test("float_: var fails") <- (not float_(_x))  # nv
 
 # number
-Test("number: large int (via eval)") <- (X := 10 ** 100, number(X))  # nv
+Test("number: large int (via eval)") <- (X == 10 ** 100, number(X))  # nv
 
 # callable_
 # (compound-arg variant stays in Python — needs Compound() construction.)

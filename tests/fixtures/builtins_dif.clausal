@@ -5,8 +5,8 @@ NotEqual(X, Y) <- dif(X, Y)
 
 # Use dif inside a rule: pick an element different from a given value
 PickDifferent(X, LIST, PICKED) <- (
-    in_(PICKED, LIST),
-    dif(PICKED, X)
+    PICKED in LIST,
+    PICKED is not X
 )
 
 # eq/3 — reified equality: TRUTH is True if X=Y, False if dif(X,Y)
@@ -22,6 +22,7 @@ SameOrDiff(X, Y, "different") <- eq(X, Y, False)
 
 Test("not equal") <- NotEqual(1, 2)  # nv
 Test("pick different") <- (PickDifferent(1, [1, 2, 3], PICKED), PICKED == 2)  # nv
+# Can the TRUTH == ... be put into the Reified... goal? Then make it a single goal body (no enclosing ()).
 Test("reified eq true") <- (ReifiedEq(1, 1, TRUTH), TRUTH == True)  # nv
 Test("reified eq false") <- (ReifiedEq(1, 2, TRUTH), TRUTH == False)  # nv
 Test("reified dif true") <- (ReifiedDif(1, 2, TRUTH), TRUTH == True)  # nv
