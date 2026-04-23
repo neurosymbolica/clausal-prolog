@@ -10,11 +10,31 @@ Python class for a registry, etc.).
 This doc categorises the uses and proposes which should turn into
 predicates. It's a design discussion, not a task list.
 
-**Update (2026-04-23):** Rank 1 applied — 104 array-literal escapes
-across 4 fixtures rewritten to `array/2`, `ones/2`, `zeros/2`,
-`arange/2`. Zero wrapper changes; the predicates already accepted
-scalar/int shapes and list literals. Count now 147 across 12 files.
-Ranks 2–7 are still open work.
+**Update (2026-04-23):** Ranks 1–3 applied. 251 → 131 occurrences
+across 12 files (−48%).
+
+- **Rank 1** — 104 array-literal escapes rewritten to `array/2`,
+  `ones/2`, `zeros/2`, `arange/2`. Zero wrapper changes; the
+  predicates already accepted scalar/int shapes and list literals.
+- **Rank 2** — 2 tuple-indexing sites (`H is ++(R[0])`) rewritten
+  to pattern unification (`R is (H, _)` / `VJP_RESULT is (G,)`).
+  Clausal's 1-tuple `(X,)` syntax and tuple-against-python-tuple
+  unification both work natively.
+- **Rank 3** — 14 `++(float(V))` scalar-coercion sites rewritten to
+  `array_list(V, V_F)`. No new predicates added: `array_list/2`
+  already returns a Python float for 0-D arrays (via `.tolist()`).
+  The remaining 2 sites use `++(str(P))` on a `PartitionSpec` —
+  cleanly fixed only by making `partition_spec/2` bidirectional;
+  left alone pending that larger change.
+- **Incidental win** — `nan` (lowercase, `py.jax` export) switched
+  to `NaN` (TitleCase, canonical Clausal idiom matching
+  `py.torch.NaN`). Added `NaN`/`Inf` aliases to `py.jax.__getattr__`
+  so JAX fixtures don't need a `py.torch` dependency. Tracked for
+  promotion to true AST-level builtins in
+  `todo/builtin_numeric_constants.md`.
+
+Ranks 4–7 (`tree_at_get`, `complex_split`, `grad_fn`/`jit_fn`, etc.)
+still open.
 
 ---
 
@@ -188,15 +208,17 @@ Examples:
 - `jax_optax_tests.clausal:155` — `V0_F is ++(float(V0))`
 - `jax_sharding_tests.clausal:118` — `S is ++(str(P))`
 
-**Why the escape:** No predicate for scalar extraction. `array_list`
-works for arrays but not for 0-D → Python float.
+**Correction after implementation:** the premise "no predicate for
+scalar extraction" was wrong. `array_list/2` already returns a
+Python `float` when applied to a 0-D array (via `.tolist()`), so
+`V0_F is ++(float(V0))` just becomes `array_list(V0, V0_F)`. And
+`++(float(L[0]))` following `array_list(NEW, L)` can collapse both
+into `array_list(NEW, [F0, *_])` using list-head pattern
+unification. No `to_float`/`to_int` predicates needed.
 
-**Fixability: HIGH, trivial.** Add:
-- `to_float(X, F)`, `to_int(X, I)`, `to_string(X, S)` — straight
-  `float(x)` / `int(x)` / `str(x)` wrappers.
-- `scalar_value(X, V)` — extract Python scalar from 0-D array.
-
-~10 sites eliminated for ~30 lines of wrapper code.
+The `++(str(P))` sites on `PartitionSpec` are the exception —
+cleanly fixed only by making `partition_spec/2` bidirectional.
+Tracked separately.
 
 ### G. Python-None literal inside term constructors (~2 occurrences, ~1%)
 

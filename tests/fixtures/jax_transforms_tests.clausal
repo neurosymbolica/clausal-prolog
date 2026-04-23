@@ -92,7 +92,7 @@ Test("vjp_fn applied gives gradient") <- (
     RESULT is (_V, VJP_FN),
     array(1.0, COTANGENT),
     VJP_RESULT is ++(VJP_FN(COTANGENT)),
-    G is ++(VJP_RESULT[0]),
+    VJP_RESULT is (G,),
     array_list(G, [2.0, 4.0, 6.0])
 )  # nv
 

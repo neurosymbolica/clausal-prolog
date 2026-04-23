@@ -133,7 +133,7 @@ Test("lstm_cell single-step shape") <- (
     zeros(8, H0),
     zeros(8, C0),
     R is ++(M(X, (H0, C0))),
-    H is ++(R[0]),
+    R is (H, _C),
     shape(H, [8])
 )  # nv
 

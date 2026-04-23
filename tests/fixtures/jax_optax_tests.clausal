@@ -1,5 +1,5 @@
 -import_module(jax)
--import_from(py.jax, [array, array_list, zeros, shape, allclose, nan])
+-import_from(py.jax, [array, array_list, zeros, shape, allclose, NaN])
 -import_from(py.jax_random, [key])
 -import_from(py.jax_transforms, [value_and_grad])
 -import_from(py.jax_optax, [
@@ -130,7 +130,7 @@ Test("zero_nans replaces nan grads with 0") <- (
     zero_nans(OPT),
     array([1.0, 2.0], PARAMS),
     init_optimizer(OPT, PARAMS, STATE),
-    array([nan, 0.0], GRADS),
+    array([NaN, 0.0], GRADS),
     update_optimizer(OPT, GRADS, STATE, RESULT),
     RESULT is (UPDATES, _),
     apply_updates(PARAMS, UPDATES, NEW),
@@ -152,8 +152,8 @@ Test("linear_schedule interpolates") <- (
     linear_schedule(1.0, 0.0, 10, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 10, V10),
-    V0_F is ++(float(V0)),
-    V10_F is ++(float(V10)),
+    array_list(V0, V0_F),
+    array_list(V10, V10_F),
     V0_F > 0.99,
     V10_F < 0.01
 )  # nv
@@ -162,8 +162,8 @@ Test("exponential_decay shrinks") <- (
     exponential_decay(1.0, 1, 0.5, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 4, V4),
-    V0_F is ++(float(V0)),
-    V4_F is ++(float(V4)),
+    array_list(V0, V0_F),
+    array_list(V4, V4_F),
     V0_F > 0.99,
     V4_F < 0.1
 )  # nv
@@ -172,8 +172,8 @@ Test("cosine_decay_schedule endpoints") <- (
     cosine_decay_schedule(1.0, 100, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 100, V_END),
-    V0_F is ++(float(V0)),
-    VEND_F is ++(float(V_END)),
+    array_list(V0, V0_F),
+    array_list(V_END, VEND_F),
     V0_F > 0.99,
     VEND_F < 0.01
 )  # nv
@@ -182,8 +182,8 @@ Test("warmup_cosine_decay_schedule peaks at end of warmup") <- (
     warmup_cosine_decay_schedule(0.0, 1.0, 10, 100, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 10, VPEAK),
-    V0_F is ++(float(V0)),
-    VPEAK_F is ++(float(VPEAK)),
+    array_list(V0, V0_F),
+    array_list(VPEAK, VPEAK_F),
     V0_F < 0.01,
     VPEAK_F > 0.99
 )  # nv
@@ -192,8 +192,8 @@ Test("piecewise_constant_schedule steps at boundary") <- (
     piecewise_constant_schedule(1.0, {5: 0.5}, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 10, V10),
-    V0_F is ++(float(V0)),
-    V10_F is ++(float(V10)),
+    array_list(V0, V0_F),
+    array_list(V10, V10_F),
     V0_F > 0.99,
     V10_F > 0.49,
     V10_F < 0.51
@@ -203,8 +203,8 @@ Test("polynomial_schedule") <- (
     polynomial_schedule(1.0, 0.0, 1.0, 10, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 10, V10),
-    V0_F is ++(float(V0)),
-    V10_F is ++(float(V10)),
+    array_list(V0, V0_F),
+    array_list(V10, V10_F),
     V0_F > 0.99,
     V10_F < 0.01
 )  # nv
@@ -221,8 +221,7 @@ Test("scale_by_schedule wired into chain decays effective LR") <- (
     RESULT is (UPDATES, _),
     apply_updates(PARAMS, UPDATES, NEW),
     # First step: base sgd(-1.0 grad) * cosine(0)≈1 ≈ -1.0
-    array_list(NEW, L),
-    F0 is ++(float(L[0])),
+    array_list(NEW, [F0, *_]),
     F0 < -0.99
 )  # nv
 
@@ -369,8 +368,7 @@ Test("multi_steps accumulates K gradients before applying") <- (
     R4 is (U4, _S4),
     apply_updates(P1, U4, P4),
     # Step 4 of 4: mean accumulated grad applied (use_grad_mean=True default)
-    array_list(P4, L),
-    F0 is ++(float(L[0])),
+    array_list(P4, [F0, *_]),
     F0 < -0.99,
     F0 > -1.01
 )  # nv

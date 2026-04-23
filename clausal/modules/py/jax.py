@@ -1290,11 +1290,20 @@ _EXPORTED_DTYPES = frozenset({
 
 _EXPORTED_CONSTS = frozenset({"pi", "e", "inf", "nan", "newaxis"})
 
+# Clausal-idiom aliases for IEEE 754 constants. `py.torch` uses NaN/Inf
+# (TitleCase); we expose the same spellings here so JAX fixtures don't
+# have to pull in py.torch just for a NaN literal. Tracked for promotion
+# to true AST-level builtins in todo/builtin_numeric_constants.md.
+_CONST_ALIASES = {"NaN": "nan", "Inf": "inf"}
+
 
 def __getattr__(name):
     if name in _EXPORTED_DTYPES or name in _EXPORTED_CONSTS:
         _ensure_jax()
         return getattr(_jnp, name)
+    if name in _CONST_ALIASES:
+        _ensure_jax()
+        return getattr(_jnp, _CONST_ALIASES[name])
     raise AttributeError(f"module 'clausal.modules.py.jax' has no attribute {name!r}")
 
 
