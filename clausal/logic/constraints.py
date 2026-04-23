@@ -102,21 +102,28 @@ def structural_eq(left: Any, right: Any) -> bool:
             return False
         return all(structural_eq(ls, rs) for ls, rs in zip(l_segs, r_segs))
 
-    # DictTerm — compare keys and recursively compare values
-    if isinstance(left, DictTerm):
-        if not isinstance(right, DictTerm):
-            return False
-        if left.data.keys() != right.data.keys():
+    # DictTerm / plain dict — treated as equivalent representations of the
+    # same mapping. A DictTerm literal from Clausal source compares equal
+    # to a plain dict returned from a library predicate (e.g. tree_flatten's
+    # backward direction reconstructs into a Python dict).
+    if isinstance(left, (DictTerm, dict)) and isinstance(right, (DictTerm, dict)):
+        l_data = left.data if isinstance(left, DictTerm) else left
+        r_data = right.data if isinstance(right, DictTerm) else right
+        if l_data.keys() != r_data.keys():
             return False
         return all(
-            structural_eq(left.data[k], right.data[k]) for k in left.data
+            structural_eq(l_data[k], r_data[k]) for k in l_data
         )
 
-    # SetTerm — elements are ground/hashable, so frozenset == is sufficient
-    if isinstance(left, SetTerm):
-        if not isinstance(right, SetTerm):
-            return False
-        return left.elements == right.elements
+    # SetTerm / plain set / frozenset — treated as equivalent representations
+    # of the same set. Mirrors the DictTerm/dict handling above: library
+    # predicates that return a Python set can still be compared with a
+    # Clausal-native set literal.
+    if isinstance(left, (SetTerm, set, frozenset)) \
+            and isinstance(right, (SetTerm, set, frozenset)):
+        l_elems = left.elements if isinstance(left, SetTerm) else frozenset(left)
+        r_elems = right.elements if isinstance(right, SetTerm) else frozenset(right)
+        return l_elems == r_elems
 
     # User-defined term dataclasses (same functor class)
     if is_term_instance(left):

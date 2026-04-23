@@ -809,3 +809,105 @@ class TestInOperatorDictSet:
         d = DictTerm({"a": 1, "b": 2})
         sols = self._capture("pair_absent", "a", 99, d)
         assert len(sols) == 1  # ("a", 99) not in dict (value doesn't match)
+
+
+# ── Symmetric equality: DictTerm/dict and SetTerm/set ─────────────────────────
+#
+# DictTerm / SetTerm are Clausal's unification-aware wrappers; a
+# bidirectional predicate's backward direction or a library call might
+# return a plain Python dict / set equivalent. Clausal `==` (structural_eq)
+# and `unify` must treat the two representations as equal so fixtures can
+# write `TREE is {"a": 1}, REBUILT == TREE` without forcing a ++({...}).
+
+
+class TestDictTermPlainDictEquality:
+    def test_python_eq_dictterm_vs_dict(self):
+        # nv
+        assert DictTerm({"a": 1, "b": 2}) == {"a": 1, "b": 2}
+
+    def test_python_eq_dict_vs_dictterm(self):
+        # nv
+        assert {"a": 1, "b": 2} == DictTerm({"a": 1, "b": 2})
+
+    def test_python_eq_differs_on_keys(self):
+        # nv
+        assert DictTerm({"a": 1}) != {"b": 1}
+        assert {"a": 1} != DictTerm({"b": 1})
+
+    def test_python_eq_differs_on_values(self):
+        # nv
+        assert DictTerm({"a": 1}) != {"a": 2}
+        assert {"a": 1} != DictTerm({"a": 2})
+
+    def test_structural_eq_dictterm_vs_dict(self):
+        # nv
+        from clausal.logic.constraints import structural_eq
+        assert structural_eq(DictTerm({"a": 1, "b": 2}), {"a": 1, "b": 2})
+        assert structural_eq({"a": 1, "b": 2}, DictTerm({"a": 1, "b": 2}))
+
+    def test_structural_eq_nested(self):
+        # nv
+        from clausal.logic.constraints import structural_eq
+        dt = DictTerm({"a": [1, 2], "b": 3})
+        d = {"a": [1, 2], "b": 3}
+        assert structural_eq(dt, d)
+        assert structural_eq(d, dt)
+
+    def test_unify_dictterm_and_dict(self):
+        # nv
+        t = Trail()
+        assert unify(DictTerm({"a": 1, "b": 2}), {"a": 1, "b": 2}, t)
+
+    def test_unify_dict_and_dictterm(self):
+        # nv
+        t = Trail()
+        assert unify({"a": 1, "b": 2}, DictTerm({"a": 1, "b": 2}), t)
+
+    def test_unify_dictterm_with_var_value_vs_dict(self):
+        # nv — Vars inside DictTerm values unify with corresponding dict values
+        t = Trail()
+        v = Var()
+        assert unify(DictTerm({"a": v, "b": 2}), {"a": 42, "b": 2}, t)
+        assert deref(v) == 42
+
+
+class TestSetTermPlainSetEquality:
+    def test_python_eq_setterm_vs_set(self):
+        # nv
+        assert SetTerm([1, 2, 3]) == {1, 2, 3}
+
+    def test_python_eq_set_vs_setterm(self):
+        # nv
+        assert {1, 2, 3} == SetTerm([1, 2, 3])
+
+    def test_python_eq_setterm_vs_frozenset(self):
+        # nv
+        assert SetTerm([1, 2, 3]) == frozenset([1, 2, 3])
+        assert frozenset([1, 2, 3]) == SetTerm([1, 2, 3])
+
+    def test_python_eq_differs(self):
+        # nv
+        assert SetTerm([1, 2]) != {1, 2, 3}
+        assert {1, 2, 3} != SetTerm([1, 2])
+
+    def test_structural_eq_setterm_vs_set(self):
+        # nv
+        from clausal.logic.constraints import structural_eq
+        assert structural_eq(SetTerm([1, 2, 3]), {1, 2, 3})
+        assert structural_eq({1, 2, 3}, SetTerm([1, 2, 3]))
+
+    def test_structural_eq_setterm_vs_frozenset(self):
+        # nv
+        from clausal.logic.constraints import structural_eq
+        assert structural_eq(SetTerm([1, 2, 3]), frozenset([1, 2, 3]))
+        assert structural_eq(frozenset([1, 2, 3]), SetTerm([1, 2, 3]))
+
+    def test_unify_setterm_and_set(self):
+        # nv
+        t = Trail()
+        assert unify(SetTerm([1, 2, 3]), {1, 2, 3}, t)
+
+    def test_unify_set_and_setterm(self):
+        # nv
+        t = Trail()
+        assert unify({1, 2, 3}, SetTerm([1, 2, 3]), t)

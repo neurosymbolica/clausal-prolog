@@ -72,14 +72,14 @@ Test("tree_flatten forward count") <- (
 )  # nv
 
 Test("tree_flatten roundtrip dict") <- (
-    TREE is ++({"a": [1.0, 2.0], "b": 3.0}),
+    TREE is {"a": [1.0, 2.0], "b": 3.0},
     tree_flatten(TREE, TREEDEF, LEAVES),
     tree_flatten(REBUILT, TREEDEF, LEAVES),
     REBUILT == TREE
 )  # nv
 
 Test("tree_flatten roundtrip list") <- (
-    TREE is ++([1.0, 2.0, 3.0]),
+    TREE is [1.0, 2.0, 3.0],
     tree_flatten(TREE, TREEDEF, LEAVES),
     tree_flatten(REBUILT, TREEDEF, LEAVES),
     REBUILT == TREE

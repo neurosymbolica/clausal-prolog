@@ -72,10 +72,16 @@ class TestDictTermBasics:
         d2 = DictTerm({"x": 2})
         assert d1 != d2
 
-    def test_not_equal_to_plain_dict(self):
+    def test_equals_plain_dict_with_matching_content(self):
+        # nv — symmetric equality: DictTerm and plain dict are treated as
+        # equivalent representations of the same mapping.
+        assert DictTerm({"x": 1}) == {"x": 1}
+        assert {"x": 1} == DictTerm({"x": 1})
+
+    def test_differs_from_plain_dict_with_different_content(self):
         # nv
-        d = DictTerm({"x": 1})
-        assert d != {"x": 1}
+        assert DictTerm({"x": 1}) != {"x": 2}
+        assert DictTerm({"x": 1}) != {"y": 1}
 
     def test_hash(self):
         # nv
@@ -273,10 +279,18 @@ class TestSetTermBasics:
         s2 = SetTerm([1, 3])
         assert s1 != s2
 
-    def test_not_equal_to_plain_set(self):
+    def test_equals_plain_set_with_matching_content(self):
+        # nv — symmetric equality: SetTerm, plain set, and frozenset with
+        # the same elements all compare equal.
+        assert SetTerm([1, 2]) == {1, 2}
+        assert {1, 2} == SetTerm([1, 2])
+        assert SetTerm([1, 2]) == frozenset([1, 2])
+        assert frozenset([1, 2]) == SetTerm([1, 2])
+
+    def test_differs_from_plain_set_with_different_content(self):
         # nv
-        s = SetTerm([1, 2])
-        assert s != {1, 2}
+        assert SetTerm([1, 2]) != {1, 3}
+        assert SetTerm([1, 2]) != {1, 2, 3}
 
     def test_hash(self):
         # nv

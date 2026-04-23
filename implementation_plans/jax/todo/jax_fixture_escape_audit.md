@@ -55,10 +55,12 @@ across 12 files (−48%).
   The 2 `++(str(P))` survivors in `jax_sharding_tests.clausal` became
   structural round-trips: `partition_spec(["x"], P), partition_spec(AXES, P),
   AXES == ["x"]` — stronger than the old string check.
-- **Tracked separately** — 2 `++()` sites in `jax_tree_tests.clausal`
-  (roundtrip tests for `tree_flatten`) retained, blocked on
-  DictTerm/plain-dict equality asymmetry
-  (`implementation_plans/data_structures/todo/dictterm_plain_dict_equality.md`).
+- **DictTerm/SetTerm equality symmetry** — resolved alongside. The 2
+  `tree_flatten` roundtrip sites in `jax_tree_tests.clausal` were
+  initially retained because `DictTerm == {...}` returned False. Fixed
+  `structural_eq`, `__eq__`, and `__unify__` to treat DictTerm/dict
+  (and SetTerm/set/frozenset) as equivalent; the retained escapes are
+  now gone.
 
 ---
 

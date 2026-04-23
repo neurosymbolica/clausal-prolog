@@ -86,10 +86,12 @@ class TestCLevelUnify:
         assert unify(x, s, t)
         assert deref(x) == s
 
-    def test_dictterm_not_implemented_for_non_dict(self):
-        # nv
+    def test_dictterm_unifies_with_plain_dict(self):
+        # nv — DictTerm and plain dict are treated as equivalent under
+        # unification. See TestDictTermPlainDictEquality in
+        # test_dict_set_builtins.py for the full matrix.
         t = Trail()
-        assert not unify(DictTerm({"a": 1}), {"a": 1}, t)
+        assert unify(DictTerm({"a": 1}), {"a": 1}, t)
 
     def test_empty_dictterms_unify(self):
         # nv
@@ -105,10 +107,13 @@ class TestCLevelUnify:
         assert unify(d1, d2, t)
         assert deref(x) == 99
 
-    def test_setterm_not_implemented_for_non_set(self):
-        # nv
+    def test_setterm_unifies_with_plain_set(self):
+        # nv — SetTerm and plain set/frozenset are equivalent under
+        # unification. Full matrix in TestSetTermPlainSetEquality in
+        # test_dict_set_builtins.py.
         t = Trail()
-        assert not unify(SetTerm([1, 2]), frozenset([1, 2]), t)
+        assert unify(SetTerm([1, 2]), frozenset([1, 2]), t)
+        assert unify(SetTerm([1, 2]), {1, 2}, Trail())
 
     def test_empty_setterms_unify(self):
         # nv

@@ -657,7 +657,11 @@ class DictTerm:
     def __iter__(self):          return iter(self._data)  # yields keys, like Python dict
 
     def __eq__(self, other):
-        return isinstance(other, DictTerm) and self._data == other._data
+        if isinstance(other, DictTerm):
+            return self._data == other._data
+        if isinstance(other, dict):
+            return self._data == other
+        return NotImplemented
 
     def __hash__(self):
         return hash(frozenset(self._data.items()))
@@ -680,15 +684,25 @@ class DictTerm:
         return any(occurs_check(var, v) for v in self._data.values())
 
     def __unify__(self, other, trail):
-        """Called by C do_unify: pairwise value unification."""
-        if not isinstance(other, DictTerm):
+        """Called by C do_unify: pairwise value unification.
+
+        Accepts another DictTerm or a plain Python dict on the right so
+        that library-returned dicts (e.g. from `_deep_deref` or a
+        bidirectional predicate's backward direction) unify with
+        Clausal-native dict literals without forcing a ++({...}) escape.
+        """
+        if isinstance(other, DictTerm):
+            other_data = other._data
+        elif isinstance(other, dict):
+            other_data = other
+        else:
             return NotImplemented
-        if self._data.keys() != other._data.keys():
+        if self._data.keys() != other_data.keys():
             return False
         from .logic.variables import unify
         mark = trail.mark()
         for key in self._data:
-            if not unify(self._data[key], other._data[key], trail):
+            if not unify(self._data[key], other_data[key], trail):
                 trail.undo(mark)
                 return False
         return True
@@ -718,7 +732,11 @@ class SetTerm:
     def __iter__(self): return iter(self._elements)
 
     def __eq__(self, other):
-        return isinstance(other, SetTerm) and self._elements == other._elements
+        if isinstance(other, SetTerm):
+            return self._elements == other._elements
+        if isinstance(other, (set, frozenset)):
+            return self._elements == frozenset(other)
+        return NotImplemented
 
     def __hash__(self):
         return hash(self._elements)
@@ -728,10 +746,16 @@ class SetTerm:
         return f"SetTerm({{{inner}}})"
 
     def __unify__(self, other, trail):
-        """Called by C do_unify: element-wise equality (elements are ground)."""
-        if not isinstance(other, SetTerm):
-            return NotImplemented
-        return self._elements == other._elements
+        """Called by C do_unify: element-wise equality (elements are ground).
+
+        Accepts another SetTerm or a plain set/frozenset on the right for
+        symmetry with library code that returns Python sets.
+        """
+        if isinstance(other, SetTerm):
+            return self._elements == other._elements
+        if isinstance(other, (set, frozenset)):
+            return self._elements == frozenset(other)
+        return NotImplemented
 
 
 # ── Quantity — number with physical dimensions ────────────────────────────────
