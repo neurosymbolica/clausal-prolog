@@ -1,5 +1,5 @@
 -import_module(jax)
--import_from(py.jax, [array, array_list, shape, allclose])
+-import_from(py.jax, [array, array_list, zeros, shape, allclose, nan])
 -import_from(py.jax_random, [key])
 -import_from(py.jax_transforms, [value_and_grad])
 -import_from(py.jax_optax, [
@@ -24,9 +24,9 @@
 
 Test("sgd one step on a flat array") <- (
     sgd(0.1, OPT),
-    PARAMS is ++(jax.numpy.array([1.0, 2.0, 3.0])),
+    array([1.0, 2.0, 3.0], PARAMS),
     init_optimizer(OPT, PARAMS, STATE0),
-    GRADS is ++(jax.numpy.array([1.0, 1.0, 1.0])),
+    array([1.0, 1.0, 1.0], GRADS),
     update_optimizer(OPT, GRADS, STATE0, RESULT),
     RESULT is (UPDATES, _STATE1),
     apply_updates(PARAMS, UPDATES, NEW_PARAMS),
@@ -36,9 +36,9 @@ Test("sgd one step on a flat array") <- (
 
 Test("sgd opts: momentum") <- (
     sgd(0.1, {"momentum": 0.9}, OPT),
-    PARAMS is ++(jax.numpy.array([0.0, 0.0])),
+    array([0.0, 0.0], PARAMS),
     init_optimizer(OPT, PARAMS, STATE0),
-    GRADS is ++(jax.numpy.array([1.0, 1.0])),
+    array([1.0, 1.0], GRADS),
     update_optimizer(OPT, GRADS, STATE0, RESULT),
     RESULT is (UPDATES, _S),
     # First step with momentum: -lr * grad = -0.1
@@ -49,7 +49,7 @@ Test("sgd opts: momentum") <- (
 
 Test("adam step using value_and_grad") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
-    PARAMS is ++(jax.numpy.array([3.0, 4.0])),
+    array([3.0, 4.0], PARAMS),
     value_and_grad(F, PARAMS, VG),
     VG is (_VAL, GRADS),
     adam(0.01, OPT),
@@ -62,7 +62,7 @@ Test("adam step using value_and_grad") <- (
 
 Test("two-step training reduces loss for x^2") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
-    P0 is ++(jax.numpy.array([5.0])),
+    array([5.0], P0),
     sgd(0.1, OPT),
     init_optimizer(OPT, P0, S0),
     value_and_grad(F, P0, VG0),
@@ -104,9 +104,9 @@ Test("chain of clip then sgd builds and steps") <- (
     clip_by_global_norm(1.0, CLIP),
     sgd(0.1, RAW_SGD),
     chain([CLIP, RAW_SGD], OPT),
-    PARAMS is ++(jax.numpy.zeros(4)),
+    zeros(4, PARAMS),
     init_optimizer(OPT, PARAMS, STATE),
-    GRADS is ++(jax.numpy.array([100.0, 0.0, 0.0, 0.0])),
+    array([100.0, 0.0, 0.0, 0.0], GRADS),
     update_optimizer(OPT, GRADS, STATE, RESULT),
     RESULT is (UPDATES, _),
     apply_updates(PARAMS, UPDATES, NEW),
@@ -117,9 +117,9 @@ Test("chain of clip then sgd builds and steps") <- (
 
 Test("scale alone") <- (
     scale(0.5, OPT),
-    PARAMS is ++(jax.numpy.array([0.0])),
+    array([0.0], PARAMS),
     init_optimizer(OPT, PARAMS, STATE),
-    GRADS is ++(jax.numpy.array([2.0])),
+    array([2.0], GRADS),
     update_optimizer(OPT, GRADS, STATE, RESULT),
     RESULT is (UPDATES, _),
     apply_updates(PARAMS, UPDATES, NEW),
@@ -128,9 +128,9 @@ Test("scale alone") <- (
 
 Test("zero_nans replaces nan grads with 0") <- (
     zero_nans(OPT),
-    PARAMS is ++(jax.numpy.array([1.0, 2.0])),
+    array([1.0, 2.0], PARAMS),
     init_optimizer(OPT, PARAMS, STATE),
-    GRADS is ++(jax.numpy.array([float("nan"), 0.0])),
+    array([nan, 0.0], GRADS),
     update_optimizer(OPT, GRADS, STATE, RESULT),
     RESULT is (UPDATES, _),
     apply_updates(PARAMS, UPDATES, NEW),
@@ -214,9 +214,9 @@ Test("scale_by_schedule wired into chain decays effective LR") <- (
     sgd(1.0, BASE),
     scale_by_schedule(SCHED, SCALER),
     chain([BASE, SCALER], OPT),
-    PARAMS is ++(jax.numpy.array([0.0])),
+    array([0.0], PARAMS),
     init_optimizer(OPT, PARAMS, STATE),
-    GRADS is ++(jax.numpy.array([1.0])),
+    array([1.0], GRADS),
     update_optimizer(OPT, GRADS, STATE, RESULT),
     RESULT is (UPDATES, _),
     apply_updates(PARAMS, UPDATES, NEW),
@@ -231,8 +231,8 @@ Test("scale_by_schedule wired into chain decays effective LR") <- (
 # ════════════════════════════════════════════════════════════════════════════
 
 Test("softmax_cross_entropy on one-hot label") <- (
-    LOGITS is ++(jax.numpy.array([2.0, 1.0, 0.1])),
-    LABELS is ++(jax.numpy.array([1.0, 0.0, 0.0])),
+    array([2.0, 1.0, 0.1], LOGITS),
+    array([1.0, 0.0, 0.0], LABELS),
     softmax_cross_entropy(LOGITS, LABELS, L),
     array_list(L, V),
     V > 0.4,
@@ -240,15 +240,17 @@ Test("softmax_cross_entropy on one-hot label") <- (
 )  # nv
 
 Test("softmax_cross_entropy_with_integer_labels matches one-hot form") <- (
-    LOGITS is ++(jax.numpy.array([[2.0, 1.0, 0.1]])),
-    softmax_cross_entropy_with_integer_labels(LOGITS, ++(jax.numpy.array([0])), L_INT),
-    softmax_cross_entropy(LOGITS, ++(jax.numpy.array([[1.0, 0.0, 0.0]])), L_OH),
+    array([[2.0, 1.0, 0.1]], LOGITS),
+    array([0], INT_LABELS),
+    array([[1.0, 0.0, 0.0]], OH_LABELS),
+    softmax_cross_entropy_with_integer_labels(LOGITS, INT_LABELS, L_INT),
+    softmax_cross_entropy(LOGITS, OH_LABELS, L_OH),
     allclose(L_INT, L_OH)
 )  # nv
 
 Test("sigmoid_binary_cross_entropy on logit 0 with label 1") <- (
-    LOGITS is ++(jax.numpy.array(0.0)),
-    LABELS is ++(jax.numpy.array(1.0)),
+    array(0.0, LOGITS),
+    array(1.0, LABELS),
     sigmoid_binary_cross_entropy(LOGITS, LABELS, L),
     array_list(L, V),
     # -log(0.5) ≈ 0.6931
@@ -257,16 +259,16 @@ Test("sigmoid_binary_cross_entropy on logit 0 with label 1") <- (
 )  # nv
 
 Test("l2_loss with target") <- (
-    PRED is ++(jax.numpy.array([2.0, 4.0])),
-    TARGET is ++(jax.numpy.array([1.0, 1.0])),
+    array([2.0, 4.0], PRED),
+    array([1.0, 1.0], TARGET),
     l2_loss(PRED, TARGET, L),
     # 0.5 * ((2-1)^2 + (4-1)^2) = 0.5 * (1 + 9) elementwise → [0.5, 4.5]
     array_list(L, [0.5, 4.5])
 )  # nv
 
 Test("huber_loss small residual ≈ quadratic") <- (
-    PRED is ++(jax.numpy.array(0.0)),
-    TARGET is ++(jax.numpy.array(0.5)),
+    array(0.0, PRED),
+    array(0.5, TARGET),
     huber_loss(PRED, TARGET, L),
     array_list(L, V),
     # 0.5 * (0.5)^2 = 0.125
@@ -275,8 +277,8 @@ Test("huber_loss small residual ≈ quadratic") <- (
 )  # nv
 
 Test("huber_loss with custom delta") <- (
-    PRED is ++(jax.numpy.array(0.0)),
-    TARGET is ++(jax.numpy.array(2.0)),
+    array(0.0, PRED),
+    array(2.0, TARGET),
     huber_loss(PRED, TARGET, 0.5, L),
     array_list(L, V),
     # delta=0.5; large residual: delta * (|r| - 0.5*delta) = 0.5*(2 - 0.25) = 0.875
@@ -285,21 +287,21 @@ Test("huber_loss with custom delta") <- (
 )  # nv
 
 Test("cosine_similarity of identical vectors is 1") <- (
-    A is ++(jax.numpy.array([1.0, 2.0, 3.0])),
+    array([1.0, 2.0, 3.0], A),
     cosine_similarity(A, A, L),
     array_list(L, V),
     V > 0.99
 )  # nv
 
 Test("hinge_loss correct margin gives 0") <- (
-    PRED is ++(jax.numpy.array(2.0)),
-    TARGET is ++(jax.numpy.array(1.0)),
+    array(2.0, PRED),
+    array(1.0, TARGET),
     hinge_loss(PRED, TARGET, L),
     array_list(L, 0.0)
 )  # nv
 
 Test("smooth_labels with alpha=0.1 on 3-class one-hot") <- (
-    LABELS is ++(jax.numpy.array([1.0, 0.0, 0.0])),
+    array([1.0, 0.0, 0.0], LABELS),
     smooth_labels(LABELS, 0.1, S),
     array_list(S, [V0, V1, V2]),
     # alpha=0.1 → on-class 0.9 + 0.1/3 ≈ 0.9333; off-class 0.1/3 ≈ 0.0333
@@ -328,7 +330,7 @@ Test("optimizer findall returns full list") <- (
 Test("optimizer lookup by name returns the constructor") <- (
     optimizer("sgd", CTOR),
     OPT is ++(CTOR(0.1)),
-    PARAMS is ++(jax.numpy.array([1.0])),
+    array([1.0], PARAMS),
     init_optimizer(OPT, PARAMS, _STATE)
 )  # nv
 
@@ -351,9 +353,9 @@ Test("loss_function registry has known names") <- (
 Test("multi_steps accumulates K gradients before applying") <- (
     sgd(1.0, INNER),
     multi_steps(INNER, 4, OPT),
-    PARAMS is ++(jax.numpy.array([0.0])),
+    array([0.0], PARAMS),
     init_optimizer(OPT, PARAMS, S0),
-    GRADS is ++(jax.numpy.array([1.0])),
+    array([1.0], GRADS),
     update_optimizer(OPT, GRADS, S0, R1),
     R1 is (U1, S1),
     apply_updates(PARAMS, U1, P1),

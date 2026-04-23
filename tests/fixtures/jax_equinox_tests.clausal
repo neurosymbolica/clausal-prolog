@@ -1,6 +1,6 @@
 -import_module(jax)
 -import_module(equinox)
--import_from(py.jax, [array, array_list, shape, allclose])
+-import_from(py.jax, [array, array_list, ones, zeros, arange, shape, allclose, int32])
 -import_from(py.jax_random, [key, split_key])
 -import_from(py.jax_tree, [apply_updates])
 -import_from(py.jax_optax, [sgd, init_optimizer, update_optimizer])
@@ -27,7 +27,7 @@
 Test("linear forward shape") <- (
     key(0, K),
     linear(4, 8, K, MODEL),
-    X is ++(jax.numpy.ones(4)),
+    ones(4, X),
     apply_module(MODEL, X, Y),
     shape(Y, [8])
 )  # nv
@@ -35,7 +35,7 @@ Test("linear forward shape") <- (
 Test("linear with use_bias=False opts") <- (
     key(0, K),
     linear(4, 8, {"use_bias": False}, K, MODEL),
-    X is ++(jax.numpy.ones(4)),
+    ones(4, X),
     apply_module(MODEL, X, Y),
     shape(Y, [8])
 )  # nv
@@ -43,14 +43,14 @@ Test("linear with use_bias=False opts") <- (
 Test("mlp forward shape") <- (
     key(0, K),
     mlp(2, 3, 8, 2, K, MODEL),
-    X is ++(jax.numpy.ones(2)),
+    ones(2, X),
     apply_module(MODEL, X, Y),
     shape(Y, [3])
 )  # nv
 
 Test("layer_norm forward preserves shape") <- (
     layer_norm(8, NORM),
-    X is ++(jax.numpy.arange(8.0)),
+    arange(8.0, X),
     apply_module(NORM, X, Y),
     shape(Y, [8])
 )  # nv
@@ -62,14 +62,14 @@ Test("sequential of linear, layer_norm, linear") <- (
     layer_norm(6, B),
     linear(6, 2, K2, C),
     sequential([A, B, C], MODEL),
-    X is ++(jax.numpy.ones(4)),
+    ones(4, X),
     apply_module(MODEL, X, Y),
     shape(Y, [2])
 )  # nv
 
 Test("identity is a no-op") <- (
     identity(M),
-    X is ++(jax.numpy.array([1.0, 2.0, 3.0])),
+    array([1.0, 2.0, 3.0], X),
     apply_module(M, X, Y),
     array_list(Y, [1.0, 2.0, 3.0])
 )  # nv
@@ -77,14 +77,14 @@ Test("identity is a no-op") <- (
 Test("lambda_layer wraps a callable") <- (
     FN is ++(lambda x: x * 2),
     lambda_layer(FN, M),
-    X is ++(jax.numpy.array([1.0, 2.0, 3.0])),
+    array([1.0, 2.0, 3.0], X),
     apply_module(M, X, Y),
     array_list(Y, [2.0, 4.0, 6.0])
 )  # nv
 
 Test("dropout defaults to inference (no-op)") <- (
     dropout(0.5, M),
-    X is ++(jax.numpy.ones(8)),
+    ones(8, X),
     apply_module(M, X, Y),
     array_list(Y, [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
 )  # nv
@@ -92,28 +92,28 @@ Test("dropout defaults to inference (no-op)") <- (
 Test("conv2d forward shape") <- (
     key(0, K),
     conv2d(3, 8, 3, K, MODEL),
-    X is ++(jax.numpy.ones((3, 16, 16))),
+    ones([3, 16, 16], X),
     apply_module(MODEL, X, Y),
     shape(Y, [8, 14, 14])
 )  # nv
 
 Test("max_pool2d shape with stride=2 opts") <- (
     max_pool2d(2, {"stride": 2}, M),
-    X is ++(jax.numpy.ones((1, 8, 8))),
+    ones([1, 8, 8], X),
     apply_module(M, X, Y),
     shape(Y, [1, 4, 4])
 )  # nv
 
 Test("avg_pool1d shape with stride=2 opts") <- (
     avg_pool1d(2, {"stride": 2}, M),
-    X is ++(jax.numpy.ones((1, 8))),
+    ones([1, 8], X),
     apply_module(M, X, Y),
     shape(Y, [1, 4])
 )  # nv
 
 Test("adaptive_avg_pool2d shape") <- (
     adaptive_avg_pool2d([4, 4], M),
-    X is ++(jax.numpy.ones((1, 16, 16))),
+    ones([1, 16, 16], X),
     apply_module(M, X, Y),
     shape(Y, [1, 4, 4])
 )  # nv
@@ -121,7 +121,7 @@ Test("adaptive_avg_pool2d shape") <- (
 Test("embedding lookup shape") <- (
     key(0, K),
     embedding(10, 4, K, M),
-    X is ++(jax.numpy.array(3)),
+    array(3, X),
     apply_module(M, X, Y),
     shape(Y, [4])
 )  # nv
@@ -129,9 +129,9 @@ Test("embedding lookup shape") <- (
 Test("lstm_cell single-step shape") <- (
     key(0, K),
     lstm_cell(4, 8, K, M),
-    X is ++(jax.numpy.ones(4)),
-    H0 is ++(jax.numpy.zeros(8)),
-    C0 is ++(jax.numpy.zeros(8)),
+    ones(4, X),
+    zeros(8, H0),
+    zeros(8, C0),
     R is ++(M(X, (H0, C0))),
     H is ++(R[0]),
     shape(H, [8])
@@ -144,7 +144,7 @@ Test("lstm_cell single-step shape") <- (
 Test("filter_grad_value over a Linear loss") <- (
     key(0, K),
     linear(4, 1, K, MODEL),
-    XS is ++(jax.numpy.ones(4)),
+    ones(4, XS),
     LOSS_FN is ++(lambda m: jax.numpy.sum(m(jax.numpy.ones(4)) ** 2)),
     filter_grad_value(LOSS_FN, MODEL, GRADS),
     # Grads should match the model's pytree structure (linear weight + bias)
@@ -193,7 +193,7 @@ Test("tree_at_set replaces a single leaf") <- (
     key(0, K),
     linear(2, 3, K, MODEL),
     WHERE is ++(lambda m: m.bias),
-    NEW_BIAS is ++(jax.numpy.zeros(3)),
+    zeros(3, NEW_BIAS),
     tree_at_set(WHERE, MODEL, NEW_BIAS, NEW_MODEL),
     NB is ++(NEW_MODEL.bias),
     array_list(NB, [0.0, 0.0, 0.0])
@@ -214,7 +214,7 @@ Test("tree_at_apply transforms a leaf") <- (
 # ════════════════════════════════════════════════════════════════════════════
 
 Test("is_array succeeds on a JAX array") <- (
-    X is ++(jax.numpy.array([1.0, 2.0])),
+    array([1.0, 2.0], X),
     is_array(X)
 )  # nv
 
@@ -223,12 +223,12 @@ Test("is_array fails on a Python int") <- (
 )  # nv
 
 Test("is_inexact_array succeeds on a float array") <- (
-    X is ++(jax.numpy.array([1.0, 2.0])),
+    array([1.0, 2.0], X),
     is_inexact_array(X)
 )  # nv
 
 Test("is_inexact_array fails on an int array") <- (
-    X is ++(jax.numpy.array([1, 2], dtype=jax.numpy.int32)),
+    array([1, 2], {"dtype": int32}, X),
     not is_inexact_array(X)
 )  # nv
 
@@ -262,8 +262,8 @@ Test("MLP one optax SGD step changes the model") <- (
     key(0, K0),
     split_key(K0, 2, [K_INIT, _]),
     mlp(2, 1, 4, 1, K_INIT, MODEL),
-    XS is ++(jax.numpy.array([[1.0, 2.0], [3.0, 4.0]])),
-    YS is ++(jax.numpy.array([[5.0], [6.0]])),
+    array([[1.0, 2.0], [3.0, 4.0]], XS),
+    array([[5.0], [6.0]], YS),
     LOSS_FN is ++(lambda m: jax.numpy.mean(
         (jax.vmap(m)(jax.numpy.array([[1.0, 2.0], [3.0, 4.0]]))
          - jax.numpy.array([[5.0], [6.0]])) ** 2)),
@@ -294,14 +294,14 @@ Test("batch_norm with mode=batch opts") <- (
 Test("apply_stateful_module in inference mode preserves shape") <- (
     batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
     inference_mode(BN, BN_EVAL),
-    X is ++(jax.numpy.ones(3)),
+    ones(3, X),
     apply_stateful_module(BN_EVAL, X, STATE, Y, _NEW_STATE),
     shape(Y, [3])
 )  # nv
 
 Test("apply_stateful_module under vmap preserves batch shape") <- (
     batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
-    X is ++(jax.numpy.ones((4, 3))),
+    ones([4, 3], X),
     VMAPPED is ++(jax.vmap(BN, axis_name="batch",
                            in_axes=(0, None), out_axes=(0, None))),
     apply_stateful_module(VMAPPED, X, STATE, Y, _NEW_STATE),
@@ -310,7 +310,7 @@ Test("apply_stateful_module under vmap preserves batch shape") <- (
 
 Test("dropout_train differs from its input under a key") <- (
     dropout_train(0.5, D),
-    X is ++(jax.numpy.ones(64)),
+    ones(64, X),
     key(42, K),
     apply_module(D, X, {"key": K}, Y),
     # With p=0.5 over 64 elements the output almost-surely has zeros
