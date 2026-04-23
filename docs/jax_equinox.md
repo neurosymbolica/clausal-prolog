@@ -63,7 +63,7 @@ The full surface is enumerated in the module docstring. Categorisation:
 | Activation / structural | `dropout`, `prelu`, `identity`, `lambda_layer`, `sequential` |
 
 Why per-class instead of one generic `layer/3` constructor: see
-[`todo/jax_registries_discussion.md`](../todo/jax_registries_discussion.md).
+[`implementation_plans/jax/todo/jax_registries_discussion.md`](../implementation_plans/jax/todo/jax_registries_discussion.md).
 The short version is that registry-form construction has higher
 call-site cost (string name + runtime-validated kwargs dict) than
 per-class predicates with named positional args, and nobody

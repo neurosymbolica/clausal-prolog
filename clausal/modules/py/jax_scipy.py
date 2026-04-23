@@ -189,7 +189,7 @@ i1e = _pred("i1e",
 # Alias the canonical implementation in py.jax to guarantee identical
 # behaviour across `-import_from(py.jax, [logsumexp])` and
 # `-import_from(py.jax_scipy, [logsumexp])`. See
-# todo/jax_wrapper_followups.md#2.
+# implementation_plans/jax/todo/jax_wrapper_followups.md#2.
 logsumexp = _jax_logsumexp
 
 beta_fn = _pred("beta_fn",

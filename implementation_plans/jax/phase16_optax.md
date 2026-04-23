@@ -360,7 +360,9 @@ Test("enumerate available optimisers") <- (
 - Registry enumeration: `optimizer/2`, `schedule/2`,
   `loss_function/2` — `length(NS, K)` matches the wrapper's curated
   list. (`gradient_transform/2` was removed as a follow-up — see
-  `todo/jax_registries_discussion.md`; gradient transforms compose
+  `todo/jax_registries_discussion.md` (now
+  `implementation_plans/jax/todo/jax_registries_discussion.md`);
+  gradient transforms compose
   positionally with `chain`, no name-as-data use case.)
 - `multi_steps`: gradient accumulation over 4 micro-batches equals one
   big-batch step
