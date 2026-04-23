@@ -11,37 +11,37 @@
 -module(iso_control, [Test(DESC)])
 
 -private([
-    Choose(X, Y, R),
-    SafeMax(X, Y, M),
-    Parent(P, C), Ancestor(A, D),
-    Color(X),
+    choose(X, Y, R),
+    safe_max(X, Y, M),
+    parent(P, C), ancestor(A, D),
+    color(X),
     a, b, c, d, e, red, green, blue
 ])
 
-# Parent/ancestor chain a → b → c → d, plus branch a → e.
-Parent(a, b),
-Parent(b, c),
-Parent(c, d),
-Parent(a, e),
+# parent/ancestor chain a → b → c → d, plus branch a → e.
+parent(a, b),
+parent(b, c),
+parent(c, d),
+parent(a, e),
 
-Ancestor(A, D) <- Parent(A, D)
-Ancestor(A, D) <- (
-    Parent(A, Z),
-    Ancestor(Z, D)
+ancestor(A, D) <- parent(A, D)
+ancestor(A, D) <- (
+    parent(A, Z),
+    ancestor(Z, D)
 )
 
 # Three-clause predicate used to enumerate colors.
-Color(red),
-Color(green),
-Color(blue),
+color(red),
+color(green),
+color(blue),
 
-# Multi-clause disjunction: Choose/3 picks either argument.
-Choose(X, _, X),
-Choose(_, Y, Y),
+# Multi-clause disjunction: choose/3 picks either argument.
+choose(X, _, X),
+choose(_, Y, Y),
 
 # If-then-else pattern via or+not (no -> in clausal).
-SafeMax(X, Y, X) <- (X >= Y)
-SafeMax(X, Y, Y) <- (Y > X)
+safe_max(X, Y, X) <- (X >= Y)
+safe_max(X, Y, Y) <- (Y > X)
 
 # ── Conjunction (and) ────────────────────────────────────────────────────────
 
@@ -88,24 +88,24 @@ Test("conjunction + negation") <- (
     _x == 5
 )  # nv
 
-# ── Multi-clause predicates (Choose/3) ─────────────────────────────────────
+# ── Multi-clause predicates (choose/3) ─────────────────────────────────────
 
-Test("choose picks first") <- Choose(1, 2, 1)  # nv
-Test("choose picks second") <- Choose(1, 2, 2)  # nv
-Test("choose with atoms") <- Choose(a, b, a)  # nv
+Test("choose picks first") <- choose(1, 2, 1)  # nv
+Test("choose picks second") <- choose(1, 2, 2)  # nv
+Test("choose with atoms") <- choose(a, b, a)  # nv
 
-# ── If-then-else via SafeMax/3 ────────────────────────────────────────────
+# ── If-then-else via safe_max/3 ───────────────────────────────────────────
 
 Test("safe_max: first is larger") <- (
-    SafeMax(5, 3, _m),
+    safe_max(5, 3, _m),
     _m == 5
 )  # nv
 Test("safe_max: second is larger") <- (
-    SafeMax(2, 7, _m),
+    safe_max(2, 7, _m),
     _m == 7
 )  # nv
 Test("safe_max: equal") <- (
-    SafeMax(4, 4, _m),
+    safe_max(4, 4, _m),
     _m == 4
 )  # nv
 
@@ -139,19 +139,19 @@ Test("disjunction with conjunction: 2 solutions") <- (
 
 Test("naf does not bind: not(X is a) fails") <- (not (not (_x is a)))  # nv
 
-# ── Multi-clause facts (Color/1) ───────────────────────────────────────────
+# ── Multi-clause facts (color/1) ───────────────────────────────────────────
 
 Test("color enumerates three") <- (
-    findall(X, Color(X), L),
+    findall(X, color(X), L),
     L == [red, green, blue]
 )  # nv
 
-# ── Recursive predicate (Ancestor/2) ───────────────────────────────────────
+# ── Recursive predicate (ancestor/2) ───────────────────────────────────────
 
-Test("ancestor: direct parent") <- Ancestor(a, b)  # nv
-Test("ancestor: transitive") <- Ancestor(a, d)  # nv
+Test("ancestor: direct parent") <- ancestor(a, b)  # nv
+Test("ancestor: transitive") <- ancestor(a, d)  # nv
 Test("ancestor of a yields all descendants") <- (
-    findall(D, Ancestor(a, D), L),
+    findall(D, ancestor(a, D), L),
     sort(L, S),
     S == [b, c, d, e]
 )  # nv

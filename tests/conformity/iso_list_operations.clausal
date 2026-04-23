@@ -12,25 +12,25 @@
 -module(iso_list_operations, [Test(DESC)])
 
 -private([
-    Palindrome(XS),
-    SortedAsc(XS),
-    IsPermutation(XS, YS),
+    palindrome(XS),
+    sorted_asc(XS),
+    is_permutation(XS, YS),
     a, b, c, d, x
 ])
 
 # A palindrome reads the same forwards and backwards.
-Palindrome(XS) <- reverse(XS, XS)
+palindrome(XS) <- reverse(XS, XS)
 
 # Check that a list is in ascending order.
-SortedAsc(XS=[]),
-SortedAsc([_]),
-SortedAsc([A, B, *REST]) <- (
+sorted_asc(XS=[]),
+sorted_asc([_]),
+sorted_asc([A, B, *REST]) <- (
     A <= B,
-    SortedAsc([B, *REST])
+    sorted_asc([B, *REST])
 )
 
 # Two lists are permutations iff they have equal length and equal sorted form.
-IsPermutation(XS, YS) <- (
+is_permutation(XS, YS) <- (
     length(XS, N),
     length(YS, N),
     sort(XS, S),
@@ -139,26 +139,26 @@ Test("max_list singleton") <- max_list([42], 42)  # nv
 
 # ── palindrome/1 (private helper) ──────────────────────────────────────────
 
-Test("palindrome: empty") <- Palindrome([])  # nv
-Test("palindrome: single") <- Palindrome([1])  # nv
-Test("palindrome: aba") <- Palindrome([1, 2, 1])  # nv
-Test("palindrome: abba") <- Palindrome([1, 2, 2, 1])  # nv
-Test("not palindrome: ab") <- (not Palindrome([1, 2]))  # nv
+Test("palindrome: empty") <- palindrome([])  # nv
+Test("palindrome: single") <- palindrome([1])  # nv
+Test("palindrome: aba") <- palindrome([1, 2, 1])  # nv
+Test("palindrome: abba") <- palindrome([1, 2, 2, 1])  # nv
+Test("not palindrome: ab") <- (not palindrome([1, 2]))  # nv
 
 # ── sorted_asc/1 (private helper) ──────────────────────────────────────────
 
-Test("sorted_asc: empty") <- SortedAsc([])  # nv
-Test("sorted_asc: single") <- SortedAsc([1])  # nv
-Test("sorted_asc: ascending") <- SortedAsc([1, 2, 3])  # nv
-Test("sorted_asc: not descending") <- (not SortedAsc([3, 2, 1]))  # nv
-Test("sorted_asc: equal elements") <- SortedAsc([2, 2, 2])  # nv
+Test("sorted_asc: empty") <- sorted_asc([])  # nv
+Test("sorted_asc: single") <- sorted_asc([1])  # nv
+Test("sorted_asc: ascending") <- sorted_asc([1, 2, 3])  # nv
+Test("sorted_asc: not descending") <- (not sorted_asc([3, 2, 1]))  # nv
+Test("sorted_asc: equal elements") <- sorted_asc([2, 2, 2])  # nv
 
 # ── is_permutation/2 (private helper) ──────────────────────────────────────
 
-Test("is_permutation: same list") <- IsPermutation([1, 2, 3], [1, 2, 3])  # nv
-Test("is_permutation: reordered") <- IsPermutation([3, 1, 2], [1, 2, 3])  # nv
-Test("not permutation: different lengths") <- (not IsPermutation([1, 2], [1, 2, 3]))  # nv
-Test("is_permutation: empty") <- IsPermutation([], [])  # nv
+Test("is_permutation: same list") <- is_permutation([1, 2, 3], [1, 2, 3])  # nv
+Test("is_permutation: reordered") <- is_permutation([3, 1, 2], [1, 2, 3])  # nv
+Test("not permutation: different lengths") <- (not is_permutation([1, 2], [1, 2, 3]))  # nv
+Test("is_permutation: empty") <- is_permutation([], [])  # nv
 
 # ── enumeration cases (migrated from test_iso_list_operations.py) ──────────
 

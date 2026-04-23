@@ -17,88 +17,88 @@
 
 -module(iso_database, [Test(DESC)])
 
--dynamic(Color/1)
--dynamic(Item/1)
--dynamic(Greet/1)
--dynamic(Letter/1)
--dynamic(Single/1)
+-dynamic(color/1)
+-dynamic(item/1)
+-dynamic(greet/1)
+-dynamic(letter/1)
+-dynamic(single/1)
 
-Color("red"),
-Color("green"),
+color("red"),
+color("green"),
 
-Item("b"),
-Item("c"),
+item("b"),
+item("c"),
 
-Letter("a"),
-Letter("b"),
-Letter("c"),
+letter("a"),
+letter("b"),
+letter("c"),
 
-Single(42),
+single(42),
 
-Greet("__seed__"),
+greet("__seed__"),
 
 # ── assertz/1 — add then observe ───────────────────────────────────────────
 
 Test("assertz adds and is visible") <- (
-    assertz(Color("blue")),
-    Color("blue"),
-    retract(Color("blue"))
+    assertz(color("blue")),
+    color("blue"),
+    retract(color("blue"))
 )  # nv
 
 Test("assertz on fresh predicate") <- (
-    assertz(Greet("hello")),
-    Greet("hello"),
-    retract(Greet("hello"))
+    assertz(greet("hello")),
+    greet("hello"),
+    retract(greet("hello"))
 )  # nv
 
 Test("assertz multiple then query each") <- (
-    assertz(Greet("one")),
-    assertz(Greet("two")),
-    assertz(Greet("three")),
-    Greet("one"),
-    Greet("two"),
-    Greet("three"),
-    retract(Greet("one")),
-    retract(Greet("two")),
-    retract(Greet("three"))
+    assertz(greet("one")),
+    assertz(greet("two")),
+    assertz(greet("three")),
+    greet("one"),
+    greet("two"),
+    greet("three"),
+    retract(greet("one")),
+    retract(greet("two")),
+    retract(greet("three"))
 )  # nv
 
 # ── asserta/1 — prepended clause is reachable ─────────────────────────────
 
 Test("asserta adds and is visible") <- (
-    asserta(Item("a")),
-    Item("a"),
-    retract(Item("a"))
+    asserta(item("a")),
+    item("a"),
+    retract(item("a"))
 )  # nv
 
 # ── retract/1 — removes a clause ──────────────────────────────────────────
 
 Test("retract removes matching clause") <- (
-    retract(Letter("b")),
-    not Letter("b"),
-    Letter("a"),
-    Letter("c"),
-    assertz(Letter("b"))
+    retract(letter("b")),
+    not letter("b"),
+    letter("a"),
+    letter("c"),
+    assertz(letter("b"))
 )  # nv
 
 Test("retract first clause") <- (
-    retract(Letter("a")),
-    not Letter("a"),
-    Letter("b"),
-    Letter("c"),
-    asserta(Letter("a"))
+    retract(letter("a")),
+    not letter("a"),
+    letter("b"),
+    letter("c"),
+    asserta(letter("a"))
 )  # nv
 
 Test("retract only clause leaves predicate empty") <- (
-    retract(Single(42)),
-    not Single(42),
-    assertz(Single(42))
+    retract(single(42)),
+    not single(42),
+    assertz(single(42))
 )  # nv
 
 Test("retract then re-assert restores fact") <- (
-    Color("red"),
-    retract(Color("red")),
-    not Color("red"),
-    assertz(Color("red")),
-    Color("red")
+    color("red"),
+    retract(color("red")),
+    not color("red"),
+    assertz(color("red")),
+    color("red")
 )  # nv

@@ -3,23 +3,23 @@
 # vary/3 — copy a term with field overrides
 # (Uses Python dict as overrides; requires a predicate with known fields.)
 # Example: copy a point with its x replaced
-UpdateX(POINT, NEW_X, UPDATED) <- vary({"x": NEW_X}, POINT, UPDATED)
+update_x(POINT, NEW_X, UPDATED) <- vary({"x": NEW_X}, POINT, UPDATED)
 
 # unbound_keys/2 — find which fields are still unbound vars
-FreeFields(TERM, KEYS) <- unbound_keys(TERM, KEYS)
+free_fields(TERM, KEYS) <- unbound_keys(TERM, KEYS)
 
 # signature/3 — reflect the registered parameter names for a predicate
-PredParams(NAME, ARITY, PARAMS) <- signature(NAME, ARITY, PARAMS)
+pred_params(NAME, ARITY, PARAMS) <- signature(NAME, ARITY, PARAMS)
 
 
 # A keyword predicate for testing vary/unbound_keys/signature
-Vec(x=0, y=0),
-Vec(x=1, y=2),
-Vec(x=3, y=4),
+vec(x=0, y=0),
+vec(x=1, y=2),
+vec(x=3, y=4),
 
-Test("signature vec fields") <- (PredParams("Vec", 2, PARAMS), length(PARAMS, 2))  # nv
-Test("free fields unbound y") <- (FreeFields(Vec(x=1), KEYS), "y" in KEYS)  # nv
+Test("signature vec fields") <- (pred_params("vec", 2, PARAMS), length(PARAMS, 2))  # nv
+Test("free fields unbound y") <- (free_fields(vec(x=1), KEYS), "y" in KEYS)  # nv
 Test("vary vec x") <- (
-    UpdateX(Vec(x=1, y=2), 99, UPDATED),
-    UPDATED == Vec(x=99, y=2)
+    update_x(vec(x=1, y=2), 99, UPDATED),
+    UPDATED == vec(x=99, y=2)
 )  # nv

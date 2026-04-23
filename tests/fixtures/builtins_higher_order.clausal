@@ -3,32 +3,32 @@
 
 # Helper predicates used as goals
 
-IsPositive(X) <- (X > 0)
+is_positive(X) <- (X > 0)
 
-IsNegative(X) <- (X < 0)
+is_negative(X) <- (X < 0)
 
-Double(X, Y) <- (Y == X * 2)
+double(X, Y) <- (Y == X * 2)
 
-AddStep(NUMBER, ACCUMULATOR, NEXT) <- (NEXT == ACCUMULATOR + NUMBER)
+add_step(NUMBER, ACCUMULATOR, NEXT) <- (NEXT == ACCUMULATOR + NUMBER)
 
 # maplist/2 — Goal(Elem) holds for all elements
-AllPositive(LIST) <- maplist(IsPositive, LIST)
+all_positive(LIST) <- maplist(is_positive, LIST)
 
 # maplist/3 — maps each X to doubled Y
-Doubled(LIST, RESULT) <- maplist(Double, LIST, RESULT)
+doubled(LIST, RESULT) <- maplist(double, LIST, RESULT)
 
 # include/3 — filter keeping positives
-KeepPositives(LIST, RESULT) <- include(IsPositive, LIST, RESULT)
+keep_positives(LIST, RESULT) <- include(is_positive, LIST, RESULT)
 
 # exclude/3 — remove negatives
-DropNegatives(LIST, RESULT) <- exclude(IsNegative, LIST, RESULT)
+drop_negatives(LIST, RESULT) <- exclude(is_negative, LIST, RESULT)
 
 # foldl/4 — sum a list via fold
-SumFold(LIST, SUM) <- foldl(AddStep, LIST, 0, SUM)
+sum_fold(LIST, SUM) <- foldl(add_step, LIST, 0, SUM)
 
 
-Test("all positive") <- AllPositive([1, 2, 3])  # nv
-Test("doubled list") <- (Doubled([1, 2, 3], RESULT), RESULT == [2, 4, 6])  # nv
-Test("keep positives") <- (KeepPositives([1, -2, 3, -4], RESULT), RESULT == [1, 3])  # nv
-Test("drop negatives") <- (DropNegatives([1, -2, 3, -4], RESULT), RESULT == [1, 3])  # nv
-Test("sum fold") <- (SumFold([1, 2, 3, 4], SUM), SUM == 10)  # nv
+Test("all positive") <- all_positive([1, 2, 3])  # nv
+Test("doubled list") <- (doubled([1, 2, 3], RESULT), RESULT == [2, 4, 6])  # nv
+Test("keep positives") <- (keep_positives([1, -2, 3, -4], RESULT), RESULT == [1, 3])  # nv
+Test("drop negatives") <- (drop_negatives([1, -2, 3, -4], RESULT), RESULT == [1, 3])  # nv
+Test("sum fold") <- (sum_fold([1, 2, 3, 4], SUM), SUM == 10)  # nv

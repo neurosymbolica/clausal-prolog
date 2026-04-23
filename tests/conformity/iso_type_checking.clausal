@@ -19,12 +19,12 @@
 -module(iso_type_checking, [Test(DESC)])
 
 -private([
-    IsBoundNumber(X),
+    is_bound_number(X),
     Hello, Abc
 ])
 
 # Succeeds when X is bound to a number (integer or float).
-IsBoundNumber(X) <- (
+is_bound_number(X) <- (
     nonvar(X),
     number(X)
 )
@@ -110,12 +110,12 @@ Test("ground: ground list") <- ground([1, 2, 3])  # nv
 Test("ground: empty list") <- ground([])  # nv
 Test("ground: var fails") <- (not ground(_x))  # nv
 
-# ── IsBoundNumber/1 (private helper) ─────────────────────────────────────────
+# ── is_bound_number/1 (private helper) ───────────────────────────────────────
 
-Test("is_bound_number: integer") <- IsBoundNumber(42)  # nv
-Test("is_bound_number: float") <- IsBoundNumber(3.14)  # nv
-Test("is_bound_number: string fails") <- (not IsBoundNumber("42"))  # nv
-Test("is_bound_number: unbound fails") <- (not IsBoundNumber(_x))  # nv
+Test("is_bound_number: integer") <- is_bound_number(42)  # nv
+Test("is_bound_number: float") <- is_bound_number(3.14)  # nv
+Test("is_bound_number: string fails") <- (not is_bound_number("42"))  # nv
+Test("is_bound_number: unbound fails") <- (not is_bound_number(_x))  # nv
 
 # ── additional ground-literal cases migrated from test_iso_type_checking.py ──
 

@@ -11,15 +11,15 @@
 -module(iso_arithmetic, [Test(DESC)])
 
 -private([
-    Double(X, Y),
-    Square(X, Y),
-    TriangleNumber(N, T)
+    double(X, Y),
+    square(X, Y),
+    triangle_number(N, T)
 ])
 
 # Arithmetic helper predicates.
-Double(X, Y) <- (Y == X * 2)
-Square(X, Y) <- (Y == X * X)
-TriangleNumber(N, T) <- (T == N * (N + 1) // 2)
+double(X, Y) <- (Y == X * 2)
+square(X, Y) <- (Y == X * X)
+triangle_number(N, T) <- (T == N * (N + 1) // 2)
 
 # ── := (arithmetic evaluation) ───────────────────────────────────────────────
 
@@ -107,31 +107,31 @@ Test("mixed int/float compare: 1 <= 1.0") <- (1 <= 1.0)  # nv
 # ── Private helper predicates ──────────────────────────────────────────────
 
 Test("double 3 is 6") <- (
-    Double(3, _y),
+    double(3, _y),
     _y == 6
 )  # nv
 Test("double 0 is 0") <- (
-    Double(0, _y),
+    double(0, _y),
     _y == 0
 )  # nv
 Test("square 4 is 16") <- (
-    Square(4, _y),
+    square(4, _y),
     _y == 16
 )  # nv
 Test("square 1 is 1") <- (
-    Square(1, _y),
+    square(1, _y),
     _y == 1
 )  # nv
 Test("triangle 5 is 15") <- (
-    TriangleNumber(5, _t),
+    triangle_number(5, _t),
     _t == 15
 )  # nv
 Test("triangle 1 is 1") <- (
-    TriangleNumber(1, _t),
+    triangle_number(1, _t),
     _t == 1
 )  # nv
 Test("triangle 10 is 55") <- (
-    TriangleNumber(10, _t),
+    triangle_number(10, _t),
     _t == 55
 )  # nv
 
