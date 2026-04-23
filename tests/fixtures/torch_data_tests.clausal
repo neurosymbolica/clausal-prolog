@@ -45,8 +45,8 @@ Test("dataset_item first") <- (
     tensor([1, 2, 3], Y),
     tensor_dataset([X, Y], DS),
     dataset_item(DS, 0, ITEM),
-    # ITEM is a tuple of tensors; access elements via ++()
-    X0 is ++(ITEM[0]),
+    # ITEM is a (X_row, Y_row) tuple — decompose via unification
+    ITEM is (X0, _),
     tensor_list(X0, [10.0])
 )  # nv
 
@@ -55,7 +55,7 @@ Test("dataset_item last") <- (
     tensor([1, 2, 3], Y),
     tensor_dataset([X, Y], DS),
     dataset_item(DS, 2, ITEM),
-    X2 is ++(ITEM[0]),
+    ITEM is (X2, _),
     tensor_list(X2, [30.0])
 )  # nv
 
@@ -90,6 +90,6 @@ Test("dataset_element index and item match") <- (
     tensor([[10.0], [20.0]], X),
     tensor_dataset([X], DS),
     dataset_element(DS, 0, ITEM),
-    V is ++(ITEM[0]),
+    ITEM is (V,),
     tensor_list(V, [10.0])
 )  # nv
