@@ -299,6 +299,84 @@ applies. Group by propagator in the plan for efficient implementation.
 
 ---
 
+## Step 5d — When to Add a Registry
+
+A **registry** in this codebase is a `_fact_table_2`-backed predicate
+that exposes a `(NAME, VALUE)` lookup table — typically used to
+discover library entities (activations, optimisers, layer classes) or
+look one up by name. They're cheap to write and easy to reach for, so
+they accumulate. Most of them shouldn't exist.
+
+### The three legitimate patterns
+
+A registry earns its place when at least one of these is true:
+
+1. **Registry IS the construction surface.** No per-class predicate
+   exists or makes sense; users always go through the registry. Most
+   distribution wrappers fit this pattern — `pdf("norm", X, OPTS, R)`
+   takes the distribution name as data, and there's no `pdf_norm/3`
+   alternative.
+
+2. **Name-as-data lookup.** A common use case is *parameterising the
+   entity by name*, e.g. reading `"adam"` from a config file and
+   constructing the optimiser from that name. Per-class predicates may
+   also exist for ergonomics, but the registry serves a separate
+   workflow that would otherwise require a `case` dispatcher.
+
+3. **Enumeration is the goal.** Users genuinely run
+   `findall(N, activation(N, _), NS)` to discover what's available.
+   This typically overlaps with (2) — if you need to enumerate, you
+   probably also need to look up by name.
+
+### The anti-pattern
+
+A registry that fails all three tests is **redundant** — a per-class
+set of predicates does the work, the call-site cost of the registry
+form is *higher* than the per-class form (runtime-validated string
+name + kwargs dict vs. named positional args with IDE/typechecker
+support), and nobody actually enumerates the table. The "test" becomes
+`registry_contains_known_names` — asserting presence, not exercising a
+workflow. That's a symmetry check, not a test.
+
+The trap: once one registry exists, the natural reflex when writing
+the next module is to add another to match. "Symmetry with
+neighbouring registries" is the same anti-pattern as "uniformity of
+the dispatcher" — both are wrapper-side conveniences that users don't
+see. Resist it.
+
+### The three questions
+
+Before adding `_fact_table_2(...)` to a new module:
+
+1. Do users construct entries with the **name as data** (from a
+   config, from user input), or with the per-class predicate?
+2. Will anyone `findall` over this table, or test it just for
+   symmetry?
+3. If a per-class set exists already, what does the registry add
+   beyond a runtime kwargs dict?
+
+If the honest answers are "per-class" / "just symmetry" / "nothing
+real" — don't add the registry. If you're unsure, don't add it; it's
+easier to add one later than to remove it after dependent code grows
+up.
+
+### Collapse-into-one is usually worse
+
+Once you have three legitimate registries (`optimizer/2`, `schedule/2`,
+`loss_function/2`), the instinct is to collapse them into a single
+`named(Kind, Name, Value)` predicate. Don't — call-site readability
+suffers (`optimizer("adam", CTOR)` beats `named(optimizer, "adam",
+CTOR)`), you lose the auto-completion/type-safety dimension (you can't
+ask for an optimiser and accidentally get a schedule), and you still
+need one `_NAMES` tuple per kind. The three registries are cheap to
+keep separate.
+
+**Write-up:** For each module with a registry, the plan should name
+which legitimacy pattern applies. For modules without registries, no
+section needed.
+
+---
+
 ## Step 6 — Design the Term Language
 
 Before predicates, design the **terms** — the data structures that flow
@@ -660,6 +738,23 @@ For every term in the design:
 
 ---
 
+## Checklist J — Registry Audit
+
+For each proposed `_fact_table_2`-backed registry:
+
+- [ ] At least one of the three legitimate patterns applies:
+      - Registry IS the construction surface (no per-class alternative)
+      - Name-as-data lookup (reading the name from a config / user input)
+      - Enumeration is the goal (`findall` over the table is a real use case)
+- [ ] If per-class predicates also exist, the registry solves a workflow
+      the per-class set cannot (not just "symmetry")
+- [ ] At least one test exercises the workflow, not just
+      `registry_contains_known_names` presence checks
+- [ ] The plan names which legitimacy pattern applies
+- [ ] Rejected: "we already have one in the neighbouring module" as a reason
+
+---
+
 ## Checklist I — `.clausal` Syntax
 
 `.clausal` files are parsed as Python AST, not Prolog. Common pitfalls:
@@ -705,6 +800,8 @@ Before the plan is considered ready for implementation:
 - [ ] Tier classification done for all predicates (Step 4)
 - [ ] Scope decision documented with rationale (Step 5)
 - [ ] `++()` escapes minimised — constants exported, check predicates added (Step 5b)
+- [ ] Registry decisions match one of the three legitimate patterns, or
+      no registries added (Step 5d)
 - [ ] Term Language section with all constructors (Step 6)
 - [ ] Predicate Catalogue table complete (Step 7)
 - [ ] Submodule breakdown if needed (Step 8)
@@ -719,6 +816,7 @@ Before the plan is considered ready for implementation:
 - [ ] All terms pass Checklist F
 - [ ] Scope passes Checklist G
 - [ ] `++()` escapes pass Checklist H
+- [ ] Registries pass Checklist J
 - [ ] `.clausal` syntax pass Checklist I
 - [ ] Quantity propagators assigned for numeric predicates (Checklist K)
 

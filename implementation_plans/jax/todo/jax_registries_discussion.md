@@ -170,7 +170,14 @@ don't add the registry.
   registry has known names` fixture test, and all doc/plan mentions.
   581 JAX tests still pass (one fewer than before — the removed
   test).
-- [ ] (Optional, not now) Capture this audit's "when to add a
-  registry" checklist somewhere user-facing — maybe in the wrapper
-  authoring section of the docs, or in the
-  `EXTERNAL_WRAPPER_CHECKLIST.md` if that's the right home.
+- [x] **Lift the "when to add a registry" checklist** into
+  `implementation_plans/std_modules/EXTERNAL_WRAPPER_CHECKLIST.md`.
+  Resolved 2026-04-23: added Step 5d ("When to Add a Registry") with
+  the three legitimate patterns, the anti-pattern, the three
+  questions, and the don't-collapse-into-one advice. Added Checklist
+  J ("Registry Audit") alongside the other per-topic checklists, and
+  referenced it from Checklist L. The JAX/Torch inventory above
+  stays here as the worked example.
+
+This file is now a historical record of the audit — kept for
+reference. Both action items are resolved.
