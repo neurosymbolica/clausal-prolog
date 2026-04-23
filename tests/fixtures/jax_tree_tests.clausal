@@ -10,31 +10,31 @@
 # --- leaf enumeration ---
 
 Test("leaf enumerates flat list") <- (
-    TREE is ++([1.0, 2.0, 3.0]),
+    TREE is [1.0, 2.0, 3.0],
     findall(L, leaf(TREE, L), LS),
     LS == [1.0, 2.0, 3.0]
 )  # nv
 
 Test("leaf enumerates nested dict") <- (
-    TREE is ++({"a": [1.0, 2.0], "b": (3.0, 4.0)}),
+    TREE is {"a": [1.0, 2.0], "b": (3.0, 4.0)},
     findall(L, leaf(TREE, L), LS),
     length(LS, 4)
 )  # nv
 
 Test("leaf on a single value") <- (
-    TREE is ++(42.0),
+    TREE is 42.0,
     findall(L, leaf(TREE, L), LS),
     LS == [42.0]
 )  # nv
 
 Test("leaf on empty list has no leaves") <- (
-    TREE is ++([]),
+    TREE is [],
     findall(L, leaf(TREE, L), LS),
     LS == []
 )  # nv
 
 Test("leaf on empty dict has no leaves") <- (
-    TREE is ++({}),
+    TREE is {},
     findall(L, leaf(TREE, L), LS),
     LS == []
 )  # nv
@@ -42,31 +42,31 @@ Test("leaf on empty dict has no leaves") <- (
 # --- leaf_with_path ---
 
 Test("leaf_with_path on flat list yields index paths") <- (
-    TREE is ++([10.0, 20.0]),
+    TREE is [10.0, 20.0],
     findall(P-L, leaf_with_path(TREE, P, L), PAIRS),
     length(PAIRS, 2)
 )  # nv
 
 Test("leaf_with_path exposes dict key") <- (
-    TREE is ++({"a": 1.0}),
+    TREE is {"a": 1.0},
     leaf_with_path(TREE, (("key", "a"),), 1.0)
 )  # nv
 
 Test("leaf_with_path on nested dict yields correct depth") <- (
-    TREE is ++({"a": [1.0, 2.0]}),
+    TREE is {"a": [1.0, 2.0]},
     findall(P, leaf_with_path(TREE, P, _L), PS),
     length(PS, 2)
 )  # nv
 
 Test("leaf_with_path dict path then list index") <- (
-    TREE is ++({"a": [1.0, 2.0]}),
+    TREE is {"a": [1.0, 2.0]},
     leaf_with_path(TREE, (("key", "a"), ("index", 1)), 2.0)
 )  # nv
 
 # --- tree_flatten (bijective) ---
 
 Test("tree_flatten forward count") <- (
-    TREE is ++({"a": [1.0, 2.0], "b": 3.0}),
+    TREE is {"a": [1.0, 2.0], "b": 3.0},
     tree_flatten(TREE, _TREEDEF, LEAVES),
     length(LEAVES, 3)
 )  # nv
@@ -86,9 +86,9 @@ Test("tree_flatten roundtrip list") <- (
 )  # nv
 
 Test("unflatten with modified leaves") <- (
-    TREE is ++({"a": [1.0, 2.0], "b": 3.0}),
+    TREE is {"a": [1.0, 2.0], "b": 3.0},
     tree_flatten(TREE, TREEDEF, LEAVES),
-    MODIFIED is ++([l * 10 for l in LEAVES]),
+    MODIFIED is ++[l * 10 for l in LEAVES],
     tree_flatten(NEW_TREE, TREEDEF, MODIFIED),
     leaf(NEW_TREE, 10.0)
 )  # nv
@@ -101,20 +101,20 @@ Test("tree_flatten on single value") <- (
 # --- structure queries ---
 
 Test("tree_structure returns PyTreeDef") <- (
-    TREE is ++({"a": 1.0, "b": 2.0}),
+    TREE is {"a": 1.0, "b": 2.0},
     tree_structure(TREE, TD),
     tree_flatten(TREE, TD2, _LEAVES),
     TD == TD2
 )  # nv
 
 Test("tree_leaves_list flat list") <- (
-    TREE is ++([1.0, 2.0, 3.0]),
+    TREE is [1.0, 2.0, 3.0],
     tree_leaves_list(TREE, LEAVES),
     LEAVES == [1.0, 2.0, 3.0]
 )  # nv
 
 Test("tree_leaves_list nested") <- (
-    TREE is ++({"a": [1.0, 2.0], "b": 3.0}),
+    TREE is {"a": [1.0, 2.0], "b": 3.0},
     tree_leaves_list(TREE, LEAVES),
     length(LEAVES, 3)
 )  # nv
@@ -133,7 +133,7 @@ Test("treedef_is_leaf on scalar flatten") <- (
 )  # nv
 
 Test("treedef_is_leaf false on list flatten") <- (
-    TREE is ++([1.0, 2.0]),
+    TREE is [1.0, 2.0],
     tree_flatten(TREE, TD, _LS),
     not treedef_is_leaf(TD)
 )  # nv
@@ -141,7 +141,7 @@ Test("treedef_is_leaf false on list flatten") <- (
 # --- mapping ---
 
 Test("tree_map doubles leaves") <- (
-    TREE is ++({"a": 1.0, "b": 2.0}),
+    TREE is {"a": 1.0, "b": 2.0},
     F is ++(lambda x: x * 2),
     tree_map(F, TREE, DOUBLED),
     tree_leaves_list(DOUBLED, LS),
@@ -149,7 +149,7 @@ Test("tree_map doubles leaves") <- (
 )  # nv
 
 Test("tree_map preserves structure") <- (
-    TREE is ++({"a": [1.0, 2.0], "b": 3.0}),
+    TREE is {"a": [1.0, 2.0], "b": 3.0},
     F is ++(lambda x: x + 1),
     tree_map(F, TREE, MAPPED),
     tree_structure(TREE, TD1),
@@ -158,8 +158,8 @@ Test("tree_map preserves structure") <- (
 )  # nv
 
 Test("tree_map_n adds leaves of two trees") <- (
-    T1 is ++({"a": 1.0, "b": 2.0}),
-    T2 is ++({"a": 10.0, "b": 20.0}),
+    T1 is {"a": 1.0, "b": 2.0},
+    T2 is {"a": 10.0, "b": 20.0},
     F is ++(lambda x, y: x + y),
     tree_map_n(F, [T1, T2], R),
     tree_leaves_list(R, LS),
@@ -169,21 +169,21 @@ Test("tree_map_n adds leaves of two trees") <- (
 # --- reducing ---
 
 Test("tree_reduce sums leaves") <- (
-    TREE is ++({"a": 1.0, "b": 2.0, "c": 3.0}),
+    TREE is {"a": 1.0, "b": 2.0, "c": 3.0},
     F is ++(lambda acc, x: acc + x),
     tree_reduce(F, TREE, 0.0, TOTAL),
     TOTAL == 6.0
 )  # nv
 
 Test("tree_reduce with max and init") <- (
-    TREE is ++([1.0, 5.0, 3.0]),
+    TREE is [1.0, 5.0, 3.0],
     F is ++(lambda acc, x: max(acc, x)),
     tree_reduce(F, TREE, 0.0, PEAK),
     PEAK == 5.0
 )  # nv
 
 Test("tree_reduce counts leaves") <- (
-    TREE is ++({"a": [1.0, 2.0], "b": 3.0}),
+    TREE is {"a": [1.0, 2.0], "b": 3.0},
     F is ++(lambda acc, _x: acc + 1),
     tree_reduce(F, TREE, 0, COUNT),
     COUNT == 3
@@ -204,7 +204,7 @@ Test("keystr on empty path") <- (
 # --- showcase: findall pattern over pytree ---
 
 Test("findall scalar leaves greater than 2") <- (
-    TREE is ++({"a": 1.0, "b": [2.0, 3.0, 4.0]}),
+    TREE is {"a": 1.0, "b": [2.0, 3.0, 4.0]},
     findall(L, (leaf(TREE, L), L > 2.0), BIG),
     length(BIG, 2)
 )  # nv

@@ -90,7 +90,7 @@ Test("mesh_shape check mode with dict literal") <- (
 Test("mesh_shape reach-through by key") <- (
     make_mesh([1], ["x"], MESH),
     mesh_shape(MESH, S),
-    V is ++(S["x"]),
+    V is ++S["x"],
     V == 1
 )  # nv
 

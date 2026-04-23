@@ -16,7 +16,7 @@ Test("init a two-layer param pytree") <- (
     split_key(K, 2, [K1, K2]),
     init_array(F, K1, [10, 5], W1),
     init_array(F, K2, [5, 3], W2),
-    PARAMS is ++({"layer1": {"w": W1}, "layer2": {"w": W2}}),
+    PARAMS is {"layer1": {"w": W1}, "layer2": {"w": W2}},
     findall(L, leaf(PARAMS, L), LEAVES),
     length(LEAVES, 2)
 )  # nv
@@ -27,7 +27,7 @@ Test("tree_map preserves structure over an init'd param pytree") <- (
     split_key(K, 2, [K1, K2]),
     init_array(F, K1, [3], W1),
     init_array(F, K2, [2], W2),
-    PARAMS is ++({"a": W1, "b": W2}),
+    PARAMS is {"a": W1, "b": W2},
     ADD_ONE is ++(lambda w: w + 1.0),
     tree_map(ADD_ONE, PARAMS, MAPPED),
     tree_structure(PARAMS, TD1),
@@ -41,7 +41,7 @@ Test("tree_reduce sums element counts across param leaves") <- (
     split_key(K, 2, [K1, K2]),
     init_array(F, K1, [10, 5], W1),
     init_array(F, K2, [5, 3], W2),
-    PARAMS is ++({"layer1": W1, "layer2": W2}),
+    PARAMS is {"layer1": W1, "layer2": W2},
     ADD_COUNT is ++(lambda acc, w: acc + w.size),
     tree_reduce(ADD_COUNT, PARAMS, 0, TOTAL),
     TOTAL == 65
@@ -53,7 +53,7 @@ Test("tree_leaves_list preserves leaf order by dict key") <- (
     split_key(K, 2, [K1, K2]),
     init_array(F, K1, [3], W1),
     init_array(F, K2, [2], W2),
-    PARAMS is ++({"a": W1, "b": W2}),
+    PARAMS is {"a": W1, "b": W2},
     tree_leaves_list(PARAMS, LEAVES),
     length(LEAVES, 2)
 )  # nv

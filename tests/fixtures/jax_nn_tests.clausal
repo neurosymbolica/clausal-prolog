@@ -243,7 +243,7 @@ Test("init_array different keys differ") <- (
 # Configured initializer via ++() — e.g., constant(0.5).
 # With -import_module(jax) at the top, the Python-side path is clean.
 Test("configured initializer via ++()") <- (
-    F is ++(jax.nn.initializers.constant(0.5)),
+    F is ++jax.nn.initializers.constant(0.5),
     key(0, K),
     init_array(F, K, [3], W),
     array_list(W, [0.5, 0.5, 0.5])

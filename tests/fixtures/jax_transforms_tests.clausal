@@ -92,7 +92,7 @@ Test("vjp_fn applied gives gradient") <- (
     vjp_value(F, X, RESULT),
     RESULT is (_V, VJP_FN),
     array(1.0, COTANGENT),
-    VJP_RESULT is ++(VJP_FN(COTANGENT)),
+    VJP_RESULT is ++VJP_FN(COTANGENT),
     VJP_RESULT is (G,),
     array_list(G, [2.0, 4.0, 6.0])
 )  # nv
@@ -155,7 +155,7 @@ Test("jit_compile returns callable that produces correct output") <- (
     F is ++(lambda x: x * x),
     jit_compile(F, F_JIT),
     array(5.0, X),
-    Y is ++(F_JIT(X)),
+    Y is ++F_JIT(X),
     array_list(Y, 25.0)
 )  # nv
 
@@ -164,7 +164,7 @@ Test("jit_compile of grad gives same value as grad_value") <- (
     grad_fn(F, GRAD),
     jit_compile(GRAD, GRAD_JIT),
     array(2.0, X),
-    Y is ++(GRAD_JIT(X)),
+    Y is ++GRAD_JIT(X),
     array_list(Y, 12.0)
 )  # nv
 
@@ -181,18 +181,18 @@ Test("make_jaxpr returns a Jaxpr") <- (
 
 Test("eval_shape of matmul") <- (
     F is ++(lambda x: x @ x.T),
-    X is ++(jax.ShapeDtypeStruct((10, 5), jax.numpy.float32)),
+    X is ++jax.ShapeDtypeStruct((10, 5), jax.numpy.float32),
     eval_shape(F, X, SD),
-    S is ++(SD.shape),
+    S is ++SD.shape,
     S == (10, 10)
 )  # nv
 
 Test("eval_shape cheap — doesn't allocate the huge result") <- (
     F is ++(lambda x: x + 1),
     # 1_000_000 x 1_000_000 would be ~4 TB if materialised.
-    X is ++(jax.ShapeDtypeStruct((1000000, 1000000), jax.numpy.float32)),
+    X is ++jax.ShapeDtypeStruct((1000000, 1000000), jax.numpy.float32),
     eval_shape(F, X, SD),
-    S is ++(SD.shape),
+    S is ++SD.shape,
     S == (1000000, 1000000)
 )  # nv
 
@@ -202,8 +202,8 @@ Test("grad with dict input") <- (
     F is ++(lambda params: (params["a"] ** 2) + (params["b"] ** 2)),
     PARAMS is ++({"a": jax.numpy.array(3.0), "b": jax.numpy.array(4.0)}),
     grad_value(F, PARAMS, G),
-    GA is ++(G["a"]),
-    GB is ++(G["b"]),
+    GA is ++G["a"],
+    GB is ++G["b"],
     array_list(GA, 6.0),
     array_list(GB, 8.0)
 )  # nv

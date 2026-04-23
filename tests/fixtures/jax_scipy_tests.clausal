@@ -262,7 +262,7 @@ Test("exp of logpdf equals pdf for normal") <- (
     pdf("norm", 1.5, {"loc": 0.0, "scale": 1.0}, P),
     logpdf("norm", 1.5, {"loc": 0.0, "scale": 1.0}, LP),
     array_list(LP, LP_VAL),
-    EXP_LP is ++(__import__("math").exp(LP_VAL)),
+    EXP_LP is ++__import__("math").exp(LP_VAL),
     array(EXP_LP, P2),
     allclose(P, P2, 0.0001, 0.0)
 )  # nv

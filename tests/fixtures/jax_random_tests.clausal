@@ -237,7 +237,7 @@ Test("truncated_normal within bounds") <- (
 
 Test("sampler registry lookup") <- (
     sampler("normal", FN),
-    NAME is ++(FN.__name__),
+    NAME is ++FN.__name__,
     NAME == "normal"
 )  # nv
 

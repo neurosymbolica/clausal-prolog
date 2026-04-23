@@ -81,8 +81,8 @@ Test("apply_updates on pytree of params") <- (
     PARAMS is ++({"w": jax.numpy.array([1.0, 2.0]), "b": jax.numpy.array(0.5)}),
     UPDATES is ++({"w": jax.numpy.array([-0.1, -0.2]), "b": jax.numpy.array(-0.05)}),
     apply_updates(PARAMS, UPDATES, NEW),
-    NW is ++(NEW["w"]),
-    NB is ++(NEW["b"]),
+    NW is ++NEW["w"],
+    NB is ++NEW["b"],
     array([0.9, 1.8], EW),
     array(0.45, EB),
     allclose(NW, EW),
@@ -328,7 +328,7 @@ Test("optimizer findall returns full list") <- (
 
 Test("optimizer lookup by name returns the constructor") <- (
     optimizer("sgd", CTOR),
-    OPT is ++(CTOR(0.1)),
+    OPT is ++CTOR(0.1),
     array([1.0], PARAMS),
     init_optimizer(OPT, PARAMS, _STATE)
 )  # nv
