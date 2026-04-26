@@ -24,6 +24,12 @@
 /*
  * Unpack a (lo, hi) 2-tuple into C int64_t values.
  * Returns 0 on success, -1 on error.
+ *
+ * For bignum bounds (Python ints exceeding int64 range), this raises
+ * OverflowError via PyLong_AsLongLong.  Callers that want to fall back to
+ * a Python implementation for bignum bounds must call has_bignum_bound()
+ * up front before invoking this — the design is "gate at the wrapper, not
+ * mid-loop", to avoid partial-state cleanup.
  */
 static inline int
 unpack_interval(PyObject *pair, int64_t *lo, int64_t *hi)
@@ -60,6 +66,49 @@ unpack_interval(PyObject *pair, int64_t *lo, int64_t *hi)
         if (*hi == -1 && PyErr_Occurred()) return -1;
     }
     return 0;
+}
+
+/*
+ * Detect whether a domain tuple contains any bound that doesn't fit in
+ * int64_t (i.e., a Python int >= 2**63 in magnitude).  Such domains arise
+ * from CLP(Z) propagation on bignum values (e.g. Fibonacci above N=92).
+ *
+ * Returns 1 if any bound is bignum, 0 otherwise.  Never raises — domains
+ * are always well-formed tuples; non-int / non-inf bounds are caught by
+ * unpack_interval at use time.
+ */
+static inline int
+has_bignum_bound(PyObject *domain)
+{
+    Py_ssize_t n = PyTuple_GET_SIZE(domain);
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *pair = PyTuple_GET_ITEM(domain, i);
+        for (int j = 0; j < 2; j++) {
+            PyObject *b = PyTuple_GET_ITEM(pair, j);
+            if (!PyLong_Check(b)) continue;  /* float +/-inf — fits */
+            int ov = 0;
+            (void)PyLong_AsLongLongAndOverflow(b, &ov);
+            if (ov != 0) return 1;
+        }
+    }
+    return 0;
+}
+
+/*
+ * Detect whether a single Python object is a bignum int (out of int64
+ * range).  Used by domain_from_range to short-circuit to the Python
+ * reference impl when constructing a bignum-bounded domain.
+ *
+ * Returns 1 if obj is a Python int outside int64 range, 0 otherwise.
+ * Floats (+/-inf) and non-int objects return 0 (handled elsewhere).
+ */
+static inline int
+is_bignum_int(PyObject *obj)
+{
+    if (!PyLong_Check(obj)) return 0;
+    int ov = 0;
+    (void)PyLong_AsLongLongAndOverflow(obj, &ov);
+    return ov != 0;
 }
 
 /*
@@ -442,6 +491,9 @@ error:
 /*
  * Parse a Python object that might be int or float +-inf into int64_t.
  * Returns 0 on success, -1 on error.
+ *
+ * Bignum ints raise OverflowError via PyLong_AsLongLong.  Callers with a
+ * bignum fallback path should call is_bignum_int() before this.
  */
 static inline int
 parse_bound(PyObject *obj, int64_t *out)

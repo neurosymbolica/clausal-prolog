@@ -232,6 +232,23 @@ def domain_values(domain: Domain):
         yield from range(lo, hi + 1)
 
 
+# Preserve Python implementations under _py_* names so the C extensions
+# can fall back to them when domain bounds exceed int64 (bignum case).
+# These references must be captured BEFORE the C versions overwrite the
+# public names below.
+_py_domain_from_range = domain_from_range
+_py_domain_contains = domain_contains
+_py_domain_min = domain_min
+_py_domain_max = domain_max
+_py_domain_size = domain_size
+_py_domain_singleton = domain_singleton
+_py_domain_intersection = domain_intersection
+_py_domain_remove = domain_remove
+_py_domain_remove_above = domain_remove_above
+_py_domain_remove_below = domain_remove_below
+_py_domain_values = domain_values
+
+
 # Replace Python domain ops with C versions when available
 if _USE_C_DOMAINS:
     domain_from_range = _c_domain_from_range
@@ -362,6 +379,236 @@ class Constraint:
     def propagate(self, trail: Trail, queue: deque) -> bool:
         """Narrow domains. Return False on wipeout."""
         raise NotImplementedError
+
+
+# ── Bignum fallback helpers for the C propagator ─────────────────────────────
+#
+# When _clpfd_propagate.c detects that a constraint's operand domains contain
+# bignum bounds (out of int64 range), it tail-calls into one of these helpers
+# instead of running its int64 fast path.  The logic mirrors the corresponding
+# class.propagate() methods below; the public domain_* names here resolve to
+# the C-accelerated wrappers, which themselves fall back to _py_domain_* when
+# bignum bounds are present (see Slice 1+2).
+
+
+def _eq_propagate_bignum(lhs, rhs, trail, queue) -> bool:
+    """Equivalent of EqConstraint.propagate with bignum-safe operations."""
+    lhs = deref(lhs)
+    rhs = deref(rhs)
+    ld = _expr_domain(lhs, trail)
+    rd = _expr_domain(rhs, trail)
+    inter = domain_intersection(ld, rd)
+    if not inter:
+        return False
+    if is_var(lhs):
+        if not _narrow_if_changed(lhs, inter, trail, queue):
+            return False
+    if is_var(rhs):
+        if not _narrow_if_changed(rhs, inter, trail, queue):
+            return False
+    return True
+
+
+def _lt_propagate_bignum(lhs, rhs, trail, queue) -> bool:
+    """Equivalent of LtConstraint.propagate with bignum-safe operations."""
+    lhs = deref(lhs)
+    rhs = deref(rhs)
+    ld = _expr_domain(lhs, trail)
+    rd = _expr_domain(rhs, trail)
+    if not ld or not rd:
+        return False
+    rd_max = domain_max(rd)
+    ld_min = domain_min(ld)
+    new_l_hi = rd_max if rd_max == _POS_INF else rd_max - 1
+    new_r_lo = ld_min if ld_min == _NEG_INF else ld_min + 1
+    new_ld = domain_remove_above(ld, new_l_hi)
+    new_rd = domain_remove_below(rd, new_r_lo)
+    if not new_ld or not new_rd:
+        return False
+    if is_var(lhs):
+        if not _narrow_if_changed(lhs, new_ld, trail, queue):
+            return False
+    elif domain_min(ld) >= rd_max:
+        return False
+    if is_var(rhs):
+        if not _narrow_if_changed(rhs, new_rd, trail, queue):
+            return False
+    return True
+
+
+def _le_propagate_bignum(lhs, rhs, trail, queue) -> bool:
+    """Equivalent of LeConstraint.propagate with bignum-safe operations."""
+    lhs = deref(lhs)
+    rhs = deref(rhs)
+    ld = _expr_domain(lhs, trail)
+    rd = _expr_domain(rhs, trail)
+    if not ld or not rd:
+        return False
+    rd_max = domain_max(rd)
+    ld_min = domain_min(ld)
+    new_ld = domain_remove_above(ld, rd_max)
+    new_rd = domain_remove_below(rd, ld_min)
+    if not new_ld or not new_rd:
+        return False
+    if is_var(lhs):
+        if not _narrow_if_changed(lhs, new_ld, trail, queue):
+            return False
+    elif ld_min > rd_max:
+        return False
+    if is_var(rhs):
+        if not _narrow_if_changed(rhs, new_rd, trail, queue):
+            return False
+    return True
+
+
+def _ne_propagate_bignum(lhs, rhs, trail, queue) -> bool:
+    """Equivalent of NeConstraint.propagate with bignum-safe operations."""
+    lhs = deref(lhs)
+    rhs = deref(rhs)
+    if not is_var(lhs) and not is_var(rhs):
+        return lhs != rhs
+    if not is_var(lhs) and isinstance(lhs, int) and is_var(rhs):
+        state = get_attr(rhs, FD_KEY)
+        if state is not None:
+            new_d = domain_remove(state.domain, lhs)
+            return _narrow_if_changed(rhs, new_d, trail, queue)
+    if not is_var(rhs) and isinstance(rhs, int) and is_var(lhs):
+        state = get_attr(lhs, FD_KEY)
+        if state is not None:
+            new_d = domain_remove(state.domain, rhs)
+            return _narrow_if_changed(lhs, new_d, trail, queue)
+    if is_var(lhs) and is_var(rhs):
+        ls = get_attr(lhs, FD_KEY)
+        rs = get_attr(rhs, FD_KEY)
+        if ls and rs:
+            lv = domain_singleton(ls.domain)
+            rv = domain_singleton(rs.domain)
+            if lv is not None and rv is not None:
+                return lv != rv
+            if lv is not None:
+                new_d = domain_remove(rs.domain, lv)
+                return _narrow_if_changed(rhs, new_d, trail, queue)
+            if rv is not None:
+                new_d = domain_remove(ls.domain, rv)
+                return _narrow_if_changed(lhs, new_d, trail, queue)
+    return True
+
+
+def _sum_propagate_bignum(sum_vars, total, trail, queue) -> bool:
+    """Equivalent of SumConstraint.propagate with bignum-safe operations.
+
+    Slice 4 of clpz_bignum.md.  The C ``sum_propagate`` accumulates
+    bounds in ``double``, which loses integer precision past 2**53 — so
+    bignum bounds AND large-but-int64 sums both need this path.
+    """
+    vars_ = [deref(v) for v in sum_vars]
+    total = deref(total)
+
+    min_sum = max_sum = 0
+    for v in vars_:
+        d = _expr_domain(v, trail)
+        if not d:
+            return False
+        min_sum += domain_min(d)
+        max_sum += domain_max(d)
+
+    total_d = _expr_domain(total, trail)
+    new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
+    if not new_total_d:
+        return False
+    if is_var(total) and not _narrow_if_changed(total, new_total_d, trail, queue):
+        return False
+    total_lo = domain_min(new_total_d)
+    total_hi = domain_max(new_total_d)
+
+    for v in vars_:
+        if not is_var(v):
+            continue
+        d = _expr_domain(v, trail)
+        v_max = domain_max(d)
+        v_min = domain_min(d)
+        # Guard against inf - inf = nan: skip narrowing when other-side
+        # bounds are infinite.
+        other_max = max_sum - v_max
+        other_min = min_sum - v_min
+        if other_max != other_max or other_min != other_min:
+            continue
+        new_lo = total_lo - other_max
+        new_hi = total_hi - other_min
+        new_d = domain_intersection(d, domain_from_range(new_lo, new_hi))
+        if not new_d:
+            return False
+        if not _narrow_if_changed(v, new_d, trail, queue):
+            return False
+
+    return True
+
+
+def _scalar_propagate_bignum(coeffs, sum_vars, total, trail, queue) -> bool:
+    """Equivalent of ScalarProductConstraint.propagate with bignum-safe ops.
+
+    Slice 4 of clpz_bignum.md.  Mirrors ``ScalarProductConstraint.
+    propagate`` but uses ``math.ceil``/``math.floor`` only on finite
+    operands; for infinite bounds, the new var bounds are kept as
+    ``±inf`` directly to avoid OverflowError on ``int(inf)``.
+    """
+    vars_ = [deref(v) for v in sum_vars]
+    total = deref(total)
+
+    min_sum = max_sum = 0
+    for c, v in zip(coeffs, vars_):
+        d = _expr_domain(v, trail)
+        if not d:
+            return False
+        v_lo, v_hi = domain_min(d), domain_max(d)
+        if c >= 0:
+            min_sum += _safe_mult(c, v_lo)
+            max_sum += _safe_mult(c, v_hi)
+        else:
+            min_sum += _safe_mult(c, v_hi)
+            max_sum += _safe_mult(c, v_lo)
+
+    total_d = _expr_domain(total, trail)
+    new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
+    if not new_total_d:
+        return False
+    if is_var(total) and not _narrow_if_changed(total, new_total_d, trail, queue):
+        return False
+    total_lo = domain_min(new_total_d)
+    total_hi = domain_max(new_total_d)
+
+    for c, v in zip(coeffs, vars_):
+        if not is_var(v) or c == 0:
+            continue
+        d = _expr_domain(v, trail)
+        v_lo, v_hi = domain_min(d), domain_max(d)
+        contrib_max = _safe_mult(c, v_hi) if c > 0 else _safe_mult(c, v_lo)
+        contrib_min = _safe_mult(c, v_lo) if c > 0 else _safe_mult(c, v_hi)
+        other_min = min_sum - contrib_min
+        other_max = max_sum - contrib_max
+        if other_min != other_min or other_max != other_max:
+            continue
+        if c > 0:
+            new_v_lo = math.ceil((total_lo - other_max) / c)
+            new_v_hi = math.floor((total_hi - other_min) / c)
+        else:
+            new_v_lo = math.ceil((total_hi - other_min) / c)
+            new_v_hi = math.floor((total_lo - other_max) / c)
+        if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
+            new_v_lo = _NEG_INF
+        else:
+            new_v_lo = int(new_v_lo)
+        if new_v_hi == _NEG_INF or new_v_hi == _POS_INF:
+            new_v_hi = _POS_INF
+        else:
+            new_v_hi = int(new_v_hi)
+        new_d = domain_intersection(d, domain_from_range(new_v_lo, new_v_hi))
+        if not new_d:
+            return False
+        if not _narrow_if_changed(v, new_d, trail, queue):
+            return False
+
+    return True
 
 
 # ── Concrete constraint types ────────────────────────────────────────────────

@@ -29,6 +29,29 @@ static PyObject *fn_both_ground = NULL;
 static PyObject *fn_collect_constraint_vars = NULL;
 static PyObject *fn_collect_vars_from = NULL;
 
+/* Bignum-fallback propagate helpers (Slice 3 of clpz_bignum.md) — invoked
+ * when a constraint's operand domains contain bounds outside int64 range. */
+static PyObject *fn_eq_propagate_bignum = NULL;
+static PyObject *fn_ne_propagate_bignum = NULL;
+static PyObject *fn_lt_propagate_bignum = NULL;
+static PyObject *fn_le_propagate_bignum = NULL;
+static PyObject *fn_sum_propagate_bignum = NULL;
+static PyObject *fn_scalar_propagate_bignum = NULL;
+
+/*
+ * Convert a Python truth value returned by a bignum-fallback propagate
+ * helper into the int contract used by the C propagators
+ * (1 = success, 0 = wipeout, -1 = error).
+ */
+static inline int
+result_to_int(PyObject *result)
+{
+    if (!result) return -1;
+    int truth = PyObject_IsTrue(result);
+    Py_DECREF(result);
+    return truth;
+}
+
 /* Mixed rational/real check */
 static PyObject *fn_check_no_mixed = NULL;
 
@@ -504,7 +527,17 @@ expr_domain_fast(PyObject *expr)
 {
     /* Fast path 1: integer → singleton domain */
     if (PyLong_Check(expr) && !PyBool_Check(expr)) {
-        int64_t val = PyLong_AsLongLong(expr);
+        int ov = 0;
+        int64_t val = PyLong_AsLongLongAndOverflow(expr, &ov);
+        if (ov != 0) {
+            /* Bignum int — build a singleton domain via the Python
+             * reference path which handles arbitrary-precision bounds. */
+            PyObject *pair = PyTuple_Pack(2, expr, expr);
+            if (!pair) return NULL;
+            PyObject *result = PyTuple_Pack(1, pair);
+            Py_DECREF(pair);
+            return result;
+        }
         if (val == -1 && PyErr_Occurred()) return NULL;
         return domain_from_range_i64(val, val);
     }
@@ -547,7 +580,18 @@ expr_domain_with_trail(PyObject *expr, PyObject *trail)
 {
     /* Try fast paths first */
     if (PyLong_Check(expr) && !PyBool_Check(expr)) {
-        int64_t val = PyLong_AsLongLong(expr);
+        int ov = 0;
+        int64_t val = PyLong_AsLongLongAndOverflow(expr, &ov);
+        if (ov != 0) {
+            /* Bignum int — build a singleton domain that preserves the
+             * Python int.  Downstream callers detect bignum bounds via
+             * has_bignum_bound() and dispatch to the Python helpers. */
+            PyObject *pair = PyTuple_Pack(2, expr, expr);
+            if (!pair) return NULL;
+            PyObject *result = PyTuple_Pack(1, pair);
+            Py_DECREF(pair);
+            return result;
+        }
         if (val == -1 && PyErr_Occurred()) return NULL;
         return domain_from_range_i64(val, val);
     }
@@ -675,14 +719,24 @@ have_constraints:
 
     /* CLP(R) sync: delegate to Python _sync_real(var, fd_lo, fd_hi, trail)
      * so we never depend on the RealVar constructor signature.
-     * Gate on REAL_KEY so we skip entirely when clpr isn't loaded. */
+     * Gate on REAL_KEY so we skip entirely when clpr isn't loaded.
+     *
+     * Bounds may be bignum (CLP(Z) propagation produces bounds outside
+     * int64 range — e.g. Fib above N=92).  Convert directly via
+     * PyFloat_AsDouble, which yields ±inf for sentinel floats and the
+     * nearest double for any other Python int (including bignum).  CLP(R)
+     * loses precision past 2^53 either way, so this is the right
+     * representation. */
     if (REAL_KEY && fn_sync_real) {
-        int64_t fd_lo, fd_hi;
-        if (domain_min_i64(new_domain, &fd_lo) < 0 ||
-            domain_max_i64(new_domain, &fd_hi) < 0)
-            return -1;
-        double fd_lo_f = (fd_lo == INT64_MIN) ? -HUGE_VAL : (double)fd_lo;
-        double fd_hi_f = (fd_hi == INT64_MAX) ? HUGE_VAL : (double)fd_hi;
+        Py_ssize_t n = PyTuple_GET_SIZE(new_domain);
+        PyObject *first_pair = PyTuple_GET_ITEM(new_domain, 0);
+        PyObject *last_pair = PyTuple_GET_ITEM(new_domain, n - 1);
+        PyObject *lo_obj = PyTuple_GET_ITEM(first_pair, 0);
+        PyObject *hi_obj = PyTuple_GET_ITEM(last_pair, 1);
+        double fd_lo_f = PyFloat_AsDouble(lo_obj);
+        if (fd_lo_f == -1.0 && PyErr_Occurred()) return -1;
+        double fd_hi_f = PyFloat_AsDouble(hi_obj);
+        if (fd_hi_f == -1.0 && PyErr_Occurred()) return -1;
         PyObject *lo_py = PyFloat_FromDouble(fd_lo_f);
         PyObject *hi_py = PyFloat_FromDouble(fd_hi_f);
         if (!lo_py || !hi_py) {
@@ -950,6 +1004,46 @@ ne_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
     int r_isvar = call_is_var(rhs);
     if (r_isvar < 0) goto error;
 
+    /* Bignum fallback: either operand is a bignum int, or a var's domain
+     * has a bignum bound.  Slice 4 of clpz_bignum.md.  Otherwise
+     * domain_remove_c / PyLong_AsLongLong below would overflow. */
+    {
+        int needs_bignum = is_bignum_int(lhs) || is_bignum_int(rhs);
+        if (!needs_bignum && l_isvar) {
+            PyObject *st = call_get_attr(lhs, FD_KEY_STR);
+            if (!st) goto error;
+            if (st != Py_None) {
+                PyObject *dom = FDVar_Check(st)
+                    ? ((FDVarObject *)st)->domain
+                    : PyObject_GetAttrString(st, "domain");
+                if (!dom) { Py_DECREF(st); goto error; }
+                needs_bignum = has_bignum_bound(dom);
+                if (!FDVar_Check(st)) Py_DECREF(dom);
+            }
+            Py_DECREF(st);
+        }
+        if (!needs_bignum && r_isvar) {
+            PyObject *st = call_get_attr(rhs, FD_KEY_STR);
+            if (!st) goto error;
+            if (st != Py_None) {
+                PyObject *dom = FDVar_Check(st)
+                    ? ((FDVarObject *)st)->domain
+                    : PyObject_GetAttrString(st, "domain");
+                if (!dom) { Py_DECREF(st); goto error; }
+                needs_bignum = has_bignum_bound(dom);
+                if (!FDVar_Check(st)) Py_DECREF(dom);
+            }
+            Py_DECREF(st);
+        }
+        if (needs_bignum) {
+            Py_DECREF(lhs); Py_DECREF(rhs);
+            PyObject *result = PyObject_CallFunctionObjArgs(
+                fn_ne_propagate_bignum,
+                self->lhs, self->rhs, trail, queue, NULL);
+            return result_to_int(result);
+        }
+    }
+
     /* Both ground */
     if (!l_isvar && !r_isvar) {
         int eq = PyObject_RichCompareBool(lhs, rhs, Py_NE);
@@ -1148,6 +1242,16 @@ eq_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
     PyObject *rd = expr_domain_with_trail(rhs, trail);
     if (!rd) { Py_DECREF(ld); Py_DECREF(lhs); Py_DECREF(rhs); return -1; }
 
+    /* Bignum fallback: defer to Python helper when either operand domain has
+     * bounds outside int64 range.  Slice 3 of clpz_bignum.md. */
+    if (has_bignum_bound(ld) || has_bignum_bound(rd)) {
+        Py_DECREF(ld); Py_DECREF(rd);
+        Py_DECREF(lhs); Py_DECREF(rhs);
+        PyObject *result = PyObject_CallFunctionObjArgs(
+            fn_eq_propagate_bignum, self->lhs, self->rhs, trail, queue, NULL);
+        return result_to_int(result);
+    }
+
     PyObject *inter = domain_intersection_c(ld, rd);
     Py_DECREF(ld); Py_DECREF(rd);
     if (!inter) { Py_DECREF(lhs); Py_DECREF(rhs); return -1; }
@@ -1195,6 +1299,16 @@ lt_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
     if (PyTuple_GET_SIZE(ld) == 0 || PyTuple_GET_SIZE(rd) == 0) {
         Py_DECREF(ld); Py_DECREF(rd); Py_DECREF(lhs); Py_DECREF(rhs);
         return 0;
+    }
+
+    /* Bignum fallback: defer to Python helper when either operand domain has
+     * bounds outside int64 range.  Slice 3 of clpz_bignum.md. */
+    if (has_bignum_bound(ld) || has_bignum_bound(rd)) {
+        Py_DECREF(ld); Py_DECREF(rd);
+        Py_DECREF(lhs); Py_DECREF(rhs);
+        PyObject *result = PyObject_CallFunctionObjArgs(
+            fn_lt_propagate_bignum, self->lhs, self->rhs, trail, queue, NULL);
+        return result_to_int(result);
     }
 
     int64_t ld_min, ld_max, rd_min, rd_max;
@@ -1270,6 +1384,16 @@ le_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
     if (PyTuple_GET_SIZE(ld) == 0 || PyTuple_GET_SIZE(rd) == 0) {
         Py_DECREF(ld); Py_DECREF(rd); Py_DECREF(lhs); Py_DECREF(rhs);
         return 0;
+    }
+
+    /* Bignum fallback: defer to Python helper when either operand domain has
+     * bounds outside int64 range.  Slice 3 of clpz_bignum.md. */
+    if (has_bignum_bound(ld) || has_bignum_bound(rd)) {
+        Py_DECREF(ld); Py_DECREF(rd);
+        Py_DECREF(lhs); Py_DECREF(rhs);
+        PyObject *result = PyObject_CallFunctionObjArgs(
+            fn_le_propagate_bignum, self->lhs, self->rhs, trail, queue, NULL);
+        return result_to_int(result);
     }
 
     int64_t ld_min, ld_max_unused, rd_min_unused, rd_max;
@@ -1435,6 +1559,11 @@ safe_mult_d(double a, double b)
     return a * b;
 }
 
+/* Threshold past which IEEE 754 double loses integer precision.  Used by
+ * sum_propagate / scalar_propagate to decide when to fall back to the
+ * bignum-safe Python helper. */
+#define DOUBLE_PRECISE_INT_LIMIT 9007199254740992.0 /* 2^53 */
+
 /*
  * sum_propagate — SumConstraint.propagate(trail, queue)
  */
@@ -1444,6 +1573,7 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
     Py_ssize_t nv = PyTuple_GET_SIZE(self->sum_vars);
 
     double min_sum = 0, max_sum = 0;
+    int needs_bignum = 0;
     for (Py_ssize_t i = 0; i < nv; i++) {
         PyObject *v = PyTuple_GET_ITEM(self->sum_vars, i);
         PyObject *dv = call_deref(v);
@@ -1452,6 +1582,8 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
         Py_DECREF(dv);
         if (!d) return -1;
         if (PyTuple_GET_SIZE(d) == 0) { Py_DECREF(d); return 0; }
+
+        if (has_bignum_bound(d)) { needs_bignum = 1; Py_DECREF(d); break; }
 
         int64_t lo, hi;
         if (domain_min_i64(d, &lo) < 0 || domain_max_i64(d, &hi) < 0) { Py_DECREF(d); return -1; }
@@ -1463,10 +1595,36 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
         max_sum += hi_f;
     }
 
+    /* Bignum fallback: any operand has bignum bounds, or the running double
+     * sum has exceeded 2^53 (where IEEE 754 doubles lose integer
+     * precision).  Slice 4 of clpz_bignum.md. */
+    if (!needs_bignum &&
+        (fabs(min_sum) > DOUBLE_PRECISE_INT_LIMIT ||
+         fabs(max_sum) > DOUBLE_PRECISE_INT_LIMIT) &&
+        min_sum != -HUGE_VAL && max_sum != HUGE_VAL) {
+        needs_bignum = 1;
+    }
+    if (needs_bignum) {
+        PyObject *result = PyObject_CallFunctionObjArgs(
+            fn_sum_propagate_bignum,
+            self->sum_vars, self->total, trail, queue, NULL);
+        return result_to_int(result);
+    }
+
     PyObject *total_d_expr = call_deref(self->total);
     if (!total_d_expr) return -1;
     PyObject *total_d = expr_domain_with_trail(total_d_expr, trail);
     if (!total_d) { Py_DECREF(total_d_expr); return -1; }
+
+    /* Bignum fallback: total domain is bignum.  Same as the operand check
+     * above but deferred until total_d is fetched. */
+    if (has_bignum_bound(total_d)) {
+        Py_DECREF(total_d); Py_DECREF(total_d_expr);
+        PyObject *result = PyObject_CallFunctionObjArgs(
+            fn_sum_propagate_bignum,
+            self->sum_vars, self->total, trail, queue, NULL);
+        return result_to_int(result);
+    }
 
     /* Intersect total domain with [min_sum, max_sum] */
     int64_t ms_lo = (min_sum == -HUGE_VAL) ? INT64_MIN :
@@ -1564,10 +1722,14 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
     Py_ssize_t nv = PyTuple_GET_SIZE(self->sum_vars);
 
     double min_sum = 0, max_sum = 0;
+    int needs_bignum = 0;
     for (Py_ssize_t i = 0; i < nv; i++) {
         PyObject *v = PyTuple_GET_ITEM(self->sum_vars, i);
         PyObject *co = PyTuple_GET_ITEM(self->coeffs, i);
-        long long c_val = PyLong_AsLongLong(co);
+        if (is_bignum_int(co)) { needs_bignum = 1; break; }
+        int co_overflow = 0;
+        long long c_val = PyLong_AsLongLongAndOverflow(co, &co_overflow);
+        if (co_overflow != 0) { needs_bignum = 1; break; }
         if (c_val == -1 && PyErr_Occurred()) return -1;
         double c = (double)c_val;
 
@@ -1577,6 +1739,8 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
         Py_DECREF(dv);
         if (!d) return -1;
         if (PyTuple_GET_SIZE(d) == 0) { Py_DECREF(d); return 0; }
+
+        if (has_bignum_bound(d)) { needs_bignum = 1; Py_DECREF(d); break; }
 
         int64_t lo, hi;
         if (domain_min_i64(d, &lo) < 0 || domain_max_i64(d, &hi) < 0) { Py_DECREF(d); return -1; }
@@ -1594,10 +1758,35 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
         }
     }
 
+    /* Bignum fallback: any operand has bignum bounds, any coefficient is
+     * bignum, or the running double sum has exceeded 2^53 (where IEEE 754
+     * doubles lose integer precision).  Slice 4 of clpz_bignum.md. */
+    if (!needs_bignum &&
+        (fabs(min_sum) > DOUBLE_PRECISE_INT_LIMIT ||
+         fabs(max_sum) > DOUBLE_PRECISE_INT_LIMIT) &&
+        min_sum != -HUGE_VAL && max_sum != HUGE_VAL) {
+        needs_bignum = 1;
+    }
+    if (needs_bignum) {
+        PyObject *result = PyObject_CallFunctionObjArgs(
+            fn_scalar_propagate_bignum,
+            self->coeffs, self->sum_vars, self->total, trail, queue, NULL);
+        return result_to_int(result);
+    }
+
     PyObject *total_d_expr = call_deref(self->total);
     if (!total_d_expr) return -1;
     PyObject *total_d = expr_domain_with_trail(total_d_expr, trail);
     if (!total_d) { Py_DECREF(total_d_expr); return -1; }
+
+    /* Bignum fallback: total domain bounds out of int64 range. */
+    if (has_bignum_bound(total_d)) {
+        Py_DECREF(total_d); Py_DECREF(total_d_expr);
+        PyObject *result = PyObject_CallFunctionObjArgs(
+            fn_scalar_propagate_bignum,
+            self->coeffs, self->sum_vars, self->total, trail, queue, NULL);
+        return result_to_int(result);
+    }
 
     int64_t ms_lo = (min_sum == -HUGE_VAL) ? INT64_MIN :
                     (min_sum >= (double)INT64_MAX) ? INT64_MAX : (int64_t)min_sum;
@@ -2667,10 +2856,38 @@ py_fd_hook(PyObject *self, PyObject *args)
         }
     }
     if (is_int_val) {
-        int64_t val = PyLong_AsLongLong(bt);
-        if (val == -1 && PyErr_Occurred()) goto hook_error;
-
-        int contains = domain_contains_i64(domain, val);
+        /* Bignum-safe domain_contains: check whether the bound int (which
+         * may exceed int64) is in any of the domain's intervals using
+         * Python rich-compare on the raw PyObject bounds.  Slice 3 of
+         * clpz_bignum.md — fast int64 path retained for the common case. */
+        int contains;
+        int bt_overflow = 0;
+        int64_t val_i64 = PyLong_AsLongLongAndOverflow(bt, &bt_overflow);
+        if (bt_overflow == 0 && !(val_i64 == -1 && PyErr_Occurred())
+            && !has_bignum_bound(domain)) {
+            /* Fast path: int64-fitting value, int64-fitting domain */
+            contains = domain_contains_i64(domain, val_i64);
+        } else {
+            /* Bignum path: scan intervals using PyObject comparisons */
+            if (PyErr_Occurred()) PyErr_Clear();
+            contains = 0;
+            Py_ssize_t nd = PyTuple_GET_SIZE(domain);
+            for (Py_ssize_t k = 0; k < nd; k++) {
+                PyObject *pair = PyTuple_GET_ITEM(domain, k);
+                PyObject *lo = PyTuple_GET_ITEM(pair, 0);
+                PyObject *hi = PyTuple_GET_ITEM(pair, 1);
+                int ge = PyObject_RichCompareBool(bt, lo, Py_GE);
+                if (ge < 0) goto hook_error;
+                if (!ge) {
+                    /* bt < this interval's lo; intervals are sorted, no
+                     * further interval can contain bt either. */
+                    break;
+                }
+                int le = PyObject_RichCompareBool(bt, hi, Py_LE);
+                if (le < 0) goto hook_error;
+                if (le) { contains = 1; break; }
+            }
+        }
         if (contains < 0) goto hook_error;
         if (!contains) {
             if (domain_newref) { Py_DECREF(domain); Py_DECREF(constraints); }
@@ -3045,10 +3262,19 @@ PyInit__clpfd_propagate(void)
     fn_linearise = PyObject_GetAttrString(clpfd_mod, "_linearise");
     fn_ensure_fd_py = PyObject_GetAttrString(clpfd_mod, "_ensure_fd");
     fn_sync_real = PyObject_GetAttrString(clpfd_mod, "_sync_real");
+    fn_eq_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_eq_propagate_bignum");
+    fn_ne_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_ne_propagate_bignum");
+    fn_lt_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_lt_propagate_bignum");
+    fn_le_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_le_propagate_bignum");
+    fn_sum_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_sum_propagate_bignum");
+    fn_scalar_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_scalar_propagate_bignum");
     Py_DECREF(clpfd_mod);
 
     if (!fn_expr_domain || !fn_resolve || !fn_any_real || !fn_both_ground ||
-        !fn_collect_constraint_vars || !fn_collect_vars_from || !fn_linearise)
+        !fn_collect_constraint_vars || !fn_collect_vars_from || !fn_linearise ||
+        !fn_eq_propagate_bignum || !fn_ne_propagate_bignum ||
+        !fn_lt_propagate_bignum || !fn_le_propagate_bignum ||
+        !fn_sum_propagate_bignum || !fn_scalar_propagate_bignum)
         return NULL;
 
     /* Try to import CLP(R) functions (optional) */

@@ -14,6 +14,52 @@
 #include "_clpfd_domain_ops.h"
 
 /* ================================================================
+ * Bignum fallback infrastructure
+ *
+ * Domain bounds may exceed int64_t range when CLP(Z) propagates over
+ * bignum values (e.g. Fibonacci above N=92).  Each public wrapper below
+ * checks for bignum bounds up-front and tail-calls into the Python
+ * reference implementation in clausal.logic.clpfd, where Python int
+ * arithmetic is bignum-safe.
+ *
+ * The Python references are saved under _py_domain_* names in clpfd.py
+ * before the public names are overwritten by the C versions.  We look
+ * them up lazily on first use to avoid an import-time cycle.
+ * ================================================================ */
+
+static PyObject *fn_py_domain_from_range = NULL;
+static PyObject *fn_py_domain_contains = NULL;
+static PyObject *fn_py_domain_size = NULL;
+static PyObject *fn_py_domain_intersection = NULL;
+static PyObject *fn_py_domain_remove = NULL;
+static PyObject *fn_py_domain_remove_above = NULL;
+static PyObject *fn_py_domain_remove_below = NULL;
+static PyObject *fn_py_domain_values = NULL;
+
+static int
+ensure_py_fallbacks(void)
+{
+    if (fn_py_domain_from_range != NULL) return 0;
+    PyObject *mod = PyImport_ImportModule("clausal.logic.clpfd");
+    if (!mod) return -1;
+#define LOAD(name) do { \
+        fn_py_##name = PyObject_GetAttrString(mod, "_py_" #name); \
+        if (!fn_py_##name) { Py_DECREF(mod); return -1; } \
+    } while (0)
+    LOAD(domain_from_range);
+    LOAD(domain_contains);
+    LOAD(domain_size);
+    LOAD(domain_intersection);
+    LOAD(domain_remove);
+    LOAD(domain_remove_above);
+    LOAD(domain_remove_below);
+    LOAD(domain_values);
+#undef LOAD
+    Py_DECREF(mod);
+    return 0;
+}
+
+/* ================================================================
  * domain_from_range(lo, hi) -> Domain
  * ================================================================ */
 
@@ -24,6 +70,13 @@ py_domain_from_range(PyObject *self, PyObject *args)
     PyObject *lo_obj, *hi_obj;
     if (!PyArg_ParseTuple(args, "OO", &lo_obj, &hi_obj))
         return NULL;
+
+    /* Bignum fallback: either bound is a Python int outside int64 range. */
+    if (is_bignum_int(lo_obj) || is_bignum_int(hi_obj)) {
+        if (ensure_py_fallbacks() < 0) return NULL;
+        return PyObject_CallFunctionObjArgs(fn_py_domain_from_range,
+                                            lo_obj, hi_obj, NULL);
+    }
 
     int64_t lo, hi;
 
@@ -77,10 +130,25 @@ static PyObject *
 py_domain_contains(PyObject *self, PyObject *args)
 {
     (void)self;
-    PyObject *domain;
-    long long value;
-    if (!PyArg_ParseTuple(args, "O!L", &PyTuple_Type, &domain, &value))
+    PyObject *domain, *value_obj;
+    if (!PyArg_ParseTuple(args, "O!O", &PyTuple_Type, &domain, &value_obj))
         return NULL;
+
+    /* Bignum fallback: domain bound or value is bignum. */
+    if (has_bignum_bound(domain) || is_bignum_int(value_obj)) {
+        if (ensure_py_fallbacks() < 0) return NULL;
+        return PyObject_CallFunctionObjArgs(fn_py_domain_contains,
+                                            domain, value_obj, NULL);
+    }
+
+    /* Value must be a Python int (within int64 range, since not bignum). */
+    int v_overflow = 0;
+    long long value = PyLong_AsLongLongAndOverflow(value_obj, &v_overflow);
+    if (v_overflow != 0 || (value == -1 && PyErr_Occurred())) {
+        if (PyErr_Occurred()) return NULL;
+        PyErr_SetString(PyExc_TypeError, "value must be int");
+        return NULL;
+    }
 
     Py_ssize_t n = PyTuple_GET_SIZE(domain);
     for (Py_ssize_t i = 0; i < n; i++) {
@@ -152,6 +220,11 @@ py_domain_size(PyObject *self, PyObject *arg)
         PyErr_SetString(PyExc_TypeError, "expected tuple");
         return NULL;
     }
+    /* Bignum fallback: any bound is out of int64 range. */
+    if (has_bignum_bound(arg)) {
+        if (ensure_py_fallbacks() < 0) return NULL;
+        return PyObject_CallOneArg(fn_py_domain_size, arg);
+    }
     Py_ssize_t n = PyTuple_GET_SIZE(arg);
     long long total = 0;
     for (Py_ssize_t i = 0; i < n; i++) {
@@ -211,6 +284,13 @@ py_domain_intersection(PyObject *self, PyObject *args)
     if (n1 == 0 || n2 == 0)
         return PyTuple_New(0);
 
+    /* Bignum fallback: either domain has bounds outside int64 range. */
+    if (has_bignum_bound(d1) || has_bignum_bound(d2)) {
+        if (ensure_py_fallbacks() < 0) return NULL;
+        return PyObject_CallFunctionObjArgs(fn_py_domain_intersection,
+                                            d1, d2, NULL);
+    }
+
     /* Allocate workspace for result intervals */
     Py_ssize_t max_result = n1 + n2;  /* upper bound */
     int64_t stack_buf[STACK_INTERVALS * 2];
@@ -267,14 +347,29 @@ static PyObject *
 py_domain_remove(PyObject *self, PyObject *args)
 {
     (void)self;
-    PyObject *domain;
-    long long value;
-    if (!PyArg_ParseTuple(args, "O!L", &PyTuple_Type, &domain, &value))
+    PyObject *domain, *value_obj;
+    if (!PyArg_ParseTuple(args, "O!O", &PyTuple_Type, &domain, &value_obj))
         return NULL;
 
     Py_ssize_t n = PyTuple_GET_SIZE(domain);
     if (n == 0)
         return PyTuple_New(0);
+
+    /* Bignum fallback: domain bound or value is bignum. */
+    if (has_bignum_bound(domain) || is_bignum_int(value_obj)) {
+        if (ensure_py_fallbacks() < 0) return NULL;
+        return PyObject_CallFunctionObjArgs(fn_py_domain_remove,
+                                            domain, value_obj, NULL);
+    }
+
+    /* Convert value (now known to fit int64). */
+    int v_overflow = 0;
+    long long value = PyLong_AsLongLongAndOverflow(value_obj, &v_overflow);
+    if (v_overflow != 0 || (value == -1 && PyErr_Occurred())) {
+        if (PyErr_Occurred()) return NULL;
+        PyErr_SetString(PyExc_TypeError, "value must be int");
+        return NULL;
+    }
 
     /* Worst case: one interval splits into two, so max n+1 */
     int64_t stack_buf[(STACK_INTERVALS + 1) * 2];
@@ -332,6 +427,13 @@ py_domain_remove_above(PyObject *self, PyObject *args)
     PyObject *domain, *limit_obj;
     if (!PyArg_ParseTuple(args, "O!O", &PyTuple_Type, &domain, &limit_obj))
         return NULL;
+
+    /* Bignum fallback: domain bound or limit is bignum. */
+    if (has_bignum_bound(domain) || is_bignum_int(limit_obj)) {
+        if (ensure_py_fallbacks() < 0) return NULL;
+        return PyObject_CallFunctionObjArgs(fn_py_domain_remove_above,
+                                            domain, limit_obj, NULL);
+    }
 
     int64_t lim;
     if (PyFloat_Check(limit_obj)) {
@@ -391,6 +493,13 @@ py_domain_remove_below(PyObject *self, PyObject *args)
     PyObject *domain, *limit_obj;
     if (!PyArg_ParseTuple(args, "O!O", &PyTuple_Type, &domain, &limit_obj))
         return NULL;
+
+    /* Bignum fallback: domain bound or limit is bignum. */
+    if (has_bignum_bound(domain) || is_bignum_int(limit_obj)) {
+        if (ensure_py_fallbacks() < 0) return NULL;
+        return PyObject_CallFunctionObjArgs(fn_py_domain_remove_below,
+                                            domain, limit_obj, NULL);
+    }
 
     int64_t lim;
     if (PyFloat_Check(limit_obj)) {
@@ -453,6 +562,17 @@ py_domain_values(PyObject *self, PyObject *arg)
     if (!PyTuple_Check(arg)) {
         PyErr_SetString(PyExc_TypeError, "expected tuple");
         return NULL;
+    }
+
+    /* Bignum fallback: domain bound is bignum.  Python reference returns a
+     * generator; convert to a list for compatibility with the C contract. */
+    if (has_bignum_bound(arg)) {
+        if (ensure_py_fallbacks() < 0) return NULL;
+        PyObject *gen = PyObject_CallOneArg(fn_py_domain_values, arg);
+        if (!gen) return NULL;
+        PyObject *list = PySequence_List(gen);
+        Py_DECREF(gen);
+        return list;
     }
 
     Py_ssize_t n = PyTuple_GET_SIZE(arg);

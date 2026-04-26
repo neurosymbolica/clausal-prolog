@@ -1,0 +1,14 @@
+-table(Fib/2)
+
+Fib(N=0, R=0),
+Fib(1, 1),
+Fib(N, R) <- (
+    N > 1,
+    N1 == N - 1,
+    N2 == N - 2,
+    Fib(N1, A),
+    Fib(N2, B),
+    R == A + B
+)
+
+Wrap(N, R) <- Fib(N, R)
