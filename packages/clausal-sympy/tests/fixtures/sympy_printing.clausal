@@ -1,4 +1,4 @@
--import_from(py.sympy, [Latex, Pretty, Sym])
+-import_from(sympy, [Latex, Pretty, Sym])
 
 # ── Latex/2 ──────────────────────────────────────────────────────────────────
 

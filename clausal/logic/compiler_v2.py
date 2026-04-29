@@ -153,6 +153,8 @@ def compile_module(
 _MODULE_ALIASES: dict[str, str] = {
     "uuid": "uuid_mod",
     "yaml": "yaml",
+    "spacy": "spacy",
+    "sympy": "sympy",
 }
 
 

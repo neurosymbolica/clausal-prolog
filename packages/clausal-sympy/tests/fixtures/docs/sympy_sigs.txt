@@ -180,14 +180,14 @@ S == "x**2 + 1"
 --8<-- [end:sym_2]
 
 --8<-- [start:math_functions_usage]
--import_from(sympy_module, [Diff, sin, cos, exp, log, sqrt])
+-import_from(sympy, [Diff, sin, cos, exp, log, sqrt])
 
 Diff(sin(X), X, R),  R == cos(X)
 Simplify(exp(log(X)), R),  R == X
 --8<-- [end:math_functions_usage]
 
 --8<-- [start:constants_usage]
--import_from(sympy_module, [Limit, inf, pi])
+-import_from(sympy, [Limit, inf, pi])
 
 Limit(1/X, X, inf, R),  R == 0
 --8<-- [end:constants_usage]

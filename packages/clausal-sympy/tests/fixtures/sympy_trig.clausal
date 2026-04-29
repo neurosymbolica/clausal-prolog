@@ -1,4 +1,4 @@
--import_from(py.sympy, [TrigSimp, ExpandTrig, Simplify,
+-import_from(sympy, [TrigSimp, ExpandTrig, Simplify,
                              sin, cos, tan, exp, log, SymEqual])
 
 # ── TrigSimp/2 ───────────────────────────────────────────────────────────────

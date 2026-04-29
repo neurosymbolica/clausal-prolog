@@ -1206,6 +1206,8 @@ def _dotted_name_from_ast(node):
 _IMPORT_ALIASES: dict[str, str] = {
     "uuid": "uuid_mod",
     "yaml": "yaml",
+    "spacy": "spacy",
+    "sympy": "sympy",
 }
 
 

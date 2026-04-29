@@ -1,4 +1,4 @@
--import_from(py.sympy, [Collect, Cancel, Apart, Together,
+-import_from(sympy, [Collect, Cancel, Apart, Together,
                              Degree, Coeffs, Roots, SymEqual])
 
 # ── Collect/3 ────────────────────────────────────────────────────────────────

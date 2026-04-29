@@ -3,7 +3,6 @@
 This subpackage contains Clausal predicate wrappers around Python
 standard library and third-party modules::
 
-    -import_from(py.sympy, [Simplify, Solve, Diff, sin, cos])
     -import_from(py.uuid, [UUIDv4, UUIDStr, IsUUID])
     -import_from(py.yaml, [Read, write, Get])
     -import_from(py.sqlite, [SQLiteConnect, SQLiteQuery])
@@ -17,9 +16,9 @@ standard library and third-party modules::
     -import_from(py.files, [FileExists, DirectoryFiles, ReadFileToString, JoinPath])
     -import_from(py.process, [Shell, ShellOutput, ProcessCreate, Sleep])
 
-The legacy names (``sympy_module``, ``uuid_mod``, ``yaml_module``,
+The legacy names (``uuid_mod``, ``yaml_module``,
 ``regex``, ``log``, ``date_time``, ``sqlite``) are compatibility shims
-that re-export from here.
+that re-export from here.  ``sympy`` is now an extracted package (clausal-sympy).
 """
 
 from __future__ import annotations

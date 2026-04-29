@@ -21,7 +21,7 @@ Repository = "https://gitlab.com/MikeAmy/clausal"
 
 [project.optional-dependencies]
 yaml = ["clausal-yaml>=0.1.0"]
-spacy = ["spacy>=3.0"]
+spacy = ["clausal-spacy>=0.1.0"]
 ptpython = ["ptpython>=3.0"]
 repl = ["ptpython>=3.0"]
 

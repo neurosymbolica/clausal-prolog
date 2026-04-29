@@ -1,9 +1,9 @@
-"""clausal.modules.py.sympy — SymPy integration for Clausal.
+"""clausal.modules.sympy — SymPy integration for Clausal.
 
 Provides symbolic math predicates that accept **native Clausal terms**
 directly — no ``Sym()`` bootstrapping or ``++()`` escaping required::
 
-    -import_from(py.sympy, [Simplify, Solve, Diff, sin, cos, inf])
+    -import_from(sympy, [Simplify, Solve, Diff, sin, cos, inf])
 
     Test("basic")    <- Simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)
     Test("solve")    <- (Solve(X**2 - 4, X, S), S == 2)
@@ -37,11 +37,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import sympy as _sp
-
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.py import ModulePredicate, simple_to_trampoline
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+
+_sp = _import_stdlib("sympy")
 from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate, Compound, term_str, DictTerm,
@@ -1001,7 +1001,7 @@ def _mathml_2(term, result, trail, k):
     """MathML/2: convert expression to MathML string."""
     term = deref(term)
     try:
-        from sympy.printing.mathml import mathml
+        mathml = _sp.printing.mathml.mathml
         s = mathml(to_sympy(term))
     except (TypeError, ValueError, ImportError):
         return
@@ -1128,7 +1128,7 @@ def _binomial_3(n, k_val, result, trail, k):
 # -- Math function constructors ----------------------------------------------
 #
 # These are callable objects that build Compound terms.  In .clausal files:
-#     -import_from(py.sympy, [sin, cos, exp, Diff])
+#     -import_from(sympy, [sin, cos, exp, Diff])
 #     Test("diff sin") <- (Diff(sin(X), X, R), R == cos(X))
 #
 # sin(X) -> Compound("sin", (X,)) which to_sympy converts to sympy.sin(Symbol).

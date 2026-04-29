@@ -1,4 +1,4 @@
-"""Tests for clausal.modules.spacy_module — spaCy NLP predicates.
+"""Tests for clausal.modules.spacy — spaCy NLP predicates.
 
 Tests skip gracefully when spaCy or en_core_web_sm is not installed.
 
@@ -39,7 +39,7 @@ if not _SPACY_OK:
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, deref
 from clausal.import_hook import _load_module
-from clausal.modules.spacy_module import (
+from clausal.modules.spacy import (
     _MODELS,
     _LOCK,
     _get_model,
@@ -216,7 +216,7 @@ class TestModelRegistry:
         alias = "_test_load2_"
         with _LOCK:
             _MODELS.pop(alias, None)
-        from clausal.modules.spacy_module import _load_model_2
+        from clausal.modules.spacy import _load_model_2
         results = list(_load_model_2("en_core_web_sm", alias, trail, None))
         assert len(results) == 1
         with _LOCK:
@@ -226,7 +226,7 @@ class TestModelRegistry:
     def test_load_model_2_idempotent(self, trail):
         # nv
         alias = "_test_idem_"
-        from clausal.modules.spacy_module import _load_model_2
+        from clausal.modules.spacy import _load_model_2
         with _LOCK:
             _MODELS.pop(alias, None)
         list(_load_model_2("en_core_web_sm", alias, trail, None))
@@ -241,7 +241,7 @@ class TestModelRegistry:
         nlp = spacy.load("en_core_web_sm")
         with _LOCK:
             _MODELS[alias] = nlp
-        from clausal.modules.spacy_module import _unload_model_1
+        from clausal.modules.spacy import _unload_model_1
         results = list(_unload_model_1(alias, trail, None))
         assert len(results) == 1
         with _LOCK:
@@ -249,7 +249,7 @@ class TestModelRegistry:
 
     def test_unload_nonexistent_fails(self, trail):
         # nv
-        from clausal.modules.spacy_module import _unload_model_1
+        from clausal.modules.spacy import _unload_model_1
         results = list(_unload_model_1("__missing__", trail, None))
         assert results == []
 
@@ -258,7 +258,7 @@ class TestModelRegistry:
         result_var = Var()
         results = []
         sentinel = object()
-        from clausal.modules.spacy_module import _current_model_1
+        from clausal.modules.spacy import _current_model_1
         from clausal.logic.trampoline import DONE
         for parent, val in _current_model_1(sentinel, sentinel, sentinel, sentinel, result_var, trail):
             if val is DONE:
@@ -269,7 +269,7 @@ class TestModelRegistry:
     def test_current_model_check_known(self, trail):
         # nv
         sentinel = object()
-        from clausal.modules.spacy_module import _current_model_1
+        from clausal.modules.spacy import _current_model_1
         from clausal.logic.trampoline import DONE
         found = False
         for parent, val in _current_model_1(sentinel, sentinel, sentinel, sentinel, _ALIAS, trail):
@@ -281,7 +281,7 @@ class TestModelRegistry:
     def test_current_model_check_unknown(self, trail):
         # nv
         sentinel = object()
-        from clausal.modules.spacy_module import _current_model_1
+        from clausal.modules.spacy import _current_model_1
         from clausal.logic.trampoline import DONE
         found = False
         for parent, val in _current_model_1(sentinel, sentinel, sentinel, sentinel, "__no__", trail):
@@ -293,7 +293,7 @@ class TestModelRegistry:
 
 # helper used in test_load_model_1
 def _load_model_1_raw(name, trail, k):
-    from clausal.modules.spacy_module import _load_model_1
+    from clausal.modules.spacy import _load_model_1
     yield from _load_model_1(name, trail, k)
 
 
@@ -305,7 +305,7 @@ def _load_model_1_raw(name, trail, k):
 class TestProcess:
     def test_process_returns_doc(self, trail):
         # nv
-        from clausal.modules.spacy_module import _process_3
+        from clausal.modules.spacy import _process_3
         result = Var()
         results = list(_process_3(_ALIAS, _TEXT, result, trail, None))
         assert len(results) == 1
@@ -314,7 +314,7 @@ class TestProcess:
 
     def test_process_unknown_alias(self, trail):
         # nv
-        from clausal.modules.spacy_module import _process_3
+        from clausal.modules.spacy import _process_3
         result = Var()
         with pytest.raises(ValueError):
             list(_process_3("__bad__", _TEXT, result, trail, None))
@@ -328,7 +328,7 @@ class TestProcess:
 class TestTokenPredicates:
     def test_token_2_yields_multiple(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _token_2
+        from clausal.modules.spacy import _token_2
         tok_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
@@ -341,7 +341,7 @@ class TestTokenPredicates:
 
     def test_token_2_first_is_apple(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _token_2
+        from clausal.modules.spacy import _token_2
         tok_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
@@ -356,7 +356,7 @@ class TestTokenPredicates:
 
     def test_token_3_by_index(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _token_3
+        from clausal.modules.spacy import _token_3
         tok_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
@@ -371,7 +371,7 @@ class TestTokenPredicates:
 
     def test_token_3_out_of_range(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _token_3
+        from clausal.modules.spacy import _token_3
         tok_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
@@ -384,7 +384,7 @@ class TestTokenPredicates:
 
     def test_token_3_iterate_with_index(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _token_3
+        from clausal.modules.spacy import _token_3
         idx_var = Var()
         tok_var = Var()
         sentinel = object()
@@ -400,7 +400,7 @@ class TestTokenPredicates:
 
     def test_token_text(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _token_text_2
+        from clausal.modules.spacy import _token_text_2
         tok = _token_to_dict(doc[0])
         result = Var()
         results = list(_token_text_2(tok, result, trail, None))
@@ -409,7 +409,7 @@ class TestTokenPredicates:
 
     def test_token_list(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _token_list_2
+        from clausal.modules.spacy import _token_list_2
         result = Var()
         results = list(_token_list_2(doc, result, trail, None))
         assert len(results) == 1
@@ -435,7 +435,7 @@ class TestAnnotationPredicates:
 
     def test_pos(self, apple_tok, trail):
         # nv
-        from clausal.modules.spacy_module import _pos_2
+        from clausal.modules.spacy import _pos_2
         result = Var()
         results = list(_pos_2(apple_tok, result, trail, None))
         assert len(results) == 1
@@ -443,7 +443,7 @@ class TestAnnotationPredicates:
 
     def test_lemma(self, looking_tok, trail):
         # nv
-        from clausal.modules.spacy_module import _lemma_2
+        from clausal.modules.spacy import _lemma_2
         result = Var()
         results = list(_lemma_2(looking_tok, result, trail, None))
         assert len(results) == 1
@@ -451,7 +451,7 @@ class TestAnnotationPredicates:
 
     def test_dep(self, apple_tok, trail):
         # nv
-        from clausal.modules.spacy_module import _dep_2
+        from clausal.modules.spacy import _dep_2
         result = Var()
         results = list(_dep_2(apple_tok, result, trail, None))
         assert len(results) == 1
@@ -459,7 +459,7 @@ class TestAnnotationPredicates:
 
     def test_head(self, apple_tok, trail):
         # nv
-        from clausal.modules.spacy_module import _head_2
+        from clausal.modules.spacy import _head_2
         result = Var()
         results = list(_head_2(apple_tok, result, trail, None))
         assert len(results) == 1
@@ -467,7 +467,7 @@ class TestAnnotationPredicates:
 
     def test_shape(self, apple_tok, trail):
         # nv
-        from clausal.modules.spacy_module import _shape_2
+        from clausal.modules.spacy import _shape_2
         result = Var()
         results = list(_shape_2(apple_tok, result, trail, None))
         assert len(results) == 1
@@ -475,13 +475,13 @@ class TestAnnotationPredicates:
 
     def test_is_alpha_true(self, apple_tok, trail):
         # nv
-        from clausal.modules.spacy_module import _is_alpha_1
+        from clausal.modules.spacy import _is_alpha_1
         results = list(_is_alpha_1(apple_tok, trail, None))
         assert len(results) == 1
 
     def test_is_alpha_false_for_punctuation(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _is_alpha_1
+        from clausal.modules.spacy import _is_alpha_1
         # Find the "$" or "." token
         punct_tok = None
         for tok in doc:
@@ -494,7 +494,7 @@ class TestAnnotationPredicates:
 
     def test_is_stop(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _is_stop_1
+        from clausal.modules.spacy import _is_stop_1
         # "is" should be a stop word
         for tok in doc:
             if tok.is_stop:
@@ -513,7 +513,7 @@ class TestAnnotationPredicates:
 class TestNERPredicates:
     def test_entity_2_yields_entities(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _entity_2
+        from clausal.modules.spacy import _entity_2
         ent_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
@@ -527,7 +527,7 @@ class TestNERPredicates:
 
     def test_entity_3_filter_by_label(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _entity_3
+        from clausal.modules.spacy import _entity_3
         ent_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
@@ -541,7 +541,7 @@ class TestNERPredicates:
 
     def test_entity_3_unknown_label_empty(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _entity_3
+        from clausal.modules.spacy import _entity_3
         ent_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
@@ -554,7 +554,7 @@ class TestNERPredicates:
 
     def test_entity_list(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _entity_list_2
+        from clausal.modules.spacy import _entity_list_2
         result = Var()
         results = list(_entity_list_2(doc, result, trail, None))
         assert len(results) == 1
@@ -571,7 +571,7 @@ class TestNERPredicates:
 class TestSentencePredicates:
     def test_sentence_2_yields_sentences(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _sentence_2
+        from clausal.modules.spacy import _sentence_2
         sent_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
@@ -585,7 +585,7 @@ class TestSentencePredicates:
 
     def test_sentence_list(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _sentence_list_2
+        from clausal.modules.spacy import _sentence_list_2
         result = Var()
         results = list(_sentence_list_2(doc, result, trail, None))
         assert len(results) == 1
@@ -602,7 +602,7 @@ class TestSentencePredicates:
 class TestSimilarity:
     def test_identical_texts(self, trail):
         # nv
-        from clausal.modules.spacy_module import _similarity_4
+        from clausal.modules.spacy import _similarity_4
         score = Var()
         results = list(_similarity_4(_ALIAS, "dog", "dog", score, trail, None))
         assert len(results) == 1
@@ -612,7 +612,7 @@ class TestSimilarity:
 
     def test_score_is_float(self, trail):
         # nv
-        from clausal.modules.spacy_module import _similarity_4
+        from clausal.modules.spacy import _similarity_4
         score = Var()
         results = list(_similarity_4(_ALIAS, "cat", "dog", score, trail, None))
         assert len(results) == 1
@@ -629,7 +629,7 @@ class TestSimilarity:
 class TestNounChunks:
     def test_noun_chunk_2_yields_chunks(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _noun_chunk_2
+        from clausal.modules.spacy import _noun_chunk_2
         chunk_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
@@ -643,7 +643,7 @@ class TestNounChunks:
 
     def test_noun_chunk_has_keys(self, doc, trail):
         # nv
-        from clausal.modules.spacy_module import _noun_chunk_2
+        from clausal.modules.spacy import _noun_chunk_2
         chunk_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
@@ -686,21 +686,6 @@ class TestSpacyPredicateAdapter:
         # arity 0 (just trail) not registered — should yield DONE immediately
         last = results[-1]
         assert last[1] is DONE
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Unit tests: py.spacy alias re-exports
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-class TestPySpacyAlias:
-    def test_re_exports(self):
-        # nv
-        from clausal.modules.py import spacy as py_spacy
-        assert py_spacy.LoadModel is LoadModel
-        assert py_spacy.Process is Process
-        assert py_spacy.Entity is Entity
-        assert py_spacy.NounChunk is NounChunk
 
 
 # ══════════════════════════════════════════════════════════════════════════════

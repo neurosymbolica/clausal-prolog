@@ -1,12 +1,12 @@
 # Companion tests for docs/spacy.md display snippets.
 
--import_from(spacy_module, [LoadModel, UnloadModel, CurrentModel, Process,
-                            Token, TokenText, TokenList,
-                            Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop,
-                            Entity, EntityList,
-                            Sentence, SentenceList,
-                            Similarity,
-                            NounChunk])
+-import_from(spacy, [LoadModel, UnloadModel, CurrentModel, Process,
+                     Token, TokenText, TokenList,
+                     Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop,
+                     Entity, EntityList,
+                     Sentence, SentenceList,
+                     Similarity,
+                     NounChunk])
 
 # ── Setup helper ────────────────────────────────────────────────────────────
 

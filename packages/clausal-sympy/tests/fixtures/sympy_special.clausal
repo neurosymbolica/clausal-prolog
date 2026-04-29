@@ -1,4 +1,4 @@
--import_from(py.sympy, [sum_, Product, Binomial, SymEqual, Inf])
+-import_from(sympy, [sum_, Product, Binomial, SymEqual, Inf])
 
 # ── sum_/5 ──────────────────────────────────────────────────────────────
 

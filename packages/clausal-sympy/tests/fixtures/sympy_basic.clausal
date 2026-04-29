@@ -1,4 +1,4 @@
--import_from(py.sympy, [Simplify, Expand, Factor, Solve, SolveAll,
+-import_from(sympy, [Simplify, Expand, Factor, Solve, SolveAll,
                              Diff, Integrate, Limit, Series, Subs,
                              FreeVars, SymEqual, SymStr, inf,
                              Sym, ToSympy, FromSympy])

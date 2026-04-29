@@ -1,4 +1,4 @@
--import_from(py.sympy, [IsPrime, NextPrime, FactorInt, Divisors,
+-import_from(sympy, [IsPrime, NextPrime, FactorInt, Divisors,
                              gcd, lcm])
 
 # ── IsPrime/1 ────────────────────────────────────────────────────────────────
