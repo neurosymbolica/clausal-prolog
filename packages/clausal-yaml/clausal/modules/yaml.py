@@ -1,15 +1,15 @@
-"""clausal.modules.py.yaml — YAML predicates for Clausal.
+"""clausal.modules.yaml — YAML predicates for Clausal.
 
 Provides predicates for parsing and generating YAML, wrapping Python's
 PyYAML library (``yaml.safe_load`` / ``yaml.safe_dump``).  Import via::
 
-    -import_from(py.yaml, [Read, write, ReadAll, WriteAll,
-                            ReadFile, WriteFile, Get])
+    -import_from(yaml, [Read, write, ReadAll, WriteAll,
+                        ReadFile, WriteFile, Get])
 
 Or via module import::
 
-    -import_module(py.yaml)
-    # then use py.yaml.Read(...), py.yaml.Get(...), etc.
+    -import_module(yaml)
+    # then use yaml.Read(...), yaml.Get(...), etc.
 
 Data representation
 -------------------

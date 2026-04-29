@@ -1,6 +1,6 @@
 # Companion tests for docs/yaml.md display snippets.
 
--import_from(py.yaml, [Read, write, ReadAll, WriteAll, Get])
+-import_from(yaml, [Read, write, ReadAll, WriteAll, Get])
 
 # ── Read ─────────────────────────────────────────────────────────────────────
 

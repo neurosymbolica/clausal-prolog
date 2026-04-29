@@ -15,7 +15,7 @@ from clausal.import_hook import _load_module
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-_YAML_IMPORT = '-import_from(py.yaml, [Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get])\n'
+_YAML_IMPORT = '-import_from(yaml, [Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get])\n'
 
 
 def _load(name, src_text, tmp_path):

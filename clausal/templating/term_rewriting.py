@@ -1205,6 +1205,7 @@ def _dotted_name_from_ast(node):
 # ``clausal/modules/uuid_mod.py`` shim re-exporting from ``py/uuid.py``).
 _IMPORT_ALIASES: dict[str, str] = {
     "uuid": "uuid_mod",
+    "yaml": "yaml",
 }
 
 

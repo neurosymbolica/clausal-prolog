@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: clausal-yaml
+Version: 0.1.0
+Summary: YAML predicates for Clausal (PyYAML wrapper)
+Author-email: Mike Amy <mikeamycoder@gmail.com>
+License: MIT
+Project-URL: Repository, https://gitlab.com/MikeAmy/clausal
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: clausal>=0.3.1
+Requires-Dist: pyyaml>=6.0

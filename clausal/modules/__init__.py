@@ -41,3 +41,13 @@ Legacy aliases (backward compatibility shims — re-export from ``py.*``):
 - ``files_mod``   → ``py.files``
 - ``process_mod`` → ``py.process``
 """
+
+# Extend __path__ so that separately-installed wrapper distributions
+# (e.g. clausal-yaml) that place files under clausal/modules/ in
+# site-packages are discoverable alongside the core source tree.
+import os as _os, site as _site
+for _sp in _site.getsitepackages():
+    _candidate = _os.path.join(_sp, "clausal", "modules")
+    if _os.path.isdir(_candidate) and _candidate not in __path__:
+        __path__.append(_candidate)
+

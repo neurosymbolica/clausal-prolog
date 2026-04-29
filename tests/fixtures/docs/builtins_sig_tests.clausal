@@ -394,12 +394,3 @@ Test("date_time: DayOfWeek exists") <- (
     DayOfWeek(D, W),
     integer(W)
 )  # nv
-
-# ── YAML (yaml_module module) ────────────────────────────────────────────────
-
--import_from(yaml_module, [Read, Get])
-
-Test("yaml: Read exists") <- (
-    Read("x: 1", DATA),
-    Get(DATA, "x", 1)
-)  # nv
