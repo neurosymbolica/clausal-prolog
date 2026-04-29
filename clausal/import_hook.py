@@ -510,8 +510,16 @@ class ModulesFinder(MetaPathFinder):
     # (e.g. ``uuid`` → ``uuid_mod`` shim which re-exports from py/uuid.py).
     _ALIASES: dict[str, str] = {
         "uuid": "uuid_mod",
-        "sklearn": "py.sklearn",
     }
+
+    # Names that happen to match ``clausal.modules.<name>`` but must NOT be
+    # intercepted — the real third-party package should be imported instead.
+    # The compile-time alias approach (_MODULE_ALIASES / _IMPORT_ALIASES)
+    # resolves these at compile time, so the import hook must stay out of
+    # the way to avoid shadowing the real package.
+    _PASSTHROUGH: frozenset[str] = frozenset({
+        "sklearn",
+    })
 
     # Guard against re-entrant imports (e.g. py/uuid.py does
     # ``_import_stdlib("uuid")`` which would re-enter this finder).
@@ -549,6 +557,8 @@ class ModulesFinder(MetaPathFinder):
             return new_spec
         # Only redirect top-level names (no dots) that we actually provide.
         if "." in fullname:
+            return None
+        if fullname in self._PASSTHROUGH:
             return None
         if fullname in self._resolving:
             return None

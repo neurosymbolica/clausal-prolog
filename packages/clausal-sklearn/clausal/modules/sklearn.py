@@ -1,9 +1,9 @@
-"""clausal.modules.py.sklearn — scikit-learn predicates for Clausal.
+"""clausal.modules.sklearn — scikit-learn predicates for Clausal.
 
 Provides predicates for machine learning via scikit-learn::
 
-    -import_from(py.sklearn, [Fit, Predict, Score, LoadDataset, Algorithm,
-                              Est, Dataset, Fitted, Split])
+    -import_from(sklearn, [Fit, Predict, Score, LoadDataset, Algorithm,
+                           Est, Dataset, Fitted, Split])
 
 Term constructors (tagged tuples for deep unification):
     Est(algorithm, params)     — unfitted estimator description
@@ -54,11 +54,8 @@ _sk_preprocessing = None
 def _ensure_sklearn():
     """Lazily import sklearn on first use.
 
-    Because ModulesFinder aliases 'sklearn' -> our module in sys.modules,
-    we temporarily disable it and evict the alias so Python's normal import
-    machinery finds the real scikit-learn package.  All submodule references
-    are cached globally so individual functions never need bare
-    ``from sklearn...`` imports.
+    All submodule references are cached globally so individual functions
+    never need bare ``from sklearn...`` imports.
     """
     global _sk, _sk_datasets, _sk_model_selection, _sk_metrics
     global _sk_pipeline, _sk_preprocessing
@@ -67,43 +64,23 @@ def _ensure_sklearn():
     with _sk_lock:
         if _sk is not None:
             return
-        import sys
         import importlib
-        from clausal.import_hook import ModulesFinder
 
-        # Temporarily disable ModulesFinder to avoid circular imports
-        # (sklearn -> joblib -> cloudpickle -> uuid -> ModulesFinder -> uuid_mod)
-        finders_to_restore = []
-        for i, f in enumerate(sys.meta_path):
-            if isinstance(f, ModulesFinder):
-                finders_to_restore.append((i, f))
-        for _idx, f in reversed(finders_to_restore):
-            sys.meta_path.remove(f)
-
-        _saved = sys.modules.pop("sklearn", None)
-        try:
-            sklearn = importlib.import_module("sklearn")
-            importlib.import_module("sklearn.datasets")
-            importlib.import_module("sklearn.decomposition")
-            importlib.import_module("sklearn.ensemble")
-            importlib.import_module("sklearn.linear_model")
-            importlib.import_module("sklearn.metrics")
-            importlib.import_module("sklearn.model_selection")
-            importlib.import_module("sklearn.naive_bayes")
-            importlib.import_module("sklearn.neighbors")
-            importlib.import_module("sklearn.pipeline")
-            importlib.import_module("sklearn.preprocessing")
-            importlib.import_module("sklearn.svm")
-            importlib.import_module("sklearn.tree")
-            importlib.import_module("sklearn.cluster")
-            importlib.import_module("sklearn.feature_extraction.text")
-        finally:
-            # Restore ModulesFinder
-            for idx, f in finders_to_restore:
-                sys.meta_path.insert(idx, f)
-            # Restore our alias
-            if _saved is not None:
-                sys.modules["sklearn"] = _saved
+        sklearn = importlib.import_module("sklearn")
+        importlib.import_module("sklearn.datasets")
+        importlib.import_module("sklearn.decomposition")
+        importlib.import_module("sklearn.ensemble")
+        importlib.import_module("sklearn.linear_model")
+        importlib.import_module("sklearn.metrics")
+        importlib.import_module("sklearn.model_selection")
+        importlib.import_module("sklearn.naive_bayes")
+        importlib.import_module("sklearn.neighbors")
+        importlib.import_module("sklearn.pipeline")
+        importlib.import_module("sklearn.preprocessing")
+        importlib.import_module("sklearn.svm")
+        importlib.import_module("sklearn.tree")
+        importlib.import_module("sklearn.cluster")
+        importlib.import_module("sklearn.feature_extraction.text")
 
         _sk = sklearn
         _sk_datasets = sklearn.datasets

@@ -184,6 +184,7 @@ _MODULE_ALIASES: dict[str, str] = {
     "jax_optax": "jax_optax",
     "jax_equinox": "jax_equinox",
     "jax_flax": "jax_flax",
+    "sklearn": "sklearn",
 }
 
 
