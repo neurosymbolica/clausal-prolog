@@ -6,3 +6,4 @@ __transformed__/
 build/
 clausal.egg-info/
 site/
+**/*.egg-info/

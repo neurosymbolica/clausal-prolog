@@ -1,0 +1,22 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "clausal-scryer"
+version = "0.1.0"
+description = "Scryer Prolog backend for Clausal (Rust/PyO3 extension)"
+license = {text = "MIT"}
+authors = [
+    {name = "Mike Amy", email = "mikeamycoder@gmail.com"},
+]
+requires-python = ">=3.13"
+dependencies = [
+    "clausal>=0.3.1",
+]
+
+[project.urls]
+Repository = "https://gitlab.com/MikeAmy/clausal"
+
+[tool.maturin]
+module-name = "_scryer_ext"

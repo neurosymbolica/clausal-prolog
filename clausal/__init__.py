@@ -3,6 +3,15 @@
 Top-level public API (Step 7 and later).
 """
 
+# Extend __path__ so that separately-installed backend distributions
+# (e.g. clausal-trealla, clausal-gprolog, clausal-scryer) that place
+# subpackages under clausal/ in site-packages are discoverable.
+import os as _os, site as _site
+for _sp in _site.getsitepackages():
+    _candidate = _os.path.join(_sp, "clausal")
+    if _os.path.isdir(_candidate) and _candidate not in __path__:
+        __path__.append(_candidate)
+
 from clausal.logic.solve import call, solve, query, once, _deref_walk
 from clausal.logic.database import Module, Database, Clause
 from clausal.logic.variables import Var, Trail, deref, unify, UnboundVarCoercionError
