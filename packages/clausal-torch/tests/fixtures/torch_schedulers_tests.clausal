@@ -1,0 +1,46 @@
+-import_from(torch_nn, [scheduler_type])
+
+# --- scheduler_type/2: registry enumeration ---
+
+Test("enumerate schedulers") <- (
+    findall(N, scheduler_type(N, _), NS),
+    in_("StepLR", NS),
+    in_("CosineAnnealingLR", NS),
+    in_("ExponentialLR", NS)
+)  # nv
+
+Test("scheduler lookup StepLR") <- (
+    scheduler_type("StepLR", _)
+)  # nv
+
+Test("scheduler lookup MultiStepLR") <- (
+    scheduler_type("MultiStepLR", _)
+)  # nv
+
+Test("scheduler lookup CyclicLR") <- (
+    scheduler_type("CyclicLR", _)
+)  # nv
+
+Test("scheduler lookup OneCycleLR") <- (
+    scheduler_type("OneCycleLR", _)
+)  # nv
+
+Test("scheduler lookup ReduceLROnPlateau") <- (
+    scheduler_type("ReduceLROnPlateau", _)
+)  # nv
+
+Test("scheduler lookup LambdaLR") <- (
+    scheduler_type("LambdaLR", _)
+)  # nv
+
+Test("scheduler lookup LinearLR") <- (
+    scheduler_type("LinearLR", _)
+)  # nv
+
+Test("scheduler lookup ConstantLR") <- (
+    scheduler_type("ConstantLR", _)
+)  # nv
+
+Test("scheduler lookup PolynomialLR") <- (
+    scheduler_type("PolynomialLR", _)
+)  # nv

@@ -1,0 +1,366 @@
+-import_module(jax)
+-import_module(equinox)
+-import_from(jax, [array, array_list, ones, zeros, arange, shape, allclose, int32])
+-import_from(jax_random, [key, split_key])
+-import_from(jax_tree, [apply_updates])
+-import_from(jax_optax, [sgd, init_optimizer, update_optimizer])
+-import_from(jax_equinox, [
+    linear, mlp, layer_norm, sequential, identity,
+    dropout, lambda_layer,
+    conv2d, max_pool2d, avg_pool1d, adaptive_avg_pool2d,
+    embedding, lstm_cell,
+    apply_module,
+    filter_grad_value, filter_value_and_grad, filter_jit_compile,
+    partition, combine,
+    tree_at_set, tree_at_apply, tree_at_get,
+    is_array, is_inexact_array, tree_equal,
+    serialise, deserialise,
+    batch_norm, make_with_state, apply_stateful_module,
+    dropout_train, inference_mode, is_stateful,
+    layer_class
+])
+
+# ════════════════════════════════════════════════════════════════════════════
+# Layer construction
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("linear forward shape") <- (
+    key(0, K),
+    linear(4, 8, K, MODEL),
+    ones(4, X),
+    apply_module(MODEL, X, Y),
+    shape(Y, [8])
+)  # nv
+
+Test("linear with use_bias=False opts") <- (
+    key(0, K),
+    linear(4, 8, {"use_bias": False}, K, MODEL),
+    ones(4, X),
+    apply_module(MODEL, X, Y),
+    shape(Y, [8])
+)  # nv
+
+Test("mlp forward shape") <- (
+    key(0, K),
+    mlp(2, 3, 8, 2, K, MODEL),
+    ones(2, X),
+    apply_module(MODEL, X, Y),
+    shape(Y, [3])
+)  # nv
+
+Test("layer_norm forward preserves shape") <- (
+    layer_norm(8, NORM),
+    arange(8.0, X),
+    apply_module(NORM, X, Y),
+    shape(Y, [8])
+)  # nv
+
+Test("sequential of linear, layer_norm, linear") <- (
+    key(0, K0),
+    split_key(K0, 2, [K1, K2]),
+    linear(4, 6, K1, A),
+    layer_norm(6, B),
+    linear(6, 2, K2, C),
+    sequential([A, B, C], MODEL),
+    ones(4, X),
+    apply_module(MODEL, X, Y),
+    shape(Y, [2])
+)  # nv
+
+Test("identity is a no-op") <- (
+    identity(M),
+    array([1.0, 2.0, 3.0], X),
+    apply_module(M, X, Y),
+    array_list(Y, [1.0, 2.0, 3.0])
+)  # nv
+
+Test("lambda_layer wraps a callable") <- (
+    FN is ++(lambda x: x * 2),
+    lambda_layer(FN, M),
+    array([1.0, 2.0, 3.0], X),
+    apply_module(M, X, Y),
+    array_list(Y, [2.0, 4.0, 6.0])
+)  # nv
+
+Test("dropout defaults to inference (no-op)") <- (
+    dropout(0.5, M),
+    ones(8, X),
+    apply_module(M, X, Y),
+    array_list(Y, [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+)  # nv
+
+Test("conv2d forward shape") <- (
+    key(0, K),
+    conv2d(3, 8, 3, K, MODEL),
+    ones([3, 16, 16], X),
+    apply_module(MODEL, X, Y),
+    shape(Y, [8, 14, 14])
+)  # nv
+
+Test("max_pool2d shape with stride=2 opts") <- (
+    max_pool2d(2, {"stride": 2}, M),
+    ones([1, 8, 8], X),
+    apply_module(M, X, Y),
+    shape(Y, [1, 4, 4])
+)  # nv
+
+Test("avg_pool1d shape with stride=2 opts") <- (
+    avg_pool1d(2, {"stride": 2}, M),
+    ones([1, 8], X),
+    apply_module(M, X, Y),
+    shape(Y, [1, 4])
+)  # nv
+
+Test("adaptive_avg_pool2d shape") <- (
+    adaptive_avg_pool2d([4, 4], M),
+    ones([1, 16, 16], X),
+    apply_module(M, X, Y),
+    shape(Y, [1, 4, 4])
+)  # nv
+
+Test("embedding lookup shape") <- (
+    key(0, K),
+    embedding(10, 4, K, M),
+    array(3, X),
+    apply_module(M, X, Y),
+    shape(Y, [4])
+)  # nv
+
+Test("lstm_cell single-step shape") <- (
+    key(0, K),
+    lstm_cell(4, 8, K, M),
+    ones(4, X),
+    zeros(8, H0),
+    zeros(8, C0),
+    R is ++M(X, (H0, C0)),
+    R is (H, _C),
+    shape(H, [8])
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Filter transforms
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("filter_grad_value over a Linear loss") <- (
+    key(0, K),
+    linear(4, 1, K, MODEL),
+    ones(4, XS),
+    LOSS_FN is ++(lambda m: jax.numpy.sum(m(jax.numpy.ones(4)) ** 2)),
+    filter_grad_value(LOSS_FN, MODEL, GRADS),
+    # Grads should match the model's pytree structure (linear weight + bias)
+    not tree_equal(GRADS, MODEL)
+)  # nv
+
+Test("filter_value_and_grad tuple decomposition") <- (
+    key(0, K),
+    linear(2, 1, K, MODEL),
+    LOSS_FN is ++(lambda m: jax.numpy.sum(m(jax.numpy.ones(2)) ** 2)),
+    filter_value_and_grad(LOSS_FN, MODEL, RESULT),
+    RESULT is (V, G),
+    array_list(V, FV),
+    FV >= 0.0,
+    not tree_equal(G, MODEL)
+)  # nv
+
+Test("filter_jit_compile produces equivalent callable") <- (
+    key(0, K),
+    linear(3, 2, K, MODEL),
+    F is ++(lambda m: jax.numpy.sum(m(jax.numpy.ones(3)))),
+    filter_jit_compile(F, F_JIT),
+    Y_RAW is ++F(MODEL),
+    Y_JIT is ++F_JIT(MODEL),
+    allclose(Y_RAW, Y_JIT)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Partition / combine round-trip
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("partition splits and combine rebuilds") <- (
+    key(0, K),
+    linear(3, 5, K, MODEL),
+    FILTER is ++equinox.is_array,
+    partition(MODEL, FILTER, DIFF, STATIC),
+    combine(DIFF, STATIC, REBUILT),
+    tree_equal(MODEL, REBUILT)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# tree_at — surgical updates
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("tree_at_set replaces a single leaf") <- (
+    key(0, K),
+    linear(2, 3, K, MODEL),
+    WHERE is ++(lambda m: m.bias),
+    zeros(3, NEW_BIAS),
+    tree_at_set(WHERE, MODEL, NEW_BIAS, NEW_MODEL),
+    tree_at_get(WHERE, NEW_MODEL, NB),
+    array_list(NB, [0.0, 0.0, 0.0])
+)  # nv
+
+Test("tree_at_apply transforms a leaf") <- (
+    key(0, K),
+    linear(2, 3, K, MODEL),
+    WHERE is ++(lambda m: m.bias),
+    FN is ++(lambda b: b * 0),
+    tree_at_apply(WHERE, MODEL, FN, NEW_MODEL),
+    tree_at_get(WHERE, NEW_MODEL, NB),
+    array_list(NB, [0.0, 0.0, 0.0])
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Leaf checks
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("is_array succeeds on a JAX array") <- (
+    array([1.0, 2.0], X),
+    is_array(X)
+)  # nv
+
+Test("is_array fails on a Python int") <- (
+    not is_array(3)
+)  # nv
+
+Test("is_inexact_array succeeds on a float array") <- (
+    array([1.0, 2.0], X),
+    is_inexact_array(X)
+)  # nv
+
+Test("is_inexact_array fails on an int array") <- (
+    array([1, 2], {"dtype": int32}, X),
+    not is_inexact_array(X)
+)  # nv
+
+Test("tree_equal on identical models") <- (
+    key(0, K),
+    linear(2, 3, K, M1),
+    linear(2, 3, K, M2),
+    tree_equal(M1, M2)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Serialisation round-trip
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("serialise then deserialise round-trip") <- (
+    key(0, K),
+    linear(3, 5, K, MODEL),
+    PATH is "/tmp/test_jax_equinox_roundtrip.eqx",
+    serialise(MODEL, PATH),
+    # Reconstruct a fresh model with same hyperparams as `like`
+    linear(3, 5, K, LIKE),
+    deserialise(PATH, LIKE, LOADED),
+    tree_equal(MODEL, LOADED)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# End-to-end: MLP + optax training step
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("MLP one optax SGD step changes the model") <- (
+    key(0, K0),
+    split_key(K0, 2, [K_INIT, _]),
+    mlp(2, 1, 4, 1, K_INIT, MODEL),
+    array([[1.0, 2.0], [3.0, 4.0]], XS),
+    array([[5.0], [6.0]], YS),
+    LOSS_FN is ++(lambda m: jax.numpy.mean(
+        (jax.vmap(m)(jax.numpy.array([[1.0, 2.0], [3.0, 4.0]]))
+         - jax.numpy.array([[5.0], [6.0]])) ** 2)),
+    filter_value_and_grad(LOSS_FN, MODEL, VG),
+    VG is (_LOSS, GRADS),
+    sgd(0.01, OPT),
+    init_optimizer(OPT, MODEL, STATE),
+    update_optimizer(OPT, GRADS, STATE, UR),
+    UR is (UPDATES, _),
+    apply_updates(MODEL, UPDATES, NEW_MODEL),
+    not tree_equal(MODEL, NEW_MODEL)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Stateful modules (Phase 17b)
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("batch_norm constructs model and state") <- (
+    batch_norm(3, "batch", BN, STATE),
+    is_stateful(BN)
+)  # nv
+
+Test("batch_norm with mode=batch opts") <- (
+    batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
+    is_stateful(BN)
+)  # nv
+
+Test("apply_stateful_module in inference mode preserves shape") <- (
+    batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
+    inference_mode(BN, BN_EVAL),
+    ones(3, X),
+    apply_stateful_module(BN_EVAL, X, STATE, Y, _NEW_STATE),
+    shape(Y, [3])
+)  # nv
+
+Test("apply_stateful_module under vmap preserves batch shape") <- (
+    batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
+    ones([4, 3], X),
+    VMAPPED is ++jax.vmap(BN, axis_name="batch",
+                          in_axes=(0, None), out_axes=(0, None)),
+    apply_stateful_module(VMAPPED, X, STATE, Y, _NEW_STATE),
+    shape(Y, [4, 3])
+)  # nv
+
+Test("dropout_train differs from its input under a key") <- (
+    dropout_train(0.5, D),
+    ones(64, X),
+    key(42, K),
+    apply_module(D, X, {"key": K}, Y),
+    # With p=0.5 over 64 elements the output almost-surely has zeros
+    not allclose(Y, X)
+)  # nv
+
+Test("inference_mode flips inference field to True") <- (
+    batch_norm(3, "batch", BN, _STATE),
+    inference_mode(BN, BN_EVAL),
+    ++BN.inference == False,
+    ++BN_EVAL.inference == True
+)  # nv
+
+Test("inference_mode/3 with value=False switches back") <- (
+    batch_norm(3, "batch", BN, _STATE),
+    inference_mode(BN, BN_EVAL),
+    inference_mode(BN_EVAL, False, BN_TRAIN),
+    ++BN_TRAIN.inference == False
+)  # nv
+
+Test("is_stateful discriminates BatchNorm vs Linear") <- (
+    batch_norm(3, "batch", BN, _STATE),
+    key(0, K),
+    linear(3, 3, K, LIN),
+    is_stateful(BN),
+    not is_stateful(LIN)
+)  # nv
+
+Test("make_with_state generic form equals batch_norm/5") <- (
+    BN_CLS is ++equinox.nn.BatchNorm,
+    make_with_state(BN_CLS, {"input_size": 3, "axis_name": "batch",
+                             "mode": "batch"}, BN_A, STATE_A),
+    batch_norm(3, "batch", {"mode": "batch"}, BN_B, STATE_B),
+    tree_equal(BN_A, BN_B),
+    tree_equal(STATE_A, STATE_B)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Layer-class registry (discovery)
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("layer_class registry exposes Linear, MLP, Conv2d") <- (
+    layer_class("Linear", _),
+    layer_class("MLP", _),
+    layer_class("Conv2d", _),
+    layer_class("LayerNorm", _)
+)  # nv
+
+Test("layer_class findall has at least 40 entries") <- (
+    findall(N, layer_class(N, _), NS),
+    length(NS, L),
+    L >= 40
+)  # nv

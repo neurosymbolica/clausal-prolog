@@ -1,0 +1,374 @@
+-import_module(jax)
+-import_from(jax, [array, array_list, zeros, shape, allclose, NaN, null])
+-import_from(jax_random, [key])
+-import_from(jax_transforms, [value_and_grad])
+-import_from(jax_optax, [
+    sgd, adam, adamw, rmsprop,
+    chain, clip_by_global_norm, scale, scale_by_schedule,
+    add_decayed_weights, ema, zero_nans,
+    constant_schedule, linear_schedule, exponential_decay,
+    cosine_decay_schedule, warmup_cosine_decay_schedule,
+    piecewise_constant_schedule, polynomial_schedule,
+    init_optimizer, update_optimizer, apply_updates,
+    softmax_cross_entropy, softmax_cross_entropy_with_integer_labels,
+    sigmoid_binary_cross_entropy,
+    l2_loss, huber_loss, cosine_similarity, hinge_loss, smooth_labels,
+    multi_steps,
+    optimizer, schedule, loss_function,
+    schedule_at
+])
+
+# ════════════════════════════════════════════════════════════════════════════
+# Training-loop trio: init, update, apply_updates
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("sgd one step on a flat array") <- (
+    sgd(0.1, OPT),
+    array([1.0, 2.0, 3.0], PARAMS),
+    init_optimizer(OPT, PARAMS, STATE0),
+    array([1.0, 1.0, 1.0], GRADS),
+    update_optimizer(OPT, GRADS, STATE0, RESULT),
+    RESULT is (UPDATES, _STATE1),
+    apply_updates(PARAMS, UPDATES, NEW_PARAMS),
+    array([0.9, 1.9, 2.9], EXPECTED),
+    allclose(NEW_PARAMS, EXPECTED)
+)  # nv
+
+Test("sgd opts: momentum") <- (
+    sgd(0.1, {"momentum": 0.9}, OPT),
+    array([0.0, 0.0], PARAMS),
+    init_optimizer(OPT, PARAMS, STATE0),
+    array([1.0, 1.0], GRADS),
+    update_optimizer(OPT, GRADS, STATE0, RESULT),
+    RESULT is (UPDATES, _S),
+    # First step with momentum: -lr * grad = -0.1
+    apply_updates(PARAMS, UPDATES, NEW),
+    array([-0.1, -0.1], EXPECTED),
+    allclose(NEW, EXPECTED)
+)  # nv
+
+Test("adam step using value_and_grad") <- (
+    F is ++(lambda x: jax.numpy.sum(x ** 2)),
+    array([3.0, 4.0], PARAMS),
+    value_and_grad(F, PARAMS, VG),
+    VG is (_VAL, GRADS),
+    adam(0.01, OPT),
+    init_optimizer(OPT, PARAMS, STATE0),
+    update_optimizer(OPT, GRADS, STATE0, RESULT),
+    RESULT is (UPDATES, _STATE1),
+    apply_updates(PARAMS, UPDATES, NEW),
+    shape(NEW, [2])
+)  # nv
+
+Test("two-step training reduces loss for x^2") <- (
+    F is ++(lambda x: jax.numpy.sum(x ** 2)),
+    array([5.0], P0),
+    sgd(0.1, OPT),
+    init_optimizer(OPT, P0, S0),
+    value_and_grad(F, P0, VG0),
+    VG0 is (L0, G0),
+    update_optimizer(OPT, G0, S0, R0),
+    R0 is (U0, S1),
+    apply_updates(P0, U0, P1),
+    value_and_grad(F, P1, VG1),
+    VG1 is (L1, _G1),
+    array_list(L0, V0),
+    array_list(L1, V1),
+    V1 < V0
+)  # nv
+
+Test("apply_updates on pytree of params") <- (
+    PARAMS is ++({"w": jax.numpy.array([1.0, 2.0]), "b": jax.numpy.array(0.5)}),
+    UPDATES is ++({"w": jax.numpy.array([-0.1, -0.2]), "b": jax.numpy.array(-0.05)}),
+    apply_updates(PARAMS, UPDATES, NEW),
+    NW is ++NEW["w"],
+    NB is ++NEW["b"],
+    array([0.9, 1.8], EW),
+    array(0.45, EB),
+    allclose(NW, EW),
+    allclose(NB, EB)
+)  # nv
+
+Test("init_optimizer on pytree params returns matching state") <- (
+    sgd(0.1, OPT),
+    PARAMS is ++({"w": jax.numpy.array([1.0, 2.0]), "b": jax.numpy.array(0.0)}),
+    init_optimizer(OPT, PARAMS, STATE),
+    STATE != null
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Gradient-transform composition (chain)
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("chain of clip then sgd builds and steps") <- (
+    clip_by_global_norm(1.0, CLIP),
+    sgd(0.1, RAW_SGD),
+    chain([CLIP, RAW_SGD], OPT),
+    zeros(4, PARAMS),
+    init_optimizer(OPT, PARAMS, STATE),
+    array([100.0, 0.0, 0.0, 0.0], GRADS),
+    update_optimizer(OPT, GRADS, STATE, RESULT),
+    RESULT is (UPDATES, _),
+    apply_updates(PARAMS, UPDATES, NEW),
+    # Global norm clipped to 1.0, then -0.1 LR applied
+    array([-0.1, 0.0, 0.0, 0.0], EXPECTED),
+    allclose(NEW, EXPECTED)
+)  # nv
+
+Test("scale alone") <- (
+    scale(0.5, OPT),
+    array([0.0], PARAMS),
+    init_optimizer(OPT, PARAMS, STATE),
+    array([2.0], GRADS),
+    update_optimizer(OPT, GRADS, STATE, RESULT),
+    RESULT is (UPDATES, _),
+    apply_updates(PARAMS, UPDATES, NEW),
+    array_list(NEW, [1.0])
+)  # nv
+
+Test("zero_nans replaces nan grads with 0") <- (
+    zero_nans(OPT),
+    array([1.0, 2.0], PARAMS),
+    init_optimizer(OPT, PARAMS, STATE),
+    array([NaN, 0.0], GRADS),
+    update_optimizer(OPT, GRADS, STATE, RESULT),
+    RESULT is (UPDATES, _),
+    apply_updates(PARAMS, UPDATES, NEW),
+    array_list(NEW, [1.0, 2.0])
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Schedules
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("constant_schedule returns same value at every step") <- (
+    constant_schedule(0.001, SCHED),
+    schedule_at(SCHED, 0, V0),
+    schedule_at(SCHED, 100, V100),
+    V0 == V100
+)  # nv
+
+Test("linear_schedule interpolates") <- (
+    linear_schedule(1.0, 0.0, 10, SCHED),
+    schedule_at(SCHED, 0, V0),
+    schedule_at(SCHED, 10, V10),
+    array_list(V0, V0_F),
+    array_list(V10, V10_F),
+    V0_F > 0.99,
+    V10_F < 0.01
+)  # nv
+
+Test("exponential_decay shrinks") <- (
+    exponential_decay(1.0, 1, 0.5, SCHED),
+    schedule_at(SCHED, 0, V0),
+    schedule_at(SCHED, 4, V4),
+    array_list(V0, V0_F),
+    array_list(V4, V4_F),
+    V0_F > 0.99,
+    V4_F < 0.1
+)  # nv
+
+Test("cosine_decay_schedule endpoints") <- (
+    cosine_decay_schedule(1.0, 100, SCHED),
+    schedule_at(SCHED, 0, V0),
+    schedule_at(SCHED, 100, V_END),
+    array_list(V0, V0_F),
+    array_list(V_END, VEND_F),
+    V0_F > 0.99,
+    VEND_F < 0.01
+)  # nv
+
+Test("warmup_cosine_decay_schedule peaks at end of warmup") <- (
+    warmup_cosine_decay_schedule(0.0, 1.0, 10, 100, SCHED),
+    schedule_at(SCHED, 0, V0),
+    schedule_at(SCHED, 10, VPEAK),
+    array_list(V0, V0_F),
+    array_list(VPEAK, VPEAK_F),
+    V0_F < 0.01,
+    VPEAK_F > 0.99
+)  # nv
+
+Test("piecewise_constant_schedule steps at boundary") <- (
+    piecewise_constant_schedule(1.0, {5: 0.5}, SCHED),
+    schedule_at(SCHED, 0, V0),
+    schedule_at(SCHED, 10, V10),
+    array_list(V0, V0_F),
+    array_list(V10, V10_F),
+    V0_F > 0.99,
+    V10_F > 0.49,
+    V10_F < 0.51
+)  # nv
+
+Test("polynomial_schedule") <- (
+    polynomial_schedule(1.0, 0.0, 1.0, 10, SCHED),
+    schedule_at(SCHED, 0, V0),
+    schedule_at(SCHED, 10, V10),
+    array_list(V0, V0_F),
+    array_list(V10, V10_F),
+    V0_F > 0.99,
+    V10_F < 0.01
+)  # nv
+
+Test("scale_by_schedule wired into chain decays effective LR") <- (
+    cosine_decay_schedule(1.0, 100, SCHED),
+    sgd(1.0, BASE),
+    scale_by_schedule(SCHED, SCALER),
+    chain([BASE, SCALER], OPT),
+    array([0.0], PARAMS),
+    init_optimizer(OPT, PARAMS, STATE),
+    array([1.0], GRADS),
+    update_optimizer(OPT, GRADS, STATE, RESULT),
+    RESULT is (UPDATES, _),
+    apply_updates(PARAMS, UPDATES, NEW),
+    # First step: base sgd(-1.0 grad) * cosine(0)≈1 ≈ -1.0
+    array_list(NEW, [F0, *_]),
+    F0 < -0.99
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Loss functions
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("softmax_cross_entropy on one-hot label") <- (
+    array([2.0, 1.0, 0.1], LOGITS),
+    array([1.0, 0.0, 0.0], LABELS),
+    softmax_cross_entropy(LOGITS, LABELS, L),
+    array_list(L, V),
+    V > 0.4,
+    V < 0.5
+)  # nv
+
+Test("softmax_cross_entropy_with_integer_labels matches one-hot form") <- (
+    array([[2.0, 1.0, 0.1]], LOGITS),
+    array([0], INT_LABELS),
+    array([[1.0, 0.0, 0.0]], OH_LABELS),
+    softmax_cross_entropy_with_integer_labels(LOGITS, INT_LABELS, L_INT),
+    softmax_cross_entropy(LOGITS, OH_LABELS, L_OH),
+    allclose(L_INT, L_OH)
+)  # nv
+
+Test("sigmoid_binary_cross_entropy on logit 0 with label 1") <- (
+    array(0.0, LOGITS),
+    array(1.0, LABELS),
+    sigmoid_binary_cross_entropy(LOGITS, LABELS, L),
+    array_list(L, V),
+    # -log(0.5) ≈ 0.6931
+    V > 0.69,
+    V < 0.70
+)  # nv
+
+Test("l2_loss with target") <- (
+    array([2.0, 4.0], PRED),
+    array([1.0, 1.0], TARGET),
+    l2_loss(PRED, TARGET, L),
+    # 0.5 * ((2-1)^2 + (4-1)^2) = 0.5 * (1 + 9) elementwise → [0.5, 4.5]
+    array_list(L, [0.5, 4.5])
+)  # nv
+
+Test("huber_loss small residual ≈ quadratic") <- (
+    array(0.0, PRED),
+    array(0.5, TARGET),
+    huber_loss(PRED, TARGET, L),
+    array_list(L, V),
+    # 0.5 * (0.5)^2 = 0.125
+    V > 0.124,
+    V < 0.126
+)  # nv
+
+Test("huber_loss with custom delta") <- (
+    array(0.0, PRED),
+    array(2.0, TARGET),
+    huber_loss(PRED, TARGET, 0.5, L),
+    array_list(L, V),
+    # delta=0.5; large residual: delta * (|r| - 0.5*delta) = 0.5*(2 - 0.25) = 0.875
+    V > 0.87,
+    V < 0.88
+)  # nv
+
+Test("cosine_similarity of identical vectors is 1") <- (
+    array([1.0, 2.0, 3.0], A),
+    cosine_similarity(A, A, L),
+    array_list(L, V),
+    V > 0.99
+)  # nv
+
+Test("hinge_loss correct margin gives 0") <- (
+    array(2.0, PRED),
+    array(1.0, TARGET),
+    hinge_loss(PRED, TARGET, L),
+    array_list(L, 0.0)
+)  # nv
+
+Test("smooth_labels with alpha=0.1 on 3-class one-hot") <- (
+    array([1.0, 0.0, 0.0], LABELS),
+    smooth_labels(LABELS, 0.1, S),
+    array_list(S, [V0, V1, V2]),
+    # alpha=0.1 → on-class 0.9 + 0.1/3 ≈ 0.9333; off-class 0.1/3 ≈ 0.0333
+    V0 > 0.93, V0 < 0.94,
+    V1 > 0.03, V1 < 0.04,
+    V2 > 0.03, V2 < 0.04
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# Registries
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("optimizer registry has known names") <- (
+    optimizer("sgd", _),
+    optimizer("adam", _),
+    optimizer("adamw", _),
+    optimizer("rmsprop", _),
+    optimizer("lion", _)
+)  # nv
+
+Test("optimizer findall returns full list") <- (
+    findall(N, optimizer(N, _), NS),
+    length(NS, 9)
+)  # nv
+
+Test("optimizer lookup by name returns the constructor") <- (
+    optimizer("sgd", CTOR),
+    OPT is ++CTOR(0.1),
+    array([1.0], PARAMS),
+    init_optimizer(OPT, PARAMS, _STATE)
+)  # nv
+
+Test("schedule registry has known names") <- (
+    schedule("constant_schedule", _),
+    schedule("cosine_decay_schedule", _),
+    schedule("warmup_cosine_decay_schedule", _)
+)  # nv
+
+Test("loss_function registry has known names") <- (
+    loss_function("softmax_cross_entropy", _),
+    loss_function("l2_loss", _),
+    loss_function("huber_loss", _)
+)  # nv
+
+# ════════════════════════════════════════════════════════════════════════════
+# multi_steps (gradient accumulation)
+# ════════════════════════════════════════════════════════════════════════════
+
+Test("multi_steps accumulates K gradients before applying") <- (
+    sgd(1.0, INNER),
+    multi_steps(INNER, 4, OPT),
+    array([0.0], PARAMS),
+    init_optimizer(OPT, PARAMS, S0),
+    array([1.0], GRADS),
+    update_optimizer(OPT, GRADS, S0, R1),
+    R1 is (U1, S1),
+    apply_updates(PARAMS, U1, P1),
+    # Step 1 of 4: no real update yet
+    array_list(P1, [0.0]),
+    update_optimizer(OPT, GRADS, S1, R2),
+    R2 is (_U2, S2),
+    update_optimizer(OPT, GRADS, S2, R3),
+    R3 is (_U3, S3),
+    update_optimizer(OPT, GRADS, S3, R4),
+    R4 is (U4, _S4),
+    apply_updates(P1, U4, P4),
+    # Step 4 of 4: mean accumulated grad applied (use_grad_mean=True default)
+    array_list(P4, [F0, *_]),
+    F0 < -0.99,
+    F0 > -1.01
+)  # nv

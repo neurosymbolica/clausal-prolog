@@ -1,0 +1,250 @@
+-import_module(jax)
+-import_from(jax, [array, shape, array_list, sum, allclose, null])
+-import_from(jax_random, [key])
+-import_from(jax_nn, [
+    activation, initializer, init_array,
+    relu_apply, sigmoid_apply, tanh_apply,
+    softmax_apply, log_softmax_apply,
+    gelu_apply, elu_apply, leaky_relu_apply,
+    selu_apply, softplus_apply, silu_apply,
+    one_hot
+])
+
+# --- Activation registry ---
+
+Test("activation lookup by name") <- (
+    activation("relu", FN),
+    FN != null
+)  # nv
+
+Test("activation registry contains common names") <- (
+    activation("sigmoid", _S),
+    activation("tanh", _T),
+    activation("gelu", _G),
+    activation("softmax", _SM)
+)  # nv
+
+Test("activation registry contains leaky_relu and selu") <- (
+    activation("leaky_relu", _),
+    activation("selu", _)
+)  # nv
+
+# Enumerate everything; confirm the count matches the module's whitelist.
+Test("activation findall enumerates full registry") <- (
+    findall(N, activation(N, _), NS),
+    length(NS, 22)
+)  # nv
+
+# Reverse lookup: given the function, recover the name.
+Test("activation reverse lookup") <- (
+    activation("relu", FN),
+    activation(N, FN),
+    N == "relu"
+)  # nv
+
+# --- Applied activations — value spot-checks ---
+
+Test("relu zeroes negatives") <- (
+    array([-1.0, 0.0, 1.0, 2.0], A),
+    relu_apply(A, R),
+    array([0.0, 0.0, 1.0, 2.0], EXPECTED),
+    allclose(R, EXPECTED, 0.000001, 0.0)
+)  # nv
+
+Test("relu leaves positives unchanged") <- (
+    array([0.5, 1.5, 10.0], A),
+    relu_apply(A, R),
+    array([0.5, 1.5, 10.0], EXPECTED),
+    allclose(R, EXPECTED, 0.000001, 0.0)
+)  # nv
+
+Test("sigmoid at 0 is 0.5") <- (
+    array([0.0], A),
+    sigmoid_apply(A, R),
+    array_list(R, [0.5])
+)  # nv
+
+Test("tanh at 0 is 0") <- (
+    array([0.0], A),
+    tanh_apply(A, R),
+    array([0.0], EXPECTED),
+    allclose(R, EXPECTED, 0.000001, 0.0)
+)  # nv
+
+Test("softmax sums to 1") <- (
+    array([1.0, 2.0, 3.0, 4.0], A),
+    softmax_apply(A, 0, R),
+    sum(R, S),
+    array(1.0, ONE),
+    allclose(S, ONE, 0.0001, 0.0)
+)  # nv
+
+Test("softmax on 2d along axis 1") <- (
+    array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
+    softmax_apply(A, 1, R),
+    shape(R, [2, 3])
+)  # nv
+
+Test("log_softmax shape preserved") <- (
+    array([1.0, 2.0, 3.0], A),
+    log_softmax_apply(A, 0, R),
+    shape(R, [3])
+)  # nv
+
+Test("gelu at 0 is 0") <- (
+    array([0.0], A),
+    gelu_apply(A, R),
+    array(0.0, ZERO),
+    allclose(R, ZERO, 0.0001, 0.0)
+)  # nv
+
+Test("gelu with approximate flag") <- (
+    array([1.0], A),
+    gelu_apply(A, 1, R),
+    shape(R, [1])
+)  # nv
+
+Test("elu negative gets smooth") <- (
+    array([-1.0, 0.0, 1.0], A),
+    elu_apply(A, R),
+    shape(R, [3])
+)  # nv
+
+Test("leaky_relu default slope") <- (
+    array([-1.0, 0.0, 1.0], A),
+    leaky_relu_apply(A, R),
+    shape(R, [3])
+)  # nv
+
+Test("leaky_relu custom slope") <- (
+    array([-10.0, 0.0, 5.0], A),
+    leaky_relu_apply(A, 0.5, R),
+    array([-5.0, 0.0, 5.0], EXPECTED),
+    allclose(R, EXPECTED, 0.000001, 0.0)
+)  # nv
+
+Test("selu shape") <- (
+    array([-1.0, 0.0, 1.0], A),
+    selu_apply(A, R),
+    shape(R, [3])
+)  # nv
+
+Test("softplus positive") <- (
+    array([0.0], A),
+    softplus_apply(A, R),
+    shape(R, [1])
+)  # nv
+
+Test("silu at 0 is 0") <- (
+    array([0.0], A),
+    silu_apply(A, R),
+    array([0.0], EXPECTED),
+    allclose(R, EXPECTED, 0.000001, 0.0)
+)  # nv
+
+# --- One-hot encoding ---
+
+Test("one_hot basic") <- (
+    array([0, 2, 1], X),
+    one_hot(X, 3, R),
+    array_list(R, [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+)  # nv
+
+Test("one_hot single index") <- (
+    array([1], X),
+    one_hot(X, 4, R),
+    array_list(R, [[0.0, 1.0, 0.0, 0.0]])
+)  # nv
+
+# --- Initializer registry ---
+
+Test("initializer lookup by name") <- (
+    initializer("glorot_uniform", F),
+    F != null
+)  # nv
+
+Test("initializer registry contains common names") <- (
+    initializer("zeros", _Z),
+    initializer("ones", _O),
+    initializer("glorot_uniform", _GU),
+    initializer("he_normal", _HN),
+    initializer("orthogonal", _OR)
+)  # nv
+
+Test("initializer findall enumerates full registry") <- (
+    findall(N, initializer(N, _), NS),
+    length(NS, 19)
+)  # nv
+
+Test("initializer reverse lookup") <- (
+    initializer("zeros", F),
+    initializer(N, F),
+    N == "zeros"
+)  # nv
+
+# --- init_array — apply initializers ---
+
+Test("init_array with glorot_uniform produces correct shape") <- (
+    initializer("glorot_uniform", F),
+    key(0, K),
+    init_array(F, K, [10, 5], W),
+    shape(W, [10, 5])
+)  # nv
+
+Test("init_array with he_normal") <- (
+    initializer("he_normal", F),
+    key(42, K),
+    init_array(F, K, [4, 3], W),
+    shape(W, [4, 3])
+)  # nv
+
+Test("init_array with zeros (direct initializer)") <- (
+    initializer("zeros", F),
+    key(0, K),
+    init_array(F, K, [3], W),
+    array_list(W, [0.0, 0.0, 0.0])
+)  # nv
+
+Test("init_array with ones (direct initializer)") <- (
+    initializer("ones", F),
+    key(0, K),
+    init_array(F, K, [3], W),
+    array_list(W, [1.0, 1.0, 1.0])
+)  # nv
+
+# Regression — scalar shape was previously non-iterable.
+Test("init_array accepts scalar shape") <- (
+    initializer("zeros", F),
+    key(0, K),
+    init_array(F, K, 3, W),
+    array_list(W, [0.0, 0.0, 0.0])
+)  # nv
+
+Test("init_array determinism — same key, same sample") <- (
+    initializer("glorot_uniform", F),
+    key(7, K),
+    init_array(F, K, [4, 2], W1),
+    init_array(F, K, [4, 2], W2),
+    array_list(W1, LS),
+    array_list(W2, LS)
+)  # nv
+
+Test("init_array different keys differ") <- (
+    initializer("normal", F),
+    key(1, K1),
+    key(2, K2),
+    init_array(F, K1, [4], W1),
+    init_array(F, K2, [4], W2),
+    array_list(W1, L1),
+    array_list(W2, L2),
+    not L1 == L2
+)  # nv
+
+# Configured initializer via ++() — e.g., constant(0.5).
+# With -import_module(jax) at the top, the Python-side path is clean.
+Test("configured initializer via ++()") <- (
+    F is ++jax.nn.initializers.constant(0.5),
+    key(0, K),
+    init_array(F, K, [3], W),
+    array_list(W, [0.5, 0.5, 0.5])
+)  # nv

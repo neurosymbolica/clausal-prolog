@@ -1,0 +1,86 @@
+# Companion tests for docs/torch_functional.md signature blocks.
+-import_from(torch, [tensor, randn, shape, zeros, ones])
+-import_from(torch_functional, [
+    gelu, leaky_relu,
+    conv2d, max_pool2d, adaptive_avg_pool2d,
+    batch_norm, layer_norm,
+    cross_entropy, mse_loss,
+    dropout
+])
+
+# --- activations ---
+
+Test("gelu preserves shape") <- (
+    tensor([-1.0, 0.0, 1.0], T),
+    gelu(T, R),
+    shape(R, [3])
+)  # nv
+
+Test("leaky_relu with slope") <- (
+    tensor([-1.0, 0.0, 1.0], T),
+    leaky_relu(T, 0.2, R),
+    shape(R, [3])
+)  # nv
+
+# --- convolutions ---
+
+Test("conv2d shape") <- (
+    randn([1, 1, 5, 5], INPUT),
+    randn([1, 1, 3, 3], WEIGHT),
+    conv2d(INPUT, WEIGHT, OUTPUT),
+    shape(OUTPUT, [1, 1, 3, 3])
+)  # nv
+
+# --- pooling ---
+
+Test("max_pool2d shape") <- (
+    randn([1, 1, 4, 4], INPUT),
+    max_pool2d(INPUT, 2, OUTPUT),
+    shape(OUTPUT, [1, 1, 2, 2])
+)  # nv
+
+Test("adaptive_avg_pool2d shape") <- (
+    randn([1, 1, 10, 10], INPUT),
+    adaptive_avg_pool2d(INPUT, [3, 3], OUTPUT),
+    shape(OUTPUT, [1, 1, 3, 3])
+)  # nv
+
+# --- normalization ---
+
+Test("layer_norm shape preserved") <- (
+    randn([2, 3, 4], INPUT),
+    layer_norm(INPUT, [4], OUTPUT),
+    shape(OUTPUT, [2, 3, 4])
+)  # nv
+
+Test("batch_norm shape preserved") <- (
+    randn([2, 3, 4], INPUT),
+    zeros([3], MEAN),
+    ones([3], VAR),
+    batch_norm(INPUT, MEAN, VAR, OUTPUT),
+    shape(OUTPUT, [2, 3, 4])
+)  # nv
+
+# --- loss functions ---
+
+Test("cross_entropy scalar loss") <- (
+    randn([3, 5], LOGITS),
+    tensor([0, 2, 1], TARGETS),
+    cross_entropy(LOGITS, TARGETS, LOSS),
+    shape(LOSS, [])
+)  # nv
+
+Test("mse_loss") <- (
+    tensor([1.0, 2.0, 3.0], PRED),
+    tensor([1.0, 2.0, 3.0], TARGET),
+    mse_loss(PRED, TARGET, LOSS),
+    shape(LOSS, [])
+)  # nv
+
+# --- dropout ---
+
+Test("dropout eval mode") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    dropout(T, R),
+    shape(R, [3])
+)  # nv

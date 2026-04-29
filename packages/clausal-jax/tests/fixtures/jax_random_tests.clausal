@@ -1,0 +1,301 @@
+-import_from(jax, [
+    shape, dtype, element_count, sum, mean, max, min,
+    array_list, array, bool_
+])
+-import_from(jax_random, [
+    key, split_key, fold_in, key_bytes,
+    normal, uniform, bernoulli, categorical,
+    poisson, gamma, beta, exponential, dirichlet,
+    multivariate_normal, permutation, choice,
+    randint, truncated_normal,
+    sampler
+])
+
+# --- Key primitives ---
+
+Test("create key") <- (
+    key(42, K),
+    shape(K, [])
+)  # nv
+
+Test("create key with zero seed") <- (
+    key(0, K),
+    shape(K, [])
+)  # nv
+
+Test("create key with large seed") <- (
+    key(2147483647, K),
+    shape(K, [])
+)  # nv
+
+Test("split into 2") <- (
+    key(0, K0),
+    split_key(K0, [K1, K2]),
+    shape(K1, []),
+    shape(K2, [])
+)  # nv
+
+Test("split into N=3") <- (
+    key(0, K0),
+    split_key(K0, 3, KS),
+    length(KS, 3)
+)  # nv
+
+Test("split into N=5") <- (
+    key(0, K0),
+    split_key(K0, 5, KS),
+    length(KS, 5)
+)  # nv
+
+# Two subkeys from the same split must be different — verify by the
+# samples they produce (comparing key objects directly via == would go
+# through element-wise array semantics).
+Test("split produces distinct keys") <- (
+    key(0, K0),
+    split_key(K0, [K1, K2]),
+    normal(K1, [3], A1),
+    normal(K2, [3], A2),
+    array_list(A1, L1),
+    array_list(A2, L2),
+    not(L1 == L2)
+)  # nv
+
+Test("fold_in produces different key") <- (
+    key(0, K0),
+    fold_in(K0, 5, K1),
+    normal(K0, [3], A0),
+    normal(K1, [3], A1),
+    array_list(A0, L0),
+    array_list(A1, L1),
+    not(L0 == L1)
+)  # nv
+
+# key_bytes bijection: roundtrip preserves sampling behaviour.
+Test("key_bytes roundtrip reproduces samples") <- (
+    key(42, K),
+    key_bytes(K, B),
+    key_bytes(K2, B),
+    normal(K, [4], A1),
+    normal(K2, [4], A2),
+    array_list(A1, L1),
+    array_list(A2, L2),
+    L1 == L2
+)  # nv
+
+Test("key_bytes forward shape") <- (
+    key(0, K),
+    key_bytes(K, B),
+    shape(B, [2])
+)  # nv
+
+# Determinism: same seed yields same samples.
+Test("determinism — same seed") <- (
+    key(7, K1),
+    key(7, K2),
+    normal(K1, [5], A1),
+    normal(K2, [5], A2),
+    array_list(A1, L1),
+    array_list(A2, L2),
+    L1 == L2
+)  # nv
+
+# --- Samplers ---
+
+Test("normal shape") <- (
+    key(0, K),
+    normal(K, [100], A),
+    shape(A, [100])
+)  # nv
+
+Test("normal 2d shape") <- (
+    key(0, K),
+    normal(K, [4, 5], A),
+    shape(A, [4, 5])
+)  # nv
+
+Test("uniform shape") <- (
+    key(0, K),
+    uniform(K, [50], A),
+    shape(A, [50])
+)  # nv
+
+Test("uniform range") <- (
+    key(1, K),
+    uniform(K, [1000], 0.0, 10.0, A),
+    max(A, MAX), array_list(MAX, MV),
+    MV < 10.0,
+    min(A, MIN), array_list(MIN, MN),
+    MN >= 0.0
+)  # nv
+
+Test("bernoulli default shape") <- (
+    key(0, K),
+    bernoulli(K, 0.5, A),
+    dtype(A, bool_)
+)  # nv
+
+Test("bernoulli with shape") <- (
+    key(0, K),
+    bernoulli(K, 0.5, [100], A),
+    shape(A, [100]),
+    dtype(A, bool_)
+)  # nv
+
+Test("categorical picks a class") <- (
+    key(0, K),
+    array([0.1, 0.2, 0.7], LOGITS),
+    categorical(K, LOGITS, C),
+    array_list(C, CV),
+    CV >= 0,
+    CV < 3
+)  # nv
+
+Test("poisson shape") <- (
+    key(0, K),
+    poisson(K, 3.0, [10], A),
+    shape(A, [10])
+)  # nv
+
+Test("gamma shape") <- (
+    key(0, K),
+    gamma(K, 2.0, [10], A),
+    shape(A, [10])
+)  # nv
+
+Test("beta shape") <- (
+    key(0, K),
+    beta(K, 1.0, 2.0, [10], A),
+    shape(A, [10])
+)  # nv
+
+Test("exponential shape") <- (
+    key(0, K),
+    exponential(K, [10], A),
+    shape(A, [10])
+)  # nv
+
+Test("dirichlet sums to one") <- (
+    key(0, K),
+    array([1.0, 1.0, 1.0], ALPHA),
+    dirichlet(K, ALPHA, A),
+    shape(A, [3]),
+    sum(A, S),
+    array_list(S, SV),
+    SV > 0.999,
+    SV < 1.001
+)  # nv
+
+Test("multivariate_normal shape") <- (
+    key(0, K),
+    array([0.0, 0.0], MEAN),
+    array([[1.0, 0.0], [0.0, 1.0]], COV),
+    multivariate_normal(K, MEAN, COV, [10], A),
+    shape(A, [10, 2])
+)  # nv
+
+Test("permutation of integer range") <- (
+    key(0, K),
+    permutation(K, 5, P),
+    shape(P, [5]),
+    element_count(P, 5)
+)  # nv
+
+Test("permutation of array") <- (
+    key(0, K),
+    array([10, 20, 30, 40], X),
+    permutation(K, X, P),
+    shape(P, [4])
+)  # nv
+
+Test("choice picks from array") <- (
+    key(0, K),
+    array([1, 2, 3, 4, 5], X),
+    choice(K, X, [3], C),
+    shape(C, [3])
+)  # nv
+
+Test("randint in range") <- (
+    key(0, K),
+    randint(K, [100], 0, 10, A),
+    shape(A, [100]),
+    max(A, MAX), array_list(MAX, MV),
+    MV < 10,
+    min(A, MIN), array_list(MIN, MN),
+    MN >= 0
+)  # nv
+
+Test("truncated_normal within bounds") <- (
+    key(0, K),
+    truncated_normal(K, -1.0, 1.0, [200], A),
+    max(A, MAX), array_list(MAX, MV),
+    MV <= 1.0,
+    min(A, MIN), array_list(MIN, MN),
+    MN >= -1.0
+)  # nv
+
+# --- Sampler registry ---
+
+Test("sampler registry lookup") <- (
+    sampler("normal", FN),
+    NAME is ++FN.__name__,
+    NAME == "normal"
+)  # nv
+
+Test("sampler registry includes uniform") <- (
+    sampler("uniform", _)
+)  # nv
+
+Test("sampler registry includes bernoulli") <- (
+    sampler("bernoulli", _)
+)  # nv
+
+Test("sampler registry enumerate contains expected names") <- (
+    findall(N, sampler(N, _), NS),
+    in_("normal", NS),
+    in_("uniform", NS),
+    in_("bernoulli", NS),
+    in_("categorical", NS)
+)  # nv
+
+# --- Backtracking safety ---
+
+# JAX keys are values, not handles — sampling does not mutate the key.
+# Calling normal(K, ...) twice on the same K must produce the same sample.
+Test("key is a value — repeated sampling is idempotent") <- (
+    key(0, K),
+    normal(K, [3], A1),
+    array_list(A1, L1),
+    normal(K, [3], A2),
+    array_list(A2, L2),
+    L1 == L2
+)  # nv
+
+# A sampler call inside a branch that fails must not disturb other
+# keys. We capture K2's expected sample, then consume K1 inside a
+# conjunction that deliberately fails, then re-sample from K2 and
+# check the result is unchanged.
+Test("failed sampler branch leaves sibling key untouched") <- (
+    key(0, K0),
+    split_key(K0, [K1, K2]),
+    normal(K2, [3], EXPECTED),
+    array_list(EXPECTED, EXPECTED_L),
+    not(( normal(K1, [3], _), 1 == 2 )),
+    normal(K2, [3], ACTUAL),
+    array_list(ACTUAL, ACTUAL_L),
+    EXPECTED_L == ACTUAL_L
+)  # nv
+
+# --- State-threading showcase ---
+
+init_two_layers(SEED, W1, W2) <- (
+    key(SEED, K0),
+    split_key(K0, 2, [K1, K2]),
+    normal(K1, [4, 3], W1),
+    normal(K2, [3, 2], W2)
+)  # nv
+
+Test("state-threaded initialisation") <- (
+    init_two_layers(42, W1, W2),
+    shape(W1, [4, 3]),
+    shape(W2, [3, 2])
+)  # nv

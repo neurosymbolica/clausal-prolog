@@ -1,0 +1,403 @@
+-import_module(numpy)
+-import_from(torch, [
+    tensor, zeros, ones, randn, arange, linspace, full, eye,
+    shape, dtype, device, dim, element_count, requires_gradient,
+    is_contiguous,
+    matmul, add, mul, cat, stack, sum, mean, max, min,
+    clamp, abs, softmax, relu,
+    reshape, squeeze, unsqueeze, flatten, unflatten,
+    transpose, permute, contiguous,
+    tensor_numpy, tensor_list,
+    float32, float64, int32
+])
+
+# --- Tensor creation ---
+
+Test("tensor from list") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    shape(T, [3])
+)  # nv
+
+Test("tensor from nested list") <- (
+    tensor([[1, 2], [3, 4]], T),
+    shape(T, [2, 2])
+)  # nv
+
+Test("zeros default") <- (
+    zeros([3, 4], T),
+    shape(T, [3, 4])
+)  # nv
+
+Test("zeros with dtype option") <- (
+    zeros([2, 3], {"dtype": float64}, T),
+    dtype(T, float64)
+)  # nv
+
+Test("ones default") <- (
+    ones([2, 3], T),
+    shape(T, [2, 3])
+)  # nv
+
+Test("ones with options") <- (
+    ones([4], {"dtype": int32}, T),
+    dtype(T, int32)
+)  # nv
+
+Test("randn shape") <- (
+    randn([5, 3], T),
+    shape(T, [5, 3])
+)  # nv
+
+Test("arange end only") <- (
+    arange(5, T),
+    shape(T, [5])
+)  # nv
+
+Test("arange start end") <- (
+    arange(2, 7, T),
+    shape(T, [5])
+)  # nv
+
+Test("arange start end step") <- (
+    arange(0, 10, 2, T),
+    shape(T, [5])
+)  # nv
+
+Test("linspace") <- (
+    linspace(0.0, 1.0, 5, T),
+    shape(T, [5])
+)  # nv
+
+Test("full") <- (
+    full([2, 3], 7.0, T),
+    shape(T, [2, 3]),
+    tensor_list(T, [[7.0, 7.0, 7.0], [7.0, 7.0, 7.0]])
+)  # nv
+
+Test("eye square") <- (
+    eye(3, T),
+    shape(T, [3, 3])
+)  # nv
+
+Test("eye rectangular") <- (
+    eye(2, 4, T),
+    shape(T, [2, 4])
+)  # nv
+
+# --- Tensor properties: query mode ---
+
+Test("shape query") <- (
+    zeros([3, 4, 5], T),
+    shape(T, S),
+    S == [3, 4, 5]
+)  # nv
+
+Test("dtype query") <- (
+    zeros([2], T),
+    dtype(T, D),
+    D == float32
+)  # nv
+
+Test("device query") <- (
+    zeros([2], T),
+    device(T, "cpu")
+)  # nv
+
+Test("dim query") <- (
+    zeros([2, 3, 4], T),
+    dim(T, N),
+    N == 3
+)  # nv
+
+Test("element count") <- (
+    zeros([2, 3, 4], T),
+    element_count(T, N),
+    N == 24
+)  # nv
+
+Test("requires gradient default false") <- (
+    zeros([2], T),
+    requires_gradient(T, B),
+    B == False
+)  # nv
+
+# --- Tensor properties: check mode ---
+
+Test("shape check succeeds") <- (
+    zeros([3, 4], T),
+    shape(T, [3, 4])
+)  # nv
+
+Test("shape check fails") <- (
+    zeros([3, 4], T),
+    not shape(T, [5, 6])
+)  # nv
+
+Test("dtype check succeeds") <- (
+    zeros([2], T),
+    dtype(T, float32)
+)  # nv
+
+Test("dtype check fails") <- (
+    zeros([2], T),
+    not dtype(T, float64)
+)  # nv
+
+# --- Tensor math ---
+
+Test("matmul shapes") <- (
+    zeros([2, 3], A),
+    zeros([3, 4], B),
+    matmul(A, B, C),
+    shape(C, [2, 4])
+)  # nv
+
+Test("add element-wise") <- (
+    tensor([1.0, 2.0, 3.0], A),
+    tensor([10.0, 20.0, 30.0], B),
+    add(A, B, C),
+    tensor_list(C, [11.0, 22.0, 33.0])
+)  # nv
+
+Test("mul element-wise") <- (
+    tensor([2.0, 3.0, 4.0], A),
+    tensor([10.0, 10.0, 10.0], B),
+    mul(A, B, C),
+    tensor_list(C, [20.0, 30.0, 40.0])
+)  # nv
+
+Test("cat along dim 0") <- (
+    zeros([2, 3], A),
+    ones([2, 3], B),
+    cat([A, B], 0, C),
+    shape(C, [4, 3])
+)  # nv
+
+Test("cat along dim 1") <- (
+    zeros([2, 3], A),
+    ones([2, 4], B),
+    cat([A, B], 1, C),
+    shape(C, [2, 7])
+)  # nv
+
+Test("stack along dim 0") <- (
+    zeros([3], A),
+    ones([3], B),
+    stack([A, B], 0, C),
+    shape(C, [2, 3])
+)  # nv
+
+Test("sum full reduction") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    sum(T, S),
+    tensor_list(S, 10.0)
+)  # nv
+
+Test("sum along dim") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    sum(T, 0, S),
+    tensor_list(S, [4.0, 6.0])
+)  # nv
+
+Test("mean full reduction") <- (
+    tensor([2.0, 4.0, 6.0], T),
+    mean(T, M),
+    tensor_list(M, 4.0)
+)  # nv
+
+Test("mean along dim") <- (
+    tensor([[1.0, 3.0], [5.0, 7.0]], T),
+    mean(T, 1, M),
+    tensor_list(M, [2.0, 6.0])
+)  # nv
+
+Test("max full reduction") <- (
+    tensor([3.0, 1.0, 4.0, 1.0, 5.0], T),
+    max(T, M),
+    tensor_list(M, 5.0)
+)  # nv
+
+Test("max along dim") <- (
+    tensor([[1.0, 3.0], [4.0, 2.0]], T),
+    max(T, 0, M),
+    tensor_list(M, [4.0, 3.0])
+)  # nv
+
+Test("min full reduction") <- (
+    tensor([3.0, 1.0, 4.0], T),
+    min(T, M),
+    tensor_list(M, 1.0)
+)  # nv
+
+Test("clamp values") <- (
+    tensor([-2.0, 0.5, 3.0], T),
+    clamp(T, 0.0, 1.0, T2),
+    tensor_list(T2, [0.0, 0.5, 1.0])
+)  # nv
+
+Test("abs values") <- (
+    tensor([-3.0, 0.0, 5.0], T),
+    abs(T, T2),
+    tensor_list(T2, [3.0, 0.0, 5.0])
+)  # nv
+
+Test("softmax sums to one") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    softmax(T, 0, T2),
+    sum(T2, S),
+    tensor_list(S, V),
+    V > 0.999,
+    V < 1.001
+)  # nv
+
+Test("relu zeroes negatives") <- (
+    tensor([-1.0, 0.0, 1.0], T),
+    relu(T, T2),
+    tensor_list(T2, [0.0, 0.0, 1.0])
+)  # nv
+
+# --- Shape operations ---
+
+Test("reshape") <- (
+    zeros([2, 6], T),
+    reshape(T, [3, 4], T2),
+    shape(T2, [3, 4])
+)  # nv
+
+Test("squeeze all") <- (
+    zeros([1, 3, 1, 4], T),
+    squeeze(T, T2),
+    shape(T2, [3, 4])
+)  # nv
+
+Test("squeeze specific dim") <- (
+    zeros([1, 3, 1, 4], T),
+    squeeze(T, 0, T2),
+    shape(T2, [3, 1, 4])
+)  # nv
+
+Test("unsqueeze") <- (
+    zeros([3, 4], T),
+    unsqueeze(T, 0, T2),
+    shape(T2, [1, 3, 4])
+)  # nv
+
+Test("squeeze unsqueeze roundtrip") <- (
+    zeros([3, 1, 4], T),
+    squeeze(T, 1, T2),
+    shape(T2, [3, 4]),
+    unsqueeze(T2, 1, T3),
+    shape(T3, [3, 1, 4])
+)  # nv
+
+Test("flatten all") <- (
+    zeros([2, 3, 4], T),
+    flatten(T, T2),
+    shape(T2, [24])
+)  # nv
+
+Test("flatten partial") <- (
+    zeros([2, 3, 4], T),
+    flatten(T, 0, 1, T2),
+    shape(T2, [6, 4])
+)  # nv
+
+Test("unflatten") <- (
+    zeros([6, 4], T),
+    unflatten(T, 0, [2, 3], T2),
+    shape(T2, [2, 3, 4])
+)  # nv
+
+Test("flatten unflatten roundtrip") <- (
+    zeros([2, 3, 4], T),
+    flatten(T, 0, 1, FLAT),
+    shape(FLAT, [6, 4]),
+    unflatten(FLAT, 0, [2, 3], T2),
+    shape(T2, [2, 3, 4])
+)  # nv
+
+Test("transpose") <- (
+    zeros([2, 3], T),
+    transpose(T, 0, 1, T2),
+    shape(T2, [3, 2])
+)  # nv
+
+Test("transpose is self-inverse") <- (
+    tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
+    transpose(T, 0, 1, T2),
+    transpose(T2, 0, 1, T3),
+    tensor_list(T3, [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+)  # nv
+
+Test("permute") <- (
+    zeros([2, 3, 4], T),
+    permute(T, [2, 0, 1], T2),
+    shape(T2, [4, 2, 3])
+)  # nv
+
+Test("contiguous") <- (
+    zeros([2, 3], T),
+    transpose(T, 0, 1, T2),
+    contiguous(T2, T3),
+    shape(T3, [3, 2]),
+    is_contiguous(T3)
+)  # nv
+
+# --- Conversions (bijective) ---
+
+Test("tensor_list forward") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    tensor_list(T, L),
+    L == [1.0, 2.0, 3.0]
+)  # nv
+
+Test("tensor_list backward") <- (
+    tensor_list(T, [4.0, 5.0, 6.0]),
+    shape(T, [3]),
+    tensor_list(T, [4.0, 5.0, 6.0])
+)  # nv
+
+Test("tensor_list nested") <- (
+    tensor([[1, 2], [3, 4]], T),
+    tensor_list(T, L),
+    L == [[1, 2], [3, 4]]
+)  # nv
+
+Test("tensor_numpy forward") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    tensor_numpy(T, A),
+    tensor_list(T, [1.0, 2.0, 3.0])
+)  # nv
+
+Test("tensor_numpy roundtrip") <- (
+    tensor([1.0, 2.0, 3.0], T1),
+    tensor_numpy(T1, A),
+    tensor_numpy(T2, A),
+    tensor_list(T2, [1.0, 2.0, 3.0])
+)  # nv
+
+Test("tensor_numpy backward") <- (
+    tensor_numpy(T, numpy.array([7.0, 8.0, 9.0])),
+    tensor_list(T, [7.0, 8.0, 9.0])
+)  # nv
+
+# --- Edge cases ---
+
+Test("shape with bound vars") <- (
+    N is 3, M is 4,
+    zeros([N, M], T),
+    shape(T, [3, 4])
+)  # nv
+
+Test("scalar tensor") <- (
+    tensor(42.0, T),
+    dim(T, 0),
+    element_count(T, 1),
+    tensor_list(T, 42.0)
+)  # nv
+
+Test("empty tensor") <- (
+    zeros([0, 3], T),
+    shape(T, [0, 3]),
+    element_count(T, 0)
+)  # nv

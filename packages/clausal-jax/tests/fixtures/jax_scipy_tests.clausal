@@ -1,0 +1,323 @@
+-import_from(jax, [array, array_list, allclose, null])
+-import_from(jax_scipy, [
+    gamma_fn, gammaln, digamma,
+    erf, erfc, erfinv,
+    expit, logit,
+    i0, i1, logsumexp,
+    beta_fn, betainc, polygamma,
+    rel_entr, xlogy, zeta,
+    factorial, spence,
+    distribution,
+    pdf, logpdf, cdf, logcdf, sf, logsf, ppf, pmf, logpmf
+])
+
+# --- Special functions — spot-check known values ---
+
+Test("gamma_fn at 1 is 1") <- (
+    array([1.0], X),
+    gamma_fn(X, R),
+    array(1.0, ONE),
+    allclose(R, ONE, 0.0001, 0.0)
+)  # nv
+
+Test("gamma_fn at 5 is 24") <- (
+    array([5.0], X),
+    gamma_fn(X, R),
+    array(24.0, EXPECTED),
+    allclose(R, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("gammaln at 1 is 0") <- (
+    array([1.0], X),
+    gammaln(X, R),
+    array(0.0, ZERO),
+    allclose(R, ZERO, 0.0001, 0.0)
+)  # nv
+
+Test("gammaln at 2 is 0") <- (
+    array([2.0], X),
+    gammaln(X, R),
+    array(0.0, ZERO),
+    allclose(R, ZERO, 0.0001, 0.0)
+)  # nv
+
+Test("digamma at 1 is -euler_mascheroni") <- (
+    array([1.0], X),
+    digamma(X, R),
+    array(-0.5772157, EXPECTED),
+    allclose(R, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("erf at 0 is 0") <- (
+    array([0.0], X),
+    erf(X, R),
+    array(0.0, ZERO),
+    allclose(R, ZERO, 0.0001, 0.0)
+)  # nv
+
+Test("erf approaches 1 at large x") <- (
+    array([3.0], X),
+    erf(X, R),
+    array(1.0, ONE),
+    allclose(R, ONE, 0.001, 0.0)
+)  # nv
+
+Test("erfc at 0 is 1") <- (
+    array([0.0], X),
+    erfc(X, R),
+    array(1.0, ONE),
+    allclose(R, ONE, 0.0001, 0.0)
+)  # nv
+
+Test("erfinv roundtrips erf") <- (
+    array([0.5], X),
+    erf(X, Y),
+    erfinv(Y, X2),
+    allclose(X, X2, 0.0001, 0.0)
+)  # nv
+
+Test("expit at 0 is 0.5") <- (
+    array([0.0], X),
+    expit(X, R),
+    array(0.5, HALF),
+    allclose(R, HALF, 0.0001, 0.0)
+)  # nv
+
+Test("logit at 0.5 is 0") <- (
+    array([0.5], X),
+    logit(X, R),
+    array(0.0, ZERO),
+    allclose(R, ZERO, 0.0001, 0.0)
+)  # nv
+
+Test("logit is inverse of expit") <- (
+    array([0.7], X),
+    expit(X, Y),
+    logit(Y, X2),
+    allclose(X, X2, 0.0001, 0.0)
+)  # nv
+
+Test("i0 at 0 is 1") <- (
+    array([0.0], X),
+    i0(X, R),
+    array(1.0, ONE),
+    allclose(R, ONE, 0.0001, 0.0)
+)  # nv
+
+Test("i1 at 0 is 0") <- (
+    array([0.0], X),
+    i1(X, R),
+    array(0.0, ZERO),
+    allclose(R, ZERO, 0.0001, 0.0)
+)  # nv
+
+Test("logsumexp of [0, 0, 0] is log(3)") <- (
+    array([0.0, 0.0, 0.0], A),
+    logsumexp(A, R),
+    array(1.0986123, EXPECTED),
+    allclose(R, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("logsumexp along axis") <- (
+    array([[0.0, 0.0], [0.0, 0.0]], A),
+    logsumexp(A, 1, R),
+    array([0.6931472, 0.6931472], EXPECTED),
+    allclose(R, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("beta_fn at (1,1) is 1") <- (
+    array([1.0], A),
+    array([1.0], B),
+    beta_fn(A, B, R),
+    array(1.0, ONE),
+    allclose(R, ONE, 0.0001, 0.0)
+)  # nv
+
+Test("betainc at x=1 is 1") <- (
+    array([2.0], A),
+    array([3.0], B),
+    array([1.0], X),
+    betainc(A, B, X, R),
+    array(1.0, ONE),
+    allclose(R, ONE, 0.0001, 0.0)
+)  # nv
+
+Test("polygamma order 1 at 1 is pi^2/6") <- (
+    array([1.0], X),
+    polygamma(1, X, R),
+    array(1.6449341, EXPECTED),
+    allclose(R, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("rel_entr with identical args is 0") <- (
+    array([0.5], P),
+    array([0.5], Q),
+    rel_entr(P, Q, R),
+    array(0.0, ZERO),
+    allclose(R, ZERO, 0.0001, 0.0)
+)  # nv
+
+Test("xlogy at x=0 is 0") <- (
+    array([0.0], X),
+    array([5.0], Y),
+    xlogy(X, Y, R),
+    array(0.0, ZERO),
+    allclose(R, ZERO, 0.0001, 0.0)
+)  # nv
+
+Test("zeta at (2,1) is pi^2/6") <- (
+    array([2.0], X),
+    array([1.0], Q),
+    zeta(X, Q, R),
+    array(1.6449341, EXPECTED),
+    allclose(R, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("factorial of 5 is 120") <- (
+    array([5.0], N),
+    factorial(N, R),
+    array(120.0, EXPECTED),
+    allclose(R, EXPECTED, 0.01, 0.0)
+)  # nv
+
+Test("spence at 1 is 0") <- (
+    array([1.0], X),
+    spence(X, R),
+    array(0.0, ZERO),
+    allclose(R, ZERO, 0.0001, 0.0)
+)  # nv
+
+# --- Distribution registry ---
+
+Test("distribution lookup by name") <- (
+    distribution("norm", M),
+    M != null
+)  # nv
+
+Test("distribution registry includes common names") <- (
+    distribution("norm", _N),
+    distribution("beta", _B),
+    distribution("gamma", _G),
+    distribution("uniform", _U),
+    distribution("bernoulli", _BN)
+)  # nv
+
+Test("distribution findall enumerates registry") <- (
+    findall(N, distribution(N, _), NS),
+    length(NS, 23)
+)  # nv
+
+Test("distribution reverse lookup") <- (
+    distribution("norm", M),
+    distribution(N, M),
+    N == "norm"
+)  # nv
+
+# --- Distribution methods — pdf, logpdf, cdf, logcdf ---
+
+Test("normal pdf at mean") <- (
+    pdf("norm", 0.0, {"loc": 0.0, "scale": 1.0}, P),
+    array(0.3989423, EXPECTED),
+    allclose(P, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("normal logpdf at mean") <- (
+    logpdf("norm", 0.0, {"loc": 0.0, "scale": 1.0}, LP),
+    array(-0.9189385, EXPECTED),
+    allclose(LP, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("normal cdf at mean is 0.5") <- (
+    cdf("norm", 0.0, {"loc": 0.0, "scale": 1.0}, C),
+    array(0.5, HALF),
+    allclose(C, HALF, 0.0001, 0.0)
+)  # nv
+
+Test("normal sf at mean is 0.5") <- (
+    sf("norm", 0.0, {"loc": 0.0, "scale": 1.0}, S),
+    array(0.5, HALF),
+    allclose(S, HALF, 0.0001, 0.0)
+)  # nv
+
+Test("normal ppf at 0.5 is mean") <- (
+    ppf("norm", 0.5, {"loc": 0.0, "scale": 1.0}, Q),
+    array(0.0, ZERO),
+    allclose(Q, ZERO, 0.0001, 0.0)
+)  # nv
+
+Test("normal logsf at mean is log(0.5)") <- (
+    logsf("norm", 0.0, {"loc": 0.0, "scale": 1.0}, LS),
+    array(-0.6931472, EXPECTED),
+    allclose(LS, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("normal logcdf at mean is log(0.5)") <- (
+    logcdf("norm", 0.0, {"loc": 0.0, "scale": 1.0}, LC),
+    array(-0.6931472, EXPECTED),
+    allclose(LC, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+# exp(logpdf) = pdf consistency
+Test("exp of logpdf equals pdf for normal") <- (
+    pdf("norm", 1.5, {"loc": 0.0, "scale": 1.0}, P),
+    logpdf("norm", 1.5, {"loc": 0.0, "scale": 1.0}, LP),
+    array_list(LP, LP_VAL),
+    EXP_LP is ++__import__("math").exp(LP_VAL),
+    array(EXP_LP, P2),
+    allclose(P, P2, 0.0001, 0.0)
+)  # nv
+
+# beta distribution
+Test("beta pdf at 0.5 with a=b=2 is 1.5") <- (
+    pdf("beta", 0.5, {"a": 2.0, "b": 2.0}, P),
+    array(1.5, EXPECTED),
+    allclose(P, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+# gamma distribution
+Test("gamma cdf at 0 is 0") <- (
+    cdf("gamma", 0.0, {"a": 2.0}, C),
+    array(0.0, ZERO),
+    allclose(C, ZERO, 0.0001, 0.0)
+)  # nv
+
+# uniform distribution
+Test("uniform pdf in range") <- (
+    pdf("uniform", 0.5, {"loc": 0.0, "scale": 1.0}, P),
+    array(1.0, ONE),
+    allclose(P, ONE, 0.0001, 0.0)
+)  # nv
+
+Test("uniform pdf outside range is 0") <- (
+    pdf("uniform", 2.0, {"loc": 0.0, "scale": 1.0}, P),
+    array(0.0, ZERO),
+    allclose(P, ZERO, 0.0001, 0.0)
+)  # nv
+
+# Discrete — pmf / logpmf
+Test("bernoulli pmf at 1") <- (
+    pmf("bernoulli", 1, {"p": 0.3}, P),
+    array(0.3, EXPECTED),
+    allclose(P, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("bernoulli pmf at 0") <- (
+    pmf("bernoulli", 0, {"p": 0.3}, P),
+    array(0.7, EXPECTED),
+    allclose(P, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+Test("poisson pmf at 0 for lam=1") <- (
+    pmf("poisson", 0, {"mu": 1.0}, P),
+    array(0.3678794, EXPECTED),
+    allclose(P, EXPECTED, 0.0001, 0.0)
+)  # nv
+
+# Missing methods fail cleanly
+Test("bernoulli has no pdf — failure") <- (
+    not pdf("bernoulli", 1, {"p": 0.5}, _P)
+)  # nv
+
+Test("t has no cdf in this JAX — failure") <- (
+    not cdf("t", 0.0, {"df": 5.0}, _C)
+)  # nv

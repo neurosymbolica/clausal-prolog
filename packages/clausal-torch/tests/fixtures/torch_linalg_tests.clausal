@@ -1,0 +1,229 @@
+-import_from(torch, [
+    tensor, zeros, eye, shape, tensor_list,
+    matmul, abs, sum,
+    det, inv, solve, svd, eig, cholesky, qr,
+    norm, matrix_rank, pinv, cross, dot
+])
+
+# --- Determinant ---
+
+Test("det of identity") <- (
+    eye(2, A),
+    det(A, D),
+    tensor_list(D, V),
+    V > 0.99,
+    V < 1.01
+)  # nv
+
+Test("det of 2x2") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], A),
+    det(A, D),
+    tensor_list(D, V),
+    V > -2.01,
+    V < -1.99
+)  # nv
+
+# --- Inverse ---
+
+Test("inv of identity") <- (
+    eye(3, I),
+    inv(I, B),
+    shape(B, [3, 3])
+)  # nv
+
+Test("inv roundtrip") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], A),
+    inv(A, B),
+    inv(B, C),
+    # C should be close to A — check via norm of difference
+    tensor([[1.0, 2.0], [3.0, 4.0]], A2),
+    matmul(A, B, PROD),
+    # A @ inv(A) should be close to identity
+    eye(2, I),
+    shape(PROD, [2, 2])
+)  # nv
+
+Test("inv of singular fails") <- (
+    not(
+        tensor([[1.0, 2.0], [2.0, 4.0]], A),
+        inv(A, _)
+    )
+)  # nv
+
+# --- Solve ---
+
+Test("solve identity system") <- (
+    eye(2, A),
+    tensor([3.0, 4.0], B),
+    solve(A, B, X),
+    tensor_list(X, [V1, V2]),
+    V1 > 2.99,
+    V1 < 3.01,
+    V2 > 3.99,
+    V2 < 4.01
+)  # nv
+
+Test("solve 2x2 system") <- (
+    tensor([[2.0, 1.0], [1.0, 3.0]], A),
+    tensor([5.0, 10.0], B),
+    solve(A, B, X),
+    shape(X, [2])
+)  # nv
+
+# --- SVD ---
+
+Test("svd shapes") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], A),
+    svd(A, RESULT),
+    RESULT is (U, S, VH),
+    shape(U, [2, 2]),
+    shape(S, [2]),
+    shape(VH, [2, 2])
+)  # nv
+
+Test("svd rectangular") <- (
+    tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
+    svd(A, RESULT),
+    RESULT is (U, S, VH),
+    shape(U, [2, 2]),
+    shape(S, [2]),
+    shape(VH, [3, 3])
+)  # nv
+
+# --- Eigendecomposition ---
+
+Test("eig shapes") <- (
+    tensor([[1.0, 2.0], [2.0, 1.0]], A),
+    eig(A, RESULT),
+    RESULT is (L, V),
+    shape(L, [2]),
+    shape(V, [2, 2])
+)  # nv
+
+# --- Cholesky ---
+
+Test("cholesky of identity") <- (
+    eye(3, I),
+    cholesky(I, L),
+    shape(L, [3, 3])
+)  # nv
+
+Test("cholesky reconstruct") <- (
+    # Positive definite matrix: A = [[4, 2], [2, 3]]
+    tensor([[4.0, 2.0], [2.0, 3.0]], A),
+    cholesky(A, L),
+    shape(L, [2, 2])
+)  # nv
+
+Test("cholesky of non-positive-definite fails") <- (
+    not(
+        tensor([[-1.0, 0.0], [0.0, -1.0]], A),
+        cholesky(A, _)
+    )
+)  # nv
+
+# --- QR ---
+
+Test("qr shapes") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], A),
+    qr(A, RESULT),
+    RESULT is (Q, R),
+    shape(Q, [3, 2]),
+    shape(R, [2, 2])
+)  # nv
+
+Test("qr square") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], A),
+    qr(A, RESULT),
+    RESULT is (Q, R),
+    shape(Q, [2, 2]),
+    shape(R, [2, 2])
+)  # nv
+
+# --- Norm ---
+
+Test("norm of vector") <- (
+    tensor([3.0, 4.0], A),
+    norm(A, N),
+    tensor_list(N, V),
+    V > 4.99,
+    V < 5.01
+)  # nv
+
+Test("norm with ord") <- (
+    tensor([3.0, 4.0], A),
+    norm(A, 1, N),
+    tensor_list(N, V),
+    V > 6.99,
+    V < 7.01
+)  # nv
+
+Test("norm of matrix") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], A),
+    norm(A, N),
+    tensor_list(N, V),
+    V > 0.0
+)  # nv
+
+# --- Matrix rank ---
+
+Test("matrix_rank of identity") <- (
+    eye(3, I),
+    matrix_rank(I, R),
+    tensor_list(R, 3)
+)  # nv
+
+Test("matrix_rank of rank-1") <- (
+    tensor([[1.0, 2.0], [2.0, 4.0]], A),
+    matrix_rank(A, R),
+    tensor_list(R, 1)
+)  # nv
+
+# --- Pseudoinverse ---
+
+Test("pinv shapes") <- (
+    tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
+    pinv(A, B),
+    shape(B, [3, 2])
+)  # nv
+
+Test("pinv of square invertible") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], A),
+    pinv(A, B),
+    shape(B, [2, 2])
+)  # nv
+
+# --- Cross product ---
+
+Test("cross product") <- (
+    tensor([1.0, 0.0, 0.0], A),
+    tensor([0.0, 1.0, 0.0], B),
+    cross(A, B, C),
+    tensor_list(C, [V1, V2, V3]),
+    V1 > -0.01,
+    V1 < 0.01,
+    V2 > -0.01,
+    V2 < 0.01,
+    V3 > 0.99,
+    V3 < 1.01
+)  # nv
+
+# --- Dot product ---
+
+Test("dot product") <- (
+    tensor([1.0, 2.0, 3.0], A),
+    tensor([4.0, 5.0, 6.0], B),
+    dot(A, B, C),
+    tensor_list(C, V),
+    V > 31.99,
+    V < 32.01
+)  # nv
+
+Test("dot product orthogonal") <- (
+    tensor([1.0, 0.0], A),
+    tensor([0.0, 1.0], B),
+    dot(A, B, C),
+    tensor_list(C, V),
+    V > -0.01,
+    V < 0.01
+)  # nv

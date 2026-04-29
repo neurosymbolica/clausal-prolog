@@ -1,0 +1,217 @@
+-import_module(jax)
+-import_from(jax, [array, array_list, arange, shape, allclose, null])
+-import_from(jax_transforms, [
+    grad_value, value_and_grad,
+    grad_fn, value_and_grad_fn,
+    jvp_value, vjp_value,
+    jacobian, jacfwd, jacrev, hessian,
+    vmap_apply, jit_compile,
+    make_jaxpr, eval_shape
+])
+
+# --- grad_value ---
+
+Test("grad of x^2 at 3 is 6") <- (
+    F is ++(lambda x: x ** 2),
+    array(3.0, X),
+    grad_value(F, X, G),
+    array_list(G, 6.0)
+)  # nv
+
+Test("grad of sum(x^2) gives 2x") <- (
+    F is ++(lambda x: jax.numpy.sum(x ** 2)),
+    array([1.0, 2.0, 3.0], X),
+    grad_value(F, X, G),
+    array_list(G, [2.0, 4.0, 6.0])
+)  # nv
+
+Test("grad of sin at 0 is 1") <- (
+    F is ++(lambda x: jax.numpy.sin(x)),
+    array(0.0, X),
+    grad_value(F, X, G),
+    array_list(G, L),
+    array(1.0, ONE),
+    array(L, ACT),
+    allclose(ACT, ONE, 0.0001, 0.0)
+)  # nv
+
+# --- value_and_grad (tuple decomposition) ---
+
+Test("value_and_grad of x^3 at 2") <- (
+    F is ++(lambda x: x ** 3),
+    array(2.0, X),
+    value_and_grad(F, X, RESULT),
+    RESULT is (V, G),
+    array_list(V, 8.0),
+    array_list(G, 12.0)
+)  # nv
+
+Test("value_and_grad on vector sum(x^2)") <- (
+    F is ++(lambda x: jax.numpy.sum(x ** 2)),
+    array([1.0, 2.0, 3.0], X),
+    value_and_grad(F, X, RESULT),
+    RESULT is (V, G),
+    array_list(V, 14.0),
+    array_list(G, [2.0, 4.0, 6.0])
+)  # nv
+
+# --- jvp_value ---
+
+Test("jvp of x^2 at 3 with tangent 1 gives 6") <- (
+    F is ++(lambda x: x ** 2),
+    array(3.0, P),
+    array(1.0, T),
+    jvp_value(F, [P], [T], RESULT),
+    RESULT is (PRIMAL, TANGENT),
+    array_list(PRIMAL, 9.0),
+    array_list(TANGENT, 6.0)
+)  # nv
+
+Test("jvp sum(x^2) along [1,0,0] gives 2") <- (
+    F is ++(lambda x: jax.numpy.sum(x ** 2)),
+    array([1.0, 2.0, 3.0], P),
+    array([1.0, 0.0, 0.0], T),
+    jvp_value(F, [P], [T], RESULT),
+    RESULT is (_PRIMAL, TANGENT),
+    array_list(TANGENT, 2.0)
+)  # nv
+
+# --- vjp_value ---
+
+Test("vjp value matches forward eval") <- (
+    F is ++(lambda x: jax.numpy.sum(x ** 2)),
+    array([1.0, 2.0, 3.0], X),
+    vjp_value(F, X, RESULT),
+    RESULT is (V, _VJP_FN),
+    array_list(V, 14.0)
+)  # nv
+
+Test("vjp_fn applied gives gradient") <- (
+    F is ++(lambda x: jax.numpy.sum(x ** 2)),
+    array([1.0, 2.0, 3.0], X),
+    vjp_value(F, X, RESULT),
+    RESULT is (_V, VJP_FN),
+    array(1.0, COTANGENT),
+    VJP_RESULT is ++VJP_FN(COTANGENT),
+    VJP_RESULT is (G,),
+    array_list(G, [2.0, 4.0, 6.0])
+)  # nv
+
+# --- Jacobian / Hessian ---
+
+Test("jacobian of elementwise square") <- (
+    F is ++(lambda x: x ** 2),
+    array([1.0, 2.0, 3.0], X),
+    jacobian(F, X, J),
+    shape(J, [3, 3]),
+    array_list(J, [[2.0, 0.0, 0.0], [0.0, 4.0, 0.0], [0.0, 0.0, 6.0]])
+)  # nv
+
+Test("jacfwd matches jacrev for pointwise fn") <- (
+    F is ++(lambda x: x ** 2),
+    array([1.0, 2.0, 3.0], X),
+    jacfwd(F, X, JF),
+    jacrev(F, X, JR),
+    array_list(JF, LF),
+    array_list(JR, LR),
+    LF == LR
+)  # nv
+
+Test("hessian of sum(x^2) is 2I") <- (
+    F is ++(lambda x: jax.numpy.sum(x ** 2)),
+    array([1.0, 2.0], X),
+    hessian(F, X, H),
+    shape(H, [2, 2]),
+    array_list(H, [[2.0, 0.0], [0.0, 2.0]])
+)  # nv
+
+# --- vmap ---
+
+Test("vmap doubles each element") <- (
+    F is ++(lambda x: x * 2),
+    arange(5, X),
+    vmap_apply(F, X, R),
+    array_list(R, [0, 2, 4, 6, 8])
+)  # nv
+
+Test("vmap preserves shape") <- (
+    F is ++(lambda x: jax.numpy.sum(x ** 2)),
+    array([[1.0, 2.0], [3.0, 4.0]], X),
+    vmap_apply(F, X, R),
+    shape(R, [2]),
+    array_list(R, [5.0, 25.0])
+)  # nv
+
+Test("vmap with explicit in_axes=0") <- (
+    F is ++(lambda x: x + 1),
+    array([[0, 1], [2, 3]], X),
+    vmap_apply(F, X, {"in_axes": 0}, R),
+    shape(R, [2, 2])
+)  # nv
+
+# --- jit_compile ---
+
+Test("jit_compile returns callable that produces correct output") <- (
+    F is ++(lambda x: x * x),
+    jit_compile(F, F_JIT),
+    array(5.0, X),
+    Y is ++F_JIT(X),
+    array_list(Y, 25.0)
+)  # nv
+
+Test("jit_compile of grad gives same value as grad_value") <- (
+    F is ++(lambda x: x ** 3),
+    grad_fn(F, GRAD),
+    jit_compile(GRAD, GRAD_JIT),
+    array(2.0, X),
+    Y is ++GRAD_JIT(X),
+    array_list(Y, 12.0)
+)  # nv
+
+# --- make_jaxpr ---
+
+Test("make_jaxpr returns a Jaxpr") <- (
+    F is ++(lambda x: x ** 2),
+    array(3.0, X),
+    make_jaxpr(F, X, JP),
+    JP != null
+)  # nv
+
+# --- eval_shape ---
+
+Test("eval_shape of matmul") <- (
+    F is ++(lambda x: x @ x.T),
+    X is ++jax.ShapeDtypeStruct((10, 5), jax.numpy.float32),
+    eval_shape(F, X, SD),
+    S is ++SD.shape,
+    S == (10, 10)
+)  # nv
+
+Test("eval_shape cheap — doesn't allocate the huge result") <- (
+    F is ++(lambda x: x + 1),
+    # 1_000_000 x 1_000_000 would be ~4 TB if materialised.
+    X is ++jax.ShapeDtypeStruct((1000000, 1000000), jax.numpy.float32),
+    eval_shape(F, X, SD),
+    S is ++SD.shape,
+    S == (1000000, 1000000)
+)  # nv
+
+# --- Pytree inputs to grad ---
+
+Test("grad with dict input") <- (
+    F is ++(lambda params: (params["a"] ** 2) + (params["b"] ** 2)),
+    PARAMS is ++({"a": jax.numpy.array(3.0), "b": jax.numpy.array(4.0)}),
+    grad_value(F, PARAMS, G),
+    GA is ++G["a"],
+    GB is ++G["b"],
+    array_list(GA, 6.0),
+    array_list(GB, 8.0)
+)  # nv
+
+# --- grad requires scalar output ---
+
+Test("grad of vector output fails (not scalar)") <- (
+    F is ++(lambda x: x ** 2),
+    array([1.0, 2.0, 3.0], X),
+    not grad_value(F, X, _G)
+)  # nv
