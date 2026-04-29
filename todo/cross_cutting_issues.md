@@ -89,3 +89,22 @@ large-integer workloads.
 - ~~`c_is_ground` dataclass bug~~ — already fixed (py_term_field_names fallback)
 - ~~TuplesIn unbounded domain skip~~ — fixed: now builds allowed domain from
   relation and intersects
+
+## Package Extraction
+
+### Prolog backend AVAILABLE flag should distinguish bridge vs embedded
+
+Each backend __init__.py exposes a single `AVAILABLE` bool that tracks
+whether the embedded engine (C ext / Rust ext / ctypes lib) is loaded.
+But backends are also usable in bridge mode (subprocess to the prolog
+binary on PATH) which requires no native compilation.
+
+A user who has `tpl` on PATH but hasn't compiled `libtpl.so` currently
+sees `AVAILABLE=False` even though bridge-mode queries would work fine.
+
+Proposal: expose `EMBEDDED_AVAILABLE` and `BRIDGE_AVAILABLE` (or a
+capabilities dict), so callers can pick the right mode. The bridge path
+only needs `shutil.which("tpl")` / `shutil.which("scryer-prolog")` /
+`shutil.which("gprolog")` to succeed.
+
+Affects: clausal-trealla, clausal-gprolog, clausal-scryer.
