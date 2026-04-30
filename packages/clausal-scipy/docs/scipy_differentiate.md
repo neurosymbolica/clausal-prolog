@@ -10,12 +10,6 @@ The `scipy_differentiate` module wraps [`scipy.differentiate`](https://docs.scip
 -import_from(scipy_differentiate, [Derivative, Jacobian, Hessian, ResultGet])
 ```
 
-Or via the canonical `py.*` path:
-
-```clausal
--import_from(py.scipy_differentiate, [Derivative, Jacobian, Hessian, ResultGet])
-```
-
 ---
 
 ## Tier
