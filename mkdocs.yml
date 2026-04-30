@@ -93,7 +93,6 @@ nav:
     - HTTP & URL: http.md
     - TCP: tcp.md
     - Graphs: graphs.md
-    - SymPy: sympy.md
     - Units: units.md
     - scipy.special: scipy_special.md
     - scipy.linalg: scipy_linalg.md
