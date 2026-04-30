@@ -1,5 +1,26 @@
 :- module(iso_control, [test/1]).
 
+parent(a, b).
+
+parent(b, c).
+
+parent(c, d).
+
+parent(a, e).
+
+ancestor(A, D) :-
+    parent(A, D).
+
+ancestor(A, D) :-
+    parent(A, Z),
+    ancestor(Z, D).
+
+color(red).
+
+color(green).
+
+color(blue).
+
 choose(X, _, X).
 
 choose(_, Y, Y).
@@ -44,10 +65,10 @@ test("not: successful unification fails") :-
     \+ \+ 1 = 1.
 
 test("not: member absent") :-
-    \+ in(d, [a, b, c]).
+    \+ member(d, [a, b, c]).
 
 test("not: member present fails") :-
-    \+ \+ in(b, [a, b, c]).
+    \+ \+ member(b, [a, b, c]).
 
 test("double negation: not not (1=1)") :-
     \+ \+ 1 = 1.
@@ -56,7 +77,7 @@ test("and + or: (X=1 and Y=a) or (X=2 and Y=b)") :-
     X = 1, Y = a ; X = 2, Y = b.
 
 test("not + member: d not in list") :-
-    \+ in(d, [a, b, c]).
+    \+ member(d, [a, b, c]).
 
 test("conjunction + negation") :-
     X = 5,
@@ -83,3 +104,41 @@ test("safe_max: second is larger") :-
 test("safe_max: equal") :-
     safe_max(4, 4, M),
     M == 4.
+
+test("true succeeds (1 == 1)") :-
+    1 == 1.
+
+test("fail fails: not False") :-
+    \+ false.
+
+test("conjunction backtracks: 2x2 = 4 solutions") :-
+    findall([X, Y], (member(X, [1, 2]), member(Y, [a, b])), L),
+    length(L, 4),
+    member([1, a], L),
+    member([2, b], L).
+
+test("disjunction yields 2 solutions") :-
+    findall(X, (X = 1 ; X = 2), L),
+    L == [1, 2].
+
+test("disjunction with conjunction: 2 solutions") :-
+    findall([X, Y], (X = 1, Y = a ; X = 2, Y = b), L),
+    L == [[1, a], [2, b]].
+
+test("naf does not bind: not(X is a) fails") :-
+    \+ \+ X = a.
+
+test("color enumerates three") :-
+    findall(X, color(X), L),
+    L == [red, green, blue].
+
+test("ancestor: direct parent") :-
+    ancestor(a, b).
+
+test("ancestor: transitive") :-
+    ancestor(a, d).
+
+test("ancestor of a yields all descendants") :-
+    findall(D, ancestor(a, D), L),
+    sort(L, S),
+    S == [b, c, d, e].

@@ -98,9 +98,10 @@ def _emit_list(lst: PList, op_table: OperatorTable) -> str:
     """Render a PList as [a, b, c] or [H|T]."""
     if not lst.elements and lst.tail is None:
         return "[]"
-    parts = [emit_term(e, op_table) for e in lst.elements]
+    parts = [emit_term(e, op_table, context_prec=999) for e in lst.elements]
     if lst.tail is not None:
-        return "[" + ", ".join(parts) + "|" + emit_term(lst.tail, op_table) + "]"
+        tail_str = emit_term(lst.tail, op_table, context_prec=999)
+        return "[" + ", ".join(parts) + "|" + tail_str + "]"
     return "[" + ", ".join(parts) + "]"
 
 
@@ -135,7 +136,9 @@ def _emit_compound(term: PCompound, op_table: OperatorTable,
             return _emit_postfix(term, entry, op_table, context_prec, context_assoc)
 
     # Standard compound: f(a, b, c)
-    args_str = ", ".join(emit_term(a, op_table) for a in term.args)
+    # Arguments separated by ',' (prec 1000) sit at context_prec 999, so
+    # any contained operator with prec >= 1000 (', ;, :- etc.) gets parens.
+    args_str = ", ".join(emit_term(a, op_table, context_prec=999) for a in term.args)
     if _needs_quoting(functor):
         return _quote_atom(functor) + "(" + args_str + ")"
     return functor + "(" + args_str + ")"

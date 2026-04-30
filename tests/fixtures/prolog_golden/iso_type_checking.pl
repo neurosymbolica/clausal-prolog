@@ -149,3 +149,49 @@ test("is_bound_number: string fails") :-
 
 test("is_bound_number: unbound fails") :-
     \+ is_bound_number(X).
+
+test("is_str: float fails") :-
+    \+ atom(1.0).
+
+test("integer: float fails") :-
+    \+ integer(1.0).
+
+test("integer: hex literal 0x1") :-
+    integer(1).
+
+test("integer: octal literal 0o1") :-
+    integer(1).
+
+test("integer: binary literal 0b1") :-
+    integer(1).
+
+test("float_: 1.0 succeeds") :-
+    float(1.0).
+
+test("float_: 0.0 succeeds") :-
+    float(0.0).
+
+test("float_: scientific 1e9") :-
+    float(1000000000.0).
+
+test("float_: int fails") :-
+    \+ float(1).
+
+test("float_: string fails") :-
+    \+ float("1.0").
+
+test("float_: var fails") :-
+    \+ float(X).
+
+test("number: large int (via eval)") :-
+    X == 10 ** 100,
+    number(X).
+
+test("is_list: list of mixed types") :-
+    is_list([1, "a", [2]]).
+
+test("ground: nested ground") :-
+    ground([[1, 2], [3, 4]]).
+
+test("ground: list containing var fails") :-
+    \+ ground([1, X, 3]).

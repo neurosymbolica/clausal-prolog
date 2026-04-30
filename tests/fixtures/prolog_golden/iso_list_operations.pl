@@ -224,3 +224,48 @@ test("not permutation: different lengths") :-
 
 test("is_permutation: empty") :-
     is_permutation([], []).
+
+test("in_ enumerates [1,2,3]") :-
+    findall(X, in(X, [1, 2, 3]), L),
+    L == [1, 2, 3].
+
+test("in_ with duplicates [a,b,a]") :-
+    findall(X, in(X, [a, b, a]), L),
+    L == [a, b, a].
+
+test("in enumerates [1,2,3]") :-
+    findall(X, member(X, [1, 2, 3]), L),
+    L == [1, 2, 3].
+
+test("append split mode") :-
+    findall([X, Y], append(X, Y, [1, 2, 3]), L),
+    L == [[[], [1, 2, 3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3], []]].
+
+test("get_item second element") :-
+    nth0(1, [a, b, c], b).
+
+test("last empty yields no solutions") :-
+    findall(X, last([], X), L),
+    L == [].
+
+test("permutation of [1,2,3] yields 6") :-
+    findall(P, permutation([1, 2, 3], P), L),
+    length(L, 6),
+    member([1, 2, 3], L),
+    member([3, 2, 1], L).
+
+test("permutation of [] is [[]]") :-
+    findall(P, permutation([], P), L),
+    L == [[]].
+
+test("permutation of [42] is [[42]]") :-
+    findall(P, permutation([42], P), L),
+    L == [[42]].
+
+test("select(2,[1,2,3],[1,3])") :-
+    select(2, [1, 2, 3], R),
+    R == [1, 3].
+
+test("select(1,[1,2,3],[2,3])") :-
+    select(1, [1, 2, 3], R),
+    R == [2, 3].

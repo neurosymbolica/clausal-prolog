@@ -2,14 +2,20 @@
 
 -module(iso_term_manipulation, [Test/1])
 
-Test('construct atom: functor(T, a, 0)') <- (functor(T, a, 0), T == a)  # nv
+Test('construct atom: functor(T, a, 0)') <- (functor(T, a, 0), T == a)
 
-Test("decompose atom: functor('Hello', Name, Arity)") <- (functor(hello, N, A), N == hello, A == 0)  # nv
+Test("decompose atom: functor('Hello', Name, Arity)") <- (functor(hello, N, A), N == hello, A == 0)
 
-Test('decompose empty string') <- (functor('', N, A), N == '', A == 0)  # nv
+Test('decompose empty string') <- (functor('', N, A), N == '', A == 0)
 
-Test("construct atom from list: T =.. ['a']") <- (unpack(T, [a]), T == a)  # nv
+Test("construct atom from list: T =.. ['a']") <- (unpack(T, [a]), T == a)
 
-Test("decompose atom: 'a' =.. X") <- (unpack(a, X), X == [a])  # nv
+Test("decompose atom: 'a' =.. X") <- (unpack(a, X), X == [a])
 
-Test("decompose string: 'Hello' =.. X") <- (unpack(hello, X), X == [hello])  # nv
+Test("decompose string: 'Hello' =.. X") <- (unpack(hello, X), X == [hello])
+
+Test('decompose int: functor(1, N, A)') <- (functor(1, N, A), A == 0)
+
+Test('decompose float: functor(1.0, N, A)') <- (functor(1.0, N, A), A == 0)
+
+Test("unpack int: 1 =.. X gives ['1']") <- (unpack(1, X), X == ['1'])
