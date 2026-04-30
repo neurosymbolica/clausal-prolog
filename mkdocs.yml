@@ -111,6 +111,7 @@ nav:
     - scipy.signal: scipy_signal.md
     - scipy.sparse: scipy_sparse.md
     - scipy.cluster: scipy_cluster.md
+  - Optional Packages: packages.md
   - Advanced:
     - Module System: import.md
     - Regex: regex.md
