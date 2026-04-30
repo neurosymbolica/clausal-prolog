@@ -87,7 +87,6 @@ nav:
     - Regex: regex.md
     - Date & Time: date_time.md
     - SQLite: sqlite.md
-    - spaCy NLP: spacy.md
     - UUIDs: uuid.md
     - Crypto: crypto.md
     - HTTP & URL: http.md
