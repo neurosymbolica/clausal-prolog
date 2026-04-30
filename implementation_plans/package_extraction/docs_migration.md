@@ -315,4 +315,102 @@ and revertable.
 
 ## 9. Issues
 
-_To be populated during migration._
+Surfaced during the rollout. Each is filed as a follow-up todo
+under `implementation_plans/package_extraction/todo/`.
+
+### Editable installs don't expose package modules
+
+`pip install -e packages/clausal-<pkg>` "succeeds" but
+`import clausal.modules.<pkg>` fails. The PEP 660 finder doesn't
+extend an existing `clausal.modules.__path__`; non-editable
+installs work because they copy files under
+`<site-packages>/clausal/modules/`. Per-package
+`test_doc_integrity.py` requires the package to be installed
+non-editably for its inline-block compile-checks to pass.
+
+Workaround used during migration: `pip install packages/clausal-<pkg>`
+(no `-e`) before running per-package tests. Filed at
+[`todo/editable_install.md`](todo/editable_install.md) — proper
+fix wants its own design pass (PEP 420 namespace packaging is
+the right answer).
+
+### Docs site assembly is now an open question
+
+After this migration, `mkdocs build` produces 54 broken-link
+warnings because core docs (`index.md`, `architecture.md`,
+`constraints.md`, etc.) link directly to extracted-package docs
+that no longer live in core's `docs/`. `mkdocs build --strict`
+aborts.
+
+§6 of this plan punted the assembly decision; it can no longer
+be punted. Filed at
+[`todo/docs_site_assembly.md`](todo/docs_site_assembly.md) with
+a recommended short-term path (rewrite cross-doc links to
+`packages.md`) and a long-term path (`mkdocs-monorepo-plugin`).
+
+### Path-prefixed snippet refs in sympy.md
+
+`sympy.md` was the only migrated doc that used
+`packages/clausal-sympy/tests/fixtures/docs/...` as the snippet
+prefix. That worked when the doc lived in core (where
+`_PROJECT_ROOT` was the repo root) but broke after the move into
+the package (where `_PKG_ROOT` is `packages/clausal-sympy/`).
+
+Fixed in `ec6a771` by stripping the prefix. Migration of the
+other 9 packages used package-relative refs from the start;
+no further occurrences expected.
+
+### Stale `py.<pkg>` legacy snippets in spacy and scipy_differentiate
+
+Both `spacy.md` and `scipy_differentiate.md` carried "Or via the
+`py.<pkg>` alias" snippets that referenced an import alias that
+existed before extraction and was removed when the packages
+extracted. The bare-name alias (e.g. `spacy`) is now the canonical
+import.
+
+Fixed inline during their respective migration commits (`e224f99`,
+`7936192`). Other migrated docs were checked; no further legacy
+snippets remained.
+
+### 103 pre-existing uncompilable inline blocks in jax docs
+
+Most `.md` files in clausal-jax carry partial display fragments
+and pseudo-code that don't compile standalone. These were
+already in this state before extraction — they made up the bulk
+of core's pre-migration `test_no_raw_untested_blocks` failure.
+
+Mitigated with a `_KNOWN_UNCOMPILABLE` allowlist in
+`packages/clausal-jax/tests/test_doc_integrity.py` (annotated as
+"do not grow"). Cleanup tracked at
+[`todo/jax_doc_cleanup.md`](todo/jax_doc_cleanup.md).
+
+### Latent translator bugs surfaced by golden roundtrip
+
+Two unrelated bugs in the prolog translator were exposed by
+exercising the regenerated goldens:
+
+1. `_emit_compound` and `_emit_list` called `emit_term` without
+   `context_prec`, defaulting to 1201 (no parens for any
+   operator). Args separated by `,` (prec 1000) sit at
+   context_prec 999, so any contained `;`/`->`/`:-` operator
+   needed parens. Fixed in `ecc6252`.
+2. `prolog_to_clausal` emitted Prolog `true`/`false`/`fail`
+   verbatim, but Clausal uses Python `True`/`False`. Fixed in
+   `08c50e0` with a `_BUILTIN_ATOM_REWRITES` mapping.
+
+Neither was caused by the migration; the migration made them
+visible. Both fixes are independently good.
+
+### `docs/builtins.md` had a YAML section pointing at deleted fixtures
+
+When `clausal-yaml` extracted in `46cce77`, the YAML sections
+in `tests/fixtures/docs/builtins_sigs.txt` were deleted, but
+the corresponding YAML section in `docs/builtins.md` (with 7
+`--8<--` references) was not. The section was pointing at
+non-existent fixtures and survived undetected because the
+old core integrity tests only tracked which were broken, not
+when they became broken.
+
+Fixed in `248d20a` by deleting the stale YAML section from
+core's `builtins.md`. The yaml docs are now at
+`packages/clausal-yaml/docs/yaml.md` (migrated in `9af34bc`).
