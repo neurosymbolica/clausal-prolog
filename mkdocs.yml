@@ -86,7 +86,6 @@ nav:
     - Process: process.md
     - Regex: regex.md
     - Date & Time: date_time.md
-    - YAML: yaml.md
     - SQLite: sqlite.md
     - spaCy NLP: spacy.md
     - UUIDs: uuid.md
