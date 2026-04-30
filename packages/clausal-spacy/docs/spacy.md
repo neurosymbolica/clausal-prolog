@@ -1,11 +1,11 @@
 # spaCy NLP Module
 
-The `spacy_module` standard library [module](import.md) exposes spaCy's NLP pipeline as Clausal predicates. It provides model management, tokenisation, linguistic annotations, named-entity recognition, sentence segmentation, noun chunks, and vector similarity — all accessible from `.clausal` files via a relational interface.
+The `spacy` module exposes spaCy's NLP pipeline as Clausal predicates. It provides model management, tokenisation, linguistic annotations, named-entity recognition, sentence segmentation, noun chunks, and vector similarity — all accessible from `.clausal` files via a relational interface.
 
 **Requires:** `pip install spacy` and at least one downloaded spaCy model (e.g. `python -m spacy download en_core_web_sm`).
 
 ```clausal
--import_from(spacy_module, [LoadModel, Process, Token, Lemma, Entity])
+-import_from(spacy, [LoadModel, Process, Token, Lemma, Entity])
 
 Nouns(DOC, TOK) <- (
     LoadModel("en_core_web_sm", "nlp"),
@@ -15,18 +15,12 @@ Nouns(DOC, TOK) <- (
 )
 ```
 
-Or via the `py.spacy` alias:
-
-```clausal
--import_from(py.spacy, [LoadModel, Process, Entity, EntityList])
-```
-
 ---
 
 ## Import
 
 ```clausal
--import_from(spacy_module, [
+-import_from(spacy, [
     LoadModel, UnloadModel, CurrentModel,
     Process,
     Token, TokenText, TokenList,
@@ -362,7 +356,7 @@ Subjects(DOC, CHUNK) <- (
 ## Working example
 
 ```clausal
--import_from(spacy_module, [LoadModel, Process, Token, Pos, Lemma, Entity, Dep])
+-import_from(spacy, [LoadModel, Process, Token, Pos, Lemma, Entity, Dep])
 
 # Find all noun subjects in a sentence
 NounSubjects(TEXT, LEMMA) <- (
