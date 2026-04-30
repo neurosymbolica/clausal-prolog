@@ -72,7 +72,7 @@ Test('safe_max: equal') <- (SafeMax(4, 4, M), M == 4)
 
 Test('true succeeds (1 == 1)') <- (1 == 1)
 
-Test('fail fails: not False') <- (not false)
+Test('fail fails: not False') <- (not False)
 
 Test('conjunction backtracks: 2x2 = 4 solutions') <- (findall([X, Y], member(X, [1, 2]) , member(Y, [a, b]), L), length(L, 4), [1, a] in L, [2, b] in L)
 

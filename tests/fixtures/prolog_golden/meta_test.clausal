@@ -20,7 +20,7 @@ Test('findall basic: member of [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), L
 
 Test('findall with filter: X > 1') <- (findall(X, in_(X, [1, 2, 3]) , X > 1, L), L == [2, 3])
 
-Test('findall empty: no solutions yields []') <- (findall(X, false, L), L == [])
+Test('findall empty: no solutions yields []') <- (findall(X, False, L), L == [])
 
 Test('findall cartesian product') <- (findall([X, Y], in_(X, ['a', 'b']) , in_(Y, [1, 2]), L), L == [['a', 1], ['a', 2], ['b', 1], ['b', 2]])
 
@@ -30,14 +30,14 @@ Test('findall nested: outer + inner') <- (findall([Y, _inner], in_(Y, [10, 20]) 
 
 Test('bagof basic') <- (bagof(X, in_(X, [1, 2]), L), L == [1, 2])
 
-Test('bagof fails on empty') <- (not bagof(X, false, _))
+Test('bagof fails on empty') <- (not bagof(X, False, _))
 
 Test('setof deduplicates') <- (setof(X, in_(X, [1, 1, 2, 2, 3]), L), L == [1, 2, 3])
 
-Test('setof fails on empty') <- (not setof(X, false, _))
+Test('setof fails on empty') <- (not setof(X, False, _))
 
 Test('forall positive elements') <- (forall(in_(X, [2, 4, 6]), X > 0))
 
 Test('forall fails with negative') <- (not forall(in_(X, [2, -1, 6]), X > 0))
 
-Test('forall vacuously true when cond fails') <- (forall(false, X > 0))
+Test('forall vacuously true when cond fails') <- (forall(False, X > 0))

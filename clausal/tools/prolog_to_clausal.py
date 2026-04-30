@@ -510,6 +510,14 @@ class _PrologToClausal:
     # Atoms that map to Python builtins and should not be collected as data atoms.
     _BUILTIN_ATOMS = frozenset({"true", "false", "fail", "True", "False", "None"})
 
+    # Prolog spelling -> Clausal spelling for builtin truth atoms. Prolog uses
+    # lowercase 'true'/'false'/'fail'; Clausal uses Python 'True'/'False'.
+    _BUILTIN_ATOM_REWRITES = {
+        "true": "True",
+        "false": "False",
+        "fail": "False",
+    }
+
     def _emit_atom(self, atom: PAtom) -> str:
         """Emit an atom as a bare name, registering it for ``-private`` declaration.
 
@@ -521,7 +529,7 @@ class _PrologToClausal:
         name = atom.name
         # Special atoms that map to Python builtins
         if name in self._BUILTIN_ATOMS:
-            return name
+            return self._BUILTIN_ATOM_REWRITES.get(name, name)
         if name == "!":
             raise PrologTranslationError(
                 "Cut (!/0) cannot be translated to Clausal.\n"
