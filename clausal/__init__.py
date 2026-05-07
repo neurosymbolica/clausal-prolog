@@ -26,6 +26,14 @@ from clausal.logic.exceptions import LogicException
 from clausal.repl import Solutions
 import clausal._lazy_hook as _lazy_hook  # registers lightweight stub finder
 
+# CLAUSAL_IPYTHON=1 — opt-in eager load so the IPython AST transformer
+# wires up before the user's first cell runs.  Without this, the lazy
+# stub above only loads `clausal.import_hook` on first .clausal file
+# import, which is too late for `-import_from(...)` directives typed at
+# the prompt.
+if _os.environ.get('CLAUSAL_IPYTHON', '').lower() in ('1', 'true', 'yes', 'y'):
+    import clausal.import_hook  # noqa: F401 — triggers _try_auto_enable_ipython
+
 
 # ── Export all builtin predicate classes as top-level names ────────────────────
 # This lets users write: from clausal import append, between, in_, length, ...
