@@ -788,6 +788,11 @@ def enable_ipython(ipython_globals, shell=None):
     """
     if shell is None:
         shell = ipython_globals["get_ipython"]()
+    # Idempotent: if already enabled on this shell, do nothing. Stacking
+    # transformers double-rewrites the AST and breaks *(…) queries.
+    if getattr(shell, '_clausal_enabled', False):
+        return
+    shell._clausal_enabled = True
     # Suppress the "'str' object is not callable" SyntaxWarning that Python
     # emits when it compiles source containing  'op'(args)  syntax.  in_ this
     # DSL that syntax is intentional; the EmbedTransformer and
