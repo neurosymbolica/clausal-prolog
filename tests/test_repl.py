@@ -138,7 +138,7 @@ def test_a_shows_all():
     # nv
     out = run(iter([{"X": 1}, {"X": 2}, {"X": 3}]), 'a')
     lines = _content_lines(out)
-    assert lines == ["X is 1", "or", "X is 2", "or", "X is 3", "No more solutions."]
+    assert lines == ["X is 1", "or", "X is 2", "or", "X is 3", "# No more solutions."]
 
 
 # ── Three solutions, next then stop ──────────────────────────────────────────

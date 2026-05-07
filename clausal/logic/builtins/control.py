@@ -85,7 +85,7 @@ def _time_goal__1(this_generator, _proceed, _fail, _catcher, goal, trail):
     wall_elapsed = _time.perf_counter() - wall_start
     cpu_elapsed = _time.process_time() - cpu_start
     print(
-        f"% {solution_count} solution(s), "
+        f"# {solution_count} solution(s), "
         f"{wall_elapsed:.6f}s wall, {cpu_elapsed:.6f}s CPU",
         file=_sys.stderr,
     )

@@ -347,7 +347,7 @@ class Solutions:
                 look_ahead = next(self._iter)
             except StopIteration:
                 # This was the last solution.
-                print("No more solutions.")
+                print("# No more solutions.")
                 return
 
             # There is a next solution — show prompt and wait for a key.
@@ -371,7 +371,7 @@ class Solutions:
                 for sol in self._iter:
                     print("or")
                     print(_format_bindings(sol))
-                print("No more solutions.")
+                print("# No more solutions.")
                 return
             else:
                 # Unknown key — treat as next.
