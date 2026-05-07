@@ -10,15 +10,14 @@ operator reads. For notebook-specific rendering, see [Jupyter Notebooks](jupyter
 
 ## Quick start
 
-```python
-# Cell 1 — one-time setup per session
-from clausal.import_hook import enable_ipython
-enable_ipython(globals())
+After [setting up the IPython startup hook](#set-up-the-ipython-startup-hook)
+(one-time, per profile):
 
-# Cell 2 — load a module
+```python
+# Cell 1 — load a module
 import clausal.examples.sudoku as sudoku
 
-# Cell 3 — query
+# Cell 2 — query
 *(sudoku.Problem(1, ROWS), sudoku.Sudoku(ROWS))
 ```
 
@@ -26,22 +25,68 @@ import clausal.examples.sudoku as sudoku
 
 ---
 
-## Auto-enable via environment variable
+## Set up the IPython startup hook
 
-Set `CLAUSAL_IPYTHON=1` (or `true` / `yes` / `y`) in your shell profile and
-the integration activates automatically whenever `clausal` is imported:
+IPython parses each cell *before* executing any code in it, so the AST
+transformer that rewrites `-import_from(...)` and `*(...)` queries has to
+be registered **before your first cell runs**.  The cleanest way is an
+IPython startup file that imports Clausal once at session start.
+
+### Recommended — install command
+
+```bash
+clausal-install-ipython
+```
+
+This drops a single file at
+`~/.ipython/profile_default/startup/00-clausal.py`.  Every IPython session
+in that profile picks it up automatically; you can delete the file to opt
+back out.  Useful flags:
+
+```bash
+clausal-install-ipython --profile myprofile   # different IPython profile
+clausal-install-ipython --force               # overwrite existing file
+clausal-install-ipython --uninstall           # remove the hook
+clausal-install-ipython --print               # print the script to stdout
+```
+
+### Manual — write the file yourself
+
+If you'd rather not run the install command, the hook is a five-line
+file you can copy in by hand:
+
+```python
+# ~/.ipython/profile_default/startup/00-clausal.py
+try:
+    from clausal.import_hook import enable_ipython as _enable_clausal
+    _enable_clausal(get_ipython().user_ns)
+except ImportError:
+    pass
+```
+
+### Per-session — call `enable_ipython` from cell 1
+
+Without a startup file, every session needs an explicit setup cell:
+
+```python
+from clausal.import_hook import enable_ipython
+enable_ipython(globals())
+```
+
+After that, subsequent cells can use `*(...)` and `-import_from(...)`.
+
+### Environment-variable opt-in (advanced)
+
+Setting `CLAUSAL_IPYTHON=1` makes `import clausal` *itself* register the
+AST transformer — handy if your workflow already imports clausal at the
+top of every session, but on its own it doesn't help: until something
+imports clausal, IPython has no way to know about the integration.  Use
+this in combination with a startup file or a `--ext` IPython extension
+that imports clausal during startup:
 
 ```bash
 # ~/.zshrc or ~/.bashrc
 export CLAUSAL_IPYTHON=1
-```
-
-With the env var set, the session simplifies to:
-
-```python
-import clausal.examples.sudoku as sudoku
-
-*(sudoku.Problem(1, ROWS), sudoku.Sudoku(ROWS))
 ```
 
 ---
