@@ -80,7 +80,8 @@ class AggregateProvenance(Provenance):
 
     Boolean Datalog gets ``count``/``sum``/``argmax`` for free (cardinality,
     plain sum, plain argmax). Probabilistic semirings need expectation-aware
-    versions; see phase P-3.
+    versions — see ``add_mult_prob``, ``diff_add_mult_prob``, and
+    ``top_k_proofs`` in :mod:`clausal.modules.provenance.semirings`.
     """
 
     def aggregate_count(self, tags: list) -> "Tag":

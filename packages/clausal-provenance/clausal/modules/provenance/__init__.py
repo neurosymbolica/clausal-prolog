@@ -3,15 +3,21 @@
 Public surface (Python-side and `.clausal`-side):
 
   - ``solve(semiring, facts, goal)`` — Python-side direct call to the engine.
+  - ``query(goal, facts=, semiring=)`` — Python-side `clausal.query`-shaped
+    wrapper used by neurosymbolic training loops.
   - ``provenance.solve/4`` — `.clausal`-side builtin, same shape as the
-    Python helper.
+    Python helper. ``provenance.aggregate/4`` and ``recover/3`` ride
+    alongside.
   - ``bottom_up_(P)`` — register a predicate for bottom-up evaluation.
   - ``pure_(P)`` — declare a predicate as pure for use from -bottom_up bodies.
-  - ``boolean`` — boolean semiring (B, ∨, ∧, ⊥, ⊤).
 
-Phase P-1 ships only the boolean semiring. Probabilistic and
-differentiable semirings (``add_mult_prob``, ``diff_add_mult_prob``,
-``top_k_proofs``, …) land in P-2 and later.
+Semirings shipped:
+
+  - ``boolean`` — plain Datalog set semantics.
+  - ``add_mult_prob`` — independence-assumption probability ([0, 1]).
+  - ``diff_add_mult_prob`` — same algebra on PyTorch / JAX tensors.
+  - ``top_k_proofs(k)`` — DNF lineage truncated to the k highest-prob proofs.
+  - ``diff_top_k_proofs(k)`` — differentiable variant; autograd through I-E.
 
 See :mod:`clausal.modules.provenance.engine` for the engine and
 :mod:`clausal.modules.provenance.protocol` for the semiring protocol.
