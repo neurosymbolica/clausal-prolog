@@ -1,0 +1,53 @@
+-import_from(provenance, [bottom_up_, solve, boolean, add_mult_prob])
+
+-module(mnist_sum, [
+    Digit(IMAGE_ID, VALUE),
+    SumDigits(IMAGE_A, IMAGE_B, TOTAL),
+])
+
+# Digit and SumDigits both flow through the bottom-up engine: Digit is
+# the data layer (perception-model output, supplied as tagged facts);
+# SumDigits is the rule layer.
+bottom_up_(Digit)
+bottom_up_(SumDigits)
+
+SumDigits(IMG_A, IMG_B, TOTAL) <- (
+    Digit(IMG_A, A),
+    Digit(IMG_B, B),
+    TOTAL == A + B,
+)
+
+
+# ── Tests under the boolean semiring ────────────────────────────────
+
+Test("boolean: digit-pair sum") <- (
+    FACTS is [
+        (Digit(0, 3), True),
+        (Digit(1, 5), True),
+    ],
+    solve(boolean, FACTS, SumDigits(0, 1, T), R),
+    T == 8,
+    R == [(SumDigits(0, 1, 8), True)]
+)
+
+Test("boolean: enumerate possible sums when value uncertain") <- (
+    FACTS is [
+        (Digit(0, 3), True),
+        (Digit(0, 4), True),
+        (Digit(1, 5), True),
+    ],
+    solve(boolean, FACTS, SumDigits(0, 1, T), R),
+    length(R, 2)
+)
+
+
+# ── Test under add_mult_prob ────────────────────────────────────────
+
+Test("add_mult_prob: confident pair multiplies cleanly") <- (
+    FACTS is [
+        (Digit(0, 3), 0.7),
+        (Digit(1, 5), 0.9),
+    ],
+    solve(add_mult_prob, FACTS, SumDigits(0, 1, 8), R),
+    R == [(SumDigits(0, 1, 8), 0.63)]
+)

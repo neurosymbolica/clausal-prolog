@@ -1,0 +1,68 @@
+-import_from(provenance, [bottom_up_, solve, aggregate, boolean, add_mult_prob])
+
+-module(negation_aggregate, [
+    Edge(SRC, DST),
+    Block(NODE),
+    Reachable(NODE),
+    Allowed(NODE),
+])
+
+bottom_up_(Edge)
+bottom_up_(Block)
+bottom_up_(Reachable)
+bottom_up_(Allowed)
+
+Reachable(X) <- Edge(_, X)
+
+Allowed(X) <- (
+    Reachable(X),
+    not Block(X),
+)
+
+
+# ── Stratified negation under boolean ─────────────────────────────────
+
+Test("boolean: blocked node excluded from Allowed") <- (
+    FACTS is [
+        (Edge("a", "b"), True),
+        (Edge("a", "c"), True),
+        (Edge("a", "d"), True),
+        (Block("c"), True),
+    ],
+    solve(boolean, FACTS, Allowed(NODE), R),
+    length(R, 2)
+)
+
+
+# ── Stratified negation under add_mult_prob ───────────────────────────
+
+Test("add_mult_prob: certain block excludes via 1 - 1.0 = 0") <- (
+    FACTS is [
+        (Edge("a", "b"), 0.7),
+        (Block("b"), 1.0),
+    ],
+    solve(add_mult_prob, FACTS, Allowed("b"), [])
+)
+
+
+# ── aggregate/4 — boolean count and add_mult_prob expected count ──────
+
+Test("aggregate count under boolean") <- (
+    aggregate(boolean, "count", [True, False, True, True], 3)
+)
+
+Test("aggregate sum under boolean") <- (
+    aggregate(boolean, "sum", [(1, True), (2, False), (3, True)], 4)
+)
+
+Test("aggregate count under add_mult_prob = expected count") <- (
+    aggregate(add_mult_prob, "count", [0.3, 0.5, 0.2], EXPECTED),
+    EXPECTED < 1.0000000001,
+    EXPECTED > 0.9999999999
+)
+
+Test("aggregate sum under add_mult_prob = expected sum") <- (
+    aggregate(add_mult_prob, "sum", [(3, 0.7), (5, 0.3)], EXPECTED),
+    EXPECTED < 3.6000000001,
+    EXPECTED > 3.5999999999
+)

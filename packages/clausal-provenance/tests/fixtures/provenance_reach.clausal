@@ -1,0 +1,56 @@
+-import_from(provenance, [bottom_up_, solve, boolean])
+
+-module(provenance_reach, [
+    Edge(SRC, DST),
+    Path(SRC, DST),
+])
+
+bottom_up_(Edge)
+bottom_up_(Path)
+
+Path(SRC, DST) <- Edge(SRC, DST)
+
+Path(SRC, DST) <- (
+    Edge(SRC, MID),
+    Path(MID, DST),
+)
+
+
+# ── Tests ─────────────────────────────────────────────────────────────
+
+Test("direct edge under boolean") <- (
+    FACTS is [
+        (Edge("a", "b"), True),
+        (Edge("b", "c"), True),
+    ],
+    solve(boolean, FACTS, Path("a", "b"), R),
+    R == [(Path("a", "b"), True)]
+)
+
+Test("transitive closure under boolean") <- (
+    FACTS is [
+        (Edge("a", "b"), True),
+        (Edge("b", "c"), True),
+        (Edge("c", "d"), True),
+    ],
+    solve(boolean, FACTS, Path("a", "d"), R),
+    R == [(Path("a", "d"), True)]
+)
+
+Test("multiple answers from one start node") <- (
+    FACTS is [
+        (Edge("a", "b"), True),
+        (Edge("b", "c"), True),
+        (Edge("c", "d"), True),
+    ],
+    solve(boolean, FACTS, Path("a", DST), R),
+    length(R, 3)
+)
+
+Test("disconnected nodes yield no path") <- (
+    FACTS is [
+        (Edge("a", "b"), True),
+        (Edge("c", "d"), True),
+    ],
+    solve(boolean, FACTS, Path("a", "d"), []),
+)
