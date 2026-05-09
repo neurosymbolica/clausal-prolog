@@ -16,13 +16,13 @@
 # ── maplist/3 — transform each element ───────────────────────────────────────
 
 # Double every element.
-Doubles(XS, YS) <- maplist(((X, Y) <- (Y := X * 2)), XS, YS)
+Doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
 
 # Square every element.
-Squares(XS, YS) <- maplist(((X, Y) <- (Y := X * X)), XS, YS)
+Squares(XS, YS) <- maplist(((X, Y) <- (Y == X * X)), XS, YS)
 
 # Negate every element.
-NegateList(XS, YS) <- maplist(((X, Y) <- (Y := 0 - X)), XS, YS)
+NegateList(XS, YS) <- maplist(((X, Y) <- (Y == 0 - X)), XS, YS)
 
 # ── maplist/2 — check predicate on each element ──────────────────────────────
 
@@ -48,13 +48,13 @@ RemoveEven(XS, OS) <- exclude((X <- (X % 2 == 0)), XS, OS)
 # ── foldl/4 — left fold ────────────────────────────────────────────────────
 
 # sum_ via fold.
-SumListFold(XS, S) <- foldl(((E, A, R) <- (R := A + E)), XS, 0, S)
+SumListFold(XS, S) <- foldl(((E, A, R) <- (R == A + E)), XS, 0, S)
 
 # Product via fold.
-ProductList(XS, P) <- foldl(((E, A, R) <- (R := A * E)), XS, 1, P)
+ProductList(XS, P) <- foldl(((E, A, R) <- (R == A * E)), XS, 1, P)
 
 # Count elements via fold.
-CountFold(XS, N) <- foldl(((ELEM, A, R) <- (R := A + 1)), XS, 0, N)
+CountFold(XS, N) <- foldl(((ELEM, A, R) <- (R == A + 1)), XS, 0, N)
 
 # max_ via fold with initial value.
 MaxFold(XS, INIT, M) <- foldl(((E, A, R) <- (
