@@ -1,0 +1,87 @@
+-import_from(provenance, [bottom_up_, solve,
+                          boolean, add_mult_prob, top_k_proofs])
+
+-module(top_k_engine, [
+    Edge(SRC, DST),
+    Path(SRC, DST),
+])
+
+bottom_up_(Edge)
+bottom_up_(Path)
+
+Path(A, B) <- Edge(A, B)
+Path(A, C) <- (Edge(A, B), Path(B, C))
+
+
+# ── Two-hop: single proof, exact product ──────────────────────────────
+
+Test("top_k_proofs(3) two-hop = product of edge probs") <- (
+    FACTS is [(Edge("a", "b"), 0.7), (Edge("b", "c"), 0.5)],
+    solve(top_k_proofs(3), FACTS, Path("a", "c"), [(_, P)]),
+    P > 0.3499999999,
+    P < 0.3500000001,
+)
+
+
+# ── Diamond with disjoint proofs: combines via noisy-OR ───────────────
+#
+# a → b → d  (0.6 * 0.6 = 0.36)
+# a → c → d  (0.5 * 0.4 = 0.20)
+# Disjoint inputs, so I-E reduces to 0.36 + 0.20 - 0.36*0.20 = 0.488.
+
+Test("top_k_proofs: disjoint diamond proofs match noisy-OR") <- (
+    FACTS is [
+        (Edge("a", "b"), 0.6),
+        (Edge("b", "d"), 0.6),
+        (Edge("a", "c"), 0.5),
+        (Edge("c", "d"), 0.4),
+    ],
+    solve(top_k_proofs(3), FACTS, Path("a", "d"), [(_, P)]),
+    P > 0.4879999999,
+    P < 0.4880000001,
+)
+
+
+# ── Parity with add_mult_prob when proofs are input-disjoint ──────────
+#
+# Plan's flagship parity: top_k_proofs(k>=#proofs) == add_mult_prob
+# exactly when the program is non-recursive and proofs share no inputs.
+
+Test("top_k_proofs == add_mult_prob on disjoint proofs") <- (
+    FACTS is [
+        (Edge("a", "b"), 0.6),
+        (Edge("b", "d"), 0.5),
+        (Edge("a", "c"), 0.4),
+        (Edge("c", "d"), 0.7),
+    ],
+    solve(top_k_proofs(3), FACTS, Path("a", "d"), [(_, P_TOPK)]),
+    solve(add_mult_prob, FACTS, Path("a", "d"), [(_, P_AMP)]),
+    DELTA is P_TOPK - P_AMP,
+    DELTA < 0.0000000001,
+    DELTA > -0.0000000001,
+)
+
+
+# ── Boolean equivalence at probabilities ∈ {0, 1} ─────────────────────
+#
+# top_k at 1.0 ≡ derivable; at 0.0 the input is pruned. The boolean run
+# on the same graph (with True-tagged edges) sees the full closure.
+
+Test("top_k at p=0 propagates a zero-probability proof") <- (
+    # The DNF carrier still records the proof — it just recovers to 0.
+    FACTS is [
+        (Edge("a", "b"), 0.0),
+        (Edge("b", "c"), 1.0),
+    ],
+    solve(top_k_proofs(4), FACTS, Path("a", "c"), [(_, P)]),
+    P < 0.0000000001,
+)
+
+Test("top_k at p=1 propagates through transitive closure") <- (
+    FACTS is [
+        (Edge("a", "b"), 1.0),
+        (Edge("b", "c"), 1.0),
+    ],
+    solve(top_k_proofs(4), FACTS, Path("a", "c"), [(_, P)]),
+    P > 0.9999999999,
+)

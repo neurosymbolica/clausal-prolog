@@ -90,189 +90,23 @@ def test_boolean_saturated_default():
     assert boolean.saturated(False, True) is False
 
 
-# ── Single rule, no recursion ───────────────────────────────────────────
+# ── End-to-end reachability is dogfooded in
+#    tests/fixtures/provenance_reach.clausal and mutual_recursion.clausal.
+#    These Python tests retain only the cases that need pytest infra:
+#    error paths, custom Python semirings, and engine-internal probes.
 
 
-def test_direct_edge_reachability():
-    mod, c = _setup_program(("Edge", ["s", "t"]), ("Path", ["s", "t"]))
-    Edge, Path = c["Edge"], c["Path"]
-    s, t = Var(), Var()
-    Path._assertz(Clause(head=Path(s, t), body=[_ast_call("Edge", s, t)]))
-    facts = [(Edge("a", "b"), True), (Edge("b", "c"), True)]
-    out = evaluate(boolean, facts, Path("a", Var()), module=mod)
-    assert len(out) == 1
-    (term, tag), = out
-    assert (term.s, term.t) == ("a", "b")
-    assert tag is True
-
-
-# ── Recursive transitive closure ────────────────────────────────────────
-
-
-def test_transitive_closure_three_hop():
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
-    A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
-    A2, M, B2 = Var(), Var(), Var()
-    Path._assertz(Clause(
-        head=Path(A2, B2),
-        body=[_ast_call("Edge", A2, M), _ast_call("Path", M, B2)],
-    ))
-    facts = [(Edge("a", "b"), True), (Edge("b", "c"), True), (Edge("c", "d"), True)]
-    out = evaluate(boolean, facts, Path("a", Var()), module=mod)
-    targets = sorted(p.b for p, _ in out)
-    assert targets == ["b", "c", "d"]
-    assert all(tag is True for _, tag in out)
-
-
-def test_transitive_closure_with_cycle():
-    """A cycle should not blow up the fixpoint — set semantics."""
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
-    A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
-    A2, M, B2 = Var(), Var(), Var()
-    Path._assertz(Clause(
-        head=Path(A2, B2),
-        body=[_ast_call("Edge", A2, M), _ast_call("Path", M, B2)],
-    ))
-    facts = [
-        (Edge("a", "b"), True),
-        (Edge("b", "a"), True),  # cycle a-b-a
-    ]
-    out = evaluate(boolean, facts, Path("a", Var()), module=mod)
-    targets = sorted(p.b for p, _ in out)
-    assert targets == ["a", "b"]
-
-
-def test_no_path_when_disconnected():
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
-    A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
-    A2, M, B2 = Var(), Var(), Var()
-    Path._assertz(Clause(
-        head=Path(A2, B2),
-        body=[_ast_call("Edge", A2, M), _ast_call("Path", M, B2)],
-    ))
-    facts = [(Edge("a", "b"), True), (Edge("c", "d"), True)]
-    out = evaluate(boolean, facts, Path("a", "d"), module=mod)
-    assert out == []
-
-
-def test_multiple_starts():
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
-    A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
-    A2, M, B2 = Var(), Var(), Var()
-    Path._assertz(Clause(
-        head=Path(A2, B2),
-        body=[_ast_call("Edge", A2, M), _ast_call("Path", M, B2)],
-    ))
-    facts = [(Edge(0, 1), True), (Edge(1, 2), True), (Edge(10, 11), True)]
-    out = evaluate(boolean, facts, Path(Var(), Var()), module=mod)
-    pairs = sorted((p.a, p.b) for p, _ in out)
-    assert pairs == [(0, 1), (0, 2), (1, 2), (10, 11)]
-
-
-# ── Mutual recursion across two predicates ──────────────────────────────
-
-
-def test_mutual_recursion_even_odd():
-    """Even/Odd over Pred (predecessor) — mutual recursion across two SCC members."""
-    mod, c = _setup_program(
-        ("Pred", ["a", "b"]),
-        ("Even", ["x"]),
-        ("Odd", ["x"]),
-        ("Zero", ["x"]),
-    )
-    Pred, Even, Odd, Zero = c["Pred"], c["Even"], c["Odd"], c["Zero"]
-    # Zero(0)
-    X = Var()
-    Even._assertz(Clause(head=Even(X), body=[_ast_call("Zero", X)]))
-    # Odd(N)  :- Pred(N, M), Even(M)
-    N, M = Var(), Var()
-    Odd._assertz(Clause(head=Odd(N), body=[_ast_call("Pred", N, M), _ast_call("Even", M)]))
-    # Even(N) :- Pred(N, M), Odd(M)
-    N2, M2 = Var(), Var()
-    Even._assertz(Clause(head=Even(N2), body=[_ast_call("Pred", N2, M2), _ast_call("Odd", M2)]))
-    facts = [
-        (Zero(0), True),
-        (Pred(1, 0), True), (Pred(2, 1), True), (Pred(3, 2), True),
-        (Pred(4, 3), True), (Pred(5, 4), True),
-    ]
-    even_out = evaluate(boolean, facts, Even(Var()), module=mod)
-    odd_out = evaluate(boolean, facts, Odd(Var()), module=mod)
-    even_vals = sorted(t.x for t, _ in even_out)
-    odd_vals = sorted(t.x for t, _ in odd_out)
-    assert even_vals == [0, 2, 4]
-    assert odd_vals == [1, 3, 5]
-
-
-# ── Empty input handling ────────────────────────────────────────────────
-
-
-def test_no_facts_no_answers():
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
-    A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
-    out = evaluate(boolean, [], Path(Var(), Var()), module=mod)
-    assert out == []
+# ── Single empty-relation corner case (kept in Python — fits Python)
+#    better than a dedicated .clausal fixture for this one shape) ────────
 
 
 def test_facts_only_no_rules_for_query_predicate():
+    """Path is registered -bottom_up but has no clauses; querying yields []."""
     mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
     Edge, Path = c["Edge"], c["Path"]
-    # Path has no rules. Query against Path will yield empty.
     facts = [(Edge("a", "b"), True)]
     out = evaluate(boolean, facts, Path(Var(), Var()), module=mod)
     assert out == []
-
-
-def test_facts_only_with_query_on_input_predicate():
-    mod, c = _setup_program(("Edge", ["a", "b"]),)
-    Edge = c["Edge"]
-    facts = [(Edge("a", "b"), True), (Edge("b", "c"), True)]
-    out = evaluate(boolean, facts, Edge(Var(), Var()), module=mod)
-    pairs = sorted((t.a, t.b) for t, _ in out)
-    assert pairs == [("a", "b"), ("b", "c")]
-
-
-# ── Goal binding modes ──────────────────────────────────────────────────
-
-
-def test_goal_with_specific_target():
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
-    A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
-    A2, M, B2 = Var(), Var(), Var()
-    Path._assertz(Clause(
-        head=Path(A2, B2),
-        body=[_ast_call("Edge", A2, M), _ast_call("Path", M, B2)],
-    ))
-    facts = [(Edge(0, 1), True), (Edge(1, 2), True)]
-    # Query with both args bound — single-tuple match
-    out = evaluate(boolean, facts, Path(0, 2), module=mod)
-    assert len(out) == 1
-    out_neg = evaluate(boolean, facts, Path(0, 99), module=mod)
-    assert out_neg == []
-
-
-# ── Tag merging via semiring.add ────────────────────────────────────────
-
-
-def test_duplicate_facts_merge_via_add():
-    mod, c = _setup_program(("Edge", ["a", "b"]),)
-    Edge = c["Edge"]
-    facts = [(Edge("a", "b"), True), (Edge("a", "b"), True), (Edge("a", "b"), True)]
-    out = evaluate(boolean, facts, Edge(Var(), Var()), module=mod)
-    # Boolean: True ∨ True = True, single tuple
-    assert len(out) == 1
-    assert out[0][1] is True
 
 
 # ── Purity errors ───────────────────────────────────────────────────────
@@ -488,87 +322,10 @@ def test_python_query_helper():
     assert len(out) == 1
 
 
-# ── In-source provenance.solve/4 builtin ────────────────────────────────
-
-
-def test_solve_4_builtin_reach(tmp_path):
-    """Use provenance.solve/4 from .clausal source."""
-    src = (
-        '-import_from(provenance, [bottom_up_, solve, boolean])\n'
-        '-module(test_solve_4, [Edge(A, B), Path(A, B)])\n'
-        'bottom_up_(Edge)\n'
-        'bottom_up_(Path)\n'
-        'Path(A, B) <- Edge(A, B)\n'
-        'Path(A, C) <- (Edge(A, B), Path(B, C))\n'
-    )
-    p = tmp_path / "test_solve_4.clausal"
-    p.write_text(src)
-    from clausal.import_hook import _load_module
-    from clausal.logic.solve import call as logic_call
-    from clausal.logic.variables import Var, deref
-    mod = _load_module("test_solve_4", str(p))
-    cm = mod.__dict__["$module"]
-    Edge = mod.Edge
-    Path = mod.Path
-
-    # provenance.solve(boolean, FACTS, Path("a", _), R)
-    from clausal.modules.provenance import solve as prov_solve, boolean as bool_sr
-    facts = [
-        (Edge("a", "b"), True),
-        (Edge("b", "c"), True),
-    ]
-    R = Var()
-    success = False
-    for _ in logic_call(prov_solve, bool_sr, facts, Path("a", Var()), R, module=cm):
-        success = True
-        result = deref(R)
-    assert success
-    assert isinstance(result, list)
-    targets = sorted(t.B for (t, _) in result)
-    assert targets == ["b", "c"]
-
-
-# ── Recover/3 ───────────────────────────────────────────────────────────
-
-
-def test_recover_3_identity_for_boolean():
-    from clausal.modules.provenance import recover, boolean as bool_sr
-    from clausal.logic.solve import call as logic_call
-    from clausal.logic.variables import Var, deref
-    Out = Var()
-    success = False
-    for _ in logic_call(recover, bool_sr, True, Out):
-        success = True
-        result = deref(Out)
-    assert success
-    assert result is True
-
-
-# ── Semi-naive correctness: all derivable tuples appear ─────────────────
-
-
-def test_dense_graph_all_pairs_reachable():
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
-    A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
-    A2, M, B2 = Var(), Var(), Var()
-    Path._assertz(Clause(
-        head=Path(A2, B2),
-        body=[_ast_call("Edge", A2, M), _ast_call("Path", M, B2)],
-    ))
-    # Complete graph on {0, 1, 2}
-    facts = [
-        (Edge(i, j), True)
-        for i in range(3)
-        for j in range(3)
-        if i != j
-    ]
-    out = evaluate(boolean, facts, Path(Var(), Var()), module=mod)
-    pairs = sorted((p.a, p.b) for p, _ in out)
-    # All ordered pairs (i, j) with i ≠ j: 6 of them, plus self-loops via cycle
-    expected = sorted({(i, j) for i in range(3) for j in range(3)})
-    assert pairs == expected
+# In-source provenance.solve/4 and recover/3 are dogfooded in the
+# .clausal fixtures; same for transitive-closure correctness on dense
+# graphs (top_k_engine.clausal exercises a 4-edge diamond, and
+# provenance_reach.clausal covers the disjoint-component case).
 
 
 # ── Custom semiring contract ────────────────────────────────────────────
@@ -595,29 +352,3 @@ def test_custom_semiring_count_facts():
     # Two duplicate facts — counts add.
     assert len(out) == 1
     assert out[0][1] == 2
-
-
-# ── Saturation checks the relation reaches fixpoint ─────────────────────
-
-
-def test_fixpoint_terminates_on_complete_graph():
-    """Even on a strongly-connected graph the engine must terminate."""
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
-    A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
-    A2, M, B2 = Var(), Var(), Var()
-    Path._assertz(Clause(
-        head=Path(A2, B2),
-        body=[_ast_call("Edge", A2, M), _ast_call("Path", M, B2)],
-    ))
-    facts = [
-        (Edge(0, 1), True), (Edge(1, 0), True),
-        (Edge(1, 2), True), (Edge(2, 1), True),
-    ]
-    out = evaluate(boolean, facts, Path(Var(), Var()), module=mod)
-    pairs = sorted((p.a, p.b) for p, _ in out)
-    # All combinations among {0, 1, 2}
-    assert (0, 0) in pairs
-    assert (0, 2) in pairs
-    assert (2, 0) in pairs

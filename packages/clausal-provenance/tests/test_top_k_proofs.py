@@ -275,54 +275,13 @@ def test_invalid_k_rejected():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# Engine integration
+# Engine integration — top-k two-hop, diamond, parity with amp, and the
+# zero/one boolean-equivalence corner case that filters reachable_topk
+# vs reachable_bool live in tests/fixtures/top_k_engine.clausal. The
+# Python tests below keep only the multi-set boolean-equivalence variant
+# because it exercises a Path(Var, Var) result-set comparison that's
+# easier to write in Python.
 # ══════════════════════════════════════════════════════════════════════════
-
-
-def test_engine_two_hop():
-    mod, Edge, Path = _setup_path_program()
-    facts = [(Edge("a", "b"), 0.7), (Edge("b", "c"), 0.5)]
-    out = evaluate(top_k_proofs(k=3), facts, Path("a", "c"), module=mod)
-    assert len(out) == 1
-    _, prob = out[0]
-    assert abs(prob - 0.35) < 1e-9
-
-
-def test_engine_diamond_disjoint_proofs_match_noisy_or():
-    """Two disjoint paths combine via noisy-OR (matches add_mult_prob exactly)."""
-    mod, Edge, Path = _setup_path_program()
-    facts = [
-        (Edge("a", "b"), 0.6),
-        (Edge("b", "d"), 0.6),
-        (Edge("a", "c"), 0.5),
-        (Edge("c", "d"), 0.4),
-    ]
-    out = evaluate(top_k_proofs(k=3), facts, Path("a", "d"), module=mod)
-    _, prob = out[0]
-    expected = 0.36 + 0.20 - 0.36 * 0.20
-    assert abs(prob - expected) < 1e-9
-
-
-def test_engine_shared_input_proofs_correct_when_amp_overcounts():
-    """top_k_proofs is exact where add_mult_prob double-counts the shared input.
-
-    Graph: a→b (p=0.7), b→c (p=0.5), b→d (p=0.4), c→x, d→x.
-    Two paths from a to x both go through (a,b). add_mult_prob over-counts;
-    top_k_proofs sees the shared input and applies inclusion-exclusion.
-    """
-    mod, Edge, Path = _setup_path_program()
-    facts = [
-        (Edge("a", "b"), 0.7),
-        (Edge("b", "x"), 0.5),
-        (Edge("a", "b2"), 0.6),     # disjoint detour
-        (Edge("b2", "x"), 0.4),
-    ]
-    # In this fixture proofs are disjoint, so amp and top_k_proofs match.
-    out_topk = evaluate(top_k_proofs(k=4), facts, Path("a", "x"), module=mod)
-    out_amp = evaluate(add_mult_prob, facts, Path("a", "x"), module=mod)
-    p_topk = out_topk[0][1]
-    p_amp = out_amp[0][1]
-    assert abs(p_topk - p_amp) < 1e-9
 
 
 def test_engine_boolean_equivalence_at_zero_one_inputs():
@@ -349,27 +308,11 @@ def test_engine_boolean_equivalence_at_zero_one_inputs():
                               ("a", "d"), ("d", "e"), ("a", "e")}
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# Parity with diff_add_mult_prob (the plan's required validation)
-# ══════════════════════════════════════════════════════════════════════════
-
-
-def test_parity_with_diff_add_mult_prob_disjoint_proofs():
-    """When proofs are input-disjoint, top_k_proofs == add_mult_prob exactly.
-
-    The plan's required parity case: ``k ≥ #proofs`` and the program is
-    non-recursive (so iteration terminates after one pass).
-    """
-    mod, Edge, Path = _setup_path_program()
-    facts = [
-        (Edge("a", "b"), 0.6),
-        (Edge("b", "d"), 0.5),
-        (Edge("a", "c"), 0.4),
-        (Edge("c", "d"), 0.7),
-    ]
-    out_topk = evaluate(top_k_proofs(k=3), facts, Path("a", "d"), module=mod)
-    out_amp = evaluate(add_mult_prob, facts, Path("a", "d"), module=mod)
-    assert abs(out_topk[0][1] - out_amp[0][1]) < 1e-9
+# Parity with add_mult_prob on disjoint proofs (top_k(k>=#proofs) ==
+# add_mult_prob exactly) is dogfooded in
+# tests/fixtures/top_k_engine.clausal. This Python file keeps only the
+# differentiable parity case below because gradcheck and tensor probs
+# don't fit a .clausal Test clause.
 
 
 # ══════════════════════════════════════════════════════════════════════════

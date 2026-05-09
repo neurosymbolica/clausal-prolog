@@ -80,76 +80,10 @@ def _setup_negation_program():
     return mod, Edge, Block, Reachable, Allowed
 
 
-# ══════════════════════════════════════════════════════════════════════
-# Stratified negation under the boolean semiring
-# ══════════════════════════════════════════════════════════════════════
-
-
-def test_boolean_negation_excludes_blocked():
-    mod, Edge, Block, Reachable, Allowed = _setup_negation_program()
-    facts = [
-        (Edge("a", "b"), True),
-        (Edge("a", "c"), True),
-        (Edge("a", "d"), True),
-        (Block("c"), True),
-    ]
-    out = evaluate(boolean, facts, Allowed(Var()), module=mod)
-    allowed = sorted(t.x for t, _ in out)
-    assert allowed == ["b", "d"]   # c is blocked
-    assert all(tag is True for _, tag in out)
-
-
-def test_boolean_negation_with_no_blocks_keeps_all():
-    mod, Edge, Block, Reachable, Allowed = _setup_negation_program()
-    facts = [(Edge("a", x), True) for x in ("b", "c", "d")]
-    out = evaluate(boolean, facts, Allowed(Var()), module=mod)
-    allowed = sorted(t.x for t, _ in out)
-    assert allowed == ["b", "c", "d"]
-
-
-def test_boolean_negation_blocks_everything():
-    mod, Edge, Block, Reachable, Allowed = _setup_negation_program()
-    facts = [
-        (Edge("a", "b"), True),
-        (Edge("a", "c"), True),
-        (Block("b"), True),
-        (Block("c"), True),
-    ]
-    out = evaluate(boolean, facts, Allowed(Var()), module=mod)
-    assert out == []
-
-
-# ══════════════════════════════════════════════════════════════════════
-# Stratified negation under add_mult_prob
-# ══════════════════════════════════════════════════════════════════════
-
-
-def test_add_mult_prob_negation_multiplies_by_one_minus_p():
-    mod, Edge, Block, Reachable, Allowed = _setup_negation_program()
-    # Edge tags propagate through Reachable, then negation by Block
-    # multiplies by (1 - p_block).
-    facts = [
-        (Edge("a", "b"), 0.8),
-        (Edge("a", "c"), 0.9),
-        (Block("c"), 0.6),    # c is blocked with prob 0.6
-    ]
-    out = evaluate(add_mult_prob, facts, Allowed(Var()), module=mod)
-    by_x = {t.x: tag for t, tag in out}
-    # b: reach=0.8, no block → 0.8 * 1.0 = 0.8
-    # c: reach=0.9, block prob=0.6 → 0.9 * (1 - 0.6) = 0.36
-    assert abs(by_x["b"] - 0.8) < 1e-9
-    assert abs(by_x["c"] - 0.36) < 1e-9
-
-
-def test_add_mult_prob_certain_block_excludes_via_zero_prob():
-    mod, Edge, Block, Reachable, Allowed = _setup_negation_program()
-    facts = [
-        (Edge("a", "b"), 0.7),
-        (Block("b"), 1.0),     # certainly blocked
-    ]
-    out = evaluate(add_mult_prob, facts, Allowed(Var()), module=mod)
-    # 0.7 * (1 - 1.0) = 0 → discarded.
-    assert out == []
+# Stratified negation under boolean and add_mult_prob is dogfooded in
+# tests/fixtures/negation_aggregate.clausal — the 6 cases there cover
+# blocked / unblocked / all-blocked under boolean, and certain /
+# probabilistic / no-block under add_mult_prob.
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -297,45 +231,10 @@ def test_diff_add_mult_prob_aggregate_count_gradcheck():
     assert torch.autograd.gradcheck(model, (tags,), eps=1e-6, atol=1e-5)
 
 
-# ══════════════════════════════════════════════════════════════════════
-# provenance.aggregate/4 builtin (Python-side via call())
-# ══════════════════════════════════════════════════════════════════════
-
-
-def test_aggregate_4_builtin_count_boolean():
-    from clausal.modules.provenance import aggregate as agg
-    from clausal.logic.solve import call as logic_call
-    R = Var()
-    success = False
-    for _ in logic_call(agg, boolean, "count", [True, False, True, True], R):
-        success = True
-        result = R.value
-    assert success
-    assert result == 3
-
-
-def test_aggregate_4_builtin_sum_add_mult_prob():
-    from clausal.modules.provenance import aggregate as agg
-    from clausal.logic.solve import call as logic_call
-    R = Var()
-    success = False
-    for _ in logic_call(agg, add_mult_prob, "sum",
-                        [(3, 0.7), (5, 0.3)], R):
-        success = True
-        result = R.value
-    assert success
-    assert abs(result - (3 * 0.7 + 5 * 0.3)) < 1e-12
-
-
-def test_aggregate_4_builtin_argmax_add_mult_prob():
-    from clausal.modules.provenance import aggregate as agg
-    from clausal.logic.solve import call as logic_call
-    R = Var()
-    for _ in logic_call(agg, add_mult_prob, "argmax",
-                        [(3, 0.4), (5, 0.7), (8, 0.6)], R):
-        result = R.value
-        break
-    assert result == (5, 0.7)
+# provenance.aggregate/4 happy-path coverage (count / sum / argmax under
+# boolean and add_mult_prob) lives in
+# tests/fixtures/negation_aggregate.clausal. The Python tests below keep
+# only the rejection paths that need pytest.raises.
 
 
 def test_aggregate_4_rejects_non_aggregate_semiring():

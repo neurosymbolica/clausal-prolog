@@ -119,50 +119,10 @@ def test_add_mult_prob_discard_below_eps():
     assert add_mult_prob.discard(1e-3) is False
 
 
-# ── add_mult_prob through the engine ───────────────────────────────────
-
-
-def test_add_mult_prob_two_hop_independence():
-    """Path probability under independence ≈ product of edge probabilities."""
-    mod, Edge, Path = _setup_path_program()
-    facts = [
-        (Edge("a", "b"), 0.7),
-        (Edge("b", "c"), 0.5),
-    ]
-    out = evaluate(add_mult_prob, facts, Path("a", "c"), module=mod)
-    assert len(out) == 1
-    (term, tag), = out
-    assert (term.a, term.b) == ("a", "c")
-    assert abs(tag - 0.35) < 1e-9   # 0.7 * 0.5
-
-
-def test_add_mult_prob_alternative_paths_combine_via_noisy_or():
-    """Two independent paths to the same target combine via noisy-OR."""
-    mod, Edge, Path = _setup_path_program()
-    facts = [
-        (Edge("a", "b"), 0.6),       # path: a -> b -> d, prob 0.36
-        (Edge("b", "d"), 0.6),
-        (Edge("a", "c"), 0.5),       # path: a -> c -> d, prob 0.20
-        (Edge("c", "d"), 0.4),
-    ]
-    out = evaluate(add_mult_prob, facts, Path("a", "d"), module=mod)
-    assert len(out) == 1
-    _, tag = out[0]
-    # The two paths a->b->d and a->c->d should combine via noisy-OR:
-    # noisy_or(0.36, 0.20) = 0.36 + 0.20 - 0.072 = 0.488
-    expected = 0.36 + 0.20 - 0.36 * 0.20
-    assert abs(tag - expected) < 1e-6
-
-
-def test_add_mult_prob_zero_input_propagates():
-    mod, Edge, Path = _setup_path_program()
-    facts = [
-        (Edge("a", "b"), 0.0),
-        (Edge("b", "c"), 0.5),
-    ]
-    out = evaluate(add_mult_prob, facts, Path("a", "c"), module=mod)
-    # Discarded by `discard` threshold.
-    assert out == []
+# add_mult_prob through the engine (two-hop, alternative paths via
+# noisy-OR, zero-input propagation) is dogfooded in
+# tests/fixtures/provenance_reach.clausal under the
+# "add_mult_prob through the engine" section.
 
 
 # ── diff_add_mult_prob: tensor-typed tags ──────────────────────────────

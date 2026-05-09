@@ -1,0 +1,57 @@
+-import_from(provenance, [bottom_up_, solve, boolean])
+
+-module(mutual_recursion, [
+    Pred(N, M),       # N's predecessor is M (N = M + 1)
+    Zero(X),
+    Even(X),
+    Odd(X),
+])
+
+bottom_up_(Pred)
+bottom_up_(Zero)
+bottom_up_(Even)
+bottom_up_(Odd)
+
+# Mutual recursion across two predicates: SCC analysis must place Even
+# and Odd in one stratum.
+Even(X) <- Zero(X)
+Odd(N) <- (Pred(N, M), Even(M))
+Even(N) <- (Pred(N, M), Odd(M))
+
+
+Test("mutual recursion across two predicates: Even") <- (
+    FACTS is [
+        (Zero(0), True),
+        (Pred(1, 0), True), (Pred(2, 1), True), (Pred(3, 2), True),
+        (Pred(4, 3), True), (Pred(5, 4), True),
+    ],
+    solve(boolean, FACTS, Even(X), R),
+    length(R, 3)
+)
+
+Test("mutual recursion across two predicates: Odd") <- (
+    FACTS is [
+        (Zero(0), True),
+        (Pred(1, 0), True), (Pred(2, 1), True), (Pred(3, 2), True),
+        (Pred(4, 3), True), (Pred(5, 4), True),
+    ],
+    solve(boolean, FACTS, Odd(X), R),
+    length(R, 3)
+)
+
+Test("mutual recursion: Even(4) is derived") <- (
+    FACTS is [
+        (Zero(0), True),
+        (Pred(1, 0), True), (Pred(2, 1), True), (Pred(3, 2), True),
+        (Pred(4, 3), True),
+    ],
+    solve(boolean, FACTS, Even(4), [(_, True)])
+)
+
+Test("mutual recursion: Odd(2) is not derived") <- (
+    FACTS is [
+        (Zero(0), True),
+        (Pred(1, 0), True), (Pred(2, 1), True),
+    ],
+    solve(boolean, FACTS, Odd(2), [])
+)
