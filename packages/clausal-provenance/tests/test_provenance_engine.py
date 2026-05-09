@@ -343,6 +343,41 @@ def test_pure_marked_callee_accepted():
     assert out == []
 
 
+# ── Attributed-variable / constraint-posting rejection ─────────────────
+#
+# Risks §1 in the plan: -bottom_up rules must reject bodies that post
+# attributed-var constraints. Bottom-up evaluation operates on ground
+# tuples; attributed-var propagation is non-monotonic w.r.t. the
+# fixpoint and breaks the semiring discipline. The purity gate is what
+# enforces this — none of dif/2, CLP(FD) labelling, CLP(B) sat are on
+# the default-pure whitelist, and they cannot be marked pure_/1
+# truthfully.
+
+
+@pytest.mark.parametrize("constraint,arity,call_args", [
+    ("dif", 2, lambda a, b: (a, b)),
+    ("label", 1, lambda a, b: ([a, b],)),
+    ("sat", 1, lambda a, b: (a,)),
+    ("#=", 2, lambda a, b: (a, b)),
+])
+def test_attributed_var_constraint_rejected(constraint, arity, call_args):
+    """An unmarked attributed-var poster in a -bottom_up body raises PurityError."""
+    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
+    Edge, Path = c["Edge"], c["Path"]
+    A, B = Var(), Var()
+    Path._assertz(Clause(
+        head=Path(A, B),
+        body=[
+            _ast_call("Edge", A, B),
+            _ast_call(constraint, *call_args(A, B)),
+        ],
+    ))
+    facts = [(Edge("a", "b"), True)]
+    with pytest.raises(PurityError) as exc:
+        evaluate(boolean, facts, Path(Var(), Var()), module=mod)
+    assert f"{constraint}/{arity}" in str(exc.value)
+
+
 # ── Non-ground tuple errors ─────────────────────────────────────────────
 
 

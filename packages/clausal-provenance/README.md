@@ -41,20 +41,31 @@ Test("transitive closure under boolean") <- (
 
 ## Status
 
-Phase **P-2** — package skeleton + tag-threading bottom-up engine +
-boolean / add_mult_prob / diff_add_mult_prob semirings + autograd flow
-(PyTorch and JAX).
+Phases **P-1**..**P-4** landed. The package ships:
+
+- a stratified semi-naive bottom-up engine generic over a `Provenance`
+  protocol, with `bottom_up_/1` and `pure_/1` registration goals;
+- the `boolean` semiring (plain Datalog set semantics);
+- `add_mult_prob` (independence-assumption probability) and
+  `diff_add_mult_prob` (PyTorch / JAX-differentiable on tensors);
+- stratified negation and `AggregateProvenance` with semiring-aware
+  `count` / `sum` / `argmax`;
+- `top_k_proofs(k)` (DNF lineage with k-truncated union, exact
+  probabilities via inclusion-exclusion) and `diff_top_k_proofs(k)`
+  with optional `torch.autograd.Function` / `jax.custom_vjp` bridges;
+- in-source builtins `provenance.solve/4`, `aggregate/4`, `recover/3`
+  and a Python-side `query()` helper.
 
 ```python
 import torch
-from clausal.modules.provenance import diff_add_mult_prob, evaluate
+from clausal.modules.provenance import diff_add_mult_prob, query
 # probs = softmax(cnn(images)), shape (N, 10), requires_grad=True
 facts = [(Digit(img, v), probs[img, v]) for img in range(N) for v in range(10)]
-answers = evaluate(diff_add_mult_prob, facts, SumDigits(0, 1, true_sum), module=mod)
+answers = query(SumDigits(0, 1, true_sum), facts=facts, semiring=diff_add_mult_prob)
 loss = -torch.log(answers[0][1] + 1e-12)
 loss.backward()      # gradients flow into probs and back into the CNN
 ```
 
-See [`implementation_plans/PROVENANCE_SEMIRINGS.md`](../../implementation_plans/PROVENANCE_SEMIRINGS.md)
-for the full plan including stratified negation + aggregation (P-3),
-top_k_proofs (P-4), and dual-number semirings (P-5).
+See [`docs/provenance.md`](docs/provenance.md) for the user guide and
+[`implementation_plans/PROVENANCE_SEMIRINGS.md`](../../implementation_plans/PROVENANCE_SEMIRINGS.md)
+for the full plan, including the deferred dual-number semirings (P-5).
