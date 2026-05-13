@@ -1,0 +1,188 @@
+-import_from(opencv, [
+    imread, shape, free,
+    imread_grayscale
+])
+-import_from(opencv_imgproc, [resize])
+-import_from(opencv_objdetect, [
+    make_cascade_classifier, detect_multi_scale, haar_cascade_path,
+    make_hog, hog_compute, hog_detect,
+    hog_set_svm_detector, hog_default_people_detector
+])
+
+# ──────────────────────────────────────────────────────────────────────────
+# Cascade classifier
+# ──────────────────────────────────────────────────────────────────────────
+
+Test("make_cascade_classifier on bundled face XML returns a handle") <- (
+    haar_cascade_path("face", PATH),
+    make_cascade_classifier(PATH, H),
+    integer(H)
+)  # nv
+
+Test("make_cascade_classifier fails on missing XML") <- (
+    not make_cascade_classifier("/does/not/exist.xml", _)
+)  # nv
+
+Test("detect_multi_scale on scene returns a list (possibly empty)") <- (
+    haar_cascade_path("face", PATH),
+    make_cascade_classifier(PATH, CASCADE),
+    imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
+    detect_multi_scale(CASCADE, IMG, RECTS),
+    is_list(RECTS)
+)  # nv
+
+Test("detect_multi_scale with scale_factor") <- (
+    haar_cascade_path("face", PATH),
+    make_cascade_classifier(PATH, CASCADE),
+    imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
+    detect_multi_scale(CASCADE, IMG, 1.1, RECTS),
+    is_list(RECTS)
+)  # nv
+
+Test("detect_multi_scale with scale_factor and min_neighbors") <- (
+    haar_cascade_path("face", PATH),
+    make_cascade_classifier(PATH, CASCADE),
+    imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
+    detect_multi_scale(CASCADE, IMG, 1.1, 3, RECTS),
+    is_list(RECTS)
+)  # nv
+
+Test("detect_multi_scale with scale_factor, min_neighbors, min_size") <- (
+    haar_cascade_path("face", PATH),
+    make_cascade_classifier(PATH, CASCADE),
+    imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
+    detect_multi_scale(CASCADE, IMG, 1.1, 3, [10, 10], RECTS),
+    is_list(RECTS)
+)  # nv
+
+# ──────────────────────────────────────────────────────────────────────────
+# Haar cascade registry
+# ──────────────────────────────────────────────────────────────────────────
+
+Test("haar_cascade_path lookup face") <- (
+    haar_cascade_path("face", PATH),
+    ++(isinstance(PATH, str))
+)  # nv
+
+Test("haar_cascade_path enumerates several cascades") <- (
+    findall(N, haar_cascade_path(N, _), NAMES),
+    length(NAMES, K),
+    K >= 5
+)  # nv
+
+Test("haar_cascade_path unknown name fails") <- (
+    not haar_cascade_path("not_a_real_cascade", _)
+)  # nv
+
+# Every registered path resolves to an existing file.
+Test("all registered cascades exist on disk") <- (
+    findall(P, haar_cascade_path(_, P), PATHS),
+    findall(P, (in_(P, PATHS), ++(__import__("os").path.exists(P))), EXISTING),
+    length(PATHS, N),
+    length(EXISTING, N)
+)  # nv
+
+# ──────────────────────────────────────────────────────────────────────────
+# HOG descriptor
+# ──────────────────────────────────────────────────────────────────────────
+
+Test("make_hog default") <- (
+    make_hog(H),
+    integer(H)
+)  # nv
+
+Test("make_hog with custom opts") <- (
+    make_hog({"win_size": [32, 64], "block_size": [8, 8],
+              "block_stride": [4, 4], "cell_size": [4, 4],
+              "nbins": 9}, H),
+    integer(H)
+)  # nv
+
+Test("hog_default_people_detector returns a vector") <- (
+    hog_default_people_detector(SVM),
+    shape(SVM, [N]),
+    N > 0
+)  # nv
+
+# HOG default window is 64x128. Compute on a resized 64x128 image
+# and verify the descriptor length is non-zero.
+Test("hog_compute on properly-sized image yields a descriptor") <- (
+    make_hog(HOG),
+    imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
+    resize(IMG, [64, 128], RESIZED),
+    hog_compute(HOG, RESIZED, DESC),
+    shape(DESC, [_])
+)  # nv
+
+# ──────────────────────────────────────────────────────────────────────────
+# hog_set_svm_detector — state threading round-trip
+# ──────────────────────────────────────────────────────────────────────────
+
+Test("hog_set_svm_detector returns a NEW handle") <- (
+    make_hog(HOG0),
+    hog_default_people_detector(SVM),
+    hog_set_svm_detector(HOG0, SVM, HOG1),
+    HOG0 != HOG1
+)  # nv
+
+# After set-SVM, the new handle can run hog_detect (which requires an SVM).
+# Detection may or may not find people; we only assert it returns a list.
+Test("hog_detect on SVM-installed HOG returns a list") <- (
+    make_hog(HOG0),
+    hog_default_people_detector(SVM),
+    hog_set_svm_detector(HOG0, SVM, HOG1),
+    imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
+    resize(IMG, [128, 256], BIG),
+    hog_detect(HOG1, BIG, RECTS),
+    is_list(RECTS)
+)  # nv
+
+Test("hog_detect with opts on SVM-installed HOG") <- (
+    make_hog(HOG0),
+    hog_default_people_detector(SVM),
+    hog_set_svm_detector(HOG0, SVM, HOG1),
+    imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
+    resize(IMG, [128, 256], BIG),
+    hog_detect(HOG1, BIG, {"win_stride": [8, 8], "scale": 1.05}, RECTS),
+    is_list(RECTS)
+)  # nv
+
+# After hog_set_svm_detector(HOG0, SVM, HOG1), HOG0 is still valid.
+# Verify by computing on it — it must succeed (descriptor compute does
+# not need an SVM).
+Test("original HOG handle remains usable after set_svm_detector") <- (
+    make_hog(HOG0),
+    hog_default_people_detector(SVM),
+    hog_set_svm_detector(HOG0, SVM, _HOG1),
+    imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
+    resize(IMG, [64, 128], RESIZED),
+    hog_compute(HOG0, RESIZED, DESC),
+    shape(DESC, [_])
+)  # nv
+
+# ──────────────────────────────────────────────────────────────────────────
+# Handle lifecycle
+# ──────────────────────────────────────────────────────────────────────────
+
+Test("free releases a cascade handle") <- (
+    haar_cascade_path("face", PATH),
+    make_cascade_classifier(PATH, CASCADE),
+    free(CASCADE),
+    not detect_multi_scale(CASCADE, _, _)
+)  # nv
+
+Test("free releases a HOG handle") <- (
+    make_hog(HOG),
+    free(HOG),
+    not hog_compute(HOG, _, _)
+)  # nv
+
+Test("free on the SVM-installed HOG does not invalidate the original") <- (
+    make_hog(HOG0),
+    hog_default_people_detector(SVM),
+    hog_set_svm_detector(HOG0, SVM, HOG1),
+    free(HOG1),
+    imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
+    resize(IMG, [64, 128], RESIZED),
+    hog_compute(HOG0, RESIZED, _DESC)
+)  # nv

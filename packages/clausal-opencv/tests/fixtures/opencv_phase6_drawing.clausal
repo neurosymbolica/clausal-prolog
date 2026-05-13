@@ -1,0 +1,267 @@
+-import_from(opencv, [
+    imread, shape, size, absdiff, min_max_loc, copy_image,
+    imread_color, imread_grayscale,
+    line_aa, filled,
+    font_hershey_simplex,
+    marker_cross, marker_star,
+    thresh_binary, retr_external, chain_approx_simple
+])
+-import_from(opencv_imgproc, [threshold])
+-import_from(opencv_contours, [find_contours])
+-import_from(opencv_draw, [
+    line, arrowed_line, rectangle, circle, ellipse,
+    polylines, fill_poly, put_text, marker, draw_contours
+])
+
+# --- Shape preservation across arity variants ---
+
+Test("line arity 5") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    line(IMG, [0, 0], [3, 3], [0, 255, 0], OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("line arity 6 with thickness") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    line(IMG, [0, 0], [3, 3], [0, 255, 0], 2, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("line arity 7 with line_aa") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    line(IMG, [0, 0], [3, 3], [0, 255, 0], 1, line_aa, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("arrowed_line preserves shape") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    arrowed_line(IMG, [0, 0], [3, 3], [255, 0, 0], OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("rectangle preserves shape") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    rectangle(IMG, [0, 0], [3, 3], [255, 0, 0], OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("rectangle filled") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    rectangle(IMG, [0, 0], [3, 3], [128], filled, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("circle preserves shape") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    circle(IMG, [2, 2], 1, [0, 0, 255], OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("circle filled with FILLED thickness") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    circle(IMG, [2, 2], 1, [0, 0, 255], filled, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("ellipse with axes") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    ellipse(IMG, [2, 2], [1, 1], 0.0, 0.0, 360.0, [0, 255, 255], OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("ellipse with thickness") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    ellipse(IMG, [2, 2], [1, 1], 0.0, 0.0, 360.0, [0, 255, 255], 2, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("polylines closed square") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    polylines(IMG, [[[0,0],[3,0],[3,3],[0,3]]], True, [0, 255, 0], OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("polylines with thickness") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    polylines(IMG, [[[0,0],[3,0],[3,3],[0,3]]], False, [0, 255, 0], 1, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("fill_poly fills a polygon") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    fill_poly(IMG, [[[0,0],[3,0],[3,3],[0,3]]], [128], OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("put_text preserves shape") <- (
+    imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
+    put_text(IMG, "hi", [2, 16], font_hershey_simplex, 0.5, [255], 1, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("put_text with line_aa") <- (
+    imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
+    put_text(IMG, "hi", [2, 16], font_hershey_simplex, 0.5, [255], 1, line_aa, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("marker default arity 4") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    marker(IMG, [2, 2], [255, 0, 0], OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("marker with marker_type") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
+    marker(IMG, [2, 2], [255, 0, 0], marker_star, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("marker with size and thickness") <- (
+    imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
+    marker(IMG, [16, 16], [255], marker_cross, 8, 1, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+# --- The no-mutation invariant ---
+#
+# Each drawing predicate must NOT modify the input image. Snapshot via
+# copy_image and verify absdiff(input, snapshot) == 0 after the draw.
+
+Test("no-mutation for line") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    copy_image(IMG, SNAP),
+    line(IMG, [0, 0], [3, 3], [255], _OUT),
+    absdiff(IMG, SNAP, D),
+    min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+Test("no-mutation for arrowed_line") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    copy_image(IMG, SNAP),
+    arrowed_line(IMG, [0, 0], [3, 3], [255], _OUT),
+    absdiff(IMG, SNAP, D),
+    min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+Test("no-mutation for rectangle") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    copy_image(IMG, SNAP),
+    rectangle(IMG, [0, 0], [3, 3], [128], 1, _OUT),
+    absdiff(IMG, SNAP, D),
+    min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+Test("no-mutation for circle") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    copy_image(IMG, SNAP),
+    circle(IMG, [2, 2], 1, [128], _OUT),
+    absdiff(IMG, SNAP, D),
+    min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+Test("no-mutation for ellipse") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    copy_image(IMG, SNAP),
+    ellipse(IMG, [2, 2], [1, 1], 0.0, 0.0, 360.0, [128], _OUT),
+    absdiff(IMG, SNAP, D),
+    min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+Test("no-mutation for polylines") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    copy_image(IMG, SNAP),
+    polylines(IMG, [[[0,0],[3,0],[3,3],[0,3]]], True, [255], _OUT),
+    absdiff(IMG, SNAP, D),
+    min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+Test("no-mutation for fill_poly") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    copy_image(IMG, SNAP),
+    fill_poly(IMG, [[[0,0],[3,0],[3,3],[0,3]]], [200], _OUT),
+    absdiff(IMG, SNAP, D),
+    min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+Test("no-mutation for put_text") <- (
+    imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
+    copy_image(IMG, SNAP),
+    put_text(IMG, "x", [2, 16], font_hershey_simplex, 0.5, [255], 1, _OUT),
+    absdiff(IMG, SNAP, D),
+    min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+Test("no-mutation for marker") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    copy_image(IMG, SNAP),
+    marker(IMG, [2, 2], [200], _OUT),
+    absdiff(IMG, SNAP, D),
+    min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+# --- The drawing actually happens on the output ---
+
+Test("line actually draws on the output canvas") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    line(IMG, [0, 0], [3, 3], [255], OUT),
+    absdiff(IMG, OUT, D),
+    min_max_loc(D, ("min_max", _, MAX, _, _)),
+    MAX > 0.0
+)  # nv
+
+Test("rectangle filled actually changes pixels") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
+    rectangle(IMG, [0, 0], [3, 3], [200], filled, OUT),
+    absdiff(IMG, OUT, D),
+    min_max_loc(D, ("min_max", _, MAX, _, _)),
+    MAX > 0.0
+)  # nv
+
+# --- draw_contours with real contours from Phase 4 ---
+
+Test("draw_contours with all contours preserves shape") <- (
+    imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
+    threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
+    find_contours(BIN, retr_external, chain_approx_simple, CS, _),
+    draw_contours(IMG, CS, -1, [128], OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("draw_contours with specific index and thickness") <- (
+    imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
+    threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
+    find_contours(BIN, retr_external, chain_approx_simple, CS, _),
+    draw_contours(IMG, CS, 0, [200], 2, OUT),
+    shape(IMG, S),
+    shape(OUT, S)
+)  # nv
+
+Test("draw_contours does not mutate source") <- (
+    imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
+    threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
+    find_contours(BIN, retr_external, chain_approx_simple, CS, _),
+    copy_image(IMG, SNAP),
+    draw_contours(IMG, CS, -1, [128], _OUT),
+    absdiff(IMG, SNAP, D),
+    min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
+)  # nv

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clausal-opencv"
+version = "0.1.0"
+description = "OpenCV (cv2) predicates for Clausal"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Mike Amy", email = "mikeamycoder@gmail.com"},
+]
+requires-python = ">=3.13"
+dependencies = [
+    "clausal>=0.3.1",
+    "opencv-python",
+    "numpy",
+]
+
+[project.urls]
+Repository = "https://gitlab.com/MikeAmy/clausal"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["clausal*"]
+
+# Namespace packages: no __init__.py at clausal/, clausal/modules/ —
+# these are owned by the core distribution.
+# setuptools discovers them as implicit namespace packages (PEP 420).

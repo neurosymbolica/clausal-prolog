@@ -1,0 +1,140 @@
+-import_from(opencv, [
+    imread, shape, channels_count, is_grayscale, is_color,
+    absdiff, min_max_loc,
+    imread_color, imread_grayscale,
+    color_bgr2gray, color_gray2bgr,
+    color_bgr2hsv, color_hsv2bgr,
+    color_bgr2rgb, color_rgb2bgr
+])
+-import_from(opencv_color, [
+    cvt_color, cvt_color_named, color_code, channels
+])
+
+# --- cvt_color via integer code ---
+
+Test("bgr to grayscale by code") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, BGR),
+    cvt_color(BGR, color_bgr2gray, GRAY),
+    is_grayscale(GRAY),
+    shape(GRAY, [4, 4])
+)  # nv
+
+Test("gray to bgr replicates a single channel") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, GRAY),
+    cvt_color(GRAY, color_gray2bgr, BGR),
+    is_color(BGR),
+    shape(BGR, [4, 4, 3])
+)  # nv
+
+# After GRAY -> BGR, all three channels equal the original grayscale.
+Test("gray2bgr produces three equal channels") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, GRAY),
+    cvt_color(GRAY, color_gray2bgr, BGR),
+    channels(BGR, [B, G, R]),
+    absdiff(B, G, D1),
+    min_max_loc(D1, ("min_max", 0.0, 0.0, _, _)),
+    absdiff(G, R, D2),
+    min_max_loc(D2, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+Test("bgr2rgb then rgb2bgr is identity") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, BGR),
+    cvt_color(BGR, color_bgr2rgb, RGB),
+    cvt_color(RGB, color_rgb2bgr, BGR2),
+    channels(BGR, [B0, G0, R0]),
+    channels(BGR2, [B1, G1, R1]),
+    absdiff(B0, B1, DB),
+    min_max_loc(DB, ("min_max", 0.0, 0.0, _, _)),
+    absdiff(G0, G1, DG),
+    min_max_loc(DG, ("min_max", 0.0, 0.0, _, _)),
+    absdiff(R0, R1, DR),
+    min_max_loc(DR, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+# --- cvt_color_named ---
+
+Test("bgr to grayscale by name") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, BGR),
+    cvt_color_named(BGR, "bgr2gray", GRAY),
+    is_grayscale(GRAY)
+)  # nv
+
+Test("named matches the int-code result") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, BGR),
+    cvt_color_named(BGR, "bgr2hsv", BY_NAME),
+    cvt_color(BGR, color_bgr2hsv, BY_CODE),
+    channels(BY_NAME, [BN_H, BN_S, BN_V]),
+    channels(BY_CODE, [BC_H, BC_S, BC_V]),
+    absdiff(BN_H, BC_H, DH),
+    min_max_loc(DH, ("min_max", 0.0, 0.0, _, _))
+)  # nv
+
+Test("cvt_color_named fails on unknown code") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, BGR),
+    not cvt_color_named(BGR, "not_a_real_code", _)
+)  # nv
+
+# --- color_code registry ---
+
+Test("color_code lookup name to int") <- (
+    color_code("bgr2gray", CODE),
+    CODE == color_bgr2gray
+)  # nv
+
+Test("color_code reverse lookup int to name") <- (
+    color_code(NAME, color_bgr2hsv),
+    NAME == "bgr2hsv"
+)  # nv
+
+Test("color_code findall enumerates many names") <- (
+    findall(N, color_code(N, _), NAMES),
+    length(NAMES, K),
+    K >= 100
+)  # nv
+
+Test("color_code unknown name fails") <- (
+    not color_code("not_a_real_code", _)
+)  # nv
+
+# --- channels bidirectional ---
+
+Test("channels split then merge is identity") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, BGR),
+    channels(BGR, [B, G, R]),
+    channels(BGR2, [B, G, R]),
+    absdiff(B, B, DB),
+    min_max_loc(DB, ("min_max", 0.0, 0.0, _, _)),
+    shape(BGR, S),
+    shape(BGR2, S)
+)  # nv
+
+Test("channels of grayscale yields single-element list") <- (
+    imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, GRAY),
+    channels(GRAY, CHS),
+    length(CHS, 1)
+)  # nv
+
+Test("channels forward shape preserved per channel") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, BGR),
+    channels(BGR, [B, _, _]),
+    shape(B, [4, 4])
+)  # nv
+
+# --- HSV roundtrip (BGR -> HSV -> BGR) ---
+
+Test("HSV roundtrip is approximately identity") <- (
+    imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, BGR),
+    cvt_color(BGR, color_bgr2hsv, HSV),
+    cvt_color(HSV, color_hsv2bgr, BGR2),
+    channels(BGR, [B0, G0, R0]),
+    channels(BGR2, [B1, G1, R1]),
+    absdiff(B0, B1, DB),
+    min_max_loc(DB, ("min_max", _, MAX_B, _, _)),
+    MAX_B <= 2.0,
+    absdiff(G0, G1, DG),
+    min_max_loc(DG, ("min_max", _, MAX_G, _, _)),
+    MAX_G <= 2.0,
+    absdiff(R0, R1, DR),
+    min_max_loc(DR, ("min_max", _, MAX_R, _, _)),
+    MAX_R <= 2.0
+)  # nv
