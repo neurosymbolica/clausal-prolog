@@ -1,0 +1,7 @@
+# Phase 2 fixture: -private declaration shadows the global atom default.
+# Module A privately owns phase2priv_orange; module B (companion fixture)
+# auto-mints the global one.
+
+-private([phase2priv_orange])
+
+ColorPrivA(phase2priv_orange),

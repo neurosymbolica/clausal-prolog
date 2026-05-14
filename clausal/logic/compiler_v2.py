@@ -24,6 +24,7 @@ from clausal.logic.compiler import (
 )
 from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.pythonic_ast.nodes import (
+    BareAtomRefs as BareAtomRefsItem,
     Directive as DirectiveItem,
     ImportFromDirective as ImportFromItem,
     ImportModuleDirective as ImportModuleItem,
@@ -87,6 +88,12 @@ def compile_module(
 
     # ── Step 3: Process module/private declarations ──────────────────────
     _process_declarations(module_items, module_dict)
+
+    # ── Step 3b: Auto-mint undeclared bare atom references ───────────────
+    #    Phase 2 of GLOBAL_ATOMS_DEFAULT.md.  Must run AFTER declarations
+    #    (so module-local atoms shadow the global) and BEFORE clause
+    #    compilation (so referenced names resolve in module_dict).
+    _process_bare_atom_refs(module_items, module_dict)
 
     # ── Step 4: assertz all clauses ───────────────────────────────────────
     pending: dict[tuple[str, int], PredicateMeta | None] = {}
@@ -363,24 +370,92 @@ def _run_specialization(
         # predicate_nodes — it's already fully compiled.
 
 
+def _process_bare_atom_refs(module_items: list, module_dict: dict) -> None:
+    """Auto-mint undeclared bare atom references into the process-wide
+    ``predicate_builtins`` dict, then assign each result into ``module_dict``.
+
+    Implements rule 1.4 (global fallthrough) of GLOBAL_ATOMS_DEFAULT.md.
+    Every bare ``LoadName`` fallthrough collected by the term-rewriting walker
+    arrives here as a ``BareAtomRefs`` module item.  A name is skipped (left
+    unminted) when any higher-precedence resolution rule already supplies it:
+
+    * already bound in ``module_dict`` — by imports (Step 0), declarations
+      (Step 3), or by an in-file ``_make_functor_class_ast`` exec-time block;
+    * registered as a builtin in ``_BUILTINS`` / ``_DB_BUILTINS`` under any
+      arity — these resolve through ``get_builtin_predicate`` later in the
+      pipeline, and minting them as 0-arity classes would shadow that lookup.
+
+    The collected set is naturally over-broad (it also contains predicate
+    functor names and imported-utility names), but that over-collection is
+    harmless: the skip rules above filter out every case except the
+    genuinely undeclared bare-atom one.
+
+    Lazy import of ``predicate_builtins`` — ``clausal.import_hook`` depends
+    transitively on this package, so a top-level import would create a cycle
+    at package load time.
+    """
+    from clausal.import_hook import predicate_builtins
+    from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
+
+    builtin_names = {name for (name, _arity) in _BUILTINS}
+    builtin_names.update(name for (name, _arity) in _DB_BUILTINS)
+
+    for item in module_items:
+        if not isinstance(item, BareAtomRefsItem):
+            continue
+        for name in item.names:
+            if name in module_dict:
+                # Higher-precedence rule already supplied this name.
+                continue
+            if name in builtin_names:
+                # Builtin under any arity — resolved by get_builtin_predicate.
+                continue
+            cls = predicate_builtins.setdefault(
+                name, make_predicate(name, [])
+            )
+            module_dict[name] = cls
+
+
 def _process_declarations(module_items: list, module_dict: dict) -> None:
     """Process -module and -private declarations: create PredicateMeta classes
-    and atom assignments."""
+    and atom assignments.
+
+    A declared atom or predicate always gets a module-local class — even when
+    a global-default class for the same name already sits in ``module_dict``
+    (placed there by ``module_dict.update(predicate_builtins)`` at exec
+    start).  This implements the spec rules of GLOBAL_ATOMS_DEFAULT.md:
+    listing in ``-module`` or ``-private`` opts the name into module-local
+    identity, distinct from the global default.
+
+    To avoid clobbering a class minted by ``_make_functor_class_ast`` for an
+    in-file predicate clause (which runs before this pass), we only override
+    when the existing entry is the *global* class for that name — i.e. when
+    ``module_dict[name] is predicate_builtins.get(name)``.
+    """
+    # Lazy import — see _process_bare_atom_refs.
+    from clausal.import_hook import predicate_builtins
+
     for item in module_items:
         if isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
             exports = item.exports if isinstance(item, ModuleDeclItem) else item.items
             for entry in exports:
                 if isinstance(entry, str):
-                    # Atom: create zero-arity PredicateMeta class.
-                    if entry not in module_dict or not isinstance(
-                        module_dict.get(entry), PredicateMeta
-                    ):
-                        cls = make_predicate(entry, [])
-                        module_dict[entry] = cls
+                    name = entry
+                    field_names: tuple | list = ()
                 elif isinstance(entry, tuple):
-                    functor_name, field_names = entry
-                    if functor_name not in module_dict or not isinstance(
-                        module_dict.get(functor_name), PredicateMeta
-                    ):
-                        cls = make_predicate(functor_name, field_names)
-                        module_dict[functor_name] = cls
+                    name, field_names = entry
+                else:
+                    continue
+                existing = module_dict.get(name)
+                # Create a fresh local class when:
+                # * no class exists, or
+                # * the existing class is the global-default class for this
+                #   name (declarations are explicit opt-in to module-local
+                #   identity, so they must shadow the global default).
+                global_cls = predicate_builtins.get(name)
+                if (
+                    not isinstance(existing, PredicateMeta)
+                    or (existing is global_cls and global_cls is not None)
+                ):
+                    cls = make_predicate(name, field_names)
+                    module_dict[name] = cls

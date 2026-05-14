@@ -87,6 +87,7 @@ __all__ = [
     # Module-level items (pipeline split)
     "Directive", "ImportFromDirective", "ImportModuleDirective",
     "ModuleDeclaration", "PrivateDeclaration", "TranslationsDirective",
+    "BareAtomRefs",
     # Imports
     "Import", "ImportFrom",
     # Compound statements
@@ -1049,6 +1050,24 @@ class ModuleDeclaration(Node):
 class PrivateDeclaration(Node):
     """Module-level -private([preds...]) directive."""
     items: list = field(default_factory=list)  # same format as ModuleDeclaration.exports
+
+@node_class
+class BareAtomRefs(Node):
+    """Module item: names referenced bare in clause bodies that may need
+    auto-minting as global atoms (Phase 2 of GLOBAL_ATOMS_DEFAULT.md).
+
+    Populated by ``EmbedTransformer`` from the union of every per-clause
+    ``TermTransformer._bare_atom_refs`` set.  Consumed by
+    ``compiler_v2._process_bare_atom_refs`` after declaration processing —
+    any name still absent from ``module_dict`` at that point is minted via
+    ``predicate_builtins.setdefault`` and the resulting class is assigned
+    into ``module_dict``.
+
+    Over-collection (predicate functor names, imported names, builtins) is
+    harmless: those names are already in ``module_dict`` by the time the
+    auto-mint pass runs, so the skip rule filters them out.
+    """
+    names: frozenset = field(default_factory=frozenset)
 
 @node_class
 class SpecializeDirective(Node):

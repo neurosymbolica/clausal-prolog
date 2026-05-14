@@ -1,0 +1,7 @@
+# Phase 2 fixture: module-level export of an atom (yellow) so that a sibling
+# can -import_from it.  The importing fixture (global_atoms_importer) bare-
+# references the same name — the import must win over the global default.
+
+-module(global_atoms_owner, [phase2import_yellow])
+
+ColorOwner(phase2import_yellow),

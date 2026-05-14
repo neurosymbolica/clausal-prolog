@@ -5,6 +5,7 @@ from .compiler import compile_template_func
 
 # Module-level item types for the pipeline-split ModuleAST.
 from clausal.pythonic_ast.nodes import (
+    BareAtomRefs as BareAtomRefsItem,
     Directive as DirectiveItem,
     EdcgAccDecl,
     EdcgPassDecl,
@@ -433,11 +434,24 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
 class TermTransformer(NodeTransformer):
     """Transform a Python expression AST into Python AST that constructs simple_ast nodes."""
 
-    def __init__(transformer, atoms=frozenset(), import_remap=None, source_lines=None):
+    def __init__(transformer, atoms=frozenset(), import_remap=None,
+                 source_lines=None, bare_atom_refs=None):
         transformer.seen_vars = set()
         transformer.atoms = atoms
         transformer._import_remap = import_remap or {}
         transformer._source_lines = source_lines
+        # Shared sink for bare-atom collection.  EmbedTransformer passes the
+        # same set into every per-clause TermTransformer so that the final
+        # union is naturally available without a post-pass merge.  Phase 2 of
+        # GLOBAL_ATOMS_DEFAULT.md (auto-mint hook) consumes this.
+        transformer._bare_atom_refs = (
+            bare_atom_refs if bare_atom_refs is not None else set()
+        )
+        # When True, ``visit_Name`` will not add the visited identifier to
+        # ``_bare_atom_refs``.  ``visit_Call`` flips this on while visiting
+        # ``call.func`` so that predicate functor names (which are calls, not
+        # atoms) are excluded from the global-atom auto-mint set.
+        transformer._suppress_bare_atom_collection = False
 
     def visit_Await(transformer, await_expr):
         return node_ast("Await", await_expr, value=transformer.visit(await_expr.value))
@@ -462,6 +476,22 @@ class TermTransformer(NodeTransformer):
         for value_node in value_nodes[1:]:
             result = node_ast(class_name, bool_operation, left=result, right=value_node)
         return result
+
+    def _visit_call_func(transformer, func_expr):
+        """Visit a Call's func position with bare-atom collection suppressed.
+
+        Predicate functor names (e.g. ``Edge`` in ``Edge(X, Y)``) emerge from
+        ``visit_Name`` as ``LoadName`` nodes — the same shape as bare atom
+        references — but they should NOT auto-mint as 0-arity global atoms.
+        They resolve via the runtime predicate-resolution path instead, so
+        ``visit_Name`` skips its bare-atom-set add when this guard is active.
+        """
+        prev = transformer._suppress_bare_atom_collection
+        transformer._suppress_bare_atom_collection = True
+        try:
+            return transformer.visit(func_expr)
+        finally:
+            transformer._suppress_bare_atom_collection = prev
 
     def visit_Call(transformer, call):
         visit = transformer.visit
@@ -494,7 +524,9 @@ class TermTransformer(NodeTransformer):
         # A string literal used as the callable, e.g. '+'(a, b), is sugar for a
         # name reference whose identifier is that string.
         if isinstance(call.func, Constant) and isinstance(call.func.value, str):
-            func_node = visit(replace(Name(id=call.func.value, ctx=load), call.func))
+            func_node = transformer._visit_call_func(
+                replace(Name(id=call.func.value, ctx=load), call.func)
+            )
         # HasUnits(X, compound_unit) — auto-wrap compound unit expr in PyThunk
         # so it evaluates as Python rather than being compiled as a Clausal term.
         elif (
@@ -507,7 +539,7 @@ class TermTransformer(NodeTransformer):
         ):
             first_arg = visit(call.args[0])
             unit_thunk = _build_py_thunk_ast(transformer, call, call.args[1], [])
-            func_node = visit(call.func)
+            func_node = transformer._visit_call_func(call.func)
             return node_ast(
                 "Call", call,
                 func=func_node,
@@ -548,7 +580,7 @@ class TermTransformer(NodeTransformer):
             )
             return _build_py_thunk_ast(transformer, call, inner, var_names)
         else:
-            func_node = visit(call.func)
+            func_node = transformer._visit_call_func(call.func)
         positional_args = [visit(argument) for argument in call.args]
         # Convert keyword arguments to Keyword simple_ast nodes
         keyword_argument_nodes = [
@@ -711,7 +743,10 @@ class TermTransformer(NodeTransformer):
 
         Uses the same capture/LoadName mechanism as ``visit_Lambda``.
         """
-        lambda_transformer = TermTransformer(import_remap=transformer._import_remap)
+        lambda_transformer = TermTransformer(
+            import_remap=transformer._import_remap,
+            bare_atom_refs=transformer._bare_atom_refs,
+        )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
 
         logic_var_params = [p for p in param_names if _is_logic_var_name(p)]
@@ -842,6 +877,18 @@ class TermTransformer(NodeTransformer):
             return node_ast(
                 "LoadName", name, name=replace(Constant(value=dotted), name)
             )
+        # Fallthrough — bare reference that may need auto-minting as a global
+        # atom (Phase 2 of GLOBAL_ATOMS_DEFAULT.md).  Record the name; the
+        # auto-mint pass in ``compiler_v2._process_bare_atom_refs`` decides at
+        # compile time whether the name is already bound (skip) or needs to
+        # be minted into the process-wide ``predicate_builtins`` dict.
+        # The ``_suppress_bare_atom_collection`` flag is set by ``visit_Call``
+        # when visiting ``call.func`` so that predicate functor names are not
+        # auto-minted as 0-arity atoms — those resolve via the runtime
+        # predicate-resolution path (builtins, module globals, dispatch
+        # adapter) rather than the global atom dict.
+        if not transformer._suppress_bare_atom_collection:
+            transformer._bare_atom_refs.add(identifier)
         return node_ast(
             "LoadName", name, name=replace(Constant(value=identifier), name)
         )
@@ -1290,12 +1337,15 @@ def _parse_pred_arity_args(args, directive_name):
 
 
 def _make_functor_class_ast(functor_name, field_names, source):
-    """Generate a try/except NameError block that defines a Predicate class.
+    """Generate a guarded block that defines a Predicate class.
 
     Generated code (example for ``fib`` with fields ``n``, ``f``):
 
         try:
             fib
+            if not (isinstance(fib, PredicateMeta)
+                    and getattr(fib, '_fields', None) == ('n', 'f')):
+                raise NameError
         except NameError:
             class fib(metaclass=PredicateMeta):
                 _fields = ('n', 'f')
@@ -1304,11 +1354,21 @@ def _make_functor_class_ast(functor_name, field_names, source):
     ``__match_args__``, ``__slots__``, and partial-term creation (missing
     fields → fresh ``Var()``).  No ``@dataclass`` and no singleton.
     ``fib`` stays as the class in module globals.
+
+    The arity-aware guard is needed because, under the global-atoms-default
+    rule (Phase 2 of GLOBAL_ATOMS_DEFAULT.md), any earlier file in the
+    process may have auto-minted a 0-arity ``PredicateMeta`` for the same
+    name into ``predicate_builtins``.  Without the arity check, the existing
+    0-arity class would silently shadow this file's intended N-arity
+    predicate.
     """
     fields_tuple = repr(tuple(field_names))
     lines = [
         "try:",
         f"    {functor_name}",
+        f"    if not (isinstance({functor_name}, PredicateMeta)",
+        f"            and getattr({functor_name}, '_fields', None) == {fields_tuple}):",
+        "        raise NameError",
         "except NameError:",
         f"    class {functor_name}(metaclass=PredicateMeta):",
         f"        _fields = {fields_tuple}",
@@ -2079,10 +2139,45 @@ class EmbedTransformer(NodeTransformer):
         transformer._import_remap: dict[str, str] = {}
         transformer._module_items: list = []
         transformer._source_lines = source_lines
+        # Shared bare-atom collection sink — every per-clause TermTransformer
+        # writes into this single set so the union is naturally accumulated.
+        # ``visit_Module`` emits a final ``BareAtomRefs`` module item that
+        # ``compiler_v2._process_bare_atom_refs`` consumes for auto-minting
+        # (Phase 2 of GLOBAL_ATOMS_DEFAULT.md).
+        transformer._bare_atom_refs: set[str] = set()
         # EDCG declarations: populated by -edcg_acc, -edcg_pass, -edcg_pred directives.
         transformer._edcg_accs: dict[str, dict] = {}   # name → {val, in_, out, joiner_ast}
         transformer._edcg_passes: set[str] = set()      # set of pass names
         transformer._edcg_preds: dict[str, tuple[int, list[str]]] = {}  # pred → (visible_arity, [acc/pass names])
+
+    def _make_term_transformer(transformer, atoms=None):
+        """Build a TermTransformer sharing this EmbedTransformer's
+        bare-atom collection sink and import-remap table.
+
+        Centralised so every per-clause TermTransformer participates in the
+        same Phase 2 (auto-mint) collection without each call site having
+        to remember the plumbing.
+        """
+        return TermTransformer(
+            atoms=atoms if atoms is not None else transformer._atoms,
+            import_remap=transformer._import_remap,
+            source_lines=transformer._source_lines,
+            bare_atom_refs=transformer._bare_atom_refs,
+        )
+
+    def visit_Module(transformer, module):
+        """Visit the module body, then emit a final ``BareAtomRefs`` item
+        carrying every bare reference the per-clause transformers saw.
+
+        The auto-mint pass in ``compiler_v2._process_bare_atom_refs`` reads
+        this item and decides per-name whether to install the global atom.
+        """
+        result = transformer.generic_visit(module)
+        if transformer._bare_atom_refs:
+            transformer._module_items.append(
+                BareAtomRefsItem(names=frozenset(transformer._bare_atom_refs))
+            )
+        return result
 
     def visit_FunctionDef(transformer, node):
         if is_template_func(node):
@@ -2108,7 +2203,7 @@ class EmbedTransformer(NodeTransformer):
                     unary_op.col_offset == unary_op.operand.col_offset - 1
                     and unary_op.lineno == unary_op.operand.lineno
                 ):
-                    return TermTransformer(atoms=transformer._atoms, import_remap=transformer._import_remap).visit(expression)
+                    return transformer._make_term_transformer().visit(expression)
             case UnaryOp(op=Invert(), operand=UnaryOp(op=Invert(), operand=expression)):
                 # '~~' must be written without a space (the two '~' are adjacent).
                 if (
@@ -2176,7 +2271,7 @@ class EmbedTransformer(NodeTransformer):
                             arg_field_names[i] = prev_fields[i]
                     all_field_names = arg_field_names + kwarg_field_names
 
-                term_transformer = TermTransformer(atoms=transformer._atoms, import_remap=transformer._import_remap)
+                term_transformer = transformer._make_term_transformer()
                 transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
                 transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
 
@@ -2336,7 +2431,7 @@ class EmbedTransformer(NodeTransformer):
 
                 # Transform terms. One shared transformer keeps variable bindings
                 # (walrus operator) consistent across head and body.
-                term_transformer = TermTransformer(atoms=transformer._atoms, import_remap=transformer._import_remap)
+                term_transformer = transformer._make_term_transformer()
                 transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
                 transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
                 body_ast = term_transformer.visit(body_expr)
@@ -3161,7 +3256,7 @@ class EmbedTransformer(NodeTransformer):
         # string constants.  Exclude them from the atom set.
         dcg_call_names = _collect_call_func_names(body_expr_raw)
         dcg_atoms = transformer._atoms - dcg_call_names
-        term_transformer = TermTransformer(atoms=dcg_atoms, import_remap=transformer._import_remap)
+        term_transformer = transformer._make_term_transformer(atoms=dcg_atoms)
         transformed_pos = [
             term_transformer.visit(a) for a in orig_pos_args
         ]
@@ -3240,7 +3335,7 @@ class EmbedTransformer(NodeTransformer):
 
         if _is_double(USub):
             # with --{} as target: — block form of --; produces simple_ast terms.
-            term_transformer = TermTransformer(atoms=transformer._atoms, import_remap=transformer._import_remap)
+            term_transformer = transformer._make_term_transformer()
             elements = [
                 term_transformer.visit(stmt.value)
                 for stmt in with_statement.body
