@@ -1,0 +1,8 @@
+# Phase 3 fixture: -strict_atoms with no clauses that bare-reference atoms.
+# Must compile fine — there is nothing for strict mode to reject.
+
+-strict_atoms
+-module(strict_atoms_empty, [Ok(X)])
+
+Ok(1),
+Ok(2),

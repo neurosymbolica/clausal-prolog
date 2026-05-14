@@ -87,7 +87,7 @@ __all__ = [
     # Module-level items (pipeline split)
     "Directive", "ImportFromDirective", "ImportModuleDirective",
     "ModuleDeclaration", "PrivateDeclaration", "TranslationsDirective",
-    "BareAtomRefs",
+    "BareAtomRefs", "StrictAtomsDeclaration",
     # Imports
     "Import", "ImportFrom",
     # Compound statements
@@ -1050,6 +1050,23 @@ class ModuleDeclaration(Node):
 class PrivateDeclaration(Node):
     """Module-level -private([preds...]) directive."""
     items: list = field(default_factory=list)  # same format as ModuleDeclaration.exports
+
+@node_class
+class StrictAtomsDeclaration(Node):
+    """Module item: ``-strict_atoms`` directive marker.
+
+    Presence in ``module_items`` switches Phase 2's auto-mint pass
+    (``compiler_v2._process_bare_atom_refs``) into strict mode: every
+    bare atom reference must be reachable via ``-module``, ``-private``,
+    ``-import_from``, a qualified reference, or ``global_atom/2``.  Any
+    name that falls through to the global mint becomes a compile-time
+    ``NameError`` instead of a silent global default.
+
+    The directive takes no arguments — its mere presence is the signal.
+    See Phase 3 of ``implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md``.
+    """
+    pass
+
 
 @node_class
 class BareAtomRefs(Node):

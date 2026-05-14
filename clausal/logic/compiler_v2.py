@@ -31,6 +31,7 @@ from clausal.pythonic_ast.nodes import (
     ModuleDeclaration as ModuleDeclItem,
     PrivateDeclaration as PrivateDeclItem,
     SpecializeDirective as SpecializeItem,
+    StrictAtomsDeclaration as StrictAtomsItem,
 )
 
 
@@ -93,7 +94,9 @@ def compile_module(
     #    Phase 2 of GLOBAL_ATOMS_DEFAULT.md.  Must run AFTER declarations
     #    (so module-local atoms shadow the global) and BEFORE clause
     #    compilation (so referenced names resolve in module_dict).
-    _process_bare_atom_refs(module_items, module_dict)
+    #    Phase 3: if ``-strict_atoms`` is present in module_items, raise
+    #    NameError on undeclared names instead of minting.
+    _process_bare_atom_refs(module_items, module_dict, module_name)
 
     # ── Step 4: assertz all clauses ───────────────────────────────────────
     pending: dict[tuple[str, int], PredicateMeta | None] = {}
@@ -370,7 +373,11 @@ def _run_specialization(
         # predicate_nodes — it's already fully compiled.
 
 
-def _process_bare_atom_refs(module_items: list, module_dict: dict) -> None:
+def _process_bare_atom_refs(
+    module_items: list,
+    module_dict: dict,
+    module_name: str = "<module>",
+) -> None:
     """Auto-mint undeclared bare atom references into the process-wide
     ``predicate_builtins`` dict, then assign each result into ``module_dict``.
 
@@ -390,6 +397,14 @@ def _process_bare_atom_refs(module_items: list, module_dict: dict) -> None:
     harmless: the skip rules above filter out every case except the
     genuinely undeclared bare-atom one.
 
+    Phase 3 of GLOBAL_ATOMS_DEFAULT.md: if a ``StrictAtomsItem`` is present
+    in ``module_items``, the global-fallthrough mint is disabled.  Names that
+    would otherwise have been minted are instead collected and reported as
+    a single ``NameError`` with a diagnostic naming each offending atom and
+    the file, and suggesting the five legitimate ways to declare or reach
+    it (``-module``, ``-private``, ``-import_from``, qualified reference,
+    ``global_atom/2``).
+
     Lazy import of ``predicate_builtins`` — ``clausal.import_hook`` depends
     transitively on this package, so a top-level import would create a cycle
     at package load time.
@@ -399,6 +414,11 @@ def _process_bare_atom_refs(module_items: list, module_dict: dict) -> None:
 
     builtin_names = {name for (name, _arity) in _BUILTINS}
     builtin_names.update(name for (name, _arity) in _DB_BUILTINS)
+
+    strict_mode = any(
+        isinstance(item, StrictAtomsItem) for item in module_items
+    )
+    undeclared: list[str] = []
 
     for item in module_items:
         if not isinstance(item, BareAtomRefsItem):
@@ -410,10 +430,52 @@ def _process_bare_atom_refs(module_items: list, module_dict: dict) -> None:
             if name in builtin_names:
                 # Builtin under any arity — resolved by get_builtin_predicate.
                 continue
+            if strict_mode:
+                undeclared.append(name)
+                continue
             cls = predicate_builtins.setdefault(
                 name, make_predicate(name, [])
             )
             module_dict[name] = cls
+
+    if undeclared:
+        raise NameError(
+            _build_strict_atoms_diagnostic(undeclared, module_name)
+        )
+
+
+def _build_strict_atoms_diagnostic(names: list[str], module_name: str) -> str:
+    """Build the multi-line diagnostic for ``-strict_atoms`` violations.
+
+    Reports every undeclared atom in one message rather than failing at the
+    first, so the author can fix them all at once.  The four (now five with
+    ``global_atom/2``) legitimate routes are spelled out to make the fix
+    obvious — these files are typically authoritative rules where atom
+    spelling is load-bearing, so a beginner-friendly error pays off.
+    """
+    # De-duplicate while preserving first-seen order — frozenset is unordered,
+    # but ``sorted`` makes the diagnostic deterministic across runs.
+    unique_names = sorted(set(names))
+    if len(unique_names) == 1:
+        header = (
+            f"strict_atoms: undeclared atom {unique_names[0]!r} "
+            f"in {module_name}"
+        )
+    else:
+        joined = ", ".join(repr(n) for n in unique_names)
+        header = (
+            f"strict_atoms: undeclared atoms {joined} in {module_name}"
+        )
+    lines = [
+        header,
+        "  bare atom references must be one of:",
+        f"    - listed in -module({module_name}, [atom, ...])",
+        "    - listed in -private([atom, ...])",
+        "    - imported via -import_from(from_module, [atom])",
+        "    - qualified (e.g. other_module.atom)",
+        "    - obtained via global_atom(\"atom\", Atom)",
+    ]
+    return "\n".join(lines)
 
 
 def _process_declarations(module_items: list, module_dict: dict) -> None:

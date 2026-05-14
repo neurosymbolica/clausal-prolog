@@ -1,0 +1,7 @@
+# Phase 3 fixture: -strict_atoms with the bare atom declared in -module([...]).
+# Must compile successfully — the module export list satisfies strict mode.
+
+-strict_atoms
+-module(strict_atoms_module_decl, [phase3strict_module_green])
+
+ColorStrictModuleDecl(phase3strict_module_green),

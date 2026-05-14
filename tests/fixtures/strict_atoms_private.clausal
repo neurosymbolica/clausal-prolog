@@ -1,0 +1,7 @@
+# Phase 3 fixture: -strict_atoms with the bare atom declared in -private.
+# Must compile successfully — the private declaration satisfies strict mode.
+
+-strict_atoms
+-private([phase3strict_private_orange])
+
+ColorStrictPrivate(phase3strict_private_orange),

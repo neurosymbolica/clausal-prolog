@@ -1,0 +1,10 @@
+# Phase 3 fixture: -strict_atoms with the bare name reached via global_atom/2
+# rather than a bare reference.  The string literal "phase3strict_global_red"
+# is not a Name node, so the strict-mode check never sees it as a bare atom.
+# Compiles successfully even though no -module/-private/-import_from lists it.
+
+-strict_atoms
+
+LookupStrictGlobal(_atom) <- (
+    global_atom("phase3strict_global_red", _atom),
+)

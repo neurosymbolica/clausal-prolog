@@ -1,0 +1,8 @@
+# Phase 3 fixture: -strict_atoms file that -import_from brings in
+# `phase3strict_import_yellow`.  The import satisfies strict mode for the
+# bare reference in the clause body.
+
+-strict_atoms
+-import_from(tests.fixtures.strict_atoms_import_owner, [phase3strict_import_yellow])
+
+ColorStrictImport(phase3strict_import_yellow),

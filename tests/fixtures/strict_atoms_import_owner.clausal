@@ -1,0 +1,6 @@
+# Phase 3 fixture: owner module that exports `phase3strict_import_yellow`
+# for a sibling strict-atoms file to -import_from.
+
+-module(strict_atoms_import_owner, [phase3strict_import_yellow])
+
+ColorStrictImportOwner(phase3strict_import_yellow),

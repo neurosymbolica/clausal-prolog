@@ -16,6 +16,7 @@ from clausal.pythonic_ast.nodes import (
     PrivateDeclaration as PrivateDeclItem,
     Predicate as PredicateItem,
     SpecializeDirective as SpecializeItem,
+    StrictAtomsDeclaration as StrictAtomsItem,
     TranslationsDirective as TranslationsItem,
 )
 
@@ -2254,6 +2255,20 @@ class EmbedTransformer(NodeTransformer):
                 return transformer._handle_directive(
                     directive_name, directive_args, expr_stmt
                 )
+            # Bare -directive at module level (no parens, no args).  Currently
+            # only ``-strict_atoms`` uses this form; other directives all take
+            # arguments and therefore parse as the Call form above.
+            case UnaryOp(
+                op=USub(),
+                operand=Name(id=directive_name),
+            ) as neg if (
+                transformer._scope_depth == 0
+                and neg.col_offset == neg.operand.col_offset - 1
+                and neg.lineno == neg.operand.lineno
+            ):
+                return transformer._handle_directive(
+                    directive_name, [], expr_stmt
+                )
             case Tuple(elts=[single_element], ctx=Load()) if (
                 isinstance(single_element, Call)
                 and isinstance(single_element.func, Name)
@@ -2543,11 +2558,14 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_edcg_pred_directive(args, expr_stmt)
         if name == "translations":
             return transformer._handle_translations_directive(args, expr_stmt)
+        if name == "strict_atoms":
+            return transformer._handle_strict_atoms_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
             f"(known directives: -module, -private, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
-            f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations)"
+            f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
+            f"-strict_atoms)"
         )
 
     def _handle_module_directive(transformer, args, expr_stmt):
@@ -2643,6 +2661,28 @@ class EmbedTransformer(NodeTransformer):
         if not statements:
             return replace(Pass(), expr_stmt)
         return statements if len(statements) > 1 else statements[0]
+
+    def _handle_strict_atoms_directive(transformer, args, expr_stmt):
+        """Process ``-strict_atoms`` directive (Phase 3 of GLOBAL_ATOMS_DEFAULT.md).
+
+        Marker directive — no arguments.  Accepts both the canonical bare form
+        ``-strict_atoms`` (parsed via the ``UnaryOp(USub, Name(...))`` branch
+        in ``visit_Expr``) and the parenthesised form ``-strict_atoms()`` for
+        symmetry with other directives.  Any positional arguments are rejected
+        because the directive carries no payload.
+
+        Emits a ``StrictAtomsItem`` module item; the auto-mint pass in
+        ``compiler_v2._process_bare_atom_refs`` checks for its presence and
+        switches to strict mode (raise ``NameError`` instead of minting an
+        undeclared bare atom).
+        """
+        if args:
+            raise SyntaxError(
+                "-strict_atoms takes no arguments: use bare `-strict_atoms` "
+                "or `-strict_atoms()`"
+            )
+        transformer._module_items.append(StrictAtomsItem())
+        return replace(Pass(), expr_stmt)
 
     def _handle_predspec_directive(transformer, method_name, args, expr_stmt):
         """Process a directive that takes ``pred/arity, ...`` arguments.
