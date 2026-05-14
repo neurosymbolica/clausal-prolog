@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
+from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, make_predicate
 from clausal.terms import Compound, KWTerm
 
 from clausal.logic.builtins._registry import _builtin
@@ -277,3 +277,77 @@ def _gensym__2(prefix, atom, trail, k):
     result = f"{prefix_d}_{count}"
     if unify(atom, result, trail):
         yield None
+
+
+# ── global_atom/2 ─────────────────────────────────────────────────────────────
+
+
+@_builtin("global_atom", 2)
+def _global_atom__2(name, atom, trail, k):
+    """global_atom(Name, Atom) — reflect on the process-wide global atom dict.
+
+    Exposes ``clausal.import_hook.predicate_builtins``, the dict that seeds
+    every fresh predicate module's globals.  Modes:
+
+      (+Name, -Atom): mint-on-demand.  Look Name up in the global dict; if
+        absent, create a fresh ``make_predicate(Name, [])`` and install it.
+        Unify Atom with the resulting class.
+      (+Name, +Atom): guard.  Succeed iff ``predicate_builtins[Name] is Atom``.
+      (-Name, +Atom): reverse lookup.  Succeed iff Atom is a PredicateMeta
+        whose ``__name__`` resolves back to Atom in the dict (i.e. Atom is
+        genuinely the registered global, not a module-local namesake); unify
+        Name with that name.
+      (-Name, -Atom): enumerate.  Yield one solution per ``(name, cls)`` pair
+        where the value is a PredicateMeta of arity 0.  Order not guaranteed.
+    """
+    # Lazy import: clausal.import_hook depends transitively on this package,
+    # so a top-level import here would create a cycle at package load time.
+    from clausal.import_hook import predicate_builtins
+
+    name_val = deref(name)
+    atom_val = deref(atom)
+    name_bound = not is_var(name_val)
+    atom_bound = not is_var(atom_val)
+
+    if name_bound:
+        if not isinstance(name_val, str):
+            return
+        if atom_bound:
+            # Guard mode: succeed iff atom_val IS the registered global.
+            if predicate_builtins.get(name_val) is atom_val:
+                yield None
+            return
+        # Mint-on-demand mode.
+        cls = predicate_builtins.setdefault(
+            name_val, make_predicate(name_val, [])
+        )
+        mark = trail.mark()
+        if unify(atom, cls, trail):
+            yield None
+        trail.undo(mark)
+        return
+
+    # name is unbound.
+    if atom_bound:
+        # Reverse-lookup mode.  Atom must be a PredicateMeta whose __name__
+        # resolves back to Atom in the global dict.
+        if not isinstance(atom_val, PredicateMeta):
+            return
+        cls_name = atom_val.__name__
+        if predicate_builtins.get(cls_name) is not atom_val:
+            return
+        mark = trail.mark()
+        if unify(name, cls_name, trail):
+            yield None
+        trail.undo(mark)
+        return
+
+    # Both unbound — enumerate arity-0 PredicateMeta entries.
+    # Snapshot keys so concurrent minting elsewhere can't perturb iteration.
+    for key, val in list(predicate_builtins.items()):
+        if not isinstance(val, PredicateMeta) or val._fields:
+            continue
+        mark = trail.mark()
+        if unify(name, key, trail) and unify(atom, val, trail):
+            yield None
+        trail.undo(mark)

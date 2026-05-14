@@ -639,3 +639,163 @@ class TestTermVariablesSegList:
         _collect_vars_impl(t, result)
         # current behaviour: SegList falls through → empty list
         assert result == []
+
+
+# ── global_atom/2 ──────────────────────────────────────────────────────────────
+#
+# Reflection builtin exposing the process-wide predicate_builtins dict.
+# Mode-driven: mint on (+name, -atom); guard on (+name, +atom); reverse-lookup
+# on (-name, +atom); enumerate on (-name, -atom).
+#
+# Tests drive the builtin via ``call(cls, ...)`` rather than ``solve(goal, ...)``
+# so that PredicateMeta class arguments pass through untouched (the goal
+# compiler would otherwise emit them as bare name references).
+
+
+def _global_atom_call(*args):
+    """Invoke global_atom/2 directly via its dispatch fn and yield arg snapshots.
+
+    Driving the dispatch function ourselves bypasses both the goal compiler
+    (which would emit PredicateMeta args as bare names) and the ``call/N``
+    meta-predicate (which shadows ``clausal.call`` after _export_builtin_classes
+    runs).
+    """
+    from clausal.logic.builtins import get_builtin_class
+    from clausal.logic.solve import _drive_trampoline
+    cls = get_builtin_class("global_atom")
+    dispatch_fn = cls._get_dispatch()
+    trail = Trail()
+    results = []
+    for _ in _drive_trampoline(dispatch_fn, trail, *args):
+        results.append(tuple(deref(a) for a in args))
+    return results
+
+
+class TestGlobalAtom:
+    """Tests for global_atom/2 — reflection on the global atom dict."""
+
+    # Use distinct names per test to avoid cross-test interference in the
+    # process-wide predicate_builtins dict.
+
+    def test_mint_on_demand(self):
+        """(+name, -atom) — fresh name mints a new PredicateMeta arity-0 class."""
+        # nv
+        from clausal.import_hook import predicate_builtins
+        from clausal.logic.predicate import PredicateMeta
+        name = "_test_global_atom_mint_xyz"
+        assert name not in predicate_builtins  # sanity: fresh
+        atom = Var()
+        results = _global_atom_call(name, atom)
+        assert len(results) == 1
+        _, cls = results[0]
+        assert isinstance(cls, PredicateMeta)
+        assert cls._fields == ()
+        assert cls.__name__ == name
+        # Side-effect: it is now in the global dict.
+        assert predicate_builtins.get(name) is cls
+
+    def test_idempotent_mint(self):
+        """(+name, -atom) twice yields the same class object (identity)."""
+        # nv
+        name = "_test_global_atom_idempotent_xyz"
+        a1 = Var()
+        r1 = _global_atom_call(name, a1)
+        a2 = Var()
+        r2 = _global_atom_call(name, a2)
+        assert len(r1) == 1 and len(r2) == 1
+        assert r1[0][1] is r2[0][1]
+
+    def test_existing_pre_seeded_returned(self):
+        """(+name, -atom) for a pre-seeded entry (e.g. Var) returns that value."""
+        # nv
+        from clausal.import_hook import predicate_builtins
+        # 'Var' is pre-seeded in predicate_builtins as the Var class.
+        pre_existing = predicate_builtins["Var"]
+        out = Var()
+        results = _global_atom_call("Var", out)
+        assert len(results) == 1
+        assert results[0][1] is pre_existing
+
+    def test_guard_succeeds_when_atom_matches(self):
+        """(+name, +atom) — succeeds iff atom IS the global class."""
+        # nv
+        from clausal.import_hook import predicate_builtins
+        name = "_test_global_atom_guard_match_xyz"
+        # Mint first.
+        _global_atom_call(name, Var())
+        cls = predicate_builtins[name]
+        # Guard mode with the right class should succeed exactly once.
+        results = _global_atom_call(name, cls)
+        assert len(results) == 1
+
+    def test_guard_fails_when_atom_mismatches(self):
+        """(+name, +atom) — fails when atom is NOT the global class for that name."""
+        # nv
+        from clausal.logic.predicate import make_predicate
+        name = "_test_global_atom_guard_mismatch_xyz"
+        # Mint the global atom for 'name'.
+        _global_atom_call(name, Var())
+        # Create a separate (non-global) PredicateMeta with the same name.
+        impostor = make_predicate(name, [])
+        results = _global_atom_call(name, impostor)
+        assert results == []
+
+    def test_reverse_lookup_returns_name(self):
+        """(-name, +atom) — yields cls.__name__ when cls is a global atom."""
+        # nv
+        from clausal.import_hook import predicate_builtins
+        name = "_test_global_atom_reverse_xyz"
+        _global_atom_call(name, Var())
+        cls = predicate_builtins[name]
+        # Reverse-lookup with bound atom.
+        n_out = Var()
+        results = _global_atom_call(n_out, cls)
+        assert len(results) == 1
+        assert results[0][0] == name
+
+    def test_reverse_lookup_fails_for_non_global_class(self):
+        """(-name, +atom) — fails if atom is not the global class registered for its name."""
+        # nv
+        from clausal.logic.predicate import make_predicate
+        # A PredicateMeta NOT placed into predicate_builtins.
+        local_only = make_predicate("_test_global_atom_local_only_xyz", [])
+        n_out = Var()
+        results = _global_atom_call(n_out, local_only)
+        assert results == []
+
+    def test_enumerate_yields_minted_atoms(self):
+        """(-name, -atom) — enumerates global atoms; minted one appears."""
+        # nv
+        from clausal.import_hook import predicate_builtins
+        from clausal.logic.predicate import PredicateMeta
+        name = "_test_global_atom_enumerate_xyz"
+        # Mint to ensure presence.
+        _global_atom_call(name, Var())
+        cls = predicate_builtins[name]
+        # Enumerate.
+        n_out = Var()
+        a_out = Var()
+        results = _global_atom_call(n_out, a_out)
+        # Our minted entry must appear.
+        assert (name, cls) in results
+        # All yielded pairs must be (str, PredicateMeta with arity 0).
+        for n, c in results:
+            assert isinstance(n, str)
+            assert isinstance(c, PredicateMeta)
+            assert c._fields == ()
+
+    def test_round_trip(self):
+        """Mint with (+name, -atom); reverse-lookup with (-name, +atom) returns name."""
+        # nv
+        from clausal.import_hook import predicate_builtins
+        name = "_test_global_atom_round_trip_xyz"
+        # Mint.
+        x = Var()
+        mint_results = _global_atom_call(name, x)
+        assert len(mint_results) == 1
+        cls = predicate_builtins[name]
+        # Reverse lookup.
+        n_out = Var()
+        rev_results = _global_atom_call(n_out, cls)
+        assert len(rev_results) == 1
+        assert rev_results[0][0] == name
