@@ -58,6 +58,11 @@ _SetTerm = SetTerm
 _KWTerm = KWTerm
 _SetLiteral = SetLiteral
 
+# Python types that ``ast.Constant`` accepts as a value.  PredicateMeta
+# atom classes, Compound terms, dataclass instances, etc. are NOT in this
+# set — they must be lowered via ``term_to_ast_expr`` instead.
+_AST_CONST_TYPES = (type(None), bool, int, float, str, bytes, complex)
+
 
 def _wrap_yields_with_output_guards(
     stmts: list[ast.stmt], output_guard_cond: "ast.expr"
@@ -487,7 +492,12 @@ def _compile_multi_star_guard(
                 elts=[_var_or_const_expr(e) for e in elem],
                 ctx=ast.Load(),
             )
-        return ast.Constant(value=elem)
+        if isinstance(elem, _AST_CONST_TYPES):
+            return ast.Constant(value=elem)
+        # Non-scalar term (PredicateMeta atom, Compound, dataclass
+        # instance, ...): delegate to term_to_ast_expr, which emits a
+        # Name reference for atoms and constructor calls for compounds.
+        return term_to_ast_expr(elem, vc, eval_arith=False)
 
     # Count fixed elements and stars
     star_vars: list[Any] = []  # star Var objects in order
@@ -951,7 +961,11 @@ def compile_head_to_match_case(
                             elts=[_var_or_const(e) for e in elem],
                             ctx=ast.Load(),
                         )
-                    return ast.Constant(value=elem)
+                    if isinstance(elem, _AST_CONST_TYPES):
+                        return ast.Constant(value=elem)
+                    # Non-scalar term: delegate to term_to_ast_expr so atoms
+                    # become Name references rather than bare ast.Constants.
+                    return term_to_ast_expr(elem, vc, eval_arith=False)
                 before_list = ast.List(elts=[_var_or_const(e) for e in before], ctx=ast.Load())
                 if star is not None and is_var(star) and star._id in vc:
                     star_expr = _name(vc[star._id])

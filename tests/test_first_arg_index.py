@@ -18,7 +18,7 @@ from clausal.logic.compiler.arg_index import (
     _INDEX_VAR,
     _INDEX_THRESHOLD,
 )
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.predicate import PredicateMeta, make_atom
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
 from clausal.terms import Compound, Unify
@@ -543,3 +543,67 @@ class TestEdgeCases:
         results = _simple_solutions(fn, [True], trail)
         # Both True and 1 should match (they're equal in Python)
         assert len(results) >= 1
+
+
+class TestAtomInListHead:
+    """Atoms (zero-arity PredicateMeta classes) appearing inside a list
+    pattern in the clause head — regression for the indexer-driven bucket
+    compile that emitted the atom class into an ``ast.Constant`` node and
+    triggered ``TypeError: got an invalid type in Constant: PredicateMeta``.
+
+    The bug surfaced only when indexing fired (>= _INDEX_THRESHOLD clauses)
+    and the chosen index bucket contained at least one clause whose head
+    matches on a list literal containing an atom — see
+    ``todo/insurance_required_predicate_meta_quirk.md`` in
+    ``packages/clausal-thai_imm_rules`` for the original report.
+    """
+
+    def test_mixed_scalar_and_list_last_args(self):
+        """Compile a 4-clause predicate mixing scalar-last and ``[atom, int]``
+        list-last heads.  The combination forces indexing on a position whose
+        bucket re-includes the list-pattern clauses; the list pattern
+        ``[usd, 50000]`` then carries the ``usd`` atom into the head-match
+        AST, where it must be lowered as a ``Name`` reference rather than
+        embedded into an ``ast.Constant``.
+        """
+        # nv
+        usd = make_atom("usd")
+        non_o_a = make_atom("non_o_a")
+        non_o_x = make_atom("non_o_x")
+        ltr = make_atom("ltr")
+        smart_t = make_atom("smart_t")
+        unrestricted = make_atom("unrestricted")
+
+        db = Database()
+        clauses = [
+            (non_o_a, 40000, 400000, 3000000),
+            (non_o_x, 40000, 400000, unrestricted),
+            (ltr,     unrestricted, unrestricted, [usd, 50000]),
+            (smart_t, unrestricted, unrestricted, [usd, 100000]),
+        ]
+        for args in clauses:
+            db.assertz(_normalize_fact_clause(Compound("InsuranceRequired", args)))
+
+        # Before the fix this raised
+        # ``TypeError: got an invalid type in Constant: PredicateMeta``.
+        fn = compile_predicate(
+            "InsuranceRequired", 4,
+            db.clauses_for("InsuranceRequired", 4),
+            db,
+            globals_={
+                "usd": usd, "non_o_a": non_o_a, "non_o_x": non_o_x,
+                "ltr": ltr, "smart_t": smart_t, "unrestricted": unrestricted,
+            },
+        )
+
+        # Query with an unbound last arg routes through the fallback
+        # (no bucket key for an unbound Var), so every clause's full head
+        # match runs — verifying all four lowered clauses are well-formed.
+        trail = Trail()
+        a, b, c, d = Var(), Var(), Var(), Var()
+        results = _simple_solutions(fn, [a, b, c, d], trail)
+        assert len(results) == 4
+        # The list-pattern clauses round-trip the atom-bearing last arg.
+        last_args = [r[3] for r in results]
+        assert [usd, 50000] in last_args
+        assert [usd, 100000] in last_args
