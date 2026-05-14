@@ -1343,8 +1343,8 @@ def _make_functor_class_ast(functor_name, field_names, source):
 
         try:
             fib
-            if not (isinstance(fib, PredicateMeta)
-                    and getattr(fib, '_fields', None) == ('n', 'f')):
+            if isinstance(fib, PredicateMeta) and getattr(
+                fib, '_fields', None) != ('n', 'f'):
                 raise NameError
         except NameError:
             class fib(metaclass=PredicateMeta):
@@ -1355,19 +1355,27 @@ def _make_functor_class_ast(functor_name, field_names, source):
     fields → fresh ``Var()``).  No ``@dataclass`` and no singleton.
     ``fib`` stays as the class in module globals.
 
-    The arity-aware guard is needed because, under the global-atoms-default
-    rule (Phase 2 of GLOBAL_ATOMS_DEFAULT.md), any earlier file in the
-    process may have auto-minted a 0-arity ``PredicateMeta`` for the same
-    name into ``predicate_builtins``.  Without the arity check, the existing
-    0-arity class would silently shadow this file's intended N-arity
-    predicate.
+    The arity-aware re-raise of ``NameError`` is needed because, under the
+    global-atoms-default rule (Phase 2 of GLOBAL_ATOMS_DEFAULT.md), any
+    earlier file in the process may have auto-minted a 0-arity
+    ``PredicateMeta`` for the same name into ``predicate_builtins``.
+    Without the arity check, that 0-arity class would silently shadow this
+    file's intended N-arity predicate.
+
+    The guard is deliberately narrowed to ``isinstance(.., PredicateMeta)``:
+    a non-``PredicateMeta`` binding of the same name (e.g. a user-defined
+    ``def Foo(...)`` in the .clausal file) is left alone and the predicate
+    block is skipped.  Clobbering a non-``PredicateMeta`` value would
+    silently destroy user code; failing loudly later (when the clause body
+    tries to use ``Foo`` as a predicate) preserves the pre-Phase-2 behavior
+    for that edge case.
     """
     fields_tuple = repr(tuple(field_names))
     lines = [
         "try:",
         f"    {functor_name}",
-        f"    if not (isinstance({functor_name}, PredicateMeta)",
-        f"            and getattr({functor_name}, '_fields', None) == {fields_tuple}):",
+        f"    if isinstance({functor_name}, PredicateMeta) and getattr(",
+        f"            {functor_name}, '_fields', None) != {fields_tuple}:",
         "        raise NameError",
         "except NameError:",
         f"    class {functor_name}(metaclass=PredicateMeta):",

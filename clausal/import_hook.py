@@ -682,6 +682,10 @@ class _StarQueryTransformer(ast.NodeTransformer):
         return self.generic_visit(node)
 
     def _rewrite(self, node, inner):
+        # IPython REPL path — not a .clausal module compile, so no shared
+        # bare-atom-refs sink to thread through.  Phase 2 auto-mint applies
+        # to module compilation in compiler_v2; bare references in REPL
+        # goals resolve against the REPL session's globals at exec time.
         tt = TermTransformer()
 
         if isinstance(inner, ast.Tuple):
