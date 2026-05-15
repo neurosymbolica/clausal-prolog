@@ -31,7 +31,7 @@ _HOWTO = (
 # examples / pseudo-code in guide pages. Allowlist, not aspiration: do not
 # grow this set. New blocks should compile or be moved to fixtures.
 _KNOWN_UNCOMPILABLE = {
-    ("directives.md", 218),
+    ("directives.md", 292),
     ("for_ai_agents.md", 155),
     ("for_ai_agents.md", 206),
     ("for_prolog_programmers.md", 61),
