@@ -104,7 +104,7 @@ global atom instead of failing fast.
 - a qualified reference (`other_module.red`),
 - a `global_atom/2` call (see [Term Inspection](builtins.md#global_atom2)).
 
-A bare reference that satisfies none of the above raises a compile-time `NameError` instead of being silently auto-minted. The diagnostic names the offending atom and the file, and spells out the five legitimate routes so the fix is obvious.
+A bare reference that satisfies none of the above raises a compile-time `NameError` instead of being silently auto-minted. The diagnostic names every offending atom and the module, and spells out the five legitimate routes so the fix is obvious.
 
 **Scope**: per-file only. The directive does not propagate to imported modules — each file decides for itself. A strict file can freely import from non-strict files and vice versa.
 
