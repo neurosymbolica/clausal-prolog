@@ -15,6 +15,7 @@ compilation, tabling wraps, and locking in a single pass.
 from __future__ import annotations
 
 import importlib
+import warnings
 from typing import Any
 
 from clausal.logic.database import Module as LogicModule, Clause, head_key
@@ -29,10 +30,42 @@ from clausal.pythonic_ast.nodes import (
     ImportFromDirective as ImportFromItem,
     ImportModuleDirective as ImportModuleItem,
     ModuleDeclaration as ModuleDeclItem,
+    OverwritesDeclaration as OverwritesDeclItem,
     PrivateDeclaration as PrivateDeclItem,
     SpecializeDirective as SpecializeItem,
     StrictAtomsDeclaration as StrictAtomsItem,
 )
+
+
+class ClausalAtomShadowingWarning(UserWarning):
+    """A local ``-module``/``-private`` declaration names an *atom* that is
+    also bound by an ``-import_from`` in the same file (Phase 4 of
+    GLOBAL_ATOMS_DEFAULT.md).
+
+    The local declaration creates a distinct ``PredicateMeta`` class from
+    the imported one, so uses of the name in this module will not unify
+    with values from the imported module.  Add the name to
+    ``-overwrites([...])`` to silence this warning, or remove the local
+    declaration and rely on the import.
+
+    Narrowed trigger: the warning fires only for atom-name (zero-arity)
+    shadowing — the case introduced by Phase 2's global-default atom rule.
+    Predicate-functor shadowing remains the existing per-module convention
+    and is not flagged; see ``GLOBAL_ATOMS_DEFAULT.md`` §"Predicates with
+    arity".
+    """
+
+
+class ClausalUnusedOverwritesWarning(UserWarning):
+    """An ``-overwrites([...])`` entry names something that is not actually
+    shadowing an imported atom in this module (Phase 4 of
+    GLOBAL_ATOMS_DEFAULT.md).
+
+    Either remove the entry, or add the redeclaration if that was the
+    intent.  Under the narrowed Phase-4 trigger, predicate-functor entries
+    in ``-overwrites`` also count as unused: the warning never would have
+    fired for a predicate functor, so the entry suppresses nothing.
+    """
 
 
 def compile_module(
@@ -493,6 +526,16 @@ def _process_declarations(module_items: list, module_dict: dict) -> None:
     in-file predicate clause (which runs before this pass), we only override
     when the existing entry is the *global* class for that name — i.e. when
     ``module_dict[name] is predicate_builtins.get(name)``.
+
+    Phase 4 of GLOBAL_ATOMS_DEFAULT.md: after building the local classes,
+    cross-check ``-import_from`` bindings against local *atom* declarations
+    and emit ``ClausalAtomShadowingWarning`` for the intersection, modulo
+    ``-overwrites([...])`` entries.  Names listed in ``-overwrites`` but not
+    shadowing an imported atom earn ``ClausalUnusedOverwritesWarning``.  The
+    trigger is narrowed to atoms because predicate functors are already
+    module-local-by-default and never participated in the Phase 2 global
+    flip — shadowing a predicate functor with an import is the existing
+    convention, not the new footgun the warning catches.
     """
     # Lazy import — see _process_bare_atom_refs.
     from clausal.import_hook import predicate_builtins
@@ -521,3 +564,97 @@ def _process_declarations(module_items: list, module_dict: dict) -> None:
                 ):
                     cls = make_predicate(name, field_names)
                     module_dict[name] = cls
+
+    _check_atom_shadowing(module_items, module_dict)
+
+
+def _check_atom_shadowing(module_items: list, module_dict: dict) -> None:
+    """Phase 4 shadowing detection: compare ``-import_from`` bindings to local
+    atom declarations and emit warnings.
+
+    The check intersects two sets:
+
+    * **Local atom names** — entries in ``-module(...)``/``-private([...])``
+      that are bare strings (``isinstance(entry, str)``).  Tuple entries
+      (predicate functors) are excluded under the narrowed Phase-4 trigger.
+    * **Imported names** — local bindings from ``-import_from``.  For
+      ``[Foo]`` this is ``Foo``; for ``[alias(Bar, Local)]`` it is
+      ``Local`` (the alias name is what shadows in this module).
+
+    The intersection minus ``-overwrites([...])`` entries earns
+    ``ClausalAtomShadowingWarning``.  ``-overwrites`` entries that do not
+    correspond to any shadowed atom earn ``ClausalUnusedOverwritesWarning``.
+
+    Warning emission uses ``warnings.warn_explicit`` with ``filename``/
+    ``lineno`` from the module's ``__file__`` so each warning carries
+    source attribution.  Sorting ``warn_shadowing`` and ``warn_unused_ow``
+    before emission keeps warning order deterministic across runs.
+    """
+    local_atom_names: set[str] = set()
+    imported_sources: dict[str, str] = {}  # local_name → source module path
+    overwritten: set[str] = set()
+
+    for item in module_items:
+        if isinstance(item, ModuleDeclItem):
+            for entry in item.exports:
+                if isinstance(entry, str):
+                    local_atom_names.add(entry)
+                # Predicate-functor tuple entries excluded by narrowed
+                # Phase-4 trigger.
+        elif isinstance(item, PrivateDeclItem):
+            for entry in item.items:
+                if isinstance(entry, str):
+                    local_atom_names.add(entry)
+        elif isinstance(item, ImportFromItem):
+            for entry in item.names:
+                if isinstance(entry, str):
+                    imported_sources[entry] = item.module
+                elif isinstance(entry, tuple):
+                    # ``alias(Orig, Local)`` — the binding in this module is
+                    # the *local* name (the second tuple element).
+                    _orig, local_name = entry
+                    imported_sources[local_name] = item.module
+        elif isinstance(item, OverwritesDeclItem):
+            for name in item.items:
+                overwritten.add(name)
+
+    shadowed = set(imported_sources.keys()) & local_atom_names
+    warn_shadowing = shadowed - overwritten
+    warn_unused_ow = overwritten - shadowed
+
+    if not warn_shadowing and not warn_unused_ow:
+        return
+
+    mod_name = module_dict.get("__name__", "<unknown>")
+    file_path = module_dict.get("__file__", "<unknown>")
+
+    for name in sorted(warn_shadowing):
+        source_mod = imported_sources[name]
+        msg = (
+            f"`{mod_name}` redeclares atom `{name}`, which is also imported "
+            f"via -import_from(`{source_mod}`, [...]).  The local declaration "
+            f"creates a separate class from the imported one — uses in this "
+            f"module will not unify with values from `{source_mod}`.  Either "
+            f"remove `{name}` from -module(...)/-private([...]) (and rely on "
+            f"the import), or add it to -overwrites([...]) to silence this "
+            f"warning."
+        )
+        warnings.warn_explicit(
+            msg,
+            ClausalAtomShadowingWarning,
+            filename=file_path,
+            lineno=0,
+        )
+
+    for name in sorted(warn_unused_ow):
+        msg = (
+            f"`{mod_name}` lists `{name}` in -overwrites([...]) but does not "
+            f"redeclare an imported atom of that name.  Remove the entry, "
+            f"or add the redeclaration if intended."
+        )
+        warnings.warn_explicit(
+            msg,
+            ClausalUnusedOverwritesWarning,
+            filename=file_path,
+            lineno=0,
+        )

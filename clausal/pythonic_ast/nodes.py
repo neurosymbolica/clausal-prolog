@@ -87,7 +87,7 @@ __all__ = [
     # Module-level items (pipeline split)
     "Directive", "ImportFromDirective", "ImportModuleDirective",
     "ModuleDeclaration", "PrivateDeclaration", "TranslationsDirective",
-    "BareAtomRefs", "StrictAtomsDeclaration",
+    "BareAtomRefs", "StrictAtomsDeclaration", "OverwritesDeclaration",
     # Imports
     "Import", "ImportFrom",
     # Compound statements
@@ -1066,6 +1066,27 @@ class StrictAtomsDeclaration(Node):
     See Phase 3 of ``implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md``.
     """
     pass
+
+
+@node_class
+class OverwritesDeclaration(Node):
+    """Module item: ``-overwrites([atom, ...])`` directive (Phase 4 of
+    GLOBAL_ATOMS_DEFAULT.md).
+
+    Suppresses ``ClausalAtomShadowingWarning`` for each listed atom name in
+    this module.  Declarative only: does not change ``PredicateMeta``
+    creation or alias the local name to the imported one.  The local name
+    still creates a distinct per-module class — the directive asserts the
+    user accepts that.
+
+    The narrowed Phase-4 trigger means the warning only fires for *atom*
+    shadowing (the new global-default case from Phase 2), so listing a
+    predicate-functor name here is *unused* — it suppresses nothing and
+    earns a ``ClausalUnusedOverwritesWarning``.  See
+    ``implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md`` §"Phase
+    4: shadowing warning + ``-overwrites``" for the full reasoning.
+    """
+    items: list = field(default_factory=list)  # bare atom names
 
 
 @node_class
