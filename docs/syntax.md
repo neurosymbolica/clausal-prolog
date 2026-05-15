@@ -81,6 +81,29 @@ Inside a logical term:
 
 Atoms that conflict with Python keywords or builtins are written as strings: `'not'`, `'is'`, `'max'`.
 
+Every atom is reified at compile time as a zero-arity `PredicateMeta` class — atoms are first-class values you can pass around, store in dicts, and compare with `is`. Unification on atoms is class identity.
+
+!!! info "Global by default"
+    A bare atom reference such as `red` resolves to the **same** `PredicateMeta` class across every module that mentions it — atoms are global by default, matching Prolog's convention.
+
+    ```clausal
+    --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms_global_default"
+    ```
+
+    A module opts an atom into **module-local** identity (a class distinct from the global one) by listing it in `-module([...])` (public) or `-private([...])` (private):
+
+    ```clausal
+    --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms_module_local"
+    ```
+
+    Resolution order for a bare reference inside a module: `-private` → `-module` → `-import_from` → global fallthrough.
+
+    Files where atom-typo correctness is load-bearing (regulatory rules, clinical decision support, financial compliance) can opt out of the silent global auto-mint with the [`-strict_atoms`](directives.md#-strict_atoms) directive, which turns undeclared bare references into compile-time errors.
+
+    The full design is in the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
+
+Predicates with arity ≥ 1 do **not** participate in the global default: they remain module-local-by-default and must be listed in `-module` / `-private` (or imported via `-import_from`) to be shared across modules. The asymmetry between atoms (global default) and predicates (local default) is principled — Prolog itself treats atoms as global and predicates as module-scoped.
+
 ---
 
 ## Builtin predicate naming

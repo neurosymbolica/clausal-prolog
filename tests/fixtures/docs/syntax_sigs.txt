@@ -21,6 +21,33 @@ status(active),
 greeting("hello world"),
 --8<-- [end:atoms]
 
+--8<-- [start:atoms_global_default]
+# module_a.clausal — bare reference, no -module/-private listing
+ColorA(red),
+
+# module_b.clausal — bare reference, no -module/-private listing
+ColorB(red),
+
+# Both files' `red` resolve to the same global PredicateMeta class.
+# In Python:
+#     from module_a import red as red_a
+#     from module_b import red as red_b
+#     assert red_a is red_b   # same class identity
+--8<-- [end:atoms_global_default]
+
+--8<-- [start:atoms_module_local]
+# Pick exactly one of the two listings below — an atom cannot appear in
+# both -module and -private (the compiler rejects that as a hard error).
+
+# Public, module-local: importers see traffic.red as a distinct class
+# from the global red.
+-module(traffic, [red, amber, green])
+
+# OR private, module-local: red here is invisible outside this module
+# and distinct from the global red.
+-private([red])
+--8<-- [end:atoms_module_local]
+
 
 # === Unification ===
 

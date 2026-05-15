@@ -37,3 +37,27 @@
 --8<-- [start:edcg_pred]
 -edcg_pred(scaled_inc, 0, [counter, scale])
 --8<-- [end:edcg_pred]
+
+
+# === Atom-identity Directives (GLOBAL_ATOMS_DEFAULT.md) ===
+
+--8<-- [start:module_with_atoms]
+-module(traffic, [Phase(X), red, amber, green])
+--8<-- [end:module_with_atoms]
+
+--8<-- [start:private_with_atoms]
+-private([draft, internal_only])
+--8<-- [end:private_with_atoms]
+
+--8<-- [start:strict_atoms]
+-strict_atoms
+-module(immigration_rules, [Eligible(X), Denied(X, Reason)])
+-private([visa_type, application_status])
+-import_from(atoms, [ok, error, pending])
+--8<-- [end:strict_atoms]
+
+--8<-- [start:overwrites]
+-import_from(palette, [red])
+-private([red])
+-overwrites([red])
+--8<-- [end:overwrites]

@@ -160,6 +160,13 @@ numbervars(+Term, +Start, -End)
 gensym(+Prefix, -Atom)
 --8<-- [end:gensym_2]
 
+--8<-- [start:global_atom_2]
+global_atom(+Name, -Atom)   % mint-on-demand: returns (and creates if absent)
+global_atom(+Name, +Atom)   % guard: succeeds iff Atom is the global class for Name
+global_atom(-Name, +Atom)   % reverse lookup: succeeds iff Atom is genuinely global
+global_atom(-Name, -Atom)   % enumerate global atoms (ordering not guaranteed)
+--8<-- [end:global_atom_2]
+
 
 # === Runtime Database ===
 
