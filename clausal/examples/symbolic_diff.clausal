@@ -1,5 +1,4 @@
 -module(symbolic_diff, [
-    Vx, Vy,
     Diff(EXPR, VAR, DERIV)
 ])
 

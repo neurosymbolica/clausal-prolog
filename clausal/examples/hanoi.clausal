@@ -1,5 +1,4 @@
 -module(hanoi, [
-    Left, Center, Right,
     Hanoi(N, From, To, Via, Moves)
 ])
 

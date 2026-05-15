@@ -1,5 +1,3 @@
--private([th, hello, nil])
-
 -translations(th, {
     append(LIST, ELEMENT, NEWLIST): ต่อท้าย(รายการ, สมาชิก, รายการใหม่),
     Member(ELEMENT, LIST): สมาชิกของ(สมาชิก, รายการ),

@@ -3,9 +3,6 @@
 ])
 
 -private([
-    Red, Green, Blue, Yellow,
-    WesternAustralia, NorthernTerritory, SouthAustralia,
-    Queensland, NewSouthWales, Victoria, Tasmania,
     Color(C),
     Adjacent(X, Y),
     ColorOf(REGION, C, COLORING)
