@@ -409,9 +409,10 @@ def _build_predicate_trampoline_funcdef(
             )
         )
     else:
+        _head_globals = ctx_template.base_globals
         for ci, clause in enumerate(clauses):
             var_context: dict[int, str] = {}
-            _head_arg_patterns(clause.head, var_context, arity)
+            _head_arg_patterns(clause.head, var_context, arity, globals_=_head_globals)
 
             # Slice G5: scope head-match scaffolding (mark/undo, pattern
             # guards, unify calls) on the clause's own source position.
@@ -427,6 +428,7 @@ def _build_predicate_trampoline_funcdef(
                     var_context=var_context,
                     arity=arity,
                     skip_trail=skip_trail,
+                    globals_=_head_globals,
                 )
             finally:
                 _pop_position()
@@ -1083,6 +1085,20 @@ from .arg_index import (  # noqa: E402,F401
 )
 
 
+# Shallow-path globals fallback.  ``compile_predicate_shallow`` builds a
+# ``base_globals`` dict that head-pattern compilation needs to resolve
+# imported-compound ``Call(LoadName(qualified))`` head terms to real
+# classes.  Threading that dict through the ten ``_build_predicate_funcdef``
+# call sites in compile_predicate_shallow would be noise; instead, the
+# outer function stashes it here in a try/finally and the builder reads
+# it as the default when no caller supplies an explicit override.  Module-
+# level (not contextvar) is intentional — Python compilation runs on the
+# importing thread, and the shallow compiler isn't reentrant from inside
+# itself.  Re-entry from another module's compile would also be fine
+# because both writes go through the same save/restore.
+_CURRENT_SHALLOW_BASE_GLOBALS: "dict | None" = None
+
+
 def _build_predicate_funcdef(
     functor: str,
     arity: int,
@@ -1090,6 +1106,7 @@ def _build_predicate_funcdef(
     db: Database,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
     skip_trail: bool = False,
+    globals_: dict | None = None,
 ) -> ast.FunctionDef:
     """Build the ``ast.FunctionDef`` for a simple/short-stack compiled predicate.
 
@@ -1097,6 +1114,8 @@ def _build_predicate_funcdef(
     ``compile_predicate`` (which then calls ``functiondef_to_function``) and
     ``compile_predicate_ast`` (which returns the FunctionDef directly).
     """
+    if globals_ is None:
+        globals_ = _CURRENT_SHALLOW_BASE_GLOBALS
     _shallow_strategy = ShallowStrategy()
     _params_ctx = CompilationContext(
         db=db, var_context={}, trail_name=_TRAIL_PARAM_NAME,
@@ -1121,7 +1140,7 @@ def _build_predicate_funcdef(
 
     for clause in clauses:
         var_context: dict[int, str] = {}
-        _head_arg_patterns(clause.head, var_context, arity)
+        _head_arg_patterns(clause.head, var_context, arity, globals_=globals_)
         # Slice G5: scope head-match + body emission on clause position.
         _push_position(getattr(clause, "position", None))
         try:
@@ -1132,6 +1151,7 @@ def _build_predicate_funcdef(
                 var_context=var_context,
                 arity=arity,
                 skip_trail=skip_trail,
+                globals_=globals_,
             )
         finally:
             _pop_position()
@@ -1338,6 +1358,9 @@ def compile_predicate_shallow(
     _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
     ctx_template.locked_dispatch_keys = _locked_keys
     ctx_template.base_globals = base_globals
+    global _CURRENT_SHALLOW_BASE_GLOBALS
+    _saved_shallow_globals = _CURRENT_SHALLOW_BASE_GLOBALS
+    _CURRENT_SHALLOW_BASE_GLOBALS = base_globals
     try:
         # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
         index_positions = _analyze_index_positions(clauses, arity)
@@ -1489,7 +1512,7 @@ def compile_predicate_shallow(
 
             fn = functiondef_to_function(func_def, globals_=base_globals)
     finally:
-        pass
+        _CURRENT_SHALLOW_BASE_GLOBALS = _saved_shallow_globals
 
     # Wrap the shallow function in a trampoline-protocol adapter so it can be
     # driven by the standard solver and called from compiled trampoline code.

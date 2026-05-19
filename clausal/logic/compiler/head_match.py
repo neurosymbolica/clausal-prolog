@@ -133,12 +133,64 @@ def _wrap_yields_with_output_guards(
 # ── head_to_match_pattern ──────────────────────────────────────────────────────
 
 
+def _resolve_loadname(qualified_name: str, globals_: dict | None) -> Any:
+    """Resolve a (possibly dotted) ``LoadName.name`` to its compile-time value.
+
+    Mirrors the dotted-name resolution that
+    ``globals_env._inject_resolved_targets`` performs for body call
+    targets: first try a direct dict hit (covers bare names that the
+    import-remap stage left intact plus dotted names that the host
+    module already binds verbatim — both happen after
+    ``-import_from``), then fall back to splitting the dotted name and
+    walking attributes.  Returns ``None`` when the name cannot be
+    resolved; the caller treats that as "fall through to other pattern
+    branches."
+    """
+    if globals_ is None or not qualified_name:
+        return None
+    direct = globals_.get(qualified_name)
+    if direct is not None:
+        return direct
+    if "." in qualified_name:
+        parts = qualified_name.split(".")
+        obj = globals_.get(parts[0])
+        for part in parts[1:]:
+            if obj is None:
+                return None
+            obj = getattr(obj, part, None)
+        return obj
+    return None
+
+
+def _resolved_field_names(resolved: Any) -> tuple[str, ...] | None:
+    """Return the field-name tuple for *resolved*, or None if not term-shaped.
+
+    Accepts both ``PredicateMeta`` classes (via ``cls._fields``) and
+    bare ``@dataclass`` classes (via ``dataclasses.fields``).  Refuses
+    anything else so the caller falls back through to the dataclass-
+    instance / wildcard branches.
+    """
+    if resolved is None or not isinstance(resolved, type):
+        return None
+    fields = getattr(resolved, "_fields", None)
+    if isinstance(fields, tuple):
+        return fields
+    try:
+        import dataclasses as _dc
+        if _dc.is_dataclass(resolved):
+            return tuple(f.name for f in _dc.fields(resolved))
+    except Exception:  # noqa: BLE001 — never let pattern-compilation crash on lookup
+        return None
+    return None
+
+
 def head_to_match_pattern(
     term: Any,
     var_context: dict[int, str],
     dup_guards: list[tuple[str, str]] | None = None,
     list_guards: list[tuple] | None = None,
     _list_reg_ids: set[int] | None = None,
+    globals_: dict | None = None,
 ) -> ast.pattern:
     """Convert a head field value to a Python ``ast.pattern`` node.
 
@@ -147,6 +199,14 @@ def head_to_match_pattern(
     term:        value from a clause head (may be a Var, literal, dataclass, …)
     var_context: mutable dict mapping ``Var._id`` → Python local variable name.
                  Unbound Vars are registered here on first encounter.
+    globals_:    the compiled function's globals dict (typically the host
+                 module's namespace, post-import-remap).  Used to resolve
+                 ``Call(func=LoadName(qualified_name), args=...)`` head
+                 terms — emitted whenever a rule head references an
+                 imported-compound functor like ``Item(...)`` — into the
+                 actual ``PredicateMeta`` / dataclass class so a real
+                 ``MatchClass`` pattern can be generated instead of falling
+                 through to a value-rejecting wildcard.
 
     Pattern mapping
     ---------------
@@ -158,6 +218,11 @@ def head_to_match_pattern(
     list                   → ``MatchSequence`` of sub-patterns
     Compound(f, args)      → ``MatchClass(Compound, functor=f, args=...)``
     functor dataclass      → ``MatchClass(cls, kwd field patterns)``
+    Call(LoadName(qn), …)  → resolve ``qn`` in ``globals_``; if a class with
+                             ``_fields`` results, emit ``MatchClass(cls,
+                             kwd field patterns)``; else wildcard (with the
+                             matching ``is_term_instance`` fall-through if
+                             applicable to a dataclass like ``Call`` itself).
     other                  → ``MatchAs(name=None)``  (wildcard ``_``)
     """
     term = deref(term)
@@ -417,7 +482,7 @@ def head_to_match_pattern(
         if is_var(f):
             # Variable functor: cannot match statically → wildcard
             return ast.MatchAs(pattern=None, name=None)
-        sub_patterns = [head_to_match_pattern(a, var_context, dup_guards, list_guards, _list_reg_ids) for a in term.args]
+        sub_patterns = [head_to_match_pattern(a, var_context, dup_guards, list_guards, _list_reg_ids, globals_=globals_) for a in term.args]
         return ast.MatchClass(
             cls=_name("Compound"),
             patterns=[],
@@ -428,6 +493,33 @@ def head_to_match_pattern(
             ],
         )
 
+    # Call(func=LoadName(qualified_name), args=[...]) — emitted whenever a
+    # rule head references an imported-compound functor (e.g. ``Item(...)``
+    # from another module).  Without this branch the term falls through to
+    # ``is_term_instance`` (Call is itself a dataclass), which produces a
+    # ``MatchClass(Call, ...)`` pattern that requires the runtime value to
+    # *be* a Call AST instance — which it never is.  Same shape used for
+    # the fact path's runtime-Unify resolution, but here we resolve the
+    # name at compile time against the module globals.
+    if isinstance(term, Call) and isinstance(term.func, LoadName):
+        resolved = _resolve_loadname(term.func.name, globals_)
+        fields = _resolved_field_names(resolved)
+        # We only emit a MatchClass when we can pin the field-name list at
+        # compile time; otherwise (resolution failed, or the resolved value
+        # isn't a term-shaped class) we MUST fall through to the value-
+        # rejecting branches below — the previous wildcard fallback at the
+        # end is what masked this whole class of bug.
+        if fields is not None and len(term.args) <= len(fields):
+            return ast.MatchClass(
+                cls=_name(term.func.name),
+                patterns=[],
+                kwd_attrs=list(fields[: len(term.args)]),
+                kwd_patterns=[
+                    head_to_match_pattern(a, var_context, dup_guards, list_guards, _list_reg_ids, globals_=globals_)
+                    for a in term.args
+                ],
+            )
+
     # Functor term instance → MatchClass with field patterns
     if is_term_instance(term):
         cls_name = type(term).__name__
@@ -437,7 +529,7 @@ def head_to_match_pattern(
             patterns=[],
             kwd_attrs=list(fields),
             kwd_patterns=[
-                head_to_match_pattern(getattr(term, name), var_context, dup_guards, list_guards, _list_reg_ids)
+                head_to_match_pattern(getattr(term, name), var_context, dup_guards, list_guards, _list_reg_ids, globals_=globals_)
                 for name in fields
             ],
         )
@@ -793,6 +885,7 @@ def compile_head_to_match_case(
     trail_name: str = _TRAIL_PARAM_NAME,
     mark_name: str = "_mark",
     skip_trail: bool = False,
+    globals_: dict | None = None,
 ) -> ast.match_case:
     """Compile a clause head into one ``match_case`` arm.
 
@@ -825,7 +918,7 @@ def compile_head_to_match_case(
     # pre-allocated name; a Var that was first registered as a direct match capture
     # and then appears in a list gets a dup name to avoid overwriting the capture.
     _list_reg_ids: set[int] = set()
-    arg_patterns = _head_arg_patterns(head, head_var_ctx, arity, dup_guards, list_guards, _list_reg_ids)
+    arg_patterns = _head_arg_patterns(head, head_var_ctx, arity, dup_guards, list_guards, _list_reg_ids, globals_=globals_)
     var_context.update(head_var_ctx)
     outer_pattern = ast.MatchSequence(patterns=arg_patterns)
 
@@ -1063,10 +1156,11 @@ def _head_arg_patterns(
     dup_guards: list[tuple[str, str]] | None = None,
     list_guards: list[tuple] | None = None,
     _list_reg_ids: set[int] | None = None,
+    globals_: dict | None = None,
 ) -> list[ast.pattern]:
     """Extract per-argument patterns from a head term."""
     def _pat(term):
-        return head_to_match_pattern(term, var_context, dup_guards, list_guards, _list_reg_ids)
+        return head_to_match_pattern(term, var_context, dup_guards, list_guards, _list_reg_ids, globals_=globals_)
     if isinstance(head, Compound):
         return [_pat(a) for a in head.args]
     # Call(func=LoadName(f), args=[...]) — e.g. from $assert_fact with trailing comma.

@@ -49,12 +49,22 @@ def _arg_to_index_key(arg: Any) -> Any:
     - Scalars (int, float, str, bytes, bool, None) → the value itself
     - Compound nodes → ``(functor, arity)`` tuple  (Phase 9a)
     - PredicateMeta instances → ``(class_name, field_count)`` tuple  (Phase 9a)
+    - ``Call(LoadName(qn), args)`` (imported-compound head arg) →
+      ``(qn.rsplit('.', 1)[-1], len(args))`` so the bucket matches the
+      runtime ``(cls.__name__, n_fields)`` key emitted by
+      :func:`_runtime_arg_key` for a real instance of that class.
+      Must run BEFORE the ``is_term_instance`` branch — Call is itself a
+      dataclass and would otherwise key as ``('Call', 4)``, which no
+      runtime value ever matches.
     - Anything else (Var, list, DictTerm, …) → ``_INDEX_VAR``
     """
     if isinstance(arg, _INDEXABLE_TYPES):
         return arg
     if isinstance(arg, Compound):
         return (arg.functor, len(arg.args))
+    if isinstance(arg, Call) and isinstance(arg.func, LoadName):
+        basename = arg.func.name.rsplit(".", 1)[-1]
+        return (basename, len(arg.args))
     if is_term_instance(arg):
         cls = type(arg)
         return (cls.__name__, len(term_field_names(arg)))
