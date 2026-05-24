@@ -1,4 +1,4 @@
-"""clausal.modules.spacy — spaCy NLP predicates for Clausal.
+"""clausal.modules.py.spacy — spaCy NLP predicates for Clausal.
 
 Provides LoadModel, UnloadModel, CurrentModel, Process, Token, TokenText,
 TokenList, Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop, Entity,
@@ -36,7 +36,7 @@ def _get_spacy():
         return _spacy
     except Exception as exc:
         raise ImportError(
-            "spaCy is required for clausal.modules.spacy. "
+            "spaCy is required for clausal.modules.py.spacy. "
             "Install it with: pip install spacy"
         ) from exc
 
