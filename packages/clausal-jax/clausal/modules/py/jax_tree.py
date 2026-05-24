@@ -1,4 +1,4 @@
-"""clausal.modules.jax_tree — JAX pytree predicates for Clausal.
+"""clausal.modules.py.jax_tree — JAX pytree predicates for Clausal.
 
 Pytrees are JAX's structural abstraction — any nested container (dict,
 list, tuple, namedtuple, dataclass) whose leaves are arrays. This
@@ -74,7 +74,7 @@ import threading as _threading
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import _pred, _pure, _deep_deref, _check_1
-from clausal.modules.jax import _ensure_jax
+from clausal.modules.py.jax import _ensure_jax
 
 
 # ── Lazy jax.tree_util import ────────────────────────────────────────────

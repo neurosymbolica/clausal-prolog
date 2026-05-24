@@ -1,4 +1,4 @@
-"""clausal.modules.jax_equinox — Equinox NN layers, filter transforms, pytree utilities.
+"""clausal.modules.py.jax_equinox — Equinox NN layers, filter transforms, pytree utilities.
 
 `Equinox <https://docs.kidger.site/equinox/>`_ is the JAX library
 that makes neural-net modules first-class pytrees. An ``eqx.Module``
@@ -135,7 +135,7 @@ import threading as _threading
 from clausal.modules.py._helpers import (
     _pred, _pure, _check_1, _check_2, _fact_table_2,
 )
-from clausal.modules.jax import _ensure_jax  # noqa: F401 — surfaces JAX dep
+from clausal.modules.py.jax import _ensure_jax  # noqa: F401 — surfaces JAX dep
 
 
 # ═══════════════════════════════════════════════════════════════════════════

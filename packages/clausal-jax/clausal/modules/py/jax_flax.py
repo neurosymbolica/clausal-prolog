@@ -1,4 +1,4 @@
-"""clausal.modules.jax_flax — Flax Linen NN layers and init/apply.
+"""clausal.modules.py.jax_flax — Flax Linen NN layers and init/apply.
 
 `Flax <https://flax.readthedocs.io>`_'s **Linen** API is the second
 major NN library for JAX. Unlike Equinox (Phase 17), where the model
@@ -109,7 +109,7 @@ from __future__ import annotations
 import threading as _threading
 
 from clausal.modules.py._helpers import _pred, _pure, _fact_table_2
-from clausal.modules.jax import _ensure_jax  # noqa: F401 — surfaces JAX dep
+from clausal.modules.py.jax import _ensure_jax  # noqa: F401 — surfaces JAX dep
 
 
 # ═══════════════════════════════════════════════════════════════════════════

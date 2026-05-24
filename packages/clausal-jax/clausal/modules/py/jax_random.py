@@ -1,4 +1,4 @@
-"""clausal.modules.jax_random — JAX PRNG predicates for Clausal.
+"""clausal.modules.py.jax_random — JAX PRNG predicates for Clausal.
 
 JAX refuses to hide randomness in a global: every sampler takes an explicit
 ``PRNGKey`` and consumes it deterministically. That matches Clausal's
@@ -55,7 +55,7 @@ import threading as _threading
 from clausal.modules.py._helpers import (
     _pred, _pure, _bidir_2, _fact_table_2,
 )
-from clausal.modules.jax import _ensure_jax
+from clausal.modules.py.jax import _ensure_jax
 
 
 # ── Lazy jax.random import ───────────────────────────────────────────────

@@ -1,4 +1,4 @@
-"""clausal.modules.jax_transforms — JAX function transforms.
+"""clausal.modules.py.jax_transforms — JAX function transforms.
 
 JAX's higher-order transforms — ``grad``, ``jit``, ``vmap``, ``jvp``,
 ``vjp`` — are pure functions of functions. Unlike PyTorch's
@@ -75,7 +75,7 @@ the ``tree_map`` / ``tree_reduce`` predicates in Phase 9.
 from __future__ import annotations
 
 from clausal.modules.py._helpers import _pred, _pure
-from clausal.modules.jax import _ensure_jax, _jx
+from clausal.modules.py.jax import _ensure_jax, _jx
 
 
 # ═══════════════════════════════════════════════════════════════════════════

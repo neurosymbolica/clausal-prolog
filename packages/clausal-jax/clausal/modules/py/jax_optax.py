@@ -1,4 +1,4 @@
-"""clausal.modules.jax_optax — Optax gradient transformations and optimisation.
+"""clausal.modules.py.jax_optax — Optax gradient transformations and optimisation.
 
 `Optax <https://optax.readthedocs.io>`_ is the de-facto functional
 optimiser library for JAX. Its core abstraction is
@@ -110,7 +110,7 @@ from __future__ import annotations
 import threading as _threading
 
 from clausal.modules.py._helpers import _pred, _pure
-from clausal.modules.jax import _ensure_jax  # noqa: F401 — surfaces JAX dep
+from clausal.modules.py.jax import _ensure_jax  # noqa: F401 — surfaces JAX dep
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -330,7 +330,7 @@ update_optimizer = _pred("update_optimizer",
 # `apply_updates` is a pure pytree operation, not optimiser-specific —
 # canonical implementation lives in py.jax_tree. Re-exported here so
 # callers who import from py.jax_optax don't break.
-from clausal.modules.jax_tree import apply_updates as _apply_updates
+from clausal.modules.py.jax_tree import apply_updates as _apply_updates
 apply_updates = _apply_updates
 
 

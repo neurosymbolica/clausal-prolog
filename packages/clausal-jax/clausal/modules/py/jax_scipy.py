@@ -1,4 +1,4 @@
-"""clausal.modules.jax_scipy — jax.scipy predicates for Clausal.
+"""clausal.modules.py.jax_scipy — jax.scipy predicates for Clausal.
 
 Wraps ``jax.scipy.special`` (special mathematical functions) and
 ``jax.scipy.stats`` (probability distribution shapes) as pure
@@ -98,7 +98,7 @@ from __future__ import annotations
 import threading as _threading
 
 from clausal.modules.py._helpers import _pred, _pure, _fact_table_2
-from clausal.modules.jax import _ensure_jax, logsumexp as _jax_logsumexp
+from clausal.modules.py.jax import _ensure_jax, logsumexp as _jax_logsumexp
 
 
 # ── Lazy jax.scipy.special / jax.scipy.stats imports ──────────────────────

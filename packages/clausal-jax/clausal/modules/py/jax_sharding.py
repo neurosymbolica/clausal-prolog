@@ -1,4 +1,4 @@
-"""clausal.modules.jax_sharding — JAX device placement and sharding.
+"""clausal.modules.py.jax_sharding — JAX device placement and sharding.
 
 JAX treats device placement and sharding as first-class *values*:
 ``Device``, ``Mesh``, ``PartitionSpec``, ``NamedSharding``. They are
@@ -82,7 +82,7 @@ import threading as _threading
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import _pred, _pure, _bidir_2, _check_1, _deep_deref
-from clausal.modules.jax import _ensure_jax, _jx
+from clausal.modules.py.jax import _ensure_jax, _jx
 from clausal.terms import DictTerm
 
 

@@ -1,4 +1,4 @@
-"""clausal.modules.jax — JAX array predicates for Clausal.
+"""clausal.modules.py.jax — JAX array predicates for Clausal.
 
 Provides pure array operations from JAX as importable predicate objects
 for use in .clausal files via::
@@ -1327,7 +1327,7 @@ def __getattr__(name):
     if name in _CONST_ALIASES:
         _ensure_jax()
         return getattr(_jnp, _CONST_ALIASES[name])
-    raise AttributeError(f"module 'clausal.modules.jax' has no attribute {name!r}")
+    raise AttributeError(f"module 'clausal.modules.py.jax' has no attribute {name!r}")
 
 
 # ── Module-level exports ──────────────────────────────────────────────────

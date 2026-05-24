@@ -1,4 +1,4 @@
-"""clausal.modules.jax_nn — JAX activations and initializers.
+"""clausal.modules.py.jax_nn — JAX activations and initializers.
 
 ``jax.nn`` is small compared to ``torch.nn``: no module classes (JAX is
 a function library — model classes live in Flax / Equinox). What it
@@ -76,7 +76,7 @@ import inspect as _inspect
 import threading as _threading
 
 from clausal.modules.py._helpers import _pred, _pure, _fact_table_2
-from clausal.modules.jax import _ensure_jax
+from clausal.modules.py.jax import _ensure_jax
 
 
 # ── Lazy jax.nn / jax.nn.initializers import ──────────────────────────────

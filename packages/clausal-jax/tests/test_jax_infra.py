@@ -1,4 +1,4 @@
-"""Tests for clausal.modules.jax — JAX array predicates (Phase 1).
+"""Tests for clausal.modules.py.jax — JAX array predicates (Phase 1).
 
 Integration tests run .clausal fixture files.
 Unit tests cover infrastructure (lazy import, opts handling, __getattr__).
@@ -940,18 +940,18 @@ class TestJaxRandomInfra:
 
     def test_lazy_import_loads_jax_random(self):
         # nv
-        import clausal.modules.jax_random as impl
+        import clausal.modules.py.jax_random as impl
         assert impl._jr() is not None
 
     def test_exports_exist(self):
         # nv
-        import clausal.modules.jax_random as impl
+        import clausal.modules.py.jax_random as impl
         for name in impl.__all__:
             assert getattr(impl, name) is not None, f"{name} is None"
 
     def test_sampler_facts_non_empty(self):
         # nv
-        import clausal.modules.jax_random as impl
+        import clausal.modules.py.jax_random as impl
         facts = impl._build_sampler_facts()
         names = {n for n, _ in facts}
         for expected in ("normal", "uniform", "bernoulli", "categorical"):
@@ -960,7 +960,7 @@ class TestJaxRandomInfra:
     def test_split_returns_python_list(self):
         """Pattern matching [K1, K2] needs a real list, not a KeyArray."""
         # nv
-        import clausal.modules.jax_random as impl
+        import clausal.modules.py.jax_random as impl
         jr = impl._jr()
         k0 = jr.key(0)
         assert isinstance(impl._split_2(k0), list)
@@ -977,14 +977,14 @@ class TestJaxInfra:
 
     def test_lazy_import_loads_jax(self):
         # nv
-        import clausal.modules.jax as impl
+        import clausal.modules.py.jax as impl
         impl._ensure_jax()
         assert impl._jax is not None
         assert impl._jnp is not None
 
     def test_exports_exist(self):
         # nv
-        import clausal.modules.jax as impl
+        import clausal.modules.py.jax as impl
         # newaxis is legitimately None (jnp.newaxis == None) and null is an
         # explicit alias for Python None — accept both.
         _NONE_OK = {"newaxis", "null"}
@@ -997,7 +997,7 @@ class TestJaxInfra:
 
     def test_dtype_export(self):
         # nv
-        import clausal.modules.jax as impl
+        import clausal.modules.py.jax as impl
         import jax.numpy as jnp
         assert impl.float32 is jnp.float32
         assert impl.float64 is jnp.float64
@@ -1005,21 +1005,21 @@ class TestJaxInfra:
 
     def test_const_export(self):
         # nv
-        import clausal.modules.jax as impl
+        import clausal.modules.py.jax as impl
         import math
         assert impl.pi == math.pi
         assert impl.newaxis is None  # jnp.newaxis is None
 
     def test_unknown_attribute_raises(self):
         # nv
-        import clausal.modules.jax as impl
+        import clausal.modules.py.jax as impl
         with pytest.raises(AttributeError):
             _ = impl.not_a_real_name
 
     def test_pred_arities(self):
         """Verify key predicates have the expected arity variants."""
         # nv
-        import clausal.modules.jax as impl
+        import clausal.modules.py.jax as impl
         # zeros should have arity 2 and 3
         assert 2 in impl.zeros._dispatch_fns
         assert 3 in impl.zeros._dispatch_fns
@@ -1036,7 +1036,7 @@ class TestJaxInfra:
     def test_empty_opts_dict(self):
         """Empty opts dict should behave like default call."""
         # nv
-        import clausal.modules.jax as impl
+        import clausal.modules.py.jax as impl
         from clausal.logic.variables import Var, deref
         from clausal.logic.database import Module
         mod = Module("jax", module_dict=vars(impl))
@@ -1120,20 +1120,20 @@ class TestJaxOptaxInfrastructure:
         # Importing the wrapper module must not eagerly import optax.
         # We can't easily un-import optax in a running process, so just
         # verify the wrapper exposes its lazy hook.
-        import clausal.modules.jax_optax as impl
+        import clausal.modules.py.jax_optax as impl
         assert hasattr(impl, "_ensure_optax")
         assert callable(impl._ensure_optax)
 
     def test_all_exports_resolve(self):
         # nv
-        import clausal.modules.jax_optax as impl
+        import clausal.modules.py.jax_optax as impl
         for name in impl.__all__:
             obj = getattr(impl, name)
             assert obj is not None, f"{name} is None"
 
     def test_pred_arities(self):
         # nv
-        import clausal.modules.jax_optax as impl
+        import clausal.modules.py.jax_optax as impl
         # sgd/adam: /2 and /3
         assert {2, 3} <= set(impl.sgd._dispatch_fns.keys())
         assert {2, 3} <= set(impl.adam._dispatch_fns.keys())
@@ -1218,20 +1218,20 @@ class TestJaxEquinoxInfrastructure:
 
     def test_lazy_import(self):
         # nv
-        import clausal.modules.jax_equinox as impl
+        import clausal.modules.py.jax_equinox as impl
         assert hasattr(impl, "_ensure_equinox")
         assert callable(impl._ensure_equinox)
 
     def test_all_exports_resolve(self):
         # nv
-        import clausal.modules.jax_equinox as impl
+        import clausal.modules.py.jax_equinox as impl
         for name in impl.__all__:
             obj = getattr(impl, name)
             assert obj is not None, f"{name} is None"
 
     def test_pred_arities(self):
         # nv
-        import clausal.modules.jax_equinox as impl
+        import clausal.modules.py.jax_equinox as impl
         # linear: /4 (with key) and /5 (with opts + key)
         assert {4, 5} <= set(impl.linear._dispatch_fns.keys())
         # mlp: /6 and /7
@@ -1254,7 +1254,7 @@ class TestJaxEquinoxInfrastructure:
 
     def test_layer_class_registry_has_known(self):
         # nv
-        import clausal.modules.jax_equinox as impl
+        import clausal.modules.py.jax_equinox as impl
         # The registry uses TitleCase Equinox class names.
         from clausal.logic.variables import Var, deref
         from clausal.logic.database import Module
@@ -1316,20 +1316,20 @@ class TestJaxFlaxInfrastructure:
 
     def test_lazy_import(self):
         # nv
-        import clausal.modules.jax_flax as impl
+        import clausal.modules.py.jax_flax as impl
         assert hasattr(impl, "_ensure_flax")
         assert callable(impl._ensure_flax)
 
     def test_all_exports_resolve(self):
         # nv
-        import clausal.modules.jax_flax as impl
+        import clausal.modules.py.jax_flax as impl
         for name in impl.__all__:
             obj = getattr(impl, name)
             assert obj is not None, f"{name} is None"
 
     def test_pred_arities(self):
         # nv
-        import clausal.modules.jax_flax as impl
+        import clausal.modules.py.jax_flax as impl
         # dense: /2 and /3
         assert {2, 3} <= set(impl.dense._dispatch_fns.keys())
         # conv: /3 and /4
