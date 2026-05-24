@@ -1,4 +1,4 @@
-"""clausal.modules.yaml — YAML predicates for Clausal.
+"""clausal.modules.py.yaml — YAML predicates for Clausal.
 
 Provides predicates for parsing and generating YAML, wrapping Python's
 PyYAML library (``yaml.safe_load`` / ``yaml.safe_dump``).  Import via::

@@ -195,7 +195,7 @@ def compile_module(
 
 _MODULE_ALIASES: dict[str, str] = {
     "uuid": "uuid_mod",
-    "yaml": "yaml",
+    "yaml": "py.yaml",
     "spacy": "py.spacy",
     "sympy": "py.sympy",
     "scipy_cluster": "py.scipy_cluster",
