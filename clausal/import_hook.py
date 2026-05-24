@@ -511,10 +511,6 @@ class ModulesFinder(MetaPathFinder):
 
     _MODULES_PKG = "clausal.modules"
 
-    # Kept as an empty frozenset; previously listed names that should NOT be
-    # intercepted.  All compile-time aliases now handle those cases.
-    _PASSTHROUGH: frozenset[str] = frozenset()
-
     # Guard against re-entrant imports (e.g. py/uuid.py does
     # ``_import_stdlib("uuid")`` which would re-enter this finder).
     _resolving: set[str] = set()
