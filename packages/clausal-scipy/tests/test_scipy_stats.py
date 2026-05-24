@@ -18,7 +18,7 @@ import scipy.stats as scipy_stats
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_stats import (
+from clausal.modules.py.scipy_stats import (
     StatsDescribe, StatsMean, StatsGeometricMean, StatsHarmonicMean,
     StatsMode, StatsSkew, StatsKurtosis, StatsInterquartileRange,
     StatsZScore, StatsMedianAbsoluteDeviation,
@@ -717,7 +717,7 @@ class TestStatsFreezeDist:
                 break
         assert isinstance(handle, int)
         # cleanup
-        from clausal.modules.scipy_stats import _FROZEN_DIST_REGISTRY
+        from clausal.modules.py.scipy_stats import _FROZEN_DIST_REGISTRY
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_pdf_via_handle(self):
@@ -747,7 +747,7 @@ class TestStatsFreezeDist:
         assert abs(val - 1.0 / math.sqrt(2 * math.pi)) < 1e-9
 
         # cleanup
-        from clausal.modules.scipy_stats import _FROZEN_DIST_REGISTRY
+        from clausal.modules.py.scipy_stats import _FROZEN_DIST_REGISTRY
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_frozen_stats(self):
@@ -774,12 +774,12 @@ class TestStatsFreezeDist:
         assert abs(val['mean'] - 3.0) < 1e-9
         assert abs(val['var'] - 4.0) < 1e-9
 
-        from clausal.modules.scipy_stats import _FROZEN_DIST_REGISTRY
+        from clausal.modules.py.scipy_stats import _FROZEN_DIST_REGISTRY
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_frozen_free_removes_handle(self):
         # nv
-        from clausal.modules.scipy_stats import _FROZEN_DIST_REGISTRY
+        from clausal.modules.py.scipy_stats import _FROZEN_DIST_REGISTRY
 
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
@@ -824,7 +824,7 @@ class TestStatsFreezeDist:
                 break
         assert abs(val - 0.5) < 1e-9
 
-        from clausal.modules.scipy_stats import _FROZEN_DIST_REGISTRY
+        from clausal.modules.py.scipy_stats import _FROZEN_DIST_REGISTRY
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_frozen_ppf(self):
@@ -852,7 +852,7 @@ class TestStatsFreezeDist:
                 break
         assert abs(val) < 1e-9
 
-        from clausal.modules.scipy_stats import _FROZEN_DIST_REGISTRY
+        from clausal.modules.py.scipy_stats import _FROZEN_DIST_REGISTRY
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_frozen_rvs_scalar(self):
@@ -878,7 +878,7 @@ class TestStatsFreezeDist:
                 break
         assert isinstance(val, float)
 
-        from clausal.modules.scipy_stats import _FROZEN_DIST_REGISTRY
+        from clausal.modules.py.scipy_stats import _FROZEN_DIST_REGISTRY
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_frozen_rvs_with_size(self):
@@ -905,7 +905,7 @@ class TestStatsFreezeDist:
         assert val is not None
         assert len(val) == 10
 
-        from clausal.modules.scipy_stats import _FROZEN_DIST_REGISTRY
+        from clausal.modules.py.scipy_stats import _FROZEN_DIST_REGISTRY
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
 

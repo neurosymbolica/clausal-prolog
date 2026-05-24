@@ -18,7 +18,7 @@ import scipy.linalg as la
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_linalg import (
+from clausal.modules.py.scipy_linalg import (
     Solve, LeastSquares, SolveTriangular,
     LuDecompose, QrDecompose, SingularValueDecompose,
     Cholesky, EigenDecompose, EigenDecomposeHermitian, Schur,

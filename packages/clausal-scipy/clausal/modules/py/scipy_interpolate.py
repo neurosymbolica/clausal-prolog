@@ -96,7 +96,7 @@ from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
 from clausal.terms import Quantity, UnitsMismatch
-from clausal.modules._scipy_units import (
+from clausal.modules.py._scipy_units import (
     strip_quantity, quantity_dims, merge_dims, wrap_result,
 )
 

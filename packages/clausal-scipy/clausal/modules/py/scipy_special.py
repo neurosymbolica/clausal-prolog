@@ -79,8 +79,8 @@ from typing import Any, Callable
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
-from clausal.modules._scipy_relations import _bidir_dispatch
-from clausal.modules._scipy_units import make_quantity_aware, REQUIRE_DIMENSIONLESS
+from clausal.modules.py._scipy_relations import _bidir_dispatch
+from clausal.modules.py._scipy_units import make_quantity_aware, REQUIRE_DIMENSIONLESS
 
 
 # ── Lazy scipy.special import ─────────────────────────────────────────────

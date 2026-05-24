@@ -50,8 +50,8 @@ from typing import Callable
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
-from clausal.modules._scipy_relations import _bidir_dispatch, _fft_bidir_n
-from clausal.modules._scipy_units import make_quantity_aware, PASS_THROUGH_FIRST
+from clausal.modules.py._scipy_relations import _bidir_dispatch, _fft_bidir_n
+from clausal.modules.py._scipy_units import make_quantity_aware, PASS_THROUGH_FIRST
 
 
 # ── Lazy scipy.fft import ──────────────────────────────────────────────────

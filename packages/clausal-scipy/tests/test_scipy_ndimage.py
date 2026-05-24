@@ -16,7 +16,7 @@ import numpy as np
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_ndimage import (
+from clausal.modules.py.scipy_ndimage import (
     GaussianFilter,
     UniformFilter,
     MedianFilter,

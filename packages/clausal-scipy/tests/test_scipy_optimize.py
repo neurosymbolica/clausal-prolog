@@ -17,7 +17,7 @@ import scipy.optimize as opt
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_optimize import (
+from clausal.modules.py.scipy_optimize import (
     MinimizeScalar, Minimize,
     DifferentialEvolution, BasinHopping, DualAnnealing, ShgoMinimize,
     NonlinearLeastSquares, CurveFit,

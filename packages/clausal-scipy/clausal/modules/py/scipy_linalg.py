@@ -74,9 +74,9 @@ import numpy as _np
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
-from clausal.modules._scipy_relations import _bidir_dispatch
+from clausal.modules.py._scipy_relations import _bidir_dispatch
 from clausal.terms import Quantity as _Quantity
-from clausal.modules._scipy_units import (
+from clausal.modules.py._scipy_units import (
     make_quantity_aware, merge_dims, wrap_result,
     REQUIRE_DIMENSIONLESS, PASS_THROUGH_FIRST, STRIP_TO_PLAIN,
 )

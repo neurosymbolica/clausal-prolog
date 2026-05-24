@@ -2,7 +2,7 @@
 
 All scipy wrapper modules import from this module::
 
-    from clausal.modules._scipy_units import (
+    from clausal.modules.py._scipy_units import (
         make_quantity_aware,
         REQUIRE_DIMENSIONLESS, PASS_THROUGH_FIRST, PASS_THROUGH_LAST, STRIP_TO_PLAIN,
         strip_quantity, quantity_dims, merge_dims, wrap_result,

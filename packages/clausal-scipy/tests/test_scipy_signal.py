@@ -17,7 +17,7 @@ import numpy as np
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_signal import (
+from clausal.modules.py.scipy_signal import (
     Butterworth,
     Bessel,
     ChebyshevType1,

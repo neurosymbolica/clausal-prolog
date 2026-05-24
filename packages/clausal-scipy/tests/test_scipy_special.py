@@ -17,7 +17,7 @@ import scipy.special as sc
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_special import (
+from clausal.modules.py.scipy_special import (
     Gamma, GammaLog, GammaSign, BetaLog, Digamma, Polygamma,
     Factorial, Comb, Perm,
     Erf, ErfComplement,

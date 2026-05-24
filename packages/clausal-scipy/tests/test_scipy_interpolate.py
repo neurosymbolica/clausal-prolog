@@ -20,7 +20,7 @@ import scipy.interpolate as scipy_interp
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_interpolate import (
+from clausal.modules.py.scipy_interpolate import (
     MakeSpline,
     MakeCubic,
     MakePCHIP,
@@ -485,7 +485,7 @@ class TestFree:
 class TestInterpModuleImport:
     def test_alias_module_exports_all(self):
         # nv
-        from clausal.modules import scipy_interpolate as m
+        from clausal.modules.py import scipy_interpolate as m
         for name in [
             'MakeSpline', 'MakeCubic', 'MakePCHIP',
             'MakeAkima', 'MakeLinear1D',

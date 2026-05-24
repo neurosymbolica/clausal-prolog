@@ -17,7 +17,7 @@ from clausal.logic.solve import call
 from clausal.import_hook import _load_module
 from clausal.terms import Quantity
 from clausal.modules.py import units as _u
-from clausal.modules.scipy_constants import (
+from clausal.modules.py.scipy_constants import (
     SpeedOfLight, PlanckConstant, ReducedPlanckConstant,
     GravitationalConstant, AvogadroConstant, BoltzmannConstant,
     ElementaryCharge, ElectronMass, ProtonMass,

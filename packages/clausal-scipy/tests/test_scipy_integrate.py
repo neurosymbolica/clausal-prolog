@@ -18,7 +18,7 @@ import numpy as np
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_integrate import (
+from clausal.modules.py.scipy_integrate import (
     Quad, DoubleQuad, TripleQuad, NQuad, QuadVec,
     SolveInitialValueProblem, OdeIntegrate,
     CumulativeTrapezoid, Trapezoid, Simpson,

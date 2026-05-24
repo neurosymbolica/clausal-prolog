@@ -20,7 +20,7 @@ import scipy.sparse
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_sparse import (
+from clausal.modules.py.scipy_sparse import (
     MakeCSR,
     MakeCSC,
     MakeCOO,
@@ -631,7 +631,7 @@ class TestModuleExports:
 
     def test_shim_exports_match(self):
         # nv
-        import clausal.modules.scipy_sparse as shim
+        import clausal.modules.py.scipy_sparse as shim
         import clausal.modules.py.scipy_sparse as impl
         for name in impl.__all__:
             if name.startswith("_"):

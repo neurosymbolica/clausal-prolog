@@ -16,7 +16,7 @@ import numpy as np
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_cluster import (
+from clausal.modules.py.scipy_cluster import (
     Linkage, FlatCluster, Dendrogram, Cophenet, Inconsistent,
     KMeans2, KMeans, VectorQuantize, Whiten,
     ResultGet,

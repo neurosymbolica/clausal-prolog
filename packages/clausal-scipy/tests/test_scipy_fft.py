@@ -17,7 +17,7 @@ import numpy as np
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.scipy_fft import (
+from clausal.modules.py.scipy_fft import (
     FFTransform,
     FFTransform2D,
     FFTransformND,

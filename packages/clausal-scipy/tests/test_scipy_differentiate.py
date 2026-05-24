@@ -22,7 +22,7 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.logic.solve import call
 from clausal.import_hook import _load_module
-from clausal.modules.scipy_differentiate import (
+from clausal.modules.py.scipy_differentiate import (
     Derivative, Jacobian, Hessian, ResultGet,
 )
 
