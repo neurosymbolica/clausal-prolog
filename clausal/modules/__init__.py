@@ -23,22 +23,6 @@ Canonical modules (``py.*`` subpackage):
 - ``py.os``       — EnvironmentVariable, SetEnvironmentVariable, UnsetEnvironmentVariable, WorkingDirectory, ChangeDirectory, Pid, Argv, Platform, CPUCount
 - ``py.files``    — FileExists, DirectoryExists, PathExists, DirectoryFiles, DirectoryEntries, FileSize, FileModificationTime, DeleteFile, DeleteDirectory, RenameFile, CopyFile, MakeDirectory, MakeDirectoryPath, ReadFileToString, WriteStringToFile, AppendStringToFile, AbsolutePath, JoinPath, SplitPath, FileExtension, TempFile, TempDirectory
 - ``py.process``  — Shell, ShellOutput, ProcessCreate, Sleep
-
-Legacy aliases (backward compatibility shims — re-export from ``py.*``):
-
-- ``regex``       → ``py.re``
-- ``log``         → ``py.logging``
-- ``date_time``   → ``py.datetime``
-- ``yaml_module`` → ``py.yaml``
-- ``sympy``       → ``clausal.modules.py.sympy`` (extracted: clausal-sympy package)
-- ``uuid_mod``    → ``py.uuid``
-- ``sqlite``      → ``py.sqlite``
-- ``random_mod``  → ``py.random``
-- ``json_mod``    → ``py.json``
-- ``csv_mod``     → ``py.csv``
-- ``os_mod``      → ``py.os``
-- ``files_mod``   → ``py.files``
-- ``process_mod`` → ``py.process``
 """
 
 # Extend __path__ so that separately-installed wrapper distributions
