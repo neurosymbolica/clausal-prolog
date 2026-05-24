@@ -620,7 +620,7 @@ class TestSchedulerGradUtils:
 
     def _nn_module(self):
         """Load torch_nn as a Clausal Module for call()."""
-        import clausal.modules.torch_nn as nn_mod
+        import clausal.modules.py.torch_nn as nn_mod
         from clausal.logic.database import Module
         return Module("torch_nn", module_dict=vars(nn_mod))
 
@@ -739,13 +739,13 @@ class TestTorchInfra:
 
     def test_lazy_import_loads_torch(self):
         # nv
-        import clausal.modules.torch as impl
+        import clausal.modules.py.torch as impl
         impl._ensure_torch()
         assert impl._torch is not None
 
     def test_exports_exist(self):
         # nv
-        import clausal.modules.torch as impl
+        import clausal.modules.py.torch as impl
         for name in impl.__all__:
             obj = getattr(impl, name)
             assert obj is not None, f"{name} is None"
@@ -753,7 +753,7 @@ class TestTorchInfra:
     def test_pred_arities(self):
         """Verify key predicates have the expected arity variants."""
         # nv
-        import clausal.modules.torch as impl
+        import clausal.modules.py.torch as impl
         # zeros should have arity 2 and 3
         assert 2 in impl.zeros._dispatch_fns
         assert 3 in impl.zeros._dispatch_fns

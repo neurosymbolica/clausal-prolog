@@ -56,7 +56,7 @@ dropout(T, R) / dropout(T, OPTS, R)
 from __future__ import annotations
 
 from clausal.modules.py._helpers import _pred, _pure
-from clausal.modules.torch import _th
+from clausal.modules.py.torch import _th
 
 
 # ═══════════════════════════════════════════════════════════════════════════

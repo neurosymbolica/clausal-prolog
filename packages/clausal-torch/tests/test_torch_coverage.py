@@ -13,22 +13,22 @@ import warnings
 def _get_wrapped_names():
     """Collect all predicate names from torch wrapper modules."""
     names = set()
-    import clausal.modules.torch as t
+    import clausal.modules.py.torch as t
     names.update(t.__all__)
-    import clausal.modules.torch_nn as tnn
+    import clausal.modules.py.torch_nn as tnn
     names.update(tnn.__all__)
     try:
-        import clausal.modules.torch_functional as tf
+        import clausal.modules.py.torch_functional as tf
         names.update(tf.__all__)
     except ImportError:
         pass
     try:
-        import clausal.modules.torch_distributions as td
+        import clausal.modules.py.torch_distributions as td
         names.update(td.__all__)
     except ImportError:
         pass
     try:
-        import clausal.modules.torch_data as tdata
+        import clausal.modules.py.torch_data as tdata
         names.update(tdata.__all__)
     except ImportError:
         pass

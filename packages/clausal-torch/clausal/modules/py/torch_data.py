@@ -28,7 +28,7 @@ from __future__ import annotations
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import _pred, _deep_deref, _pure
-from clausal.modules.torch import _ensure_torch, _th
+from clausal.modules.py.torch import _ensure_torch, _th
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────

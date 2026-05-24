@@ -40,7 +40,7 @@ from __future__ import annotations
 from clausal.logic.variables import deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import _pred, _deep_deref, _pure, _fact_table_2
-from clausal.modules.torch import _ensure_torch, _th
+from clausal.modules.py.torch import _ensure_torch, _th
 
 
 def _property_2(getter):
