@@ -23,6 +23,34 @@ that re-export from here.  ``sympy`` is now an extracted package (clausal-sympy)
 
 from __future__ import annotations
 
+# Extend __path__ so that separately-installed wrapper distributions
+# (e.g. clausal-torch) that place files under clausal/modules/py/ in
+# site-packages are discoverable alongside the core source tree.
+_sp = _candidate = _finder = _finder_module = _namespaces = None
+import os as _os, site as _site
+for _sp in _site.getsitepackages():
+    _candidate = _os.path.join(_sp, "clausal", "modules", "py")
+    if _os.path.isdir(_candidate) and _candidate not in __path__:
+        __path__.append(_candidate)
+
+# Discover editable installs: setuptools' modern editable finder (verified
+# against setuptools >=64) registers a class in sys.meta_path; the
+# NAMESPACES dict mapping fully-qualified package names to source
+# directories lives on the finder *module* (reachable via
+# sys.modules[finder.__module__]). Without this, `pip install -e
+# packages/clausal-X` would not contribute its `clausal/modules/py/<name>.py`
+# to clausal.modules.py.__path__.
+import sys as _sys
+for _finder in list(_sys.meta_path):
+    _finder_module = _sys.modules.get(getattr(_finder, "__module__", None) or "")
+    _namespaces = getattr(_finder_module, "NAMESPACES", None)
+    if not isinstance(_namespaces, dict):
+        continue
+    for _candidate in _namespaces.get("clausal.modules.py", ()):
+        if _candidate and _candidate not in __path__:
+            __path__.append(_candidate)
+del _os, _site, _sp, _sys, _finder, _finder_module, _namespaces, _candidate
+
 from typing import Callable
 
 from clausal.logic.trampoline import DONE
