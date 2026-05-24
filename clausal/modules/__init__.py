@@ -50,3 +50,21 @@ for _sp in _site.getsitepackages():
     if _os.path.isdir(_candidate) and _candidate not in __path__:
         __path__.append(_candidate)
 
+# Discover editable installs: setuptools' modern editable finder (verified
+# against setuptools >=64) registers a class in sys.meta_path; the
+# NAMESPACES dict mapping fully-qualified package names to source
+# directories lives on the finder *module* (reachable via
+# sys.modules[finder.__module__]). Without this, `pip install -e
+# packages/clausal-X` would not contribute its `clausal/modules/<name>.py`
+# to clausal.modules.__path__.
+import sys as _sys
+for _finder in list(_sys.meta_path):
+    _finder_module = _sys.modules.get(getattr(_finder, "__module__", None) or "")
+    _namespaces = getattr(_finder_module, "NAMESPACES", None)
+    if not isinstance(_namespaces, dict):
+        continue
+    for _candidate in _namespaces.get("clausal.modules", ()):
+        if _candidate and _candidate not in __path__:
+            __path__.append(_candidate)
+del _os, _site, _sp, _sys, _finder, _finder_module, _namespaces, _candidate
+
