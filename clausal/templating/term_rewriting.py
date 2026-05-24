@@ -1317,6 +1317,7 @@ _IMPORT_ALIASES: dict[str, str] = {
     "graphs": "graphs",
     "imperial": "imperial",
     "prolog": "prolog",
+    "provenance": "provenance",
     "units": "units",
 }
 
