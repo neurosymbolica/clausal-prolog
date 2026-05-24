@@ -1,4 +1,4 @@
-"""clausal.modules.sklearn — scikit-learn predicates for Clausal.
+"""clausal.modules.py.sklearn — scikit-learn predicates for Clausal.
 
 Provides predicates for machine learning via scikit-learn::
 

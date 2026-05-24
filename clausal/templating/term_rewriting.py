@@ -1295,7 +1295,7 @@ _IMPORT_ALIASES: dict[str, str] = {
     "opencv_imgproc": "py.opencv_imgproc",
     "opencv_objdetect": "py.opencv_objdetect",
     "opencv_video": "py.opencv_video",
-    "sklearn": "sklearn",
+    "sklearn": "py.sklearn",
 }
 
 
