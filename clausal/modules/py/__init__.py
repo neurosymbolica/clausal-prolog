@@ -1,24 +1,12 @@
-"""clausal.modules.py — Python library wrapper modules for Clausal.
+"""clausal.modules.py — canonical Python library wrappers.
 
-This subpackage contains Clausal predicate wrappers around Python
-standard library and third-party modules::
-
-    -import_from(py.uuid, [UUIDv4, UUIDStr, IsUUID])
-    -import_from(py.yaml, [Read, write, Get])
-    -import_from(py.sqlite, [SQLiteConnect, SQLiteQuery])
-    -import_from(py.datetime, [Now, Today, Date, TimeDelta])
-    -import_from(py.re, [Match, Search, Replace, Split, findall])
-    -import_from(py.logging, [GetLogger, Info, Debug, Warning, Error])
-    -import_from(py.random, [Random, RandomInteger, RandomMember, Maybe])
-    -import_from(py.json, [Parse, Generate, Get, ReadFile])
-    -import_from(py.csv, [Parse, ParseRow, ReadFile, ReadRecords])
-    -import_from(py.os, [EnvironmentVariable, WorkingDirectory, Pid, Platform])
-    -import_from(py.files, [FileExists, DirectoryFiles, ReadFileToString, JoinPath])
-    -import_from(py.process, [Shell, ShellOutput, ProcessCreate, Sleep])
-
-The legacy names (``uuid_mod``, ``yaml_module``,
-``regex``, ``log``, ``date_time``, ``sqlite``) are compatibility shims
-that re-export from here.  ``sympy`` is now an extracted package (clausal-sympy).
+Each wrapper module is named after the Python library it wraps. Stdlib
+wrappers (``csv``, ``datetime``, ``json``, ``os``, ``random``, ``re``,
+``uuid``, etc.) ship with core Clausal. Third-party wrappers (``torch``,
+``sympy``, ``jax``, ``opencv``, ``scipy_*``, ``sklearn``, ``spacy``,
+``yaml``) ship in separately installable extension distributions
+(clausal-torch, clausal-sympy, …) that contribute files into this
+subpackage via PEP 420 namespace packaging.
 """
 
 from __future__ import annotations

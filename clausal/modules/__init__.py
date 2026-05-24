@@ -1,28 +1,27 @@
-"""clausal.modules — standard library modules for Clausal.
+"""clausal.modules — Python library wrappers for Clausal.
 
-This package acts as the top-level search path for Clausal module imports.
-when a .clausal file uses ``-import_from(py.re, [Match, ...])`` or
-``-import_module(py.re)``, the import machinery looks here (as
-``clausal.modules.py.re``) if the bare module name is not found.
+Wrappers for Python stdlib and third-party packages all live in the
+``py`` subpackage (``clausal.modules.py.<name>``). For example::
 
-Canonical modules (``py.*`` subpackage):
+    -import_from(py.uuid, [UUIDv4, UUIDStr])
+    -import_from(py.torch, [tensor, zeros, randn])
+    -import_from(py.sympy, [Simplify, Solve])
 
-- ``py.re``       — Match, Search, Replace, Split, findall
-- ``py.logging``  — GetLogger, Debug, Info, Warning, Error, Critical, ...
-- ``py.datetime`` — Now, Today, Date, Time, DateTime, TimeDelta, ...
-- ``py.yaml``     — Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get
-- ``sympy``       — Sym, Simplify, Expand, Factor, Solve, SolveAll, Diff, Integrate, Limit, Series, Subs, FreeVars, ToSympy, FromSympy (extracted: clausal-sympy)
-- ``py.uuid``     — UUIDv4, UUIDv1, UUIDv3, UUIDv5, UUIDStr, UUIDHex, ...
-- ``py.sqlite``   — SQLiteConnect, SQLiteQuery, SQLiteExec, SQLiteTable, ...
-- ``py.spacy``    — LoadModel, UnloadModel, CurrentModel, Process, Token, TokenText, TokenList, Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop, Entity, EntityList, Sentence, SentenceList, Similarity, NounChunk
-- ``py.units``    — SI base/derived unit predicates, SI prefix constants, has_units, StripUnits (canonical: ``units``)
-- ``py.imperial`` — imperial and non-SI unit vectors (inch, foot, pound_mass, mph, …) (canonical: ``imperial``)
-- ``py.random``   — Random, RandomFloat, RandomInteger, RandomMember, RandomPermutation, RandomSample, RandomSeed, Maybe
-- ``py.json``     — Parse, Generate, PrettyGenerate, Get, ReadFile, WriteFile
-- ``py.csv``      — Parse, ParseRow, ParseRecords, Generate, GenerateRecords, ReadFile, ReadRecords, WriteFile
-- ``py.os``       — EnvironmentVariable, SetEnvironmentVariable, UnsetEnvironmentVariable, WorkingDirectory, ChangeDirectory, Pid, Argv, Platform, CPUCount
-- ``py.files``    — FileExists, DirectoryExists, PathExists, DirectoryFiles, DirectoryEntries, FileSize, FileModificationTime, DeleteFile, DeleteDirectory, RenameFile, CopyFile, MakeDirectory, MakeDirectoryPath, ReadFileToString, WriteStringToFile, AppendStringToFile, AbsolutePath, JoinPath, SplitPath, FileExtension, TempFile, TempDirectory
-- ``py.process``  — Shell, ShellOutput, ProcessCreate, Sleep
+``.clausal`` files may also use the bare names (``-import_from(torch, ...)``,
+``-import_from(sympy, ...)``); the compiler rewrites these to the
+canonical ``py.<name>`` paths via ``_IMPORT_ALIASES`` in
+``clausal/templating/term_rewriting.py``.
+
+Extension distributions (clausal-torch, clausal-sympy, clausal-jax,
+clausal-opencv, clausal-scipy, clausal-sklearn, clausal-spacy,
+clausal-yaml) install their wrappers into ``clausal/modules/py/`` via
+PEP 420 namespace-package contributions; this package's ``__path__``
+is extended below to discover them.
+
+A small number of Clausal-domain modules (``graphs``, ``imperial``,
+``prolog``, ``units``) live directly under ``clausal/modules/`` rather
+than the ``py/`` subpackage. These are first-class Clausal predicates,
+not Python-library wrappers; they keep their bare-name location.
 """
 
 # Extend __path__ so that separately-installed wrapper distributions
