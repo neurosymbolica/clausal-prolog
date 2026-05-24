@@ -59,8 +59,8 @@ from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import (
     _pred, _pure, _check_1, _bidir_2, _fact_table_2, _deep_deref,
 )
-from clausal.modules.opencv import _cv
-from clausal.modules._opencv_handles import alloc, lookup, release as _registry_release
+from clausal.modules.py.opencv import _cv
+from clausal.modules.py._opencv_handles import alloc, lookup, release as _registry_release
 
 
 # ══════════════════════════════════════════════════════════════════════════

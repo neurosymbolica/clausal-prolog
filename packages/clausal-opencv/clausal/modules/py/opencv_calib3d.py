@@ -38,7 +38,7 @@ from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import (
     _pred, _pure, _deep_deref, _bidir_2,
 )
-from clausal.modules.opencv import _cv
+from clausal.modules.py.opencv import _cv
 
 
 # ══════════════════════════════════════════════════════════════════════════

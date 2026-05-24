@@ -25,7 +25,7 @@ def test_lazy_import_holds_no_cv2_reference_at_module_load():
     wrapper module's private global directly: ``_cv2`` starts as None
     and is populated only after a call to ``_ensure_cv2()``.
     """
-    from clausal.modules import opencv as m
+    from clausal.modules.py import opencv as m
     # Reset to the cold-import state (this only affects our wrapper —
     # any pre-loaded cv2 module in sys.modules stays).
     m._cv2 = None
@@ -35,13 +35,13 @@ def test_lazy_import_holds_no_cv2_reference_at_module_load():
 
 
 def test_getattr_raises_for_unknown_name():
-    from clausal.modules import opencv as m
+    from clausal.modules.py import opencv as m
     with pytest.raises(AttributeError, match="no attribute 'not_a_constant'"):
         _ = m.not_a_constant
 
 
 def test_getattr_returns_known_constants():
-    from clausal.modules import opencv as m
+    from clausal.modules.py import opencv as m
     # Constants are exported under lowercase aliases because ALL-CAPS
     # names are reserved for logic variables by Clausal's grammar.
     assert isinstance(m.imread_color, int)
@@ -51,7 +51,7 @@ def test_getattr_returns_known_constants():
 
 
 def test_handle_registry_alloc_returns_distinct_integers():
-    from clausal.modules._opencv_handles import alloc
+    from clausal.modules.py._opencv_handles import alloc
     h1 = alloc(object())
     h2 = alloc(object())
     assert isinstance(h1, int) and isinstance(h2, int)
@@ -59,7 +59,7 @@ def test_handle_registry_alloc_returns_distinct_integers():
 
 
 def test_handle_registry_lookup_and_release():
-    from clausal.modules._opencv_handles import alloc, lookup, release
+    from clausal.modules.py._opencv_handles import alloc, lookup, release
     obj = object()
     h = alloc(obj)
     assert lookup(h) is obj
@@ -71,15 +71,15 @@ def test_handle_registry_lookup_and_release():
 
 
 def test_handle_registry_lookup_unknown_raises():
-    from clausal.modules._opencv_handles import lookup
+    from clausal.modules.py._opencv_handles import lookup
     with pytest.raises(KeyError):
         lookup(9_999_999)
 
 
 def test_free_predicate_removes_handle():
     """free/1 calls release() if present and removes from registry."""
-    from clausal.modules import opencv as m
-    from clausal.modules._opencv_handles import alloc, lookup
+    from clausal.modules.py import opencv as m
+    from clausal.modules.py._opencv_handles import alloc, lookup
     from clausal.logic.solve import call
     from clausal.logic.variables import Var
 
@@ -107,7 +107,7 @@ def test_free_predicate_removes_handle():
 
 
 def test_free_predicate_on_unknown_handle_fails():
-    from clausal.modules import opencv as m
+    from clausal.modules.py import opencv as m
     from clausal.logic.solve import call
 
     ok = any(True for _ in call(m.free, 8_888_888))

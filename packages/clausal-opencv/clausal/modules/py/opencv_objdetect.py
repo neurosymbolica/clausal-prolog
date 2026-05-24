@@ -58,8 +58,8 @@ import os as _os
 from clausal.logic.variables import deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import _pred, _pure, _fact_table_2, _deep_deref
-from clausal.modules.opencv import _cv
-from clausal.modules._opencv_handles import alloc, lookup
+from clausal.modules.py.opencv import _cv
+from clausal.modules.py._opencv_handles import alloc, lookup
 
 
 # ── Cascade classifier ───────────────────────────────────────────────────

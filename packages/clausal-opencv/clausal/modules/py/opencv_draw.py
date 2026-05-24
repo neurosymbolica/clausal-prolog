@@ -55,7 +55,7 @@ from __future__ import annotations
 import numpy as _np
 
 from clausal.modules.py._helpers import _pred, _pure
-from clausal.modules.opencv import _cv
+from clausal.modules.py.opencv import _cv
 
 
 # ── Copy-on-write helper ──────────────────────────────────────────────────

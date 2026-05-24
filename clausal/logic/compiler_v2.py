@@ -227,6 +227,15 @@ _MODULE_ALIASES: dict[str, str] = {
     "jax_optax": "py.jax_optax",
     "jax_equinox": "py.jax_equinox",
     "jax_flax": "py.jax_flax",
+    "opencv": "py.opencv",
+    "opencv_calib3d": "py.opencv_calib3d",
+    "opencv_color": "py.opencv_color",
+    "opencv_contours": "py.opencv_contours",
+    "opencv_draw": "py.opencv_draw",
+    "opencv_features": "py.opencv_features",
+    "opencv_imgproc": "py.opencv_imgproc",
+    "opencv_objdetect": "py.opencv_objdetect",
+    "opencv_video": "py.opencv_video",
     "sklearn": "sklearn",
 }
 

@@ -593,7 +593,7 @@ copy_image = _pred("copy_image",
 
 def _free_dispatch(this_generator, _proceed, _fail, _catcher,
                    handle_var, trail):
-    from clausal.modules._opencv_handles import lookup, release
+    from clausal.modules.py._opencv_handles import lookup, release
     handle = deref(handle_var)
     try:
         obj = lookup(handle)

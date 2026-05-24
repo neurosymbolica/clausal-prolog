@@ -61,8 +61,8 @@ from __future__ import annotations
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import _pred, _pure, _deep_deref
-from clausal.modules.opencv import _cv
-from clausal.modules._opencv_handles import alloc, lookup
+from clausal.modules.py.opencv import _cv
+from clausal.modules.py._opencv_handles import alloc, lookup
 
 
 # ── Detector option-dict to cv2-kwarg mapping ─────────────────────────────

@@ -25,7 +25,7 @@ from __future__ import annotations
 import threading as _threading
 
 from clausal.modules.py._helpers import _pred, _pure, _bidir_2, _fact_table_2
-from clausal.modules.opencv import _cv
+from clausal.modules.py.opencv import _cv
 
 
 # ── Cached name ↔ code maps ───────────────────────────────────────────────
