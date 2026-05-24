@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_stats — scipy.stats predicates for Clausal.
+"""clausal.modules.py.scipy_stats — scipy.stats predicates for Clausal.
 
 Provides statistical routines from scipy.stats as importable predicate
 objects for use in .clausal files via::

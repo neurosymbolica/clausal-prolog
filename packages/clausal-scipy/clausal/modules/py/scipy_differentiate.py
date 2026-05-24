@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_differentiate — scipy.differentiate predicates for Clausal.
+"""clausal.modules.py.scipy_differentiate — scipy.differentiate predicates for Clausal.
 
 Provides numerical differentiation from ``scipy.differentiate`` as
 importable predicate objects for use in .clausal files via::

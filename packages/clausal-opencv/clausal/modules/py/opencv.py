@@ -1,4 +1,4 @@
-"""clausal.modules.opencv — OpenCV (cv2) predicates for Clausal.
+"""clausal.modules.py.opencv — OpenCV (cv2) predicates for Clausal.
 
 Phase 1 — Core, I/O, Properties, Arithmetic.
 
@@ -138,7 +138,7 @@ def _cv():
 # ── Constant re-exports via __getattr__ ───────────────────────────────────
 #
 # Each Phase may extend ``_CONSTANTS`` to surface additional cv2
-# attributes under ``clausal.modules.opencv`` so users can write
+# attributes under ``clausal.modules.py.opencv`` so users can write
 # ``-import_from(opencv, [color_bgr2gray])`` without an ``++()`` escape.
 #
 # CONVENTION: names are **lowercase** in the wrapper, not the
@@ -352,7 +352,7 @@ def __getattr__(name):
                 f"cv2 has no attribute {cv2_attr!r} (build mismatch?)"
             ) from exc
     raise AttributeError(
-        f"module 'clausal.modules.opencv' has no attribute {name!r}"
+        f"module 'clausal.modules.py.opencv' has no attribute {name!r}"
     )
 
 

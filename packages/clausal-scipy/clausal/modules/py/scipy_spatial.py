@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_spatial — scipy.spatial predicates for Clausal.
+"""clausal.modules.py.scipy_spatial — scipy.spatial predicates for Clausal.
 
 Provides spatial algorithms from scipy.spatial as importable predicate objects
 for use in .clausal files via::

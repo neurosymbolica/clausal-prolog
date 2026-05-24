@@ -1,4 +1,4 @@
-"""clausal.modules.torch — PyTorch tensor predicates for Clausal.
+"""clausal.modules.py.torch — PyTorch tensor predicates for Clausal.
 
 Provides pure tensor operations from PyTorch as importable predicate objects
 for use in .clausal files via::
@@ -1101,7 +1101,7 @@ def __getattr__(name):
         _DTYPE_CACHE = _export_dtypes()
     if name in _DTYPE_CACHE:
         return _DTYPE_CACHE[name]
-    raise AttributeError(f"module 'clausal.modules.torch' has no attribute {name!r}")
+    raise AttributeError(f"module 'clausal.modules.py.torch' has no attribute {name!r}")
 
 
 # ── Module-level exports ──────────────────────────────────────────────────

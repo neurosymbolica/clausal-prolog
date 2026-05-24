@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_optimize — scipy.optimize predicates for Clausal.
+"""clausal.modules.py.scipy_optimize — scipy.optimize predicates for Clausal.
 
 Provides optimisation routines from scipy.optimize as importable predicate
 objects for use in .clausal files via::

@@ -1,4 +1,4 @@
-"""clausal.modules.opencv_objdetect — Classical object detectors.
+"""clausal.modules.py.opencv_objdetect — Classical object detectors.
 
 Phase 8 — Object Detection.
 

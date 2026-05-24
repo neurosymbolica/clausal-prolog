@@ -1,4 +1,4 @@
-"""clausal.modules.opencv_video — Video I/O predicates.
+"""clausal.modules.py.opencv_video — Video I/O predicates.
 
 Phase 10 — Video I/O.
 

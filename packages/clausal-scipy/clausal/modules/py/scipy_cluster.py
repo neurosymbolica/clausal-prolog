@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_cluster — scipy.cluster predicates for Clausal.
+"""clausal.modules.py.scipy_cluster — scipy.cluster predicates for Clausal.
 
 Provides hierarchical clustering and vector quantisation routines from
 ``scipy.cluster.hierarchy`` and ``scipy.cluster.vq`` as importable predicate

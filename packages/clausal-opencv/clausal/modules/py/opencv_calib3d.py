@@ -1,4 +1,4 @@
-"""clausal.modules.opencv_calib3d — Camera calibration and 3D geometry.
+"""clausal.modules.py.opencv_calib3d — Camera calibration and 3D geometry.
 
 Phase 9 — Camera Calibration and Homography.
 

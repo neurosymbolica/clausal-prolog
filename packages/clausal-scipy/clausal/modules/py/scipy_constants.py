@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_constants — physical constants from scipy.constants.
+"""clausal.modules.py.scipy_constants — physical constants from scipy.constants.
 
 Named constants are plain ``Quantity`` values importable directly::
 

@@ -1,4 +1,4 @@
-"""clausal.modules.opencv_contours — OpenCV contour predicates.
+"""clausal.modules.py.opencv_contours — OpenCV contour predicates.
 
 Phase 4 — Contours.
 

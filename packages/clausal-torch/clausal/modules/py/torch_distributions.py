@@ -1,4 +1,4 @@
-"""clausal.modules.torch_distributions — Probability distribution predicates.
+"""clausal.modules.py.torch_distributions — Probability distribution predicates.
 
 Wraps ``torch.distributions`` — probability distributions with sampling,
 log-probability, and property queries::

@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_fft — scipy.fft predicates for Clausal.
+"""clausal.modules.py.scipy_fft — scipy.fft predicates for Clausal.
 
 Provides fast Fourier transform routines from scipy.fft as importable
 predicate objects for use in .clausal files via::

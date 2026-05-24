@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_ndimage — scipy.ndimage predicates for Clausal.
+"""clausal.modules.py.scipy_ndimage — scipy.ndimage predicates for Clausal.
 
 Provides N-dimensional image processing routines from scipy.ndimage as
 importable predicate objects for use in .clausal files via::

@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_signal — scipy.signal predicates for Clausal.
+"""clausal.modules.py.scipy_signal — scipy.signal predicates for Clausal.
 
 Provides signal-processing routines from scipy.signal as importable predicate
 objects for use in .clausal files via::

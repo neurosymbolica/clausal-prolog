@@ -1,4 +1,4 @@
-"""clausal.modules.torch_functional — nn.functional predicates for Clausal.
+"""clausal.modules.py.torch_functional — nn.functional predicates for Clausal.
 
 Wraps commonly-used functions from ``torch.nn.functional`` — the stateless
 functional API for neural network operations::

@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_linalg — scipy.linalg predicates for Clausal.
+"""clausal.modules.py.scipy_linalg — scipy.linalg predicates for Clausal.
 
 Provides linear algebra routines from scipy.linalg as importable predicate
 objects for use in .clausal files via::

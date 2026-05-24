@@ -1,4 +1,4 @@
-"""clausal.modules.opencv_color — OpenCV color-space predicates.
+"""clausal.modules.py.opencv_color — OpenCV color-space predicates.
 
 Phase 2 — Color Conversions.
 

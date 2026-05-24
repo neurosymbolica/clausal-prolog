@@ -2,7 +2,7 @@
 
 Used by later phases (features, objdetect, video) to manage detector,
 matcher, capture, and writer handles. Phase 1 also uses this to back
-the `free/1` predicate exposed from ``clausal.modules.opencv``.
+the `free/1` predicate exposed from ``clausal.modules.py.opencv``.
 
 Pattern mirrors ``packages/clausal-scipy/clausal/modules/scipy_spatial.py``
 (see ``_alloc_handle`` / ``_lookup_handle``).

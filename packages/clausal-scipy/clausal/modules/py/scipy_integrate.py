@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_integrate — scipy.integrate predicates for Clausal.
+"""clausal.modules.py.scipy_integrate — scipy.integrate predicates for Clausal.
 
 Provides numerical integration routines from scipy.integrate as importable
 predicate objects for use in .clausal files via::

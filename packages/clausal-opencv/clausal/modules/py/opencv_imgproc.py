@@ -1,4 +1,4 @@
-"""clausal.modules.opencv_imgproc — OpenCV image-processing predicates.
+"""clausal.modules.py.opencv_imgproc — OpenCV image-processing predicates.
 
 Phase 3 — Filtering and Morphology.
 

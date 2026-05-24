@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_special — scipy.special predicates for Clausal.
+"""clausal.modules.py.scipy_special — scipy.special predicates for Clausal.
 
 Provides mathematical special functions from scipy.special as importable
 predicate objects for use in .clausal files via::

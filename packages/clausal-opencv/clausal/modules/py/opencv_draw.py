@@ -1,4 +1,4 @@
-"""clausal.modules.opencv_draw — Non-mutating OpenCV drawing predicates.
+"""clausal.modules.py.opencv_draw — Non-mutating OpenCV drawing predicates.
 
 Phase 6 — Drawing.
 

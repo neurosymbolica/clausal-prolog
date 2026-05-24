@@ -1,4 +1,4 @@
-"""clausal.modules.torch_nn — nn.Module predicates for Clausal.
+"""clausal.modules.py.torch_nn — nn.Module predicates for Clausal.
 
 Provides nondeterministic enumeration of PyTorch nn.Module structure and
 registry fact tables for layers, activations, losses, optimizers, and

@@ -1,4 +1,4 @@
-"""clausal.modules.opencv_features — Feature detectors and matchers.
+"""clausal.modules.py.opencv_features — Feature detectors and matchers.
 
 Phase 7 — Features and Matching.
 

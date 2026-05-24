@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_interpolate — scipy.interpolate predicates for Clausal.
+"""clausal.modules.py.scipy_interpolate — scipy.interpolate predicates for Clausal.
 
 Provides interpolation routines from scipy.interpolate as importable predicate
 objects for use in .clausal files via::

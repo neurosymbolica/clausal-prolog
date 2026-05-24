@@ -1,4 +1,4 @@
-"""clausal.modules.scipy_sparse — scipy.sparse predicates for Clausal.
+"""clausal.modules.py.scipy_sparse — scipy.sparse predicates for Clausal.
 
 Provides sparse matrix construction, conversion, inspection, and linear algebra
 from ``scipy.sparse`` and ``scipy.sparse.linalg`` as importable predicate objects

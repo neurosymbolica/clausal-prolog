@@ -1,4 +1,4 @@
-"""clausal.modules.torch_data — Dataset predicates for Clausal.
+"""clausal.modules.py.torch_data — Dataset predicates for Clausal.
 
 Wraps ``torch.utils.data`` — dataset definition and item access::
 
