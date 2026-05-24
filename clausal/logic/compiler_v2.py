@@ -197,7 +197,7 @@ _MODULE_ALIASES: dict[str, str] = {
     "uuid": "uuid_mod",
     "yaml": "yaml",
     "spacy": "spacy",
-    "sympy": "sympy",
+    "sympy": "py.sympy",
     "scipy_cluster": "scipy_cluster",
     "scipy_constants": "scipy_constants",
     "scipy_differentiate": "scipy_differentiate",

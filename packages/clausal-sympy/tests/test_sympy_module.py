@@ -1,4 +1,4 @@
-"""Tests for clausal.modules.sympy — SymPy integration."""
+"""Tests for clausal.modules.py.sympy — SymPy integration."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import sympy as sp
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.terms import Add, Sub, Mult, Div, Pow, Negate, Compound
-from clausal.modules.sympy import (
+from clausal.modules.py.sympy import (
     to_sympy, from_sympy, _ConversionContext,
     Sym, ToSympy, FromSympy,
     Simplify, Expand, Factor, Solve, SolveAll,
@@ -345,7 +345,7 @@ class TestExpand:
         assert sol is not None
         r = deref(result)
         # Result is a SymExpr wrapper around a SymPy expression
-        from clausal.modules.sympy import SymExpr
+        from clausal.modules.py.sympy import SymExpr
         assert isinstance(r, SymExpr)
         assert r == x**2 + 2 * x + 1
 

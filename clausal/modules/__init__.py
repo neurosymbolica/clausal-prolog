@@ -30,7 +30,7 @@ Legacy aliases (backward compatibility shims — re-export from ``py.*``):
 - ``log``         → ``py.logging``
 - ``date_time``   → ``py.datetime``
 - ``yaml_module`` → ``py.yaml``
-- ``sympy``       → ``clausal.modules.sympy`` (extracted: clausal-sympy package)
+- ``sympy``       → ``clausal.modules.py.sympy`` (extracted: clausal-sympy package)
 - ``uuid_mod``    → ``py.uuid``
 - ``sqlite``      → ``py.sqlite``
 - ``random_mod``  → ``py.random``

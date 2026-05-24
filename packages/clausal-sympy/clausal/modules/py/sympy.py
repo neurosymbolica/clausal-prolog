@@ -1,4 +1,4 @@
-"""clausal.modules.sympy — SymPy integration for Clausal.
+"""clausal.modules.py.sympy — SymPy integration for Clausal.
 
 Provides symbolic math predicates that accept **native Clausal terms**
 directly — no ``Sym()`` bootstrapping or ``++()`` escaping required::
