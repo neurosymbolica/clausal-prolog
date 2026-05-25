@@ -831,6 +831,9 @@ container type has a SegList arm but no SegString arm.
   probe (covered by the existing F031/F032/F033/F034 probes which
   exercise the delegated helpers).
 
+*Task 6 confirmed (no finding):*
+- **F049** — Task 6 confirmed: `_head_has_deferred_pattern` (goal_shallow.py:226–262) correctly checks for `SegList` and `StarUnpack` in clause heads to gate continuation-TCO; no `SegString` check is needed. Rationale: `SegString` is a runtime construct created only in `__walk__` (when ground) and in `_build_multi_star_list` (body-position multi-star), never as a head literal. Head terms are validated by `term_to_ast_expr` (terms_to_ast.py) which lacks a case for `SegString` and raises `NotImplementedError` if someone attempts to use one as a head argument; `is_term_instance(SegString(...))` returns False. Since `SegString` cannot appear in heads, the absence of a SegString check in the deferred-pattern gate is correct and requires no fix. Verified by: (1) inspection of `SegString.__init__` and `__walk__` (no head-constructor entry points); (2) `term_to_ast_expr` type coverage (SegString not handled); (3) runtime check that `is_term_instance(SegString(...)) == False`. No probe needed (static verification only).
+
 ### Class C4 — Head-pattern literal mismatch
 
 ### F046 — C4 confirmed: rule heads with string literals fail to match char-list callers
