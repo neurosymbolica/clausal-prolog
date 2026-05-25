@@ -47,6 +47,7 @@
   to an int code. This sets the de-facto contract for the char element
   type: 1-char `str`. Confirmed for both branches. See
   `probes/probe_F006.py`.
+- **F005** — Task 1 confirmed: nested-list elements in a string-vs-list unify are rejected (the per-element check requires `PyUnicode_Check(elem) && PyUnicode_GET_LENGTH(elem) == 1`). Probe: `probes/probe_F005.py`.
 
 ### Class C2 — Non-det collapsed to first
 *(none yet)*
@@ -177,8 +178,7 @@ assert unify(nfd, ["e", "́"], Trail()) is True
 
 - **Class:** C7 (Unicode / multi-codepoint)
 - **Severity:** doc-only
-- **Location:** `clausal/logic/variables/_variables.c:1143-1149` and
-  `clausal/logic/variables/_variables.c:1170-1176`
+- **Location:** `clausal/logic/variables/_variables.c:1129, 1144, 1171`
 - **Discovered by:** Task 1 of Phase 0
 - **Probe:** `probes/probe_F004.py`
 
@@ -203,6 +203,8 @@ assert unify("abc", ["abc"],     Trail()) is False
 document the rule"). The finding is to add a note to the str↔list
 section of `_variables.c` and any user-facing docs that describe the
 contract.
+
+Reproducer cases all return False at the size-mismatch check (`:1129`) before reaching the per-element `PyUnicode_GET_LENGTH(elem) == 1` gate (`:1144`/`:1171`). The per-element gate is effectively unreachable in isolation because any list whose elements sum to `n` codepoints with at least one multi-char element must have fewer than `n` slots. The doc-only finding stands: the contract documented by the per-element gate (no multi-char elements) is implicitly enforced by the size check in every reachable case.
 
 ### F007 — Lone surrogate halves are treated as ordinary codepoints
 
@@ -254,12 +256,7 @@ indexing semantics on str.
 ### Class C12 — Char representation drift
 
 *Task 1 confirmed (no finding):*
-- **F013** — A Var bound to an int (e.g. `97` = ASCII `'a'`) does not
-  unify when placed inside a list against the equivalent `str`
-  (`unify("a", [Var bound to 97], t)` is False). This is consistent with
-  [[F006]]: the C path binds chars as 1-char `str`, never as int codes.
-  See `probes/probe_F013.py`. Spec C12 notes this is the intended
-  contract; the broader char-aware-builtin audit is left to later tasks.
+- **F013** — A Var bound to a non-Var, non-single-char-PyUnicode dereffed element (e.g. int, list, tuple) does not unify when placed inside a list against the equivalent `str`. The C path requires the dereffed element to be either an unbound Var (allocate substring & bind) or a PyUnicode of exactly 1 code point. This is consistent with [[F006]]: the C path binds chars as 1-char `str`, never as int codes. See `probes/probe_F013.py`. Spec C12 notes this is the intended contract; the broader char-aware-builtin audit is left to later tasks.
 
 ### Class C13 — Type-check predicates
 *(none yet)*
@@ -358,14 +355,7 @@ must be bound to *some* `PyObject`. Logged for visibility; not worth
 fixing in isolation.
 
 *Task 1 confirmed (no finding):*
-- Refcount discipline in the str↔list block is balanced. Every
-  `PyUnicode_Substring` allocation (`_variables.c:1138`, `:1165`) is
-  paired with `Py_DECREF(ch)` (`_variables.c:1141`, `:1168`), and the
-  DECREF runs on every return path — success (`r == 1`), failure
-  (`r == 0`), and error (`r < 0`). The outer `do_unify_and_wake`
-  (`_variables.c:1346-1386`) calls `trail_undo_to(trail, mark)` on any
-  failure or error, so partial Var bindings made inside the loop are
-  rolled back. No leak detected.
+- **F014** — Task 1 confirmed: refcount discipline on `PyUnicode_Substring` allocations is balanced. Every alloc at `_variables.c:1138`/`:1165` is paired with `Py_DECREF` at `:1141`/`:1168` on the success path; error returns (`r == -1`) propagate the unbinding via standard CPython exception flow. No probe (static review only).
 
 ### Out-of-taxonomy
 *(none yet)*
