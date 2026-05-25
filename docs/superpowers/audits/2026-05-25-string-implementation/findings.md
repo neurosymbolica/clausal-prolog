@@ -122,7 +122,8 @@ have to capture the original target type at the compile-time site
 design-gap because the information genuinely isn't present at the
 call site; F003-class type-preservation gap on the head-pattern
 boundary. Related to [[F018]] (parallel type loss in
-`SegList.__walk__`).
+`SegList.__walk__`) and [[F034]] (SegString blind spot in output
+star_val, the C3 sibling of this C1 finding).
 
 ### F020 — SegList.__add__ / __radd__ rejects str
 
@@ -532,6 +533,7 @@ list).
   point. Confirmed via direct call:
   `_head_list_unify_input(Var(), [Var()], Var(), [], Trail())`
   returns `None`. The protocol contract (None = defer) holds.
+- **F037** — Task 3 confirmed: the fast path at `list_unify.py:101-109` (gated `type(d) is list and star_val is not None and not after_vals`) deliberately skips strings; strings flow through the slow path at `:119-139` where `isinstance(d, (list, str))` correctly handles both via uniform slicing. F031/F032 implicitly demonstrated the slow path's string-handling correctness for the SegList walk → list result case. No fast-path-specific finding.
 
 ### Class C4 — Head-pattern literal mismatch
 *(none yet)*
