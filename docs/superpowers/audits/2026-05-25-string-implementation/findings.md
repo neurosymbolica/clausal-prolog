@@ -21,7 +21,7 @@
 | C11 | Trail/backtracking around partials | 0 | 0 | 0 | 0 | 0 |
 | C12 | Char representation drift | 1 | 0 | 0 | 0 | 0 |
 | C13 | Type-check predicates | 1 | 3 | 0 | 1 | 0 |
-| C14 | Term inspection drift | 0 | 0 | 0 | 0 | 0 |
+| C14 | Term inspection drift | 4 | 3 | 0 | 0 | 0 |
 | C15 | First-arg indexing on strings | 0 | 0 | 0 | 0 | 0 |
 | C16 | Free-threaded build safety | 1 | 0 | 0 | 0 | 0 |
 | C17 | Performance, memory, leaks | 0 | 0 | 2 | 1 | 0 |
@@ -2773,7 +2773,404 @@ the ISO type-check family).
   probe (covered by `probes/probe_F080.py`).
 
 ### Class C14 — Term inspection drift
-*(none yet)*
+
+### F088 — `unpack` (=..) on a non-empty list yields `[".", ]` with no args
+
+- **Class:** C14 (Term inspection drift)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/inspection.py:159-177`
+  (the decomposition branch in ``_univ__2``) consuming
+  `clausal/logic/builtins/_helpers.py:75-83` (`_args_list_py`) and the
+  C twin at `clausal/logic/variables/_variables.c:2311-2363`
+  (`py_args_list`)
+- **Discovered by:** Task 12 of Phase 0
+- **Probe:** `probes/probe_F088.py`
+
+**Symptom:** ``unpack(["a","b","c"], L)`` succeeds with ``L = ["."]``
+— the functor name with **no args**.  The implementation calls
+``_functor_name(["a","b","c"]) == "."`` (the cons-cell functor) and
+concatenates it with ``_args_list(["a","b","c"])`` — but ``_args_list``
+falls through to ``return []`` for every Python ``list`` input.  The
+Python fallback at ``_helpers.py:75-83`` and the C version at
+``_variables.c:2362-2363`` agree: lists are not unpacked.
+
+Same call also makes the round-trip property of ``=..``
+non-recoverable: ``T =.. L, T =.. L2`` no longer produces ``L = L2``
+when the original term is a list — ``L`` becomes ``["."]`` and the
+reconstruction step yields the atom ``"."``, losing every element.
+
+**Reproducer:**
+```python
+from clausal.logic.builtins import get_builtin_dispatch
+from clausal.logic.variables import Var, Trail, deref
+from clausal.logic.trampoline import StepGenerator, solutions
+
+L = Var()
+disp = get_builtin_dispatch("unpack", 2, None)
+sols = solutions(StepGenerator(disp, None, None, None,
+                               ["a", "b", "c"], L, Trail()),
+                 snapshot=lambda: deref(L))
+assert sols == [["."]]
+```
+
+**Expected:** Either honour cons-cell semantics
+(``L = [".", "a", ["b", "c"]]``) consistent with ``functor/3``
+reporting arity 2, or honour strings-as-lists (``L = ["a", "b", "c"]``
+— atom-univ shape but element-typed).  Either choice is defensible;
+the current shape is neither.
+**Actual:** ``L = ["."]`` — functor name only, args dropped.
+
+**Notes:** ``functor/3`` on the same input reports
+``("." , 2)`` (the arity *is* 2), so the inconsistency is internal to
+the inspection family — see [[F089]] for the cross-predicate angle and
+[[F091]] for the matching ``arg/3`` story.  Fix is local to
+``_args_list_py`` / ``py_args_list``: add the missing
+``isinstance(term, list)`` branch.  Note the helper's default value
+also drives ``=..`` on every unrecognised term (e.g. a bare ``True``
+or a bound int) — those silently produce ``[<functor-name>]`` too,
+but those are zero-arity per ``functor/3`` so the disagreement only
+surfaces for lists today.
+
+### F090 — `arg(N, "abc", X)` silently fails for every N
+
+- **Class:** C14 (Term inspection drift)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/inspection.py:140-156`
+  (``_arg__3`` — the ``except IndexError: return`` block at
+  ``:151-152``) consuming `clausal/logic/builtins/_helpers.py:54-72`
+  (`_nth_arg_py`) and the C twin at
+  `clausal/logic/variables/_variables.c:2216-2306` (`py_nth_arg`)
+- **Discovered by:** Task 12 of Phase 0
+- **Probe:** `probes/probe_F088.py`
+
+**Symptom:** ``arg(N, "abc", X)`` silently fails for every ``N``.  The
+Python fallback at ``_helpers.py:72`` raises ``IndexError`` for any
+str input (no ``isinstance(term, str)`` branch); the C twin at
+``_variables.c:2305`` falls through to ``raise_arg_index_error`` for
+the same reason.  The builtin at ``inspection.py:149-152`` catches
+``IndexError`` and ``return``s without yielding — so the caller sees
+clean failure rather than a ``type_error(compound, "abc")``.
+
+Asymmetric with ``arg(N, ["a","b","c"], X)``, which binds the N-th
+list element (see [[F091]]).  Under the strings-as-lists contract
+both inputs should behave identically.
+
+**Reproducer:**
+```python
+from clausal.logic.builtins import get_builtin_dispatch
+from clausal.logic.variables import Var, Trail, deref
+from clausal.logic.trampoline import StepGenerator, solutions
+
+disp = get_builtin_dispatch("arg", 3, None)
+X = Var()
+sols = solutions(StepGenerator(disp, None, None, None,
+                               1, "abc", X, Trail()),
+                 snapshot=lambda: deref(X))
+assert sols == []           # silent failure
+
+X = Var()
+sols = solutions(StepGenerator(disp, None, None, None,
+                               1, ["a", "b", "c"], X, Trail()),
+                 snapshot=lambda: deref(X))
+assert sols == ["a"]         # list branch succeeds
+```
+
+**Expected:** Under strings-as-lists, ``arg(1, "abc", X)`` should bind
+``X = "a"``.  Under "str-as-atom" (the shape ``functor/3`` and
+``unpack/2`` agree on), the call should raise ``type_error(compound,
+"abc")`` — a clean error, not silent failure.
+**Actual:** Silent failure for every N over every str.
+
+**Notes:** The silent-failure mode is itself a smell — ISO ``arg/3``
+is a type-error predicate, not a failure predicate, when the term
+arg is non-compound.  The catch-and-return at
+``inspection.py:151-152`` masks both the strings-as-lists gap and
+the ISO-conformance gap.  Cross-link with [[F083]] (``ground/1``
+returning ``True`` on Seg*) and [[F080]] (``is_list("abc")``
+failing) — every "term-shape" predicate today disagrees on what str
+*is*.
+
+### F091 — `arg/3` on a non-empty list uses Python-list indexing, not cons-cell head/tail
+
+- **Class:** C14 (Term inspection drift)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/_helpers.py:70-71` (`_nth_arg_py`
+  list branch) and the C twin at
+  `clausal/logic/variables/_variables.c:2296-2304`
+- **Discovered by:** Task 12 of Phase 0
+- **Probe:** `probes/probe_F088.py`
+
+**Symptom:** ``arg(N, ["a","b","c"], X)`` returns ``term[n-1]`` — the
+N-th Python-list element — for ``N ∈ {1, 2, 3}``.  ``functor/3`` on the
+same input reports arity **2** (cons-cell), so:
+
+  * ``arg(1, [a,b,c], X)`` binds ``X = "a"`` (cons-cell head — agrees
+    with the cons-cell view).
+  * ``arg(2, [a,b,c], X)`` binds ``X = "b"`` (Python-list index 1).
+    Cons-cell tail would be ``["b", "c"]``.
+  * ``arg(3, [a,b,c], X)`` binds ``X = "c"`` — but arity is 2, so an
+    ISO-conformant ``arg`` would *fail* here.
+
+The list branch never raises for ``N ≤ len(term)``, even when ``N >
+arity``.  Combined with [[F088]]'s ``unpack`` returning ``["."]`` (no
+args) and ``functor/3`` reporting arity 2, there are now three
+incompatible views of "what are the args of ``[a,b,c]``":
+
+  * ``functor/3``: 2 args (cons cell).
+  * ``unpack/2``: 0 args.
+  * ``arg/N``: ``len(list)`` args, index 1-based.
+
+**Reproducer:**
+```python
+from clausal.logic.builtins import get_builtin_dispatch
+from clausal.logic.variables import Var, Trail, deref
+from clausal.logic.trampoline import StepGenerator, solutions
+
+disp = get_builtin_dispatch("arg", 3, None)
+X = Var()
+sols = solutions(StepGenerator(disp, None, None, None,
+                               3, ["a", "b", "c"], X, Trail()),
+                 snapshot=lambda: deref(X))
+# functor/3 says arity 2 — yet arg(3, ...) happily returns "c".
+assert sols == ["c"]
+```
+
+**Expected:** Pick a consistent cons-cell vs Python-list semantics
+for the whole inspection family and apply it everywhere.
+**Actual:** Each predicate picks differently; users cannot reason
+about ``[a,b,c]`` as a term.
+
+**Notes:** Sibling of [[F088]] / [[F089]].  The simplest fix is to
+adopt cons-cell semantics across the trio — ``_nth_arg`` for lists
+returns ``head`` for ``n=1``, ``tail`` for ``n=2``, raises for ``n
+> 2``; ``_args_list`` returns ``[head, tail]``; ``_arity`` already
+agrees.  That breaks anything that relies on ``arg(N, list, X)``
+giving the N-th element (the only mode any caller exercises today),
+so the alternative is to push lists out of ``_nth_arg``/``_args_list``
+entirely and raise ``type_error(compound, ...)`` from the builtin —
+which also closes [[F090]]'s silent-failure gap.  Either way the
+fix is cross-cutting.
+
+### F092 — `copy_term/2` does not recurse into `SegList` / `SegString`
+
+- **Class:** C14 (Term inspection drift)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/inspection.py:21-47`
+  (`_copy_term_py` — falls through every type case for ``Seg*``) and the
+  C twin at `clausal/logic/variables/_variables.c:2403-2579`
+  (`c_copy_term` — same fall-through at ``:2576-2578``)
+- **Discovered by:** Task 12 of Phase 0
+- **Probe:** `probes/probe_F088.py`
+
+**Symptom:** ``copy_term(SegString([..., VarSeg(V)]), X)`` binds ``X``
+to the **same** ``SegString`` object as the original — ``X is
+original``.  Identical behaviour for ``SegList``.  Neither the Python
+fallback nor the C accelerator has a ``Seg*`` branch; both reach the
+final ``return term`` (``inspection.py:47`` / ``_variables.c:2576-
+2578``) and hand back the input unchanged.
+
+The Vars inside the original ``VarSeg``s are therefore aliased to the
+Vars inside the "copy".  Any binding made through the "copy" mutates
+the original, defeating the entire purpose of ``copy_term`` (independent
+backtrackable instance).
+
+Critically: ``copy_term`` is the spine of clause renaming during
+resolution.  If a clause containing a ``Seg*`` term is renamed via
+``copy_term``, the per-call fresh-Var guarantee is broken — two calls
+to the same clause share the same SegList/SegString instance and
+fight over its VarSegs.
+
+**Reproducer:**
+```python
+from clausal.logic.builtins import get_builtin_dispatch
+from clausal.logic.variables import Var, Trail, deref
+from clausal.logic.trampoline import StepGenerator, solutions
+from clausal.terms import SegString, VarSeg
+
+V = Var()
+ss = SegString(["x", VarSeg(V)])
+disp = get_builtin_dispatch("copy_term", 2, None)
+X = Var()
+sols = solutions(StepGenerator(disp, None, None, None, ss, X, Trail()),
+                 snapshot=lambda: deref(X))
+assert sols[0] is ss                 # the "copy" IS the original
+assert sols[0].segments[1].var is V  # inner Var is shared
+```
+
+**Expected:** ``copy_term`` allocates a fresh ``SegString`` /
+``SegList`` whose ``VarSeg``s reference fresh Vars (entered into the
+same ``var_map`` as everything else, so co-references inside the
+``Seg*`` container are preserved).
+**Actual:** Original handed back; no copy performed; inner Vars
+shared.
+
+**Notes:** Same Seg*-blind root cause as [[F083]] / [[F086]] /
+[[F093]] / [[F094]] — the C accelerators don't know about ``Seg*``
+because those types are not registered via ``_register_term_types``
+(only ``Compound`` and ``KWTerm`` are, at
+``_helpers.py:122-133``).  The Python fallback is equally blind
+because it has no isinstance branch for ``Seg*``.  Fix is one new
+branch in each implementation, plus per-segment recursion into
+``ConcreteSeg.elements`` and ``VarSeg.var``.  Discovered alongside
+the rest of the C14 inspection cluster but the root cause is C3
+SegString blind spots — cross-list both ways.  Also noted: the
+``SegList.__repr__`` at ``clausal/terms.py:386`` crashes
+(``AttributeError: 'str' object has no attribute 'var'``) when a
+fresh segment is a plain str, which surfaces during error-paths
+that try to repr() a partially-built SegList — out of scope for
+C14 but worth a tracking note.
+
+### F089 — `functor/3` and `=..` give different shapes for str vs list
+
+- **Class:** C14 (Term inspection drift)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/inspection.py:98-137`
+  (``_functor__3``) and `:159-195` (``_univ__2``) consuming
+  `clausal/logic/builtins/_helpers.py:20-83`
+  (``_functor_name_py`` / ``_arity_py`` / ``_args_list_py``) and the
+  C twins at `clausal/logic/variables/_variables.c:2027-2363`
+- **Discovered by:** Task 12 of Phase 0
+- **Probe:** `probes/probe_F088.py`
+
+**Symptom:** Strings and lists — supposedly interchangeable under the
+strings-as-lists contract enforced by [[F031]] / [[F033]] / [[F042]] /
+[[F053]] / [[F062]] / [[F063]] / [[F070]] / [[F080]] — decompose to
+entirely different shapes under the inspection predicates:
+
+| Input               | ``functor/3``       | ``unpack/2`` (``=..``) |
+|---------------------|---------------------|------------------------|
+| ``"abc"``           | ``("abc", 0)``      | ``["abc"]``            |
+| ``["a","b","c"]``   | ``(".", 2)``        | ``["."]`` *(see F088)* |
+| ``""``              | ``("", 0)``         | ``[""]``               |
+| ``[]``              | ``("[]", 0)``       | ``["[]"]``             |
+| ``42``              | ``("42", 0)``       | ``["42"]``             |
+| ``True``            | ``("True", 0)``     | ``["True"]``           |
+
+Strings, integers, and booleans all behave as **atoms** (atom-univ,
+functor = ``repr``-like coercion, arity 0).  Lists behave as
+**cons-cells** (functor = ``.``, arity 2) — except ``unpack`` drops
+the args (the [[F088]] bug).
+
+Two issues here even after [[F088]] is fixed:
+
+  1. **Strings-as-lists is broken:** ``"abc"`` and ``["a","b","c"]``
+     decompose to two unrelated worlds.  Code that asks "what kind of
+     term is this" gets a different answer depending on which
+     equivalent representation the caller happened to pass.
+  2. **Integer/bool atomification:** ``functor(42, F, A)`` returns
+     ``("42", 0)`` — the integer is stringified.  Same for
+     ``True → "True"``.  ISO Prolog returns the *number itself* as
+     the functor for numeric terms (``functor(42, 42, 0)``) and
+     reserves string-functors for atoms.  This is C13/C14 boundary
+     territory; the audit is logging the C14 angle here.
+
+**Reproducer:** ``probes/probe_F088.py`` prints the full row matrix.
+
+**Expected:** Under "strings-as-lists", ``functor/3`` and
+``unpack/2`` produce the same shape for str and list inputs (either
+both atom-univ, both element-list, or both cons-cell).
+**Actual:** Disagreement on every row except ``Compound`` itself.
+
+**Notes:** This is the **C14 anchor finding** — the lower-severity
+design-gap that frames the bug cluster [[F088]] / [[F090]] /
+[[F091]].  Resolving it requires picking a contract for "what is a
+list/str under inspection":
+
+  * **Atom-shape across the board.**  Easiest; matches the integer
+    and bool behaviour already present.  ``arg`` always raises
+    ``type_error(compound, ...)``; ``=..`` always yields the
+    single-element list.  Loses cons-cell decomposition entirely —
+    callers wanting head/tail use a dedicated builtin.
+  * **Cons-cell shape across the board.**  Closer to ISO Prolog.
+    Strings must lower to char-cons-cells inside inspection
+    (``"abc" =.. [".", "a", "bc"]``), which is expensive and
+    breaks codepoint-grapheme handling ([[F002]] family).
+  * **Element-list shape (strings-as-lists, applied to inspection).**
+    ``"abc" =.. ["a", "b", "c"]``, ``["a","b","c"] =.. ["a","b","c"]``,
+    no functor at all.  Coherent with the SegList/SegString user
+    model but incompatible with ISO ``=..``.
+
+The fact that there are three plausible answers and zero documented
+choice is why C14 is "drift", not "bug".  The bugs ([[F088]],
+[[F090]], [[F091]], [[F092]]) are independent of which contract is
+chosen — they're inconsistencies within the current code regardless.
+
+### F093 — `term_variables/2` does not see Vars inside `Seg*` VarSegs
+
+- **Class:** C14 (Term inspection drift)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/inspection.py:50-79`
+  (`_collect_vars_py`) and the C twin at
+  `clausal/logic/variables/_variables.c` (`_collect_vars_impl`)
+- **Discovered by:** Task 12 of Phase 0
+- **Probe:** `probes/probe_F088.py`
+
+**Symptom:** ``term_variables(SegString(["x", VarSeg(V)]), Vs)``
+binds ``Vs = []`` — the unbound ``V`` inside the ``VarSeg`` is
+invisible to the walker.  Identical behaviour for ``SegList``.
+
+The Python fallback has no ``Seg*`` branch; the C accelerator is the
+same (``Seg*`` not registered with ``_register_term_types``).  Both
+reach the final fall-through and treat the container as a leaf.
+
+**Reproducer:** see ``probes/probe_F088.py`` —
+``term_variables(SegString([..VarSeg(V)..]), Vs)`` returns ``[[]]``.
+
+**Expected:** Under the C3 cluster's "Seg* is a compound-shaped
+container" reading, ``term_variables`` recurses into every
+``VarSeg.var`` and ``ConcreteSeg.elements``, returning every unbound
+Var it finds (in left-to-right order, no duplicates).
+**Actual:** ``Vs = []`` — Seg* containers are leaves.
+
+**Notes:** Sibling of [[F083]] (``ground/1`` returning ``True`` on
+the same shape) and [[F092]] (``copy_term`` not recursing into
+Seg*).  All three share the C3 root cause and a single fix:
+register ``SegList`` and ``SegString`` with the C walker (and add
+Python isinstance branches).  Filed under C14 because the
+user-facing surface here is the inspection predicate, not the
+type-check; the root-cause cross-link is the documentation answer.
+Severity is design-gap rather than bug because there is no caller
+in the codebase today that relies on ``term_variables`` seeing
+inside Seg* (the only producers of Seg* are the head-match
+compiler and the body-multi-star path, neither of which calls
+``term_variables`` between produce and consume).  Becomes a bug the
+moment user code uses ``Seg*`` and ``term_variables`` together.
+
+### F094 — `numbervars/3` cannot number Vars inside `Seg*` containers
+
+- **Class:** C14 (Term inspection drift)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/inspection.py:224-253`
+  (`_number_vars__3` — drives `_collect_vars_impl`)
+- **Discovered by:** Task 12 of Phase 0
+- **Probe:** `probes/probe_F088.py`
+
+**Symptom:** ``numbervars(SegString([..VarSeg(V)..]), 0, End)``
+returns ``End = 0`` and leaves ``V`` unbound.  ``numbervars`` walks
+``_collect_vars_impl`` (the same blind walker behind [[F093]]) and
+binds every var it finds — but it finds nothing inside Seg*
+containers, so the var is silently unnumbered.
+
+Downstream effect: any pretty-printer or
+``write_term``-with-``numbervars`` option that depends on
+``numbervars`` having reached every variable will emit a fresh
+``_42`` style name for the unnumbered Var instead of the canonical
+``$VAR(N)`` form.  Consistency of "two textually-identical clauses
+have identical printed form" is broken.
+
+**Reproducer:** see ``probes/probe_F088.py`` —
+``numbervars(SegString([..VarSeg(V)..]), 0, End)`` yields
+``End = 0`` with ``V`` unbound.
+
+**Expected:** ``numbervars`` walks the same expanded ``Seg*``
+contract proposed for [[F093]] and numbers every reachable Var.
+**Actual:** Seg* containers are leaves; their Vars are invisible.
+
+**Notes:** Cross-listed with [[F093]] (same walker, same fix).
+Severity is design-gap, same reasoning as F093 — no caller in the
+codebase combines ``Seg*`` with ``numbervars`` today.  No
+independent action item beyond fixing the underlying
+``_collect_vars_impl`` walker.
 
 ### Class C15 — First-arg indexing on strings
 *(none yet)*
