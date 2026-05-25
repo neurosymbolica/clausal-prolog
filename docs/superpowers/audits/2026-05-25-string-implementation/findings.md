@@ -11,7 +11,7 @@
 | C1 | Type preservation | 0 | 5 | 0 | 0 | 0 |
 | C2 | Non-det collapsed to first | 2 | 0 | 0 | 0 | 0 |
 | C3 | SegString blind spots vs SegList | 5 | 2 | 0 | 0 | 0 |
-| C4 | Head-pattern literal mismatch | 0 | 0 | 0 | 0 | 0 |
+| C4 | Head-pattern literal mismatch | 1 | 0 | 0 | 0 | 0 |
 | C5 | Hash/eq asymmetries | 1 | 2 | 0 | 0 | 0 |
 | C6 | Hashable vs unhashable bridges | 0 | 0 | 0 | 0 | 0 |
 | C7 | Unicode / multi-codepoint | 0 | 0 | 0 | 0 | 4 |
@@ -833,40 +833,42 @@ container type has a SegList arm but no SegString arm.
 
 ### Class C4 — Head-pattern literal mismatch
 
+### F046 — C4 confirmed: rule heads with string literals fail to match char-list callers
+
+- **Class:** C4 (Head-pattern literal mismatch)
+- **Severity:** bug
+- **Status:** defer-to-followup-spec (fix scope is compiler-wide; per the audit spec, C4 confirmation warrants a separate brainstorm + spec rather than rolling into Phase 2 of this audit)
+- **Location:** `clausal/logic/compiler/head_match.py:253-254` (the `MatchValue` branch for str/bytes literals)
+- **Discovered by:** Task 5 of Phase 0
+- **Probe:** `probes/probe_F046.py`
+
+**Symptom:** A rule `Quux("abc") <- (real_body)` compiles to a Python `match` arm with `MatchValue(Constant("abc"))` at `head_match.py:253-254`. Python's `match` compares `MatchValue` with `==`, so a caller `Quux(['a','b','c'])` — which unifies with `"abc"` under the strings-as-lists contract at the runtime layer — silently fails to match this clause. The symmetric list-literal case (`Zorp(['a','b','c']) <- body` called with `"abc"`) works correctly because list-literal heads go through the wildcard-capture + runtime-unify path at `head_match.py:258`. Facts are dodged by the `_normalize_dataclass_fact` elaborator at `database.py:332-361` (gated by `body_goals == [True]` at `database.py:274`, which also catches `<- (True)` bodies), but rules with non-True bodies survive with the literal in the head.
+
+**Reproducer:**
+```python
+# Define a rule Quux("abc") <- Helper(1), and a fact Helper(1).
+# Then call Quux(['a','b','c']) — strings-as-lists says this should match.
+# Actual: 0 solutions.
+# See probe_F046.py for full setup via inline .clausal source.
+```
+
+**Expected:** `call("Quux", ["a", "b", "c"])` returns 1 solution (the same as `call("Quux", "abc")`).
+**Actual:** Returns 0 solutions.
+
+**Notes:** Confirmed by extended probe `probe_F046.py`. Fix-scope assessment from Task 5:
+
+1. The narrow fix at `head_match.py:253-254` is to split the `(int, float, str, bytes, complex)` tuple — emit `MatchValue` only for non-sequence scalars (int, float, complex); emit a wildcard capture + `unify(_lcap, literal, trail)` guard for `str` and `bytes`, mirroring the list-literal path that already works correctly.
+2. Alternative: lift the fact-side elaborator gate (`_normalize_dataclass_fact` at `database.py:274`) to run for all clauses, not just `body == [True]` clauses. This removes the C4 surface at the source.
+3. Either approach has perf implications: literal-string-head clauses become wildcard-match + runtime-unify instead of Python-level `==`. May warrant a same-type fast-path. Verify first-arg indexing (`clausal/logic/compiler/arg_index.py:162` mentions the Var+Unify pattern) still discriminates correctly when literal heads are converted.
+4. Compound-head and list-head cases ([[F048]]) inherit whichever fix lands.
+5. Symmetric concern for `bytes` (also a sequence type) — not explicitly probed but the same branch handles it.
+
+Sibling C-class cluster: this is C4, structurally orthogonal to the C3 "SegList arm but no SegString arm" cluster ([[F031]] [[F032]] [[F034]] [[F040]] [[F041]] [[F047]]). Both are compiler-side findings; they'd likely be tackled in separate Phase 2 efforts.
+
 *Task 5 confirmed (no finding):*
-- **F046** — Task 5 confirmed: C4 head string-literal mismatch is **not
-  present**. Probe `probes/probe_F046.py` shows `Foo("abc")` called with
-  `['a','b','c']` returns 1 solution and `Bar(['a','b','c'])` called
-  with `"abc"` returns 1 solution. The compiler dodges C4 structurally:
-  the parser/elaborator never places a literal directly in a head arg
-  slot — every literal is lifted into a body ``Unify``. The compiled
-  clause for ``Foo("abc")`` is
-  ``Clause(head=Foo(arg_0=AttVar(_0)), body=[Unify(left=AttVar(_0), right='abc')])``;
-  ``head_to_match_pattern`` therefore emits an ``ast.MatchAs`` wildcard
-  capture (head_match.py:245), and the runtime ``unify`` at body time
-  routes through the C str↔list block (`_variables.c:1127-1179`) which
-  *does* honour the strings-as-lists contract. The literal branch at
-  head_match.py:253-254 (`MatchValue(Constant(value=term))`) is reachable
-  only via `_lift_clause_at_pos` (list_dispatch.py:50-107) during
-  indexed-bucket compilation — and when a caller arg's index key
-  (`arg_index.py:74-91`) doesn't match the lifted bucket key, dispatch
-  falls back to the default bucket which uses the *unlifted* clauses
-  with the body Unify intact. So even the indexed path cannot expose
-  C4: a `str`-keyed bucket sees only `str` callers, a `list` caller
-  has no index key (lists return `_INDEX_VAR`) and lands in the default
-  bucket which still has the runtime-unify path.
-- **F048** — Task 5 confirmed: compound heads containing string literals
-  (e.g. ``Quux(foo("abc"))``) are subsumed by F046. Direct inspection
-  of the compiled clause shows the parser/elaborator lifts the entire
-  compound argument into a body Unify too:
-  ``Clause(head=Quux(arg_0=AttVar(_0)), body=[Unify(left=AttVar(_0), right=Call(func=LoadName(name='foo'), args=['abc'], …))])``.
-  The head pattern is again a wildcard capture; runtime unify on the
-  Call expression value handles the str↔list bridging via the same
-  mechanism. No probe (verified by direct module inspection in the
-  Task 5 work session). List literals in head args (e.g.
-  ``Bar(['a','b','c'])``) also follow this elaboration —
-  ``Clause(head=Bar(arg_0=AttVar(_0)), body=[Unify(left=AttVar(_0), right=['a','b','c'])])`` —
-  so the same structural dodge applies recursively.
+- **F048** — Task 5 confirmed: compound heads containing list literals (e.g. ``Zorp(['a','b','c']) <- body``) and list-literal-only paths are subsumed by the successful elaboration + wildcard-capture + runtime-unify mechanism. Direct inspection of the compiled clause shows the parser/elaborator lifts the entire argument into a body Unify:
+  ``Clause(head=Zorp(arg_0=AttVar(_0)), body=[Unify(left=AttVar(_0), right=['a','b','c'])])`` —
+  the head pattern is a wildcard capture; runtime unify handles the list value, and calls with str-typed args match via the strings-as-lists contract. List-literal heads therefore work. However, compound heads and string-literal heads inherit the F046 bug: ``Quux(foo("abc")) <- body`` lifts the entire compound argument into a body Unify, but when that Call expression at runtime produces a str, the head pattern becomes a `MatchValue(Constant(...))` branch if the indexing bucket was specialized — or survives as a wildcard if unindexed. Str-literal heads in rules with non-trivial bodies (e.g. ``Quux("abc") <- Helper(1)``) expose the C4 gap directly. No separate probe for F048 (verified by direct module inspection); F046's probe covers the core issue.
 
 ### Class C5 — Hash/eq asymmetries
 
