@@ -77,6 +77,8 @@ think about which container they passed. Picking a coherent rule across
 both classes is the C1 work. Related to [[F019]] (the same shape
 mismatch surfaces in __eq__).
 
+**Prior-known:** commit f635551 — "Phase 7: SegString and string-preserving pattern matching" rewrote `SegList.__walk__` to handle VarSegs bound to strings (eliminating the SegList/compiler path asymmetry per the plan in `implementation_plans/data_structures/STRING_LIST_UNIFICATION.md` Phase 7 acceptance criterion); the rewrite normalized inward (str → char-list) for the SegList container and outward (list → str) for SegString, which is exactly the "container-shape wins" rule this finding flags.
+
 ### F033 — `_head_list_unify_output` always builds a list, never a str
 
 - **Class:** C1 (Type preservation)
@@ -124,6 +126,8 @@ call site; F003-class type-preservation gap on the head-pattern
 boundary. Related to [[F018]] (parallel type loss in
 `SegList.__walk__`) and [[F034]] (SegString blind spot in output
 star_val, the C3 sibling of this C1 finding).
+
+**Prior-known:** commit aa2155d — "Compiler: head patterns accept strings in clause matching" widened `_head_list_unify_input` to accept `(list, str)` and noted that "string slicing naturally preserves type: [H, *T] on 'hello' gives H='h', T='ello'". That commit only covered the input-mode path; the symmetric output-mode reconstruction at `_head_list_unify_output` was not touched and still always allocates a list.
 
 ### F020 — SegList.__add__ / __radd__ rejects str
 
@@ -213,6 +217,8 @@ threading the original target type into the output-mode call site, the
 same plumbing should reach this helper. The single-star body path `[*S]` does not reach this branch — it delegates to `_body_star_unify` → `_head_list_unify_output`, which inherits [[F033]]. F042 is specific to multi-star body patterns (≥2 stars) whose targets are unbound Vars. Companion to [[F043]] (the build helpers also
 lose type when star is bound to a list-of-1-char-strs).
 
+**Prior-known:** commit 82ecc96 — "Fix SegString bugs, update strings_as_lists docs for Phase 7" reworked `_build_star_list` to "handle non-ground SegString with mixed before/after by converting to SegList instead of falling through to VarSeg(SegString)". That commit closed a specific crash but did not introduce a target-type record, so the unbound-Var branch in `_body_multi_star_unify` (a sibling helper) still builds SegList unconditionally.
+
 ### F043 — `_build_star_list` / `_build_multi_star_list` lose str type for list-of-chars and non-ground SegString stars
 
 - **Class:** C1 (Type preservation)
@@ -273,6 +279,8 @@ ambiguous whether the value originated as a str or a list — but the
 non-ground-SegString-to-SegList demotion has no such ambiguity and
 should be fixable in isolation. Logged as design-gap (matching F018,
 F033, F034 grading).
+
+**Prior-known:** commit 82ecc96 — "Fix SegString bugs" specifically fixed the non-ground SegString path in `_build_star_list` (converting to SegList rather than wrapping in `VarSeg(SegString)`) but the *type-preservation* gap this finding flags — that list-of-1-char-strs and non-ground SegString stars both demote to list/SegList rather than promoting back to str/SegString — was left in place; commit f635551 (Phase 7) introduced the `all_str` gate that captures most ground cases, but the gate explicitly disables string promotion when a non-ground SegString segment is seen (the `all_str = False` flip in `_build_multi_star_list` line 167-184).
 
 *Task 1 confirmed (no finding):*
 - **F010** — The two str↔list branches at `_variables.c:1140` and
@@ -380,6 +388,8 @@ generator is correct (see "Task 2 confirmed" bullet below) — the
 mark/undo pair leaves the trail at its prior length after each yield,
 so the iteration is safe to drive from outside.
 
+**Prior-known:** commit f635551 — "Phase 7: SegString and string-preserving pattern matching" introduced `SegString` and `_segstring_unify_gen` with the same `for _ in gen: return True` first-solution-only protocol that [[F015]] already documents for the older `SegList` path; the symmetry was preserved (intentionally — same code pattern) but neither side was upgraded to a true non-deterministic protocol.
+
 *Task 2 confirmed (no finding):*
 - **F027** — Trail discipline in `_seglist_unify_gen`
   (`terms.py:390-426`) and `_segstring_unify_gen`
@@ -454,6 +464,8 @@ SegString) and [[F034]] (the output-mode side has the same blind
 spot). The Python and C paths agree, so this is *not* a C3 bug
 that depends on the build configuration — both are equally broken.
 
+**Prior-known:** commit aa2155d — "Compiler: head patterns accept strings in clause matching" widened `_head_list_unify_input` to accept `(list, str)` and `_build_list_dispatch_guard` / `_compile_multi_star_guard` to emit `isinstance(_, (list, str))`. The SegString type didn't yet exist at that commit (introduced 6 commits later in f635551), and Phase 7's `STRING_LIST_UNIFICATION.md` plan did not include a follow-up to widen these head-pattern paths for SegString. The blind spot was introduced by omission rather than regression.
+
 ### F032 — `_head_list_unify_input` rejects *ground* SegString too
 
 - **Class:** C3 (SegString blind spots vs SegList)
@@ -504,6 +516,8 @@ needs the matching `SegStringType` cache + `TypeCheck` branch.
 Related to [[F031]], [[F034]] (output-mode twin), [[F012]] (C-level
 SegString-as-list-element blind spot).
 
+**Prior-known:** same as [[F031]] — commit aa2155d widened the head-pattern path for `str` but not for `SegString`. Cross-ref the same Phase 7 plan gap.
+
 ### F012 — Var bound to SegString in list position is not recognised as a char
 
 - **Class:** C3 (SegString blind spots vs SegList)
@@ -542,6 +556,8 @@ when `elem` is not a Var and not a 1-codepoint `PyUnicode`. Related to
 [[F008]] (ground-SegString-vs-list does reach the `__unify__` hook when
 the SegString is the top-level arg, but Vars *inside* a list never
 reach that fallback).
+
+**Prior-known:** commit b8d3038 — "Phase 1: string ↔ list unification at the C level" set the `PyUnicode_Check(elem) && PyUnicode_GET_LENGTH(elem) == 1` element type-check; SegString didn't exist yet (introduced in f635551 Phase 7), so the check was correct at the time. Phase 7 added the SegString type but never came back to widen this C-level element check.
 
 ### F034 — `_head_list_unify_output` never walks SegString star_val
 
@@ -823,6 +839,8 @@ they'd still hit the type_error). Cross-ref [[F012]] (Var bound to
 SegString in list-element position) — that's the same gap surfacing
 in the C-level unify path.
 
+**Prior-known:** commit 98379ed — "perf: add C-accelerated inner loops for char/string predicates" added the C accelerators (`_chars_core.c`) for `char_type/2`, `atom_concat/3`, `sub_atom/5` and noted in its description "Python fallbacks are preserved for all predicates"; neither the C path nor the Python fallback gained a SegString-walk branch. The companion `todo/C_chars_issues.md` (created in the same commit, 82 lines) lists eight optimization concerns but does not mention the SegString-blind contract gap.
+
 *Task 1 confirmed (no finding):*
 - **F008** — Top-level `unify(SegString("abc"), ["a","b","c"], t)` and the
   reverse direction both succeed. The C path's str↔list block keys off
@@ -914,6 +932,8 @@ in the C-level unify path.
 5. Symmetric concern for `bytes` (also a sequence type) — not explicitly probed but the same branch handles it.
 
 Sibling C-class cluster: this is C4, structurally orthogonal to the C3 "SegList arm but no SegString arm" cluster ([[F031]] [[F032]] [[F034]] [[F040]] [[F041]] [[F047]]). Both are compiler-side findings; they'd likely be tackled in separate Phase 2 efforts.
+
+**Prior-known:** commit aa2155d — "Compiler: head patterns accept strings in clause matching" widened the *runtime* destructuring path (`_head_list_unify_input` and the two `isinstance` dispatch guards) so a clause with a list-literal head matches a string caller. The commit message claims "user-defined predicates with list patterns work on strings" and lists three sites changed. The fourth site — `MatchValue(Constant(<str>))` for clause heads that contain a *string literal* — was not addressed; that's the F046 surface. Phase 5b's plan in `STRING_LIST_UNIFICATION.md` (L1198-1281) likewise only enumerates the three sites that were fixed.
 
 *Task 5 confirmed (no finding):*
 - **F048** — Task 5 confirmed: compound heads containing list literals (e.g. ``Zorp(['a','b','c']) <- body``) and list-literal-only paths are subsumed by the successful elaboration + wildcard-capture + runtime-unify mechanism. Direct inspection of the compiled clause shows the parser/elaborator lifts the entire argument into a body Unify:
@@ -1288,6 +1308,8 @@ extend the same docs paragraph. For grapheme-aware applications the
 user must normalise to NFC and avoid emoji modifier sequences before
 using positional predicates.
 
+**Prior-known:** commit 98379ed introduced the C accelerator with the same codepoint-offset slicing semantics as the Python original; no commit in the history has changed sub_atom/atom_concat to grapheme-aware semantics.
+
 *Task 1 confirmed (no finding):*
 - **F001** — The `n == 0` fast path at `_variables.c:1130` /
   `_variables.c:1158` correctly succeeds for `unify("", [], t)` and
@@ -1440,6 +1462,8 @@ path. Related to [[F012]] (C-side blind spot for SegString-as-list-
 element) and the spec's C3 enumeration.
 
 Re-graded from design-gap to bug after Task 2 spec review: silent dropped solutions on a logically-satisfiable unify call is the textbook "silently drops solutions" pattern listed under bug in the spec's severity vocabulary. F015 and F016 have the same character and were graded bug; F023 should match. The C3 structural-gap framing remains valid but does not lower the C8 severity.
+
+**Prior-known:** commit 82ecc96 — "Fix SegString bugs, update strings_as_lists docs for Phase 7" fixed one half of this gap: `SegString.__unify__ vs list` "delegate to C-level str↔list unification instead of broken `walked == list(other)` comparison". That fix only routes through C str↔list when the SegString walks to a plain str (i.e. is ground); the non-ground case this finding documents still returns `NotImplemented` and surfaces as silent `False`. The commit description acknowledges only the ground case ("walked == list(other) was broken"); the non-ground hole was not addressed.
 
 ### F024 — SegString.__walk__ raises TypeError on non-str list binding
 
@@ -1716,6 +1740,8 @@ the runtime tests ``isinstance(val, (list, str))`` without first
 considering walked Seg* values.  Logging as one bug across multiple
 loci per the spec's "merge same-root-cause findings" guidance.
 
+**Prior-known:** commit 423be48 — "Phase 4: polymorphic list builtins accept strings" introduced the `_as_items` / `_seq_result` helpers and routed all 27 list builtins through them. The plan in `STRING_LIST_UNIFICATION.md` Phase 4 (L709-942) only mentioned `(list, str)` as the accepted types; SegList / SegString unification with builtin consumers was deferred to "Phase 7 (optional)" — Phase 7 added the SegString type but never came back to extend `_as_items`.
+
 ### F052 — `sum_list/max_list/min_list` swallow TypeError into silent failure
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
@@ -1815,6 +1841,8 @@ requires either a typed output-mode protocol or a documented
 contract.  ``replicate`` and ``same_length`` *do* have type
 information available (the element / sibling argument), so could in
 principle promote.
+
+**Prior-known:** commit 423be48 — "Phase 4: polymorphic list builtins accept strings" reworked the input side of these predicates via `_as_items` but documented `replicate` and `same_length` as list-output. The `same_length` case in particular has the sibling-type signal available but the commit's design (per `STRING_LIST_UNIFICATION.md` Phase 4 table at L770-787) hard-coded list output for predicates "generates integer lists / numlist"-class — the matrix didn't include `same_length` in that group, so the omission appears unintentional.
 
 ### F054 — `_seq_result` asymmetry: list-of-1-char-str input ≠ str-promoted output
 
@@ -2006,6 +2034,8 @@ Cross-links: [[F051]] (the helper itself in lists.py), [[F031]],
 [[F032]], [[F034]], [[F040]], [[F041]], [[F047]] (C3 SegString
 blind-spot family).
 
+**Prior-known:** commit 39415d6 — "Phase 5: higher-order predicates accept strings" rewrote all 16 higher_order predicates to consume `_as_items` from lists.py; the Seg* gap was inherited from [[F051]]'s root cause and propagated by the import.
+
 ### F062 — `higher_order` string-preserving predicates: list-of-1-char-str input ≠ str-promoted output
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
@@ -2115,6 +2145,8 @@ gap.  Existing test `test_string_higher_order.py::test_maplist3_char_to_code`
 codifies the list output for the int-codes case, which is *correct*
 (ints aren't joinable to str); the gap is the 1-char-str-output case
 that isn't covered.
+
+**Prior-known:** commit 39415d6 — "Phase 5: higher-order predicates accept strings" applied `_seq_result` to the filter-style predicates (include/exclude/take_while/drop_while/span/partition/tfilter/tpartition) but not to the four output-building ones documented here. The omission is visible in the diff: the maplist/3, filter_map/3, group_by/3, sort_by/3 sections of the commit have plain `results = []` / `unify(ys, results, trail)` without a `was_str` thread.
 
 ### F072 — `char_type/2` Char-bound vs Type-bound mode disagree on non-ASCII
 
@@ -2318,6 +2350,8 @@ conversion fundamentally contradicts. Graded `bug` because the spec
 vocabulary defines `bug` as "wrong answer / silently drops solutions";
 this is the dual — silently *produces* a wrong answer.
 
+**Prior-known:** commit c3f8844 — "Phase 3: DCGs accept strings as input" added the unconditional `list(list_val)` conversion at `phrase/2,3` entry. The plan in `STRING_LIST_UNIFICATION.md` Phase 3 (L506-705) considered two designs — a complex `sequence//1`-aware rewrite and a "simpler: convert at phrase boundary" approach — and explicitly chose the latter, observing "the remainder will be a list of chars, not a string — this is acceptable and consistent" (D5 design decision). The state-threading-overload hazard this finding documents was not considered in the plan.
+
 ### F069 — `phrase/2` and `phrase/3` silently fail on SegString input
 
 - **Class:** C10 (DCG / phrase interaction)
@@ -2359,6 +2393,8 @@ overlaps with the C3 cluster — a fix in `dcg.py` could pre-walk
 SegString to str on the way in, *or* defer to fixes in
 `_head_list_unify_input` (which would address both). Cross-link to
 [[F031]], [[F032]], [[F034]], [[F040]], [[F041]], [[F047]].
+
+**Prior-known:** commit c3f8844 — "Phase 3: DCGs accept strings as input" added the `isinstance(list_val, str)` check that gates the str→char-list conversion; SegString wasn't yet introduced. Phase 7 added SegString (f635551) without revisiting dcg.py.
 
 ### F067 — `phrase/3` Rest type does not preserve str input shape
 
@@ -2404,6 +2440,8 @@ predicates without `_seq_result`). Logged as design-gap rather than
 bug because the current behaviour is *documented* — the gap is the
 inconsistency with the rest of the audit's emerging "input-type wins"
 contract.
+
+**Prior-known:** commit c3f8844 — Phase 3's plan in `STRING_LIST_UNIFICATION.md` Phase 3 D5 explicitly chose the list-Rest behaviour ("the remainder will be a list of chars, not a string — this is acceptable and consistent"). The contract was documented; the design-gap is the inconsistency with `_seq_result` / `_as_items` plumbing landed later in Phase 4 (commit 423be48).
 
 ### F070 — `sequence//1` drops str type across every binding mode
 
@@ -2452,6 +2490,8 @@ and [[F063]] (`maplist/3`, `filter_map/3` etc.) — output builders
 that never reach a `_seq_result`-style decision. Mode-D failure
 shares root cause with [[F069]] / the C3 SegString cluster. Logged
 as design-gap (matches the F053/F063 grading).
+
+**Prior-known:** commit c3f8844 — "Phase 3: DCGs accept strings as input" added the original `sequence//1` str-handling, and commit 5fcade4 — "fix: wire up SegList in Sequence//1 for both-unbound S0/S case" landed the *Mode C* branch this finding documents. The 5fcade4 commit description acknowledges: "SegList Phases 1-4 were complete but Phase 5 (builtin integration) was interrupted by OOM. This adds the missing else branch in _sequence__3: when both S0 and S are unbound, build SegList…" — the OOM-interrupted Phase 5 mention and the file `todo/SEQUENCE_BOTH_UNBOUND.md` that was deleted in 5fcade4 both indicate the str-vs-SegList branching was a known gap; the fix landed the SegList branch but did not introduce a parallel SegString branch (Phase 7's SegString was introduced in f635551, which came after 5fcade4 in calendar time but did not revisit dcg.py).
 
 ### Class C11 — Trail/backtracking around partials
 *(none yet)*
@@ -2704,6 +2744,8 @@ Cross-link with C3 cluster: [[F020]], [[F024]], [[F041]] all flag
 Seg*-blind builtins. C13 adds ``ground/1`` to that list. Probably
 also surfaces in any builtin that uses ``_is_ground`` as a fast
 pre-check before dispatch (search ``_helpers._is_ground`` consumers).
+
+**Prior-known:** commit eb33bfb — "fix: address 8 review issues in C predicate helpers" reworked `c_is_ground` (Issue 1: "Fix c_is_ground dataclass bug: fall back to py_term_field_names for non-PredicateMeta dataclass instances instead of assuming ground") and added defensive fall-throughs without registering SegList/SegString — the same review touched this function and the Seg* gap was not flagged. The 8625f3e perf commit subsequently consolidated more lazy caches in the same file. Same root-cause family as [[F092]] / [[F093]] / [[F094]] — none of the Seg* registrations have ever been added.
 
 ### F084 — `callable_/1` says every Python str is callable
 
@@ -3020,6 +3062,8 @@ fresh segment is a plain str, which surfaces during error-paths
 that try to repr() a partially-built SegList — out of scope for
 C14 but worth a tracking note.
 
+**Prior-known:** commit 4507be8 — "fix: correct KWTerm reconstruction and items() in c_copy_term; add gap tests" explicitly acknowledges the gap: "Issue 3: Added tests documenting current DictTerm/SegList gap — both copy_term and term_variables fall through to 'as-is' for these term types. New test classes: TestCopyTermKWTerm, TestCopyTermDictTerm, TestTermVariablesDictTerm, TestCopyTermSegList, TestTermVariablesSegList." That commit added the documenting tests but did not fix the gap. Commits bd8f975 — "perf: move _copy_term and _collect_vars hot paths to C extension" and 8625f3e — "perf: cache str_functor/str_args …" continued performance work on the same C path without adding Seg* branches; commit 7016cd2 — "fix: restore Python fallbacks for all C-accelerated helpers" restored the Python copies, also without Seg* branches. The gap is documented in tests for ~6 commits, never fixed.
+
 ### F089 — `functor/3` and `=..` give different shapes for str vs list
 
 - **Class:** C14 (Term inspection drift)
@@ -3136,6 +3180,8 @@ compiler and the body-multi-star path, neither of which calls
 ``term_variables`` between produce and consume).  Becomes a bug the
 moment user code uses ``Seg*`` and ``term_variables`` together.
 
+**Prior-known:** same chain as [[F092]] — commit 4507be8 added gap-documenting tests for `term_variables(SegList(...))`; subsequent perf commits (bd8f975, 8625f3e) and the fallback-restoration commit (7016cd2) preserved the gap.
+
 ### F094 — `numbervars/3` cannot number Vars inside `Seg*` containers
 
 - **Class:** C14 (Term inspection drift)
@@ -3171,6 +3217,8 @@ Severity is design-gap, same reasoning as F093 — no caller in the
 codebase combines ``Seg*`` with ``numbervars`` today.  No
 independent action item beyond fixing the underlying
 ``_collect_vars_impl`` walker.
+
+**Prior-known:** inherited via [[F093]] from commit chain 4507be8 → bd8f975 → 8625f3e → 7016cd2 — the same Seg*-blind C walker that breaks `numbervars` is the one those commits successively performance-tuned without addressing the gap.
 
 ### Class C15 — First-arg indexing on strings
 
@@ -3361,6 +3409,8 @@ needs to widen its element type check).
 
 Re-graded from smell to bug after Task 1 spec review: the spec's severity vocabulary defines bug to include "refcount/use-after-free hazard", which is exactly what an unprotected PyList_GET_ITEM on FT builds is. Caveats kept: (a) unverified — the test harness runs with the GIL enabled, so the race cannot be reproduced here; (b) the same hazard pattern pre-dates the str↔list addition and exists in the neighbouring plain list-vs-list block at `_variables.c:1103-1116` — fixing F011 should address both.
 
+**Prior-known:** commit b8d3038 — "Phase 1: string ↔ list unification at the C level" introduced the unguarded list iteration; commit eb33bfb — "fix: address 8 review issues in C predicate helpers" landed FT-discipline improvements elsewhere in the same file (atomics for static caches, thread-safe interning) but did not extend any critical section over the str↔list loop; commit 8625f3e — "perf: cache str_functor/str_args …" further consolidated lazy module-init under the same atomic-load pattern. The gap is recognized in `todo/cross_cutting_issues.md` §4 ("Static caches not thread-safe under free-threaded Python") but cross_cutting_issues frames it as a *cache* problem, not a critical-section-around-PyList_GET_ITEM problem.
+
 ### Class C17 — Performance, memory, leaks
 
 ### F009 — Per-element PyUnicode_Substring allocation in unbound-Var branch
@@ -3401,6 +3451,8 @@ contains the matching codepoint (already the fast path for the ground
 case). For the unbound-Var case the allocation is fundamental — the var
 must be bound to *some* `PyObject`. Logged for visibility; not worth
 fixing in isolation.
+
+**Prior-known:** commit b8d3038 — "Phase 1: string ↔ list unification at the C level" added the unbound-Var branch with `PyUnicode_Substring(t, i, i + 1)`; the plan in `implementation_plans/data_structures/STRING_LIST_UNIFICATION.md` (Phase 1, "Performance note" L170-208) already calls out the per-element allocation cost and proposes the `PyUnicode_READ_CHAR` fast path — that fast path landed for the ground side but not for the var-binding side.
 
 ### F026 — _multi_star_splits combinatorial cost
 
@@ -3480,6 +3532,8 @@ by expanding the enumeration to Unicode, this branch becomes live and
 must be corrected. If the fix is the other direction (restrict
 Char-bound mode to ASCII), this branch is provably dead and should
 be deleted.
+
+**Prior-known:** commit 98379ed introduced both the ASCII-only `type_to_chars` initialization (`_chars_core.c:128-132`) and the dead non-ASCII allocation branch in the same commit; the inconsistency was present at birth, not regressed.
 
 *Task 1 confirmed (no finding):*
 - **F014** — Task 1 confirmed: refcount discipline on `PyUnicode_Substring` allocations is balanced. Every alloc at `_variables.c:1138`/`:1165` is paired with `Py_DECREF` at `:1141`/`:1168` on the success path; error returns (`r == -1`) propagate the unbinding via standard CPython exception flow. No probe (static review only).
