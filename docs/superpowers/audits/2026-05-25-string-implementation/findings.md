@@ -10,21 +10,21 @@
 |-------|-------|-----|-----------:|-----:|------:|---------:|
 | C1 | Type preservation | 0 | 5 | 0 | 0 | 0 |
 | C2 | Non-det collapsed to first | 2 | 0 | 0 | 0 | 0 |
-| C3 | SegString blind spots vs SegList | 5 | 2 | 0 | 0 | 0 |
+| C3 | SegString blind spots vs SegList | 5 | 3 | 0 | 0 | 0 |
 | C4 | Head-pattern literal mismatch | 1 | 0 | 0 | 0 | 0 |
 | C5 | Hash/eq asymmetries | 1 | 2 | 0 | 0 | 0 |
 | C6 | Hashable vs unhashable bridges | 0 | 0 | 0 | 0 | 0 |
-| C7 | Unicode / multi-codepoint | 0 | 0 | 0 | 0 | 4 |
+| C7 | Unicode / multi-codepoint | 0 | 0 | 0 | 0 | 7 |
 | C8 | Partial-term short-circuits | 4 | 1 | 0 | 1 | 0 |
-| C9 | Polymorphic builtin mode matrix | 4 | 6 | 0 | 0 | 0 |
+| C9 | Polymorphic builtin mode matrix | 5 | 6 | 0 | 1 | 0 |
 | C10 | DCG / phrase interaction | 2 | 2 | 0 | 0 | 0 |
 | C11 | Trail/backtracking around partials | 0 | 0 | 0 | 0 | 0 |
-| C12 | Char representation drift | 0 | 0 | 0 | 0 | 0 |
+| C12 | Char representation drift | 1 | 0 | 0 | 0 | 0 |
 | C13 | Type-check predicates | 0 | 0 | 0 | 0 | 0 |
 | C14 | Term inspection drift | 0 | 0 | 0 | 0 | 0 |
 | C15 | First-arg indexing on strings | 0 | 0 | 0 | 0 | 0 |
 | C16 | Free-threaded build safety | 1 | 0 | 0 | 0 | 0 |
-| C17 | Performance, memory, leaks | 0 | 0 | 2 | 0 | 0 |
+| C17 | Performance, memory, leaks | 0 | 0 | 2 | 1 | 0 |
 | —   | Out-of-taxonomy | 0 | 0 | 0 | 0 | 0 |
 
 (Counts updated at the end of each task.)
@@ -776,6 +776,53 @@ multi-star), [[F038]]/[[F039]] (`_in_iter`). The whole cluster shares
 the same root cause: every dispatch site that branches on the target's
 container type has a SegList arm but no SegString arm.
 
+### F075 — Every char/atom builtin in `chars.py` is SegString-blind
+
+- **Class:** C3 (SegString blind spots vs SegList)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/chars.py:47-57` (`_atom_to_str`),
+  plus the `isinstance(vc, str)` gate in `char_type/2`
+  (`chars.py:105`) and `char_code/2` (`chars.py:179`)
+- **Discovered by:** Task 10 of Phase 0
+- **Probe:** `probes/probe_F075.py`
+
+**Symptom:** ``_atom_to_str`` accepts only a plain Python ``str`` or a
+zero-arity ``PredicateMeta``; ``SegString`` is neither, so every
+atom-accepting predicate raises ``type_error("atom", SegString(...))``
+when handed one — *even when the SegString is fully ground and would
+walk to a plain str.* Affected: ``upcase_atom/2``, ``downcase_atom/2``,
+``atom_length/2``, ``atom_chars/2``, ``atom_codes/2``, ``atom_concat/3``,
+``sub_atom/5``, ``number_chars/2``, ``number_codes/2``. ``char_type/2``
+and ``char_code/2`` use ``isinstance(vc, str)`` directly and *silently
+fail* (zero solutions, no error) — see [[F071]] for the char_type
+silent-fail surface.
+
+**Reproducer:** see `probes/probe_F075.py`. Output excerpt:
+```
+upcase_atom(SegString(["h","i"]), V)   → type_error(atom, SegString(...))
+atom_length(SegString(["h","i"]), N)   → type_error(atom, SegString(...))
+char_type(SegString(["h","i"]), alpha) → silent 0 solutions
+```
+
+**Expected:** Same answer as for the walked str — ``SegString(["hi"])``
+should behave like ``"hi"`` for every predicate above. Under the
+strings-as-lists "input-type wins" contract, the SegString is a
+str-shaped container.
+**Actual:** Either ``type_error`` (atom-accepting predicates) or silent
+fail (char-accepting predicates).
+
+**Notes:** Same blind-spot pattern as [[F069]] (``phrase/2,3`` on
+SegString), [[F068]] (``phrase/3`` state-thread), [[F031]]–[[F034]],
+[[F040]]/[[F041]], [[F047]], [[F051]]. The cluster will collapse to a
+single Phase 2 fix: either ``_atom_to_str`` grows a ``SegString``
+branch (``return seg.__walk__() if isinstance(seg.__walk__(), str)
+else None``), or the wrapper layer calls ``__walk__`` on Seg* inputs
+before dispatch. The latter is more uniform across the codebase but
+needs care for non-ground SegStrings (which walk to themselves —
+they'd still hit the type_error). Cross-ref [[F012]] (Var bound to
+SegString in list-element position) — that's the same gap surfacing
+in the C-level unify path.
+
 *Task 1 confirmed (no finding):*
 - **F008** — Top-level `unify(SegString("abc"), ["a","b","c"], t)` and the
   reverse direction both succeed. The C path's str↔list block keys off
@@ -1135,6 +1182,111 @@ assert unify(smile, ["\ud83d", "\ude00"], Trail()) is False
 
 **Notes:** Document the no-UTF-16 contract. Matches Python's `len()` and
 indexing semantics on str.
+
+### F071 — `char_type/2` silently fails on multi-codepoint graphemes
+
+- **Class:** C7 (Unicode / multi-codepoint)
+- **Severity:** doc-only
+- **Location:** `clausal/logic/builtins/chars.py:104-106` (the
+  ``len(vc) != 1`` gate)
+- **Discovered by:** Task 10 of Phase 0
+- **Probe:** `probes/probe_F071.py`
+
+**Symptom:** ``char_type(Char, Type)`` accepts only Char arguments
+where ``isinstance(vc, str) and len(vc) == 1``. A user-perceived
+grapheme spanning multiple codepoints — thumbs-up + skin-tone modifier
+``"👍🏽"`` (2 codepoints), NFD ``"é"`` = ``e`` + combining acute
+(2 codepoints), family emoji ZWJ sequences (5+ codepoints) — silently
+returns zero solutions at the length check. No type_error, no warning.
+Single-codepoint astral emoji (e.g. ``"😀"`` = U+1F600) work correctly
+because their str length is 1.
+
+**Reproducer:**
+```python
+from clausal.logic.builtins import get_builtin_dispatch
+from clausal.logic.variables import Trail
+from clausal.logic.trampoline import StepGenerator, solutions
+disp = get_builtin_dispatch("char_type", 2, None)
+assert len(solutions(StepGenerator(disp, None, None, None,
+    "\U0001f600", "print", Trail()))) == 1   # single-cp OK
+assert len(solutions(StepGenerator(disp, None, None, None,
+    "\U0001f44d\U0001f3fd", "print", Trail()))) == 0  # 2-cp silent fail
+```
+
+**Expected:** Codepoint-level identity (the documented contract for
+[[F002]] / [[F004]]).
+**Actual:** Same as expected — the failure mode is silent, no error.
+
+**Notes:** Internally consistent with [[F002]]: code-point indexing
+throughout. The doc-only finding is to extend the same paragraph that
+covers F002/F003/F004/F007 to mention the silent-fail behaviour of
+``char_type/2`` on multi-codepoint inputs. Users who normalise to NFC
+and avoid emoji modifier sequences are unaffected.
+
+### F074 — `upcase_atom`/`downcase_atom` can change string length
+
+- **Class:** C7 (Unicode / multi-codepoint)
+- **Severity:** doc-only
+- **Location:** `clausal/logic/builtins/chars.py:207, 222` (the
+  ``.upper()`` / ``.lower()`` calls)
+- **Discovered by:** Task 10 of Phase 0
+- **Probe:** `probes/probe_F074.py`
+
+**Symptom:** Python's case-folding is locale-aware and not bijective
+on codepoint length:
+  * ``"ß"`` (1 cp) → ``.upper() = "SS"`` (2 cps)
+  * ``"ﬃ"`` (1 cp ligature) → ``.upper() = "FFI"`` (3 cps)
+  * ``"ς"`` (final sigma) and ``"σ"`` (medial sigma) both → ``"Σ"``
+    → ``.lower() = "σ"`` (round-trip loses the final form)
+
+Consequences for the strings-as-lists contract:
+  * ``atom_length`` is *not* preserved by ``upcase_atom`` /
+    ``downcase_atom``. ``length("ß", 1)`` succeeds but
+    ``upcase_atom("ß", X), length(X, L)`` binds ``L = 2``.
+  * ``downcase_atom(upcase_atom(A))`` is not the identity on case-folded
+    text, even when the original is lowercase.
+
+**Reproducer:** `probes/probe_F074.py`. ``upcase_atom('straße', U)``
+binds ``U = 'STRASSE'`` (length 7, was 6).
+
+**Expected:** Python's default case-folding semantics — the
+implementation rule.
+**Actual:** Same as expected.
+
+**Notes:** Doc-only. No code change recommended; ISO Prolog systems
+that demand strict length preservation use locale-independent
+single-character case maps, which is not what Python ``.upper()`` /
+``.lower()`` provides. Same documentation paragraph as
+[[F002]]/[[F003]]/[[F007]]/[[F071]].
+
+### F076 — `sub_atom/5` and `atom_concat/3` split at codepoint boundaries
+
+- **Class:** C7 (Unicode / multi-codepoint)
+- **Severity:** doc-only
+- **Location:** `clausal/logic/builtins/chars.py:386-388, 483` and
+  `clausal/logic/builtins/_chars_core.c:272-298, 450`
+- **Discovered by:** Task 10 of Phase 0
+- **Probe:** `probes/probe_F076.py`
+
+**Symptom:** Both positional predicates index into the str at codepoint
+offsets. ``atom_concat(A, B, S)`` enumerates ``i ∈ [0, len(S)]`` and
+binds ``A = S[:i], B = S[i:]`` — for an input with a multi-codepoint
+grapheme, the middle split breaks the grapheme. ``sub_atom`` likewise
+slices at arbitrary codepoint indices. Resulting substrings can contain
+isolated combining marks or skin-tone modifiers with no base character.
+
+**Reproducer:** see `probes/probe_F076.py`. For
+``g = "\U0001f44d\U0001f3fd"`` (thumbs-up + skin-tone), the middle
+split of ``atom_concat(A, B, g)`` yields
+``A = "\U0001f44d", B = "\U0001f3fd"`` (a dangling modifier).
+
+**Expected:** Codepoint-level slicing — the documented contract.
+**Actual:** Same as expected.
+
+**Notes:** Internally consistent with [[F002]]/[[F004]]/[[F007]];
+extend the same docs paragraph. For grapheme-aware applications the
+user must normalise to NFC and avoid emoji modifier sequences before
+using positional predicates.
 
 *Task 1 confirmed (no finding):*
 - **F001** — The `n == 0` fast path at `_variables.c:1130` /
@@ -1964,6 +2116,98 @@ codifies the list output for the int-codes case, which is *correct*
 (ints aren't joinable to str); the gap is the 1-char-str-output case
 that isn't covered.
 
+### F072 — `char_type/2` Char-bound vs Type-bound mode disagree on non-ASCII
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/chars.py:76-86` (pre-computed
+  ASCII-only enumeration tables); `clausal/logic/builtins/_chars_core.c:128-132`
+  (`type_to_chars` populated from 0..127 only); `chars.py:148-158` and
+  `_chars_core.c:226-247` (the enumeration paths themselves)
+- **Discovered by:** Task 10 of Phase 0
+- **Probe:** `probes/probe_F072.py`
+
+**Symptom:** ``char_type/2`` has three modes; they disagree on which
+characters are *in* the relation:
+
+1. *Char bound:* the per-codepoint classifier supports the full Unicode
+   range (``Py_UNICODE_ISALPHA`` etc. in the C path at
+   ``_chars_core.c:165-179``, ``str.isalpha`` etc. in the Python
+   fallback at ``chars.py:113``). So ``char_type('α', alpha)`` succeeds.
+2. *Char bound, Type unbound:* same classifier, enumerates matching
+   types for the given char. So ``char_type('α', T)`` enumerates
+   ``[alpha, alnum, lower, print]``.
+3. *Type bound, Char unbound:* iterates the pre-computed
+   ``_TYPE_TO_CHARS`` / ``type_to_chars`` table, which only contains
+   ASCII codepoints. So ``findall(C, char_type(C, alpha), L)`` returns
+   only the 52 ASCII letters — ``α`` is silently omitted from the
+   enumeration even though it satisfies the relation under mode (1).
+
+Consequence: a Prolog program that uses ``char_type(C, alpha)`` as a
+generator and then tests something else on each ``C`` will silently
+skip every non-ASCII letter. ``findall`` is incomplete relative to
+test-mode membership — the relation is not well-defined.
+
+**Reproducer:** see `probes/probe_F072.py`.
+
+**Expected:** Either (a) restrict the Char-bound modes to ASCII only
+(matching the enumeration), or (b) document that Type-bound enumeration
+is limited to a fixed alphabet (the ISO-standard practice — but Prolog
+systems vary on what that alphabet is).
+**Actual:** Char-bound mode supports Unicode; Type-bound mode is ASCII-
+only; no documentation of the asymmetry.
+
+**Notes:** Severity is bug per the spec vocabulary — "non-determinism
+collapsed silently" applies here: the relation enumerated is a proper
+subset of the relation tested. Two fix-shapes:
+
+  * *Cheap:* document the ASCII-only enumeration contract and gate the
+    Char-bound modes with the same ASCII restriction (1-line change in
+    ``chars.py`` and ``_chars_core.c::py_char_type_find_types``).
+  * *Right:* expand ``type_to_chars`` to cover all Unicode general
+    categories, lazily (155k codepoints — feasible but memory-heavy).
+    Note: ``_chars_core.c:228-234`` already has a dead non-ASCII branch
+    that would need fixing (see [[F078]]).
+
+Cross-ref [[F078]] (dead non-ASCII allocation branch in the C path is
+*almost* set up for the right fix but uses the wrong PyUnicode kind for
+codepoints ≥ 0x100).
+
+### F077 — `atom_concat/3` raises instantiation_error for mis-typed bound args
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** smell
+- **Location:** `clausal/logic/builtins/chars.py:346-393` (the boundness
+  inference via ``_atom_to_str`` and the final ``else``)
+- **Discovered by:** Task 10 of Phase 0
+- **Probe:** `probes/probe_F077.py`
+
+**Symptom:** ``atom_concat/3`` infers boundness by setting
+``a_bound = sa is not None`` (and the same for ``b_bound``, ``c_bound``)
+where ``sa = _atom_to_str(va) if not is_var(va) else None``. When an
+arg is bound but not atom-shaped (``[h,e,l]``, ``1``, ``3.14``,
+``foo(x)``), the corresponding ``_bound`` flag is False, so the
+fully-instantiated mis-typed call falls through to the final ``else``
+at ``chars.py:391-393`` which raises
+``instantiation_error("atom_concat/3")``. The correct ISO error is
+``type_error(atom, NonAtom)``.
+
+**Reproducer:** see `probes/probe_F077.py`. Every of
+``atom_concat([h,e,l], "lo", V)``, ``atom_concat(1, 2, V)``,
+``atom_concat(3.14, "x", V)`` raises instantiation_error.
+
+**Expected:** ``type_error(atom, NonAtom)`` for any bound non-atom arg.
+**Actual:** ``instantiation_error("atom_concat/3")``.
+
+**Notes:** A user ``catch(_, instantiation_error, …)`` handler will
+swallow these — masking real type-error bugs. Fix is local: at
+``chars.py:391-393``, before the instantiation_error, check whether
+any of ``va``, ``vb``, ``vc`` is bound-but-non-atom and raise
+``type_error("atom", first_non_atom, "atom_concat/3")``. The same
+pattern likely appears in other atom-accepting predicates that gate on
+``_atom_to_str is None`` to mean "unbound" — worth a sweep when
+fixing.
+
 *Task 7 confirmed (no finding):*
 - **F057** — Task 7 confirmed: the ``_seq_result`` "all 1-char str"
   guard at lists.py:63 is correct for all known callers.  For every
@@ -2214,6 +2458,46 @@ as design-gap (matches the F053/F063 grading).
 
 ### Class C12 — Char representation drift
 
+### F073 — `char_code/2`, `atom_codes/2`, `number_codes/2` leak raw `ValueError` for out-of-range codes
+
+- **Class:** C12 (Char representation drift)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/chars.py:190`
+  (``char_code`` ``chr(vn)``), `:323` (``atom_codes`` ``chr(e)`` in
+  the codes-to-atom branch), `:571` (``number_codes`` ``chr(e)``)
+- **Discovered by:** Task 10 of Phase 0
+- **Probe:** `probes/probe_F073.py`
+
+**Symptom:** ``chr(n)`` raises Python ``ValueError`` for ``n < 0`` or
+``n >= 0x110000``. None of the three call sites guards the call:
+
+  * ``char_code(V, -1)`` *is* guarded (``chars.py:187`` raises
+    ``type_error(integer, vn)``), but ``char_code(V, 0x110000)`` is not.
+  * ``atom_codes(V, [-1])`` and ``atom_codes(V, [0x110000])`` reach
+    ``chr(e)`` directly — only the ``isinstance(e, int)`` gate fires
+    (``chars.py:321``).
+  * ``number_codes`` has the same shape at ``chars.py:571``.
+
+The raw ``ValueError`` propagates through the trampoline as an
+uncaught Python exception — it is *not* an ISO ``error/2`` term, so
+``catch/3`` in Prolog cannot intercept it.
+
+**Reproducer:** see `probes/probe_F073.py`.
+
+**Expected:** ``representation_error(character_code)`` (or
+``type_error(character_code, N)``) — a proper Prolog error term.
+**Actual:** ``ValueError: chr() arg not in range(0x110000)``.
+
+**Notes:** This is the C12-drift surface for the int↔chr boundary: the
+int-code domain is wider than the str char domain (negative ints and
+``>= 0x110000``) and the boundary is unguarded. Fix is local — wrap
+each ``chr(...)`` site with a range check that raises the proper
+LogicException, or guard the input list / int up-front. Should also
+sweep ``number_chars`` for the symmetric concern (it parses via
+``int()``/``float()`` which already raise on invalid input — already
+caught at ``chars.py:528-531``; the issue is specific to the codes
+form).
+
 *Task 1 confirmed (no finding):*
 - **F013** — A Var bound to a non-Var, non-single-char-PyUnicode dereffed element (e.g. int, list, tuple) does not unify when placed inside a list against the equivalent `str`. The C path requires the dereffed element to be either an unbound Var (allocate substring & bind) or a PyUnicode of exactly 1 code point. This is consistent with [[F006]]: the C path binds chars as 1-char `str`, never as int codes. See `probes/probe_F013.py`. Spec C12 notes this is the intended contract; the broader char-aware-builtin audit is left to later tasks.
 
@@ -2350,8 +2634,67 @@ fewer solutions are needed) rather than in the gen itself. Logged
 for visibility; no Phase 2 action unless a benchmark shows real
 user-visible regression.
 
+### F078 — `_chars_core.c::char_type_find_chars` has dead non-ASCII allocation branch
+
+- **Class:** C17 (Performance, memory, leaks)
+- **Severity:** smell
+- **Location:** `clausal/logic/builtins/_chars_core.c:228-234`
+  (the runtime branch) and `:128-132` (the init loop that bounds the
+  table to ASCII only)
+- **Discovered by:** Task 10 of Phase 0
+- **Probe:** `probes/probe_F078.py` (static-review note; nothing to
+  exercise at runtime)
+
+**Symptom:** ``char_type_find_chars`` (the Type-bound enumeration
+helper for ``char_type/2``) checks ``(ch < 128) ? ascii_char_objs[ch]
+: NULL`` and, when the cache lookup misses, falls back to
+``PyUnicode_FromKindAndData(PyUnicode_1BYTE_KIND, &ch, 1)`` with
+``need_decref = 1``. But ``type_to_chars[t][i]`` is populated only for
+``i ∈ [0, 128)`` at ``_chars_core.c:130-132`` — every codepoint in the
+table is ASCII. The fallback branch is therefore unreachable.
+
+The dead branch is the only place in this file that pairs an alloc
+with a *conditional* DECREF; the rest of the file uses unconditional
+cleanup that is easier to audit. The conditional pattern also has a
+subtle landmine: ``PyUnicode_1BYTE_KIND`` produces a Latin-1 string
+that requires the codepoint to fit in one byte (``ch < 0x100``).
+A future change that widens ``type_to_chars`` to cover Unicode (see
+[[F072]]) without also fixing the kind argument would silently produce
+malformed strings for codepoints ``[0x100, 0x10000)``.
+
+**Reproducer:** static review only — the runtime branch is unreachable.
+
+**Expected:** Either drop the dead branch (and the ``need_decref``
+flag), or widen the table and use ``PyUnicode_FromOrdinal((int)ch)``
+which handles all codepoint ranges correctly.
+**Actual:** Dead code with a latent bug if revived as-is.
+
+**Notes:** Logged as smell — no correctness impact today. The fix is
+intertwined with [[F072]]: if the C9 mode-matrix asymmetry is closed
+by expanding the enumeration to Unicode, this branch becomes live and
+must be corrected. If the fix is the other direction (restrict
+Char-bound mode to ASCII), this branch is provably dead and should
+be deleted.
+
 *Task 1 confirmed (no finding):*
 - **F014** — Task 1 confirmed: refcount discipline on `PyUnicode_Substring` allocations is balanced. Every alloc at `_variables.c:1138`/`:1165` is paired with `Py_DECREF` at `:1141`/`:1168` on the success path; error returns (`r == -1`) propagate the unbinding via standard CPython exception flow. No probe (static review only).
+
+*Task 10 confirmed (no finding):*
+- **F079** — Task 10 confirmed: refcount discipline in
+  ``clausal/logic/builtins/_chars_core.c`` is balanced across every
+  helper.  Each ``PyLong_FromSsize_t`` / ``PyUnicode_Substring`` alloc
+  in ``py_atom_concat_split_find`` (``:273-275``),
+  ``py_sub_atom_search`` (``:337-342``), and ``py_sub_atom_enum``
+  (``:443-451``) is paired with unconditional ``Py_DECREF`` on both
+  the success path (returns ``Py_BuildValue``) and the error-cleanup
+  path (``goto error_cleanup`` at ``:489-494`` or explicit guards
+  before propagation).  The pre-built ``ascii_char_objs`` and
+  ``type_name_objs`` are owned by the module (created in
+  ``init_char_tables``) and passed as borrowed references through
+  ``call_unify`` — correct because unify returns a *new* ref
+  (``Py_True``/``Py_False``) and does not steal its arg refs.  The
+  one conditional-DECREF case is the dead branch flagged as [[F078]].
+  No probe (static review only).
 
 ### Out-of-taxonomy
 *(none yet)*
