@@ -17,7 +17,7 @@
 | C7 | Unicode / multi-codepoint | 0 | 0 | 0 | 0 | 4 |
 | C8 | Partial-term short-circuits | 4 | 1 | 0 | 1 | 0 |
 | C9 | Polymorphic builtin mode matrix | 4 | 6 | 0 | 0 | 0 |
-| C10 | DCG / phrase interaction | 0 | 0 | 0 | 0 | 0 |
+| C10 | DCG / phrase interaction | 2 | 2 | 0 | 0 | 0 |
 | C11 | Trail/backtracking around partials | 0 | 0 | 0 | 0 | 0 |
 | C12 | Char representation drift | 0 | 0 | 0 | 0 | 0 |
 | C13 | Type-check predicates | 0 | 0 | 0 | 0 | 0 |
@@ -2021,7 +2021,193 @@ that isn't covered.
   verification).
 
 ### Class C10 — DCG / phrase interaction
-*(none yet)*
+
+### F068 — `phrase/3` silently splits str state-threading arg into chars
+
+- **Class:** C10 (DCG / phrase interaction)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/dcg.py:49-50` (and `:18-19` for
+  `phrase/2`)
+- **Discovered by:** Task 9 of Phase 0
+- **Probe:** `probes/probe_F068.py`
+
+**Symptom:** `phrase/3` is documented in `docs/dcg.md` as both a
+character-level DCG entry point (string input is split into chars) *and*
+a generic state-threading mechanism where the input list carries an
+arbitrary single state value (`phrase(rule, [State0], [State])`). Those
+two uses share the same input slot, and `dcg.py:49-50` unconditionally
+applies `list(list_val)` when the slot is a `str`. If a user accidentally
+drops the brackets in the state-threading form (`phrase(set_name("alice"),
+"bob", Rest)` instead of `phrase(set_name("alice"), ["bob"], Rest)`),
+the str `"bob"` is silently split to `["b", "o", "b"]` and the rule
+head unifies just the first character with what was meant to be the
+whole state. The query *succeeds* with a wrong answer (`Rest =
+['alice', 'o', 'b']` instead of the intended `Rest = ['alice']`) — no
+runtime error, no warning.
+
+**Reproducer:**
+```clausal
+-module(s2, [state2(_s0, _s, S0_2, S_2), set_name(_n, _s0, _s)])
+(state2(_s0, _s), [_s]) >> ([_s0])
+set_name(_n) >> (state2(_, _n))
+```
+```python
+# Correct call: Rest = ['alice']
+for _ in call("phrase", set_name("alice"), ["bob"], rest, module=mod): ...
+# User error — Rest comes back as ['alice', 'o', 'b']
+for _ in call("phrase", set_name("alice"), "bob", rest, module=mod): ...
+```
+
+**Expected:** Either reject str inputs in state-threading shape, or
+require the user to opt in to char-splitting (e.g. a separate
+`phrase_chars/3` or a wrapping helper). At minimum a wrong-answer
+outcome should not be silent.
+**Actual:** Silent wrong answer: `Rest = ['alice', 'o', 'b']`.
+
+**Notes:** Root cause is the polymorphism in `phrase/3` itself — the
+str-to-chars conversion is the right default for token parsing but
+the wrong default for state threading, and the implementation can't
+distinguish the two intents from the call shape. Cross-link to
+[[F067]] (output-type leak from the same conversion) and to the C9
+"input-type wins" cluster ([[F053]], [[F063]]) which the dcg.py
+conversion fundamentally contradicts. Graded `bug` because the spec
+vocabulary defines `bug` as "wrong answer / silently drops solutions";
+this is the dual — silently *produces* a wrong answer.
+
+### F069 — `phrase/2` and `phrase/3` silently fail on SegString input
+
+- **Class:** C10 (DCG / phrase interaction)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/dcg.py:15-19` (`phrase/2` list
+  arg) and `:46-51` (`phrase/3` list arg and rest arg)
+- **Discovered by:** Task 9 of Phase 0
+- **Probe:** `probes/probe_F069.py`
+
+**Symptom:** `phrase/2` and `phrase/3` test `isinstance(list_val, str)`
+to decide whether to split into chars. `SegString` instances — which
+walk to a `str` and represent the same logical value — are not
+recognised; they fall through into the dispatch path, and the rule
+body's `s_in is [t1, ..., tn, *s_out]` cannot unify against a raw
+SegString (no list-shape match path for `SegString` at the head-unify
+layer either — see [[F031]], [[F032]], [[F034]], [[F040]], [[F041]],
+[[F047]]). Net effect: `phrase(rule, ground_SegString)` returns zero
+solutions where `phrase(rule, ground_SegString.__walk__())` returns
+one. The same hole applies to the `rest_arg` of `phrase/3`: a
+SegString-shaped remainder is never accepted, even when ground.
+
+**Reproducer:**
+```python
+seg = SegString(["h", VarSeg(X)])  # X bound to "i" → walks to "hi"
+for _ in call("phrase", hi_rule, seg, module=mod): ...      # 0 solutions
+for _ in call("phrase", hi_rule, "hi", module=mod): ...     # 1 solution
+```
+
+**Expected:** SegString should be handled by walking-to-str at
+`dcg.py:18,49` (parallel to the existing str path) when ground, and
+treated as a SegList-style sequence when non-ground (parallel to the
+C3 fixes wanted in `_head_list_unify_input`).
+**Actual:** Silent failure.
+
+**Notes:** This is the DCG-layer expression of the same C3 SegString
+blind spot that runs through the unify/head paths. Logged here under
+C10 because the visible call site is `phrase/2,3`, but the root cause
+overlaps with the C3 cluster — a fix in `dcg.py` could pre-walk
+SegString to str on the way in, *or* defer to fixes in
+`_head_list_unify_input` (which would address both). Cross-link to
+[[F031]], [[F032]], [[F034]], [[F040]], [[F041]], [[F047]].
+
+### F067 — `phrase/3` Rest type does not preserve str input shape
+
+- **Class:** C10 (DCG / phrase interaction)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/dcg.py:49-50` (input
+  conversion) and the lack of any output-shape record threaded back
+  through to `rest_arg`
+- **Discovered by:** Task 9 of Phase 0
+- **Probe:** `probes/probe_F067.py`
+
+**Symptom:** When the user passes a str to `phrase/3`
+(`phrase(g, "abcd", Rest)`), the input is converted to a Python list
+of 1-char strs at `dcg.py:49-50`, the rule body threads list-shaped
+state, and `Rest` ends up bound to the list slice of the residue
+(e.g. `['b','c','d']`) — never a str like `"bcd"`. The contract is
+*documented* in `docs/dcg.md:148` (the example asserts
+`Rest == ['a', 'b']`), so this is the intended behaviour today. The
+design gap is that:
+
+  1. It is inconsistent with the broader "input-type wins" pattern
+     emerging from the C1/C9 audit (see [[F018]], [[F033]], [[F042]],
+     [[F043]], [[F053]], [[F062]], [[F063]] — every other
+     str-preserving builtin tries to preserve str shape on output when
+     the input was str).
+  2. There is no opt-in to recover str-shaped Rest. A caller wanting
+     to chain `phrase/3` calls and keep the residue str-typed for
+     downstream str-only predicates has to `"".join(Rest)` manually.
+
+**Reproducer:** `probes/probe_F067.py` — `phrase(tok(V), "abcd", Rest)`
+binds `Rest = ['b','c','d']` (list), not `"bcd"`.
+
+**Expected:** Either (a) document the asymmetry in the spec as
+intentional and add a sibling `phrase_str/3` that preserves str shape,
+or (b) thread a `was_string` flag through the rule body so the final
+unification of `rest_arg` can promote a list-of-1-char-strs back to
+str (analogous to the `_seq_result` pattern in `lists.py`).
+**Actual:** Always list Rest.
+
+**Notes:** Sibling-shaped to [[F053]] (`length/2`, `replicate/3`,
+`same_length/2` always build list output) and [[F063]] (higher_order
+predicates without `_seq_result`). Logged as design-gap rather than
+bug because the current behaviour is *documented* — the gap is the
+inconsistency with the rest of the audit's emerging "input-type wins"
+contract.
+
+### F070 — `sequence//1` drops str type across every binding mode
+
+- **Class:** C10 (DCG / phrase interaction)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/dcg.py:73-116`
+- **Discovered by:** Task 9 of Phase 0
+- **Probe:** `probes/probe_F070.py`
+
+**Symptom:** `sequence//1` (`sequence/3` builtin) asserts
+`S0 = List ++ S` across four binding modes; every mode produces a
+list-typed output even when the inputs are str:
+
+- **Mode A** (S0 bound to str, S unbound): `dcg.py:90-98` converts
+  `s0_val = list(s0_val)` and binds `s = s0_val[n:]` — a list slice.
+  `phrase`-style str input → list output S.
+- **Mode B** (S bound to str, S0 unbound): `dcg.py:99-107` builds
+  `expected = lst_val + s_val` where `lst_val` was eagerly converted
+  to list at `:86`. Result S0 is always a list (or raises if
+  `lst_val` is list and `s_val` is str of unequal types — masked by
+  the eager conversion).
+- **Mode C** (both unbound): `dcg.py:108-115` builds a `SegList` with
+  `ConcreteSeg(lst_val)` and `VarSeg(s_val)`. Even when `lst` was a
+  `str`, the output is `SegList`, not `SegString`.
+- **Mode D** (`lst` is `SegList`/`SegString`): unsupported. `dcg.py:81`
+  guards `not isinstance(lst_val, (list, str))` and silently fails.
+
+**Reproducer:** `probes/probe_F070.py` — exercises all four modes.
+Examples:
+```python
+# Mode A: lst="ab", S0="abXY", S=Var → S = ['X','Y'] (not "XY")
+# Mode B: lst="ab", S0=Var,    S="XY"  → S0 = ['a','b','X','Y']
+# Mode C: lst="ab", S0=Var,    S=Var   → S0 = SegList([ConcreteSeg(['a','b']),
+#                                                       VarSeg(...)])
+# Mode D: lst=SegString("ab")           → fail
+```
+
+**Expected:** Modes A/B should produce str output when both inputs
+are str (input-type wins). Mode C should build a `SegString` when
+`lst` is a `str`. Mode D should accept ground SegString/SegList by
+walking to a comparable list/str (parallel to the [[F069]] fix).
+**Actual:** Every output mode hard-codes list/SegList/fail.
+
+**Notes:** Direct C10 analogue of [[F053]] (`length/2`, `replicate/3`)
+and [[F063]] (`maplist/3`, `filter_map/3` etc.) — output builders
+that never reach a `_seq_result`-style decision. Mode-D failure
+shares root cause with [[F069]] / the C3 SegString cluster. Logged
+as design-gap (matches the F053/F063 grading).
 
 ### Class C11 — Trail/backtracking around partials
 *(none yet)*
