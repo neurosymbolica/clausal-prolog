@@ -20,7 +20,7 @@
 | C10 | DCG / phrase interaction | 2 | 2 | 0 | 0 | 0 |
 | C11 | Trail/backtracking around partials | 0 | 0 | 0 | 0 | 0 |
 | C12 | Char representation drift | 1 | 0 | 0 | 0 | 0 |
-| C13 | Type-check predicates | 0 | 0 | 0 | 0 | 0 |
+| C13 | Type-check predicates | 1 | 3 | 0 | 1 | 0 |
 | C14 | Term inspection drift | 0 | 0 | 0 | 0 | 0 |
 | C15 | First-arg indexing on strings | 0 | 0 | 0 | 0 | 0 |
 | C16 | Free-threaded build safety | 1 | 0 | 0 | 0 | 0 |
@@ -2502,7 +2502,275 @@ form).
 - **F013** — A Var bound to a non-Var, non-single-char-PyUnicode dereffed element (e.g. int, list, tuple) does not unify when placed inside a list against the equivalent `str`. The C path requires the dereffed element to be either an unbound Var (allocate substring & bind) or a PyUnicode of exactly 1 code point. This is consistent with [[F006]]: the C path binds chars as 1-char `str`, never as int codes. See `probes/probe_F013.py`. Spec C12 notes this is the intended contract; the broader char-aware-builtin audit is left to later tasks.
 
 ### Class C13 — Type-check predicates
-*(none yet)*
+
+**Answer matrix from `probes/probe_F080.py`** — each cell is whether the
+type-check builtin succeeds (T) / fails (F) / is not registered (UNDEF)
+for the input on the left:
+
+| input                              | is_list | is_chars | is_str | string | atom | atomic | var | nonvar | ground | compound | callable_ |
+|------------------------------------|:-------:|:--------:|:------:|:------:|:----:|:------:|:---:|:------:|:------:|:--------:|:---------:|
+| `"abc"`                            | F       | T        | T      | UNDEF  | F    | UNDEF  | F   | T      | T      | F        | T         |
+| `["a","b","c"]`                    | T       | T        | F      | UNDEF  | F    | UNDEF  | F   | T      | T      | F        | F         |
+| `""`                               | F       | T        | T      | UNDEF  | F    | UNDEF  | F   | T      | T      | F        | T         |
+| `[]`                               | T       | T        | F      | UNDEF  | F    | UNDEF  | F   | T      | T      | F        | F         |
+| `SegList([VarSeg(X)])` (unbound)   | F       | F        | F      | UNDEF  | F    | UNDEF  | F   | T      | **T**  | F        | F         |
+| `SegString(["a",VarSeg(Y)])` (unbound) | F   | F        | F      | UNDEF  | F    | UNDEF  | F   | T      | **T**  | F        | F         |
+| `Var()` (unbound)                  | F       | F        | F      | UNDEF  | F    | UNDEF  | T   | F      | F      | F        | F         |
+
+Bolded cells are the surprising answers driving findings below.
+
+### F080 — `is_list/1` rejects strings while every other list builtin accepts them
+
+- **Class:** C13 (Type-check predicates)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/type_checks.py:106-110`
+- **Discovered by:** Task 11 of Phase 0
+- **Probe:** `probes/probe_F080.py`
+
+**Symptom:** ``is_list/1`` is a strict ``isinstance(_, list)`` check —
+``is_list("abc")`` fails, ``is_list("")`` fails. Yet the rest of the
+"list" builtin layer happily accepts ``str`` as a character sequence
+(``in_/2``, ``length/2``, ``append/3``, ``msort/2``, ``reverse/2``,
+``maplist/N``, ``in_/2``, …) as confirmed by the strings-as-lists
+work tracked in [[F018]], [[F033]], [[F042]], [[F043]], [[F053]],
+[[F062]], [[F063]], [[F070]]. The library exposes a *separate*
+``is_chars/1`` (`type_checks.py:113-117`) that returns True for both
+``list`` *and* ``str`` — but every list-flavoured builtin uses ``str``
+inputs at runtime without ever asking ``is_chars`` first.
+
+The contract the audit needs to flag: a user who writes
+``foo(X) <- is_list(X), maplist(p, X, Y)`` will see ``foo("abc")``
+fail, but ``maplist(p, "abc", Y)`` succeed. The two type-tests
+disagree, and there is no documented rule for which one a polymorphic
+builtin should respect.
+
+**Reproducer:** see `probes/probe_F080.py`. The asserts at the bottom
+pin down ``is_list("abc") == F`` and ``is_chars("abc") == T``.
+
+**Expected:** A documented rule — either ``is_list`` becomes
+polymorphic (matching every list builtin) or every list builtin is
+explicitly typed to reject ``str`` (matching ``is_list``). The current
+state leaves callers guessing.
+**Actual:** ``is_list`` is strict, the list-flavoured builtins are
+polymorphic, the two contracts disagree.
+
+**Notes:** ``tests/test_string_list_builtins.py:405`` already pins down
+``is_list("hello")`` returning False as the *intended* behaviour ("exact
+type test") — so the test suite has codified the inconsistency rather
+than resolved it. The fix lives at the contract level (pick one), not
+at the call site. Logged as design-gap (parallels [[F067]]: documented
+behaviour that contradicts the broader strings-as-lists contract).
+
+### F081 — `string/1` is not registered; only `is_str/1` exists
+
+- **Class:** C13 (Type-check predicates)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/type_checks.py:29-34` (the
+  ``is_str/1`` registration is the only string-type test)
+- **Discovered by:** Task 11 of Phase 0
+- **Probe:** `probes/probe_F080.py`
+
+**Symptom:** There is no ``string/1`` builtin. ``call("string", "abc",
+module=mod)`` raises ``KeyError`` because
+``get_builtin_predicate("string", 1, db)`` returns ``None``. The
+matching test is registered under the name ``is_str/1`` instead.
+
+This is at odds with two reference points:
+
+  1. **ISO Prolog / SWI** expose ``string/1`` as a stable name for
+     "is this a Prolog string?". A user-port from SWI will silently
+     fail to find ``string/1``.
+  2. **The internal type table** ``_check_type`` in the *same file*
+     (lines 137-142) accepts ``"atom"``, ``"string"``, ``"str"`` as
+     synonyms for the same Python-str check — so ``must_be(string, X)``
+     works, but ``string(X)`` does not.
+
+The matrix at the top of this section also shows that the docstring
+of ``_atom__1`` at `type_checks.py:31` describes itself as
+``atom(X) — succeeds if X is a string (Prolog atom).`` even though the
+function is registered under the *different* name ``is_str/1`` and a
+separate ``atom/1`` registration at line 37 implements the
+"zero-arity PredicateMeta" check. Three names, two semantics, one
+docstring that mixes them up.
+
+**Reproducer:** see `probes/probe_F080.py`. The asserts include
+``_check(mod, "string", "abc") == "UNDEF"`` and
+``_check(mod, "is_str", "abc") == "T"``.
+
+**Expected:** Register ``string/1`` as an alias for ``is_str/1`` (and
+fix the misleading docstring). Optionally surface a deprecation note
+on ``is_str`` if the audit wants to standardise on the ISO name.
+**Actual:** ``string/1`` is undefined; ``must_be/2`` calls it
+``"string"`` but the standalone test is called ``"is_str"``.
+
+**Notes:** Cross-link with [[F082]] (atomic/1 also missing) — both
+look like incomplete porting of the ISO type-check family. The
+docstring fix is independent of the alias decision.
+
+### F082 — `atomic/1` is not registered
+
+- **Class:** C13 (Type-check predicates)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/type_checks.py` (no
+  ``@_builtin("atomic", 1)`` registration)
+- **Discovered by:** Task 11 of Phase 0
+- **Probe:** `probes/probe_F080.py`
+
+**Symptom:** ``atomic/1`` is a standard Prolog type-check that succeeds
+for any term that is not a Var and not compound — atoms, numbers,
+strings, and the empty list (in ISO).  No such builtin is registered
+in ``type_checks.py``. ``call("atomic", "abc", module=mod)`` raises
+``KeyError``.
+
+The audit's input matrix can't even probe this row meaningfully — the
+"atomic" column is ``UNDEF`` everywhere. Users porting from any
+Prolog reference will see ``atomic(X)`` fall through to "predicate not
+defined" rather than the expected silent True/False.
+
+**Reproducer:** see `probes/probe_F080.py`. The asserts include
+``_check(mod, "atomic", "abc") == "UNDEF"``.
+
+**Expected:** Register ``atomic/1`` as ``(not is_var)`` AND
+``(not compound)`` — should accept str, int, float, bool, None, and
+zero-arity PredicateMeta classes; should reject Compound, KWTerm,
+list, dict, term-instances with fields, ``SegList``/``SegString`` with
+any segment.
+**Actual:** ``atomic/1`` is undefined.
+
+**Notes:** Cross-link with [[F081]] (string/1 missing) — same root
+cause (incomplete ISO porting). Implementation is a 5-liner: deref,
+reject Var, reject compound shapes, succeed.
+
+### F083 — `ground/1` returns True for SegList / SegString with unbound VarSeg
+
+- **Class:** C13 (Type-check predicates)
+- **Severity:** **bug**
+- **Location:** `clausal/logic/builtins/_helpers.py:93-110` (Python
+  fallback) and `clausal/logic/variables/_variables.c:1933-2038`
+  (``c_is_ground``)
+- **Discovered by:** Task 11 of Phase 0
+- **Probe:** `probes/probe_F080.py`
+
+**Symptom:** Both the Python fallback ``_is_ground_py`` and the C
+implementation ``c_is_ground`` enumerate the known container shapes
+(list, Compound, KWTerm, PredicateMeta, term-instance) and fall
+through to ``return 1`` (True) for any other object — including
+``SegList`` and ``SegString``. The Var living inside a ``VarSeg`` is
+never visited.
+
+Concrete consequence: with ``X = Var()``,
+``ground(SegList([VarSeg(X)])) == True``, even though the SegList is
+explicitly a term-with-a-hole. The same is true for ``SegString``.
+This contradicts ``ground/1``'s entire purpose — it is the canonical
+test for "no unbound Vars anywhere in the term" — and contradicts the
+companion behaviour of every Seg*-aware builtin in the C3 cluster.
+
+The audit matrix also shows the related ``nonvar(SegList([VarSeg(X)]))``
+is True, which is *consistent within the type-check layer* (Seg* is
+not itself a Var) but inconsistent with ground/1's documented
+recursive definition.
+
+**Reproducer:** see `probes/probe_F080.py`. The asserts cover both
+``SegList`` and ``SegString`` shapes. Minimal:
+
+```python
+from clausal.logic.variables import Var
+from clausal.terms import SegList, VarSeg
+from clausal.logic.builtins._helpers import _is_ground
+
+X = Var()
+assert _is_ground(SegList([VarSeg(X)])) is False     # FAILS — returns True
+```
+
+**Expected:** ``_is_ground`` walks Seg* segments and recurses into
+``VarSeg.var``.
+**Actual:** Seg* falls through the "unknown container" branch and
+silently reports ground.
+
+**Notes:** This is a real correctness bug (severity: bug) because
+downstream predicates that gate on ``ground/1`` before, say, hashing
+or indexing into a Var-keyed dict, will treat a Seg*-with-hole as
+fully ground and crash later when they try to use the dereffed
+value. The fix has two layers:
+
+  1. Add ``SegList``/``SegString`` cases to ``_is_ground_py`` at
+     `clausal/logic/builtins/_helpers.py:93-110`.
+  2. Mirror in ``c_is_ground`` at
+     `clausal/logic/variables/_variables.c:1933-2038` — register the
+     two Seg* types alongside the existing ``Compound_type`` /
+     ``KWTerm_type`` registration in ``_register_term_types``.
+
+Cross-link with C3 cluster: [[F020]], [[F024]], [[F041]] all flag
+Seg*-blind builtins. C13 adds ``ground/1`` to that list. Probably
+also surfaces in any builtin that uses ``_is_ground`` as a fast
+pre-check before dispatch (search ``_helpers._is_ground`` consumers).
+
+### F084 — `callable_/1` says every Python str is callable
+
+- **Class:** C13 (Type-check predicates)
+- **Severity:** smell
+- **Location:** `clausal/logic/builtins/type_checks.py:92-103`
+- **Discovered by:** Task 11 of Phase 0
+- **Probe:** `probes/probe_F080.py`
+
+**Symptom:** ``callable_/1`` succeeds whenever the dereffed term is a
+``str`` (line 98: ``isinstance(x_val, (str, Compound, KWTerm))``).
+That includes arbitrary strings like ``"this is not a predicate
+name"`` or even the empty string ``""``. In Prolog tradition
+``callable/1`` should succeed for "an atom or a compound" — strings
+specifically may or may not be callable depending on whether they
+name a registered predicate.
+
+The matrix shows: ``callable_("abc") == T``, ``callable_("") == T``,
+``callable_(["a","b","c"]) == F``. So a *string of one char* is
+considered callable but a *one-element list* is not — and neither
+form is actually a predicate name.
+
+**Reproducer:** see `probes/probe_F080.py`. The asserts include
+``callable_("this is not a predicate") == "T"``.
+
+**Expected:** Either restrict to strings that resolve to a registered
+predicate (expensive — needs the DB), or document the laxer
+``"any str is callable"`` semantics so users know not to rely on
+``callable_/1`` as a guard before ``call/N``.
+**Actual:** Any str trivially succeeds; the predicate is effectively
+``isinstance(x, (str, Compound, KWTerm, term-instance))``.
+
+**Notes:** Logged as smell rather than bug because the lax semantics
+match SWI's ``callable/1`` (which also says any atom is callable, even
+unknown ones). What the audit wants to flag is the *naming*: the
+trailing underscore in ``callable_`` is the only signal that this is
+not ISO ``callable/1`` — and the relaxed contract isn't documented
+anywhere. Cross-link with [[F081]]/[[F082]] (incomplete porting of
+the ISO type-check family).
+
+*Task 11 confirmed (no finding):*
+- **F085** — Task 11 confirmed: ``var/1`` and ``nonvar/1`` behave
+  correctly for the matrix row-set. ``var(Var()) == T``,
+  ``nonvar(Var()) == F``, and ``var/nonvar`` flip for every bound
+  input. ``var(SegList([VarSeg(unbound)])) == F`` is *consistent
+  within the type-check layer* (Seg* is not itself a Var) — though
+  see [[F083]] for the ground/1 contradiction the same row exposes.
+  No probe (covered by `probes/probe_F080.py`).
+- **F086** — Task 11 confirmed: ``compound/1`` correctly rejects
+  ``str``, ``list``, ``[]``, ``""``, and an unbound ``Var`` (matrix
+  shows F for every row). The contract "compound = ``Compound`` or
+  ``KWTerm`` with arity > 0, or a term-instance with field count >
+  0" is enforced at `type_checks.py:78-89`. Note that ``compound``
+  reports False for ``SegList([VarSeg(X)])`` and
+  ``SegString(["a",VarSeg(X)])`` — these are compound-shaped *under
+  the C3 contract* but ``type_checks.py`` doesn't know about Seg*,
+  so the answer is consistent with the broader Seg*-blind C13 layer
+  (same root cause as [[F083]]; not separately flagged). No probe
+  (covered by `probes/probe_F080.py`).
+- **F087** — Task 11 confirmed: ``atom/1`` (zero-arity PredicateMeta
+  check) is *not* confused by ``str`` inputs — ``atom("abc") == F``
+  for every str in the matrix. The misleading docstring at
+  ``type_checks.py:31`` ("atom(X) — succeeds if X is a string (Prolog
+  atom)") is on the wrong function (it documents ``is_str``, not the
+  ``atom`` defined four lines below it) — see [[F081]] for the
+  docstring/name confusion finding. Behaviour itself is correct. No
+  probe (covered by `probes/probe_F080.py`).
 
 ### Class C14 — Term inspection drift
 *(none yet)*
