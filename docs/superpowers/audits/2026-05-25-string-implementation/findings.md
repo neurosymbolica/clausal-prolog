@@ -8,14 +8,14 @@
 
 | Class | Title | Bug | Design-gap | Perf | Smell | Doc-only |
 |-------|-------|-----|-----------:|-----:|------:|---------:|
-| C1 | Type preservation | 0 | 3 | 0 | 0 | 0 |
+| C1 | Type preservation | 0 | 5 | 0 | 0 | 0 |
 | C2 | Non-det collapsed to first | 2 | 0 | 0 | 0 | 0 |
-| C3 | SegString blind spots vs SegList | 2 | 2 | 0 | 0 | 0 |
+| C3 | SegString blind spots vs SegList | 4 | 2 | 0 | 0 | 0 |
 | C4 | Head-pattern literal mismatch | 0 | 0 | 0 | 0 | 0 |
 | C5 | Hash/eq asymmetries | 1 | 2 | 0 | 0 | 0 |
 | C6 | Hashable vs unhashable bridges | 0 | 0 | 0 | 0 | 0 |
 | C7 | Unicode / multi-codepoint | 0 | 0 | 0 | 0 | 4 |
-| C8 | Partial-term short-circuits | 2 | 1 | 0 | 1 | 0 |
+| C8 | Partial-term short-circuits | 4 | 1 | 0 | 1 | 0 |
 | C9 | Polymorphic builtin mode matrix | 0 | 0 | 0 | 0 | 0 |
 | C10 | DCG / phrase interaction | 0 | 0 | 0 | 0 | 0 |
 | C11 | Trail/backtracking around partials | 0 | 0 | 0 | 0 | 0 |
@@ -165,6 +165,116 @@ strings-as-lists contract), or both rejected.
 current behaviour is at least consistent with the host language. The
 audit logs this as a contract gap rather than a bug. Related to
 [[F019]] (parallel asymmetry in `__eq__`).
+
+### F042 — `_body_multi_star_unify` unbound-target branch always builds SegList
+
+- **Class:** C1 (Type preservation)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/runtime/body_star_unify.py:249-260`
+- **Discovered by:** Task 4 of Phase 0
+- **Probe:** `probes/probe_F042.py`
+
+**Symptom:** When the dereffed target is an unbound `Var`, the helper
+unconditionally constructs a `SegList` of `[VarSeg | ConcreteSeg]`
+segments from the pattern and binds the target to it. There is no
+record of whether the surrounding logical context expects a
+str/SegString result — even when every fixed segment is a 1-char str
+var and every star is bound (or would later bind) to a str. A goal
+``X is [H, *S, T]`` where every var is fresh therefore binds X to a
+SegList regardless of how X is consumed downstream.
+
+This is the multi-star body-position parallel of [[F033]] (head-output
+mode always builds a list). The information genuinely isn't present at
+this site, so the fix requires upstream plumbing (compile-time
+type-source recording, or threading the type through the input phase).
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var, Trail, deref
+from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
+from clausal.terms import SegList, SegString
+
+target = Var()
+H, S, R = Var(), Var(), Var()
+segments = [("fixed", [H]), ("star", S), ("fixed", [R])]
+# inspect during yield — trail.undo at :259 unbinds after each yield
+for _ in _body_multi_star_unify(target, segments, Trail()):
+    assert isinstance(deref(target), SegList)
+    assert not isinstance(deref(target), SegString)
+    break
+```
+
+**Expected:** Under "input type wins" a SegString when the surrounding
+logical context is string-typed; SegList otherwise.
+**Actual:** Always SegList.
+
+**Notes:** Same root-cause class as [[F033]]; if Phase 2 fixes F033 by
+threading the original target type into the output-mode call site, the
+same plumbing should reach this helper. Related to [[F042]] is implicit
+in the multi-star pattern: even a single-star ``[*S]`` body pattern
+goes through this branch. Companion to [[F043]] (the build helpers also
+lose type when star is bound to a list-of-1-char-strs).
+
+### F043 — `_build_star_list` / `_build_multi_star_list` lose str type for list-of-chars and non-ground SegString stars
+
+- **Class:** C1 (Type preservation)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/runtime/body_star_unify.py:70-71, 119-126`
+  (`_build_star_list`) and `clausal/logic/runtime/body_star_unify.py:150-156,
+  167-184` (`_build_multi_star_list`)
+- **Discovered by:** Task 4 of Phase 0
+- **Probe:** `probes/probe_F043.py`
+
+**Symptom:** Both helpers preserve `str` only when the dereffed star is
+itself a `str` (or a ground SegString that walks to a str). When the
+star is bound to a `list` of 1-char strs — semantically equivalent to a
+str under the strings-as-lists contract — the helpers fall into the
+`list` branch (line 71 for `_build_star_list`, line 150-156 for
+`_build_multi_star_list`) and never re-promote the result to str.
+
+For `_build_multi_star_list`, the non-ground SegString fork at
+`:167-184` explicitly sets `all_str = False` and emits
+`ConcreteSeg`/`VarSeg` (SegList shape) rather than rebuilding a
+SegString, losing both the SegString container identity *and* the
+str-typing for the concrete-string segments that *are* known.
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var, unify, Trail
+from clausal.logic.runtime.body_star_unify import (
+    _build_star_list, _build_multi_star_list,
+)
+from clausal.terms import SegString, VarSeg
+
+# list-of-chars star — str is recoverable but is lost
+X = Var(); unify(X, ["e","l","l","o"], Trail())
+assert _build_star_list(["h"], X, []) == ["h","e","l","l","o"]   # not 'hello'
+Z = Var(); unify(Z, ["e","l","l","o"], Trail())
+assert _build_multi_star_list([("fixed", ["h"]), ("star", Z)]) == [
+    "h","e","l","l","o"
+]                                                                # not 'hello'
+
+# non-ground SegString star — rebuilt as SegList, not SegString
+W = Var(); Inner = Var()
+unify(W, SegString(["el", VarSeg(Inner), "o"]), Trail())
+r = _build_multi_star_list([("fixed", ["h"]), ("star", W)])
+# r is a SegList(['h','e','l', *Inner, 'o']) — should be a SegString instead.
+```
+
+**Expected:** Under "input type wins", either branch should re-detect
+list-of-1-char-strs and promote to str when the surrounding context is
+str-typed; the non-ground-SegString fork should preserve the
+SegString container.
+**Actual:** Always list / SegList.
+
+**Notes:** Sibling of [[F018]] (SegList.__walk__ drops str typing via
+char expansion), [[F033]] (head-output mode always builds a list), and
+[[F034]] (head-output mode never walks SegString). The strings-as-lists
+contract is genuinely underdetermined for "list of 1-char strs" —
+ambiguous whether the value originated as a str or a list — but the
+non-ground-SegString-to-SegList demotion has no such ambiguity and
+should be fixable in isolation. Logged as design-gap (matching F018,
+F033, F034 grading).
 
 *Task 1 confirmed (no finding):*
 - **F010** — The two str↔list branches at `_variables.c:1140` and
@@ -495,6 +605,108 @@ SegString-as-element will surface as a surprise. Companion to
 (SegList walk type-loss), [[F033]] (output-mode always builds a
 list).
 
+### F040 — `_body_multi_star_unify` rejects ground SegString target
+
+- **Class:** C3 (SegString blind spots vs SegList)
+- **Severity:** bug
+- **Location:** `clausal/logic/runtime/body_star_unify.py:231-262`
+- **Discovered by:** Task 4 of Phase 0
+- **Probe:** `probes/probe_F040.py`
+
+**Symptom:** The dispatch checks `isinstance(d, (list, str))` at line
+234 (true → enumerate splits), then `isinstance(d, SegList)` at line
+235 (true → walk and either enumerate or rebuild), then `is_var(d)` at
+line 249 (true → construct + bind). A trivially ground
+``SegString(["abc"])`` whose ``__walk__()`` returns the plain str
+``"abc"`` falls through all four branches and hits the catch-all
+``else: return`` at line 262, silently producing zero solutions.
+
+This is the body-position multi-star parallel of [[F032]] (head-position
+input rejects ground SegString). The fix is symmetric: a SegString
+branch that walks the value and routes through the existing
+``(list, str)`` arm.
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var, unify, Trail
+from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
+from clausal.terms import SegString
+
+ss = SegString(["abc"])
+assert ss.is_ground() and ss.__walk__() == "abc"
+H, S, R = Var(), Var(), Var()
+assert list(_body_multi_star_unify(
+    ss, [("fixed", [H]), ("star", S), ("fixed", [R])], Trail()
+)) == []                                            # WRONG — should yield True
+# Symmetric: Var bound to ground SegString
+X = Var(); unify(X, SegString(["abc"]), Trail())
+H2, S2, R2 = Var(), Var(), Var()
+assert list(_body_multi_star_unify(
+    X, [("fixed", [H2]), ("star", S2), ("fixed", [R2])], Trail()
+)) == []
+```
+
+**Expected:** `[True]` with `H='a'`, `S='b'`, `R='c'` (analogous to the
+SegList branch which walks then enumerates).
+**Actual:** Silent `[]`.
+
+**Notes:** Companion to [[F041]] (same path drops non-ground SegString
+too) and to [[F032]] (head-position twin). The body-position
+single-star path inherits [[F031]]/[[F032]] via the delegation chain
+(`_body_star_unify` → `_head_list_unify_input`), but the multi-star
+path is independent and has its own dispatch — hence this separate
+finding.
+
+### F041 — `_body_multi_star_unify` has no non-ground SegString branch
+
+- **Class:** C3 (SegString blind spots vs SegList)
+- **Severity:** bug
+- **Location:** `clausal/logic/runtime/body_star_unify.py:234-262`
+- **Discovered by:** Task 4 of Phase 0
+- **Probe:** `probes/probe_F041.py`
+
+**Symptom:** The non-list/str dispatch has an ``isinstance(d, SegList)``
+branch (lines 235-248) that walks the SegList; when the walked value is
+still a SegList (i.e. genuinely non-ground), it constructs a SegList
+from the pattern segments and unifies. There is *no* parallel
+``isinstance(d, SegString)`` branch — a non-ground SegString-bound
+target hits the catch-all ``else: return`` at :262 and silently drops
+the goal.
+
+(The existing SegList branch is *itself* currently blocked by the
+deferred SegList-vs-SegList unification [[F030]] — but that's a
+separate issue. F041 is the structural absence of a SegString branch
+at all.)
+
+This is the multi-star body-position parallel of [[F031]] (head-position
+input never walks SegString).
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var, Trail
+from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
+from clausal.terms import SegString, VarSeg
+
+X = Var()
+ss = SegString(["a", VarSeg(X), "c"])
+H, S, R = Var(), Var(), Var()
+assert list(_body_multi_star_unify(
+    ss, [("fixed", [H]), ("star", S), ("fixed", [R])], Trail()
+)) == []                                            # silent
+```
+
+**Expected:** A structural SegString branch symmetric to lines 235-248
+that constructs a SegString from the pattern (translating ``("fixed",
+[v])`` → string slot, ``("star", v)`` → VarSeg) and unifies with the
+target. Or, at minimum, a typed deferred-constraint signal.
+**Actual:** Silent `[]`.
+
+**Notes:** Cluster of body-position SegString C3 findings: this one
+([[F041]] — non-ground multi-star), [[F040]] (ground multi-star),
+plus the inherited [[F031]]/[[F032]]/[[F033]]/[[F034]] via
+``_body_star_unify``'s delegation chain. The minimal fix is symmetric
+to the head-position SegString patches.
+
 *Task 1 confirmed (no finding):*
 - **F008** — Top-level `unify(SegString("abc"), ["a","b","c"], t)` and the
   reverse direction both succeed. The C path's str↔list block keys off
@@ -534,6 +746,20 @@ list).
   `_head_list_unify_input(Var(), [Var()], Var(), [], Trail())`
   returns `None`. The protocol contract (None = defer) holds.
 - **F037** — Task 3 confirmed: the fast path at `list_unify.py:101-109` (gated `type(d) is list and star_val is not None and not after_vals`) deliberately skips strings; strings flow through the slow path at `:119-139` where `isinstance(d, (list, str))` correctly handles both via uniform slicing. F031/F032 implicitly demonstrated the slow path's string-handling correctness for the SegList walk → list result case. No fast-path-specific finding.
+
+*Task 4 confirmed (no finding):*
+- **F045** — `_body_star_unify` (single-star body-position dispatch at
+  `body_star_unify.py:26-47`) is a thin delegate to
+  `_head_list_unify_input` (for `SegList` and `list` targets) and
+  `_head_list_unify_output` (for unbound `Var` targets). All the C3
+  SegString blind spots and the C1 type-loss findings already logged
+  for the head-position helpers — [[F031]], [[F032]], [[F033]],
+  [[F034]] — therefore apply to body-position single-star
+  unification too. No new finding is logged for `_body_star_unify`
+  itself; the same fix scope applies. Confirmed by direct calls
+  reproducing F031/F032/F033 via `_body_star_unify`; no separate
+  probe (covered by the existing F031/F032/F033/F034 probes which
+  exercise the delegated helpers).
 
 ### Class C4 — Head-pattern literal mismatch
 *(none yet)*
@@ -996,6 +1222,112 @@ joins to `"abcd"`), which is a *separate* smell — the char-list
 contract says every element is 1-char, but the code doesn't enforce
 it. Both are smells, not bugs (a malformed SegString construction is
 out of contract). Logged for the cleanup pass.
+
+### F038 — `_in_iter` raises on ground SegString (no `__iter__`)
+
+- **Class:** C8 (Partial-term short-circuits)
+- **Severity:** bug
+- **Location:** `clausal/logic/runtime/body_star_unify.py:208-217`
+- **Discovered by:** Task 4 of Phase 0
+- **Probe:** `probes/probe_F038.py`
+
+**Symptom:** `_in_iter(collection, pair_mode)` returns
+``iter(collection)`` for the non-DictTerm branch. `SegString` does not
+define `__iter__` (terms.py:449-630 — only `__walk__`,
+`__occurs_check__`, `__unify__`, sequence-shaped helpers are absent),
+and it is not a `str` subclass (MRO is `(SegString, object)` — see
+[[F008]]). So even a trivially ground ``SegString(["abc"])`` raises
+``TypeError: 'SegString' object is not iterable`` when used in a
+body-position ``elem in coll`` goal — the exception propagates out of
+the compiled body code.
+
+By contrast, ground SegList enumerates correctly: ``SegList`` does
+define ``__iter__`` (terms.py:337) which delegates to ``to_list()``.
+The asymmetry is the C3 SegString blind spot — surfacing here as a
+C8 silent-crash.
+
+Per spec vocabulary, "TypeError on a logically-valid call = bug".
+
+**Reproducer:**
+```python
+from clausal.logic.runtime.body_star_unify import _in_iter
+from clausal.terms import SegString
+
+ss = SegString(["abc"])
+assert ss.is_ground() and ss.__walk__() == "abc"
+try:
+    list(_in_iter(ss, pair_mode=False))                # TypeError
+except TypeError:
+    pass
+```
+
+**Expected:** `['a', 'b', 'c']` (parallel to ground SegList) — or, if
+the strings-as-lists contract says iteration over a string yields
+chars, the walked str routes through `iter("abc")`.
+**Actual:** TypeError.
+
+**Notes:** The minimal fix is to walk the collection before iterating
+(or add a `SegString.__iter__` that delegates to `__walk__` then
+`iter`). Companion to [[F039]] (the partial-term variant), [[F034]]
+(output-mode SegString blind spot in the head-position path).
+
+### F039 — `_in_iter` raises on non-ground SegList / SegString
+
+- **Class:** C8 (Partial-term short-circuits)
+- **Severity:** bug
+- **Location:** `clausal/logic/runtime/body_star_unify.py:208-217`
+  (via `SegList.__iter__` → `to_list()` at `clausal/terms.py:337` and
+  the missing SegString `__iter__` — see [[F038]])
+- **Discovered by:** Task 4 of Phase 0
+- **Probe:** `probes/probe_F039.py`
+
+**Symptom:** `_in_iter` calls ``iter(collection)`` unconditionally.
+For a non-ground SegList this routes through `SegList.__iter__` →
+`SegList.to_list()` which raises ``TypeError("SegList is not ground:
+...")`` (see [[F021]]). For a SegString it raises regardless of ground
+state (see [[F038]]). The body-position ``elem in coll`` goal has no
+way to defer or partially enumerate — the TypeError propagates out of
+the compiled body code.
+
+A defensible alternative: enumerate the known ConcreteSeg / string
+prefix and surface the VarSeg holes as deferred constraints so the
+caller can re-attempt after binding. The current behaviour drops a
+logically satisfiable goal as an exception.
+
+Per spec vocabulary, "TypeError on a logically-valid call = bug". The
+concrete prefix elements are knowable and the goal could succeed on
+any of them without committing on the VarSeg holes.
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var
+from clausal.logic.runtime.body_star_unify import _in_iter
+from clausal.terms import SegList, SegString, VarSeg, ConcreteSeg
+
+sl = SegList([ConcreteSeg([1, 2]), VarSeg(Var()), ConcreteSeg([5])])
+try:
+    list(_in_iter(sl, pair_mode=False))                # TypeError
+except TypeError:
+    pass
+
+ss = SegString(["a", VarSeg(Var()), "c"])
+try:
+    list(_in_iter(ss, pair_mode=False))                # TypeError
+except TypeError:
+    pass
+```
+
+**Expected:** Either enumerate the concrete prefix (1, 2, 5 / 'a', 'c')
+with deferred-membership semantics on the VarSeg holes, or a typed
+soft-failure that the caller can recover from.
+**Actual:** TypeError propagates out of the body goal.
+
+**Notes:** Body-position twin of [[F021]] (SegList sequence-protocol
+crash on partial terms). [[F038]] covers the ground-SegString case in
+this same helper. Pairs with [[F022]] (`__contains__` is silently
+incomplete on VarSegs) — note the inconsistent disciplines: `_in_iter`
+raises, `__contains__` answers `False`. A coherent fix should pick
+one rule and apply it across both.
 
 *Task 2 confirmed (no finding):*
 - **F029** — `SegList.__occurs_check__` (`terms.py:296-306`) and
