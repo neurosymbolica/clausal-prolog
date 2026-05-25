@@ -23,7 +23,7 @@
 | C13 | Type-check predicates | 0 | 0 | 0 | 0 | 0 |
 | C14 | Term inspection drift | 0 | 0 | 0 | 0 | 0 |
 | C15 | First-arg indexing on strings | 0 | 0 | 0 | 0 | 0 |
-| C16 | Free-threaded build safety | 0 | 0 | 0 | 1 | 0 |
+| C16 | Free-threaded build safety | 1 | 0 | 0 | 0 | 0 |
 | C17 | Performance, memory, leaks | 0 | 0 | 1 | 0 | 0 |
 | —   | Out-of-taxonomy | 0 | 0 | 0 | 0 | 0 |
 
@@ -275,7 +275,7 @@ indexing semantics on str.
 ### F011 — str↔list block holds no critical section on the list arg
 
 - **Class:** C16 (Free-threaded build safety)
-- **Severity:** smell
+- **Severity:** bug
 - **Location:** `clausal/logic/variables/_variables.c:1127-1179`
 - **Discovered by:** Task 1 of Phase 0
 - **Probe:** `probes/probe_F011.py`
@@ -313,6 +313,8 @@ in `FT_CS_BEGIN(&cs, t2_or_t1)`. The neighbouring plain list-vs-list
 block (`_variables.c:1103-1116`) has the same gap and should be
 re-examined as part of any fix. Cross-ref [[F012]] (the same loop also
 needs to widen its element type check).
+
+Re-graded from smell to bug after Task 1 spec review: the spec's severity vocabulary defines bug to include "refcount/use-after-free hazard", which is exactly what an unprotected PyList_GET_ITEM on FT builds is. Caveats kept: (a) unverified — the test harness runs with the GIL enabled, so the race cannot be reproduced here; (b) the same hazard pattern pre-dates the str↔list addition and exists in the neighbouring plain list-vs-list block at `_variables.c:1103-1116` — fixing F011 should address both.
 
 ### Class C17 — Performance, memory, leaks
 
