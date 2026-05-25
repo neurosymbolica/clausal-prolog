@@ -837,7 +837,7 @@ container type has a SegList arm but no SegString arm.
 
 - **Class:** C4 (Head-pattern literal mismatch)
 - **Severity:** bug
-- **Status:** defer-to-followup-spec (fix scope is compiler-wide; per the audit spec, C4 confirmation warrants a separate brainstorm + spec rather than rolling into Phase 2 of this audit)
+- **Status:** open (folded into this audit's Phase 2 per user decision 2026-05-25; large-blast-radius candidate — fix-scope assessment in Notes will inform Phase 2 plan ordering)
 - **Location:** `clausal/logic/compiler/head_match.py:253-254` (the `MatchValue` branch for str/bytes literals)
 - **Discovered by:** Task 5 of Phase 0
 - **Probe:** `probes/probe_F046.py`
