@@ -16,7 +16,7 @@
 | C6 | Hashable vs unhashable bridges | 0 | 0 | 0 | 0 | 0 |
 | C7 | Unicode / multi-codepoint | 0 | 0 | 0 | 0 | 4 |
 | C8 | Partial-term short-circuits | 4 | 1 | 0 | 1 | 0 |
-| C9 | Polymorphic builtin mode matrix | 0 | 0 | 0 | 0 | 0 |
+| C9 | Polymorphic builtin mode matrix | 3 | 4 | 0 | 0 | 0 |
 | C10 | DCG / phrase interaction | 0 | 0 | 0 | 0 | 0 |
 | C11 | Trail/backtracking around partials | 0 | 0 | 0 | 0 | 0 |
 | C12 | Char representation drift | 0 | 0 | 0 | 0 | 0 |
@@ -1452,7 +1452,377 @@ one rule and apply it across both.
   inspection plus direct repl check; see Task 2 notes).
 
 ### Class C9 — Polymorphic builtin mode matrix
-*(none yet)*
+
+### F050 — `split_with/3` join mode silently drops str parts
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/lists.py:630-642`
+- **Discovered by:** Task 7 of Phase 0
+- **Probe:** `probes/probe_F050.py`
+
+**Symptom:** The join (inverse-split) branch interleaves *parts* with
+the separator using ``if isinstance(p, list): joined.extend(p)``.  A
+part that is a ``str`` — the natural inverse of the split direction,
+which *produces* str parts when the input was a str — is silently
+skipped: only the separators end up in the joined result.
+
+Round-trip: ``split_with(',', 'a,b,c', P)`` yields ``P = ['a','b','c']``
+(three 1-char strs).  Feeding that back in as
+``split_with(',', J, ['a','b','c'])`` yields ``J = [',', ',']`` — the
+'a', 'b', 'c' parts are dropped because each fails the ``isinstance(p,
+list)`` guard.  ``split_with(',', J, ['abc','def'])`` yields ``J =
+[',']``.
+
+**Reproducer:**
+```python
+from clausal.logic.solve import call
+from clausal.logic.variables import Var, deref
+# ... mod loaded ...
+
+J = Var()
+for _ in call("split_with", ",", J, ["a", "b", "c"], module=mod):
+    assert deref(J) == [",", ","]      # bug: should round-trip to 'a,b,c'
+```
+
+**Expected:** Join should re-include str parts (treat them as
+list-of-chars under the strings-as-lists contract), or at minimum the
+forward and inverse directions should round-trip.
+**Actual:** Only ``isinstance(p, list)`` parts are extended; str parts
+are silently dropped.
+
+**Notes:** This is a true bug — wrong answer on a satisfiable goal.
+The fix is straightforward: replace ``isinstance(p, list)`` with
+``isinstance(p, (list, str))`` (or the existing ``_as_items`` helper).
+The same module's split-direction branch (lists.py:614-629) correctly
+handles str input via ``_as_items``, so the asymmetry is just the
+inverse direction's blind spot.  Related to [[F054]] (broader C9
+list-vs-str output asymmetry across the file).
+
+### F051 — Every polymorphic list builtin silently fails on ground SegList / SegString
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/lists.py:48-57` (the
+  ``_as_items`` helper itself), affecting every predicate that gates on
+  ``items is not None`` (append, length, member/``in_``, in_check,
+  reverse, get_item, take, drop, split_at, msort, sort, last, select,
+  permutation, flatten, subtract, intersection, union, list_to_set,
+  sum_list, max_list, min_list, zip_, split_with, same_length).
+- **Discovered by:** Task 7 of Phase 0
+- **Probe:** `probes/probe_F051.py`
+
+**Symptom:** ``_as_items`` accepts only ``list`` or ``str`` and returns
+``None`` otherwise.  Ground ``SegList(ConcreteSeg([...]))`` and
+``SegString([...])`` walk to a concrete list / str via ``__walk__`` and
+are logically equivalent under the SegList / strings-as-lists
+contracts, but ``_as_items`` doesn't call ``__walk__`` — it just
+returns ``None``.  Every predicate then falls through to ``(_fail,
+DONE)`` and yields zero solutions silently on a Seg* input.
+
+Combined with the surrounding non-list / non-str rejection, this means
+roughly **20 polymorphic builtins** silently drop satisfiable goals
+when handed a Seg* term.  In practice this surfaces whenever a Seg*
+value flows from the head/body unification layer (e.g. via
+``_build_multi_star_list`` or ``_seg*_unify_gen``) into a downstream
+builtin call.
+
+**Reproducer:**
+```python
+from clausal.logic.solve import call
+from clausal.logic.variables import Var
+from clausal.terms import SegList, SegString, ConcreteSeg
+
+sl = SegList([ConcreteSeg(["a", "b", "c"])])
+ss = SegString(["abc"])
+assert sl.is_ground() and sl.__walk__() == ["a", "b", "c"]
+assert ss.is_ground() and ss.__walk__() == "abc"
+
+# Both yield zero solutions despite the goals being satisfiable:
+assert sum(1 for _ in call("append", sl, "d", Var(), module=mod)) == 0
+assert sum(1 for _ in call("in_",    Var(), ss,   module=mod)) == 0
+assert sum(1 for _ in call("length", sl,    Var(), module=mod)) == 0
+# ... and ~17 others
+```
+
+**Expected:** Either walk the Seg* via ``__walk__`` inside
+``_as_items`` (preferred — single fix for ~20 call sites), or refuse
+Seg* inputs with a type error.  Silent failure on a logically valid
+goal is the worst option.
+**Actual:** Silent ``(_fail, DONE)``.
+
+**Notes:** The fix is one line: extend ``_as_items`` to walk ground
+Seg* terms (e.g. ``if isinstance(val, (SegList, SegString)) and
+val.is_ground(): return _as_items(val.__walk__())``).  Non-ground Seg*
+is a separate concern — those should arguably defer or refuse rather
+than silently fail.
+
+This is the C9 cross-cut companion of the C3 family of SegString
+blind-spot findings ([[F031]], [[F032]], [[F034]], [[F040]], [[F041]],
+[[F047]]) — the SegList/SegString blind-spot pattern repeats wherever
+the runtime tests ``isinstance(val, (list, str))`` without first
+considering walked Seg* values.  Logging as one bug across multiple
+loci per the spec's "merge same-root-cause findings" guidance.
+
+### F052 — `sum_list/max_list/min_list` swallow TypeError into silent failure
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/lists.py:475-479` (sum_list),
+  `:493-497` (max_list), `:511-515` (min_list)
+- **Discovered by:** Task 7 of Phase 0
+- **Probe:** `probes/probe_F052.py`
+
+**Symptom:** Each numeric-reduction predicate wraps the
+``sum/max/min`` call in ``try: ... except TypeError: yield (_fail,
+DONE); return``.  When the items are not summable / orderable (e.g.
+``sum_list("abc", S)`` because ``sum(str, 0)`` raises TypeError, or
+``max_list([1, 'a'], M)`` because mixed types are incomparable), the
+TypeError is silently converted to logical failure.
+
+This makes a type error indistinguishable from a clean "no solutions"
+result.  ``sum_list("abc", S)`` is not a satisfiable goal under any
+reasonable interpretation, but the silent failure leaves the user
+guessing whether the program failed because the input was wrong or
+because the predicate decided there is no answer.
+
+**Reproducer:**
+```python
+from clausal.logic.solve import call
+from clausal.logic.variables import Var
+
+S = Var()
+assert sum(1 for _ in call("sum_list", "abc", S, module=mod)) == 0
+S = Var()
+assert sum(1 for _ in call("sum_list", ["a", "b", "c"], S, module=mod)) == 0
+M = Var()
+assert sum(1 for _ in call("max_list", [1, "a"], M, module=mod)) == 0
+```
+
+**Expected:** Either define sum/max/min on str input meaningfully
+(e.g. sum_list-of-str = concatenation), or raise a type error rather
+than silently failing.
+**Actual:** Silent ``(_fail, DONE)``.
+
+**Notes:** Logged as bug (silent drop of a satisfiable-or-erroneous
+goal) rather than design-gap because the user has no signal that the
+predicate is undefined on the input — the same shape as a clean
+no-solutions result.  ``max_list`` and ``min_list`` happen to succeed
+on str input (str chars are orderable), so the asymmetry is also a
+documentation gap.
+
+### F053 — `length(Var, N)`, `replicate/3`, `same_length` always build list output
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/lists.py:210-215` (length
+  output mode), `:589-598` (replicate), `:683-697` (same_length)
+- **Discovered by:** Task 7 of Phase 0
+- **Probe:** `probes/probe_F053.py`
+
+**Symptom:** The output-mode builders for these predicates have no
+input-type hint to switch on — they allocate a Python ``list``
+unconditionally.  A caller cannot ask for a "str-shaped" fresh
+variable, even when the surrounding logic would consume the result as
+a str.
+
+Examples (each yields a ``list`` even though a str would be
+semantically valid):
+- ``length(L, 5)`` → ``L = [Var, Var, Var, Var, Var]`` (list)
+- ``replicate(5, 'a', R)`` → ``R = ['a', 'a', 'a', 'a', 'a']`` (list,
+  even though all elements are 1-char strs)
+- ``same_length("abc", X)`` → ``X = [Var, Var, Var]`` (list)
+- ``same_length(X, "abc")`` → ``X = [Var, Var, Var]`` (list)
+
+**Reproducer:**
+```python
+from clausal.logic.solve import call
+from clausal.logic.variables import Var, deref
+
+L = Var()
+for _ in call("length", L, 5, module=mod):
+    assert type(deref(L)) is list   # not str, even with hint
+
+R = Var()
+for _ in call("replicate", 5, "a", R, module=mod):
+    assert deref(R) == ["a"]*5      # list, even though all 1-char strs
+```
+
+**Expected:** Under "input type wins" the predicate should preserve
+the str shape when an adjacent argument carries str typing (e.g.
+``same_length("abc", X)`` should arguably bind X to a fresh str-typed
+hole).  Under "list is canonical" the docstring should call out that
+output-mode is always list.
+**Actual:** Always list, undocumented.
+
+**Notes:** This is the C9 mode-matrix mirror of [[F033]] (head-output
+mode always builds a list) and [[F042]] (body multi-star unbound-target
+always builds SegList).  The information genuinely isn't present at
+the call site for ``length(L, N)`` with both vars except N — so a fix
+requires either a typed output-mode protocol or a documented
+contract.  ``replicate`` and ``same_length`` *do* have type
+information available (the element / sibling argument), so could in
+principle promote.
+
+### F054 — `_seq_result` asymmetry: list-of-1-char-str input ≠ str-promoted output
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/lists.py:60-65` (helper) plus
+  every call site that derives ``was_string`` from
+  ``isinstance(lst_val, str)``: reverse (`:236`), msort (`:314`), sort
+  (`:336`), permutation (`:351`), select (`:375`), take (`:532`), drop
+  (`:547`), split_at (`:562`), list_to_set (`:461`), subtract (`:404`),
+  intersection (`:421`), union (`:438`), append (`:157-159`).
+- **Discovered by:** Task 7 of Phase 0
+- **Probe:** `probes/probe_F054.py`
+
+**Symptom:** ``_seq_result`` promotes the result back to a str only
+when ``was_string`` is True — and ``was_string`` is set strictly from
+``isinstance(lst_val, str)``.  A caller that passes ``['a','b','c']``
+(a list of 1-char strs, semantically equivalent to ``"abc"`` under the
+strings-as-lists contract) gets a list result even when the result is
+a valid char sequence:
+
+| call                                  | list input         | str input |
+|---------------------------------------|--------------------|-----------|
+| ``reverse(.., R)``                    | ``['c','b','a']``  | ``'cba'`` |
+| ``msort(.., M)``                      | ``['a','b','c']``  | ``'abc'`` |
+| ``sort(.., S)``                       | ``['a','b','c']``  | ``'abc'`` |
+| ``take(2, .., T)``                    | ``['a','b']``      | ``'ab'``  |
+| ``drop(1, .., D)``                    | ``['b','c']``      | ``'bc'``  |
+| ``list_to_set(.., S)``                | ``['a','b','c']``  | ``'abc'`` |
+| ``subtract(.., ['b'], R)``            | ``['a','c']``      | ``'ac'``  |
+| ``union(.., ['d'], R)``               | ``['a','b','c','d']`` | ``'abcd'`` |
+
+**Reproducer:** See `probes/probe_F054.py` — runs the whole table.
+
+**Expected:** Under "string-preserving + input-type wins", the output
+shape should track the input shape consistently.  Either (a) detect a
+list of 1-char strs and treat it as str-shaped at the entry, (b)
+document that mixed inputs always degrade to list, or (c) provide a
+canonical conversion contract.
+**Actual:** Asymmetric — only ``isinstance(_, str)`` triggers
+promotion; equivalent list inputs stay list.
+
+**Notes:** This is the C9-side of the type-loss family.  Cross-links:
+[[F018]] (SegList walk drops str via char expansion), [[F033]]
+(head-output mode always list), [[F043]] (body-star helpers lose str
+type for list-of-chars stars).  The audit grades all of these as
+design-gap because the strings-as-lists contract is genuinely
+under-specified for "list of 1-char strs" — ambiguous whether the value
+originated as str or list.  Picking a coherent rule is the C1+C9 work.
+
+### F055 — `transpose/2` silently fails on str outer matrix
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/lists.py:700-722` (the
+  ``isinstance(mat, list)`` gate at :704)
+- **Discovered by:** Task 7 of Phase 0
+- **Probe:** `probes/probe_F055.py`
+
+**Symptom:** ``transpose`` requires the outer matrix to be a Python
+``list`` (``if is_var(mat) or not isinstance(mat, list): return``),
+but rows go through ``_as_items`` (lists.py:714) — so a list-of-str
+matrix transposes fine, while a str outer matrix silently yields zero
+solutions.
+
+| call                              | result             |
+|-----------------------------------|--------------------|
+| ``transpose([[1,2],[3,4]], T)``   | ``[[1,3],[2,4]]``  |
+| ``transpose(['ab','cd'], T)``     | ``[['a','c'],['b','d']]`` |
+| ``transpose('ab', T)``            | **0 solutions** (silent fail) |
+
+**Reproducer:**
+```python
+T = Var()
+assert sum(1 for _ in call("transpose", "ab", T, module=mod)) == 0
+```
+
+**Expected:** Either (a) accept str outer matrix as a list of 1-char
+strs (transposing ``"ab"`` would give ``[['a'], ['b']]`` if a 1-char
+str is read as a 1-row matrix, or refused as ambiguous), or
+(b) document that the matrix must be a list-shaped container.
+Silent failure on a logically-shaped input is the design-gap.
+**Actual:** Silent ``return``.
+
+**Notes:** The implementation's docstring says "list of lists" — the
+strict outer-list requirement is consistent with that, but the
+inconsistency with row-level ``_as_items`` plumbing makes the contract
+hard to predict.  Logged as design-gap (matches the spec's "code right,
+doc right but contract inconsistent with siblings" pattern).
+
+### F056 — `flatten/2` str-as-atom contract breaks list-of-chars equivalence
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/lists.py:277-301`
+- **Discovered by:** Task 7 of Phase 0
+- **Probe:** `probes/probe_F056.py`
+
+**Symptom:** ``flatten`` deliberately treats str as an atom (it only
+recurses through ``isinstance(x, list)``).  The docstring at lists.py:282
+calls this out explicitly: "Strings are treated as atoms (not flattened
+into characters)."  But this means two "equivalent" inputs produce
+different outputs:
+
+| input                       | flatten result |
+|-----------------------------|-----------------|
+| ``[['a','b']]``             | ``['a','b']``  (2 elements) |
+| ``['ab']``                  | ``['ab']``     (1 element)  |
+| ``[['a','b'], ['c']]``      | ``['a','b','c']`` |
+| ``[['ab', 'cd']]``          | ``['ab', 'cd']``  |
+
+Under the strings-as-lists contract ``[['a','b']]`` and ``['ab']``
+should be equivalent values — but flatten distinguishes them, breaking
+the equivalence in the most user-visible spot in the file.
+
+**Reproducer:** See `probes/probe_F056.py`.
+
+**Expected:** Either (a) recurse through str like list (flatten
+``['ab']`` → ``['a','b']``), or (b) the documented contract is the
+chosen semantics and the strings-as-lists equivalence is explicitly
+suspended here.
+**Actual:** (b), but the divergence from sibling builtins (which *do*
+treat str as list-of-chars via ``_as_items``) makes it a coherence gap
+even with the honest docstring.
+
+**Notes:** Logged as design-gap.  The Prolog ``flatten/2`` would have
+the same issue (atoms vs lists), so the contract is defensible — but
+the audit's job is to log the C9-class user-visible asymmetry, which
+this is.  No fix recommended; the docstring already covers it.  Logged
+for the ledger's completeness.
+
+*Task 7 confirmed (no finding):*
+- **F057** — Task 7 confirmed: the ``_seq_result`` "all 1-char str"
+  guard at lists.py:63 is correct for all known callers.  For every
+  ``was_string=True`` call site, the items list originates from
+  ``list(str_val)`` (str iteration gives 1-char strs) or from
+  ``slice/sort/permutations`` of those, so the per-element 1-char check
+  is always true and ``"".join(items)`` always succeeds.  The guard is
+  defensive against future callers that pass mixed-type items with
+  ``was_string=True`` — no current bug.  No probe (static review).
+- **F058** — Task 7 confirmed: ``append(Var, Var, Var)`` mode (all
+  three unbound) correctly yields zero solutions.  Insufficient input
+  to enumerate is the standard Prolog mode-error behaviour; the
+  implementation falls through to ``(_fail, DONE)`` cleanly via the
+  ``l3_items is not None`` gate at lists.py:177.  No probe.
+- **F059** — Task 7 confirmed: the C accelerators
+  (``_c_member_find``, ``_c_append_split_find``, ``_c_select_find``,
+  ``_c_permutation_find``, ``_c_nth0_find``, ``_c_memberchk_find``)
+  use ``PyList_GET_SIZE`` / ``PyList_GET_ITEM`` macros on the
+  ``items`` argument with no type check, but every call site passes
+  ``items`` from ``_as_items(...)`` which always returns a Python list
+  (str input is converted via ``list(val)``).  No type confusion in
+  the C path.  No probe (static review of _lists_core.c:128, 168).
+- **F060** — Task 7 confirmed: ``get_item`` / ``last`` / ``in_`` /
+  ``in_check`` / ``select`` / ``permutation`` element-type output is
+  consistently a 1-char str when iterating a str input — confirmed by
+  the existing `tests/test_string_list_builtins.py` coverage (see
+  ``TestInString.test_enumerate_chars``, ``TestGetItemString``,
+  ``TestSelectString``, ``TestPermutationString``).  No new probe
+  required; the test suite is the witness.
 
 ### Class C10 — DCG / phrase interaction
 *(none yet)*
