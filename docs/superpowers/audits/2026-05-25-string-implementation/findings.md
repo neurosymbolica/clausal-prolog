@@ -22,7 +22,7 @@
 | C12 | Char representation drift | 1 | 0 | 0 | 0 | 0 |
 | C13 | Type-check predicates | 1 | 3 | 0 | 1 | 0 |
 | C14 | Term inspection drift | 4 | 3 | 0 | 0 | 0 |
-| C15 | First-arg indexing on strings | 0 | 0 | 0 | 0 | 0 |
+| C15 | First-arg indexing on strings | 1 | 0 | 0 | 0 | 0 |
 | C16 | Free-threaded build safety | 1 | 0 | 0 | 0 | 0 |
 | C17 | Performance, memory, leaks | 0 | 0 | 2 | 1 | 0 |
 | —   | Out-of-taxonomy | 0 | 0 | 0 | 0 | 0 |
@@ -3173,7 +3173,147 @@ independent action item beyond fixing the underlying
 ``_collect_vars_impl`` walker.
 
 ### Class C15 — First-arg indexing on strings
-*(none yet)*
+
+### F095 — Indexed dispatch routes list callers away from str-headed buckets
+
+- **Class:** C15 (First-arg indexing on strings)
+- **Severity:** bug
+- **Location:** `clausal/logic/compiler/arg_index.py:37` (`_INDEXABLE_TYPES`),
+  `:45-71` (`_arg_to_index_key`), `:74-91` (`_runtime_arg_key`),
+  `:614-674` (`_make_indexed_dispatch_*`),
+  `:680-857` (`_make_groundness_dispatch_*`)
+- **Discovered by:** Task 13 of Phase 0
+- **Probe:** `probes/probe_F095.py`
+
+**Symptom:** The first-arg / groundness-keyed dispatch layer uses two
+mirrored helpers — ``_arg_to_index_key`` (compile-time, on clause
+heads) and ``_runtime_arg_key`` (runtime, on deref'd call args) — to
+compute the bucket key for an argument value. Both helpers treat
+``str`` as an indexable scalar (it appears in
+``_INDEXABLE_TYPES = (int, float, str, bytes, bool, type(None))``)
+and treat Python ``list`` as ``_INDEX_VAR`` (no scalar branch, no
+``Compound`` branch, no ``is_term_instance`` branch — list falls
+through the bottom of both functions). The two values therefore key
+to different buckets:
+
+- A clause ``Foo("abc")`` → bucket key ``"abc"``.
+- A clause ``Foo(['a','b','c'])`` → bucket key ``_INDEX_VAR`` (joins
+  the "defaults" bucket).
+
+At dispatch time, ``_make_indexed_dispatch_impl`` /
+``_groundness_dispatch_body_single`` look up the runtime key:
+
+- Caller ``Foo("abc")`` → runtime key ``"abc"`` → indexed bucket
+  ``"abc"`` is found. ``_build_arg_index`` (arg_index.py:215-219)
+  merges every default clause into every specific bucket, so this
+  bucket also contains the list-headed default clause. Runtime unify
+  inside the list-default's body handles the str caller → both
+  clauses fire.
+- Caller ``Foo(['a','b','c'])`` → runtime key ``_INDEX_VAR`` → falls
+  through to the ``default_fn``, which holds only the defaults
+  (list-headed and var-headed). The str-headed ``"abc"`` bucket is
+  never even consulted. Under the strings-as-lists contract the two
+  callers should be observationally equivalent (modulo binding
+  shape), but they are not — the list caller skips half the clauses
+  the str caller sees.
+
+The asymmetry is dispatch-time, separate from the per-clause head
+match. Even if F046's head-match fix lands (``MatchValue`` →
+wildcard + runtime ``unify``), a list caller still never reaches the
+str-headed clause's arm because dispatch routes it elsewhere first.
+
+**Reproducer:**
+```python
+# See probes/probe_F095.py for the full inline-clausal version.
+# Fixture: 3 int facts + 1 str fact + 1 list fact on Foo (≥4 ⇒ indexed).
+#   Foo("abc")  → bucketed under "abc"; bucket = [Foo("abc"), Foo([...])]
+#   Foo([..])   → goes to defaults; defaults = [Foo([...])]
+# call("Foo", "abc")          → 2 solutions (str bucket + list default merged in)
+# call("Foo", ["a","b","c"])  → 1 solution  (list-default only; str bucket SKIPPED)
+```
+
+**Expected:** Both callers reach both clauses (per the
+strings-as-lists contract that runtime ``unify`` already implements
+for ``"abc"`` vs ``['a','b','c']`` at
+``clausal/logic/variables/_variables.c:1127-1179``). Each call
+returns 2 solutions.
+**Actual:** ``Foo("abc")`` returns 2; ``Foo(['a','b','c'])`` returns
+1. The dispatch layer routes list callers to a bucket subset that
+excludes str-keyed clauses.
+
+**Notes:** This is the dispatch-time analogue of [[F046]]. F046's
+fix-scope analysis explicitly flagged: *"Verify first-arg indexing
+(arg_index.py:162 mentions the Var+Unify pattern) still discriminates
+correctly when literal heads are converted."* F095 confirms the
+indexer does **not** discriminate correctly — it discriminates on
+container type at compile time and never reconciles the two shapes at
+runtime. A complete strings-as-lists fix must address both. Three
+options for the indexer side, each with a tradeoff:
+
+1. **Canonicalise the runtime key** so a list-of-1-codepoint-strs
+   produced by a caller hashes to the same key as the equivalent
+   ``str``. Concretely: in ``_runtime_arg_key``, when the deref'd
+   value is a ``list`` whose elements are all 1-char strings, derive
+   the equivalent str key (``"".join(elems)``). Cost: per-call
+   inspection of every list-typed arg (O(n) join + alloc) even when
+   no str-headed bucket exists; only useful when at least one bucket
+   key is a str.
+2. **Canonicalise the compile-time key** so str-headed clauses key as
+   ``_INDEX_VAR`` (i.e. join the defaults bucket). Cost: regresses
+   selectivity for the common case (e.g. an enum-style predicate
+   keyed on a short ASCII tag) since all str-headed clauses collapse
+   into one big default bucket.
+3. **Emit two bucket entries per str-headed clause** — one under
+   ``"abc"`` and a parallel one under a synthesised list-equivalent
+   key. Cost: doubles the bucket table for str-using predicates;
+   requires a corresponding list→str canonicalisation at runtime to
+   pick the second key.
+
+Sibling C-class cross-refs: this is the dispatch-time leg of the C4
+"head-pattern literal mismatch" cluster ([[F046]], [[F048]]). The
+runtime ``unify`` C-level str↔list code path that this finding
+relies on as the source of truth lives in
+[[F011]] / [[F012]]. The compile-time key extraction at
+``_extract_arg_key`` (arg_index.py:162-175) DOES correctly look into
+``Unify(Var, lit)`` body goals produced by the
+``_normalize_dataclass_fact`` elaborator (database.py:332-361), so
+facts and rules both surface this asymmetry — facts merely happen to
+also have a wildcard-capture per-clause arm that lets runtime unify
+clean up if dispatch delivers the caller to the right bucket.
+
+Note on the ``_INDEXABLE_TYPES`` ``bytes`` entry: same hazard, same
+fix surface — ``bytes`` is also a sequence type. Out of scope for the
+strings audit but worth flagging for any Phase 2 work that touches
+``_arg_to_index_key`` / ``_runtime_arg_key``.
+
+*Task 13 confirmed (no finding):*
+- **F096** — Task 13 confirmed: ``_build_arg_index``
+  (arg_index.py:215-219) interleaves every default (``_INDEX_VAR``)
+  clause into every specific bucket's clause list, preserving Prolog
+  clause-ordering semantics within each bucket. This means the
+  str-caller direction of [[F095]] is partially papered over: a
+  caller ``Foo("abc")`` reaches both the str-keyed clause AND any
+  list-headed default clauses merged in, so runtime unify can still
+  match the list. Only the list-caller direction is observably
+  broken. Verified by direct inspection of arg_index.py:215-219 and
+  the probe's ``Foo('abc') → 2 sol`` line. No independent action
+  item — the merge behaviour is correct as-is; the asymmetry is in
+  the key extraction (F095).
+- **F097** — Task 13 confirmed: ``_classify_list_key`` in
+  ``clausal/logic/compiler/list_dispatch.py:125-138`` returns
+  ``"other"`` for str arguments (only ``list`` matches), which
+  excludes any predicate with a string-literal head at the candidate
+  position from the structural-list dispatch path (the
+  ``isinstance(_d_pos, (list, str))`` guard at list_dispatch.py:239
+  is therefore unreachable for str-headed clauses — it only fires
+  when ALL clauses at the position are nil/cons/var and the runtime
+  arg happens to be a str). The visible C15 surface is entirely
+  routed through ``arg_index.py`` (F095), not through
+  ``list_dispatch.py``. Verified by reading ``_find_list_dispatch_pos``
+  (list_dispatch.py:141-163) — the ``"other"`` classification short-
+  circuits the candidate-position scan. No independent action item;
+  the structural-list path is a no-op for the mixed-shape predicates
+  that surface F095, so its fix space is independent.
 
 ### Class C16 — Free-threaded build safety
 
