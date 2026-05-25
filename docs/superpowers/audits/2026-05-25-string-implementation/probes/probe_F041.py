@@ -23,7 +23,7 @@ symmetric to the SegList one at 235-248, and to translate the pattern
 Usage:
     python docs/superpowers/audits/2026-05-25-string-implementation/probes/probe_F041.py
 """
-from clausal.logic.variables import Var, unify, Trail, deref
+from clausal.logic.variables import Var, unify, Trail
 from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
 from clausal.terms import SegString, SegList, VarSeg, ConcreteSeg
 

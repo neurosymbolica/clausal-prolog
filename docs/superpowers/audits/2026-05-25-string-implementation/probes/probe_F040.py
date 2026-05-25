@@ -19,7 +19,7 @@ input). See also F041 (non-ground SegString missing branch).
 Usage:
     python docs/superpowers/audits/2026-05-25-string-implementation/probes/probe_F040.py
 """
-from clausal.logic.variables import Var, unify, Trail, deref
+from clausal.logic.variables import Var, unify, Trail
 from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
 from clausal.terms import SegString, SegList, ConcreteSeg
 

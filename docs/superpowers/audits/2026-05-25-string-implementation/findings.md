@@ -210,9 +210,7 @@ logical context is string-typed; SegList otherwise.
 
 **Notes:** Same root-cause class as [[F033]]; if Phase 2 fixes F033 by
 threading the original target type into the output-mode call site, the
-same plumbing should reach this helper. Related to [[F042]] is implicit
-in the multi-star pattern: even a single-star ``[*S]`` body pattern
-goes through this branch. Companion to [[F043]] (the build helpers also
+same plumbing should reach this helper. The single-star body path `[*S]` does not reach this branch — it delegates to `_body_star_unify` → `_head_list_unify_output`, which inherits [[F033]]. F042 is specific to multi-star body patterns (≥2 stars) whose targets are unbound Vars. Companion to [[F043]] (the build helpers also
 lose type when star is bound to a list-of-1-char-strs).
 
 ### F043 — `_build_star_list` / `_build_multi_star_list` lose str type for list-of-chars and non-ground SegString stars
@@ -269,7 +267,7 @@ SegString container.
 
 **Notes:** Sibling of [[F018]] (SegList.__walk__ drops str typing via
 char expansion), [[F033]] (head-output mode always builds a list), and
-[[F034]] (head-output mode never walks SegString). The strings-as-lists
+[[F034]] (head-output mode never walks SegString). Sibling-task companion: [[F042]] (unbound-Var-target builds SegList even when SegString would be type-correct) — same C1 class, same body-side audit task. The strings-as-lists
 contract is genuinely underdetermined for "list of 1-char strs" —
 ambiguous whether the value originated as a str or a list — but the
 non-ground-SegString-to-SegList demotion has no such ambiguity and
@@ -748,6 +746,7 @@ to the head-position SegString patches.
 - **F037** — Task 3 confirmed: the fast path at `list_unify.py:101-109` (gated `type(d) is list and star_val is not None and not after_vals`) deliberately skips strings; strings flow through the slow path at `:119-139` where `isinstance(d, (list, str))` correctly handles both via uniform slicing. F031/F032 implicitly demonstrated the slow path's string-handling correctness for the SegList walk → list result case. No fast-path-specific finding.
 
 *Task 4 confirmed (no finding):*
+- **F044** — Task 4 confirmed: `_build_multi_star_list` edge cases all behave correctly. The str-preservation gate at `body_star_unify.py:197-204` (`all_str` tracked across loop iterations, plus the `all(isinstance(e, str) and len(e) == 1 for e in result)` final check) correctly handles: (a) an empty string `""` bound to a star (no-op merge per the `if d:` guard at `:148`), (b) a single ConcreteSeg of 1-char strs (preserves str via the gate), (c) entirely-empty input segments list (returns `[]`), (d) a mix of star types where any non-str element flips `all_str` to False. No probe (verified by code-path reading + bench-runs in adjacent probes).
 - **F045** — `_body_star_unify` (single-star body-position dispatch at
   `body_star_unify.py:26-47`) is a thin delegate to
   `_head_list_unify_input` (for `SegList` and `list` targets) and
