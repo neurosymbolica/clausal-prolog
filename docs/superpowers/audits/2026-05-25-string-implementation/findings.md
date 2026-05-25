@@ -16,7 +16,7 @@
 | C6 | Hashable vs unhashable bridges | 0 | 0 | 0 | 0 | 0 |
 | C7 | Unicode / multi-codepoint | 0 | 0 | 0 | 0 | 4 |
 | C8 | Partial-term short-circuits | 4 | 1 | 0 | 1 | 0 |
-| C9 | Polymorphic builtin mode matrix | 3 | 4 | 0 | 0 | 0 |
+| C9 | Polymorphic builtin mode matrix | 4 | 6 | 0 | 0 | 0 |
 | C10 | DCG / phrase interaction | 0 | 0 | 0 | 0 | 0 |
 | C11 | Trail/backtracking around partials | 0 | 0 | 0 | 0 | 0 |
 | C12 | Char representation drift | 0 | 0 | 0 | 0 | 0 |
@@ -1794,6 +1794,176 @@ the audit's job is to log the C9-class user-visible asymmetry, which
 this is.  No fix recommended; the docstring already covers it.  Logged
 for the ledger's completeness.
 
+### F061 — `higher_order.py` predicates silently fail on Seg* inputs
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/higher_order.py:62` (maplist/2),
+  `:86` (maplist/3), `:113` (include/3), `:140` (exclude/3),
+  `:167` (foldl/4), `:202` (take_while/3), `:230` (drop_while/3),
+  `:258` (span/4), `:288` (group_by/3), `:324` (sort_by/3),
+  `:360` (max_by/3), `:397` (min_by/3), `:434` (filter_map/3),
+  `:465` (partition/4), `:504` (tfilter/3), `:542` (tpartition/4) — all
+  consume ``items = _as_items(lst_val)`` and fall through to
+  ``(_fail, DONE)`` when ``items is None``.
+- **Discovered by:** Task 8 of Phase 0
+- **Probe:** `probes/probe_F061.py`
+
+**Symptom:** Every higher_order list predicate cracks the input via the
+shared ``_as_items`` helper from ``lists.py`` (imported at
+higher_order.py:10).  ``_as_items`` rejects ``SegList`` / ``SegString``
+and returns ``None`` (see [[F051]] for the root cause and the lists.py
+side of this problem).  Each higher_order predicate then gates on
+``items is None`` and yields zero solutions silently when handed a
+Seg* input.
+
+In practice this surfaces whenever a Seg* value flows out of the
+head/body unification layer (e.g. via ``_build_multi_star_list`` or a
+``_seg*_unify_gen`` solution) into a higher_order call.
+
+**Reproducer:**
+```python
+from clausal.logic.solve import call
+from clausal.logic.variables import Var
+from clausal.terms import SegList, SegString, ConcreteSeg
+
+sl = SegList([ConcreteSeg(["a", "e", "i"])])
+ss = SegString(["abc"])
+assert sl.is_ground() and ss.is_ground()
+
+# Every higher_order predicate silently drops the satisfiable goal:
+assert sum(1 for _ in call("maplist",   is_vowel, sl, module=mod)) == 0
+assert sum(1 for _ in call("include",   is_vowel, sl, Var(), module=mod)) == 0
+assert sum(1 for _ in call("foldl",     concat,   ss, "", Var(), module=mod)) == 0
+assert sum(1 for _ in call("partition", is_vowel, ss, Var(), Var(), module=mod)) == 0
+# ... and the other ~12 predicates
+```
+
+**Expected:** Either walk the Seg* via ``__walk__`` inside the shared
+``_as_items`` (preferred — single fix simultaneously closes this and
+[[F051]]), or refuse Seg* inputs with a type error.  Silent failure on
+a logically valid goal is the worst option.
+**Actual:** Silent ``(_fail, DONE)``.
+
+**Notes:** Same single-line fix as [[F051]] — extend ``_as_items`` to
+walk ground Seg* terms.  Logged separately from F051 because the loci
+(file-wide impact across ~16 higher_order predicates) and the symptom
+surface (higher-order goal silently never invoked) are user-distinct
+from the lists.py family even though the root cause is shared.
+Cross-links: [[F051]] (the helper itself in lists.py), [[F031]],
+[[F032]], [[F034]], [[F040]], [[F041]], [[F047]] (C3 SegString
+blind-spot family).
+
+### F062 — `higher_order` string-preserving predicates: list-of-1-char-str input ≠ str-promoted output
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** design-gap
+- **Location:** every higher_order predicate that derives ``was_str``
+  from ``isinstance(lst_val, str)`` and wraps the result via
+  ``_seq_result``: ``include/3`` (`:117`, `:129`), ``exclude/3`` (`:144`,
+  `:156`), ``take_while/3`` (`:206`, `:219`), ``drop_while/3`` (`:234`,
+  `:247`), ``span/4`` (`:262`, `:277`), ``partition/4`` (`:469`, `:484`),
+  ``tfilter/3`` (`:508`, `:524`), ``tpartition/4`` (`:546`, `:563`).
+- **Discovered by:** Task 8 of Phase 0
+- **Probe:** `probes/probe_F062.py`
+
+**Symptom:** The ``was_str = isinstance(lst_val, str)`` test only fires
+when the input is literally a ``str``.  A semantically equivalent input
+(a list of 1-char strs, e.g. ``['h','e','l','l','o']``) is reported as
+``was_str=False`` and the result stays as a list — even when every
+element of the result is a 1-char str and ``"".join(result)`` would
+succeed.
+
+| call                                      | list input              | str input |
+|-------------------------------------------|-------------------------|-----------|
+| ``include(is_vowel, .., R)``              | ``['e','o']``           | ``'eo'``  |
+| ``exclude(is_vowel, .., R)``              | ``['h','l','l']``       | ``'hll'`` |
+| ``take_while(is_vowel, .., R)``           | ``[]``                  | ``''``    |
+| ``drop_while(is_vowel, .., R)``           | ``['h','e','l','l','o']`` | ``'hello'`` |
+| ``partition(is_vowel, .., Y, N)``         | ``(['e','o'], ['h','l','l'])`` | ``('eo','hll')`` |
+| ``span(is_vowel, .., Y, N)``              | ``([], ['h','e','l','l','o'])`` | ``('','hello')`` |
+
+**Reproducer:** See `probes/probe_F062.py` — runs every affected
+predicate on logically-equivalent inputs and tabulates the asymmetric
+output container.
+
+**Expected:** Under "string-preserving + input-type wins", the output
+shape should track the input shape consistently.  Either (a) detect a
+list-of-1-char-strs at the entry and treat it as str-shaped, (b)
+document that mixed inputs always degrade to list, or (c) provide a
+canonical conversion contract.
+**Actual:** Asymmetric — only ``isinstance(_, str)`` triggers promotion;
+equivalent list inputs stay list.
+
+**Notes:** Direct sibling of [[F054]] for the higher_order family.
+Cross-links: [[F018]], [[F033]], [[F043]], [[F053]], [[F054]] (the
+recurring C1/C9 type-loss family across head, body-star, lists.py and
+higher_order.py).  Logged as design-gap because the strings-as-lists
+contract is genuinely under-specified for "list of 1-char strs" —
+ambiguous whether the value originated as str or list.
+
+### F063 — `maplist/3`, `filter_map/3`, `group_by/3`, `sort_by/3` build list output unconditionally (no `_seq_result`)
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/builtins/higher_order.py:92-102`
+  (maplist/3 — ``results = []``, ``unify(ys, results, trail)``),
+  `:440-450` (filter_map/3 — ``kept = []``, ``unify(result, kept, trail)``),
+  `:294-313` (group_by/3 — outer ``result: list[list] = []`` and inner
+  ``[deref(elem)]`` lists), `:330-349` (sort_by/3 — ``result = [e for _,
+  e in keyed]``).
+- **Discovered by:** Task 8 of Phase 0
+- **Probe:** `probes/probe_F063.py`
+
+**Symptom:** Unlike the string-preserving siblings (include, exclude,
+partition, take_while, drop_while, span, tfilter, tpartition) that
+honour the str-input shape via ``_seq_result(kept, was_str)``, these
+four output-building predicates have no ``was_str`` / ``_seq_result``
+path at all.  Their result is hard-coded to a Python ``list`` even when
+the input is a str and every result element is a 1-char str (the case
+where str promotion would be unambiguous and lossless).
+
+Examples (str input, str-typed result elements, but list output):
+- ``maplist(upcase, "abc", R)`` → ``R = ['A', 'B', 'C']``
+- ``filter_map(upcase, "abc", R)`` → ``R = ['A', 'B', 'C']``
+- ``group_by(vowel_key, "hello", R)`` →
+  ``R = [['h'], ['e'], ['l','l'], ['o']]`` (outer AND inner are lists —
+  even the inner groups, which are always slices of the input, lose
+  str typing)
+- ``sort_by(code_key, "cba", R)`` → ``R = ['a','b','c']``
+
+**Reproducer:**
+```python
+R = Var()
+for _ in call("maplist", upcase, "abc", R, module=mod):
+    assert type(deref(R)) is list   # not str, even though all-1-char
+    break
+
+R = Var()
+for _ in call("sort_by", code_key, "cba", R, module=mod):
+    assert type(deref(R)) is list   # not str, even though all-1-char
+    break
+```
+
+**Expected:** Under "string-preserving + input-type wins", str input
+with all-1-char-str result elements should produce a str.  For
+``group_by``, the inner groups (which are slices of the input) should
+preserve the input's str typing.
+**Actual:** Hard-coded list output across all four predicates.
+
+**Notes:** This is structurally distinct from [[F062]] — F062 is about
+input-side list-vs-str asymmetry on str-preserving predicates;
+F063 is that for these four predicates, **even str input degrades to
+list output** because they never reach a ``_seq_result`` decision.
+Closest sibling is [[F053]] (output-mode builders in lists.py always
+list).  Logged as design-gap because the fix needs the same
+``was_str``/``_seq_result`` thread that the other predicates already
+have — straightforward to apply but currently undocumented as a
+gap.  Existing test `test_string_higher_order.py::test_maplist3_char_to_code`
+codifies the list output for the int-codes case, which is *correct*
+(ints aren't joinable to str); the gap is the 1-char-str-output case
+that isn't covered.
+
 *Task 7 confirmed (no finding):*
 - **F057** — Task 7 confirmed: the ``_seq_result`` "all 1-char str"
   guard at lists.py:63 is correct for all known callers.  For every
@@ -1823,6 +1993,32 @@ for the ledger's completeness.
   ``TestInString.test_enumerate_chars``, ``TestGetItemString``,
   ``TestSelectString``, ``TestPermutationString``).  No new probe
   required; the test suite is the witness.
+
+*Task 8 confirmed (no finding):*
+- **F064** — Task 8 confirmed: ``maplist/2``, ``maplist/3`` and
+  ``foldl/4`` pass 1-char ``str`` elements to the user's goal when the
+  input collection is a ``str``, per the strings-as-lists contract.
+  Verified by instrumenting a Python-callable goal via the ``++expr``
+  escape (see `probes/probe_F064.py`).  ``foldl/4`` also threads the
+  accumulator transparently — a str-typed acc stays str when the goal
+  builds str, an int-typed acc stays int when the goal does int
+  arithmetic.  No element-coercion bug; the goal-side typing contract
+  is honoured.  The C9 issues logged under F061/F062/F063 are all
+  *output-shape* and *Seg* input-acceptance* concerns, not element-
+  typing concerns.
+- **F065** — Task 8 confirmed: ``max_by/3`` and ``min_by/3`` correctly
+  bind the result to a 1-char ``str`` when the input is a ``str`` (the
+  result is just one of the input elements, dereffed and unified into
+  the output var).  No string-preservation issue: ``max_by`` returns a
+  single element, not a collection, so ``_seq_result`` has nothing to
+  do.  Verified by probe_F063.py control invocation pattern.  No probe.
+- **F066** — Task 8 confirmed: the goal-callable check used by every
+  higher_order predicate (``callable(goal_val) or hasattr(goal_val,
+  '_get_dispatch')``) correctly rejects ``str`` as a goal — ``str``
+  instances are not callable in Python 3 and have no ``_get_dispatch``
+  attribute.  No risk of mistakenly treating an input str as a goal in
+  any of the higher_order entry points.  No probe (static check + REPL
+  verification).
 
 ### Class C10 — DCG / phrase interaction
 *(none yet)*
