@@ -10,7 +10,7 @@
 |-------|-------|-----|-----------:|-----:|------:|---------:|
 | C1 | Type preservation | 0 | 5 | 0 | 0 | 0 |
 | C2 | Non-det collapsed to first | 2 | 0 | 0 | 0 | 0 |
-| C3 | SegString blind spots vs SegList | 4 | 2 | 0 | 0 | 0 |
+| C3 | SegString blind spots vs SegList | 5 | 2 | 0 | 0 | 0 |
 | C4 | Head-pattern literal mismatch | 0 | 0 | 0 | 0 | 0 |
 | C5 | Hash/eq asymmetries | 1 | 2 | 0 | 0 | 0 |
 | C6 | Hashable vs unhashable bridges | 0 | 0 | 0 | 0 | 0 |
@@ -705,6 +705,77 @@ plus the inherited [[F031]]/[[F032]]/[[F033]]/[[F034]] via
 ``_body_star_unify``'s delegation chain. The minimal fix is symmetric
 to the head-position SegString patches.
 
+### F047 — Multi-star head guard ignores SegString (both ground and non-ground)
+
+- **Class:** C3 (SegString blind spots vs SegList)
+- **Severity:** bug
+- **Location:** `clausal/logic/compiler/head_match.py:857-872`
+  (`_compile_multi_star_guard` — the ``seglist_normalise`` block plus the
+  trailing ``isinstance(_d, (list, str))`` test in ``list_branch``)
+- **Discovered by:** Task 5 of Phase 0
+- **Probe:** `probes/probe_F047.py`
+
+**Symptom:** The multi-star head guard emits this normalisation pipeline
+before its ``(list, str)`` isinstance arm:
+
+```
+_d = deref(_lcap)
+if isinstance(_d, SegList):
+    _d = _d.__walk__()            # walk SegList → list (or stays SegList)
+if isinstance(_d, Var): defer …   # output mode
+if isinstance(_d, (list, str)):
+    …guarded body…                # input mode
+```
+
+There is no ``isinstance(_d, SegString)`` branch. A SegString target —
+whether ground (``SegString(["abc"])`` whose ``__walk__()`` returns the
+plain str ``"abc"``) or non-ground (``SegString(["a", VarSeg(X), "c"])``)
+— walks past the SegList normalise, past the Var defer, fails the
+``(list, str)`` isinstance test, and the multi-star arm is skipped.
+The enclosing ``match`` falls through and the caller silently gets zero
+solutions.
+
+The probe drives the existing ``Bracket([*A, X, Y, *B], X, Y, A, B)``
+fixture in ``tests/clausal_modules/list_edge_cases.clausal`` with four
+targets — ``"abc"`` (control), ``['a','b','c']`` (control),
+``SegString(["abc"])`` (ground probe), and ``SegString(["a",VarSeg(X),"c"])``
+(non-ground probe). Both controls yield 2 solutions; both SegString
+calls yield 0.
+
+This is the head-position multi-star parallel of [[F041]] (body-position
+multi-star has no SegString branch) and [[F031]]/[[F032]] (head-position
+single-star input-mode helper also has no SegString branch). Per the
+spec vocabulary, "False/no-solutions on satisfiable goal = bug".
+
+**Reproducer:** see `probes/probe_F047.py`. Output:
+```
+  Control Bracket("abc")             solutions: 2
+  Control Bracket(['a','b','c'])       solutions: 2
+  Probe   Bracket(SegString(['abc']))  solutions: 0
+  Probe   Bracket(SegString(['a',*X,'c'])) solutions: 0
+```
+
+**Expected:** Either symmetric SegString normalisation at the guard
+(``isinstance(_d, SegString)`` → ``_d = _d.__walk__()``, parallel to
+the SegList branch at :857-872) followed by the existing
+``(list, str)`` arm; or, for non-ground SegString, a structural
+SegString-vs-segments unification analogous to the head-position
+single-star fix proposed for F031/F041.
+**Actual:** Silent zero solutions.
+
+**Notes:** The minimal fix is symmetric to the SegList normalise — one
+``isinstance``/``__walk__`` pair before the Var defer. Ground SegString
+falls out for free (walk returns str → existing arm fires); the
+non-ground case still drops because the walked value is itself a
+SegString. A full fix would need a SegString-aware arm parallel to the
+SegList walk-or-rebuild branch (or route through ``_body_multi_star_unify``,
+once [[F040]]/[[F041]] are fixed there too). Companion cluster:
+[[F031]]/[[F032]] (head-position single-star input), [[F034]]
+(head-position single-star output), [[F040]]/[[F041]] (body-position
+multi-star), [[F038]]/[[F039]] (`_in_iter`). The whole cluster shares
+the same root cause: every dispatch site that branches on the target's
+container type has a SegList arm but no SegString arm.
+
 *Task 1 confirmed (no finding):*
 - **F008** — Top-level `unify(SegString("abc"), ["a","b","c"], t)` and the
   reverse direction both succeed. The C path's str↔list block keys off
@@ -761,7 +832,41 @@ to the head-position SegString patches.
   exercise the delegated helpers).
 
 ### Class C4 — Head-pattern literal mismatch
-*(none yet)*
+
+*Task 5 confirmed (no finding):*
+- **F046** — Task 5 confirmed: C4 head string-literal mismatch is **not
+  present**. Probe `probes/probe_F046.py` shows `Foo("abc")` called with
+  `['a','b','c']` returns 1 solution and `Bar(['a','b','c'])` called
+  with `"abc"` returns 1 solution. The compiler dodges C4 structurally:
+  the parser/elaborator never places a literal directly in a head arg
+  slot — every literal is lifted into a body ``Unify``. The compiled
+  clause for ``Foo("abc")`` is
+  ``Clause(head=Foo(arg_0=AttVar(_0)), body=[Unify(left=AttVar(_0), right='abc')])``;
+  ``head_to_match_pattern`` therefore emits an ``ast.MatchAs`` wildcard
+  capture (head_match.py:245), and the runtime ``unify`` at body time
+  routes through the C str↔list block (`_variables.c:1127-1179`) which
+  *does* honour the strings-as-lists contract. The literal branch at
+  head_match.py:253-254 (`MatchValue(Constant(value=term))`) is reachable
+  only via `_lift_clause_at_pos` (list_dispatch.py:50-107) during
+  indexed-bucket compilation — and when a caller arg's index key
+  (`arg_index.py:74-91`) doesn't match the lifted bucket key, dispatch
+  falls back to the default bucket which uses the *unlifted* clauses
+  with the body Unify intact. So even the indexed path cannot expose
+  C4: a `str`-keyed bucket sees only `str` callers, a `list` caller
+  has no index key (lists return `_INDEX_VAR`) and lands in the default
+  bucket which still has the runtime-unify path.
+- **F048** — Task 5 confirmed: compound heads containing string literals
+  (e.g. ``Quux(foo("abc"))``) are subsumed by F046. Direct inspection
+  of the compiled clause shows the parser/elaborator lifts the entire
+  compound argument into a body Unify too:
+  ``Clause(head=Quux(arg_0=AttVar(_0)), body=[Unify(left=AttVar(_0), right=Call(func=LoadName(name='foo'), args=['abc'], …))])``.
+  The head pattern is again a wildcard capture; runtime unify on the
+  Call expression value handles the str↔list bridging via the same
+  mechanism. No probe (verified by direct module inspection in the
+  Task 5 work session). List literals in head args (e.g.
+  ``Bar(['a','b','c'])``) also follow this elaboration —
+  ``Clause(head=Bar(arg_0=AttVar(_0)), body=[Unify(left=AttVar(_0), right=['a','b','c'])])`` —
+  so the same structural dodge applies recursively.
 
 ### Class C5 — Hash/eq asymmetries
 
