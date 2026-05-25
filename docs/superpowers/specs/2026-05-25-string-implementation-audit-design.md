@@ -1,5 +1,10 @@
 # String Implementation Audit — Design Spec
 
+> **Audit principle:** log *every* issue you find — correctness, design,
+> performance, memory, or doc-drift. Fix correctness issues (including
+> memory leaks and refcount bugs) class-by-class. Defer pure-perf fixes
+> with a ledger entry.
+
 **Date:** 2026-05-25
 **Author:** Michael Amy (with Claude)
 **Status:** Draft — pending user review before plan-writing
@@ -296,6 +301,43 @@ follow the bind chain — confirm the str↔list addition didn't open a hole
 under the FT model. Limited to static review + targeted stress; residual
 uncertainty documented.
 
+### C17 — Performance, memory, and resource issues
+
+Any non-correctness issue that affects runtime, memory, or resource use.
+Audit covers:
+
+- **Memory leaks in C code** — `_variables.c` str↔list path: every
+  `PyUnicode_Substring` is paired with `Py_DECREF`, but cross-check
+  every allocation+return path. Same for any C extensions reachable
+  from string work (`_list_unify.c`, `_chars_core.c`).
+- **Refcount errors** — borrowed vs new references; `Py_INCREF` /
+  `Py_DECREF` balance on error paths; `do_unify` returning `-1` without
+  leaving dangling refs.
+- **Quadratic / exponential blowups** — `_seglist_unify_gen` and
+  `_segstring_unify_gen` walk every split combination; with multiple
+  star vars and long strings this is combinatorial. Audit for
+  unintentional blowups in the common (single-star) case. Also: nested
+  `SegList.__walk__` copies on every call — accidental O(n²) over
+  repeated walks?
+- **Unnecessary string ↔ list conversions** — `"".join(...)` and
+  `list(s)` in hot paths; `walked == list(other)` allocations in
+  `SegList.__unify__`; the per-element single-char `PyUnicode_Substring`
+  in the unbound-Var branch of the C path. Worth flagging when ≥ O(n)
+  on a per-unification basis.
+- **Trail churn** — `mark`/`undo` pairs around speculative splits;
+  whether they leave the trail at its prior length or grow it
+  monotonically.
+- **`__hash__` cost** — `SegString.__hash__` walks the whole structure
+  every call when ground; if used as a dict key in a hot loop, that's
+  O(n) per lookup.
+- **Repr / str cost** — `SegList.__repr__` walks the structure; if
+  called during tracing or error formatting in a hot path, problematic.
+
+Severity rule: a confirmed memory leak or refcount bug in C code is
+`bug` and gets fixed. Pure throughput perf is `perf` severity (see
+vocabulary below) and gets logged for later — no Phase 2 fix unless
+trivial.
+
 ---
 
 ## Methodology
@@ -310,17 +352,26 @@ grouped by class, sorted by severity within class.
 
 Severity vocabulary:
 
-- `bug` — the code produces a wrong answer, crashes, or silently drops
-  solutions in a way the contract forbids. Must be fixed unless `wontfix`
-  with rationale.
+- `bug` — the code produces a wrong answer, crashes, silently drops
+  solutions, leaks memory, or has a refcount/use-after-free hazard.
+  Must be fixed unless `wontfix` with rationale.
 - `design-gap` — the contract itself is under-specified for this case; the
   code's current behaviour is defensible but inconsistent with sibling
   cases. Fix usually means picking a consistent rule and aligning all
   sites.
+- `perf` — correctness is fine but the code is slower or allocates more
+  than it needs to (quadratic blowups, redundant conversions, hot-path
+  walks). Logged for follow-up; fixed in Phase 2 only when the fix is
+  trivial or the cost is severe enough to count as a defect.
 - `smell` — code that works but invites future bugs (asymmetric handling,
   duplicated invariants, magic-number splits). Optional fix.
 - `doc-only` — the implementation is correct; `docs/strings_as_lists.md`
   or a code comment is wrong or missing.
+
+The audit logs **every** issue it finds against these severities,
+regardless of class — including findings that fall outside the C1–C17
+taxonomy. New patterns that recur across multiple sites earn a new class
+mid-audit and get the same Phase 1 + Phase 2 treatment as the originals.
 
 Mine `git log` for `fix(...)` and `Phase N:` commits touching the in-scope
 files; pull unresolved items from `todo/`, `implementation_plans/`, and
@@ -353,6 +404,8 @@ test here is intentionally failing.
 Phase 1 exit criteria:
 
 - Every `bug` / `design-gap` ledger finding has at least one test.
+- `perf` findings get a benchmark or asymptotic-check test when cheap;
+  otherwise stay ledger-only.
 - `smell` findings get tests when cheap; otherwise stay ledger-only.
 
 ### Phase 2 — Fix class-by-class
@@ -420,6 +473,9 @@ Otherwise: proceed without per-step gates.
 ## Success criteria
 
 - Every in-scope source file has been read and tagged in the ledger.
+- Every issue found is logged, regardless of severity — including
+  performance, memory, and refcount observations that won't be fixed
+  in this audit.
 - Every `bug` or `design-gap` finding has either a green test + a fix
   commit, or a `wontfix` entry with rationale.
 - The full pre-existing test suite passes after each Phase 2 commit.
@@ -450,8 +506,10 @@ Otherwise: proceed without per-step gates.
 ## Non-goals (explicit)
 
 - No API or naming changes to `SegList` / `SegString`.
-- No performance work beyond what a correctness fix incidentally requires.
 - No new strings-as-lists features; `SegList`-vs-`SegList` unification
   (the documented "Phase 6") is `wontfix: deferred` if it surfaces.
 - No remediation of issues outside the in-scope file list beyond ledger
   notes.
+- Pure performance optimisations (`perf` severity) are logged but not
+  fixed in Phase 2 unless trivial or severe. Memory leaks and refcount
+  bugs in C code are correctness issues and *are* fixed.
