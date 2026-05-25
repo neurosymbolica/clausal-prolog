@@ -2,7 +2,7 @@
 
 **Spec:** [../../specs/2026-05-25-string-implementation-audit-design.md](../../specs/2026-05-25-string-implementation-audit-design.md)
 **Phase 0 plan:** [../../plans/2026-05-25-string-audit-phase-0.md](../../plans/2026-05-25-string-audit-phase-0.md)
-**Status:** Phase 0 in progress
+**Status:** Phase 0 complete; awaiting Phase 1 plan execution
 
 ## Summary by class
 
@@ -27,7 +27,7 @@
 | C17 | Performance, memory, leaks | 0 | 0 | 2 | 1 | 0 |
 | —   | Out-of-taxonomy | 0 | 0 | 0 | 0 | 0 |
 
-(Counts updated at the end of each task.)
+(Counts verified at Phase 0 completion: 66 findings total — 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only.)
 
 ## Findings
 
@@ -79,6 +79,47 @@ mismatch surfaces in __eq__).
 
 **Prior-known:** commit f635551 — "Phase 7: SegString and string-preserving pattern matching" rewrote `SegList.__walk__` to handle VarSegs bound to strings (eliminating the SegList/compiler path asymmetry per the plan in `implementation_plans/data_structures/STRING_LIST_UNIFICATION.md` Phase 7 acceptance criterion); the rewrite normalized inward (str → char-list) for the SegList container and outward (list → str) for SegString, which is exactly the "container-shape wins" rule this finding flags.
 
+### F020 — SegList.__add__ / __radd__ rejects str
+
+- **Class:** C1 (Type preservation)
+- **Severity:** design-gap
+- **Location:** `clausal/terms.py:353-364`
+- **Discovered by:** Task 2 of Phase 0
+- **Probe:** `probes/probe_F020.py`
+
+**Symptom:** `SegList.__add__` handles `list` and `SegList` and returns
+`NotImplemented` for `str`. `SegList.__radd__` only handles `list`. So
+`SegList(['a','b']) + "cd"` raises TypeError and `"cd" +
+SegList(['a','b'])` raises TypeError (because `str.__add__` also
+NotImplements). Under the strings-as-lists contract a `str` should
+work as a list-of-1-char-strs in a SegList tail just as a `list`
+does.
+
+**Reproducer:**
+```python
+from clausal.terms import SegList, ConcreteSeg
+
+sl = SegList([ConcreteSeg(["a", "b"])])
+assert sl + ["c", "d"] == ["a", "b", "c", "d"]      # works
+try:
+    sl + "cd"                                       # TypeError
+except TypeError:
+    pass
+try:
+    "cd" + sl                                       # TypeError
+except TypeError:
+    pass
+```
+
+**Expected:** Either both `list` and `str` accepted (preferred for the
+strings-as-lists contract), or both rejected.
+**Actual:** Only `list` accepted.
+
+**Notes:** Native Python `list + str` also raises TypeError, so the
+current behaviour is at least consistent with the host language. The
+audit logs this as a contract gap rather than a bug. Related to
+[[F019]] (parallel asymmetry in `__eq__`).
+
 ### F033 — `_head_list_unify_output` always builds a list, never a str
 
 - **Class:** C1 (Type preservation)
@@ -128,47 +169,6 @@ boundary. Related to [[F018]] (parallel type loss in
 star_val, the C3 sibling of this C1 finding).
 
 **Prior-known:** commit aa2155d — "Compiler: head patterns accept strings in clause matching" widened `_head_list_unify_input` to accept `(list, str)` and noted that "string slicing naturally preserves type: [H, *T] on 'hello' gives H='h', T='ello'". That commit only covered the input-mode path; the symmetric output-mode reconstruction at `_head_list_unify_output` was not touched and still always allocates a list.
-
-### F020 — SegList.__add__ / __radd__ rejects str
-
-- **Class:** C1 (Type preservation)
-- **Severity:** design-gap
-- **Location:** `clausal/terms.py:353-364`
-- **Discovered by:** Task 2 of Phase 0
-- **Probe:** `probes/probe_F020.py`
-
-**Symptom:** `SegList.__add__` handles `list` and `SegList` and returns
-`NotImplemented` for `str`. `SegList.__radd__` only handles `list`. So
-`SegList(['a','b']) + "cd"` raises TypeError and `"cd" +
-SegList(['a','b'])` raises TypeError (because `str.__add__` also
-NotImplements). Under the strings-as-lists contract a `str` should
-work as a list-of-1-char-strs in a SegList tail just as a `list`
-does.
-
-**Reproducer:**
-```python
-from clausal.terms import SegList, ConcreteSeg
-
-sl = SegList([ConcreteSeg(["a", "b"])])
-assert sl + ["c", "d"] == ["a", "b", "c", "d"]      # works
-try:
-    sl + "cd"                                       # TypeError
-except TypeError:
-    pass
-try:
-    "cd" + sl                                       # TypeError
-except TypeError:
-    pass
-```
-
-**Expected:** Either both `list` and `str` accepted (preferred for the
-strings-as-lists contract), or both rejected.
-**Actual:** Only `list` accepted.
-
-**Notes:** Native Python `list + str` also raises TypeError, so the
-current behaviour is at least consistent with the host language. The
-audit logs this as a contract gap rather than a bug. Related to
-[[F019]] (parallel asymmetry in `__eq__`).
 
 ### F042 — `_body_multi_star_unify` unbound-target branch always builds SegList
 
@@ -518,107 +518,6 @@ SegString-as-list-element blind spot).
 
 **Prior-known:** same as [[F031]] — commit aa2155d widened the head-pattern path for `str` but not for `SegString`. Cross-ref the same Phase 7 plan gap.
 
-### F012 — Var bound to SegString in list position is not recognised as a char
-
-- **Class:** C3 (SegString blind spots vs SegList)
-- **Severity:** design-gap
-- **Location:** `clausal/logic/variables/_variables.c:1143-1149` and
-  `clausal/logic/variables/_variables.c:1170-1176`
-- **Discovered by:** Task 1 of Phase 0
-- **Probe:** `probes/probe_F012.py`
-
-**Symptom:** Inside the str↔list loop, the C path type-checks each list
-element with `PyUnicode_Check(elem) && PyUnicode_GET_LENGTH(elem) == 1`.
-A `SegString` (Python class, *not* a `str` subclass) representing a
-single character is rejected even when it semantically equals the
-codepoint at that position. A Var bound to such a `SegString` therefore
-makes `unify("a", [v])` return `False` even when `v` was previously
-bound to `SegString("a")`.
-
-**Reproducer:**
-```python
-from clausal.logic.variables import Trail, Var, unify
-from clausal.terms import SegString
-
-v = Var()
-t = Trail()
-unify(v, SegString("a"), t)
-assert unify("a", [v], t) is True  # FAILS — returns False
-```
-
-**Expected:** True (the bound value is semantically the char `'a'`).
-**Actual:** False (the C path's `PyUnicode_Check` excludes `SegString`).
-
-**Notes:** Symmetric to the SegList walking gap noted in spec C3 but at
-the C boundary rather than the Python list-unify path. The hot loop must
-keep its fast path; one option is to defer to the `__unify__` protocol
-when `elem` is not a Var and not a 1-codepoint `PyUnicode`. Related to
-[[F008]] (ground-SegString-vs-list does reach the `__unify__` hook when
-the SegString is the top-level arg, but Vars *inside* a list never
-reach that fallback).
-
-**Prior-known:** commit b8d3038 — "Phase 1: string ↔ list unification at the C level" set the `PyUnicode_Check(elem) && PyUnicode_GET_LENGTH(elem) == 1` element type-check; SegString didn't exist yet (introduced in f635551 Phase 7), so the check was correct at the time. Phase 7 added the SegString type but never came back to widen this C-level element check.
-
-### F034 — `_head_list_unify_output` never walks SegString star_val
-
-- **Class:** C3 (SegString blind spots vs SegList)
-- **Severity:** design-gap
-- **Location:** `clausal/logic/runtime/list_unify.py:166-200` and
-  `clausal/logic/runtime/_list_unify.c:264-434`
-- **Discovered by:** Task 3 of Phase 0
-- **Probe:** `probes/probe_F034.py`
-
-**Symptom:** The output-mode helper branches the dereffed
-``star_val`` on ``list`` (extend), ``SegList`` (walk-and-extend or
-rebuild as SegList), and ``Var`` (rebuild as SegList with a fresh
-VarSeg). It has *no* SegString branch — a SegString-bound star_val
-falls into the catch-all ``else`` at list_unify.py:197-198 (Python)
-/ _list_unify.c:425-432 (C) and is appended as a single opaque
-element.
-
-Effect: a head ``foo([H, *T])`` whose T is bound to
-``SegString(['hello'])`` produces ``[deref(H), SegString(['hello'])]``
-— the SegString is neither walked into chars (as a ground SegList
-would be) nor used to rebuild a SegList/SegString result. The C
-and Python paths agree (both blind).
-
-**Reproducer:**
-```python
-from clausal.logic.variables import Var, unify, Trail, deref
-from clausal.terms import SegString
-from clausal.logic.runtime.list_unify import _head_list_unify_output
-
-target = Var()
-H = Var(); T = Var()
-unify(H, "h", Trail())
-unify(T, SegString(["ello"]), Trail())
-_head_list_unify_output(target, [H], T, [], Trail())
-assert deref(target) == ["h", SegString(["ello"])]  # un-walked
-# Compare with the SegList branch:
-from clausal.terms import SegList, ConcreteSeg
-target2 = Var()
-H2 = Var(); T2 = Var()
-unify(H2, "h", Trail())
-unify(T2, SegList([ConcreteSeg(["e","l","l","o"])]), Trail())
-_head_list_unify_output(target2, [H2], T2, [], Trail())
-assert deref(target2) == ["h", "e", "l", "l", "o"]    # walked
-```
-
-**Expected:** Symmetric handling — walk ground SegString into the
-result (extending chars or, under "input type wins", building a
-str/SegString-shaped result); rebuild from segments when
-non-ground, analogous to the SegList branch at list_unify.py:170-186.
-**Actual:** SegString appended as a single opaque element.
-
-**Notes:** Logged as design-gap rather than bug because the result
-unify still succeeds and the target value is a defined Python
-object; it just doesn't match the SegList branch's semantics. If
-downstream code does `list(target)` or indexes into it, the
-SegString-as-element will surface as a surprise. Companion to
-[[F031]]/[[F032]] (input-mode SegString blind spots), [[F018]]
-(SegList walk type-loss), [[F033]] (output-mode always builds a
-list).
-
 ### F040 — `_body_multi_star_unify` rejects ground SegString target
 
 - **Class:** C3 (SegString blind spots vs SegList)
@@ -791,6 +690,107 @@ once [[F040]]/[[F041]] are fixed there too). Companion cluster:
 multi-star), [[F038]]/[[F039]] (`_in_iter`). The whole cluster shares
 the same root cause: every dispatch site that branches on the target's
 container type has a SegList arm but no SegString arm.
+
+### F012 — Var bound to SegString in list position is not recognised as a char
+
+- **Class:** C3 (SegString blind spots vs SegList)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/variables/_variables.c:1143-1149` and
+  `clausal/logic/variables/_variables.c:1170-1176`
+- **Discovered by:** Task 1 of Phase 0
+- **Probe:** `probes/probe_F012.py`
+
+**Symptom:** Inside the str↔list loop, the C path type-checks each list
+element with `PyUnicode_Check(elem) && PyUnicode_GET_LENGTH(elem) == 1`.
+A `SegString` (Python class, *not* a `str` subclass) representing a
+single character is rejected even when it semantically equals the
+codepoint at that position. A Var bound to such a `SegString` therefore
+makes `unify("a", [v])` return `False` even when `v` was previously
+bound to `SegString("a")`.
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Trail, Var, unify
+from clausal.terms import SegString
+
+v = Var()
+t = Trail()
+unify(v, SegString("a"), t)
+assert unify("a", [v], t) is True  # FAILS — returns False
+```
+
+**Expected:** True (the bound value is semantically the char `'a'`).
+**Actual:** False (the C path's `PyUnicode_Check` excludes `SegString`).
+
+**Notes:** Symmetric to the SegList walking gap noted in spec C3 but at
+the C boundary rather than the Python list-unify path. The hot loop must
+keep its fast path; one option is to defer to the `__unify__` protocol
+when `elem` is not a Var and not a 1-codepoint `PyUnicode`. Related to
+[[F008]] (ground-SegString-vs-list does reach the `__unify__` hook when
+the SegString is the top-level arg, but Vars *inside* a list never
+reach that fallback).
+
+**Prior-known:** commit b8d3038 — "Phase 1: string ↔ list unification at the C level" set the `PyUnicode_Check(elem) && PyUnicode_GET_LENGTH(elem) == 1` element type-check; SegString didn't exist yet (introduced in f635551 Phase 7), so the check was correct at the time. Phase 7 added the SegString type but never came back to widen this C-level element check.
+
+### F034 — `_head_list_unify_output` never walks SegString star_val
+
+- **Class:** C3 (SegString blind spots vs SegList)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/runtime/list_unify.py:166-200` and
+  `clausal/logic/runtime/_list_unify.c:264-434`
+- **Discovered by:** Task 3 of Phase 0
+- **Probe:** `probes/probe_F034.py`
+
+**Symptom:** The output-mode helper branches the dereffed
+``star_val`` on ``list`` (extend), ``SegList`` (walk-and-extend or
+rebuild as SegList), and ``Var`` (rebuild as SegList with a fresh
+VarSeg). It has *no* SegString branch — a SegString-bound star_val
+falls into the catch-all ``else`` at list_unify.py:197-198 (Python)
+/ _list_unify.c:425-432 (C) and is appended as a single opaque
+element.
+
+Effect: a head ``foo([H, *T])`` whose T is bound to
+``SegString(['hello'])`` produces ``[deref(H), SegString(['hello'])]``
+— the SegString is neither walked into chars (as a ground SegList
+would be) nor used to rebuild a SegList/SegString result. The C
+and Python paths agree (both blind).
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var, unify, Trail, deref
+from clausal.terms import SegString
+from clausal.logic.runtime.list_unify import _head_list_unify_output
+
+target = Var()
+H = Var(); T = Var()
+unify(H, "h", Trail())
+unify(T, SegString(["ello"]), Trail())
+_head_list_unify_output(target, [H], T, [], Trail())
+assert deref(target) == ["h", SegString(["ello"])]  # un-walked
+# Compare with the SegList branch:
+from clausal.terms import SegList, ConcreteSeg
+target2 = Var()
+H2 = Var(); T2 = Var()
+unify(H2, "h", Trail())
+unify(T2, SegList([ConcreteSeg(["e","l","l","o"])]), Trail())
+_head_list_unify_output(target2, [H2], T2, [], Trail())
+assert deref(target2) == ["h", "e", "l", "l", "o"]    # walked
+```
+
+**Expected:** Symmetric handling — walk ground SegString into the
+result (extending chars or, under "input type wins", building a
+str/SegString-shaped result); rebuild from segments when
+non-ground, analogous to the SegList branch at list_unify.py:170-186.
+**Actual:** SegString appended as a single opaque element.
+
+**Notes:** Logged as design-gap rather than bug because the result
+unify still succeeds and the target value is a defined Python
+object; it just doesn't match the SegList branch's semantics. If
+downstream code does `list(target)` or indexes into it, the
+SegString-as-element will surface as a surprise. Companion to
+[[F031]]/[[F032]] (input-mode SegString blind spots), [[F018]]
+(SegList walk type-loss), [[F033]] (output-mode always builds a
+list).
 
 ### F075 — Every char/atom builtin in `chars.py` is SegString-blind
 
@@ -1370,47 +1370,6 @@ discipline. Related to spec's `_in_iter` example (list_unify.py).
 
 Re-graded from design-gap to bug after Task 2 spec review: the spec's severity vocabulary lists "crashes" under bug, and TypeError on a sequence-protocol call is a crash regardless of whether it is typed-and-informative. Same logic as the Task 1 F011 re-grade. The implementer's defense (TypeError is a deliberate contract signal) is preserved as context but no longer determines the severity.
 
-### F022 — SegList.__contains__ silently incomplete on VarSegs
-
-- **Class:** C8 (Partial-term short-circuits)
-- **Severity:** design-gap
-- **Location:** `clausal/terms.py:340-348`
-- **Discovered by:** Task 2 of Phase 0
-- **Probe:** `probes/probe_F022.py`
-
-**Symptom:** When the SegList is non-ground, `__contains__` walks the
-remaining segments and only checks `ConcreteSeg.elements`; it never
-checks whether a `VarSeg`'s bound value contains the item. Effect:
-`3 in SegList([ConcreteSeg([1,2]), VarSeg(X), ConcreteSeg([4])])`
-returns `False` even when `X` could be bound to a list containing 3.
-
-This is silent logical incompleteness: no error, just a wrong answer
-in the case where the item *could* be inside a VarSeg.
-
-**Reproducer:**
-```python
-from clausal.logic.variables import Var
-from clausal.terms import SegList, VarSeg, ConcreteSeg
-
-X = Var()
-sl = SegList([ConcreteSeg([1, 2]), VarSeg(X), ConcreteSeg([4])])
-assert 1 in sl                              # True via ConcreteSeg
-assert 4 in sl                              # True via ConcreteSeg
-assert (3 in sl) is False                   # silently False; could be in X
-```
-
-**Expected:** Either `True` (membership is satisfiable), `None`
-(unknown), or a TypeError. Returning a definite `False` is wrong for
-the case where X is unbound and 3 could legitimately be assigned.
-**Actual:** Definite `False`.
-
-**Notes:** Inconsistent with [[F021]] (the sibling sequence methods
-raise instead of silently answering). The combined picture: SegList's
-sequence protocol is half "raise on partial" and half "answer wrong
-on partial". Either is defensible alone; the mix is the smell.
-
-The spec vocabulary's "wrong answer" definition technically could cover a definite-False return on a partial container where the logical answer is "unknown". Task 2 spec review judged this borderline and kept the design-gap grading because Python's `__contains__` contract on partial terms is genuinely unspecified by the strings-as-lists contract. If a fix in Phase 2 reveals a clear corrective rule, revisit this grading then.
-
 ### F023 — SegString.__unify__(list) silently fails when non-ground
 
 - **Class:** C8 (Partial-term short-circuits)
@@ -1464,49 +1423,6 @@ element) and the spec's C3 enumeration.
 Re-graded from design-gap to bug after Task 2 spec review: silent dropped solutions on a logically-satisfiable unify call is the textbook "silently drops solutions" pattern listed under bug in the spec's severity vocabulary. F015 and F016 have the same character and were graded bug; F023 should match. The C3 structural-gap framing remains valid but does not lower the C8 severity.
 
 **Prior-known:** commit 82ecc96 — "Fix SegString bugs, update strings_as_lists docs for Phase 7" fixed one half of this gap: `SegString.__unify__ vs list` "delegate to C-level str↔list unification instead of broken `walked == list(other)` comparison". That fix only routes through C str↔list when the SegString walks to a plain str (i.e. is ground); the non-ground case this finding documents still returns `NotImplemented` and surfaces as silent `False`. The commit description acknowledges only the ground case ("walked == list(other) was broken"); the non-ground hole was not addressed.
-
-### F024 — SegString.__walk__ raises TypeError on non-str list binding
-
-- **Class:** C8 (Partial-term short-circuits)
-- **Severity:** smell
-- **Location:** `clausal/terms.py:493-499`
-- **Discovered by:** Task 2 of Phase 0
-- **Probe:** `probes/probe_F024.py`
-
-**Symptom:** The `isinstance(v, list)` branch in `SegString.__walk__`
-joins the list via `"".join(v)`. This works when every element is a
-`str` (including multi-char strings — see notes). If a VarSeg's var
-was unified with a list of non-strs (e.g. ints — possible via a
-direct `unify(X, [1,2,3], t)` followed by embedding X in a SegString),
-the walk raises TypeError from inside `str.join`, propagating out of
-`__walk__`. Anything that touches `__walk__` — `is_ground`,
-`__eq__`, `__hash__`, `__repr__`, `__unify__` — then blows up.
-
-**Reproducer:**
-```python
-from clausal.logic.variables import Var, unify, Trail
-from clausal.terms import SegString, VarSeg
-
-X = Var(); t = Trail()
-unify(X, [1, 2, 3], t)
-ss = SegString(["a", VarSeg(X), "b"])
-try:
-    ss.__walk__()      # TypeError: sequence item 0: expected str instance, int found
-except TypeError:
-    pass
-```
-
-**Expected:** A typed contract violation ("SegString VarSeg bound to
-non-char-list"), not a low-level `str.join` exception from deep in
-the walk. Better: catch in the walk and fall through to a no-walk
-result (keep the VarSeg as opaque).
-**Actual:** Raw TypeError from `str.join`.
-
-**Notes:** Multi-char string elements work silently (`["ab","cd"]`
-joins to `"abcd"`), which is a *separate* smell — the char-list
-contract says every element is 1-char, but the code doesn't enforce
-it. Both are smells, not bugs (a malformed SegString construction is
-out of contract). Logged for the cleanup pass.
 
 ### F038 — `_in_iter` raises on ground SegString (no `__iter__`)
 
@@ -1613,6 +1529,90 @@ this same helper. Pairs with [[F022]] (`__contains__` is silently
 incomplete on VarSegs) — note the inconsistent disciplines: `_in_iter`
 raises, `__contains__` answers `False`. A coherent fix should pick
 one rule and apply it across both.
+
+### F022 — SegList.__contains__ silently incomplete on VarSegs
+
+- **Class:** C8 (Partial-term short-circuits)
+- **Severity:** design-gap
+- **Location:** `clausal/terms.py:340-348`
+- **Discovered by:** Task 2 of Phase 0
+- **Probe:** `probes/probe_F022.py`
+
+**Symptom:** When the SegList is non-ground, `__contains__` walks the
+remaining segments and only checks `ConcreteSeg.elements`; it never
+checks whether a `VarSeg`'s bound value contains the item. Effect:
+`3 in SegList([ConcreteSeg([1,2]), VarSeg(X), ConcreteSeg([4])])`
+returns `False` even when `X` could be bound to a list containing 3.
+
+This is silent logical incompleteness: no error, just a wrong answer
+in the case where the item *could* be inside a VarSeg.
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var
+from clausal.terms import SegList, VarSeg, ConcreteSeg
+
+X = Var()
+sl = SegList([ConcreteSeg([1, 2]), VarSeg(X), ConcreteSeg([4])])
+assert 1 in sl                              # True via ConcreteSeg
+assert 4 in sl                              # True via ConcreteSeg
+assert (3 in sl) is False                   # silently False; could be in X
+```
+
+**Expected:** Either `True` (membership is satisfiable), `None`
+(unknown), or a TypeError. Returning a definite `False` is wrong for
+the case where X is unbound and 3 could legitimately be assigned.
+**Actual:** Definite `False`.
+
+**Notes:** Inconsistent with [[F021]] (the sibling sequence methods
+raise instead of silently answering). The combined picture: SegList's
+sequence protocol is half "raise on partial" and half "answer wrong
+on partial". Either is defensible alone; the mix is the smell.
+
+The spec vocabulary's "wrong answer" definition technically could cover a definite-False return on a partial container where the logical answer is "unknown". Task 2 spec review judged this borderline and kept the design-gap grading because Python's `__contains__` contract on partial terms is genuinely unspecified by the strings-as-lists contract. If a fix in Phase 2 reveals a clear corrective rule, revisit this grading then.
+
+### F024 — SegString.__walk__ raises TypeError on non-str list binding
+
+- **Class:** C8 (Partial-term short-circuits)
+- **Severity:** smell
+- **Location:** `clausal/terms.py:493-499`
+- **Discovered by:** Task 2 of Phase 0
+- **Probe:** `probes/probe_F024.py`
+
+**Symptom:** The `isinstance(v, list)` branch in `SegString.__walk__`
+joins the list via `"".join(v)`. This works when every element is a
+`str` (including multi-char strings — see notes). If a VarSeg's var
+was unified with a list of non-strs (e.g. ints — possible via a
+direct `unify(X, [1,2,3], t)` followed by embedding X in a SegString),
+the walk raises TypeError from inside `str.join`, propagating out of
+`__walk__`. Anything that touches `__walk__` — `is_ground`,
+`__eq__`, `__hash__`, `__repr__`, `__unify__` — then blows up.
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var, unify, Trail
+from clausal.terms import SegString, VarSeg
+
+X = Var(); t = Trail()
+unify(X, [1, 2, 3], t)
+ss = SegString(["a", VarSeg(X), "b"])
+try:
+    ss.__walk__()      # TypeError: sequence item 0: expected str instance, int found
+except TypeError:
+    pass
+```
+
+**Expected:** A typed contract violation ("SegString VarSeg bound to
+non-char-list"), not a low-level `str.join` exception from deep in
+the walk. Better: catch in the walk and fall through to a no-walk
+result (keep the VarSeg as opaque).
+**Actual:** Raw TypeError from `str.join`.
+
+**Notes:** Multi-char string elements work silently (`["ab","cd"]`
+joins to `"abcd"`), which is a *separate* smell — the char-list
+contract says every element is 1-char, but the code doesn't enforce
+it. Both are smells, not bugs (a malformed SegString construction is
+out of contract). Logged for the cleanup pass.
 
 *Task 2 confirmed (no finding):*
 - **F029** — `SegList.__occurs_check__` (`terms.py:296-306`) and
@@ -1788,6 +1788,125 @@ predicate is undefined on the input — the same shape as a clean
 no-solutions result.  ``max_list`` and ``min_list`` happen to succeed
 on str input (str chars are orderable), so the asymmetry is also a
 documentation gap.
+
+### F061 — `higher_order.py` predicates silently fail on Seg* inputs
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/higher_order.py:62` (maplist/2),
+  `:86` (maplist/3), `:113` (include/3), `:140` (exclude/3),
+  `:167` (foldl/4), `:202` (take_while/3), `:230` (drop_while/3),
+  `:258` (span/4), `:288` (group_by/3), `:324` (sort_by/3),
+  `:360` (max_by/3), `:397` (min_by/3), `:434` (filter_map/3),
+  `:465` (partition/4), `:504` (tfilter/3), `:542` (tpartition/4) — all
+  consume ``items = _as_items(lst_val)`` and fall through to
+  ``(_fail, DONE)`` when ``items is None``.
+- **Discovered by:** Task 8 of Phase 0
+- **Probe:** `probes/probe_F061.py`
+
+**Symptom:** Every higher_order list predicate cracks the input via the
+shared ``_as_items`` helper from ``lists.py`` (imported at
+higher_order.py:10).  ``_as_items`` rejects ``SegList`` / ``SegString``
+and returns ``None`` (see [[F051]] for the root cause and the lists.py
+side of this problem).  Each higher_order predicate then gates on
+``items is None`` and yields zero solutions silently when handed a
+Seg* input.
+
+In practice this surfaces whenever a Seg* value flows out of the
+head/body unification layer (e.g. via ``_build_multi_star_list`` or a
+``_seg*_unify_gen`` solution) into a higher_order call.
+
+**Reproducer:**
+```python
+from clausal.logic.solve import call
+from clausal.logic.variables import Var
+from clausal.terms import SegList, SegString, ConcreteSeg
+
+sl = SegList([ConcreteSeg(["a", "e", "i"])])
+ss = SegString(["abc"])
+assert sl.is_ground() and ss.is_ground()
+
+# Every higher_order predicate silently drops the satisfiable goal:
+assert sum(1 for _ in call("maplist",   is_vowel, sl, module=mod)) == 0
+assert sum(1 for _ in call("include",   is_vowel, sl, Var(), module=mod)) == 0
+assert sum(1 for _ in call("foldl",     concat,   ss, "", Var(), module=mod)) == 0
+assert sum(1 for _ in call("partition", is_vowel, ss, Var(), Var(), module=mod)) == 0
+# ... and the other ~12 predicates
+```
+
+**Expected:** Either walk the Seg* via ``__walk__`` inside the shared
+``_as_items`` (preferred — single fix simultaneously closes this and
+[[F051]]), or refuse Seg* inputs with a type error.  Silent failure on
+a logically valid goal is the worst option.
+**Actual:** Silent ``(_fail, DONE)``.
+
+**Notes:** Same single-line fix as [[F051]] — extend ``_as_items`` to
+walk ground Seg* terms.  Logged separately from F051 because the loci
+(file-wide impact across ~16 higher_order predicates) and the symptom
+surface (higher-order goal silently never invoked) are user-distinct
+from the lists.py family even though the root cause is shared.
+Cross-links: [[F051]] (the helper itself in lists.py), [[F031]],
+[[F032]], [[F034]], [[F040]], [[F041]], [[F047]] (C3 SegString
+blind-spot family).
+
+**Prior-known:** commit 39415d6 — "Phase 5: higher-order predicates accept strings" rewrote all 16 higher_order predicates to consume `_as_items` from lists.py; the Seg* gap was inherited from [[F051]]'s root cause and propagated by the import.
+
+### F072 — `char_type/2` Char-bound vs Type-bound mode disagree on non-ASCII
+
+- **Class:** C9 (Polymorphic builtin mode matrix)
+- **Severity:** bug
+- **Location:** `clausal/logic/builtins/chars.py:76-86` (pre-computed
+  ASCII-only enumeration tables); `clausal/logic/builtins/_chars_core.c:128-132`
+  (`type_to_chars` populated from 0..127 only); `chars.py:148-158` and
+  `_chars_core.c:226-247` (the enumeration paths themselves)
+- **Discovered by:** Task 10 of Phase 0
+- **Probe:** `probes/probe_F072.py`
+
+**Symptom:** ``char_type/2`` has three modes; they disagree on which
+characters are *in* the relation:
+
+1. *Char bound:* the per-codepoint classifier supports the full Unicode
+   range (``Py_UNICODE_ISALPHA`` etc. in the C path at
+   ``_chars_core.c:165-179``, ``str.isalpha`` etc. in the Python
+   fallback at ``chars.py:113``). So ``char_type('α', alpha)`` succeeds.
+2. *Char bound, Type unbound:* same classifier, enumerates matching
+   types for the given char. So ``char_type('α', T)`` enumerates
+   ``[alpha, alnum, lower, print]``.
+3. *Type bound, Char unbound:* iterates the pre-computed
+   ``_TYPE_TO_CHARS`` / ``type_to_chars`` table, which only contains
+   ASCII codepoints. So ``findall(C, char_type(C, alpha), L)`` returns
+   only the 52 ASCII letters — ``α`` is silently omitted from the
+   enumeration even though it satisfies the relation under mode (1).
+
+Consequence: a Prolog program that uses ``char_type(C, alpha)`` as a
+generator and then tests something else on each ``C`` will silently
+skip every non-ASCII letter. ``findall`` is incomplete relative to
+test-mode membership — the relation is not well-defined.
+
+**Reproducer:** see `probes/probe_F072.py`.
+
+**Expected:** Either (a) restrict the Char-bound modes to ASCII only
+(matching the enumeration), or (b) document that Type-bound enumeration
+is limited to a fixed alphabet (the ISO-standard practice — but Prolog
+systems vary on what that alphabet is).
+**Actual:** Char-bound mode supports Unicode; Type-bound mode is ASCII-
+only; no documentation of the asymmetry.
+
+**Notes:** Severity is bug per the spec vocabulary — "non-determinism
+collapsed silently" applies here: the relation enumerated is a proper
+subset of the relation tested. Two fix-shapes:
+
+  * *Cheap:* document the ASCII-only enumeration contract and gate the
+    Char-bound modes with the same ASCII restriction (1-line change in
+    ``chars.py`` and ``_chars_core.c::py_char_type_find_types``).
+  * *Right:* expand ``type_to_chars`` to cover all Unicode general
+    categories, lazily (155k codepoints — feasible but memory-heavy).
+    Note: ``_chars_core.c:228-234`` already has a dead non-ASCII branch
+    that would need fixing (see [[F078]]).
+
+Cross-ref [[F078]] (dead non-ASCII allocation branch in the C path is
+*almost* set up for the right fix but uses the wrong PyUnicode kind for
+codepoints ≥ 0x100).
 
 ### F053 — `length(Var, N)`, `replicate/3`, `same_length` always build list output
 
@@ -1974,68 +2093,6 @@ the audit's job is to log the C9-class user-visible asymmetry, which
 this is.  No fix recommended; the docstring already covers it.  Logged
 for the ledger's completeness.
 
-### F061 — `higher_order.py` predicates silently fail on Seg* inputs
-
-- **Class:** C9 (Polymorphic builtin mode matrix)
-- **Severity:** bug
-- **Location:** `clausal/logic/builtins/higher_order.py:62` (maplist/2),
-  `:86` (maplist/3), `:113` (include/3), `:140` (exclude/3),
-  `:167` (foldl/4), `:202` (take_while/3), `:230` (drop_while/3),
-  `:258` (span/4), `:288` (group_by/3), `:324` (sort_by/3),
-  `:360` (max_by/3), `:397` (min_by/3), `:434` (filter_map/3),
-  `:465` (partition/4), `:504` (tfilter/3), `:542` (tpartition/4) — all
-  consume ``items = _as_items(lst_val)`` and fall through to
-  ``(_fail, DONE)`` when ``items is None``.
-- **Discovered by:** Task 8 of Phase 0
-- **Probe:** `probes/probe_F061.py`
-
-**Symptom:** Every higher_order list predicate cracks the input via the
-shared ``_as_items`` helper from ``lists.py`` (imported at
-higher_order.py:10).  ``_as_items`` rejects ``SegList`` / ``SegString``
-and returns ``None`` (see [[F051]] for the root cause and the lists.py
-side of this problem).  Each higher_order predicate then gates on
-``items is None`` and yields zero solutions silently when handed a
-Seg* input.
-
-In practice this surfaces whenever a Seg* value flows out of the
-head/body unification layer (e.g. via ``_build_multi_star_list`` or a
-``_seg*_unify_gen`` solution) into a higher_order call.
-
-**Reproducer:**
-```python
-from clausal.logic.solve import call
-from clausal.logic.variables import Var
-from clausal.terms import SegList, SegString, ConcreteSeg
-
-sl = SegList([ConcreteSeg(["a", "e", "i"])])
-ss = SegString(["abc"])
-assert sl.is_ground() and ss.is_ground()
-
-# Every higher_order predicate silently drops the satisfiable goal:
-assert sum(1 for _ in call("maplist",   is_vowel, sl, module=mod)) == 0
-assert sum(1 for _ in call("include",   is_vowel, sl, Var(), module=mod)) == 0
-assert sum(1 for _ in call("foldl",     concat,   ss, "", Var(), module=mod)) == 0
-assert sum(1 for _ in call("partition", is_vowel, ss, Var(), Var(), module=mod)) == 0
-# ... and the other ~12 predicates
-```
-
-**Expected:** Either walk the Seg* via ``__walk__`` inside the shared
-``_as_items`` (preferred — single fix simultaneously closes this and
-[[F051]]), or refuse Seg* inputs with a type error.  Silent failure on
-a logically valid goal is the worst option.
-**Actual:** Silent ``(_fail, DONE)``.
-
-**Notes:** Same single-line fix as [[F051]] — extend ``_as_items`` to
-walk ground Seg* terms.  Logged separately from F051 because the loci
-(file-wide impact across ~16 higher_order predicates) and the symptom
-surface (higher-order goal silently never invoked) are user-distinct
-from the lists.py family even though the root cause is shared.
-Cross-links: [[F051]] (the helper itself in lists.py), [[F031]],
-[[F032]], [[F034]], [[F040]], [[F041]], [[F047]] (C3 SegString
-blind-spot family).
-
-**Prior-known:** commit 39415d6 — "Phase 5: higher-order predicates accept strings" rewrote all 16 higher_order predicates to consume `_as_items` from lists.py; the Seg* gap was inherited from [[F051]]'s root cause and propagated by the import.
-
 ### F062 — `higher_order` string-preserving predicates: list-of-1-char-str input ≠ str-promoted output
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
@@ -2147,63 +2204,6 @@ codifies the list output for the int-codes case, which is *correct*
 that isn't covered.
 
 **Prior-known:** commit 39415d6 — "Phase 5: higher-order predicates accept strings" applied `_seq_result` to the filter-style predicates (include/exclude/take_while/drop_while/span/partition/tfilter/tpartition) but not to the four output-building ones documented here. The omission is visible in the diff: the maplist/3, filter_map/3, group_by/3, sort_by/3 sections of the commit have plain `results = []` / `unify(ys, results, trail)` without a `was_str` thread.
-
-### F072 — `char_type/2` Char-bound vs Type-bound mode disagree on non-ASCII
-
-- **Class:** C9 (Polymorphic builtin mode matrix)
-- **Severity:** bug
-- **Location:** `clausal/logic/builtins/chars.py:76-86` (pre-computed
-  ASCII-only enumeration tables); `clausal/logic/builtins/_chars_core.c:128-132`
-  (`type_to_chars` populated from 0..127 only); `chars.py:148-158` and
-  `_chars_core.c:226-247` (the enumeration paths themselves)
-- **Discovered by:** Task 10 of Phase 0
-- **Probe:** `probes/probe_F072.py`
-
-**Symptom:** ``char_type/2`` has three modes; they disagree on which
-characters are *in* the relation:
-
-1. *Char bound:* the per-codepoint classifier supports the full Unicode
-   range (``Py_UNICODE_ISALPHA`` etc. in the C path at
-   ``_chars_core.c:165-179``, ``str.isalpha`` etc. in the Python
-   fallback at ``chars.py:113``). So ``char_type('α', alpha)`` succeeds.
-2. *Char bound, Type unbound:* same classifier, enumerates matching
-   types for the given char. So ``char_type('α', T)`` enumerates
-   ``[alpha, alnum, lower, print]``.
-3. *Type bound, Char unbound:* iterates the pre-computed
-   ``_TYPE_TO_CHARS`` / ``type_to_chars`` table, which only contains
-   ASCII codepoints. So ``findall(C, char_type(C, alpha), L)`` returns
-   only the 52 ASCII letters — ``α`` is silently omitted from the
-   enumeration even though it satisfies the relation under mode (1).
-
-Consequence: a Prolog program that uses ``char_type(C, alpha)`` as a
-generator and then tests something else on each ``C`` will silently
-skip every non-ASCII letter. ``findall`` is incomplete relative to
-test-mode membership — the relation is not well-defined.
-
-**Reproducer:** see `probes/probe_F072.py`.
-
-**Expected:** Either (a) restrict the Char-bound modes to ASCII only
-(matching the enumeration), or (b) document that Type-bound enumeration
-is limited to a fixed alphabet (the ISO-standard practice — but Prolog
-systems vary on what that alphabet is).
-**Actual:** Char-bound mode supports Unicode; Type-bound mode is ASCII-
-only; no documentation of the asymmetry.
-
-**Notes:** Severity is bug per the spec vocabulary — "non-determinism
-collapsed silently" applies here: the relation enumerated is a proper
-subset of the relation tested. Two fix-shapes:
-
-  * *Cheap:* document the ASCII-only enumeration contract and gate the
-    Char-bound modes with the same ASCII restriction (1-line change in
-    ``chars.py`` and ``_chars_core.c::py_char_type_find_types``).
-  * *Right:* expand ``type_to_chars`` to cover all Unicode general
-    categories, lazily (155k codepoints — feasible but memory-heavy).
-    Note: ``_chars_core.c:228-234`` already has a dead non-ASCII branch
-    that would need fixing (see [[F078]]).
-
-Cross-ref [[F078]] (dead non-ASCII allocation branch in the C path is
-*almost* set up for the right fix but uses the wrong PyUnicode kind for
-codepoints ≥ 0x100).
 
 ### F077 — `atom_concat/3` raises instantiation_error for mis-typed bound args
 
@@ -2559,6 +2559,72 @@ for the input on the left:
 
 Bolded cells are the surprising answers driving findings below.
 
+### F083 — `ground/1` returns True for SegList / SegString with unbound VarSeg
+
+- **Class:** C13 (Type-check predicates)
+- **Severity:** **bug**
+- **Location:** `clausal/logic/builtins/_helpers.py:93-110` (Python
+  fallback) and `clausal/logic/variables/_variables.c:1933-2038`
+  (``c_is_ground``)
+- **Discovered by:** Task 11 of Phase 0
+- **Probe:** `probes/probe_F080.py`
+
+**Symptom:** Both the Python fallback ``_is_ground_py`` and the C
+implementation ``c_is_ground`` enumerate the known container shapes
+(list, Compound, KWTerm, PredicateMeta, term-instance) and fall
+through to ``return 1`` (True) for any other object — including
+``SegList`` and ``SegString``. The Var living inside a ``VarSeg`` is
+never visited.
+
+Concrete consequence: with ``X = Var()``,
+``ground(SegList([VarSeg(X)])) == True``, even though the SegList is
+explicitly a term-with-a-hole. The same is true for ``SegString``.
+This contradicts ``ground/1``'s entire purpose — it is the canonical
+test for "no unbound Vars anywhere in the term" — and contradicts the
+companion behaviour of every Seg*-aware builtin in the C3 cluster.
+
+The audit matrix also shows the related ``nonvar(SegList([VarSeg(X)]))``
+is True, which is *consistent within the type-check layer* (Seg* is
+not itself a Var) but inconsistent with ground/1's documented
+recursive definition.
+
+**Reproducer:** see `probes/probe_F080.py`. The asserts cover both
+``SegList`` and ``SegString`` shapes. Minimal:
+
+```python
+from clausal.logic.variables import Var
+from clausal.terms import SegList, VarSeg
+from clausal.logic.builtins._helpers import _is_ground
+
+X = Var()
+assert _is_ground(SegList([VarSeg(X)])) is False     # FAILS — returns True
+```
+
+**Expected:** ``_is_ground`` walks Seg* segments and recurses into
+``VarSeg.var``.
+**Actual:** Seg* falls through the "unknown container" branch and
+silently reports ground.
+
+**Notes:** This is a real correctness bug (severity: bug) because
+downstream predicates that gate on ``ground/1`` before, say, hashing
+or indexing into a Var-keyed dict, will treat a Seg*-with-hole as
+fully ground and crash later when they try to use the dereffed
+value. The fix has two layers:
+
+  1. Add ``SegList``/``SegString`` cases to ``_is_ground_py`` at
+     `clausal/logic/builtins/_helpers.py:93-110`.
+  2. Mirror in ``c_is_ground`` at
+     `clausal/logic/variables/_variables.c:1933-2038` — register the
+     two Seg* types alongside the existing ``Compound_type`` /
+     ``KWTerm_type`` registration in ``_register_term_types``.
+
+Cross-link with C3 cluster: [[F020]], [[F024]], [[F041]] all flag
+Seg*-blind builtins. C13 adds ``ground/1`` to that list. Probably
+also surfaces in any builtin that uses ``_is_ground`` as a fast
+pre-check before dispatch (search ``_helpers._is_ground`` consumers).
+
+**Prior-known:** commit eb33bfb — "fix: address 8 review issues in C predicate helpers" reworked `c_is_ground` (Issue 1: "Fix c_is_ground dataclass bug: fall back to py_term_field_names for non-PredicateMeta dataclass instances instead of assuming ground") and added defensive fall-throughs without registering SegList/SegString — the same review touched this function and the Seg* gap was not flagged. The 8625f3e perf commit subsequently consolidated more lazy caches in the same file. Same root-cause family as [[F092]] / [[F093]] / [[F094]] — none of the Seg* registrations have ever been added.
+
 ### F080 — `is_list/1` rejects strings while every other list builtin accepts them
 
 - **Class:** C13 (Type-check predicates)
@@ -2680,72 +2746,6 @@ any segment.
 **Notes:** Cross-link with [[F081]] (string/1 missing) — same root
 cause (incomplete ISO porting). Implementation is a 5-liner: deref,
 reject Var, reject compound shapes, succeed.
-
-### F083 — `ground/1` returns True for SegList / SegString with unbound VarSeg
-
-- **Class:** C13 (Type-check predicates)
-- **Severity:** **bug**
-- **Location:** `clausal/logic/builtins/_helpers.py:93-110` (Python
-  fallback) and `clausal/logic/variables/_variables.c:1933-2038`
-  (``c_is_ground``)
-- **Discovered by:** Task 11 of Phase 0
-- **Probe:** `probes/probe_F080.py`
-
-**Symptom:** Both the Python fallback ``_is_ground_py`` and the C
-implementation ``c_is_ground`` enumerate the known container shapes
-(list, Compound, KWTerm, PredicateMeta, term-instance) and fall
-through to ``return 1`` (True) for any other object — including
-``SegList`` and ``SegString``. The Var living inside a ``VarSeg`` is
-never visited.
-
-Concrete consequence: with ``X = Var()``,
-``ground(SegList([VarSeg(X)])) == True``, even though the SegList is
-explicitly a term-with-a-hole. The same is true for ``SegString``.
-This contradicts ``ground/1``'s entire purpose — it is the canonical
-test for "no unbound Vars anywhere in the term" — and contradicts the
-companion behaviour of every Seg*-aware builtin in the C3 cluster.
-
-The audit matrix also shows the related ``nonvar(SegList([VarSeg(X)]))``
-is True, which is *consistent within the type-check layer* (Seg* is
-not itself a Var) but inconsistent with ground/1's documented
-recursive definition.
-
-**Reproducer:** see `probes/probe_F080.py`. The asserts cover both
-``SegList`` and ``SegString`` shapes. Minimal:
-
-```python
-from clausal.logic.variables import Var
-from clausal.terms import SegList, VarSeg
-from clausal.logic.builtins._helpers import _is_ground
-
-X = Var()
-assert _is_ground(SegList([VarSeg(X)])) is False     # FAILS — returns True
-```
-
-**Expected:** ``_is_ground`` walks Seg* segments and recurses into
-``VarSeg.var``.
-**Actual:** Seg* falls through the "unknown container" branch and
-silently reports ground.
-
-**Notes:** This is a real correctness bug (severity: bug) because
-downstream predicates that gate on ``ground/1`` before, say, hashing
-or indexing into a Var-keyed dict, will treat a Seg*-with-hole as
-fully ground and crash later when they try to use the dereffed
-value. The fix has two layers:
-
-  1. Add ``SegList``/``SegString`` cases to ``_is_ground_py`` at
-     `clausal/logic/builtins/_helpers.py:93-110`.
-  2. Mirror in ``c_is_ground`` at
-     `clausal/logic/variables/_variables.c:1933-2038` — register the
-     two Seg* types alongside the existing ``Compound_type`` /
-     ``KWTerm_type`` registration in ``_register_term_types``.
-
-Cross-link with C3 cluster: [[F020]], [[F024]], [[F041]] all flag
-Seg*-blind builtins. C13 adds ``ground/1`` to that list. Probably
-also surfaces in any builtin that uses ``_is_ground`` as a fast
-pre-check before dispatch (search ``_helpers._is_ground`` consumers).
-
-**Prior-known:** commit eb33bfb — "fix: address 8 review issues in C predicate helpers" reworked `c_is_ground` (Issue 1: "Fix c_is_ground dataclass bug: fall back to py_term_field_names for non-PredicateMeta dataclass instances instead of assuming ground") and added defensive fall-throughs without registering SegList/SegString — the same review touched this function and the Seg* gap was not flagged. The 8625f3e perf commit subsequently consolidated more lazy caches in the same file. Same root-cause family as [[F092]] / [[F093]] / [[F094]] — none of the Seg* registrations have ever been added.
 
 ### F084 — `callable_/1` says every Python str is callable
 
@@ -3557,3 +3557,31 @@ be deleted.
 
 ### Out-of-taxonomy
 *(none yet)*
+
+## Phase 0 conclusion
+
+- **Total findings:** 66
+- **By severity:** 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only
+- **By class:** (table above)
+- **Highest-blast-radius finding:** F046 (C4 head-pattern literal mismatch) — folded into Phase 2 per user decision 2026-05-25
+- **Largest cluster:** C3 SegString blind-spots ([[F012]], [[F031]], [[F032]], [[F034]], [[F040]], [[F041]], [[F047]], [[F051]], [[F061]], [[F069]], [[F070]], [[F075]], [[F083]], [[F092]], [[F093]], [[F094]] — 16+ findings sharing the same root cause: dispatch sites with SegList arms but no SegString arms; many can be closed by a single `_as_items` extension or a Seg* `__walk__` shim at each dispatch site)
+- **Recommended Phase 2 ordering** (fix-blast-radius ascending — start with self-contained classes, finish with cross-cutting ones):
+  1. **C17** (3 findings) — perf/smell only ([[F009]], [[F026]], [[F078]]); F078 is a dead-branch deletion, F009 & F026 stay as visibility-only ledger entries. Zero behavioural change; smallest possible blast radius.
+  2. **C7** (7 doc-only) — extend the existing `_variables.c` codepoint paragraph plus `chars.py` / `char_type/2` notes to cover [[F002]], [[F003]], [[F004]], [[F007]], [[F071]], [[F074]], [[F076]]. Pure documentation; no code path touched.
+  3. **C12** (1 finding) — wrap the three `chr(n)` sites in `chars.py` with a range guard that raises `representation_error(character_code)` ([[F073]]). Local single-file fix; isolated from every other class.
+  4. **C16** (1 finding) — add `FT_CS_BEGIN` over the str↔list `PyList_GET_ITEM` loop in `_variables.c` ([[F011]]). One C function; defer FT-build CI verification — fix itself is contained.
+  5. **C5** (3 findings) — pick a single Seg* hash/eq/add rule (likely: both unhashable when non-ground; both accept str-or-list in `__eq__` / `__add__`) and apply across `SegList` + `SegString` in `terms.py` ([[F017]], [[F019]], [[F025]]). Contained to one file; no compiler or runtime touch.
+  6. **C2** (2 findings) — expose `_seglist_unify_gen` / `_segstring_unify_gen` through a non-det protocol so `SegList.__unify__` / `SegString.__unify__` yield every split rather than the first ([[F015]], [[F016]]). Small change in `terms.py`; consumers of `__unify__` need a protocol upgrade but the gen helpers already do the work. Perf cost is real ([[F026]]) but the audit accepts it.
+  7. **C8** (6 findings) — Seg* sequence-protocol cleanup: add `SegString.__iter__`, decide a consistent contract for `__len__`/`__iter__`/`__contains__` on non-ground SegList ([[F021]], [[F022]]), wire SegString.__unify__(list) through the gen ([[F023]]), graceful walk for non-str list bindings ([[F024]]), and walk-before-iter in `_in_iter` ([[F038]], [[F039]]). Touches `terms.py` + `body_star_unify._in_iter`; no cross-cut.
+  8. **C15** (1 finding) — `_runtime_arg_key` canonicalisation for list-of-1-char-strs vs str ([[F095]]). Single-file change in `arg_index.py`, but tightly coupled to the C4 fix below — schedule before C4 so the indexer is correct before the head-match shape changes.
+  9. **C13** (5 findings) — register `SegList`/`SegString` with `_register_term_types` so `ground/1` recurses correctly ([[F083]]); add `string/1` and `atomic/1` builtins ([[F081]], [[F082]]); flip or document `is_list` polymorphism ([[F080]] — has a lock-in test in `test_string_list_builtins.py::TestIsChars::test_is_list_string_still_fails` that must be updated or removed when the fix lands); document the lax `callable_/1` contract ([[F084]]). The `_register_term_types` change overlaps with C14 — schedule together if convenient.
+  10. **C14** (7 findings) — Seg* registration with the C walker for `copy_term/2` ([[F092]]) and `term_variables/2` ([[F093]]) — both have lock-in tests in `test_term_inspection.py::TestCopyTermSegList` / `TestTermVariablesSegList` that explicitly say "future fix breaks visibly" and must be flipped. Then fix `arg/3` ([[F090]], [[F091]]), `unpack/2` ([[F088]]) and the documented inspection-shape contract for str-vs-list ([[F089]]); `numbervars/3` ([[F094]]) falls out for free once F093 lands.
+  11. **C3** (8 findings) — the SegString blind-spot sweep: extend `_head_list_unify_input` (both C and Python) with a `SegString` walk branch ([[F031]], [[F032]]), fix the `_head_list_unify_output` star_val ([[F034]]), add `SegString` arms in `_body_multi_star_unify` ([[F040]], [[F041]]), the multi-star head guard ([[F047]]), the C-level element check ([[F012]]), and the `chars.py` builtin family ([[F075]]). Largest cluster but shares one root cause — a single `_as_items`-style helper plus a handful of dispatch-site edits closes most of it.
+  12. **C9** (12 findings) — close [[F051]] (the polymorphic-builtin Seg* gap) via `_as_items` extension (single-line fix; [[F061]] closes for free as the higher_order family imports the same helper); fix `split_with/3` join mode ([[F050]]); convert `sum_list`/`max_list`/`min_list` TypeError swallow ([[F052]]); add `_seq_result`-style threading to `maplist/3`, `filter_map/3`, `group_by/3`, `sort_by/3` ([[F063]]); decide a contract for list-of-1-char-strs vs str input/output ([[F054]], [[F062]]); plus the output-mode builders [[F053]], the transpose/flatten contracts ([[F055]], [[F056]]), the char_type/2 mode-matrix ([[F072]]), and the atom_concat/3 error shape ([[F077]]). Schedule after C3 so the `_as_items` extension has the SegString walk-arms it depends on.
+  13. **C1** (5 design-gap, 2 lock-in) — thread an "original input type" record through head/body unify so the output-mode builders can preserve str typing ([[F033]] and [[F042]] have lock-in tests in `test_seglist_creation.py::TestOutputUnboundStar` / `TestBodyMultiStarUnifyUnbound` that must be updated). Also extend `SegList.__walk__` / `__add__` ([[F018]], [[F020]]) and `_build_star_list` / `_build_multi_star_list` ([[F043]]). The type-source plumbing is structurally invasive (every dispatch site needs the new parameter) — schedule late so the C3 and C9 fixes are stable before the data shape changes underneath them.
+  14. **C10** (4 findings, 1 lock-in) — phrase/2,3 SegString acceptance ([[F069]] — depends on C3 fixes), state-thread vs char-split overload ([[F068]]), Rest-shape preservation ([[F067]] — lock-in test `test_phrase3_string_remainder` must be updated), and `sequence//1` mode-matrix ([[F070]] — depends on the C1 type-source plumbing). Schedule after C3 + C1 so the DCG layer has the underlying pieces available.
+  15. **C4** (1 finding) — F046, the head-pattern literal mismatch. Per user decision 2026-05-25, plan this as its own multi-step sub-plan because the compiler scope is cross-cutting: changes `head_match.py` `MatchValue` emission for str/bytes literals, possibly lifts `_normalize_dataclass_fact` to all clauses, and reverifies first-arg indexing ([[F095]] — which is why C15 lands first). Highest blast radius; schedule last and treat as a phase of its own.
+
+The Phase 1 plan should produce one test file per class with findings (using `tests/audit_2026_05_25/test_class_C<N>_*.py` paths; mark `xfail(strict=True, reason="ledger F<N>")` until fixes land).
+
+The Phase 2 plan should produce one commit per class in the order above; the F046 (C4) work should be planned as its own multi-step sub-plan because of its cross-cutting compiler scope.

@@ -2,6 +2,9 @@
 
 This directory holds the artifacts of the strings-as-lists audit.
 
+**Status:** Phase 0 complete; awaiting Phase 1 plan execution.
+**Totals:** 66 findings across 15 classes — 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only.
+
 - **Design spec:** `../../specs/2026-05-25-string-implementation-audit-design.md`
 - **Phase 0 plan:** `../../plans/2026-05-25-string-audit-phase-0.md`
 - **Ledger:** [findings.md](findings.md) — every issue found, grouped by
