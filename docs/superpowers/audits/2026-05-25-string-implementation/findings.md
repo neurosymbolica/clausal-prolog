@@ -15,7 +15,7 @@
 | C5 | Hash/eq asymmetries | 1 | 2 | 0 | 0 | 0 |
 | C6 | Hashable vs unhashable bridges | 0 | 0 | 0 | 0 | 0 |
 | C7 | Unicode / multi-codepoint | 0 | 0 | 0 | 0 | 4 |
-| C8 | Partial-term short-circuits | 0 | 3 | 0 | 1 | 0 |
+| C8 | Partial-term short-circuits | 2 | 1 | 0 | 1 | 0 |
 | C9 | Polymorphic builtin mode matrix | 0 | 0 | 0 | 0 | 0 |
 | C10 | DCG / phrase interaction | 0 | 0 | 0 | 0 | 0 |
 | C11 | Trail/backtracking around partials | 0 | 0 | 0 | 0 | 0 |
@@ -579,7 +579,7 @@ indexing semantics on str.
 ### F021 — SegList sequence protocol crashes on non-ground
 
 - **Class:** C8 (Partial-term short-circuits)
-- **Severity:** design-gap
+- **Severity:** bug
 - **Location:** `clausal/terms.py:334-351` (via `to_list()` at
   `clausal/terms.py:285-292`)
 - **Discovered by:** Task 2 of Phase 0
@@ -627,6 +627,8 @@ False on the same partial-term). The two are arguably inconsistent:
 `__len__` raises, `__contains__` quietly answers False. Pick one
 discipline. Related to spec's `_in_iter` example (list_unify.py).
 
+Re-graded from design-gap to bug after Task 2 spec review: the spec's severity vocabulary lists "crashes" under bug, and TypeError on a sequence-protocol call is a crash regardless of whether it is typed-and-informative. Same logic as the Task 1 F011 re-grade. The implementer's defense (TypeError is a deliberate contract signal) is preserved as context but no longer determines the severity.
+
 ### F022 — SegList.__contains__ silently incomplete on VarSegs
 
 - **Class:** C8 (Partial-term short-circuits)
@@ -666,10 +668,12 @@ raise instead of silently answering). The combined picture: SegList's
 sequence protocol is half "raise on partial" and half "answer wrong
 on partial". Either is defensible alone; the mix is the smell.
 
+The spec vocabulary's "wrong answer" definition technically could cover a definite-False return on a partial container where the logical answer is "unknown". Task 2 spec review judged this borderline and kept the design-gap grading because Python's `__contains__` contract on partial terms is genuinely unspecified by the strings-as-lists contract. If a fix in Phase 2 reveals a clear corrective rule, revisit this grading then.
+
 ### F023 — SegString.__unify__(list) silently fails when non-ground
 
 - **Class:** C8 (Partial-term short-circuits)
-- **Severity:** design-gap
+- **Severity:** bug
 - **Location:** `clausal/terms.py:565-573`
 - **Discovered by:** Task 2 of Phase 0
 - **Probe:** `probes/probe_F023.py`
@@ -715,6 +719,8 @@ ground. Logged under C8 because the silent failure flavour matches
 the C8 description; C3 covers the structural absence of the twin
 path. Related to [[F012]] (C-side blind spot for SegString-as-list-
 element) and the spec's C3 enumeration.
+
+Re-graded from design-gap to bug after Task 2 spec review: silent dropped solutions on a logically-satisfiable unify call is the textbook "silently drops solutions" pattern listed under bug in the spec's severity vocabulary. F015 and F016 have the same character and were graded bug; F023 should match. The C3 structural-gap framing remains valid but does not lower the C8 severity.
 
 ### F024 — SegString.__walk__ raises TypeError on non-str list binding
 
