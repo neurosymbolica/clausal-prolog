@@ -8,9 +8,9 @@
 
 | Class | Title | Bug | Design-gap | Perf | Smell | Doc-only |
 |-------|-------|-----|-----------:|-----:|------:|---------:|
-| C1 | Type preservation | 0 | 2 | 0 | 0 | 0 |
+| C1 | Type preservation | 0 | 3 | 0 | 0 | 0 |
 | C2 | Non-det collapsed to first | 2 | 0 | 0 | 0 | 0 |
-| C3 | SegString blind spots vs SegList | 0 | 1 | 0 | 0 | 0 |
+| C3 | SegString blind spots vs SegList | 2 | 2 | 0 | 0 | 0 |
 | C4 | Head-pattern literal mismatch | 0 | 0 | 0 | 0 | 0 |
 | C5 | Hash/eq asymmetries | 1 | 2 | 0 | 0 | 0 |
 | C6 | Hashable vs unhashable bridges | 0 | 0 | 0 | 0 | 0 |
@@ -76,6 +76,53 @@ the broader strings-as-lists contract where the user shouldn't have to
 think about which container they passed. Picking a coherent rule across
 both classes is the C1 work. Related to [[F019]] (the same shape
 mismatch surfaces in __eq__).
+
+### F033 — `_head_list_unify_output` always builds a list, never a str
+
+- **Class:** C1 (Type preservation)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/runtime/list_unify.py:165` and
+  `clausal/logic/runtime/_list_unify.c:251`
+- **Discovered by:** Task 3 of Phase 0
+- **Probe:** `probes/probe_F033.py`
+
+**Symptom:** The output-mode helper unconditionally allocates
+``result = [...]`` (a Python list) for the deferred head reconstruction.
+There is no record of the input target's original *logical* type — the
+target was an unbound `Var` when the input phase deferred — so even if
+``H`` and ``T`` were bound from a str-typed context (e.g. ``T = "ello"``
+), the constructed target is bound to the list ``['h', 'ello']``.
+
+Concrete effect: a clause ``foo([H, *T])`` whose body proves
+``T = "ello"`` and ``H = "h"`` produces a target ``['h', 'ello']``
+rather than ``"hello"``. The C and Python paths agree (both write
+list).
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var, unify, Trail, deref
+from clausal.logic.runtime.list_unify import _head_list_unify_output
+
+target = Var()
+H, T = Var(), Var()
+unify(H, "h", Trail())
+unify(T, "ello", Trail())
+_head_list_unify_output(target, [H], T, [], Trail())
+assert deref(target) == ['h', 'ello']         # list, not 'hello'
+assert type(deref(target)) is list
+```
+
+**Expected:** Under the strings-as-lists "input type wins" contract,
+the str-typed inputs should reconstruct as ``"hello"`` (a str).
+**Actual:** Always a list.
+
+**Notes:** The fix is structural: the deferred-output guard would
+have to capture the original target type at the compile-time site
+(or pass it through the input-mode return value). Logged as
+design-gap because the information genuinely isn't present at the
+call site; F003-class type-preservation gap on the head-pattern
+boundary. Related to [[F018]] (parallel type loss in
+`SegList.__walk__`).
 
 ### F020 — SegList.__add__ / __radd__ rejects str
 
@@ -247,6 +294,107 @@ so the iteration is safe to drive from outside.
 
 ### Class C3 — SegString blind spots vs SegList
 
+### F031 — `_head_list_unify_input` never walks SegString (non-ground silently fails)
+
+- **Class:** C3 (SegString blind spots vs SegList)
+- **Severity:** bug
+- **Location:** `clausal/logic/runtime/list_unify.py:114-117, 145-146`
+  and `clausal/logic/runtime/_list_unify.c:139-149, 213-214`
+- **Discovered by:** Task 3 of Phase 0
+- **Probe:** `probes/probe_F031.py`
+
+**Symptom:** The input-mode helper has an explicit ``isinstance(d,
+SegList)`` walk branch but no SegString equivalent. A non-ground
+``SegString(["a", VarSeg(X), "c"])`` flows past the list/str
+isinstance check, past the `SegList` check, past the `is_var` defer
+branch, and hits the final ``return False``. The clause head
+``foo([H, *T])`` matched against the SegString silently fails even
+though the unification is logically satisfiable
+(e.g. H="a", T = SegString([VarSeg(X), "c"]) or analogous).
+
+The C version mirrors the same blind spot: only `SegListType` is
+TypeChecked at `_list_unify.c:140`; no `SegStringType` branch
+exists, so behaviour is identical regardless of whether the C
+extension was built (see C-vs-Python parity note below).
+
+This is a textbook "silently drops solutions" pattern listed under
+bug in the spec's severity vocabulary; sibling [[F023]] (same shape
+on `SegString.__unify__(list)`) was re-graded to bug under the
+same rule.
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var, Trail, deref
+from clausal.terms import SegString, VarSeg
+from clausal.logic.runtime.list_unify import _head_list_unify_input
+
+X = Var()
+seg = SegString(["a", VarSeg(X), "c"])
+H, T = Var(), Var()
+t = Trail()
+assert _head_list_unify_input(seg, [H], T, [], t) is False  # silent
+```
+
+**Expected:** Either deferred output mode (None) so the body can
+constrain the SegString, or success with a SegString-aware
+destructure. Silent False is the C8/C3 worst case.
+**Actual:** Silent False.
+
+**Notes:** Companion to [[F032]] (same path also fails on *ground*
+SegString) and [[F034]] (the output-mode side has the same blind
+spot). The Python and C paths agree, so this is *not* a C3 bug
+that depends on the build configuration — both are equally broken.
+
+### F032 — `_head_list_unify_input` rejects *ground* SegString too
+
+- **Class:** C3 (SegString blind spots vs SegList)
+- **Severity:** bug
+- **Location:** `clausal/logic/runtime/list_unify.py:114-117, 145-146`
+  and `clausal/logic/runtime/_list_unify.c:139-149, 213-214`
+- **Discovered by:** Task 3 of Phase 0
+- **Probe:** `probes/probe_F032.py`
+
+**Symptom:** A trivially-ground ``SegString(["abc"])`` whose
+``__walk__()`` returns the plain str ``"abc"`` is *still* rejected
+by `_head_list_unify_input`. The function never walks SegString in
+either the C or Python path, so a Var bound to a ground SegString
+matched against ``[H, *T]`` returns False even though
+``unify(SegString(["abc"]), [H, *T])`` is unambiguously solvable
+(H="a", T="bc").
+
+This is the stronger half of [[F031]]: even when no logical
+ambiguity exists, the input path silently fails.
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var, unify, Trail, deref
+from clausal.terms import SegString
+from clausal.logic.runtime.list_unify import _head_list_unify_input
+
+ss = SegString(["abc"])
+assert ss.is_ground() and ss.__walk__() == "abc"
+H, T = Var(), Var()
+t = Trail()
+assert _head_list_unify_input(ss, [H], T, [], t) is False  # WRONG
+# Symmetric: Var bound to ground SegString
+X = Var()
+unify(X, SegString(["abc"]), Trail())
+H2, T2 = Var(), Var()
+assert _head_list_unify_input(X, [H2], T2, [], Trail()) is False
+```
+
+**Expected:** True with H='a' and T='bc' (or list equivalents under
+the strings-as-lists contract).
+**Actual:** Silent False.
+
+**Notes:** The minimal fix is symmetric to the SegList branch at
+list_unify.py:114-117 / _list_unify.c:140-149: add an
+``isinstance(d, SegString)`` branch that calls ``d.__walk__()`` and
+then routes through the existing ``(list, str)`` arm. The C path
+needs the matching `SegStringType` cache + `TypeCheck` branch.
+Related to [[F031]], [[F034]] (output-mode twin), [[F012]] (C-level
+SegString-as-list-element blind spot).
+
 ### F012 — Var bound to SegString in list position is not recognised as a char
 
 - **Class:** C3 (SegString blind spots vs SegList)
@@ -286,6 +434,66 @@ when `elem` is not a Var and not a 1-codepoint `PyUnicode`. Related to
 the SegString is the top-level arg, but Vars *inside* a list never
 reach that fallback).
 
+### F034 — `_head_list_unify_output` never walks SegString star_val
+
+- **Class:** C3 (SegString blind spots vs SegList)
+- **Severity:** design-gap
+- **Location:** `clausal/logic/runtime/list_unify.py:166-200` and
+  `clausal/logic/runtime/_list_unify.c:264-434`
+- **Discovered by:** Task 3 of Phase 0
+- **Probe:** `probes/probe_F034.py`
+
+**Symptom:** The output-mode helper branches the dereffed
+``star_val`` on ``list`` (extend), ``SegList`` (walk-and-extend or
+rebuild as SegList), and ``Var`` (rebuild as SegList with a fresh
+VarSeg). It has *no* SegString branch — a SegString-bound star_val
+falls into the catch-all ``else`` at list_unify.py:197-198 (Python)
+/ _list_unify.c:425-432 (C) and is appended as a single opaque
+element.
+
+Effect: a head ``foo([H, *T])`` whose T is bound to
+``SegString(['hello'])`` produces ``[deref(H), SegString(['hello'])]``
+— the SegString is neither walked into chars (as a ground SegList
+would be) nor used to rebuild a SegList/SegString result. The C
+and Python paths agree (both blind).
+
+**Reproducer:**
+```python
+from clausal.logic.variables import Var, unify, Trail, deref
+from clausal.terms import SegString
+from clausal.logic.runtime.list_unify import _head_list_unify_output
+
+target = Var()
+H = Var(); T = Var()
+unify(H, "h", Trail())
+unify(T, SegString(["ello"]), Trail())
+_head_list_unify_output(target, [H], T, [], Trail())
+assert deref(target) == ["h", SegString(["ello"])]  # un-walked
+# Compare with the SegList branch:
+from clausal.terms import SegList, ConcreteSeg
+target2 = Var()
+H2 = Var(); T2 = Var()
+unify(H2, "h", Trail())
+unify(T2, SegList([ConcreteSeg(["e","l","l","o"])]), Trail())
+_head_list_unify_output(target2, [H2], T2, [], Trail())
+assert deref(target2) == ["h", "e", "l", "l", "o"]    # walked
+```
+
+**Expected:** Symmetric handling — walk ground SegString into the
+result (extending chars or, under "input type wins", building a
+str/SegString-shaped result); rebuild from segments when
+non-ground, analogous to the SegList branch at list_unify.py:170-186.
+**Actual:** SegString appended as a single opaque element.
+
+**Notes:** Logged as design-gap rather than bug because the result
+unify still succeeds and the target value is a defined Python
+object; it just doesn't match the SegList branch's semantics. If
+downstream code does `list(target)` or indexes into it, the
+SegString-as-element will surface as a surprise. Companion to
+[[F031]]/[[F032]] (input-mode SegString blind spots), [[F018]]
+(SegList walk type-loss), [[F033]] (output-mode always builds a
+list).
+
 *Task 1 confirmed (no finding):*
 - **F008** — Top-level `unify(SegString("abc"), ["a","b","c"], t)` and the
   reverse direction both succeed. The C path's str↔list block keys off
@@ -302,6 +510,28 @@ reach that fallback).
   the deferred "Phase 6" SegList-vs-SegList unification feature
   explicitly out-of-scope per the audit spec; `wontfix: deferred`
   applies. Confirmed by direct calls.
+
+*Task 3 confirmed (no finding):*
+- **F035** — C-vs-Python parity for `_head_list_unify_input` /
+  `_head_list_unify_output` is exact for the SegString blind spot.
+  Both `list_unify.py:114-117` and `_list_unify.c:139-149` only
+  `isinstance`/`TypeCheck` against `SegList`; neither has a
+  `SegString` branch, neither walks SegString in the input path,
+  and neither has a SegString branch in the output-mode
+  star-handling. The behaviour described in F031/F032/F034 is
+  therefore identical on `Py_GIL_DISABLED` builds without the C
+  extension and on standard builds with the C extension loaded.
+  No C-vs-Python divergence bug exists in this module. Verified by
+  direct calls to both the unsuffixed (C-backed) and `_py`
+  fallbacks; see `probes/probe_F031.py`, `probes/probe_F032.py`,
+  `probes/probe_F034.py`.
+- **F036** — The `is_var(d)` defer-to-output branch
+  (`list_unify.py:141-143`, `_list_unify.c:205-211`) correctly
+  returns `None` and leaves all input vars unbound. The output-mode
+  helper then handles the actual construction at a later yield
+  point. Confirmed via direct call:
+  `_head_list_unify_input(Var(), [Var()], Var(), [], Trail())`
+  returns `None`. The protocol contract (None = defer) holds.
 
 ### Class C4 — Head-pattern literal mismatch
 *(none yet)*
