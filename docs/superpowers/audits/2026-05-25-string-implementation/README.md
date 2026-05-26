@@ -2,8 +2,19 @@
 
 This directory holds the artifacts of the strings-as-lists audit.
 
-**Status:** Phase 1 complete; awaiting Phase 2 fixes.
-**Totals:** 66 findings across 15 classes — 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only.
+**Status:** complete (closed 2026-05-26). Tagged `string-audit-complete`.
+**Totals:** 66 findings across 15 classes — 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only. 59 closed in Phase 2; 7 deferred (see `findings.md` "Phase 3 sweep — conclusion").
+
+## Phase 2 status — complete (with deferrals)
+
+- **Fix commits:** 14 core (one per audit class plus the F046 deferral commit); 63 total in the Phase 2 range including planning, test scaffolding, and polish commits
+- **Findings closed:** 59 / 66
+- **Findings deferred:** 7 (F046 follow-up spec, F068 architectural, F088-F091 args-of-list cluster, F078 untested smell — see `findings.md` "Phase 3 sweep — conclusion")
+- **Audit suite:** 69 PASSED, 6 XFAIL, 0 XPASSED, 0 FAILED, 0 ERRORED
+- **Pre-existing pytest suite:** 7752 passing — zero regressions vs pre-Phase-2 baseline
+- **Tagged:** `string-audit-complete`
+
+The audit is complete. F046 (C4 head-pattern literal mismatch) is scheduled for a follow-up spec.
 
 ## Phase 1 status — complete
 

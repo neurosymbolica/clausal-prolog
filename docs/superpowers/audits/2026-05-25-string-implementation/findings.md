@@ -4069,3 +4069,96 @@ be deleted.
 The Phase 1 plan should produce one test file per class with findings (using `tests/audit_2026_05_25/test_class_C<N>_*.py` paths; mark `xfail(strict=True, reason="ledger F<N>")` until fixes land).
 
 The Phase 2 plan should produce one commit per class in the order above; the F046 (C4) work should be planned as its own multi-step sub-plan because of its cross-cutting compiler scope.
+
+## Phase 3 sweep — conclusion
+
+**Sweep date:** 2026-05-26
+**Phase 2 commits surveyed:** 63 (range `2c43722..HEAD`, includes planning, test, fix, polish, and docs commits; 14 of these are core `fix:` / `perf:` commits — one per audit class plus the F046 deferral)
+
+### Audit test suite (`tests/audit_2026_05_25/`)
+
+- **Total tests:** 75
+- **PASSED:** 69  (closed findings + regression guards: F009 perf guard, F033/F042/F067/F080/F092/F093 lock-ins, plus F012, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F031, F032, F033, F034, F038, F039, F040, F041, F042, F043, F047, F050, F051, F052, F053, F054 (×8 parametrized), F055, F056, F061, F062, F063, F067, F069 (×3), F070 (×4), F072, F073 (×6), F075, F077, F080, F081, F082, F083, F084, F092, F093, F094, F095, F011)
+- **XFAIL:** 6  (F046, F068, F088, F089, F090, F091 — see deferred-findings table)
+- **XPASSED:** 0
+- **FAILED:** 0
+- **ERRORED:** 0
+
+### Deferred findings (still XFAIL / not exercised)
+
+| Finding | Class | Severity | Why deferred |
+|---------|-------|----------|--------------|
+| F046 | C4 | bug | Largest blast radius (compiler `MatchValue` for str/bytes, indexing interaction, lock-in test sweep). User decision 2026-05-26 to defer to a dedicated follow-up spec + plan. Status flipped from open to "deferred to follow-up spec" in commit 39cdb1b. |
+| F068 | C10 | bug | Architectural — distinguishing phrase/3 state-threading mode from char-parsing mode from the call shape alone is unresolvable without a per-rule declaration or a separate `phrase_state/3` builtin. Marked XFAIL in C10 commit (bc98702); intentionally deferred. |
+| F088 | C14 | bug | Args-of-list convention: user decision 2026-05-26 to defer (consistent with F089/F090/F091 — they all require the same conceptual settlement on what `args(list)` means in this Prolog dialect). |
+| F089 | C14 | design-gap | Same args-of-list cluster — deferred per user decision 2026-05-26. |
+| F090 | C14 | bug | Same cluster. Deferred. |
+| F091 | C14 | bug | Same cluster. Deferred. |
+| F078 | C17 | smell | Untested — dead-branch deletion in `_chars_core.c::char_type_find_chars`. Phase 1 logged it as static-review-only; no probe and no adversarial test (would require C-level branch coverage tooling). Not closed in Phase 2; not re-counted in the 69 PASSED total. Carried forward as an untested smell. |
+
+### Pre-existing pytest suite
+
+- **Pre-Phase-2 baseline:** 7752 passing (Phase 1 close; the post-Task-13 hash-revert merge of two tests is reflected here)
+- **Post-Phase-2:** 7752 passing
+- **Delta:** 0 (net — lock-in test updates from Phase 2 are balanced by new tests added per class)
+- **Regressions:** 0
+
+### Cross-class consistency
+
+The Phase 2 commits layered cleanly. Specific observations:
+
+- **Two cross-cutting helpers were introduced in sequence and used consistently downstream:**
+  - `clausal/logic/runtime/_seg_helpers.normalize_seg_input` (Task 11, commit 87ccfef) — added when C3 needed a shared Seg* walk point. Later picked up by Task 15 (C10 / DCG) for all phrase/sequence dispatch arms.
+  - `clausal/logic/runtime/_seg_helpers.maybe_promote_to_str` (Task 13, commit 952aa88) — added when C1 needed the Liskov-aware output promotion. Used in `terms.py` (SegList.__walk__), `body_star_unify.py` (3 sites), and `list_unify.py` (3 sites). Encodes the canonical "default output is list; promote to str only when provably 1-char-strs" rule.
+- **`clausal/terms.py` was touched 5 times** (F026 perf rewrite, C5 hash/eq, C2 non-det, C8 partial-term, C1 type-preservation). Each task layered on top of the previous; the F026 iterative DFS rewrite was a prerequisite for the C2 `_seglist_unify_gen` / `_segstring_unify_gen` non-det work because it removed the recursion budget concern from the splitter.
+- **C5 hash-as-structural (Task 5) was intentionally reverted by C1 (Task 13)** to align with the Liskov rule. The revert is documented in commit 952aa88's "revises F017, F025" and the C5 test file was updated accordingly. No silent contradiction left in the ledger.
+- **C-extension rebuild succeeded all three times** (F011 FT critical section in Task 4; C3 SegString blind-spot in `_list_unify.c` in Task 11; C1 SegList walk in `_list_unify.c` in Task 13). All three commits passed the post-build pre-existing suite.
+- **C9 (Task 10) introduced its own builtin-layer helper trio** (`_as_items`, `_was_string`, `_seq_result` in `clausal/logic/builtins/lists.py`) instead of using `normalize_seg_input` / `maybe_promote_to_str`. That is the correct layering — `_as_items` returns a *items-for-iteration* list (always splitting str chars), whereas `normalize_seg_input` returns the *walked container* (preserving str). Both encode the same Liskov rule; they operate at different layers.
+- **F069 closure cascaded across two tasks.** The `phrase3_rejects_segstring_rest` sub-test was closed by Task 7 (C8) when `SegString.__unify__(list)` got its walk-and-delegate path; the other two sub-tests closed in Task 15 (C10).
+- **F051 / F061 / F083 / F092 closed in their natural classes** (C9, C13, C14) without needing a cascade from C3 — the `_as_items` and Seg*-registration changes are local to the builtins/inspection layer and only require that the C3 Seg* dispatch arms exist underneath.
+- **No place** was found where a later task's fix contradicted an earlier task's assumption. The one *deliberate* revision (C5 by C1) is explicitly noted in the commit message and ledger.
+
+### Findings closed by Phase 2
+
+| Class | Closed in Phase 2 | Deferred / untested | Notes |
+|-------|------------------:|--------------------:|-------|
+| C1 | 5 | 0 | Type-preservation; `maybe_promote_to_str` introduced |
+| C2 | 2 | 0 | Non-det unify generators |
+| C3 | 8 | 0 | SegString blind-spot sweep; introduced `_seg_helpers.normalize_seg_input` |
+| C4 | 0 | 1 (F046) | Deferred to follow-up spec |
+| C5 | 3 | 0 | Closed then partially revised by C1 (revert hash-as-structural) |
+| C7 | 7 | 0 | Doc-only |
+| C8 | 6 | 0 | Sequence-protocol cleanup + `PartialTermError`; cascade-closed half of F069 |
+| C9 | 12 | 0 | Polymorphic mode matrix; introduced `_as_items` / `_was_string` / `_seq_result` |
+| C10 | 3 | 1 (F068) | F067/F069/F070 closed; F068 deferred architectural |
+| C12 | 1 | 0 | `chr(n)` range guards |
+| C13 | 5 | 0 | Seg* registration with the C walker for `ground/1`; `string/1` and `atomic/1` registered |
+| C14 | 3 | 4 (F088, F089, F090, F091) | F092/F093/F094 closed (Seg* visibility); args-of-list cluster deferred |
+| C15 | 1 | 0 | First-arg indexing canonicalisation |
+| C16 | 1 | 0 | F011 FT critical section |
+| C17 | 2 | 1 (F078) | F009 regression-guard test passes; F026 perf rewrite; F078 untested smell carried forward |
+| **Total** | **59** | **7** | |
+
+### Audit verdict
+
+The strings-as-lists audit closes 59 of 66 findings. The 7 deferred items break down as:
+
+- **1 user-deferred bug** (F046, planned follow-up spec)
+- **1 architectural bug** (F068, design question — needs `phrase_state/3` or per-rule declaration)
+- **4 user-deferred items in the args-of-list cluster** (F088 bug, F089 design-gap, F090 bug, F091 bug)
+- **1 untested smell** (F078, requires C-level branch-coverage tooling)
+
+The strings-as-lists contract is now consistent across:
+
+- Core unification (str ↔ list, Seg* dispatch — `_list_unify.c` + Python fallbacks)
+- SegList / SegString partial-term machinery (sequence protocol, `PartialTermError`, `__walk__`, `__unify__`, `__eq__`, `__hash__`, `__add__`)
+- Polymorphic list builtins (input-type-wins rule via `_as_items` / `_was_string` / `_seq_result`)
+- Higher-order builtins (same input-type-wins rule)
+- DCG / phrase (input-parsing mode — F068 state-threading mode explicitly out of scope)
+- Char / atom predicates (`chars.py` — SegString-aware; `chr(n)` range-guarded)
+- Type-check predicates (`is_list`, `string`, `atomic`, `ground`, `callable_` — Seg*-aware; lax `callable_` documented)
+- Term inspection (`copy_term`, `term_variables`, `numbervars` over Seg*; F088-F091 args-of-list cluster deferred)
+- First-arg indexing (dispatch-layer canonicalisation for str / list-of-1-char-strs)
+- Free-threaded build (`FT_CS_BEGIN` over `PyList_GET_ITEM` loop in the str ↔ list path)
+
+The Liskov-substitution model (str ⊂ list-of-chars) is the canonical contract. Default output is list; promotion to str only when provably all 1-char strs at construction time. The two cross-cutting helpers (`normalize_seg_input`, `maybe_promote_to_str`) and the builtins-layer trio (`_as_items`, `_was_string`, `_seq_result`) jointly encode this rule across every dispatch and result-construction site touched by the audit.
