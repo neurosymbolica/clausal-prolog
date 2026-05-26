@@ -80,13 +80,19 @@ def _map_list__2(this_generator, _proceed, _fail, _catcher, goal, lst, trail):
 
 @_trampoline_builtin("maplist", 3)
 def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail):
-    """map_list(Goal, Xs, Ys) — Goal(X, Y) maps each X to Y."""
+    """map_list(Goal, Xs, Ys) — Goal(X, Y) maps each X to Y.
+
+    F063 (C9 audit, option A): result is wrapped via ``_seq_result`` so
+    str input with all-1-char-str result elements collapses to a
+    ``str``; list input keeps list output.
+    """
     xs_val = deref(xs)
     goal_val = deref(goal)
     xs_items = _as_items(xs_val)
     if xs_items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
         yield (_fail, DONE)
         return
+    was_str = isinstance(xs_val, str)
     dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
     results = []
@@ -99,7 +105,7 @@ def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail)
             yield (_fail, DONE)
             return
         results.append(deref(y))
-    if unify(ys, results, trail):
+    if unify(ys, _seq_result(results, was_str), trail):
         yield (_proceed, None)
     trail.undo(outer_mark)
     yield (_fail, DONE)
@@ -282,13 +288,20 @@ def _span__4(this_generator, _proceed, _fail, _catcher, goal, lst, yes, no, trai
 
 @_trampoline_builtin("group_by", 3)
 def _group_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, groups, trail):
-    """group_by(Goal, List, Groups) — group consecutive elements by key via Goal(Elem, Key)."""
+    """group_by(Goal, List, Groups) — group consecutive elements by key via Goal(Elem, Key).
+
+    F063 (C9 audit, option A): inner groups and the outer container
+    are wrapped via ``_seq_result`` so str input collapses each inner
+    group (slice of the input) and the outer list of groups to str
+    when the elements are 1-char strs; list input keeps list output.
+    """
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
     if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
+    was_str = isinstance(lst_val, str)
     dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
     result: list[list] = []
@@ -310,7 +323,12 @@ def _group_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, groups, t
         else:
             result.append([deref(elem)])
             prev_key = k
-    if unify(groups, result, trail):
+    # F063: each inner group is a slice of the input — promote to str
+    # when the input was a str. The outer container stays a list (a
+    # str cannot contain str elements as distinct cells under the
+    # strings-as-lists contract).
+    final = [_seq_result(g, was_str) for g in result]
+    if unify(groups, final, trail):
         yield (_proceed, None)
     trail.undo(outer_mark)
     yield (_fail, DONE)
@@ -318,13 +336,19 @@ def _group_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, groups, t
 
 @_trampoline_builtin("sort_by", 3)
 def _sort_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, sorted_lst, trail):
-    """sort_by(Goal, List, Sorted) — sort List by key projected via Goal(Elem, Key)."""
+    """sort_by(Goal, List, Sorted) — sort List by key projected via Goal(Elem, Key).
+
+    F063 (C9 audit, option A): result is wrapped via ``_seq_result``
+    so str input with all-1-char-str elements collapses to a ``str``;
+    list input keeps list output.
+    """
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
     if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
+    was_str = isinstance(lst_val, str)
     dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
     keyed: list[tuple] = []
@@ -346,7 +370,7 @@ def _sort_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, sorted_lst
     except TypeError:
         keyed.sort(key=lambda pair: (type(pair[0]).__name__, repr(pair[0])))
     result = [e for _, e in keyed]
-    if unify(sorted_lst, result, trail):
+    if unify(sorted_lst, _seq_result(result, was_str), trail):
         yield (_proceed, None)
     trail.undo(outer_mark)
     yield (_fail, DONE)
@@ -428,13 +452,19 @@ def _min_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, minimum, tr
 
 @_trampoline_builtin("filter_map", 3)
 def _filter_map__3(this_generator, _proceed, _fail, _catcher, goal, lst, result, trail):
-    """filter_map(Goal, List, Result) — map+filter: keep mapped value when Goal(Elem, Out) succeeds."""
+    """filter_map(Goal, List, Result) — map+filter: keep mapped value when Goal(Elem, Out) succeeds.
+
+    F063 (C9 audit, option A): result is wrapped via ``_seq_result``
+    so str input with all-1-char-str result elements collapses to a
+    ``str``; list input keeps list output.
+    """
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
     if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
+    was_str = isinstance(lst_val, str)
     dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
     kept = []
@@ -447,7 +477,7 @@ def _filter_map__3(this_generator, _proceed, _fail, _catcher, goal, lst, result,
         if found:
             kept.append(deref(out))
         trail.undo(mark)
-    if unify(result, kept, trail):
+    if unify(result, _seq_result(kept, was_str), trail):
         yield (_proceed, None)
     trail.undo(outer_mark)
     yield (_fail, DONE)

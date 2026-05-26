@@ -49,12 +49,41 @@ def _as_items(val):
     """Return list of elements if *val* is a sequence (list or str), else None.
 
     For strings, returns list of single-char strings.
+
+    F051/F061 (C9 audit): a *ground* ``SegList`` / ``SegString`` is
+    walked to the concrete ``list`` / ``str`` it represents and then
+    re-entered, so every gated builtin treats the Seg* like the
+    sequence it walks to. A non-ground Seg* still returns ``None`` so
+    the caller takes its usual "not a sequence" branch.
     """
     if isinstance(val, list):
         return val
     if isinstance(val, str):
         return list(val)
+    # Late import to avoid an import cycle (clausal.terms → clausal.logic
+    # via Seg*.__walk__).
+    from clausal.terms import SegList, SegString
+    if isinstance(val, (SegList, SegString)) and val.is_ground():
+        return _as_items(val.__walk__())
     return None
+
+
+def _was_string(val):
+    """Return True if *val* should be treated as str-shaped for output
+    purposes.
+
+    Used by every ``_seq_result``-consuming predicate to decide whether
+    to promote a result of 1-char strs back to a ``str``. Recognises a
+    plain ``str`` and a ground ``SegString`` that walks to one. Lists —
+    including lists of 1-char strs — are *not* str-shaped under
+    option A (input-type wins): list input keeps list output.
+    """
+    if isinstance(val, str):
+        return True
+    from clausal.terms import SegString
+    if isinstance(val, SegString) and val.is_ground():
+        return isinstance(val.__walk__(), str)
+    return False
 
 
 def _seq_result(items, was_string):
@@ -199,12 +228,17 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
 
 @_trampoline_builtin("length", 2)
 def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
-    """length(List, N) — N is the length of List."""
+    """length(List, N) — N is the length of List.
+
+    F051 (C9 audit): accepts ground SegList/SegString via ``_as_items``
+    so a Seg* term reports the length of the sequence it walks to.
+    """
     lst_val = deref(lst)
     n_val = deref(n)
-    if isinstance(lst_val, (list, str)):
+    items = _as_items(lst_val)
+    if items is not None:
         mark = trail.mark()
-        if unify(n, len(lst_val), trail):
+        if unify(n, len(items), trail):
             yield (_proceed, None)
         trail.undo(mark)
     elif not is_var(n_val) and isinstance(n_val, int) and n_val >= 0:
@@ -218,11 +252,15 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
 
 @_trampoline_builtin("last", 2)
 def _last__2(this_generator, _proceed, _fail, _catcher, lst, elem, trail):
-    """last(List, Elem) — Elem is the last element of List."""
+    """last(List, Elem) — Elem is the last element of List.
+
+    F051 (C9 audit): accepts ground SegList/SegString via ``_as_items``.
+    """
     lst_val = deref(lst)
-    if isinstance(lst_val, (list, str)) and len(lst_val) > 0:
+    items = _as_items(lst_val)
+    if items is not None and len(items) > 0:
         mark = trail.mark()
-        if unify(elem, lst_val[-1], trail):
+        if unify(elem, items[-1], trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
@@ -230,11 +268,15 @@ def _last__2(this_generator, _proceed, _fail, _catcher, lst, elem, trail):
 
 @_trampoline_builtin("reverse", 2)
 def _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
-    """reverse(List, Rev) — Rev is the reverse of List."""
+    """reverse(List, Rev) — Rev is the reverse of List.
+
+    F051 (C9 audit): accepts ground SegList/SegString via ``_as_items``.
+    """
     lst_val = deref(lst)
-    if isinstance(lst_val, (list, str)):
-        was_str = isinstance(lst_val, str)
-        result = _seq_result(list(reversed(lst_val)), was_str)
+    items = _as_items(lst_val)
+    if items is not None:
+        was_str = _was_string(lst_val)
+        result = _seq_result(list(reversed(items)), was_str)
         mark = trail.mark()
         if unify(rev, result, trail):
             yield (_proceed, None)
@@ -278,22 +320,50 @@ def _nth0__3(this_generator, _proceed, _fail, _catcher, n, lst, elem, trail):
 def _flatten__2(this_generator, _proceed, _fail, _catcher, lst, flat, trail):
     """flatten(List, Flat) — Flat is the flat list of all atoms in List.
 
-    Strings are treated as atoms (not flattened into characters).
+    F056 (C9 audit): under the strings-as-lists contract, ``['ab']``
+    and ``[['a','b']]`` are equivalent values, so ``flatten`` must
+    treat a nested ``str`` (or ground ``SegString``) like a list of
+    1-char strs and recurse through it. The top-level container is
+    *not* recursed into — flattening ``'abc'`` returns ``['abc']`` for
+    the same reason a 1-element atom flattens to its 1-element
+    wrapper.
     """
     lst_val = deref(lst)
     if not is_var(lst_val):
         result: list = []
+        outer = True
 
         def _do_flat(x: Any) -> None:
+            nonlocal outer
             x = deref(x)
             if isinstance(x, list):
                 for item in x:
+                    outer = False
                     _do_flat(item)
+            elif not outer and isinstance(x, str):
+                # F056: nested str is recursed-into per the
+                # strings-as-lists equivalence; the top-level str case
+                # is handled by the early-return below the recursion.
+                for ch in x:
+                    result.append(ch)
             else:
-                # Strings are atoms, not recursed into
-                result.append(x)
+                # Ground Seg* walk to their concrete shape; reuse the
+                # _as_items helper for the Seg* recurse-or-atom decision.
+                items = _as_items(x) if not outer else None
+                if items is not None:
+                    for item in items:
+                        _do_flat(item)
+                else:
+                    result.append(x)
 
-        _do_flat(lst_val)
+        # Top-level: if the whole input is a non-list (str, atom, Seg*),
+        # the canonical flatten result is a single-element list
+        # containing the input (matching Prolog's flatten/2 contract).
+        if isinstance(lst_val, list):
+            outer = False
+            _do_flat(lst_val)
+        else:
+            result.append(lst_val)
         mark = trail.mark()
         if unify(flat, result, trail):
             yield (_proceed, None)
@@ -468,15 +538,31 @@ def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, tra
 
 @_trampoline_builtin("sum_list", 2)
 def _sum_list__2(this_generator, _proceed, _fail, _catcher, lst, total, trail):
-    """sum_list(List, Total) — Total is the sum of all numbers in List."""
+    """sum_list(List, Total) — Total is the sum of all numbers in List.
+
+    F052 (C9 audit): a TypeError from ``sum(...)`` (e.g. ``sum_list("abc",
+    S)`` where the elements are not summable) is raised as a typed
+    ``type_error(number, …)`` clausal exception rather than silently
+    converted to ``(_fail, DONE)`` — silent failure is
+    indistinguishable from the legitimate "the list is empty" result.
+    """
+    from clausal.logic.exceptions import LogicException, type_error
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
         try:
             s = sum(deref(x) for x in items)
-        except TypeError:
-            yield (_fail, DONE)
-            return
+        except TypeError as exc:
+            # Pick the first non-number element to point the type_error at.
+            offender = next(
+                (deref(x) for x in items
+                 if isinstance(deref(x), bool)
+                 or not isinstance(deref(x), (int, float))),
+                None,
+            )
+            raise LogicException(
+                type_error("number", offender, "sum_list/2")
+            ) from exc
         mark = trail.mark()
         if unify(total, s, trail):
             yield (_proceed, None)
@@ -486,15 +572,22 @@ def _sum_list__2(this_generator, _proceed, _fail, _catcher, lst, total, trail):
 
 @_trampoline_builtin("max_list", 2)
 def _max_list__2(this_generator, _proceed, _fail, _catcher, lst, maximum, trail):
-    """max_list(List, max_) — max_ is the maximum element of List."""
+    """max_list(List, max_) — max_ is the maximum element of List.
+
+    F052 (C9 audit): a TypeError from ``max(...)`` (e.g. mixed
+    incomparable types) is raised as a typed clausal exception rather
+    than silently converted to ``(_fail, DONE)``.
+    """
+    from clausal.logic.exceptions import LogicException, type_error
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
         try:
             m = max(deref(x) for x in items)
-        except TypeError:
-            yield (_fail, DONE)
-            return
+        except TypeError as exc:
+            raise LogicException(
+                type_error("orderable", lst_val, "max_list/2")
+            ) from exc
         mark = trail.mark()
         if unify(maximum, m, trail):
             yield (_proceed, None)
@@ -504,15 +597,22 @@ def _max_list__2(this_generator, _proceed, _fail, _catcher, lst, maximum, trail)
 
 @_trampoline_builtin("min_list", 2)
 def _min_list__2(this_generator, _proceed, _fail, _catcher, lst, minimum, trail):
-    """min_list(List, min_) — min_ is the minimum element of List."""
+    """min_list(List, min_) — min_ is the minimum element of List.
+
+    F052 (C9 audit): a TypeError from ``min(...)`` is raised as a typed
+    clausal exception rather than silently converted to ``(_fail,
+    DONE)``.
+    """
+    from clausal.logic.exceptions import LogicException, type_error
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
         try:
             m = min(deref(x) for x in items)
-        except TypeError:
-            yield (_fail, DONE)
-            return
+        except TypeError as exc:
+            raise LogicException(
+                type_error("orderable", lst_val, "min_list/2")
+            ) from exc
         mark = trail.mark()
         if unify(minimum, m, trail):
             yield (_proceed, None)
@@ -587,11 +687,21 @@ def _zip__3(this_generator, _proceed, _fail, _catcher, l1, l2, pairs, trail):
 
 @_trampoline_builtin("replicate", 3)
 def _replicate__3(this_generator, _proceed, _fail, _catcher, n, elem, lst, trail):
-    """replicate(N, Elem, List) — List is N copies of Elem."""
+    """replicate(N, Elem, List) — List is N copies of Elem.
+
+    F053 (C9 audit, option A — input-type wins): when ``Elem`` is a
+    1-char ``str``, build the result as a ``str`` (e.g. ``replicate(5,
+    'a', R)`` → ``R = 'aaaaa'``). The single-char-str element gives the
+    builder the type hint it needs to pick the str shape, matching the
+    string-preserving contract followed by the rest of the family.
+    """
     n_val = deref(n)
     elem_val = deref(elem)
     if isinstance(n_val, int) and n_val >= 0:
-        result = [elem_val] * n_val
+        if isinstance(elem_val, str) and len(elem_val) == 1:
+            result = elem_val * n_val
+        else:
+            result = [elem_val] * n_val
         mark = trail.mark()
         if unify(lst, result, trail):
             yield (_proceed, None)
@@ -628,12 +738,22 @@ def _split_with__3(this_generator, _proceed, _fail, _catcher, sep, lst, parts, t
             yield (_proceed, None)
         trail.undo(mark)
     elif isinstance(parts_val, list):
-        # Join mode: interleave parts with separator
+        # Join mode: interleave parts with separator.
+        # F050 (C9 audit): str parts are the natural inverse of the
+        # split direction (which emits str parts when the input was a
+        # str). Widen the recurse-into-part test to ``_as_items`` so
+        # str / list / ground Seg* parts all contribute their elements
+        # to the joined output, rather than the bug-shape "only
+        # separators survive".
         joined: list = []
         for i, part in enumerate(parts_val):
             p = deref(part)
-            if isinstance(p, list):
-                joined.extend(p)
+            p_items = _as_items(p)
+            if p_items is not None:
+                joined.extend(p_items)
+            else:
+                # Non-sequence part — treat as a single element.
+                joined.append(p)
             if i < len(parts_val) - 1:
                 joined.append(sep_val)
         mark = trail.mark()
@@ -674,11 +794,32 @@ def _numlist__2(high, lst, trail, k):
         yield None
 
 
+def _fresh_same_shape(seq_val):
+    """Return a fresh sequence of N elements matching ``seq_val``'s shape.
+
+    F053 (C9 audit, option A — input-type wins): when the sibling value
+    is a ``str`` (or a ground ``SegString``), build a fresh
+    ``SegString`` of N ``VarSeg`` holes so the generated placeholder is
+    *str-shaped* rather than a Python list. Otherwise generate the
+    classic list of fresh ``Var`` objects.
+    """
+    from clausal.terms import SegString, VarSeg
+    if isinstance(seq_val, str):
+        return SegString([VarSeg(Var()) for _ in seq_val])
+    if isinstance(seq_val, SegString) and seq_val.is_ground():
+        return SegString([VarSeg(Var()) for _ in seq_val.__walk__()])
+    return [Var() for _ in seq_val]
+
+
 @_builtin("same_length", 2)
 def _same_length__2(l1, l2, trail, k):
     """same_length(L1, L2) — true if L1 and L2 have the same length.
 
-    If one is ground and the other unbound, generates a list of fresh Vars.
+    F053 (C9 audit, option A — input-type wins): if one side is a
+    ``str`` (or ground ``SegString``) and the other is unbound, the
+    generated placeholder is a ``SegString`` of fresh ``VarSeg`` holes
+    (str-shaped); for a ``list`` sibling the placeholder is the
+    classic list of fresh ``Var`` objects.
     """
     l1_val = deref(l1)
     l2_val = deref(l2)
@@ -688,32 +829,41 @@ def _same_length__2(l1, l2, trail, k):
         if len(l1_val) == len(l2_val):
             yield None
     elif l1_is_seq and is_var(l2_val):
-        generated = [Var() for _ in l1_val]
-        if unify(l2, generated, trail):
+        if unify(l2, _fresh_same_shape(l1_val), trail):
             yield None
     elif l2_is_seq and is_var(l1_val):
-        generated = [Var() for _ in l2_val]
-        if unify(l1, generated, trail):
+        if unify(l1, _fresh_same_shape(l2_val), trail):
             yield None
 
 
 @_builtin("transpose", 2)
 def _transpose__2(matrix, transposed, trail, k):
-    """transpose(Matrix, Transposed) — column-wise transposition of a list of lists."""
+    """transpose(Matrix, Transposed) — column-wise transposition of a list of lists.
+
+    F055 (C9 audit): the outer matrix may be a ``list``, a ``str`` (read
+    as a 1-row matrix of 1-char-str cells via ``_as_items``), or a
+    ground Seg* that walks to either. Inner rows continue to go through
+    ``_as_items`` so list-of-str matrices still transpose correctly.
+    """
     mat = deref(matrix)
-    if is_var(mat) or not isinstance(mat, list):
+    outer_items = _as_items(mat)
+    if outer_items is None:
         return
-    if len(mat) == 0:
+    if len(outer_items) == 0:
         if unify(transposed, [], trail):
             yield None
         return
     # Verify all rows are lists (or strings) of the same length
     rows = []
-    for row in mat:
+    for row in outer_items:
         r = deref(row)
         items = _as_items(r)
         if items is None:
-            return
+            # F055: outer str-matrix mode — a 1-char-str "row" treated
+            # as a single-element row so transpose("ab") yields
+            # [['a'], ['b']]. Falls through here only for outer
+            # sequences that aren't themselves sequences.
+            items = [r]
         rows.append(items)
     if len(set(len(r) for r in rows)) != 1:
         return

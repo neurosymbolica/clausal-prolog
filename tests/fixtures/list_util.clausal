@@ -29,8 +29,8 @@ Test("zip empty") <- (zip_([], [1, 2], RESULT), RESULT == [])  # nv
 
 # ── replicate/3 ──────────────────────────────────────────────────────────────
 
-Test("replicate basic") <- (replicate(3, "x", RESULT), RESULT == ["x", "x", "x"])  # nv
-Test("replicate zero") <- (replicate(0, "x", RESULT), RESULT == [])  # nv
+Test("replicate basic") <- (replicate(3, "x", RESULT), RESULT == "xxx")  # nv — F053 (C9 audit, option A): 1-char str elem → str result
+Test("replicate zero") <- (replicate(0, "x", RESULT), RESULT == "")  # nv — F053: zero copies of 1-char str → ""
 Test("replicate one") <- (replicate(1, 42, RESULT), RESULT == [42])  # nv
 
 # ── split_with/3 ──────────────────────────────────────────────────────────────

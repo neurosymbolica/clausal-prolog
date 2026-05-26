@@ -100,6 +100,51 @@ for _t in _CHAR_TYPES:
     _TYPE_TO_CHARS[_t] = [c for c in _ASCII_CHARS if _CHAR_TYPES[_t](c)]
 
 
+# F072 (C9 audit): Char-bound modes use full-Unicode classifiers
+# (``str.isalpha`` etc.) — so ``char_type('α', alpha)`` succeeds. The
+# Type-bound enumeration must therefore include non-ASCII chars to
+# keep the relation consistent across modes. Lazy per-type cache: the
+# first enumeration of a Unicode-eligible type walks the BMP once and
+# memoises the full char list.
+_UNICODE_TYPES = {"alpha", "alnum", "upper", "lower", "print"}
+_TYPE_TO_CHARS_UNICODE: dict[str, list[str]] = {}
+
+
+def _type_to_chars_unicode(type_name: str) -> list[str]:
+    """Return the full Unicode enumeration of chars matching *type_name*.
+
+    Walks the Basic Multilingual Plane (0x0000-0xFFFF) on first call
+    and caches the result. Returns the ASCII-only list for types not
+    in ``_UNICODE_TYPES`` (e.g. ``ascii``, ``control``, ``digit``,
+    ``space``, ``punct``) where ASCII coverage is already exhaustive
+    or the classification is intentionally narrow.
+    """
+    if type_name not in _UNICODE_TYPES:
+        return _TYPE_TO_CHARS.get(type_name, [])
+    cached = _TYPE_TO_CHARS_UNICODE.get(type_name)
+    if cached is not None:
+        return cached
+    fn = _CHAR_TYPES.get(type_name)
+    if fn is None:
+        return []
+    # Walk the BMP — 65536 codepoints is fast (<100ms) and covers every
+    # alphabetic / case / printable code point in common use. Surrogate
+    # halves (0xD800-0xDFFF) are skipped because constructing ``chr``
+    # of them yields invalid strings on some Python builds.
+    chars = []
+    for i in range(0x10000):
+        if 0xD800 <= i <= 0xDFFF:
+            continue
+        c = chr(i)
+        try:
+            if fn(c):
+                chars.append(c)
+        except (TypeError, ValueError):
+            continue
+    _TYPE_TO_CHARS_UNICODE[type_name] = chars
+    return chars
+
+
 @_builtin("char_type", 2)
 def _char_type__2(char, type_, trail, k):
     """char_type(Char, Type) — character classification as a relation.
@@ -150,8 +195,27 @@ def _char_type__2(char, type_, trail, k):
                 if unify(type_, t_name, trail):
                     yield None
                 trail.undo(mark)
-    elif _c_char_type_find_chars is not None and _c_type_name_index is not None:
-        # Type bound, Char unbound → C-accelerated enumeration
+    elif (vt in _UNICODE_TYPES) or _c_char_type_find_chars is None \
+            or _c_type_name_index is None:
+        # Type bound, Char unbound → Python enumeration. F072 (C9
+        # audit): the C-accelerator only knows about ASCII, so we take
+        # the Python path for any type whose Char-bound classifier
+        # supports Unicode (alpha/alnum/upper/lower/print) — this keeps
+        # the test-mode and enumeration-mode relations consistent.
+        if not isinstance(vt, str):
+            return
+        chars = _type_to_chars_unicode(vt)
+        if not chars:
+            return
+        for c in chars:
+            mark = trail.mark()
+            if unify(char, c, trail):
+                yield None
+            trail.undo(mark)
+    else:
+        # Type bound, Char unbound → C-accelerated ASCII enumeration
+        # (used for types whose classifier is intentionally ASCII-only,
+        # e.g. ``ascii``, ``control``, ``digit``, ``space``, ``punct``).
         if not isinstance(vt, str):
             return
         tidx = _c_type_name_index(vt)
@@ -164,18 +228,6 @@ def _char_type__2(char, type_, trail, k):
                 break
             idx, mark = result
             yield None
-            trail.undo(mark)
-    else:
-        # Type bound, Char unbound → enumerate matching chars
-        if not isinstance(vt, str):
-            return
-        chars = _TYPE_TO_CHARS.get(vt)
-        if chars is None:
-            return
-        for c in chars:
-            mark = trail.mark()
-            if unify(char, c, trail):
-                yield None
             trail.undo(mark)
 
 
@@ -421,6 +473,18 @@ def _atom_concat__3(a, b, c, trail, k):
                 yield None
             trail.undo(mark)
     else:
+        # F077 (C9 audit): if any arg is bound but not atom-shaped
+        # (list, int, float, compound, …), surface the real ISO error —
+        # ``type_error(atom, NonAtom)`` — rather than masking it as
+        # ``instantiation_error`` (which the boundness-via-
+        # ``_atom_to_str is None`` inference would otherwise emit and
+        # which any ``catch(_, instantiation_error, _)`` handler would
+        # swallow).
+        for arg_val in (va, vb, vc):
+            if not is_var(arg_val) and _atom_to_str(arg_val) is None:
+                raise LogicException(
+                    type_error("atom", arg_val, "atom_concat/3")
+                )
         # C unbound and not enough info to compute it
         raise LogicException(instantiation_error("atom_concat/3"))
 

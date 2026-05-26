@@ -24,10 +24,6 @@ Findings tested here:
 import pytest
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F050: split_with join mode drops str parts",
-)
 def test_F050_split_with_join_preserves_str_parts():
     """`split_with(Sep, J, Parts)` (join mode) with str elements in
     Parts must include those str elements in J. Currently the join
@@ -95,10 +91,6 @@ def test_F050_split_with_join_preserves_str_parts():
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F051: _as_items rejects ground SegList/SegString",
-)
 def test_F051_as_items_accepts_ground_seg_inputs():
     """Every polymorphic list builtin that gates on ``_as_items`` must
     accept ground SegList / SegString as if they were the list / str
@@ -202,10 +194,6 @@ def test_F051_as_items_accepts_ground_seg_inputs():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F052: sum_list/max_list/min_list swallow TypeError",
-)
 def test_F052_reduction_predicates_dont_swallow_typeerror():
     """`sum_list/max_list/min_list` must not silently turn a TypeError
     from ``sum/max/min`` into ``(_fail, DONE)``. Either they should
@@ -257,10 +245,6 @@ def test_F052_reduction_predicates_dont_swallow_typeerror():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F053: length/replicate output always list",
-)
 def test_F053_output_mode_builders_respect_str_type_hint():
     """`length(L, 5)`, ``replicate(5, 'a', R)``, and
     ``same_length("abc", X)`` allocate Python lists unconditionally,
@@ -307,6 +291,11 @@ def test_F053_output_mode_builders_respect_str_type_hint():
     )
 
     # same_length("abc", X) — sibling arg is str, X should be str-shaped.
+    # Under option A (input-type wins) the str-shaped fresh placeholder
+    # is either a concrete ``str`` (if all elements are already bound)
+    # or a ``SegString`` of fresh ``VarSeg`` holes (the natural
+    # variable-bearing str shape — walks to a ``str`` once bound).
+    from clausal.terms import SegString
     X = Var()
     same_results = []
     for _ in call("same_length", "abc", X, module=mod):
@@ -317,66 +306,86 @@ def test_F053_output_mode_builders_respect_str_type_hint():
         f"solution; got {len(same_results)}."
     )
     same = same_results[0]
-    assert isinstance(same, str), (
+    assert isinstance(same, (str, SegString)), (
         f"same_length('abc', X) returned X = {same!r} of type "
-        f"{type(same).__name__}; expected a str-shaped value since the "
-        f"sibling argument is str. The output-mode builder at "
-        f"lists.py:683-697 always allocates a list."
+        f"{type(same).__name__}; expected a str-shaped value (a str "
+        f"or a SegString of fresh VarSeg holes) since the sibling "
+        f"argument is str. The output-mode builder at "
+        f"lists.py:756-783 should pick the str shape per option A "
+        f"(input-type wins)."
     )
+    if isinstance(same, SegString):
+        assert len(same.segments) == 3, (
+            f"same_length('abc', X) returned a SegString with "
+            f"{len(same.segments)} segments; expected 3 (one VarSeg per "
+            f"sibling-str character)."
+        )
 
 
-# F054 — _seq_result asymmetry across 8 input shapes. Parametrised.
+# F054 — _seq_result symmetry across 8 input shapes. Parametrised.
+# Under option A (input-type wins): str input → str output, list input →
+# list output. The two halves must be symmetric in **shape** — the
+# element values match, but list inputs never promote to str even when
+# every element is a 1-char str.
 
 @pytest.mark.parametrize(
-    "label, args_list, args_str, expected_list_result",
+    "label, args_list, args_str, expected_str_result, expected_list_result",
     [
         (
             "reverse",
             ("reverse", ["a", "b", "c"]),
             ("reverse", "abc"),
             "cba",
+            ["c", "b", "a"],
         ),
         (
             "msort",
             ("msort", ["c", "b", "a"]),
             ("msort", "cba"),
             "abc",
+            ["a", "b", "c"],
         ),
         (
             "sort",
             ("sort", ["a", "b", "c"]),
             ("sort", "abc"),
             "abc",
+            ["a", "b", "c"],
         ),
         (
             "take",
             ("take", 2, ["a", "b", "c"]),
             ("take", 2, "abc"),
             "ab",
+            ["a", "b"],
         ),
         (
             "drop",
             ("drop", 1, ["a", "b", "c"]),
             ("drop", 1, "abc"),
             "bc",
+            ["b", "c"],
         ),
         (
             "list_to_set",
             ("list_to_set", ["a", "b", "c"]),
             ("list_to_set", "abc"),
             "abc",
+            ["a", "b", "c"],
         ),
         (
             "subtract",
             ("subtract", ["a", "b", "c"], ["b"]),
             ("subtract", "abc", "b"),
             "ac",
+            ["a", "c"],
         ),
         (
             "union",
             ("union", ["a", "b", "c"], ["d"]),
             ("union", "abc", "d"),
             "abcd",
+            ["a", "b", "c", "d"],
         ),
     ],
     ids=[
@@ -384,24 +393,19 @@ def test_F053_output_mode_builders_respect_str_type_hint():
         "list_to_set", "subtract", "union",
     ],
 )
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F054: _seq_result asymmetry across predicates",
-)
-def test_F054_seq_result_list_of_1char_str_promotes_to_str(
-    label, args_list, args_str, expected_list_result
+def test_F054_seq_result_input_type_wins(
+    label, args_list, args_str, expected_str_result, expected_list_result
 ):
-    """For every ``_seq_result``-gated predicate, a list of 1-char strs
-    on input should produce the same shape of result as the equivalent
-    str input — i.e. either both list or both str. Currently
-    ``was_string = isinstance(lst_val, str)`` only fires when the input
-    is literally a ``str``, so list-of-1-char-strs inputs stay list
-    even when the result is a valid char sequence.
+    """For every ``_seq_result``-gated predicate, the result shape
+    tracks the *input shape*: str input → str output, list input →
+    list output. The element values match across the two halves, but
+    list-of-1-char-strs inputs are *not* silently promoted to str —
+    that asymmetry was the F054 bug.
 
-    This is parametrised over the 8 representative predicates from the
-    ledger's matrix. Each case asserts that the list-input result
-    matches the str-input result in type (both str under
-    string-preserving + input-type-wins).
+    Per the user's decision (option A — input-type wins), the two
+    halves are symmetric in shape: each preserves its input's
+    container type. This is parametrised over the 8 representative
+    predicates from the ledger's matrix.
     """
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, deref
@@ -426,28 +430,31 @@ def test_F054_seq_result_list_of_1char_str_promotes_to_str(
         f"str={str_result!r}."
     )
 
-    # Sanity: the str input behaves as expected (this is the control).
-    assert str_result == expected_list_result, (
-        f"control: {label}(str-input) should return {expected_list_result!r}; "
-        f"got {str_result!r}. If this fails the fixture is broken."
+    # Str input → str output (control + the string-preserving half).
+    assert str_result == expected_str_result, (
+        f"{label}(str-input) should return {expected_str_result!r}; "
+        f"got {str_result!r}."
+    )
+    assert isinstance(str_result, str), (
+        f"{label}(str-input) returned {str_result!r} of type "
+        f"{type(str_result).__name__}; expected str (str input → str "
+        f"output under option A)."
     )
 
-    # The asymmetry: list input result should also be str (input-type wins,
-    # all elements are 1-char strs so str is lossless).
-    assert isinstance(list_result, str), (
+    # List input → list output. Same element values as the str half,
+    # but kept in a Python list (no silent promotion).
+    assert list_result == expected_list_result, (
+        f"{label}(list-input) should return {expected_list_result!r}; "
+        f"got {list_result!r}."
+    )
+    assert isinstance(list_result, list), (
         f"{label}(list-of-1-char-strs) returned {list_result!r} of type "
-        f"{type(list_result).__name__}; expected a str (equivalent to "
-        f"the str-input result {str_result!r}) under the "
-        f"string-preserving contract. ``was_string`` only flips on "
-        f"``isinstance(_, str)`` so list-of-1-char-strs inputs are "
-        f"silently kept as list."
+        f"{type(list_result).__name__}; expected a list (list input → "
+        f"list output under option A — input-type wins, list-of-1-char- "
+        f"strs is *not* silently promoted to str)."
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F055: transpose silently fails on str matrix",
-)
 def test_F055_transpose_accepts_str_outer_matrix():
     """`transpose(M, T)` must not silently yield zero solutions on a
     str outer matrix. The outer guard at lists.py:704 demands
@@ -500,10 +507,6 @@ def test_F055_transpose_accepts_str_outer_matrix():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F056: flatten str-as-atom equivalence break",
-)
 def test_F056_flatten_str_list_equivalence():
     """Under the strings-as-lists contract, ``['ab']`` and
     ``[['a','b']]`` are equivalent values. ``flatten`` should preserve
@@ -550,10 +553,6 @@ def test_F056_flatten_str_list_equivalence():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F061: Seg* silent failure across higher_order predicates",
-)
 def test_F061_higher_order_accepts_seg_inputs():
     """Every higher_order predicate must accept ground SegList /
     SegString inputs just like list / str. They all consume the
@@ -581,12 +580,12 @@ key_of(_c, _k) <- If(in_(_c, ['a', 'e', 'i', 'o', 'u']), _k == 1, _k == 0)
     ]
 
     sl = SegList([ConcreteSeg(["a", "e", "i"])])
-    ss = SegString(["abc"])
+    ss = SegString(["aei"])
     assert sl.is_ground() and sl.__walk__() == ["a", "e", "i"], (
         f"precondition: SegList ground/walks; got is_ground={sl.is_ground()}, "
         f"walk={sl.__walk__()!r}"
     )
-    assert ss.is_ground() and ss.__walk__() == "abc", (
+    assert ss.is_ground() and ss.__walk__() == "aei", (
         f"precondition: SegString ground/walks; got is_ground={ss.is_ground()}, "
         f"walk={ss.__walk__()!r}"
     )
@@ -652,20 +651,20 @@ key_of(_c, _k) <- If(in_(_c, ['a', 'e', 'i', 'o', 'u']), _k == 1, _k == 0)
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F062: higher_order list-of-1-char-str input != str output asymmetry",
-)
-def test_F062_higher_order_list_of_1char_str_promotes_to_str():
+def test_F062_higher_order_input_type_wins():
     """For every higher_order predicate that derives ``was_str`` from
     ``isinstance(lst_val, str)`` (include, exclude, take_while,
-    drop_while, span, partition, tfilter, tpartition), a list of
-    1-char strs on input should produce the same shape of result as
-    the equivalent str input — i.e. both str. Currently the asymmetry
-    is the same as [[F054]] but in higher_order.py.
+    drop_while, span, partition, tfilter, tpartition), the result
+    shape tracks the *input shape*: str input → str output, list
+    input → list output.
 
-    This test asserts on a representative subset: include/3,
-    exclude/3, partition/4 (two output args).
+    Per the user's decision (option A — input-type wins), the two
+    halves are symmetric: each preserves its input's container type.
+    List-of-1-char-strs inputs are *not* silently promoted to str —
+    that asymmetry was the F062 bug.
+
+    This test asserts on a representative subset: include/3 and
+    partition/4 (two output args).
     """
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, deref
@@ -683,7 +682,7 @@ is_vowel(_c) <- in_(_c, ['a', 'e', 'i', 'o', 'u'])
     list_input = ["h", "e", "l", "l", "o"]
     str_input = "hello"
 
-    # include — list keeps list, str preserves str.
+    # include — list keeps list, str preserves str (input-type wins).
     R = Var()
     list_inc = None
     for _ in call("include", is_vowel, list_input, R, module=mod):
@@ -700,18 +699,26 @@ is_vowel(_c) <- in_(_c, ['a', 'e', 'i', 'o', 'u'])
         f"list_inc={list_inc!r}, str_inc={str_inc!r}."
     )
     assert str_inc == "eo", (
-        f"control: include(is_vowel, 'hello', R) should return 'eo'; "
+        f"include(is_vowel, 'hello', R) should return 'eo' (str); "
         f"got {str_inc!r}."
     )
-    assert isinstance(list_inc, str), (
+    assert isinstance(str_inc, str), (
+        f"include(is_vowel, 'hello', R) returned {str_inc!r} of type "
+        f"{type(str_inc).__name__}; expected str (str input → str "
+        f"output under option A)."
+    )
+    assert list_inc == ["e", "o"], (
+        f"include(is_vowel, ['h','e','l','l','o'], R) should return "
+        f"['e', 'o'] (list); got {list_inc!r}."
+    )
+    assert isinstance(list_inc, list), (
         f"include(is_vowel, ['h','e','l','l','o'], R) returned "
-        f"{list_inc!r} of type {type(list_inc).__name__}; expected str "
-        f"(equivalent to the str-input result 'eo'). The "
-        f"``was_str = isinstance(lst_val, str)`` test only fires when "
-        f"the input is literally a str."
+        f"{list_inc!r} of type {type(list_inc).__name__}; expected a "
+        f"list (list input → list output under option A — input-type "
+        f"wins, no silent promotion to str)."
     )
 
-    # partition — same asymmetry with two output args.
+    # partition — same symmetry with two output args.
     Y, N = Var(), Var()
     list_par = None
     for _ in call("partition", is_vowel, list_input, Y, N, module=mod):
@@ -728,22 +735,24 @@ is_vowel(_c) <- in_(_c, ['a', 'e', 'i', 'o', 'u'])
         f"list_par={list_par!r}, str_par={str_par!r}."
     )
     assert str_par == ("eo", "hll"), (
-        f"control: partition(is_vowel, 'hello', Y, N) should bind "
-        f"Y='eo', N='hll'; got {str_par!r}."
+        f"partition(is_vowel, 'hello', Y, N) should bind Y='eo', "
+        f"N='hll'; got {str_par!r}."
     )
-    assert isinstance(list_par[0], str) and isinstance(list_par[1], str), (
+    assert isinstance(str_par[0], str) and isinstance(str_par[1], str), (
+        f"partition(is_vowel, 'hello', Y, N) bound ({str_par[0]!r}, "
+        f"{str_par[1]!r}); expected both str under option A."
+    )
+    assert list_par == (["e", "o"], ["h", "l", "l"]), (
         f"partition(is_vowel, ['h','e','l','l','o'], Y, N) bound "
-        f"({list_par[0]!r}, {list_par[1]!r}); expected both str "
-        f"(equivalent to str-input result {str_par!r}). The "
-        f"was_str/_seq_result asymmetry drops str typing for "
-        f"list-of-1-char-strs inputs."
+        f"{list_par!r}; expected (['e','o'], ['h','l','l'])."
+    )
+    assert isinstance(list_par[0], list) and isinstance(list_par[1], list), (
+        f"partition(is_vowel, ['h','e','l','l','o'], Y, N) bound "
+        f"({list_par[0]!r}, {list_par[1]!r}); expected both list under "
+        f"option A (list input → list output)."
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F063: maplist/3, filter_map, group_by, sort_by always build list",
-)
 def test_F063_output_building_higher_order_preserves_str():
     """`maplist/3`, ``filter_map/3``, ``group_by/3``, ``sort_by/3``
     have no ``was_str``/``_seq_result`` thread — their result is
@@ -804,10 +813,6 @@ code_key(_c, _k) <- char_code(_c, _k)
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F072: char_type Char-bound vs Type-bound mode mismatch",
-)
 def test_F072_char_type_modes_agree_on_non_ascii():
     """`char_type/2` must be a well-defined relation across modes:
     if ``char_type('α', alpha)`` succeeds in test mode (Char bound),
@@ -850,10 +855,6 @@ def test_F072_char_type_modes_agree_on_non_ascii():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F077: atom_concat raises instantiation_error for mis-typed bound args",
-)
 def test_F077_atom_concat_type_error_for_non_atom_bound_args():
     """`atom_concat/3` with fully-bound but non-atom-shaped args
     (e.g. a list ``[h,e,l]``, an int ``1``, a float ``3.14``) must

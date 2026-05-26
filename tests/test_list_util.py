@@ -194,12 +194,15 @@ class TestZip:
 
 class TestReplicate:
     def test_basic(self):
-        # nv
-        assert run_trampoline_var(_replicate__3, 3, "x") == [["x", "x", "x"]]
+        # nv — F053 (C9 audit, option A): replicating a 1-char str
+        # produces a str (input-type-wins, str is lossless when every
+        # element is a 1-char str).
+        assert run_trampoline_var(_replicate__3, 3, "x") == ["xxx"]
 
     def test_zero(self):
-        # nv
-        assert run_trampoline_var(_replicate__3, 0, "x") == [[]]
+        # nv — F053 (C9 audit, option A): zero copies of a 1-char str
+        # is the empty str, matching the str-shaped output rule.
+        assert run_trampoline_var(_replicate__3, 0, "x") == [""]
 
     def test_one(self):
         # nv

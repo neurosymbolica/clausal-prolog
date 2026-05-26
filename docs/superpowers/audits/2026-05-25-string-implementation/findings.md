@@ -1763,6 +1763,11 @@ out of contract). Logged for the cleanup pass.
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 12 — the join branch now feeds
+  each part through ``_as_items`` instead of the bug-shape
+  ``isinstance(p, list)`` test, so str / list / ground Seg* parts all
+  contribute their elements (and a non-sequence part is appended as a
+  single element).
 - **Location:** `clausal/logic/builtins/lists.py:630-642`
 - **Discovered by:** Task 7 of Phase 0
 - **Probe:** `probes/probe_F050.py`
@@ -1809,6 +1814,13 @@ list-vs-str output asymmetry across the file).
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 12 — ``_as_items`` now walks a
+  ground SegList/SegString to its concrete list/str and re-enters; a
+  non-ground Seg* still returns None. Cascade-closed every gated
+  builtin in lists.py and (via shared import) in higher_order.py
+  (closes [[F061]]). ``length`` / ``last`` / ``reverse`` previously
+  used a bare ``isinstance(_, (list, str))`` test instead of
+  ``_as_items`` — switched to ``_as_items`` in the same task.
 - **Location:** `clausal/logic/builtins/lists.py:48-57` (the
   ``_as_items`` helper itself), affecting every predicate that gates on
   ``items is not None`` (append, length, member/``in_``, in_check,
@@ -1876,6 +1888,12 @@ loci per the spec's "merge same-root-cause findings" guidance.
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 12 — each predicate now raises a
+  typed clausal ``type_error`` (``number`` for sum_list, ``orderable``
+  for max_list / min_list) instead of converting the underlying
+  TypeError into a silent ``(_fail, DONE)``. The previous behaviour
+  made undefined-on-input indistinguishable from a clean empty
+  result.
 - **Location:** `clausal/logic/builtins/lists.py:475-479` (sum_list),
   `:493-497` (max_list), `:511-515` (min_list)
 - **Discovered by:** Task 7 of Phase 0
@@ -1923,6 +1941,10 @@ documentation gap.
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 12 — cascade-closed by the
+  ``_as_items`` walk-into-Seg* extension that closes [[F051]]. Every
+  higher_order predicate imports the shared helper from lists.py, so
+  the single Seg*-walk patch fixes all ~16 predicates in one shot.
 - **Location:** `clausal/logic/builtins/higher_order.py:62` (maplist/2),
   `:86` (maplist/3), `:113` (include/3), `:140` (exclude/3),
   `:167` (foldl/4), `:202` (take_while/3), `:230` (drop_while/3),
@@ -1985,6 +2007,14 @@ blind-spot family).
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 12 — the Type-bound mode now
+  takes a Python path that walks the Basic Multilingual Plane on
+  first call (with a per-type cache) for the Unicode-eligible types
+  (``alpha`` / ``alnum`` / ``upper`` / ``lower`` / ``print``); the C
+  accelerator is kept for the intentionally ASCII-only types
+  (``ascii`` / ``control`` / ``digit`` / ``space`` / ``punct``). The
+  enumeration and Char-bound test relations now agree on every
+  Unicode codepoint up to U+FFFF.
 - **Location:** `clausal/logic/builtins/chars.py:76-86` (pre-computed
   ASCII-only enumeration tables); `clausal/logic/builtins/_chars_core.c:128-132`
   (`type_to_chars` populated from 0..127 only); `chars.py:148-158` and
@@ -2042,6 +2072,13 @@ codepoints ≥ 0x100).
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 12 (per user decision option A —
+  input-type wins) — ``replicate(N, '<c>', R)`` now returns a ``str``
+  when the element is a 1-char str (the lossless str-shape); the
+  output of ``same_length(<str>, X)`` is a fresh ``SegString`` of N
+  ``VarSeg`` holes (the natural variable-bearing str shape).
+  ``length(L, N)`` output mode has no type hint at the call site —
+  documented as list-only and unchanged.
 - **Location:** `clausal/logic/builtins/lists.py:210-215` (length
   output mode), `:589-598` (replicate), `:683-697` (same_length)
 - **Discovered by:** Task 7 of Phase 0
@@ -2097,6 +2134,19 @@ principle promote.
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 12 — resolved per user decision
+  option A (**input-type wins**): when input is ``str``, output is
+  ``str``; when input is ``list``, output is ``list`` (even if every
+  element is a 1-char str — *no* silent promotion). The existing
+  ``was_string = isinstance(_, str)`` test already implements this;
+  the audit fix is the *contract clarification* plus an aligned
+  ``_was_string`` helper for the (also-str-shaped) ground SegString
+  case. C9 test ``test_F054_seq_result_input_type_wins`` now codifies
+  the option-A symmetry across the 8 predicates in the matrix.
+  Lock-in updates: ``tests/test_list_util.py::TestReplicate`` and
+  ``tests/fixtures/list_util.clausal`` (replicate basic / zero) — both
+  previously asserted ``[["x","x","x"]]`` / ``[[]]``, updated to
+  ``["xxx"]`` / ``[""]`` per F053 + option A.
 - **Location:** `clausal/logic/builtins/lists.py:60-65` (helper) plus
   every call site that derives ``was_string`` from
   ``isinstance(lst_val, str)``: reverse (`:236`), msort (`:314`), sort
@@ -2146,6 +2196,13 @@ originated as str or list.  Picking a coherent rule is the C1+C9 work.
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 12 — the outer matrix guard now
+  uses ``_as_items`` (accepts list / str / ground Seg*) so
+  ``transpose("ab", T)`` succeeds with ``T = [['a'], ['b']]`` (the
+  str-as-list-of-1-char-strs interpretation). Inner-row handling is
+  unchanged; rows that don't themselves walk to a sequence are
+  treated as single-cell rows so the inner / outer treatments are
+  symmetric.
 - **Location:** `clausal/logic/builtins/lists.py:700-722` (the
   ``isinstance(mat, list)`` gate at :704)
 - **Discovered by:** Task 7 of Phase 0
@@ -2186,6 +2243,13 @@ doc right but contract inconsistent with siblings" pattern).
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 12 — flatten now recurses through
+  a *nested* ``str`` (and ground ``SegString``) as if it were a list
+  of 1-char strs, restoring the strings-as-lists equivalence:
+  ``flatten(['ab'])`` and ``flatten([['a','b']])`` now both return
+  ``['a','b']``. The top-level container retains the classic Prolog
+  contract (a non-list input flattens to its single-element
+  wrapper).
 - **Location:** `clausal/logic/builtins/lists.py:277-301`
 - **Discovered by:** Task 7 of Phase 0
 - **Probe:** `probes/probe_F056.py`
@@ -2227,6 +2291,13 @@ for the ledger's completeness.
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 12 — resolved per user decision
+  option A (**input-type wins**), shared with [[F054]]: list input
+  keeps list output, str input keeps str output, no silent promotion
+  of list-of-1-char-strs. The current ``was_str = isinstance(_,
+  str)`` test in each higher_order predicate already implements this;
+  the audit fix is the contract clarification plus the F063
+  ``_seq_result`` thread added to the four output-builders.
 - **Location:** every higher_order predicate that derives ``was_str``
   from ``isinstance(lst_val, str)`` and wraps the result via
   ``_seq_result``: ``include/3`` (`:117`, `:129`), ``exclude/3`` (`:144`,
@@ -2275,6 +2346,18 @@ ambiguous whether the value originated as str or list.
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 12 — each of the four
+  output-builders now threads ``was_str = isinstance(lst_val, str)``
+  and wraps the result via ``_seq_result``, matching the rest of the
+  higher_order family. For ``group_by`` the inner groups (slices of
+  the input) are also wrapped so an all-1-char-str group collapses
+  to a str; the outer container stays a list (a str cannot contain
+  str cells under the strings-as-lists contract). Behaviour
+  follows option A (input-type wins): str input with all-1-char-str
+  elements collapses to str; list input keeps list output. The
+  pre-existing int-codes test (``maplist(char_to_code, "abc", R)``
+  → ``[97,98,99]``) is unchanged because ints don't trigger the
+  ``_seq_result`` str-promotion guard.
 - **Location:** `clausal/logic/builtins/higher_order.py:92-102`
   (maplist/3 — ``results = []``, ``unify(ys, results, trail)``),
   `:440-450` (filter_map/3 — ``kept = []``, ``unify(result, kept, trail)``),
@@ -2339,6 +2422,12 @@ that isn't covered.
 
 - **Class:** C9 (Polymorphic builtin mode matrix)
 - **Severity:** smell
+- **Status:** fixed in Phase 2 Task 12 — before the final
+  ``instantiation_error`` branch, ``atom_concat/3`` now scans the
+  three args for any bound-but-not-atom-shaped value and raises
+  ``type_error("atom", NonAtom, "atom_concat/3")``. A user
+  ``catch(_, instantiation_error, _)`` handler no longer swallows
+  real type errors as instantiation errors.
 - **Location:** `clausal/logic/builtins/chars.py:346-393` (the boundness
   inference via ``_atom_to_str`` and the final ``else``)
 - **Discovered by:** Task 10 of Phase 0
