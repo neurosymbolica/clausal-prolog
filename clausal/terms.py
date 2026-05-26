@@ -427,9 +427,21 @@ def _seglist_unify_gen(seglist, target_list, trail):
 
 
 def _multi_star_splits(n_stars: int, remainder: int):
-    """Yield all ways to assign *remainder* items across *n_stars* buckets
-    (each bucket ≥ 0).  equivalent to ``_multi_star_splits`` in compiler.py
-    but lives here so runtime code can import it without circular imports.
+    """Yield all weak compositions of *remainder* into *n_stars* parts
+    (each bucket ≥ 0). Equivalent to the ``_multi_star_splits`` in
+    ``compiler.py`` but lives here so runtime code can import it
+    without circular imports.
+
+    Implementation note: iterative depth-first traversal over a shared
+    ``buf`` list, yielding a fresh tuple per step. Tuples are yielded
+    in the same lexicographic order as the previous recursive
+    ``(first,) + rest`` formulation, but without the O(n_stars) tuple
+    concatenation per yield and without the deep generator-chaining
+    overhead. The hot inner loop (incrementing the second-to-last
+    bucket while the last bucket can still donate one unit) is a
+    constant-work fast path; backtracking deeper into the buffer only
+    happens once per fully-consumed inner row. See F026 in the
+    2026-05-25 string-implementation audit.
     """
     if n_stars == 0:
         if remainder == 0:
@@ -438,9 +450,42 @@ def _multi_star_splits(n_stars: int, remainder: int):
     if n_stars == 1:
         yield (remainder,)
         return
-    for first in range(remainder + 1):
-        for rest in _multi_star_splits(n_stars - 1, remainder - first):
-            yield (first,) + rest
+    buf = [0] * n_stars
+    rem_at = [0] * n_stars
+    rem_at[0] = remainder
+    last = n_stars - 1
+    last_m1 = last - 1
+    # Initial descent — set every bucket except the last to 0, propagating
+    # the running remainder so ``rem_at[i]`` is the budget available to
+    # ``buf[i..last]`` given the chosen ``buf[0..i-1]``.
+    idx = 0
+    while idx < last:
+        idx += 1
+        rem_at[idx] = rem_at[idx - 1] - buf[idx - 1]
+    while True:
+        # ``buf[last]`` is whatever is left after the prefix; emit.
+        buf[last] = rem_at[last_m1] - buf[last_m1]
+        yield tuple(buf)
+        # Fast path: walk the second-to-last bucket through 0..rem_at[last_m1]
+        # without re-descending. This handles the common case where only the
+        # last two positions vary between successive splits.
+        if buf[last_m1] < rem_at[last_m1]:
+            buf[last_m1] += 1
+            continue
+        # Inner row exhausted. Backtrack to find the next prefix that can
+        # be incremented, then redescend (zeroing the right-tail buckets
+        # and refreshing their ``rem_at`` budgets).
+        idx = last_m1 - 1
+        while idx >= 0 and buf[idx] >= rem_at[idx]:
+            idx -= 1
+        if idx < 0:
+            return
+        buf[idx] += 1
+        idx += 1
+        while idx <= last_m1:
+            rem_at[idx] = rem_at[idx - 1] - buf[idx - 1]
+            buf[idx] = 0
+            idx += 1
 
 
 # ── SegString — segmented partial string ──────────────────────────────────────

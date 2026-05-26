@@ -3458,6 +3458,16 @@ fixing in isolation.
 
 - **Class:** C17 (Performance, memory, leaks)
 - **Severity:** perf
+- **Status:** partially fixed in Phase 2 Task 1 (commit `<pending>`) —
+  algorithmic constant factor reduced ~3x on the dev VM (5.0 s →
+  1.83 s for `_multi_star_splits(10, 20)`), but the test threshold of
+  1.0 s is below the inherent ~0.98 s floor for materialising 10 M
+  distinct 10-tuples on this 4 GB aarch64 VM (GC pressure dominates
+  what little Python-level overhead remains). Phase 1 xfail marker
+  kept in place; F026 stays open until either the test threshold is
+  relaxed to reflect dev-VM constraints or the work is pushed into a
+  C extension. Production callers benefit from the speedup
+  immediately (they only iterate splits, never `list()` them).
 - **Location:** `clausal/terms.py:429-443`
 - **Discovered by:** Task 2 of Phase 0
 - **Probe:** `probes/probe_F026.py`
@@ -3490,6 +3500,31 @@ semantics (e.g. add cuts, constrain the split shape upfront).
 fewer solutions are needed) rather than in the gen itself. Logged
 for visibility; no Phase 2 action unless a benchmark shows real
 user-visible regression.
+
+Phase 2 Task 1 update: the gen itself was restructured into an
+iterative depth-first traversal over a shared buffer (no recursion,
+no per-yield tuple concatenation), preserving the original lex
+order so the unit tests in `test_seglist_core.py::TestMultiStarSplits`
+continue to assert exact tuples. Benchmarks on the dev VM
+(`sum(1 for _ in ...)` — measures the gen's intrinsic cost without
+the `list()` materialisation overhead the Phase 1 test pays):
+
+| (n_stars, remainder) | splits      | before  | after  |
+|----------------------|-------------|---------|--------|
+| (4, 50)              |      23 426 | 0.005 s | 0.002 s |
+| (8, 20)              |     888 030 | 0.367 s | 0.106 s |
+| (10, 20)             |  10 015 005 | 5.074 s | 1.315 s |
+
+For the Phase 1 test specifically (`list(_multi_star_splits(10, 20))`),
+the after-timing is ~1.83 s on the dev VM — still over the 1.0 s
+threshold. The remaining cost is dominated by allocating 10 M
+distinct 10-tuples plus the GC pressure that puts on a 4 GB VM
+(the bare `[(0, 0, …, 0, i) for i in range(10_000_000)]` baseline is
+0.98 s here, leaving < 0.02 s of headroom for any algorithmic work).
+Closing that gap would require either a C extension or relaxing the
+test threshold to reflect the dev-VM ceiling. Production callers
+consume splits one at a time (no `list()` materialisation) and so
+see the full speedup unconditionally.
 
 ### F078 — `_chars_core.c::char_type_find_chars` has dead non-ASCII allocation branch
 
