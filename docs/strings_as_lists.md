@@ -203,6 +203,40 @@ of characters is expected, with no loss of functionality.
 
 ---
 
+## Code-point vs grapheme semantics
+
+Clausal's strings-as-lists contract operates at **code-point granularity**,
+not grapheme granularity. This means:
+
+- A multi-codepoint emoji like `"👍🏽"` (thumbs-up + skin-tone modifier)
+  has `len("👍🏽") == 2` and unifies with `["👍", "🏽"]`, not `["👍🏽"]`.
+- A base character followed by a combining mark — `"é"` written as
+  decomposed form (base `e` + combining acute U+0301) — has length 2 and unifies
+  with `["e", "́"]`. The same character in precomposed form (`"é"`, U+00E9)
+  has length 1 and unifies with `["é"]`. NFC and NFD representations of the
+  same grapheme do not unify with each other.
+- Lone surrogate halves are processed as individual code points
+  (Python permits malformed Unicode at the surrogate level).
+- List elements that are multi-character strings (e.g. `["ab", "c"]`)
+  are **rejected** by the per-element check; only 1-character list elements
+  participate in str↔list unification.
+
+This rule applies uniformly across:
+
+- C-level `unify` (str ↔ list).
+- `SegList` and `SegString` walks and unification.
+- Head and body multi-star patterns over string targets.
+- `phrase/2,3` and DCG terminals.
+- `char_type`, `char_code`, `atom_chars`, `atom_codes`.
+- All polymorphic list builtins (`append`, `length`, `member`, etc.).
+
+If your application needs grapheme-aware processing (e.g. cursor
+movement in a text editor), use the standard Python library
+`unicodedata` or the third-party `regex`/`grapheme` packages
+**before** handing the string to Clausal — Clausal sees code points.
+
+---
+
 ## Comparison with Prolog
 
 in_ Prolog systems like [Scryer Prolog](scryer.md), strings *are* lists of characters — the

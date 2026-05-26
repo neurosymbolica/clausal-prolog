@@ -1083,6 +1083,7 @@ tabling concerns.
 
 - **Class:** C7 (Unicode / multi-codepoint)
 - **Severity:** doc-only
+- **Status:** fixed in 07129a8
 - **Location:** `clausal/logic/variables/_variables.c:1127-1179`
 - **Discovered by:** Task 1 of Phase 0
 - **Probe:** `probes/probe_F002.py`
@@ -1105,13 +1106,13 @@ assert unify(s, [s], Trail()) is False  # 1 list elem, 2 codepoint str
 **Expected:** Defensible at the code-point level (Python's own indexing).
 **Actual:** Same as expected.
 
-**Notes:** This is the documented contract per spec C7; the finding is to
-make it explicit in user-visible documentation. No semantic fix planned.
+**Notes:** Doc-only fix landed in commit 2c8b1f7 (Phase 2 Task 2) — documented in the "Code-point vs grapheme semantics" section of docs/strings_as_lists.md.
 
 ### F003 — NFC and NFD forms of the same grapheme do not unify
 
 - **Class:** C7 (Unicode / multi-codepoint)
 - **Severity:** doc-only
+- **Status:** fixed in 07129a8
 - **Location:** `clausal/logic/variables/_variables.c:1127-1179` and the
   fall-through to `PyObject_RichCompareBool` at `_variables.c:1229`
 - **Discovered by:** Task 1 of Phase 0
@@ -1138,13 +1139,13 @@ assert unify(nfd, ["e", "́"], Trail()) is True
 **Expected:** Code-point-level identity (the implementation rule).
 **Actual:** Same as expected.
 
-**Notes:** Document the no-normalisation contract. Consider whether DCG /
-`phrase` should accept an opt-in normalisation hook (out of scope).
+**Notes:** Doc-only fix landed in commit 2c8b1f7 (Phase 2 Task 2) — documented in the "Code-point vs grapheme semantics" section of docs/strings_as_lists.md.
 
 ### F004 — List element must be exactly one codepoint (multi-char rejected)
 
 - **Class:** C7 (Unicode / multi-codepoint)
 - **Severity:** doc-only
+- **Status:** fixed in 07129a8
 - **Location:** `clausal/logic/variables/_variables.c:1129, 1144, 1171`
 - **Discovered by:** Task 1 of Phase 0
 - **Probe:** `probes/probe_F004.py`
@@ -1166,10 +1167,7 @@ assert unify("abc", ["abc"],     Trail()) is False
 **Expected:** False (single-codepoint-per-element rule).
 **Actual:** False.
 
-**Notes:** Spec C7 calls this out explicitly ("currently rejected;
-document the rule"). The finding is to add a note to the str↔list
-section of `_variables.c` and any user-facing docs that describe the
-contract.
+**Notes:** Doc-only fix landed in commit 2c8b1f7 (Phase 2 Task 2) — documented in the "Code-point vs grapheme semantics" section of docs/strings_as_lists.md.
 
 Reproducer cases all return False at the size-mismatch check (`:1129`) before reaching the per-element `PyUnicode_GET_LENGTH(elem) == 1` gate (`:1144`/`:1171`). The per-element gate is effectively unreachable in isolation because any list whose elements sum to `n` codepoints with at least one multi-char element must have fewer than `n` slots. The doc-only finding stands: the contract documented by the per-element gate (no multi-char elements) is implicitly enforced by the size check in every reachable case.
 
@@ -1177,6 +1175,7 @@ Reproducer cases all return False at the size-mismatch check (`:1129`) before re
 
 - **Class:** C7 (Unicode / multi-codepoint)
 - **Severity:** doc-only
+- **Status:** fixed in 07129a8
 - **Location:** `clausal/logic/variables/_variables.c:1127-1179`
 - **Discovered by:** Task 1 of Phase 0
 - **Probe:** `probes/probe_F007.py`
@@ -1200,13 +1199,13 @@ assert unify(smile, ["\ud83d", "\ude00"], Trail()) is False
 **Expected:** Codepoint-level identity, no UTF-16 reassembly.
 **Actual:** Same as expected.
 
-**Notes:** Document the no-UTF-16 contract. Matches Python's `len()` and
-indexing semantics on str.
+**Notes:** Doc-only fix landed in commit 2c8b1f7 (Phase 2 Task 2) — documented in the "Code-point vs grapheme semantics" section of docs/strings_as_lists.md.
 
 ### F071 — `char_type/2` silently fails on multi-codepoint graphemes
 
 - **Class:** C7 (Unicode / multi-codepoint)
 - **Severity:** doc-only
+- **Status:** fixed in 07129a8
 - **Location:** `clausal/logic/builtins/chars.py:104-106` (the
   ``len(vc) != 1`` gate)
 - **Discovered by:** Task 10 of Phase 0
@@ -1237,16 +1236,13 @@ assert len(solutions(StepGenerator(disp, None, None, None,
 [[F002]] / [[F004]]).
 **Actual:** Same as expected — the failure mode is silent, no error.
 
-**Notes:** Internally consistent with [[F002]]: code-point indexing
-throughout. The doc-only finding is to extend the same paragraph that
-covers F002/F003/F004/F007 to mention the silent-fail behaviour of
-``char_type/2`` on multi-codepoint inputs. Users who normalise to NFC
-and avoid emoji modifier sequences are unaffected.
+**Notes:** Doc-only fix landed in commit 2c8b1f7 (Phase 2 Task 2) — documented in the "Code-point vs grapheme semantics" section of docs/strings_as_lists.md.
 
 ### F074 — `upcase_atom`/`downcase_atom` can change string length
 
 - **Class:** C7 (Unicode / multi-codepoint)
 - **Severity:** doc-only
+- **Status:** fixed in 07129a8
 - **Location:** `clausal/logic/builtins/chars.py:207, 222` (the
   ``.upper()`` / ``.lower()`` calls)
 - **Discovered by:** Task 10 of Phase 0
@@ -1273,16 +1269,13 @@ binds ``U = 'STRASSE'`` (length 7, was 6).
 implementation rule.
 **Actual:** Same as expected.
 
-**Notes:** Doc-only. No code change recommended; ISO Prolog systems
-that demand strict length preservation use locale-independent
-single-character case maps, which is not what Python ``.upper()`` /
-``.lower()`` provides. Same documentation paragraph as
-[[F002]]/[[F003]]/[[F007]]/[[F071]].
+**Notes:** Doc-only fix landed in commit 2c8b1f7 (Phase 2 Task 2) — documented in the "Code-point vs grapheme semantics" section of docs/strings_as_lists.md.
 
 ### F076 — `sub_atom/5` and `atom_concat/3` split at codepoint boundaries
 
 - **Class:** C7 (Unicode / multi-codepoint)
 - **Severity:** doc-only
+- **Status:** fixed in 07129a8
 - **Location:** `clausal/logic/builtins/chars.py:386-388, 483` and
   `clausal/logic/builtins/_chars_core.c:272-298, 450`
 - **Discovered by:** Task 10 of Phase 0
@@ -1303,10 +1296,7 @@ split of ``atom_concat(A, B, g)`` yields
 **Expected:** Codepoint-level slicing — the documented contract.
 **Actual:** Same as expected.
 
-**Notes:** Internally consistent with [[F002]]/[[F004]]/[[F007]];
-extend the same docs paragraph. For grapheme-aware applications the
-user must normalise to NFC and avoid emoji modifier sequences before
-using positional predicates.
+**Notes:** Doc-only fix landed in commit 2c8b1f7 (Phase 2 Task 2) — documented in the "Code-point vs grapheme semantics" section of docs/strings_as_lists.md.
 
 **Prior-known:** commit 98379ed introduced the C accelerator with the same codepoint-offset slicing semantics as the Python original; no commit in the history has changed sub_atom/atom_concat to grapheme-aware semantics.
 
