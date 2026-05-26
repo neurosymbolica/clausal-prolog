@@ -3125,6 +3125,17 @@ fix is cross-cutting.
 
 - **Class:** C14 (Term inspection drift)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 10 — ``_copy_term_py`` in
+  ``clausal/logic/builtins/inspection.py`` now has explicit ``SegList``
+  / ``SegString`` branches that allocate a fresh container, copy each
+  ``ConcreteSeg``'s elements, and produce a fresh ``VarSeg`` whose
+  ``var`` is threaded through ``var_map`` (so Var sharing inside the
+  container is preserved).  The C-accelerated ``_copy_term_impl`` is
+  wrapped in the same module so Seg* shapes are short-circuited to the
+  Python implementation before reaching ``c_copy_term``; the C
+  function itself remains Seg*-blind but is no longer ever invoked on
+  those shapes from the helper path.  Same Python-shim pattern used
+  by [[F083]] for ``_is_ground``.
 - **Location:** `clausal/logic/builtins/inspection.py:21-47`
   (`_copy_term_py` — falls through every type case for ``Seg*``) and the
   C twin at `clausal/logic/variables/_variables.c:2403-2579`
@@ -3271,6 +3282,14 @@ chosen — they're inconsistencies within the current code regardless.
 
 - **Class:** C14 (Term inspection drift)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 10 — ``_collect_vars_py`` in
+  ``clausal/logic/builtins/inspection.py`` now has explicit
+  ``SegList`` / ``SegString`` branches that walk every
+  ``ConcreteSeg``'s elements and recurse into every ``VarSeg.var``.
+  The C-accelerated ``_collect_vars_impl`` is wrapped so Seg* shapes
+  are routed through the Python implementation before reaching the
+  C walker; the C function itself remains Seg*-blind but is no
+  longer ever invoked on those shapes from the helper path.
 - **Location:** `clausal/logic/builtins/inspection.py:50-79`
   (`_collect_vars_py`) and the C twin at
   `clausal/logic/variables/_variables.c` (`_collect_vars_impl`)
@@ -3314,6 +3333,13 @@ moment user code uses ``Seg*`` and ``term_variables`` together.
 
 - **Class:** C14 (Term inspection drift)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 10 — inherits the fix from
+  [[F093]]: ``numbervars/3`` drives ``_collect_vars_impl`` and the
+  Python wrapper around the C walker now routes ``SegList`` /
+  ``SegString`` through ``_collect_vars_py``, which recurses into
+  every ``VarSeg.var`` and surfaces the unbound Vars so
+  ``numbervars`` can bind them to ``$VAR(N)`` atoms like any other
+  unbound Var.
 - **Location:** `clausal/logic/builtins/inspection.py:224-253`
   (`_number_vars__3` — drives `_collect_vars_impl`)
 - **Discovered by:** Task 12 of Phase 0

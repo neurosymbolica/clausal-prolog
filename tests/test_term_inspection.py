@@ -559,11 +559,20 @@ class TestCopyTermKWTerm:
 
 # ── copy_term/2 and term_variables/2 with DictTerm / SegList ──────────────────
 #
-# DictTerm and SegList are not yet handled by c_copy_term / c_collect_vars.
-# They fall through to "return as-is", meaning:
-#   - copy_term shares the *same* Var objects (no fresh copy)
-#   - term_variables returns [] (vars not collected)
-# These tests document the current behaviour so any future fix breaks visibly.
+# DictTerm is still not handled by c_copy_term / c_collect_vars: it falls
+# through to "return as-is" (copy_term shares the same Var objects;
+# term_variables returns []).  These tests document that current behaviour
+# so any future fix breaks visibly.
+#
+# SegList / SegString — historically had the same gap.  Closed by the
+# 2026-05-25 string audit (F092 / F093 / F094): the Python wrapper in
+# ``clausal/logic/builtins/inspection.py`` now short-circuits Seg*
+# shapes before reaching the Seg*-blind C accelerator, producing an
+# independent copy with FRESH Vars threaded through ``var_map`` and
+# reporting every VarSeg's Var via ``term_variables`` /
+# ``numbervars``.  The tests below are the inverted lock-in of the
+# documenting tests added in commit 4507be8: they now assert the
+# fixed contract.
 
 
 class TestCopyTermDictTerm:
@@ -608,37 +617,77 @@ class TestTermVariablesDictTerm:
 
 
 class TestCopyTermSegList:
-    """Test copy_term behaviour on SegList via the C helper directly.
+    """Test copy_term behaviour on SegList via the helper directly.
 
     SegList cannot be passed through the goal compiler, so we call
-    _copy_term_impl directly to verify the current fall-through behaviour.
+    _copy_term_impl directly to verify the new contract: copy_term
+    produces an independent SegList whose VarSegs reference FRESH
+    Vars (F092 — fixed in the 2026-05-25 string audit, Phase 2 Task 10).
     """
 
-    def test_copy_seglist_var_not_freshened(self):
-        """SegList VarSeg Vars are NOT freshened — copy shares the original."""
+    def test_copy_seglist_var_freshened(self):
+        """SegList VarSeg Vars ARE freshened — copy is independent of original."""
         # nv
         from clausal.logic.builtins.inspection import _copy_term_impl
         x = Var()
         t = SegList([ConcreteSeg([1, 2]), VarSeg(x)])
         c = _copy_term_impl(t, {})
         assert isinstance(c, SegList)
-        # current behaviour: SegList falls through → same Var object (not a fresh copy)
-        assert c._segments[1].var is x
+        # F092 (fixed): the VarSeg.var slot now holds a FRESH Var, not
+        # the original ``x``.  Without this, binding the original's
+        # var would propagate to the copy and vice versa, breaking
+        # the per-call fresh-Var guarantee that copy_term provides.
+        fresh = c._segments[1].var
+        assert isinstance(fresh, Var)
+        assert fresh is not x, (
+            f"copy_term(SegList(..., VarSeg(x))) produced a copy whose "
+            f"inner VarSeg.var IS the original x — expected a fresh "
+            f"Var threaded through var_map. Regression on F092."
+        )
+        # Concrete elements are still equal but the container is a
+        # NEW SegList object, not the input.
+        assert c is not t
+        assert c._segments[0].elements == [1, 2]
+
+    def test_copy_seglist_var_sharing_preserved(self):
+        """When the same Var appears in two VarSegs, the copy preserves
+        the sharing (both new VarSegs reference the SAME fresh Var)."""
+        # nv — F092 sharing invariant
+        from clausal.logic.builtins.inspection import _copy_term_impl
+        x = Var()
+        t = SegList([VarSeg(x), ConcreteSeg([1]), VarSeg(x)])
+        c = _copy_term_impl(t, {})
+        a = c._segments[0].var
+        b = c._segments[2].var
+        assert isinstance(a, Var) and isinstance(b, Var)
+        assert a is b, (
+            f"copy_term must preserve Var sharing within Seg* containers: "
+            f"the same original Var appearing in two VarSegs must map to "
+            f"the SAME fresh Var in the copy. Got {a!r} vs {b!r}."
+        )
+        assert a is not x
 
 
 class TestTermVariablesSegList:
-    """Test term_variables behaviour on SegList via the C helper directly."""
+    """Test term_variables behaviour on SegList via the helper directly.
 
-    def test_seglist_vars_not_collected(self):
-        """term_variables on SegList currently returns [] (gap, not handled)."""
-        # nv
+    F093 (fixed in the 2026-05-25 string audit, Phase 2 Task 10):
+    term_variables now reports the Var inside every VarSeg of a
+    SegList / SegString.
+    """
+
+    def test_seglist_vars_collected(self):
+        """term_variables on SegList now reports the VarSeg's Var."""
+        # nv — F093 inverted lock-in
         from clausal.logic.builtins.inspection import _collect_vars_impl
         x = Var()
         t = SegList([VarSeg(x)])
         result = []
         _collect_vars_impl(t, result)
-        # current behaviour: SegList falls through → empty list
-        assert result == []
+        assert result == [x], (
+            f"term_variables(SegList([VarSeg(x)])) should report x; "
+            f"got {result!r}. Regression on F093."
+        )
 
 
 # ── global_atom/2 ──────────────────────────────────────────────────────────────

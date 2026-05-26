@@ -7,7 +7,7 @@ from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, make_predicate
-from clausal.terms import Compound, KWTerm
+from clausal.terms import Compound, KWTerm, SegList, SegString, VarSeg, ConcreteSeg
 
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import _functor_name, _arity, _nth_arg, _args_list
@@ -39,6 +39,40 @@ def _copy_term_py(term: Any, var_map: dict) -> Any:
         return Compound(term.functor, tuple(_copy_term_py(a, var_map) for a in term.args))
     if isinstance(term, KWTerm):
         return KWTerm(term.functor, **{k: _copy_term_py(v, var_map) for k, v in term.items()})
+    # F092 (audit 2026-05-25): Seg* containers must produce an
+    # independent copy whose VarSegs reference FRESH Vars threaded
+    # through ``var_map`` so co-references inside the container are
+    # preserved.  Falling through to ``return term`` (the historical
+    # behaviour) aliased the "copy" to the original — binding the
+    # original's Var mutated the copy and vice versa, breaking the
+    # per-call fresh-Var guarantee that ``copy_term`` is supposed to
+    # provide.  Mirrors the Seg*-blind cluster fixed at the Python
+    # level for [[F083]]; the C accelerator (``c_copy_term``) is
+    # similarly blind and is short-circuited via the Python wrapper
+    # ``_copy_term`` below.
+    if isinstance(term, SegList):
+        new_segments: list = []
+        for seg in term.segments:
+            if isinstance(seg, ConcreteSeg):
+                new_segments.append(
+                    ConcreteSeg([_copy_term_py(e, var_map) for e in seg.elements])
+                )
+            elif isinstance(seg, VarSeg):
+                new_segments.append(VarSeg(_copy_term_py(seg.var, var_map)))
+            else:
+                # Unknown segment — be conservative and recurse.
+                new_segments.append(_copy_term_py(seg, var_map))
+        return SegList(new_segments)
+    if isinstance(term, SegString):
+        new_segments = []
+        for seg in term.segments:
+            if isinstance(seg, str):
+                new_segments.append(seg)
+            elif isinstance(seg, VarSeg):
+                new_segments.append(VarSeg(_copy_term_py(seg.var, var_map)))
+            else:
+                new_segments.append(_copy_term_py(seg, var_map))
+        return SegString(new_segments)
     if is_term_instance(term):
         return type(term)(**{
             name: _copy_term_py(getattr(term, name), var_map)
@@ -74,6 +108,32 @@ def _collect_vars_py(term: Any, result: list, _seen: set | None = None) -> None:
         for v in term.values():
             _collect_vars_py(v, result, _seen)
         return
+    # F093 (audit 2026-05-25): Seg* containers expose their VarSegs as
+    # variables.  Walk every ConcreteSeg element and every VarSeg's
+    # ``var`` slot so ``term_variables`` and ``numbervars`` (which
+    # share this walker) see the unbound Vars hidden inside Seg*
+    # containers.  Same root cause as [[F083]] / [[F092]] — the C
+    # accelerator (``_collect_vars_impl``) is Seg*-blind and is
+    # short-circuited by the Python wrapper below.
+    if isinstance(term, SegList):
+        for seg in term.segments:
+            if isinstance(seg, ConcreteSeg):
+                for e in seg.elements:
+                    _collect_vars_py(e, result, _seen)
+            elif isinstance(seg, VarSeg):
+                _collect_vars_py(seg.var, result, _seen)
+            else:
+                _collect_vars_py(seg, result, _seen)
+        return
+    if isinstance(term, SegString):
+        for seg in term.segments:
+            if isinstance(seg, str):
+                continue
+            if isinstance(seg, VarSeg):
+                _collect_vars_py(seg.var, result, _seen)
+            else:
+                _collect_vars_py(seg, result, _seen)
+        return
     if is_term_instance(term):
         for name in term_field_names(term):
             _collect_vars_py(getattr(term, name), result, _seen)
@@ -85,9 +145,32 @@ _copy_term_impl = _copy_term_py
 _collect_vars_impl = _collect_vars_py
 try:
     from clausal.logic.variables._variables import (
-        _copy_term_impl,
-        _collect_vars_impl,
+        _copy_term_impl as _c_copy_term_impl,
+        _collect_vars_impl as _c_collect_vars_impl,
     )
+
+    # F092 / F093 (audit 2026-05-25): the C accelerators do not know
+    # about ``SegList`` / ``SegString`` — they fall through to "return
+    # as-is" for ``copy_term`` (aliasing the original) and "leaf" for
+    # ``term_variables`` (missing VarSegs).  Both types are absent
+    # from ``_register_term_types`` (which only knows ``Compound`` and
+    # ``KWTerm``).  Short-circuit Seg* shapes in Python (same pattern
+    # used by ``_is_ground`` for [[F083]]) and delegate every other
+    # shape to the C fast path.  Within the Python branch we still
+    # recurse via ``_copy_term_py`` / ``_collect_vars_py`` so any
+    # nested Seg* container is handled too.
+    def _copy_term_impl(term: Any, var_map: dict) -> Any:
+        t = deref(term)
+        if isinstance(t, (SegList, SegString)):
+            return _copy_term_py(t, var_map)
+        return _c_copy_term_impl(t, var_map)
+
+    def _collect_vars_impl(term: Any, result: list) -> None:
+        t = deref(term)
+        if isinstance(t, (SegList, SegString)):
+            _collect_vars_py(t, result)
+            return
+        _c_collect_vars_impl(t, result)
 except ImportError:
     pass
 

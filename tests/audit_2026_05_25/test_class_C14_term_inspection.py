@@ -166,10 +166,6 @@ def test_F091_arg_on_list_uses_python_indexing_not_cons_cell():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F092: copy_term aliases Seg* containers (correctness landmine)",
-)
 def test_F092_copy_term_aliases_segstring_binding_propagates():
     """``copy_term(SegString([..., VarSeg(V)]), X)`` must produce a
     FRESH container whose inner ``VarSeg`` references a FRESH ``Var``.
@@ -231,10 +227,6 @@ def test_F092_copy_term_aliases_segstring_binding_propagates():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F093: term_variables Seg*-blind",
-)
 def test_F093_term_variables_blind_to_segstring_varseg():
     """``term_variables(SegString([..., VarSeg(V)]), Vs)`` should bind
     ``Vs`` to a list containing ``V`` (and similarly for SegList).
@@ -267,10 +259,6 @@ def test_F093_term_variables_blind_to_segstring_varseg():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F094: numbervars/3 cannot number Vars inside Seg* containers",
-)
 def test_F094_numbervars_misses_varsegs_in_segstring():
     """``numbervars(SegString([..., VarSeg(V)]), 0, End)`` should
     advance ``End`` to ``1`` and bind ``V`` to ``$VAR(0)``.
