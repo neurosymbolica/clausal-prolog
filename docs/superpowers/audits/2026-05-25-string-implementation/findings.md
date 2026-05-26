@@ -3366,6 +3366,7 @@ strings audit but worth flagging for any Phase 2 work that touches
 
 - **Class:** C16 (Free-threaded build safety)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 4
 - **Location:** `clausal/logic/variables/_variables.c:1127-1179`
 - **Discovered by:** Task 1 of Phase 0
 - **Probe:** `probes/probe_F011.py`
@@ -3403,6 +3404,14 @@ in `FT_CS_BEGIN(&cs, t2_or_t1)`. The neighbouring plain list-vs-list
 block (`_variables.c:1103-1116`) has the same gap and should be
 re-examined as part of any fix. Cross-ref [[F012]] (the same loop also
 needs to widen its element type check).
+
+Fixed in Phase 2 Task 4 — replaced `PyList_GET_ITEM` with
+`PyList_GetItemRef` at all 4 str↔list / list↔list unify sites in
+`_variables.c` (lines ~1107, ~1113, ~1135, ~1163). Refcount discipline
+preserved on all return paths including error exits. Test xfail marker
+removed; test now passes reliably on GIL builds (and is expected to
+pass on FT builds — `PyList_GetItemRef` is the CPython-blessed FT-safe
+accessor).
 
 Re-graded from smell to bug after Task 1 spec review: the spec's severity vocabulary defines bug to include "refcount/use-after-free hazard", which is exactly what an unprotected PyList_GET_ITEM on FT builds is. Caveats kept: (a) unverified — the test harness runs with the GIL enabled, so the race cannot be reproduced here; (b) the same hazard pattern pre-dates the str↔list addition and exists in the neighbouring plain list-vs-list block at `_variables.c:1103-1116` — fixing F011 should address both.
 

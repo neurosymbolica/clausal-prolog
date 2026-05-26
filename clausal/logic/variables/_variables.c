@@ -1104,15 +1104,35 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         Py_ssize_t n = PyList_GET_SIZE(t1);
         if (n != PyList_GET_SIZE(t2)) return 0;
         for (Py_ssize_t i = 0; i < n - 1; i++) {
-            int r = do_unify(PyList_GET_ITEM(t1, i),
-                             PyList_GET_ITEM(t2, i),
-                             trail, depth + 1, oc);
+            /* FT-safe element access: PyList_GetItemRef returns a new
+             * strong reference (NULL on error) and applies the appropriate
+             * critical section on free-threaded builds. */
+            PyObject *e1 = PyList_GetItemRef(t1, i);
+            if (e1 == NULL) return -1;
+            PyObject *e2 = PyList_GetItemRef(t2, i);
+            if (e2 == NULL) {
+                Py_DECREF(e1);
+                return -1;
+            }
+            int r = do_unify(e1, e2, trail, depth + 1, oc);
+            Py_DECREF(e1);
+            Py_DECREF(e2);
             if (r != 1) return r;
         }
         if (n == 0) return 1;
-        return do_unify(PyList_GET_ITEM(t1, n-1),
-                        PyList_GET_ITEM(t2, n-1),
-                        trail, depth + 1, oc);
+        {
+            PyObject *e1 = PyList_GetItemRef(t1, n - 1);
+            if (e1 == NULL) return -1;
+            PyObject *e2 = PyList_GetItemRef(t2, n - 1);
+            if (e2 == NULL) {
+                Py_DECREF(e1);
+                return -1;
+            }
+            int r = do_unify(e1, e2, trail, depth + 1, oc);
+            Py_DECREF(e1);
+            Py_DECREF(e2);
+            return r;
+        }
     }
 
     /* ---- String ↔ List unification ----
@@ -1132,20 +1152,31 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         void *data = PyUnicode_DATA(t1);
         for (Py_ssize_t i = 0; i < n; i++) {
             Py_UCS4 c1 = PyUnicode_READ(kind, data, i);
-            PyObject *elem = var_deref(PyList_GET_ITEM(t2, i));
+            /* FT-safe element access: PyList_GetItemRef returns a new
+             * strong reference (NULL on error); must Py_DECREF on every
+             * exit path including error returns. */
+            PyObject *elem_raw = PyList_GetItemRef(t2, i);
+            if (elem_raw == NULL) return -1;
+            PyObject *elem = var_deref(elem_raw);
             if (Var_Check(elem)) {
                 /* Unbound var — allocate char string and unify (binds the var) */
                 PyObject *ch = PyUnicode_Substring(t1, i, i + 1);
-                if (!ch) return -1;
+                if (!ch) {
+                    Py_DECREF(elem_raw);
+                    return -1;
+                }
                 int r = do_unify(ch, elem, trail, depth + 1, oc);
                 Py_DECREF(ch);
+                Py_DECREF(elem_raw);
                 if (r != 1) return r;
             } else if (PyUnicode_Check(elem)
                        && PyUnicode_GET_LENGTH(elem) == 1
                        && PyUnicode_READ_CHAR(elem, 0) == c1) {
                 /* Ground single-char match — no allocation */
+                Py_DECREF(elem_raw);
                 continue;
             } else {
+                Py_DECREF(elem_raw);
                 return 0;
             }
         }
@@ -1160,18 +1191,29 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         void *data = PyUnicode_DATA(t2);
         for (Py_ssize_t i = 0; i < n; i++) {
             Py_UCS4 c2 = PyUnicode_READ(kind, data, i);
-            PyObject *elem = var_deref(PyList_GET_ITEM(t1, i));
+            /* FT-safe element access: PyList_GetItemRef returns a new
+             * strong reference (NULL on error); must Py_DECREF on every
+             * exit path including error returns. */
+            PyObject *elem_raw = PyList_GetItemRef(t1, i);
+            if (elem_raw == NULL) return -1;
+            PyObject *elem = var_deref(elem_raw);
             if (Var_Check(elem)) {
                 PyObject *ch = PyUnicode_Substring(t2, i, i + 1);
-                if (!ch) return -1;
+                if (!ch) {
+                    Py_DECREF(elem_raw);
+                    return -1;
+                }
                 int r = do_unify(elem, ch, trail, depth + 1, oc);
                 Py_DECREF(ch);
+                Py_DECREF(elem_raw);
                 if (r != 1) return r;
             } else if (PyUnicode_Check(elem)
                        && PyUnicode_GET_LENGTH(elem) == 1
                        && PyUnicode_READ_CHAR(elem, 0) == c2) {
+                Py_DECREF(elem_raw);
                 continue;
             } else {
+                Py_DECREF(elem_raw);
                 return 0;
             }
         }
