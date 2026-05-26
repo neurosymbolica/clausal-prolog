@@ -1,0 +1,407 @@
+"""C3 — SegString blind spots vs SegList.
+
+8 findings (5 bug + 3 design-gap). The dispatch sites that branch on
+the target's container type have SegList arms but no SegString arms.
+A single Phase 2 fix (likely at the _as_items-equivalent layer or per-
+site __walk__ shims) could close many of these in one change.
+
+Findings tested here:
+- F012 Var bound to SegString in list position not recognised as a char
+- F031 _head_list_unify_input never walks SegString (non-ground fails)
+- F032 _head_list_unify_input rejects ground SegString too
+- F034 _head_list_unify_output never walks SegString star_val
+- F040 _body_multi_star_unify rejects ground SegString target
+- F041 _body_multi_star_unify has no non-ground SegString branch
+- F047 Multi-star head guard ignores SegString (ground and non-ground)
+- F075 Every char/atom builtin in chars.py is SegString-blind
+"""
+
+import pytest
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ledger F012: Var bound to SegString in list position not "
+        "recognised as a char"
+    ),
+)
+def test_F012_var_bound_to_segstring_is_char_in_list():
+    """`unify("a", [v])` where `v` is bound to `SegString("a")` should succeed.
+
+    Inside the C unify loop the per-element check is
+    `PyUnicode_Check(elem) && PyUnicode_GET_LENGTH(elem) == 1`. After
+    `var_deref(v)` the element is the SegString instance — not a
+    `str` subclass — so the fast path's `PyUnicode_Check` rejects it
+    and the loop falls to ``return 0`` at `_variables.c:1149/1175`.
+    Semantically the SegString IS the 1-char string ``"a"``, so the
+    unify should succeed.
+    """
+    from clausal.logic.variables import Trail, Var, unify
+    from clausal.terms import SegString
+
+    v = Var()
+    t = Trail()
+    bound = unify(v, SegString("a"), t)
+    assert bound is True, (
+        f"control: binding v to SegString('a') should succeed; "
+        f"got {bound!r}"
+    )
+
+    ok = unify("a", [v], t)
+    assert ok is True, (
+        f"unify('a', [v]) where v is bound to SegString('a') should "
+        f"succeed (the bound value is semantically the char 'a'); "
+        f"got {ok!r}. The C path's PyUnicode_Check excludes SegString "
+        f"and the per-element loop returns 0 at _variables.c:1149/1175."
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ledger F031: _head_list_unify_input never walks SegString "
+        "(non-ground silently fails)"
+    ),
+)
+def test_F031_head_list_unify_input_non_ground_segstring():
+    """`_head_list_unify_input(SegString([\"a\", VarSeg(X), \"c\"]), [H], T, [], t)`
+    should not silently return False.
+
+    The input-mode helper has an explicit ``isinstance(d, SegList)``
+    walk branch but no SegString equivalent. A non-ground SegString
+    flows past the list/str isinstance check, past the SegList check,
+    past the is_var defer, and hits the final ``return False``. The
+    head pattern ``foo([H, *T])`` against this SegString is logically
+    satisfiable (e.g. H="a", T=SegString([VarSeg(X), "c"])), so the
+    silent False drops a real solution.
+    """
+    from clausal.logic.variables import Var, Trail
+    from clausal.terms import SegString, VarSeg
+    from clausal.logic.runtime.list_unify import _head_list_unify_input
+
+    X = Var()
+    seg = SegString(["a", VarSeg(X), "c"])
+    H, T = Var(), Var()
+    t = Trail()
+    result = _head_list_unify_input(seg, [H], T, [], t)
+
+    # Expected: True (or None for deferred). The bug is silent False.
+    assert result is not False, (
+        f"_head_list_unify_input(non-ground SegString, [H], T, [], t) "
+        f"returned {result!r}; expected True (or None for deferred) — "
+        f"the goal is logically satisfiable but list_unify.py:114-117 "
+        f"has no SegString-walking branch."
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ledger F032: _head_list_unify_input rejects ground SegString too"
+    ),
+)
+def test_F032_head_list_unify_input_ground_segstring():
+    """`_head_list_unify_input(SegString([\"abc\"]), [H], T, [], t)` should
+    succeed with H='a' and T='bc'.
+
+    A trivially-ground ``SegString(["abc"])`` whose ``__walk__()``
+    returns the plain str ``"abc"`` is *still* rejected: the function
+    never walks SegString. The unification is unambiguously solvable
+    (H='a', T='bc') — silent False is the stronger half of F031.
+    """
+    from clausal.logic.variables import Var, Trail, deref
+    from clausal.terms import SegString
+    from clausal.logic.runtime.list_unify import _head_list_unify_input
+
+    ss = SegString(["abc"])
+    # Sanity-check the precondition the bug claim depends on.
+    assert ss.is_ground() and ss.__walk__() == "abc", (
+        f"precondition: SegString(['abc']) should be ground and walk "
+        f"to 'abc'; got is_ground={ss.is_ground()}, "
+        f"walk={ss.__walk__()!r}"
+    )
+
+    H, T = Var(), Var()
+    t = Trail()
+    result = _head_list_unify_input(ss, [H], T, [], t)
+
+    assert result is True, (
+        f"_head_list_unify_input(SegString(['abc']), [H], T, [], t) "
+        f"returned {result!r}; expected True with H='a' and T='bc' — "
+        f"SegString walks to 'abc' but the helper never invokes "
+        f"__walk__ (no SegString branch at list_unify.py:114-117)."
+    )
+    assert deref(H) == "a" and deref(T) == "bc", (
+        f"expected H='a', T='bc' from destructuring SegString(['abc']); "
+        f"got H={deref(H)!r}, T={deref(T)!r}"
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ledger F034: _head_list_unify_output never walks SegString star_val"
+    ),
+)
+def test_F034_head_list_unify_output_walks_segstring_star_val():
+    """Output-mode reconstruction should walk a SegString-bound star_val,
+    not append it as a single opaque element.
+
+    The output-mode helper branches `star_val` on ``list`` (extend),
+    ``SegList`` (walk-and-extend), and ``Var`` (rebuild with VarSeg).
+    It has no SegString branch — a SegString-bound star_val falls
+    into the catch-all ``else`` and is appended whole. A head
+    ``foo([H, *T])`` whose T is bound to ``SegString(['hello'])``
+    therefore produces ``['h', SegString(['hello'])]`` instead of
+    walking the SegString into chars (as the parallel SegList branch
+    would do) or, under "input type wins", into a str.
+    """
+    from clausal.logic.variables import Var, unify, Trail, deref
+    from clausal.terms import SegString
+    from clausal.logic.runtime.list_unify import _head_list_unify_output
+
+    target = Var()
+    H, T = Var(), Var()
+    unify(H, "h", Trail())
+    unify(T, SegString(["ello"]), Trail())
+    _head_list_unify_output(target, [H], T, [], Trail())
+
+    bound = deref(target)
+    # The actual current behaviour is ['h', SegString(['ello'])] — a list
+    # with an opaque SegString tail element. The expected behaviour
+    # (symmetric with the SegList branch) walks the SegString.
+    assert bound == ["h", "e", "l", "l", "o"] or bound == "hello", (
+        f"_head_list_unify_output with T bound to SegString(['ello']) "
+        f"should walk the SegString into chars (or, under 'input type "
+        f"wins', into the str 'hello'); got {bound!r} "
+        f"(type={type(bound).__name__}). The SegString was appended as "
+        f"a single opaque element because there is no SegString branch "
+        f"at list_unify.py:166-200."
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ledger F040: _body_multi_star_unify rejects ground SegString target"
+    ),
+)
+def test_F040_body_multi_star_unify_ground_segstring():
+    """`_body_multi_star_unify(SegString(["abc"]), [fixed,star,fixed], t)`
+    should yield True (one solution), not silently produce [].
+
+    The dispatch checks ``(list, str)``, then ``SegList``, then
+    ``is_var``. A trivially ground ``SegString(['abc'])`` (which walks
+    to ``"abc"``) falls through all four branches and hits the
+    catch-all ``else: return`` at body_star_unify.py:262. Silent
+    zero-solutions on a logically-satisfiable goal — the multi-star
+    body twin of F032.
+    """
+    from clausal.logic.variables import Var, Trail
+    from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
+    from clausal.terms import SegString
+
+    ss = SegString(["abc"])
+    # Precondition: ground SegString walks to plain str.
+    assert ss.is_ground() and ss.__walk__() == "abc", (
+        f"precondition: SegString(['abc']) ground+walks-to-'abc'; "
+        f"got is_ground={ss.is_ground()}, walk={ss.__walk__()!r}"
+    )
+
+    H, S, R = Var(), Var(), Var()
+    segments = [("fixed", [H]), ("star", S), ("fixed", [R])]
+    solutions = list(_body_multi_star_unify(ss, segments, Trail()))
+
+    assert len(solutions) >= 1, (
+        f"_body_multi_star_unify(SegString(['abc']), [fixed,star,fixed]) "
+        f"yielded {solutions!r}; expected at least one True (analogous "
+        f"to the SegList branch which walks then enumerates). "
+        f"body_star_unify.py:234-262 has no SegString branch — the "
+        f"value falls through to the catch-all 'else: return'."
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ledger F041: _body_multi_star_unify has no non-ground SegString branch"
+    ),
+)
+def test_F041_body_multi_star_unify_non_ground_segstring():
+    """`_body_multi_star_unify(SegString(["a", VarSeg(X), "c"]), …)` should
+    not silently yield [].
+
+    The non-list/str dispatch has an ``isinstance(d, SegList)`` branch
+    (body_star_unify.py:235-248) but no parallel ``isinstance(d,
+    SegString)`` branch. A non-ground SegString-bound target hits the
+    catch-all ``else: return`` and silently drops the goal. (The
+    SegList branch is itself currently blocked on F030's deferred
+    SegList-vs-SegList unification — but F041 is the *structural*
+    absence of the SegString branch.)
+    """
+    from clausal.logic.variables import Var, Trail
+    from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
+    from clausal.terms import SegString, VarSeg
+
+    X = Var()
+    ss = SegString(["a", VarSeg(X), "c"])
+    assert not ss.is_ground(), (
+        f"precondition: SegString(['a', VarSeg(X), 'c']) should be "
+        f"non-ground; got is_ground={ss.is_ground()}"
+    )
+
+    H, S, R = Var(), Var(), Var()
+    segments = [("fixed", [H]), ("star", S), ("fixed", [R])]
+    solutions = list(_body_multi_star_unify(ss, segments, Trail()))
+
+    # Expected: at least one yield (a structural SegString branch
+    # symmetric to body_star_unify.py:235-248). Today: silent [].
+    assert len(solutions) >= 1, (
+        f"_body_multi_star_unify(non-ground SegString, "
+        f"[fixed,star,fixed]) yielded {solutions!r}; expected at "
+        f"least one yield from a structural SegString branch "
+        f"(symmetric to the SegList branch at body_star_unify.py:"
+        f"235-248). Today: no SegString branch → silent 'else: return'."
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ledger F047: Multi-star head guard ignores SegString "
+        "(both ground and non-ground)"
+    ),
+)
+def test_F047_multi_star_head_guard_segstring():
+    """Multi-star head pattern ``Bracket([*A, X, Y, *B], X, Y, A, B)``
+    invoked with a SegString target should yield the same solutions as
+    the str/list controls — not silently zero.
+
+    The multi-star head guard at head_match.py:857-872 normalises
+    SegList before the ``(list, str)`` isinstance arm but has no
+    SegString normalisation. A SegString target (ground or non-ground)
+    walks past SegList normalise, past Var defer, fails the
+    ``(list, str)`` isinstance test, the multi-star arm is skipped,
+    and the caller silently gets zero solutions.
+    """
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var
+    from clausal.terms import SegString, VarSeg
+    from tests.audit_2026_05_25._helpers import load_inline_clausal
+
+    src = "Bracket([*A, X, Y, *B], X, Y, A, B),\n"
+    mod = load_inline_clausal("c03_f047_bracket", src).__dict__["$module"]
+
+    # Control 1: ground str — walks via (list, str) isinstance arm.
+    X1, Y1, A1, B1 = Var(), Var(), Var(), Var()
+    n_str = sum(1 for _ in call("Bracket", "abc", X1, Y1, A1, B1, module=mod))
+    assert n_str > 0, (
+        f"control: Bracket(\"abc\") should yield >0 solutions; "
+        f"got {n_str}. If this fails, the fixture is broken."
+    )
+
+    # Control 2: ground list — symmetric.
+    X2, Y2, A2, B2 = Var(), Var(), Var(), Var()
+    n_list = sum(
+        1 for _ in call("Bracket", ["a", "b", "c"], X2, Y2, A2, B2, module=mod)
+    )
+    assert n_list > 0, (
+        f"control: Bracket(['a','b','c']) should yield >0 solutions; "
+        f"got {n_list}. If this fails, the fixture is broken."
+    )
+
+    # Probe 1: ground SegString — walks to "abc"; should equal str control.
+    ss_ground = SegString(["abc"])
+    assert ss_ground.is_ground() and ss_ground.__walk__() == "abc"
+    X3, Y3, A3, B3 = Var(), Var(), Var(), Var()
+    n_ss_ground = sum(
+        1 for _ in call("Bracket", ss_ground, X3, Y3, A3, B3, module=mod)
+    )
+
+    # Probe 2: non-ground SegString — semantically "a" + ?X + "c";
+    # multi-star pattern [*A, X, Y, *B] is logically satisfiable.
+    XV = Var()
+    ss_partial = SegString(["a", VarSeg(XV), "c"])
+    X4, Y4, A4, B4 = Var(), Var(), Var(), Var()
+    n_ss_partial = sum(
+        1 for _ in call("Bracket", ss_partial, X4, Y4, A4, B4, module=mod)
+    )
+
+    assert n_ss_ground == n_str, (
+        f"Bracket(SegString(['abc'])) yielded {n_ss_ground} solutions; "
+        f"expected the same count as the str control ({n_str}) since "
+        f"the SegString walks to 'abc'. The multi-star head guard at "
+        f"head_match.py:857-872 has no SegString normalisation, so the "
+        f"target falls through and the multi-star arm is skipped."
+    )
+    assert n_ss_partial > 0, (
+        f"Bracket(SegString(['a', VarSeg(X), 'c'])) yielded "
+        f"{n_ss_partial} solutions; expected >0 since the goal is "
+        f"logically satisfiable. The multi-star head guard silently "
+        f"drops the SegString."
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ledger F075: Every char/atom builtin in chars.py is SegString-blind"
+    ),
+)
+def test_F075_chars_builtins_accept_segstring():
+    """`atom_length(SegString(["hi"]), N)` should bind N=2 (and parallel
+    predicates should behave like their str counterparts).
+
+    ``_atom_to_str`` in chars.py:47-57 accepts only a plain Python str
+    or a zero-arity PredicateMeta; SegString is neither, so every
+    atom-accepting predicate raises ``type_error("atom", SegString)``
+    even when the SegString is fully ground and walks to a plain str.
+    char_type/2 uses ``isinstance(vc, str)`` directly and silently
+    fails (zero solutions, no error).
+    """
+    from clausal.logic.builtins import get_builtin_dispatch
+    from clausal.logic.variables import Var, Trail, deref
+    from clausal.logic.trampoline import StepGenerator, solutions
+    from clausal.logic.exceptions import LogicException
+    from clausal.terms import SegString
+
+    seg = SegString(["hi"])
+    # Precondition: this SegString walks to the plain str "hi".
+    assert seg.is_ground() and seg.__walk__() == "hi", (
+        f"precondition: SegString(['hi']) should be ground and walk "
+        f"to 'hi'; got is_ground={seg.is_ground()}, "
+        f"walk={seg.__walk__()!r}"
+    )
+
+    # atom_length(SegString(["hi"]), N) should bind N=2 (same as the
+    # walked str "hi") — currently raises type_error("atom", ...).
+    N = Var()
+    disp = get_builtin_dispatch("atom_length", 2, None)
+    try:
+        sols = solutions(StepGenerator(disp, None, None, None, seg, N, Trail()))
+    except LogicException as e:
+        pytest.fail(
+            f"atom_length(SegString(['hi']), N) raised LogicException "
+            f"{e!r}; expected one solution with N=2. _atom_to_str at "
+            f"chars.py:47-57 has no SegString branch."
+        )
+    assert len(sols) >= 1 and deref(N) == 2, (
+        f"atom_length(SegString(['hi']), N) yielded {sols!r} with "
+        f"N={deref(N)!r}; expected one solution with N=2 (the SegString "
+        f"walks to 'hi', length 2)."
+    )
+
+    # char_type/2 with a single-char SegString should yield >0 solutions
+    # for the "alpha" type — currently silent zero.
+    seg1 = SegString(["a"])
+    assert seg1.is_ground() and seg1.__walk__() == "a"
+    disp_ct = get_builtin_dispatch("char_type", 2, None)
+    n_ct = len(
+        solutions(StepGenerator(disp_ct, None, None, None, seg1, "alpha", Trail()))
+    )
+    assert n_ct >= 1, (
+        f"char_type(SegString(['a']), alpha) yielded {n_ct} solutions; "
+        f"expected >=1 (the SegString walks to 'a', which is alpha). "
+        f"chars.py:105 uses isinstance(vc, str) which excludes SegString."
+    )
