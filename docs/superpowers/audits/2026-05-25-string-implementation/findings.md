@@ -3311,7 +3311,7 @@ independent action item beyond fixing the underlying
 
 - **Class:** C15 (First-arg indexing on strings)
 - **Severity:** bug
-- **Status:** fixed in <sha> (Phase 2 Task 8)
+- **Status:** fixed in 9494e22 (Phase 2 Task 8)
 - **Location:** `clausal/logic/compiler/arg_index.py:37` (`_INDEXABLE_TYPES`),
   `:45-71` (`_arg_to_index_key`), `:74-91` (`_runtime_arg_key`),
   `:614-674` (`_make_indexed_dispatch_*`),
@@ -3420,7 +3420,7 @@ fix surface — ``bytes`` is also a sequence type. Out of scope for the
 strings audit but worth flagging for any Phase 2 work that touches
 ``_arg_to_index_key`` / ``_runtime_arg_key``.
 
-Fixed in commit <sha> (Phase 2 Task 8) — applied option (A): a new
+Fixed in commit 9494e22 (Phase 2 Task 8) — applied option (A): a new
 helper ``_charlist_to_str_or_none`` canonicalises a ``list``/``tuple``
 of 1-char strings to its joined ``str`` at both compile-time
 (``_arg_to_index_key`` / ``_static_call_key``) and runtime
