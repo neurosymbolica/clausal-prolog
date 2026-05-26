@@ -3311,6 +3311,7 @@ independent action item beyond fixing the underlying
 
 - **Class:** C15 (First-arg indexing on strings)
 - **Severity:** bug
+- **Status:** fixed in <sha> (Phase 2 Task 8)
 - **Location:** `clausal/logic/compiler/arg_index.py:37` (`_INDEXABLE_TYPES`),
   `:45-71` (`_arg_to_index_key`), `:74-91` (`_runtime_arg_key`),
   `:614-674` (`_make_indexed_dispatch_*`),
@@ -3418,6 +3419,26 @@ Note on the ``_INDEXABLE_TYPES`` ``bytes`` entry: same hazard, same
 fix surface — ``bytes`` is also a sequence type. Out of scope for the
 strings audit but worth flagging for any Phase 2 work that touches
 ``_arg_to_index_key`` / ``_runtime_arg_key``.
+
+Fixed in commit <sha> (Phase 2 Task 8) — applied option (A): a new
+helper ``_charlist_to_str_or_none`` canonicalises a ``list``/``tuple``
+of 1-char strings to its joined ``str`` at both compile-time
+(``_arg_to_index_key`` / ``_static_call_key``) and runtime
+(``_runtime_arg_key``).  After canonicalisation, a clause keyed under
+``"abc"`` and a clause keyed under ``['a','b','c']`` share a bucket,
+and a caller of either container shape routes to that bucket — so the
+str-list duality runtime ``unify`` already implements is now visible at
+the dispatch layer too.  A small companion change in
+``clausal/logic/compiler/list_dispatch.py`` (``_lift_clause_at_pos``)
+skips the body-Unify lift when the lifted term is a ``str``/``bytes``:
+lifting a str literal would emit a ``MatchValue`` head pattern whose
+``==`` comparison breaks list callers reaching the bucket via the new
+canonicalisation.  Leaving str/bytes unlifted preserves the wildcard
++ runtime-unify per-clause arm where the str↔list duality is honoured.
+Required for [[F046]] (C4 head-pattern literal mismatch) to fully
+restore the strings-as-lists contract; [[F046]] is a separate Task 15
+fix on the ``head_match.py`` ``MatchValue`` emission for top-level
+str literal rule heads.
 
 *Task 13 confirmed (no finding):*
 - **F096** — Task 13 confirmed: ``_build_arg_index``

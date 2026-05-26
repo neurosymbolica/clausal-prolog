@@ -60,7 +60,15 @@ def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
     The transformation is a no-op when:
     - the head arg at *pos* is already a concrete term (not a Var), or
     - no matching ``Unify`` is found in the body's clean prefix (the
-      contiguous run of ``Unify`` goals before the first non-``Unify`` goal).
+      contiguous run of ``Unify`` goals before the first non-``Unify`` goal), or
+    - the lifted term is a ``str``/``bytes`` literal (Phase 2 Task 8 / F095):
+      lifting would emit a ``MatchValue`` pattern that uses ``==`` for the
+      head match, which fails the strings-as-lists contract when the caller
+      arrives via a coalesced str/charlist bucket (e.g. a caller passing
+      ``['a','b','c']`` reaching a bucket containing a clause originally
+      keyed under ``"abc"``).  Leaving str/bytes unlifted keeps the body
+      ``Unify`` in place where runtime ``unify`` correctly handles the
+      str↔list duality.
 
     Only called from the indexed bucket path — the fallback function always
     uses the original unlifted clauses.
@@ -105,6 +113,14 @@ def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
 
     if unify_idx is None:
         return clause  # no liftable unification found
+
+    # Phase 2 Task 8 (F095): skip the lift when the lifted term is a str
+    # or bytes literal.  See docstring above for the strings-as-lists
+    # rationale — lifting a str would emit a ``MatchValue`` head pattern
+    # that breaks list callers reaching this clause via the coalesced
+    # str/charlist bucket built by ``arg_index._arg_to_index_key``.
+    if isinstance(lift_term, (str, bytes)):
+        return clause
 
     # Rebuild head with lift_term at pos
     if isinstance(head, Compound):

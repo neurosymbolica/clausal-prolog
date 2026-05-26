@@ -10,13 +10,6 @@ Findings tested here:
 - F095 (bug) First-arg indexing routes str vs char-list to different buckets
 """
 
-import pytest
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F095: first-arg indexing routes str vs list to different buckets",
-)
 def test_F095_first_arg_index_coalesces_str_and_charlist():
     """The first-arg index routes str and char-list heads to different buckets.
 

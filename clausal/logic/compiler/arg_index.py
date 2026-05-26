@@ -42,11 +42,36 @@ _JOINT_COVERAGE_THRESHOLD = 0.8  # min fraction of clauses needing joint key for
 # ── Phase 9a: key helpers ────────────────────────────────────────────────────
 
 
+def _charlist_to_str_or_none(seq) -> str | None:
+    """Canonicalise a list/tuple of 1-char strings to its joined str equivalent.
+
+    Returns ``None`` when *seq* is empty or contains any non-1-char element
+    (including non-str elements).  Used by the indexer to coalesce the
+    strings-as-lists shape duality: a head ``Foo(['a','b','c'])`` and a
+    head ``Foo("abc")`` produce the same bucket key, and a caller passing
+    either container shape routes to that same bucket.
+
+    F095 fix (Phase 2 Task 8): char-list-of-1-char-strs canonicalises to
+    str at both compile-time (``_arg_to_index_key`` / ``_static_call_key``)
+    and runtime (``_runtime_arg_key``).  Required for F046 (C4) to fully
+    restore the strings-as-lists contract at the dispatch layer — see
+    docs/superpowers/audits/2026-05-25-string-implementation/findings.md.
+    """
+    if not seq:
+        return None
+    for c in seq:
+        if type(c) is not str or len(c) != 1:
+            return None
+    return "".join(seq)
+
+
 def _arg_to_index_key(arg: Any) -> Any:
     """Compile-time: convert a head argument to its index key.
 
     Returns a hashable key for indexable terms:
     - Scalars (int, float, str, bytes, bool, None) → the value itself
+    - ``list``/``tuple`` of 1-char strings → the joined ``str``
+      (Phase 2 Task 8 — coalesce with the str scalar branch for F095)
     - Compound nodes → ``(functor, arity)`` tuple  (Phase 9a)
     - PredicateMeta instances → ``(class_name, field_count)`` tuple  (Phase 9a)
     - ``Call(LoadName(qn), args)`` (imported-compound head arg) →
@@ -56,10 +81,15 @@ def _arg_to_index_key(arg: Any) -> Any:
       Must run BEFORE the ``is_term_instance`` branch — Call is itself a
       dataclass and would otherwise key as ``('Call', 4)``, which no
       runtime value ever matches.
-    - Anything else (Var, list, DictTerm, …) → ``_INDEX_VAR``
+    - Anything else (Var, non-charlist list, DictTerm, …) → ``_INDEX_VAR``
     """
     if isinstance(arg, _INDEXABLE_TYPES):
         return arg
+    if isinstance(arg, (list, tuple)):
+        s = _charlist_to_str_or_none(arg)
+        if s is not None:
+            return s
+        return _INDEX_VAR
     if isinstance(arg, Compound):
         return (arg.functor, len(arg.args))
     if isinstance(arg, Call) and isinstance(arg.func, LoadName):
@@ -77,12 +107,22 @@ def _runtime_arg_key(a: Any) -> Any:
     Mirrors :func:`_arg_to_index_key` for the runtime dispatch path.
     All four dispatch closure factories use this so that compound-term
     buckets (Phase 9a) are reachable without special-casing.
+
+    Phase 2 Task 8 (F095): a ``list``/``tuple`` of 1-char strings is
+    canonicalised to its joined ``str`` so str-headed and charlist-headed
+    clauses share a bucket and a caller of either container shape routes
+    to it.
     """
     t = type(a)
     if t is int or t is str:
         return a
     if isinstance(a, _INDEXABLE_TYPES):
         return a
+    if isinstance(a, (list, tuple)):
+        s = _charlist_to_str_or_none(a)
+        if s is not None:
+            return s
+        return _INDEX_VAR
     if isinstance(a, Compound):
         return (a.functor, len(a.args))
     if is_term_instance(a):
@@ -96,10 +136,24 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
 
     Mirrors :func:`_runtime_arg_key` for the compile-time call-site analysis
     path.  Returns ``None`` if the argument is a variable or otherwise unknown.
+
+    Phase 2 Task 8 (F095): a literal list/tuple of 1-char string constants
+    canonicalises to its joined ``str`` for the same reason
+    :func:`_runtime_arg_key` does — see :func:`_charlist_to_str_or_none`.
     """
     if isinstance(arg_expr, ast.Constant):
         # scalar: int, str, float, bool, None — key is the value itself
         return arg_expr.value
+    if isinstance(arg_expr, (ast.List, ast.Tuple)):
+        # literal list/tuple — if every element is a 1-char str constant,
+        # canonicalise to the joined str so dispatch sees the same bucket
+        # as a str caller.  Otherwise, no static key.
+        elts = []
+        for e in arg_expr.elts:
+            if not isinstance(e, ast.Constant):
+                return None
+            elts.append(e.value)
+        return _charlist_to_str_or_none(elts)
     if isinstance(arg_expr, ast.Call):
         # compound term constructor: Dog(_v_name, _v_age) or mod.Dog(...)
         func = arg_expr.func
