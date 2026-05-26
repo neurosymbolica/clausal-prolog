@@ -14,53 +14,38 @@ Findings tested here:
 import pytest
 
 
-def test_F017_segstring_hash_invariant_violation():
-    """Two structurally-equal non-ground SegStrings must have equal hashes.
+def test_F017_segstring_unhashable():
+    """SegString is *unconditionally* unhashable, matching Python's
+    ``list`` parallel for SegList.
 
-    The Python data-model contract: if `a == b`, then `hash(a) == hash(b)`
-    (when both are hashable). This invariant is violated by SegString in
-    the non-ground case.
+    Phase 2 Task 13 revision (user-confirmed Liskov contract):
+    the previous Task 5 fix made SegString hashable when ground and
+    structurally-hashable when non-ground; the new contract reverts
+    that — both Seg* types are unhashable always, so the Python
+    eq/hash invariant (``a == b ⇒ hash(a) == hash(b)`` when both are
+    hashable) is trivially satisfied because no SegString instance is
+    ever hashable.
 
-    SegString.__eq__ (terms.py:581-587) compares `_segments` lists
-    structurally, so two non-ground SegStrings built from the same
-    segments (same Var objects, same string literals) will compare equal.
-
-    SegString.__hash__ (terms.py:589-591) returns `hash(walked)` when
-    ground but `id(self)` when non-ground. For non-ground SegStrings,
-    each instance gets its own id-based hash — distinct hashes for equal
-    values, breaking the invariant.
-
-    Concrete effect: identical non-ground SegStrings become distinct keys
-    in a dict or set, silently duplicating values in memoisation and
-    tabling contexts.
+    Callers who need a hashable form for a ground SegString convert
+    via ``to_str()`` / ``str(...)`` first.
     """
     from clausal.logic.variables import Var
     from clausal.terms import SegString, VarSeg
 
+    # Non-ground SegString — raises TypeError on hash.
     X = Var()
-    ss1 = SegString(["a", VarSeg(X), "c"])
-    ss2 = SegString(["a", VarSeg(X), "c"])
+    ss = SegString(["a", VarSeg(X), "c"])
+    with pytest.raises(TypeError, match="unhashable"):
+        hash(ss)
 
-    # The two SegStrings are structurally equal.
-    assert ss1 == ss2, (
-        f"ss1 and ss2 have identical _segments; __eq__ should return True. "
-        f"ss1 == ss2: {ss1 == ss2}"
-    )
+    # Ground SegString — also raises TypeError (no special case).
+    ground_ss = SegString(["abc"])
+    with pytest.raises(TypeError, match="unhashable"):
+        hash(ground_ss)
 
-    # For equal values, hash must be equal (Python invariant).
-    h1, h2 = hash(ss1), hash(ss2)
-    assert h1 == h2, (
-        f"ss1 == ss2, therefore hash(ss1) must equal hash(ss2). "
-        f"Got hash(ss1)={h1}, hash(ss2)={h2}. "
-        f"This breaks the Python eq/hash invariant."
-    )
-
-    # Consequence: both can be used as dict keys without duplication.
-    d = {ss1: 1, ss2: 2}
-    assert len(d) == 1, (
-        f"Equal SegStrings must produce the same dict key. "
-        f"Got len({{ss1: 1, ss2: 2}}) = {len(d)}, expected 1. "
-        f"The duplicate key indicates hash(ss1) != hash(ss2) despite ss1 == ss2."
+    # User-side workaround: convert via ``to_str()`` first.
+    assert hash(ground_ss.to_str()) == hash("abc"), (
+        "ground SegString can be hashed via to_str() conversion"
     )
 
 

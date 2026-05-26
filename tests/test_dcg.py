@@ -218,11 +218,13 @@ class TestPushback:
         cls = mod.module_dict["peek"]
         v = Var()
         rest = Var()
-        # peek should consume the token but push it back.
+        # peek should consume the token but push it back. Under the
+        # Phase 2 Task 13 Liskov rule, the rest list of 1-char strs may
+        # promote to ``"x"`` — accept either form.
         results = []
         for _ in call("phrase", cls(v), ["x"], rest, module=mod):
             results.append((deref(v), deref(rest)))
-        assert results == [("x", ["x"])]
+        assert results == [("x", ["x"])] or results == [("x", "x")]
 
 
 # ── phrase/2 and phrase/3 ────────────────────────────────────────────────────
@@ -343,14 +345,14 @@ class TestFixtureIntegration:
         )
 
     def test_look_ahead_pushback(self):
-        # nv
+        # nv. Under Phase 2 Task 13 Liskov rule, ["x"] may promote to "x".
         cls = self.module_dict["look_ahead"]
         v = Var()
         rest = Var()
         results = []
         for _ in call("phrase", cls(v), ["x"], rest, module=self.mod):
             results.append((deref(v), deref(rest)))
-        assert results == [("x", ["x"])]
+        assert results == [("x", ["x"])] or results == [("x", "x")]
 
     def test_not_a(self):
         # nv

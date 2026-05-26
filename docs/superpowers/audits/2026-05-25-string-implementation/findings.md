@@ -39,6 +39,7 @@
 
 - **Class:** C1 (Type preservation)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 13
 - **Location:** `clausal/terms.py:227-234`
 - **Discovered by:** Task 2 of Phase 0
 - **Probe:** `probes/probe_F018.py`
@@ -79,10 +80,13 @@ mismatch surfaces in __eq__).
 
 **Prior-known:** commit f635551 — "Phase 7: SegString and string-preserving pattern matching" rewrote `SegList.__walk__` to handle VarSegs bound to strings (eliminating the SegList/compiler path asymmetry per the plan in `implementation_plans/data_structures/STRING_LIST_UNIFICATION.md` Phase 7 acceptance criterion); the rewrite normalized inward (str → char-list) for the SegList container and outward (list → str) for SegString, which is exactly the "container-shape wins" rule this finding flags.
 
+Fix (Phase 2 Task 13): under the user-confirmed Liskov "strings-as-lists" model, `SegList.__walk__` now applies the new `maybe_promote_to_str` helper (in `clausal/logic/runtime/_seg_helpers.py`) to its final fully-ground walked list. VarSeg's splat semantics still expand a bound `str` into chars (str ⊂ list-of-chars), but the post-walk promotion re-emits a `str` whenever every element is a 1-char str. Default output remains `list`; the upgrade to `str` fires only when provable from the result elements.
+
 ### F020 — SegList.__add__ / __radd__ rejects str
 
 - **Class:** C1 (Type preservation)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 13
 - **Location:** `clausal/terms.py:353-364`
 - **Discovered by:** Task 2 of Phase 0
 - **Probe:** `probes/probe_F020.py`
@@ -120,10 +124,13 @@ current behaviour is at least consistent with the host language. The
 audit logs this as a contract gap rather than a bug. Related to
 [[F019]] (parallel asymmetry in `__eq__`).
 
+Fix (Phase 2 Task 13): `SegList.__add__` now accepts a `str` operand and treats it as a list-of-1-char-strs tail (`list(other)`); `SegList.__radd__` does the same on the left. The Liskov "strings-as-lists" rule means a `str` and a `list-of-chars` are interchangeable as a SegList neighbour.
+
 ### F033 — `_head_list_unify_output` always builds a list, never a str
 
 - **Class:** C1 (Type preservation)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 13
 - **Location:** `clausal/logic/runtime/list_unify.py:165` and
   `clausal/logic/runtime/_list_unify.c:251`
 - **Discovered by:** Task 3 of Phase 0
@@ -170,10 +177,13 @@ star_val, the C3 sibling of this C1 finding).
 
 **Prior-known:** commit aa2155d — "Compiler: head patterns accept strings in clause matching" widened `_head_list_unify_input` to accept `(list, str)` and noted that "string slicing naturally preserves type: [H, *T] on 'hello' gives H='h', T='ello'". That commit only covered the input-mode path; the symmetric output-mode reconstruction at `_head_list_unify_output` was not touched and still always allocates a list.
 
+Fix (Phase 2 Task 13): `_head_list_unify_output` (both Python and C accelerator) now applies the `maybe_promote_to_str` helper before the final `unify(target, result, trail)` call. A str-bound star is treated as a list of 1-char strs (splat its chars); the post-construction promotion re-emits a `str` when every element of the result is a 1-char str. Default remains `list`; the upgrade is purely a property of the result elements — no type-source plumbing required.
+
 ### F042 — `_body_multi_star_unify` unbound-target branch always builds SegList
 
 - **Class:** C1 (Type preservation)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 13
 - **Location:** `clausal/logic/runtime/body_star_unify.py:249-260`
 - **Discovered by:** Task 4 of Phase 0
 - **Probe:** `probes/probe_F042.py`
@@ -219,10 +229,13 @@ lose type when star is bound to a list-of-1-char-strs).
 
 **Prior-known:** commit 82ecc96 — "Fix SegString bugs, update strings_as_lists docs for Phase 7" reworked `_build_star_list` to "handle non-ground SegString with mixed before/after by converting to SegList instead of falling through to VarSeg(SegString)". That commit closed a specific crash but did not introduce a target-type record, so the unbound-Var branch in `_body_multi_star_unify` (a sibling helper) still builds SegList unconditionally.
 
+Fix (Phase 2 Task 13): the unbound-Var branch now delegates to `_build_multi_star_list`, which under the new Liskov rule first scans the segments — if every fixed element is a 1-char str and every star derefs to a str / ground-SegString / non-ground-SegString / list-of-1-char-strs, the build returns a plain `str` (ground) or a `SegString` (non-ground holes). Mixed or non-string-compatible content takes the original SegList path. No type-source plumbing required; the choice is purely a property of the derefferenced star values.
+
 ### F043 — `_build_star_list` / `_build_multi_star_list` lose str type for list-of-chars and non-ground SegString stars
 
 - **Class:** C1 (Type preservation)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 13
 - **Location:** `clausal/logic/runtime/body_star_unify.py:70-71, 119-126`
   (`_build_star_list`) and `clausal/logic/runtime/body_star_unify.py:150-156,
   167-184` (`_build_multi_star_list`)
@@ -281,6 +294,8 @@ should be fixable in isolation. Logged as design-gap (matching F018,
 F033, F034 grading).
 
 **Prior-known:** commit 82ecc96 — "Fix SegString bugs" specifically fixed the non-ground SegString path in `_build_star_list` (converting to SegList rather than wrapping in `VarSeg(SegString)`) but the *type-preservation* gap this finding flags — that list-of-1-char-strs and non-ground SegString stars both demote to list/SegList rather than promoting back to str/SegString — was left in place; commit f635551 (Phase 7) introduced the `all_str` gate that captures most ground cases, but the gate explicitly disables string promotion when a non-ground SegString segment is seen (the `all_str = False` flip in `_build_multi_star_list` line 167-184).
+
+Fix (Phase 2 Task 13): both helpers now apply the new `maybe_promote_to_str` helper at every list-shaped exit. `_build_multi_star_list` was rewritten with a first-pass type check that determines whether every star + fixed element is str-compatible (1-char strs, strs, ground SegStrings, non-ground SegStrings, lists of 1-char strs); if so, the second pass builds str segments and emits a plain `str` (ground) or `SegString` (non-ground holes). Otherwise it falls back to the SegList build with a final `maybe_promote_to_str` so a list of all 1-char strs still re-promotes. The non-ground-SegString fork no longer demotes to SegList — the SegString container identity is preserved.
 
 *Task 1 confirmed (no finding):*
 - **F010** — The two str↔list branches at `_variables.c:1140` and
@@ -1074,6 +1089,18 @@ over `_segments` (via the shared `_seg_hash_key` helper) when
 non-ground, so two SegStrings built from identical segments produce
 identical hashes and the eq/hash invariant holds.
 
+**Notes (Phase 2 Task 13 contract revision):** the Task 5 hashable-when-
+ground / structural-when-non-ground rule was reverted in Task 13.
+Under the user-confirmed Liskov "strings-as-lists" model, hashing
+behaviour of a Clausal-side seg container is undefined; both
+`SegList.__hash__` and `SegString.__hash__` now *unconditionally*
+raise `TypeError("unhashable type: ...")` — matching Python's `list`
+parallel. The Python eq/hash invariant is trivially satisfied (no
+SegString or SegList instance is ever hashable). The shared
+`_seg_hash_key` helper added in Task 5 is removed (no longer used).
+Callers needing hashability convert via `to_str()` / `to_list()` /
+`str(...)` / `list(...)` first.
+
 ### F019 — SegList vs SegString __eq__ asymmetry against str / list
 
 - **Class:** C5 (Hash/eq asymmetries)
@@ -1173,6 +1200,15 @@ SegList), and a structural hash over `_segments` when non-ground
 (via the shared `_seg_hash_key` helper). Ground SegList is therefore
 hashable as a dict key, matching ground SegString, and non-ground
 hashes line up with `_segments`-based `__eq__`.
+
+**Notes (Phase 2 Task 13 contract revision):** the Task 5 fix was
+reverted in Task 13 under the user-confirmed Liskov rule. Both
+SegList and SegString now *unconditionally* raise `TypeError` on
+hash — the symmetric rule is now "both unhashable always", matching
+Python's `list` parallel. Hashing of seg containers is undefined on
+the Clausal side; callers convert via `to_list()` / `to_str()` first.
+The `_seg_hash_key` helper introduced in Task 5 has been removed
+(no longer used).
 
 ### Class C6 — Hashable vs unhashable bridges
 *(none yet)*

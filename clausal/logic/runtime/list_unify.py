@@ -83,6 +83,7 @@ from clausal.terms import (
     SegList, ConcreteSeg, VarSeg,
     SegString,
 )
+from ._seg_helpers import maybe_promote_to_str
 
 
 def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
@@ -177,13 +178,22 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
         s = deref(star_val)
         if isinstance(s, list):
             result.extend(s)
+        elif isinstance(s, str):
+            # Liskov "strings-as-lists" rule: a str-bound star is treated
+            # as a list of 1-char strs. Splat its chars into the result;
+            # the final ``maybe_promote_to_str`` re-promotes the whole
+            # result to a str when every element is 1-char-str.
+            result.extend(s)
         elif isinstance(s, SegList):
             # Star derefs to a SegList — walk it first
             walked = s.__walk__()
             if isinstance(walked, list):
                 result.extend(walked)
                 result.extend(deref(v) for v in after_vals)
-                return unify(d, result, trail)
+                # F033: promote list-of-1-char-strs back to str under the
+                # Liskov "strings-as-lists" rule (default output is list;
+                # str only when provable from the elements themselves).
+                return unify(d, maybe_promote_to_str(result), trail)
             else:
                 # Still partially unbound: build a new SegList
                 after_result = [deref(v) for v in after_vals]
@@ -203,7 +213,9 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             if isinstance(walked, str):
                 result.extend(walked)
                 result.extend(deref(v) for v in after_vals)
-                return unify(d, result, trail)
+                # F033: promote list-of-1-char-strs back to str under the
+                # Liskov "strings-as-lists" rule.
+                return unify(d, maybe_promote_to_str(result), trail)
             else:
                 # Still partially unbound SegString: convert each segment to
                 # the SegList equivalent (str segments → ConcreteSeg of
@@ -233,7 +245,10 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
         else:
             result.append(s)
     result.extend(deref(v) for v in after_vals)
-    return unify(d, result, trail)
+    # F033: promote list-of-1-char-strs back to str under the Liskov
+    # "strings-as-lists" rule (default output is list; str only when
+    # provable from the elements themselves).
+    return unify(d, maybe_promote_to_str(result), trail)
 
 
 # ── C-accelerated list unification (with Python fallback) ────────────────────

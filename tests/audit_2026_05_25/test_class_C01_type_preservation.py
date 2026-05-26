@@ -1,64 +1,69 @@
 """C1 — Type preservation across the str<->list boundary.
 
-5 design-gap findings. Each test asserts the strings-as-lists contract:
-an operation that consumes a `str` should return a `str` (or vice versa)
-when the contract demands it — not a `list`.
+5 design-gap findings. Each test asserts the user-confirmed
+strings-as-lists Liskov rule: a list is the default output type;
+``str`` is produced only when the result is *provably* a list of
+all 1-char strs (i.e. ``maybe_promote_to_str`` semantics in
+``_seg_helpers.py``). The promotion is purely a property of the
+result elements — no upstream type-source plumbing is required.
 
 Findings tested here:
-- F018 SegList.__walk__ expands VarSeg-bound str into char list
-- F020 SegList.__add__ / __radd__ rejects str
-- F033 _head_list_unify_output always builds a list, never a str
-       (lock-in test exists in tests/test_seglist_creation.py)
-- F042 _body_multi_star_unify unbound-target branch always builds SegList
-       (lock-in test exists in tests/test_seglist_creation.py)
-- F043 _build_star_list / _build_multi_star_list lose str type for
-       list-of-chars and non-ground SegString stars
-
-All tests are xfail(strict=True): a passing test means the fix landed
-(remove the marker) or the test is wrong (re-check the ledger entry).
+- F018 SegList.__walk__ promotes all-1-char-str list to str
+- F020 SegList.__add__ / __radd__ accepts str (Liskov substitution)
+- F033 _head_list_unify_output promotes list-of-1-char-strs to str
+- F042 _body_multi_star_unify promotes to str when provable
+- F043 _build_star_list / _build_multi_star_list promote list-of-chars
+       to str, preserve SegString for non-ground SegString stars
 """
 
 import pytest
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F018: SegList.__walk__ expands VarSeg-bound str into char list",
-)
-def test_F018_seglist_walk_preserves_str_binding():
-    """SegList.__walk__ should preserve the str-ness of a VarSeg binding.
+def test_F018_seglist_walk_promotes_all_char_str_to_str():
+    """Under the user-confirmed Liskov "strings-as-lists" rule,
+    SegList.__walk__ should promote a fully-ground walked list to a
+    plain ``str`` when every element is a 1-char ``str`` — and keep the
+    default list shape otherwise.
 
-    Under the strings-as-lists "input-type wins" contract, walking a
-    SegList that contains a VarSeg bound to "abc" should not silently
-    expand the string into individual characters and inline them into
-    the surrounding ConcreteSegs. The reproducer below currently yields
-    ``[1, 'a', 'b', 'c', 2]`` — the str 'abc' has been atomized.
+    VarSeg's splat semantics still expand a bound ``str`` into chars
+    (str ⊂ list-of-chars), but at the end of the walk the helper
+    applies ``maybe_promote_to_str``: a list of all 1-char strs becomes
+    the equivalent str; a mixed list (or any non-char element) stays
+    as a list.
+
+    F018 fix: walking ``SegList([ConcreteSeg(['h']), VarSeg(X→'ello')])``
+    used to yield ``['h','e','l','l','o']`` (list) and now yields
+    ``'hello'`` (str) — the elements are *provably* all 1-char strs so
+    the promote rule fires. A list containing non-char elements (e.g.
+    ints) stays as a list because the rule cannot prove a str upgrade.
     """
     from clausal.logic.variables import Var, unify, Trail
     from clausal.terms import SegList, VarSeg, ConcreteSeg
 
+    # Case A: walk yields all-1-char-str list → promote to str.
     X = Var()
-    unify(X, "abc", Trail())
-    sl = SegList([ConcreteSeg([1]), VarSeg(X), ConcreteSeg([2])])
+    unify(X, "ello", Trail())
+    sl = SegList([ConcreteSeg(["h"]), VarSeg(X)])
     walked = sl.__walk__()
-
-    # Expected: the str 'abc' survives as a single element rather than
-    # being expanded inline to chars.
-    assert "abc" in walked, (
-        f"expected the str 'abc' to survive in the walked SegList "
-        f"(no inline char expansion), got {walked!r} "
-        f"(type={type(walked).__name__})"
+    assert walked == "hello", (
+        f"all-1-char-str walked list should promote to str 'hello', "
+        f"got {walked!r} (type={type(walked).__name__})"
     )
-    assert walked != [1, "a", "b", "c", 2], (
-        f"walked SegList should not have inline-expanded 'abc' into "
-        f"chars; got {walked!r}"
+    assert isinstance(walked, str), (
+        f"expected str, got {type(walked).__name__}: {walked!r}"
     )
 
+    # Case B: walk yields mixed list (ints + strs) → stays as list.
+    Y = Var()
+    unify(Y, "abc", Trail())
+    sl2 = SegList([ConcreteSeg([1]), VarSeg(Y), ConcreteSeg([2])])
+    walked2 = sl2.__walk__()
+    assert isinstance(walked2, list), (
+        f"mixed-type walked list should stay as list (no provable "
+        f"str promotion), got {type(walked2).__name__}: {walked2!r}"
+    )
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F020: SegList.__add__ / __radd__ rejects str",
-)
+
 def test_F020_seglist_add_accepts_str():
     """SegList + str and str + SegList should both succeed.
 
@@ -100,13 +105,6 @@ def test_F020_seglist_add_accepts_str():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F033: _head_list_unify_output always builds a list, never "
-        "a str (lock-in test exists in tests/test_seglist_creation.py)"
-    ),
-)
 def test_F033_head_list_unify_output_preserves_str():
     """When all bindings are str-typed, output-mode reconstruction should
     yield a str, not a list.
@@ -136,56 +134,60 @@ def test_F033_head_list_unify_output_preserves_str():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F042: _body_multi_star_unify unbound-target branch always "
-        "builds SegList (lock-in test exists in tests/test_seglist_creation.py)"
-    ),
-)
-def test_F042_body_multi_star_unify_builds_segstring_for_str_context():
-    """For an unbound target in a str-typed context, the multi-star body
-    helper should build a SegString, not a SegList.
+def test_F042_body_multi_star_unify_promotes_str_when_provable():
+    """Under the user-confirmed Liskov "strings-as-lists" rule, the
+    multi-star body helper default-builds a SegList for an unbound
+    target, and promotes to a plain ``str`` (or rebuilds as a SegString
+    for non-ground bindings) only when the result is *provably*
+    str-compatible — every fixed element is a 1-char str and every
+    star derefs to a str / SegString / list-of-1-char-strs.
 
-    Currently the unbound-target branch unconditionally constructs a
-    SegList of [VarSeg | ConcreteSeg] segments regardless of the
-    surrounding logical context. Under the "input type wins" contract a
-    str-typed context should produce a SegString.
-
-    Inspect the binding *during* the yield — the generator's trail.undo
-    unbinds after each yield, so consuming the full generator would lose
-    the binding.
+    Default is list. Upgrade to str only when provable from result
+    elements; no type-source plumbing required.
     """
-    from clausal.logic.variables import Var, Trail, deref
+    from clausal.logic.variables import Var, Trail, deref, unify
     from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
     from clausal.terms import SegList, SegString
 
+    # Case 1: all fixed elements bound to 1-char strs, star bound to a
+    # str — result should be a plain str (provable from elements).
     target = Var()
     H, S, R = Var(), Var(), Var()
+    trail = Trail()
+    unify(H, "h", trail)
+    unify(S, "ell", trail)
+    unify(R, "o", trail)
     segments = [("fixed", [H]), ("star", S), ("fixed", [R])]
 
     bound = None
-    for _ in _body_multi_star_unify(target, segments, Trail()):
+    for _ in _body_multi_star_unify(target, segments, trail):
         bound = deref(target)
         break
-
-    assert bound is not None, "expected at least one yield from _body_multi_star_unify"
-    assert isinstance(bound, SegString), (
-        f"expected target bound to a SegString (str-typed context), got "
-        f"{type(bound).__name__}: {bound!r}"
+    assert bound is not None, "expected at least one yield"
+    assert bound == "hello", (
+        f"expected target bound to str 'hello' (all elements provably "
+        f"1-char-strs / str), got {bound!r} (type={type(bound).__name__})"
     )
-    assert not isinstance(bound, SegList) or isinstance(bound, SegString), (
-        f"expected non-SegList shape; got SegList: {bound!r}"
+    assert isinstance(bound, str), (
+        f"expected type str (provable promote), got {type(bound).__name__}"
+    )
+
+    # Case 2: vars unbound — default is SegList (no promotion possible
+    # because we cannot prove the result will be all 1-char strs).
+    target2 = Var()
+    H2, S2, R2 = Var(), Var(), Var()
+    segments2 = [("fixed", [H2]), ("star", S2), ("fixed", [R2])]
+    bound2 = None
+    for _ in _body_multi_star_unify(target2, segments2, Trail()):
+        bound2 = deref(target2)
+        break
+    assert bound2 is not None, "expected at least one yield from case 2"
+    assert isinstance(bound2, SegList), (
+        f"unbound-var multi-star: default output is SegList (no provable "
+        f"promotion), got {type(bound2).__name__}: {bound2!r}"
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F043: _build_star_list / _build_multi_star_list lose str "
-        "type for list-of-chars and non-ground SegString stars"
-    ),
-)
 def test_F043_build_star_list_preserves_str_for_list_of_chars():
     """_build_star_list and _build_multi_star_list should re-promote a
     list-of-1-char-strs star to a str, and preserve SegString container

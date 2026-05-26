@@ -501,20 +501,23 @@ class TestEquality:
         sl = SegList([ConcreteSeg(["a", "b", "c"])])
         assert sl == "abc"
 
-    def test_hashable_when_ground(self):
-        # nv — F025 fix: ground SegList is hashable (matches SegString and
-        # restores Python's eq/hash invariant for SegList).
-        sl = SegList([ConcreteSeg([1, 2, 3])])
-        assert hash(sl) == hash(SegList([ConcreteSeg([1, 2, 3])]))
-
-    def test_hashable_when_nonground_structural(self):
-        # nv — F017/F025 fix: non-ground SegList hashes structurally so
-        # equal _segments produce equal hashes (preserves eq/hash invariant).
+    def test_unhashable_unconditionally(self):
+        # nv — Phase 2 Task 13 (revised F017/F025 contract): SegList is
+        # *unconditionally* unhashable, matching Python's ``list``. The
+        # Task 5 hashable-when-ground / structural-when-non-ground
+        # contract was reverted because the Liskov "strings-as-lists"
+        # model leaves hashing of seg containers undefined. Callers
+        # needing hashability convert via ``to_list()`` first.
+        import pytest
+        sl_ground = SegList([ConcreteSeg([1, 2, 3])])
+        with pytest.raises(TypeError, match="unhashable"):
+            hash(sl_ground)
         v = Var()
-        sl1 = SegList([ConcreteSeg([1]), VarSeg(v)])
-        sl2 = SegList([ConcreteSeg([1]), VarSeg(v)])
-        assert sl1 == sl2
-        assert hash(sl1) == hash(sl2)
+        sl_nonground = SegList([ConcreteSeg([1]), VarSeg(v)])
+        with pytest.raises(TypeError, match="unhashable"):
+            hash(sl_nonground)
+        # User-side workaround: convert to_list() first.
+        assert hash(tuple(sl_ground.to_list())) == hash((1, 2, 3))
 
 
 # ── __repr__ ──────────────────────────────────────────────────────────────────

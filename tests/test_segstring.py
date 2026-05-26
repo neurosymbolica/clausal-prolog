@@ -274,15 +274,18 @@ class TestSegListStringPreserving:
         assert deref(A) == ""
 
     def test_walk_handles_string_bound_varseg(self):
-        """SegList.__walk__ converts string-bound VarSegs to char lists."""
+        """SegList.__walk__ converts string-bound VarSegs to char lists,
+        then promotes the all-1-char-str result to a plain ``str`` under
+        the Phase 2 Task 13 Liskov rule (F018 fix)."""
         # nv
         trail = Trail()
         A = Var()
         unify(A, "hello", trail)
         sl = SegList([VarSeg(A)])
         walked = sl.__walk__()
-        assert isinstance(walked, list)
-        assert walked == ["h", "e", "l", "l", "o"]
+        # F018 fix: all-1-char-str walked list promotes to str.
+        assert isinstance(walked, str)
+        assert walked == "hello"
 
     def test_seglist_still_works_with_lists(self):
         """SegList against list still returns list slices."""

@@ -20,6 +20,7 @@ from clausal.terms import (
     _multi_star_splits,
 )
 
+from ._seg_helpers import maybe_promote_to_str
 from .list_unify import _head_list_unify_input, _head_list_unify_output
 
 
@@ -68,11 +69,15 @@ def _build_star_list(before, star, after):
         # Mixed types — fall through to list construction
         return b + list(d) + a
     if isinstance(d, list):
-        return list(before) + d + list(after)
+        # F043: promote list-of-1-char-strs back to str under the Liskov
+        # "strings-as-lists" rule. The default is list; str only when the
+        # whole result is provably all 1-char strs.
+        return maybe_promote_to_str(list(before) + d + list(after))
     if isinstance(d, SegList):
         walked = d.__walk__()
         if isinstance(walked, list):
-            return list(before) + walked + list(after)
+            # F043: promote list-of-1-char-strs back to str.
+            return maybe_promote_to_str(list(before) + walked + list(after))
         # non-ground SegList — wrap into a new SegList
         segs = []
         if before:
@@ -133,11 +138,116 @@ def _build_multi_star_list(segments):
     ("star", var) for a splat variable.  Returns a plain list when all
     star vars are bound, otherwise a SegList.
 
-    when all concrete elements are single-char strings and all star vars are
-    bound to strings, returns a plain ``str`` (or ``SegString`` when partial).
+    Under the Liskov "strings-as-lists" rule, when every part is
+    str-compatible (1-char-str fixed elements, str / ground-SegString
+    stars, non-ground SegString stars) the result is promoted to a
+    plain ``str`` (ground) or a ``SegString`` (non-ground). F043 fix:
+    a non-ground SegString star no longer demotes the whole result to
+    SegList; instead the segments preserve their string identity and
+    the build returns a SegString.
     """
+    # First pass: do we have any non-string-compatible content?
+    # If every star derefs to a str / ground-SegString / non-ground
+    # SegString and every fixed element is a 1-char str, we can build
+    # a SegString instead of a SegList.
+    string_mode = True
+    for kind, val in segments:
+        if kind == "star":
+            d = deref(val)
+            if isinstance(d, str):
+                continue
+            if isinstance(d, SegString):
+                continue
+            if isinstance(d, list):
+                if not all(isinstance(e, str) and len(e) == 1 for e in d):
+                    string_mode = False
+                    break
+                continue
+            if isinstance(d, SegList):
+                walked = d.__walk__()
+                if isinstance(walked, list):
+                    if not all(isinstance(e, str) and len(e) == 1 for e in walked):
+                        string_mode = False
+                        break
+                    continue
+                # Non-ground SegList → cannot guarantee str-compat
+                string_mode = False
+                break
+            if is_var(d):
+                # Unbound var — can't prove str-compat
+                string_mode = False
+                break
+            # Other types (int, term, etc.)
+            string_mode = False
+            break
+        else:  # "fixed"
+            elems = [deref(e) for e in val]
+            if any(not isinstance(e, str) or len(e) != 1 for e in elems):
+                string_mode = False
+                break
+
+    if string_mode:
+        # Build SegString segments (str / VarSeg only).
+        str_segs: list = []
+        for kind, val in segments:
+            if kind == "star":
+                d = deref(val)
+                if isinstance(d, str):
+                    if d:
+                        if str_segs and isinstance(str_segs[-1], str):
+                            str_segs[-1] = str_segs[-1] + d
+                        else:
+                            str_segs.append(d)
+                elif isinstance(d, SegString):
+                    walked = d.__walk__()
+                    if isinstance(walked, str):
+                        if walked:
+                            if str_segs and isinstance(str_segs[-1], str):
+                                str_segs[-1] = str_segs[-1] + walked
+                            else:
+                                str_segs.append(walked)
+                    else:
+                        for inner_seg in walked.segments:
+                            if isinstance(inner_seg, str):
+                                if inner_seg:
+                                    if str_segs and isinstance(str_segs[-1], str):
+                                        str_segs[-1] = str_segs[-1] + inner_seg
+                                    else:
+                                        str_segs.append(inner_seg)
+                            else:  # VarSeg
+                                str_segs.append(inner_seg)
+                elif isinstance(d, list):
+                    # list of 1-char strs (guaranteed by first-pass check)
+                    s = "".join(d)
+                    if s:
+                        if str_segs and isinstance(str_segs[-1], str):
+                            str_segs[-1] = str_segs[-1] + s
+                        else:
+                            str_segs.append(s)
+                elif isinstance(d, SegList):
+                    walked = d.__walk__()
+                    # walked is a list of 1-char strs (first-pass check)
+                    s = "".join(walked)
+                    if s:
+                        if str_segs and isinstance(str_segs[-1], str):
+                            str_segs[-1] = str_segs[-1] + s
+                        else:
+                            str_segs.append(s)
+            else:  # "fixed" — all 1-char strs (first-pass check)
+                elems = [deref(e) for e in val]
+                s = "".join(elems)
+                if s:
+                    if str_segs and isinstance(str_segs[-1], str):
+                        str_segs[-1] = str_segs[-1] + s
+                    else:
+                        str_segs.append(s)
+        # Ground? return str. Otherwise SegString.
+        if all(isinstance(s, str) for s in str_segs):
+            return "".join(str_segs)
+        return SegString(str_segs)
+
+    # SegList path — same as before.
     segs = []
-    all_str = True  # track whether all parts are string-compatible
     for kind, val in segments:
         if kind == "star":
             d = deref(val)
@@ -148,14 +258,12 @@ def _build_multi_star_list(segments):
                     if d:
                         segs.append(ConcreteSeg(list(d)))
             elif isinstance(d, list):
-                all_str = False
                 if segs and isinstance(segs[-1], ConcreteSeg):
                     segs[-1] = ConcreteSeg(segs[-1].elements + d)
                 else:
                     if d:
                         segs.append(ConcreteSeg(d))
             elif isinstance(d, SegList):
-                all_str = False
                 walked = d.__walk__()
                 if isinstance(walked, list):
                     if segs and isinstance(segs[-1], ConcreteSeg):
@@ -172,8 +280,6 @@ def _build_multi_star_list(segments):
                     elif walked:
                         segs.append(ConcreteSeg(list(walked)))
                 else:
-                    # Non-ground SegString — give up on string result
-                    all_str = False
                     for inner_seg in walked.segments:
                         if isinstance(inner_seg, str):
                             if segs and isinstance(segs[-1], ConcreteSeg):
@@ -183,12 +289,9 @@ def _build_multi_star_list(segments):
                         else:
                             segs.append(inner_seg)
             else:
-                all_str = False
                 segs.append(VarSeg(d))
         else:  # "fixed"
             elems = [deref(e) for e in val]
-            if any(not isinstance(e, str) or len(e) != 1 for e in elems):
-                all_str = False
             if segs and isinstance(segs[-1], ConcreteSeg):
                 segs[-1] = ConcreteSeg(segs[-1].elements + elems)
             else:
@@ -198,10 +301,9 @@ def _build_multi_star_list(segments):
         result = []
         for seg in segs:
             result.extend(seg.elements)
-        # If all parts were string-compatible, return a str
-        if all_str and all(isinstance(e, str) and len(e) == 1 for e in result):
-            return "".join(result)
-        return result
+        # F043: promote list-of-1-char-strs back to str under the
+        # Liskov "strings-as-lists" rule.
+        return maybe_promote_to_str(result)
     return SegList(segs)
 
 
@@ -352,14 +454,15 @@ def _body_multi_star_unify(target, segments, trail):
                 trail.undo(mark)
                 return
         elif is_var(d):
-            # Unbound target: construct a SegList from the pattern and bind it
-            segs = [
-                VarSeg(deref(val)) if kind == "star"
-                else ConcreteSeg([deref(e) for e in val])
-                for kind, val in segments
-            ]
+            # Unbound target: build the result via _build_multi_star_list so
+            # the same str / SegString promotion rule applies. F042: when
+            # all fixed elements deref to 1-char strs and every star derefs
+            # to a str / SegString, the result is a plain str or SegString
+            # rather than a SegList — the Liskov "strings-as-lists" rule
+            # applied at the unbound-target construction site.
+            built = _build_multi_star_list(segments)
             mark = trail.mark()
-            if unify(d, SegList(segs), trail):
+            if unify(d, built, trail):
                 yield True
             trail.undo(mark)
             return

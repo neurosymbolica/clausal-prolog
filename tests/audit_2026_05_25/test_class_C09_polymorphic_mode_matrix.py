@@ -118,11 +118,14 @@ def test_F051_as_items_accepts_ground_seg_inputs():
 
     sl = SegList([ConcreteSeg(["a", "b", "c"])])
     ss = SegString(["abc"])
-    # Preconditions: both ground and walk to the expected concrete values.
-    assert sl.is_ground() and sl.__walk__() == ["a", "b", "c"], (
+    # Preconditions: both ground. Under the Phase 2 Task 13 Liskov rule
+    # (default output is list; promote to str when all elements are
+    # 1-char strs), a SegList whose elements are all 1-char strs walks
+    # to the equivalent str (``"abc"``) rather than the char list.
+    assert sl.is_ground() and sl.__walk__() == "abc", (
         f"precondition: SegList([ConcreteSeg(['a','b','c'])]) should be "
-        f"ground and walk to ['a','b','c']; got is_ground={sl.is_ground()}, "
-        f"walk={sl.__walk__()!r}"
+        f"ground and walk to 'abc' (Liskov promote-to-str); got "
+        f"is_ground={sl.is_ground()}, walk={sl.__walk__()!r}"
     )
     assert ss.is_ground() and ss.__walk__() == "abc", (
         f"precondition: SegString(['abc']) should be ground and walk to "
@@ -581,9 +584,10 @@ key_of(_c, _k) <- If(in_(_c, ['a', 'e', 'i', 'o', 'u']), _k == 1, _k == 0)
 
     sl = SegList([ConcreteSeg(["a", "e", "i"])])
     ss = SegString(["aei"])
-    assert sl.is_ground() and sl.__walk__() == ["a", "e", "i"], (
-        f"precondition: SegList ground/walks; got is_ground={sl.is_ground()}, "
-        f"walk={sl.__walk__()!r}"
+    # Phase 2 Task 13 Liskov rule: all-1-char-str SegList walks to str.
+    assert sl.is_ground() and sl.__walk__() == "aei", (
+        f"precondition: SegList ground/walks (Liskov promote-to-str); "
+        f"got is_ground={sl.is_ground()}, walk={sl.__walk__()!r}"
     )
     assert ss.is_ground() and ss.__walk__() == "aei", (
         f"precondition: SegString ground/walks; got is_ground={ss.is_ground()}, "

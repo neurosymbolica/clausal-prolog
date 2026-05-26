@@ -42,3 +42,28 @@ def normalize_seg_input(x: Any) -> Any:
     if isinstance(x, SegString):
         return x.__walk__()
     return x
+
+
+def maybe_promote_to_str(result: Any) -> Any:
+    """If *result* is a list of all ground 1-char ``str`` elements, return
+    the equivalent ``str``. Otherwise return *result* unchanged.
+
+    This implements the Liskov-substitution / strings-as-lists rule
+    confirmed in the Phase 2 design review: a list whose contents are
+    *provably* all 1-character strs is interchangeable with the
+    corresponding str (str ⊂ list-of-chars). The default output type is
+    ``list`` — we only upgrade to ``str`` when the upgrade is provable
+    from the result elements themselves.
+
+    Used at result-construction sites (head/body output reconstruction,
+    star-list builders, SegList walk) to opportunistically promote
+    list-of-chars outputs back to str so downstream consumers see the
+    natural str shape when one is recoverable. No type-source plumbing
+    is required — the property is purely a function of the result
+    elements.
+    """
+    if isinstance(result, list) and result and all(
+        isinstance(e, str) and len(e) == 1 for e in result
+    ):
+        return "".join(result)
+    return result

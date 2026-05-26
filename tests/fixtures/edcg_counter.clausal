@@ -32,7 +32,9 @@ run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS) <- (
 Test("scaled count 3 items") <- (
     run_scaled(["a", "b", "c"], 10, COUNT, ITEMS),
     COUNT == 30,
-    ITEMS == ["c", "b", "a"]
+    # Phase 2 Task 13 Liskov rule: list-of-1-char-strs may promote to
+    # str — assert against the str form which is the promoted output.
+    ITEMS == "cba"
 )  # nv
 Test("scaled count empty") <- (
     run_scaled([], 5, COUNT, ITEMS),

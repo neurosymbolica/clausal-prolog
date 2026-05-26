@@ -92,6 +92,49 @@ seq_length(PyObject *seq)
     return PyObject_Length(seq);
 }
 
+/* maybe_promote_to_str(result) — F033 / C1 type-preservation:
+ *
+ * If *result* is a non-empty list whose every element is a ground
+ * 1-char str, return the equivalent str. Otherwise return *result*
+ * unchanged (with its refcount incremented).
+ *
+ * Mirrors the Python ``_seg_helpers.maybe_promote_to_str`` helper
+ * applied at every result-construction site in ``list_unify.py``
+ * /  ``body_star_unify.py`` under the Liskov "strings-as-lists" rule:
+ * the default output type is list; str is produced only when the
+ * upgrade is provable from the result elements.
+ *
+ * Returns a new reference to either the promoted str or the
+ * unchanged (refcount-incremented) input. Returns NULL on error.
+ */
+static PyObject *
+maybe_promote_to_str(PyObject *result)
+{
+    if (!PyList_Check(result)) {
+        Py_INCREF(result);
+        return result;
+    }
+    Py_ssize_t n = PyList_GET_SIZE(result);
+    if (n == 0) {
+        Py_INCREF(result);
+        return result;
+    }
+    /* Verify every element is a 1-char str. */
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *e = PyList_GET_ITEM(result, i);
+        if (!PyUnicode_Check(e) || PyUnicode_GET_LENGTH(e) != 1) {
+            Py_INCREF(result);
+            return result;
+        }
+    }
+    /* All 1-char strs — build the promoted str via str.join. */
+    PyObject *empty = PyUnicode_FromStringAndSize("", 0);
+    if (!empty) return NULL;
+    PyObject *joined = PyUnicode_Join(empty, result);
+    Py_DECREF(empty);
+    return joined;
+}
+
 /* ================================================================
  * _head_list_unify_input
  * ================================================================ */
@@ -298,6 +341,20 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 }
             }
             Py_DECREF(s);
+        } else if (PyUnicode_Check(s)) {
+            /* Liskov "strings-as-lists" rule: a str-bound star is
+             * treated as a list of 1-char strs. Splat its chars into
+             * the result; the final ``maybe_promote_to_str`` will
+             * re-promote when every element is a 1-char str. */
+            Py_ssize_t slen = PyUnicode_GET_LENGTH(s);
+            for (Py_ssize_t i = 0; i < slen; i++) {
+                PyObject *ch = PyUnicode_Substring(s, i, i + 1);
+                if (!ch) { Py_DECREF(s); goto error; }
+                int rc = PyList_Append(result, ch);
+                Py_DECREF(ch);
+                if (rc < 0) { Py_DECREF(s); goto error; }
+            }
+            Py_DECREF(s);
         } else if (PyObject_TypeCheck(s, SegListType) ||
                    PyObject_TypeCheck(s, SegStringType)) {
             /* SegList / SegString: walk it.
@@ -336,7 +393,12 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                     Py_DECREF(dv);
                     if (rc < 0) goto error;
                 }
-                int ok = call_unify(d, result, trail);
+                /* F033: promote list-of-1-char-strs back to str under
+                 * the Liskov "strings-as-lists" rule. */
+                PyObject *promoted = maybe_promote_to_str(result);
+                if (!promoted) { Py_DECREF(d); Py_DECREF(result); return NULL; }
+                int ok = call_unify(d, promoted, trail);
+                Py_DECREF(promoted);
                 Py_DECREF(d);
                 Py_DECREF(result);
                 if (ok < 0) return NULL;
@@ -502,7 +564,12 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
 
     /* unify(d, result, trail) */
     {
-        int ok = call_unify(d, result, trail);
+        /* F033: promote list-of-1-char-strs back to str under the Liskov
+         * "strings-as-lists" rule. */
+        PyObject *promoted = maybe_promote_to_str(result);
+        if (!promoted) { Py_DECREF(d); Py_DECREF(result); return NULL; }
+        int ok = call_unify(d, promoted, trail);
+        Py_DECREF(promoted);
         Py_DECREF(d);
         Py_DECREF(result);
         if (ok < 0) return NULL;

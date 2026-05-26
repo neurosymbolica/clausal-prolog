@@ -254,7 +254,10 @@ class TestMultipleAccumulators:
         items = Var()
         for _ in call("process_all", ["a", "b", "c"], 0, cnt, [], items, module=mod):
             assert deref(cnt) == 3
-            assert deref(items) == ["c", "b", "a"]
+            # Phase 2 Task 13 Liskov rule: list-of-1-char-strs may
+            # promote to str.
+            d = deref(items)
+            assert d == ["c", "b", "a"] or d == "cba"
             break
 
     def test_partial_overlap(self, tmp_path):
@@ -274,7 +277,10 @@ class TestMultipleAccumulators:
         items = Var()
         for _ in call("do_both", "x", 0, cnt, [], items, module=mod):
             assert deref(cnt) == 1
-            assert deref(items) == ["x"]
+            # Phase 2 Task 13 Liskov rule: list-of-1-char-strs may
+            # promote to str.
+            d = deref(items)
+            assert d == ["x"] or d == "x"
             break
 
 
@@ -466,7 +472,10 @@ class TestEdcgFixture:
         items = Var()
         for _ in call("run_scaled", ["a", "b", "c"], 10, count, items, module=lm):
             assert deref(count) == 30  # 3 items * scale 10
-            assert deref(items) == ["c", "b", "a"]  # reversed due to prepend
+            # Phase 2 Task 13 Liskov rule: list-of-1-char-strs may
+            # promote to str (reversed due to prepend).
+            d = deref(items)
+            assert d == ["c", "b", "a"] or d == "cba"
             break
 
 

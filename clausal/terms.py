@@ -204,43 +204,6 @@ class VarSeg:
     var: Var
 
 
-def _seg_hash_key(seg):
-    """Return a hashable structural key for a SegList/SegString segment.
-
-    Used by ``SegList.__hash__`` and ``SegString.__hash__`` so two Seg* values
-    built from the same segments hash equally (preserving Python's
-    ``a == b ⇒ hash(a) == hash(b)`` invariant). ``ConcreteSeg`` and ``VarSeg``
-    are unhashable dataclasses, so we project them onto hashable surrogates:
-
-    - ``ConcreteSeg(elements)`` → ``("c", tuple-of-hashable-elements)``
-      (falling back to ``id()`` for unhashable elements).
-    - ``VarSeg(var)``           → ``("v", id(var))`` — ``Var`` is already
-      identity-hashed, so ``id`` matches the equality used by ``VarSeg``'s
-      dataclass ``__eq__``.
-    - ``str``                   → ``("s", str)`` (string literal in a
-      ``SegString``).
-    """
-    if isinstance(seg, ConcreteSeg):
-        items = []
-        for e in seg.elements:
-            try:
-                hash(e)
-                items.append(e)
-            except TypeError:
-                items.append(("id", id(e)))
-        return ("c", tuple(items))
-    if isinstance(seg, VarSeg):
-        return ("v", id(seg.var))
-    if isinstance(seg, str):
-        return ("s", seg)
-    # Fallback: try the segment's own hash, otherwise its identity.
-    try:
-        hash(seg)
-        return ("o", seg)
-    except TypeError:
-        return ("o", id(seg))
-
-
 def _seg_unify_cache_key(other, trail):
     """Build a hashable cache key for ``SegList`` / ``SegString`` ``__unify__``
     generator caching (see [[F015]] / [[F016]]).
@@ -356,12 +319,14 @@ class SegList:
                     # Still unbound — keep as VarSeg with walked var
                     new_segs.append(VarSeg(v))
 
-        # If no VarSegs remain, return a plain Python list
+        # If no VarSegs remain, return a plain Python list (promoted to
+        # str when every element is a 1-char str — F018, Liskov rule).
         if all(isinstance(s, ConcreteSeg) for s in new_segs):
             result = []
             for s in new_segs:
                 result.extend(s.elements)
-            return result
+            from .logic.runtime._seg_helpers import maybe_promote_to_str
+            return maybe_promote_to_str(result)
 
         # Clean up empty ConcreteSegs
         new_segs = [s for s in new_segs
@@ -371,14 +336,24 @@ class SegList:
         return SegList(new_segs)
 
     def is_ground(self) -> bool:
-        """True if all VarSegs are bound — i.e. ``__walk__`` returns a plain list."""
-        return isinstance(self.__walk__(), list)
+        """True if all VarSegs are bound — i.e. ``__walk__`` returns a
+        plain list (or, under the F018 Liskov rule, a plain ``str`` when
+        every walked element is a 1-char str)."""
+        return isinstance(self.__walk__(), (list, str))
 
     def to_list(self) -> list:
-        """Walk and flatten. Raises ``TypeError`` if not fully ground."""
+        """Walk and flatten. Raises ``TypeError`` if not fully ground.
+
+        Under the F018 Liskov rule, a ground SegList whose elements are
+        all 1-char strs walks to a ``str`` — we convert back to a plain
+        list-of-chars here to honour the ``to_list`` contract.
+        """
         w = self.__walk__()
         if isinstance(w, list):
             return w
+        if isinstance(w, str):
+            # Promoted SegList — convert back to list-of-chars.
+            return list(w)
         raise TypeError(
             f"SegList is not ground: {w!r}"
         )
@@ -426,8 +401,13 @@ class SegList:
         from .logic.variables import unify, walk
         if isinstance(other, (list, str)):
             walked = self.__walk__()
-            if isinstance(walked, list):
-                # Fully ground SegList → compare with target.
+            if isinstance(walked, (list, str)):
+                # Fully ground SegList → compare with target. Under the
+                # F018 Liskov rule the walk may promote to ``str``; in
+                # that case compare via the equivalent char-list form
+                # to keep the existing semantics.
+                if isinstance(walked, str):
+                    walked = list(walked)
                 if isinstance(other, str):
                     return walked == list(other)
                 return walked == other
@@ -478,6 +458,9 @@ class SegList:
         w = self.__walk__()
         if isinstance(w, list):
             return w, False
+        if isinstance(w, str):
+            # F018 promoted form — surface as list-of-chars.
+            return list(w), False
         elements: list = []
         has_var = False
         for seg in w._segments:
@@ -508,6 +491,9 @@ class SegList:
         w = self.__walk__()
         if isinstance(w, list):
             return item in w
+        if isinstance(w, str):
+            # F018 promoted form — list-of-chars membership test.
+            return isinstance(item, str) and len(item) == 1 and item in w
         # Non-ground: True if the item is in any ConcreteSeg; otherwise
         # *also* True conservatively when an unbound VarSeg remains
         # (it could be bound to a list containing the item). Only
@@ -533,6 +519,10 @@ class SegList:
         w = self.__walk__()
         if isinstance(w, list):
             return w[index]
+        if isinstance(w, str):
+            # F018 promoted form — index as list-of-chars (each char is
+            # a 1-char str).
+            return w[index]
         elements: list = []
         for seg in w._segments:
             if isinstance(seg, ConcreteSeg):
@@ -554,16 +544,27 @@ class SegList:
         return elements[index]
 
     def __add__(self, other):
-        """Lazy concatenation — returns a new SegList."""
+        """Lazy concatenation — returns a new SegList.
+
+        F020 fix: ``str`` is accepted as a list-of-1-char-strs tail under
+        the Liskov "strings-as-lists" rule. ``SegList(['a','b']) + 'cd'``
+        produces ``SegList(['a','b','c','d'])`` shape.
+        """
         if isinstance(other, list):
             return SegList(self._segments + [ConcreteSeg(other)])
+        if isinstance(other, str):
+            # F020: Liskov — str is a list of chars.
+            return SegList(self._segments + [ConcreteSeg(list(other))])
         if isinstance(other, SegList):
             return SegList(self._segments + other._segments)
         return NotImplemented
 
     def __radd__(self, other):
+        """F020 fix: accept ``str`` as a list-of-1-char-strs head."""
         if isinstance(other, list):
             return SegList([ConcreteSeg(other)] + self._segments)
+        if isinstance(other, str):
+            return SegList([ConcreteSeg(list(other))] + self._segments)
         return NotImplemented
 
     def __eq__(self, other):
@@ -573,11 +574,17 @@ class SegList:
             w = self.__walk__()
             if isinstance(w, list):
                 return w == other
+            if isinstance(w, str):
+                # F018 promoted form — list-of-chars equivalence.
+                return list(w) == other
             return False
         if isinstance(other, str):
             # Symmetric with SegString — str unifies with char-list at runtime,
             # so equality should hold when the SegList walks to a 1-char-str list.
             w = self.__walk__()
+            if isinstance(w, str):
+                # F018 promoted form — compare strings directly.
+                return w == other
             if isinstance(w, list) and all(
                 isinstance(c, str) and len(c) == 1 for c in w
             ):
@@ -587,6 +594,8 @@ class SegList:
             # Walk both and compare under the strings-as-lists contract.
             w_self = self.__walk__()
             w_other = other.__walk__()
+            if isinstance(w_self, str) and isinstance(w_other, str):
+                return w_self == w_other
             if isinstance(w_self, list) and isinstance(w_other, str):
                 return (
                     all(isinstance(c, str) and len(c) == 1 for c in w_self)
@@ -598,20 +607,15 @@ class SegList:
         return NotImplemented
 
     def __hash__(self):
-        # Symmetric with SegString: hashable when ground (hash the walked
-        # plain list as a tuple), and structurally hashable when non-ground
-        # (hash the _segments shape so two SegLists built from the same
-        # segments hash equally — preserving Python's eq/hash invariant,
-        # which __eq__ checks via ``self._segments == other._segments``).
-        w = self.__walk__()
-        if isinstance(w, list):
-            try:
-                return hash(tuple(w))
-            except TypeError:
-                # Ground but contains unhashable elements — fall through to
-                # the structural hash.
-                pass
-        return hash(("SegList", tuple(_seg_hash_key(s) for s in self._segments)))
+        # F025 / Phase 2 Task 13 revision (user-confirmed):
+        # SegList is *unconditionally* unhashable — matching Python's
+        # ``list`` (also unhashable). The previous Task 5 contract
+        # (hashable when ground, structurally hashable when non-ground)
+        # over-specified the rule. Under the Liskov "strings-as-lists"
+        # model the hashing behaviour of a Clausal-side seg container
+        # is undefined; if a caller needs to hash a ground SegList they
+        # can convert via ``to_list()`` / ``list(...)`` first.
+        raise TypeError("unhashable type: 'SegList'")
 
     def __repr__(self) -> str:
         parts = []
@@ -1026,15 +1030,15 @@ class SegString:
         return NotImplemented
 
     def __hash__(self):
-        # Symmetric with SegList: hashable when ground (hash the walked str),
-        # and structurally hashable when non-ground (hash the _segments shape
-        # so two SegStrings built from the same segments hash equally).
-        # Restores Python's eq/hash invariant — the old ``id(self)`` fallback
-        # violated ``a == b ⇒ hash(a) == hash(b)`` for non-ground SegStrings.
-        w = self.__walk__()
-        if isinstance(w, str):
-            return hash(w)
-        return hash(("SegString", tuple(_seg_hash_key(s) for s in self._segments)))
+        # F017 / Phase 2 Task 13 revision (user-confirmed):
+        # SegString is *unconditionally* unhashable, symmetric with
+        # SegList (and with Python's ``list``). The previous Task 5
+        # contract (hashable when ground, structurally hashable when
+        # non-ground) over-specified the rule; the Python eq/hash
+        # invariant is trivially satisfied here because no SegString
+        # instance is ever hashable. Callers needing hashability for a
+        # ground SegString can convert via ``to_str()`` / ``str(...)``.
+        raise TypeError("unhashable type: 'SegString'")
 
 
 def _segstring_unify_gen(segstring, target_str, trail):
