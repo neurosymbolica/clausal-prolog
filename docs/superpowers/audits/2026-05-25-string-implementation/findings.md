@@ -3458,7 +3458,7 @@ fixing in isolation.
 
 - **Class:** C17 (Performance, memory, leaks)
 - **Severity:** perf
-- **Status:** partially fixed in Phase 2 Task 1 (commit `<pending>`) —
+- **Status:** partially fixed in Phase 2 Task 1 (commit `f83801c`) —
   algorithmic constant factor reduced ~3x on the dev VM (5.0 s →
   1.83 s for `_multi_star_splits(10, 20)`), but the test threshold of
   1.0 s is below the inherent ~0.98 s floor for materialising 10 M
