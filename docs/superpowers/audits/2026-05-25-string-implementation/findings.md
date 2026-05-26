@@ -39,7 +39,7 @@
 
 - **Class:** C1 (Type preservation)
 - **Severity:** design-gap
-- **Status:** fixed in Phase 2 Task 13
+- **Status:** fixed in Phase 2 Task 13 (952aa88)
 - **Location:** `clausal/terms.py:227-234`
 - **Discovered by:** Task 2 of Phase 0
 - **Probe:** `probes/probe_F018.py`
@@ -86,7 +86,7 @@ Fix (Phase 2 Task 13): under the user-confirmed Liskov "strings-as-lists" model,
 
 - **Class:** C1 (Type preservation)
 - **Severity:** design-gap
-- **Status:** fixed in Phase 2 Task 13
+- **Status:** fixed in Phase 2 Task 13 (952aa88)
 - **Location:** `clausal/terms.py:353-364`
 - **Discovered by:** Task 2 of Phase 0
 - **Probe:** `probes/probe_F020.py`
@@ -130,7 +130,7 @@ Fix (Phase 2 Task 13): `SegList.__add__` now accepts a `str` operand and treats 
 
 - **Class:** C1 (Type preservation)
 - **Severity:** design-gap
-- **Status:** fixed in Phase 2 Task 13
+- **Status:** fixed in Phase 2 Task 13 (952aa88)
 - **Location:** `clausal/logic/runtime/list_unify.py:165` and
   `clausal/logic/runtime/_list_unify.c:251`
 - **Discovered by:** Task 3 of Phase 0
@@ -183,7 +183,7 @@ Fix (Phase 2 Task 13): `_head_list_unify_output` (both Python and C accelerator)
 
 - **Class:** C1 (Type preservation)
 - **Severity:** design-gap
-- **Status:** fixed in Phase 2 Task 13
+- **Status:** fixed in Phase 2 Task 13 (952aa88)
 - **Location:** `clausal/logic/runtime/body_star_unify.py:249-260`
 - **Discovered by:** Task 4 of Phase 0
 - **Probe:** `probes/probe_F042.py`
@@ -235,7 +235,7 @@ Fix (Phase 2 Task 13): the unbound-Var branch now delegates to `_build_multi_sta
 
 - **Class:** C1 (Type preservation)
 - **Severity:** design-gap
-- **Status:** fixed in Phase 2 Task 13
+- **Status:** fixed in Phase 2 Task 13 (952aa88)
 - **Location:** `clausal/logic/runtime/body_star_unify.py:70-71, 119-126`
   (`_build_star_list`) and `clausal/logic/runtime/body_star_unify.py:150-156,
   167-184` (`_build_multi_star_list`)
