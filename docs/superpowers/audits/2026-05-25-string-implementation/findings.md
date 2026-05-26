@@ -1000,7 +1000,7 @@ in the C-level unify path.
 
 - **Class:** C4 (Head-pattern literal mismatch)
 - **Severity:** bug
-- **Status:** open (folded into this audit's Phase 2 per user decision 2026-05-25; large-blast-radius candidate — fix-scope assessment in Notes will inform Phase 2 plan ordering)
+- **Status:** deferred to follow-up spec (user decision 2026-05-26; large blast radius — fix touches the compiler and may affect many existing user-defined predicates with literal-in-head rule clauses; warrants its own spec + plan + Phase 1+2 cycle)
 - **Location:** `clausal/logic/compiler/head_match.py:253-254` (the `MatchValue` branch for str/bytes literals)
 - **Discovered by:** Task 5 of Phase 0
 - **Probe:** `probes/probe_F046.py`
@@ -1029,6 +1029,8 @@ in the C-level unify path.
 Sibling C-class cluster: this is C4, structurally orthogonal to the C3 "SegList arm but no SegString arm" cluster ([[F031]] [[F032]] [[F034]] [[F040]] [[F041]] [[F047]]). Both are compiler-side findings; they'd likely be tackled in separate Phase 2 efforts.
 
 **Prior-known:** commit aa2155d — "Compiler: head patterns accept strings in clause matching" widened the *runtime* destructuring path (`_head_list_unify_input` and the two `isinstance` dispatch guards) so a clause with a list-literal head matches a string caller. The commit message claims "user-defined predicates with list patterns work on strings" and lists three sites changed. The fourth site — `MatchValue(Constant(<str>))` for clause heads that contain a *string literal* — was not addressed; that's the F046 surface. Phase 5b's plan in `STRING_LIST_UNIFICATION.md` (L1198-1281) likewise only enumerates the three sites that were fixed.
+
+Phase 2 deferred F046 per user decision 2026-05-26. The three candidate fix approaches identified during the audit (narrow head_match.py:253-254 split, broad database.py:274 elaborator-gate removal, or combined) all remain viable for a follow-up spec. The conjoined finding F095 (C15 first-arg indexing) was closed in Phase 2 Task 8 (commit 9494e22), so the dispatch-layer half of the strings-as-lists head-literal contract is already restored — the compile-layer half is the remaining work. The Phase 1 test `tests/audit_2026_05_25/test_class_C04_head_literal_mismatch.py::test_F046_rule_str_head_matches_charlist_caller` remains xfail-strict and will continue to flag any regression that re-introduces the bug as well as catch the fix landing.
 
 *Task 5 confirmed (no finding):*
 - **F048** — Task 5 confirmed: compound heads containing list literals (e.g. ``Zorp(['a','b','c']) <- body``) and list-literal-only paths are subsumed by the successful elaboration + wildcard-capture + runtime-unify mechanism. Direct inspection of the compiled clause shows the parser/elaborator lifts the entire argument into a body Unify:
