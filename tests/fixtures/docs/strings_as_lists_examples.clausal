@@ -55,6 +55,9 @@ Test("index") <- (get_item(1, "hello", C), C == "e")  # nv
 # --8<-- [start:type_checking]
 Test("is_chars string") <- is_chars("hello")  # nv
 Test("is_chars list") <- is_chars([1, 2, 3])  # nv
-Test("is_list string fails") <- (not is_list("hello"))  # nv
+# Audit 2026-05-25 (F080): is_list/1 is now polymorphic over list
+# and str — a str is a character sequence, so is_list("hello")
+# agrees with maplist/length/append/reverse/member/take/drop/etc.
+Test("is_list string succeeds") <- is_list("hello")  # nv
 Test("is_str list fails") <- (not is_str([1, 2, 3]))  # nv
 # --8<-- [end:type_checking]

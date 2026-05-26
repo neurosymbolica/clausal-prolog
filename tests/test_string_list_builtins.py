@@ -402,7 +402,16 @@ class TestIsChars:
         # nv
         assert not _first("is_chars", 42, module=mod)
 
-    def test_is_list_string_still_fails(self, mod):
-        """is_list('hello') still fails — exact type test."""
+    def test_is_list_string_now_succeeds(self, mod):
+        """is_list('hello') succeeds — strings-as-lists contract.
+
+        Audit 2026-05-25 (Phase 2 Task 9, finding F080): the user
+        selected option A — every list-flavoured builtin already
+        treats ``str`` as a character sequence, so ``is_list/1`` is
+        now polymorphic over ``list`` and ``str`` to match. The prior
+        ``not _first(...)`` assertion has been inverted; see
+        ``docs/superpowers/audits/2026-05-25-string-implementation``
+        ledger entry F080 for the full rationale.
+        """
         # nv
-        assert not _first("is_list", "hello", module=mod)
+        assert _first("is_list", "hello", module=mod)

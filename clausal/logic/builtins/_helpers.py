@@ -11,7 +11,7 @@ from typing import Any
 
 from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
-from clausal.terms import Compound, KWTerm
+from clausal.terms import Compound, KWTerm, SegList, SegString, VarSeg, ConcreteSeg
 
 
 # ── Python reference implementations ─────────────────────────────────────────
@@ -105,6 +105,35 @@ def _is_ground_py(term: Any) -> bool:
         return isinstance(term.functor, str) and all(_is_ground_py(a) for a in term.args)
     if isinstance(term, KWTerm):
         return all(_is_ground_py(v) for v in term.values())
+    # F083 (audit 2026-05-25): recurse into Seg* containers so that
+    # ``ground/1`` returns False for any SegList/SegString that still
+    # holds an unbound ``VarSeg``. Both the Python fallback and the C
+    # ``c_is_ground`` historically fell through to "True" for Seg* —
+    # see [[F083]] in the 2026-05-25 string audit findings ledger.
+    if isinstance(term, SegList):
+        for seg in term.segments:
+            if isinstance(seg, ConcreteSeg):
+                if not all(_is_ground_py(e) for e in seg.elements):
+                    return False
+            elif isinstance(seg, VarSeg):
+                if not _is_ground_py(seg.var):
+                    return False
+            else:
+                # Unknown segment type — be conservative and walk it.
+                if not _is_ground_py(seg):
+                    return False
+        return True
+    if isinstance(term, SegString):
+        for seg in term.segments:
+            if isinstance(seg, str):
+                continue
+            if isinstance(seg, VarSeg):
+                if not _is_ground_py(seg.var):
+                    return False
+            else:
+                if not _is_ground_py(seg):
+                    return False
+        return True
     if is_term_instance(term):
         return all(_is_ground_py(getattr(term, name)) for name in term_field_names(term))
     return True
@@ -126,10 +155,21 @@ try:
         _nth_arg,
         _args_list,
         _is_compound,
-        _is_ground,
+        _is_ground as _c_is_ground,
         _register_term_types,
     )
     # Register Compound and KWTerm types with the C extension
     _register_term_types(Compound, KWTerm)
+
+    # F083 (audit 2026-05-25): the C ``_is_ground`` does not know about
+    # SegList / SegString and falls through to "True" for any unknown
+    # container. Short-circuit the Seg* shapes in Python so a SegList
+    # / SegString that still holds an unbound ``VarSeg`` reports
+    # *not* ground. Other shapes still go through the fast C path.
+    def _is_ground(term: Any) -> bool:
+        t = deref(term)
+        if isinstance(t, (SegList, SegString)):
+            return _is_ground_py(t)
+        return _c_is_ground(t)
 except ImportError:
     pass

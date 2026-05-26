@@ -87,9 +87,16 @@ Test("number: string fails") <- (not number("42"))  # nv
 Test("number: var fails") <- (not number(_x))  # nv
 
 # ── callable_/1 (declared atoms) ─────────────────────────────────────────────
+# Audit 2026-05-25 (F084): callable_/1 was tightened. A bare ``str``
+# is now callable only when it names a predicate that is registered
+# in the current module (user clauses, dispatch, or a builtin); an
+# arbitrary string like "hello" no longer trivially succeeds. Zero-
+# arity ``PredicateMeta`` atoms (``Hello``) and ``Compound`` terms
+# continue to succeed unchanged.
 
 Test("callable: declared atom") <- callable_(Hello)  # nv
-Test("callable: string") <- callable_("hello")  # nv
+Test("callable: registered predicate name") <- callable_("is_bound_number")  # nv
+Test("callable: arbitrary string fails") <- (not callable_("hello"))  # nv
 Test("callable: int fails") <- (not callable_(42))  # nv
 Test("callable: var fails") <- (not callable_(_x))  # nv
 

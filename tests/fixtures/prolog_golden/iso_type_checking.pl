@@ -96,8 +96,11 @@ test("number: var fails") :-
 test("callable: declared atom") :-
     callable(hello).
 
-test("callable: string") :-
-    callable("hello").
+test("callable: registered predicate name") :-
+    callable("is_bound_number").
+
+test("callable: arbitrary string fails") :-
+    \+ callable("hello").
 
 test("callable: int fails") :-
     \+ callable(42).

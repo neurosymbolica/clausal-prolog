@@ -15,8 +15,6 @@ Findings tested here:
 - F084 (smell) callable_/1 succeeds for any str including ""
 """
 
-import pytest
-
 from clausal.logic.solve import call
 from clausal.logic.variables import Var
 from clausal.terms import SegList, SegString, VarSeg
@@ -44,10 +42,6 @@ def _check(mod, pred: str, value) -> str:
         return "UNDEF"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F080: is_list(\"abc\") fails despite strings-as-lists",
-)
 def test_F080_is_list_rejects_str_strings_as_lists_gap():
     """is_list("abc") should succeed under strings-as-lists contract.
 
@@ -76,10 +70,6 @@ def test_F080_is_list_rejects_str_strings_as_lists_gap():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F081: string/1 not registered as builtin",
-)
 def test_F081_string_predicate_not_registered():
     """string/1 builtin is not registered; only is_str/1 exists.
 
@@ -114,10 +104,6 @@ def test_F081_string_predicate_not_registered():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F082: atomic/1 not registered as builtin",
-)
 def test_F082_atomic_predicate_not_registered():
     """atomic/1 builtin is not registered.
 
@@ -153,10 +139,6 @@ def test_F082_atomic_predicate_not_registered():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F083: ground/1 returns True for non-ground SegList/SegString",
-)
 def test_F083_ground_blind_to_varseg_in_seglist():
     """ground/1 returns True for SegList with unbound VarSeg — critical bug.
 
@@ -202,10 +184,6 @@ def test_F083_ground_blind_to_varseg_in_seglist():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F084: callable_/1 succeeds for any str including \"\"",
-)
 def test_F084_callable_lax_on_arbitrary_strings():
     """callable_/1 succeeds for any str, even strings that are not predicate names.
 

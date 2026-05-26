@@ -137,16 +137,19 @@ Test("parse words") <- phrase(words, "hello world")
 
 ## Type Checking
 
-Two predicates test sequence types (see [Type Checking](type_checking.md) for the full set):
+Three predicates test sequence types (see [Type Checking](type_checking.md) for the full set):
 
 | Predicate | Strings | Lists | Purpose |
 |-----------|---------|-------|---------|
-| `is_list/1` | Fails | Succeeds | Exact type test: is this a Python list? |
+| `is_list/1` | Succeeds | Succeeds | Polymorphic: is this a list-shaped value (list or char-sequence str)? |
 | `is_str/1` | Succeeds | Fails | Exact type test: is this a Python str? |
 | `is_chars/1` | Succeeds | Succeeds | union test: is this a character sequence? |
 
-Use `is_chars/1` when you want to accept both strings and lists. Use `is_list/1`
-or `is_str/1` when you need to distinguish the two.
+`is_list/1` is polymorphic over `list` and `str` (audit 2026-05-25, F080)
+so it agrees with every list-flavoured builtin — `append`, `length`,
+`reverse`, `member`, `maplist`, `take`, `drop`, etc. — all of which
+accept a `str` as a character sequence. Use `is_str/1` when you
+specifically need to distinguish a `str` from a `list`.
 
 ```clausal
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:type_checking"

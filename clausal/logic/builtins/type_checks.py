@@ -1,14 +1,14 @@
-"""Type-checking builtins: var/1, nonvar/1, is_str/1, number/1,
-integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1,
+"""Type-checking builtins: var/1, nonvar/1, is_str/1, string/1, number/1,
+integer/1, float_/1, atomic/1, compound/1, callable_/1, is_list/1, ground/1,
 must_be/2, can_be/2."""
 
 from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
-from clausal.terms import Compound, KWTerm
+from clausal.terms import Compound, KWTerm, SegList, SegString
 
-from clausal.logic.builtins._registry import _builtin
+from clausal.logic.builtins._registry import _builtin, _db_builtin
 from clausal.logic.builtins._helpers import _is_ground
 
 
@@ -28,9 +28,37 @@ def _nonvar__1(x, trail, k):
 
 @_builtin("is_str", 1)
 def _atom__1(x, trail, k):
-    """atom(X) — succeeds if X is a string (Prolog atom)."""
+    """is_str(X) — succeeds if X is a Python str.
+
+    Also succeeds for a ground ``SegString`` (its ``walk`` returns a
+    plain ``str``).
+    """
     x_val = deref(x)
-    if not is_var(x_val) and isinstance(x_val, str):
+    if is_var(x_val):
+        return
+    if isinstance(x_val, str):
+        yield None
+    elif isinstance(x_val, SegString) and _is_ground(x_val):
+        yield None
+
+
+# F081 (audit 2026-05-25): register ``string/1`` as the ISO/SWI name
+# alongside the clausal-native ``is_str/1``. The ``_check_type`` table
+# below has long accepted ``"string"`` as a synonym for the str check,
+# so ``must_be(string, X)`` worked while ``string(X)`` raised KeyError
+# — see [[F081]].
+@_builtin("string", 1)
+def _string__1(x, trail, k):
+    """string(X) — succeeds if X is a Python str (ISO/SWI alias of ``is_str``).
+
+    Also succeeds for a ground ``SegString``.
+    """
+    x_val = deref(x)
+    if is_var(x_val):
+        return
+    if isinstance(x_val, str):
+        yield None
+    elif isinstance(x_val, SegString) and _is_ground(x_val):
         yield None
 
 
@@ -89,24 +117,138 @@ def _compound__1(x, trail, k):
         yield None
 
 
-@_builtin("callable_", 1)
-def _callable__1(x, trail, k):
-    """callable(X) — succeeds if X is an atom or compound."""
+# F082 (audit 2026-05-25): register ``atomic/1``, the ISO Prolog
+# type-check for "any non-variable, non-compound term". Accepts
+# Python ``str`` / ``int`` / ``float`` / ``bool`` / ``None`` and
+# zero-arity ``PredicateMeta`` classes; rejects Var, Compound,
+# KWTerm, term-instance, list, dict, and SegList / SegString — every
+# Seg* shape is structurally compound. See [[F082]].
+@_builtin("atomic", 1)
+def _atomic__1(x, trail, k):
+    """atomic(X) — succeeds if X is a non-variable, non-compound term.
+
+    Accepts ``str``, ``int``, ``float``, ``bool``, ``None``, and
+    zero-arity ``PredicateMeta`` classes. Rejects ``Var``, ``Compound``,
+    ``KWTerm``, term-instances, ``list``, ``SegList``, ``SegString``.
+    """
     x_val = deref(x)
     if is_var(x_val):
         return
-    if isinstance(x_val, (str, Compound, KWTerm)):
+    # Reject compound shapes explicitly so we don't accidentally accept
+    # them via the "anything else" fallthrough.
+    if isinstance(x_val, (Compound, KWTerm, list, SegList, SegString)):
+        return
+    if is_term_instance(x_val):
+        return
+    # Atomic primitives. ``bool`` is-a ``int`` in Python — that's fine
+    # for ``atomic``, but ``number/1`` continues to exclude it.
+    if x_val is None or isinstance(x_val, (bool, int, float, str, bytes)):
         yield None
-    elif is_term_instance(x_val):
+        return
+    # Zero-arity PredicateMeta class — a declared atom.
+    if (
+        isinstance(x_val, type)
+        and isinstance(x_val, PredicateMeta)
+        and not x_val._fields
+    ):
         yield None
-    elif isinstance(x_val, PredicateMeta) and not x_val._fields:
-        yield None
+
+
+def _str_is_identifier(s: str) -> bool:
+    """Return True if *s* could plausibly be a predicate name.
+
+    Conservative: non-empty + Python ``str.isidentifier`` rule. Predicate
+    names in clausal use the same lexical class as Python identifiers
+    (head-of-word: letter/underscore; body: alphanumeric/underscore).
+    """
+    return bool(s) and s.isidentifier()
+
+
+# F084 (audit 2026-05-25): tighten ``callable_/1`` so it no longer
+# accepts arbitrary Python strs. A str now has to (a) be a non-empty
+# valid identifier *and* (b) name a predicate that is registered in
+# the current module's database — either as user-defined clauses or
+# as a builtin / stdlib entry. Compound, KWTerm, term-instance, and
+# zero-arity PredicateMeta classes continue to succeed unchanged.
+# See [[F084]] for the full rationale.
+@_db_builtin("callable_", 1, fields=("x",))
+def _callable__1_factory(db):
+    """Factory for ``callable_/1`` — captures *db* for predicate-name lookups."""
+    from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
+
+    def _str_is_callable(name: str) -> bool:
+        if not _str_is_identifier(name):
+            return False
+        # Any registered arity counts: scan user clauses, dispatch table,
+        # and the builtin / db-builtin registries for at least one match.
+        try:
+            iter_clauses = db._clauses  # internal — same shape used elsewhere
+        except AttributeError:
+            iter_clauses = {}
+        for (fn, _arity) in iter_clauses:
+            if fn == name:
+                return True
+        try:
+            iter_dispatch = db._dispatch
+        except AttributeError:
+            iter_dispatch = {}
+        for (fn, _arity) in iter_dispatch:
+            if fn == name:
+                return True
+        for (fn, _arity) in _BUILTINS:
+            if fn == name:
+                return True
+        for (fn, _arity) in _DB_BUILTINS:
+            if fn == name:
+                return True
+        # Module-globals fallback: a PredicateMeta class registered
+        # under this name in the importing module.
+        module_dict = getattr(db, "module_dict", None)
+        if module_dict is not None:
+            obj = module_dict.get(name)
+            if obj is not None and hasattr(obj, "_get_dispatch"):
+                return True
+        return False
+
+    def callable___1(x, trail, k):
+        x_val = deref(x)
+        if is_var(x_val):
+            return
+        if isinstance(x_val, (Compound, KWTerm)):
+            yield None
+            return
+        if is_term_instance(x_val):
+            yield None
+            return
+        if isinstance(x_val, type) and isinstance(x_val, PredicateMeta):
+            yield None
+            return
+        if isinstance(x_val, str):
+            if _str_is_callable(x_val):
+                yield None
+            return
+        # Any other shape (int, float, list, SegList, …) — not callable.
+
+    return callable___1
 
 
 @_builtin("is_list", 1)
 def _is_list__1(x, trail, k):
-    """is_list(X) — succeeds if X is a Python list."""
-    if isinstance(deref(x), list):
+    """is_list(X) — succeeds if X is a Python list or a Python str.
+
+    F080 (audit 2026-05-25): under the strings-as-lists contract a
+    ``str`` *is* a (character) list, so ``is_list("abc")`` must agree
+    with ``in_/2``, ``length/2``, ``append/3``, ``msort/2``,
+    ``reverse/2``, and ``maplist/N`` — all of which accept a ``str``
+    as a list of chars. A ground ``SegList`` / ``SegString`` (one
+    whose ``walk`` collapses to a plain list / str) also succeeds.
+    See [[F080]] for the full design discussion and the lock-in
+    update in ``tests/test_string_list_builtins.py``.
+    """
+    x_val = deref(x)
+    if isinstance(x_val, (list, str)):
+        yield None
+    elif isinstance(x_val, (SegList, SegString)) and _is_ground(x_val):
         yield None
 
 

@@ -2648,6 +2648,14 @@ Bolded cells are the surprising answers driving findings below.
 
 - **Class:** C13 (Type-check predicates)
 - **Severity:** **bug**
+- **Status:** fixed in Phase 2 Task 9 — ``_is_ground_py`` now has
+  explicit ``SegList`` / ``SegString`` branches and recurses into
+  ``VarSeg.var``; the C-accelerated ``_is_ground`` is wrapped in
+  ``clausal/logic/builtins/_helpers.py`` so any ``SegList`` /
+  ``SegString`` is short-circuited to the Python implementation
+  before reaching ``c_is_ground``. The C function itself remains
+  Seg*-blind but is no longer ever invoked on those shapes from
+  the helper path.
 - **Location:** `clausal/logic/builtins/_helpers.py:93-110` (Python
   fallback) and `clausal/logic/variables/_variables.c:1933-2038`
   (``c_is_ground``)
@@ -2714,6 +2722,19 @@ pre-check before dispatch (search ``_helpers._is_ground`` consumers).
 
 - **Class:** C13 (Type-check predicates)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 9 — user chose **option A** on
+  2026-05-25 (make ``is_list`` polymorphic). ``is_list/1`` now
+  accepts ``list`` and ``str`` (and ground ``SegList`` / ``SegString``
+  whose ``walk`` resolves to one of those). The lock-in test
+  ``test_is_list_string_still_fails`` in
+  ``tests/test_string_list_builtins.py`` was renamed to
+  ``test_is_list_string_now_succeeds`` with the inverted assertion;
+  the strings-as-lists doc snippet in
+  ``tests/fixtures/docs/strings_as_lists_examples.clausal`` and the
+  type-checking table in ``docs/strings_as_lists.md`` were updated to
+  match. The ISO conformity fixtures (``iso_type_checking.clausal``
+  and its golden ``.pl``) only test ``is_list`` against lists and
+  atom symbols, so they were unaffected by the contract change.
 - **Location:** `clausal/logic/builtins/type_checks.py:106-110`
 - **Discovered by:** Task 11 of Phase 0
 - **Probe:** `probes/probe_F080.py`
@@ -2756,6 +2777,12 @@ behaviour that contradicts the broader strings-as-lists contract).
 
 - **Class:** C13 (Type-check predicates)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 9 — ``string/1`` is now
+  registered as the ISO/SWI-named alias of ``is_str/1``; both
+  succeed on ``str`` and on ground ``SegString``. The misleading
+  ``is_str`` docstring (which read ``atom(X) — succeeds if X is a
+  string (Prolog atom).``) was rewritten so the name and the
+  description agree.
 - **Location:** `clausal/logic/builtins/type_checks.py:29-34` (the
   ``is_str/1`` registration is the only string-type test)
 - **Discovered by:** Task 11 of Phase 0
@@ -2802,6 +2829,11 @@ docstring fix is independent of the alias decision.
 
 - **Class:** C13 (Type-check predicates)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 9 — ``atomic/1`` is now
+  registered. Accepts ``str``, ``int``, ``float``, ``bool``,
+  ``None``, and zero-arity ``PredicateMeta`` classes; rejects Var,
+  Compound, KWTerm, term-instance, ``list``, ``SegList``, and
+  ``SegString`` (every Seg* shape is structurally compound).
 - **Location:** `clausal/logic/builtins/type_checks.py` (no
   ``@_builtin("atomic", 1)`` registration)
 - **Discovered by:** Task 11 of Phase 0
@@ -2836,6 +2868,17 @@ reject Var, reject compound shapes, succeed.
 
 - **Class:** C13 (Type-check predicates)
 - **Severity:** smell
+- **Status:** fixed in Phase 2 Task 9 — ``callable_/1`` is now a
+  db-builtin. A bare ``str`` succeeds only when it (a) passes
+  ``str.isidentifier`` *and* (b) names a predicate registered in
+  the current module — user clauses, dispatch table, builtins, or
+  ``module_dict`` PredicateMeta entries. Compound, KWTerm,
+  term-instance, and ``PredicateMeta`` classes continue to succeed
+  unchanged. The conformity test in
+  ``tests/conformity/iso_type_checking.clausal`` (and its golden
+  ``.pl``) gained a *callable: registered predicate name* case and
+  a *callable: arbitrary string fails* counter-case to pin down
+  the tightened contract.
 - **Location:** `clausal/logic/builtins/type_checks.py:92-103`
 - **Discovered by:** Task 11 of Phase 0
 - **Probe:** `probes/probe_F080.py`
