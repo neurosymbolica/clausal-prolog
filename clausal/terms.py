@@ -43,6 +43,24 @@ from .pythonic_ast.nodes import (
 )
 
 
+# ── Exceptions ────────────────────────────────────────────────────────────────
+
+
+class PartialTermError(Exception):
+    """Raised when a non-ground SegList/SegString cannot satisfy an operation.
+
+    Deliberately not a :class:`TypeError` subclass — callers that previously
+    caught the bare ``TypeError`` raised from ``to_list()`` / ``to_str()`` /
+    ``str.join`` on partial Seg* terms were getting a leaked low-level
+    CPython exception with no clausal-identity. ``PartialTermError`` lets
+    those callers distinguish "this Seg* is partial / malformed" from
+    generic Python type errors and surface a meaningful diagnostic.
+
+    Audit findings: F021, F023, F024, F038, F039
+    (docs/superpowers/audits/2026-05-25-string-implementation/findings.md).
+    """
+
+
 # ── New term types ─────────────────────────────────────────────────────────────
 
 @dataclass
@@ -430,26 +448,110 @@ class SegList:
             return NotImplemented
         return NotImplemented
 
-    # ── sequence protocol (ground delegation) ────────────────────────────────
+    # ── sequence protocol (partial-aware) ────────────────────────────────────
+    #
+    # F021/F022/F039 (audit 2026-05-25): on non-ground SegLists the old code
+    # called ``to_list()`` which raised a bare ``TypeError`` — a sequence-
+    # protocol crash propagating out of duck-typed callers (``len``, ``iter``,
+    # ``in``). The current contract for partial SegLists returns a
+    # *partial answer* drawn from the ConcreteSeg prefix/positions, so a
+    # caller iterating an unknown SegList still sees every knowable element
+    # without committing on the VarSeg holes. ``__contains__`` likewise
+    # returns ``True`` conservatively for items that could legitimately live
+    # in an unbound VarSeg — a definite ``False`` on a satisfiable goal is
+    # the worst-case silent incompleteness flagged by F022.
+    #
+    # The walked ConcreteSegs are flattened in order; an unbound VarSeg is
+    # treated as an opaque gap (skipped during iteration / length counting).
+    # Negative or partial indices into the gap raise ``PartialTermError``
+    # rather than IndexError, so callers can distinguish "out of known prefix"
+    # from "out of bounds".
+
+    def _concrete_prefix(self) -> tuple[list, bool]:
+        """Return (concrete_elements, has_var_seg) for the walked SegList.
+
+        Used by the partial-aware sequence protocol. ``concrete_elements`` is
+        the flat list of every element drawn from ConcreteSegs in segment
+        order; ``has_var_seg`` is True iff at least one VarSeg remains
+        unbound after walking.
+        """
+        w = self.__walk__()
+        if isinstance(w, list):
+            return w, False
+        elements: list = []
+        has_var = False
+        for seg in w._segments:
+            if isinstance(seg, ConcreteSeg):
+                elements.extend(seg.elements)
+            else:
+                has_var = True
+        return elements, has_var
 
     def __len__(self) -> int:
-        return len(self.to_list())
+        # Ground: exact length via the walked list.
+        # Non-ground: the *minimum* knowable length (sum of ConcreteSeg
+        # lengths). VarSegs contribute zero or more — the true length is
+        # ``>= __len__``. Python's ``len()`` requires a non-negative int, so
+        # we cannot represent the uncertainty here; the conservative lower
+        # bound is the contract.
+        elements, _ = self._concrete_prefix()
+        return len(elements)
 
     def __iter__(self):
-        return iter(self.to_list())
+        # Ground: iterate the walked list.
+        # Non-ground: yield every ConcreteSeg element in order, skipping
+        # VarSeg gaps. Callers get the knowable prefix without a crash.
+        elements, _ = self._concrete_prefix()
+        return iter(elements)
 
     def __contains__(self, item) -> bool:
         w = self.__walk__()
         if isinstance(w, list):
             return item in w
-        # Check ConcreteSegs only — uncertain for VarSegs
+        # Non-ground: True if the item is in any ConcreteSeg; otherwise
+        # *also* True conservatively when an unbound VarSeg remains
+        # (it could be bound to a list containing the item). Only
+        # definitively False when every segment is concrete and the item
+        # is absent from all of them — the walked form would have been
+        # a plain list in that case, so reaching here with no VarSeg is
+        # unreachable, but we keep the branch for defensiveness.
+        has_var = False
         for seg in w._segments:
-            if isinstance(seg, ConcreteSeg) and item in seg.elements:
-                return True
-        return False
+            if isinstance(seg, ConcreteSeg):
+                if item in seg.elements:
+                    return True
+            else:
+                has_var = True
+        return has_var
 
     def __getitem__(self, index):
-        return self.to_list()[index]
+        # Ground: normal list indexing.
+        # Non-ground: index into the concrete prefix. If the requested
+        # index falls within the concrete prefix we can return it; otherwise
+        # raise PartialTermError so the caller can distinguish "known
+        # absent" from "unknown until bound".
+        w = self.__walk__()
+        if isinstance(w, list):
+            return w[index]
+        elements: list = []
+        for seg in w._segments:
+            if isinstance(seg, ConcreteSeg):
+                elements.extend(seg.elements)
+            else:
+                # Hit an unbound VarSeg before exhausting the requested
+                # index — the value at ``index`` depends on the VarSeg's
+                # eventual binding. We can still satisfy non-negative
+                # indices that land within the prefix already collected.
+                if isinstance(index, int) and 0 <= index < len(elements):
+                    return elements[index]
+                raise PartialTermError(
+                    f"SegList[{index!r}] requires resolving an unbound "
+                    f"VarSeg; only the concrete prefix (indices "
+                    f"0..{len(elements) - 1}) is knowable. SegList={self!r}"
+                )
+        # All concrete — but __walk__ would have returned a list, so this
+        # branch is mostly unreachable. Fall through to normal indexing.
+        return elements[index]
 
     def __add__(self, other):
         """Lazy concatenation — returns a new SegList."""
@@ -643,6 +745,21 @@ class SegString:
     __slots__ = ("_segments", "_unify_gens")
 
     def __init__(self, segments: list):
+        # F024 (audit 2026-05-25): precondition-check segment shapes at
+        # construction time. The SegString contract permits only ``str``
+        # literals and ``VarSeg`` holes. Accepting other types (ints,
+        # nested lists, …) silently rots through to ``__walk__`` / ``eq``
+        # / ``hash`` / ``unify`` and surfaces as a confusing bare
+        # ``TypeError`` from deep inside CPython. Reject early with a
+        # typed clausal exception so the caller learns about the
+        # malformed segment at construction, not three call frames away.
+        for i, seg in enumerate(segments):
+            if not isinstance(seg, (str, VarSeg)):
+                raise PartialTermError(
+                    f"SegString segment [{i}] is {type(seg).__name__} "
+                    f"({seg!r}); expected str or VarSeg. SegString accepts "
+                    f"only string literals and variable-length holes."
+                )
         self._segments = list(segments)
         # F016 fix — per-(target, trail) generator cache; see
         # ``SegList.__init__`` / ``SegList.__unify__`` for the rationale.
@@ -673,7 +790,24 @@ class SegString:
                     else:
                         new_segs.append(v)
                 elif isinstance(v, list):
-                    # VarSeg bound to a char list — join into string
+                    # VarSeg bound to a char list — join into string.
+                    # F024 (audit 2026-05-25): validate every element is a
+                    # ``str`` before delegating to ``str.join`` so the
+                    # malformed-segment case raises a typed clausal
+                    # ``PartialTermError`` instead of leaking the raw
+                    # ``TypeError: sequence item N: expected str instance,
+                    # ... found`` from deep inside CPython. The leaked
+                    # exception propagates through every method that
+                    # touches ``__walk__`` (eq, hash, repr, unify,
+                    # is_ground) and gives no signal that the SegString's
+                    # VarSeg binding violates the char-list contract.
+                    for i, elem in enumerate(v):
+                        if not isinstance(elem, str):
+                            raise PartialTermError(
+                                f"SegString VarSeg bound to a non-char-list: "
+                                f"element [{i}] is {type(elem).__name__} "
+                                f"({elem!r}), expected str. Full binding: {v!r}"
+                            )
                     s = "".join(v)
                     if new_segs and isinstance(new_segs[-1], str):
                         new_segs[-1] = new_segs[-1] + s
@@ -763,11 +897,110 @@ class SegString:
             if isinstance(walked, str):
                 from .logic.variables import unify as _unify
                 return _unify(walked, other, trail)
-            # Non-ground: can't unify SegString with list directly
-            return NotImplemented
+            # F023 (audit 2026-05-25): non-ground SegString vs list — the
+            # old branch returned ``NotImplemented`` which the C top-level
+            # unify treats as "no protocol match → False", silently
+            # dropping logically-satisfiable goals like
+            # ``unify(SegString(['a', VarSeg(X), 'c']), ['a','b','c'])``.
+            # The companion ``SegList.__unify__(str)`` already routes
+            # through ``_seglist_unify_gen`` against the string; build the
+            # SegList equivalent (str segments → ConcreteSeg-of-chars,
+            # VarSegs preserved) and delegate so the SegString-vs-list
+            # path picks up the same generator-driven enumeration.
+            equivalent_segs: list = []
+            for seg in walked._segments:
+                if isinstance(seg, str):
+                    equivalent_segs.append(ConcreteSeg(list(seg)))
+                else:  # VarSeg
+                    equivalent_segs.append(seg)
+            return SegList(equivalent_segs).__unify__(other, trail)
         if isinstance(other, (SegString, SegList)):
             return NotImplemented
         return NotImplemented
+
+    # ── sequence protocol (partial-aware) ────────────────────────────────────
+    #
+    # F038/F039 (audit 2026-05-25): SegString previously defined no
+    # ``__iter__``, so even a *ground* ``SegString(["abc"])`` raised
+    # ``TypeError: 'SegString' object is not iterable`` when handed to
+    # ``iter(collection)`` (e.g. via ``_in_iter`` for body-position
+    # ``elem in coll`` goals). The new sequence protocol mirrors the
+    # partial-aware SegList contract: ground SegStrings iterate their
+    # walked ``str`` as chars; non-ground SegStrings expose the concrete
+    # prefix from str segments, treating VarSegs as opaque gaps.
+
+    def _concrete_prefix(self) -> tuple[str, bool]:
+        """Return (concrete_chars, has_var_seg) for the walked SegString.
+
+        ``concrete_chars`` concatenates every ``str`` segment in segment
+        order; ``has_var_seg`` is True iff at least one VarSeg remains
+        unbound after walking.
+        """
+        w = self.__walk__()
+        if isinstance(w, str):
+            return w, False
+        parts: list = []
+        has_var = False
+        for seg in w._segments:
+            if isinstance(seg, str):
+                parts.append(seg)
+            else:
+                has_var = True
+        return "".join(parts), has_var
+
+    def __len__(self) -> int:
+        # Ground: exact length of the walked str.
+        # Non-ground: minimum length (sum of concrete str segments).
+        # See SegList.__len__ — same conservative-lower-bound contract.
+        chars, _ = self._concrete_prefix()
+        return len(chars)
+
+    def __iter__(self):
+        # Ground: iterate the walked str as chars (matches Python's
+        # ``iter(str)`` contract under the strings-as-lists rule).
+        # Non-ground: yield the concrete chars from str segments in
+        # order, skipping VarSeg gaps.
+        chars, _ = self._concrete_prefix()
+        return iter(chars)
+
+    def __contains__(self, item) -> bool:
+        w = self.__walk__()
+        if isinstance(w, str):
+            # ``item in str`` requires item to be a str (substring test).
+            # Anything else is False under Python's str.__contains__ rule.
+            if isinstance(item, str):
+                return item in w
+            return False
+        # Non-ground: True if the item is in any concrete str segment.
+        # If absent but a VarSeg remains, return True conservatively
+        # (the item could be bound inside the VarSeg). See SegList
+        # for the same satisfiable-membership rule.
+        has_var = False
+        for seg in w._segments:
+            if isinstance(seg, str):
+                if isinstance(item, str) and item in seg:
+                    return True
+            else:
+                has_var = True
+        return has_var if isinstance(item, str) else False
+
+    def __getitem__(self, index):
+        w = self.__walk__()
+        if isinstance(w, str):
+            return w[index]
+        chars: list[str] = []
+        for seg in w._segments:
+            if isinstance(seg, str):
+                chars.extend(seg)
+            else:
+                if isinstance(index, int) and 0 <= index < len(chars):
+                    return chars[index]
+                raise PartialTermError(
+                    f"SegString[{index!r}] requires resolving an unbound "
+                    f"VarSeg; only the concrete prefix (indices "
+                    f"0..{len(chars) - 1}) is knowable. SegString={self!r}"
+                )
+        return "".join(chars)[index]
 
     def __repr__(self):
         return f"SegString({self._segments!r})"

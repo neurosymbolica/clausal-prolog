@@ -1359,6 +1359,12 @@ split of ``atom_concat(A, B, g)`` yields
 
 - **Class:** C8 (Partial-term short-circuits)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 7 — ``__len__`` / ``__iter__`` /
+  ``__getitem__`` return a partial answer drawn from the concrete
+  prefix (sum of ConcreteSeg sizes / iter over ConcreteSeg elements /
+  index into the known prefix); ``__getitem__`` past the prefix raises
+  a typed ``PartialTermError`` (defined in ``clausal/terms.py``) rather
+  than a bare ``TypeError``.
 - **Location:** `clausal/terms.py:334-351` (via `to_list()` at
   `clausal/terms.py:285-292`)
 - **Discovered by:** Task 2 of Phase 0
@@ -1412,6 +1418,13 @@ Re-graded from design-gap to bug after Task 2 spec review: the spec's severity v
 
 - **Class:** C8 (Partial-term short-circuits)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 7 — non-ground
+  ``SegString.__unify__(list)`` now walks the SegString, converts every
+  ``str`` segment to a ``ConcreteSeg`` of chars (preserving VarSegs),
+  and delegates to ``SegList.__unify__(list)`` so the symmetric
+  generator-driven split path picks up the call. Returns
+  ``NotImplemented`` only for unsupported target types. Cascade-closed
+  the SegString-Rest half of F069 (``test_F069_phrase3_rejects_segstring_rest``).
 - **Location:** `clausal/terms.py:565-573`
 - **Discovered by:** Task 2 of Phase 0
 - **Probe:** `probes/probe_F023.py`
@@ -1466,6 +1479,11 @@ Re-graded from design-gap to bug after Task 2 spec review: silent dropped soluti
 
 - **Class:** C8 (Partial-term short-circuits)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 7 — added
+  ``SegString.__iter__`` (and the rest of the sequence protocol)
+  that walks to the ground ``str`` and yields chars. The body-position
+  ``elem in coll`` goal now succeeds without any change to
+  ``_in_iter`` itself.
 - **Location:** `clausal/logic/runtime/body_star_unify.py:208-217`
 - **Discovered by:** Task 4 of Phase 0
 - **Probe:** `probes/probe_F038.py`
@@ -1514,6 +1532,12 @@ chars, the walked str routes through `iter("abc")`.
 
 - **Class:** C8 (Partial-term short-circuits)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 7 — partial-aware
+  ``__iter__`` on both SegList (via the F021 fix) and SegString
+  (new) yields the concrete prefix from ConcreteSeg / str segments
+  in order, skipping VarSeg gaps. ``_in_iter`` was not touched —
+  the standard ``iter(collection)`` dispatch now succeeds because
+  the Seg* iterators no longer raise.
 - **Location:** `clausal/logic/runtime/body_star_unify.py:208-217`
   (via `SegList.__iter__` → `to_list()` at `clausal/terms.py:337` and
   the missing SegString `__iter__` — see [[F038]])
@@ -1572,6 +1596,13 @@ one rule and apply it across both.
 
 - **Class:** C8 (Partial-term short-circuits)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 7 — chose the conservative rule:
+  return ``True`` when the item is in any ConcreteSeg *or* when no
+  ConcreteSeg matches but an unbound VarSeg remains (the VarSeg could
+  bind to a list containing the item, so the membership goal is
+  satisfiable). Definite ``False`` only when every segment is concrete
+  and the item is absent — eliminating the silent-wrong-answer case
+  flagged here. The matching SegString rule was added at the same time.
 - **Location:** `clausal/terms.py:340-348`
 - **Discovered by:** Task 2 of Phase 0
 - **Probe:** `probes/probe_F022.py`
@@ -1613,6 +1644,15 @@ The spec vocabulary's "wrong answer" definition technically could cover a defini
 
 - **Class:** C8 (Partial-term short-circuits)
 - **Severity:** smell
+- **Status:** fixed in Phase 2 Task 7 — two-layer fix:
+  (1) ``SegString.__init__`` validates that every segment is ``str``
+  or ``VarSeg`` at construction time, rejecting malformed bare-int /
+  nested-list segments with a typed ``PartialTermError``;
+  (2) the ``isinstance(v, list)`` branch in ``__walk__`` validates
+  every element is a ``str`` before delegating to ``str.join``, so a
+  VarSeg bound to ``[1, 2, 3]`` raises ``PartialTermError("SegString
+  VarSeg bound to non-char-list: ...")`` instead of leaking the bare
+  CPython ``TypeError`` from ``str.join``.
 - **Location:** `clausal/terms.py:493-499`
 - **Discovered by:** Task 2 of Phase 0
 - **Probe:** `probes/probe_F024.py`

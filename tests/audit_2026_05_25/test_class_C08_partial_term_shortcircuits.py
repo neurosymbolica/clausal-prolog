@@ -17,10 +17,6 @@ Findings tested here:
 import pytest
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F021: SegList sequence protocol crashes on non-ground",
-)
 def test_F021_seglist_sequence_protocol_no_bare_typeerror():
     """`len(sl)`, `list(sl)`, and `sl[0]` on a non-ground SegList must
     not raise a bare TypeError.
@@ -90,10 +86,6 @@ def test_F021_seglist_sequence_protocol_no_bare_typeerror():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F022: SegList.__contains__ silent False on partial",
-)
 def test_F022_seglist_contains_silent_false_on_partial():
     """`elem in sl` for a partial SegList must not silently return False
     when `elem` could legitimately live in an unbound VarSeg.
@@ -135,10 +127,6 @@ def test_F022_seglist_contains_silent_false_on_partial():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F023: SegString.__unify__(list) silent fail on non-ground",
-)
 def test_F023_segstring_unify_list_non_ground():
     """`unify(SegString(["a", *X, "c"]), ["a","b","c"], t)` must not
     silently return False — the goal is logically satisfiable with
@@ -179,10 +167,6 @@ def test_F023_segstring_unify_list_non_ground():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F024: walk crashes on malformed SegString segments",
-)
 def test_F024_segstring_walk_typed_exception_on_non_str_list_binding():
     """`SegString.__walk__()` on a SegString whose VarSeg is bound to a
     non-str list (e.g. ints) must raise a typed clausal exception, not
@@ -243,10 +227,6 @@ def test_F024_segstring_walk_typed_exception_on_non_str_list_binding():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F038: _in_iter raises TypeError on ground SegString",
-)
 def test_F038_in_iter_ground_segstring_no_bare_typeerror():
     """`_in_iter(SegString(["abc"]), pair_mode=False)` must not raise a
     bare TypeError — a ground SegString walks to a plain str and
@@ -290,10 +270,6 @@ def test_F038_in_iter_ground_segstring_no_bare_typeerror():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F039: _in_iter raises TypeError on non-ground SegList/SegString",
-)
 def test_F039_in_iter_non_ground_no_bare_typeerror():
     """`_in_iter` on a non-ground SegList or SegString must not raise a
     bare TypeError — the concrete prefix is knowable and the goal is

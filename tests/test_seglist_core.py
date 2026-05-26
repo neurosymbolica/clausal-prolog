@@ -355,21 +355,29 @@ class TestSequenceProtocol:
         # nv
         assert len(self.sl_ground) == 3
 
-    def test_len_unground_raises(self):
+    def test_len_unground_returns_concrete_prefix_length(self):
+        # F021 (audit 2026-05-25): non-ground __len__ now returns the
+        # minimum knowable length (sum of ConcreteSeg sizes) instead of
+        # raising a bare TypeError. ``len(SegList([VarSeg(Var())]))`` has
+        # no concrete elements, so the lower bound is 0.
         # nv
         sl = SegList([VarSeg(Var())])
-        with pytest.raises(TypeError):
-            len(sl)
+        assert len(sl) == 0
+        sl2 = SegList([ConcreteSeg([1, 2]), VarSeg(Var())])
+        assert len(sl2) == 2
 
     def test_iter_ground(self):
         # nv
         assert list(self.sl_ground) == [10, 20, 30]
 
-    def test_iter_unground_raises(self):
+    def test_iter_unground_yields_concrete_prefix(self):
+        # F021 (audit 2026-05-25): non-ground __iter__ yields the concrete
+        # prefix (skipping VarSeg gaps) instead of raising TypeError.
         # nv
         sl = SegList([VarSeg(Var())])
-        with pytest.raises(TypeError):
-            list(sl)
+        assert list(sl) == []
+        sl2 = SegList([ConcreteSeg([1, 2]), VarSeg(Var()), ConcreteSeg([5])])
+        assert list(sl2) == [1, 2, 5]
 
     def test_contains_ground(self):
         # nv
@@ -382,22 +390,38 @@ class TestSequenceProtocol:
         sl = SegList([ConcreteSeg([5]), VarSeg(Var())])
         assert 5 in sl
 
-    def test_contains_not_found_unground(self):
-        # Can't confirm — returns False (not in any ConcreteSeg)
+    def test_contains_not_found_unground_returns_true_conservatively(self):
+        # F022 (audit 2026-05-25): on a partial container, ``elem in sl``
+        # returns True conservatively when the element is not in any
+        # ConcreteSeg but an unbound VarSeg remains — the VarSeg could be
+        # bound to a list containing the element. A definite False on a
+        # satisfiable goal is the silent-incompleteness bug F022 fixes.
         # nv
         sl = SegList([ConcreteSeg([1]), VarSeg(Var())])
-        assert 99 not in sl
+        assert 99 in sl
 
     def test_getitem_ground(self):
         # nv
         assert self.sl_ground[0] == 10
         assert self.sl_ground[-1] == 30
 
-    def test_getitem_unground_raises(self):
+    def test_getitem_unground_raises_typed_partial_term_error(self):
+        # F021 (audit 2026-05-25): non-ground __getitem__ raises a typed
+        # ``PartialTermError`` when the index falls past the concrete
+        # prefix (i.e. depends on resolving an unbound VarSeg). Indices
+        # within the concrete prefix return the known element.
         # nv
+        from clausal.terms import PartialTermError
         sl = SegList([VarSeg(Var())])
-        with pytest.raises(TypeError):
+        with pytest.raises(PartialTermError):
             _ = sl[0]
+        # Within concrete prefix: returns the element.
+        sl2 = SegList([ConcreteSeg([10, 20]), VarSeg(Var())])
+        assert sl2[0] == 10
+        assert sl2[1] == 20
+        # Past the concrete prefix: hits the VarSeg → PartialTermError.
+        with pytest.raises(PartialTermError):
+            _ = sl2[2]
 
 
 # ── Concatenation ─────────────────────────────────────────────────────────────

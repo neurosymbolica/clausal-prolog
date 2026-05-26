@@ -184,15 +184,18 @@ def test_F069_phrase3_rejects_segstring_input():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F069: phrase/2,3 silently fail on SegString input",
-)
 def test_F069_phrase3_rejects_segstring_rest():
     """phrase/3 silently fails when Rest is unbound and Var but SegString-shaped.
 
     Testing the Rest arg of phrase/3 — when Rest is a SegString variable
     and should unify with the remainder, phrase/3 currently fails to handle it.
+
+    Closed as a cascade of the F023 fix (Phase 2 Task 7, C8): non-ground
+    ``SegString.__unify__(list)`` now walks-and-delegates to the equivalent
+    SegList path instead of returning ``NotImplemented``, so a SegString-
+    shaped Rest binds against the remainder list. The phrase2/phrase3_input
+    siblings exercise a different dispatch path (SegString *as the list
+    arg*, not as the Rest) and remain open.
     """
     # Register a simple DCG rule.
     source = 'tok(_t) >> ([_t])\n'
