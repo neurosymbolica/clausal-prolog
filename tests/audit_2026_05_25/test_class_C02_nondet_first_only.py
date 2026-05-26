@@ -8,13 +8,6 @@ Findings tested here:
 - F016 SegString.__unify__ returns only the first valid split
 """
 
-import pytest
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F015: SegList.__unify__ returns only the first valid split",
-)
 def test_F015_seglist_unify_enumerates_all_splits():
     """`SegList([*A, *B]) = [1, 2, 3]` should expose all four splits via the
     unify entry point, not just the first.
@@ -78,10 +71,6 @@ def test_F015_seglist_unify_enumerates_all_splits():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F016: SegString.__unify__ returns only the first valid split",
-)
 def test_F016_segstring_unify_enumerates_all_splits():
     """`SegString([*A, *B]) = "abc"` should expose all four splits via the
     unify entry point, not just the first.

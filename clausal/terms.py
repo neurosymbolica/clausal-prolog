@@ -223,6 +223,39 @@ def _seg_hash_key(seg):
         return ("o", id(seg))
 
 
+def _seg_unify_cache_key(other, trail):
+    """Build a hashable cache key for ``SegList`` / ``SegString`` ``__unify__``
+    generator caching (see [[F015]] / [[F016]]).
+
+    The key combines a *content-derived* form of ``other`` with the
+    identity of ``trail`` so that re-calls with a freshly constructed but
+    value-equal target (e.g. a ``[1, 2, 3]`` literal that is rebuilt each
+    loop iteration) hit the same cached generator entry. ``str`` targets
+    are already hashable; ``list`` targets are tupled, recursively
+    substituting ``("id", id(e))`` for any unhashable element so the key
+    itself stays hashable even if the list contains custom objects.
+
+    Trail identity (``id(trail)``) is used because ``Trail`` is
+    intentionally non-hashable and the cache lifetime is implicitly
+    bounded by the trail's lifetime: once the trail is gone, any
+    generator paused on it is unreachable too.
+    """
+    if isinstance(other, str):
+        return (other, id(trail))
+    if isinstance(other, list):
+        items = []
+        for e in other:
+            try:
+                hash(e)
+                items.append(e)
+            except TypeError:
+                items.append(("id", id(e)))
+        return (tuple(items), id(trail))
+    # Fall back to identity for anything else (unify only routes list/str
+    # targets here today, so this is a defensive branch).
+    return (id(other), id(trail))
+
+
 class SegList:
     """A first-class term representing a list with variable-length holes.
 
@@ -236,10 +269,14 @@ class SegList:
         → SegList([ConcreteSeg([1, 2]), VarSeg(MID), ConcreteSeg([5]), VarSeg(TAIL)])
     """
 
-    __slots__ = ("_segments",)
+    __slots__ = ("_segments", "_unify_gens")
 
     def __init__(self, segments: list):
         self._segments = list(segments)
+        # F015 fix — per-(target, trail) generator cache so successive calls
+        # to ``__unify__`` expose every split of ``_seglist_unify_gen`` rather
+        # than committing to the first one. See ``__unify__`` below.
+        self._unify_gens: dict = {}
 
     @property
     def segments(self) -> list:
@@ -343,25 +380,52 @@ class SegList:
         return False
 
     def __unify__(self, other, trail):
-        """Called by C do_unify. Deterministic unification of self against other.
+        """Called by C do_unify. Drives ``_seglist_unify_gen`` one split per
+        call against a list/str target, so repeated calls with the same
+        ``(other, trail)`` enumerate every valid split rather than
+        committing to the first.
 
-        For a plain list or string target: attempt the first valid split and
-        return True.  Strings are passed directly (not converted to char lists)
-        so that VarSegs bind to substrings preserving str type.
+        The C ``do_unify`` protocol hook is bool-valued, so we expose the
+        non-determinism by caching the generator on ``self._unify_gens``
+        keyed by ``(target-content, trail-identity)``.  Each call advances
+        the cached generator by one step:
+
+        * First call with a given ``(other, trail)`` creates the generator
+          (via :func:`_seglist_unify_gen`) and pulls its first split — the
+          target VarSegs are bound on ``trail`` and ``True`` is returned.
+        * Subsequent calls resume the generator, undoing the previous
+          split's bindings (a no-op if the caller already wound past them
+          via ``trail.undo(mark)``) and yielding the next split.
+        * When the generator is exhausted the cache entry is dropped and
+          ``False`` is returned; a future call after the trail is reset
+          re-enters from the first split.
+
+        This makes the failure mode flagged by ledger entry F015 visible
+        via the standard ``mark()`` / ``unify()`` / ``undo(mark)`` drive
+        pattern: four calls in a row against ``[*A, *B] = [1, 2, 3]``
+        surface all four splits.
         """
         from .logic.variables import unify, walk
         if isinstance(other, (list, str)):
             walked = self.__walk__()
             if isinstance(walked, list):
-                # Fully ground SegList → compare with target
+                # Fully ground SegList → compare with target.
                 if isinstance(other, str):
                     return walked == list(other)
                 return walked == other
-            # Use the generator; take the first solution only.
-            # Pass string targets directly — string slicing returns substrings.
-            for _ in _seglist_unify_gen(walked, other, trail):
+            # Non-ground — drive the cached generator one step.
+            # Pass string targets directly (string slicing returns substrings).
+            key = _seg_unify_cache_key(other, trail)
+            gen = self._unify_gens.get(key)
+            if gen is None:
+                gen = _seglist_unify_gen(walked, other, trail)
+                self._unify_gens[key] = gen
+            try:
+                next(gen)
                 return True
-            return False
+            except StopIteration:
+                self._unify_gens.pop(key, None)
+                return False
         if isinstance(other, SegList):
             return NotImplemented
         return NotImplemented
@@ -576,10 +640,13 @@ class SegString:
     VarSegs always bind to ``str`` (substrings), never char lists.
     """
 
-    __slots__ = ("_segments",)
+    __slots__ = ("_segments", "_unify_gens")
 
     def __init__(self, segments: list):
         self._segments = list(segments)
+        # F016 fix — per-(target, trail) generator cache; see
+        # ``SegList.__init__`` / ``SegList.__unify__`` for the rationale.
+        self._unify_gens: dict = {}
 
     @property
     def segments(self) -> list:
@@ -666,17 +733,29 @@ class SegString:
     def __unify__(self, other, trail):
         """Called by C do_unify.
 
-        Against ``str``: split by string slicing — VarSegs bind to substrings.
-        Against ``list``: convert string segments to char elements and delegate.
+        Against ``str``: drives ``_segstring_unify_gen`` one split per call
+        so repeated calls with the same ``(other, trail)`` enumerate every
+        valid split (mirror of :meth:`SegList.__unify__` — see its
+        docstring for the full rationale; F016 in the ledger).
+        Against ``list``: convert string segments to char elements and
+        delegate.
         """
         from .logic.variables import unify
         if isinstance(other, str):
             walked = self.__walk__()
             if isinstance(walked, str):
                 return walked == other
-            for _ in _segstring_unify_gen(walked, other, trail):
+            key = _seg_unify_cache_key(other, trail)
+            gen = self._unify_gens.get(key)
+            if gen is None:
+                gen = _segstring_unify_gen(walked, other, trail)
+                self._unify_gens[key] = gen
+            try:
+                next(gen)
                 return True
-            return False
+            except StopIteration:
+                self._unify_gens.pop(key, None)
+                return False
         if isinstance(other, list):
             # Ground SegString → str, then let C-level str↔list unification
             # (Phase 1) handle the comparison.

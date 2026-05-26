@@ -302,6 +302,7 @@ F033, F034 grading).
 
 - **Class:** C2 (Non-det collapsed to first)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 6
 - **Location:** `clausal/terms.py:325-326` (with the gen at
   `clausal/terms.py:390-426`)
 - **Discovered by:** Task 2 of Phase 0
@@ -350,10 +351,27 @@ protocol or moving the call sites onto the gen directly. Related to
 [[F016]] (same pattern in SegString) and [[F026]] (the combinatorial
 cost of enumerating all splits becomes visible once C2 is fixed).
 
+Fix (Phase 2 Task 6): `SegList.__unify__` now caches the
+`_seglist_unify_gen` instance on a new `_unify_gens` slot keyed by
+`(content-of-target, id(trail))` (see the `_seg_unify_cache_key`
+helper in `clausal/terms.py`). Each call into `__unify__` advances
+the cached generator one step via `next()`, returning `True` for
+each yielded split and `False` (plus dropping the cache entry) once
+the generator is exhausted. Re-driving `unify(sl, [1,2,3], t)` four
+times between `trail.mark()`/`trail.undo(mark)` pairs now surfaces
+all four `[*A,*B] = [1,2,3]` splits via the deterministic bool
+protocol — no new C-level hook required. The cache key is
+content-derived (list targets are tupled) so a freshly constructed
+but value-equal target on each loop iteration still hits the same
+cached generator. The combinatorial perf concern flagged in
+[[F026]] now affects real callers; left to its existing visibility-
+only ledger entry.
+
 ### F016 — SegString.__unify__ returns only the first valid split
 
 - **Class:** C2 (Non-det collapsed to first)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 6
 - **Location:** `clausal/terms.py:562-563` (with the gen at
   `clausal/terms.py:594-627`)
 - **Discovered by:** Task 2 of Phase 0
@@ -387,6 +405,16 @@ assert sum(1 for _ in _segstring_unify_gen(ss2, "abc", Trail())) == 4
 generator is correct (see "Task 2 confirmed" bullet below) — the
 mark/undo pair leaves the trail at its prior length after each yield,
 so the iteration is safe to drive from outside.
+
+Fix (Phase 2 Task 6): mirror of the F015 fix — `SegString.__unify__`
+now caches `_segstring_unify_gen` on a `_unify_gens` slot keyed via
+the shared `_seg_unify_cache_key` helper, and advances the cached
+generator one step per call. Re-driving `unify(ss, "abc", t)` four
+times via the `mark()` / `unify()` / `undo(mark)` pattern surfaces
+all four splits of `[*A,*B] = "abc"`. No change to the C-level
+`do_unify` protocol; the existing bool / `NotImplemented` contract
+carries the non-determinism via per-(target, trail) generator state
+on the SegString itself.
 
 **Prior-known:** commit f635551 — "Phase 7: SegString and string-preserving pattern matching" introduced `SegString` and `_segstring_unify_gen` with the same `for _ in gen: return True` first-solution-only protocol that [[F015]] already documents for the older `SegList` path; the symmetry was preserved (intentionally — same code pattern) but neither side was upgraded to a true non-deterministic protocol.
 
