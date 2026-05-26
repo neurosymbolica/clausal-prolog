@@ -463,15 +463,34 @@ class TestEquality:
         assert not (sl == [1, 2, 3])
 
     def test_seglist_neq_non_list(self):
-        # nv
+        # nv — SegList of non-char ints can't equal a str (asymmetry fix
+        # F019: SegList.__eq__ now accepts str as a comparand and walks,
+        # but only matches when the walked list is a list of 1-char strs).
         sl = SegList([ConcreteSeg([1])])
-        assert sl.__eq__("hello") is NotImplemented
+        assert (sl == "hello") is False
+        # And: a non-str/list/Seg* comparand still returns NotImplemented.
+        assert sl.__eq__(42) is NotImplemented
 
-    def test_not_hashable(self):
-        # nv
-        sl = SegList([ConcreteSeg([1])])
-        with pytest.raises(TypeError, match="unhashable"):
-            hash(sl)
+    def test_seglist_eq_str_when_charlist(self):
+        # nv — Symmetric with SegString under the strings-as-lists contract
+        # (F019 fix): a ground SegList of 1-char strings equals the matching str.
+        sl = SegList([ConcreteSeg(["a", "b", "c"])])
+        assert sl == "abc"
+
+    def test_hashable_when_ground(self):
+        # nv — F025 fix: ground SegList is hashable (matches SegString and
+        # restores Python's eq/hash invariant for SegList).
+        sl = SegList([ConcreteSeg([1, 2, 3])])
+        assert hash(sl) == hash(SegList([ConcreteSeg([1, 2, 3])]))
+
+    def test_hashable_when_nonground_structural(self):
+        # nv — F017/F025 fix: non-ground SegList hashes structurally so
+        # equal _segments produce equal hashes (preserves eq/hash invariant).
+        v = Var()
+        sl1 = SegList([ConcreteSeg([1]), VarSeg(v)])
+        sl2 = SegList([ConcreteSeg([1]), VarSeg(v)])
+        assert sl1 == sl2
+        assert hash(sl1) == hash(sl2)
 
 
 # ── __repr__ ──────────────────────────────────────────────────────────────────

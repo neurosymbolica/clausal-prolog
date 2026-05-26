@@ -14,10 +14,6 @@ Findings tested here:
 import pytest
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F017: SegString.__hash__ violates the Python eq/hash invariant",
-)
 def test_F017_segstring_hash_invariant_violation():
     """Two structurally-equal non-ground SegStrings must have equal hashes.
 
@@ -68,10 +64,6 @@ def test_F017_segstring_hash_invariant_violation():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F019: SegList vs SegString __eq__ asymmetry against str/list",
-)
 def test_F019_seglist_segstring_eq_asymmetry():
     """SegList and SegString disagree about which container type to accept in __eq__.
 
@@ -112,10 +104,6 @@ def test_F019_seglist_segstring_eq_asymmetry():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F025: SegList.__hash__ unconditional vs SegString.__hash__ conditional",
-)
 def test_F025_seglist_segstring_hashability_asymmetry():
     """SegList and SegString have asymmetric hashability rules.
 

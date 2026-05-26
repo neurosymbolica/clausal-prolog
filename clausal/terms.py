@@ -186,6 +186,43 @@ class VarSeg:
     var: Var
 
 
+def _seg_hash_key(seg):
+    """Return a hashable structural key for a SegList/SegString segment.
+
+    Used by ``SegList.__hash__`` and ``SegString.__hash__`` so two Seg* values
+    built from the same segments hash equally (preserving Python's
+    ``a == b ⇒ hash(a) == hash(b)`` invariant). ``ConcreteSeg`` and ``VarSeg``
+    are unhashable dataclasses, so we project them onto hashable surrogates:
+
+    - ``ConcreteSeg(elements)`` → ``("c", tuple-of-hashable-elements)``
+      (falling back to ``id()`` for unhashable elements).
+    - ``VarSeg(var)``           → ``("v", id(var))`` — ``Var`` is already
+      identity-hashed, so ``id`` matches the equality used by ``VarSeg``'s
+      dataclass ``__eq__``.
+    - ``str``                   → ``("s", str)`` (string literal in a
+      ``SegString``).
+    """
+    if isinstance(seg, ConcreteSeg):
+        items = []
+        for e in seg.elements:
+            try:
+                hash(e)
+                items.append(e)
+            except TypeError:
+                items.append(("id", id(e)))
+        return ("c", tuple(items))
+    if isinstance(seg, VarSeg):
+        return ("v", id(seg.var))
+    if isinstance(seg, str):
+        return ("s", seg)
+    # Fallback: try the segment's own hash, otherwise its identity.
+    try:
+        hash(seg)
+        return ("o", seg)
+    except TypeError:
+        return ("o", id(seg))
+
+
 class SegList:
     """A first-class term representing a list with variable-length holes.
 
@@ -371,11 +408,44 @@ class SegList:
             if isinstance(w, list):
                 return w == other
             return False
+        if isinstance(other, str):
+            # Symmetric with SegString — str unifies with char-list at runtime,
+            # so equality should hold when the SegList walks to a 1-char-str list.
+            w = self.__walk__()
+            if isinstance(w, list) and all(
+                isinstance(c, str) and len(c) == 1 for c in w
+            ):
+                return "".join(w) == other
+            return False
+        if isinstance(other, SegString):
+            # Walk both and compare under the strings-as-lists contract.
+            w_self = self.__walk__()
+            w_other = other.__walk__()
+            if isinstance(w_self, list) and isinstance(w_other, str):
+                return (
+                    all(isinstance(c, str) and len(c) == 1 for c in w_self)
+                    and "".join(w_self) == w_other
+                )
+            # Both non-ground (or mixed walks) — fall back to NotImplemented so
+            # Python can try the right-hand side's __eq__.
+            return NotImplemented
         return NotImplemented
 
     def __hash__(self):
-        # SegLists are mutable (vars can bind), so not hashable by default
-        raise TypeError("unhashable type: 'SegList'")
+        # Symmetric with SegString: hashable when ground (hash the walked
+        # plain list as a tuple), and structurally hashable when non-ground
+        # (hash the _segments shape so two SegLists built from the same
+        # segments hash equally — preserving Python's eq/hash invariant,
+        # which __eq__ checks via ``self._segments == other._segments``).
+        w = self.__walk__()
+        if isinstance(w, list):
+            try:
+                return hash(tuple(w))
+            except TypeError:
+                # Ground but contains unhashable elements — fall through to
+                # the structural hash.
+                pass
+        return hash(("SegList", tuple(_seg_hash_key(s) for s in self._segments)))
 
     def __repr__(self) -> str:
         parts = []
@@ -628,12 +698,31 @@ class SegString:
             return self._segments == other._segments
         if isinstance(other, str):
             w = self.__walk__()
-            return w == other if isinstance(w, str) else NotImplemented
+            return w == other if isinstance(w, str) else False
+        if isinstance(other, list):
+            # Symmetric with SegList — char-list unifies with str at runtime.
+            w = self.__walk__()
+            if isinstance(w, str):
+                return (
+                    all(isinstance(c, str) and len(c) == 1 for c in other)
+                    and w == "".join(other)
+                )
+            return False
+        if isinstance(other, SegList):
+            # Delegate to SegList's bidirectional handling for symmetry.
+            return other.__eq__(self)
         return NotImplemented
 
     def __hash__(self):
+        # Symmetric with SegList: hashable when ground (hash the walked str),
+        # and structurally hashable when non-ground (hash the _segments shape
+        # so two SegStrings built from the same segments hash equally).
+        # Restores Python's eq/hash invariant — the old ``id(self)`` fallback
+        # violated ``a == b ⇒ hash(a) == hash(b)`` for non-ground SegStrings.
         w = self.__walk__()
-        return hash(w) if isinstance(w, str) else id(self)
+        if isinstance(w, str):
+            return hash(w)
+        return hash(("SegString", tuple(_seg_hash_key(s) for s in self._segments)))
 
 
 def _segstring_unify_gen(segstring, target_str, trail):

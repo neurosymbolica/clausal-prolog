@@ -946,6 +946,7 @@ Sibling C-class cluster: this is C4, structurally orthogonal to the C3 "SegList 
 
 - **Class:** C5 (Hash/eq asymmetries)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 5
 - **Location:** `clausal/terms.py:589-591` (with `__eq__` at
   `clausal/terms.py:581-587`)
 - **Discovered by:** Task 2 of Phase 0
@@ -987,11 +988,17 @@ a different asymmetry); (b) hash on the `_segments` tuple structure
 (but `Var` objects are usually identity-hashed already, so this works
 trivially). Related to [[F025]] (SegList vs SegString hashability
 asymmetry) and the C6 tabling concerns the spec calls out.
+Fix (Phase 2 Task 5): adopted approach (b) — both Seg* `__hash__`
+methods now return `hash(walked)` when ground and a structural hash
+over `_segments` (via the shared `_seg_hash_key` helper) when
+non-ground, so two SegStrings built from identical segments produce
+identical hashes and the eq/hash invariant holds.
 
 ### F019 — SegList vs SegString __eq__ asymmetry against str / list
 
 - **Class:** C5 (Hash/eq asymmetries)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 5
 - **Location:** `clausal/terms.py:366-374` and
   `clausal/terms.py:581-587`
 - **Discovered by:** Task 2 of Phase 0
@@ -1031,11 +1038,18 @@ both reject the foreign container, or both walk-then-compare.
 [[F023]] (same asymmetry in `__unify__(list)`). Fixing C5 requires
 deciding the rule once and applying it across __eq__, __add__,
 __unify__, and likely the C-level identity test.
+Fix (Phase 2 Task 5): `SegList.__eq__` now accepts `str` (returns
+`True` when the walked list is a list of 1-char strings that joins to
+the str), and `SegString.__eq__` now accepts `list` (mirror). Both
+also accept the sibling Seg* type, delegating to the other side for
+symmetric handling. `__add__` and `__unify__` are tracked separately
+under F020/F023.
 
 ### F025 — SegList.__hash__ unconditional vs SegString.__hash__ conditional
 
 - **Class:** C5 (Hash/eq asymmetries)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 5
 - **Location:** `clausal/terms.py:376-378` and
   `clausal/terms.py:589-591`
 - **Discovered by:** Task 2 of Phase 0
@@ -1073,6 +1087,12 @@ the host-language level, so it's defensible — but it makes
 strings-as-lists round-tripping leak through to dict-key behaviour.
 Related to [[F017]] (the SegString hash invariant bug) and the C6
 tabling concerns.
+Fix (Phase 2 Task 5): both Seg* `__hash__` methods now share the
+same discipline — `hash(walked)` when ground (via `tuple` for
+SegList), and a structural hash over `_segments` when non-ground
+(via the shared `_seg_hash_key` helper). Ground SegList is therefore
+hashable as a dict key, matching ground SegString, and non-ground
+hashes line up with `_segments`-based `__eq__`.
 
 ### Class C6 — Hashable vs unhashable bridges
 *(none yet)*
