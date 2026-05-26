@@ -2492,6 +2492,7 @@ as design-gap (matches the F053/F063 grading).
 
 - **Class:** C12 (Char representation drift)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 3
 - **Location:** `clausal/logic/builtins/chars.py:190`
   (``char_code`` ``chr(vn)``), `:323` (``atom_codes`` ``chr(e)`` in
   the codes-to-atom branch), `:571` (``number_codes`` ``chr(e)``)
@@ -2527,6 +2528,12 @@ sweep ``number_chars`` for the symmetric concern (it parses via
 ``int()``/``float()`` which already raise on invalid input — already
 caught at ``chars.py:528-531``; the issue is specific to the codes
 form).
+
+Fixed in Phase 2 Task 3 — added ``0 <= code < 0x110000`` range guards
+around ``chr()`` in ``char_code/2``, ``atom_codes/2``, ``number_codes/2``.
+Out-of-range codes now fail logically (zero solutions) instead of leaking
+Python ``ValueError``. All 6 parametrized F073 tests pass; pre-existing
+suite unchanged (7749 passing).
 
 *Task 1 confirmed (no finding):*
 - **F013** — A Var bound to a non-Var, non-single-char-PyUnicode dereffed element (e.g. int, list, tuple) does not unify when placed inside a list against the equivalent `str`. The C path requires the dereffed element to be either an unbound Var (allocate substring & bind) or a PyUnicode of exactly 1 code point. This is consistent with [[F006]]: the C path binds chars as 1-char `str`, never as int codes. See `probes/probe_F013.py`. Spec C12 notes this is the intended contract; the broader char-aware-builtin audit is left to later tasks.

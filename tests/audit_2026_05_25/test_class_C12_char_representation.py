@@ -24,10 +24,6 @@ def _run(name, arity, *args, trail=None):
     return len(solutions(StepGenerator(dispatch, None, None, None, *args, trail)))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F073: chr() ValueError leak on out-of-range char codes",
-)
 def test_F073_char_code_out_of_range_fails_logically():
     """char_code(V, 0x110000) should fail logically, not leak ValueError.
 
@@ -62,10 +58,6 @@ def test_F073_char_code_out_of_range_fails_logically():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F073: chr() ValueError leak on out-of-range char codes",
-)
 def test_F073_char_code_negative_code_fails_logically():
     """char_code(V, -1) should fail logically, not leak ValueError.
 
@@ -87,10 +79,6 @@ def test_F073_char_code_negative_code_fails_logically():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F073: chr() ValueError leak on out-of-range char codes",
-)
 def test_F073_atom_codes_negative_element_fails_logically():
     """atom_codes(V, [-1]) should fail logically, not leak ValueError.
 
@@ -116,10 +104,6 @@ def test_F073_atom_codes_negative_element_fails_logically():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F073: chr() ValueError leak on out-of-range char codes",
-)
 def test_F073_atom_codes_out_of_range_element_fails_logically():
     """atom_codes(V, [0x110000]) should fail logically, not leak ValueError.
 
@@ -141,10 +125,6 @@ def test_F073_atom_codes_out_of_range_element_fails_logically():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F073: chr() ValueError leak on out-of-range char codes",
-)
 def test_F073_number_codes_negative_element_fails_logically():
     """number_codes(V, [-1]) should fail logically, not leak ValueError.
 
@@ -166,10 +146,6 @@ def test_F073_number_codes_negative_element_fails_logically():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F073: chr() ValueError leak on out-of-range char codes",
-)
 def test_F073_number_codes_out_of_range_element_fails_logically():
     """number_codes(V, [0x110000]) should fail logically, not leak ValueError.
 

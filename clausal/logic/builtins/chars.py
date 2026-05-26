@@ -184,8 +184,10 @@ def _char_code__2(char, code, trail, k):
             yield None
         trail.undo(mark)
     elif n_bound:
-        if not isinstance(vn, int) or vn < 0:
+        if not isinstance(vn, int):
             raise LogicException(type_error("integer", vn, "char_code/2"))
+        if not (0 <= vn < 0x110000):
+            return  # logical failure — out-of-range code point
         mark = trail.mark()
         if unify(char, chr(vn), trail):
             yield None
@@ -320,6 +322,8 @@ def _atom_codes__2(atom, codes, trail, k):
                 raise LogicException(instantiation_error("atom_codes/2"))
             if not isinstance(e, int):
                 raise LogicException(type_error("integer", e, "atom_codes/2"))
+            if not (0 <= e < 0x110000):
+                return  # logical failure — out-of-range code point
             elems.append(chr(e))
         mark = trail.mark()
         if unify(atom, "".join(elems), trail):
@@ -568,6 +572,8 @@ def _number_codes__2(number, codes, trail, k):
                 raise LogicException(instantiation_error("number_codes/2"))
             if not isinstance(e, int):
                 raise LogicException(type_error("integer", e, "number_codes/2"))
+            if not (0 <= e < 0x110000):
+                return  # logical failure — out-of-range code point
             elems.append(chr(e))
         s = "".join(elems)
         try:
