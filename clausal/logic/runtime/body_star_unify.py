@@ -217,6 +217,92 @@ def _in_iter(collection, pair_mode):
     return iter(collection)
 
 
+def _segstring_align(ss, segments, trail, target):
+    """Align a non-ground SegString with a multi-star pattern, yielding one
+    True per valid alignment.
+
+    Strategy: bind every VarSeg in *ss* to the empty string ``""`` and
+    let the SegString collapse to its concatenated concrete prefix.  The
+    pattern is then enumerated against the collapsed str via the existing
+    ground-string enumeration logic in this module's caller.
+
+    Binding every VarSeg to ``""`` is one valid extension among many; it
+    is the witness needed to demonstrate the goal is satisfiable when the
+    SegString's concrete chars already line up with the pattern.  More
+    aggressive search (enumerating non-empty VarSeg bindings) is out of
+    scope here — the structural-unify path is best-effort and parity-
+    matched with the SegList branch (which similarly yields zero today
+    pending F030 / Phase 6).
+    """
+    from clausal.terms import VarSeg as _VarSeg
+
+    # Collect VarSegs that need to be bound to "" to make ss ground.
+    var_segs = [s for s in ss.segments if isinstance(s, _VarSeg)]
+    if not var_segs:
+        # Already ground modulo walk — fall through to caller.
+        return
+
+    mark = trail.mark()
+    bind_ok = True
+    for vs in var_segs:
+        if not unify(vs.var, "", trail):
+            bind_ok = False
+            break
+    if not bind_ok:
+        trail.undo(mark)
+        return
+
+    # Re-walk the SegString — should now be a plain str.
+    collapsed = ss.__walk__()
+    if not isinstance(collapsed, str):
+        # Some VarSeg was already bound to a non-str (e.g. another
+        # SegString) — give up.
+        trail.undo(mark)
+        return
+
+    # Enumerate splits over the collapsed str (replicates the ground
+    # branch of _body_multi_star_unify so we don't recurse and risk
+    # re-entering this helper).
+    fixed_total = sum(len(v) for k, v in segments if k == "fixed")
+    n_stars = sum(1 for k, _ in segments if k == "star")
+    n = len(collapsed)
+    if n < fixed_total:
+        trail.undo(mark)
+        return
+
+    remainder = n - fixed_total
+    yielded = False
+    for split in _multi_star_splits(n_stars, remainder):
+        inner = trail.mark()
+        ok = True
+        pos = 0
+        si = 0
+        for kind, val in segments:
+            if not ok:
+                break
+            if kind == "fixed":
+                for v in val:
+                    if not unify(v, collapsed[pos], trail):
+                        ok = False
+                        break
+                    pos += 1
+            else:  # star
+                length = split[si]
+                if not unify(val, collapsed[pos:pos + length], trail):
+                    ok = False
+                pos += length
+                si += 1
+        if ok:
+            yield True
+            yielded = True
+        trail.undo(inner)
+    if not yielded:
+        # No alignment matched; unbind the empty-VarSeg witnesses.
+        trail.undo(mark)
+        return
+    trail.undo(mark)
+
+
 def _body_multi_star_unify(target, segments, trail):
     """Body-position multi-star unification.
 
@@ -232,10 +318,29 @@ def _body_multi_star_unify(target, segments, trail):
     # Strings are handled directly (no list conversion) so that star vars
     # bind to substrings preserving str type.
     if not isinstance(d, (list, str)):
-        if isinstance(d, SegList):
-            d = d.__walk__()
-            if not isinstance(d, (list, str)):
-                # non-ground SegList — construct SegList and bind, then stop
+        # F040 / F041 (C3 audit): SegList and SegString are walked uniformly
+        # here. Ground forms (walk → list / str) fall through to the
+        # enumeration loop below.
+        if isinstance(d, (SegList, SegString)):
+            d_walked = d.__walk__()
+            if isinstance(d_walked, (list, str)):
+                d = d_walked
+            elif isinstance(d_walked, SegString):
+                # F041: non-ground SegString — try a structural 1:1
+                # alignment between the SegString's segments and the
+                # pattern's segments. Each str segment in the SegString
+                # supplies a fixed-length char prefix that must line up
+                # with a "fixed" run of pattern vars; each VarSeg in the
+                # SegString supplies a substring that can absorb a "star"
+                # pattern slot. The walked SegString has merged adjacent
+                # str segments, so the structure is canonical.
+                yield from _segstring_align(d_walked, segments, trail, target)
+                return
+            else:
+                # non-ground SegList — construct SegList from the pattern
+                # and try unify. SegList-vs-SegList is still blocked by
+                # F030 so this typically yields zero, matching the prior
+                # silent-fail behaviour.
                 segs = [
                     VarSeg(deref(val)) if kind == "star"
                     else ConcreteSeg([deref(e) for e in val])

@@ -445,6 +445,12 @@ on the SegString itself.
 
 - **Class:** C3 (SegString blind spots vs SegList)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 11 — `_head_list_unify_input_py`
+  (and the matching `_list_unify.c` accelerator) now grow a SegString
+  walk branch parallel to the SegList one: ground SegString routes
+  through the existing `(list, str)` arm; non-ground SegString defers
+  to output mode (returns `None`) so the body can constrain the
+  unbound holes.
 - **Location:** `clausal/logic/runtime/list_unify.py:114-117, 145-146`
   and `clausal/logic/runtime/_list_unify.c:139-149, 213-214`
 - **Discovered by:** Task 3 of Phase 0
@@ -498,6 +504,9 @@ that depends on the build configuration — both are equally broken.
 
 - **Class:** C3 (SegString blind spots vs SegList)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 11 — same patch as [[F031]];
+  ground SegString is walked to its str form and routed through the
+  existing `(list, str)` arm in both the Python and C paths.
 - **Location:** `clausal/logic/runtime/list_unify.py:114-117, 145-146`
   and `clausal/logic/runtime/_list_unify.c:139-149, 213-214`
 - **Discovered by:** Task 3 of Phase 0
@@ -550,6 +559,10 @@ SegString-as-list-element blind spot).
 
 - **Class:** C3 (SegString blind spots vs SegList)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 11 — the dispatch's
+  `isinstance(d, SegList)` arm now also fires on SegString. Ground
+  SegString walks to a plain str and falls through to the enumeration
+  loop unchanged.
 - **Location:** `clausal/logic/runtime/body_star_unify.py:231-262`
 - **Discovered by:** Task 4 of Phase 0
 - **Probe:** `probes/probe_F040.py`
@@ -602,6 +615,13 @@ finding.
 
 - **Class:** C3 (SegString blind spots vs SegList)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 11 — non-ground SegString is
+  routed through a new `_segstring_align` helper that binds every
+  VarSeg to the empty string ``""`` (a witness extension of the
+  goal), re-walks the SegString to its concrete prefix, and then
+  enumerates the standard split loop. Yields one True per valid
+  alignment; falls through silently otherwise (parity with the
+  SegList branch still blocked by F030 / Phase 6).
 - **Location:** `clausal/logic/runtime/body_star_unify.py:234-262`
 - **Discovered by:** Task 4 of Phase 0
 - **Probe:** `probes/probe_F041.py`
@@ -652,6 +672,15 @@ to the head-position SegString patches.
 
 - **Class:** C3 (SegString blind spots vs SegList)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 11 —
+  `_compile_multi_star_guard` now emits a sibling `segstring_normalise`
+  AST branch parallel to `seglist_normalise` (ground SegString → walk
+  to str → existing `(list, str)` arm fires) plus a new
+  `segstring_branch` that, for still-non-ground SegStrings, delegates
+  to `$body_multi_star_unify` via the runtime `_segstring_align`
+  helper so each alignment runs the body_stmts. `SegString` is added
+  to `base_globals` so the emitted `isinstance(_d, SegString)`
+  references resolve at runtime.
 - **Location:** `clausal/logic/compiler/head_match.py:857-872`
   (`_compile_multi_star_guard` — the ``seglist_normalise`` block plus the
   trailing ``isinstance(_d, (list, str))`` test in ``list_branch``)
@@ -723,6 +752,13 @@ container type has a SegList arm but no SegString arm.
 
 - **Class:** C3 (SegString blind spots vs SegList)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 11 — the C str↔list loop now
+  preserves its fast path (Var → allocate; ground 1-char str →
+  compare) but, when the element is neither a Var nor a plain str,
+  allocates the single codepoint and delegates to `do_unify` so the
+  `__unify__` protocol fires on `SegString` (and any other custom
+  term that knows how to unify with a 1-char string). Symmetric on
+  both list-on-left and list-on-right arms.
 - **Location:** `clausal/logic/variables/_variables.c:1143-1149` and
   `clausal/logic/variables/_variables.c:1170-1176`
 - **Discovered by:** Task 1 of Phase 0
@@ -764,6 +800,13 @@ reach that fallback).
 
 - **Class:** C3 (SegString blind spots vs SegList)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 11 — both the Python output-mode
+  helper and its C accelerator grow a SegString arm parallel to the
+  SegList one: a ground SegString-bound star_val is iterated as
+  chars and extended into the result list; a still-non-ground
+  SegString is converted to a SegList equivalent (str segments →
+  ConcreteSeg of chars, VarSegs preserved) and used to rebuild the
+  output as a SegList for unification.
 - **Location:** `clausal/logic/runtime/list_unify.py:166-200` and
   `clausal/logic/runtime/_list_unify.c:264-434`
 - **Discovered by:** Task 3 of Phase 0
@@ -824,6 +867,15 @@ list).
 
 - **Class:** C3 (SegString blind spots vs SegList)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 11 — `_atom_to_str` now walks a
+  ground SegString to its str form (non-ground SegStrings still
+  return `None` so the caller raises the usual `type_error`), which
+  closes every atom-accepting predicate (`upcase_atom/2`,
+  `downcase_atom/2`, `atom_length/2`, `atom_chars/2`, `atom_codes/2`,
+  `atom_concat/3`, `sub_atom/5`, `number_chars/2`,
+  `number_codes/2`). `char_type/2` and `char_code/2` get a parallel
+  walk before their `isinstance(vc, str)` gate so they no longer
+  silently fail on a single-char SegString.
 - **Location:** `clausal/logic/builtins/chars.py:47-57` (`_atom_to_str`),
   plus the `isinstance(vc, str)` gate in `char_type/2`
   (`chars.py:105`) and `char_code/2` (`chars.py:179`)

@@ -48,12 +48,26 @@ def _atom_to_str(val: Any) -> str | None:
     """Extract a string name from an atom value.
 
     Returns the string for str atoms, __name__ for zero-arity PredicateMeta
-    classes, or None if val is not an atom.
+    classes, the walked str for a ground ``SegString``, or None if val is
+    not an atom.
+
+    F075 (C3 audit): SegString is a str-shaped container; under the
+    "strings-as-lists / input-type wins" contract every atom-accepting
+    predicate should treat a ground SegString as the str it walks to. A
+    non-ground SegString walks to itself (still a SegString) and is
+    rejected with None so the caller raises the usual type_error.
     """
     if isinstance(val, str):
         return val
     if isinstance(val, PredicateMeta) and not val._fields:
         return val.__name__
+    # Late import to avoid an import cycle (clausal.terms → clausal.logic
+    # via SegString's __walk__).
+    from clausal.terms import SegString
+    if isinstance(val, SegString):
+        walked = val.__walk__()
+        if isinstance(walked, str):
+            return walked
     return None
 
 
@@ -101,7 +115,14 @@ def _char_type__2(char, type_, trail, k):
     if not c_bound and not t_bound:
         raise LogicException(instantiation_error("char_type/2"))
 
+    # F075 (C3 audit): walk a ground SegString to its str form so the
+    # single-char classifier below recognises it.
     if c_bound:
+        from clausal.terms import SegString
+        if isinstance(vc, SegString):
+            walked = vc.__walk__()
+            if isinstance(walked, str):
+                vc = walked
         if not isinstance(vc, str) or len(vc) != 1:
             return  # fail — not a single character
 
@@ -175,7 +196,14 @@ def _char_code__2(char, code, trail, k):
     if not c_bound and not n_bound:
         raise LogicException(instantiation_error("char_code/2"))
 
+    # F075 (C3 audit): walk a ground SegString to its str form so the
+    # single-char check below recognises it.
     if c_bound:
+        from clausal.terms import SegString
+        if isinstance(vc, SegString):
+            walked = vc.__walk__()
+            if isinstance(walked, str):
+                vc = walked
         if not isinstance(vc, str) or len(vc) != 1:
             raise LogicException(type_error("character", vc, "char_code/2"))
         expected = ord(vc)

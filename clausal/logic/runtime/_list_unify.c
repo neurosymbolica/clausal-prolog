@@ -21,6 +21,7 @@ static PyObject *fn_deref  = NULL;  /* clausal.logic.variables.deref */
 static PyObject *fn_is_var = NULL;  /* clausal.logic.variables.is_var */
 
 static PyTypeObject *SegListType     = NULL;
+static PyTypeObject *SegStringType   = NULL;
 static PyTypeObject *ConcreteSegType = NULL;
 static PyTypeObject *VarSegType      = NULL;
 
@@ -136,7 +137,27 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
         Py_RETURN_FALSE;
     }
 
-    /* ── Normalise SegList ── */
+    /* ── Normalise SegList / SegString ──
+     * F031 / F032 (C3 audit): SegString gets the same walk treatment as
+     * SegList so the head/body input-mode pattern accepts ground
+     * SegStrings (which walk to plain str and route through the
+     * (list, str) arm below).
+     *
+     * For non-ground walked values the two types diverge: SegString
+     * returns Py_None (defer to output mode so the body can constrain
+     * the unbound holes); SegList keeps the historical silent-False
+     * behaviour (SegList-vs-SegList unification is blocked by F030,
+     * Phase 6). The Python fallback mirrors this asymmetry. */
+    if (PyObject_TypeCheck(d, SegStringType)) {
+        PyObject *walked = PyObject_CallMethod(d, "__walk__", NULL);
+        Py_DECREF(d);
+        if (!walked) return NULL;
+        d = walked;
+        if (!PyList_Check(d) && !PyUnicode_Check(d)) {
+            Py_DECREF(d);
+            Py_RETURN_NONE;
+        }
+    }
     if (PyObject_TypeCheck(d, SegListType)) {
         PyObject *walked = PyObject_CallMethod(d, "__walk__", NULL);
         Py_DECREF(d);
@@ -277,20 +298,33 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 }
             }
             Py_DECREF(s);
-        } else if (PyObject_TypeCheck(s, SegListType)) {
-            /* SegList: walk it */
+        } else if (PyObject_TypeCheck(s, SegListType) ||
+                   PyObject_TypeCheck(s, SegStringType)) {
+            /* SegList / SegString: walk it.
+             * F034 (C3 audit): SegString gets the same walk-and-extend (or
+             * walk-and-rebuild-as-SegList) treatment as SegList. A walked
+             * str is iterated as a sequence of single-char strs so the
+             * result list matches what the "strings as char lists" contract
+             * would produce. A walked still-non-ground SegString has its
+             * str segments converted to ConcreteSeg(list(seg)) before
+             * being spliced into the rebuilt SegList. */
             PyObject *walked = PyObject_CallMethod(s, "__walk__", NULL);
             Py_DECREF(s);
             if (!walked) goto error;
 
-            if (PyList_Check(walked)) {
-                /* Ground SegList → extend and continue normally */
-                Py_ssize_t wlen = PyList_GET_SIZE(walked);
+            if (PyList_Check(walked) || PyUnicode_Check(walked)) {
+                /* Ground SegList (→ list) or ground SegString (→ str):
+                 * extend result with the elements / chars. */
+                Py_ssize_t wlen = PyObject_Length(walked);
+                if (wlen < 0) { Py_DECREF(walked); goto error; }
                 for (Py_ssize_t i = 0; i < wlen; i++) {
-                    if (PyList_Append(result, PyList_GET_ITEM(walked, i)) < 0) {
-                        Py_DECREF(walked);
-                        goto error;
-                    }
+                    PyObject *item = PyList_Check(walked)
+                        ? PyList_GET_ITEM(walked, i)
+                        : PyUnicode_Substring(walked, i, i + 1);
+                    if (!item) { Py_DECREF(walked); goto error; }
+                    int rc = PyList_Append(result, item);
+                    if (!PyList_Check(walked)) Py_DECREF(item);
+                    if (rc < 0) { Py_DECREF(walked); goto error; }
                 }
                 Py_DECREF(walked);
                 /* Append after_vals and unify */
@@ -309,7 +343,12 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 if (ok) Py_RETURN_TRUE;
                 Py_RETURN_FALSE;
             } else {
-                /* Non-ground SegList: build new SegList with segments */
+                /* Non-ground SegList / SegString: build new SegList with
+                 * segments. For SegString, each segment is either ``str``
+                 * (convert to ConcreteSeg(list(seg))) or ``VarSeg`` (carry
+                 * through unchanged). For SegList, the inner segments are
+                 * already ConcreteSeg / VarSeg. */
+                int walked_is_segstring = PyObject_TypeCheck(walked, SegStringType);
                 PyObject *after_result = PyList_New(0);
                 if (!after_result) { Py_DECREF(walked); goto error; }
                 for (Py_ssize_t i = 0; i < n_after; i++) {
@@ -333,13 +372,31 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                     if (rc < 0) { Py_DECREF(segs); Py_DECREF(after_result); Py_DECREF(walked); goto error; }
                 }
 
-                /* Extend segs with walked.segments */
+                /* Extend segs with walked.segments. For SegString, str
+                 * segments must be wrapped in ConcreteSeg(list(seg)). */
                 PyObject *inner_segs = PyObject_GetAttrString(walked, "segments");
                 Py_DECREF(walked);
                 if (!inner_segs) { Py_DECREF(segs); Py_DECREF(after_result); goto error; }
                 Py_ssize_t islen = PyList_GET_SIZE(inner_segs);
                 for (Py_ssize_t i = 0; i < islen; i++) {
-                    if (PyList_Append(segs, PyList_GET_ITEM(inner_segs, i)) < 0) {
+                    PyObject *iseg = PyList_GET_ITEM(inner_segs, i);
+                    if (walked_is_segstring && PyUnicode_Check(iseg)) {
+                        /* Convert str segment to ConcreteSeg(list(seg)). */
+                        PyObject *chars = PySequence_List(iseg);
+                        if (!chars) {
+                            Py_DECREF(inner_segs); Py_DECREF(segs); Py_DECREF(after_result); goto error;
+                        }
+                        PyObject *cseg = PyObject_CallOneArg((PyObject *)ConcreteSegType, chars);
+                        Py_DECREF(chars);
+                        if (!cseg) {
+                            Py_DECREF(inner_segs); Py_DECREF(segs); Py_DECREF(after_result); goto error;
+                        }
+                        int rc = PyList_Append(segs, cseg);
+                        Py_DECREF(cseg);
+                        if (rc < 0) {
+                            Py_DECREF(inner_segs); Py_DECREF(segs); Py_DECREF(after_result); goto error;
+                        }
+                    } else if (PyList_Append(segs, iseg) < 0) {
                         Py_DECREF(inner_segs); Py_DECREF(segs); Py_DECREF(after_result); goto error;
                     }
                 }
@@ -503,12 +560,14 @@ PyInit__list_unify(void)
     if (!terms_mod) return NULL;
 
     PyObject *sl = PyObject_GetAttrString(terms_mod, "SegList");
+    PyObject *ss = PyObject_GetAttrString(terms_mod, "SegString");
     PyObject *cs = PyObject_GetAttrString(terms_mod, "ConcreteSeg");
     PyObject *vs = PyObject_GetAttrString(terms_mod, "VarSeg");
     Py_DECREF(terms_mod);
 
-    if (!sl || !cs || !vs) return NULL;
+    if (!sl || !ss || !cs || !vs) return NULL;
     SegListType     = (PyTypeObject *)sl;
+    SegStringType   = (PyTypeObject *)ss;
     ConcreteSegType = (PyTypeObject *)cs;
     VarSegType      = (PyTypeObject *)vs;
 

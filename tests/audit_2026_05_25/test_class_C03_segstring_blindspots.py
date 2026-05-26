@@ -19,13 +19,6 @@ Findings tested here:
 import pytest
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F012: Var bound to SegString in list position not "
-        "recognised as a char"
-    ),
-)
 def test_F012_var_bound_to_segstring_is_char_in_list():
     """`unify("a", [v])` where `v` is bound to `SegString("a")` should succeed.
 
@@ -57,13 +50,6 @@ def test_F012_var_bound_to_segstring_is_char_in_list():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F031: _head_list_unify_input never walks SegString "
-        "(non-ground silently fails)"
-    ),
-)
 def test_F031_head_list_unify_input_non_ground_segstring():
     """`_head_list_unify_input(SegString([\"a\", VarSeg(X), \"c\"]), [H], T, [], t)`
     should not silently return False.
@@ -95,12 +81,6 @@ def test_F031_head_list_unify_input_non_ground_segstring():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F032: _head_list_unify_input rejects ground SegString too"
-    ),
-)
 def test_F032_head_list_unify_input_ground_segstring():
     """`_head_list_unify_input(SegString([\"abc\"]), [H], T, [], t)` should
     succeed with H='a' and T='bc'.
@@ -138,12 +118,6 @@ def test_F032_head_list_unify_input_ground_segstring():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F034: _head_list_unify_output never walks SegString star_val"
-    ),
-)
 def test_F034_head_list_unify_output_walks_segstring_star_val():
     """Output-mode reconstruction should walk a SegString-bound star_val,
     not append it as a single opaque element.
@@ -181,12 +155,6 @@ def test_F034_head_list_unify_output_walks_segstring_star_val():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F040: _body_multi_star_unify rejects ground SegString target"
-    ),
-)
 def test_F040_body_multi_star_unify_ground_segstring():
     """`_body_multi_star_unify(SegString(["abc"]), [fixed,star,fixed], t)`
     should yield True (one solution), not silently produce [].
@@ -222,12 +190,6 @@ def test_F040_body_multi_star_unify_ground_segstring():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F041: _body_multi_star_unify has no non-ground SegString branch"
-    ),
-)
 def test_F041_body_multi_star_unify_non_ground_segstring():
     """`_body_multi_star_unify(SegString(["a", VarSeg(X), "c"]), …)` should
     not silently yield [].
@@ -266,13 +228,6 @@ def test_F041_body_multi_star_unify_non_ground_segstring():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F047: Multi-star head guard ignores SegString "
-        "(both ground and non-ground)"
-    ),
-)
 def test_F047_multi_star_head_guard_segstring():
     """Multi-star head pattern ``Bracket([*A, X, Y, *B], X, Y, A, B)``
     invoked with a SegString target should yield the same solutions as
@@ -343,12 +298,6 @@ def test_F047_multi_star_head_guard_segstring():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F075: Every char/atom builtin in chars.py is SegString-blind"
-    ),
-)
 def test_F075_chars_builtins_accept_segstring():
     """`atom_length(SegString(["hi"]), N)` should bind N=2 (and parallel
     predicates should behave like their str counterparts).
@@ -376,20 +325,25 @@ def test_F075_chars_builtins_accept_segstring():
 
     # atom_length(SegString(["hi"]), N) should bind N=2 (same as the
     # walked str "hi") — currently raises type_error("atom", ...).
+    # Use ``snapshot=lambda: deref(N)`` so we capture the binding while
+    # it is live (the trampoline undoes bindings on the way out, mirroring
+    # the way real callers see solutions one at a time).
     N = Var()
     disp = get_builtin_dispatch("atom_length", 2, None)
     try:
-        sols = solutions(StepGenerator(disp, None, None, None, seg, N, Trail()))
+        sols = solutions(
+            StepGenerator(disp, None, None, None, seg, N, Trail()),
+            snapshot=lambda: deref(N),
+        )
     except LogicException as e:
         pytest.fail(
             f"atom_length(SegString(['hi']), N) raised LogicException "
             f"{e!r}; expected one solution with N=2. _atom_to_str at "
             f"chars.py:47-57 has no SegString branch."
         )
-    assert len(sols) >= 1 and deref(N) == 2, (
-        f"atom_length(SegString(['hi']), N) yielded {sols!r} with "
-        f"N={deref(N)!r}; expected one solution with N=2 (the SegString "
-        f"walks to 'hi', length 2)."
+    assert len(sols) >= 1 and sols[0] == 2, (
+        f"atom_length(SegString(['hi']), N) snapshot yielded {sols!r}; "
+        f"expected [2] (the SegString walks to 'hi', length 2)."
     )
 
     # char_type/2 with a single-char SegString should yield >0 solutions

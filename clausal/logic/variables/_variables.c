@@ -1175,9 +1175,25 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
                 /* Ground single-char match — no allocation */
                 Py_DECREF(elem_raw);
                 continue;
-            } else {
+            } else if (PyUnicode_Check(elem)) {
+                /* str of length != 1 — never matches a single codepoint. */
                 Py_DECREF(elem_raw);
                 return 0;
+            } else {
+                /* F012 (C3 audit): not a Var, not a plain str — could be a
+                 * SegString or other custom term that knows how to unify
+                 * with a single-char str. Allocate the single codepoint and
+                 * delegate to do_unify, which routes through the __unify__
+                 * protocol. Keeps the hot fast path above intact. */
+                PyObject *ch = PyUnicode_Substring(t1, i, i + 1);
+                if (!ch) {
+                    Py_DECREF(elem_raw);
+                    return -1;
+                }
+                int r = do_unify(ch, elem, trail, depth + 1, oc);
+                Py_DECREF(ch);
+                Py_DECREF(elem_raw);
+                if (r != 1) return r;
             }
         }
         return 1;
@@ -1212,9 +1228,22 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
                        && PyUnicode_READ_CHAR(elem, 0) == c2) {
                 Py_DECREF(elem_raw);
                 continue;
-            } else {
+            } else if (PyUnicode_Check(elem)) {
                 Py_DECREF(elem_raw);
                 return 0;
+            } else {
+                /* F012 (C3 audit): symmetric to the t1/t2-swapped case
+                 * above — delegate to do_unify so custom terms (e.g.
+                 * SegString) can unify with a single codepoint. */
+                PyObject *ch = PyUnicode_Substring(t2, i, i + 1);
+                if (!ch) {
+                    Py_DECREF(elem_raw);
+                    return -1;
+                }
+                int r = do_unify(elem, ch, trail, depth + 1, oc);
+                Py_DECREF(ch);
+                Py_DECREF(elem_raw);
+                if (r != 1) return r;
             }
         }
         return 1;

@@ -871,7 +871,58 @@ def _compile_multi_star_guard(
         orelse=[],
     )
 
-    return [deref_assign, seglist_normalise, var_check, list_branch]
+    # F047 (C3 audit): mirror the SegList walk for SegString so the multi-
+    # star head guard accepts ground SegStrings (which walk to plain str and
+    # route through the (list, str) isinstance arm below).
+    segstring_normalise = ast.If(
+        test=_call(_name("isinstance"), _name(d_name), _name("SegString")),
+        body=[
+            _assign(
+                d_name,
+                ast.Call(
+                    func=ast.Attribute(
+                        value=_name(d_name), attr="__walk__", ctx=ast.Load()
+                    ),
+                    args=[],
+                    keywords=[],
+                ),
+            )
+        ],
+        orelse=[],
+    )
+
+    # F047 (C3 audit): a still-non-ground SegString delegates to
+    # ``$body_multi_star_unify`` (runtime), which knows how to align a
+    # non-ground SegString with a multi-star pattern via
+    # ``_segstring_align`` (yields one True per valid alignment). The
+    # body_stmts run inside the for-loop so each alignment yields a
+    # solution.
+    segstring_branch = ast.If(
+        test=_call(_name("isinstance"), _name(d_name), _name("SegString")),
+        body=[
+            ast.For(
+                target=ast.Name(id=f"_ssms{cap_name}", ctx=ast.Store()),
+                iter=_call(
+                    _name("$body_multi_star_unify"),
+                    _name(cap_name),
+                    segments_ast,
+                    _name(trail_name),
+                ),
+                body=body_stmts,
+                orelse=[],
+            ),
+        ],
+        orelse=[],
+    )
+
+    return [
+        deref_assign,
+        seglist_normalise,
+        segstring_normalise,
+        var_check,
+        segstring_branch,
+        list_branch,
+    ]
 
 
 # ── compile_head_to_match_case ─────────────────────────────────────────────────

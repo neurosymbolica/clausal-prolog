@@ -81,6 +81,7 @@ from __future__ import annotations
 from clausal.logic.variables import is_var, deref, unify
 from clausal.terms import (
     SegList, ConcreteSeg, VarSeg,
+    SegString,
 )
 
 
@@ -108,9 +109,18 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
         return unify(star_val, d[n:], trail)
     # ── end fast path ──
 
-    # Normalise SegList: walk it; if ground it becomes a plain list.
-    # Non-ground SegLists can't be matched against a single-star pattern yet
-    # (SegList-vs-SegList unification is Phase 6) — return False to fail.
+    # Normalise SegList / SegString: walk it; if ground it becomes a plain
+    # list / str so the existing (list, str) arm below fires. F031 / F032
+    # (C3 audit): the SegString arm mirrors SegList. A still-non-ground
+    # SegString defers to output mode (returns None) so the body can
+    # constrain the unbound holes — the output-mode helper then rebuilds
+    # the pattern and tries the unify when called. A still-non-ground
+    # SegList keeps the historical silent-False behaviour (SegList-vs-
+    # SegList unification is blocked by F030, Phase 6).
+    if isinstance(d, SegString):
+        d = d.__walk__()
+        if not isinstance(d, (list, str)):
+            return None
     if isinstance(d, SegList):
         d = d.__walk__()
         if not isinstance(d, (list, str)):
@@ -181,6 +191,32 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
                 if result:
                     segs.append(ConcreteSeg(result))
                 segs.extend(walked.segments)
+                if after_result:
+                    segs.append(ConcreteSeg(after_result))
+                return unify(d, SegList(segs), trail)
+        elif isinstance(s, SegString):
+            # F034 (C3 audit): Star derefs to a SegString — walk it parallel
+            # to the SegList branch. Ground → extend chars (treat the str as
+            # a sequence of single-char strs, matching the "strings as char
+            # lists" contract). Non-ground → rebuild via the segments.
+            walked = s.__walk__()
+            if isinstance(walked, str):
+                result.extend(walked)
+                result.extend(deref(v) for v in after_vals)
+                return unify(d, result, trail)
+            else:
+                # Still partially unbound SegString: convert each segment to
+                # the SegList equivalent (str segments → ConcreteSeg of
+                # chars) so the output remains a SegList for unification.
+                after_result = [deref(v) for v in after_vals]
+                segs = []
+                if result:
+                    segs.append(ConcreteSeg(result))
+                for inner in walked.segments:
+                    if isinstance(inner, str):
+                        segs.append(ConcreteSeg(list(inner)))
+                    else:  # VarSeg
+                        segs.append(inner)
                 if after_result:
                     segs.append(ConcreteSeg(after_result))
                 return unify(d, SegList(segs), trail)
