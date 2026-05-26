@@ -20,22 +20,14 @@ from clausal.terms import SegString, VarSeg, SegList, ConcreteSeg
 from tests.audit_2026_05_25._helpers import load_inline_clausal
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F067: phrase/3 Rest type does not preserve str input shape",
-)
 def test_F067_phrase3_rest_type_preserves_str():
-    """phrase/3 Rest should preserve str shape when input is str.
+    """phrase/3 Rest preserves str shape when input is str (F070 fix, Phase 2 Task 14).
 
-    Under the strings-as-lists "input-type wins" contract, if the input
-    to phrase/3 is a str, the remainder Rest should also be a str (or at
-    least offer an opt-in to get str-shaped Rest). Currently Rest is always
-    a list-of-1-char-strs regardless of the input type.
-
-    The documented contract in docs/dcg.md:148 asserts Rest == ['a', 'b']
-    (list), so this is *currently correct*. The design-gap is the
-    inconsistency with other builtins (F018/F033/F042/F043/F053/F062/F063)
-    that preserve str shape on output.
+    Under the Liskov "strings-as-lists" / input-type-wins contract, when
+    the input to phrase/3 is a str, the remainder ``Rest`` is bound to a
+    str slice rather than a list of 1-char strs. ``phrase/2,3`` no longer
+    eagerly convert str → list at entry; ``_head_list_unify_input`` /
+    ``_body_star_unify`` destructure str natively (str slicing yields str).
     """
     # Register a simple DCG rule: tok(_t) >> ([_t])
     source = 'tok(_t) >> ([_t])\n'
@@ -45,21 +37,28 @@ def test_F067_phrase3_rest_type_preserves_str():
     # Case 1: str input should produce str Rest (under the input-type-wins
     # principle) or at least not silently downgrade to list.
     v, rest = Var(), Var()
+    found = False
     for _ in call("phrase", cls(v), "abcd", rest, module=mod):
         rv = deref(rest)
-        # Current (buggy) behaviour: Rest is always a list of 1-char strs.
-        # Under input-type-wins, Rest should be "bcd" (str) to match input type.
+        # F067 fix: Rest is a str slice ("bcd") of the str input, not a
+        # list of 1-char strs.
         assert type(rv) is str and rv == "bcd", (
             f"phrase(tok(V), 'abcd', Rest) should preserve str type: "
             f"expected Rest='bcd', got Rest={rv!r} "
             f"(type={type(rv).__name__})"
         )
+        found = True
         break
+    assert found, "phrase/3 with str input should produce at least one solution"
 
 
 @pytest.mark.xfail(
     strict=True,
-    reason="ledger F068: phrase/3 silently splits str state-threading arg into chars",
+    reason=(
+        "ledger F068: phrase/3 silently splits str state-threading arg into "
+        "chars (deferred in Phase 2 Task 14 — see findings.md F068 Notes for "
+        "the unresolved design question)"
+    ),
 )
 def test_F068_phrase3_str_state_threading_splits():
     """phrase/3 with str state-threading arg is silently split into chars.
@@ -68,10 +67,14 @@ def test_F068_phrase3_str_state_threading_splits():
     to chars, and (2) state threading with arbitrary values. When a user
     accidentally omits the brackets in state-threading form
     (phrase(rule, "bob", Rest) instead of phrase(rule, ["bob"], Rest)),
-    the str "bob" is silently converted to ['b', 'o', 'b'], the rule unifies
-    the first char with what was meant to be the whole state, and the
-    remainder is a junk wrong answer like Rest=['alice', 'o', 'b'] instead
-    of Rest=['alice']. No error, no warning — silent wrong answer.
+    the str "bob" is silently destructured by ``_head_list_unify_input``
+    into ``_s0="b"`` and a str slice ``"ob"`` for the remainder. The rule
+    head then pushes ``"alice"`` back, producing
+    ``Rest=['alice', 'o', 'b']`` — same shape as the pre-fix behaviour
+    (the Phase 2 Task 14 fix swapped the eager str→list conversion for
+    native str destructuring, but the wrong-answer is still produced
+    because the implementation cannot distinguish state-threading from
+    char-parsing intent from the call shape alone).
     """
     # Register DCG rules for state threading.
     source = """-module(s2, [state2(_s0, _s, S0_2, S_2), set_name(_n, _s0, _s)])
@@ -110,17 +113,13 @@ set_name(_n) >> (state2(_, _n))
         break
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F069: phrase/2,3 silently fail on SegString input",
-)
 def test_F069_phrase2_rejects_segstring():
-    """phrase/2 silently fails on ground SegString input.
+    """phrase/2 accepts ground SegString input (F069 fix, Phase 2 Task 14).
 
-    SegString is a logical str (walks to str, represents the same value)
-    but phrase/2 only recognises isinstance(_, str). When a ground SegString
-    is passed (all VarSegs bound), phrase should succeed with the same
-    outcome as passing the walked str, but currently fails silently.
+    SegString is a logical str (walks to str, represents the same value).
+    phrase/2 now normalizes Seg* inputs at entry via ``normalize_seg_input``,
+    so a ground SegString is walked to its str form and the existing str
+    arm fires.
     """
     # Register a simple DCG rule.
     source = 'hi >> (["h", "i"])\n'
@@ -150,14 +149,11 @@ def test_F069_phrase2_rejects_segstring():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F069: phrase/2,3 silently fail on SegString input",
-)
 def test_F069_phrase3_rejects_segstring_input():
-    """phrase/3 silently fails on ground SegString input (first arg).
+    """phrase/3 accepts ground SegString input (F069 fix, Phase 2 Task 14).
 
-    Like F069_phrase2, but testing phrase/3 with SegString as the list arg.
+    Like ``test_F069_phrase2_rejects_segstring``: a ground SegString in the
+    list slot of phrase/3 is walked to its str form at entry.
     """
     # Register a simple DCG rule.
     source = 'tok(_t) >> ([_t])\n'
@@ -218,15 +214,12 @@ def test_F069_phrase3_rejects_segstring_rest():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F070: sequence//1 drops str type across every binding mode",
-)
 def test_F070_sequence_mode_a_preserves_str():
     """sequence//1 Mode A (S0=str, S=Var): output S should be str, not list.
 
-    Mode A: S0 bound to str, S unbound. Under "input-type wins", the output
-    S should also be str, but sequence//1 always produces a list.
+    Mode A: S0 bound to str, S unbound. Under "input-type wins" (F070
+    closed in Phase 2 Task 14), the remainder ``S`` is bound to a str
+    slice of ``S0`` rather than a Python list of 1-char strs.
     """
     mod = load_inline_clausal("c10_f070_seq_mode_a", "").__dict__["$module"]
 
@@ -234,14 +227,10 @@ def test_F070_sequence_mode_a_preserves_str():
     found = False
     for _ in call("sequence", "ab", s0, s, module=mod):
         sv = deref(s)
-        # Current behaviour (buggy): s is always a list.
-        assert type(sv) is list and sv == ["X", "Y"], (
-            f"sequence('ab', 'abXY', S): current (buggy) behaviour "
-            f"gives S=['X','Y'] (list), got S={sv!r} "
-            f"(type={type(sv).__name__})"
-        )
-        # Desired behaviour (under input-type-wins):
-        # S should be "XY" (str).
+        # F070 fix: ``S`` is a str slice of ``S0`` ("XY"), preserving the
+        # str shape of the input under the Liskov "strings-as-lists"
+        # rule. The default-list / promote-to-str contract still holds:
+        # the slice is naturally str because str slicing returns str.
         assert type(sv) is str and sv == "XY", (
             f"sequence('ab', 'abXY', S): expected S='XY' (str) "
             f"under input-type-wins, got S={sv!r} "
@@ -252,15 +241,12 @@ def test_F070_sequence_mode_a_preserves_str():
     assert found, "sequence/3 Mode A should produce at least one solution"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F070: sequence//1 drops str type across every binding mode",
-)
 def test_F070_sequence_mode_b_preserves_str():
     """sequence//1 Mode B (S0=Var, S=str): output S0 should be str, not list.
 
-    Mode B: S bound to str, S0 unbound. Under "input-type wins", the output
-    S0 should be str, but sequence//1 always produces a list.
+    Mode B: S bound to str, S0 unbound. Under "input-type wins" (F070
+    closed in Phase 2 Task 14), when both ``lst`` and ``S`` are str the
+    builder concatenates as str so ``S0`` is str-typed.
     """
     mod = load_inline_clausal("c10_f070_seq_mode_b", "").__dict__["$module"]
 
@@ -268,14 +254,9 @@ def test_F070_sequence_mode_b_preserves_str():
     found = False
     for _ in call("sequence", "ab", s0, s, module=mod):
         s0v = deref(s0)
-        # Current behaviour (buggy): s0 is always a list.
-        assert type(s0v) is list and s0v == ["a", "b", "X", "Y"], (
-            f"sequence('ab', S0, 'XY'): current (buggy) behaviour "
-            f"gives S0=['a','b','X','Y'] (list), got S0={s0v!r} "
-            f"(type={type(s0v).__name__})"
-        )
-        # Desired behaviour (under input-type-wins):
-        # S0 should be "abXY" (str).
+        # F070 fix: ``S0`` is the str concatenation of ``lst`` and ``S``
+        # ("ab" + "XY" = "abXY"). The input-type-wins rule promotes when
+        # both operands are str.
         assert type(s0v) is str and s0v == "abXY", (
             f"sequence('ab', S0, 'XY'): expected S0='abXY' (str) "
             f"under input-type-wins, got S0={s0v!r} "
@@ -286,16 +267,12 @@ def test_F070_sequence_mode_b_preserves_str():
     assert found, "sequence/3 Mode B should produce at least one solution"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F070: sequence//1 drops str type across every binding mode",
-)
 def test_F070_sequence_mode_c_builds_segstring():
     """sequence//1 Mode C (S0=Var, S=Var, lst=str): output should be SegString.
 
     Mode C: both S0 and S unbound, lst is str. Under the str-preservation
-    contract, the output should be a SegString (not a SegList), matching
-    the str input type.
+    contract (F070 closed in Phase 2 Task 14), the partial output is a
+    ``SegString`` so the str shape of ``lst`` carries through.
     """
     mod = load_inline_clausal("c10_f070_seq_mode_c", "").__dict__["$module"]
 
@@ -303,33 +280,23 @@ def test_F070_sequence_mode_c_builds_segstring():
     found = False
     for _ in call("sequence", "ab", s0, s, module=mod):
         s0v = deref(s0)
-        # Current behaviour (buggy): s0 is a SegList.
-        assert isinstance(s0v, SegList), (
-            f"sequence('ab', S0, S): current (buggy) behaviour "
-            f"builds SegList, got S0={s0v!r} "
-            f"(type={type(s0v).__name__})"
-        )
-        # Desired behaviour: S0 should be a SegString to preserve the
-        # str type of lst='ab'.
+        # F070 fix: ``S0`` is a SegString preserving the str type of
+        # ``lst='ab'``. The trailing VarSeg holds the unbound ``S``.
         assert isinstance(s0v, SegString), (
             f"sequence('ab', S0, S) with str lst should build SegString, "
-            f"got {type(s0v).__name__}"
+            f"got {type(s0v).__name__}: {s0v!r}"
         )
         found = True
         break
     assert found, "sequence/3 Mode C should produce at least one solution"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F070: sequence//1 drops str type across every binding mode",
-)
 def test_F070_sequence_mode_d_accepts_segstring():
     """sequence//1 Mode D: lst is SegString should succeed, not fail.
 
-    Mode D: lst is a SegString or SegList. Currently sequence//1 silently
-    fails (guard at dcg.py:81 rejects non-list/non-str). The fix should
-    walk ground SegString/SegList to str/list and succeed.
+    Mode D: lst is a SegString or SegList. F070 closed in Phase 2 Task 14
+    via ``normalize_seg_input`` at the entry: a ground SegString is walked
+    to its str form and the existing str arm fires.
     """
     mod = load_inline_clausal("c10_f070_seq_mode_d", "").__dict__["$module"]
 
@@ -346,5 +313,5 @@ def test_F070_sequence_mode_d_accepts_segstring():
     found = sum(1 for _ in call("sequence", seg, s0, s, module=mod))
     assert found == 1, (
         f"sequence(SegString('ab'), S0, S) should succeed "
-        f"(walk to 'ab' and continue), but got {found} solutions — BUG"
+        f"(walk to 'ab' and continue), but got {found} solutions"
     )

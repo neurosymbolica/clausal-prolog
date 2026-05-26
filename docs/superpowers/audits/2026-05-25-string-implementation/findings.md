@@ -2557,6 +2557,8 @@ fixing.
 
 - **Class:** C10 (DCG / phrase interaction)
 - **Severity:** bug
+- **Status:** deferred in Phase 2 Task 14 — see Notes below for the
+  unresolved design question.
 - **Location:** `clausal/logic/builtins/dcg.py:49-50` (and `:18-19` for
   `phrase/2`)
 - **Discovered by:** Task 9 of Phase 0
@@ -2607,10 +2609,41 @@ this is the dual — silently *produces* a wrong answer.
 
 **Prior-known:** commit c3f8844 — "Phase 3: DCGs accept strings as input" added the unconditional `list(list_val)` conversion at `phrase/2,3` entry. The plan in `STRING_LIST_UNIFICATION.md` Phase 3 (L506-705) considered two designs — a complex `sequence//1`-aware rewrite and a "simpler: convert at phrase boundary" approach — and explicitly chose the latter, observing "the remainder will be a list of chars, not a string — this is acceptable and consistent" (D5 design decision). The state-threading-overload hazard this finding documents was not considered in the plan.
 
+**Deferral (Phase 2 Task 14):** Phase 2 Task 14 closed [[F067]] / [[F069]] /
+[[F070]] by removing the eager `list(list_val)` conversion at the
+`phrase/2,3` entry and extending `_body_star_unify` to destructure str /
+SegString natively (`clausal/logic/runtime/body_star_unify.py`). After
+that change `phrase(set_name("alice"), "bob", Rest)` still produces
+`Rest = ['alice', 'o', 'b']`: the rule head `[_s0, *_mid]` against the
+str `"bob"` now binds `_s0 = "b"`, `_mid = "ob"` (a str slice rather
+than a list slice), and the pushback `[_s, *_mid]` builds the same
+mixed list once `_s = "alice"` is interleaved with the chars of
+`"ob"`. The wrong-answer shape is preserved because the implementation
+still cannot distinguish state-threading from char-parsing intent from
+the call shape alone — the two readings disagree at the very first
+goal step and there is no later vantage point that can pick the right
+one. Closing F068 properly requires one of:
+ * adding a separate `phrase_state/3` (or syntactic marker) that opts
+   out of char-level destructuring at the phrase boundary;
+ * adding a per-DCG-rule declaration that records whether the rule
+   operates on chars or state items, then dispatching to a strict
+   shape-check at the rule head;
+ * documenting the hazard and accepting the silent wrong answer as a
+   user-error pitfall (parallel to how Prolog's `phrase/3` shares the
+   same polymorphism).
+None of these fits inside Task 14's "DCG-layer fix" scope; the test
+remains `xfail` so the wrong-answer shape is locked in until a future
+phase makes the design call.
+
 ### F069 — `phrase/2` and `phrase/3` silently fail on SegString input
 
 - **Class:** C10 (DCG / phrase interaction)
 - **Severity:** bug
+- **Status:** fixed in Phase 2 Task 14 — `phrase/2,3` now apply
+  `normalize_seg_input` to walk SegList/SegString to their ground form;
+  `_body_star_unify` gained str/SegString arms so the rule-body
+  destructuring fires uniformly. The Rest-as-SegString sub-case was
+  already cascade-closed by Task 7 (F023).
 - **Location:** `clausal/logic/builtins/dcg.py:15-19` (`phrase/2` list
   arg) and `:46-51` (`phrase/3` list arg and rest arg)
 - **Discovered by:** Task 9 of Phase 0
@@ -2651,10 +2684,24 @@ SegString to str on the way in, *or* defer to fixes in
 
 **Prior-known:** commit c3f8844 — "Phase 3: DCGs accept strings as input" added the `isinstance(list_val, str)` check that gates the str→char-list conversion; SegString wasn't yet introduced. Phase 7 added SegString (f635551) without revisiting dcg.py.
 
+Fix (Phase 2 Task 14): `phrase/2,3` apply `normalize_seg_input` to
+walk Seg* inputs to their ground form (str / list) at entry, so the
+existing dispatch path sees a uniform container shape.
+`_body_star_unify` (`clausal/logic/runtime/body_star_unify.py`) grew
+`str` and `SegString` arms that delegate to `_head_list_unify_input`,
+which already destructures both shapes via the Liskov "strings-as-
+lists" rule. Rest-as-SegString was already cascade-closed by Task 7
+(F023's `SegString.__unify__(list)` walk-and-delegate path);
+`test_F069_phrase3_rejects_segstring_rest` passed before this task.
+
 ### F067 — `phrase/3` Rest type does not preserve str input shape
 
 - **Class:** C10 (DCG / phrase interaction)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 14 — phrase/2,3 no longer eagerly
+  convert str → list at entry; native str destructuring in
+  `_head_list_unify_input` / `_body_star_unify` binds Rest to a str
+  slice when the input was str.
 - **Location:** `clausal/logic/builtins/dcg.py:49-50` (input
   conversion) and the lack of any output-shape record threaded back
   through to `rest_arg`
@@ -2698,10 +2745,27 @@ contract.
 
 **Prior-known:** commit c3f8844 — Phase 3's plan in `STRING_LIST_UNIFICATION.md` Phase 3 D5 explicitly chose the list-Rest behaviour ("the remainder will be a list of chars, not a string — this is acceptable and consistent"). The contract was documented; the design-gap is the inconsistency with `_seq_result` / `_as_items` plumbing landed later in Phase 4 (commit 423be48).
 
+Fix (Phase 2 Task 14): the eager `list(list_val)` conversion at
+`phrase/2,3` entry is removed. Strings flow into the dispatch
+unchanged, and the existing `_head_list_unify_input` /
+`_body_star_unify` arms destructure str natively (str slicing returns
+str), so `Rest` is bound to the natural str slice. The
+`docs/dcg.md:148` example and the `test_phrase3_string_remainder`
+lock-in in `tests/test_dcg.py` were updated to assert
+`Rest == "XY"` rather than `["X", "Y"]`. The fix slots into the
+broader "input-type wins" pattern (parallel to [[F053]] / [[F063]] /
+[[F018]] / [[F033]] / [[F042]] / [[F043]] / [[F070]]) without any new
+type-source plumbing — the str shape survives because the runtime
+helpers already pass str through without conversion.
+
 ### F070 — `sequence//1` drops str type across every binding mode
 
 - **Class:** C10 (DCG / phrase interaction)
 - **Severity:** design-gap
+- **Status:** fixed in Phase 2 Task 14 — every binding mode now
+  preserves str type per the input-type-wins rule (Mode A returns str
+  slice, Mode B str concat when both inputs are str, Mode C builds
+  `SegString`, Mode D walks SegList/SegString to its ground form).
 - **Location:** `clausal/logic/builtins/dcg.py:73-116`
 - **Discovered by:** Task 9 of Phase 0
 - **Probe:** `probes/probe_F070.py`
@@ -2747,6 +2811,22 @@ shares root cause with [[F069]] / the C3 SegString cluster. Logged
 as design-gap (matches the F053/F063 grading).
 
 **Prior-known:** commit c3f8844 — "Phase 3: DCGs accept strings as input" added the original `sequence//1` str-handling, and commit 5fcade4 — "fix: wire up SegList in Sequence//1 for both-unbound S0/S case" landed the *Mode C* branch this finding documents. The 5fcade4 commit description acknowledges: "SegList Phases 1-4 were complete but Phase 5 (builtin integration) was interrupted by OOM. This adds the missing else branch in _sequence__3: when both S0 and S are unbound, build SegList…" — the OOM-interrupted Phase 5 mention and the file `todo/SEQUENCE_BOTH_UNBOUND.md` that was deleted in 5fcade4 both indicate the str-vs-SegList branching was a known gap; the fix landed the SegList branch but did not introduce a parallel SegString branch (Phase 7's SegString was introduced in f635551, which came after 5fcade4 in calendar time but did not revisit dcg.py).
+
+Fix (Phase 2 Task 14): `_sequence__3` rewritten to preserve input
+type across all four modes.
+ * `normalize_seg_input` walks ground SegList / SegString inputs at
+   entry so Mode D succeeds via the existing list / str arms.
+ * Mode A (S0 bound to str, S unbound): the prefix check normalises
+   both sides to list for the equality test but the slice `s0_val[n:]`
+   is bound as-is — a str slice when S0 is str.
+ * Mode B (S0 unbound, S str/list): when both `lst` and `S` are str
+   the concatenation is built as str; otherwise both are normalised
+   to list (input-type-wins is decided per-mode by the inputs that
+   pin the type).
+ * Mode C (both unbound, str `lst`): builds a `SegString` with the
+   ground `lst` prefix and a `VarSeg` for the unbound tail, instead
+   of the previous list-shaped `SegList`. The non-str case keeps the
+   prior SegList behaviour.
 
 ### Class C11 — Trail/backtracking around partials
 *(none yet)*

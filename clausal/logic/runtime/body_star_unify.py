@@ -27,8 +27,8 @@ from .list_unify import _head_list_unify_input, _head_list_unify_output
 def _body_star_unify(target, before_vals, star_val, after_vals, trail):
     """Bidirectional star-list unification for body-position Is goals.
 
-    Handles both deconstruction (target is a ground list) and construction
-    (target is an unbound Var, pattern vars are bound).
+    Handles both deconstruction (target is a ground list / str / Seg*) and
+    construction (target is an unbound Var, pattern vars are bound).
     """
     d = deref(target)
 
@@ -37,8 +37,16 @@ def _body_star_unify(target, before_vals, star_val, after_vals, trail):
     if isinstance(d, SegList):
         return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
 
-    if isinstance(d, list):
-        # Deconstruction: split list according to the pattern
+    # F034 / F067-F069 (C3 + C10): SegString and str are walked / handled
+    # identically to SegList / list. ``_head_list_unify_input`` already
+    # implements the Liskov "strings-as-lists" destructuring (str slicing
+    # preserves str type for the star var), so the body-Is path inherits
+    # the same contract.
+    if isinstance(d, SegString):
+        return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
+
+    if isinstance(d, (list, str)):
+        # Deconstruction: split list/str according to the pattern
         return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
 
     if is_var(d):

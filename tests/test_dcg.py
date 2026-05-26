@@ -725,7 +725,14 @@ class TestDCGStringInput:
         assert not _succeeds("phrase", cls, "hell", module=mod)
 
     def test_phrase3_string_remainder(self, tmp_path):
-        """phrase(rule, "hiXY", Rest) — Rest is a char list."""
+        """phrase(rule, "hiXY", Rest) — Rest preserves str type.
+
+        Updated in Phase 2 Task 14 (F067 closure): under the Liskov
+        "strings-as-lists" rule, phrase/3 no longer eagerly splits str
+        input into chars at entry. Native str destructuring in
+        ``_head_list_unify_input`` / ``_body_star_unify`` binds Rest to
+        a str slice rather than a list of 1-char strs.
+        """
         # nv
         src = 'hi >> (["h", "i"])\n'
         mod = _load("ds5", src, tmp_path)
@@ -734,7 +741,7 @@ class TestDCGStringInput:
         results = []
         for _ in call("phrase", cls, "hiXY", rest, module=mod):
             results.append(deref(rest))
-        assert results == [["X", "Y"]]
+        assert results == ["XY"]
 
     def test_phrase2_chained_nonterminals_string(self, tmp_path):
         """Chained non-terminals consume a string."""
