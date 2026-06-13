@@ -2,19 +2,19 @@
 
 This directory holds the artifacts of the strings-as-lists audit.
 
-**Status:** complete (closed 2026-05-26; revised 2026-06-13). Tagged `string-audit-complete`.
-**Totals:** 66 findings across 15 classes — 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only. 63 closed (59 in Phase 2 + 4 in the 2026-06-13 follow-up — C14 args-of-list cluster); 3 deferred (see `findings.md` "Phase 3 sweep — conclusion").
+**Status:** complete (closed 2026-05-26; revised 2026-06-13; F078 Phase 3 closure 2026-06-13). Tagged `string-audit-complete`.
+**Totals:** 66 findings across 15 classes — 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only. 64 closed (59 in Phase 2 + 4 in 2026-06-13 follow-up C14 cluster + 1 in Phase 3 F078 closure); 2 deferred (see `findings.md` "Phase 3 sweep — conclusion").
 
-## Phase 2 status — complete (with deferrals)
+## Phase 2 status — complete (with Phase 3 sweep)
 
-- **Fix commits:** 14 core in Phase 2 (one per audit class plus the F046 deferral commit); 63 total in the Phase 2 range including planning, test scaffolding, and polish commits; +1 follow-up commit on 2026-06-13 closing the C14 args-of-list cluster (F088-F091) and renaming `get_item/3` → `list_item/3`
-- **Findings closed:** 63 / 66
-- **Findings deferred:** 3 (F046 follow-up spec, F068 architectural, F078 untested smell — see `findings.md` "Phase 3 sweep — conclusion")
+- **Fix commits:** 14 core in Phase 2 (one per audit class plus the F046 deferral commit); 63 total in the Phase 2 range including planning, test scaffolding, and polish commits; +1 follow-up commit on 2026-06-13 closing the C14 args-of-list cluster (F088-F091) and renaming `get_item/3` → `list_item/3`; +1 Phase 3 commit (2026-06-13) closing F078 dead-branch deletion
+- **Findings closed:** 64 / 66
+- **Findings deferred:** 2 (F046 follow-up spec, F068 architectural — see `findings.md` "Phase 3 sweep — conclusion")
 - **Audit suite:** 73 PASSED, 2 XFAIL, 0 XPASSED, 0 FAILED, 0 ERRORED
 - **Pre-existing pytest suite:** 7760 passing (post-2026-06-13 follow-up; baseline 7752) — zero regressions
 - **Tagged:** `string-audit-complete`
 
-The audit is complete. F046 (C4 head-pattern literal mismatch) is scheduled for a follow-up spec.
+The audit is complete. F046 (C4 head-pattern literal mismatch) is scheduled for a follow-up spec. F078 (C17 dead-branch smell) closed in Phase 3 sweep.
 
 ### 2026-06-13 follow-up — C14 args-of-list cluster closed
 

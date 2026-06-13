@@ -225,17 +225,14 @@ py_char_type_find_chars(PyObject *Py_UNUSED(module), PyObject *args)
 
     for (Py_ssize_t i = start; i < count; i++) {
         Py_UCS4 ch = type_to_chars[type_idx][i];
-        PyObject *ch_obj = (ch < 128) ? ascii_char_objs[ch] : NULL;
-        int need_decref = 0;
-        if (!ch_obj) {
-            ch_obj = PyUnicode_FromKindAndData(PyUnicode_1BYTE_KIND, &ch, 1);
-            if (!ch_obj) return NULL;
-            need_decref = 1;
-        }
+        /* type_to_chars is ASCII-only by construction (init loop at L128-136).
+         * All values are guaranteed to be in [0, 128), so ascii_char_objs[ch]
+         * is always present. The unreachable non-ASCII allocation branch that
+         * previously lived here (F078 closure) was removed. */
+        PyObject *ch_obj = ascii_char_objs[ch];
 
         Py_ssize_t mark = VarAPI->trail_mark(trail);
         int ok = call_unify(char_var, ch_obj, trail);
-        if (need_decref) Py_DECREF(ch_obj);
         if (ok < 0) return NULL;
 
         if (ok) {

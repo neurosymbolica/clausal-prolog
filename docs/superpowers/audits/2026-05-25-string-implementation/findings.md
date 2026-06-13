@@ -4027,6 +4027,7 @@ from the test; F026 now fully closed in the ledger.
 
 - **Class:** C17 (Performance, memory, leaks)
 - **Severity:** smell
+- **Status:** fixed in Phase 3 (2026-06-13, dead branch deleted)
 - **Location:** `clausal/logic/builtins/_chars_core.c:228-234`
   (the runtime branch) and `:128-132` (the init loop that bounds the
   table to ASCII only)
@@ -4065,6 +4066,19 @@ must be corrected. If the fix is the other direction (restrict
 Char-bound mode to ASCII), this branch is provably dead and should
 be deleted.
 
+**Resolution:** F072 (commit d032ac3, Phase 2 Task 12) resolved the C9
+mode-matrix asymmetry by implementing the "restrict-to-ASCII" path for
+the C accelerator. The new design routes Unicode-eligible types
+(alpha, alnum, upper, lower, print) through a Python-level BMP cache
+walk in `chars.py:_type_to_chars_unicode`, and routes ASCII-only types
+(ascii, control, digit, space, punct) through the C accelerator's
+`char_type_find_chars`. Since the C function is now guaranteed to
+receive only ASCII-only types and `type_to_chars` is populated only
+with ASCII codepoints [0, 128), the non-ASCII fallback branch is proven
+dead. Deleted the unreachable branch and the `need_decref` flag, and
+added a comment clarifying the ASCII-only invariant at the loop entry
+point.
+
 **Prior-known:** commit 98379ed introduced both the ASCII-only `type_to_chars` initialization (`_chars_core.c:128-132`) and the dead non-ASCII allocation branch in the same commit; the inconsistency was present at birth, not regressed.
 
 *Task 1 confirmed (no finding):*
@@ -4084,8 +4098,9 @@ be deleted.
   ``init_char_tables``) and passed as borrowed references through
   ``call_unify`` — correct because unify returns a *new* ref
   (``Py_True``/``Py_False``) and does not steal its arg refs.  The
-  one conditional-DECREF case is the dead branch flagged as [[F078]].
-  No probe (static review only).
+  one conditional-DECREF case that was flagged as [[F078]] has been
+  closed by deleting the proven-dead branch (Phase 3). All remaining
+  allocations use unconditional cleanup. No probe (static review only).
 
 ### Out-of-taxonomy
 *(none yet)*
@@ -4144,7 +4159,6 @@ closing the C14 args-of-list cluster and renaming ``get_item/3`` →
 |---------|-------|----------|--------------|
 | F046 | C4 | bug | Largest blast radius (compiler `MatchValue` for str/bytes, indexing interaction, lock-in test sweep). User decision 2026-05-26 to defer to a dedicated follow-up spec + plan. Status flipped from open to "deferred to follow-up spec" in commit 39cdb1b. |
 | F068 | C10 | bug | Architectural — distinguishing phrase/3 state-threading mode from char-parsing mode from the call shape alone is unresolvable without a per-rule declaration or a separate `phrase_state/3` builtin. Marked XFAIL in C10 commit (bc98702); intentionally deferred. |
-| F078 | C17 | smell | Untested — dead-branch deletion in `_chars_core.c::char_type_find_chars`. Phase 1 logged it as static-review-only; no probe and no adversarial test (would require C-level branch coverage tooling). Not closed in Phase 2; not re-counted in the PASSED total. Carried forward as an untested smell. |
 
 ### Pre-existing pytest suite
 
@@ -4186,17 +4200,16 @@ The Phase 2 commits layered cleanly. Specific observations:
 | C14 | 7 | 0 | F092/F093/F094 closed in Phase 2 (Seg* visibility); F088/F089/F090/F091 args-of-list cluster closed in 2026-06-13 follow-up — ISO cons-cell across functor/arg/unpack with str/list Liskov symmetry; ``get_item/3`` renamed to ``list_item/3`` in the same commit |
 | C15 | 1 | 0 | First-arg indexing canonicalisation |
 | C16 | 1 | 0 | F011 FT critical section |
-| C17 | 2 | 1 (F078) | F009 regression-guard test passes; F026 perf rewrite; F078 untested smell carried forward |
-| **Total** | **63** | **3** | |
+| C17 | 2 | 0 | F009 regression-guard test passes; F026 perf rewrite; F078 dead-branch deletion |
+| **Total** | **64** | **2** | |
 
 ### Audit verdict
 
-The strings-as-lists audit closes 63 of 66 findings (after the
-2026-06-13 follow-up). The 3 remaining deferred items break down as:
+The strings-as-lists audit closes 64 of 66 findings (after the
+2026-06-13 follow-up, including F078 Phase 3 closure). The 2 remaining deferred items break down as:
 
 - **1 user-deferred bug** (F046, planned follow-up spec)
 - **1 architectural bug** (F068, design question — needs `phrase_state/3` or per-rule declaration)
-- **1 untested smell** (F078, requires C-level branch-coverage tooling)
 
 The strings-as-lists contract is now consistent across:
 
