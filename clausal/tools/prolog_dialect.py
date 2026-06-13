@@ -209,7 +209,7 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "numlist":       {"iso": "numlist"},
     "same_length":   {"iso": "same_length"},
     "in_check":      {"iso": "memberchk"},
-    "get_item":      {"iso": "nth0"},
+    "list_item":     {"iso": "nth0"},
     "take":          {"iso": "take"},
     "drop":          {"iso": "drop"},
     "zip_":          {"iso": "zip"},

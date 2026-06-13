@@ -90,10 +90,10 @@ is a character sequence, the result is returned as a string:
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:take_drop_split"
 ```
 
-### get_item
+### list_item
 
 ```clausal
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:get_item_example"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:list_item_example"
 ```
 
 ---

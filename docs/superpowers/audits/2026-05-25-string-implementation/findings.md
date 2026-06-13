@@ -3207,6 +3207,15 @@ the ISO type-check family).
 
 - **Class:** C14 (Term inspection drift)
 - **Severity:** bug
+- **Status:** fixed in 2026-06-13 follow-up — ``_args_list_py`` and
+  the C twin ``py_args_list`` now decompose a non-empty list as the
+  cons-cell ``[head, tail]`` (where ``tail`` is the rest of the
+  list); empty list returns ``[]`` (the nil atom has no args). Str
+  inputs follow the same shape with str-typed head and tail (Liskov
+  symmetry with the list case). User decision 2026-06-13: ISO-named
+  inspection predicates follow ISO Prolog cons-cell semantics; the
+  ``unpack/2`` round-trip ``T =.. L, T =.. L2`` now recovers
+  ``L = L2`` for list and str inputs.
 - **Location:** `clausal/logic/builtins/inspection.py:159-177`
   (the decomposition branch in ``_univ__2``) consuming
   `clausal/logic/builtins/_helpers.py:75-83` (`_args_list_py`) and the
@@ -3264,6 +3273,13 @@ surfaces for lists today.
 
 - **Class:** C14 (Term inspection drift)
 - **Severity:** bug
+- **Status:** fixed in 2026-06-13 follow-up — ``_nth_arg_py`` and
+  the C twin ``py_nth_arg`` now handle str inputs Liskov-symmetric
+  with list: ``arg(1, "abc", X)`` binds ``X = "a"`` (1-char str
+  head); ``arg(2, "abc", X)`` binds ``X = "bc"`` (substring tail);
+  ``arg(N, "abc", _)`` for N ≥ 3 fails (cons-cell arity is 2). Str
+  type is preserved on both head and tail per Task 13's
+  ``maybe_promote_to_str`` rule (head/tail of a str ARE strs).
 - **Location:** `clausal/logic/builtins/inspection.py:140-156`
   (``_arg__3`` — the ``except IndexError: return`` block at
   ``:151-152``) consuming `clausal/logic/builtins/_helpers.py:54-72`
@@ -3323,6 +3339,13 @@ failing) — every "term-shape" predicate today disagrees on what str
 
 - **Class:** C14 (Term inspection drift)
 - **Severity:** bug
+- **Status:** fixed in 2026-06-13 follow-up — ``_nth_arg_py`` and
+  the C twin ``py_nth_arg`` now apply ISO cons-cell to lists:
+  ``arg(1, [a,b,c], X)`` binds ``X = a`` (head); ``arg(2, [a,b,c],
+  X)`` binds ``X = [b, c]`` (cons-cell tail); ``arg(N, [a,b,c], _)``
+  for N ≥ 3 fails (arity is 2). Now consistent with the existing
+  ``functor/3`` reporting cons-cell arity 2 for the same input, and
+  Liskov-symmetric with the [[F090]] str fix.
 - **Location:** `clausal/logic/builtins/_helpers.py:70-71` (`_nth_arg_py`
   list branch) and the C twin at
   `clausal/logic/variables/_variables.c:2296-2304`
@@ -3466,6 +3489,31 @@ C14 but worth a tracking note.
 
 - **Class:** C14 (Term inspection drift)
 - **Severity:** design-gap
+- **Status:** fixed in 2026-06-13 follow-up — the C14 anchor
+  resolved. Contract picked: **ISO cons-cell across the board**
+  (option 2 in the design-gap menu below). User decision
+  2026-06-13: ISO-named inspection predicates (``functor/3``,
+  ``arg/3``, ``unpack/2`` / ``=..``) follow ISO Prolog semantics;
+  strings-as-lists Liskov symmetry applies so str inputs decompose
+  the same cons-cell shape as the equivalent list inputs (modulo
+  str-vs-list type on head/tail). For a non-empty input:
+  ``functor("abc", '.', 2)`` ≡ ``functor(["a","b","c"], '.', 2)``;
+  ``unpack("abc", L)`` binds ``L = ['.', "a", "bc"]``;
+  ``unpack(["a","b","c"], L)`` binds ``L = ['.', "a", ["b","c"]]``.
+  For empty inputs both shapes give the nil atom ``([]/0)``.
+  Strings preserve str type on head (1-char str) and tail
+  (substring) per Task 13's ``maybe_promote_to_str`` rule. The bug
+  cluster ([[F088]], [[F090]], [[F091]]) closed alongside in the
+  same commit. Note: the C13 boundary issue about integer/bool
+  ``functor(42, "42", 0)`` is unchanged and tracked separately.
+  ``get_item/3`` (the Clausal-named 0-based positional accessor)
+  was renamed to ``list_item/3`` in the same commit; the old name
+  was deemed too procedural.
+
+  TODO (post-audit 2026-06-13): rename ``unpack/2`` to a less
+  procedural-sounding Clausal name. Current is the Python-callable
+  form of ``=..`` (univ). Candidates: ``univ/2``, ``decompose/2``,
+  ``as_list/2``, ``to_list/2``, ``structure/2``. User to decide.
 - **Location:** `clausal/logic/builtins/inspection.py:98-137`
   (``_functor__3``) and `:159-195` (``_univ__2``) consuming
   `clausal/logic/builtins/_helpers.py:20-83`
@@ -4072,14 +4120,20 @@ The Phase 2 plan should produce one commit per class in the order above; the F04
 
 ## Phase 3 sweep — conclusion
 
-**Sweep date:** 2026-05-26
-**Phase 2 commits surveyed:** 63 (range `2c43722..HEAD`, includes planning, test, fix, polish, and docs commits; 14 of these are core `fix:` / `perf:` commits — one per audit class plus the F046 deferral)
+**Sweep date:** 2026-05-26 (initial); **revised 2026-06-13** to fold in
+the C14 args-of-list cluster closure (F088, F089, F090, F091) after the
+user's 2026-06-13 design clarification on ISO cons-cell semantics for
+ISO-named inspection predicates.
+**Phase 2 commits surveyed:** 63 (range `2c43722..HEAD` as of the
+2026-05-26 sweep); plus one follow-up commit in the 2026-06-13 revision
+closing the C14 args-of-list cluster and renaming ``get_item/3`` →
+``list_item/3``.
 
 ### Audit test suite (`tests/audit_2026_05_25/`)
 
 - **Total tests:** 75
-- **PASSED:** 69  (closed findings + regression guards: F009 perf guard, F033/F042/F067/F080/F092/F093 lock-ins, plus F012, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F031, F032, F033, F034, F038, F039, F040, F041, F042, F043, F047, F050, F051, F052, F053, F054 (×8 parametrized), F055, F056, F061, F062, F063, F067, F069 (×3), F070 (×4), F072, F073 (×6), F075, F077, F080, F081, F082, F083, F084, F092, F093, F094, F095, F011)
-- **XFAIL:** 6  (F046, F068, F088, F089, F090, F091 — see deferred-findings table)
+- **PASSED:** 73  (closed findings + regression guards: F009 perf guard, F033/F042/F067/F080/F092/F093 lock-ins, plus F012, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F031, F032, F033, F034, F038, F039, F040, F041, F042, F043, F047, F050, F051, F052, F053, F054 (×8 parametrized), F055, F056, F061, F062, F063, F067, F069 (×3), F070 (×4), F072, F073 (×6), F075, F077, F080, F081, F082, F083, F084, F088, F089, F090, F091, F092, F093, F094, F095, F011)
+- **XFAIL:** 2  (F046, F068 — see deferred-findings table)
 - **XPASSED:** 0
 - **FAILED:** 0
 - **ERRORED:** 0
@@ -4090,17 +4144,13 @@ The Phase 2 plan should produce one commit per class in the order above; the F04
 |---------|-------|----------|--------------|
 | F046 | C4 | bug | Largest blast radius (compiler `MatchValue` for str/bytes, indexing interaction, lock-in test sweep). User decision 2026-05-26 to defer to a dedicated follow-up spec + plan. Status flipped from open to "deferred to follow-up spec" in commit 39cdb1b. |
 | F068 | C10 | bug | Architectural — distinguishing phrase/3 state-threading mode from char-parsing mode from the call shape alone is unresolvable without a per-rule declaration or a separate `phrase_state/3` builtin. Marked XFAIL in C10 commit (bc98702); intentionally deferred. |
-| F088 | C14 | bug | Args-of-list convention: user decision 2026-05-26 to defer (consistent with F089/F090/F091 — they all require the same conceptual settlement on what `args(list)` means in this Prolog dialect). |
-| F089 | C14 | design-gap | Same args-of-list cluster — deferred per user decision 2026-05-26. |
-| F090 | C14 | bug | Same cluster. Deferred. |
-| F091 | C14 | bug | Same cluster. Deferred. |
-| F078 | C17 | smell | Untested — dead-branch deletion in `_chars_core.c::char_type_find_chars`. Phase 1 logged it as static-review-only; no probe and no adversarial test (would require C-level branch coverage tooling). Not closed in Phase 2; not re-counted in the 69 PASSED total. Carried forward as an untested smell. |
+| F078 | C17 | smell | Untested — dead-branch deletion in `_chars_core.c::char_type_find_chars`. Phase 1 logged it as static-review-only; no probe and no adversarial test (would require C-level branch coverage tooling). Not closed in Phase 2; not re-counted in the PASSED total. Carried forward as an untested smell. |
 
 ### Pre-existing pytest suite
 
 - **Pre-Phase-2 baseline:** 7752 passing (Phase 1 close; the post-Task-13 hash-revert merge of two tests is reflected here)
 - **Post-Phase-2:** 7752 passing
-- **Delta:** 0 (net — lock-in test updates from Phase 2 are balanced by new tests added per class)
+- **Post-2026-06-13-follow-up:** 7760 passing (+8 net from C14 follow-up — added cons-cell lock-in tests across `test_builtins.py`, `test_python_fallbacks.py`, `test_conformity/test_iso_term_manipulation.py`; old lock-in assertions on the atom-univ contract removed; ``get_item`` → ``list_item`` rename touched call sites in tests + fixtures + docs)
 - **Regressions:** 0
 
 ### Cross-class consistency
@@ -4133,19 +4183,19 @@ The Phase 2 commits layered cleanly. Specific observations:
 | C10 | 3 | 1 (F068) | F067/F069/F070 closed; F068 deferred architectural |
 | C12 | 1 | 0 | `chr(n)` range guards |
 | C13 | 5 | 0 | Seg* registration with the C walker for `ground/1`; `string/1` and `atomic/1` registered |
-| C14 | 3 | 4 (F088, F089, F090, F091) | F092/F093/F094 closed (Seg* visibility); args-of-list cluster deferred |
+| C14 | 7 | 0 | F092/F093/F094 closed in Phase 2 (Seg* visibility); F088/F089/F090/F091 args-of-list cluster closed in 2026-06-13 follow-up — ISO cons-cell across functor/arg/unpack with str/list Liskov symmetry; ``get_item/3`` renamed to ``list_item/3`` in the same commit |
 | C15 | 1 | 0 | First-arg indexing canonicalisation |
 | C16 | 1 | 0 | F011 FT critical section |
 | C17 | 2 | 1 (F078) | F009 regression-guard test passes; F026 perf rewrite; F078 untested smell carried forward |
-| **Total** | **59** | **7** | |
+| **Total** | **63** | **3** | |
 
 ### Audit verdict
 
-The strings-as-lists audit closes 59 of 66 findings. The 7 deferred items break down as:
+The strings-as-lists audit closes 63 of 66 findings (after the
+2026-06-13 follow-up). The 3 remaining deferred items break down as:
 
 - **1 user-deferred bug** (F046, planned follow-up spec)
 - **1 architectural bug** (F068, design question — needs `phrase_state/3` or per-rule declaration)
-- **4 user-deferred items in the args-of-list cluster** (F088 bug, F089 design-gap, F090 bug, F091 bug)
 - **1 untested smell** (F078, requires C-level branch-coverage tooling)
 
 The strings-as-lists contract is now consistent across:
@@ -4157,7 +4207,7 @@ The strings-as-lists contract is now consistent across:
 - DCG / phrase (input-parsing mode — F068 state-threading mode explicitly out of scope)
 - Char / atom predicates (`chars.py` — SegString-aware; `chr(n)` range-guarded)
 - Type-check predicates (`is_list`, `string`, `atomic`, `ground`, `callable_` — Seg*-aware; lax `callable_` documented)
-- Term inspection (`copy_term`, `term_variables`, `numbervars` over Seg*; F088-F091 args-of-list cluster deferred)
+- Term inspection (`copy_term`, `term_variables`, `numbervars` over Seg*; ISO cons-cell ``functor/3`` / ``arg/3`` / ``unpack/2`` with str ↔ list Liskov symmetry closing the F088-F091 args-of-list cluster in the 2026-06-13 follow-up; Clausal-named ``list_item/3`` replaces ``get_item/3``)
 - First-arg indexing (dispatch-layer canonicalisation for str / list-of-1-char-strs)
 - Free-threaded build (`FT_CS_BEGIN` over `PyList_GET_ITEM` loop in the str ↔ list path)
 

@@ -182,20 +182,20 @@ class TestLastString:
         assert _collect(X, "last", "", X, module=mod) == []
 
 
-# ── get_item/3 ──────────────────────────────────────────────────────────────
+# ── list_item/3 ─────────────────────────────────────────────────────────────
 
 
-class TestGetItemString:
+class TestListItemString:
     def test_index(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "get_item", 1, "hello", X, module=mod) == ["e"]
+        assert _collect(X, "list_item", 1, "hello", X, module=mod) == ["e"]
 
     def test_enumerate(self, mod):
         # nv
         N, E = Var(), Var()
         pairs = []
-        for _ in call("get_item", N, "ab", E, module=mod):
+        for _ in call("list_item", N, "ab", E, module=mod):
             pairs.append((deref(N), deref(E)))
         assert pairs == [(0, "a"), (1, "b")]
 

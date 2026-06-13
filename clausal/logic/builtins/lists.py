@@ -1,5 +1,5 @@
 """List builtins: in_/2, in_check/2, append/3, length/2, last/2, reverse/2,
-get_item/3, flatten/2, msort/2, sort/2, permutation/2, select/3,
+list_item/3, flatten/2, msort/2, sort/2, permutation/2, select/3,
 subtract/3, intersection/3, union/3, list_to_set/2, sum_list/2, max_list/2, min_list/2,
 take/3, drop/3, split_at/4, zip_/3, replicate/3, split_with/3,
 numlist/2,3, same_length/2, transpose/2."""
@@ -284,9 +284,15 @@ def _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
     yield (_fail, DONE)
 
 
-@_trampoline_builtin("get_item", 3)
+@_trampoline_builtin("list_item", 3)
 def _nth0__3(this_generator, _proceed, _fail, _catcher, n, lst, elem, trail):
-    """nth0(N, List, Elem) — Elem is the N-th element of List (0-based)."""
+    """list_item(N, List, Elem) — Elem is the N-th element of List (0-based).
+
+    Renamed from ``get_item/3`` per user decision 2026-06-13: the old
+    name was deemed too procedural. ``list_item`` is the Pythonic /
+    Clausal-named 0-based positional accessor; it is distinct from
+    ISO-named ``arg/3`` which follows cons-cell head/tail semantics.
+    """
     n_val = deref(n)
     lst_val = deref(lst)
     items = _as_items(lst_val)

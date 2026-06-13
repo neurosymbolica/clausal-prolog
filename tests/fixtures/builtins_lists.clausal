@@ -20,8 +20,8 @@ ListLast(LIST, ELEMENT) <- last(LIST, ELEMENT)
 # reverse/2
 ListReverse(LIST, REVERSED) <- reverse(LIST, REVERSED)
 
-# get_item/3 (0-based)
-Get0(LIST, INDEX, ELEMENT) <- get_item(INDEX, LIST, ELEMENT)
+# list_item/3 (0-based)
+Get0(LIST, INDEX, ELEMENT) <- list_item(INDEX, LIST, ELEMENT)
 
 # flatten/2
 Flat(LIST, RESULT) <- flatten(LIST, RESULT)

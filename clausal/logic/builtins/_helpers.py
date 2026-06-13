@@ -18,7 +18,17 @@ from clausal.terms import Compound, KWTerm, SegList, SegString, VarSeg, Concrete
 
 
 def _functor_name_py(term: Any) -> str | None:
-    """Return the functor name of a ground term, or None."""
+    """Return the functor name of a ground term, or None.
+
+    Lists and strings follow ISO cons-cell semantics:
+      - non-empty list / str → ``"."`` (the cons-cell functor)
+      - empty list / empty str → ``"[]"`` (the nil atom)
+
+    User decision 2026-06-13: ISO-named inspection predicates
+    (``functor/3``, ``arg/3``, ``unpack/2`` / ``=..``) follow ISO
+    Prolog semantics; strings-as-lists Liskov symmetry applies so str
+    inputs decompose the same shape as list inputs.
+    """
     if isinstance(term, Compound):
         return term.functor if isinstance(term.functor, str) else None
     if isinstance(term, KWTerm):
@@ -27,15 +37,21 @@ def _functor_name_py(term: Any) -> str | None:
         return type(term).__name__
     if isinstance(term, list):
         return "[]" if len(term) == 0 else "."
-    if isinstance(term, (bool, int, float, str, bytes)) or term is None:
-        return repr(term) if not isinstance(term, str) else term
+    if isinstance(term, str):
+        return "[]" if len(term) == 0 else "."
+    if isinstance(term, (bool, int, float, bytes)) or term is None:
+        return repr(term)
     if isinstance(term, PredicateMeta) and not term._fields:
         return term
     return None
 
 
 def _arity_py(term: Any) -> int | None:
-    """Return the arity of a ground term, or None."""
+    """Return the arity of a ground term, or None.
+
+    Lists and strings follow ISO cons-cell semantics: non-empty has
+    arity 2 (head + tail), empty has arity 0 (the nil atom).
+    """
     if isinstance(term, Compound):
         return len(term.args)
     if isinstance(term, KWTerm):
@@ -44,7 +60,9 @@ def _arity_py(term: Any) -> int | None:
         return len(term_field_names(term))
     if isinstance(term, list):
         return 0 if len(term) == 0 else 2
-    if isinstance(term, (bool, int, float, str, bytes)) or term is None:
+    if isinstance(term, str):
+        return 0 if len(term) == 0 else 2
+    if isinstance(term, (bool, int, float, bytes)) or term is None:
         return 0
     if isinstance(term, PredicateMeta) and not term._fields:
         return 0
@@ -52,7 +70,17 @@ def _arity_py(term: Any) -> int | None:
 
 
 def _nth_arg_py(term: Any, n: int) -> Any:
-    """Return the n-th argument (1-based) of a compound term, or raise IndexError."""
+    """Return the n-th argument (1-based) of a compound term, or raise IndexError.
+
+    For lists and strings, ISO cons-cell semantics apply:
+      - n=1 → head (first element / 1-char str)
+      - n=2 → tail (rest of list / substring)
+      - n>=3 → IndexError (arity is 2)
+
+    Str preserves str type for both head (1-char str via ``term[0]``)
+    and tail (substring via ``term[1:]``) — Liskov symmetry with the
+    list branch.
+    """
     if isinstance(term, Compound):
         if n < 1 or n > len(term.args):
             raise IndexError(f"arg index {n} out of range for {term!r}")
@@ -67,19 +95,41 @@ def _nth_arg_py(term: Any, n: int) -> Any:
         if n < 1 or n > len(fields):
             raise IndexError(f"arg index {n} out of range for {term!r}")
         return getattr(term, fields[n - 1])
-    if isinstance(term, list) and len(term) >= n >= 1:
-        return term[n - 1]
+    if isinstance(term, list) and len(term) > 0:
+        if n == 1:
+            return term[0]
+        if n == 2:
+            return term[1:]
+        raise IndexError(f"arg index {n} out of range for {term!r}")
+    if isinstance(term, str) and len(term) > 0:
+        if n == 1:
+            return term[0]
+        if n == 2:
+            return term[1:]
+        raise IndexError(f"arg index {n} out of range for {term!r}")
     raise IndexError(f"arg index {n} out of range for {term!r}")
 
 
 def _args_list_py(term: Any) -> list:
-    """Return the argument list of a compound term."""
+    """Return the argument list of a compound term.
+
+    For lists and strings, ISO cons-cell semantics: non-empty returns
+    ``[head, tail]``; empty returns ``[]`` (the nil atom has no args).
+    """
     if isinstance(term, Compound):
         return list(term.args)
     if isinstance(term, KWTerm):
         return list(term.values())
     if is_term_instance(term):
         return [getattr(term, name) for name in term_field_names(term)]
+    if isinstance(term, list):
+        if len(term) == 0:
+            return []
+        return [term[0], term[1:]]
+    if isinstance(term, str):
+        if len(term) == 0:
+            return []
+        return [term[0], term[1:]]
     return []
 
 

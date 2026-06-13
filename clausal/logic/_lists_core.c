@@ -393,7 +393,7 @@ py_permutation_find(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 /* ================================================================
- * nth0_find  —  inner loop for get_item/3 enumerate mode
+ * nth0_find  —  inner loop for list_item/3 enumerate mode
  * ================================================================ */
 
 /*
@@ -478,7 +478,7 @@ static PyMethodDef module_methods[] = {
      "nth0_find(items, start, n_var, elem_var, trail)\n"
      "  -> (next_start, mark) or None\n"
      "\n"
-     "Inner loop for get_item/3 enumerate mode."},
+     "Inner loop for list_item/3 enumerate mode."},
     {NULL, NULL, 0, NULL}
 };
 

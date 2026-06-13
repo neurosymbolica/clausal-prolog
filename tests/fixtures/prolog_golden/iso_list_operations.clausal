@@ -68,17 +68,17 @@ Test('reverse singleton') <- (reverse([42], [42]))
 
 Test('reverse involution') <- (reverse([1, 2, 3], R), reverse(R, _rr), _rr == [1, 2, 3])
 
-Test('nth0 first') <- (get_item(0, [a, b, c], a))
+Test('nth0 first') <- (list_item(0, [a, b, c], a))
 
-Test('nth0 last') <- (get_item(2, [a, b, c], c))
+Test('nth0 last') <- (list_item(2, [a, b, c], c))
 
-Test('nth1 first') <- (get_item(0, [a, b, c], a))
+Test('nth1 first') <- (list_item(0, [a, b, c], a))
 
-Test('nth1 last') <- (get_item(2, [a, b, c], c))
+Test('nth1 last') <- (list_item(2, [a, b, c], c))
 
-Test('nth0 out of range') <- (not get_item(5, [a, b], _))
+Test('nth0 out of range') <- (not list_item(5, [a, b], _))
 
-Test('nth1 zero fails') <- (not get_item(-1, [a, b], _))
+Test('nth1 zero fails') <- (not list_item(-1, [a, b], _))
 
 Test('sort removes dups') <- (sort([3, 1, 2, 1], [1, 2, 3]))
 
@@ -156,7 +156,7 @@ Test('in enumerates [1,2,3]') <- (findall(X, member(X, [1, 2, 3]), L), L == [1, 
 
 Test('append split mode') <- (findall([X, Y], append(X, Y, [1, 2, 3]), L), L == [[[], [1, 2, 3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3], []]])
 
-Test('get_item second element') <- (get_item(1, [a, b, c], b))
+Test('list_item second element') <- (list_item(1, [a, b, c], b))
 
 Test('last empty yields no solutions') <- (findall(X, last([], X), L), L == [])
 

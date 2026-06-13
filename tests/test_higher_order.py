@@ -272,10 +272,10 @@ class TestAliases:
         results = sol_var(goal, r)
         assert results == [[1, 2, 3]]
 
-    def test_get_item(self):
+    def test_list_item(self):
         # nv
         r = Var()
-        goal = _make_goal_call("get_item", [1, [10, 20, 30], r])
+        goal = _make_goal_call("list_item", [1, [10, 20, 30], r])
         results = sol_var(goal, r)
         assert results == [20]
 

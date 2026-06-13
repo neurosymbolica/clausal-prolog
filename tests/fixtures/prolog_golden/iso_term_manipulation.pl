@@ -11,7 +11,7 @@ test("decompose atom: functor('Hello', Name, Arity)") :-
 
 test("decompose empty string") :-
     functor("", N, A),
-    N == "",
+    N == "[]",
     A == 0.
 
 test("construct atom from list: T =.. ['a']") :-

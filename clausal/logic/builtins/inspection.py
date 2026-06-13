@@ -11,6 +11,7 @@ from clausal.terms import Compound, KWTerm, SegList, SegString, VarSeg, Concrete
 
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import _functor_name, _arity, _nth_arg, _args_list
+from clausal.logic.runtime._seg_helpers import normalize_seg_input
 
 
 # ── Python fallbacks for _copy_term / _collect_vars ───────────────────────────
@@ -206,7 +207,13 @@ def _functor__3(term, name, arity, trail, k):
             yield None
         trail.undo(mark)
     else:
-        # Inspection mode
+        # Inspection mode. SegList/SegString never appear at the
+        # Clausal surface — walk to ground form first per user
+        # decision 2026-06-13 (audit follow-up). Non-ground Seg*
+        # surfaces here as a still-Seg* shape; ``_functor_name``
+        # returns None for that and we fall through to silent
+        # failure, matching the existing "unknown shape" convention.
+        term_val = normalize_seg_input(term_val)
         f_val = _functor_name(term_val)
         a_val = _arity(term_val)
         if f_val is None or a_val is None:
@@ -229,6 +236,9 @@ def _arg__3(n, term, arg_out, trail, k):
         return
     if not isinstance(n_val, int):
         return
+    # SegList/SegString never appear at the Clausal surface — walk
+    # to ground form first (user decision 2026-06-13).
+    term_val = normalize_seg_input(term_val)
     try:
         arg_val = _nth_arg(term_val, n_val)
     except IndexError:
@@ -245,11 +255,20 @@ def _univ__2(term, lst, trail, k):
 
     If Term is bound: List unifies with [functor | args].
     If Term is unbound: List must be [FunctorName | Args]; Term is constructed.
+
+    TODO (post-audit 2026-06-13): rename ``unpack/2`` to a less
+    procedural-sounding Clausal name. This is the Python-callable
+    form of ISO ``=..`` (univ). Candidates: ``univ/2``,
+    ``decompose/2``, ``as_list/2``, ``to_list/2``, ``structure/2``.
+    User to decide.
     """
     term_val = deref(term)
 
     if not is_var(term_val):
-        # Decomposition
+        # Decomposition. SegList/SegString never appear at the
+        # Clausal surface — walk to ground form first (user decision
+        # 2026-06-13).
+        term_val = normalize_seg_input(term_val)
         f_val = _functor_name(term_val)
         if f_val is None:
             return

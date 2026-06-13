@@ -2148,9 +2148,16 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
         if (ti < 0) return NULL;
         if (ti) return PyObject_GetAttrString((PyObject *)Py_TYPE(term), "__name__");
     }
-    /* List */
+    /* List — ISO cons-cell semantics (user decision 2026-06-13). */
     if (PyList_Check(term)) {
         if (PyList_GET_SIZE(term) == 0)
+            return PyUnicode_FromString("[]");
+        else
+            return PyUnicode_FromString(".");
+    }
+    /* Str — Liskov-symmetric with list under strings-as-lists. */
+    if (PyUnicode_Check(term)) {
+        if (PyUnicode_GET_LENGTH(term) == 0)
             return PyUnicode_FromString("[]");
         else
             return PyUnicode_FromString(".");
@@ -2159,10 +2166,6 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
     if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
         PyFloat_Check(term) || PyBytes_Check(term)) {
         return PyObject_Repr(term);
-    }
-    if (PyUnicode_Check(term)) {
-        Py_INCREF(term);
-        return term;
     }
     /* Zero-arity PredicateMeta class (atom) */
     if (PredicateMeta_type) {
@@ -2237,13 +2240,17 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
             return PyLong_FromSsize_t(n);
         }
     }
-    /* List */
+    /* List — ISO cons-cell (user decision 2026-06-13). */
     if (PyList_Check(term)) {
         return PyLong_FromLong(PyList_GET_SIZE(term) == 0 ? 0 : 2);
     }
+    /* Str — Liskov-symmetric cons-cell. */
+    if (PyUnicode_Check(term)) {
+        return PyLong_FromLong(PyUnicode_GET_LENGTH(term) == 0 ? 0 : 2);
+    }
     /* Primitives */
     if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
-        PyFloat_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term)) {
+        PyFloat_Check(term) || PyBytes_Check(term)) {
         return PyLong_FromLong(0);
     }
     /* Zero-arity atom */
@@ -2364,14 +2371,37 @@ py_nth_arg(PyObject *Py_UNUSED(module), PyObject *args)
             return result;
         }
     }
-    /* List */
+    /* List — ISO cons-cell (user decision 2026-06-13): n=1 → head,
+     * n=2 → tail (slice). */
     if (PyList_Check(term)) {
         Py_ssize_t len = PyList_GET_SIZE(term);
-        if (n >= 1 && n <= len) {
-            PyObject *result = PyList_GET_ITEM(term, n - 1);
+        if (len == 0) {
+            return raise_arg_index_error(n, term);
+        }
+        if (n == 1) {
+            PyObject *result = PyList_GET_ITEM(term, 0);
             Py_INCREF(result);
             return result;
         }
+        if (n == 2) {
+            return PyList_GetSlice(term, 1, len);
+        }
+        return raise_arg_index_error(n, term);
+    }
+    /* Str — Liskov-symmetric cons-cell: n=1 → 1-char str head,
+     * n=2 → substring tail. Both preserve str type. */
+    if (PyUnicode_Check(term)) {
+        Py_ssize_t len = PyUnicode_GET_LENGTH(term);
+        if (len == 0) {
+            return raise_arg_index_error(n, term);
+        }
+        if (n == 1) {
+            return PyUnicode_Substring(term, 0, 1);
+        }
+        if (n == 2) {
+            return PyUnicode_Substring(term, 1, len);
+        }
+        return raise_arg_index_error(n, term);
     }
     return raise_arg_index_error(n, term);
 }
@@ -2429,6 +2459,41 @@ py_args_list(PyObject *Py_UNUSED(module), PyObject *term)
             Py_DECREF(fields);
             return result;
         }
+    }
+    /* List — ISO cons-cell (user decision 2026-06-13): non-empty
+     * → [head, tail]; empty → []. */
+    if (PyList_Check(term)) {
+        Py_ssize_t len = PyList_GET_SIZE(term);
+        if (len == 0) {
+            return PyList_New(0);
+        }
+        PyObject *head = PyList_GET_ITEM(term, 0);
+        PyObject *tail = PyList_GetSlice(term, 1, len);
+        if (!tail) return NULL;
+        PyObject *result = PyList_New(2);
+        if (!result) { Py_DECREF(tail); return NULL; }
+        Py_INCREF(head);
+        PyList_SET_ITEM(result, 0, head);
+        PyList_SET_ITEM(result, 1, tail);  /* steals tail's reference */
+        return result;
+    }
+    /* Str — Liskov-symmetric cons-cell: non-empty → [head, tail] with
+     * head as 1-char str and tail as substring (both preserve str type);
+     * empty → []. */
+    if (PyUnicode_Check(term)) {
+        Py_ssize_t len = PyUnicode_GET_LENGTH(term);
+        if (len == 0) {
+            return PyList_New(0);
+        }
+        PyObject *head = PyUnicode_Substring(term, 0, 1);
+        if (!head) return NULL;
+        PyObject *tail = PyUnicode_Substring(term, 1, len);
+        if (!tail) { Py_DECREF(head); return NULL; }
+        PyObject *result = PyList_New(2);
+        if (!result) { Py_DECREF(head); Py_DECREF(tail); return NULL; }
+        PyList_SET_ITEM(result, 0, head);  /* steals */
+        PyList_SET_ITEM(result, 1, tail);  /* steals */
+        return result;
     }
     /* Default: empty list */
     return PyList_New(0);

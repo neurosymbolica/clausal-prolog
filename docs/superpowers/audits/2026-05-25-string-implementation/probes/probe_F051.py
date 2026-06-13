@@ -11,13 +11,13 @@ Ground ``SegList(ConcreteSeg(...))`` and ``SegString([...])`` are
 SegList contracts.  They walk to a concrete list / str via
 ``__walk__``.  But ``_as_items`` doesn't try ``__walk__``, so each of
 the following builtins silently yields zero solutions on a Seg* input:
-append, length, member (``in_``), reverse, nth (``get_item``), take,
+append, length, member (``in_``), reverse, nth (``list_item``), take,
 drop, split_at, msort, sort, last, select, permutation, flatten,
 subtract, intersection, union, list_to_set, sum_list, max_list,
 min_list, zip_, split_with, same_length.
 
 This probe demonstrates the silent-failure on a representative subset
-(append, length, member, reverse, take, msort, select, get_item).
+(append, length, member, reverse, take, msort, select, list_item).
 """
 from __future__ import annotations
 
@@ -110,8 +110,8 @@ def main() -> None:
     print(f"  select(E, SegList, S):        {n_sl_select} solutions   ← silent failure")
 
     E = Var()
-    n_sl_get = sum(1 for _ in call("get_item", 1, sl, E, module=mod))
-    print(f"  get_item(1, SegList, E):      {n_sl_get} solutions   ← silent failure")
+    n_sl_get = sum(1 for _ in call("list_item", 1, sl, E, module=mod))
+    print(f"  list_item(1, SegList, E):     {n_sl_get} solutions   ← silent failure")
 
     all_failed = (n_sl_append == 0 and n_ss_append == 0
                   and n_sl_in == 0 and n_ss_in == 0

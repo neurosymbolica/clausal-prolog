@@ -335,7 +335,7 @@ maplist(GOAL, XS, YS),                      # map GOAL(X, Y) over list
 include(GOAL, LIST, KEPT),                   # keep where GOAL succeeds
 exclude(GOAL, LIST, REMOVED),               # keep where GOAL fails
 foldl(GOAL, LIST, ACC0, RESULT),         # left fold with GOAL(Elem, Acc, Next)
-get_item(INDEX, LIST, ELEM),                 # 0-based index access
+list_item(INDEX, LIST, ELEM),                # 0-based index access
 in_check(ELEM, LIST),                        # deterministic membership check
 unpack(TERM, LIST),                         # decompose/construct term
 --8<-- [end:syntax_cheat_sheet]

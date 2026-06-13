@@ -6,7 +6,9 @@ Test("gensym generates unique") <- (
     dif(A1, A2)
 )  # nv
 
-Test("unpack decompose") <- unpack("hello", ["hello"])  # nv
+# F088/F089 (audit 2026-06-13): unpack follows ISO cons-cell — a
+# non-empty str decomposes as [".", head, tail].
+Test("unpack decompose") <- unpack("hello", [".", "h", "ello"])  # nv
 
 Test("numbervars") <- (
     numbervars([X, Y, Z], 0, END),

@@ -118,13 +118,13 @@ Test("zip") <- zip_([1, 2, 3], ["a", "b", "c"], [[1, "a"], [2, "b"], [3, "c"]])
 Test("length") <- length([10, 20, 30], 3)
 ```
 
-### get_item/3
+### list_item/3
 
-`get_item(N, List, Elem)` — relates a 0-based index, a list, and an element.
+`list_item(N, List, Elem)` — relates a 0-based index, a list, and an element.
 
 ```clausal
-Test("get") <- get_item(1, ["a", "b", "c"], "b")
-Test("enumerate") <- (get_item(I, [10, 20, 30], 20), I == 1)
+Test("get") <- list_item(1, ["a", "b", "c"], "b")
+Test("enumerate") <- (list_item(I, [10, 20, 30], 20), I == 1)
 ```
 
 ### last/2
@@ -340,7 +340,7 @@ window(N, LIST, WINDOW) <- (
 ## Gotchas
 
 - **`sort` removes duplicates** — use `msort` if you need to keep them.
-- **`get_item` is 0-based** — unlike Prolog's `nth1` which is 1-based.
+- **`list_item` is 0-based** — unlike Prolog's `nth1` which is 1-based.
 - **`in_` yields multiple solutions** — if you only need to confirm membership
   once, use `in_check`.
 - **`flatten` is fully recursive** — `[1, [2, [3]]]` becomes `[1, 2, 3]`, not

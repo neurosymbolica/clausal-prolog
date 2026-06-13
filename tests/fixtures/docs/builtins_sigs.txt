@@ -569,9 +569,9 @@ last(+List, -Elem)
 reverse(+List, -Rev)
 --8<-- [end:reverse_2]
 
---8<-- [start:get_item_3]
-get_item(+N, +List, -Elem)   % 0-based
---8<-- [end:get_item_3]
+--8<-- [start:list_item_3]
+list_item(+N, +List, -Elem)   % 0-based
+--8<-- [end:list_item_3]
 
 --8<-- [start:flatten_2]
 flatten(+Nested, -Flat)

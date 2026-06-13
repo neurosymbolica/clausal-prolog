@@ -32,7 +32,7 @@ Test("decompose atom: functor('Hello', Name, Arity)") <- (
 
 Test("decompose empty string") <- (
     functor("", _n, _a),
-    _n == "",
+    _n == "[]",
     _a == 0
 )  # nv
 

@@ -8,22 +8,20 @@ aliasing) is the most serious — it's a correctness landmine for any
 future code that puts Seg* in clauses. F092 and F093 have lock-in
 tests in tests/test_term_inspection.py.
 
-Findings tested here:
-- F088 (bug) unpack (=..) on a non-empty list yields ["."] with no args
-- F089 (design-gap) functor/3 and =.. give different shapes for str vs list
-- F090 (bug) arg(N, "abc", X) silently fails for every N
-- F091 (bug) arg/3 on non-empty list uses Python-list indexing, not cons-cell
-- F092 (bug) copy_term aliases Seg* containers
-- F093 (design-gap) term_variables Seg*-blind
+Findings tested here (all closed as of 2026-06-13 follow-up):
+- F088 (bug) unpack (=..) on a non-empty list now follows ISO cons-cell
+- F089 (design-gap) functor/3 and =.. now Liskov-symmetric on str ↔ list
+- F090 (bug) arg(N, "abc", X) follows cons-cell symmetry on str
+- F091 (bug) arg/3 on non-empty list now uses cons-cell head/tail
+- F092 (bug) copy_term aliases Seg* containers (closed Phase 2 Task 10)
+- F093 (design-gap) term_variables Seg*-blind (closed Phase 2 Task 10)
 - F094 (design-gap) numbervars/3 cannot number Vars inside Seg* containers
 """
-
-import pytest
 
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.variables import Trail, Var, deref
-from clausal.terms import Compound, SegList, SegString, VarSeg
+from clausal.terms import SegList, SegString, VarSeg
 
 
 def _collect(name, arity, *args, snap):
@@ -35,52 +33,53 @@ def _collect(name, arity, *args, snap):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason='ledger F088: unpack (=..) on a non-empty list yields ["."] with no args',
-)
-def test_F088_unpack_on_list_drops_args():
-    """``unpack(["a","b","c"], L)`` should not bind ``L`` to ``["."]`` only.
+def test_F088_unpack_on_list_uses_cons_cell():
+    """``unpack(["a","b","c"], L)`` follows ISO cons-cell decomposition.
 
-    The implementation calls ``_functor_name`` (returns ``"."`` for any
-    Python list) and concatenates with ``_args_list``, but ``_args_list``
-    has no isinstance branch for ``list`` — it falls through to ``[]``
-    in both the Python fallback (_helpers.py:75-83) and the C twin
-    (_variables.c:2362-2363). Result: ``L = ["."]`` — functor name only,
-    args dropped. ``functor/3`` on the same input reports arity 2, so
-    the inspection family is internally inconsistent. The expected
-    behaviour is either cons-cell decomposition
-    (``[".", "a", ["b", "c"]]``) or strings-as-lists element-shape
-    (``["a", "b", "c"]``) — either is defensible; ``["."]`` is neither.
+    User decision 2026-06-13: ISO-named inspection predicates follow
+    ISO Prolog semantics. ``=..`` on a non-empty list returns the
+    cons-cell shape ``[".", head, tail]`` where ``tail`` is the rest
+    of the list. Liskov-symmetric on str inputs (tail is a substring).
     """
     L = Var()
     sols = _collect(
         "unpack", 2, ["a", "b", "c"], L, snap=lambda L=L: deref(L)
     )
-    assert sols and sols[0] != ["."], (
-        f"unpack(['a','b','c'], L) bound L={sols!r}; expected either "
-        f'cons-cell decomposition (e.g. [".", "a", ["b", "c"]]) or '
-        f"strings-as-lists shape (['a', 'b', 'c']) — got the functor "
-        f"name with no args, which contradicts functor/3 reporting "
-        f"arity 2 for the same input. See _helpers.py:75-83 and "
-        f"_variables.c:2362-2363 (missing isinstance(term, list) branch)."
+    assert sols == [[".", "a", ["b", "c"]]], (
+        f'unpack(["a","b","c"], L) bound L={sols!r}; expected '
+        f'[".", "a", ["b","c"]] under ISO cons-cell.'
+    )
+
+    # Liskov symmetry on str input.
+    L2 = Var()
+    sols2 = _collect(
+        "unpack", 2, "abc", L2, snap=lambda L=L2: deref(L)
+    )
+    assert sols2 == [[".", "a", "bc"]], (
+        f'unpack("abc", L) bound L={sols2!r}; expected '
+        f'[".", "a", "bc"] — str preserves str type on both head '
+        f'(1-char str) and tail (substring).'
+    )
+
+    # Empty cases — nil atom.
+    L3 = Var()
+    sols3 = _collect("unpack", 2, [], L3, snap=lambda L=L3: deref(L))
+    assert sols3 == [["[]"]], (
+        f'unpack([], L) bound L={sols3!r}; expected ["[]"].'
+    )
+    L4 = Var()
+    sols4 = _collect("unpack", 2, "", L4, snap=lambda L=L4: deref(L))
+    assert sols4 == [["[]"]], (
+        f'unpack("", L) bound L={sols4!r}; expected ["[]"].'
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F089: functor/3 and =.. give different shapes for str vs list",
-)
-def test_F089_functor_and_univ_disagree_on_str_vs_list():
-    """``functor/3`` and ``unpack/2`` (=..) should produce compatible
+def test_F089_functor_and_univ_agree_on_str_vs_list():
+    """``functor/3`` and ``unpack/2`` (=..) produce Liskov-symmetric
     shapes for str and list inputs under the strings-as-lists contract.
 
-    Today ``"abc"`` decomposes as atom-univ (``("abc", 0)`` /
-    ``["abc"]``) while ``["a","b","c"]`` decomposes as a cons-cell
-    (``(".", 2)`` / ``["."]`` per F088). The two equivalent
-    representations land in two unrelated worlds. The audit anchor for
-    C14 — the bug cluster F088/F090/F091 is independent of which
-    contract is chosen, but choosing one is what closes F089.
+    User decision 2026-06-13: ISO cons-cell across both. The cons-cell
+    answer is the same modulo str-vs-list type on head/tail.
     """
     F1, A1 = Var(), Var()
     sols_str = _collect(
@@ -92,77 +91,102 @@ def test_F089_functor_and_univ_disagree_on_str_vs_list():
         "functor", 3, ["a", "b", "c"], F2, A2,
         snap=lambda F=F2, A=A2: (deref(F), deref(A)),
     )
+    assert sols_str == [(".", 2)], (
+        f'functor("abc", F, A) returned {sols_str!r}; expected '
+        f'[(".", 2)] under ISO cons-cell.'
+    )
+    assert sols_lst == [(".", 2)], (
+        f'functor(["a","b","c"], F, A) returned {sols_lst!r}; '
+        f'expected [(".", 2)] under ISO cons-cell.'
+    )
     assert sols_str == sols_lst, (
-        f'functor/3 of "abc" returned {sols_str!r} but functor/3 of '
-        f"['a','b','c'] returned {sols_lst!r}; under strings-as-lists "
-        f"these inputs are interchangeable and must decompose to the "
-        f"same (Name, Arity) shape. Today: str → atom-univ ('abc', 0); "
-        f"list → cons-cell ('.', 2). C14 anchor finding."
+        f"functor/3 must give the same (Name, Arity) for str and "
+        f"equivalent list inputs under Liskov-symmetric "
+        f"strings-as-lists. Got str={sols_str!r}, list={sols_lst!r}."
+    )
+
+    # Empty cases — nil atom on both shapes.
+    F3, A3 = Var(), Var()
+    sols_empty_str = _collect(
+        "functor", 3, "", F3, A3,
+        snap=lambda F=F3, A=A3: (deref(F), deref(A)),
+    )
+    F4, A4 = Var(), Var()
+    sols_empty_lst = _collect(
+        "functor", 3, [], F4, A4,
+        snap=lambda F=F4, A=A4: (deref(F), deref(A)),
+    )
+    assert sols_empty_str == [("[]", 0)], (
+        f'functor("", F, A) returned {sols_empty_str!r}; expected '
+        f'[("[]", 0)] — the nil atom.'
+    )
+    assert sols_empty_lst == [("[]", 0)], (
+        f'functor([], F, A) returned {sols_empty_lst!r}; expected '
+        f'[("[]", 0)] — the nil atom.'
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason='ledger F090: arg(N, "abc", X) silently fails for every N',
-)
-def test_F090_arg_on_str_silently_fails():
-    """``arg(1, "abc", X)`` should not silently fail.
+def test_F090_arg_on_str_uses_cons_cell():
+    """``arg(N, "abc", X)`` follows ISO cons-cell symmetry on str input.
 
-    ``_nth_arg`` raises ``IndexError`` on any str (no isinstance branch);
-    ``_arg__3`` catches and ``return``s. Caller sees clean failure rather
-    than ``type_error(compound, "abc")``. Asymmetric with
-    ``arg(1, ["a","b","c"], X)`` which binds ``X = "a"`` — the two
-    equivalent inputs disagree, and the error path is silent (ISO
-    ``arg/3`` is a type-error predicate, not a failure predicate).
+    User decision 2026-06-13: strings-as-lists Liskov symmetry — str
+    decomposes as cons-cell with str-typed head (1-char str) and tail
+    (substring).
     """
+    # n=1 → head (1-char str).
+    X = Var()
+    sols = _collect("arg", 3, 1, "abc", X, snap=lambda X=X: deref(X))
+    assert sols == ["a"], (
+        f'arg(1, "abc", X) bound X={sols!r}; expected ["a"].'
+    )
+    # n=2 → tail (substring).
+    X = Var()
+    sols = _collect("arg", 3, 2, "abc", X, snap=lambda X=X: deref(X))
+    assert sols == ["bc"], (
+        f'arg(2, "abc", X) bound X={sols!r}; expected ["bc"] — '
+        f"cons-cell tail preserves str type."
+    )
+    # n=3 → fail (arity is 2).
+    X = Var()
+    sols = _collect("arg", 3, 3, "abc", X, snap=lambda X=X: deref(X))
+    assert sols == [], (
+        f'arg(3, "abc", X) bound X={sols!r}; expected [] '
+        f"(cons-cell arity is 2)."
+    )
+
+
+def test_F091_arg_on_list_uses_cons_cell():
+    """``arg/3`` on a non-empty list follows ISO cons-cell head/tail.
+
+    User decision 2026-06-13: ``arg(1, [a,b,c], X)`` binds ``X = a``
+    (head); ``arg(2, [a,b,c], X)`` binds ``X = [b,c]`` (tail);
+    ``arg(3, [a,b,c], _)`` fails (arity is 2).
+    """
+    # n=1 → head.
     X = Var()
     sols = _collect(
-        "arg", 3, 1, "abc", X, snap=lambda X=X: deref(X)
+        "arg", 3, 1, ["a", "b", "c"], X, snap=lambda X=X: deref(X)
     )
-    # Expected: under strings-as-lists, X="a". Under strict ISO, a
-    # type_error would have raised before solutions ran. Either way,
-    # silent zero-solutions is wrong.
-    assert sols, (
-        f'arg(1, "abc", X) yielded {sols!r}; expected one solution '
-        f"binding X='a' under strings-as-lists, OR a "
-        f'type_error(compound, "abc") under strict ISO. Silent failure '
-        f"is incorrect either way. _nth_arg raises IndexError on str "
-        f"(no isinstance branch) and _arg__3 swallows it at "
-        f"inspection.py:151-152."
+    assert sols == ["a"], (
+        f'arg(1, ["a","b","c"], X) bound X={sols!r}; expected ["a"].'
     )
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="ledger F091: arg/3 on non-empty list uses Python-list indexing, not cons-cell",
-)
-def test_F091_arg_on_list_uses_python_indexing_not_cons_cell():
-    """``arg/3`` on a non-empty list should not use Python-list indexing
-    while ``functor/3`` reports cons-cell arity 2.
-
-    Today ``arg(3, ["a","b","c"], X)`` binds ``X = "c"`` — but
-    ``functor(["a","b","c"], F, A)`` reports ``A = 2``, so an
-    ISO-conformant ``arg/3`` would fail for N > 2. The list branch in
-    ``_nth_arg`` (``_helpers.py:70-71``) returns ``term[n-1]`` for any
-    ``N ≤ len(term)``, ignoring the cons-cell arity that ``functor``
-    advertises. Either both should use cons-cell semantics
-    (``arg(1)`` = head, ``arg(2)`` = tail, ``arg(3)`` raises) or both
-    should use Python-list indexing (``functor`` reports arity
-    ``len(list)``).
-    """
-    # The mismatch: arg(3, [a,b,c], X) succeeds with "c" even though
-    # functor/3 reports arity 2 for the same term. Under any consistent
-    # cons-cell contract, arg(3, ...) should fail (or raise).
+    # n=2 → tail (list of rest).
+    X = Var()
+    sols = _collect(
+        "arg", 3, 2, ["a", "b", "c"], X, snap=lambda X=X: deref(X)
+    )
+    assert sols == [["b", "c"]], (
+        f'arg(2, ["a","b","c"], X) bound X={sols!r}; expected '
+        f'[["b", "c"]] — cons-cell tail.'
+    )
+    # n=3 → fail (arity is 2).
     X = Var()
     sols = _collect(
         "arg", 3, 3, ["a", "b", "c"], X, snap=lambda X=X: deref(X)
     )
     assert sols == [], (
-        f"arg(3, ['a','b','c'], X) yielded {sols!r}; expected [] "
-        f"because functor/3 reports arity 2 for the same list "
-        f"(cons-cell view). Today _nth_arg uses Python-list indexing "
-        f"(_helpers.py:70-71) and silently returns term[2]='c', "
-        f"contradicting functor/3."
+        f'arg(3, ["a","b","c"], X) bound X={sols!r}; expected [] '
+        f"(cons-cell arity is 2)."
     )
 
 

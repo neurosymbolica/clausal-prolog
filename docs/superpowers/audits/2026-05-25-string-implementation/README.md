@@ -2,19 +2,34 @@
 
 This directory holds the artifacts of the strings-as-lists audit.
 
-**Status:** complete (closed 2026-05-26). Tagged `string-audit-complete`.
-**Totals:** 66 findings across 15 classes — 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only. 59 closed in Phase 2; 7 deferred (see `findings.md` "Phase 3 sweep — conclusion").
+**Status:** complete (closed 2026-05-26; revised 2026-06-13). Tagged `string-audit-complete`.
+**Totals:** 66 findings across 15 classes — 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only. 63 closed (59 in Phase 2 + 4 in the 2026-06-13 follow-up — C14 args-of-list cluster); 3 deferred (see `findings.md` "Phase 3 sweep — conclusion").
 
 ## Phase 2 status — complete (with deferrals)
 
-- **Fix commits:** 14 core (one per audit class plus the F046 deferral commit); 63 total in the Phase 2 range including planning, test scaffolding, and polish commits
-- **Findings closed:** 59 / 66
-- **Findings deferred:** 7 (F046 follow-up spec, F068 architectural, F088-F091 args-of-list cluster, F078 untested smell — see `findings.md` "Phase 3 sweep — conclusion")
-- **Audit suite:** 69 PASSED, 6 XFAIL, 0 XPASSED, 0 FAILED, 0 ERRORED
-- **Pre-existing pytest suite:** 7752 passing — zero regressions vs pre-Phase-2 baseline
+- **Fix commits:** 14 core in Phase 2 (one per audit class plus the F046 deferral commit); 63 total in the Phase 2 range including planning, test scaffolding, and polish commits; +1 follow-up commit on 2026-06-13 closing the C14 args-of-list cluster (F088-F091) and renaming `get_item/3` → `list_item/3`
+- **Findings closed:** 63 / 66
+- **Findings deferred:** 3 (F046 follow-up spec, F068 architectural, F078 untested smell — see `findings.md` "Phase 3 sweep — conclusion")
+- **Audit suite:** 73 PASSED, 2 XFAIL, 0 XPASSED, 0 FAILED, 0 ERRORED
+- **Pre-existing pytest suite:** 7760 passing (post-2026-06-13 follow-up; baseline 7752) — zero regressions
 - **Tagged:** `string-audit-complete`
 
 The audit is complete. F046 (C4 head-pattern literal mismatch) is scheduled for a follow-up spec.
+
+### 2026-06-13 follow-up — C14 args-of-list cluster closed
+
+User decision 2026-06-13: ISO-named inspection predicates
+(`functor/3`, `arg/3`, `unpack/2` / `=..`) follow ISO Prolog cons-cell
+semantics; Clausal-named predicates remain Pythonic. Strings-as-lists
+Liskov symmetry applies, so str inputs decompose the same cons-cell
+shape as the equivalent list inputs (modulo str-vs-list type on
+head/tail). The 4 deferred findings in the args-of-list cluster
+(F088 bug, F089 design-gap, F090 bug, F091 bug) closed in a single
+follow-up commit. Same commit renamed `get_item/3` → `list_item/3`
+(the old name was deemed too procedural) and added a code-level TODO
+to rename `unpack/2` to a less procedural-sounding Clausal name
+(candidates: `univ/2`, `decompose/2`, `as_list/2`, `to_list/2`,
+`structure/2`; user to decide).
 
 ## Phase 1 status — complete
 
@@ -36,7 +51,7 @@ The audit is complete. F046 (C4 head-pattern literal mismatch) is scheduled for 
 | C10 | test_class_C10_dcg_phrase.py | 9 | 9 XFAIL (F069 ×3, F070 ×4) |
 | C12 | test_class_C12_char_representation.py | 6 | 6 XFAIL (F073 ×6 variants) |
 | C13 | test_class_C13_type_checks.py | 5 | 5 XFAIL |
-| C14 | test_class_C14_term_inspection.py | 7 | 7 XFAIL |
+| C14 | test_class_C14_term_inspection.py | 7 | 7 XFAIL (all 7 now PASSED post-Phase-2 + 2026-06-13 follow-up) |
 | C15 | test_class_C15_first_arg_indexing.py | 1 | 1 XFAIL |
 | C16 | test_class_C16_ft_safety.py | 1 | 1 XPASSED (xfail strict=False — GIL build masks FT race) |
 | C17 | test_class_C17_perf_memory.py | 2 | 1 PASSED (F009 regression test) + 1 XFAIL (F026) |

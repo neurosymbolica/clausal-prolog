@@ -77,7 +77,7 @@ Test("lookup") <- lookup("b", [["a", 1], ["b", 2], ["c", 3]], 2)
 
 ```clausal
 Test("sort by key") <- (
-    sort_by((P, K) <- get_item(0, P, K), [["b", 2], ["a", 1], ["c", 3]], SORTED),
+    sort_by((P, K) <- list_item(0, P, K), [["b", 2], ["a", 1], ["c", 3]], SORTED),
     pairs_keys(SORTED, ["a", "b", "c"])
 )
 ```

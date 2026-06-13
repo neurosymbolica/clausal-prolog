@@ -93,14 +93,14 @@ Test("reverse involution") <- (
     _rr == [1, 2, 3]
 )  # nv
 
-# ── get_item/3 (0-based) ────────────────────────────────────────────────────────
+# ── list_item/3 (0-based) ────────────────────────────────────────────────────────
 
-Test("nth0 first") <- get_item(0, [a, b, c], a)  # nv
-Test("nth0 last") <- get_item(2, [a, b, c], c)  # nv
-Test("nth1 first") <- get_item(0, [a, b, c], a)  # nv
-Test("nth1 last") <- get_item(2, [a, b, c], c)  # nv
-Test("nth0 out of range") <- (not get_item(5, [a, b], _))  # nv
-Test("nth1 zero fails") <- (not get_item(-1, [a, b], _))  # nv
+Test("nth0 first") <- list_item(0, [a, b, c], a)  # nv
+Test("nth0 last") <- list_item(2, [a, b, c], c)  # nv
+Test("nth1 first") <- list_item(0, [a, b, c], a)  # nv
+Test("nth1 last") <- list_item(2, [a, b, c], c)  # nv
+Test("nth0 out of range") <- (not list_item(5, [a, b], _))  # nv
+Test("nth1 zero fails") <- (not list_item(-1, [a, b], _))  # nv
 
 # ── sort/2 and msort/2 ───────────────────────────────────────────────────
 
@@ -178,7 +178,7 @@ Test("append split mode") <- (
     findall([X, Y], append(X, Y, [1, 2, 3]), L),
     L == [[[], [1, 2, 3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3], []]]
 )  # nv
-Test("get_item second element") <- get_item(1, [a, b, c], b)  # nv
+Test("list_item second element") <- list_item(1, [a, b, c], b)  # nv
 Test("last empty yields no solutions") <- (
     findall(X, last([], X), L),
     L == []

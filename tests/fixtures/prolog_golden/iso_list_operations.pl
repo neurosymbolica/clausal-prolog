@@ -241,7 +241,7 @@ test("append split mode") :-
     findall([X, Y], append(X, Y, [1, 2, 3]), L),
     L == [[[], [1, 2, 3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3], []]].
 
-test("get_item second element") :-
+test("list_item second element") :-
     nth0(1, [a, b, c], b).
 
 test("last empty yields no solutions") :-

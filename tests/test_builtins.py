@@ -141,12 +141,23 @@ class TestFunctor:
         results_a = sol_var(goal, a, mod=mod)
         assert results_a == [2]
 
-    def test_decompose_atom(self):
+    def test_decompose_str_cons_cell(self):
         # nv
+        # F089 (audit 2026-06-13): under ISO cons-cell, a non-empty
+        # str decomposes as (".", 2) — Liskov-symmetric with list.
         mod = fresh_module()
         f, a = Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=["hello", f, a], kwargs=[])
-        assert sol_var(goal, f, mod=mod) == ["hello"]
+        assert sol_var(goal, f, mod=mod) == ["."]
+        assert sol_var(goal, a, mod=mod) == [2]
+
+    def test_decompose_empty_str_nil(self):
+        # nv
+        # F089 (audit 2026-06-13): empty str → nil atom ("[]", 0).
+        mod = fresh_module()
+        f, a = Var(), Var()
+        goal = Call(func=LoadName(name="functor"), args=["", f, a], kwargs=[])
+        assert sol_var(goal, f, mod=mod) == ["[]"]
         assert sol_var(goal, a, mod=mod) == [0]
 
     def test_decompose_integer(self):
@@ -224,12 +235,32 @@ class TestArg:
         goal = Call(func=LoadName(name="arg"), args=[3, Compound("f", (10, 20)), a], kwargs=[])
         assert sol_var(goal, a, mod=mod) == []
 
-    def test_list_arg(self):
+    def test_list_arg_cons_cell_head(self):
         # nv
+        # F091 (audit 2026-06-13): arg/3 on a non-empty list follows
+        # ISO cons-cell — arg(1, [..], X) binds X to the head.
+        mod = fresh_module()
+        a = Var()
+        goal = Call(func=LoadName(name="arg"), args=[1, [10, 20, 30], a], kwargs=[])
+        assert sol_var(goal, a, mod=mod) == [10]
+
+    def test_list_arg_cons_cell_tail(self):
+        # nv
+        # F091 (audit 2026-06-13): arg(2, [..], X) binds X to the
+        # cons-cell tail (list of rest), not the second element.
         mod = fresh_module()
         a = Var()
         goal = Call(func=LoadName(name="arg"), args=[2, [10, 20, 30], a], kwargs=[])
-        assert sol_var(goal, a, mod=mod) == [20]
+        assert sol_var(goal, a, mod=mod) == [[20, 30]]
+
+    def test_list_arg_out_of_range(self):
+        # nv
+        # F091 (audit 2026-06-13): arg(N>=3, [..], _) fails because
+        # cons-cell arity is 2.
+        mod = fresh_module()
+        a = Var()
+        goal = Call(func=LoadName(name="arg"), args=[3, [10, 20, 30], a], kwargs=[])
+        assert sol_var(goal, a, mod=mod) == []
 
 
 # ── univ/2 ────────────────────────────────────────────────────────────────────
@@ -256,12 +287,40 @@ class TestUniv:
         assert r.functor == "g"
         assert r.args == (3, 4)
 
-    def test_decompose_atom(self):
+    def test_decompose_str_cons_cell(self):
         # nv
+        # F088/F089/F090 (audit 2026-06-13): unpack on a non-empty str
+        # follows ISO cons-cell — Liskov-symmetric with the list case.
         mod = fresh_module()
         lst = Var()
         goal = Call(func=LoadName(name="unpack"), args=["hello", lst], kwargs=[])
-        assert sol_var(goal, lst, mod=mod) == [["hello"]]
+        assert sol_var(goal, lst, mod=mod) == [[".", "h", "ello"]]
+
+    def test_decompose_list_cons_cell(self):
+        # nv
+        # F088 (audit 2026-06-13): unpack on a non-empty list returns
+        # the cons-cell decomposition [".", head, tail].
+        mod = fresh_module()
+        lst = Var()
+        goal = Call(func=LoadName(name="unpack"), args=[[1, 2, 3], lst], kwargs=[])
+        assert sol_var(goal, lst, mod=mod) == [[".", 1, [2, 3]]]
+
+    def test_decompose_empty_list_nil(self):
+        # nv
+        # F088 (audit 2026-06-13): unpack on [] returns ["[]"] —
+        # the nil atom (arity 0).
+        mod = fresh_module()
+        lst = Var()
+        goal = Call(func=LoadName(name="unpack"), args=[[], lst], kwargs=[])
+        assert sol_var(goal, lst, mod=mod) == [["[]"]]
+
+    def test_decompose_empty_str_nil(self):
+        # nv
+        # F088/F089 (audit 2026-06-13): unpack on "" returns ["[]"].
+        mod = fresh_module()
+        lst = Var()
+        goal = Call(func=LoadName(name="unpack"), args=["", lst], kwargs=[])
+        assert sol_var(goal, lst, mod=mod) == [["[]"]]
 
 
 

@@ -54,14 +54,19 @@ class TestFunctor:
         assert result is not None
         assert result == ("f", 2)
 
-    def test_decompose_atom(self):
-        """ISO: functor(a, X, Y) → X = a, Y = 0.
-        in_ clausal, strings are atoms."""
+    def test_decompose_str_cons_cell(self):
+        """ISO cons-cell on str: functor("a", F, A) → F = '.', A = 2.
+
+        F089 (audit 2026-06-13): user decision — ISO-named inspection
+        predicates follow ISO cons-cell semantics; str ↔ list Liskov
+        symmetry applies. A non-empty str decomposes as a cons-cell
+        with head and tail args.
+        """
         # nv
         name, arity = Var(), Var()
         result = _call_binding("functor", "a", name, arity)
         assert result is not None
-        assert result == ("a", 0)
+        assert result == (".", 2)
 
     def test_decompose_arity1(self):
         """functor(f(x), Name, Arity) → Name = f, Arity = 1."""
@@ -178,13 +183,18 @@ class TestUniv:
         assert result is not None
         assert result[0] == ["f", "a", "b"]
 
-    def test_decompose_atom(self):
-        """ISO: a =.. X → X = [a]."""
+    def test_decompose_str_cons_cell(self):
+        """ISO cons-cell on str: "a" =.. X → X = ['.', 'a', ''].
+
+        F088/F089/F090 (audit 2026-06-13): under ISO cons-cell, a
+        non-empty str decomposes as the cons-cell `[".", head, tail]`
+        where head is the 1-char str and tail is the substring rest.
+        """
         # nv
         x = Var()
         result = _call_binding("unpack", "a", x)
         assert result is not None
-        assert result[0] == ["a"]
+        assert result[0] == [".", "a", ""]
 
     def test_decompose_arity1(self):
         """f(x) =.. L → L = [f, x]."""

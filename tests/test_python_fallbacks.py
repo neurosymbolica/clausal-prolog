@@ -133,9 +133,17 @@ class TestFunctorNameFallback:
         # nv
         assert _functor_name_py(42) == _functor_name(42)
 
-    def test_string(self):
+    def test_string_nonempty_cons_cell(self):
         # nv
-        assert _functor_name_py("hello") == _functor_name("hello") == "hello"
+        # F089 (audit 2026-06-13): under ISO cons-cell, a non-empty
+        # str returns "." as its functor name (Liskov-symmetric with
+        # the non-empty list case above).
+        assert _functor_name_py("hello") == _functor_name("hello") == "."
+
+    def test_string_empty_nil(self):
+        # nv
+        # F089 (audit 2026-06-13): empty str → "[]" (the nil atom).
+        assert _functor_name_py("") == _functor_name("") == "[]"
 
 
 class TestArityFallback:
