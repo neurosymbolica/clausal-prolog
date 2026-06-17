@@ -125,11 +125,16 @@ class to populate.
 ### C4 — Head-pattern literal mismatch
 
 - **F046** (rule heads with str literal fail on char-list caller):
-  NOT TESTED. `test_string_head_patterns.py` covers list-literal
-  heads accepting str callers (the side that *works*) but not the
-  symmetric str-literal heads accepting list callers.
+  NOT TESTED at audit time. `test_string_head_patterns.py` covered
+  list-literal heads accepting str callers (the side that *works*) but
+  not the symmetric str-literal heads accepting list callers.
+  **Now covered (Phase 1 + 2026-06-16 fix):**
+  `tests/audit_2026_05_25/test_class_C04_head_literal_mismatch.py` (7
+  tests — the 8-way cross-call matrix plus multi-clause dispatch,
+  SegString caller, compiler-level guard lock-in, F048 compound path,
+  bytes regression, and same-type fast path).
 
-Phase 1 implication: needs an inline-clausal test that defines
+Phase 1 implication (done): an inline-clausal test that defines
 `Quux("abc") <- Helper(1)` and drives `Quux(["a","b","c"])`.
 
 ### C5 — Hash/eq asymmetries
