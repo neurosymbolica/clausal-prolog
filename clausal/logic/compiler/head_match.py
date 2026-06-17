@@ -249,9 +249,25 @@ def head_to_match_pattern(
     if term is None or term is True or term is False:
         return ast.MatchSingleton(value=term)
 
-    # Python scalar literals
-    if isinstance(term, (int, float, str, bytes, complex)):
+    # Python scalar literals (non-string): C-level == inside the match arm.
+    # str is handled separately below: a raw MatchValue compares with ==, which
+    # rejects a char-list caller despite the strings-as-lists contract (F046).
+    # bytes stays here — it has no strings-as-lists contract, so a bytes-literal
+    # head has no char-list caller to match (documented exclusion + extension
+    # point in the F046 follow-up spec).
+    if isinstance(term, (int, float, bytes, complex)):
         return ast.MatchValue(value=ast.Constant(value=term))
+
+    # Python str literal → wildcard capture + runtime unify guard, mirroring the
+    # list-literal path below. Routes the comparison through unify() so the
+    # strings-as-lists contract (str ↔ char-list) is honoured for clause heads.
+    # The guard, assembled in compile_head_to_match_case, short-circuits on a
+    # same-type str caller via `==` before falling through to unify(). (F046)
+    if isinstance(term, str):
+        cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
+        if list_guards is not None:
+            list_guards.append(("str", cap_name, term))
+        return ast.MatchAs(pattern=None, name=cap_name)
 
     # Python list → wildcard capture + _head_list_unify guard
     # This handles both input (destructuring) and output (construction) modes.
@@ -1049,9 +1065,38 @@ def compile_head_to_match_case(
 
         inner = dict_set_stmts + inner
 
+    # Emit str-literal guards (F046): wildcard capture + same-type short-circuit.
+    #   if _scap == "abc" or unify(_scap, "abc", trail): <inner>
+    # The `==` disjunct short-circuits at C speed for a same-type str caller;
+    # list / SegString callers fall through to unify(), which applies the
+    # strings-as-lists contract. Binds the raw str on an unbound caller arg,
+    # matching how _normalize_dataclass_fact handles ground fact head literals.
+    str_guards = [g for g in list_guards if g and g[0] == "str"]
+    for _tag, cap_name, literal in str_guards:
+        inner = [ast.If(
+            test=ast.BoolOp(
+                op=ast.Or(),
+                values=[
+                    ast.Compare(
+                        left=_name(cap_name),
+                        ops=[ast.Eq()],
+                        comparators=[ast.Constant(value=literal)],
+                    ),
+                    _call(
+                        _name("unify"),
+                        _name(cap_name),
+                        ast.Constant(value=literal),
+                        _name(trail_name),
+                    ),
+                ],
+            ),
+            body=inner,
+            orelse=[],
+        )]
+
     # Emit list guards: input destructuring + deferred output construction
     # Filter out dict/set guards from list_guards
-    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal")]
+    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str")]
     if actual_list_guards:
         # Separate single-star and multi-star guards
         single_star_guards = [g for g in actual_list_guards if len(g) == 5]

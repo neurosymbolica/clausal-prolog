@@ -136,11 +136,16 @@ class TestHeadToMatchPattern:
         assert isinstance(p, ast.MatchValue)
         assert p.value.value == pytest.approx(3.14)
 
-    def test_str_gives_match_value(self):
-        # nv
-        p = head_to_match_pattern("hello", {})
-        assert isinstance(p, ast.MatchValue)
-        assert p.value.value == "hello"
+    def test_str_gives_wildcard_capture_with_guard(self):
+        # nv — F046: a str literal head no longer compiles to a MatchValue
+        # (which compares with ==, rejecting char-list callers under the
+        # strings-as-lists contract). It now compiles to a wildcard capture
+        # plus a recorded ("str", cap, literal) guard, mirroring the list path.
+        list_guards: list = []
+        p = head_to_match_pattern("hello", {}, list_guards=list_guards)
+        assert isinstance(p, ast.MatchAs)
+        assert p.name.startswith("_scap")
+        assert list_guards == [("str", p.name, "hello")]
 
     def test_bytes_gives_match_value(self):
         # nv
@@ -235,15 +240,19 @@ class TestHeadToMatchPattern:
         ctx: dict[int, str] = {}
         inner = point(_x=v, _y=0)
         outer = pair(left=inner, right="done")
-        p = head_to_match_pattern(outer, ctx)
+        list_guards: list = []
+        p = head_to_match_pattern(outer, ctx, list_guards=list_guards)
         assert isinstance(p, ast.MatchClass)
         assert p.cls.id == "pair"
         # left → nested MatchClass
         left_pat = p.kwd_patterns[0]
         assert isinstance(left_pat, ast.MatchClass)
         assert left_pat.cls.id == "point"
-        # right → MatchValue
-        assert isinstance(p.kwd_patterns[1], ast.MatchValue)
+        # right → wildcard capture + recorded str guard (F046: str fields no
+        # longer compile to MatchValue, so a char-list caller can match).
+        right_pat = p.kwd_patterns[1]
+        assert isinstance(right_pat, ast.MatchAs)
+        assert ("str", right_pat.name, "done") in list_guards
         assert v._id in ctx
 
     # ── Unknown term → wildcard ──

@@ -1,63 +1,60 @@
 """C4 — Head-pattern literal mismatch (rule heads with str literals).
 
-1 bug finding. Quux("abc") <- (real_body) compiles to MatchValue(Constant("abc"))
-at head_match.py:253-254. Python's match uses == for MatchValue, so a caller
-Quux(['a','b','c']) silently fails despite the strings-as-lists contract.
+1 bug finding (F046), now FIXED by the narrow head_match.py change: str is
+split out of the MatchValue tuple at head_match.py and emitted as a wildcard
+capture + a same-type-short-circuit unify guard (`_scap == "abc" or
+unify(_scap, "abc", trail)`), mirroring the list-literal path. This routes the
+comparison through unify() so a char-list caller honours the strings-as-lists
+contract, while keeping the fast `==` path for same-type str callers.
 
-Asymmetry: only str-literal heads in rules with non-True bodies hit this
-bug. Facts (including <- (True) rules) dodge it via the
-_normalize_dataclass_fact elaborator at database.py:332-361. List-literal
-heads work because they go through the wildcard-capture + runtime-unify
-path at head_match.py:258.
+Background on the original bug: Quux("abc") <- (real_body) used to compile to
+MatchValue(Constant("abc")). Python's match uses == for MatchValue, so a caller
+Quux(['a','b','c']) silently failed despite the strings-as-lists contract.
+Only str-literal heads in rules with non-True bodies hit this — facts
+(including <- (True) rules) dodge it via the _normalize_dataclass_fact
+elaborator at database.py:332-361, and list-literal heads already went through
+the wildcard-capture + runtime-unify path.
 
-This single test guards the highest-blast-radius fix in the audit. Per
-the Phase 2 ordering, C4 lands last and requires F095 (first-arg indexing
-canonicalisation) to land first.
+This test guards the highest-blast-radius fix in the audit. It composes with
+F095 (first-arg indexing canonicalisation, already landed), which buckets
+str-literal heads and char-list callers together.
 
 Findings tested here:
-- F046 (bug) — Rules with str-literal heads silently fail char-list callers
+- F046 (bug, fixed) — Rules with str-literal heads now match char-list callers.
+- F048 (inherited) — Compound str-literal heads inherit the same fix.
+
+bytes is deliberately excluded (no strings-as-lists contract); the bytes
+regression test below locks in that a bytes-literal head still matches a bytes
+caller and is unaffected by this change.
 """
 
-import pytest
+from clausal.logic.solve import call
+from tests.audit_2026_05_25._helpers import load_inline_clausal
 
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger F046: Rules with string-literal heads fail to match "
-        "char-list callers"
-    ),
-)
 def test_F046_rule_str_head_matches_charlist_caller():
     """All 8 cross-call combinations (fact/rule × str-head/list-head ×
-    str-caller/list-caller) should return exactly 1 solution each.
+    str-caller/list-caller) return exactly 1 solution each.
 
-    Currently the Quux(['a','b','c']) call returns 0 solutions, which makes
-    the assertion fail and the xfail fire.
-
-    The probe registers four clauses via inline .clausal source:
-    - Fact `Foo("abc")` — handled correctly by elaborator dodge
-    - Fact `Bar(['a', 'b', 'c'])` — handled correctly
-    - Rule `Quux("abc") <- (Helper(1))` — currently broken (F046 bug)
-    - Rule `Zorp(['a','b','c']) <- (Helper(1))` — currently works
+    Registers four clauses via inline .clausal source:
+    - Fact `Foo("abc")` — handled by the elaborator dodge
+    - Fact `Bar(['a', 'b', 'c'])` — handled by elaboration + list path
+    - Rule `Quux("abc") <- (Helper(1))` — the F046 surface (now fixed)
+    - Rule `Zorp(['a','b','c']) <- (Helper(1))` — list-literal head
     - Plus `Helper(1)` so the rule bodies succeed
 
-    Under the strings-as-lists contract, all 8 calls should work:
+    Under the strings-as-lists contract, all 8 calls work:
     1. Foo("abc") — control (fact, str-head, str-caller)
     2. Foo(['a','b','c']) — strings-as-lists test (fact, str-head, list-caller)
     3. Bar("abc") — strings-as-lists test (fact, list-head, str-caller)
     4. Bar(['a','b','c']) — control (fact, list-head, list-caller)
     5. Quux("abc") — control (rule, str-head, str-caller)
-    6. Quux(['a','b','c']) — strings-as-lists test (rule, str-head, list-caller) [CURRENTLY FAILS]
+    6. Quux(['a','b','c']) — strings-as-lists test (rule, str-head, list-caller)
     7. Zorp("abc") — strings-as-lists test (rule, list-head, str-caller)
     8. Zorp(['a','b','c']) — control (rule, list-head, list-caller)
 
-    The bug surface is call #6: Quux(['a','b','c']) returns 0 solutions
-    instead of 1.
+    Call #6 — Quux(['a','b','c']) — was the F046 bug surface (0 solutions
+    before the fix); it now returns 1.
     """
-    from clausal.logic.solve import call
-    from tests.audit_2026_05_25._helpers import load_inline_clausal
-
     # Register fixtures inline.
     source = """\
 Foo("abc"),
@@ -105,9 +102,9 @@ Zorp(['a', 'b', 'c']) <- (Helper(1))
     assert n_quux_list == 1, (
         f"Rule Quux(\"abc\") <- Helper(1) called with ['a','b','c'] "
         f"returned {n_quux_list} solutions; expected 1 (strings-as-lists "
-        f"test, currently broken — F046 bug: head_match.py:253-254 emits "
-        f"MatchValue(Constant(\"abc\")) which fails == comparison with "
-        f"['a','b','c'])"
+        f"test — the F046 surface: str-literal head now emits a wildcard "
+        f"capture + unify guard instead of MatchValue, so the char-list "
+        f"caller matches)"
     )
     assert n_zorp_str == 1, (
         f"Rule Zorp(['a','b','c']) <- Helper(1) called with \"abc\" "
@@ -119,3 +116,200 @@ Zorp(['a', 'b', 'c']) <- (Helper(1))
         f"['a','b','c'] returned {n_zorp_list} solutions; expected 1 "
         f"(control)"
     )
+
+
+def test_F046_str_literal_dispatch_table_via_charlist():
+    """A multi-clause str-literal dispatch table reached by a char-list caller.
+
+    Exercises the first-arg indexing layer (F095 canonicalisation buckets the
+    char-list caller with the str-literal head) together with the converted
+    head guard. Each char-list caller must match exactly its corresponding
+    clause and no other; a non-matching char-list must match nothing (the
+    wildcard capture must NOT degrade into match-anything).
+    """
+    source = """\
+Helper(1),
+
+Color("red") <- (Helper(1))
+Color("green") <- (Helper(1))
+Color("blue") <- (Helper(1))
+"""
+    mod = load_inline_clausal("c04_f046_dispatch", source).__dict__["$module"]
+
+    # char-list callers land in the right bucket and match their clause.
+    assert sum(1 for _ in call("Color", list("red"), module=mod)) == 1
+    assert sum(1 for _ in call("Color", list("green"), module=mod)) == 1
+    assert sum(1 for _ in call("Color", list("blue"), module=mod)) == 1
+    # str callers (control) still match.
+    assert sum(1 for _ in call("Color", "red", module=mod)) == 1
+    assert sum(1 for _ in call("Color", "green", module=mod)) == 1
+    # A char-list with no matching clause matches nothing — the guard
+    # discriminates; it does not match every caller.
+    assert sum(1 for _ in call("Color", list("purple"), module=mod)) == 0
+    assert sum(1 for _ in call("Color", ["x"], module=mod)) == 0
+
+
+def test_F046_segstring_caller_against_str_head():
+    """A SegString caller (ground and partial) unifies with a str-literal head.
+
+    The unify guard dispatches to the caller's own SegString.__unify__:
+    - a ground SegString matches via the `==` short-circuit disjunct;
+    - a partial SegString (with a VarSeg hole) matches via the unify disjunct,
+      which enumerates the split and binds the hole.
+    """
+    from clausal.logic.variables import Var, walk
+    from clausal.terms import SegString, VarSeg
+
+    source = """\
+Helper(1),
+
+Quux("abc") <- (Helper(1))
+"""
+    mod = load_inline_clausal("c04_f046_segstring", source).__dict__["$module"]
+
+    # Ground SegString caller — matches via the `==` disjunct.
+    ground = SegString(["abc"])
+    assert sum(1 for _ in call("Quux", ground, module=mod)) == 1
+
+    # Partial SegString caller `a<X>c` — the unify disjunct enumerates the
+    # split against "abc", binding X to "b". The binding lives on the trail
+    # only inside the solution scope, so read it during iteration.
+    x = Var()
+    partial = SegString(["a", VarSeg(x), "c"])
+    bindings = [walk(x) for _ in call("Quux", partial, module=mod)]
+    assert bindings == ["b"], (
+        f"partial SegString caller a<X>c vs head \"abc\": expected exactly "
+        f"one solution binding X='b', got bindings={bindings!r}"
+    )
+
+
+def test_F046_str_head_compiles_to_unify_guard_not_matchvalue():
+    """Compiler-level lock-in: a str-literal head emits a wildcard capture +
+    `== or unify` guard, NOT a bare MatchValue.
+
+    This pins the exact fix surface so a regression that re-introduces
+    MatchValue(Constant("abc")) for a str head is caught directly, independent
+    of runtime behaviour. Mirrors the structure verified by hand:
+
+        case [_scap0]:
+            ...
+            if _scap0 == 'abc' or unify(_scap0, 'abc', trail):
+                ...
+    """
+    import ast as _ast
+
+    from clausal.logic.compiler.head_match import compile_head_to_match_case
+
+    source = """\
+Helper(1),
+
+Quux("abc") <- (Helper(1))
+"""
+    mod = load_inline_clausal("c04_f046_compile", source).__dict__["$module"]
+    clause = mod.db._clauses[("Quux", 1)][0]
+
+    case = compile_head_to_match_case(
+        head=clause.head,
+        body_stmts=[_ast.Pass()],
+        var_context={},
+        arity=1,
+    )
+    rendered = _ast.unparse(
+        _ast.fix_missing_locations(
+            _ast.Match(subject=_ast.Name("subj", _ast.Load()), cases=[case])
+        )
+    )
+
+    # No bare MatchValue for the str literal: the arg pattern is a wildcard
+    # capture, and "abc" appears inside a unify() call in the guard.
+    assert "case ['abc']" not in rendered, (
+        f"str head still compiled to a MatchValue pattern:\n{rendered}"
+    )
+    assert "unify(_scap0, 'abc', trail)" in rendered, (
+        f"str head did not emit the expected unify guard:\n{rendered}"
+    )
+    assert "_scap0 == 'abc'" in rendered, (
+        f"str head did not emit the same-type `==` short-circuit:\n{rendered}"
+    )
+
+
+def test_F048_compound_str_head_inner_arg_via_list_unify():
+    """F048: a compound head `Quux(foo("abc"))` keeps its inner str literal on
+    the runtime list-unify path (NOT a bare MatchValue), so a char-list inner
+    arg unifies under strings-as-lists.
+
+    Unlike a bare str head, the inner "abc" sits inside the Call's args list and
+    is handled by `_head_list_unify_input` (the args go through the list path) —
+    this was already correct, independent of the F046 str-head fix. This test
+    documents that and guards against a regression that would specialise the
+    inner str into a MatchValue.
+    """
+    import ast as _ast
+
+    from clausal.logic.compiler.head_match import compile_head_to_match_case
+
+    source = """\
+Helper(1),
+
+Quux(foo("abc")) <- (Helper(1))
+"""
+    mod = load_inline_clausal("c04_f048_compound", source).__dict__["$module"]
+    clause = mod.db._clauses[("Quux", 1)][0]
+
+    case = compile_head_to_match_case(
+        head=clause.head,
+        body_stmts=[_ast.Pass()],
+        var_context={},
+        arity=1,
+    )
+    rendered = _ast.unparse(
+        _ast.fix_missing_locations(
+            _ast.Match(subject=_ast.Name("subj", _ast.Load()), cases=[case])
+        )
+    )
+
+    # The inner str literal is a list-unify element, not a MatchValue pattern.
+    assert "['abc']" in rendered and "head_list_unify_input" in rendered, (
+        f"compound head inner str not on the list-unify path:\n{rendered}"
+    )
+
+
+def test_F046_bytes_literal_head_unaffected():
+    """Regression: a bytes-literal head stays on the MatchValue fast path.
+
+    bytes has no strings-as-lists contract, so this fix deliberately leaves it
+    on MatchValue. A bytes-literal head must still match a bytes caller, and
+    must NOT spuriously match the int-list `[97, 98, 99]` (which is what
+    `list(b"abc")` yields) — there is no bytes↔list contract.
+    """
+    source = """\
+Helper(1),
+
+Quux(b"abc") <- (Helper(1))
+"""
+    mod = load_inline_clausal("c04_f046_bytes", source).__dict__["$module"]
+
+    # Same-type bytes caller matches (fast path intact).
+    assert sum(1 for _ in call("Quux", b"abc", module=mod)) == 1
+    # No bytes↔list contract: the int-list form must NOT match.
+    assert sum(1 for _ in call("Quux", [97, 98, 99], module=mod)) == 0
+    # And a str caller must NOT match a bytes head.
+    assert sum(1 for _ in call("Quux", "abc", module=mod)) == 0
+
+
+def test_F046_same_type_str_fast_path():
+    """The same-type str caller path (the `==` short-circuit disjunct) works.
+
+    A plain str caller against a str-literal head returns one solution without
+    relying on the unify() fallback.
+    """
+    source = """\
+Helper(1),
+
+Quux("hello") <- (Helper(1))
+"""
+    mod = load_inline_clausal("c04_f046_fastpath", source).__dict__["$module"]
+
+    assert sum(1 for _ in call("Quux", "hello", module=mod)) == 1
+    # A different str does not match.
+    assert sum(1 for _ in call("Quux", "world", module=mod)) == 0

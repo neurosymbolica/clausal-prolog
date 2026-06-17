@@ -230,9 +230,16 @@ exclusion so the decision is explicit rather than silent.
 ### Compound heads (F048)
 
 Compound heads containing a string literal (e.g. `Quux(foo("abc")) <- body`)
-inherit this fix automatically: the parser/elaborator lifts the compound
-argument into a body `Unify`, and when that resolves to a `str` it routes through
-the same str branch. No separate work is required; a regression test covers it.
+are **already correct** and are not an F046 surface. Verified by compiler
+inspection: the head compiles to a `MatchClass` (`Call(func=LoadName(...),
+args=_lcap, ...)`) whose inner `"abc"` sits as an *element of the Call's args
+list*, handled by `_head_list_unify_input` — the runtime list-unify path, which
+already honours strings-as-lists for its elements. The str literal there was
+never a `MatchValue`. (The functor-name str — `LoadName(name="foo")` — does now
+route through the new str branch, but that only affects how the name is matched,
+not correctness.) A compiler-level regression test
+(`test_F048_compound_str_head_inner_arg_via_list_unify`) pins the inner str to
+the list-unify path so a future change can't specialise it into a `MatchValue`.
 
 ---
 
