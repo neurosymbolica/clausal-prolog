@@ -1000,8 +1000,8 @@ in the C-level unify path.
 
 - **Class:** C4 (Head-pattern literal mismatch)
 - **Severity:** bug
-- **Status:** deferred to follow-up spec (user decision 2026-05-26; large blast radius — fix touches the compiler and may affect many existing user-defined predicates with literal-in-head rule clauses; warrants its own spec + plan + Phase 1+2 cycle)
-- **Location:** `clausal/logic/compiler/head_match.py:253-254` (the `MatchValue` branch for str/bytes literals)
+- **Status:** fixed in 6c7acf6 (2026-06-16 follow-up spec `docs/superpowers/specs/2026-06-13-f046-head-literal-mismatch-design.md`; narrow fix — split `str` out of the `MatchValue` scalar tuple, emit a wildcard capture + same-type-short-circuit `unify` guard. Was: deferred to follow-up spec per user decision 2026-05-26.)
+- **Location:** `clausal/logic/compiler/head_match.py` (the `MatchValue` branch for str/bytes literals — `str` now split out into a wildcard-capture + `unify`-guard branch; `bytes` stays on `MatchValue`)
 - **Discovered by:** Task 5 of Phase 0
 - **Probe:** `probes/probe_F046.py`
 
@@ -1030,12 +1030,12 @@ Sibling C-class cluster: this is C4, structurally orthogonal to the C3 "SegList 
 
 **Prior-known:** commit aa2155d — "Compiler: head patterns accept strings in clause matching" widened the *runtime* destructuring path (`_head_list_unify_input` and the two `isinstance` dispatch guards) so a clause with a list-literal head matches a string caller. The commit message claims "user-defined predicates with list patterns work on strings" and lists three sites changed. The fourth site — `MatchValue(Constant(<str>))` for clause heads that contain a *string literal* — was not addressed; that's the F046 surface. Phase 5b's plan in `STRING_LIST_UNIFICATION.md` (L1198-1281) likewise only enumerates the three sites that were fixed.
 
-Phase 2 deferred F046 per user decision 2026-05-26. The three candidate fix approaches identified during the audit (narrow head_match.py:253-254 split, broad database.py:274 elaborator-gate removal, or combined) all remain viable for a follow-up spec. The conjoined finding F095 (C15 first-arg indexing) was closed in Phase 2 Task 8 (commit 9494e22), so the dispatch-layer half of the strings-as-lists head-literal contract is already restored — the compile-layer half is the remaining work. The Phase 1 test `tests/audit_2026_05_25/test_class_C04_head_literal_mismatch.py::test_F046_rule_str_head_matches_charlist_caller` remains xfail-strict and will continue to flag any regression that re-introduces the bug as well as catch the fix landing.
+Phase 2 deferred F046 per user decision 2026-05-26; **closed 2026-06-16** via the follow-up spec `docs/superpowers/specs/2026-06-13-f046-head-literal-mismatch-design.md` (commit 6c7acf6). The **narrow** approach was chosen (split `str` out of the `MatchValue` scalar tuple at the single `head_match.py` site; emit a wildcard capture + a same-type-short-circuit `unify` guard `_scap == "abc" or unify(_scap, "abc", trail)`, mirroring the existing list/dict/set guard machinery). The broad (`database.py:274` elaborator-gate removal) and combined approaches were rejected — see the spec's "Rejected alternative" section (and the rejected `Seg*`-head representation). The conjoined finding F095 (C15 first-arg indexing) was closed in Phase 2 Task 8 (commit 9494e22), restoring the dispatch-layer half; this fix restores the compile-layer half and composes with it (`arg_index.py` buckets a str-literal head and its char-list caller together; the in-bucket match now succeeds). `bytes` was deliberately left on the `MatchValue` fast path (no strings-as-lists contract; documented exclusion + extension point in the spec and `todo/bytes-as-lists.md`). The Phase 1 test `test_F046_rule_str_head_matches_charlist_caller` was flipped from xfail-strict to passing and joined by added coverage (multi-clause dispatch via char-list, `SegString` caller, compiler-level guard lock-in, F048 compound-head list-unify path, `bytes` regression, same-type fast path); a dispatch micro-benchmark lives at `benchmarks/bench_f046_head_dispatch.py` (same-type str path 1.86µs vs 1.83µs int `MatchValue` baseline — no regression).
 
 *Task 5 confirmed (no finding):*
 - **F048** — Task 5 confirmed: compound heads containing list literals (e.g. ``Zorp(['a','b','c']) <- body``) and list-literal-only paths are subsumed by the successful elaboration + wildcard-capture + runtime-unify mechanism. Direct inspection of the compiled clause shows the parser/elaborator lifts the entire argument into a body Unify:
   ``Clause(head=Zorp(arg_0=AttVar(_0)), body=[Unify(left=AttVar(_0), right=['a','b','c'])])`` —
-  the head pattern is a wildcard capture; runtime unify handles the list value, and calls with str-typed args match via the strings-as-lists contract. List-literal heads therefore work. However, compound heads and string-literal heads inherit the F046 bug: ``Quux(foo("abc")) <- body`` lifts the entire compound argument into a body Unify, but when that Call expression at runtime produces a str, the head pattern becomes a `MatchValue(Constant(...))` branch if the indexing bucket was specialized — or survives as a wildcard if unindexed. Str-literal heads in rules with non-trivial bodies (e.g. ``Quux("abc") <- Helper(1)``) expose the C4 gap directly. No separate probe for F048 (verified by direct module inspection); F046's probe covers the core issue.
+  the head pattern is a wildcard capture; runtime unify handles the list value, and calls with str-typed args match via the strings-as-lists contract. List-literal heads therefore work. Str-literal heads in rules with non-trivial bodies (e.g. ``Quux("abc") <- Helper(1)``) exposed the C4 gap directly — that is the F046 surface, **fixed 2026-06-16** (commit 6c7acf6). **Update (2026-06-16, corrected by compiler inspection during the F046 fix):** compound heads like ``Quux(foo("abc")) <- body`` are NOT lifted into a body Unify and do NOT inherit the F046 bug. The head compiles to a `MatchClass(Call(func=LoadName(...), args=_lcap, ...))` whose inner ``"abc"`` is an *element of the Call's args list*, handled by `_head_list_unify_input` (the runtime list-unify path) — already strings-as-lists-correct, never a `MatchValue`. (The functor-name str now routes through the new str branch, but that only changes how the name is matched, not correctness.) Locked in by `test_F048_compound_str_head_inner_arg_via_list_unify`. No separate probe for F048 (verified by direct module inspection); F046's probe covers the core issue.
 
 ### Class C5 — Hash/eq asymmetries
 
@@ -4110,7 +4110,7 @@ point.
 - **Total findings:** 66
 - **By severity:** 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only
 - **By class:** (table above)
-- **Highest-blast-radius finding:** F046 (C4 head-pattern literal mismatch) — folded into Phase 2 per user decision 2026-05-25
+- **Highest-blast-radius finding:** F046 (C4 head-pattern literal mismatch) — deferred from Phase 2 (user decision 2026-05-26) to a dedicated follow-up spec, then **closed 2026-06-16** (commit 6c7acf6, narrow `head_match.py` str split + unify guard)
 - **Largest cluster:** C3 SegString blind-spots ([[F012]], [[F031]], [[F032]], [[F034]], [[F040]], [[F041]], [[F047]], [[F051]], [[F061]], [[F069]], [[F070]], [[F075]], [[F083]], [[F092]], [[F093]], [[F094]] — 16+ findings sharing the same root cause: dispatch sites with SegList arms but no SegString arms; many can be closed by a single `_as_items` extension or a Seg* `__walk__` shim at each dispatch site)
 - **Recommended Phase 2 ordering** (fix-blast-radius ascending — start with self-contained classes, finish with cross-cutting ones):
   1. **C17** (3 findings) — perf/smell only ([[F009]], [[F026]], [[F078]]); F078 is a dead-branch deletion, F009 & F026 stay as visibility-only ledger entries. Zero behavioural change; smallest possible blast radius.
@@ -4127,7 +4127,7 @@ point.
   12. **C9** (12 findings) — close [[F051]] (the polymorphic-builtin Seg* gap) via `_as_items` extension (single-line fix; [[F061]] closes for free as the higher_order family imports the same helper); fix `split_with/3` join mode ([[F050]]); convert `sum_list`/`max_list`/`min_list` TypeError swallow ([[F052]]); add `_seq_result`-style threading to `maplist/3`, `filter_map/3`, `group_by/3`, `sort_by/3` ([[F063]]); decide a contract for list-of-1-char-strs vs str input/output ([[F054]], [[F062]]); plus the output-mode builders [[F053]], the transpose/flatten contracts ([[F055]], [[F056]]), the char_type/2 mode-matrix ([[F072]]), and the atom_concat/3 error shape ([[F077]]). Schedule after C3 so the `_as_items` extension has the SegString walk-arms it depends on.
   13. **C1** (5 design-gap, 2 lock-in) — thread an "original input type" record through head/body unify so the output-mode builders can preserve str typing ([[F033]] and [[F042]] have lock-in tests in `test_seglist_creation.py::TestOutputUnboundStar` / `TestBodyMultiStarUnifyUnbound` that must be updated). Also extend `SegList.__walk__` / `__add__` ([[F018]], [[F020]]) and `_build_star_list` / `_build_multi_star_list` ([[F043]]). The type-source plumbing is structurally invasive (every dispatch site needs the new parameter) — schedule late so the C3 and C9 fixes are stable before the data shape changes underneath them.
   14. **C10** (4 findings, 1 lock-in) — phrase/2,3 SegString acceptance ([[F069]] — depends on C3 fixes), state-thread vs char-split overload ([[F068]]), Rest-shape preservation ([[F067]] — lock-in test `test_phrase3_string_remainder` must be updated), and `sequence//1` mode-matrix ([[F070]] — depends on the C1 type-source plumbing). Schedule after C3 + C1 so the DCG layer has the underlying pieces available.
-  15. **C4** (1 finding) — F046, the head-pattern literal mismatch. Per user decision 2026-05-25, plan this as its own multi-step sub-plan because the compiler scope is cross-cutting: changes `head_match.py` `MatchValue` emission for str/bytes literals, possibly lifts `_normalize_dataclass_fact` to all clauses, and reverifies first-arg indexing ([[F095]] — which is why C15 lands first). Highest blast radius; schedule last and treat as a phase of its own.
+  15. **C4** (1 finding) — F046, the head-pattern literal mismatch. Per user decision 2026-05-25, plan this as its own multi-step sub-plan because the compiler scope is cross-cutting: changes `head_match.py` `MatchValue` emission for str/bytes literals, possibly lifts `_normalize_dataclass_fact` to all clauses, and reverifies first-arg indexing ([[F095]] — which is why C15 lands first). Highest blast radius; schedule last and treat as a phase of its own. **Outcome (2026-06-16, commit 6c7acf6):** done as a standalone follow-up spec; the **narrow** option was taken (split `str` out of the `MatchValue` tuple + wildcard-capture/`unify`-guard at the single `head_match.py` site). `_normalize_dataclass_fact` was NOT lifted (broad option rejected); F095 had already landed so indexing composed cleanly; `bytes` left on `MatchValue` (no strings-as-lists contract).
 
 The Phase 1 plan should produce one test file per class with findings (using `tests/audit_2026_05_25/test_class_C<N>_*.py` paths; mark `xfail(strict=True, reason="ledger F<N>")` until fixes land).
 
@@ -4146,9 +4146,9 @@ closing the C14 args-of-list cluster and renaming ``get_item/3`` →
 
 ### Audit test suite (`tests/audit_2026_05_25/`)
 
-- **Total tests:** 75
-- **PASSED:** 73  (closed findings + regression guards: F009 perf guard, F033/F042/F067/F080/F092/F093 lock-ins, plus F012, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F031, F032, F033, F034, F038, F039, F040, F041, F042, F043, F047, F050, F051, F052, F053, F054 (×8 parametrized), F055, F056, F061, F062, F063, F067, F069 (×3), F070 (×4), F072, F073 (×6), F075, F077, F080, F081, F082, F083, F084, F088, F089, F090, F091, F092, F093, F094, F095, F011)
-- **XFAIL:** 2  (F046, F068 — see deferred-findings table)
+- **Total tests:** 81  (+6 from the 2026-06-16 F046 follow-up: multi-clause char-list dispatch, SegString caller, compiler-level guard lock-in, F048 compound-head list-unify path, bytes regression, same-type fast path)
+- **PASSED:** 80  (closed findings + regression guards: F009 perf guard, F033/F042/F067/F080/F092/F093 lock-ins, plus F012, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F031, F032, F033, F034, F038, F039, F040, F041, F042, F043, F046, F047, F050, F051, F052, F053, F054 (×8 parametrized), F055, F056, F061, F062, F063, F067, F069 (×3), F070 (×4), F072, F073 (×6), F075, F077, F080, F081, F082, F083, F084, F088, F089, F090, F091, F092, F093, F094, F095, F011)
+- **XFAIL:** 1  (F068 — see deferred-findings table)
 - **XPASSED:** 0
 - **FAILED:** 0
 - **ERRORED:** 0
@@ -4157,14 +4157,16 @@ closing the C14 args-of-list cluster and renaming ``get_item/3`` →
 
 | Finding | Class | Severity | Why deferred |
 |---------|-------|----------|--------------|
-| F046 | C4 | bug | Largest blast radius (compiler `MatchValue` for str/bytes, indexing interaction, lock-in test sweep). User decision 2026-05-26 to defer to a dedicated follow-up spec + plan. Status flipped from open to "deferred to follow-up spec" in commit 39cdb1b. |
 | F068 | C10 | bug | Architectural — distinguishing phrase/3 state-threading mode from char-parsing mode from the call shape alone is unresolvable without a per-rule declaration or a separate `phrase_state/3` builtin. Marked XFAIL in C10 commit (bc98702); intentionally deferred. |
+
+*(F046 was deferred 2026-05-26 and **closed 2026-06-16** — commit 6c7acf6, follow-up spec `2026-06-13-f046-head-literal-mismatch-design.md`. No longer XFAIL.)*
 
 ### Pre-existing pytest suite
 
 - **Pre-Phase-2 baseline:** 7752 passing (Phase 1 close; the post-Task-13 hash-revert merge of two tests is reflected here)
 - **Post-Phase-2:** 7752 passing
 - **Post-2026-06-13-follow-up:** 7760 passing (+8 net from C14 follow-up — added cons-cell lock-in tests across `test_builtins.py`, `test_python_fallbacks.py`, `test_conformity/test_iso_term_manipulation.py`; old lock-in assertions on the atom-univ contract removed; ``get_item`` → ``list_item`` rename touched call sites in tests + fixtures + docs)
+- **Post-2026-06-16-follow-up (F046):** 7840 passing, 1 xfailed (F068) — the full `tests/` suite after the C4 fix (+6 new C04 tests, F046 xfail flipped to pass, two `test_compiler.py` unit tests updated from the old str→MatchValue contract)
 - **Regressions:** 0
 
 ### Cross-class consistency
@@ -4189,7 +4191,7 @@ The Phase 2 commits layered cleanly. Specific observations:
 | C1 | 5 | 0 | Type-preservation; `maybe_promote_to_str` introduced |
 | C2 | 2 | 0 | Non-det unify generators |
 | C3 | 8 | 0 | SegString blind-spot sweep; introduced `_seg_helpers.normalize_seg_input` |
-| C4 | 0 | 1 (F046) | Deferred to follow-up spec |
+| C4 | 1 | 0 | F046 deferred 2026-05-26, **closed 2026-06-16** (commit 6c7acf6) — narrow `head_match.py` str split + unify guard |
 | C5 | 3 | 0 | Closed then partially revised by C1 (revert hash-as-structural) |
 | C7 | 7 | 0 | Doc-only |
 | C8 | 6 | 0 | Sequence-protocol cleanup + `PartialTermError`; cascade-closed half of F069 |
@@ -4201,14 +4203,14 @@ The Phase 2 commits layered cleanly. Specific observations:
 | C15 | 1 | 0 | First-arg indexing canonicalisation |
 | C16 | 1 | 0 | F011 FT critical section |
 | C17 | 2 | 0 | F009 regression-guard test passes; F026 perf rewrite; F078 dead-branch deletion |
-| **Total** | **64** | **2** | |
+| **Total** | **65** | **1** | (C4/F046 closed in the 2026-06-16 follow-up, not Phase 2 proper) |
 
 ### Audit verdict
 
-The strings-as-lists audit closes 64 of 66 findings (after the
-2026-06-13 follow-up, including F078 Phase 3 closure). The 2 remaining deferred items break down as:
+The strings-as-lists audit closes 65 of 66 findings (after the
+2026-06-13 and 2026-06-16 follow-ups, including F078 Phase 3 closure and the
+F046 C4 follow-up). The 1 remaining deferred item is:
 
-- **1 user-deferred bug** (F046, planned follow-up spec)
 - **1 architectural bug** (F068, design question — needs `phrase_state/3` or per-rule declaration)
 
 The strings-as-lists contract is now consistent across:

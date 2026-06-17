@@ -2,19 +2,19 @@
 
 This directory holds the artifacts of the strings-as-lists audit.
 
-**Status:** complete (closed 2026-05-26; revised 2026-06-13; F078 Phase 3 closure 2026-06-13). Tagged `string-audit-complete`.
-**Totals:** 66 findings across 15 classes — 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only. 64 closed (59 in Phase 2 + 4 in 2026-06-13 follow-up C14 cluster + 1 in Phase 3 F078 closure); 2 deferred (see `findings.md` "Phase 3 sweep — conclusion").
+**Status:** complete (closed 2026-05-26; revised 2026-06-13; F078 Phase 3 closure 2026-06-13; F046 C4 follow-up closed 2026-06-16). Tagged `string-audit-complete`.
+**Totals:** 66 findings across 15 classes — 28 bug, 25 design-gap, 2 perf, 4 smell, 7 doc-only. 65 closed (59 in Phase 2 + 4 in 2026-06-13 follow-up C14 cluster + 1 in Phase 3 F078 closure + 1 in 2026-06-16 F046 C4 follow-up); 1 deferred (F068 architectural — see `findings.md` "Phase 3 sweep — conclusion").
 
 ## Phase 2 status — complete (with Phase 3 sweep)
 
-- **Fix commits:** 14 core in Phase 2 (one per audit class plus the F046 deferral commit); 63 total in the Phase 2 range including planning, test scaffolding, and polish commits; +1 follow-up commit on 2026-06-13 closing the C14 args-of-list cluster (F088-F091) and renaming `get_item/3` → `list_item/3`; +1 Phase 3 commit (2026-06-13) closing F078 dead-branch deletion
-- **Findings closed:** 64 / 66
-- **Findings deferred:** 2 (F046 follow-up spec, F068 architectural — see `findings.md` "Phase 3 sweep — conclusion")
-- **Audit suite:** 73 PASSED, 2 XFAIL, 0 XPASSED, 0 FAILED, 0 ERRORED
-- **Pre-existing pytest suite:** 7760 passing (post-2026-06-13 follow-up; baseline 7752) — zero regressions
+- **Fix commits:** 14 core in Phase 2 (one per audit class plus the F046 deferral commit); 63 total in the Phase 2 range including planning, test scaffolding, and polish commits; +1 follow-up commit on 2026-06-13 closing the C14 args-of-list cluster (F088-F091) and renaming `get_item/3` → `list_item/3`; +1 Phase 3 commit (2026-06-13) closing F078 dead-branch deletion; +1 follow-up commit on 2026-06-16 (6c7acf6) closing F046 (C4 head-literal mismatch)
+- **Findings closed:** 65 / 66
+- **Findings deferred:** 1 (F068 architectural — see `findings.md` "Phase 3 sweep — conclusion")
+- **Audit suite:** 80 PASSED, 1 XFAIL (F068), 0 XPASSED, 0 FAILED, 0 ERRORED
+- **Pre-existing pytest suite:** 7840 passing, 1 xfailed (post-2026-06-16 F046 follow-up; was 7760 post-2026-06-13; baseline 7752) — zero regressions
 - **Tagged:** `string-audit-complete`
 
-The audit is complete. F046 (C4 head-pattern literal mismatch) is scheduled for a follow-up spec. F078 (C17 dead-branch smell) closed in Phase 3 sweep.
+The audit is complete. F046 (C4 head-pattern literal mismatch) closed 2026-06-16 via its follow-up spec (`../../specs/2026-06-13-f046-head-literal-mismatch-design.md`). F078 (C17 dead-branch smell) closed in Phase 3 sweep. Only F068 (C10 architectural) remains deferred.
 
 ### 2026-06-13 follow-up — C14 args-of-list cluster closed
 
@@ -44,7 +44,7 @@ to rename `unpack/2` to a less procedural-sounding Clausal name
 | C1 | test_class_C01_type_preservation.py | 5 | 5 XFAIL |
 | C2 | test_class_C02_nondet_first_only.py | 2 | 2 XFAIL |
 | C3 | test_class_C03_segstring_blindspots.py | 8 | 8 XFAIL |
-| C4 | test_class_C04_head_literal_mismatch.py | 1 | 1 XFAIL |
+| C4 | test_class_C04_head_literal_mismatch.py | 1 | 1 XFAIL at Phase 1; F046 closed 2026-06-16 — file now has 7 tests, all PASSED (+6 coverage tests) |
 | C5 | test_class_C05_hash_eq_asymmetries.py | 3 | 3 XFAIL |
 | C8 | test_class_C08_partial_term_shortcircuits.py | 6 | 6 XFAIL |
 | C9 | test_class_C09_polymorphic_mode_matrix.py | 19 | 19 XFAIL (F054 parametrized ×8) |

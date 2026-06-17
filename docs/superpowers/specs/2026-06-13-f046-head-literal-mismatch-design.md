@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-13
 **Author:** Michael Amy (with Claude)
-**Status:** Draft — pending user review before plan-writing
+**Status:** Implemented 2026-06-16 (commit 6c7acf6) — narrow option as specified; full suite green (7840 passed, 1 xfailed F068)
 **Closes:** F046 (audit `2026-05-25-string-implementation`, class C4)
 **Related:** F048 (compound heads — inherits this fix), F095 (first-arg indexing
 canonicalisation — already landed, composes with this fix)
