@@ -289,6 +289,52 @@ On landing:
 
 ---
 
+## Rejected alternative: compile the head literal to a `Seg*` term
+
+A natural instinct is to reuse the existing term machinery — normalise the head
+literal `"abc"` into a `SegString(["abc"])` (or a `SegList` / bare char-list) and
+let its `__unify__`/`__eq__` carry the strings-as-lists contract. Rejected: the
+head literal is **fully ground** (no `VarSeg` holes), and all of `Seg*`'s value
+is in representing *non-ground partial* sequences. Wrapping a ground constant is
+pure cost with several correctness hazards.
+
+- **Slower on every call.** A ground `SegString.__unify__` re-runs `__walk__()`
+  (rebuild + join segments) per call plus Python-level method dispatch, versus
+  the plain-str guard's `_scap == "abc"` C-level short-circuit. A `SegList` /
+  char-list head is worse still: `_head_list_unify_input` decomposes
+  element-by-element, O(n) in the literal length **even for a same-type `str`
+  caller**, defeating the same-type fast path entirely.
+
+- **Breaks type preservation in output mode.** Calling `Quux(X)` with `X`
+  unbound binds `X` to the head literal. Plain str binds `"abc"` — correct type,
+  **hashable**. A `SegList`/char-list head binds a **`list`**, changing the
+  observable type from `str` to `list` (violating the C1 type-preservation
+  contract: F018/F020/F033). A `SegString` head binds a ground `SegString` —
+  which walks back to `"abc"` but is transiently `SegString`-typed,
+  **unconditionally unhashable** (`terms.py:1041`, F017), and re-exposes the
+  `SegString`-visibility blind spots sealed by C3/C14 (F012, F031, F092–094).
+
+- **`SegString`-vs-`SegString` is a known soft spot.** `SegString.__unify__`
+  returns `NotImplemented` against another `SegString`/`SegList`
+  (`terms.py:921-922`); per the F023 note there, the C top-level reads a
+  symmetric `NotImplemented` as "no match → False." So a `SegString` head literal
+  could silently fail against a partial-`SegString` caller. The plain-str head
+  sidesteps this: `unify(SegString_caller, "abc")` dispatches to the *caller's*
+  `SegString.__unify__(str)` — the fully-supported path — so the narrow fix
+  matches partial-string callers *better* than a `Seg*` head would.
+
+- **It would diverge from how facts already work.** `_normalize_dataclass_fact`
+  already normalises ground fact head literals into `Unify(_V, "abc")`, binding
+  the **raw plain `str`** (`database.py:352`). The narrow fix makes rules behave
+  identically to facts; a `Seg*` head would make an otherwise-identical rule bind
+  a different type — an inconsistency with no upside.
+
+The narrow fix already gains the one genuine benefit a `Seg*` head might promise
+— correct partial-*caller* matching — for free, because `unify` dispatches to the
+caller's own `Seg*.__unify__`.
+
+---
+
 ## Out of scope
 
 - **bytes-as-lists contract** — documented above as future work with a defined
