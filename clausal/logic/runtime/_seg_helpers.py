@@ -36,12 +36,33 @@ def normalize_seg_input(x: Any) -> Any:
     The walk is idempotent: calling on a plain ``list`` / ``str`` /
     ``Var`` is a cheap pass-through.
     """
-    from clausal.terms import SegList, SegString
+    from clausal.terms import SegList, SegString, SegBytes
     if isinstance(x, SegList):
         return x.__walk__()
     if isinstance(x, SegString):
         return x.__walk__()
+    if isinstance(x, SegBytes):
+        return x.__walk__()
     return x
+
+
+def maybe_promote_to_bytes(result: Any) -> Any:
+    """If *result* is a list of all ground ints in [0, 255], return the
+    equivalent ``bytes``. Otherwise return *result* unchanged.
+
+    The codes-model parallel of :func:`maybe_promote_to_str`. Per the
+    bytes-as-lists promiscuity guard, this is called ONLY at reconstruction
+    sites where a ``bytes`` / ``SegBytes`` source was present on the input
+    side — never unconditionally — so a plain int-list output never
+    spuriously becomes ``bytes``. Bools are excluded (``True``/``False``
+    must not coerce to bytes).
+    """
+    if isinstance(result, list) and result and all(
+        isinstance(e, int) and not isinstance(e, bool) and 0 <= e <= 255
+        for e in result
+    ):
+        return bytes(result)
+    return result
 
 
 def maybe_promote_to_str(result: Any) -> Any:

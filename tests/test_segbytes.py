@@ -185,3 +185,45 @@ class TestSegBytesSequence:
         # nv
         with pytest.raises(PartialTermError):
             SegBytes([b"ab", VarSeg(Var())])[5]
+
+
+from clausal.logic.runtime._seg_helpers import (
+    maybe_promote_to_bytes, normalize_seg_input,
+)
+
+
+class TestMaybePromoteToBytes:
+    def test_promotes_int_list(self):
+        # nv
+        assert maybe_promote_to_bytes([97, 98, 99]) == b"abc"
+        assert type(maybe_promote_to_bytes([97, 98, 99])) is bytes
+
+    def test_leaves_out_of_range(self):
+        # nv
+        assert maybe_promote_to_bytes([97, 256]) == [97, 256]
+
+    def test_leaves_non_int(self):
+        # nv
+        assert maybe_promote_to_bytes(["a", "b"]) == ["a", "b"]
+
+    def test_leaves_empty(self):
+        # nv
+        assert maybe_promote_to_bytes([]) == []
+
+    def test_leaves_bool(self):
+        # nv  — bools must not become bytes
+        assert maybe_promote_to_bytes([True, False]) == [True, False]
+
+
+class TestNormalizeSegBytes:
+    def test_walks_ground_segbytes_to_bytes(self):
+        # nv
+        assert normalize_seg_input(SegBytes([b"abc"])) == b"abc"
+
+
+class TestSegBytesGroundAgainstList:
+    # The deferred Task 2 integration test: now that core bytes<->list exists.
+    def test_ground_segbytes_unifies_with_intlist(self):
+        # nv
+        trail = Trail()
+        assert SegBytes([b"ab", b"c"]).__unify__([97, 98, 99], trail) is True
