@@ -2241,9 +2241,16 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
         else
             return PyUnicode_FromString(".");
     }
+    /* Bytes — codes-model cons-cell, symmetric with str/list. */
+    if (PyBytes_Check(term)) {
+        if (PyBytes_GET_SIZE(term) == 0)
+            return PyUnicode_FromString("[]");
+        else
+            return PyUnicode_FromString(".");
+    }
     /* Primitives */
     if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
-        PyFloat_Check(term) || PyBytes_Check(term)) {
+        PyFloat_Check(term)) {
         return PyObject_Repr(term);
     }
     /* Zero-arity PredicateMeta class (atom) */
@@ -2327,9 +2334,13 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
     if (PyUnicode_Check(term)) {
         return PyLong_FromLong(PyUnicode_GET_LENGTH(term) == 0 ? 0 : 2);
     }
+    /* Bytes — codes-model cons-cell. */
+    if (PyBytes_Check(term)) {
+        return PyLong_FromLong(PyBytes_GET_SIZE(term) == 0 ? 0 : 2);
+    }
     /* Primitives */
     if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
-        PyFloat_Check(term) || PyBytes_Check(term)) {
+        PyFloat_Check(term)) {
         return PyLong_FromLong(0);
     }
     /* Zero-arity atom */
@@ -2482,6 +2493,24 @@ py_nth_arg(PyObject *Py_UNUSED(module), PyObject *args)
         }
         return raise_arg_index_error(n, term);
     }
+    /* Bytes — codes-model cons-cell: n=1 → int head (b[0] is an int, no
+     * fixed point), n=2 → bytes tail (type preserved). */
+    if (PyBytes_Check(term)) {
+        Py_ssize_t len = PyBytes_GET_SIZE(term);
+        if (len == 0) {
+            return raise_arg_index_error(n, term);
+        }
+        if (n == 1) {
+            const unsigned char *data =
+                (const unsigned char *)PyBytes_AS_STRING(term);
+            return PyLong_FromLong((long)data[0]);
+        }
+        if (n == 2) {
+            const char *data = PyBytes_AS_STRING(term);
+            return PyBytes_FromStringAndSize(data + 1, len - 1);
+        }
+        return raise_arg_index_error(n, term);
+    }
     return raise_arg_index_error(n, term);
 }
 
@@ -2567,6 +2596,26 @@ py_args_list(PyObject *Py_UNUSED(module), PyObject *term)
         PyObject *head = PyUnicode_Substring(term, 0, 1);
         if (!head) return NULL;
         PyObject *tail = PyUnicode_Substring(term, 1, len);
+        if (!tail) { Py_DECREF(head); return NULL; }
+        PyObject *result = PyList_New(2);
+        if (!result) { Py_DECREF(head); Py_DECREF(tail); return NULL; }
+        PyList_SET_ITEM(result, 0, head);  /* steals */
+        PyList_SET_ITEM(result, 1, tail);  /* steals */
+        return result;
+    }
+    /* Bytes — codes-model cons-cell: non-empty → [int_head, bytes_tail];
+     * empty → []. Head is an int (no fixed point); tail preserves bytes. */
+    if (PyBytes_Check(term)) {
+        Py_ssize_t len = PyBytes_GET_SIZE(term);
+        if (len == 0) {
+            return PyList_New(0);
+        }
+        const unsigned char *udata =
+            (const unsigned char *)PyBytes_AS_STRING(term);
+        PyObject *head = PyLong_FromLong((long)udata[0]);
+        if (!head) return NULL;
+        PyObject *tail =
+            PyBytes_FromStringAndSize((const char *)udata + 1, len - 1);
         if (!tail) { Py_DECREF(head); return NULL; }
         PyObject *result = PyList_New(2);
         if (!result) { Py_DECREF(head); Py_DECREF(tail); return NULL; }

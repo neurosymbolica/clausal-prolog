@@ -71,3 +71,40 @@ class TestBytesNoFixedPoint:
     def test_byte_does_not_unify_with_singleton_bytes_list(self):
         # nv  — b"a" does not unify with [b"a"]
         assert not unify(b"a", [b"a"], Trail())
+
+
+from clausal.logic.builtins._helpers import _functor_name, _arity, _nth_arg, _args_list
+
+
+class TestBytesDecomposition:
+    def test_functor_name_nonempty(self):
+        # nv
+        assert _functor_name(b"abc") == "."
+
+    def test_functor_name_empty(self):
+        # nv
+        assert _functor_name(b"") == "[]"
+
+    def test_arity_nonempty(self):
+        # nv
+        assert _arity(b"abc") == 2
+
+    def test_arity_empty(self):
+        # nv
+        assert _arity(b"") == 0
+
+    def test_nth_arg_head_is_int(self):
+        # nv  — codes model: head is an int, no fixed point
+        assert _nth_arg(b"abc", 1) == 97
+
+    def test_nth_arg_tail_is_bytes(self):
+        # nv
+        assert _nth_arg(b"abc", 2) == b"bc"
+
+    def test_args_list(self):
+        # nv
+        assert _args_list(b"abc") == [97, b"bc"]
+
+    def test_args_list_empty(self):
+        # nv
+        assert _args_list(b"") == []
