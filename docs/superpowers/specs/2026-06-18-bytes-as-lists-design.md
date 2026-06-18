@@ -207,6 +207,50 @@ existing DCG machinery once the core-unify and seg-runtime branches exist.
 
 ---
 
+## Generalization and future work
+
+`bytes` is, conceptually, "a list of ints constrained to `[0, 255]`," which
+invites a generalization to typed homogeneous numeric sequences (fixed-width
+ints, floats, numpy-style arrays). This section records the deliberate decision
+**not** to build that generalization now, and why, so the door stays open
+without paying for it.
+
+- **`SegBytes` is bytes-specific and `[0, 255]`-bounded — enforced at the
+  boundary, never tracked.** `SegBytes` stores `bytes` segments / `bytes`-bound
+  `VarSeg` holes; it never stores raw ints. The `[0, 255]` domain is Python's
+  own `bytes` invariant, checked *where a `bytes` object meets a list* (unify
+  against an out-of-range int simply **fails**). There is no homogeneity flag,
+  no dtype state, and no per-operation invariant to maintain.
+
+- **"List of ints" is the *view*, not the *representation*.** The ground form
+  walks to a `bytes` **object** (preserving `.decode()`/`.hex()`/identity); the
+  int list is only what it *unifies-with*. Modelling this as a `SegInts` whose
+  ground walk yields an int list would destroy type preservation — so the term
+  is `SegBytes`, and the `b"..."` literal produces a genuine `bytes` object, not
+  sugar over a list.
+
+- **Homogeneity is not worth tracking as list state.** A tracked "list of one
+  type" property is alien to the Triska/Prolog model (lists are heterogeneous by
+  nature), would multiply the term zoo and burden every dispatch site, and buys
+  nothing the boundary check does not already provide. Constraints belong at the
+  typed-object boundary, not as an invariant on every list-producing operation.
+
+- **The reusable thing is the *pattern*, not a typed-list abstraction.** The
+  template is "an opaque object type with a list view, where the object carries
+  the domain constraint, with type preservation." `bytes` is its first instance
+  (after `str`). If fixed-width int/float vectors or numpy/array interop ever
+  arrive, each would be *its own* object-type-with-a-view (e.g. an
+  `NDArrayTerm`) following this same template — **not** a generic
+  `SegInts<range>`. numpy in particular is a different domain (packed efficient
+  numeric computation), orthogonal to unification; it would be a "wrap an
+  external array as a term" feature sharing the pattern but not this machinery.
+
+- **Floats are moot now.** There is no literal representation for a sequence of
+  floats, so float-sequences carry no pressure; they fall under the same
+  recognized-but-unbuilt future-work umbrella.
+
+---
+
 ## Explicitly out of scope
 
 - **`str` ↔ `bytes` cross-unification.** `"abc"` does **not** unify with
