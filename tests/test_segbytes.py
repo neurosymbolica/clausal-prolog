@@ -135,3 +135,53 @@ class TestSegBytesUnifyAgainstList:
         # nv
         ss = SegBytes([b"a", VarSeg(Var())])
         assert ss.__unify__(SegBytes([b"a"]), Trail()) is NotImplemented
+
+
+class TestSegBytesEqHash:
+    def test_eq_structural(self):
+        # nv
+        assert SegBytes([b"a"]) == SegBytes([b"a"])
+
+    def test_eq_ground_bytes(self):
+        # nv
+        assert SegBytes([b"ab", b"c"]) == b"abc"
+
+    def test_eq_intlist(self):
+        # nv  — codes-model: SegBytes(b"abc") == [97,98,99]
+        assert SegBytes([b"abc"]) == [97, 98, 99]
+
+    def test_neq_out_of_range_intlist(self):
+        # nv
+        assert SegBytes([b"abc"]) != [97, 98, 999]
+
+    def test_unhashable(self):
+        # nv
+        with pytest.raises(TypeError):
+            hash(SegBytes([b"a"]))
+
+
+class TestSegBytesSequence:
+    def test_iter_yields_ints(self):
+        # nv  — list(SegBytes(b"abc")) == [97,98,99], honouring list(b"abc")
+        assert list(SegBytes([b"abc"])) == [97, 98, 99]
+
+    def test_len_ground(self):
+        # nv
+        assert len(SegBytes([b"abc"])) == 3
+
+    def test_len_concrete_prefix(self):
+        # nv
+        assert len(SegBytes([b"ab", VarSeg(Var())])) == 2
+
+    def test_contains_int(self):
+        # nv
+        assert 97 in SegBytes([b"abc"])
+
+    def test_getitem_ground_is_int(self):
+        # nv
+        assert SegBytes([b"abc"])[0] == 97
+
+    def test_getitem_past_prefix_raises(self):
+        # nv
+        with pytest.raises(PartialTermError):
+            SegBytes([b"ab", VarSeg(Var())])[5]

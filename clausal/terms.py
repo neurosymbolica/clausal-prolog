@@ -1222,6 +1222,75 @@ class SegBytes:
             return NotImplemented
         return NotImplemented
 
+    def __len__(self) -> int:
+        prefix, _ = self._concrete_prefix()
+        return len(prefix)
+
+    def __iter__(self):
+        # Ground: iterate the walked bytes as ints (matches list(b"abc")
+        # == [97,98,99]). Non-ground: yield the concrete int prefix.
+        prefix, _ = self._concrete_prefix()
+        return iter(prefix)
+
+    def __contains__(self, item) -> bool:
+        w = self.__walk__()
+        if isinstance(w, bytes):
+            try:
+                return item in w
+            except TypeError:
+                return False
+        has_var = False
+        for seg in w._segments:
+            if isinstance(seg, bytes):
+                try:
+                    if item in seg:
+                        return True
+                except TypeError:
+                    pass
+            else:
+                has_var = True
+        return has_var
+
+    def __getitem__(self, index):
+        w = self.__walk__()
+        if isinstance(w, bytes):
+            return w[index]
+        parts = bytearray()
+        for seg in w._segments:
+            if isinstance(seg, bytes):
+                parts.extend(seg)
+            else:
+                if isinstance(index, int) and 0 <= index < len(parts):
+                    return parts[index]
+                raise PartialTermError(
+                    f"SegBytes[{index!r}] requires resolving an unbound "
+                    f"VarSeg; only the concrete prefix (indices "
+                    f"0..{len(parts) - 1}) is knowable. SegBytes={self!r}"
+                )
+        return bytes(parts)[index]
+
+    def __eq__(self, other):
+        if isinstance(other, SegBytes):
+            return self._segments == other._segments
+        if isinstance(other, bytes):
+            w = self.__walk__()
+            return w == other if isinstance(w, bytes) else False
+        if isinstance(other, list):
+            # Codes-model symmetry: int-list unifies with bytes at runtime.
+            w = self.__walk__()
+            if isinstance(w, bytes):
+                if all(isinstance(c, int) and not isinstance(c, bool)
+                       and 0 <= c <= 255 for c in other):
+                    return w == bytes(other)
+                return False
+            return False
+        return NotImplemented
+
+    def __hash__(self):
+        # Unconditionally unhashable, symmetric with SegString (F017) and
+        # Python's list. Convert a ground SegBytes via bytes(...) for hashing.
+        raise TypeError("unhashable type: 'SegBytes'")
+
     def __repr__(self):
         return f"SegBytes({self._segments!r})"
 
