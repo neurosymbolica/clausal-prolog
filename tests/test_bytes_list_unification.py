@@ -108,3 +108,23 @@ class TestBytesDecomposition:
     def test_args_list_empty(self):
         # nv
         assert _args_list(b"") == []
+
+
+class TestBytesTypePreservation:
+    def test_bound_var_stays_bytes_and_methods_work(self):
+        # nv  — a bytes threaded through unify stays bytes; methods callable
+        trail = Trail()
+        X = Var()
+        assert unify(X, b"\x48\x49", trail)
+        v = deref(X)
+        assert type(v) is bytes
+        assert v.hex() == "4849"
+        assert v.decode() == "HI"
+
+    def test_tail_of_bytes_decomposition_stays_bytes(self):
+        # nv  — [H, *T] is b"abc": T preserves bytes, supports .decode()
+        from clausal.logic.runtime.body_star_unify import _body_star_unify
+        trail = Trail()
+        H, T = Var(), Var()
+        assert _body_star_unify(b"abc", [H], T, [], trail)
+        assert deref(T).decode() == "bc"
