@@ -17,10 +17,11 @@ from clausal.terms import (
     DictTerm,
     SegList, ConcreteSeg, VarSeg,
     SegString,
+    SegBytes,
     _multi_star_splits,
 )
 
-from ._seg_helpers import maybe_promote_to_str
+from ._seg_helpers import maybe_promote_to_str, maybe_promote_to_bytes
 from .list_unify import _head_list_unify_input, _head_list_unify_output
 
 
@@ -45,8 +46,11 @@ def _body_star_unify(target, before_vals, star_val, after_vals, trail):
     if isinstance(d, SegString):
         return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
 
-    if isinstance(d, (list, str)):
-        # Deconstruction: split list/str according to the pattern
+    if isinstance(d, SegBytes):
+        return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
+
+    if isinstance(d, (list, str, bytes)):
+        # Deconstruction: split list/str/bytes according to the pattern
         return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
 
     if is_var(d):
@@ -75,6 +79,15 @@ def _build_star_list(before, star, after):
                 all(isinstance(e, str) and len(e) == 1 for e in a)):
             return "".join(b) + d + "".join(a)
         # Mixed types — fall through to list construction
+        return b + list(d) + a
+    if isinstance(d, bytes):
+        b = list(before)
+        a = list(after)
+        codes_ok = all(isinstance(e, int) and not isinstance(e, bool)
+                       and 0 <= e <= 255 for e in b + a)
+        if codes_ok:
+            return bytes(b) + d + bytes(a)
+        # Mixed — fall through to list construction (codes view).
         return b + list(d) + a
     if isinstance(d, list):
         # F043: promote list-of-1-char-strs back to str under the Liskov
@@ -123,6 +136,39 @@ def _build_star_list(before, star, after):
             segs.append(ConcreteSeg(b))
         for seg in walked.segments:
             if isinstance(seg, str):
+                segs.append(ConcreteSeg(list(seg)))
+            else:  # VarSeg
+                segs.append(seg)
+        if a:
+            segs.append(ConcreteSeg(a))
+        return SegList(segs)
+    if isinstance(d, SegBytes):
+        walked = d.__walk__()
+        b = list(before)
+        a = list(after)
+        codes_ok = all(isinstance(e, int) and not isinstance(e, bool)
+                       and 0 <= e <= 255 for e in b + a)
+        if isinstance(walked, bytes):
+            if codes_ok:
+                return bytes(b) + walked + bytes(a)
+            return b + list(walked) + a
+        # non-ground SegBytes
+        if codes_ok:
+            new_segs = []
+            prefix = bytes(b)
+            if prefix:
+                new_segs.append(prefix)
+            new_segs.extend(walked.segments)
+            suffix = bytes(a)
+            if suffix:
+                new_segs.append(suffix)
+            return SegBytes(new_segs)
+        # Mixed — convert SegBytes segments to SegList segments (int codes).
+        segs = []
+        if b:
+            segs.append(ConcreteSeg(b))
+        for seg in walked.segments:
+            if isinstance(seg, bytes):
                 segs.append(ConcreteSeg(list(seg)))
             else:  # VarSeg
                 segs.append(seg)
@@ -253,6 +299,73 @@ def _build_multi_star_list(segments):
         if all(isinstance(s, str) for s in str_segs):
             return "".join(str_segs)
         return SegString(str_segs)
+
+    bytes_mode = True
+    for kind, val in segments:
+        if kind == "star":
+            d = deref(val)
+            if isinstance(d, bytes):
+                continue
+            if isinstance(d, SegBytes):
+                continue
+            if isinstance(d, list):
+                if not all(isinstance(e, int) and not isinstance(e, bool)
+                           and 0 <= e <= 255 for e in d):
+                    bytes_mode = False
+                    break
+                continue
+            if isinstance(d, SegList):
+                walked = d.__walk__()
+                if isinstance(walked, list) and all(
+                    isinstance(e, int) and not isinstance(e, bool)
+                    and 0 <= e <= 255 for e in walked
+                ):
+                    continue
+                bytes_mode = False
+                break
+            bytes_mode = False
+            break
+        else:  # "fixed"
+            elems = [deref(e) for e in val]
+            if any(not (isinstance(e, int) and not isinstance(e, bool)
+                        and 0 <= e <= 255) for e in elems):
+                bytes_mode = False
+                break
+
+    if bytes_mode:
+        byte_segs: list = []
+
+        def _push_bytes(bb):
+            if bb:
+                if byte_segs and isinstance(byte_segs[-1], bytes):
+                    byte_segs[-1] = byte_segs[-1] + bb
+                else:
+                    byte_segs.append(bb)
+
+        for kind, val in segments:
+            if kind == "star":
+                d = deref(val)
+                if isinstance(d, bytes):
+                    _push_bytes(d)
+                elif isinstance(d, SegBytes):
+                    walked = d.__walk__()
+                    if isinstance(walked, bytes):
+                        _push_bytes(walked)
+                    else:
+                        for inner_seg in walked.segments:
+                            if isinstance(inner_seg, bytes):
+                                _push_bytes(inner_seg)
+                            else:  # VarSeg
+                                byte_segs.append(inner_seg)
+                elif isinstance(d, list):
+                    _push_bytes(bytes(d))
+                elif isinstance(d, SegList):
+                    _push_bytes(bytes(d.__walk__()))
+            else:  # "fixed" — all ints in [0,255]
+                _push_bytes(bytes(deref(e) for e in val))
+        if all(isinstance(s, bytes) for s in byte_segs):
+            return b"".join(byte_segs)
+        return SegBytes(byte_segs)
 
     # SegList path — same as before.
     segs = []
@@ -413,6 +526,78 @@ def _segstring_align(ss, segments, trail, target):
     trail.undo(mark)
 
 
+def _segbytes_align(ss, segments, trail, target):
+    """Align a non-ground SegBytes with a multi-star pattern, yielding one
+    True per valid alignment.
+
+    Strategy: bind every VarSeg in *ss* to the empty bytes ``b""`` and
+    let the SegBytes collapse to its concatenated concrete prefix.  The
+    pattern is then enumerated against the collapsed bytes via the
+    ground-bytes enumeration logic in this module's caller.
+
+    Fixed slots see int codes (``collapsed[pos]`` is an int for ``bytes``);
+    star slots see bytes slices (``collapsed[pos:pos+length]`` is ``bytes``).
+    """
+    from clausal.terms import VarSeg as _VarSeg
+
+    var_segs = [s for s in ss.segments if isinstance(s, _VarSeg)]
+    if not var_segs:
+        return
+
+    mark = trail.mark()
+    bind_ok = True
+    for vs in var_segs:
+        if not unify(vs.var, b"", trail):
+            bind_ok = False
+            break
+    if not bind_ok:
+        trail.undo(mark)
+        return
+
+    collapsed = ss.__walk__()
+    if not isinstance(collapsed, bytes):
+        trail.undo(mark)
+        return
+
+    fixed_total = sum(len(v) for k, v in segments if k == "fixed")
+    n_stars = sum(1 for k, _ in segments if k == "star")
+    n = len(collapsed)
+    if n < fixed_total:
+        trail.undo(mark)
+        return
+
+    remainder = n - fixed_total
+    yielded = False
+    for split in _multi_star_splits(n_stars, remainder):
+        inner = trail.mark()
+        ok = True
+        pos = 0
+        si = 0
+        for kind, val in segments:
+            if not ok:
+                break
+            if kind == "fixed":
+                for v in val:
+                    if not unify(v, collapsed[pos], trail):
+                        ok = False
+                        break
+                    pos += 1
+            else:  # star
+                length = split[si]
+                if not unify(val, collapsed[pos:pos + length], trail):
+                    ok = False
+                pos += length
+                si += 1
+        if ok:
+            yield True
+            yielded = True
+        trail.undo(inner)
+    if not yielded:
+        trail.undo(mark)
+        return
+    trail.undo(mark)
+
+
 def _body_multi_star_unify(target, segments, trail):
     """Body-position multi-star unification.
 
@@ -425,15 +610,15 @@ def _body_multi_star_unify(target, segments, trail):
     Yields once per valid split (combinatorial backtracking).
     """
     d = deref(target)
-    # Strings are handled directly (no list conversion) so that star vars
-    # bind to substrings preserving str type.
-    if not isinstance(d, (list, str)):
+    # Strings and bytes are handled directly (no list conversion) so that star
+    # vars bind to substrings/subbytes preserving type.
+    if not isinstance(d, (list, str, bytes)):
         # F040 / F041 (C3 audit): SegList and SegString are walked uniformly
-        # here. Ground forms (walk → list / str) fall through to the
+        # here. Ground forms (walk → list / str / bytes) fall through to the
         # enumeration loop below.
-        if isinstance(d, (SegList, SegString)):
+        if isinstance(d, (SegList, SegString, SegBytes)):
             d_walked = d.__walk__()
-            if isinstance(d_walked, (list, str)):
+            if isinstance(d_walked, (list, str, bytes)):
                 d = d_walked
             elif isinstance(d_walked, SegString):
                 # F041: non-ground SegString — try a structural 1:1
@@ -445,6 +630,9 @@ def _body_multi_star_unify(target, segments, trail):
                 # pattern slot. The walked SegString has merged adjacent
                 # str segments, so the structure is canonical.
                 yield from _segstring_align(d_walked, segments, trail, target)
+                return
+            elif isinstance(d_walked, SegBytes):
+                yield from _segbytes_align(d_walked, segments, trail, target)
                 return
             else:
                 # non-ground SegList — construct SegList from the pattern
