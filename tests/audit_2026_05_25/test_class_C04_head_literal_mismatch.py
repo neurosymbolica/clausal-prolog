@@ -274,13 +274,12 @@ Quux(foo("abc")) <- (Helper(1))
     )
 
 
-def test_F046_bytes_literal_head_unaffected():
-    """Regression: a bytes-literal head stays on the MatchValue fast path.
-
-    bytes has no strings-as-lists contract, so this fix deliberately leaves it
-    on MatchValue. A bytes-literal head must still match a bytes caller, and
-    must NOT spuriously match the int-list `[97, 98, 99]` (which is what
-    `list(b"abc")` yields) — there is no bytes↔list contract.
+def test_F046_bytes_literal_head_matches_int_list():
+    """bytes-as-lists extension (supersedes F046's deliberate exclusion): a
+    bytes-literal head now compiles to a wildcard-capture + unify guard, so
+    an int-list caller matches it under the codes-model contract. A same-type
+    bytes caller still hits the == fast path; a str caller still does not
+    cross into the bytes domain.
     """
     source = """\
 Helper(1),
@@ -289,11 +288,11 @@ Quux(b"abc") <- (Helper(1))
 """
     mod = load_inline_clausal("c04_f046_bytes", source).__dict__["$module"]
 
-    # Same-type bytes caller matches (fast path intact).
+    # Same-type bytes caller matches (fast == path).
     assert sum(1 for _ in call("Quux", b"abc", module=mod)) == 1
-    # No bytes↔list contract: the int-list form must NOT match.
-    assert sum(1 for _ in call("Quux", [97, 98, 99], module=mod)) == 0
-    # And a str caller must NOT match a bytes head.
+    # bytes-as-lists: the int-code list form now matches (was 0 pre-feature).
+    assert sum(1 for _ in call("Quux", [97, 98, 99], module=mod)) == 1
+    # No str/bytes cross-unification: a str caller must NOT match.
     assert sum(1 for _ in call("Quux", "abc", module=mod)) == 0
 
 

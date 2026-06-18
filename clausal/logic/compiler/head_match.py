@@ -249,13 +249,11 @@ def head_to_match_pattern(
     if term is None or term is True or term is False:
         return ast.MatchSingleton(value=term)
 
-    # Python scalar literals (non-string): C-level == inside the match arm.
-    # str is handled separately below: a raw MatchValue compares with ==, which
-    # rejects a char-list caller despite the strings-as-lists contract (F046).
-    # bytes stays here — it has no strings-as-lists contract, so a bytes-literal
-    # head has no char-list caller to match (documented exclusion + extension
-    # point in the F046 follow-up spec).
-    if isinstance(term, (int, float, bytes, complex)):
+    # Python scalar literals (non-string, non-bytes): C-level == inside the
+    # match arm. str and bytes are handled below: a raw MatchValue compares
+    # with ==, which rejects a char-list / int-list caller despite the
+    # strings-as-lists / bytes-as-lists contracts (F046 + bytes-as-lists).
+    if isinstance(term, (int, float, complex)):
         return ast.MatchValue(value=ast.Constant(value=term))
 
     # Python str literal → wildcard capture + runtime unify guard, mirroring the
@@ -267,6 +265,16 @@ def head_to_match_pattern(
         cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
         if list_guards is not None:
             list_guards.append(("str", cap_name, term))
+        return ast.MatchAs(pattern=None, name=cap_name)
+
+    # Python bytes literal → wildcard capture + runtime unify guard, mirroring
+    # the str path. Routes through unify() so the bytes-as-lists contract
+    # (bytes ↔ int-code-list) is honoured for clause heads. The guard
+    # short-circuits on a same-type bytes caller via `==` before unify().
+    if isinstance(term, bytes):
+        cap_name = f"_bcap{len(list_guards) if list_guards is not None else 0}"
+        if list_guards is not None:
+            list_guards.append(("bytes", cap_name, term))
         return ast.MatchAs(pattern=None, name=cap_name)
 
     # Python list → wildcard capture + _head_list_unify guard
@@ -1094,9 +1102,34 @@ def compile_head_to_match_case(
             orelse=[],
         )]
 
+    # Emit bytes-literal guards (bytes-as-lists): wildcard capture +
+    # same-type short-circuit. Mirrors the str-guards block above.
+    bytes_guards = [g for g in list_guards if g and g[0] == "bytes"]
+    for _tag, cap_name, literal in bytes_guards:
+        inner = [ast.If(
+            test=ast.BoolOp(
+                op=ast.Or(),
+                values=[
+                    ast.Compare(
+                        left=_name(cap_name),
+                        ops=[ast.Eq()],
+                        comparators=[ast.Constant(value=literal)],
+                    ),
+                    _call(
+                        _name("unify"),
+                        _name(cap_name),
+                        ast.Constant(value=literal),
+                        _name(trail_name),
+                    ),
+                ],
+            ),
+            body=inner,
+            orelse=[],
+        )]
+
     # Emit list guards: input destructuring + deferred output construction
-    # Filter out dict/set guards from list_guards
-    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str")]
+    # Filter out dict/set/str/bytes guards from list_guards
+    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str", "bytes")]
     if actual_list_guards:
         # Separate single-star and multi-star guards
         single_star_guards = [g for g in actual_list_guards if len(g) == 5]
