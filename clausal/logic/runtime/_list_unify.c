@@ -22,6 +22,7 @@ static PyObject *fn_is_var = NULL;  /* clausal.logic.variables.is_var */
 
 static PyTypeObject *SegListType     = NULL;
 static PyTypeObject *SegStringType   = NULL;
+static PyTypeObject *SegBytesType    = NULL;
 static PyTypeObject *ConcreteSegType = NULL;
 static PyTypeObject *VarSegType      = NULL;
 
@@ -135,6 +136,47 @@ maybe_promote_to_str(PyObject *result)
     return joined;
 }
 
+/* maybe_promote_to_bytes(result) — codes-model parallel of
+ * maybe_promote_to_str. If *result* is a non-empty list whose every element
+ * is a ground int in [0, 255] (excluding bool), return the equivalent bytes;
+ * otherwise return *result* unchanged (refcount-incremented). Called ONLY at
+ * sites where a bytes / SegBytes source was present. Returns NULL on error. */
+static PyObject *
+maybe_promote_to_bytes(PyObject *result)
+{
+    if (!PyList_Check(result)) {
+        Py_INCREF(result);
+        return result;
+    }
+    Py_ssize_t n = PyList_GET_SIZE(result);
+    if (n == 0) {
+        Py_INCREF(result);
+        return result;
+    }
+    /* Validate codes domain and fill a byte buffer. */
+    char *buf = (char *)PyMem_Malloc(n);
+    if (!buf) return PyErr_NoMemory();
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *e = PyList_GET_ITEM(result, i);
+        if (!PyLong_Check(e) || PyBool_Check(e)) {
+            PyMem_Free(buf);
+            Py_INCREF(result);
+            return result;
+        }
+        int overflow = 0;
+        long v = PyLong_AsLongAndOverflow(e, &overflow);
+        if (overflow || v < 0 || v > 255) {
+            PyMem_Free(buf);
+            Py_INCREF(result);
+            return result;
+        }
+        buf[i] = (char)(unsigned char)v;
+    }
+    PyObject *out = PyBytes_FromStringAndSize(buf, n);
+    PyMem_Free(buf);
+    return out;
+}
+
 /* ================================================================
  * _head_list_unify_input
  * ================================================================ */
@@ -201,6 +243,16 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
             Py_RETURN_NONE;
         }
     }
+    if (PyObject_TypeCheck(d, SegBytesType)) {
+        PyObject *walked = PyObject_CallMethod(d, "__walk__", NULL);
+        Py_DECREF(d);
+        if (!walked) return NULL;
+        d = walked;
+        if (!PyList_Check(d) && !PyBytes_Check(d)) {
+            Py_DECREF(d);
+            Py_RETURN_NONE;
+        }
+    }
     if (PyObject_TypeCheck(d, SegListType)) {
         PyObject *walked = PyObject_CallMethod(d, "__walk__", NULL);
         Py_DECREF(d);
@@ -212,8 +264,8 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
         }
     }
 
-    /* ── list or str ── */
-    if (PyList_Check(d) || PyUnicode_Check(d)) {
+    /* ── list, str, or bytes ── */
+    if (PyList_Check(d) || PyUnicode_Check(d) || PyBytes_Check(d)) {
         Py_ssize_t dlen = seq_length(d);
         Py_ssize_t min_len = n_before + n_after;
 
@@ -355,8 +407,42 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 if (rc < 0) { Py_DECREF(s); goto error; }
             }
             Py_DECREF(s);
+        } else if (PyBytes_Check(s)) {
+            /* Codes-model parallel of the str-star branch: splat the
+             * bytes as its int codes, then promote the whole result back
+             * to bytes via maybe_promote_to_bytes (only here, where a
+             * bytes source is present). */
+            Py_ssize_t slen = PyBytes_GET_SIZE(s);
+            const unsigned char *sdata =
+                (const unsigned char *)PyBytes_AS_STRING(s);
+            for (Py_ssize_t i = 0; i < slen; i++) {
+                PyObject *code = PyLong_FromLong((long)sdata[i]);
+                if (!code) { Py_DECREF(s); goto error; }
+                int rc = PyList_Append(result, code);
+                Py_DECREF(code);
+                if (rc < 0) { Py_DECREF(s); goto error; }
+            }
+            Py_DECREF(s);
+            for (Py_ssize_t i = 0; i < n_after; i++) {
+                PyObject *v = PyList_GET_ITEM(after_vals, i);
+                PyObject *dv = call_deref(v);
+                if (!dv) goto error;
+                int rc = PyList_Append(result, dv);
+                Py_DECREF(dv);
+                if (rc < 0) goto error;
+            }
+            PyObject *promoted = maybe_promote_to_bytes(result);
+            if (!promoted) { Py_DECREF(d); Py_DECREF(result); return NULL; }
+            int ok = call_unify(d, promoted, trail);
+            Py_DECREF(promoted);
+            Py_DECREF(d);
+            Py_DECREF(result);
+            if (ok < 0) return NULL;
+            if (ok) Py_RETURN_TRUE;
+            Py_RETURN_FALSE;
         } else if (PyObject_TypeCheck(s, SegListType) ||
-                   PyObject_TypeCheck(s, SegStringType)) {
+                   PyObject_TypeCheck(s, SegStringType) ||
+                   PyObject_TypeCheck(s, SegBytesType)) {
             /* SegList / SegString: walk it.
              * F034 (C3 audit): SegString gets the same walk-and-extend (or
              * walk-and-rebuild-as-SegList) treatment as SegList. A walked
@@ -369,7 +455,37 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
             Py_DECREF(s);
             if (!walked) goto error;
 
-            if (PyList_Check(walked) || PyUnicode_Check(walked)) {
+            if (PyBytes_Check(walked)) {
+                /* Ground SegBytes → bytes: splat int codes, promote to bytes. */
+                Py_ssize_t wlen = PyBytes_GET_SIZE(walked);
+                const unsigned char *wdata =
+                    (const unsigned char *)PyBytes_AS_STRING(walked);
+                for (Py_ssize_t i = 0; i < wlen; i++) {
+                    PyObject *code = PyLong_FromLong((long)wdata[i]);
+                    if (!code) { Py_DECREF(walked); goto error; }
+                    int rc = PyList_Append(result, code);
+                    Py_DECREF(code);
+                    if (rc < 0) { Py_DECREF(walked); goto error; }
+                }
+                Py_DECREF(walked);
+                for (Py_ssize_t i = 0; i < n_after; i++) {
+                    PyObject *v = PyList_GET_ITEM(after_vals, i);
+                    PyObject *dv = call_deref(v);
+                    if (!dv) goto error;
+                    int rc = PyList_Append(result, dv);
+                    Py_DECREF(dv);
+                    if (rc < 0) goto error;
+                }
+                PyObject *promoted = maybe_promote_to_bytes(result);
+                if (!promoted) { Py_DECREF(d); Py_DECREF(result); return NULL; }
+                int ok = call_unify(d, promoted, trail);
+                Py_DECREF(promoted);
+                Py_DECREF(d);
+                Py_DECREF(result);
+                if (ok < 0) return NULL;
+                if (ok) Py_RETURN_TRUE;
+                Py_RETURN_FALSE;
+            } else if (PyList_Check(walked) || PyUnicode_Check(walked)) {
                 /* Ground SegList (→ list) or ground SegString (→ str):
                  * extend result with the elements / chars. */
                 Py_ssize_t wlen = PyObject_Length(walked);
@@ -442,8 +558,11 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 Py_ssize_t islen = PyList_GET_SIZE(inner_segs);
                 for (Py_ssize_t i = 0; i < islen; i++) {
                     PyObject *iseg = PyList_GET_ITEM(inner_segs, i);
-                    if (walked_is_segstring && PyUnicode_Check(iseg)) {
-                        /* Convert str segment to ConcreteSeg(list(seg)). */
+                    if ((walked_is_segstring && PyUnicode_Check(iseg)) ||
+                        PyBytes_Check(iseg)) {
+                        /* str segment → ConcreteSeg(list(seg)); bytes segment
+                         * → ConcreteSeg(list(seg)) where list(bytes) == int
+                         * codes. PySequence_List handles both. */
                         PyObject *chars = PySequence_List(iseg);
                         if (!chars) {
                             Py_DECREF(inner_segs); Py_DECREF(segs); Py_DECREF(after_result); goto error;
@@ -628,13 +747,15 @@ PyInit__list_unify(void)
 
     PyObject *sl = PyObject_GetAttrString(terms_mod, "SegList");
     PyObject *ss = PyObject_GetAttrString(terms_mod, "SegString");
+    PyObject *sb = PyObject_GetAttrString(terms_mod, "SegBytes");
     PyObject *cs = PyObject_GetAttrString(terms_mod, "ConcreteSeg");
     PyObject *vs = PyObject_GetAttrString(terms_mod, "VarSeg");
     Py_DECREF(terms_mod);
 
-    if (!sl || !ss || !cs || !vs) return NULL;
+    if (!sl || !ss || !sb || !cs || !vs) return NULL;
     SegListType     = (PyTypeObject *)sl;
     SegStringType   = (PyTypeObject *)ss;
+    SegBytesType    = (PyTypeObject *)sb;
     ConcreteSegType = (PyTypeObject *)cs;
     VarSegType      = (PyTypeObject *)vs;
 
