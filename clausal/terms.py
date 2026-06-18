@@ -223,6 +223,8 @@ def _seg_unify_cache_key(other, trail):
     """
     if isinstance(other, str):
         return (other, id(trail))
+    if isinstance(other, bytes):
+        return (other, id(trail))
     if isinstance(other, list):
         items = []
         for e in other:
@@ -1089,6 +1091,8 @@ class SegBytes:
     only what it *unifies-with*, preserving ``.decode()``/``.hex()``/identity.
     """
 
+    __slots__ = ("_segments", "_unify_gens")
+
     def __init__(self, segments: list):
         # Mirror SegString.__init__ (F024): the SegBytes contract permits
         # only ``bytes`` literals and ``VarSeg`` holes. Reject anything else
@@ -1237,7 +1241,7 @@ class SegBytes:
         if isinstance(w, bytes):
             try:
                 return item in w
-            except TypeError:
+            except (TypeError, ValueError):
                 return False
         has_var = False
         for seg in w._segments:
@@ -1245,11 +1249,16 @@ class SegBytes:
                 try:
                     if item in seg:
                         return True
-                except TypeError:
+                except (TypeError, ValueError):
                     pass
             else:
                 has_var = True
-        return has_var
+        sensible = (
+            (isinstance(item, int) and not isinstance(item, bool)
+             and 0 <= item <= 255)
+            or isinstance(item, bytes)
+        )
+        return has_var if sensible else False
 
     def __getitem__(self, index):
         w = self.__walk__()

@@ -86,3 +86,25 @@ class TestBodyStarBytes:
             sols.append((deref(A), deref(B)))
         assert (b"ab", b"dc") in sols
         assert all(type(a) is bytes and type(b) is bytes for a, b in sols)
+
+    def test_multi_star_pure_intlist_stays_list(self):
+        # nv  — no bytes/SegBytes source present → must NOT become bytes
+        from clausal.logic.runtime.body_star_unify import _build_multi_star_list
+        assert _build_multi_star_list([("fixed", [10, 20, 30])]) == [10, 20, 30]
+        assert type(_build_multi_star_list([("fixed", [10, 20, 30])])) is list
+
+    def test_multi_star_intlist_star_stays_list(self):
+        # nv  — a star bound to a plain int-list is not a bytes source
+        from clausal.logic.runtime.body_star_unify import _build_multi_star_list
+        Ys = Var()
+        unify(Ys, [20, 30], Trail())
+        out = _build_multi_star_list([("fixed", [10]), ("star", Ys)])
+        assert out == [10, 20, 30] and type(out) is list
+
+    def test_multi_star_with_bytes_source_promotes(self):
+        # nv  — a bytes star IS a source → promotes to bytes
+        from clausal.logic.runtime.body_star_unify import _build_multi_star_list
+        Ys = Var()
+        unify(Ys, b"\x14\x1e", Trail())
+        out = _build_multi_star_list([("fixed", [10]), ("star", Ys)])
+        assert out == b"\n\x14\x1e" and type(out) is bytes

@@ -21,7 +21,7 @@ from clausal.terms import (
     _multi_star_splits,
 )
 
-from ._seg_helpers import maybe_promote_to_str, maybe_promote_to_bytes
+from ._seg_helpers import maybe_promote_to_str
 from .list_unify import _head_list_unify_input, _head_list_unify_output
 
 
@@ -301,12 +301,15 @@ def _build_multi_star_list(segments):
         return SegString(str_segs)
 
     bytes_mode = True
+    bytes_source_present = False
     for kind, val in segments:
         if kind == "star":
             d = deref(val)
             if isinstance(d, bytes):
+                bytes_source_present = True
                 continue
             if isinstance(d, SegBytes):
+                bytes_source_present = True
                 continue
             if isinstance(d, list):
                 if not all(isinstance(e, int) and not isinstance(e, bool)
@@ -331,6 +334,11 @@ def _build_multi_star_list(segments):
                         and 0 <= e <= 255) for e in elems):
                 bytes_mode = False
                 break
+
+    # Only build bytes when a bytes/SegBytes source is actually present —
+    # a pure int-list / SegList pattern must stay a list (promiscuity guard).
+    if bytes_mode and not bytes_source_present:
+        bytes_mode = False
 
     if bytes_mode:
         byte_segs: list = []
