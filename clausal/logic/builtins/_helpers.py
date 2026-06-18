@@ -39,7 +39,9 @@ def _functor_name_py(term: Any) -> str | None:
         return "[]" if len(term) == 0 else "."
     if isinstance(term, str):
         return "[]" if len(term) == 0 else "."
-    if isinstance(term, (bool, int, float, bytes)) or term is None:
+    if isinstance(term, bytes):
+        return "[]" if len(term) == 0 else "."
+    if isinstance(term, (bool, int, float)) or term is None:
         return repr(term)
     if isinstance(term, PredicateMeta) and not term._fields:
         return term
@@ -62,7 +64,9 @@ def _arity_py(term: Any) -> int | None:
         return 0 if len(term) == 0 else 2
     if isinstance(term, str):
         return 0 if len(term) == 0 else 2
-    if isinstance(term, (bool, int, float, bytes)) or term is None:
+    if isinstance(term, bytes):
+        return 0 if len(term) == 0 else 2
+    if isinstance(term, (bool, int, float)) or term is None:
         return 0
     if isinstance(term, PredicateMeta) and not term._fields:
         return 0
@@ -107,6 +111,12 @@ def _nth_arg_py(term: Any, n: int) -> Any:
         if n == 2:
             return term[1:]
         raise IndexError(f"arg index {n} out of range for {term!r}")
+    if isinstance(term, bytes) and len(term) > 0:
+        if n == 1:
+            return term[0]
+        if n == 2:
+            return term[1:]
+        raise IndexError(f"arg index {n} out of range for {term!r}")
     raise IndexError(f"arg index {n} out of range for {term!r}")
 
 
@@ -127,6 +137,10 @@ def _args_list_py(term: Any) -> list:
             return []
         return [term[0], term[1:]]
     if isinstance(term, str):
+        if len(term) == 0:
+            return []
+        return [term[0], term[1:]]
+    if isinstance(term, bytes):
         if len(term) == 0:
             return []
         return [term[0], term[1:]]
