@@ -108,53 +108,49 @@ def _sequence__3(this_generator, _proceed, _fail, _catcher, lst, s0, s, trail):
     * Mode D (lst is SegList / SegString) — walked to its ground form so
       the same branches fire as for a plain list / str.
     """
-    from clausal.terms import SegList, SegString, ConcreteSeg, VarSeg
+    from clausal.terms import SegList, SegString, SegBytes, ConcreteSeg, VarSeg
 
     # F070 (C10): walk ground SegList / SegString inputs so the existing
     # str / list arms fire. A non-ground Seg* is treated as a structural
     # var-like value and falls through to the build branch below.
     lst_val = normalize_seg_input(deref(lst))
-    if is_var(lst_val) or not isinstance(lst_val, (list, str)):
+    if is_var(lst_val) or not isinstance(lst_val, (list, str, bytes)):
         yield (_fail, DONE)
         return
     s_val = normalize_seg_input(deref(s))
     s0_val = normalize_seg_input(deref(s0))
-    if isinstance(s0_val, (list, str)):
+    if isinstance(s0_val, (list, str, bytes)):
         # S0 is bound — check prefix and bind S to remainder.
         # F070 Mode A: when S0 and lst are both str, ``s0_val[n:]`` is a
-        # str slice and ``s0_val[:n] == lst_val`` works across (list, str)
-        # because list[c, …] == "ab" returns True only when elements are
-        # 1-char strs equal to chars — which is exactly the contract.
+        # str slice; when both are bytes, ``s0_val[n:]`` is a bytes slice.
+        # (list, str, bytes) are all handled uniformly by normalising both
+        # sides to list for the ``==`` comparison so we accept either input
+        # type.  ``list(str)`` yields 1-char strs and ``list(bytes)`` yields
+        # ints — they never compare equal across the str/bytes divide,
+        # preserving the no-cross-unification guard.
         n = len(lst_val)
-        # str.startswith equivalent across mixed types: normalize both
-        # sides to list for the comparison so we accept either input
-        # type. (str == list of 1-char strs evaluates False even when
-        # the contents match, so we have to be explicit.)
+        # Normalise both sides to list for the comparison so we accept
+        # any combination of (list, str, bytes) without cross-type errors.
         s0_pref = s0_val[:n]
         lst_pref = lst_val
-        if isinstance(s0_pref, str):
-            s0_pref_norm = list(s0_pref)
-        else:
-            s0_pref_norm = s0_pref
-        if isinstance(lst_pref, str):
-            lst_pref_norm = list(lst_pref)
-        else:
-            lst_pref_norm = lst_pref
+        s0_pref_norm = list(s0_pref) if isinstance(s0_pref, (str, bytes)) else s0_pref
+        lst_pref_norm = list(lst_pref) if isinstance(lst_pref, (str, bytes)) else lst_pref
         if len(s0_val) >= n and s0_pref_norm == lst_pref_norm:
             mark = trail.mark()
             if unify(s, s0_val[n:], trail):
                 yield (_proceed, None)
             trail.undo(mark)
-    elif isinstance(s_val, (list, str)):
+    elif isinstance(s_val, (list, str, bytes)):
         # S is bound — compute S0 = List ++ S and unify.
-        # F070 Mode B: when both lst_val and s_val are str, build a str
-        # so the output preserves the input type. Otherwise fall back to
-        # list construction.
-        if isinstance(lst_val, str) and isinstance(s_val, str):
+        # F070 Mode B: when both lst_val and s_val are str, build a str;
+        # when both are bytes, build bytes; otherwise fall back to a list.
+        if isinstance(lst_val, bytes) and isinstance(s_val, bytes):
+            expected = lst_val + s_val
+        elif isinstance(lst_val, str) and isinstance(s_val, str):
             expected = lst_val + s_val
         else:
-            lst_as_list = list(lst_val) if isinstance(lst_val, str) else lst_val
-            s_as_list = list(s_val) if isinstance(s_val, str) else s_val
+            lst_as_list = list(lst_val) if isinstance(lst_val, (str, bytes)) else lst_val
+            s_as_list = list(s_val) if isinstance(s_val, (str, bytes)) else s_val
             expected = lst_as_list + s_as_list
         mark = trail.mark()
         if unify(s0, expected, trail):
@@ -162,9 +158,16 @@ def _sequence__3(this_generator, _proceed, _fail, _catcher, lst, s0, s, trail):
         trail.undo(mark)
     else:
         # Both S0 and S are unbound — build a partial list: S0 = List ++ S.
-        # F070 Mode C: when lst is str, build a SegString so the str shape
-        # carries through; otherwise build a SegList as before.
-        if isinstance(lst_val, str):
+        # F070 Mode C: when lst is str, build a SegString; when lst is
+        # bytes, build a SegBytes so the bytes shape carries through;
+        # otherwise build a SegList as before.
+        if isinstance(lst_val, bytes):
+            ss = SegBytes([lst_val, VarSeg(s_val)])
+            mark = trail.mark()
+            if unify(s0, ss, trail):
+                yield (_proceed, None)
+            trail.undo(mark)
+        elif isinstance(lst_val, str):
             ss = SegString([lst_val, VarSeg(s_val)])
             mark = trail.mark()
             if unify(s0, ss, trail):
