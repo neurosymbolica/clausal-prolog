@@ -1,10 +1,25 @@
 # TODO: bytes-as-lists — make `bytes` a first-class sequence like `str`
 
-**Status:** Not started — feature request, needs its own spec.
+**Status:** Designed — spec written 2026-06-18, pending implementation plan.
+See **`docs/superpowers/specs/2026-06-18-bytes-as-lists-design.md`**, which
+supersedes this file for all design decisions. This file is retained as the
+surface inventory; the open questions below are now **resolved in the spec**.
 **Origin:** Surfaced while writing the F046 follow-up spec
 (`docs/superpowers/specs/2026-06-13-f046-head-literal-mismatch-design.md`,
 2026-06-13). F046 deliberately left `bytes` on the `MatchValue` fast path and
 documented it as out of scope; this todo tracks the actual feature.
+
+## Decisions made (see spec)
+
+- **Canonical form:** `bytes` unifies-with its **list of ints** decomposition
+  (`b"abc" ↔ [97, 98, 99]`) — the Prolog *codes* model. Element domain is
+  `int ∈ [0, 255]`, **not** length-1 `bytes` (bytes has no fixed point:
+  `b"a"[0] == 97`). Resolves the "blocking design decision" below.
+- **Not conversion:** unification-equivalence + C1 type preservation; the
+  `bytes` object stays `bytes`, decomposing only on unify against a list.
+- **Promiscuity:** full symmetry, no constraint (fires only when a `bytes`
+  operand is present).
+- **No `str`↔`bytes` cross-unification** (distinct domains).
 
 ## Goal
 
