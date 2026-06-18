@@ -1249,6 +1249,85 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         return 1;
     }
 
+    /* ---- Bytes ↔ List unification (codes model) ----
+     * Treat a Python bytes as a list of ints in [0, 255]:
+     * b"abc" unifies element-wise with [97, 98, 99].
+     * bytes-vs-bytes still falls through to PyObject_RichCompareBool below.
+     * Mirror of the str↔list branch above; the fast path compares int
+     * values with no allocation, allocating a PyLong only to bind a Var or
+     * delegate to a custom term's __unify__. */
+    if (PyBytes_Check(t1) && PyList_Check(t2)) {
+        Py_ssize_t n = PyBytes_GET_SIZE(t1);
+        if (n != PyList_GET_SIZE(t2)) return 0;
+        if (n == 0) return 1;
+        const unsigned char *data = (const unsigned char *)PyBytes_AS_STRING(t1);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            long c1 = (long)data[i];
+            PyObject *elem_raw = PyList_GetItemRef(t2, i);
+            if (elem_raw == NULL) return -1;
+            PyObject *elem = var_deref(elem_raw);
+            if (Var_Check(elem)) {
+                PyObject *code = PyLong_FromLong(c1);
+                if (!code) { Py_DECREF(elem_raw); return -1; }
+                int r = do_unify(code, elem, trail, depth + 1, oc);
+                Py_DECREF(code);
+                Py_DECREF(elem_raw);
+                if (r != 1) return r;
+            } else if (PyLong_Check(elem)) {
+                /* Ground int element — compare value, no allocation. A
+                 * bool is a PyLong subclass (True==1) and matches by value. */
+                int overflow = 0;
+                long v = PyLong_AsLongAndOverflow(elem, &overflow);
+                Py_DECREF(elem_raw);
+                if (overflow || v != c1) return 0;
+            } else {
+                /* Not a Var, not an int — could be a SegBytes or other
+                 * custom term. Allocate the code and delegate to do_unify. */
+                PyObject *code = PyLong_FromLong(c1);
+                if (!code) { Py_DECREF(elem_raw); return -1; }
+                int r = do_unify(code, elem, trail, depth + 1, oc);
+                Py_DECREF(code);
+                Py_DECREF(elem_raw);
+                if (r != 1) return r;
+            }
+        }
+        return 1;
+    }
+    if (PyList_Check(t1) && PyBytes_Check(t2)) {
+        /* Symmetric: list on left, bytes on right. */
+        Py_ssize_t n = PyBytes_GET_SIZE(t2);
+        if (PyList_GET_SIZE(t1) != n) return 0;
+        if (n == 0) return 1;
+        const unsigned char *data = (const unsigned char *)PyBytes_AS_STRING(t2);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            long c2 = (long)data[i];
+            PyObject *elem_raw = PyList_GetItemRef(t1, i);
+            if (elem_raw == NULL) return -1;
+            PyObject *elem = var_deref(elem_raw);
+            if (Var_Check(elem)) {
+                PyObject *code = PyLong_FromLong(c2);
+                if (!code) { Py_DECREF(elem_raw); return -1; }
+                int r = do_unify(elem, code, trail, depth + 1, oc);
+                Py_DECREF(code);
+                Py_DECREF(elem_raw);
+                if (r != 1) return r;
+            } else if (PyLong_Check(elem)) {
+                int overflow = 0;
+                long v = PyLong_AsLongAndOverflow(elem, &overflow);
+                Py_DECREF(elem_raw);
+                if (overflow || v != c2) return 0;
+            } else {
+                PyObject *code = PyLong_FromLong(c2);
+                if (!code) { Py_DECREF(elem_raw); return -1; }
+                int r = do_unify(elem, code, trail, depth + 1, oc);
+                Py_DECREF(code);
+                Py_DECREF(elem_raw);
+                if (r != 1) return r;
+            }
+        }
+        return 1;
+    }
+
     /* __unify__ protocol: delegate to Python method if present.
      * Allows custom term types (DictTerm, SetTerm, SegList, etc.) to define
      * their own unification behaviour without hardcoding each type in C.
