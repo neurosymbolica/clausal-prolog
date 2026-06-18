@@ -1,9 +1,10 @@
 # TODO: bytes-as-lists — make `bytes` a first-class sequence like `str`
 
-**Status:** Designed — spec written 2026-06-18, pending implementation plan.
-See **`docs/superpowers/specs/2026-06-18-bytes-as-lists-design.md`**, which
-supersedes this file for all design decisions. This file is retained as the
-surface inventory; the open questions below are now **resolved in the spec**.
+**Status:** Done / Implemented 2026-06-18.
+Plan: `docs/superpowers/plans/2026-06-18-bytes-as-lists.md`.
+Spec: `docs/superpowers/specs/2026-06-18-bytes-as-lists-design.md` (supersedes
+this file for all design decisions). This file is retained as the surface
+inventory; all open questions are **resolved in the spec and implemented**.
 **Origin:** Surfaced while writing the F046 follow-up spec
 (`docs/superpowers/specs/2026-06-13-f046-head-literal-mismatch-design.md`,
 2026-06-13). F046 deliberately left `bytes` on the `MatchValue` fast path and

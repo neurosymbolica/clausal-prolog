@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-18
 **Author:** Michael Amy (with Claude)
-**Status:** Draft — pending user review before plan-writing
+**Status:** Implemented (2026-06-18)
 **Origin:** Surfaced while writing the F046 follow-up spec; tracked in
 `todo/bytes-as-lists.md`, which this spec supersedes for design decisions.
 **Related:** strings-as-lists audit (`../audits/2026-05-25-string-implementation/`),
