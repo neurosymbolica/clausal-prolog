@@ -94,10 +94,10 @@ class TestExtractFirstArgKey:
         assert _extract_first_arg_key(c, 2) == "red"
 
     def test_non_indexable_first_arg(self):
-        """Lists and term instances are not indexed (yet)."""
-        # nv
+        """Term instances are not indexed; int-lists are now bytes-indexed (Task 11)."""
+        # nv — [1, 2] is a valid codes list: canonicalises to b'\x01\x02'
         c = Clause(head=Compound("f", ([1, 2], "x")), body=[True])
-        assert _extract_first_arg_key(c, 2) is _INDEX_VAR
+        assert _extract_first_arg_key(c, 2) == b'\x01\x02'
 
     def test_bool_key(self):
         # nv

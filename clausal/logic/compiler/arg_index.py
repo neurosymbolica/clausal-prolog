@@ -65,6 +65,22 @@ def _charlist_to_str_or_none(seq) -> str | None:
     return "".join(seq)
 
 
+def _bytelist_to_bytes_or_none(seq) -> bytes | None:
+    """Canonicalise a list/tuple of ints in [0, 255] to its joined bytes.
+
+    Returns ``None`` when *seq* is empty or contains any non-int / bool /
+    out-of-range element. The bytes-as-lists analog of
+    ``_charlist_to_str_or_none``: a head ``Foo(b"abc")`` and a caller passing
+    ``[97, 98, 99]`` produce the same bucket key.
+    """
+    if not seq:
+        return None
+    for c in seq:
+        if type(c) is not int or not (0 <= c <= 255):
+            return None
+    return bytes(seq)
+
+
 def _arg_to_index_key(arg: Any) -> Any:
     """Compile-time: convert a head argument to its index key.
 
@@ -89,6 +105,9 @@ def _arg_to_index_key(arg: Any) -> Any:
         s = _charlist_to_str_or_none(arg)
         if s is not None:
             return s
+        b = _bytelist_to_bytes_or_none(arg)
+        if b is not None:
+            return b
         return _INDEX_VAR
     if isinstance(arg, Compound):
         return (arg.functor, len(arg.args))
@@ -122,6 +141,9 @@ def _runtime_arg_key(a: Any) -> Any:
         s = _charlist_to_str_or_none(a)
         if s is not None:
             return s
+        b = _bytelist_to_bytes_or_none(a)
+        if b is not None:
+            return b
         return _INDEX_VAR
     if isinstance(a, Compound):
         return (a.functor, len(a.args))
@@ -153,7 +175,10 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
             if not isinstance(e, ast.Constant):
                 return None
             elts.append(e.value)
-        return _charlist_to_str_or_none(elts)
+        s = _charlist_to_str_or_none(elts)
+        if s is not None:
+            return s
+        return _bytelist_to_bytes_or_none(elts)
     if isinstance(arg_expr, ast.Call):
         # compound term constructor: Dog(_v_name, _v_age) or mod.Dog(...)
         func = arg_expr.func
