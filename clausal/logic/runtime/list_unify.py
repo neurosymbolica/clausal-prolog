@@ -81,9 +81,9 @@ from __future__ import annotations
 from clausal.logic.variables import is_var, deref, unify
 from clausal.terms import (
     SegList, ConcreteSeg, VarSeg,
-    SegString,
+    SegString, SegBytes,
 )
-from ._seg_helpers import maybe_promote_to_str
+from ._seg_helpers import maybe_promote_to_str, maybe_promote_to_bytes
 
 
 def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
@@ -122,12 +122,16 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
         d = d.__walk__()
         if not isinstance(d, (list, str)):
             return None
+    if isinstance(d, SegBytes):
+        d = d.__walk__()
+        if not isinstance(d, (list, bytes)):
+            return None
     if isinstance(d, SegList):
         d = d.__walk__()
         if not isinstance(d, (list, str)):
             return False
 
-    if isinstance(d, (list, str)):
+    if isinstance(d, (list, str, bytes)):
         n_before = len(var_vals)
         n_after = len(after_vals)
         min_len = n_before + n_after
@@ -184,6 +188,37 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             # the final ``maybe_promote_to_str`` re-promotes the whole
             # result to a str when every element is 1-char-str.
             result.extend(s)
+        elif isinstance(s, bytes):
+            # Codes-model parallel of the str-star branch: a bytes-bound
+            # star is treated as a list of int codes. Iterating bytes yields
+            # ints; promote the result back to bytes (only fires because a
+            # bytes source is present here — no spurious bytes otherwise).
+            result.extend(s)
+            result.extend(deref(v) for v in after_vals)
+            return unify(d, maybe_promote_to_bytes(result), trail)
+        elif isinstance(s, SegBytes):
+            walked = s.__walk__()
+            if isinstance(walked, bytes):
+                result.extend(walked)
+                result.extend(deref(v) for v in after_vals)
+                return unify(d, maybe_promote_to_bytes(result), trail)
+            else:
+                # Non-ground SegBytes: convert each bytes segment to a
+                # ConcreteSeg of int codes (list(b"GET") == [71,69,84]) and
+                # rebuild as a SegList for unification — mirrors the
+                # SegString non-ground output path.
+                after_result = [deref(v) for v in after_vals]
+                segs = []
+                if result:
+                    segs.append(ConcreteSeg(result))
+                for inner in walked.segments:
+                    if isinstance(inner, bytes):
+                        segs.append(ConcreteSeg(list(inner)))
+                    else:  # VarSeg
+                        segs.append(inner)
+                if after_result:
+                    segs.append(ConcreteSeg(after_result))
+                return unify(d, SegList(segs), trail)
         elif isinstance(s, SegList):
             # Star derefs to a SegList — walk it first
             walked = s.__walk__()
