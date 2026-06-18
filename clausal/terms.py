@@ -1077,6 +1077,153 @@ def _segstring_unify_gen(segstring, target_str, trail):
         trail.undo(mark)
 
 
+# ── SegBytes — segmented byte string ─────────────────────────────────────────
+
+
+class SegBytes:
+    """A segmented byte string: concrete ``bytes`` literals alternating with
+    ``VarSeg`` holes. The codes-model analog of :class:`SegString`.
+
+    VarSegs bind to ``bytes`` substrings (never int-lists, never ``str``).
+    Ground SegBytes walk to a plain ``bytes`` object; the int-code list is
+    only what it *unifies-with*, preserving ``.decode()``/``.hex()``/identity.
+    """
+
+    def __init__(self, segments: list):
+        # Mirror SegString.__init__ (F024): the SegBytes contract permits
+        # only ``bytes`` literals and ``VarSeg`` holes. Reject anything else
+        # at construction with a typed clausal exception.
+        for i, seg in enumerate(segments):
+            if not isinstance(seg, (bytes, VarSeg)):
+                raise PartialTermError(
+                    f"SegBytes segment [{i}] is {type(seg).__name__} "
+                    f"({seg!r}); expected bytes or VarSeg. SegBytes accepts "
+                    f"only bytes literals and variable-length holes."
+                )
+        self._segments = list(segments)
+        self._unify_gens: dict = {}
+
+    @property
+    def segments(self):
+        return self._segments
+
+    def __walk__(self):
+        """Normalise: collapse bound VarSegs, merge adjacent bytes. Returns a
+        plain ``bytes`` when fully ground."""
+        from .logic.variables import walk
+        new_segs: list = []
+        for seg in self._segments:
+            if isinstance(seg, bytes):
+                if new_segs and isinstance(new_segs[-1], bytes):
+                    new_segs[-1] = new_segs[-1] + seg
+                else:
+                    new_segs.append(seg)
+            else:  # VarSeg
+                v = walk(seg.var)
+                if isinstance(v, bytes):
+                    if new_segs and isinstance(new_segs[-1], bytes):
+                        new_segs[-1] = new_segs[-1] + v
+                    else:
+                        new_segs.append(v)
+                elif isinstance(v, list):
+                    # VarSeg bound to an int-code list — join into bytes.
+                    # Mirror SegString's char-list guard (F024): validate the
+                    # codes domain before bytes(...) so a malformed binding
+                    # raises a typed PartialTermError, not a bare ValueError.
+                    for i, elem in enumerate(v):
+                        if not (isinstance(elem, int) and not isinstance(elem, bool)
+                                and 0 <= elem <= 255):
+                            raise PartialTermError(
+                                f"SegBytes VarSeg bound to a non-byte-list: "
+                                f"element [{i}] is {type(elem).__name__} "
+                                f"({elem!r}), expected int in [0, 255]. "
+                                f"Full binding: {v!r}"
+                            )
+                    b = bytes(v)
+                    if new_segs and isinstance(new_segs[-1], bytes):
+                        new_segs[-1] = new_segs[-1] + b
+                    else:
+                        new_segs.append(b)
+                elif isinstance(v, SegBytes):
+                    walked_inner = v.__walk__()
+                    if isinstance(walked_inner, bytes):
+                        if new_segs and isinstance(new_segs[-1], bytes):
+                            new_segs[-1] = new_segs[-1] + walked_inner
+                        else:
+                            new_segs.append(walked_inner)
+                    else:
+                        for inner_seg in walked_inner._segments:
+                            if isinstance(inner_seg, bytes):
+                                if new_segs and isinstance(new_segs[-1], bytes):
+                                    new_segs[-1] = new_segs[-1] + inner_seg
+                                else:
+                                    new_segs.append(inner_seg)
+                            else:
+                                new_segs.append(inner_seg)
+                else:
+                    new_segs.append(VarSeg(v))
+
+        if all(isinstance(s, bytes) for s in new_segs):
+            return b"".join(new_segs)
+        new_segs = [s for s in new_segs if not (isinstance(s, bytes) and not s)]
+        if not new_segs:
+            return b""
+        return SegBytes(new_segs)
+
+    def _concrete_prefix(self) -> tuple[bytes, bool]:
+        """Return (concrete_bytes, has_var_seg) for the walked SegBytes."""
+        w = self.__walk__()
+        if isinstance(w, bytes):
+            return w, False
+        parts: list = []
+        has_var = False
+        for seg in w._segments:
+            if isinstance(seg, bytes):
+                parts.append(seg)
+            else:
+                has_var = True
+        return b"".join(parts), has_var
+
+    def __repr__(self):
+        return f"SegBytes({self._segments!r})"
+
+
+def _segbytes_unify_gen(segbytes, target_bytes, trail):
+    """Non-deterministic generator: yield True for each valid split of
+    *target_bytes* across the VarSegs of *segbytes*.
+
+    *segbytes* must be a walked (non-ground) SegBytes.
+    *target_bytes* must be a plain Python bytes.
+    """
+    from .logic.variables import unify
+    min_len = sum(len(s) for s in segbytes.segments if isinstance(s, bytes))
+    n = len(target_bytes)
+    if n < min_len:
+        return
+    n_stars = sum(1 for s in segbytes.segments if isinstance(s, VarSeg))
+    remainder = n - min_len
+    for split in _multi_star_splits(n_stars, remainder):
+        mark = trail.mark()
+        ok = True
+        pos = 0
+        si = 0
+        for seg in segbytes.segments:
+            if isinstance(seg, VarSeg):
+                sz = split[si]; si += 1
+                ok = ok and unify(seg.var, target_bytes[pos:pos + sz], trail)
+                pos += sz
+            else:  # bytes
+                end = pos + len(seg)
+                if target_bytes[pos:end] != seg:
+                    ok = False
+                pos = end
+            if not ok:
+                break
+        if ok:
+            yield True
+        trail.undo(mark)
+
+
 # ── DictTerm — unification-aware dictionary ───────────────────────────────────
 
 
@@ -1951,6 +2098,7 @@ __all__ = [
     "SetTerm",
     "KWTerm",
     "SegString",
+    "SegBytes",
     "PyThunk",
     "FStringThunk",
     # Rendering style
