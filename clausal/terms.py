@@ -1184,6 +1184,44 @@ class SegBytes:
                 has_var = True
         return b"".join(parts), has_var
 
+    def __unify__(self, other, trail):
+        from .logic.variables import unify
+        if isinstance(other, bytes):
+            walked = self.__walk__()
+            if isinstance(walked, bytes):
+                return walked == other
+            key = _seg_unify_cache_key(other, trail)
+            gen = self._unify_gens.get(key)
+            if gen is None:
+                gen = _segbytes_unify_gen(walked, other, trail)
+                self._unify_gens[key] = gen
+            try:
+                next(gen)
+                return True
+            except StopIteration:
+                self._unify_gens.pop(key, None)
+                return False
+        if isinstance(other, list):
+            # Ground SegBytes → bytes, then let C-level bytes↔list
+            # unification handle the comparison.
+            walked = self.__walk__()
+            if isinstance(walked, bytes):
+                return unify(walked, other, trail)
+            # Non-ground: convert bytes segments to ConcreteSeg-of-int-codes
+            # (list(b"GET") == [71,69,84]) and delegate to the SegList
+            # generator-driven enumeration. Mirrors SegString's list arm
+            # (F023 precedent).
+            equivalent_segs: list = []
+            for seg in walked._segments:
+                if isinstance(seg, bytes):
+                    equivalent_segs.append(ConcreteSeg(list(seg)))
+                else:  # VarSeg
+                    equivalent_segs.append(seg)
+            return SegList(equivalent_segs).__unify__(other, trail)
+        if isinstance(other, (SegBytes, SegList)):
+            return NotImplemented
+        return NotImplemented
+
     def __repr__(self):
         return f"SegBytes({self._segments!r})"
 

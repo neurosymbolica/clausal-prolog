@@ -1,6 +1,6 @@
 import pytest
 
-from clausal.terms import SegBytes, VarSeg, PartialTermError
+from clausal.terms import SegBytes, VarSeg, PartialTermError, _segbytes_unify_gen
 from clausal.logic.variables import Var, Trail, unify, deref
 
 
@@ -78,3 +78,60 @@ class TestSegBytesConcretePrefix:
         # nv
         prefix, has_var = SegBytes([b"ab", VarSeg(Var()), b"cd"])._concrete_prefix()
         assert prefix == b"abcd" and has_var is True
+
+
+class TestSegBytesUnifyAgainstBytes:
+    def test_ground_equal(self):
+        # nv
+        assert SegBytes([b"hello"]).__unify__(b"hello", Trail()) is True
+
+    def test_ground_unequal(self):
+        # nv
+        assert SegBytes([b"hello"]).__unify__(b"world", Trail()) is False
+
+    def test_prefix_peel(self):
+        # nv  — SegBytes([b"GET", VarSeg(Rest)]) vs b"GET /" binds Rest=b" /"
+        trail = Trail()
+        Rest = Var()
+        ss = SegBytes([b"GET", VarSeg(Rest)])
+        assert ss.__unify__(b"GET /", trail) is True
+        assert deref(Rest) == b" /"
+
+    def test_varseg_binds_to_bytes_not_intlist(self):
+        # nv  — the bound value must be a bytes object, not an int-list
+        trail = Trail()
+        Rest = Var()
+        SegBytes([b"GET", VarSeg(Rest)]).__unify__(b"GET /", trail)
+        assert type(deref(Rest)) is bytes
+
+    def test_two_varseg_multiple_splits(self):
+        # nv
+        trail = Trail()
+        A, B = Var(), Var()
+        ss = SegBytes([VarSeg(A), b",", VarSeg(B)])
+        walked = ss.__walk__()
+        solutions = []
+        for _ in _segbytes_unify_gen(walked, b"a,b,c", trail):
+            solutions.append((deref(A), deref(B)))
+        assert (b"a", b"b,c") in solutions
+        assert (b"a,b", b"c") in solutions
+        assert len(solutions) == 2
+
+    def test_too_short_fails(self):
+        # nv
+        assert SegBytes([b"hello", VarSeg(Var())]).__unify__(b"hi", Trail()) is False
+
+
+class TestSegBytesUnifyAgainstList:
+    def test_non_ground_against_intlist(self):
+        # nv  — SegBytes([b"ab", VarSeg(Rest)]) vs [97,98,99] binds Rest=[99]
+        trail = Trail()
+        Rest = Var()
+        ss = SegBytes([b"ab", VarSeg(Rest)])
+        assert ss.__unify__([97, 98, 99], trail) is True
+        assert deref(Rest) == [99]
+
+    def test_against_segbytes_notimplemented(self):
+        # nv
+        ss = SegBytes([b"a", VarSeg(Var())])
+        assert ss.__unify__(SegBytes([b"a"]), Trail()) is NotImplemented
