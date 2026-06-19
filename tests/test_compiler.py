@@ -147,11 +147,16 @@ class TestHeadToMatchPattern:
         assert p.name.startswith("_scap")
         assert list_guards == [("str", p.name, "hello")]
 
-    def test_bytes_gives_match_value(self):
-        # nv
-        p = head_to_match_pattern(b"hi", {})
-        assert isinstance(p, ast.MatchValue)
-        assert p.value.value == b"hi"
+    def test_bytes_gives_wildcard_capture_with_guard(self):
+        # nv — bytes-as-lists: a bytes literal head no longer compiles to a
+        # MatchValue (which compares with ==, rejecting int-code-list callers
+        # under the codes contract). It now compiles to a wildcard capture plus
+        # a recorded ("bytes", cap, literal) guard, mirroring the str path.
+        list_guards: list = []
+        p = head_to_match_pattern(b"hi", {}, list_guards=list_guards)
+        assert isinstance(p, ast.MatchAs)
+        assert p.name.startswith("_bcap")
+        assert list_guards == [("bytes", p.name, b"hi")]
 
     # ── Python list ──
 

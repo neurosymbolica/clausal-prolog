@@ -103,21 +103,17 @@ class TestBytesDCGBinaryProtocol:
         assert snap == (b"/index", bytes)
 
 
-class TestBytesListPredicateGaps:
-    """Documents the CURRENT gap: list-library predicates are not yet
-    bytes-aware. These xfail; flip to plain asserts when bytes support lands."""
+class TestBytesListPredicatesNowWork:
+    """The list-library gap is CLOSED — these predicates are now bytes-aware.
+    Full positive coverage lives in tests/test_bytes_list_builtins.py."""
 
     @pytest.mark.parametrize("src,pred,args", [
         ("p(A,B,C) <- append(A,B,C)\n", "p", (b"he", b"llo", b"hello")),
         ("p(X,I) <- in_(X,I)\n", "p", (98, b"abc")),
         ("p(I,O) <- reverse(I,O)\n", "p", (b"abc", b"cba")),
     ])
-    def test_list_predicates_not_yet_bytes_aware(self, src, pred, args):
-        # nv  — currently no solution; documents the C9 gap
-        mod = _mod("bp_gap_" + pred + str(abs(hash(src)) % 9999), src)
+    def test_list_predicates_are_bytes_aware(self, src, pred, args):
+        # nv  — bytes now flows through the list-library predicates
+        mod = _mod("bp_ok_" + pred + str(abs(hash(src)) % 9999), src)
         n = sum(1 for _ in call(pred, *args, module=mod))
-        assert n == 0, (
-            "EXPECTED gap: list-library predicate is not bytes-aware yet. "
-            "If this now returns a solution, bytes support has landed — update "
-            "the docs' limitations section and convert this to a positive test."
-        )
+        assert n >= 1
