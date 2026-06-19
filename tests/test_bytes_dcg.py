@@ -281,3 +281,46 @@ class TestPhraseBytesGrammar:
             f"phrase/3 over bytes: remainder type must be bytes, got {type(rv).__name__!r}: {rv!r}"
         )
         assert rv == b"/path/to/resource"
+
+
+# ── realistic binary-protocol grammar (added in the docs pass) ────────────────
+
+
+class TestBytesBinaryProtocolGrammar:
+    """A small request-line grammar over a bytes stream, exercising a
+    multi-rule DCG with int-code terminals, alternation, sequencing, and a
+    preserved bytes remainder. Demonstrates the documented binary-protocol
+    use case end to end."""
+
+    _SRC = (
+        "method >> ([71, 69, 84])\n"        # b"GET"  (alternation, no args)
+        "method >> ([80, 85, 84])\n"        # b"PUT"
+        "request >> (method, [32])\n"       # a method then a space b" "
+    )
+
+    def test_sequencing_and_remainder(self):
+        # nv — composition (non-terminal then terminal); remainder stays bytes.
+        loaded = _load_inline("bin_proto_a", self._SRC)
+        req = loaded.__dict__["request"]
+        m = loaded.__dict__["$module"]
+        rest = Var()
+        got = None
+        for _ in call("phrase", req, b"GET /index", rest, module=m):
+            got = (deref(rest), type(deref(rest)))
+            break
+        assert got == (b"/index", bytes)
+
+    def test_alternation_matches_either_token(self):
+        # nv — both GET and PUT alternatives parse to full consumption.
+        loaded = _load_inline("bin_proto_b", self._SRC)
+        req = loaded.__dict__["request"]
+        m = loaded.__dict__["$module"]
+        assert sum(1 for _ in call("phrase", req, b"GET ", b"", module=m)) >= 1
+        assert sum(1 for _ in call("phrase", req, b"PUT ", b"", module=m)) >= 1
+
+    def test_unknown_method_yields_no_parse(self):
+        # nv — a token the grammar doesn't define produces zero solutions.
+        loaded = _load_inline("bin_proto_c", self._SRC)
+        req = loaded.__dict__["request"]
+        m = loaded.__dict__["$module"]
+        assert sum(1 for _ in call("phrase", req, b"DEL ", b"", module=m)) == 0

@@ -54,6 +54,8 @@ nav:
     - Lambdas: lambdas.md
     - If-Then-Else: reified_ite.md
     - DCGs: dcg.md
+    - Strings as Lists: strings_as_lists.md
+    - Bytes as Codes: bytes_as_lists.md
     - Dicts and Sets: dicts_sets.md
     - Exceptions: exceptions.md
     - Coroutining: coroutining.md

@@ -252,6 +252,12 @@ at the logic level, but remain Python `str` objects internally. You get the
 logical uniformity of Prolog's approach with the performance and interop of
 Python's native strings.
 
+This doc covers the **`chars`** model (a `str` is a list of one-character
+strings). Clausal also has the Prolog **`codes`** model for byte sequences:
+a Python `bytes` behaves as a list of integer codes in `[0, 255]`. See
+[Bytes as Lists of Codes](bytes_as_lists.md) for byte-stream unification and
+binary-protocol DCGs.
+
 | Feature | Traditional Prolog | Clausal |
 |---------|-------------------|---------|
 | String representation | List of character atoms | Python `str` |
