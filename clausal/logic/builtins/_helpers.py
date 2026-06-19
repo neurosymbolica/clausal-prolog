@@ -11,7 +11,7 @@ from typing import Any
 
 from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
-from clausal.terms import Compound, KWTerm, SegList, SegString, VarSeg, ConcreteSeg
+from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes, VarSeg, ConcreteSeg
 
 
 # ── Python reference implementations ─────────────────────────────────────────
@@ -198,6 +198,17 @@ def _is_ground_py(term: Any) -> bool:
                 if not _is_ground_py(seg):
                     return False
         return True
+    if isinstance(term, SegBytes):
+        for seg in term.segments:
+            if isinstance(seg, bytes):
+                continue
+            if isinstance(seg, VarSeg):
+                if not _is_ground_py(seg.var):
+                    return False
+            else:
+                if not _is_ground_py(seg):
+                    return False
+        return True
     if is_term_instance(term):
         return all(_is_ground_py(getattr(term, name)) for name in term_field_names(term))
     return True
@@ -226,13 +237,13 @@ try:
     _register_term_types(Compound, KWTerm)
 
     # F083 (audit 2026-05-25): the C ``_is_ground`` does not know about
-    # SegList / SegString and falls through to "True" for any unknown
-    # container. Short-circuit the Seg* shapes in Python so a SegList
-    # / SegString that still holds an unbound ``VarSeg`` reports
-    # *not* ground. Other shapes still go through the fast C path.
+    # SegList / SegString / SegBytes and falls through to "True" for any
+    # unknown container. Short-circuit the Seg* shapes in Python so a
+    # SegList / SegString / SegBytes that still holds an unbound ``VarSeg``
+    # reports *not* ground. Other shapes still go through the fast C path.
     def _is_ground(term: Any) -> bool:
         t = deref(term)
-        if isinstance(t, (SegList, SegString)):
+        if isinstance(t, (SegList, SegString, SegBytes)):
             return _is_ground_py(t)
         return _c_is_ground(t)
 except ImportError:

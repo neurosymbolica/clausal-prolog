@@ -194,3 +194,51 @@ class TestSecondarySequencePredicatesBytes:
         snap = _first(call("split_with", 44, b"a,b", (P := Var()), module=_M),
                       lambda: deref(P))
         assert snap == [b"a", b"b"]
+
+
+class TestSameLengthBytes:
+    """same_length/2 must treat bytes as a sequence (codes model), mirroring
+    str. Regression for the inline isinstance(.,(list,str)) that omitted bytes."""
+
+    def test_same_length_bytes_bytes(self):
+        # nv  — both length 3
+        assert sum(1 for _ in call("same_length", b"abc", b"xyz", module=_M)) == 1
+
+    def test_different_length_bytes(self):
+        # nv
+        assert sum(1 for _ in call("same_length", b"ab", b"xyz", module=_M)) == 0
+
+    def test_same_length_bytes_list(self):
+        # nv  — cross-type: bytes vs int-list, both length 3
+        assert sum(1 for _ in call("same_length", b"abc", [1, 2, 3], module=_M)) == 1
+
+    def test_same_length_bytes_var_binds_shape(self):
+        # nv  — same_length(b"abc", V) binds V to a 3-element bytes-shaped placeholder
+        got = _first(call("same_length", b"abc", (V := Var()), module=_M),
+                     lambda: deref(V))
+        assert got is not None
+        # placeholder has three element-slots (bytes-shaped, mirroring str's SegString)
+        from clausal.terms import SegBytes
+        assert isinstance(got, SegBytes)
+        assert len(got.segments) == 3
+
+
+class TestSegBytesThroughBuiltins:
+    """A ground SegBytes flowing into a list-library predicate must be treated
+    as the bytes it walks to — not crash. Regression for the missing
+    SegBytes.is_ground() at lists.py:69/:100 (the DCG-builds-SegBytes →
+    list-library workflow)."""
+
+    def test_reverse_of_ground_segbytes(self):
+        from clausal.terms import SegBytes
+        # nv  — reverse(SegBytes([b"ab", b"c"]), X) → X = b"cba"
+        snap = _first(call("reverse", SegBytes([b"ab", b"c"]), (X := Var()), module=_M),
+                      lambda: (deref(X), type(deref(X))))
+        assert snap == (b"cba", bytes)
+
+    def test_length_of_ground_segbytes(self):
+        from clausal.terms import SegBytes
+        # nv  — length(SegBytes([b"abc"]), N) → N = 3
+        snap = _first(call("length", SegBytes([b"abc"]), (N := Var()), module=_M),
+                      lambda: deref(N))
+        assert snap == 3

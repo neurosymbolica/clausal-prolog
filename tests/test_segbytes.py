@@ -187,6 +187,40 @@ class TestSegBytesSequence:
             SegBytes([b"ab", VarSeg(Var())])[5]
 
 
+class TestSegBytesIsGround:
+    """SegBytes.is_ground() — the codes-model analog of SegString.is_ground()."""
+
+    def test_ground_segbytes_is_ground(self):
+        # nv
+        assert SegBytes([b"abc"]).is_ground() is True
+
+    def test_segbytes_with_unbound_varseg_is_not_ground(self):
+        # nv
+        assert SegBytes([b"abc", VarSeg(Var())]).is_ground() is False
+
+    def test_segbytes_with_bound_varseg_is_ground(self):
+        # nv
+        X = Var()
+        unify(X, b"de", Trail())
+        assert SegBytes([b"abc", VarSeg(X)]).is_ground() is True
+
+
+class TestSegBytesOccursCheck:
+    """SegBytes.__occurs_check__() — must detect a var inside a VarSeg."""
+
+    def test_var_in_varseg(self):
+        # nv
+        X = Var()
+        sb = SegBytes([b"abc", VarSeg(X)])
+        assert sb.__occurs_check__(X)
+
+    def test_var_not_in_segbytes(self):
+        # nv
+        X, Y = Var(), Var()
+        sb = SegBytes([b"abc", VarSeg(Y)])
+        assert not sb.__occurs_check__(X)
+
+
 from clausal.logic.runtime._seg_helpers import (
     maybe_promote_to_bytes, normalize_seg_input,
 )

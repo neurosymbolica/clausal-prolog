@@ -3,7 +3,12 @@ import tempfile
 
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
-from clausal.logic.compiler.arg_index import _bytelist_to_bytes_or_none
+from clausal.logic.compiler.arg_index import (
+    _bytelist_to_bytes_or_none,
+    _build_first_arg_index,
+)
+from clausal.logic.database import Clause
+from clausal.terms import Compound
 
 
 def _load_inline(name, source):
@@ -35,18 +40,50 @@ class TestByteListCanonicaliser:
         assert _bytelist_to_bytes_or_none(["a"]) is None
 
 
+# Four+ clauses so the first-arg index actually builds (_INDEX_THRESHOLD == 4).
 _SRC = """\
 Helper(1),
 
 Code(b"red") <- (Helper(1))
 Code(b"green") <- (Helper(1))
 Code(b"blue") <- (Helper(1))
+Code(b"cyan") <- (Helper(1))
 """
+
+
+class TestBytesIndexBuckets:
+    """Prove spec criterion 5 at the INDEX-STRUCTURE level: a table of
+    bytes-literal heads (>= threshold) actually builds an index whose buckets
+    are keyed by the bytes literals — not just that a linear scan finds a
+    solution."""
+
+    def _clauses(self):
+        return [
+            Clause(head=Compound("Code", (b"red",)), body=[True]),
+            Clause(head=Compound("Code", (b"green",)), body=[True]),
+            Clause(head=Compound("Code", (b"blue",)), body=[True]),
+            Clause(head=Compound("Code", (b"cyan",)), body=[True]),
+        ]
+
+    def test_index_builds_with_bytes_literal_buckets(self):
+        # nv  — the index exists and buckets each bytes-literal head
+        index = _build_first_arg_index(self._clauses(), 1)
+        assert index is not None
+        assert {b"red", b"green", b"blue", b"cyan"} <= set(index["buckets"].keys())
+
+    def test_intlist_head_canonicalises_into_bytes_bucket(self):
+        # nv  — an int-list-literal head buckets under the same key as bytes
+        clauses = self._clauses() + [
+            Clause(head=Compound("Code", ([97, 97],)), body=[True])  # == b"aa"
+        ]
+        index = _build_first_arg_index(clauses, 1)
+        assert b"aa" in index["buckets"]
 
 
 class TestBytesDispatchBuckets:
     def test_intlist_caller_reaches_bytes_clause(self):
-        # nv  — list(b"green") == [103,114,101,101,110]
+        # nv  — list(b"green") == [103,114,101,101,110]; >=4 clauses so the
+        # index is built and the int-list caller must land in the b"green" bucket
         mod = _load_inline("bytes_idx_a", _SRC)
         assert sum(1 for _ in call("Code", list(b"green"), module=mod)) == 1
 

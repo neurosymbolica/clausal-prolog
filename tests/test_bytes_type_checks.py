@@ -65,6 +65,29 @@ class TestIsCodes:
         assert _ok("is_codes", [], _mod("tc_ic6"))
 
 
+class TestNonGroundSegBytesGuard:
+    """A SegBytes that still holds an unbound VarSeg is NOT ground, so the
+    groundness guard in is_list/1, is_codes/1 and ground/1 must reject it.
+    Regression for _is_ground not knowing about SegBytes (F083 for bytes)."""
+
+    def _nonground(self):
+        from clausal.terms import SegBytes, VarSeg
+        from clausal.logic.variables import Var
+        return SegBytes([b"GET", VarSeg(Var())])
+
+    def test_is_list_rejects_nonground_segbytes(self):
+        # nv
+        assert not _ok("is_list", self._nonground(), _mod("tc_ngsb1"))
+
+    def test_is_codes_rejects_nonground_segbytes(self):
+        # nv
+        assert not _ok("is_codes", self._nonground(), _mod("tc_ngsb2"))
+
+    def test_ground_rejects_nonground_segbytes(self):
+        # nv
+        assert not _ok("ground", self._nonground(), _mod("tc_ngsb3"))
+
+
 class TestBytesStaysNotStrNotChars:
     def test_is_str_rejects_bytes(self):
         # nv  — a bytes is not a str

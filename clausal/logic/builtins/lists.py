@@ -852,11 +852,15 @@ def _fresh_same_shape(seq_val):
     *str-shaped* rather than a Python list. Otherwise generate the
     classic list of fresh ``Var`` objects.
     """
-    from clausal.terms import SegString, VarSeg
+    from clausal.terms import SegString, SegBytes, VarSeg
     if isinstance(seq_val, str):
         return SegString([VarSeg(Var()) for _ in seq_val])
     if isinstance(seq_val, SegString) and seq_val.is_ground():
         return SegString([VarSeg(Var()) for _ in seq_val.__walk__()])
+    if isinstance(seq_val, bytes):
+        return SegBytes([VarSeg(Var()) for _ in seq_val])
+    if isinstance(seq_val, SegBytes) and seq_val.is_ground():
+        return SegBytes([VarSeg(Var()) for _ in seq_val.__walk__()])
     return [Var() for _ in seq_val]
 
 
@@ -867,13 +871,15 @@ def _same_length__2(l1, l2, trail, k):
     F053 (C9 audit, option A — input-type wins): if one side is a
     ``str`` (or ground ``SegString``) and the other is unbound, the
     generated placeholder is a ``SegString`` of fresh ``VarSeg`` holes
-    (str-shaped); for a ``list`` sibling the placeholder is the
-    classic list of fresh ``Var`` objects.
+    (str-shaped); a ``bytes`` (or ground ``SegBytes``) sibling yields a
+    ``SegBytes`` of fresh holes (bytes-shaped, codes model); for a
+    ``list`` sibling the placeholder is the classic list of fresh
+    ``Var`` objects.
     """
     l1_val = deref(l1)
     l2_val = deref(l2)
-    l1_is_seq = isinstance(l1_val, (list, str))
-    l2_is_seq = isinstance(l2_val, (list, str))
+    l1_is_seq = isinstance(l1_val, (list, str, bytes))
+    l2_is_seq = isinstance(l2_val, (list, str, bytes))
     if l1_is_seq and l2_is_seq:
         if len(l1_val) == len(l2_val):
             yield None

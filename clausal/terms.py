@@ -1188,6 +1188,18 @@ class SegBytes:
                 has_var = True
         return b"".join(parts), has_var
 
+    def is_ground(self) -> bool:
+        """True if all VarSegs are bound — i.e. ``__walk__`` returns ``bytes``."""
+        return isinstance(self.__walk__(), bytes)
+
+    def __occurs_check__(self, var) -> bool:
+        """Called by C do_occurs_check."""
+        from .logic.variables import occurs_check
+        for seg in self._segments:
+            if isinstance(seg, VarSeg) and occurs_check(var, seg.var):
+                return True
+        return False
+
     def __unify__(self, other, trail):
         from .logic.variables import unify
         if isinstance(other, bytes):
