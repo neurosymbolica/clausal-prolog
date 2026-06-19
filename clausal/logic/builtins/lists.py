@@ -419,7 +419,7 @@ def _msort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail)
             result = sorted(items)
         except TypeError:
             result = sorted(items, key=lambda x: (type(x).__name__, repr(x)))
-        out = _seq_result(result, isinstance(lst_val, str))
+        out = _seq_result(result, isinstance(lst_val, str), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):
             yield (_proceed, None)
@@ -441,7 +441,7 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
             result = sorted(seen)
         except TypeError:
             result = sorted(seen, key=lambda x: (type(x).__name__, repr(x)))
-        out = _seq_result(result, isinstance(lst_val, str))
+        out = _seq_result(result, isinstance(lst_val, str), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):
             yield (_proceed, None)
@@ -457,7 +457,8 @@ def _permutation__2(this_generator, _proceed, _fail, _catcher, lst, perm, trail)
     items = _as_items(lst_val)
     if items is not None:
         was_str = isinstance(lst_val, str)
-        if _c_permutation_find is not None:
+        was_bytes = _was_bytes(lst_val)
+        if _c_permutation_find is not None and not was_bytes:
             perm_iter = itertools.permutations(items)
             while True:
                 mark = _c_permutation_find(perm_iter, perm, was_str, trail)
@@ -468,7 +469,7 @@ def _permutation__2(this_generator, _proceed, _fail, _catcher, lst, perm, trail)
         else:
             for p in itertools.permutations(items):
                 mark = trail.mark()
-                if unify(perm, _seq_result(list(p), was_str), trail):
+                if unify(perm, _seq_result(list(p), was_str, was_bytes), trail):
                     yield (_proceed, None)
                 trail.undo(mark)
     yield (_fail, DONE)
@@ -481,7 +482,8 @@ def _select__3(this_generator, _proceed, _fail, _catcher, elem, lst, rest, trail
     items = _as_items(lst_val)
     if items is not None:
         was_str = isinstance(lst_val, str)
-        if _c_select_find is not None:
+        was_bytes = _was_bytes(lst_val)
+        if _c_select_find is not None and not was_bytes:
             idx = 0
             while True:
                 result = _c_select_find(
@@ -494,7 +496,7 @@ def _select__3(this_generator, _proceed, _fail, _catcher, elem, lst, rest, trail
         else:
             for i, item in enumerate(items):
                 mark = trail.mark()
-                remainder = _seq_result(items[:i] + items[i + 1:], was_str)
+                remainder = _seq_result(items[:i] + items[i + 1:], was_str, was_bytes)
                 if unify(elem, item, trail) and unify(rest, remainder, trail):
                     yield (_proceed, None)
                 trail.undo(mark)
@@ -510,7 +512,8 @@ def _subtract__3(this_generator, _proceed, _fail, _catcher, set1, set2, diff, tr
     s2_items = _as_items(s2)
     if s1_items is not None and s2_items is not None:
         _out_str = isinstance(s1, str) and isinstance(s2, str)
-        result = _seq_result([x for x in s1_items if x not in s2_items], _out_str)
+        _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
+        result = _seq_result([x for x in s1_items if x not in s2_items], _out_str, _out_bytes)
         mark = trail.mark()
         if unify(diff, result, trail):
             yield (_proceed, None)
@@ -527,7 +530,8 @@ def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inte
     s2_items = _as_items(s2)
     if s1_items is not None and s2_items is not None:
         _out_str = isinstance(s1, str) and isinstance(s2, str)
-        result = _seq_result([x for x in s1_items if x in s2_items], _out_str)
+        _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
+        result = _seq_result([x for x in s1_items if x in s2_items], _out_str, _out_bytes)
         mark = trail.mark()
         if unify(inter, result, trail):
             yield (_proceed, None)
@@ -544,11 +548,12 @@ def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail)
     s2_items = _as_items(s2)
     if s1_items is not None and s2_items is not None:
         _out_str = isinstance(s1, str) and isinstance(s2, str)
+        _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
         result = list(s1_items)
         for x in s2_items:
             if x not in result:
                 result.append(x)
-        out = _seq_result(result, _out_str)
+        out = _seq_result(result, _out_str, _out_bytes)
         mark = trail.mark()
         if unify(uni, out, trail):
             yield (_proceed, None)
@@ -566,7 +571,7 @@ def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, tra
         for x in items:
             if x not in seen:
                 seen.append(x)
-        out = _seq_result(seen, isinstance(lst_val, str))
+        out = _seq_result(seen, isinstance(lst_val, str), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(set_out, out, trail):
             yield (_proceed, None)
@@ -765,6 +770,7 @@ def _split_with__3(this_generator, _proceed, _fail, _catcher, sep, lst, parts, t
     items = _as_items(lst_val)
     if items is not None:
         was_str = isinstance(lst_val, str)
+        was_bytes = _was_bytes(lst_val)
         # Split mode
         result: list = [[]]
         for item in items:
@@ -774,6 +780,8 @@ def _split_with__3(this_generator, _proceed, _fail, _catcher, sep, lst, parts, t
                 result[-1].append(deref(item))
         if was_str:
             result = [_seq_result(part, True) for part in result]
+        elif was_bytes:
+            result = [_seq_result(part, False, True) for part in result]
         mark = trail.mark()
         if unify(parts, result, trail):
             yield (_proceed, None)

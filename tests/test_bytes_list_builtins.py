@@ -133,3 +133,64 @@ class TestBytesListNoStrCross:
         # codes/chars result, must not silently produce a wrong-typed answer.
         # (We assert it does not unify a bytes result against a str caller.)
         assert sum(1 for _ in call("append", b"ab", b"c", "abc", module=_M)) == 0
+
+
+class TestSecondarySequencePredicatesBytes:
+    """Full input-type-wins parity: sort/select/permutation/set-ops/split_with
+    reconstruct bytes from a bytes input, just as they reconstruct str."""
+
+    def test_msort(self):
+        # nv
+        snap = _first(call("msort", b"cba", (X := Var()), module=_M),
+                      lambda: (deref(X), type(deref(X))))
+        assert snap == (b"abc", bytes)
+
+    def test_sort_dedup(self):
+        # nv  — sort removes duplicates
+        snap = _first(call("sort", b"aab", (X := Var()), module=_M),
+                      lambda: (deref(X), type(deref(X))))
+        assert snap == (b"ab", bytes)
+
+    def test_select_rest_is_bytes(self):
+        # nv  — select(98, b"abc", Rest) → Rest = b"ac"
+        snap = _first(call("select", 98, b"abc", (R := Var()), module=_M),
+                      lambda: (deref(R), type(deref(R))))
+        assert snap == (b"ac", bytes)
+
+    def test_permutation_yields_bytes(self):
+        # nv
+        seen = []
+        for _ in call("permutation", b"ab", (X := Var()), module=_M):
+            seen.append(deref(X))
+        assert set(seen) == {b"ab", b"ba"}
+        assert all(type(s) is bytes for s in seen)
+
+    def test_subtract(self):
+        # nv
+        snap = _first(call("subtract", b"abc", b"b", (X := Var()), module=_M),
+                      lambda: (deref(X), type(deref(X))))
+        assert snap == (b"ac", bytes)
+
+    def test_intersection(self):
+        # nv
+        snap = _first(call("intersection", b"abc", b"bcd", (X := Var()), module=_M),
+                      lambda: (deref(X), type(deref(X))))
+        assert snap == (b"bc", bytes)
+
+    def test_union(self):
+        # nv
+        snap = _first(call("union", b"ab", b"bc", (X := Var()), module=_M),
+                      lambda: (deref(X), type(deref(X))))
+        assert snap == (b"abc", bytes)
+
+    def test_list_to_set(self):
+        # nv
+        snap = _first(call("list_to_set", b"aab", (X := Var()), module=_M),
+                      lambda: (deref(X), type(deref(X))))
+        assert snap == (b"ab", bytes)
+
+    def test_split_with_parts_are_bytes(self):
+        # nv  — split b"a,b" on the comma code (44) → [b"a", b"b"]
+        snap = _first(call("split_with", 44, b"a,b", (P := Var()), module=_M),
+                      lambda: deref(P))
+        assert snap == [b"a", b"b"]
