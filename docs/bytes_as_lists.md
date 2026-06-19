@@ -94,6 +94,31 @@ second argument `b"bc"` (the tail, still `bytes`).
 
 ---
 
+## List Predicates
+
+The [list predicates](lists.md) accept a `bytes` value as a sequence of codes.
+Element results are int codes; sequence results reconstruct as `bytes`
+(input-type-wins):
+
+```clausal
+--8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:list_predicates"
+```
+
+---
+
+## Type Checks
+
+```clausal
+--8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:type_checks"
+```
+
+`is_list/1` accepts a `bytes` (it is list-shaped). `is_codes/1` is the codes
+analog of `is_chars/1`: it succeeds for a `bytes` or a list of ints in
+`[0, 255]`. `is_str/1` and `is_chars/1` stay `false` for a `bytes` — a `bytes`
+is not a `str`, and a code sequence is not a character sequence.
+
+---
+
 ## Pattern Matching
 
 A clause-head or body list pattern destructures a `bytes` argument: the head
@@ -109,12 +134,9 @@ head_tail([H, *T], H, T),
 The same works as a body goal: `b"abc" is [First, *Rest]` binds `First = 97`
 and `Rest = b"bc"`. Star variables bind to **`bytes`** substrings, preserving
 the type — exactly as they bind to `str` substrings under
-[strings as lists](strings_as_lists.md).
-
-!!! note "Single-star vs multi-star"
-    Single-star patterns (`[H, *T]`, `[*T]`) match `bytes` today. Patterns with
-    **two or more** star variables (`[*A, *B]`, `[*_, X, *_]`) do **not** yet
-    match a `bytes` argument — see [Current scope and limitations](#current-scope-and-limitations).
+[strings as lists](strings_as_lists.md). Multi-star patterns
+(`[*A, *B]`, `[*_, X, *_]`) match `bytes` too, and enumerate splits on
+backtracking just as they do for lists and strings.
 
 ---
 
@@ -184,40 +206,34 @@ int lists unify as int lists, and **nothing ever spuriously becomes `bytes`.**
 
 ## Current scope and limitations
 
-bytes-as-lists is wired through the layers that the binary-protocol use case
-needs, but it is **narrower than strings-as-lists**. Today the codes contract
-covers:
+The codes contract is wired through the same layers as strings-as-lists:
 
 - **Unification** — `bytes` ↔ int-code list, both directions, element binding,
   length-mismatch failure, with the `bytes` type preserved.
-- **Single-star pattern matching** — clause-head and body patterns `[H, *T]`
-  bind an int head and a `bytes` tail (`b"abc" is [F, *R]` → `F = 97`,
-  `R = b"bc"`).
+- **Pattern matching** — single- and multi-star clause-head and body patterns
+  (`[H, *T]`, `[*A, *B]`, `[*_, X, *_]`) bind int elements and `bytes`
+  sub-slices (`b"abc" is [F, *R]` → `F = 97`, `R = b"bc"`), enumerating splits
+  on backtracking.
+- **List-library predicates** — `append/3`, `in_/2`, `length/2`, `reverse/2`,
+  `take/3`, `drop/3`, `split_at/4`, `list_item/3`, `last/2`, etc. accept a
+  `bytes` value as a code sequence; element results are int codes and sequence
+  results reconstruct as `bytes` (input-type-wins).
 - **Term inspection** — `functor/3`, `arg/3`, `unpack/2` (`=..`).
 - **`SegBytes`** — the partial-byte-string term (the codes analog of
   `SegString`): concrete `bytes` segments alternating with variable-length
   holes that bind to `bytes` substrings. See `clausal.terms.SegBytes`.
 - **DCGs / `phrase//`** — `bytes` subjects with integer-code terminals and
   `sequence//1`, with the remainder preserved as `bytes`.
+- **Type checks** — `is_list/1` accepts a `bytes` (it is list-shaped), and
+  `is_codes/1` is the codes analog of `is_chars/1` (succeeds for a `bytes` or a
+  list of ints in `[0, 255]`). `is_str/1` and `is_chars/1` stay `false` for a
+  `bytes` — a `bytes` is not a `str`, and is a *code* sequence, not a *char*
+  sequence.
 - **Clause dispatch & first-argument indexing** — a `bytes`-literal clause head
   matches an int-list caller and buckets with it.
 
-Not yet bytes-aware (these accept `str`/`list` but not `bytes`):
-
-- **Multi-star head patterns** — `[*A, *B]`, `[*_, X, *_]` (two or more star
-  variables) do not yet match a `bytes` argument. Single-star patterns do.
-- The high-level **list-library predicates** — `append/3`, `in_/2`, `reverse/2`,
-  `take/3`, `drop/3`, `list_item/3`, and `length/2` in compute mode. Use an
-  explicit code list, or `phrase//` for sequence work, until these are extended.
-- The **type-check predicates** `is_list/1` and `is_chars/1` report `false` for
-  a `bytes` value (and `is_str/1` correctly reports `false` — a `bytes` is not a
-  `str`).
-
-These gaps correspond to the audit classes the strings-as-lists work covered for
-`str` (the polymorphic-builtin and type-check classes) but which have no `bytes`
-analog yet. Prefer **explicit code lists**, **single-star patterns**, or
-**`phrase//`** for byte-sequence work that the list predicates would otherwise
-handle.
+Out-of-scope remains: no `str`/`bytes` cross-unification, and no `bytearray`
+support (only immutable `bytes`).
 
 ---
 

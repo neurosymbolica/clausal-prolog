@@ -40,3 +40,19 @@ Test("arg head is int") <- arg(1, b"abc", 97)  # nv
 Test("arg tail is bytes") <- arg(2, b"abc", b"bc")  # nv
 Test("univ") <- unpack(b"ab", ['.', 97, b"b"])  # nv
 # --8<-- [end:inspection]
+
+# --8<-- [start:list_predicates]
+Test("append codes -> bytes") <- (append(b"GET", b" /", X), X == b"GET /")  # nv
+Test("member code") <- in_(71, b"GET")  # nv
+Test("length") <- length(b"GET", 3)  # nv
+Test("reverse -> bytes") <- (reverse(b"abc", R), R == b"cba")  # nv
+Test("take -> bytes") <- (take(2, b"hello", T), T == b"he")  # nv
+# --8<-- [end:list_predicates]
+
+# --8<-- [start:type_checks]
+Test("is_list bytes") <- is_list(b"abc")  # nv
+Test("is_codes bytes") <- is_codes(b"abc")  # nv
+Test("is_codes int-list") <- is_codes([97, 98, 99])  # nv
+Test("bytes is not a str") <- (not is_str(b"abc"))  # nv
+Test("bytes is not chars") <- (not is_chars(b"abc"))  # nv
+# --8<-- [end:type_checks]
