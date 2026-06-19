@@ -822,10 +822,12 @@ def _compile_multi_star_guard(
     # _n = len(_d)
     len_assign = _assign(n_name, _call(_name("len"), _name(d_name)))
 
-    # isinstance check — accept both list and str (strings as char lists)
+    # isinstance check — accept list, str (chars), and bytes (codes). Native
+    # indexing/slicing handles all three: str[i] is a 1-char str, bytes[i] is
+    # an int code, and slicing preserves the container type.
     isinstance_check = _call(
         _name("isinstance"), _name(d_name),
-        ast.Tuple(elts=[_name("list"), _name("str")], ctx=ast.Load()),
+        ast.Tuple(elts=[_name("list"), _name("str"), _name("bytes")], ctx=ast.Load()),
     )
 
     # Build segments list AST for _build_multi_star_list (used in unbound Var case)
@@ -915,6 +917,26 @@ def _compile_multi_star_guard(
         orelse=[],
     )
 
+    # bytes-as-lists: mirror the SegString walk for SegBytes so the multi-star
+    # head guard accepts ground SegBytes (which walk to plain bytes and route
+    # through the (list, str, bytes) isinstance arm below).
+    segbytes_normalise = ast.If(
+        test=_call(_name("isinstance"), _name(d_name), _name("SegBytes")),
+        body=[
+            _assign(
+                d_name,
+                ast.Call(
+                    func=ast.Attribute(
+                        value=_name(d_name), attr="__walk__", ctx=ast.Load()
+                    ),
+                    args=[],
+                    keywords=[],
+                ),
+            )
+        ],
+        orelse=[],
+    )
+
     # F047 (C3 audit): a still-non-ground SegString delegates to
     # ``$body_multi_star_unify`` (runtime), which knows how to align a
     # non-ground SegString with a multi-star pattern via
@@ -939,12 +961,36 @@ def _compile_multi_star_guard(
         orelse=[],
     )
 
+    # bytes-as-lists: a still-non-ground SegBytes delegates to
+    # ``$body_multi_star_unify`` (runtime), which aligns it with the multi-star
+    # pattern via ``_segbytes_align`` (one True per valid alignment). Mirror of
+    # ``segstring_branch``.
+    segbytes_branch = ast.If(
+        test=_call(_name("isinstance"), _name(d_name), _name("SegBytes")),
+        body=[
+            ast.For(
+                target=ast.Name(id=f"_sbms{cap_name}", ctx=ast.Store()),
+                iter=_call(
+                    _name("$body_multi_star_unify"),
+                    _name(cap_name),
+                    segments_ast,
+                    _name(trail_name),
+                ),
+                body=body_stmts,
+                orelse=[],
+            ),
+        ],
+        orelse=[],
+    )
+
     return [
         deref_assign,
         seglist_normalise,
         segstring_normalise,
+        segbytes_normalise,
         var_check,
         segstring_branch,
+        segbytes_branch,
         list_branch,
     ]
 

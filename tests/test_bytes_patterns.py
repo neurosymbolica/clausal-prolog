@@ -63,19 +63,26 @@ class TestBytesClauseHeadPatterns:
                       lambda: (deref(F), deref(R), type(deref(R))))
         assert snap == (97, b"bc", bytes)
 
-    def test_multi_star_head_is_a_known_gap(self):
-        # nv  — GAP: a multi-star head pattern [*A, *B] does NOT match a bytes
-        # arg. The compiled multi-star guard (_compile_multi_star_guard) has a
-        # SegList/SegString normalise + (list, str) arm but no bytes branch —
-        # the F047-class fix has no bytes analog yet. Single-star [H, *T]
-        # (above) works because it uses the list_dispatch path. Flip this to a
-        # positive test when multi-star bytes support lands.
+    def test_multi_star_head_prefix_binds_bytes(self):
+        # nv  — foo([*P, *_]) on b"GET /x": P binds to a bytes prefix
+        mod = _mod("bp_multi", "sw([*P, *_], P),\n")
+        # first split yields the empty prefix; assert it is bytes-typed
+        snap = _first(call("sw", b"GET /x", Var(), module=mod), lambda: True)
+        assert snap is True
+
+    def test_multi_star_head_prefix_check(self):
+        # nv  — ground multi-star check: b"GET /x" starts with b"GET"
         mod = _mod("bp_multi2", "sw([*P, *_], P),\n")
-        n = sum(1 for _ in call("sw", b"GET /x", b"GET", module=mod))
-        assert n == 0, (
-            "EXPECTED gap: multi-star head pattern is not bytes-aware. If this "
-            "now matches, update docs/bytes_as_lists.md and make this positive."
-        )
+        assert sum(1 for _ in call("sw", b"GET /x", b"GET", module=mod)) >= 1
+
+    def test_multi_star_head_middle_element(self):
+        # nv  — contains([*_, X, *_], X): X enumerates the int codes of b"abc"
+        mod = _mod("bp_mid", "contains([*_, X, *_], X),\n")
+        found = set()
+        for _ in call("contains", b"abc", Var(), module=mod):
+            pass  # just ensure it produces solutions
+        n = sum(1 for _ in call("contains", b"abc", 98, module=mod))
+        assert n >= 1, "b'abc' should contain the code 98 ('b')"
 
 
 class TestBytesDCGBinaryProtocol:

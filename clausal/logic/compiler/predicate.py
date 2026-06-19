@@ -25,6 +25,7 @@ from clausal.terms import (
     Call, LoadName, LoadAttr,
     SegList, ConcreteSeg, VarSeg,
     SegString,
+    SegBytes,
     _seglist_unify_gen,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
@@ -645,6 +646,7 @@ def compile_predicate_trampoline(
         "$put_attr": _put_attr_fn,
         "SegList": SegList,
         "SegString": SegString,
+        "SegBytes": SegBytes,
         "ConcreteSeg": ConcreteSeg,
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
@@ -1304,6 +1306,7 @@ def compile_predicate_shallow(
         "$put_attr": _put_attr_fn_s,
         "SegList": SegList,
         "SegString": SegString,
+        "SegBytes": SegBytes,
         "ConcreteSeg": ConcreteSeg,
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
