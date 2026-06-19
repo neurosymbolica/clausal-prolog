@@ -60,10 +60,13 @@ def _as_items(val):
         return val
     if isinstance(val, str):
         return list(val)
+    if isinstance(val, bytes):
+        # Codes model: a bytes is a list of int codes (list(b"abc") == [97,98,99]).
+        return list(val)
     # Late import to avoid an import cycle (clausal.terms → clausal.logic
     # via Seg*.__walk__).
-    from clausal.terms import SegList, SegString
-    if isinstance(val, (SegList, SegString)) and val.is_ground():
+    from clausal.terms import SegList, SegString, SegBytes
+    if isinstance(val, (SegList, SegString, SegBytes)) and val.is_ground():
         return _as_items(val.__walk__())
     return None
 
@@ -86,11 +89,34 @@ def _was_string(val):
     return False
 
 
-def _seq_result(items, was_string):
-    """Reconstruct a string when the original input was a string and the
-    result consists entirely of single-character strings."""
+def _was_bytes(val):
+    """Codes-model analog of :func:`_was_string`: True if *val* should be
+    treated as bytes-shaped for output, so a result of int codes promotes back
+    to a ``bytes`` object (input-type-wins). Recognises a plain ``bytes`` and a
+    ground ``SegBytes`` that walks to one."""
+    if isinstance(val, bytes):
+        return True
+    from clausal.terms import SegBytes
+    if isinstance(val, SegBytes) and val.is_ground():
+        return isinstance(val.__walk__(), bytes)
+    return False
+
+
+def _seq_result(items, was_string, was_bytes=False):
+    """Reconstruct the input container type from a result of elements.
+
+    When the input was a ``str`` and every result element is a 1-char str,
+    promote to ``str``. When the input was a ``bytes`` and every result element
+    is an int in ``[0, 255]`` (excluding ``bool``), promote to ``bytes`` (the
+    codes model). Otherwise return the plain list (input-type-wins; a list
+    input keeps a list output)."""
     if was_string and all(isinstance(c, str) and len(c) == 1 for c in items):
         return "".join(items)
+    if was_bytes and all(
+        isinstance(c, int) and not isinstance(c, bool) and 0 <= c <= 255
+        for c in items
+    ):
+        return bytes(items)
     return items
 
 
@@ -182,14 +208,18 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     l1_items = _as_items(l1_val)
     l2_items = _as_items(l2_val)
     l3_items = _as_items(l3_val)
-    # Track whether all bound sequence inputs are strings for result type
-    _all_str = isinstance(l1_val, str) or isinstance(l2_val, str) or isinstance(l3_val, str)
+    # Track the result container type. str output when a str is present and no
+    # list/bytes; bytes output (codes model) when a bytes is present and no
+    # list/str. A list anywhere keeps a list (input-type-wins).
+    _any_str = isinstance(l1_val, str) or isinstance(l2_val, str) or isinstance(l3_val, str)
+    _any_bytes = isinstance(l1_val, bytes) or isinstance(l2_val, bytes) or isinstance(l3_val, bytes)
     _any_list = isinstance(l1_val, list) or isinstance(l2_val, list) or isinstance(l3_val, list)
-    _out_str = _all_str and not _any_list
+    _out_str = _any_str and not _any_list and not _any_bytes
+    _out_bytes = _any_bytes and not _any_list and not _any_str
 
     if l1_items is not None and l2_items is not None:
         # Both known: concatenate
-        result = _seq_result(l1_items + l2_items, _out_str)
+        result = _seq_result(l1_items + l2_items, _out_str, _out_bytes)
         mark = trail.mark()
         if unify(l3, result, trail):
             yield (_proceed, None)
@@ -198,14 +228,15 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
         # L1 and L3 known: compute L2
         n = len(l1_items)
         if len(l3_items) >= n and l3_items[:n] == l1_items:
-            remainder = _seq_result(l3_items[n:], _out_str)
+            remainder = _seq_result(l3_items[n:], _out_str, _out_bytes)
             mark = trail.mark()
             if unify(l2, remainder, trail):
                 yield (_proceed, None)
             trail.undo(mark)
     elif l3_items is not None:
-        # Only L3 known: enumerate all splits
-        if _c_append_split_find is not None:
+        # Only L3 known: enumerate all splits. The C accelerator only knows the
+        # str promotion flag, so bytes output routes through the Python path.
+        if _c_append_split_find is not None and not _out_bytes:
             idx = 0
             while True:
                 result = _c_append_split_find(
@@ -217,8 +248,8 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
                 trail.undo(mark)
         else:
             for i in range(len(l3_items) + 1):
-                prefix = _seq_result(l3_items[:i], _out_str)
-                suffix = _seq_result(l3_items[i:], _out_str)
+                prefix = _seq_result(l3_items[:i], _out_str, _out_bytes)
+                suffix = _seq_result(l3_items[i:], _out_str, _out_bytes)
                 mark = trail.mark()
                 if unify(l1, prefix, trail) and unify(l2, suffix, trail):
                     yield (_proceed, None)
@@ -276,7 +307,8 @@ def _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
     items = _as_items(lst_val)
     if items is not None:
         was_str = _was_string(lst_val)
-        result = _seq_result(list(reversed(items)), was_str)
+        was_bytes = _was_bytes(lst_val)
+        result = _seq_result(list(reversed(items)), was_str, was_bytes)
         mark = trail.mark()
         if unify(rev, result, trail):
             yield (_proceed, None)
@@ -636,7 +668,8 @@ def _take__3(this_generator, _proceed, _fail, _catcher, n, lst, taken, trail):
     items = _as_items(lst_val)
     if isinstance(n_val, int) and items is not None:
         was_str = isinstance(lst_val, str)
-        result = _seq_result(items[:n_val] if n_val >= 0 else [], was_str)
+        was_bytes = _was_bytes(lst_val)
+        result = _seq_result(items[:n_val] if n_val >= 0 else [], was_str, was_bytes)
         mark = trail.mark()
         if unify(taken, result, trail):
             yield (_proceed, None)
@@ -651,7 +684,8 @@ def _drop__3(this_generator, _proceed, _fail, _catcher, n, lst, rest, trail):
     items = _as_items(lst_val)
     if isinstance(n_val, int) and items is not None:
         was_str = isinstance(lst_val, str)
-        result = _seq_result(items[n_val:] if n_val >= 0 else items, was_str)
+        was_bytes = _was_bytes(lst_val)
+        result = _seq_result(items[n_val:] if n_val >= 0 else items, was_str, was_bytes)
         mark = trail.mark()
         if unify(rest, result, trail):
             yield (_proceed, None)
@@ -666,9 +700,10 @@ def _split_at__4(this_generator, _proceed, _fail, _catcher, n, lst, left, right,
     items = _as_items(lst_val)
     if isinstance(n_val, int) and items is not None:
         was_str = isinstance(lst_val, str)
+        was_bytes = _was_bytes(lst_val)
         idx = max(0, min(n_val, len(items)))
-        l_out = _seq_result(items[:idx], was_str)
-        r_out = _seq_result(items[idx:], was_str)
+        l_out = _seq_result(items[:idx], was_str, was_bytes)
+        r_out = _seq_result(items[idx:], was_str, was_bytes)
         mark = trail.mark()
         if unify(left, l_out, trail) and unify(right, r_out, trail):
             yield (_proceed, None)
