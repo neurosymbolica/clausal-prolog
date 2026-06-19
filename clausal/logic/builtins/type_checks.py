@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
-from clausal.terms import Compound, KWTerm, SegList, SegString
+from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
 from clausal.logic.builtins._helpers import _is_ground
@@ -246,16 +246,41 @@ def _is_list__1(x, trail, k):
     update in ``tests/test_string_list_builtins.py``.
     """
     x_val = deref(x)
-    if isinstance(x_val, (list, str)):
+    if isinstance(x_val, (list, str, bytes)):
         yield None
-    elif isinstance(x_val, (SegList, SegString)) and _is_ground(x_val):
+    elif isinstance(x_val, (SegList, SegString, SegBytes)) and _is_ground(x_val):
         yield None
 
 
 @_builtin("is_chars", 1)
 def _is_chars__1(x, trail, k):
-    """is_chars(X) — succeeds if X is a list or a string (a character sequence)."""
+    """is_chars(X) — succeeds if X is a list or a string (a character sequence).
+
+    A ``bytes`` is a *code* sequence, not a *char* sequence, so it is rejected
+    here — use ``is_codes/1``.
+    """
     if isinstance(deref(x), (list, str)):
+        yield None
+
+
+@_builtin("is_codes", 1)
+def _is_codes__1(x, trail, k):
+    """is_codes(X) — succeeds if X is a *code* sequence: a ``bytes`` value, or a
+    list of ints in ``[0, 255]`` (the bytes-as-lists codes model — the codes
+    analog of ``is_chars/1``). A ground ``SegBytes`` also succeeds.
+
+    A ``str`` / char-list is the *chars* model and is rejected here (use
+    ``is_chars/1``)."""
+    x_val = deref(x)
+    if isinstance(x_val, bytes):
+        yield None
+    elif isinstance(x_val, list):
+        if all(
+            isinstance(e, int) and not isinstance(e, bool) and 0 <= e <= 255
+            for e in x_val
+        ):
+            yield None
+    elif isinstance(x_val, SegBytes) and _is_ground(x_val):
         yield None
 
 
