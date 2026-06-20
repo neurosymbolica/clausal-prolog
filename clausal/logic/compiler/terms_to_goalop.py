@@ -237,8 +237,18 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
             tabled = (
                 isinstance(test, nodes.Call) and _is_tabled_naf(test, db)
             )
+            # A unify test whose either side is a star-list converts to a
+            # ListPatternUnify op (see the nodes.Unify case below), which the
+            # reified-branch lowering can't consume (it reads test_op.l/.r).
+            # Such a test is NOT reifiable as a simple eq — fall back to the
+            # general single-eval ITE shape. Surfaces with DCG terminal-branch
+            # if-then-else, e.g. ``g >> (If([x], [y], [z]))``.
+            star_list_unify = (
+                isinstance(test, nodes.Unify)
+                and (_is_star_list(test.left) or _is_star_list(test.right))
+            )
             kind = (
-                None if tabled
+                None if tabled or star_list_unify
                 else (_REIFIED_KIND[type(test)] if _is_reifiable(test) else None)
             )
             return Branch(
