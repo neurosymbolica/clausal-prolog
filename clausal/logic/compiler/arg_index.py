@@ -114,6 +114,14 @@ def _arg_to_index_key(arg: Any) -> Any:
     if isinstance(arg, Call) and isinstance(arg.func, LoadName):
         basename = arg.func.name.rsplit(".", 1)[-1]
         return (basename, len(arg.args))
+    # PredicateMeta atom (zero-arity predicate class used as a value). Keyed as
+    # ``(name, 0)`` so atom-headed clauses are indexable again — the string→
+    # PredicateMeta migration (commit 92ce2636) dropped atoms out of the
+    # indexable set, forcing a linear scan. Matches the runtime key emitted by
+    # :func:`_runtime_arg_key`. Must precede ``is_term_instance`` (False for a
+    # class, but kept adjacent for clarity).
+    if isinstance(arg, type) and isinstance(arg, PredicateMeta):
+        return (arg.__name__, 0)
     if is_term_instance(arg):
         cls = type(arg)
         return (cls.__name__, len(term_field_names(arg)))
@@ -147,6 +155,10 @@ def _runtime_arg_key(a: Any) -> Any:
         return _INDEX_VAR
     if isinstance(a, Compound):
         return (a.functor, len(a.args))
+    # PredicateMeta atom: mirror _arg_to_index_key so a runtime atom argument
+    # routes to the same bucket as its head key.
+    if isinstance(a, type) and isinstance(a, PredicateMeta):
+        return (a.__name__, 0)
     if is_term_instance(a):
         cls = type(a)
         return (cls.__name__, len(term_field_names(a)))

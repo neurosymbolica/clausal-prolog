@@ -31,7 +31,7 @@ from clausal.terms import (
 from clausal.pythonic_ast.nodes import (
     StarUnpack, TupleLiteral, SetLiteral, literal_value,
 )
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import is_term_instance, term_field_names, PredicateMeta
 
 from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -543,6 +543,21 @@ def head_to_match_pattern(
                     for a in term.args
                 ],
             )
+
+    # PredicateMeta atom (a zero-arity predicate *class* used as a value)
+    # → wildcard capture + unify guard. Atoms became class objects in the
+    # string→PredicateMeta migration (commit 92ce2636); that change updated
+    # term_to_ast_expr / indexing but not this match-pattern path, so atoms
+    # silently fell through to the value-rejecting wildcard fallback below
+    # and matched ANY argument. An atom is a class, so it never reaches the
+    # is_term_instance branch (that matches term *instances*). Route it
+    # through unify() — atoms compare by identity/equality — mirroring the
+    # str/bytes capture+guard pattern so it works in all argument modes.
+    if isinstance(term, type) and isinstance(term, PredicateMeta):
+        cap_name = f"_acap{len(list_guards) if list_guards is not None else 0}"
+        if list_guards is not None:
+            list_guards.append(("atom", cap_name, term))
+        return ast.MatchAs(pattern=None, name=cap_name)
 
     # Functor term instance → MatchClass with field patterns
     if is_term_instance(term):
@@ -1173,9 +1188,26 @@ def compile_head_to_match_case(
             orelse=[],
         )]
 
+    # Emit atom guards (R1): wildcard capture + unify guard. Atoms compare by
+    # identity/equality; unify() binds an unbound caller arg to the atom and
+    # rejects a different atom/term. term_to_ast_expr emits the atom as a Name
+    # reference resolved via the compiled predicate's globals.
+    atom_guards = [g for g in list_guards if g and g[0] == "atom"]
+    for _tag, cap_name, atom in atom_guards:
+        inner = [ast.If(
+            test=_call(
+                _name("unify"),
+                _name(cap_name),
+                term_to_ast_expr(atom, var_context, eval_arith=False),
+                _name(trail_name),
+            ),
+            body=inner,
+            orelse=[],
+        )]
+
     # Emit list guards: input destructuring + deferred output construction
-    # Filter out dict/set/str/bytes guards from list_guards
-    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str", "bytes")]
+    # Filter out dict/set/str/bytes/atom guards from list_guards
+    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str", "bytes", "atom")]
     if actual_list_guards:
         # Separate single-star and multi-star guards
         single_star_guards = [g for g in actual_list_guards if len(g) == 5]
