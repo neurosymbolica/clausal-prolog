@@ -1553,9 +1553,46 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
             )
             return replace(cmp, source), counter
 
+        case Constant(value=value) if isinstance(value, (str, bytes)):
+            # String / bytes terminal: ``>> ("hi")`` or ``>> (b"hi")``.
+            # Standard Prolog treats a string constant as a terminal sequence;
+            # under the strings-as-lists / bytes-as-lists contracts this is the
+            # same as the list form. Route through the ``sequence//1`` builtin
+            # (sequence(Str, s_in, s_out)), which already destructures str/bytes
+            # input natively and builds a typed residue in generation mode —
+            # so a str terminal matches both str and char-list callers.
+            call = Call(
+                func=Name(id="sequence", ctx=load),
+                args=[
+                    Constant(value=value),
+                    Name(id=s_in, ctx=load),
+                    Name(id=s_out, ctx=load),
+                ],
+                keywords=[],
+            )
+            return replace(call, source), counter
+
         case Set(elts=[goal]):
             # Inline goal {goal}: no state consumed.
             return goal, counter
+
+        case Name(id=name) if _is_logic_var_name(name):
+            # Variable non-terminal (call//1): a bare logic variable as a body
+            # is the standard meta-nonterminal — the grammar to run is bound at
+            # call time (e.g. ``run(_g) >> (_g)``). Lowering it as a direct call
+            # ``_g(s_in, s_out)`` produces a Call on a Var, which the goal
+            # compiler rejects. Route through phrase/3 instead, which dispatches
+            # on the bound nonterminal (class or instance).
+            call = Call(
+                func=Name(id="phrase", ctx=load),
+                args=[
+                    Name(id=name, ctx=load),
+                    Name(id=s_in, ctx=load),
+                    Name(id=s_out, ctx=load),
+                ],
+                keywords=[],
+            )
+            return replace(call, source), counter
 
         case Name(id=name):
             # Non-terminal, 0 extra args: name(s_in, s_out)
