@@ -34,6 +34,106 @@ def _succeeds(functor, *args, module):
 # ── Terminals ────────────────────────────────────────────────────────────────
 
 
+# ── Dispatch contract (R1–R4 regression suite) ───────────────────────────────
+#
+# These tests pin the DCG head-matching and body-lowering contract that the
+# 2026-06 DCG audit found broken.  See implementation_plans/dcg_audit/AUDIT.md.
+
+
+class TestAtomHeadDispatch:
+    """R1: atom-valued head arguments must dispatch by value.
+
+    Regression from commit 92ce2636 (atoms became zero-field PredicateMeta
+    classes): a ``PredicateMeta`` atom in a clause head fell through
+    ``head_to_match_pattern`` to the wildcard fallback and matched *anything*.
+    Affects every predicate, not just DCGs — pinned here because the audit
+    surfaced it through DCG dispatch.
+    """
+
+    def test_dcg_atom_head_dispatch(self, tmp_path):
+        """Two DCG clauses keyed on distinct atoms each return only their own."""
+        src = (
+            "-module(x, [r(T, S0, S), foo, bar])\n"
+            'r(foo) >> (["F"])\n'
+            'r(bar) >> (["B"])\n'
+        )
+        mod = _load("r1a", src, tmp_path)
+        r = mod.module_dict["r"]
+        foo = mod.module_dict["foo"]
+        bar = mod.module_dict["bar"]
+        assert _succeeds("phrase", r(foo), ["F"], module=mod)
+        assert not _succeeds("phrase", r(foo), ["B"], module=mod)
+        assert _succeeds("phrase", r(bar), ["B"], module=mod)
+        assert not _succeeds("phrase", r(bar), ["F"], module=mod)
+
+    def test_dcg_atom_head_no_compound_match(self, tmp_path):
+        """An atom-head clause must NOT match a compound input."""
+        src = (
+            "-module(x, [r(T, S0, S), foo, ve(V)])\n"
+            'r(foo) >> (["atom"])\n'
+            'r(ve(V)) >> (["compound"])\n'
+        )
+        mod = _load("r1b", src, tmp_path)
+        r = mod.module_dict["r"]
+        foo = mod.module_dict["foo"]
+        ve = mod.module_dict["ve"]
+        # r(foo) only the atom clause
+        assert _succeeds("phrase", r(foo), ["atom"], module=mod)
+        assert not _succeeds("phrase", r(foo), ["compound"], module=mod)
+        # r(ve(foo)) only the compound clause
+        assert _succeeds("phrase", r(ve(foo)), ["compound"], module=mod)
+        assert not _succeeds("phrase", r(ve(foo)), ["atom"], module=mod)
+
+    def test_plain_rule_atom_head_dispatch(self, tmp_path):
+        """Core (non-DCG) regression: plain ``<-`` rule with atom heads."""
+        src = (
+            "-module(x, [r(T, O), foo, bar])\n"
+            "r(foo, O) <- (O is 1)\n"
+            "r(bar, O) <- (O is 2)\n"
+        )
+        mod = _load("r1c", src, tmp_path)
+        r = mod.module_dict
+        foo = r["foo"]
+        bar = r["bar"]
+        out = Var()
+        foo_sols = [deref(out) for _ in call("r", foo, out, module=mod)]
+        out2 = Var()
+        bar_sols = [deref(out2) for _ in call("r", bar, out2, module=mod)]
+        assert foo_sols == [1]
+        assert bar_sols == [2]
+
+    def test_compound_with_atom_arg_dispatch(self, tmp_path):
+        """Nested atom inside a compound head must also discriminate."""
+        src = (
+            "-module(x, [r(T, O), ve(V), foo, bar])\n"
+            "r(ve(foo), O) <- (O is 1)\n"
+            "r(ve(bar), O) <- (O is 2)\n"
+        )
+        mod = _load("r1d", src, tmp_path)
+        ve = mod.module_dict["ve"]
+        foo = mod.module_dict["foo"]
+        bar = mod.module_dict["bar"]
+        out = Var()
+        sols = [deref(out) for _ in call("r", ve(foo), out, module=mod)]
+        assert sols == [1]
+
+    def test_indexed_atom_head_dispatch(self, tmp_path):
+        """≥4 atom-headed clauses (crosses the indexing threshold) still discriminate."""
+        src = (
+            "-module(x, [c(T, O), a, b, cc, d])\n"
+            "c(a, O) <- (O is 1)\n"
+            "c(b, O) <- (O is 2)\n"
+            "c(cc, O) <- (O is 3)\n"
+            "c(d, O) <- (O is 4)\n"
+        )
+        mod = _load("r1e", src, tmp_path)
+        md = mod.module_dict
+        for atom_name, expected in (("a", 1), ("b", 2), ("cc", 3), ("d", 4)):
+            out = Var()
+            sols = [deref(out) for _ in call("c", md[atom_name], out, module=mod)]
+            assert sols == [expected], f"{atom_name} -> {sols}"
+
+
 class TestTerminals:
     def test_single_terminal(self, tmp_path):
         # nv
@@ -205,6 +305,45 @@ class TestIfThenElse:
         assert _succeeds("phrase", cls, ["c"], module=mod)
         # "b" doesn't match either path
         assert not _succeeds("phrase", cls, ["b"], module=mod)
+
+    def test_if_then_else_terminal_branches(self, tmp_path):
+        """R2: If-then-else with terminal (list) branches must not crash.
+
+        A star-list unify condition converts to ListPatternUnify, which the
+        reified-branch lowering can't read; reifiability must be gated so the
+        general single-eval ITE path is used.
+        """
+        src = (
+            "-module(x, [c(X, S0, S), done, empty])\n"
+            "c(_x) >> (If([_x], [done], [empty]))\n"
+        )
+        mod = _load("ite2", src, tmp_path)
+        c = mod.module_dict["c"]
+        done = mod.module_dict["done"]
+        empty = mod.module_dict["empty"]
+        # [_x] consumes the leading `done`; then-branch [done] consumes the next.
+        assert _succeeds("phrase", c(done), [done, done], module=mod)
+        # leading token is not `done` → condition fails → else-branch [empty].
+        assert _succeeds("phrase", c(done), [empty], module=mod)
+        # condition commits: after consuming `done`, then-branch needs another
+        # `done` but sees `empty` — must fail (does NOT fall through to else).
+        assert not _succeeds("phrase", c(done), [done, empty], module=mod)
+
+    def test_if_then_else_terminal_else_branch(self, tmp_path):
+        """R2: the else-branch (terminal) path also produces a parse."""
+        src = (
+            "-module(x, [g(S0, S), x, y, z])\n"
+            "g >> (If([x], [y], [z]))\n"
+        )
+        mod = _load("ite3", src, tmp_path)
+        g = mod.module_dict["g"]
+        x = mod.module_dict["x"]
+        y = mod.module_dict["y"]
+        z = mod.module_dict["z"]
+        # input starts with x → cond holds → then-branch consumes y
+        assert _succeeds("phrase", g, [x, y], module=mod)
+        # input does not start with x → else-branch consumes z
+        assert _succeeds("phrase", g, [z], module=mod)
 
 
 # ── Pushback / Semicontext ───────────────────────────────────────────────────
@@ -805,3 +944,60 @@ class TestDCGStringInput:
         mod = _load("ds10", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, ["h", "i"], module=mod)
+
+
+# ── String / bytes terminals in rule bodies (R3) ─────────────────────────────
+
+
+class TestStringTerminals:
+    """R3: a ``str``/``bytes`` constant terminal in a DCG body.
+
+    Standard Prolog treats ``"abc"`` as a terminal sequence; under the
+    strings-as-lists rule it should expand the same as the list form.
+    """
+
+    def test_string_terminal_string_input(self, tmp_path):
+        src = 'hi >> ("hi")\n'
+        mod = _load("st1", src, tmp_path)
+        cls = mod.module_dict["hi"]
+        assert _succeeds("phrase", cls, "hi", module=mod)
+        assert not _succeeds("phrase", cls, "ho", module=mod)
+
+    def test_string_terminal_list_input(self, tmp_path):
+        """A string terminal also matches a char-list caller (strings-as-lists)."""
+        src = 'hi >> ("hi")\n'
+        mod = _load("st2", src, tmp_path)
+        cls = mod.module_dict["hi"]
+        assert _succeeds("phrase", cls, ["h", "i"], module=mod)
+
+    def test_string_terminal_in_sequence(self, tmp_path):
+        """String terminal threaded between other terminals."""
+        src = 'greet >> ("he", ["l"], "lo")\n'
+        mod = _load("st3", src, tmp_path)
+        cls = mod.module_dict["greet"]
+        assert _succeeds("phrase", cls, "hello", module=mod)
+
+    def test_bytes_terminal(self, tmp_path):
+        src = "hi >> (b\"hi\")\n"
+        mod = _load("st4", src, tmp_path)
+        cls = mod.module_dict["hi"]
+        assert _succeeds("phrase", cls, b"hi", module=mod)
+
+
+# ── call//1 — variable nonterminal bodies (R4) ───────────────────────────────
+
+
+class TestCallNonterminal:
+    """R4: a bare logic-variable DCG body invokes the bound nonterminal."""
+
+    def test_call_variable_nonterminal(self, tmp_path):
+        src = (
+            "-module(x, [run(G, S0, S), greeting(S0, S)])\n"
+            'greeting >> (["hello"])\n'
+            "run(_g) >> (_g)\n"
+        )
+        mod = _load("cn1", src, tmp_path)
+        run = mod.module_dict["run"]
+        greeting = mod.module_dict["greeting"]
+        assert _succeeds("phrase", run(greeting), ["hello"], module=mod)
+        assert not _succeeds("phrase", run(greeting), ["bye"], module=mod)
