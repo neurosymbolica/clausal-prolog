@@ -79,6 +79,11 @@ three sites in `head_match.py`. **Not yet fixed — needs a design call.**
   by lifting strings through unify.
 
 ## Follow-up
-- Decide the structural-head-literal (#8–#10) fix alongside data constructors.
+- **Structural head literals (#8–#10):** find a smarter construct-and-bind
+  lowering (reuse the fact path?) — see
+  `todo/compound-head-literal-output-mode.md`. Tied to data-constructor support.
+- **Mode coverage:** audit the whole suite for input vs output (var-query) mode
+  coverage so this blind spot can't recur — see
+  `todo/audit-tests-input-output-mode-coverage.md`.
 - Consider a compiler self-check / lint that flags any `MatchValue` /
   `MatchSingleton` head pattern lacking a `unify()` fallback.
