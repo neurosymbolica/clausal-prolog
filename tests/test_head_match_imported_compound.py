@@ -277,17 +277,17 @@ def test_rule_matches_fact_in_output_mode():
 
 def test_nested_compound_head_binds_unbound_caller():
     """CheckNested(Item(REQ_ID, Met(SUB), _), RESULT) <- RESULT is REQ_ID:
-    output mode constructs the nested term and binds the caller Var.
-
-    Note: the catch-all clause CheckNested(ANY, "fallback") also fires in
-    output mode (ANY unifies with the unbound X and "fallback" unifies with
-    the second Var()), so len(found) == 2.  The pin is that at least one
-    solution has X bound to an Item.
-    """
+    output mode must construct AND correctly shape the nested term. There are
+    two solutions (the rule + the "fallback" catch-all); pin the rule's."""
     mod = _load_importer()
     logic_mod = mod.__dict__["$module"]
     X = Var()
     found = []
     for _ in call("CheckNested", X, Var(), module=logic_mod):
         found.append(deref(X))
-    assert any(type(f).__name__ == "Item" for f in found)
+    item_solutions = [f for f in found if type(f).__name__ == "Item"]
+    assert len(item_solutions) == 1
+    item = item_solutions[0]
+    # The structural head Item(REQ_ID, Met(SUB), _) must be reconstructed with
+    # its STATUS field bound to a Met-shaped sub-term (not a free var / garbage).
+    assert type(deref(item.STATUS)).__name__ == "Met"
