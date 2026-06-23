@@ -273,3 +273,21 @@ def test_rule_matches_fact_in_output_mode():
     fact_got = _bind_first(mod, "CheckFact", "matched")
     assert len(rule_got) == len(fact_got) == 1
     assert type(rule_got[0]).__name__ == type(fact_got[0]).__name__ == "Wrap"
+
+
+def test_nested_compound_head_binds_unbound_caller():
+    """CheckNested(Item(REQ_ID, Met(SUB), _), RESULT) <- RESULT is REQ_ID:
+    output mode constructs the nested term and binds the caller Var.
+
+    Note: the catch-all clause CheckNested(ANY, "fallback") also fires in
+    output mode (ANY unifies with the unbound X and "fallback" unifies with
+    the second Var()), so len(found) == 2.  The pin is that at least one
+    solution has X bound to an Item.
+    """
+    mod = _load_importer()
+    logic_mod = mod.__dict__["$module"]
+    X = Var()
+    found = []
+    for _ in call("CheckNested", X, Var(), module=logic_mod):
+        found.append(deref(X))
+    assert any(type(f).__name__ == "Item" for f in found)
