@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-23
 **Author:** Michael Amy (with Claude)
-**Status:** Implemented 2026-06-23 (commits b37ea1c0..<cleanup-commit>)
+**Status:** Implemented 2026-06-23 (commits b37ea1c0..d8036f23)
 **Closes:** Findings #8–#10 of `todo/equality-vs-unification-audit.md`
 (Compound / imported-`Call` / functor-instance head literals)
 **Related:** numeric/bool/None head-literal fix (commits `71d7062f`, `c8807d36`);
