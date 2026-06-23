@@ -212,10 +212,18 @@ def head_to_match_pattern(
     ---------------
     Var (unbound)          → ``MatchAs(name="_v{id}")`` — captures the arg
     Var (bound)            → recurse after dereferencing
-    None / True / False    → ``MatchSingleton``
-    int, float, str, bytes → ``MatchValue(Constant(value))``
-    complex                → ``MatchValue(Constant(value))``
+    None / True / False    → wildcard capture + ``== or unify`` guard (scalar)
+    int, float, complex    → wildcard capture + ``== or unify`` guard (scalar)
+    str, bytes             → wildcard capture + ``== or unify`` guard
     list                   → ``MatchSequence`` of sub-patterns
+
+    NOTE on the bug class this guards against: a bare ``MatchValue`` /
+    ``MatchSingleton`` matches with ``==`` / identity, which only succeeds when
+    the deref'd caller arg ALREADY equals the literal (input mode). An unbound
+    Var caller (output / var-query mode) silently fails the match and yields no
+    solution — it never *binds* the literal. Every atomic head literal must
+    therefore capture the arg and route through ``unify()`` (which binds a Var
+    and rejects a mismatch), never rely on ``==``/identity alone.
     Compound(f, args)      → ``MatchClass(Compound, functor=f, args=...)``
     functor dataclass      → ``MatchClass(cls, kwd field patterns)``
     Call(LoadName(qn), …)  → resolve ``qn`` in ``globals_``; if a class with
@@ -244,9 +252,20 @@ def head_to_match_pattern(
         # _list_reg_ids tracks list-registered Vars; absence means direct capture.
         return ast.MatchAs(pattern=None, name=name)
 
-    # Python singletons
+    # Python singletons (None / True / False) → wildcard capture + unify guard,
+    # NOT a bare MatchSingleton. A MatchSingleton matches by identity, so an
+    # unbound Var caller (output / var-query mode) silently fails to match and
+    # never binds — the same bug class as numeric MatchValue literals below.
+    # Route through the scalar guard (`== or unify`) so a Var caller binds.
+    # (bool is an int subclass and would otherwise reach the numeric branch;
+    # None is handled here.) Falls back to MatchSingleton only when there is no
+    # list_guards sink to assemble the guard.
     term = literal_value(term)
     if term is None or term is True or term is False:
+        if list_guards is not None:
+            cap_name = f"_ncap{len(list_guards)}"
+            list_guards.append(("scalar", cap_name, term))
+            return ast.MatchAs(pattern=None, name=cap_name)
         return ast.MatchSingleton(value=term)
 
     # Python scalar literals (non-string, non-bytes) → wildcard capture +
@@ -262,7 +281,7 @@ def head_to_match_pattern(
     if isinstance(term, (int, float, complex)):
         if list_guards is not None:
             cap_name = f"_ncap{len(list_guards)}"
-            list_guards.append(("num", cap_name, term))
+            list_guards.append(("scalar", cap_name, term))
             return ast.MatchAs(pattern=None, name=cap_name)
         return ast.MatchValue(value=ast.Constant(value=term))
 
@@ -511,6 +530,20 @@ def head_to_match_pattern(
         return ast.MatchAs(pattern=None, name=cap_name)
 
     # Compound(functor, args) → MatchClass on Compound
+    #
+    # WARNING (== / structural-match-vs-unification bug class): a MatchClass
+    # only matches when the deref'd caller arg IS ALREADY a Compound of this
+    # shape (input mode). An unbound Var caller (output / var-query mode) fails
+    # the match and yields no solution — it never binds the Var to a freshly
+    # constructed `functor(args...)` term the way unification would. This is the
+    # same class of bug fixed for atomic literals (numbers / singletons /
+    # str / bytes / atoms), but the structural fix is harder: it must build the
+    # compound term (with fresh Vars for head Vars) and unify() it into the
+    # caller arg, which a match pattern cannot express inline. The functor
+    # MatchValue below is sound (a Compound's functor is always ground), but the
+    # outer MatchClass is the value-rejecting part. See
+    # todo/equality-vs-unification-audit.md before relying on a compound head
+    # literal in output mode.
     if isinstance(term, Compound):
         f = term.functor
         if is_var(f):
@@ -535,6 +568,11 @@ def head_to_match_pattern(
     # *be* a Call AST instance — which it never is.  Same shape used for
     # the fact path's runtime-Unify resolution, but here we resolve the
     # name at compile time against the module globals.
+    #
+    # WARNING (== / structural-match-vs-unification bug class): the MatchClass
+    # below matches an input-mode caller only; an unbound Var caller is not
+    # bound to a constructed term (output mode fails). Same caveat as the
+    # Compound / term-instance branches. See todo/equality-vs-unification-audit.md.
     if isinstance(term, Call) and isinstance(term.func, LoadName):
         resolved = _resolve_loadname(term.func.name, globals_)
         fields = _resolved_field_names(resolved)
@@ -570,6 +608,13 @@ def head_to_match_pattern(
         return ast.MatchAs(pattern=None, name=cap_name)
 
     # Functor term instance → MatchClass with field patterns
+    #
+    # WARNING (== / structural-match-vs-unification bug class): like the
+    # Compound and imported-Call branches above, this MatchClass only matches an
+    # input-mode caller that already IS an instance of `cls`. An unbound Var
+    # caller is not bound to a freshly constructed `cls(fields...)` term the way
+    # unification would — the query just fails. Sound for input mode; unsound
+    # for output mode. See todo/equality-vs-unification-audit.md.
     if is_term_instance(term):
         cls_name = type(term).__name__
         fields = term_field_names(term)
@@ -1198,12 +1243,14 @@ def compile_head_to_match_case(
             orelse=[],
         )]
 
-    # Emit numeric-literal guards: wildcard capture + same-type short-circuit.
-    # Mirrors the str-/bytes-guards blocks above. The `==` disjunct accepts an
-    # already-equal caller at C speed; an unbound Var caller falls through to
-    # unify(), which binds the literal (output / var-query mode).
-    num_guards = [g for g in list_guards if g and g[0] == "num"]
-    for _tag, cap_name, literal in num_guards:
+    # Emit scalar-literal guards (int/float/complex/bool/None): wildcard capture
+    # + same-type short-circuit. Mirrors the str-/bytes-guards blocks above. The
+    # `==` disjunct accepts an already-equal caller at C speed; an unbound Var
+    # caller falls through to unify(), which binds the literal (output /
+    # var-query mode). A bare MatchValue/MatchSingleton would compare with
+    # `==`/identity and silently fail to bind a Var — the bug this guards.
+    scalar_guards = [g for g in list_guards if g and g[0] == "scalar"]
+    for _tag, cap_name, literal in scalar_guards:
         inner = [ast.If(
             test=ast.BoolOp(
                 op=ast.Or(),
@@ -1244,7 +1291,7 @@ def compile_head_to_match_case(
 
     # Emit list guards: input destructuring + deferred output construction
     # Filter out dict/set/str/bytes/atom guards from list_guards
-    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str", "bytes", "atom", "num")]
+    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str", "bytes", "atom", "scalar")]
     if actual_list_guards:
         # Separate single-star and multi-star guards
         single_star_guards = [g for g in actual_list_guards if len(g) == 5]

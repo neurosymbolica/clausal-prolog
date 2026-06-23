@@ -61,6 +61,29 @@ class TestNumericHeadLiteralVarBinding:
         assert _collect("triv", [X], 50, X, module=mod) == [(99,)]
 
 
+class TestSingletonHeadLiteralVarBinding:
+    """True/False/None head literals share the bug class: MatchSingleton matches
+    by identity, so an unbound Var caller never binds in output mode."""
+
+    def test_true_literal_head_query_as_var(self, mod):
+        F = Var()
+        assert _collect("flag_t", [F], 5, F, module=mod) == [(True,)]
+
+    def test_false_literal_head_query_as_var(self, mod):
+        F = Var()
+        assert _collect("flag_f", [F], 5, F, module=mod) == [(False,)]
+
+    def test_none_literal_head_query_as_var(self, mod):
+        F = Var()
+        assert _collect("flag_n", [F], 5, F, module=mod) == [(None,)]
+
+    def test_true_literal_input_mode(self, mod):
+        assert _count("flag_t", 5, True, module=mod) == 1
+
+    def test_true_literal_wrong_value_fails(self, mod):
+        assert _count("flag_t", 5, False, module=mod) == 0
+
+
 class TestNumericHeadLiteralInputMode:
     """Input mode (caller supplies the literal directly) must still work."""
 

@@ -12,6 +12,15 @@ mid_lit(A, 7, B) <- (A >= 1, B == A + 1)
 
 triv(DAYS, 99) <- (DAYS is DAYS)
 
+# singleton literals (True/False/None) in a ruled head, queried as var:
+# same bug class as numbers — MatchSingleton matches by identity, so an
+# unbound Var caller never binds.
+flag_t(N, True) <- (N >= 0)
+
+flag_f(N, False) <- (N >= 0)
+
+flag_n(N, None) <- (N >= 0)
+
 # control: bare fact (already worked) and string literal head (already worked)
 fact_int(50, 20000),
 
