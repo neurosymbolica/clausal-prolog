@@ -60,3 +60,31 @@ class TestNormalizeStructuralHeadArgs:
         head = pt(a=Var())
         h2, b2 = _normalize_structural_head_args(head, [True])
         assert h2 is head and b2 == [True]
+
+
+import os
+import pytest
+from clausal.import_hook import _load_module
+from clausal.logic.solve import call
+from clausal.logic.variables import Var
+
+
+def _undeclared_mod():
+    path = os.path.join(
+        os.path.dirname(__file__), "clausal_modules", "undeclared_compound_head.clausal"
+    )
+    return _load_module("undeclared_compound_head_mod", path).__dict__["$module"]
+
+
+def _err_text(pred, *args, module):
+    with pytest.raises(Exception) as exc:
+        list(call(pred, *args, module=module))
+    return str(exc.value)
+
+
+def test_undeclared_rule_and_fact_raise_same_error_in_output_mode():
+    mod = _undeclared_mod()
+    rule_err = _err_text("ur", 5, Var(), module=mod)
+    fact_err = _err_text("uf", 50, Var(), module=mod)
+    assert "not in scope as a term class" in rule_err
+    assert "not in scope as a term class" in fact_err

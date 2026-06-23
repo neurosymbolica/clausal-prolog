@@ -1,0 +1,4 @@
+# `point` is never declared/imported — constructing it must raise the helpful
+# "not in scope as a term class" error in output mode, for BOTH rule and fact.
+ur(N, point(1, 2)) <- (N >= 0)
+uf(50, point(1, 2)),
