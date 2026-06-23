@@ -1,5 +1,14 @@
 # TODO: smarter way to bind a compound head literal in output mode
 
+RESOLVED 2026-06-23 (binding fix): declared/imported constructors (Compound /
+imported-Call / functor-instance) now bind in output mode via
+`_normalize_structural_head_args` in `clausal/logic/database.py`, which hoists
+each structural top-level head arg to a fresh Var + prepended Unify goal at
+assert time (mirroring fact normalization). The undeclared-bare-functor
+construction case (`point(1,2)` with no declared `point`) remains a separate
+data-constructor design item — it raises the existing "not in scope" error in
+output mode rather than silently failing.
+
 **Opened 2026-06-23** as follow-up to `equality-vs-unification-audit.md`
 (findings #8–#10: `Compound` / imported-`Call` / functor-instance head literals).
 

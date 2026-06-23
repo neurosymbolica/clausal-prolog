@@ -531,19 +531,9 @@ def head_to_match_pattern(
 
     # Compound(functor, args) → MatchClass on Compound
     #
-    # WARNING (== / structural-match-vs-unification bug class): a MatchClass
-    # only matches when the deref'd caller arg IS ALREADY a Compound of this
-    # shape (input mode). An unbound Var caller (output / var-query mode) fails
-    # the match and yields no solution — it never binds the Var to a freshly
-    # constructed `functor(args...)` term the way unification would. This is the
-    # same class of bug fixed for atomic literals (numbers / singletons /
-    # str / bytes / atoms), but the structural fix is harder: it must build the
-    # compound term (with fresh Vars for head Vars) and unify() it into the
-    # caller arg, which a match pattern cannot express inline. The functor
-    # MatchValue below is sound (a Compound's functor is always ground), but the
-    # outer MatchClass is the value-rejecting part. See
-    # todo/equality-vs-unification-audit.md before relying on a compound head
-    # literal in output mode.
+    # Structural head args are hoisted to Var + Unify at assert time
+    # (_normalize_structural_head_args), so this MatchClass only ever sees a
+    # ground (input-mode) caller; output-mode binding is handled by the Unify.
     if isinstance(term, Compound):
         f = term.functor
         if is_var(f):
@@ -569,10 +559,9 @@ def head_to_match_pattern(
     # the fact path's runtime-Unify resolution, but here we resolve the
     # name at compile time against the module globals.
     #
-    # WARNING (== / structural-match-vs-unification bug class): the MatchClass
-    # below matches an input-mode caller only; an unbound Var caller is not
-    # bound to a constructed term (output mode fails). Same caveat as the
-    # Compound / term-instance branches. See todo/equality-vs-unification-audit.md.
+    # Structural head args are hoisted to Var + Unify at assert time
+    # (_normalize_structural_head_args), so this MatchClass only ever sees a
+    # ground (input-mode) caller; output-mode binding is handled by the Unify.
     if isinstance(term, Call) and isinstance(term.func, LoadName):
         resolved = _resolve_loadname(term.func.name, globals_)
         fields = _resolved_field_names(resolved)
@@ -609,12 +598,9 @@ def head_to_match_pattern(
 
     # Functor term instance → MatchClass with field patterns
     #
-    # WARNING (== / structural-match-vs-unification bug class): like the
-    # Compound and imported-Call branches above, this MatchClass only matches an
-    # input-mode caller that already IS an instance of `cls`. An unbound Var
-    # caller is not bound to a freshly constructed `cls(fields...)` term the way
-    # unification would — the query just fails. Sound for input mode; unsound
-    # for output mode. See todo/equality-vs-unification-audit.md.
+    # Structural head args are hoisted to Var + Unify at assert time
+    # (_normalize_structural_head_args), so this MatchClass only ever sees a
+    # ground (input-mode) caller; output-mode binding is handled by the Unify.
     if is_term_instance(term):
         cls_name = type(term).__name__
         fields = term_field_names(term)

@@ -35,9 +35,9 @@ All head-pattern emission lives in `clausal/logic/compiler/head_match.py`
 | 5 | atom (PredicateMeta) | capture + `unify` guard | OK (pre-existing, R1) |
 | 6 | list / SegString | capture + `_head_list_unify` guard | OK (pre-existing) |
 | 7 | dict / set / set-literal | capture + unify guard | OK (pre-existing) |
-| 8 | `Compound(f, args)` | `MatchClass(Compound, …)` | **KNOWN GAP** — see below (commented) |
-| 9 | imported `Call(LoadName, …)` | `MatchClass(cls, …)` | **KNOWN GAP** — commented |
-| 10 | functor term instance | `MatchClass(cls, …)` | **KNOWN GAP** — commented |
+| 8 | `Compound(f, args)` | `MatchClass(Compound, …)` | **FIXED — structural head normalization (this plan)** |
+| 9 | imported `Call(LoadName, …)` | `MatchClass(cls, …)` | **FIXED — structural head normalization (this plan)** |
+| 10 | functor term instance | `MatchClass(cls, …)` | **FIXED — structural head normalization (this plan)** |
 
 ### Fixed (this audit)
 - **#1 numbers**, **#2 booleans/None**. Both now capture the arg and run the
@@ -47,23 +47,21 @@ All head-pattern emission lives in `clausal/logic/compiler/head_match.py`
   (fixture `tests/clausal_modules/numeric_head_literal.clausal`), red-green
   verified for every case.
 
-### Known gap — structural head literals (#8/#9/#10)
-A `Compound` / imported-`Call` / functor-instance head literal compiles to a
-Python `MatchClass`, which matches only when the caller arg **already is** a
-term of that shape (input mode). An unbound `Var` caller is **not** bound to a
-freshly constructed `functor(args…)` term the way unification would — the query
-fails silently. Same bug class as #1/#2, but the fix is materially harder: a
-`match` pattern cannot *construct-and-bind*; it would need to build the term
-(allocating fresh `Var`s for any head vars) and `unify()` it into the caller
-arg, i.e. a code path more like the bare-fact `unify(...)` lowering than a match
-arm.
+### Fixed — structural head literals (#8/#9/#10)
+`_normalize_structural_head_args` in `clausal/logic/database.py` now hoists
+every structural (Compound / imported-Call / functor-instance) top-level head
+arg into a fresh `Var` + prepended `Unify(Var, value)` goal at assert time,
+mirroring what `_normalize_dataclass_fact` does for facts. The `MatchClass`
+branches in `head_match.py` therefore only ever see ground (input-mode) callers;
+output-mode binding is handled by `Unify` in the body, exactly as for facts.
 
-This is **entangled with data-constructor support**: a compound like
-`point(1, 2)` in a head currently isn't even constructible unless `point` is a
-registered/imported constructor (see the deferred "auto-mint compound data
-constructors" design). So #8–#10 should be resolved *together with* that design
-decision rather than patched piecemeal. Warning comments have been added at all
-three sites in `head_match.py`. **Not yet fixed — needs a design call.**
+Implemented: `docs/superpowers/plans/2026-06-23-structural-head-literal-binding.md`
+(commits b37ea1c0..); WARNING comments removed from `head_match.py`.
+
+**Caveat:** undeclared bare-functor construction (`point(1,2)` with no
+declared/imported `point`) still raises the existing "not in scope as a term
+class" error in output mode — the auto-mint data-constructor design is a
+separate, deferred item.
 
 ## Not in scope (verified intentional)
 - `control_constructs.py` `ast.Eq()` sites — runtime counter / index / type
@@ -79,9 +77,8 @@ three sites in `head_match.py`. **Not yet fixed — needs a design call.**
   by lifting strings through unify.
 
 ## Follow-up
-- **Structural head literals (#8–#10):** find a smarter construct-and-bind
-  lowering (reuse the fact path?) — see
-  `todo/compound-head-literal-output-mode.md`. Tied to data-constructor support.
+- **Structural head literals (#8–#10):** resolved — see above and
+  `todo/compound-head-literal-output-mode.md` (marked RESOLVED).
 - **Mode coverage:** audit the whole suite for input vs output (var-query) mode
   coverage so this blind spot can't recur — see
   `todo/audit-tests-input-output-mode-coverage.md`.
