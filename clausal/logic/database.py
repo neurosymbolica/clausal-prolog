@@ -273,6 +273,12 @@ class Module:
         # Normalize dataclass facts: ground field values → Var + Is body goals.
         if body_goals == [True] and _is_normalizable_fact(head):
             head, body_goals = _normalize_dataclass_fact(head)
+        else:
+            # Ruled clause: hoist structural head args (Compound / Call(LoadName)
+            # / functor-instance) into prepended Unify goals so an unbound caller
+            # binds in output mode — the same Var+Unify shape facts use. Atomic
+            # head literals keep the match-guard path.
+            head, body_goals = _normalize_structural_head_args(head, body_goals)
         self.db.assertz(Clause(
             head=head,
             body=body_goals,

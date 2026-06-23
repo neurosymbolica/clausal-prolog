@@ -245,3 +245,31 @@ def test_nested_fact_and_rule_agree_on_inner_mismatch():
         f"Fact/rule divergence on inner mismatch: "
         f"rule={rule_results!r} fact={fact_results!r}"
     )
+
+
+def _bind_first(mod, pred, second):
+    """Output mode: query pred(X, second) with X unbound; return derefs of X."""
+    logic_mod = mod.__dict__["$module"]
+    X = Var()
+    found = []
+    for _ in call(pred, X, second, module=logic_mod):
+        found.append(deref(X))
+    return found
+
+
+def test_rule_structural_head_binds_unbound_caller():
+    """Check(Wrap(SUB), RESULT) <- RESULT is "matched":
+    Check(X, "matched") with X unbound must bind X = Wrap(_)."""
+    mod = _load_importer()
+    got = _bind_first(mod, "Check", "matched")
+    assert len(got) == 1
+    assert type(got[0]).__name__ == "Wrap"
+
+
+def test_rule_matches_fact_in_output_mode():
+    """Rule (Check) and fact (CheckFact) must agree in output mode."""
+    mod = _load_importer()
+    rule_got = _bind_first(mod, "Check", "matched")
+    fact_got = _bind_first(mod, "CheckFact", "matched")
+    assert len(rule_got) == len(fact_got) == 1
+    assert type(rule_got[0]).__name__ == type(fact_got[0]).__name__ == "Wrap"
