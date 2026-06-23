@@ -361,6 +361,54 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
     return new_head, body
 
 
+def _is_structural_head_value(val: Any) -> bool:
+    """True if val is a structural term that head_to_match_pattern would compile
+    to a value-rejecting MatchClass (Compound / Call(LoadName) / functor
+    instance). Such head args must be hoisted into a Var + Unify body goal so an
+    unbound caller binds in output mode. Atomics, Vars, StarUnpack and lists are
+    handled by other compiler paths and must NOT be normalized here."""
+    from clausal.logic.variables import is_var
+    if is_var(val) or isinstance(val, (StarUnpack, list, KWTerm)):
+        return False
+    if isinstance(val, Compound):
+        return True
+    if isinstance(val, Call):
+        return isinstance(val.func, LoadName)
+    if is_term_instance(val):
+        return True
+    return False
+
+
+def _normalize_structural_head_args(head: Any, body: list) -> tuple[Any, list]:
+    """Hoist structural top-level head args into prepended Unify body goals.
+
+    Mirrors _normalize_dataclass_fact but for structural args only (atomics keep
+    the match-guard path). Each structural field is replaced by a fresh Var and a
+    Unify(var, value) goal is prepended to body (prepended so destructured inner
+    vars are bound before the original body runs). No-op for non-functor-instance
+    heads (bare Compound/Call/KWTerm) or heads with no structural fields."""
+    from clausal.logic.variables import Var
+    from clausal.terms import Unify
+    if not is_term_instance(head) or isinstance(head, (Compound, Call, KWTerm)):
+        return head, body
+    fields = term_field_names(head)
+    replacements: dict[str, Any] = {}
+    prepend: list = []
+    for name in fields:
+        val = getattr(head, name)
+        if _is_structural_head_value(val):
+            v = Var()
+            replacements[name] = v
+            prepend.append(Unify(left=v, right=val))
+    if not replacements:
+        return head, body
+    new_kwargs = {
+        name: replacements.get(name, getattr(head, name)) for name in fields
+    }
+    new_head = type(head)(**new_kwargs)
+    return new_head, prepend + list(body)
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 

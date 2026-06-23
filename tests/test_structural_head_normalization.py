@@ -1,0 +1,62 @@
+"""Unit tests for structural head-arg normalization (clausal.logic.database)."""
+
+from clausal.logic.database import (
+    _is_structural_head_value,
+    _normalize_structural_head_args,
+)
+from clausal.terms import Call, Compound, LoadName, Unify
+from clausal.logic.variables import Var, is_var
+from clausal.logic.predicate import make_predicate
+
+
+class TestIsStructuralHeadValue:
+    def test_compound_is_structural(self):
+        # Compound signature is Compound(functor, args) — args is one sequence.
+        assert _is_structural_head_value(Compound("point", [1, 2])) is True
+
+    def test_loadname_call_is_structural(self):
+        assert _is_structural_head_value(
+            Call(func=LoadName(name="point"), args=[1, 2], kwargs=[])
+        ) is True
+
+    def test_atomics_are_not_structural(self):
+        for v in (1, 1.5, True, False, None, "s", b"b", 3 + 2j):
+            assert _is_structural_head_value(v) is False
+
+    def test_var_and_list_not_structural(self):
+        assert _is_structural_head_value(Var()) is False
+        assert _is_structural_head_value([1, 2]) is False
+
+    def test_non_loadname_call_not_structural(self):
+        # A Call whose func is not a LoadName is not a data term to construct.
+        assert _is_structural_head_value(
+            Call(func=Var(), args=[], kwargs=[])
+        ) is False
+
+
+class TestNormalizeStructuralHeadArgs:
+    def test_structural_field_hoisted_to_prepended_unify(self):
+        pt = make_predicate("pt", ("a", "b"))
+        compound = Call(func=LoadName(name="point"), args=[1, 2], kwargs=[])
+        head = pt(a=Var(), b=compound)
+        new_head, new_body = _normalize_structural_head_args(head, [True])
+        # field b replaced by a Var
+        assert is_var(new_head.b)
+        # one Unify prepended, binding that Var to the original compound
+        assert isinstance(new_body[0], Unify)
+        assert new_body[0].left is new_head.b
+        assert new_body[0].right is compound
+        assert new_body[1] is True  # original body preserved after prepend
+
+    def test_atomic_fields_left_alone(self):
+        pt = make_predicate("pt", ("a", "b"))
+        head = pt(a=Var(), b=20000)
+        new_head, new_body = _normalize_structural_head_args(head, [True])
+        assert new_head.b == 20000      # untouched
+        assert new_body == [True]       # no goals added
+
+    def test_no_structural_fields_is_noop(self):
+        pt = make_predicate("pt", ("a",))
+        head = pt(a=Var())
+        h2, b2 = _normalize_structural_head_args(head, [True])
+        assert h2 is head and b2 == [True]
