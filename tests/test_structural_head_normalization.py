@@ -1,5 +1,9 @@
 """Unit tests for structural head-arg normalization (clausal.logic.database)."""
 
+import os
+
+import pytest
+
 from clausal.logic.database import (
     _is_structural_head_value,
     _normalize_structural_head_args,
@@ -7,6 +11,8 @@ from clausal.logic.database import (
 from clausal.terms import Call, Compound, LoadName, Unify
 from clausal.logic.variables import Var, is_var
 from clausal.logic.predicate import make_predicate
+from clausal.import_hook import _load_module
+from clausal.logic.solve import call
 
 
 class TestIsStructuralHeadValue:
@@ -60,13 +66,6 @@ class TestNormalizeStructuralHeadArgs:
         head = pt(a=Var())
         h2, b2 = _normalize_structural_head_args(head, [True])
         assert h2 is head and b2 == [True]
-
-
-import os
-import pytest
-from clausal.import_hook import _load_module
-from clausal.logic.solve import call
-from clausal.logic.variables import Var
 
 
 def _undeclared_mod():
