@@ -298,7 +298,7 @@ class TestCompileHeadToMatchCase:
         assert isinstance(case_arm.pattern, ast.MatchSequence)
         assert len(case_arm.pattern.patterns) == 2
 
-    def test_ground_fact_skips_trail_mark(self):
+    def test_numeric_head_literal_keeps_trail_mark(self):
         # nv
         head = point(_x=1, _y=2)
         case_arm = compile_head_to_match_case(
@@ -307,10 +307,13 @@ class TestCompileHeadToMatchCase:
             var_context={},
             arity=2,
         )
-        # Ground fact: no trail mark/undo, body stmts emitted directly
-        assert not any(isinstance(s, ast.Assign) and
-                       isinstance(s.targets[0], ast.Name) and
-                       s.targets[0].id == "_mark" for s in case_arm.body)
+        # Numeric head literals capture + unify (so a Var caller binds in the
+        # var-query/output direction). unify() mutates the trail, so the
+        # mark/undo MUST be present for correct backtracking — it is NOT a
+        # trail-free ground fact. (numeric-head-literal bug)
+        assert any(isinstance(s, ast.Assign) and
+                   isinstance(s.targets[0], ast.Name) and
+                   s.targets[0].id == "_mark" for s in case_arm.body)
 
     def test_body_starts_with_trail_mark(self):
         # nv
@@ -374,7 +377,19 @@ class TestCompileHeadToMatchCase:
             arity=2,
         )
         try_stmt = case_arm.body[1]
-        assert sentinel in try_stmt.body
+        # The sentinel body is emitted inside the try block, possibly nested
+        # within head-literal guard `if`s (e.g. the numeric capture+unify
+        # guard for _y=2). Walk the try body to find it.
+        def _contains(stmts, target):
+            for s in stmts:
+                if s is target:
+                    return True
+                for field in ("body", "orelse", "finalbody"):
+                    if _contains(getattr(s, field, []) or [], target):
+                        return True
+            return False
+
+        assert _contains(try_stmt.body, sentinel)
 
 
 # ── compile_predicate ─────────────────────────────────────────────────────────

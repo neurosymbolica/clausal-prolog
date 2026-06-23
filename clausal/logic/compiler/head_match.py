@@ -249,11 +249,21 @@ def head_to_match_pattern(
     if term is None or term is True or term is False:
         return ast.MatchSingleton(value=term)
 
-    # Python scalar literals (non-string, non-bytes): C-level == inside the
-    # match arm. str and bytes are handled below: a raw MatchValue compares
-    # with ==, which rejects a char-list / int-list caller despite the
-    # strings-as-lists / bytes-as-lists contracts (F046 + bytes-as-lists).
+    # Python scalar literals (non-string, non-bytes) → wildcard capture +
+    # runtime unify guard, mirroring the str/bytes paths below. A bare
+    # MatchValue only matches when the deref'd arg already *equals* the literal
+    # (input mode); an unbound Var caller (output / var-query mode) silently
+    # fails the match and yields no solution. Routing through unify() binds the
+    # literal into the caller's Var, matching how bare facts and string/atom
+    # head literals behave. The guard short-circuits on an already-equal caller
+    # via `==` before falling through to unify(). (numeric-head-literal bug)
+    # When there is no list_guards sink (e.g. a nested context that does not
+    # assemble guards) fall back to the literal MatchValue.
     if isinstance(term, (int, float, complex)):
+        if list_guards is not None:
+            cap_name = f"_ncap{len(list_guards)}"
+            list_guards.append(("num", cap_name, term))
+            return ast.MatchAs(pattern=None, name=cap_name)
         return ast.MatchValue(value=ast.Constant(value=term))
 
     # Python str literal → wildcard capture + runtime unify guard, mirroring the
@@ -1188,6 +1198,33 @@ def compile_head_to_match_case(
             orelse=[],
         )]
 
+    # Emit numeric-literal guards: wildcard capture + same-type short-circuit.
+    # Mirrors the str-/bytes-guards blocks above. The `==` disjunct accepts an
+    # already-equal caller at C speed; an unbound Var caller falls through to
+    # unify(), which binds the literal (output / var-query mode).
+    num_guards = [g for g in list_guards if g and g[0] == "num"]
+    for _tag, cap_name, literal in num_guards:
+        inner = [ast.If(
+            test=ast.BoolOp(
+                op=ast.Or(),
+                values=[
+                    ast.Compare(
+                        left=_name(cap_name),
+                        ops=[ast.Eq()],
+                        comparators=[ast.Constant(value=literal)],
+                    ),
+                    _call(
+                        _name("unify"),
+                        _name(cap_name),
+                        ast.Constant(value=literal),
+                        _name(trail_name),
+                    ),
+                ],
+            ),
+            body=inner,
+            orelse=[],
+        )]
+
     # Emit atom guards (R1): wildcard capture + unify guard. Atoms compare by
     # identity/equality; unify() binds an unbound caller arg to the atom and
     # rejects a different atom/term. term_to_ast_expr emits the atom as a Name
@@ -1207,7 +1244,7 @@ def compile_head_to_match_case(
 
     # Emit list guards: input destructuring + deferred output construction
     # Filter out dict/set/str/bytes/atom guards from list_guards
-    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str", "bytes", "atom")]
+    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str", "bytes", "atom", "num")]
     if actual_list_guards:
         # Separate single-star and multi-star guards
         single_star_guards = [g for g in actual_list_guards if len(g) == 5]

@@ -1,0 +1,18 @@
+# Fixture for the numeric-head-literal var-binding bug.
+# A numeric literal in a ruled-clause head must bind into a caller's Var
+# (output mode), exactly like a string/atom literal or a bare fact.
+
+fine_int(DAYS, 20000) <- (DAYS >= 40)
+
+fine_flt(DAYS, 3.5) <- (DAYS >= 40)
+
+first_lit(20000, DAYS) <- (DAYS >= 40)
+
+mid_lit(A, 7, B) <- (A >= 1, B == A + 1)
+
+triv(DAYS, 99) <- (DAYS is DAYS)
+
+# control: bare fact (already worked) and string literal head (already worked)
+fact_int(50, 20000),
+
+elig_dq(P, "yes") <- (P == "alice")
