@@ -548,6 +548,49 @@ class ModulesFinder(MetaPathFinder):
         return None
 
 
+def _ensure_source_modules_on_path() -> None:
+    """Guarantee the source ``clausal/modules`` directory is on the package path.
+
+    Extension distributions (clausal-torch, clausal-jax, …) installed
+    *non-editably* drop bare ``.py`` files into ``site-packages/clausal/modules/``
+    with no ``__init__.py``, turning that directory into a PEP 420 namespace
+    portion. When a process runs from a working directory that does not put the
+    clausal *source* tree on ``sys.path`` (the normal shape for a rulebase plus a
+    separate test harness), the stdlib ``PathFinder`` resolves ``clausal.modules``
+    to that site-packages portion *before* an editable finder is consulted — and
+    that portion lacks the source-only ``py/`` subpackage. The symptom is::
+
+        <load> — No module named 'clausal.modules.py'
+
+    for any ``-import_from(date_time, …)`` (or regex/json/os/…) that compiles to
+    ``from clausal.modules.py.<name> import …``.
+
+    This hook runs from the source tree (``clausal.import_hook`` is always
+    resolved there), so it can locate the canonical ``clausal/modules`` directory
+    relative to itself and splice it onto ``clausal.modules.__path__``, making the
+    ``py/`` subpackage discoverable regardless of cwd.
+    """
+    src_modules = os.path.join(os.path.dirname(os.path.abspath(__file__)), "modules")
+    if not os.path.isdir(src_modules):
+        return
+    try:
+        mod = importlib.import_module("clausal.modules")
+    except ImportError:
+        return
+    search = getattr(mod, "__path__", None)
+    if search is None:
+        return
+    if not any(os.path.abspath(p) == os.path.abspath(src_modules) for p in list(search)):
+        # Prefer the canonical source location (mirrors the layout seen when the
+        # source tree is on sys.path, where it is searched first).
+        try:
+            search.insert(0, src_modules)
+        except (AttributeError, TypeError):
+            search.append(src_modules)
+
+
+_ensure_source_modules_on_path()
+
 sys.meta_path[:] = [PredicateFinder(), PrologFinder(), ModulesFinder(), *sys.meta_path]
 
 
