@@ -218,12 +218,30 @@ of whoever *calls* it. This is exactly how a Python function behaves: a function
 defined in module `lib` looks its free names up in `lib`'s globals, never in the
 globals of the module that happens to call it.
 
-**Prolog does the opposite.** In Prolog, an unqualified goal is resolved
-*dynamically*, at call time, relative to the calling context. A library
-predicate can call `requirement/4` and pick up whatever `requirement/4` the
-*caller's* program defined. Clausal has no such call-time, caller-relative name
-lookup — a name that isn't visible where the clause was written is simply not
-visible.
+**Prolog is split on this — and neither half works like Clausal.** Standard ISO
+Prolog (ISO/IEC 13211-1) defines *no* module system at all, so a classic
+"consult everything into one database" program has a single flat global
+namespace: there is only one `requirement/4`, and any library predicate that
+calls it picks up whatever the program happened to load. That is less
+"resolution relative to the caller" than "there is nothing to encapsulate" — and
+it is the behaviour that breaks the encapsulation you would expect.
+
+Real systems add module systems to fix exactly this, but those are **de facto**,
+per-implementation (SWI, SICStus, …); the ISO *Modules* standard, ISO/IEC
+13211-2, was essentially never adopted. And here is the subtlety: in those module
+systems an *ordinary* call like `requirement(...)` inside a library module
+**does** resolve to that library's own `requirement/4` — lexically, just like
+Clausal. The genuinely caller-relative behaviour is reserved for
+**meta-predicates**: when a library declares `:- meta_predicate assess(…, :, …)`,
+Prolog makes that argument module-sensitive and *implicitly* threads the caller's
+module into goals passed there (the "context module"). That implicit threading is
+the part Prolog programmers reliably trip over.
+
+Clausal collapses both cases into one rule: names are always resolved lexically
+against the defining module, and when a predicate needs to call something the
+caller owns, the caller **passes it in explicitly** as a goal. There is no flat
+global database and no implicit context module — the wiring a `meta_predicate`
+declaration would do behind your back becomes an ordinary, visible argument.
 
 ### What this means in practice
 
@@ -247,7 +265,9 @@ TestDynamic(X) <- (RunCheck(X))    # asks the library to call Hook
 Querying `TestDynamic(X)` raises `KeyError: Predicate Hook/1 not found`.
 `RunCheck` was compiled in `lib`'s namespace, where `Hook` does not exist — and
 Clausal never consults the caller's namespace to find it. A Prolog programmer
-expects this to find the caller's `Hook/1`; in Clausal it does not, by design.
+coming from the flat, module-less style expects this to find the caller's
+`Hook/1`; in Clausal — as in a properly modularised SWI/SICStus program — it does
+not.
 
 ### The idiom: pass the predicate as a goal
 
@@ -288,8 +308,9 @@ Clausal is a logic-programming layer for Python programmers, many of whom do not
 know Prolog. The guiding principle is **least surprise for a Python programmer**:
 imports, modules, and name scoping should behave the way they already do in
 Python — lexical resolution against the defining module, predicates as
-first-class objects you pass explicitly — rather than reproducing Prolog's
-dynamic, caller-relative name resolution. The closure/lexical model is also what
+first-class objects you pass explicitly — rather than a flat global predicate
+database or the implicit context-module threading that Prolog's meta-predicates
+rely on. The closure/lexical model is also what
 makes predicates ordinary `PredicateMeta` objects you can import, pass around,
 and call by reference, which is exactly what the [`Call`/`call_goal`
 higher-order builtins](higher_order.md) and [lambdas](lambdas.md) rely on.
