@@ -276,9 +276,15 @@ def specialize_mi(
     from clausal.logic.compiler import compile_predicate_trampoline
 
     db = Database(module_dict=module_dict)
+    # Register the specialized class so db.assertz mirrors clauses onto it
+    # (it dispatches through the class); fall back to an explicit class sync
+    # when no module dict is available for db.assertz to resolve through.
+    if db.module_dict is not None:
+        db.module_dict[new_name] = pred_cls
     for clause in clauses:
         db.assertz(clause)
-        pred_cls._assertz(clause)
+        if db.module_dict is None:
+            pred_cls._assertz(clause)
 
     globals_ = module_dict or {}
     globals_[new_name] = pred_cls
@@ -1315,9 +1321,15 @@ def specialize_mi_deep(
     from clausal.logic.compiler import compile_predicate_trampoline
 
     db = Database(module_dict=module_dict)
+    # Register the specialized class so db.assertz mirrors clauses onto it
+    # (it dispatches through the class); fall back to an explicit class sync
+    # when no module dict is available for db.assertz to resolve through.
+    if db.module_dict is not None:
+        db.module_dict[new_name] = pred_cls
     for clause in clauses:
         db.assertz(clause)
-        pred_cls._assertz(clause)
+        if db.module_dict is None:
+            pred_cls._assertz(clause)
 
     globals_ = module_dict or {}
     globals_[new_name] = pred_cls
@@ -1639,9 +1651,15 @@ def specialize_mi_cpd(
     from clausal.logic.compiler import compile_predicate_trampoline
 
     db = Database(module_dict=module_dict)
+    # Register the specialized class so db.assertz mirrors clauses onto it
+    # (it dispatches through the class); fall back to an explicit class sync
+    # when no module dict is available for db.assertz to resolve through.
+    if db.module_dict is not None:
+        db.module_dict[new_name] = pred_cls
     for clause in deforested:
         db.assertz(clause)
-        pred_cls._assertz(clause)
+        if db.module_dict is None:
+            pred_cls._assertz(clause)
 
     globals_ = module_dict or {}
     globals_[new_name] = pred_cls

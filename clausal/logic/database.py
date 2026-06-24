@@ -62,6 +62,27 @@ class Database:
         self._table_store: dict = {}
         self.module_dict: dict | None = module_dict
 
+    def _pred_cls_for(self, functor: str) -> Any:
+        """Return the unlocked PredicateMeta class for *functor*, or None.
+
+        ``solve()`` (and compiled inter-predicate calls) resolve a predicate
+        through its PredicateMeta class — a clause store that runs in parallel
+        with ``self._clauses``.  Mutating only the DB store leaves the class
+        stale, so the low-level assertz/asserta/retract below must mirror the
+        change onto the class.  Locked (static) predicates are skipped so the
+        low-level API does not silently bypass the runtime-mutation lock; only
+        dynamic predicates — the ones that may legitimately change at runtime —
+        are synced.
+        """
+        md = self.module_dict
+        if md is None:
+            return None
+        from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+        cand = md.get(functor)
+        if isinstance(cand, PredicateMeta) and not cand._locked:
+            return cand
+        return None
+
     def assertz(self, clause: Clause) -> None:
         """Add clause at end of its predicate's clause list."""
         functor, arity = head_key(clause.head)
@@ -70,6 +91,11 @@ class Database:
         # Invalidate compiled dispatch so lazy recompile triggers on next use.
         if key in self._dispatch:
             self._dispatch[key] = None
+        # Keep the predicate class (which solve() dispatches through) in sync.
+        pred_cls = self._pred_cls_for(functor)
+        if pred_cls is not None:
+            pred_cls._clauses.append(clause)
+            pred_cls._dispatch_fn = None
         # Auto-invalidate tabled answers when a tabled predicate changes.
         if key in self._tabled:
             self.abolish_table(functor, arity)
@@ -84,6 +110,11 @@ class Database:
         # Invalidate compiled dispatch so lazy recompile triggers on next use.
         if key in self._dispatch:
             self._dispatch[key] = None
+        # Keep the predicate class (which solve() dispatches through) in sync.
+        pred_cls = self._pred_cls_for(functor)
+        if pred_cls is not None:
+            pred_cls._clauses.insert(0, clause)
+            pred_cls._dispatch_fn = None
         # Auto-invalidate tabled answers when a tabled predicate changes.
         if key in self._tabled:
             self.abolish_table(functor, arity)
@@ -103,6 +134,15 @@ class Database:
                 # Invalidate compiled dispatch.
                 if key in self._dispatch:
                     self._dispatch[key] = None
+                # Keep the predicate class (which solve() dispatches through) in
+                # sync: remove the same clause object by identity.
+                pred_cls = self._pred_cls_for(functor)
+                if pred_cls is not None:
+                    for j, pcls_clause in enumerate(pred_cls._clauses):
+                        if pcls_clause is clause:
+                            del pred_cls._clauses[j]
+                            pred_cls._dispatch_fn = None
+                            break
                 # Auto-invalidate tabled answers when a tabled predicate changes.
                 if key in self._tabled:
                     self.abolish_table(functor, arity)

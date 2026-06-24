@@ -99,10 +99,8 @@ def _assertz_factory(db):
                 f"Predicate {functor}/{arity} is locked. "
                 "Use dynamic() to allow runtime assertion."
             )
+        # db.assertz syncs pred_cls._clauses and clears its dispatch.
         db.assertz(clause)
-        if pred_cls is not None:
-            pred_cls._clauses.append(clause)
-            pred_cls._dispatch_fn = None
         clauses = db.clauses_for(functor, arity)
         compile_predicate_trampoline(functor, arity, clauses, db,
                                      globals_=module_dict, pred_cls=pred_cls)
@@ -134,10 +132,8 @@ def _asserta_factory(db):
                 f"Predicate {functor}/{arity} is locked. "
                 "Use dynamic() to allow runtime assertion."
             )
+        # db.asserta syncs pred_cls._clauses and clears its dispatch.
         db.asserta(clause)
-        if pred_cls is not None:
-            pred_cls._clauses.insert(0, clause)
-            pred_cls._dispatch_fn = None
         clauses = db.clauses_for(functor, arity)
         compile_predicate_trampoline(functor, arity, clauses, db,
                                      globals_=module_dict, pred_cls=pred_cls)
