@@ -113,28 +113,76 @@ def _term_to_goal(term: Any) -> Any:
 
 _VAR_SENTINEL = object()
 
-# Cache: (goal_class_or_functor, arg_type_key, module_id) → (fn, code_object, var_names)
+# Cache: (structural_key, module_id) → (fn, code_object, var_names)
 _query_cache: dict = {}
+
+# Upper bound on distinct cached query shapes; see eviction note at the
+# insertion site in _compile_as_query.
+_QUERY_CACHE_MAX = 4096
+
+
+class _Uncacheable(Exception):
+    """Raised internally when a goal contains a ground leaf we cannot key on."""
+
+
+def _structural_key(term: Any, var_index: dict) -> tuple:
+    """Recursively canonicalise a goal term into a hashable structural key.
+
+    The compiled query bakes ground arguments into the generated code as literal
+    constants, while logic variables become rebindable globals (remapped on a
+    cache hit).  So two goals may share compiled code *only* when they have the
+    same structure, the same ground literal *values* (not merely the same
+    types), and variables in the same positions.  This key captures all three:
+
+      - variables become ``('var', n)`` where ``n`` is the first-occurrence index,
+        so ``p(V, V)`` (aliased) and ``p(V, W)`` (distinct) get different keys;
+      - ground leaves become ``('lit', type, value)`` — keying on the value, which
+        is what distinguishes ``p(1, V)`` from ``p(2, V)``;
+      - compound/predicate/sequence terms recurse structurally.
+
+    Raises :class:`_Uncacheable` if a ground leaf is unhashable (e.g. a list,
+    dict, or ndarray argument), in which case the caller skips caching entirely
+    rather than risk a stale or colliding entry.
+    """
+    from clausal.logic.predicate import PredicateMeta
+
+    t = deref(term)
+    if is_var(t):
+        idx = var_index.get(id(t))
+        if idx is None:
+            idx = len(var_index)
+            var_index[id(t)] = idx
+        return ("var", idx)
+    if isinstance(type(t), PredicateMeta):
+        return ("pred", type(t),
+                tuple(_structural_key(getattr(t, f), var_index)
+                      for f in term_field_names(t)))
+    if isinstance(t, Compound):
+        return ("cmp", t.functor,
+                tuple(_structural_key(a, var_index) for a in t.args))
+    if isinstance(t, (list, tuple)):
+        return ("seq", type(t),
+                tuple(_structural_key(x, var_index) for x in t))
+    try:
+        hash(t)
+    except TypeError as e:
+        raise _Uncacheable() from e
+    return ("lit", type(t), t)
 
 
 def _goal_cache_key(goal: Any, module: Module):
-    """Structural key: predicate identity + which positions are Var vs ground type."""
+    """Structural, value-sensitive cache key for a top-level query goal.
+
+    Returns ``None`` (caching disabled for this goal) when the goal is neither a
+    predicate term nor a Compound, or when it contains an unhashable ground leaf.
+    """
     from clausal.logic.predicate import PredicateMeta
-    if isinstance(type(goal), PredicateMeta):
-        cls = type(goal)
-        fields = term_field_names(goal)
-        arg_types = []
-        for f in fields:
-            v = deref(getattr(goal, f))
-            arg_types.append(_VAR_SENTINEL if is_var(v) else type(v))
-        return (cls, tuple(arg_types), id(module))
-    if isinstance(goal, Compound):
-        arg_types = []
-        for a in goal.args:
-            a = deref(a)
-            arg_types.append(_VAR_SENTINEL if is_var(a) else type(a))
-        return (goal.functor, len(goal.args), tuple(arg_types), id(module))
-    return None
+    if not (isinstance(type(goal), PredicateMeta) or isinstance(goal, Compound)):
+        return None
+    try:
+        return (_structural_key(goal, {}), id(module))
+    except _Uncacheable:
+        return None
 
 
 def _compile_as_query(goal: Any, module: Module) -> Any:
@@ -201,6 +249,12 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
 
     if cache_key is not None:
         cached_var_names = [_var_python_name(v) for v in vars_in_goal]
+        # Bound the cache: keying on ground *values* (for correctness) means a
+        # workload that queries one module with many distinct argument values
+        # would otherwise grow this dict without limit.  Evict in FIFO order
+        # (dicts preserve insertion order) once the cap is reached.
+        if len(_query_cache) >= _QUERY_CACHE_MAX:
+            _query_cache.pop(next(iter(_query_cache)), None)
         _query_cache[cache_key] = (dispatch_fn, dispatch_fn.__code__, cached_var_names)
 
     return dispatch_fn
