@@ -119,6 +119,13 @@ available as builtins.
 equivalent to Prolog's `use_module` family. Qualified calls use dot notation:
 `math_utils.Factorial(N, F)`.
 
+> **One genuine difference — read this.** Name resolution is **lexical
+> (Pythonic), not dynamic (Prolog).** A predicate sees the names in *its own
+> file*, never the caller's, so a library predicate cannot call back into a
+> bare predicate the importer defined — you pass that predicate in as a goal
+> argument instead. This trips up Prolog programmers; see
+> [Name resolution is lexical, not dynamic](import.md#name-resolution-is-lexical-pythonic-not-dynamic-prolog).
+
 ---
 
 ## What's genuinely different

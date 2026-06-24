@@ -206,6 +206,100 @@ Same strategy as Python — partial module objects. The deferred compilation mod
 
 ---
 
+## Name resolution is lexical (Pythonic), not dynamic (Prolog)
+
+This is the single most important scoping rule to internalise, and it is where
+Clausal deliberately departs from Prolog. **It follows Python, not Prolog.**
+
+**The rule.** A predicate resolves the names it calls against **its own
+defining module's namespace** — the module the clause was *written in* — fixed
+when that predicate is compiled. It does **not** resolve them in the namespace
+of whoever *calls* it. This is exactly how a Python function behaves: a function
+defined in module `lib` looks its free names up in `lib`'s globals, never in the
+globals of the module that happens to call it.
+
+**Prolog does the opposite.** In Prolog, an unqualified goal is resolved
+*dynamically*, at call time, relative to the calling context. A library
+predicate can call `requirement/4` and pick up whatever `requirement/4` the
+*caller's* program defined. Clausal has no such call-time, caller-relative name
+lookup — a name that isn't visible where the clause was written is simply not
+visible.
+
+### What this means in practice
+
+A library predicate cannot "reach back" into the importer to call a predicate
+the importer defined. The name isn't in the library's namespace, so the call
+fails at runtime:
+
+```clausal
+# lib.clausal — the library knows nothing about Hook
+RunCheck(X) <- (Hook(X))
+```
+
+```clausal
+# caller.clausal
+-import_from(lib, [RunCheck])
+
+Hook(42),                          # defined HERE, in the caller
+TestDynamic(X) <- (RunCheck(X))    # asks the library to call Hook
+```
+
+Querying `TestDynamic(X)` raises `KeyError: Predicate Hook/1 not found`.
+`RunCheck` was compiled in `lib`'s namespace, where `Hook` does not exist — and
+Clausal never consults the caller's namespace to find it. A Prolog programmer
+expects this to find the caller's `Hook/1`; in Clausal it does not, by design.
+
+### The idiom: pass the predicate as a goal
+
+When a library predicate needs to invoke something the caller supplies, the
+caller passes that predicate **as a goal argument** (higher-order), and the
+library invokes it with the [`Call` / `call_goal` higher-order builtins](higher_order.md).
+This is the Pythonic equivalent of passing a callback / function object instead
+of relying on a global name being in scope:
+
+```clausal
+# lib.clausal — the hook is a parameter, not a free name
+RunCheck(HOOK, X) <- (call_goal(HOOK, X))
+```
+
+```clausal
+# caller.clausal
+-import_from(lib, [RunCheck])
+
+Hook(42),
+TestHO(X) <- (RunCheck(Hook, X))   # pass our Hook in as a goal → binds X = 42
+```
+
+This is the right pattern whenever a generic library predicate must call back
+into domain-specific predicates. For example, a generic eligibility engine takes
+the domain's `requirement` predicate as a goal argument rather than calling a
+bare `requirement/4` and hoping the caller defined one:
+
+```clausal
+# Generic, reusable: the requirement relation is passed in.
+Assess(SUBJECT, REQ_IDS, PROFILE, REQUIREMENT, LABELS, RESULT) <- (
+    # ... evaluate each id in REQ_IDS by calling REQUIREMENT as a goal ...
+)
+```
+
+### Why Clausal chose this
+
+Clausal is a logic-programming layer for Python programmers, many of whom do not
+know Prolog. The guiding principle is **least surprise for a Python programmer**:
+imports, modules, and name scoping should behave the way they already do in
+Python — lexical resolution against the defining module, predicates as
+first-class objects you pass explicitly — rather than reproducing Prolog's
+dynamic, caller-relative name resolution. The closure/lexical model is also what
+makes predicates ordinary `PredicateMeta` objects you can import, pass around,
+and call by reference, which is exactly what the [`Call`/`call_goal`
+higher-order builtins](higher_order.md) and [lambdas](lambdas.md) rely on.
+
+> **One-line summary.** If you came from Prolog: a library predicate sees the
+> names *in its own file*, never the caller's. Need it to call something the
+> caller owns? Pass that predicate in as a goal argument.
+
+---
+
 ## Builtin injection
 
 The following names are injected into every predicate module's namespace by the import hook:
