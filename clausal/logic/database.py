@@ -425,6 +425,21 @@ def _is_structural_head_value(val: Any) -> bool:
     return False
 
 
+def _contains_structural_head_value(val: Any) -> bool:
+    """Recursively True if *val* is, or contains, a structural term that needs
+    hoisting (a Compound / Call(LoadName) / functor instance). Used to detect
+    structural literals nested inside a head *list* (or compound), e.g. the
+    ``item2(S)`` in a head arg ``[item2(S)]`` — whose inner var would otherwise
+    stay decoupled from a body goal that binds it."""
+    if _is_structural_head_value(val):
+        return True
+    if isinstance(val, list):
+        return any(_contains_structural_head_value(e) for e in val)
+    if isinstance(val, Compound):
+        return any(_contains_structural_head_value(a) for a in val.args)
+    return False
+
+
 def _normalize_structural_head_args(head: Any, body: list) -> tuple[Any, list]:
     """Hoist structural top-level head args into prepended Unify body goals.
 
@@ -442,7 +457,12 @@ def _normalize_structural_head_args(head: Any, body: list) -> tuple[Any, list]:
     prepend: list = []
     for name in fields:
         val = getattr(head, name)
-        if _is_structural_head_value(val):
+        # Hoist a top-level structural arg, OR a list arg that *contains* a
+        # structural literal at any depth (its inner var must unify with the
+        # clause's shared body var — cons-pattern head matching doesn't couple
+        # them in output mode).
+        if _is_structural_head_value(val) or (
+                isinstance(val, list) and _contains_structural_head_value(val)):
             v = Var()
             replacements[name] = v
             prepend.append(Unify(left=v, right=val))
