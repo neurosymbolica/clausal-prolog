@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from typing import Any, Iterator
 
-from clausal.logic.variables import Var, Trail, deref, is_var
+from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
@@ -185,6 +185,71 @@ def _goal_cache_key(goal: Any, module: Module):
         return None
 
 
+def _templatize_query_goal(goal: Any):
+    """Parameterize the fully-ground top-level arguments of a predicate-call goal.
+
+    Returns ``(template_goal, [(param_var, value), ...])``. Each direct argument
+    of a single predicate-call goal (PredicateMeta instance or Compound) that is
+    fully ground is replaced with a fresh unbound Var; the var is bound to that
+    value at run time (see ``solve``). The compiled query therefore contains no
+    baked-in argument literals and is reused across calls that differ only in
+    their ground arguments — instead of recompiling once per distinct value.
+
+    Composite/control/arithmetic goals are returned unchanged (``params`` empty);
+    they keep the value-keyed cache as a correct fallback.
+    """
+    from clausal.logic.predicate import PredicateMeta
+
+    def _ground_value(val):
+        """Return the scalar ground value to parameterize, or None to leave it.
+
+        Only plain scalar literals are parameterized: they unify directly with a
+        head literal regardless of mode.  Structural args (list/dict/compound)
+        are *not* parameterized because the literal-baking path rewrites them
+        (e.g. a list literal becomes cons cells) — a raw value bound to a Var
+        would not match the rewritten head pattern.  Those keep the value-keyed
+        cache fallback.
+        """
+        dv = deref(val)
+        if is_var(dv):
+            return None
+        if type(dv) in (int, float, complex, bool, str, bytes) or dv is None:
+            return dv
+        return None
+
+    if isinstance(type(goal), PredicateMeta):
+        params: list = []
+        new_vals: dict = {}
+        for f in term_field_names(goal):
+            gv = _ground_value(getattr(goal, f))
+            if gv is None:
+                new_vals[f] = getattr(goal, f)
+            else:
+                pv = Var()
+                params.append((pv, gv))
+                new_vals[f] = pv
+        if not params:
+            return goal, []
+        return type(goal)(**new_vals), params
+
+    if isinstance(goal, Compound):
+        params = []
+        new_args: list = []
+        for a in goal.args:
+            gv = _ground_value(a)
+            if gv is None:
+                new_args.append(a)
+            else:
+                pv = Var()
+                params.append((pv, gv))
+                new_args.append(pv)
+        if not params:
+            return goal, []
+        return Compound(goal.functor, tuple(new_args)), params
+
+    return goal, []
+
+
 def _compile_as_query(goal: Any, module: Module) -> Any:
     """Compile goal as a zero-arity query predicate and return its dispatch fn.
 
@@ -197,7 +262,13 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     function's globals so that predicate names resolve from the module namespace
     (Phase 5: cross-predicate resolution without _db string lookup).
     """
-    # Compute cache key before AST conversion (needs original term)
+    # Parameterize ground top-level args so distinct values reuse one compiled
+    # query.  The returned param_pairs are bound to their values (on the trail)
+    # by the caller before driving the search.
+    goal, param_pairs = _templatize_query_goal(goal)
+
+    # Compute cache key before AST conversion (needs original term).  After
+    # templatizing, ground args are Vars, so the key is value-independent.
     cache_key = _goal_cache_key(goal, module)
 
     goal = _term_to_goal(goal)
@@ -216,7 +287,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         for old_name, new_var in zip(cached_var_names, vars_in_goal):
             new_globals[old_name] = new_var
         fn = _types.FunctionType(cached_code, new_globals, cached_fn.__name__)
-        return fn
+        return fn, param_pairs
 
     db = module.db
 
@@ -257,7 +328,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
             _query_cache.pop(next(iter(_query_cache)), None)
         _query_cache[cache_key] = (dispatch_fn, dispatch_fn.__code__, cached_var_names)
 
-    return dispatch_fn
+    return dispatch_fn, param_pairs
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -445,7 +516,11 @@ def solve(
     if goal is False:
         return
 
-    dispatch_fn = _compile_as_query(goal, module)
+    dispatch_fn, param_pairs = _compile_as_query(goal, module)
+    # Bind parameterized ground args to their values before driving so the
+    # value-independent compiled query sees the concrete arguments.
+    for param_var, value in param_pairs:
+        unify(param_var, value, trail)
     yield from _drive_trampoline(dispatch_fn, trail)
 
 
