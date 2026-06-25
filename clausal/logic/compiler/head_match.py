@@ -1414,17 +1414,38 @@ def compile_head_to_match_case(
             body=inner,
         )
 
+    # The body contains ``yield``s, so this generator can be suspended at a
+    # choicepoint and later abandoned (e.g. once/1 or \+ commits past it). If the
+    # garbage collector then reclaims the suspended generator, CPython throws
+    # ``GeneratorExit`` into it and the ``finally`` would run ``trail.undo(_mark)``
+    # — truncating the *live* trail of the in-flight search back to this old mark
+    # and destroying bindings made after it (lost/duplicate solutions, only with
+    # GC enabled). So skip the undo when the generator is being closed: an
+    # abandoned choicepoint's bindings are cleaned up by the enclosing mark/undo
+    # (or discarded with the per-query trail), never by this finally.
+    closing_name = mark_name + "_cl"
     try_finally = ast.Try(
         body=inner,
-        handlers=[],
+        handlers=[ast.ExceptHandler(
+            type=_name("GeneratorExit"),
+            name=None,
+            body=[_assign(closing_name, ast.Constant(value=True)),
+                  ast.Raise(exc=None, cause=None)],
+        )],
         orelse=[],
-        finalbody=[undo_stmt],
+        finalbody=[ast.If(
+            test=ast.UnaryOp(op=ast.Not(), operand=_name(closing_name)),
+            body=[undo_stmt],
+            orelse=[],
+        )],
     )
 
     return ast.match_case(
         pattern=outer_pattern,
         guard=None,
-        body=[mark_assign, try_finally],
+        body=[mark_assign,
+              _assign(closing_name, ast.Constant(value=False)),
+              try_finally],
     )
 
 
