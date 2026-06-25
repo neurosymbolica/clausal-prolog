@@ -139,13 +139,33 @@ def main(args: list[str] | None = None) -> int:
     parser.add_argument("paths", nargs="+", help=".clausal files or directories")
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Show individual test results")
+    parser.add_argument("--strict", "--fail-on-empty", dest="strict",
+                        action="store_true",
+                        help="Exit non-zero when no Test(...) clauses are collected")
     parsed = parser.parse_args(args)
+
+    # Validate paths up front so a mistyped path or wrong cwd is an error, not a
+    # silently-green run.  A non-existent path, or a file that exists but is not a
+    # .clausal/.pl file, is reported and forces a non-zero exit.
+    bad_paths: list[str] = []
+    for path in parsed.paths:
+        p = Path(path)
+        if not p.exists():
+            bad_paths.append(f"no such file or directory: {path}")
+        elif p.is_file() and p.suffix != ".clausal":
+            bad_paths.append(f"not a .clausal file: {path}")
+    if bad_paths:
+        for msg in bad_paths:
+            print(f"error: {msg}", file=sys.stderr)
+        return 2
 
     total_passed = 0
     total_failed = 0
+    files_seen = 0
     failures: list[tuple[str, TestResult]] = []
 
     for path in discover_clausal_files(parsed.paths):
+        files_seen += 1
         file_results = run_file(path)
         rel = os.path.relpath(file_results.path)
 
@@ -173,6 +193,21 @@ def main(args: list[str] | None = None) -> int:
         print()
 
     total = total_passed + total_failed
+
+    # Distinguish "nothing to run" from "everything passed": files that exist but
+    # contain no Test(...) clauses (or roots with no .clausal files at all) would
+    # otherwise print a misleading [PASSED].
+    if total == 0:
+        if files_seen == 0:
+            print("no .clausal files found")
+        else:
+            print(f"{files_seen} file(s) collected, but no Test(...) clauses found")
+        if parsed.strict:
+            print("0 tests [NO TESTS]")
+            return 1
+        print("0 tests [NO TESTS] (use --strict to fail)")
+        return 0
+
     status = "PASSED" if total_failed == 0 else "FAILED"
     print(f"{total} tests: {total_passed} passed, {total_failed} failed [{status}]")
     return 0 if total_failed == 0 else 1
