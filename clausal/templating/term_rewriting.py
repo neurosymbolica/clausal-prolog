@@ -372,6 +372,61 @@ def _collect_logic_var_names(node) -> list[str]:
     return ordered
 
 
+class ClausalLintWarning(UserWarning):
+    """Load-time lint diagnostic for a likely-footgun Clausal construct."""
+
+
+def _node_has_var_or_wildcard(node) -> bool:
+    """True if *node* contains a logic variable or a bare ``_`` wildcard."""
+    found = False
+
+    class _V(NodeVisitor):
+        def visit_Name(self, name):
+            nonlocal found
+            if name.id == "_" or _is_logic_var_name(name.id):
+                found = True
+
+    _V().visit(node)
+    return found
+
+
+def _isnot_rhs_is_partial_pattern(rhs) -> bool:
+    """True when the RHS of ``X is not RHS`` is a *structural* term (compound,
+    list, tuple, set, or dict) that contains an unbound variable or ``_``.
+
+    ``is not`` is ``dif/2`` (disequality). Against a partial term it compares with
+    a *fresh* variable, so the guard succeeds even for terms that match the shape
+    — almost always a mistake (the author meant ``not (X is P)``). Scalars and
+    fully-ground RHS (the correct, common uses — ``X is not 0``, ``K is not "k"``,
+    ``KEYS is not []``) return False.
+    """
+    if isinstance(rhs, Call):
+        # A functor application like tag(_); exclude a logic variable applied as
+        # a goal closure (e.g. Goal(...)) — that is not a data pattern.
+        if isinstance(rhs.func, Name) and _is_logic_var_name(rhs.func.id):
+            return False
+    elif not isinstance(rhs, (List, Tuple, Set, Dict)):
+        return False
+    return _node_has_var_or_wildcard(rhs)
+
+
+def _warn_isnot_partial_pattern(rhs, node, source_lines) -> None:
+    import warnings  # noqa: PLC0415
+    lineno = getattr(node, "lineno", None)
+    snippet = ""
+    if source_lines and lineno and 1 <= lineno <= len(source_lines):
+        snippet = " — " + source_lines[lineno - 1].strip()
+    where = f" (line {lineno})" if lineno else ""
+    warnings.warn(
+        f"`is not` against a pattern containing an unbound variable{where}"
+        f"{snippet}: this is dif/2 against a fresh variable, so it ALWAYS "
+        "succeeds (even for terms matching the shape). Use `not (X is P)` to "
+        "test non-matching, or `dif` against a fully-ground term for disequality.",
+        ClausalLintWarning,
+        stacklevel=2,
+    )
+
+
 def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyThunk"):
     """Build a ``PyThunk(lambda V1, ...: expr, [V1_var, ...])`` AST node.
 
@@ -636,6 +691,10 @@ class TermTransformer(NodeTransformer):
 
 
         if len(operators) == 1:
+            if isinstance(operators[0], IsNot) and \
+                    _isnot_rhs_is_partial_pattern(comparators[0]):
+                _warn_isnot_partial_pattern(
+                    comparators[0], compare, transformer._source_lines)
             class_name = CMPOP_CLS[type(operators[0])]
             return node_ast(
                 class_name,
