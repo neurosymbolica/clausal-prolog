@@ -349,24 +349,34 @@ attach_dif_pair(PyObject *x, PyObject *y, PyObject *pair,
             Py_DECREF(new_list);
             if (rc < 0) { Py_DECREF(unique); return -1; }
         } else {
+            int skip = 0;
             if (check_identity) {
                 /* Skip if pair already present (identity check) */
-                int found = 0;
                 Py_ssize_t en = PyList_GET_SIZE(existing);
                 for (Py_ssize_t j = 0; j < en; j++) {
                     if (PyList_GET_ITEM(existing, j) == pair) {
-                        found = 1;
+                        skip = 1;
                         break;
                     }
                 }
-                if (!found) {
-                    if (PyList_Append(existing, pair) < 0) {
-                        Py_DECREF(existing); Py_DECREF(unique);
-                        return -1;
-                    }
+            }
+            if (!skip) {
+                /* Replace via put_attr (trailed) instead of mutating the list
+                 * in place: an untrailed append survives backtracking and
+                 * leaves a stale constraint that wrongly blocks later
+                 * unifications (sequential-query state accumulation). */
+                PyObject *new_list = PySequence_List(existing);
+                if (!new_list) {
+                    Py_DECREF(existing); Py_DECREF(unique);
+                    return -1;
                 }
-            } else {
-                if (PyList_Append(existing, pair) < 0) {
+                if (PyList_Append(new_list, pair) < 0) {
+                    Py_DECREF(new_list); Py_DECREF(existing); Py_DECREF(unique);
+                    return -1;
+                }
+                int rc = VarAPI->put_attr(v, DIF_KEY_STR, new_list, trail);
+                Py_DECREF(new_list);
+                if (rc < 0) {
                     Py_DECREF(existing); Py_DECREF(unique);
                     return -1;
                 }

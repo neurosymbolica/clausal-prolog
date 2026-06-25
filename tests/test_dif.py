@@ -499,3 +499,50 @@ class TestDifImportHook:
         goal2 = Call(func=LoadName(name="different"), args=[1, 1, x2], kwargs=[])
         result2 = once(goal2, logic_mod)
         assert result2 is None
+
+
+class TestDifBacktracking:
+    """A dif constraint added after a trail mark must be fully undone when the
+    trail is unwound to that mark.
+
+    Regression: the second+ dif on a variable appended the new pair to the
+    existing attribute list *in place* without trailing the mutation, so the
+    constraint survived backtracking and wrongly blocked later unifications.
+    This accumulating residue corrupted long-lived multi-query harnesses
+    (see todo/sequential-query-state-accumulation-bug.md).
+    """
+
+    def test_constraint_list_restored_on_undo(self):
+        X, Y, Z = Var(), Var(), Var()
+        t = Trail()
+        assert dif(X, Y, t) is True
+        m = t.mark()
+        assert dif(X, Z, t) is True
+        # X now carries two constraints; (X, Z) must be removed on undo.
+        assert len(get_attr(X, DIF_KEY)) == 2
+        t.undo(m)
+        assert len(get_attr(X, DIF_KEY)) == 1
+
+    def test_backtracked_constraint_does_not_block_unify(self):
+        X, Y, Z = Var(), Var(), Var()
+        t = Trail()
+        assert dif(X, Y, t) is True
+        m = t.mark()
+        assert dif(X, Z, t) is True      # X must differ from Z …
+        t.undo(m)                        # … but this is backtracked away.
+        # With dif(X, Z) gone, X and Z may take the same value.
+        assert unify(X, 5, t)
+        assert unify(Z, 5, t)
+
+    def test_hook_reattach_constraint_trailed(self):
+        # When a constrained var is bound, the hook re-attaches surviving
+        # constraints to remaining free vars; that re-attach must also be
+        # trailed so it is undone on backtrack.
+        X, Y, Z = Var(), Var(), Var()
+        t = Trail()
+        assert dif(X, Y, t) is True      # Y carries (X, Y)
+        m = t.mark()
+        assert dif(Y, Z, t) is True      # Y now also carries (Y, Z)
+        assert len(get_attr(Y, DIF_KEY)) == 2
+        t.undo(m)
+        assert len(get_attr(Y, DIF_KEY)) == 1

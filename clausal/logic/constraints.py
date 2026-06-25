@@ -271,7 +271,10 @@ def dif(x: Any, y: Any, trail: Trail) -> bool:
         if existing is None:
             put_attr(v, DIF_KEY, [pair], trail)
         else:
-            existing.append(pair)
+            # Replace the list via put_attr (trailed) rather than mutating it in
+            # place — an untrailed append survives backtracking and leaves a
+            # stale constraint that wrongly blocks later unifications.
+            put_attr(v, DIF_KEY, existing + [pair], trail)
 
     return True
 
@@ -322,7 +325,8 @@ def _dif_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
                 put_attr(v, DIF_KEY, [pair], trail)
             else:
                 if not any(p is pair for p in existing):
-                    existing.append(pair)
+                    # Trailed replacement, not an in-place append (see dif()).
+                    put_attr(v, DIF_KEY, existing + [pair], trail)
 
     return True
 
