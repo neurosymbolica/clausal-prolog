@@ -82,5 +82,17 @@ separate, deferred item.
 - **Mode coverage:** audit the whole suite for input vs output (var-query) mode
   coverage so this blind spot can't recur — see
   `todo/audit-tests-input-output-mode-coverage.md`.
-- Consider a compiler self-check / lint that flags any `MatchValue` /
-  `MatchSingleton` head pattern lacking a `unify()` fallback.
+- **Compiler self-check — DONE 2026-06-26.** `assert_head_pattern_unify_safe`
+  in `clausal/logic/compiler/invariants.py` now runs on every compile (via
+  `compile_head_to_match_case`) and raises `InvariantError` if any **top-level
+  head argument** compiles to a bare `MatchValue` / `MatchSingleton` (the
+  `==`/identity-only shape that never binds a Var caller). Scoped to direct arg
+  slots, so it does not flag the legitimate, input-mode-only `MatchValue`
+  discriminant nested inside a `MatchClass` (compound-key indexing) or the
+  ground-position indexing lift. Negative + positive tests:
+  `tests/test_invariant_errors.py::test_head_pattern_unify_safe_*`. The whole
+  suite (8137 passing) is the standing affirmative gate that no real head trips
+  it.
+
+**This audit is now fully resolved** — all findings fixed and the bug class is
+locked against regression by the always-on compiler invariant.

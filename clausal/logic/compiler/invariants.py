@@ -223,6 +223,63 @@ def _make_module(stmts: list):
     return _ast.Module(body=stmts, type_ignores=[])
 
 
+def assert_head_pattern_unify_safe(pattern: Any, head: Any = None) -> None:
+    """Equality-vs-unification invariant — ``head_match.py`` (Phase 6).
+
+    A compiled clause-head ``match`` pattern must never contain a bare
+    :class:`ast.MatchValue` (``==`` match) or :class:`ast.MatchSingleton`
+    (identity match).  Both succeed only when the deref'd caller argument
+    *already equals* the literal (input mode); an unbound ``Var`` caller
+    (output / var-query mode) silently fails the match and never *binds* the
+    literal, yielding no solution.  Every atomic head literal must instead be
+    captured (``MatchAs``) and routed through a ``unify()`` guard in the arm
+    body (which binds a Var and rejects a mismatch) — the invariant established
+    by the equality-vs-unification audit (``todo/equality-vs-unification-audit``).
+
+    This locks that audit in: the numeric / bool / None / str / bytes head-
+    literal bug class cannot silently regress, because any pattern path that
+    re-introduces a bare ``MatchValue`` / ``MatchSingleton`` for a head arg
+    fails loudly here at compile time.
+
+    Scope: only **top-level argument** patterns are checked — the direct
+    children of the head's outer ``MatchSequence``.  A ``MatchValue`` nested
+    *inside* a ``MatchClass`` is the structural-type discriminant (e.g. the
+    functor name of ``circle(R)`` in a compound-key-indexed head ``Shape(circle(R),
+    R)``): a ``Var`` caller fails the enclosing ``MatchClass`` type-check before
+    that inner pattern is ever reached, so it is input-mode-only *by
+    construction* and not the bug class.  Likewise first-argument indexing lifts
+    a ground-position ``MatchValue`` that is safe by dispatch.  The bug class is
+    precisely a bare ``MatchValue`` / ``MatchSingleton`` standing directly at an
+    argument slot (``case [_v0, 20000]:``), where the caller arg itself may be an
+    unbound Var.
+    """
+    import ast as _ast
+    # Inspect only the direct argument patterns (children of the outer
+    # MatchSequence), not nested structural sub-patterns.
+    if isinstance(pattern, _ast.MatchSequence):
+        arg_patterns = pattern.patterns
+    elif isinstance(pattern, (list, tuple)):
+        arg_patterns = pattern
+    else:
+        arg_patterns = [pattern]
+    offenders = [
+        type(p).__name__
+        for p in arg_patterns
+        if isinstance(p, (_ast.MatchValue, _ast.MatchSingleton))
+    ]
+    if offenders:
+        raise InvariantError(
+            "Phase 6: head-pattern-unify-safe invariant violated. "
+            f"A clause-head match pattern emitted {len(offenders)} bare "
+            f"{', '.join(sorted(set(offenders)))} node(s) — these match by "
+            "``==`` / identity (input mode only) and never bind an unbound Var "
+            "caller, so an output / var-query call silently yields no solution. "
+            "Atomic head literals must capture the arg and route through a "
+            "``unify()`` guard instead (equality-vs-unification audit).\n"
+            f"  head: {head!r}"
+        )
+
+
 def assert_trampoline_done_yield_present(funcdef: Any) -> None:
     """README §10 invariant 4 — Phase 6 post (trampoline only).
 
@@ -267,6 +324,7 @@ __all__ = [
     "InvariantError",
     "assert_body_vars_preallocated",
     "assert_call_targets_resolved",
+    "assert_head_pattern_unify_safe",
     "assert_mark_undo_paired",
     "assert_trampoline_done_yield_present",
 ]

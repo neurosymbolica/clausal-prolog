@@ -24,6 +24,7 @@ from clausal.logic.compiler.invariants import (
     InvariantError,
     assert_body_vars_preallocated,
     assert_call_targets_resolved,
+    assert_head_pattern_unify_safe,
     assert_mark_undo_paired,
     assert_trampoline_done_yield_present,
 )
@@ -213,3 +214,59 @@ def test_call_targets_resolved_fires_on_missing_non_dotted_name():
     assert "Missing" in msg
     # The entry that *is* present should not be flagged.
     assert "'Present'" not in msg or "Present" not in str(exc_info.value).split("sample")[1]
+
+
+# ── assert_head_pattern_unify_safe (equality-vs-unification audit) ─────────────
+
+
+def _seq(*patterns) -> ast.MatchSequence:
+    """Build a MatchSequence of argument patterns (a head's outer pattern)."""
+    return ast.MatchSequence(patterns=list(patterns))
+
+
+def test_head_pattern_unify_safe_passes_on_capture_patterns():
+    """Positive: an all-capture (MatchAs) head pattern is unify-safe."""
+    pat = _seq(ast.MatchAs(pattern=None, name="_v0"),
+              ast.MatchAs(pattern=None, name="_v1"))
+    assert_head_pattern_unify_safe(pat)  # must not raise
+
+
+def test_head_pattern_unify_safe_fires_on_top_level_matchvalue():
+    """Negative: a bare MatchValue at an arg slot (the numeric-head bug shape)."""
+    pat = _seq(ast.MatchAs(pattern=None, name="_v0"),
+              ast.MatchValue(value=ast.Constant(value=20000)))
+    with pytest.raises(InvariantError) as exc_info:
+        assert_head_pattern_unify_safe(pat, head="fine(DAYS, 20000)")
+    msg = str(exc_info.value)
+    assert "head-pattern-unify-safe" in msg
+    assert "MatchValue" in msg
+    assert "fine(DAYS, 20000)" in msg
+
+
+def test_head_pattern_unify_safe_fires_on_top_level_matchsingleton():
+    """Negative: a bare MatchSingleton at an arg slot (the bool/None-head bug)."""
+    pat = _seq(ast.MatchSingleton(value=None))
+    with pytest.raises(InvariantError):
+        assert_head_pattern_unify_safe(pat)
+
+
+def test_head_pattern_unify_safe_allows_matchvalue_nested_in_matchclass():
+    """Positive: a MatchValue that is a structural discriminant inside a
+    MatchClass (e.g. the functor of `circle(R)` in a compound-key-indexed head)
+    is input-mode-only by construction and must NOT be flagged."""
+    # case [MatchClass(Compound, functor=MatchValue('circle'), args=[_v0]), _v1]
+    inner = ast.MatchClass(
+        cls=ast.Name(id="Compound", ctx=ast.Load()),
+        patterns=[],
+        kwd_attrs=["functor"],
+        kwd_patterns=[ast.MatchValue(value=ast.Constant(value="circle"))],
+    )
+    pat = _seq(inner, ast.MatchAs(pattern=None, name="_v1"))
+    assert_head_pattern_unify_safe(pat, head="Shape(circle(R), R)")  # must not raise
+
+
+def test_head_pattern_unify_safe_error_is_assertion_error():
+    """InvariantError is an AssertionError subclass (consistent with siblings)."""
+    pat = _seq(ast.MatchValue(value=ast.Constant(value=1)))
+    with pytest.raises(AssertionError):
+        assert_head_pattern_unify_safe(pat)

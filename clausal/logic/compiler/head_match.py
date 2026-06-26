@@ -1099,6 +1099,12 @@ def compile_head_to_match_case(
     var_context.update(head_var_ctx)
     outer_pattern = ast.MatchSequence(patterns=arg_patterns)
 
+    # Equality-vs-unification invariant: no head arg may compile to a bare
+    # MatchValue / MatchSingleton (== / identity match), which never binds an
+    # unbound Var caller. See assert_head_pattern_unify_safe.
+    from .invariants import assert_head_pattern_unify_safe
+    assert_head_pattern_unify_safe(outer_pattern, head)
+
     # _mark = trail.mark()
     mark_assign = _assign_mark(mark_name, trail_name)
 
