@@ -876,18 +876,59 @@ def _flatten_conjunction(goal) -> list:
     return [goal]
 
 
+def _hoist_lambdas_in_term(
+    ctx: CompilationContext,
+    term: Any,
+    lambda_defs: list[ast.stmt],
+):
+    """Recursively replace every ``Lambda`` node *anywhere* in *term* with a
+    ``LoadName`` reference to a freshly-compiled closure ``FunctionDef`` (appended
+    to *lambda_defs*).
+
+    A lambda only becomes a callable closure when it is compiled in its defining
+    lexical context (so its free Vars and predicate names resolve).  Lambdas that
+    appear directly as call arguments were always hoisted; this also hoists
+    lambdas nested inside compound terms (``bundle((X <- ...))``) and any other
+    value position, so a closure can be stored in a term or threaded through a
+    variable and still be invoked by ``call_goal`` — standard higher-order use.
+    Without this, a non-hoisted lambda reaches runtime as a raw ``Lambda`` AST
+    node that ``call_goal`` cannot invoke.
+    """
+    if isinstance(term, Lambda):
+        func_name, func_def = _compile_goal_lambda(ctx, term)
+        lambda_defs.append(func_def)
+        return LoadName(name=func_name)
+    if isinstance(term, Compound):
+        new_args = tuple(
+            _hoist_lambdas_in_term(ctx, a, lambda_defs) for a in term.args
+        )
+        if new_args == term.args:
+            return term
+        return Compound(term.functor, new_args, term._position)
+    if isinstance(term, Call):
+        new_args = [
+            _hoist_lambdas_in_term(ctx, a, lambda_defs) for a in term.args
+        ]
+        new_kwargs = [
+            kw(value=_hoist_lambdas_in_term(ctx, kw.value, lambda_defs))
+            if hasattr(kw, "value") else kw
+            for kw in term.kwargs
+        ]
+        if new_args == term.args and new_kwargs == term.kwargs:
+            return term
+        # Call is a node_class node: field-replacement __call__ preserves position.
+        return term(args=new_args, kwargs=new_kwargs)
+    if isinstance(term, list):
+        return [_hoist_lambdas_in_term(ctx, e, lambda_defs) for e in term]
+    return term
+
+
 def _hoist_lambda_args(
     ctx: CompilationContext,
     ordered_args: list,
 ) -> tuple[list, list[ast.stmt]]:
-    """Scan call args for Lambda nodes; compile them and replace with name refs."""
+    """Scan call args for Lambda nodes — including lambdas nested inside compound
+    terms — compile them and replace with name refs."""
     lambda_defs: list[ast.stmt] = []
-    processed: list = []
-    for a in ordered_args:
-        if isinstance(a, Lambda):
-            func_name, func_def = _compile_goal_lambda(ctx, a)
-            lambda_defs.append(func_def)
-            processed.append(LoadName(name=func_name))
-        else:
-            processed.append(a)
+    processed = [_hoist_lambdas_in_term(ctx, a, lambda_defs) for a in ordered_args]
     return processed, lambda_defs

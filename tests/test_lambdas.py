@@ -550,6 +550,53 @@ class TestLambdaImport:
         results = self._query(mod, "bind_pair", 1, 2)
         assert results == [[1, 2]]
 
+    def test_lambda_threaded_through_local_var(self, tmp_path):
+        """A closure unified into a local var stays callable (first-class goal).
+
+        ``G is ((A, B) <- double(A, B))`` then ``call_goal(G, ...)`` must work —
+        the lambda is hoisted to a closure on the unify RHS, not left as a raw
+        Lambda node. (closure-loses-arity-when-stored-or-nested bug, case B.)
+        """
+        # nv
+        clausal_file = tmp_path / "lambda_var.clausal"
+        clausal_file.write_text(
+            "-module(lambda_var, [run/1])\n"
+            "\n"
+            "double(_a, _b) <- (_b == _a * 2)\n"
+            "\n"
+            "run(_r) <- (_g is ((_a, _b) <- double(_a, _b)), call_goal(_g, 3, _r))\n"
+        )
+
+        from clausal.import_hook import _load_module
+        mod = _load_module("lambda_var", str(clausal_file))
+        results = self._query(mod, "run")
+        assert results == [6]
+
+    def test_lambda_nested_in_compound_term(self, tmp_path):
+        """A closure stored in a compound term, then extracted, stays callable.
+
+        ``unbundle(bundle((A,B)<-...), ...)`` must work — the lambda nested in
+        ``bundle(...)`` is hoisted recursively, so the compound carries a real
+        closure. (closure-loses-arity-when-stored-or-nested bug, case C.)
+        """
+        # nv
+        clausal_file = tmp_path / "lambda_bundle.clausal"
+        clausal_file.write_text(
+            "-module(lambda_bundle, [run/1])\n"
+            "-private([bundle(_g)])\n"
+            "\n"
+            "double(_a, _b) <- (_b == _a * 2)\n"
+            "\n"
+            "unbundle(_bundle, _x, _y) <- (_bundle is bundle(_g), call_goal(_g, _x, _y))\n"
+            "\n"
+            "run(_r) <- unbundle(bundle(((_a, _b) <- double(_a, _b))), 3, _r)\n"
+        )
+
+        from clausal.import_hook import _load_module
+        mod = _load_module("lambda_bundle", str(clausal_file))
+        results = self._query(mod, "run")
+        assert results == [6]
+
     def test_lambda_zero_arg_in_clausal(self, tmp_path):
         """Zero-arg arrow lambda in .clausal file."""
         # nv

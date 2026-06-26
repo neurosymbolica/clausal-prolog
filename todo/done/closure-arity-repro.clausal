@@ -1,0 +1,13 @@
+double(A, B) <- (B == A * 2)
+
+# A: closure passed DIRECTLY as an argument, then called -> expected to work
+callit(GOAL, X, Y) <- (call_goal(GOAL, X, Y))
+Test("A: direct closure arg") <- (callit(((A, B) <- double(A, B)), 3, R), R == 6)
+
+# B: closure unified into a local variable in the body, then called
+Test("B: closure via local var") <- (G is ((A, B) <- double(A, B)), call_goal(G, 3, R), R == 6)
+
+# C: closure nested inside a compound term, extracted, then called
+-private([bundle(G)])
+unbundle(BUNDLE, X, Y) <- (BUNDLE is bundle(G), call_goal(G, X, Y))
+Test("C: closure nested in compound") <- (unbundle(bundle(((A, B) <- double(A, B))), 3, R), R == 6)

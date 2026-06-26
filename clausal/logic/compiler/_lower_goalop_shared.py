@@ -137,10 +137,18 @@ def _lower_shared_body(
             return out
 
         case Unify(l=l, r=r):
+            # A lambda on either side (e.g. ``G is ((A, B) <- ...)``) must be
+            # hoisted to a compiled closure here — otherwise it reaches runtime
+            # as a raw Lambda node that call_goal cannot invoke. See
+            # _hoist_lambdas_in_term.
+            from .control_constructs import _hoist_lambdas_in_term
+            lambda_defs: list = []
+            l = _hoist_lambdas_in_term(ctx, l, lambda_defs)
+            r = _hoist_lambdas_in_term(ctx, r, lambda_defs)
             mark = ctx.fresh(_MARK_PREFIX)
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
+            return lambda_defs + [
                 _assign_mark(mark, trail_name),
                 _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
                 _undo_stmt(mark, trail_name),
