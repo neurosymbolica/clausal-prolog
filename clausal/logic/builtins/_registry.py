@@ -101,6 +101,27 @@ def _ensure_trampoline_dispatch(goal_val):
     """
     if hasattr(goal_val, '_get_dispatch'):
         return goal_val._get_dispatch()
+    # A Pythonic AST node (Predicate, Lambda, Compound-as-term, …) is
+    # ``callable`` — every node gets a field-replacement ``__call__`` from
+    # @node_class — but it is NOT a goal dispatch function.  This is reached
+    # when a non-goal term is passed to call_goal/maplist/foldl/etc., e.g. a
+    # ``Head <- Body`` arrow that degraded to a Predicate rule literal because
+    # a head name was not a logic variable (logic vars are ALL-CAPS or
+    # ``_leading`` — ``St`` is NOT one).  Surface a proper ISO type_error
+    # instead of letting the node's keyword-only ``__call__`` blow up with a
+    # raw Python TypeError.
+    from clausal.pythonic_ast.nodes import Node
+    if isinstance(goal_val, Node):
+        from clausal.logic.exceptions import LogicException, type_error
+        # The culprit must be a proper *ground term* so the resulting error
+        # term round-trips through unification / copy_term — a raw AST node does
+        # not (it breaks catch/3 pattern matching).  Use its string form.
+        raise LogicException(type_error(
+            "callable", str(goal_val),
+            f"not a callable goal — got a {type(goal_val).__name__} term; "
+            f"an anonymous predicate (lambda) needs logic-variable head names "
+            f"(ALL-CAPS like X, or _leading)",
+        ))
     # Assume simple-mode callable
     return _simple_to_trampoline(goal_val)
 

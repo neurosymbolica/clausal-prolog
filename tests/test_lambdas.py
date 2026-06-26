@@ -623,6 +623,43 @@ class TestLambdaImport:
         with pytest.raises(SyntaxError, match="arrow syntax"):
             _load_module("py_lambda", str(clausal_file))
 
+    def test_call_goal_of_predicate_literal_raises_logic_error(self, tmp_path):
+        """call_goal of a non-callable goal must raise a Clausal error, not a
+        raw Python TypeError.
+
+        A tuple-head arrow whose head contains a non-logic-variable name (e.g.
+        the mixed-case ``St`` — logic vars must be ALL-CAPS or ``_leading``)
+        does NOT parse as a lambda; it degrades to a ``Predicate`` rule literal.
+        Passing that to call_goal used to surface a raw
+        ``node_class.__call__() takes ... positional arguments but N were given``
+        TypeError.  It must now be a proper ``type_error(callable, ...)``.
+        """
+        # nv
+        from clausal.logic.exceptions import LogicException
+        clausal_file = tmp_path / "bad_goal.clausal"
+        clausal_file.write_text(
+            "-module(bad_goal, [run/1])\n"
+            "\n"
+            "loc(K, V) <- (K is \"a\", V is 1)\n"
+            "\n"
+            "run(_r) <- call_goal(((K, V, St) <- loc(K, V)), \"a\", 1, _r)\n"
+        )
+
+        from clausal.import_hook import _load_module
+        mod = _load_module("bad_goal", str(clausal_file))
+        from clausal.logic.solve import query
+        r = Var()
+        logic_mod = mod.__dict__["$module"]
+        goal = Call(func=LoadName(name="run"), args=[r], kwargs=[])
+        with pytest.raises(LogicException) as exc_info:
+            list(query(goal, {"r": r}, logic_mod))
+        # The wrapped term should be an ISO type_error(callable, _).
+        term = exc_info.value.term
+        assert isinstance(term, Compound) and term.functor == "error"
+        inner = term.args[0]
+        assert isinstance(inner, Compound) and inner.functor == "type_error"
+        assert inner.args[0] == "callable"
+
 
 # ── Phase 5: Arrow lambda syntax  (_x, _y) <- (body) ─────────────────────────
 
