@@ -301,6 +301,12 @@ def _last__2(this_generator, _proceed, _fail, _catcher, lst, elem, trail):
 def _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
     """reverse(List, Rev) — Rev is the reverse of List.
 
+    Bidirectional: if the first arg is a usable sequence we reverse it into the
+    second (forward mode); otherwise, if the second arg is a usable sequence we
+    reverse it into the first (backward mode, e.g. ``reverse(L, [3,2,1])``).
+    Both-ground calls verify via the forward branch. Both-unbound is not
+    enumerated (yields no solution).
+
     F051 (C9 audit): accepts ground SegList/SegString via ``_as_items``.
     """
     lst_val = deref(lst)
@@ -313,6 +319,20 @@ def _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
         if unify(rev, result, trail):
             yield (_proceed, None)
         trail.undo(mark)
+    else:
+        # Backward mode: first arg not a usable sequence (e.g. unbound Var);
+        # reverse the second arg into it. Mirrors the forward branch, preserving
+        # the str/bytes seq-result contract from the *second* arg's shape.
+        rev_val = deref(rev)
+        rev_items = _as_items(rev_val)
+        if rev_items is not None:
+            was_str = _was_string(rev_val)
+            was_bytes = _was_bytes(rev_val)
+            result = _seq_result(list(reversed(rev_items)), was_str, was_bytes)
+            mark = trail.mark()
+            if unify(lst, result, trail):
+                yield (_proceed, None)
+            trail.undo(mark)
     yield (_fail, DONE)
 
 
