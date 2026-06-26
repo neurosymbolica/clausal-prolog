@@ -223,8 +223,32 @@ class TestModuleState:
     """Module state threading through expansion."""
 
     def test_state_unmatched_passes_through(self):
-        """when TE rule doesn't match state, items pass through unchanged."""
-        # Rule requires _count + 1 but initial state is "nil" → fails → pass-through
+        """When a TE rule's body cleanly FAILS, items pass through unchanged."""
+        # The head matches the state (binding _count="nil"), but the guard
+        # `_count == 0` fails for the initial "nil" count → no solution →
+        # pass-through.  (Body failure, not body error — see the error case in
+        # ``test_state_body_arith_error_propagates`` below.)
+        # nv
+        source = (
+            'TermExpansion(_term, _term, ModuleExpansionState(_i, _f, _count), '
+            'ModuleExpansionState(_i, _f, _next)) <- '
+            '(_count == 0, _next := _count + 1)\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        result = run_term_expansion(preds, md)
+        assert len(result) == 1
+        assert type(result[0].head).__name__ == "foo"
+
+    def test_state_body_arith_error_propagates(self):
+        """A TE rule whose body errors (e.g. arithmetic on a non-number) raises,
+        rather than silently failing into pass-through.
+
+        Bad arithmetic (``"nil" + 1``) is a type error and must surface — it is
+        catchable in .clausal via ``catch/3`` (e.g. ``TypeError(_)``).  This pins
+        the decided semantics: body *errors* propagate; only body *failure* (no
+        solution) yields pass-through.
+        """
         # nv
         source = (
             'TermExpansion(_term, _term, ModuleExpansionState(_i, _f, _count), '
@@ -232,9 +256,8 @@ class TestModuleState:
             'foo("a"),\n'
         )
         preds, _, md = _parse_and_collect(source)
-        result = run_term_expansion(preds, md)
-        assert len(result) == 1
-        assert type(result[0].head).__name__ == "foo"
+        with pytest.raises(TypeError):
+            run_term_expansion(preds, md)
 
 
 class TestQuasiQuotation:

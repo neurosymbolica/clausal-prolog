@@ -233,20 +233,22 @@ Quux("abc") <- (Helper(1))
     )
 
 
-def test_F048_compound_str_head_inner_arg_via_list_unify():
-    """F048: a compound head `Quux(foo("abc"))` keeps its inner str literal on
-    the runtime list-unify path (NOT a bare MatchValue), so a char-list inner
-    arg unifies under strings-as-lists.
+def test_F048_compound_str_head_inner_arg_hoisted_to_body_unify():
+    """F048: a compound head `Quux(foo("abc"))` does not specialise its inner str
+    literal into a head MatchValue.
 
-    Unlike a bare str head, the inner "abc" sits inside the Call's args list and
-    is handled by `_head_list_unify_input` (the args go through the list path) —
-    this was already correct, independent of the F046 str-head fix. This test
-    documents that and guards against a regression that would specialise the
-    inner str into a MatchValue.
+    Nested structural literals in a head are now *hoisted* into a body
+    ``Unify`` goal (so inner vars couple correctly — the structural-head fix):
+    the head arg becomes a fresh var and the body unifies it with the full
+    ``foo("abc")`` term, keeping the inner "abc" on the ordinary unify path
+    (where strings-as-lists applies) rather than a bare ``MatchValue``. This
+    guards against a regression that would specialise the inner str into a match
+    pattern.
     """
     import ast as _ast
 
     from clausal.logic.compiler.head_match import compile_head_to_match_case
+    from clausal.terms import Unify
 
     source = """\
 Helper(1),
@@ -256,6 +258,18 @@ Quux(foo("abc")) <- (Helper(1))
     mod = load_inline_clausal("c04_f048_compound", source).__dict__["$module"]
     clause = mod.db._clauses[("Quux", 1)][0]
 
+    # The inner foo("abc") is hoisted out of the head into a body Unify goal.
+    unifies = [g for g in clause.body if isinstance(g, Unify)]
+    assert unifies, f"expected a hoisted head-literal Unify in body: {clause.body!r}"
+    hoisted = unifies[0]
+    rhs = _ast.dump(_ast.parse(repr(hoisted.right))) if False else repr(hoisted.right)
+    assert "foo" in rhs and "abc" in rhs, (
+        f"hoisted Unify does not carry foo(\"abc\"): {hoisted!r}"
+    )
+
+    # The head match itself must NOT specialise the inner str into a MatchValue:
+    # the head arg is now a plain captured var, so 'abc' never appears as a match
+    # pattern in the rendered case.
     case = compile_head_to_match_case(
         head=clause.head,
         body_stmts=[_ast.Pass()],
@@ -267,10 +281,8 @@ Quux(foo("abc")) <- (Helper(1))
             _ast.Match(subject=_ast.Name("subj", _ast.Load()), cases=[case])
         )
     )
-
-    # The inner str literal is a list-unify element, not a MatchValue pattern.
-    assert "['abc']" in rendered and "head_list_unify_input" in rendered, (
-        f"compound head inner str not on the list-unify path:\n{rendered}"
+    assert "'abc'" not in rendered, (
+        f"inner str leaked into the head match as a literal pattern:\n{rendered}"
     )
 
 

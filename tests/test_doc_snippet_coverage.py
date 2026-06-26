@@ -40,6 +40,11 @@ _KNOWN_UNCOMPILABLE = {
     ("for_prolog_programmers.md", 114),
     ("for_python_programmers.md", 272),
     ("for_python_programmers.md", 291),
+    # import.md: two `# caller.clausal` blocks that `-import_from(lib, …)` a
+    # fictional library and illustrate cross-module name scoping; L257
+    # deliberately documents a runtime failure. Neither is standalone-compilable.
+    ("import.md", 257),
+    ("import.md", 285),
     ("index.md", 10),
     ("purity.md", 111),
 }

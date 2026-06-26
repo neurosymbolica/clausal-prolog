@@ -341,11 +341,16 @@ class TestCompileHeadToMatchCase:
             var_context={},
             arity=2,
         )
-        # Second statement is Try with finalbody containing undo call
-        try_stmt = case_arm.body[1]
-        assert isinstance(try_stmt, ast.Try)
+        # The arm wraps the body in a Try whose finalbody undoes the trail.
+        # The leading statements are `_mark = trail.mark()` and the
+        # `_mark_cl = False` cleanup flag (so a closed/suspended generator does
+        # not double-undo), so locate the Try rather than assuming an index.
+        try_stmt = next(s for s in case_arm.body if isinstance(s, ast.Try))
         assert len(try_stmt.finalbody) == 1
-        undo = try_stmt.finalbody[0]
+        # finalbody is now a guarded undo: `if not _mark_cl: trail.undo(_mark)`.
+        guard = try_stmt.finalbody[0]
+        assert isinstance(guard, ast.If)
+        undo = guard.body[0]
         assert isinstance(undo, ast.Expr)
         call = undo.value
         assert isinstance(call, ast.Call)
@@ -376,7 +381,7 @@ class TestCompileHeadToMatchCase:
             var_context={},
             arity=2,
         )
-        try_stmt = case_arm.body[1]
+        try_stmt = next(s for s in case_arm.body if isinstance(s, ast.Try))
         # The sentinel body is emitted inside the try block, possibly nested
         # within head-literal guard `if`s (e.g. the numeric capture+unify
         # guard for _y=2). Walk the try body to find it.

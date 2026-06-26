@@ -171,8 +171,17 @@ class TestTrailElisionStructural:
         assert mark_in_case == 0
         assert undo_in_case == 0
 
-    def test_ground_head_still_elided_without_skip_trail(self):
-        """Ground heads (no vars, no guards) are still elided by the original opt."""
+    def test_numeric_ground_head_gets_mark_undo_without_skip_trail(self):
+        """A numeric-literal head needs mark/undo when skip_trail is off.
+
+        Numeric head literals are no longer compiled to a bare ``MatchValue``;
+        they take the ``== or unify(trail)`` guard so a Var caller binds
+        (numeric-head-literal unification fix).  Because that guard can mutate
+        the trail (output mode), the clause arm must mark/undo for backtracking
+        — so a head like ``t(1, 2)`` is NOT trail-elided at skip_trail=False.
+        The single-clause-bucket optimization (skip_trail=True) still elides;
+        see ``test_single_clause_bucket_no_mark_undo``.
+        """
         # nv
         head = Compound("t", (1, 2))
         case_arm = compile_head_to_match_case(
@@ -184,8 +193,8 @@ class TestTrailElisionStructural:
         )
         mark_in_case = _count_method_calls("trail", "mark", case_arm)
         undo_in_case = _count_method_calls("trail", "undo", case_arm)
-        assert mark_in_case == 0
-        assert undo_in_case == 0
+        assert mark_in_case == 1
+        assert undo_in_case == 1
 
 
 # ── Behavioral tests ─────────────────────────────────────────────────────────
