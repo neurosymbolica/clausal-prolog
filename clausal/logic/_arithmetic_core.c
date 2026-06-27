@@ -126,6 +126,10 @@ py_arith_between(PyObject *self, PyObject *args)
     PyObject *low, *high, *x, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOOO", &low, &high, &x, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *low_val = VarAPI->deref(low);
@@ -161,6 +165,10 @@ py_arith_succ(PyObject *self, PyObject *args)
     PyObject *x, *y, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOO", &x, &y, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *x_val = VarAPI->deref(x);
@@ -202,6 +210,10 @@ py_arith_plus(PyObject *self, PyObject *args)
     PyObject *x, *y, *z, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOOO", &x, &y, &z, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);
@@ -250,6 +262,10 @@ py_arith_abs(PyObject *self, PyObject *args)
     PyObject *x, *y, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOO", &x, &y, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);
@@ -272,6 +288,10 @@ py_arith_max(PyObject *self, PyObject *args)
     PyObject *x, *y, *z, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOOO", &x, &y, &z, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);
@@ -294,6 +314,10 @@ py_arith_min(PyObject *self, PyObject *args)
     PyObject *x, *y, *z, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOOO", &x, &y, &z, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);
@@ -316,6 +340,10 @@ py_arith_sign(PyObject *self, PyObject *args)
     PyObject *x, *s, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOO", &x, &s, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);
@@ -344,6 +372,10 @@ py_arith_gcd(PyObject *self, PyObject *args)
     PyObject *x, *y, *g, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOOO", &x, &y, &g, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);
@@ -368,6 +400,10 @@ py_arith_divmod(PyObject *self, PyObject *args)
     PyObject *x, *y, *q, *r, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOOOO", &x, &y, &q, &r, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);
@@ -400,6 +436,10 @@ py_arith_lcm(PyObject *self, PyObject *args)
     PyObject *x, *y, *l, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOOO", &x, &y, &l, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);
@@ -449,6 +489,10 @@ py_arith_exp_mod(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "OOOOO", &base, &exp, &mod, &result_arg,
                           &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *bv = VarAPI->deref(base);
@@ -480,6 +524,10 @@ py_arith_popcount(PyObject *self, PyObject *args)
     PyObject *x, *count, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOO", &x, &count, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);
@@ -507,6 +555,10 @@ py_arith_msb(PyObject *self, PyObject *args)
     PyObject *x, *bit, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOO", &x, &bit, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);
@@ -537,6 +589,10 @@ py_arith_lsb(PyObject *self, PyObject *args)
     PyObject *x, *bit, *trail_obj;
     if (!PyArg_ParseTuple(args, "OOO", &x, &bit, &trail_obj))
         return NULL;
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *xv = VarAPI->deref(x);

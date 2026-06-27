@@ -421,6 +421,10 @@ py_unify_answer(PyObject *Py_UNUSED(module), PyObject *args)
     PyObject *py_args, *stored, *trail;
     if (!PyArg_ParseTuple(args, "OOO", &py_args, &stored, &trail))
         return NULL;
+    if (!Trail_Check(trail)) {
+        PyErr_SetString(PyExc_TypeError, "_unify_answer: third arg must be a Trail");
+        return NULL;
+    }
 
     /* Support both tuple and list for args/stored */
     Py_ssize_t n1, n2;

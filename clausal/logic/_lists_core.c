@@ -124,6 +124,10 @@ py_member_find(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyArg_ParseTuple(args, "OnOO", &items, &start, &elem, &trail_obj))
         return NULL;
 
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t len = PyList_GET_SIZE(items);
 
@@ -164,6 +168,10 @@ py_memberchk_find(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyArg_ParseTuple(args, "OOO", &items, &elem, &trail_obj))
         return NULL;
 
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t len = PyList_GET_SIZE(items);
 
@@ -212,6 +220,10 @@ py_append_split_find(PyObject *Py_UNUSED(module), PyObject *args)
                           &items, &start, &l1, &l2, &out_str, &trail_obj))
         return NULL;
 
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t len = PyList_GET_SIZE(items);
 
@@ -286,6 +298,10 @@ py_select_find(PyObject *Py_UNUSED(module), PyObject *args)
                           &items, &start, &elem, &rest, &was_str, &trail_obj))
         return NULL;
 
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t len = PyList_GET_SIZE(items);
 
@@ -354,6 +370,10 @@ py_permutation_find(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyArg_ParseTuple(args, "OOpO", &iter, &perm_var, &was_str, &trail_obj))
         return NULL;
 
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *item;
@@ -416,6 +436,10 @@ py_nth0_find(PyObject *Py_UNUSED(module), PyObject *args)
                           &items, &start, &n_var, &elem_var, &trail_obj))
         return NULL;
 
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t len = PyList_GET_SIZE(items);
 
