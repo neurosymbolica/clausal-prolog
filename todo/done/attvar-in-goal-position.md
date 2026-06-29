@@ -46,3 +46,32 @@ oracle); this one construct blocks the whole public-interface test file from loa
 
 Found via the 30B schengen formalization baseline (see clausify `formalization-program-state` /
 `.superpowers/sdd/progress.md`).
+
+## Resolution — RESOLVED 2026-06-29
+
+Chosen design (confirmed with the user): **reject a bare variable in goal position at
+compile time** with a clear, located error. An intended meta-call must be written
+explicitly as `call/1` (`call(R)`). This is loud and fast for the generated-rulebase
+mistake case — far better than the alternative of silently failing the clause (which a
+`call/1` auto-wrap would do for a bound non-callable).
+
+**Root cause.** All Clausal logic variables are `AttVar` instances (`Var = AttVar`, see
+`clausal/logic/variables/__init__.py`). A clause body whose goal is just a variable reaches
+`terms_to_goalop._convert_inner` as an `AttVar` and fell through to the generic `_not_yet`
+`NotImplementedError`. Only goals (never operands) flow through `_convert`, so any variable
+arriving there is genuinely in goal position.
+
+**Fix.**
+- `clausal/logic/compiler/terms_to_goalop.py`: new `BareGoalVariableError`; `_convert_inner`
+  detects a bare logic variable (`is_var`) and raises it with an actionable message.
+- `clausal/logic/compiler/predicate.py`: both `compile_predicate_trampoline` and
+  `compile_predicate_shallow` catch the error and re-raise it stamped with the offending
+  predicate's `functor/arity` so the load-time message locates the clause.
+
+Now surfaces as:
+`AttVar(_0) is not a callable goal: a bare variable appears in goal position in predicate
+go/1. If a meta-call was intended, wrap it as call/1 (e.g. call(R)).`
+
+Tests: `tests/test_bare_goal_variable.py` (unit error shape + actionable message + located
+load-time error). Related runtime precedent: commit 579e94b6 raised `type_error(callable)`
+for non-goal AST nodes passed to `call_goal`.

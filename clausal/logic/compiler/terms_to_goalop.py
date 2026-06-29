@@ -27,6 +27,7 @@ from typing import Any, NoReturn
 
 from clausal.pythonic_ast import nodes
 from clausal.terms import PyThunk
+from clausal.logic.variables import is_var
 from clausal.logic.compiler.terms_to_ast import (
     _is_star_list,
     _dotted_name_from_loadattr,
@@ -175,6 +176,17 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
     # ``ast.Expr(call)``.
     if isinstance(goal, PyThunk):
         return PyThunkOp(thunk=goal)
+    # A bare logic variable in goal position.  All Clausal logic
+    # variables are ``AttVar`` instances (``Var = AttVar``), so a clause
+    # body whose goal is just a variable — typically a generated rulebase
+    # ending in an output variable, e.g. ``... , RESULT`` — reaches here
+    # as an ``AttVar``.  Only goals (never operands) flow through
+    # ``_convert``, so any variable here is genuinely in goal position.
+    # Reject it with a clear, actionable error rather than the generic
+    # ``_not_yet`` internal-shape crash; ``compile_predicate_trampoline``
+    # enriches it with the offending predicate's name.
+    if is_var(goal):
+        raise BareGoalVariableError(goal)
     goal = nodes.literal_value(goal)
     # ``False`` reaching ``_convert`` (e.g. as an :class:`Or` arm or an
     # :class:`IfExpr` branch) — same :class:`Fail` op the conjunction
@@ -408,6 +420,33 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
     _not_yet(goal)
 
 
+class BareGoalVariableError(Exception):
+    """A bare logic variable was used in goal position.
+
+    A variable on its own is not a callable goal.  This usually means a
+    clause accidentally ended with an output variable (common in
+    machine-generated rulebases, e.g. ``decide(...) <- (..., RESULT)``);
+    an intended meta-call must be written explicitly as ``call/1``
+    (``call(RESULT)``).
+
+    ``var`` carries the offending variable.  ``predicate`` is filled in
+    by :func:`compile_predicate_trampoline` once the enclosing
+    predicate's ``functor/arity`` is known, so the surfaced message can
+    locate the clause; it is ``None`` when raised in isolation (e.g.
+    a direct :func:`terms_to_goalop` unit call).
+    """
+
+    def __init__(self, var: Any, predicate: str | None = None) -> None:
+        self.var = var
+        self.predicate = predicate
+        location = f" in predicate {predicate}" if predicate else ""
+        super().__init__(
+            f"{var!r} is not a callable goal: a bare variable appears in "
+            f"goal position{location}. If a meta-call was intended, wrap "
+            f"it as call/1 (e.g. call(R))."
+        )
+
+
 def _not_yet(goal: Any) -> NoReturn:
     """Signal that the D2 subset does not yet cover this goal shape.
 
@@ -421,4 +460,4 @@ def _not_yet(goal: Any) -> NoReturn:
     )
 
 
-__all__ = ["terms_to_goalop"]
+__all__ = ["terms_to_goalop", "BareGoalVariableError"]

@@ -69,6 +69,7 @@ from ._ast_helpers import (
 )
 from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
+from .terms_to_goalop import BareGoalVariableError
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _disp_key,
     _merge_builtin, _inject_call_targets, _inject_resolved_targets,
@@ -1012,6 +1013,15 @@ def compile_predicate_trampoline(
             )
 
             fn = functiondef_to_function(func_def, globals_=base_globals)
+    except BareGoalVariableError as exc:
+        # A clause body used a bare variable in goal position.  Re-raise
+        # with the offending predicate's name so the load-time error
+        # locates the clause for the author (todo/attvar-in-goal-position).
+        if exc.predicate is None:
+            raise BareGoalVariableError(
+                exc.var, predicate=f"{functor}/{arity}"
+            ) from None
+        raise
     finally:
         pass
 
@@ -1517,6 +1527,14 @@ def compile_predicate_shallow(
             )
 
             fn = functiondef_to_function(func_def, globals_=base_globals)
+    except BareGoalVariableError as exc:
+        # Bare variable in goal position — locate the clause by predicate
+        # name (mirrors compile_predicate_trampoline).
+        if exc.predicate is None:
+            raise BareGoalVariableError(
+                exc.var, predicate=f"{functor}/{arity}"
+            ) from None
+        raise
     finally:
         _CURRENT_SHALLOW_BASE_GLOBALS = _saved_shallow_globals
 
