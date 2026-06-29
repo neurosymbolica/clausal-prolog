@@ -1,4 +1,7 @@
 .DS_Store
+# Emacs lock files (.#name -> user@host.pid) and autosaves
+.#*
+#*#
 .claude/
 __pycache__/
 __transformed__/
