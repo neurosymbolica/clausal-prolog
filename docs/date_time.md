@@ -11,8 +11,8 @@ The implementation lives in `clausal/modules/date_time.py`.
 ```clausal
 -import_from(date_time, [Now, Today, Date, Time, DateTime,
                          TimeDelta, DateAdd, DateSub, DateDiff,
-                         FormatDate, ParseDate, DayOfWeek,
-                         DateBetween])
+                         DaysBetween, FormatDate, ParseDate,
+                         DateOf, DayOfWeek, DateBetween])
 ```
 
 Or via [module import](import.md):
@@ -45,6 +45,17 @@ IsoDate(Y, M, D, S) <- (
     S is ++DT.isoformat()
 )
 ```
+
+!!! tip "Prefer the declarative predicates over `++` escapes"
+
+    `++()` drops into arbitrary Python and is reserved for last-resort interop. The common date operations all have clean, relational equivalents — reach for these first:
+
+    | Instead of `++` … | Use |
+    |---|---|
+    | `S is ++DT.isoformat()` | `FormatDate(DT, "%Y-%m-%d", S)` |
+    | `N is ++TD.days` | `TimeDelta(N, _, TD)` |
+    | `D is ++DT.date()` | `DateOf(DT, D)` |
+    | `DateDiff(A, B, TD), N is ++TD.days` | `DaysBetween(A, B, N)` |
 
 ---
 
@@ -100,6 +111,14 @@ IsoDate(Y, M, D, S) <- (
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:date_diff"
 ```
 
+### DaysBetween/3
+
+`DaysBetween(DateA, DateB, N)` — the whole-day count of `DateA - DateB` as a plain integer, so the common "days between two dates" need is a single goal instead of `DateDiff(A, B, TD), TimeDelta(N, _, TD)`:
+
+```clausal
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:days_between"
+```
+
 ### FormatDate/3
 
 ```clausal
@@ -110,6 +129,14 @@ IsoDate(Y, M, D, S) <- (
 
 ```clausal
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:parse_date"
+```
+
+### DateOf/2 — Bidirectional
+
+`DateOf(DateTime, Date)` — the declarative form of `++DT.date()`. Forward, it extracts the calendar `datetime.date` from a `datetime.datetime`; in reverse (with `DateTime` unbound) it builds the midnight datetime of a `datetime.date`:
+
+```clausal
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:date_of"
 ```
 
 ### DayOfWeek/2
@@ -142,7 +169,9 @@ This is nondeterministic — it succeeds once for each date in the range via [ba
     - **DateTime/7**: construct, decompose
     - **TimeDelta/3**: construct, decompose
     - **DateAdd/DateSub/DateDiff**: arithmetic
+    - **DaysBetween**: direct integer day count
     - **FormatDate/ParseDate**: strftime/strptime
+    - **DateOf**: datetime ↔ date (both modes)
     - **DayOfWeek**: weekday computation
     - **DateBetween**: date range enumeration
 

@@ -13,11 +13,12 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.datetime import (
     Now, NowUTC, Today, Date, Time, DateTime, TimeDelta,
     DateAdd, DateSub, DateDiff, FormatDate, ParseDate,
-    DayOfWeek, DateBetween,
+    DayOfWeek, DateBetween, DateOf, DaysBetween,
     _now_1, _now_utc_1, _today_1,
     _date_4, _time_4, _datetime_7, _timedelta_3,
     _date_add_3, _date_sub_3, _date_diff_3,
     _format_date_3, _parse_date_3, _day_of_week_2,
+    _date_of_2, _days_between_3,
 )
 from clausal.logic.trampoline import DONE
 
@@ -528,6 +529,125 @@ class TestDateBetween:
         assert len(solutions) == 0
 
 
+# ── DateOf/2 (datetime ↔ date) ──────────────────────────────────────────
+
+
+class TestDateOf:
+    def test_extract_date_from_datetime(self):
+        """Forward: datetime → date (covers ++DT.date())."""
+        # nv
+        d = Var()
+        results, _ = simple_solutions(
+            _date_of_2, dt.datetime(2026, 3, 16, 14, 30, 0), d
+        )
+        assert len(results) == 1
+        out = deref(d)
+        assert out == dt.date(2026, 3, 16)
+        assert isinstance(out, dt.date) and not isinstance(out, dt.datetime)
+
+    def test_inverse_midnight_datetime_from_date(self):
+        """Inverse: date → midnight datetime."""
+        # vn
+        v = Var()
+        results, _ = simple_solutions(_date_of_2, v, dt.date(2026, 3, 16))
+        assert len(results) == 1
+        out = deref(v)
+        assert out == dt.datetime(2026, 3, 16, 0, 0, 0)
+        assert isinstance(out, dt.datetime)
+
+    def test_check_mode_matching(self):
+        """Both ground, matching → one solution."""
+        # nn
+        results, _ = simple_solutions(
+            _date_of_2, dt.datetime(2026, 3, 16, 9, 0, 0), dt.date(2026, 3, 16)
+        )
+        assert len(results) == 1
+
+    def test_check_mode_non_matching_fails(self):
+        # nn
+        results, _ = simple_solutions(
+            _date_of_2, dt.datetime(2026, 3, 16, 9, 0, 0), dt.date(2026, 3, 17)
+        )
+        assert len(results) == 0
+
+    def test_both_unbound_fails(self):
+        # vv
+        results, _ = simple_solutions(_date_of_2, Var(), Var())
+        assert len(results) == 0
+
+    def test_non_datetime_first_arg_fails(self):
+        # nv
+        results, _ = simple_solutions(_date_of_2, "2026-03-16", Var())
+        assert len(results) == 0
+
+
+# ── DaysBetween/3 (integer day count) ───────────────────────────────────
+
+
+class TestDaysBetween:
+    def test_days_between_dates(self):
+        """DaysBetween(A, B, N) → N = (A - B).days, no DateDiff+decompose."""
+        # nnv
+        n = Var()
+        results, _ = simple_solutions(
+            _days_between_3, dt.date(2026, 3, 23), dt.date(2026, 3, 16), n
+        )
+        assert len(results) == 1
+        assert deref(n) == 7
+
+    def test_negative_day_count(self):
+        # nnv
+        n = Var()
+        results, _ = simple_solutions(
+            _days_between_3, dt.date(2026, 3, 16), dt.date(2026, 3, 23), n
+        )
+        assert len(results) == 1
+        assert deref(n) == -7
+
+    def test_same_day_is_zero(self):
+        # nnv
+        n = Var()
+        results, _ = simple_solutions(
+            _days_between_3, dt.date(2026, 3, 16), dt.date(2026, 3, 16), n
+        )
+        assert len(results) == 1
+        assert deref(n) == 0
+
+    def test_datetimes_whole_days(self):
+        """Whole-day count (timedelta.days), consistent with DateDiff."""
+        # nnv
+        n = Var()
+        results, _ = simple_solutions(
+            _days_between_3,
+            dt.datetime(2026, 3, 23, 10, 0, 0),
+            dt.datetime(2026, 3, 16, 12, 0, 0),
+            n,
+        )
+        assert len(results) == 1
+        # 6 days, 22 hours → timedelta.days == 6
+        assert deref(n) == 6
+
+    def test_check_mode(self):
+        # nnn
+        results, _ = simple_solutions(
+            _days_between_3, dt.date(2026, 3, 23), dt.date(2026, 3, 16), 7
+        )
+        assert len(results) == 1
+
+    def test_check_mode_wrong_fails(self):
+        # nnn
+        results, _ = simple_solutions(
+            _days_between_3, dt.date(2026, 3, 23), dt.date(2026, 3, 16), 5
+        )
+        assert len(results) == 0
+
+    def test_non_date_fails(self):
+        # nnv
+        n = Var()
+        results, _ = simple_solutions(_days_between_3, "a", "b", n)
+        assert len(results) == 0
+
+
 # ── Unification of datetime objects ─────────────────────────────────────
 
 
@@ -619,6 +739,14 @@ class TestAdapters:
     def test_date_between_has_dispatch(self):
         # nv
         assert callable(DateBetween._get_dispatch())
+
+    def test_date_of_has_dispatch(self):
+        # nv
+        assert callable(DateOf._get_dispatch())
+
+    def test_days_between_has_dispatch(self):
+        # nv
+        assert callable(DaysBetween._get_dispatch())
 
     def test_repr(self):
         # nv

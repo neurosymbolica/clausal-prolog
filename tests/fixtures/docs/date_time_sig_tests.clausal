@@ -1,8 +1,8 @@
 # Companion tests for docs/date_time.md display snippets.
 
 -import_from(date_time, [Now, NowUTC, Today, Date, Time, DateTime,
-                         TimeDelta, DateAdd, DateSub, DateDiff,
-                         FormatDate, ParseDate, DayOfWeek])
+                         TimeDelta, DateAdd, DateSub, DateDiff, DaysBetween,
+                         FormatDate, ParseDate, DateOf, DayOfWeek])
 
 # ── Now/Today ────────────────────────────────────────────────────────────────
 
@@ -76,6 +76,39 @@ Test("format date") <- (
 Test("parse date") <- (
     ParseDate("2026-03-16", "%Y-%m-%d", DT),
     nonvar(DT)
+)  # nv
+
+# ── DateOf (datetime → date, no ++DT.date()) ──────────────────────────────────
+
+Test("date of datetime") <- (
+    DateTime(2026, 3, 16, 14, 30, 0, DT),
+    DateOf(DT, D),
+    Date(2026, 3, 16, D)
+)  # nv
+
+Test("date of inverse midnight") <- (
+    Date(2026, 3, 16, D),
+    DateOf(DT, D),
+    DateTime(2026, 3, 16, 0, 0, 0, DT)
+)  # vn
+
+# ── DaysBetween (direct integer day count) ────────────────────────────────────
+
+Test("days between") <- (
+    Date(2026, 3, 23, A),
+    Date(2026, 3, 16, B),
+    DaysBetween(A, B, N),
+    N == 7
+)  # nnv
+
+# Schengen-style "parse ISO → date → diff" with no ++ Python escapes.
+Test("parse iso to date diff no escapes") <- (
+    ParseDate("2026-03-23", "%Y-%m-%d", DT_A),
+    ParseDate("2026-03-16", "%Y-%m-%d", DT_B),
+    DateOf(DT_A, A),
+    DateOf(DT_B, B),
+    DaysBetween(A, B, N),
+    N == 7
 )  # nv
 
 # ── DayOfWeek ────────────────────────────────────────────────────────────────

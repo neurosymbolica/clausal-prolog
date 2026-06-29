@@ -5,8 +5,8 @@ manipulating dates and times.  Import via::
 
     -import_from(py.datetime, [Now, Today, Date, Time, DateTime,
                              TimeDelta, DateAdd, DateSub, DateDiff,
-                             FormatDate, ParseDate, DayOfWeek,
-                             DateBetween])
+                             DaysBetween, FormatDate, ParseDate,
+                             DateOf, DayOfWeek, DateBetween])
 
 Or via module import::
 
@@ -29,9 +29,15 @@ values, e.g. ``S_ is ++D_.isoformat()`` or ``++D_.strftime("%Y-%m-%d")``.
 
 Bidirectional predicates
 ------------------------
-``Date/4``, ``Time/4``, ``DateTime/7``, and ``TimeDelta/3`` are
-bidirectional: pass ground components to construct, or pass a ground
+``Date/4``, ``Time/4``, ``DateTime/7``, ``TimeDelta/3``, and ``DateOf/2``
+are bidirectional: pass ground components to construct, or pass a ground
 datetime object to decompose into components.
+
+Prefer these declarative predicates over ``++`` Python escapes:
+``DateOf(DT, D)`` instead of ``D is ++DT.date()``; ``TimeDelta(N, _, TD)``
+instead of ``N is ++TD.days``; ``FormatDate(DT, "%Y-%m-%d", S)`` instead
+of ``S is ++DT.isoformat()``; and ``DaysBetween(A, B, N)`` for a direct
+integer day count instead of ``DateDiff(A, B, TD), TimeDelta(N, _, TD)``.
 """
 
 from __future__ import annotations
@@ -289,6 +295,63 @@ def _parse_date_3(s, fmt, dt, trail, k):
         yield None
 
 
+# ── DateOf/2 — datetime ↔ date ──────────────────────────────────────────
+
+
+def _date_of_2(dt_obj, d, trail, k):
+    """DateOf/2: bidirectional — DateOf(DateTime, Date).
+
+    The clean, declarative replacement for ``++DT.date()``:
+
+    - **Forward** (DateTime is a ``datetime.datetime``): bind Date to its
+      calendar date, ``DateTime.date()``.  With Date already bound this
+      acts as a check (same date → succeeds).
+    - **Inverse** (DateTime unbound, Date a ``datetime.date``): bind
+      DateTime to that date at midnight,
+      ``datetime.datetime(Y, Mo, D, 0, 0, 0)``.
+
+    Fails if neither argument is usable (e.g. both unbound, or the first
+    is a non-datetime value).
+    """
+    dt_obj, d = deref(dt_obj), deref(d)
+    if isinstance(dt_obj, _dt.datetime):
+        # forward (or check) — datetime → date
+        if unify(d, dt_obj.date(), trail):
+            yield None
+    elif is_var(dt_obj) and isinstance(d, _dt.date):
+        # inverse — date → midnight datetime.  ``datetime`` is a subclass
+        # of ``date``; normalise through the calendar components so a
+        # datetime passed here collapses to midnight of its day.
+        out = _dt.datetime(d.year, d.month, d.day)
+        if unify(dt_obj, out, trail):
+            yield None
+
+
+# ── DaysBetween/3 — integer day count ────────────────────────────────────
+
+
+def _days_between_3(d1, d2, n, trail, k):
+    """DaysBetween/3: DaysBetween(DateA, DateB, N).
+
+    N = whole days in ``DateA - DateB`` (``(DateA - DateB).days``).  The
+    one-goal form of ``DateDiff(A, B, TD), TimeDelta(N, _, TD)`` — for
+    datetimes the count is the timedelta's whole-day component, matching
+    DateDiff.  With N bound this acts as a check.
+    """
+    d1, d2, n = deref(d1), deref(d2), deref(n)
+    if not isinstance(d1, (_dt.date, _dt.datetime)):
+        return
+    if not isinstance(d2, (_dt.date, _dt.datetime)):
+        return
+    try:
+        days = (d1 - d2).days
+    except TypeError:
+        # mixing naive date and datetime, etc.
+        return
+    if unify(n, days, trail):
+        yield None
+
+
 # ── DayOfWeek/2 — weekday ───────────────────────────────────────────────
 
 
@@ -364,6 +427,12 @@ FormatDate._register(3, simple_to_trampoline(_format_date_3))
 
 ParseDate = ModulePredicate("ParseDate", module="datetime")
 ParseDate._register(3, simple_to_trampoline(_parse_date_3))
+
+DateOf = ModulePredicate("DateOf", module="datetime")
+DateOf._register(2, simple_to_trampoline(_date_of_2))
+
+DaysBetween = ModulePredicate("DaysBetween", module="datetime")
+DaysBetween._register(3, simple_to_trampoline(_days_between_3))
 
 DayOfWeek = ModulePredicate("DayOfWeek", module="datetime")
 DayOfWeek._register(2, simple_to_trampoline(_day_of_week_2))

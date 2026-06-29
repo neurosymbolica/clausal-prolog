@@ -38,6 +38,15 @@ DateSub(DATE, DELTA, RESULT)    # RESULT = DATE - DELTA
 DateDiff(D1, D2, TD)    # TD = D1 - D2 (timedelta)
 --8<-- [end:date_diff]
 
+--8<-- [start:days_between]
+DaysBetween(A, B, N)    # N = (A - B).days (integer) — no DateDiff+decompose
+--8<-- [end:days_between]
+
+--8<-- [start:date_of]
+DateOf(DT, D)    # D = DT.date()        (datetime → date)
+DateOf(DT, D)    # DT = midnight of D   (date → datetime; DT unbound)
+--8<-- [end:date_of]
+
 --8<-- [start:format_date]
 FormatDate(DT, "%Y-%m-%d", S)    # S = "2026-03-16"
 --8<-- [end:format_date]
