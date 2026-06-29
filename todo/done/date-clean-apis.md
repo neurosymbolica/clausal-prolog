@@ -73,3 +73,11 @@ The existing API already covered the other two escapes (`++TD.days` via `TimeDel
 
 **Downstream now unblocked:** `/workspace/clausify/todo/cheatsheet-remove-python-escapes.md` (was gated on
 this) can sweep the clausify cheat-sheet + primers to the clean APIs.
+
+---
+## Follow-up note (2026-06-29): the same gap surfaced a third date-access variant
+A later 30B schengen run reached for `TD.days` (no `++`) and got
+`Logic variable 'TD' cannot appear as the base of a qualified name` — i.e. the model oscillated between
+`++TD.days`, `++X.date()`, and bare `X.days` across runs because there was no clean predicate. The new
+`DaysBetween/3` + `DateOf/2` cover all three; the clausify primer + cheat-sheet now teach them so the
+model stops improvising. Good regression-test cases: `DateDiff(A,B,TD), N is ++TD.days` and `... N == TD.days + 1`.
