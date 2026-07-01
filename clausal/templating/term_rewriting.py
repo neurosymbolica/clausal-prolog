@@ -2369,6 +2369,40 @@ class EmbedTransformer(NodeTransformer):
         """Detect trailing-comma tuple (Prolog fact) and module-level predicate definitions."""
         if transformer._scope_depth == 0:
             _check_hidden_arrow(expr_stmt.value, transformer._source_lines)
+            # A trailing comma after a ``<-`` rule parses the rule's
+            # ``head < -body`` Compare as a tuple element.  Normalise the two
+            # tuple shapes so a comma-terminated rule behaves identically to a
+            # newline-separated one — including the same guard errors:
+            #
+            #   ``head <- (body),``   → Tuple([Compare])      (one element)
+            #                           unwrap → compile as a clause below.
+            #   ``head <- g1, g2,``   → Tuple([Compare, ...]) (many elements)
+            #                           the body was left unparenthesised; raise
+            #                           the same error the bare form raises.
+            #
+            # A single-element tuple whose element is a plain Call is a fact and
+            # is handled below unchanged.
+            value = expr_stmt.value
+            if isinstance(value, Tuple) and isinstance(value.ctx, Load):
+                if len(value.elts) == 1:
+                    inner = value.elts[0]
+                    # ``head <- a or b,`` hides the arrow inside a BoolOp; run the
+                    # same disjunction-body check the bare form gets.
+                    _check_hidden_arrow(inner, transformer._source_lines)
+                    if isinstance(inner, Compare) and _detect_arrow(
+                        inner.left, inner.ops, inner.comparators,
+                        transformer._source_lines,
+                    ) is not None:
+                        expr_stmt = replace(Expr(value=inner), expr_stmt)
+                elif len(value.elts) > 1 and isinstance(value.elts[0], Compare):
+                    head = value.elts[0]
+                    if _detect_arrow(
+                        head.left, head.ops, head.comparators,
+                        transformer._source_lines,
+                    ) is not None:
+                        # ``head <- g1, g2`` — the comma split an unparenthesised
+                        # multi-goal body into tuple elements.
+                        raise SyntaxError(_ARROW_BODY_ERROR)
         match expr_stmt.value:
             # -directive(...) at module level: unary minus applied to a call.
             # Currently only -module(name, [exports]) is recognised.
