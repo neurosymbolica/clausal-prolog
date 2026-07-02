@@ -9,6 +9,15 @@ Built-in expansions
   and ``Search/2`` patterns with ALLCAPS/leading-underscore named groups
   are rewritten to ``Match/3`` + ``Unify`` chains.  The compiled
   ``re.Pattern`` object is injected into ``module_dict`` for runtime use.
+- **Arrow match patterns** (reflection sugar): a ``(HEAD <- BODY)``
+  expression in an argument of a reflection builtin (``ReifiedClause`` et
+  al.) is rewritten into the equivalent reified-vocabulary pattern —
+  ``Clause(Goal(...), [...])`` construction — so matchers are written in
+  natural clause syntax.  Pattern variables remain the matcher clause's
+  own variables; unifying them against the ground ``Variable('X')`` terms
+  in reified output gives capture and sharing semantics.  Outside
+  reflection-builtin arguments the arrow expression keeps its existing
+  meaning (a runtime ``Predicate`` node — the assertz write-side term).
 """
 
 from __future__ import annotations
@@ -20,10 +29,12 @@ from clausal.pythonic_ast.nodes import (
     And,
     Call,
     IfExpr,
+    LoadAttr,
     LoadName,
     Not,
     Or,
     Predicate,
+    TupleLiteral,
     Unify,
 )
 from clausal.logic.variables import Var, is_var, deref
@@ -167,12 +178,20 @@ def _expand_goal(goal: Any, ctx: _ExpansionContext) -> Any:
                 and new_orelse is goal.orelse):
             return goal
         return IfExpr(test=new_test, body=new_body, orelse=new_orelse)
+    if isinstance(goal, TupleLiteral):
+        new_elements = [_expand_goal(element, ctx) for element in goal.elements]
+        if all(new is old for new, old in zip(new_elements, goal.elements)):
+            return goal
+        return TupleLiteral(elements=new_elements, position=goal.position)
     return _try_expand(goal, ctx)
 
 
 def _try_expand(goal: Any, ctx: _ExpansionContext) -> Any:
     """Apply built-in expansion rules to a single goal."""
     expanded = _expand_regex(goal, ctx)
+    if expanded is not goal:
+        return expanded
+    expanded = _expand_arrow_patterns(goal, ctx)
     if expanded is not goal:
         return expanded
     return goal
@@ -287,3 +306,194 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
         chain = And(left=chain, right=unify_goal)
 
     return chain
+
+
+# ── Arrow match-pattern expansion (reflection sugar) ────────────────────────
+#
+# ``ReifiedClause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))`` — the arrow
+# argument arrives here as a runtime ``Predicate`` node (head/goals are
+# middle-layer ``Call`` nodes, variables are the clause's real ``Var``
+# objects).  It is rewritten into construction of the reified vocabulary,
+# mirroring ``clausal.reflection._ClauseReifier``:
+#
+#   Call('Clause', [Call('Goal', ['MyPred', [A, B], []]),
+#                   [Call('Goal', ['Goalx', [A], []]),
+#                    Call('Goal', ['Goaly', [B], []])],
+#                   Var()])
+#
+# The construction compiles like any other compound body argument, so the
+# pattern's variables are per-invocation clause variables (capture), and
+# operator/unary nodes pass through raw with mapped operands — matching
+# the reifier's raw-operator representation.
+
+_REFLECTION_BUILTIN_NAMES = frozenset((
+    "ReifiedItem", "ReifiedClause", "ReifiedFileItem", "ReifiedSubterm",
+    "ClauseHead", "ClauseBody", "GoalFunctor",
+))
+
+# Vocabulary functors referenced by generated pattern constructions.
+_VOCABULARY_NAMES = ("Clause", "Goal", "Atom", "IfThenElse")
+
+
+def _is_reflection_goal(goal: Call, ctx: _ExpansionContext) -> bool:
+    """True iff *goal* calls one of the reflection builtins.
+
+    Verified by identity against ``clausal.modules.reflection`` through the
+    module's own binding, so a same-named user predicate never triggers the
+    sugar."""
+    name = _get_call_name(goal)
+    if name is None:
+        return False
+    # Imported names are remapped to dotted form ("reflection.ReifiedClause");
+    # _process_imports stores the value under both the short and dotted keys.
+    short_name = name.rsplit(".", 1)[-1]
+    if short_name not in _REFLECTION_BUILTIN_NAMES:
+        return False
+    bound = ctx.module_dict.get(name)
+    if bound is None:
+        return False
+    from clausal.modules import reflection
+
+    return bound is getattr(reflection, short_name, None)
+
+
+def _ensure_vocabulary(ctx: _ExpansionContext) -> None:
+    """Make the vocabulary functors resolvable in the module.
+
+    No-op when the module already imported them (same classes)."""
+    from clausal import reflection
+
+    for name in _VOCABULARY_NAMES:
+        ctx.module_dict.setdefault(name, getattr(reflection, name))
+
+
+def _expand_arrow_patterns(goal: Any, ctx: _ExpansionContext) -> Any:
+    if not isinstance(goal, Call) or not _is_reflection_goal(goal, ctx):
+        return goal
+    new_args = [_map_pattern_arg(arg, ctx) for arg in goal.args]
+    if all(new is old for new, old in zip(new_args, goal.args)):
+        return goal
+    return Call(func=goal.func, args=new_args, kwargs=goal.kwargs,
+                position=goal.position)
+
+
+def _map_pattern_arg(arg: Any, ctx: _ExpansionContext) -> Any:
+    if isinstance(arg, Predicate):
+        _ensure_vocabulary(ctx)
+        return _pattern_clause(arg, ctx)
+    if isinstance(arg, list):
+        new_elements = [_map_pattern_arg(element, ctx) for element in arg]
+        if all(new is old for new, old in zip(new_elements, arg)):
+            return arg
+        return new_elements
+    return arg
+
+
+def _pattern_clause(node: Predicate, ctx: _ExpansionContext) -> Call:
+    head = _pattern_term(node.head, ctx)
+    goals = _pattern_goal_list(node.body, ctx)
+    # Explicit fresh Var wildcards the position field per invocation.
+    return Call(func=LoadName(name="Clause"), args=[head, goals, Var()],
+                kwargs=[])
+
+
+def _functor_name(func: Any) -> str | None:
+    if isinstance(func, LoadName):
+        return func.name
+    if isinstance(func, LoadAttr):
+        base = _functor_name(func.object)
+        return None if base is None else f"{base}.{func.attr}"
+    return None
+
+
+def _pattern_term(term: Any, ctx: _ExpansionContext) -> Any:
+    """Map a pattern subterm to its reified-vocabulary construction."""
+    term = deref(term)
+    if is_var(term):
+        return term  # capture variable — stays a clause variable
+    if isinstance(term, Call):
+        name = _functor_name(term.func)
+        if name is None:
+            return term
+        args = [_pattern_term(a, ctx) for a in term.args]
+        kwargs = [[kw.name, _pattern_term(kw.value, ctx)]
+                  for kw in term.kwargs]
+        return Call(func=LoadName(name="Goal"), args=[name, args, kwargs],
+                    kwargs=[])
+    if isinstance(term, LoadName):
+        return Call(func=LoadName(name="Atom"), args=[term.name], kwargs=[])
+    if isinstance(term, LoadAttr):
+        dotted = _functor_name(term)
+        if dotted is None:
+            return term
+        return Call(func=LoadName(name="Atom"), args=[dotted], kwargs=[])
+    if isinstance(term, Predicate):
+        return _pattern_clause(term, ctx)
+    if isinstance(term, IfExpr):
+        return Call(
+            func=LoadName(name="IfThenElse"),
+            args=[_pattern_term(term.test, ctx),
+                  _pattern_term(term.body, ctx),
+                  _pattern_term(term.orelse, ctx)],
+            kwargs=[],
+        )
+    if isinstance(term, list):
+        new_elements = [_pattern_term(element, ctx) for element in term]
+        if all(new is old for new, old in zip(new_elements, term)):
+            return term
+        return new_elements
+    if isinstance(term, (And, Or, Not, TupleLiteral)):
+        # Goal-shaped nodes reaching term position: leave to the caller's
+        # goal-context handling; raw here would never match reified output.
+        return term
+    from clausal.pythonic_ast.nodes import Node
+
+    if isinstance(term, Node):
+        # Operator/unary/star nodes stay raw with mapped operands —
+        # mirroring the reifier's raw-operator representation.
+        return term.transform_children(lambda child: _pattern_term(child, ctx))
+    return term  # literals, thunks, opaque values
+
+
+def _pattern_goal(goal: Any, ctx: _ExpansionContext) -> Any:
+    """Map a pattern goal; conjunctions become lists (as in the reifier)."""
+    goal = deref(goal)
+    if isinstance(goal, TupleLiteral):
+        flat: list = []
+        for element in goal.elements:
+            mapped = _pattern_goal(element, ctx)
+            flat.extend(mapped) if isinstance(mapped, list) else flat.append(mapped)
+        return flat
+    if isinstance(goal, And):
+        left = _pattern_goal(goal.left, ctx)
+        right = _pattern_goal(goal.right, ctx)
+        left = left if isinstance(left, list) else [left]
+        right = right if isinstance(right, list) else [right]
+        return left + right
+    if isinstance(goal, Or):
+        return Or(left=_pattern_goal(goal.left, ctx),
+                  right=_pattern_goal(goal.right, ctx),
+                  position=goal.position)
+    if isinstance(goal, Not):
+        return Not(operand=_pattern_goal(goal.operand, ctx),
+                   position=goal.position)
+    if isinstance(goal, IfExpr):
+        return Call(
+            func=LoadName(name="IfThenElse"),
+            args=[_pattern_goal(goal.test, ctx),
+                  _pattern_goal(goal.body, ctx),
+                  _pattern_goal(goal.orelse, ctx)],
+            kwargs=[],
+        )
+    return _pattern_term(goal, ctx)
+
+
+def _pattern_goal_list(body: Any, ctx: _ExpansionContext) -> Any:
+    """Map a pattern body to the goals-list side of a Clause pattern."""
+    if body is True:
+        return []  # fact pattern: ``HEAD <- True``
+    body = deref(body)
+    if is_var(body):
+        return body  # ``HEAD <- GOALS`` captures the whole goal list
+    mapped = _pattern_goal(body, ctx)
+    return mapped if isinstance(mapped, list) else [mapped]

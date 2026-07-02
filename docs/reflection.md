@@ -137,6 +137,57 @@ EscapeCode(SRC, CODE) <- (
 
 ---
 
+## Arrow Patterns — Matching in Clause Syntax
+
+Inside a reflection builtin's argument, a ``(HEAD <- BODY)`` expression is
+sugar for the equivalent vocabulary pattern, so matchers are written in the
+same syntax as the clauses they match:
+
+```clausal
+ShapeXY(SRC) <- ReifiedClause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))
+```
+
+is rewritten at compile time (goal expansion) into
+
+```clausal
+ShapeXY(SRC) <- ReifiedClause(SRC,
+    Clause(Goal("MyPred", [A, B], []),
+           [Goal("Goalx", [A], []), Goal("Goaly", [B], [])]))
+```
+
+Semantics:
+
+- **Pattern variables are the matcher's own variables.** They *capture*
+  the reified subterms they align with — `A` above binds to
+  `Variable("X")` when matching `MyPred(X, Y) <- (Goalx(X), Goaly(Y))` —
+  and repeated variables enforce sharing: the pattern above rejects
+  `MyPred(X, Y) <- (Goalx(Y), Goaly(X))`. To pin an actual source-level
+  name, write `Variable("X")` explicitly in the pattern.
+- **Facts:** `Tagged(_, ok) <- True` matches the fact `Tagged(1, ok),`
+  (a `True` body is the empty goal list). Atoms in patterns match reified
+  `Atom` terms, not strings.
+- **Whole-body capture:** `MyPred(_, _) <- GOALS` binds `GOALS` to the
+  body's goal list.
+- **Goal lists match exactly.** A two-goal pattern body matches two-goal
+  bodies only.
+- **Operators stay raw on both sides:** `Positive(A) <- (A > 0)` matches
+  via the `Gt` node's structural unification; `not`/`or` bodies work the
+  same way.
+
+Boundaries:
+
+- The sugar fires **only** in the argument positions of the reflection
+  builtins (detected by identity, so a same-named user predicate never
+  triggers it). Everywhere else `(HEAD <- BODY)` keeps its existing
+  meaning — a runtime clause term, as consumed by `assertz`.
+- A **variable head** (`HEAD <- GOALS`) is lambda syntax, not a clause
+  pattern — for full head destructuring match `Clause(HEAD, GOALS)`
+  directly.
+- `++` escapes cannot be written in pattern syntax (they would be live
+  thunks); match them explicitly with `Escape(CODE, _, _)`.
+
+---
+
 ## A Call-Graph Lint in Clausal
 
 The motivating example — "a called predicate that is neither defined nor
@@ -152,7 +203,7 @@ CalledPredicate(SRC, NAME, ARITY) <- (
 
 DefinedName(SRC, NAME) <- (
     ReifiedClause(SRC, Clause(Goal(NAME, _, _), _, _))
-)
+)  # head name is a variable — vocabulary form, not arrow sugar
 
 UndefinedCall(SRC, NAME) <- (
     CalledPredicate(SRC, NAME, _),

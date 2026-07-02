@@ -173,7 +173,19 @@ validation of this feature.
 - **Phase 3 was free:** bodies are Python lists, so `phrase/2` matches goal sequences with no new
   code — a grammar-rule matcher test passes against reified bodies directly.
 
-### Natural-syntax clause patterns (deferred, 2026-07-01)
+### Natural-syntax clause patterns (IMPLEMENTED 2026-07-02 — option 1 below)
+
+Landed as `_expand_arrow_patterns` in `clausal/logic/goal_expansion.py` (13 tests in
+`tests/test_reflection_sugar.py`, docs in `docs/reflection.md` §"Arrow Patterns"). As designed:
+fires only in reflection-builtin argument positions (identity-checked through the module's own
+binding, dotted-remap aware), pattern vars stay clause vars (capture + sharing), `<- True` = fact,
+`<- GOALS` captures the body list, goal lists match exactly, operators stay raw both sides.
+Variable-headed `HEAD <- GOALS` remains lambda syntax — full destructuring uses `Clause(HEAD,
+GOALS)`. Incidental fix: `_expand_goal` now recurses into `TupleLiteral` conjunctions (previously
+goal expansion never fired inside multi-goal bodies — latent regex auto-binding gap). Original
+design notes kept below for the record.
+
+### Original design notes (2026-07-01)
 
 `(HEAD <- BODY)` **already parses as an expression** in argument position: `TermTransformer`
 detects the arrow and builds a runtime `Predicate(head=Call(...), body=TupleLiteral(...))` node
