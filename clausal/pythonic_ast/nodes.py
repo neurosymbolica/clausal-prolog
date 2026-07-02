@@ -183,6 +183,28 @@ class BinOp(Node):
     def __str__(bin_op):
         return f"{bin_op.left} {bin_op.op} {bin_op.right}"
 
+    def __unify__(self, other, trail):
+        """Structural unification: same operator class, operands unified pairwise.
+
+        Operator nodes are structural terms (matched/constructed, not
+        evaluated), so a caller's operator term unifies field-wise with a
+        clause's, binding variables in either operand.  Without this the C
+        ``do_unify`` falls back to ``==``, which never binds a variable, so a
+        clause that builds e.g. ``DA + DB`` cannot unify against another
+        operator term of the same shape.  The non-semantic ``position`` field
+        is ignored (it is ``compare=False``).  Mirrors ``Compound.__unify__``.
+        """
+        if not isinstance(other, BinOp):
+            return NotImplemented
+        if type(self) is not type(other):
+            return False  # distinct operators (e.g. Add vs Mult) never unify
+        from clausal.logic.variables import unify
+        mark = trail.mark()
+        if unify(self.left, other.left, trail) and unify(self.right, other.right, trail):
+            return True
+        trail.undo(mark)
+        return False
+
 
 class BoolOp(BinOp):
     """Base for boolean binary operators (And, Or)."""
@@ -204,6 +226,15 @@ class UnaryOp(Node):
         if unary_op.op.isalpha():
             return f"{unary_op.op} {operand_str}"
         return f"{unary_op.op}{operand_str}"
+
+    def __unify__(self, other, trail):
+        """Structural unification of a unary operator term — see ``BinOp``."""
+        if not isinstance(other, UnaryOp):
+            return NotImplemented
+        if type(self) is not type(other):
+            return False
+        from clausal.logic.variables import unify
+        return unify(self.operand, other.operand, trail)
 
 
 

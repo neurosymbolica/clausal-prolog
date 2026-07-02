@@ -373,3 +373,72 @@ class TestStructuralUnifyAtomics:
     def test_mixed_types_fail(self):
         # nv
         assert not structural_unify(1, "1", fresh())
+
+
+# ── TestUnifyOperatorNodes ─────────────────────────────────────────────────────
+
+
+class TestUnifyOperatorNodes:
+    """The C-extension ``unify`` must structurally unify arithmetic operator
+    nodes (Add/Mult/Pow, ...).  They are structural terms per the language
+    contract ("operators are matched/constructed, not evaluated"), so a clause
+    that builds ``DA + DB`` must unify against another operator term with the
+    same shape — binding the variables inside.  Regression for symbolic_diff.
+    """
+
+    def test_add_with_var_fields(self):
+        # nv
+        from clausal.terms import Add
+        v1, v2 = Var(), Var()
+        t = fresh()
+        assert unify(Add(left=v1, right=v2), Add(left=1, right=1), t)
+        assert deref(v1) == 1 and deref(v2) == 1
+
+    def test_add_var_on_right(self):
+        # nv
+        from clausal.terms import Add
+        v = Var()
+        t = fresh()
+        assert unify(Add(left=1, right=2), Add(left=1, right=v), t)
+        assert deref(v) == 2
+
+    def test_add_ground_match(self):
+        # nv
+        from clausal.terms import Add
+        assert unify(Add(left=1, right=2), Add(left=1, right=2), fresh())
+
+    def test_add_ground_mismatch(self):
+        # nv
+        from clausal.terms import Add
+        assert not unify(Add(left=1, right=2), Add(left=1, right=3), fresh())
+
+    def test_different_operators_dont_unify(self):
+        # nv — Add and Mult are distinct structural terms
+        from clausal.terms import Add, Mult
+        v = Var()
+        assert not unify(Add(left=v, right=1), Mult(left=1, right=1), fresh())
+
+    def test_position_ignored(self):
+        # nv — the non-semantic source-position field must not block unification
+        from clausal.terms import Add
+        t = fresh()
+        a = Add(left=1, right=2, position=(1, 2, 3, 4))
+        b = Add(left=1, right=2, position=(5, 6, 7, 8))
+        assert unify(a, b, t)
+
+    def test_nested_operator_unify(self):
+        # nv — recursion into operands
+        from clausal.terms import Add, Mult
+        v = Var()
+        t = fresh()
+        assert unify(Add(left=Mult(left=2, right=v), right=1),
+                     Add(left=Mult(left=2, right=3), right=1), t)
+        assert deref(v) == 3
+
+    def test_trail_undo_on_partial_failure(self):
+        # nv — first field binds, second fails: the binding must roll back
+        from clausal.terms import Add
+        v = Var()
+        t = fresh()
+        assert not unify(Add(left=v, right=2), Add(left=9, right=3), t)
+        assert is_var(deref(v))

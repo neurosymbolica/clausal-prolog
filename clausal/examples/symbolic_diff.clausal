@@ -14,8 +14,10 @@ Diff(X, X, 1),
 Diff(C, _, 0) <- number(C)
 
 # Different variable: Diff(Vy)/dVx = 0
+# Variables are represented as atoms (Vx, Vy), so guard with atom/1 — not
+# is_str/1, which is for Python strings and correctly rejects an atom.
 Diff(Y, X, 0) <- (
-    is_str(Y),
+    atom(Y),
     Y is not X
 )
 
