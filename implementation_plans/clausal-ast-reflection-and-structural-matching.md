@@ -1,6 +1,7 @@
 # Feature plan: AST reflection → Clausal compound terms + structural matching in Clausal
 
-**Status:** proposal / captured idea (2026-07-01)
+**Status:** phases 1–3 landed (2026-07-01) — see "Implementation notes" at the end.
+Phase 4 (round-trip/expansion) deferred; phase 5 (verifier migration) lives in `clausify`.
 **Origin:** surfaced while building the `clausify` adversarial verifier, which needs to
 statically analyse `.clausal` rulebases (call-graph, arity, `++`-escape detection). Doing that
 with regexes is wrong (Clausal is not a regular language); doing it with Python's `ast` works but
@@ -144,3 +145,55 @@ undefined_call(SOURCE, NAME, ARITY) <- (
 stable `Attack.run()` interface, and **migrate them to this feature** (phases 1→2→5 above) once it
 lands — no change to the verifier's gate, registry, or report. That migration is the first external
 validation of this feature.
+
+---
+
+## Implementation notes (phases 1–3, landed 2026-07-01)
+
+- **Approach:** instead of exec'ing the transformed module, `reify_source` statically evaluates the
+  `$define_predicate(Predicate(...))` constructor expressions that `EmbedTransformer` emits — a
+  closed vocabulary (functor calls with keyword fields, walrus-bound `Var()`s, simple_ast node
+  constructors, `PyThunk`/`FStringThunk` lambdas). Pure: no directive execution, no embedded-Python
+  or escape evaluation. `EmbedTransformer` stays the single source of truth for surface syntax.
+- **Files:** `clausal/reflection.py` (pure layer: `reify_source`/`reify_file`/`reify_ast` +
+  vocabulary), `clausal/modules/reflection.py` (Clausal-facing builtins), `docs/reflection.md`,
+  `tests/test_reflection.py` (39 tests), `tests/test_reflection_builtins.py` (9 tests, incl. the
+  `undefined_call` lint and a DCG construction matcher). `reflection` registered in
+  `_IMPORT_ALIASES` (term_rewriting.py).
+- **Vocabulary deviations from the sketch above** (documented in `docs/reflection.md`):
+  `pred` → `Goal(NAME, ARGS, KWARGS)`; functor/atom names are **strings**, not atoms; Python
+  literals stay **raw** (no `int(1)`/`str(...)` wrapping); variables/atoms wrap as
+  `Variable('X')`/`Atom('a')`; `clause` → `Clause(HEAD, GOALS, POSITION)` (trailing `position`
+  fields wildcard naturally because `__call__` fills missing fields with fresh vars). `Goal`
+  carries no position so whole-goal `==`/`SetOf` dedup stays structural.
+- **The phase-2 trade-off** (wrap operators vs expose raw) was decided **raw**: operator/unary
+  nodes pass through with reified operands, matched via their `__unify__` from `4944fe5f`.
+  Control shapes got the normalized vocabulary (`Clause`, `Goal`, `Escape`, `FormatString`,
+  `IfThenElse`, `ModuleDirective`, `PythonCode`); conjunctions normalize to Python lists.
+- **Phase 3 was free:** bodies are Python lists, so `phrase/2` matches goal sequences with no new
+  code — a grammar-rule matcher test passes against reified bodies directly.
+
+### Natural-syntax clause patterns (deferred, 2026-07-01)
+
+`(HEAD <- BODY)` **already parses as an expression** in argument position: `TermTransformer`
+detects the arrow and builds a runtime `Predicate(head=Call(...), body=TupleLiteral(...))` node
+with the surrounding clause's real Vars shared inside (the write-side currency — what `assertz`
+consumes). It does NOT unify with the reified vocabulary (different classes at every level:
+`Predicate`≠`Clause`, `Call`≠`Goal`, `TupleLiteral`≠list, real Vars≠ground `Variable` terms), so
+`ReifiedClause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))` does not match today. Two closures
+considered:
+
+1. **Goal-expansion sugar** (preferred): in reflection-builtin argument positions, rewrite the
+   `Predicate`-constructor expression into the equivalent vocabulary pattern at compile time
+   (precedent: regex auto-binding in `goal_expansion.py`; the AST→vocabulary mapping is
+   `reflection._ClauseReifier`). Pattern vars stay the matcher's clause vars → unification against
+   ground `Variable(...)` terms gives capture + sharing semantics for free. No new keyword — the
+   arrow syntax is already reserved and parsed, so `qc/1` is unnecessary; `qc/n` (named
+   substitutions) doubly so.
+2. **Unify the currencies**: reify to raw `Predicate`/`Call` nodes and add `__unify__` to them
+   (extending `4944fe5f`). More principled (one clause-term shape language-wide) but reworks the
+   shipped vocabulary, costs the list-body/DCG property, and touches the assertz write-side shape.
+
+**Deferred** until the clausify verifier migration (phase 5) provides a real matcher corpus — that
+usage should decide (a) whether the sugar pays for itself, and (b) whether pattern bodies should
+match exactly or as a subsequence.

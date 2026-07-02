@@ -1,0 +1,233 @@
+# Reflection — Matching Clausal Source with Clausal
+
+The `reflection` module reifies `.clausal` source into ordinary compound
+terms — a homoiconic tree the language can inspect — so linters, call-graph
+analyses, style checkers, and construction matchers are written **in Clausal
+itself**, by unification against clause structure, instead of walking a
+Python AST imperatively.
+
+Reification is *pure*: the analysed source is never executed. Directives are
+not run, embedded Python does not evaluate, `++` escapes are captured as
+source text. It is safe to reflect over untrusted rulebases.
+
+---
+
+## Quick Example
+
+```clausal
+-import_from(reflection, [
+    ReifiedClause, ClauseHead, ClauseBody, GoalFunctor, Clause, Goal,
+])
+
+HeadName(SRC, NAME) <- (
+    ReifiedClause(SRC, CLAUSE),
+    ClauseHead(CLAUSE, HEAD),
+    GoalFunctor(HEAD, NAME, _)
+)
+```
+
+```python
+>>> from clausal.logic.solve import call
+>>> src = "Edge(1, 2),\nConnected(X, Y) <- Edge(X, Y)\n"
+>>> # HeadName(src, NAME) enumerates "Edge", "Connected"
+```
+
+---
+
+## The Reified Vocabulary
+
+Every top-level item of a source reifies to one of three terms:
+
+| Term | Meaning |
+|---|---|
+| `Clause(HEAD, GOALS, POSITION)` | One clause. `GOALS` is a list — `[]` for facts. |
+| `ModuleDirective(NAME, ARGS, POSITION)` | A `-name(...)` directive (`dynamic`, `import_from`, `module`, …). |
+| `PythonCode(KIND, NAME, POSITION)` | An embedded plain-Python statement (`function`, `class`, `import`, …) — reported, never run. |
+
+Inside clauses:
+
+| Term | Meaning |
+|---|---|
+| `Goal(NAME, ARGS, KWARGS)` | A predicate call *and* any compound term — heads, body goals, and structured arguments share this shape. `NAME` is a string (dotted for qualified calls, e.g. `"mod.Pred"`); `KWARGS` is a list of `[name, value]` pairs. |
+| `Variable(NAME)` | A logic variable, as a *ground* term — matchers inspect structure without binding anything. Anonymous variables are numbered `_1`, `_2`, … per clause. |
+| `Atom(NAME)` | A bare lowercase name. |
+| `Escape(CODE, VARS, POSITION)` | A `++` Python escape. `CODE` is the escaped expression's source text; it is never evaluated. |
+| `FormatString(CODE, VARS, POSITION)` | A deferred f-string. |
+| `IfThenElse(CONDITION, THEN, OTHERWISE)` | A reified `If/3`. |
+
+Python literals stay raw: numbers, strings, lists, tuples, and dicts appear
+as themselves, so `Path([1, 2, 3])` reifies with the plain list `[1, 2, 3]`
+as its argument.
+
+**Operator nodes stay raw.** Arithmetic, comparison, and boolean operator
+nodes (`Add`, `Gt`, `Unify`, `Not`, `Or`, `StarUnpack`, …) carry structural
+unification, so they pass through unwrapped with reified operands. A body
+goal `X > 0` reifies as `Gt(left=Variable('X'), right=0)` and is matched by
+writing `Gt(A, B)` — the constructor names are available in every `.clausal`
+module. This keeps the operator subset matchable exactly as demonstrated by
+`clausal/examples/symbolic_diff.clausal`, at the cost of coupling matchers
+to the `pythonic_ast` node names.
+
+Conjunctions normalise to Python lists wherever they appear in goal
+position: a clause body is always a list, and a parenthesised conjunction
+inside `or` becomes a nested list.
+
+---
+
+## Import
+
+```clausal
+-import_from(reflection, [
+    ReifiedItem, ReifiedClause, ReifiedFileItem,
+    ClauseHead, ClauseBody, GoalFunctor, ReifiedSubterm,
+    Clause, Goal, Variable, Atom, Escape,
+])
+```
+
+Import only what a matcher uses; the vocabulary classes (`Clause`, `Goal`,
+`Variable`, `Atom`, `Escape`, `FormatString`, `IfThenElse`,
+`ModuleDirective`, `PythonCode`) are needed whenever they appear in a head
+pattern or constructed argument.
+
+---
+
+## Builtins
+
+### ReifiedItem/2 — Enumerate All Items
+
+`ReifiedItem(SOURCE, ITEM)` — `SOURCE` is `.clausal` source *text*; `ITEM`
+enumerates every reified top-level item on backtracking. Reification is
+cached per source text.
+
+### ReifiedClause/2 — Clauses Only
+
+`ReifiedClause(SOURCE, CLAUSE)` — like `ReifiedItem`, filtered to `Clause`
+terms.
+
+### ReifiedFileItem/2 — From a File
+
+`ReifiedFileItem(PATH, ITEM)` — like `ReifiedItem` over a file path (cached
+per path and modification time).
+
+### ClauseHead/2, ClauseBody/2 — Accessors
+
+`ClauseHead(CLAUSE, HEAD)` and `ClauseBody(CLAUSE, GOALS)` destructure a
+`Clause`. Equivalent to matching `Clause(HEAD, GOALS, _)` directly.
+
+### GoalFunctor/3 — Name and Arity
+
+`GoalFunctor(GOAL, NAME, ARITY)` — `NAME` is the functor string, `ARITY`
+counts positional plus keyword arguments. Fails on non-`Goal` terms (raw
+operator nodes, literals), which conveniently skips them in call-graph
+sweeps.
+
+### ReifiedSubterm/2 — Recursive Walk
+
+`ReifiedSubterm(TERM, SUB)` — enumerates every subterm depth-first,
+starting with `TERM` itself; recurses through vocabulary terms, raw
+operator nodes, lists, tuples, and dict values. The workhorse for "find a
+`++` escape anywhere" checks:
+
+```clausal
+EscapeCode(SRC, CODE) <- (
+    ReifiedItem(SRC, ITEM),
+    ReifiedSubterm(ITEM, Escape(CODE, _, _))
+)
+```
+
+---
+
+## A Call-Graph Lint in Clausal
+
+The motivating example — "a called predicate that is neither defined nor
+imported":
+
+```clausal
+CalledPredicate(SRC, NAME, ARITY) <- (
+    ReifiedClause(SRC, CLAUSE),
+    ClauseBody(CLAUSE, GOALS),
+    GOAL in GOALS,
+    GoalFunctor(GOAL, NAME, ARITY)
+)
+
+DefinedName(SRC, NAME) <- (
+    ReifiedClause(SRC, Clause(Goal(NAME, _, _), _, _))
+)
+
+UndefinedCall(SRC, NAME) <- (
+    CalledPredicate(SRC, NAME, _),
+    not DefinedName(SRC, NAME)
+)
+```
+
+---
+
+## DCG Construction Matching
+
+A clause body is a plain list of goals, so [DCGs](dcg.md) match goal
+*sequences* directly — the right tool for "a body that starts with an
+`Edge/2` call":
+
+```clausal
+edge_goal >> ([Goal("Edge", _, _)])
+any_goal >> ([_])
+any_goals >> ([])
+any_goals >> (any_goal, any_goals)
+
+starts_with_edge >> (edge_goal, any_goals)
+
+StartsWithEdge(SRC, NAME) <- (
+    ReifiedClause(SRC, CLAUSE),
+    ClauseHead(CLAUSE, HEAD),
+    GoalFunctor(HEAD, NAME, _),
+    ClauseBody(CLAUSE, GOALS),
+    phrase(starts_with_edge, GOALS)
+)
+```
+
+---
+
+## Python API
+
+For Python-side tooling (e.g. static analysers that must not load the
+target's engine or imports), `clausal.reflection` exposes the pure layer:
+
+```python
+from clausal.reflection import reify_source, reify_file, reify_ast, Clause, Goal
+
+items = reify_source(open("rules.clausal").read())
+clauses = [item for item in items if isinstance(item, Clause)]
+heads = [clause.head.name for clause in clauses]
+```
+
+- `reify_source(text, filename="<reflected>")` — parse and reify every
+  top-level item, ordered by source position (directives, whose positions
+  are not tracked, sort first).
+- `reify_file(path)` — the same over a file.
+- `reify_ast(node)` — reify a single parsed Python `ast` node of `.clausal`
+  surface syntax; statements yield items, expressions yield terms.
+
+Positions are `(line, column, end_line, end_column)` tuples. Field access
+is plain attribute access: `clause.head`, `clause.goals`,
+`goal.name`, `goal.args`, `escape.code`.
+
+Note the difference from the runtime clause store: reified terms hold
+ground `Variable('X')` terms where the compiled database holds real unbound
+`Var` objects, and reification needs neither directive execution nor
+predicate compilation.
+
+---
+
+## Notes
+
+- `Goal` has no position field: goals are compared whole far more often
+  than clauses, and an always-present position would make structurally
+  identical goals compare unequal. Positions live on `Clause`,
+  `ModuleDirective`, `PythonCode`, `Escape`, and `FormatString`; raw
+  operator nodes keep their own (comparison-neutral) `position` attribute.
+- Head patterns written with fewer arguments wildcard the remaining fields
+  (`Clause(HEAD, GOALS)` leaves `POSITION` unconstrained), so matchers stay
+  concise.
+- DCG rules in the *analysed* source reify in their expanded `<-` form
+  (with the two threaded state arguments), since expansion happens at the
+  surface-syntax level.

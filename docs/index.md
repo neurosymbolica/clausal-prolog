@@ -114,6 +114,7 @@ for the full feature set.
 | [Importing Prolog](importing_prolog.md) | Import `.pl` files directly — on-the-fly translation and caching |
 | [Architecture](architecture.md) | Layer stack, execution model, why not a WAM |
 | [Python Integration](python_integration.md) | Query API, `++()` escape, Python interop |
+| [Reflection](reflection.md) | Reify `.clausal` source as matchable terms — linters and matchers in Clausal |
 | [IPython / Jupyter REPL](ipython.md) | Interactive queries, `*(goals)` syntax, solution browsing |
 | **Standard Library Modules** | |
 | [Physical Units](units.md) | `n(Unit)` sugar, dimensional arithmetic, AttVar constraints |
