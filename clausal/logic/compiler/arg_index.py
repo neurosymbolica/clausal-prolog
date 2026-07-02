@@ -114,6 +114,20 @@ def _arg_to_index_key(arg: Any) -> Any:
     if isinstance(arg, Call) and isinstance(arg.func, LoadName):
         basename = arg.func.name.rsplit(".", 1)[-1]
         return (basename, len(arg.args))
+    # Bare name reference (``LoadName('Red')`` / ``LoadAttr(mod, 'Red')``) — a
+    # 0-arity atom used as a value, e.g. the RHS of the ``Unify`` body goal that
+    # a keyword-atom fact ``Color(C=Red)`` compiles to.  Key as ``(name, 0)`` so
+    # the bucket matches the runtime ``(atom.__name__, 0)`` key that
+    # :func:`_runtime_arg_key` emits when the atom resolves to a PredicateMeta.
+    # Must run BEFORE ``is_term_instance`` — LoadName/LoadAttr are themselves
+    # dataclasses and would otherwise key as ``('LoadName', 2)``, which no
+    # runtime value ever matches (leaving ground callers with no bucket and an
+    # empty default set → spurious "no solutions").
+    if isinstance(arg, (LoadName, LoadAttr)):
+        dotted = _dotted_name_from_loadattr(arg)
+        if dotted is not None:
+            return (dotted.rsplit(".", 1)[-1], 0)
+        return _INDEX_VAR
     # PredicateMeta atom (zero-arity predicate class used as a value). Keyed as
     # ``(name, 0)`` so atom-headed clauses are indexable again — the string→
     # PredicateMeta migration (commit 92ce2636) dropped atoms out of the

@@ -117,6 +117,41 @@ class TestExtractFirstArgKey:
         c = Clause(head=Compound("f", (None,)), body=[True])
         assert _extract_first_arg_key(c, 1) is None
 
+    def test_atom_reference_key_from_unify(self):
+        """A keyword-atom fact (``Color(C=Red)``) compiles to a Var head with a
+        ``Unify(field_var, LoadName('Red'))`` body.  The extracted key must be the
+        0-arity atom key ``('Red', 0)`` — matching the runtime ``PredicateMeta``
+        key — not the compound-term key ``('LoadName', 2)`` for the reference node.
+        """
+        # nv — regression for map_coloring private-atom-fact indexing bug
+        from clausal.terms import LoadName
+        v = Var()
+        c = Clause(head=Compound("Color", (v,)),
+                   body=[Unify(left=v, right=LoadName(name="Red"))])
+        assert _extract_first_arg_key(c, 1) == ("Red", 0)
+
+
+class TestLiftClauseAtPos:
+    def test_does_not_lift_loadname_atom(self):
+        """A ``LoadName`` atom reference must NOT be lifted into the head.
+
+        Lifting would emit a ``MatchClass(LoadName, ...)`` head pattern that no
+        runtime value ever matches (the atom resolves to a ``PredicateMeta``,
+        not a ``LoadName`` node), so the bucket would yield nothing.  Leaving the
+        body ``Unify`` in place lets the runtime resolve the reference to the
+        atom.  Mirrors the existing str/bytes skip.
+        """
+        # nv — regression for map_coloring private-atom-fact bucket lifting bug
+        from clausal.terms import LoadName
+        from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
+        v = Var()
+        c = Clause(head=Compound("Color", (v,)),
+                   body=[Unify(left=v, right=LoadName(name="Red"))])
+        lifted = _lift_clause_at_pos(c, 0)
+        # Unchanged: head still a Var, body Unify retained.
+        assert lifted.head.args[0] is v
+        assert len(lifted.body) == 1
+
 
 # ── Test _build_first_arg_index ──────────────────────────────────────────────
 

@@ -18,7 +18,7 @@ from typing import Any
 from clausal.logic.variables import is_var, deref  # noqa: F401
 from clausal.terms import (
     Compound,
-    Call, LoadName,  # noqa: F401
+    Call, LoadName, LoadAttr,  # noqa: F401
     Unify,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
@@ -120,6 +120,17 @@ def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
     # that breaks list callers reaching this clause via the coalesced
     # str/charlist bucket built by ``arg_index._arg_to_index_key``.
     if isinstance(lift_term, (str, bytes)):
+        return clause
+
+    # Skip the lift when the lifted term is a bare name reference
+    # (``LoadName('Red')`` / ``LoadAttr(mod, 'Red')``) — an unresolved 0-arity
+    # atom, e.g. the RHS of the ``Unify`` that a keyword-atom fact
+    # ``Color(C=Red)`` compiles to.  ``head_to_match_pattern`` would emit a
+    # ``MatchClass(LoadName, ...)`` pattern that no runtime value matches (the
+    # reference resolves to a ``PredicateMeta`` atom, never a ``LoadName``
+    # node), so the bucket would yield nothing.  Leaving the body ``Unify`` in
+    # place lets the runtime resolve the reference to the atom and unify it.
+    if isinstance(lift_term, (LoadName, LoadAttr)):
         return clause
 
     # Rebuild head with lift_term at pos
