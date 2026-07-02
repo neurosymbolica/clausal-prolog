@@ -1,9 +1,9 @@
 # Feature plan: AST reflection → Clausal compound terms + structural matching in Clausal
 
 **Status:** phases 1–3 landed (2026-07-01) — see "Implementation notes" at the end.
-Phase 4 (round-trip/expansion) deferred; phase 5 (verifier migration) lives in `clausify`.
-**Origin:** surfaced while building the `clausify` adversarial verifier, which needs to
-statically analyse `.clausal` rulebases (call-graph, arity, `++`-escape detection). Doing that
+Phase 4 (round-trip/expansion) deferred; phase 5 (porting a real external tool) is left to consumers.
+**Origin:** surfaced from a recurring need to statically analyse `.clausal` rulebases
+(call-graph, arity, `++`-escape detection) from *outside* the engine. Doing that
 with regexes is wrong (Clausal is not a regular language); doing it with Python's `ast` works but
 means *analysing Clausal in Python*. The right tool for matching constructions in Clausal code is
 **Clausal itself** — this feature makes that possible and is a strong core capability in its own
@@ -21,7 +21,7 @@ the construction can appear. In short: give Clausal the ability to pattern-match
 embedded Python) as data. This is the Lisp/Prolog `read_term`/`=..`/`term_expansion` capability,
 specialised to Clausal's Python-AST substrate.
 
-## Why it is a great core feature (not just a verifier need)
+## Why it is a great core feature (not just a linter need)
 
 - **Metacircular tooling.** Linters, style-checkers, complexity metrics, dead-clause detection,
   call-graph extraction, and refactorings can all be written *in Clausal*, matching goal/head/clause
@@ -89,8 +89,8 @@ independent of Python's own capitalised-name meaning.
 Python-facing (compile-time reflection):
 - `reify_ast(node) -> Compound` — one AST node → a reified Clausal term.
 - `reify_source(text) -> list[Compound]` — parse `.clausal` text (no directive execution, no kit
-  import) and reify every top-level item. Pure and dependency-light — the property the verifier
-  needs (analyse without loading the engine or the kit).
+  import) and reify every top-level item. Pure and dependency-light — the property an external
+  static analyser needs (analyse without loading the engine or the kit).
 
 Clausal-facing (the metacircular surface):
 - `reified_clause(SOURCE_TERM, CLAUSE)` / `reified_item(SOURCE, ITEM)` — enumerate reified items.
@@ -114,8 +114,8 @@ undefined_call(SOURCE, NAME, ARITY) <- (
 ## Phasing
 
 1. **`reify_ast` / `reify_source` (Python).** The pure AST → `Compound` mapping above + tests over
-   real kit files (`kit/*.clausal`). No engine load, no kit import. This alone unblocks the verifier
-   (it can call `reify_source` instead of hand-walking `ast`).
+   real kit files (`kit/*.clausal`). No engine load, no kit import. This alone unblocks external
+   static analysers (they call `reify_source` instead of hand-walking `ast`).
 2. **Clausal destructuring builtins.** `reified_clause/2`, `clause_head/2`, `clause_body/2`,
    `goal_functor/3`, `is_var/1`, `is_escape/2` — so matchers can be written in Clausal.
    *Scope narrowed by `4944fe5f`:* operator/unary subtrees (`BinOp`/`UnaryOp` — arithmetic,
@@ -130,21 +130,14 @@ undefined_call(SOURCE, NAME, ARITY) <- (
 3. **DCG support over goal lists.** Grammar rules for matching goal sequences/constructions.
 4. **Round-trip / expansion.** `reflect_term(term) -> AST -> code` so term-expansions authored over
    reified terms can be materialised (optional; enables macros-in-Clausal).
-5. **Port a real tool.** Re-express the verifier's call-graph / arity / `++`-escape attacks as
-   Clausal matchers over reified terms — the dogfood milestone.
+5. **Port a real tool.** Re-express an external analyser's call-graph / arity / `++`-escape checks
+   as Clausal matchers over reified terms — the dogfood milestone.
 
 ## Non-goals
 
 - Not replacing the standard-Prolog reader (`prolog_parser`); this targets the Python-AST substrate.
 - Not requiring the engine or the kit to be importable for `reify_source` (phase 1 must stay pure).
 - Not a full macro system in phase 1 — reflection first, expansion later.
-
-## Consumer note
-
-`clausify`'s adversarial verifier will ship its Phase-1 static attacks on Python `ast` now, behind a
-stable `Attack.run()` interface, and **migrate them to this feature** (phases 1→2→5 above) once it
-lands — no change to the verifier's gate, registry, or report. That migration is the first external
-validation of this feature.
 
 ---
 
@@ -206,6 +199,6 @@ considered:
    (extending `4944fe5f`). More principled (one clause-term shape language-wide) but reworks the
    shipped vocabulary, costs the list-body/DCG property, and touches the assertz write-side shape.
 
-**Deferred** until the clausify verifier migration (phase 5) provides a real matcher corpus — that
+**Deferred** until porting a real external analyser (phase 5) provides a matcher corpus — that
 usage should decide (a) whether the sugar pays for itself, and (b) whether pattern bodies should
 match exactly or as a subsequence.
