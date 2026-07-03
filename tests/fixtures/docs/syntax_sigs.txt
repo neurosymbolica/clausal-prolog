@@ -15,9 +15,10 @@ ast_node = ~~(x + y * z)
 # === Atoms ===
 
 --8<-- [start:atoms]
-# These are atoms:
+# These are atoms (identifiers → interned PredicateMeta; unicode letters OK):
 color(red),
 status(active),
+# A quoted string is NOT a declared atom — it is a list of chars (see Strings):
 greeting("hello world"),
 --8<-- [end:atoms]
 
@@ -229,9 +230,10 @@ X, HEAD, REST          # ALL-CAPS logic variables
 _x, _head, _rest       # leading-underscore style (also valid)
 _                      # anonymous variable (always unifies, stores nothing)
 
-# Atoms
-Atom, 'an atom', '+'   # atoms (titlecase or quoted string)
+# Atoms (symbols) → interned PredicateMeta classes
+Atom, red, café        # identifiers, incl. any-language unicode letters
 --python_obj           # any Python object used as an atom
+# 'quoted text' is a STRING (a list of chars), NOT a declared atom — see Strings
 
 # Lists
 []                     # empty list

@@ -60,17 +60,18 @@ So a plain string is simultaneously the "undeclared atom" representation **and**
 duality (not a lost feature) is what made the citation case confusing.
 
 ## The actual open items
-1. **Docs contradiction to fix.** `docs/syntax.md:333` ("Plain string literals (without `u`) are
-   atoms") and `syntax_sigs.txt:233` (`'an atom'  # atoms (titlecase or quoted string)`) read as
-   "quoted = atom", but `docs/builtins.md:985` (`atom/1` "does not match plain strings") and
-   `iso_prolog_compatibility_report.md:158` ("plain strings = undeclared atoms") say the opposite.
-   Reconcile: a quoted literal is an atom-*value* but **not** a `PredicateMeta`. Also worth noting
-   the `u"…"` prefix is currently a no-op (ignored by `convert_constant`) — either wire it up or
-   drop the claim that it distinguishes char-lists from plain strings.
-2. **Optional feature — `PredicateMeta` identity for spaced/punctuated names.** If citations ever
-   need true-atom identity *with* spaces/punctuation, it does not exist and would need BOTH:
-   (a) `-private(['quoted'])` minting a class for quoted entries, and (b) a way to *reference* that
-   class from a clause body (a Constant carries no name to resolve). Non-trivial; likely not worth it.
+1. **Docs contradiction — FIXED (2026-07-02).** `docs/syntax.md` now states that every string
+   literal is a `str`/char-list and **not** a `PredicateMeta` atom, that quote style and the `u"…"`
+   prefix are inert, and adds a **"Atoms vs strings: there are no string atoms"** section
+   (`docs/syntax.md`) with the design rationale. The `syntax_sigs.txt` `atoms` fixtures no longer
+   label quoted strings as atoms. This reconciles with `docs/builtins.md` (`atom/1` rejects plain
+   strings) and `iso_prolog_compatibility_report.md`.
+2. **Optional feature — `PredicateMeta` identity for spaced/punctuated names. RESOLVED: won't do.**
+   Decision (2026-07-02): Clausal will **not** gain string/quoted atoms. Quoted atoms buy only
+   human-readable punctuated names, and that need is already met by Unicode-letter identifiers
+   (unquoted i18n atoms) plus the translation lexicon for verbatim display text; adding them would
+   re-muddy the `str`-vs-symbol split. Rationale is now documented in the syntax.md section above.
+   The rare "atom whose name isn't a valid identifier" case uses `make_atom("…")` at runtime.
 
 ## Workaround (adopted; recommended to keep)
 Bare snake_case **identifier atoms** for statuses and citation KEYS, with the verbatim citation text
