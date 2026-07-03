@@ -255,6 +255,56 @@ class TestQualifiedCalls:
         assert deref(y) == 2
 
 
+# ── Qualified atoms as VALUES (module.atom in term position) ─────────────────
+
+
+class TestQualifiedValueAtoms:
+    """Module-qualified atoms (``module.atom``) must resolve as VALUES in term
+    position, not only as call targets.
+
+    Regression test for ``todo/qualified-atoms-in-term-position.md``: a
+    ``module.atom`` reference in a term (argument / unification operand) was
+    lowered to a ``LoadAttr`` reflection node instead of the module's exported
+    atom, so it failed to unify with the same atom obtained via ``-import_from``.
+    """
+
+    def test_qualified_atom_in_term_position_unifies_with_imported_bare(self):
+        # nv
+        _load_fixture("qualified_atom_vocab.clausal", "qualified_atom_vocab")
+        mod = _load_fixture("qualified_atom_consumer.clausal",
+                            "qualified_atom_consumer")
+        logic_mod = mod.__dict__["$module"]
+
+        # Control: the imported bare atom resolves and unifies with the fact.
+        y0 = Var()
+        assert len(list(call("ImportedControl", y0, module=logic_mod))) == 1
+
+        # The fix: qualified ``qualified_atom_vocab.euro`` in term position must
+        # resolve to the SAME atom, so ``Stored(qualified_atom_vocab.euro)``
+        # unifies against the fact built with the imported bare ``euro``.
+        y = Var()
+        results = list(call("QualifiedMatchesImported", y, module=logic_mod))
+        assert len(results) == 1, "qualified atom in term position did not unify"
+
+        # Binding is only live during iteration, so re-run with next() to read it.
+        y2 = Var()
+        next(call("QualifiedMatchesImported", y2, module=logic_mod))
+        assert deref(y2).__name__ == "ok"
+
+    def test_qualified_atom_in_head_position_constructs_real_atom(self):
+        # nv
+        _load_fixture("qualified_atom_vocab.clausal", "qualified_atom_vocab")
+        mod = _load_fixture("qualified_atom_consumer.clausal",
+                            "qualified_atom_consumer")
+        logic_mod = mod.__dict__["$module"]
+
+        # ``StoredHead(qualified_atom_vocab.euro)`` fact must build the real atom,
+        # so a query using the imported bare ``euro`` matches it.
+        y = Var()
+        results = list(call("HeadQualifiedMatches", y, module=logic_mod))
+        assert len(results) == 1, "qualified atom in head position did not construct the atom"
+
+
 # ── Python-to-clausal import (existing behaviour preserved) ──────────────────
 
 

@@ -1,0 +1,17 @@
+# Consumes qualified_atom_vocab both ways:
+#   -import_from  → bare `euro` (the real atom), used to build the Stored fact
+#   -import_module → qualified `qualified_atom_vocab.euro` in TERM position
+# The qualified form in a term must resolve to the SAME atom as the imported bare
+# one, so the query below unifies against the fact.
+-import_from(qualified_atom_vocab, [euro])
+-import_module(qualified_atom_vocab)
+
+Stored(euro),
+
+QualifiedMatchesImported(R) <- (Stored(qualified_atom_vocab.euro), R is ok)
+ImportedControl(R) <- (Stored(euro), R is ok)
+
+# Reverse direction: a qualified atom in a fact HEAD must construct the real
+# atom too, so a query with the imported bare atom matches it.
+StoredHead(qualified_atom_vocab.euro),
+HeadQualifiedMatches(R) <- (StoredHead(euro), R is ok)

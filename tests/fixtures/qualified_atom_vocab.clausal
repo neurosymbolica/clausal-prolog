@@ -1,0 +1,2 @@
+# Vocabulary module exporting value atoms (module-local identity).
+-module(qualified_atom_vocab, [euro, us_dollar])
