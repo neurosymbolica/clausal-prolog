@@ -126,6 +126,23 @@ def term_to_ast_expr(
     if isinstance(term, LoadName):
         return _name(term.name)
 
+    # Bare (non-Call) LoadAttr in value position: a module-qualified atom used
+    # as a VALUE, e.g. ``currency.euro`` on the RHS of a unify or as a call
+    # argument.  Lower it to the equivalent Python attribute access so the
+    # ``-import_module``'d module object (present in the compiled function's
+    # globals) yields its exported atom at runtime.  Without this the term falls
+    # through to the generic term-instance constructor below and is re-emitted as
+    # a ``LoadAttr(...)`` reflection node, which never unifies with the atom.
+    # Mirrors the qualified-call path (``Call`` + ``LoadAttr`` further down).
+    if isinstance(term, LoadAttr):
+        dotted = _dotted_name_from_loadattr(term)
+        if dotted is not None:
+            parts = dotted.split(".")
+            expr: ast.expr = _name(parts[0])
+            for attr in parts[1:]:
+                expr = ast.Attribute(value=expr, attr=attr, ctx=ast.Load())
+            return expr
+
     term = literal_value(term)
     if term is None or isinstance(term, bool):
         return ast.Constant(value=term)
