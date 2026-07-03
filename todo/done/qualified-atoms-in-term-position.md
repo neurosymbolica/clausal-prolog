@@ -55,15 +55,22 @@ Full suite: 8255 passed, 0 failures.
 - Imported bare: `-import_from(currency, [euro])` then reference `euro` — shared identity.
 - From Python, `currency_mod.euro` yields the atom.
 
-## Separate, still-open issue discovered (NOT this bug)
+## Separate issue discovered AND fixed (same session)
 Building a QUERY *in Python* from a foreign atom — e.g. `solve(consumer.p(currency_mod.euro))` —
-raises `NameError: name 'euro' is not defined`. This is a different code path: the query template
-lowers a zero-arity `PredicateMeta` atom via `term_to_ast_expr`'s
-`PredicateMeta and not _fields` case → a bare `Name(atom.__name__)`, which fails when the atom is
-foreign (its bare name isn't in that function's globals). It does **not** involve `module.atom`
-syntax and is unaffected by this fix. Reproduces from pure Python only (pure-`.clausal` head/body
-paths are fine). Worth a separate todo if the corpus queries clausal predicates from Python with
-cross-module atoms.
+raised `NameError: name 'euro' is not defined`. Different code path: the query template lowered a
+zero-arity `PredicateMeta` atom via `term_to_ast_expr`'s `PredicateMeta and not _fields` case → a
+bare `Name(atom.__name__)`, which fails when the atom is foreign (its bare name isn't in that
+function's globals — e.g. `-import_module` only, no `-import_from`).
+
+**Root cause:** `_templatize_query_goal._ground_value` (`clausal/logic/solve.py`) parameterized only
+scalar literals `(int, float, complex, bool, str, bytes)`, so an atom arg stayed baked into the
+compiled query as a bare name instead of being passed as a bound parameter.
+
+**Fix:** extended `_ground_value` to also parameterize zero-arity atoms (`is_atom(dv)`). The atom
+*object* is now passed in as a bound arg (identity preserved; runtime first-arg indexing still keys
+off the bound value), so no bare name is emitted. Test:
+`test_query_from_python_with_cross_module_atom` + fixture
+`qualified_atom_import_module_only.clausal`. Full suite: 8256 passed, 0 failures.
 
 ## Why it mattered
 The corpus wants language-neutral, namespaced VALUE atoms (`currency.euro`, `country.uk`,

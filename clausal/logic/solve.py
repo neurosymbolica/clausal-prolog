@@ -198,22 +198,30 @@ def _templatize_query_goal(goal: Any):
     Composite/control/arithmetic goals are returned unchanged (``params`` empty);
     they keep the value-keyed cache as a correct fallback.
     """
-    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.predicate import PredicateMeta, is_atom
 
     def _ground_value(val):
         """Return the scalar ground value to parameterize, or None to leave it.
 
-        Only plain scalar literals are parameterized: they unify directly with a
-        head literal regardless of mode.  Structural args (list/dict/compound)
-        are *not* parameterized because the literal-baking path rewrites them
-        (e.g. a list literal becomes cons cells) — a raw value bound to a Var
-        would not match the rewritten head pattern.  Those keep the value-keyed
-        cache fallback.
+        Only plain scalar literals and zero-arity atoms are parameterized: they
+        unify directly with a head literal regardless of mode.  Structural args
+        (list/dict/compound) are *not* parameterized because the literal-baking
+        path rewrites them (e.g. a list literal becomes cons cells) — a raw value
+        bound to a Var would not match the rewritten head pattern.  Those keep the
+        value-keyed cache fallback.
+
+        Atoms (zero-arity ``PredicateMeta`` classes) are parameterized so the
+        atom *object* is passed in as a bound arg rather than baked into the
+        compiled query as a bare ``Name(atom.__name__)`` — the latter raises
+        ``NameError`` for a cross-module atom whose bare name is not in the
+        target function's globals (e.g. imported via ``-import_module`` only).
         """
         dv = deref(val)
         if is_var(dv):
             return None
         if type(dv) in (int, float, complex, bool, str, bytes) or dv is None:
+            return dv
+        if is_atom(dv):
             return dv
         return None
 

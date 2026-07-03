@@ -304,6 +304,23 @@ class TestQualifiedValueAtoms:
         results = list(call("HeadQualifiedMatches", y, module=logic_mod))
         assert len(results) == 1, "qualified atom in head position did not construct the atom"
 
+    def test_query_from_python_with_cross_module_atom(self):
+        """solve() a clausal goal built with a foreign atom whose bare name is
+        NOT in the target module's globals (import_module only, no import_from).
+
+        The query compiler must pass the atom as a bound parameter rather than
+        baking a bare ``Name(atom.__name__)`` into the generated code, which
+        would raise ``NameError`` for the cross-module atom.
+        """
+        # nv
+        vocab = _load_fixture("qualified_atom_vocab.clausal",
+                              "qualified_atom_vocab")
+        mod = _load_fixture("qualified_atom_import_module_only.clausal",
+                            "qualified_atom_import_module_only")
+        euro = vocab.euro  # foreign atom; its bare name is not in mod's globals
+        results = list(solve(mod.KnownCurrency(euro)))
+        assert len(results) == 1
+
 
 # ── Python-to-clausal import (existing behaviour preserved) ──────────────────
 
