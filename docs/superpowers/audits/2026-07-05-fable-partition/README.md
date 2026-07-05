@@ -8,7 +8,7 @@ spec: `docs/superpowers/specs/2026-07-05-fable-partition-audit-design.md`.
 
 | ID | Subsystem | Session status | Findings | Design Qs | Todos | Test file |
 |----|-----------|----------------|----------|-----------|-------|-----------|
-| A01 | term-layer | not started | – | – | – | test_01_term_layer.py |
+| A01 | term-layer | **done 2026-07-05** | 11 (F001–F011; F002 unconfirmed/capi-only) | 4 (D003 resolved-from-docs; D001/D002/D004 parked by user) | 10 fix + 2 investigate | test_01_term_layer.py (37 passed, 20 xfailed) |
 | A02 | compiler-heads | not started | – | – | – | test_02_compiler_heads.py |
 | A03 | compiler-goals | not started | – | – | – | test_03_compiler_goals.py |
 | A04 | runtime-tabling | not started | – | – | – | test_04_runtime_tabling.py |
