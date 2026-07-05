@@ -41,7 +41,34 @@ classes of bug exist across the rest of the codebase, and that unhappy-path /
 mode coverage is thin outside the string surface. This round generalises that
 methodology to the whole package.
 
-Relevant standing constraints (from project memory):
+### Authoritative semantics reference: the Clausal cheat-sheet
+
+`/workspace/clausify/docs/clausal-cheatsheet.md` (729 lines) is a dense,
+construct-by-construct map of *idiomatic, correct* Clausal, with **runnable**
+examples that were executed against the interpreter in `/workspace/clausal`.
+It is the closest thing to a ground-truth spec of *intended* behavior and is
+the primary reference for rubric class 1 (semantics vs. documentation). Every
+agent MUST read it before auditing and treat it as authoritative for the
+contracts it covers, including:
+
+- Cut-free by design: **no `!/0`, `(->)/2`, `(*->)/2`** — replaced by disjoint
+  guarded clauses, first-arg indexing, reified `If(C,T,E)`, `dif/2`, `once/1`.
+- Unification is `is` (not `=`); `==` posts a CLP(ℤ) constraint (multi-mode),
+  `:=` is eager Python eval; `!=` is arithmetic disequality; `X is not Y` →
+  `dif/2`.
+- Bare atoms are **strings**; facts end in a trailing comma, rules use `<-`
+  with parenthesized multi-goal bodies; DCG uses `>>`.
+- Builtin naming: PascalCase / full words, no abbreviations (`list_item/3` is
+  0-based `nth0`; there is no `nth1`; SWI `succ` → `succ/2`).
+
+Caveats: sections marked *(unverified)* are documentation-derived, not
+executed — treat as weaker evidence. A live `todo/cheatsheet-remove-python-
+escapes.md` indicates the `++()` / `:=` escape guidance is being revised, so
+prefer the cheat-sheet's verified relational idioms over escape-based examples
+when they conflict. The cheat-sheet lives in the sibling **clausify** repo
+(read-only for this audit); do not modify it.
+
+### Other standing constraints (from project memory)
 
 - `==` is **arithmetic** equality (Prolog `=:=`), not structural.
 - A string **is** a list of single-character strings (Liskov substitution).
@@ -103,7 +130,8 @@ Log every issue; write adversarial tests for the correctness ones. Issue
 classes:
 
 1. **Semantics vs. documentation** — behavior contradicting docstrings, `docs/`,
-   or standing contracts (arithmetic `==`, strings-as-lists, comma-not-`and`).
+   the **Clausal cheat-sheet** (see above), or standing contracts (arithmetic
+   `==`, strings-as-lists, comma-not-`and`, cut-free).
 2. **Mode / groundness coverage** — input vs output modes, partial terms,
    unbound-var args, the polymorphic mode matrix.
 3. **Edge cases** — empty/singleton/cyclic inputs, backtracking & trail
@@ -168,6 +196,9 @@ tests/audit_2026_07_05/
   provides 11 ready-to-paste prompt blocks.
 - Each agent: `model: "fable"`, `subagent_type: general-purpose` (needs
   Read / Grep / Glob / Bash / Write).
+- Every agent prompt opens with required reading:
+  `/workspace/clausify/docs/clausal-cheatsheet.md` (intended semantics) plus
+  the subsystem's own docstrings/`docs/` — before any code reading.
 - Agents write only to disjoint audit + test paths → safe to run in parallel;
   no worktrees. Suggested batch size **4–5** concurrent to bound token burn.
 - Recommended order: core engine first (1 → 4), then constraints (5 → 8), then
