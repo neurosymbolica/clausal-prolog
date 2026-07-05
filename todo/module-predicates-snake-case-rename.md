@@ -78,7 +78,7 @@ flag-day (no deprecated aliases, matching the datetime precedent).
 1. Decide the acronym/redundant-prefix policy (snag 3).
 2. ~~Batch the **trivial modules** (tcp, url, json, http, hash, pbkdf2, process, units, reflection)~~
    ✅ **DONE 2026-07-04** — see "Trivial batch — done" below.
-3. Handle **`re`** carefully (goal-expansion + README) as its own change.
+3. ~~Handle **`re`** carefully (goal-expansion + README)~~ ✅ **DONE 2026-07-04** — see "re — done" below.
 4. Do the **big three** (files, graphs, logging) once the pattern is proven.
 5. Fix the **docs** (above) in the same series.
 6. Hand off the **external sweep** as a tracked follow-up (see below).
@@ -114,6 +114,31 @@ migration.
 
 **Verify green:** `PYTHONPATH=/workspace/clausal-bug-fix /home/node/.pyenv/versions/3.13.3/bin/python
 -m pytest tests/ -q -p no:cacheprovider` (baseline: 8278 passed + the one perf flake).
+
+## re — done 2026-07-04
+
+`Match`→`match`, `Search`→`search`, `Replace`→`replace`, `Split`→`split` (findall was already
+lowercase). Chose bare snake_case — under qualified call it reads `re.match`/`re.search`/`re.split`,
+matching Python's own `re.*` function names exactly. Verified no core-builtin/module already claims
+those lowercase names (no collision).
+
+**This one could NOT be blanket-renamed — done surgically:**
+- **Functional wiring:** `goal_expansion.py:247` `if short_name not in ("Match","Search")` gates the
+  regex auto-binding (Match/2→Match/3 rewrite). Updated to `("match","search")`. Miss this and
+  auto-binding silently stops firing (tests catch it, but it's the load-bearing line).
+- **Protected `_re.Match`** — the Python stdlib match-object *type annotation* in `re.py:46`. The sed
+  hit it; restored by hand. (Same family as the `urllib.request.Request` gotcha.)
+- **`Match`/`Search`/`Split`/`Replace` are heavily overloaded** and MOST occurrences are NOT the
+  regex predicate: `Split/3` is a user-defined list-split in several fixtures
+  (`Split([*A,*B],A,B)`), `continuation_search.Search` is an engine function, `_ast.Match` /
+  `pythonic_terms.py:104 "Match"` are Python AST match-statement nodes. Discriminator that works:
+  only rename where the name is reachable via `import_from(regex|py.re, [...])` or qualified
+  `re.Name`/`py.re.Name`, or is a regex-pattern call `Name(r"...")`. Grepping bare `Name(` is too
+  broad.
+- **Two aliases:** the module is importable as both `py.re` and the bare alias `regex`
+  (`ModulesFinder` redirect) — cover both spellings.
+- **Prose collisions in mixed docs** (`compiler.md` "Search exhausted" = trampoline, not regex;
+  `term_expansion.md` "Replace the goal" = English verb) — edited those pages by hand, not by sed.
 
 ## Done when
 - [ ] `grep -rhoE '(ModulePredicate|_[A-Za-z]+Predicate)\(\s*"[A-Z]' clausal/modules/` is empty.

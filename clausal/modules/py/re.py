@@ -1,21 +1,21 @@
 """clausal.modules.py.re — Regex predicates for Clausal.
 
-Provides Match, Search, Replace, Split, and findall as importable
+Provides match, search, replace, split, and findall as importable
 predicate objects for use in .clausal files via::
 
-    -import_from(py.re, [Match, Search, Replace, Split, findall])
+    -import_from(py.re, [match, search, replace, split, findall])
 
 Or via module import::
 
     -import_module(py.re)
-    # then use py.re.Match(...), py.re.findall(...), etc.
+    # then use py.re.match(...), py.re.findall(...), etc.
 
 Binding modes
 -------------
-- **Boolean** — ``Match(r"\\d+", S)`` / ``Search(r"\\d+", S)`` — succeeds/fails
-- **Explicit groups** — ``Match(pat, S, G)`` — G is a dict of named groups
+- **Boolean** — ``match(r"\\d+", S)`` / ``search(r"\\d+", S)`` — succeeds/fails
+- **Explicit groups** — ``match(pat, S, G)`` — G is a dict of named groups
   (or tuple of positional groups if no named groups)
-- **Auto-binding** (via goal expansion) — ``Match(r"(?P<YEAR>\\d{4})", S)``
+- **Auto-binding** (via goal expansion) — ``match(r"(?P<YEAR>\\d{4})", S)``
   auto-binds ALLCAPS/leading-underscore named groups to clause variables
 
 Auto-binding is handled by ``clausal.logic.goal_expansion`` at compile
@@ -58,11 +58,11 @@ def _groups_dict(m: "_re.Match") -> dict | tuple:
     return {}
 
 
-# ── Match ────────────────────────────────────────────────────────────────────
+# ── match ────────────────────────────────────────────────────────────────────
 
 
 def _match_2(pat, string, trail, k):
-    """Match/2: boolean test — re.match(pattern, string)."""
+    """match/2: boolean test — re.match(pattern, string)."""
     pat = deref(pat)
     string = deref(string)
     compiled = _compile_pattern(pat)
@@ -72,7 +72,7 @@ def _match_2(pat, string, trail, k):
 
 
 def _match_3(pat, string, groups, trail, k):
-    """Match/3: explicit group extraction — re.match(pattern, string) → groups dict."""
+    """match/3: explicit group extraction — re.match(pattern, string) → groups dict."""
     pat = deref(pat)
     string = deref(string)
     compiled = _compile_pattern(pat)
@@ -83,11 +83,11 @@ def _match_3(pat, string, groups, trail, k):
             yield None
 
 
-# ── Search ───────────────────────────────────────────────────────────────────
+# ── search ───────────────────────────────────────────────────────────────────
 
 
 def _search_2(pat, string, trail, k):
-    """Search/2: boolean test — re.search(pattern, string)."""
+    """search/2: boolean test — re.search(pattern, string)."""
     pat = deref(pat)
     string = deref(string)
     compiled = _compile_pattern(pat)
@@ -97,7 +97,7 @@ def _search_2(pat, string, trail, k):
 
 
 def _search_3(pat, string, groups, trail, k):
-    """Search/3: explicit group extraction — re.search(pattern, string) → groups dict."""
+    """search/3: explicit group extraction — re.search(pattern, string) → groups dict."""
     pat = deref(pat)
     string = deref(string)
     compiled = _compile_pattern(pat)
@@ -108,11 +108,11 @@ def _search_3(pat, string, groups, trail, k):
             yield None
 
 
-# ── Replace ──────────────────────────────────────────────────────────────────
+# ── replace ──────────────────────────────────────────────────────────────────
 
 
 def _replace_4(pat, repl, string, result, trail, k):
-    """Replace/4: re.sub(pattern, replacement, string) → result."""
+    """replace/4: re.sub(pattern, replacement, string) → result."""
     pat = deref(pat)
     repl = deref(repl)
     string = deref(string)
@@ -122,11 +122,11 @@ def _replace_4(pat, repl, string, result, trail, k):
         yield None
 
 
-# ── Split ────────────────────────────────────────────────────────────────────
+# ── split ────────────────────────────────────────────────────────────────────
 
 
 def _split_3(pat, string, parts, trail, k):
-    """Split/3: re.split(pattern, string) → parts list."""
+    """split/3: re.split(pattern, string) → parts list."""
     pat = deref(pat)
     string = deref(string)
     compiled = _compile_pattern(pat)
@@ -163,19 +163,19 @@ def _findall_3(this_generator, _proceed, _fail, _catcher, pat, string, match_var
 
 # ── Build and export predicate objects ───────────────────────────────────────
 
-Match = ModulePredicate("Match")
-Match._register(2, simple_to_trampoline(_match_2))
-Match._register(3, simple_to_trampoline(_match_3))
+match = ModulePredicate("match")
+match._register(2, simple_to_trampoline(_match_2))
+match._register(3, simple_to_trampoline(_match_3))
 
-Search = ModulePredicate("Search")
-Search._register(2, simple_to_trampoline(_search_2))
-Search._register(3, simple_to_trampoline(_search_3))
+search = ModulePredicate("search")
+search._register(2, simple_to_trampoline(_search_2))
+search._register(3, simple_to_trampoline(_search_3))
 
-Replace = ModulePredicate("Replace")
-Replace._register(4, simple_to_trampoline(_replace_4))
+replace = ModulePredicate("replace")
+replace._register(4, simple_to_trampoline(_replace_4))
 
-Split = ModulePredicate("Split")
-Split._register(3, simple_to_trampoline(_split_3))
+split = ModulePredicate("split")
+split._register(3, simple_to_trampoline(_split_3))
 
 findall = ModulePredicate("findall")
 findall._register(3, _findall_3)

@@ -175,7 +175,7 @@ red() is red               # True
 
 - **`-use_module(library(lists))`** — imports a Prolog module, passing it through
   the Prolog-to-Clausal translation layer first
-- **`-import_from(regex, [Match, Search])`** / **`-import_module(regex)`** — imports
+- **`-import_from(regex, [match, search])`** / **`-import_module(regex)`** — imports
   a Python/Clausal module directly (existing mechanism, unchanged)
 
 ### How `use_module` Works

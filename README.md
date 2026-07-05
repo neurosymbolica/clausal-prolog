@@ -17,7 +17,7 @@ system, with full constraint solving, tabling, DCGs, and a rich standard library
 - **Higher-order** — `maplist/2,3`, `foldl/4`, `include/3`, `exclude/3`
 - **Python interop** — `++expr` escape, lambda goal closures, f-string support in terms
 - **SciPy integration** — wrappers for `scipy.special`, `scipy.linalg`, `scipy.optimize`, `scipy.interpolate`, `scipy.signal`
-- **Regex** — `Match/2,3`, `Search/2,3`, `Replace/4`, `Split/3` with auto-binding goal expansion
+- **Regex** — `match/2,3`, `search/2,3`, `replace/4`, `split/3` with auto-binding goal expansion
 - **Term expansion** — macro system for source-level term rewriting
 - **C extensions** — fast logic variables, trail-based backtracking, trampoline (no WAM)
 

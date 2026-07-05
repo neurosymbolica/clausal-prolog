@@ -547,15 +547,15 @@ Phase A bytecode is cached by Python's `SourceLoader` machinery. On cache hit, `
 
 ### Regex auto-binding
 
-when a [`Match/2` or `Search/2`](regex.md) call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `Match/3` + `Unify` chains:
+when a [`match/2` or `search/2`](regex.md) call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `match/3` + `Unify` chains:
 
 ```clausal
 # Source:
-parse(S, YEAR, MONTH) <- Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
+parse(S, YEAR, MONTH) <- match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
 
 # After expansion (conceptual):
 parse(S, YEAR, MONTH) <- (
-    Match(_re_0, S, _groups),
+    match(_re_0, S, _groups),
     YEAR is ++_groups["YEAR"],
     MONTH is ++_groups["MONTH"]
 )
@@ -567,14 +567,14 @@ Lowercase named groups are NOT auto-bound — they function as regex-only groups
 
 ### Pattern pre-compilation
 
-All static patterns (string literals) in `Match` and `Search` calls are pre-compiled via `re.compile()` and stored in `module_dict`. The goal's pattern argument is replaced with a `LoadName` referencing the compiled object. Dynamic patterns (f-strings, variables) are left unchanged.
+All static patterns (string literals) in `match` and `search` calls are pre-compiled via `re.compile()` and stored in `module_dict`. The goal's pattern argument is replaced with a `LoadName` referencing the compiled object. Dynamic patterns (f-strings, variables) are left unchanged.
 
 ### `clausal.modules` — standard library package
 
-`clausal/modules/` is a Python package that acts as the standard library search path for Clausal module imports. A `ModulesFinder` meta path finder (registered in `import_hook.py`) redirects bare module names to `clausal.modules.<name>`, so `-import_from(regex, [Match, ...])` resolves to `clausal.modules.regex` transparently.
+`clausal/modules/` is a Python package that acts as the standard library search path for Clausal module imports. A `ModulesFinder` meta path finder (registered in `import_hook.py`) redirects bare module names to `clausal.modules.<name>`, so `-import_from(regex, [match, ...])` resolves to `clausal.modules.regex` transparently.
 
 Currently provides:
-- **`regex`** — Match/2,3, Search/2,3, Replace/4, Split/3, findall/3
+- **`regex`** — match/2,3, search/2,3, replace/4, split/3, findall/3
 - **`log`** — GetLogger/1,2, Debug/1,2, Info/1,2, Warning/1,2, Error/1,2, Critical/1,2, Log/3, SetLevel/2, GetLevel/2, IsEnabledFor/2, StreamHandler/2, FileHandler/2, SetFormatter/2, AddHandler/2, RemoveHandler/2, BasicConfig/1. See [logging.md](logging.md)
 - **`date_time`** — now/1, now_utc/1, today/1, date/4, time/4, datetime/7, timedelta/3, date_add/3, date_sub/3, date_diff/3, datetime_string/3, weekday/2, date_between/3, timestamp/2, datetime_string_iso/2, date_string_iso/2. All predicates produce and consume real Python `datetime` objects (`datetime.date`, `datetime.time`, `datetime.datetime`, `datetime.timedelta`) — not custom term types. See [Date & Time](date_time.md)
 - **`yaml_module`** — Read/2, write/2, ReadAll/2, WriteAll/2, ReadFile/2, WriteFile/2, Get/3. Wraps PyYAML (`yaml.safe_load`/`yaml.safe_dump`); data represented as native Python dicts/lists/scalars. See [yaml.md](yaml.md)

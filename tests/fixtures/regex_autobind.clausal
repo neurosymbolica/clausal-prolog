@@ -1,10 +1,10 @@
--import_from(py.re, [Match, Search, findall])
+-import_from(py.re, [match, search, findall])
 
 # Regex auto-binding — ALLCAPS group names auto-bind to clause variables.
 
 # ── Basic auto-binding ──────────────────────────────────────────────────────
 
-ParseDate(S, YEAR, MONTH, DAY) <- Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<DAY>\d{2})", S)
+ParseDate(S, YEAR, MONTH, DAY) <- match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<DAY>\d{2})", S)
 
 Test("auto-bind date parsing") <- (
     ParseDate("2026-03-16", Y, M, D) and
@@ -15,27 +15,27 @@ Test("auto-bind no match fails") <- (not ParseDate("not-a-date", _, _, _))  # nv
 
 # ── Auto-bind constrains already-bound variables ────────────────────────────
 
-IsYear(S, YEAR) <- Match(r"(?P<YEAR>\d{4})-\d{2}-\d{2}", S)
+IsYear(S, YEAR) <- match(r"(?P<YEAR>\d{4})-\d{2}-\d{2}", S)
 
 Test("auto-bind output") <- (IsYear("2026-03-16", Y) and Y == "2026")  # nv
 Test("auto-bind constrains correct") <- IsYear("2026-03-16", "2026")  # nv
 Test("auto-bind constrains wrong fails") <- (not IsYear("2026-03-16", "1999"))  # nv
 
-# ── Auto-bind with Search ──────────────────────────────────────────────────
+# ── Auto-bind with search ──────────────────────────────────────────────────
 
-FindTag(TEXT, TAG) <- Search(r"<(?P<TAG>\w+)>", TEXT)
+FindTag(TEXT, TAG) <- search(r"<(?P<TAG>\w+)>", TEXT)
 
 Test("auto-bind search") <- (FindTag("text <bold> more", T) and T == "bold")  # nv
 
 # ── Single group ────────────────────────────────────────────────────────────
 
-FirstWord(S, WORD) <- Match(r"(?P<WORD>\w+)", S)
+FirstWord(S, WORD) <- match(r"(?P<WORD>\w+)", S)
 
 Test("auto-bind single group") <- (FirstWord("hello world", W) and W == "hello")  # nv
 
 # ── Many groups ─────────────────────────────────────────────────────────────
 
-ParseUrl(S, SCHEME, HOST, PORT, PATH) <- Match(r"(?P<SCHEME>https?)://(?P<HOST>[^:/]+):(?P<PORT>\d+)(?P<PATH>/\S*)", S)
+ParseUrl(S, SCHEME, HOST, PORT, PATH) <- match(r"(?P<SCHEME>https?)://(?P<HOST>[^:/]+):(?P<PORT>\d+)(?P<PATH>/\S*)", S)
 
 Test("auto-bind many groups") <- (
     ParseUrl("https://example.com:8080/api/v1", S, H, P, PA) and
@@ -44,26 +44,26 @@ Test("auto-bind many groups") <- (
 
 # ── Leading-underscore groups ──────────────────────────────────────────────
 
-ExtractWord(S, _word) <- Match(r"(?P<_word>\w+)", S)
+ExtractWord(S, _word) <- match(r"(?P<_word>\w+)", S)
 
 Test("leading underscore auto-bind") <- (ExtractWord("hello world", W) and W == "hello")  # nv
 
 # ── Mixed ALLCAPS and lowercase groups ──────────────────────────────────────
 
-ParseLog(LINE, LEVEL) <- Match(r"(?P<timestamp>\S+)\s+(?P<LEVEL>INFO|WARN|ERROR):\s+(?P<msg>.*)", LINE)
+ParseLog(LINE, LEVEL) <- match(r"(?P<timestamp>\S+)\s+(?P<LEVEL>INFO|WARN|ERROR):\s+(?P<msg>.*)", LINE)
 
 Test("selective binding ALLCAPS only") <- (ParseLog("2026-03-16 ERROR: disk full", L) and L == "ERROR")  # nv
 
 # ── Lowercase regex-only groups (backreferences) ───────────────────────────
 
-HasRepeated(S) <- Search(r"(?P<word>\w+)\s+(?P=word)", S)
+HasRepeated(S) <- search(r"(?P<word>\w+)\s+(?P=word)", S)
 
 Test("lowercase groups for backrefs") <- HasRepeated("the the cat")  # nv
 Test("lowercase groups no repeat fails") <- (not HasRepeated("the cat sat"))  # nv
 
 # ── Optional groups bind None ──────────────────────────────────────────────
 
-OptParse(S, A, B) <- Match(r"(?P<A>\d+)(?:-(?P<B>\d+))?", S)
+OptParse(S, A, B) <- match(r"(?P<A>\d+)(?:-(?P<B>\d+))?", S)
 
 Test("optional group both present") <- (OptParse("42-99", A, B) and A == "42" and B == "99")  # nv
 Test("optional group absent binds None") <- (OptParse("42", A, B) and A == "42" and B is None)  # nv
@@ -73,7 +73,7 @@ Test("optional group absent binds None") <- (OptParse("42", A, B) and A == "42" 
 
 # ── Practical: log parser ──────────────────────────────────────────────────
 
-ParseLogFull(LINE, LEVEL, MSG) <- Match(r"(?P<LEVEL>INFO|WARN|ERROR):\s*(?P<MSG>.*)", LINE)
+ParseLogFull(LINE, LEVEL, MSG) <- match(r"(?P<LEVEL>INFO|WARN|ERROR):\s*(?P<MSG>.*)", LINE)
 
 Test("log parser compact") <- (
     ParseLogFull("ERROR: disk full", L, M) and
@@ -88,7 +88,7 @@ Line("2026-03-16 INFO stopped"),
 
 ErrorMessage(MSG) <- (
     Line(L) and
-    Match(r"\S+ ERROR\s+(?P<MSG>.*)", L)
+    match(r"\S+ ERROR\s+(?P<MSG>.*)", L)
 )
 
 Test("backtracking with regex") <- (ErrorMessage(M) and M == "disk full")  # nv

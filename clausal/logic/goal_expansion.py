@@ -5,9 +5,9 @@ expansion but before compilation in the ``compile_module`` pipeline.
 
 Built-in expansions
 -------------------
-- **Regex pre-compilation + auto-binding** (Phase 3): static ``Match/2``
-  and ``Search/2`` patterns with ALLCAPS/leading-underscore named groups
-  are rewritten to ``Match/3`` + ``Unify`` chains.  The compiled
+- **Regex pre-compilation + auto-binding** (Phase 3): static ``match/2``
+  and ``search/2`` patterns with ALLCAPS/leading-underscore named groups
+  are rewritten to ``match/3`` + ``Unify`` chains.  The compiled
   ``re.Pattern`` object is injected into ``module_dict`` for runtime use.
 - **Arrow match patterns** (reflection sugar): a ``(HEAD <- BODY)``
   expression in an argument of a reflection builtin (``reified_clause`` et
@@ -232,9 +232,9 @@ def _get_call_name(goal: Call) -> str | None:
 
 
 def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
-    """Expand Match/2 and Search/2 with auto-binding + pre-compilation.
+    """Expand match/2 and search/2 with auto-binding + pre-compilation.
 
-    Also pre-compiles static patterns in Match/3 and Search/3.
+    Also pre-compiles static patterns in match/3 and search/3.
     """
     if not isinstance(goal, Call):
         return goal
@@ -242,9 +242,9 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
     func_name = _get_call_name(goal)
     if func_name is None:
         return goal
-    # Support dotted names like "clausal.regex.Match"
+    # Support dotted names like "clausal.regex.match"
     short_name = func_name.rsplit(".", 1)[-1] if "." in func_name else func_name
-    if short_name not in ("Match", "Search"):
+    if short_name not in ("match", "search"):
         return goal
 
     nargs = len(goal.args)
@@ -267,7 +267,7 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
     if nargs != 2:
         return goal
 
-    # Match/2 or Search/2: check for auto-bindable groups.
+    # match/2 or search/2: check for auto-bindable groups.
     bindable = {
         name: idx
         for name, idx in compiled.groupindex.items()
@@ -278,7 +278,7 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
         new_args = [LoadName(name=re_key)] + goal.args[1:]
         return Call(func=goal.func, args=new_args, kwargs=goal.kwargs)
 
-    # Auto-bind: rewrite to Match/3 + Unify chain.
+    # Auto-bind: rewrite to match/3 + Unify chain.
     groups_var = Var()
 
     match_goal = Call(
