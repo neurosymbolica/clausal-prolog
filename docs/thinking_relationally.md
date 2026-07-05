@@ -10,7 +10,7 @@ it be this.
     `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
     this in mind when comparing with Prolog resources.
 
-in_ Clausal, every predicate defines a relation between its arguments. A
+In Clausal, every predicate defines a relation between its arguments. A
 relation is not a function — it has no fixed inputs or outputs. A relation
 simply *holds* or *doesn't hold* for a given combination of arguments. This
 shift in perspective — from "what does the program do?" to "when does this
@@ -279,7 +279,7 @@ A common characterization of declarative programming is "what, not how" — you
 say *what* you want, not *how* to get it. But this does not adequately capture
 what makes logic programming special.
 
-in_ fact, the opposite is closer to the truth: **how, not what** — because it
+In fact, the opposite is closer to the truth: **how, not what** — because it
 matters *how* we express our task, not *what* is being executed. A well-chosen
 representation, good naming, and relational framing are not cosmetic choices.
 They determine whether the code can be used in all directions, whether it can

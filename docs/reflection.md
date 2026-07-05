@@ -16,13 +16,13 @@ source text. It is safe to reflect over untrusted rulebases.
 
 ```clausal
 -import_from(reflection, [
-    ReifiedClause, ClauseHead, ClauseBody, GoalFunctor, Clause, Goal,
+    reified_clause, clause_head, clause_body, goal_functor, Clause, Goal,
 ])
 
 HeadName(SRC, NAME) <- (
-    ReifiedClause(SRC, CLAUSE),
-    ClauseHead(CLAUSE, HEAD),
-    GoalFunctor(HEAD, NAME, _)
+    reified_clause(SRC, CLAUSE),
+    clause_head(CLAUSE, HEAD),
+    goal_functor(HEAD, NAME, _)
 )
 ```
 
@@ -78,8 +78,8 @@ inside `or` becomes a nested list.
 
 ```clausal
 -import_from(reflection, [
-    ReifiedItem, ReifiedClause, ReifiedFileItem,
-    ClauseHead, ClauseBody, GoalFunctor, ReifiedSubterm,
+    reified_item, reified_clause, reified_file_item,
+    clause_head, clause_body, goal_functor, reified_subterm,
     Clause, Goal, Variable, Atom, Escape,
 ])
 ```
@@ -93,45 +93,45 @@ pattern or constructed argument.
 
 ## Builtins
 
-### ReifiedItem/2 — Enumerate All Items
+### reified_item/2 — Enumerate All Items
 
-`ReifiedItem(SOURCE, ITEM)` — `SOURCE` is `.clausal` source *text*; `ITEM`
+`reified_item(SOURCE, ITEM)` — `SOURCE` is `.clausal` source *text*; `ITEM`
 enumerates every reified top-level item on backtracking. Reification is
 cached per source text.
 
-### ReifiedClause/2 — Clauses Only
+### reified_clause/2 — Clauses Only
 
-`ReifiedClause(SOURCE, CLAUSE)` — like `ReifiedItem`, filtered to `Clause`
+`reified_clause(SOURCE, CLAUSE)` — like `reified_item`, filtered to `Clause`
 terms.
 
-### ReifiedFileItem/2 — From a File
+### reified_file_item/2 — From a File
 
-`ReifiedFileItem(PATH, ITEM)` — like `ReifiedItem` over a file path (cached
+`reified_file_item(PATH, ITEM)` — like `reified_item` over a file path (cached
 per path and modification time).
 
-### ClauseHead/2, ClauseBody/2 — Accessors
+### clause_head/2, clause_body/2 — Accessors
 
-`ClauseHead(CLAUSE, HEAD)` and `ClauseBody(CLAUSE, GOALS)` destructure a
+`clause_head(CLAUSE, HEAD)` and `clause_body(CLAUSE, GOALS)` destructure a
 `Clause`. Equivalent to matching `Clause(HEAD, GOALS, _)` directly.
 
-### GoalFunctor/3 — Name and Arity
+### goal_functor/3 — Name and Arity
 
-`GoalFunctor(GOAL, NAME, ARITY)` — `NAME` is the functor string, `ARITY`
+`goal_functor(GOAL, NAME, ARITY)` — `NAME` is the functor string, `ARITY`
 counts positional plus keyword arguments. Fails on non-`Goal` terms (raw
 operator nodes, literals), which conveniently skips them in call-graph
 sweeps.
 
-### ReifiedSubterm/2 — Recursive Walk
+### reified_subterm/2 — Recursive Walk
 
-`ReifiedSubterm(TERM, SUB)` — enumerates every subterm depth-first,
+`reified_subterm(TERM, SUB)` — enumerates every subterm depth-first,
 starting with `TERM` itself; recurses through vocabulary terms, raw
 operator nodes, lists, tuples, and dict values. The workhorse for "find a
 `++` escape anywhere" checks:
 
 ```clausal
 EscapeCode(SRC, CODE) <- (
-    ReifiedItem(SRC, ITEM),
-    ReifiedSubterm(ITEM, Escape(CODE, _, _))
+    reified_item(SRC, ITEM),
+    reified_subterm(ITEM, Escape(CODE, _, _))
 )
 ```
 
@@ -144,13 +144,13 @@ sugar for the equivalent vocabulary pattern, so matchers are written in the
 same syntax as the clauses they match:
 
 ```clausal
-ShapeXY(SRC) <- ReifiedClause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))
+ShapeXY(SRC) <- reified_clause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))
 ```
 
 is rewritten at compile time (goal expansion) into
 
 ```clausal
-ShapeXY(SRC) <- ReifiedClause(SRC,
+ShapeXY(SRC) <- reified_clause(SRC,
     Clause(Goal("MyPred", [A, B], []),
            [Goal("Goalx", [A], []), Goal("Goaly", [B], [])]))
 ```
@@ -195,14 +195,14 @@ imported":
 
 ```clausal
 CalledPredicate(SRC, NAME, ARITY) <- (
-    ReifiedClause(SRC, CLAUSE),
-    ClauseBody(CLAUSE, GOALS),
+    reified_clause(SRC, CLAUSE),
+    clause_body(CLAUSE, GOALS),
     GOAL in GOALS,
-    GoalFunctor(GOAL, NAME, ARITY)
+    goal_functor(GOAL, NAME, ARITY)
 )
 
 DefinedName(SRC, NAME) <- (
-    ReifiedClause(SRC, Clause(Goal(NAME, _, _), _, _))
+    reified_clause(SRC, Clause(Goal(NAME, _, _), _, _))
 )  # head name is a variable — vocabulary form, not arrow sugar
 
 UndefinedCall(SRC, NAME) <- (
@@ -228,10 +228,10 @@ any_goals >> (any_goal, any_goals)
 starts_with_edge >> (edge_goal, any_goals)
 
 StartsWithEdge(SRC, NAME) <- (
-    ReifiedClause(SRC, CLAUSE),
-    ClauseHead(CLAUSE, HEAD),
-    GoalFunctor(HEAD, NAME, _),
-    ClauseBody(CLAUSE, GOALS),
+    reified_clause(SRC, CLAUSE),
+    clause_head(CLAUSE, HEAD),
+    goal_functor(HEAD, NAME, _),
+    clause_body(CLAUSE, GOALS),
     phrase(starts_with_edge, GOALS)
 )
 ```

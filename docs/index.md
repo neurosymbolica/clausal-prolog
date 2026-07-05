@@ -54,9 +54,9 @@ CLAUSAL_IPYTHON=True ipython
 Then solve a Sudoku puzzle interactively:
 
 ```python
-in_ [1]: from clausal.examples.sudoku import *
+In [1]: from clausal.examples.sudoku import *
 
-in_ [2]: *(ROWS is [
+In [2]: *(ROWS is [
    ...:   [1, _, _, 8, _, 4, _, _, _],
    ...:   [_, 2, _, _, _, _, 4, 5, 6],
    ...:   [_, _, 3, 2, _, 5, _, _, _],

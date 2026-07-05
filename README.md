@@ -17,7 +17,7 @@ system, with full constraint solving, tabling, DCGs, and a rich standard library
 - **Higher-order** — `maplist/2,3`, `foldl/4`, `include/3`, `exclude/3`
 - **Python interop** — `++expr` escape, lambda goal closures, f-string support in terms
 - **SciPy integration** — wrappers for `scipy.special`, `scipy.linalg`, `scipy.optimize`, `scipy.interpolate`, `scipy.signal`
-- **Regex** — `Match/2,3`, `Search/2,3`, `Replace/4`, `Split/3` with auto-binding goal expansion
+- **Regex** — `match/2,3`, `search/2,3`, `replace/4`, `split/3` with auto-binding goal expansion
 - **Term expansion** — macro system for source-level term rewriting
 - **C extensions** — fast logic variables, trail-based backtracking, trampoline (no WAM)
 
@@ -34,16 +34,16 @@ Requires Python ≥ 3.13 and a C compiler (used automatically by pip when buildi
 ### `.clausal` source files
 
 Facts use a trailing comma. Rules use `<-` with a parenthesised, comma-separated body.
-Predicate names are CamelCase; variables are ALLCAPS.
+Predicate names are lowercase (`snake_case` by convention); variables are ALL_CAPS.
 
 ```prolog
 # family.clausal
-Parent(tom, bob),
-Parent(tom, liz),
-Parent(bob, ann),
-Parent(bob, pat),
+parent(tom, bob),
+parent(tom, liz),
+parent(bob, ann),
+parent(bob, pat),
 
-Grandparent(X, Z) <- (Parent(X, Y), Parent(Y, Z))
+grandparent(X, Z) <- (parent(X, Y), parent(Y, Z))
 ```
 
 ```python

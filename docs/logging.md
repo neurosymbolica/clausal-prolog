@@ -7,13 +7,13 @@ The `log` module provides structured logging predicates backed by Python's `logg
 Since Python's `logging` module is the backend, all of Python's handler ecosystem is available — file rotation, syslog, SMTP, JSON formatters, etc.
 
 ```clausal
--import_from(log, [GetLogger, Info, Debug, Warning, Error, SetLevel])
+-import_from(log, [get_logger, info, debug, warning, error, set_level])
 
 Main(NAME) <- (
-    GetLogger("myapp", L),
-    SetLevel(L, "debug"),
-    Debug(L, f"Starting with name={NAME}"),
-    Info(L, f"Hello, {NAME}!")
+    get_logger("myapp", L),
+    set_level(L, "debug"),
+    debug(L, f"Starting with name={NAME}"),
+    info(L, f"Hello, {NAME}!")
 )
 ```
 
@@ -23,8 +23,8 @@ Or via [module import](import.md):
 -import_module(log)
 
 Main <- (
-    log.GetLogger("myapp", L),
-    log.Info(L, "ready")
+    log.get_logger("myapp", L),
+    log.info(L, "ready")
 )
 ```
 
@@ -34,11 +34,11 @@ Main <- (
 
 ```clausal
 -import_from(log, [
-    GetLogger, Debug, Info, Warning, Error, Critical,
-    SetLevel, GetLevel, IsEnabledFor, Log,
-    AddHandler, RemoveHandler,
-    StreamHandler, FileHandler, SetFormatter,
-    BasicConfig
+    get_logger, debug, info, warning, error, critical,
+    set_level, get_level, is_enabled_for, log,
+    add_handler, remove_handler,
+    stream_handler, file_handler, set_formatter,
+    basic_config
 ])
 ```
 
@@ -46,7 +46,7 @@ The module name is `log` (not `logging`) to avoid shadowing Python's stdlib `log
 
 ---
 
-## Log levels
+## log levels
 
 Levels follow Python's standard hierarchy (ascending severity):
 
@@ -66,53 +66,53 @@ Level names are case-insensitive strings when passed to predicates.
 
 All logging predicates **always succeed** — they are side-effects. A message below the logger's configured level is silently discarded (the predicate still succeeds).
 
-### `Debug/1`, `Debug/2`
+### `debug/1`, `debug/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:debug_sig"
 ```
 
-Log `Msg` at DEBUG level. The arity-1 form uses the default `"clausal"` logger.
+log `Msg` at DEBUG level. The arity-1 form uses the default `"clausal"` logger.
 
-### `Info/1`, `Info/2`
+### `info/1`, `info/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:info_sig"
 ```
 
-Log at INFO level.
+log at INFO level.
 
-### `Warning/1`, `Warning/2`
+### `warning/1`, `warning/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:warning_sig"
 ```
 
-Log at WARNING level.
+log at WARNING level.
 
-### `Error/1`, `Error/2`
+### `error/1`, `error/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:error_sig"
 ```
 
-Log at ERROR level.
+log at ERROR level.
 
-### `Critical/1`, `Critical/2`
+### `critical/1`, `critical/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:critical_sig"
 ```
 
-Log at CRITICAL level.
+log at CRITICAL level.
 
-### `Log/3`
+### `log/3`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:log_sig"
 ```
 
-Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an integer.
+log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an integer.
 
 ### Messages and f-strings
 
@@ -128,7 +128,7 @@ Logic variables in f-strings are auto-dereferenced at search time.
 
 ## Logger management
 
-### `GetLogger/1`, `GetLogger/2`
+### `get_logger/1`, `get_logger/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:get_logger_sig"
@@ -136,9 +136,9 @@ Logic variables in f-strings are auto-dereferenced at search time.
 
 Unify `Logger` with a Python `logging.Logger` instance. The arity-1 form returns the default `"clausal"` logger. Logger objects are opaque — they unify via identity, not structure.
 
-Python's logger hierarchy applies: `GetLogger("myapp.db", L)` creates a child of `"myapp"`. Calling `GetLogger` with the same name always returns the same logger instance.
+Python's logger hierarchy applies: `get_logger("myapp.db", L)` creates a child of `"myapp"`. Calling `get_logger` with the same name always returns the same logger instance.
 
-### `SetLevel/2`
+### `set_level/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:set_level_sig"
@@ -146,7 +146,7 @@ Python's logger hierarchy applies: `GetLogger("myapp.db", L)` creates a child of
 
 Set the logger's level. Messages below this level will be discarded (but the logging predicate still succeeds). `Level` is a string or integer.
 
-### `GetLevel/2`
+### `get_level/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:get_level_sig"
@@ -154,7 +154,7 @@ Set the logger's level. Messages below this level will be discarded (but the log
 
 Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`, `"WARNING"`).
 
-### `IsEnabledFor/2`
+### `is_enabled_for/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:is_enabled_for_sig"
@@ -164,7 +164,7 @@ Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`, `"WARNING"
 
 ```clausal
 Process(L, DATA) <- (
-    (IsEnabledFor(L, "debug"), Debug(L, f"Processing: {DATA}") or True),
+    (is_enabled_for(L, "debug"), debug(L, f"Processing: {DATA}") or True),
     do_work(DATA)
 )
 ```
@@ -173,23 +173,23 @@ Process(L, DATA) <- (
 
 ## Handler management
 
-### `StreamHandler/2`
+### `stream_handler/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:stream_handler_sig"
 ```
 
-Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
+Create a `logging.stream_handler`. `StreamName` is `"stdout"` or `"stderr"`.
 
-### `FileHandler/2`
+### `file_handler/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:file_handler_sig"
 ```
 
-Create a `logging.FileHandler` that writes to the given file path.
+Create a `logging.file_handler` that writes to the given file path.
 
-### `SetFormatter/2`
+### `set_formatter/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:set_formatter_sig"
@@ -197,7 +197,7 @@ Create a `logging.FileHandler` that writes to the given file path.
 
 Set a `logging.Formatter` on the handler using Python's format string syntax (e.g. `"%(asctime)s [%(levelname)s] %(message)s"`).
 
-### `AddHandler/2`
+### `add_handler/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:add_handler_sig"
@@ -205,7 +205,7 @@ Set a `logging.Formatter` on the handler using Python's format string syntax (e.
 
 Add a handler to the logger.
 
-### `RemoveHandler/2`
+### `remove_handler/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:remove_handler_sig"
@@ -213,7 +213,7 @@ Add a handler to the logger.
 
 Remove a handler from the logger.
 
-### `BasicConfig/1`
+### `basic_config/1`
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:basic_config_sig"
@@ -258,7 +258,7 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
 
     1. **Logger objects are opaque Python values** — passed around via unification, not inspectable as terms.
     2. **Logging predicates always succeed** — they are side effects. Level filtering happens inside Python's logging; the Clausal predicate succeeds regardless.
-    3. **`IsEnabledFor/2` is the exception** — it succeeds or fails based on level, useful for guarding expensive message construction.
+    3. **`is_enabled_for/2` is the exception** — it succeeds or fails based on level, useful for guarding expensive message construction.
     4. **Level names are strings** — maps to Python constants internally. Both `"warn"`/`"warning"` and `"fatal"`/`"critical"` are accepted.
     5. **f-string messages** — no special formatting needed; Clausal's f-string support handles interpolation with auto-deref of logic variables.
     6. **Module name is `log`** — avoids shadowing Python's `logging` stdlib module in the import machinery.

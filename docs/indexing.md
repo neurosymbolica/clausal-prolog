@@ -41,7 +41,7 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
 
     ### Bucket merging
 
-    A critical correctness requirement: **clause ordering must be preserved.** in_ Prolog and clausal, clause order determines solution order. Consider:
+    A critical correctness requirement: **clause ordering must be preserved.** In Prolog and clausal, clause order determines solution order. Consider:
 
     ```
     f(1, "a"),          # clause 0, key=1

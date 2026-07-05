@@ -12,9 +12,9 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.uuid import (
-    UUIDv4, UUIDv1, UUIDv3, UUIDv5,
-    UUIDStr, UUIDHex, UUIDUrn, UUIDBytes, UUIDInt,
-    UUIDVersion, UUIDFields, IsUUID,
+    uuid_v4, uuid_v1, uuid_v3, uuid_v5,
+    uuid_str, uuid_hex, uuid_urn, uuid_bytes, uuid_int,
+    uuid_version, uuid_fields, is_uuid,
     _uuid4_1, _uuid1_1, _uuid3_3, _uuid5_3,
     _uuid_str_2, _uuid_hex_2, _uuid_urn_2, _uuid_bytes_2, _uuid_int_2,
     _uuid_version_2, _uuid_fields_7, _is_uuid_1,
@@ -47,7 +47,7 @@ def trampoline_solutions(pred, *args):
     return solutions, trail
 
 
-_UUID_IMPORT = '-import_from(uuid, [UUIDv4, UUIDv1, UUIDv3, UUIDv5, UUIDStr, UUIDHex, UUIDUrn, UUIDBytes, UUIDInt, UUIDVersion, UUIDFields, IsUUID])\n'
+_UUID_IMPORT = '-import_from(uuid, [uuid_v4, uuid_v1, uuid_v3, uuid_v5, uuid_str, uuid_hex, uuid_urn, uuid_bytes, uuid_int, uuid_version, uuid_fields, is_uuid])\n'
 
 
 def _load(name, src_text, tmp_path):
@@ -87,7 +87,7 @@ class TestUuid4:
     def test_uuid4_trampoline(self):
         # nv
         v = Var()
-        solutions, trail = trampoline_solutions(UUIDv4, v)
+        solutions, trail = trampoline_solutions(uuid_v4, v)
         assert len(solutions) == 1
         assert isinstance(deref(v), uuid.UUID)
 
@@ -108,7 +108,7 @@ class TestUuid1:
     def test_uuid1_trampoline(self):
         # nv
         v = Var()
-        solutions, trail = trampoline_solutions(UUIDv1, v)
+        solutions, trail = trampoline_solutions(uuid_v1, v)
         assert len(solutions) == 1
         assert isinstance(deref(v), uuid.UUID)
 
@@ -158,7 +158,7 @@ class TestUuid3:
     def test_uuid3_trampoline(self):
         # nv
         v = Var()
-        solutions, _ = trampoline_solutions(UUIDv3, "dns", "example.com", v)
+        solutions, _ = trampoline_solutions(uuid_v3, "dns", "example.com", v)
         assert len(solutions) == 1
 
 
@@ -182,11 +182,11 @@ class TestUuid5:
     def test_uuid5_trampoline(self):
         # nv
         v = Var()
-        solutions, _ = trampoline_solutions(UUIDv5, "url", "test", v)
+        solutions, _ = trampoline_solutions(uuid_v5, "url", "test", v)
         assert len(solutions) == 1
 
 
-# ── UUIDStr ──────────────────────────────────────────────────────────────
+# ── uuid_str ──────────────────────────────────────────────────────────────
 
 
 class TestUUIDStr:
@@ -234,7 +234,7 @@ class TestUUIDStr:
         assert len(results) == 0
 
 
-# ── UUIDHex ──────────────────────────────────────────────────────────────
+# ── uuid_hex ──────────────────────────────────────────────────────────────
 
 
 class TestUUIDHex:
@@ -269,7 +269,7 @@ class TestUUIDHex:
         assert len(results) == 0
 
 
-# ── UUIDUrn ──────────────────────────────────────────────────────────────
+# ── uuid_urn ──────────────────────────────────────────────────────────────
 
 
 class TestUUIDUrn:
@@ -298,7 +298,7 @@ class TestUUIDUrn:
         assert deref(u_out) == u_in
 
 
-# ── UUIDBytes ────────────────────────────────────────────────────────────
+# ── uuid_bytes ────────────────────────────────────────────────────────────
 
 
 class TestUUIDBytes:
@@ -333,7 +333,7 @@ class TestUUIDBytes:
         assert len(results) == 0
 
 
-# ── UUIDInt ──────────────────────────────────────────────────────────────
+# ── uuid_int ──────────────────────────────────────────────────────────────
 
 
 class TestUUIDInt:
@@ -368,7 +368,7 @@ class TestUUIDInt:
         assert len(results) == 0
 
 
-# ── UUIDVersion ──────────────────────────────────────────────────────────
+# ── uuid_version ──────────────────────────────────────────────────────────
 
 
 class TestUUIDVersion:
@@ -411,7 +411,7 @@ class TestUUIDVersion:
         assert len(results) == 0
 
 
-# ── UUIDFields ───────────────────────────────────────────────────────────
+# ── uuid_fields ───────────────────────────────────────────────────────────
 
 
 class TestUUIDFields:
@@ -436,7 +436,7 @@ class TestUUIDFields:
         assert len(results) == 0
 
 
-# ── IsUUID ───────────────────────────────────────────────────────────────
+# ── is_uuid ───────────────────────────────────────────────────────────────
 
 
 class TestIsUUID:
@@ -508,32 +508,32 @@ class TestEdgeCases:
 class TestClausalInline:
     def test_uuid4_in_clausal(self, tmp_path):
         # nv
-        mod = _load("ui1", 'Test <- (UUIDv4(_u) and IsUUID(_u))\n', tmp_path)
+        mod = _load("ui1", 'Test <- (uuid_v4(_u) and is_uuid(_u))\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid_str_roundtrip_clausal(self, tmp_path):
         # nv
-        mod = _load("ui2", 'Test <- (UUIDv4(_u) and UUIDStr(_u, _s) and UUIDStr(_u2, _s) and UUIDStr(_u2, _s2) and _s == _s2)\n', tmp_path)
+        mod = _load("ui2", 'Test <- (uuid_v4(_u) and uuid_str(_u, _s) and uuid_str(_u2, _s) and uuid_str(_u2, _s2) and _s == _s2)\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid3_clausal(self, tmp_path):
         # nv
-        mod = _load("ui3", 'Test <- (UUIDv3("dns", "example.com", _u) and UUIDVersion(_u, 3))\n', tmp_path)
+        mod = _load("ui3", 'Test <- (uuid_v3("dns", "example.com", _u) and uuid_version(_u, 3))\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid5_clausal(self, tmp_path):
         # nv
-        mod = _load("ui4", 'Test <- (UUIDv5("url", "test", _u) and UUIDVersion(_u, 5))\n', tmp_path)
+        mod = _load("ui4", 'Test <- (uuid_v5("url", "test", _u) and uuid_version(_u, 5))\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid_int_clausal(self, tmp_path):
         # nv
-        mod = _load("ui5", 'Test <- (UUIDv4(_u) and UUIDInt(_u, _n) and UUIDInt(_u2, _n) and UUIDInt(_u2, _n2) and _n == _n2)\n', tmp_path)
+        mod = _load("ui5", 'Test <- (uuid_v4(_u) and uuid_int(_u, _n) and uuid_int(_u2, _n) and uuid_int(_u2, _n2) and _n == _n2)\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid_hex_clausal(self, tmp_path):
         # nv
-        mod = _load("ui6", 'Test <- (UUIDv4(_u) and UUIDHex(_u, _h) and UUIDHex(_u2, _h) and UUIDHex(_u2, _h2) and _h == _h2)\n', tmp_path)
+        mod = _load("ui6", 'Test <- (uuid_v4(_u) and uuid_hex(_u, _h) and uuid_hex(_u2, _h) and uuid_hex(_u2, _h2) and _h == _h2)\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
 

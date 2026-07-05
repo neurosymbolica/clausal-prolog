@@ -9,14 +9,14 @@ The implementation lives in `clausal/modules/py/json.py`.
 ## Import
 
 ```clausal
--import_from(py.json, [Parse, Generate, PrettyGenerate, Get, ReadFile, WriteFile])
+-import_from(py.json, [parse, generate, pretty_generate, get, read_file, write_file])
 ```
 
 Or via [module import](import.md):
 
 ```clausal
 -import_module(py.json)
-# then use py.json.Parse(S_, T_), py.json.Get(T_, "key", V_), etc.
+# then use py.json.parse(S_, T_), py.json.get(T_, "key", V_), etc.
 ```
 
 ---
@@ -38,64 +38,64 @@ Conversion is recursive: nested JSON objects produce nested DictTerms.
 
 ## Predicates
 
-### Parse/2
+### parse/2
 
-`Parse(String, Term)` — parse a JSON string into Clausal terms. Fails on invalid JSON or unbound String.
-
-```clausal
-parse_config(S, CONFIG) <- Parse(S, CONFIG)
-```
-
-### Generate/2
-
-`Generate(Term, String)` — serialize a Clausal term to a compact JSON string. Fails if the term contains unbound [variables](syntax.md).
+`parse(String, Term)` — parse a JSON string into Clausal terms. Fails on invalid JSON or unbound String.
 
 ```clausal
-to_json(DATA, JSON) <- Generate(DATA, JSON)
+parse_config(S, CONFIG) <- parse(S, CONFIG)
 ```
 
-### PrettyGenerate/2
+### generate/2
 
-`PrettyGenerate(Term, String)` — like Generate but with 2-space indentation.
+`generate(Term, String)` — serialize a Clausal term to a compact JSON string. Fails if the term contains unbound [variables](syntax.md).
 
-### Get/3
+```clausal
+to_json(DATA, JSON) <- generate(DATA, JSON)
+```
 
-`Get(Term, Key, Value)` — extract a value from a DictTerm by key.
+### pretty_generate/2
+
+`pretty_generate(Term, String)` — like generate but with 2-space indentation.
+
+### get/3
+
+`get(Term, Key, Value)` — extract a value from a DictTerm by key.
 
 - **Key bound**: direct lookup, unify Value. Fails if key not found.
 - **Key unbound**: enumerate all key-value pairs via backtracking.
 
 ```clausal
--import_from(py.json, [Parse, Get])
+-import_from(py.json, [parse, get])
 
 get_name(JSON_STRING, NAME) <- (
-    Parse(JSON_STRING, DATA),
-    Get(DATA, "name", NAME)
+    parse(JSON_STRING, DATA),
+    get(DATA, "name", NAME)
 )
 ```
 
-### ReadFile/2
+### read_file/2
 
-`ReadFile(Path, Term)` — read and parse a JSON file. Fails on file or parse error.
+`read_file(Path, Term)` — read and parse a JSON file. Fails on file or parse error.
 
 ```clausal
-load_config(CONFIG) <- ReadFile("config.json", CONFIG)
+load_config(CONFIG) <- read_file("config.json", CONFIG)
 ```
 
-### WriteFile/2
+### write_file/2
 
-`WriteFile(Path, Term)` — serialize a term and write to a JSON file (2-space indented). Fails if term contains unbound variables.
+`write_file(Path, Term)` — serialize a term and write to a JSON file (2-space indented). Fails if term contains unbound variables.
 
 ---
 
 ## Example
 
 ```clausal
--import_from(py.json, [Parse, Generate, Get, ReadFile])
+-import_from(py.json, [parse, generate, get, read_file])
 
-load_config(CONFIG) <- ReadFile("config.json", CONFIG)
+load_config(CONFIG) <- read_file("config.json", CONFIG)
 
-get_setting(CONFIG, KEY, VALUE) <- Get(CONFIG, KEY, VALUE)
+get_setting(CONFIG, KEY, VALUE) <- get(CONFIG, KEY, VALUE)
 
-config_to_json(CONFIG, JSON) <- Generate(CONFIG, JSON)
+config_to_json(CONFIG, JSON) <- generate(CONFIG, JSON)
 ```

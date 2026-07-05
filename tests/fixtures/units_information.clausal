@@ -6,11 +6,11 @@
     Kibibit, Mebibit, Gibibit,
     kibi, mebi, gibi, tebi,
     Metre,
-    StripUnits])
+    strip_units])
 
 # ── Base unit ─────────────────────────────────────────────────────────────────
 
-Test("bit roundtrip") <- StripUnits(1(Bit), 1)  # nv
+Test("bit roundtrip") <- strip_units(1(Bit), 1)  # nv
 
 Test("bit hasbits") <- has_units(1(Bit), Bit)  # nv
 
@@ -19,10 +19,10 @@ Test("bit hasbits") <- has_units(1(Bit), Bit)  # nv
 Test("byte is 8 bits") <- (
     B := 1(Byte),
     has_units(B, Bit),
-    StripUnits(B, 8.0)
+    strip_units(B, 8.0)
 )  # nv
 
-Test("byte n(Byte) sugar") <- StripUnits(10(Byte), 80.0)  # nv
+Test("byte n(Byte) sugar") <- strip_units(10(Byte), 80.0)  # nv
 
 # ── Decimal byte multiples ────────────────────────────────────────────────────
 
@@ -82,25 +82,25 @@ Test("gigabit stores as bits") <- (
 Test("kibibyte is 8192 bits") <- (
     D := 1(Kibibyte),
     has_units(D, Bit),
-    StripUnits(D, 8192)
+    strip_units(D, 8192)
 )  # nv
 
 Test("mebibyte stores as bits") <- (
     D := 1(Mebibyte),
     has_units(D, Bit),
-    StripUnits(D, ++(8 * 2**20))
+    strip_units(D, ++(8 * 2**20))
 )  # nv
 
 Test("gibibyte stores as bits") <- (
     D := 1(Gibibyte),
     has_units(D, Bit),
-    StripUnits(D, ++(8 * 2**30))
+    strip_units(D, ++(8 * 2**30))
 )  # nv
 
 Test("tebibyte stores as bits") <- (
     D := 1(Tebibyte),
     has_units(D, Bit),
-    StripUnits(D, ++(8 * 2**40))
+    strip_units(D, ++(8 * 2**40))
 )  # nv
 
 # ── Binary bit multiples ──────────────────────────────────────────────────────
@@ -108,19 +108,19 @@ Test("tebibyte stores as bits") <- (
 Test("kibibit stores as bits") <- (
     D := 1(Kibibit),
     has_units(D, Bit),
-    StripUnits(D, 1024)
+    strip_units(D, 1024)
 )  # nv
 
 Test("mebibit stores as bits") <- (
     D := 1(Mebibit),
     has_units(D, Bit),
-    StripUnits(D, ++(2**20))
+    strip_units(D, ++(2**20))
 )  # nv
 
 Test("gibibit stores as bits") <- (
     D := 1(Gibibit),
     has_units(D, Bit),
-    StripUnits(D, ++(2**30))
+    strip_units(D, ++(2**30))
 )  # nv
 
 # ── Binary prefix constants used in ++ expressions ───────────────────────────
@@ -128,19 +128,19 @@ Test("gibibit stores as bits") <- (
 Test("4 gibibytes via prefix") <- (
     D := ++(4 * gibi * Byte),
     has_units(D, Bit),
-    StripUnits(D, ++(4 * 2**30 * 8))
+    strip_units(D, ++(4 * 2**30 * 8))
 )  # nv
 
 Test("512 mebibytes via prefix") <- (
     D := ++(512 * mebi * Byte),
     has_units(D, Bit),
-    StripUnits(D, ++(512 * 2**20 * 8))
+    strip_units(D, ++(512 * 2**20 * 8))
 )  # nv
 
 Test("2 tebibytes via prefix") <- (
     D := ++(2 * tebi * Byte),
     has_units(D, Bit),
-    StripUnits(D, ++(2 * 2**40 * 8))
+    strip_units(D, ++(2 * 2**40 * 8))
 )  # nv
 
 # ── Arithmetic between information quantities ─────────────────────────────────
@@ -148,13 +148,13 @@ Test("2 tebibytes via prefix") <- (
 Test("add bytes and bits") <- (
     SUM := 1(Byte) + 8(Bit),
     has_units(SUM, Bit),
-    StripUnits(SUM, 16.0)
+    strip_units(SUM, 16.0)
 )  # nv
 
 Test("kibibyte minus 1 byte") <- (
     D := 1(Kibibyte) - 1(Byte),
     has_units(D, Bit),
-    StripUnits(D, ++(8 * 1023))
+    strip_units(D, ++(8 * 1023))
 )  # nv
 
 Test("kilobyte plus kilobyte") <- (
@@ -166,7 +166,7 @@ Test("kilobyte plus kilobyte") <- (
 
 Test("dims cancel: byte over byte is dimensionless") <- (
     R := 16(Byte) / 2(Byte),
-    StripUnits(R, 8.0)
+    strip_units(R, 8.0)
 )  # nv
 
 # ── has_units checks ───────────────────────────────────────────────────────────

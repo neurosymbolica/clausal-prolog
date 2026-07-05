@@ -239,7 +239,7 @@ Files are loaded via Python's [import system](import.md). `import my_module` loa
 
 ### PredicateMeta
 
-Every predicate is a Python class with `PredicateMeta` as its metaclass. in_ `.clausal` files this is generated automatically from clause heads. For programmatic use:
+Every predicate is a Python class with `PredicateMeta` as its metaclass. In `.clausal` files this is generated automatically from clause heads. For programmatic use:
 
 ```python
 from clausal.logic.predicate import PredicateMeta

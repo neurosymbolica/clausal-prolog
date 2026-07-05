@@ -43,7 +43,7 @@ automatically allocated as fresh logic variables.
 
 ## How solutions display
 
-in_ a Jupyter notebook, all solutions are rendered at once (up to a configurable
+In a Jupyter notebook, all solutions are rendered at once (up to a configurable
 limit) as styled HTML.  Each solution is separated by **or**:
 
 ```python
@@ -61,7 +61,7 @@ Displays:
 > X is 3<br>
 > No more solutions.
 
-in_ terminal IPython, the same code uses interactive keypresses instead.
+In terminal IPython, the same code uses interactive keypresses instead.
 
 ---
 
@@ -106,7 +106,7 @@ Test("alice is grandparent of dave") <- (grandparent("alice", "dave"))
 Test("alice is grandparent of eve") <- (grandparent("alice", "eve"))
 ```
 
-in_ a notebook you would query this as:
+In a notebook you would query this as:
 
 ```python
 import family

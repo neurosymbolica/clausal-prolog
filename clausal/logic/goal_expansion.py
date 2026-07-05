@@ -5,12 +5,12 @@ expansion but before compilation in the ``compile_module`` pipeline.
 
 Built-in expansions
 -------------------
-- **Regex pre-compilation + auto-binding** (Phase 3): static ``Match/2``
-  and ``Search/2`` patterns with ALLCAPS/leading-underscore named groups
-  are rewritten to ``Match/3`` + ``Unify`` chains.  The compiled
+- **Regex pre-compilation + auto-binding** (Phase 3): static ``match/2``
+  and ``search/2`` patterns with ALLCAPS/leading-underscore named groups
+  are rewritten to ``match/3`` + ``Unify`` chains.  The compiled
   ``re.Pattern`` object is injected into ``module_dict`` for runtime use.
 - **Arrow match patterns** (reflection sugar): a ``(HEAD <- BODY)``
-  expression in an argument of a reflection builtin (``ReifiedClause`` et
+  expression in an argument of a reflection builtin (``reified_clause`` et
   al.) is rewritten into the equivalent reified-vocabulary pattern —
   ``Clause(Goal(...), [...])`` construction — so matchers are written in
   natural clause syntax.  Pattern variables remain the matcher clause's
@@ -232,9 +232,9 @@ def _get_call_name(goal: Call) -> str | None:
 
 
 def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
-    """Expand Match/2 and Search/2 with auto-binding + pre-compilation.
+    """Expand match/2 and search/2 with auto-binding + pre-compilation.
 
-    Also pre-compiles static patterns in Match/3 and Search/3.
+    Also pre-compiles static patterns in match/3 and search/3.
     """
     if not isinstance(goal, Call):
         return goal
@@ -242,9 +242,9 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
     func_name = _get_call_name(goal)
     if func_name is None:
         return goal
-    # Support dotted names like "clausal.regex.Match"
+    # Support dotted names like "clausal.regex.match"
     short_name = func_name.rsplit(".", 1)[-1] if "." in func_name else func_name
-    if short_name not in ("Match", "Search"):
+    if short_name not in ("match", "search"):
         return goal
 
     nargs = len(goal.args)
@@ -267,7 +267,7 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
     if nargs != 2:
         return goal
 
-    # Match/2 or Search/2: check for auto-bindable groups.
+    # match/2 or search/2: check for auto-bindable groups.
     bindable = {
         name: idx
         for name, idx in compiled.groupindex.items()
@@ -278,7 +278,7 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
         new_args = [LoadName(name=re_key)] + goal.args[1:]
         return Call(func=goal.func, args=new_args, kwargs=goal.kwargs)
 
-    # Auto-bind: rewrite to Match/3 + Unify chain.
+    # Auto-bind: rewrite to match/3 + Unify chain.
     groups_var = Var()
 
     match_goal = Call(
@@ -310,7 +310,7 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
 
 # ── Arrow match-pattern expansion (reflection sugar) ────────────────────────
 #
-# ``ReifiedClause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))`` — the arrow
+# ``reified_clause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))`` — the arrow
 # argument arrives here as a runtime ``Predicate`` node (head/goals are
 # middle-layer ``Call`` nodes, variables are the clause's real ``Var``
 # objects).  It is rewritten into construction of the reified vocabulary,
@@ -327,8 +327,8 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
 # the reifier's raw-operator representation.
 
 _REFLECTION_BUILTIN_NAMES = frozenset((
-    "ReifiedItem", "ReifiedClause", "ReifiedFileItem", "ReifiedSubterm",
-    "ClauseHead", "ClauseBody", "GoalFunctor",
+    "reified_item", "reified_clause", "reified_file_item", "reified_subterm",
+    "clause_head", "clause_body", "goal_functor",
 ))
 
 # Vocabulary functors referenced by generated pattern constructions.
@@ -344,7 +344,7 @@ def _is_reflection_goal(goal: Call, ctx: _ExpansionContext) -> bool:
     name = _get_call_name(goal)
     if name is None:
         return False
-    # Imported names are remapped to dotted form ("reflection.ReifiedClause");
+    # Imported names are remapped to dotted form ("reflection.reified_clause");
     # _process_imports stores the value under both the short and dotted keys.
     short_name = name.rsplit(".", 1)[-1]
     if short_name not in _REFLECTION_BUILTIN_NAMES:

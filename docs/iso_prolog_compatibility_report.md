@@ -66,7 +66,7 @@ The Prolog-to-Clausal translator now:
   listing pure alternatives (dif/2, once/1, indexing, reified ITE)
 - **Rejects** `(C -> T ; E)` and bare `(C -> T)` with `PrologTranslationError`,
   suggesting reified conditionals, separate clauses with dif/2 guards, or constraints
-- in_ the **reverse direction**, Clausal's reified `THEN if COND else ELSE` is
+- In the **reverse direction**, Clausal's reified `THEN if COND else ELSE` is
   also rejected when translating to Prolog, since the semantics differ
 
 ---
@@ -82,11 +82,11 @@ representation.
 ### What This Means
 
 ```prolog
-% in_ Prolog
+% In Prolog
 X = "hello"    % X = [h, e, l, l, o]  (list of atoms, each a single char)
 ```
 
-in_ Clausal, when running translated Prolog code, `"hello"` must behave as
+In Clausal, when running translated Prolog code, `"hello"` must behave as
 `['h', 'e', 'l', 'l', 'o']` — a list of single-character atoms.
 
 ### Implementation
@@ -175,7 +175,7 @@ red() is red               # True
 
 - **`-use_module(library(lists))`** — imports a Prolog module, passing it through
   the Prolog-to-Clausal translation layer first
-- **`-import_from(regex, [Match, Search])`** / **`-import_module(regex)`** — imports
+- **`-import_from(regex, [match, search])`** / **`-import_module(regex)`** — imports
   a Python/Clausal module directly (existing mechanism, unchanged)
 
 ### How `use_module` Works
@@ -260,7 +260,7 @@ largely irrelevant — constraint-based arithmetic doesn't have this ambiguity.
 ### User-Defined Operators
 
 Prolog `:- op(Prec, Type, Name)` directives are consumed by the translation
-layer's parser (the operator table is mutable during parsing). in_ the emitted
+layer's parser (the operator table is mutable during parsing). In the emitted
 Clausal code, uses of user-defined operators become predicate calls:
 
 ```prolog

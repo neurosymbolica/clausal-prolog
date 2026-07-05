@@ -111,7 +111,7 @@ Test("compound") <- compound(point(1, 2, 3))
 ### callable_/1
 
 `callable_(X)` — succeeds if `X` is an atom (declared or string) or a
-compound term. in_ Prolog terms, something that could appear as a goal.
+compound term. In Prolog terms, something that could appear as a goal.
 
 ```clausal
 -private([red])

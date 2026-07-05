@@ -8,13 +8,13 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 
 from clausal.modules.py.hash import (
-    Hash, HashBytes, _hash_3, _hash_bytes_3,
+    hash, hash_bytes, _hash_3, _hash_bytes_3,
 )
 from clausal.modules.py.hmac import (
-    sign, Verify, _sign_3, _sign_4, _verify_3, _verify_4,
+    sign, verify, _sign_3, _sign_4, _verify_3, _verify_4,
 )
 from clausal.modules.py.pbkdf2 import (
-    Derive, _derive_4, _derive_5,
+    derive, _derive_4, _derive_5,
 )
 
 
@@ -41,13 +41,13 @@ def trampoline_solutions(pred, *args):
     return solutions, trail
 
 
-# ── Hash/3 ───────────────────────────────────────────────────────────────
+# ── hash/3 ───────────────────────────────────────────────────────────────
 
 
 class TestHash:
 
     def test_sha256_known_vector(self):
-        """Hash("sha256", "abc", H) → known hex digest."""
+        """hash("sha256", "abc", H) → known hex digest."""
         # nv
         h = Var()
         sols, trail = simple_solutions(_hash_3, "sha256", "abc", h)
@@ -78,7 +78,7 @@ class TestHash:
         assert deref(h) == "a9993e364706816aba3e25717850c26c9cd0d89d"
 
     def test_bytes_input(self):
-        """Hash accepts bytes data."""
+        """hash accepts bytes data."""
         # nv
         h = Var()
         sols, trail = simple_solutions(_hash_3, "sha256", b"abc", h)
@@ -106,12 +106,12 @@ class TestHash:
     def test_trampoline_protocol(self):
         # nv
         h = Var()
-        sols, trail = trampoline_solutions(Hash, "sha256", "abc", h)
+        sols, trail = trampoline_solutions(hash, "sha256", "abc", h)
         assert len(sols) == 1
         assert deref(h) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 
 
-# ── HashBytes/3 ──────────────────────────────────────────────────────────
+# ── hash_bytes/3 ──────────────────────────────────────────────────────────
 
 
 class TestHashBytes:
@@ -188,7 +188,7 @@ class TestHmacSign:
         assert len(sols) == 1
 
 
-# ── Verify/3,4 ───────────────────────────────────────────────────────────
+# ── verify/3,4 ───────────────────────────────────────────────────────────
 
 
 class TestHmacVerify:
@@ -215,7 +215,7 @@ class TestHmacVerify:
         assert len(sols) == 1
 
 
-# ── Derive/4,5 ───────────────────────────────────────────────────────────
+# ── derive/4,5 ───────────────────────────────────────────────────────────
 
 
 class TestPbkdf2:
@@ -238,7 +238,7 @@ class TestPbkdf2:
         assert deref(dk1) != deref(dk2)
 
     def test_default_key_length(self):
-        """Derive/4 uses 32-byte key length."""
+        """derive/4 uses 32-byte key length."""
         # nv
         dk4 = Var()
         dk5 = Var()
@@ -261,5 +261,5 @@ class TestPbkdf2:
     def test_trampoline_protocol(self):
         # nv
         dk = Var()
-        sols, trail = trampoline_solutions(Derive, "password", "salt", 1, dk)
+        sols, trail = trampoline_solutions(derive, "password", "salt", 1, dk)
         assert len(sols) == 1

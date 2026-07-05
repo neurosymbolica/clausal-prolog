@@ -1,6 +1,6 @@
 # Strings as Lists of Characters
 
-in_ Clausal, strings are treated as lists of single-character strings at the
+In Clausal, strings are treated as lists of single-character strings at the
 logic level. You can use list predicates, pattern matching, and DCGs on strings
 directly — no conversion needed.
 
@@ -8,7 +8,7 @@ directly — no conversion needed.
 
 ## Why?
 
-in_ logic programming, sequences are the universal data structure. Lists hold
+In logic programming, sequences are the universal data structure. Lists hold
 elements; strings hold characters. The operations you want on both are the same:
 split, join, reverse, search, filter, iterate. Maintaining two parallel sets of
 predicates — one for lists, one for strings — doubles the API surface and forces
@@ -242,7 +242,7 @@ movement in a text editor), use the standard Python library
 
 ## Comparison with Prolog
 
-in_ Prolog systems like [Scryer Prolog](scryer.md), strings *are* lists of characters — the
+In Prolog systems like [Scryer Prolog](scryer.md), strings *are* lists of characters — the
 same data structure, with no distinction. This gives maximum uniformity at the
 cost of performance (no compact string representation) and foreign-function
 interop (every string is a linked list of character atoms).

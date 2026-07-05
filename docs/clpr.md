@@ -106,7 +106,7 @@ Integer and real variables can appear together. when an FD variable is involved 
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:mixed_fd_and_real"
 ```
 
-in_ this example, `HOURS` keeps its FD domain `{1..8}` even after participating in the real constraint `COST >= HOURS * 12.5`. The FD domain enforces integrality and holes, while the real interval handles continuous narrowing. Both hooks fire independently on unification — the variable is only valid if both agree.
+In this example, `HOURS` keeps its FD domain `{1..8}` even after participating in the real constraint `COST >= HOURS * 12.5`. The FD domain enforces integrality and holes, while the real interval handles continuous narrowing. Both hooks fire independently on unification — the variable is only valid if both agree.
 
 You can also add an FD domain to a variable that already has a real interval:
 

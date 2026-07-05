@@ -67,7 +67,7 @@ The `q()` function creates term templates in expansion rules. It quotes a term s
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:quasi_quotation"
 ```
 
-Variables inside `q()` are shared between the pattern and the replacement. in_ the example above, `X` in the input pattern is the same `X` in both output terms.
+Variables inside `q()` are shared between the pattern and the replacement. In the example above, `X` in the input pattern is the same `X` in both output terms.
 
 ### Module State Threading
 
@@ -158,15 +158,15 @@ The compiler pipeline orchestrates both expansions in sequence:
 The goal expansion for regex auto-binding shows both systems working together. when you write:
 
 ```clausal
--import_from(regex, [Match])
+-import_from(regex, [match])
 
 Test("auto-bind year") <- (
-    Match(r"(?P<YEAR>\d{4})-\d{2}", "2026-03"),
+    match(r"(?P<YEAR>\d{4})-\d{2}", "2026-03"),
     YEAR == "2026"
 )
 ```
 
-The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `Match/2` to `Match/3` with group extraction, and binds `YEAR` automatically. The regex pattern is also precompiled at load time.
+The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `match/2` to `match/3` with group extraction, and binds `YEAR` automatically. The regex pattern is also precompiled at load time.
 
 ---
 

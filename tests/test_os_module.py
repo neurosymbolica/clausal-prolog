@@ -9,8 +9,8 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.os import (
-    EnvironmentVariable, SetEnvironmentVariable, UnsetEnvironmentVariable,
-    WorkingDirectory, ChangeDirectory, Pid, Argv, Platform, CPUCount,
+    environment_variable, set_environment_variable, unset_environment_variable,
+    working_directory, change_directory, pid, argv, platform, cpu_count,
     _environment_variable_2, _set_environment_variable_2,
     _unset_environment_variable_1, _working_directory_1,
     _change_directory_1, _pid_1, _argv_1, _platform_1, _cpu_count_1,
@@ -41,7 +41,7 @@ def trampoline_solutions(pred, *args):
     return solutions, trail
 
 
-# ── EnvironmentVariable/2 ───────────────────────────────────────────────
+# ── environment_variable/2 ───────────────────────────────────────────────
 
 
 class TestEnvironmentVariable:
@@ -97,12 +97,12 @@ class TestEnvironmentVariable:
     def test_trampoline(self):
         # nv
         v = Var()
-        sols, trail = trampoline_solutions(EnvironmentVariable, "PATH", v)
+        sols, trail = trampoline_solutions(environment_variable, "PATH", v)
         assert len(sols) == 1
         assert deref(v) == os.environ["PATH"]
 
 
-# ── SetEnvironmentVariable/2 ───────────────────────────────────────────
+# ── set_environment_variable/2 ───────────────────────────────────────────
 
 
 class TestSetEnvironmentVariable:
@@ -132,7 +132,7 @@ class TestSetEnvironmentVariable:
         assert len(sols) == 0
 
 
-# ── UnsetEnvironmentVariable/1 ─────────────────────────────────────────
+# ── unset_environment_variable/1 ─────────────────────────────────────────
 
 
 class TestUnsetEnvironmentVariable:
@@ -157,7 +157,7 @@ class TestUnsetEnvironmentVariable:
         assert len(sols) == 0
 
 
-# ── WorkingDirectory/1 ─────────────────────────────────────────────────
+# ── working_directory/1 ─────────────────────────────────────────────────
 
 
 class TestWorkingDirectory:
@@ -179,12 +179,12 @@ class TestWorkingDirectory:
     def test_trampoline(self):
         # nv
         v = Var()
-        sols, trail = trampoline_solutions(WorkingDirectory, v)
+        sols, trail = trampoline_solutions(working_directory, v)
         assert len(sols) == 1
         assert deref(v) == os.getcwd()
 
 
-# ── ChangeDirectory/1 ──────────────────────────────────────────────────
+# ── change_directory/1 ──────────────────────────────────────────────────
 
 
 class TestChangeDirectory:
@@ -209,7 +209,7 @@ class TestChangeDirectory:
         assert len(sols) == 0
 
 
-# ── Pid/1 ──────────────────────────────────────────────────────────────
+# ── pid/1 ──────────────────────────────────────────────────────────────
 
 
 class TestPid:
@@ -231,12 +231,12 @@ class TestPid:
     def test_trampoline(self):
         # nv
         v = Var()
-        sols, trail = trampoline_solutions(Pid, v)
+        sols, trail = trampoline_solutions(pid, v)
         assert len(sols) == 1
         assert deref(v) == os.getpid()
 
 
-# ── Argv/1 ─────────────────────────────────────────────────────────────
+# ── argv/1 ─────────────────────────────────────────────────────────────
 
 
 class TestArgv:
@@ -251,12 +251,12 @@ class TestArgv:
     def test_trampoline(self):
         # nv
         v = Var()
-        sols, trail = trampoline_solutions(Argv, v)
+        sols, trail = trampoline_solutions(argv, v)
         assert len(sols) == 1
         assert isinstance(deref(v), list)
 
 
-# ── Platform/1 ─────────────────────────────────────────────────────────
+# ── platform/1 ─────────────────────────────────────────────────────────
 
 
 class TestPlatform:
@@ -271,12 +271,12 @@ class TestPlatform:
     def test_trampoline(self):
         # nv
         v = Var()
-        sols, trail = trampoline_solutions(Platform, v)
+        sols, trail = trampoline_solutions(platform, v)
         assert len(sols) == 1
         assert deref(v) == sys.platform
 
 
-# ── CPUCount/1 ─────────────────────────────────────────────────────────
+# ── cpu_count/1 ─────────────────────────────────────────────────────────
 
 
 class TestCPUCount:
@@ -298,6 +298,6 @@ class TestCPUCount:
     def test_trampoline(self):
         # nv
         v = Var()
-        sols, trail = trampoline_solutions(CPUCount, v)
+        sols, trail = trampoline_solutions(cpu_count, v)
         assert len(sols) == 1
         assert deref(v) == os.cpu_count()

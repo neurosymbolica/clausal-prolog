@@ -8,8 +8,8 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.csv import (
-    Parse, ParseRow, ParseRecords, Generate, GenerateRecords,
-    ReadFile, ReadRecords, WriteFile,
+    parse, parse_row, parse_records, generate, generate_records,
+    read_file, read_records, write_file,
     _parse_row_2, _parse_2, _parse_records_3,
     _generate_2, _generate_records_3,
     _read_file_2, _read_records_2, _write_file_2,
@@ -41,7 +41,7 @@ def trampoline_solutions(pred, *args):
     return solutions, trail
 
 
-# ── ParseRow/2 ──────────────────────────────────────────────────────────
+# ── parse_row/2 ──────────────────────────────────────────────────────────
 
 
 class TestParseRow:
@@ -81,12 +81,12 @@ class TestParseRow:
     def test_trampoline(self):
         # nv
         row = Var()
-        sols, trail = trampoline_solutions(ParseRow, "x,y", row)
+        sols, trail = trampoline_solutions(parse_row, "x,y", row)
         assert len(sols) == 1
         assert deref(row) == ["x", "y"]
 
 
-# ── Parse/2 ─────────────────────────────────────────────────────────────
+# ── parse/2 ─────────────────────────────────────────────────────────────
 
 
 class TestParse:
@@ -125,7 +125,7 @@ class TestParse:
         assert len(sols) == 0
 
 
-# ── ParseRecords/3 ─────────────────────────────────────────────────────
+# ── parse_records/3 ─────────────────────────────────────────────────────
 
 
 class TestParseRecords:
@@ -164,7 +164,7 @@ class TestParseRecords:
         assert len(sols) == 0
 
 
-# ── Generate/2 ─────────────────────────────────────────────────────────
+# ── generate/2 ─────────────────────────────────────────────────────────
 
 
 class TestGenerate:
@@ -188,7 +188,7 @@ class TestGenerate:
         assert '"hello, world"' in result
 
     def test_round_trip(self):
-        """Parse then generate yields same rows."""
+        """parse then generate yields same rows."""
         # nv
         original = "a,b\r\n1,2\r\n"
         rows = Var()
@@ -208,7 +208,7 @@ class TestGenerate:
         assert len(sols) == 0
 
 
-# ── GenerateRecords/3 ──────────────────────────────────────────────────
+# ── generate_records/3 ──────────────────────────────────────────────────
 
 
 class TestGenerateRecords:
@@ -236,7 +236,7 @@ class TestGenerateRecords:
         assert len(sols) == 0
 
 
-# ── ReadFile/2 & WriteFile/2 ───────────────────────────────────────────
+# ── read_file/2 & write_file/2 ───────────────────────────────────────────
 
 
 class TestFileIO:
@@ -271,7 +271,7 @@ class TestFileIO:
         assert len(sols) == 0
 
 
-# ── ReadRecords/2 ──────────────────────────────────────────────────────
+# ── read_records/2 ──────────────────────────────────────────────────────
 
 
 class TestReadRecords:

@@ -8,7 +8,7 @@ to what, and why you'd want to use it.
 
 ## The thirty-second version
 
-in_ Python, you write **functions** that compute results from inputs. in_
+In Python, you write **functions** that compute results from inputs. In
 Clausal, you write **[relations](thinking_relationally.md)** that describe when something is true about
 their arguments. A relation has no fixed inputs or outputs — the same
 definition can compute, verify, generate, and enumerate.
@@ -52,14 +52,14 @@ predicates from Python by iterating directly over predicate terms.
 
 ### Variables are unknowns, not containers
 
-in_ Python, a variable holds a value:
+In Python, a variable holds a value:
 
 ```python
 x = 5       # x is now 5
 x = x + 1   # x is now 6
 ```
 
-in_ Clausal, a logic variable is an **unknown** — it starts unbound and gets
+In Clausal, a logic variable is an **unknown** — it starts unbound and gets
 bound through unification. once bound, it cannot be reassigned (within that
 branch of search). Logic variables are written in ALLCAPS:
 
@@ -127,7 +127,7 @@ This bidirectionality is what makes relations work in all directions.
 
 ### Atoms are symbolic constants
 
-in_ logic programming, an **atom** is a symbolic constant — like an enum value
+In logic programming, an **atom** is a symbolic constant — like an enum value
 with identity. when you declare atoms in `-private` or `-module`, Clausal
 creates zero-arity classes:
 
@@ -266,7 +266,7 @@ and "Which country has Paris as its capital?"
 ### Constraint solving for free
 
 Need to solve a Sudoku, schedule a timetable, or find valid configurations?
-in_ Python, you'd reach for a solver library or write custom search. in_
+In Python, you'd reach for a solver library or write custom search. In
 Clausal, you describe the constraints and let CLP(ℤ) search:
 
 ```clausal

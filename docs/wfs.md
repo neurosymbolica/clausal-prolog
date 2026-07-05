@@ -108,7 +108,7 @@ even_node(X) <- (edge(X, Y), not odd_node(Y))
 odd_node(X) <- (edge(X, Y), not even_node(Y))
 ```
 
-in_ a cycle of length 4 (1→2→3→4→1), `even_node` and `odd_node` are mutually recursive through negation. WFS resolves this: nodes whose parity is determinable get **true**/**false**, while nodes in an unfounded cycle get **undefined**.
+In a cycle of length 4 (1→2→3→4→1), `even_node` and `odd_node` are mutually recursive through negation. WFS resolves this: nodes whose parity is determinable get **true**/**false**, while nodes in an unfounded cycle get **undefined**.
 
 ---
 
@@ -119,11 +119,11 @@ An answer is **undefined** when it is neither provably true nor provably false. 
 1. **Self-supporting cycles**: A depends on not-B, B depends on not-A. Neither can be resolved without the other.
 2. **Unfounded loops**: A depends on not-A (directly or through a chain).
 
-Undefined does NOT mean "error" — it is a legitimate third truth value. in_ game theory, undefined positions represent draws or positions where neither player has a winning strategy.
+Undefined does NOT mean "error" — it is a legitimate third truth value. In game theory, undefined positions represent draws or positions where neither player has a winning strategy.
 
 ### What to Do with Undefined Answers
 
-- **Treat as false**: in_ many practical programs, undefined answers can be safely treated as false (this is what `query()`/`call()` do — they yield undefined answers alongside true ones).
+- **Treat as false**: In many practical programs, undefined answers can be safely treated as false (this is what `query()`/`call()` do — they yield undefined answers alongside true ones).
 - **Inspect explicitly**: Use `query_wfs` when you need to distinguish true from undefined — e.g., for debugging, verification, or reporting.
 - **Restructure the program**: If you don't expect undefined answers, the cyclic dependency may indicate a modeling error.
 

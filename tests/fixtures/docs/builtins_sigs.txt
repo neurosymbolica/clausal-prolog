@@ -874,73 +874,73 @@ portray_clause(+Term)
 # === Logging (`log` module) ===
 
 --8<-- [start:getlogger_1]
-GetLogger(-Logger)
-GetLogger(+Name, -Logger)
+get_logger(-Logger)
+get_logger(+Name, -Logger)
 --8<-- [end:getlogger_1]
 
 --8<-- [start:debug_1]
-Debug(+Msg)
-Debug(+Logger, +Msg)
+debug(+Msg)
+debug(+Logger, +Msg)
 --8<-- [end:debug_1]
 
 --8<-- [start:info_1]
-Info(+Msg)
-Info(+Logger, +Msg)
+info(+Msg)
+info(+Logger, +Msg)
 --8<-- [end:info_1]
 
 --8<-- [start:warning_1]
-Warning(+Msg)
-Warning(+Logger, +Msg)
+warning(+Msg)
+warning(+Logger, +Msg)
 --8<-- [end:warning_1]
 
 --8<-- [start:error_1]
-Error(+Msg)
-Error(+Logger, +Msg)
+error(+Msg)
+error(+Logger, +Msg)
 --8<-- [end:error_1]
 
 --8<-- [start:critical_1]
-Critical(+Msg)
-Critical(+Logger, +Msg)
+critical(+Msg)
+critical(+Logger, +Msg)
 --8<-- [end:critical_1]
 
 --8<-- [start:log_3]
-Log(+Logger, +Level, +Msg)
+log(+Logger, +Level, +Msg)
 --8<-- [end:log_3]
 
 --8<-- [start:setlevel_2]
-SetLevel(+Logger, +Level)
+set_level(+Logger, +Level)
 --8<-- [end:setlevel_2]
 
 --8<-- [start:getlevel_2]
-GetLevel(+Logger, -Level)
+get_level(+Logger, -Level)
 --8<-- [end:getlevel_2]
 
 --8<-- [start:isenabledfor_2]
-IsEnabledFor(+Logger, +Level)
+is_enabled_for(+Logger, +Level)
 --8<-- [end:isenabledfor_2]
 
 --8<-- [start:streamhandler_2]
-StreamHandler(+StreamName, -Handler)
+stream_handler(+StreamName, -Handler)
 --8<-- [end:streamhandler_2]
 
 --8<-- [start:filehandler_2]
-FileHandler(+Path, -Handler)
+file_handler(+Path, -Handler)
 --8<-- [end:filehandler_2]
 
 --8<-- [start:setformatter_2]
-SetFormatter(+Handler, +FormatString)
+set_formatter(+Handler, +FormatString)
 --8<-- [end:setformatter_2]
 
 --8<-- [start:addhandler_2]
-AddHandler(+Logger, +Handler)
+add_handler(+Logger, +Handler)
 --8<-- [end:addhandler_2]
 
 --8<-- [start:removehandler_2]
-RemoveHandler(+Logger, +Handler)
+remove_handler(+Logger, +Handler)
 --8<-- [end:removehandler_2]
 
 --8<-- [start:basicconfig_1]
-BasicConfig(+Opts)
+basic_config(+Opts)
 --8<-- [end:basicconfig_1]
 
 

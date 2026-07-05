@@ -7,18 +7,18 @@ cryptographic hashing, message authentication, and key derivation. All modules
 use only the standard library — no third-party dependencies.
 
 ```clausal
--import_from(py.hash, [Hash])
--import_from(py.hmac, [sign, Verify])
--import_from(py.pbkdf2, [Derive])
+-import_from(py.hash, [hash])
+-import_from(py.hmac, [sign, verify])
+-import_from(py.pbkdf2, [derive])
 
 CheckIntegrity(DATA, EXPECTED) <- (
-    Hash("sha256", DATA, COMPUTED),
+    hash("sha256", DATA, COMPUTED),
     COMPUTED == EXPECTED
 )
 
 SignMessage(KEY, MSG, SIG) <- sign(KEY, MSG, SIG)
 
-VerifyMessage(KEY, MSG, SIG) <- Verify(KEY, MSG, SIG)
+VerifyMessage(KEY, MSG, SIG) <- verify(KEY, MSG, SIG)
 ```
 
 ---
@@ -26,13 +26,13 @@ VerifyMessage(KEY, MSG, SIG) <- Verify(KEY, MSG, SIG)
 ## `py.hash` — Cryptographic Hashing
 
 ```clausal
--import_from(py.hash, [Hash, HashBytes])
+-import_from(py.hash, [hash, hash_bytes])
 ```
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Hash(Algorithm, Data, Hex)` | `+Algo, +Data, -Hex` | Hex digest via `hashlib` |
-| `HashBytes(Algorithm, Data, Bytes)` | `+Algo, +Data, -Bytes` | Raw digest bytes |
+| `hash(Algorithm, Data, Hex)` | `+Algo, +Data, -Hex` | Hex digest via `hashlib` |
+| `hash_bytes(Algorithm, Data, Bytes)` | `+Algo, +Data, -Bytes` | Raw digest bytes |
 
 **Supported algorithms:** `"sha256"`, `"sha512"`, `"md5"`, `"sha1"`, `"sha384"`,
 `"sha3_256"`, `"sha3_512"`, `"blake2b"`, `"blake2s"` (anything `hashlib.new()` accepts).
@@ -50,17 +50,17 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 ## `py.hmac` — Message Authentication
 
 ```clausal
--import_from(py.hmac, [sign, Verify])
+-import_from(py.hmac, [sign, verify])
 ```
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
 | `sign(Key, Data, Hex)` | `+Key, +Data, -Hex` | HMAC-SHA256 signature |
 | `sign(Algorithm, Key, Data, Hex)` | `+Algo, +Key, +Data, -Hex` | HMAC with specified algorithm |
-| `Verify(Key, Data, Hex)` | `+Key, +Data, +Hex` | Verify HMAC-SHA256 (constant-time) |
-| `Verify(Algorithm, Key, Data, Hex)` | `+Algo, +Key, +Data, +Hex` | Verify with specified algorithm |
+| `verify(Key, Data, Hex)` | `+Key, +Data, +Hex` | verify HMAC-SHA256 (constant-time) |
+| `verify(Algorithm, Key, Data, Hex)` | `+Algo, +Key, +Data, +Hex` | verify with specified algorithm |
 
-`Key` and `Data` can be strings (UTF-8 encoded) or `bytes`. `Verify` uses
+`Key` and `Data` can be strings (UTF-8 encoded) or `bytes`. `verify` uses
 `hmac.compare_digest` for constant-time comparison.
 
 ```clausal
@@ -72,13 +72,13 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 ## `py.pbkdf2` — Key Derivation
 
 ```clausal
--import_from(py.pbkdf2, [Derive])
+-import_from(py.pbkdf2, [derive])
 ```
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Derive(Password, Salt, Iterations, DerivedKey)` | `+Pw, +Salt, +Iter, -DK` | PBKDF2-HMAC-SHA256, 32-byte key |
-| `Derive(Password, Salt, Iterations, KeyLength, DerivedKey)` | `+Pw, +Salt, +Iter, +KL, -DK` | Custom key length |
+| `derive(Password, Salt, Iterations, DerivedKey)` | `+Pw, +Salt, +Iter, -DK` | PBKDF2-HMAC-SHA256, 32-byte key |
+| `derive(Password, Salt, Iterations, KeyLength, DerivedKey)` | `+Pw, +Salt, +Iter, +KL, -DK` | Custom key length |
 
 `DerivedKey` is a hex string. `Password` and `Salt` can be strings or `bytes`.
 `Iterations` must be a positive integer.

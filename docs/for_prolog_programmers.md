@@ -91,7 +91,7 @@ n_queens(N, QUEENS) <- (
 
 The constraint operators (`#=`, `#<`, `#>`, `#<=`, `#>=`, `#!=`) are the same.
 `ins` works as you'd expect. `all_different`, `labeling`, and other global
-constraints are available as PascalCase builtins.
+constraints are available as `snake_case` builtins.
 
 ### DCGs
 
@@ -157,10 +157,15 @@ Both work in unification and pattern matching.
 
 | Prolog convention | Clausal convention |
 |---|---|
-| `lowercase_atoms` for predicates | `lowercase` for user predicates |
-| `TitleCase` for variables | `ALLCAPS` for variables |
-| `abbreviations` (`msort`, `succ`, `nb_getval`) | Full names (`msort`, `Successor`, ...) |
-| `library(lists)` | `PascalCase` builtins (`append`, `in_`, `sort`) |
+| `lowercase_atoms` for predicates | `snake_case` for predicates and builtins (`append`, `in_`, `read_file`, `find_path`) |
+| `TitleCase` for variables | `ALL_CAPS` (or leading `_lowercase`) for variables (`X`, `LIST`, `SAMPLE_SIZE`, `_rest`) |
+| `TitleCase` for compound functors | `TitleCase` for atoms and functors declared via `-module`/`-private` (`Red`, `Point(X, Y)`) |
+| `abbreviations` (`nb_getval`) | spell names out; keep only universal abbreviations (`DCG`, `CLP`, `msort`, `succ`) |
+
+`snake_case` for predicates is a **convention, not a language rule** — the parser accepts any
+lowercase-initial identifier. It mirrors Python's standard library and SWI-Prolog, so code reads
+naturally and LLMs trained on Prolog generate it reliably; where the two pull apart, Python-side
+consistency wins.
 
 The philosophy: spell out names. Only keep abbreviations that are the
 universal name (e.g., `DCG`, `CLP`). This makes code readable without

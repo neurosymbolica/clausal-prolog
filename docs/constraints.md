@@ -22,7 +22,7 @@ Two constraint solvers are built in:
 
 ### Syntax
 
-in_ `.clausal` files, `is not` has dif semantics:
+In `.clausal` files, `is not` has dif semantics:
 
 ```clausal
 safe_assign(X, Y) <- (

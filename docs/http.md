@@ -6,12 +6,12 @@ Two modules for HTTP requests and URL manipulation, wrapping Python's `urllib`
 stdlib. Zero third-party dependencies.
 
 ```clausal
--import_from(py.http, [Get, JSONGet, Post, Request])
--import_from(py.url, [Encode, Decode, Parse, Join])
+-import_from(py.http, [get, json_get, post, request])
+-import_from(py.url, [encode, decode, parse, join])
 
-FetchPage(URL, BODY) <- Get(URL, BODY)
+FetchPage(URL, BODY) <- get(URL, BODY)
 
-FetchApi(URL, DATA) <- JSONGet(URL, DATA)
+FetchApi(URL, DATA) <- json_get(URL, DATA)
 ```
 
 Or via [module import](import.md):
@@ -21,7 +21,7 @@ Or via [module import](import.md):
 -import_module(py.url)
 
 Main <- (
-    py.http.Get("http://example.com", BODY),
+    py.http.get("http://example.com", BODY),
     ++print(BODY)
 )
 ```
@@ -31,17 +31,17 @@ Main <- (
 ## `py.http` — HTTP Requests
 
 ```clausal
--import_from(py.http, [Get, Post, Request, JSONGet, JSONPost])
+-import_from(py.http, [get, post, request, json_get, json_post])
 ```
 
 ### Simple requests
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Get(Url, Body)` | `+Url, -Body` | GET request, body as string. Fails on HTTP errors (4xx/5xx). |
-| `Get(Url, Headers, Body)` | `+Url, +Headers, -Body` | GET with custom headers (DictTerm). |
-| `Post(Url, Data, Body)` | `+Url, +Data, -Body` | POST string data, response as string. |
-| `Post(Url, Data, Headers, Body)` | `+Url, +Data, +Headers, -Body` | POST with custom headers. |
+| `get(Url, Body)` | `+Url, -Body` | GET request, body as string. Fails on HTTP errors (4xx/5xx). |
+| `get(Url, Headers, Body)` | `+Url, +Headers, -Body` | GET with custom headers (DictTerm). |
+| `post(Url, Data, Body)` | `+Url, +Data, -Body` | POST string data, response as string. |
+| `post(Url, Data, Headers, Body)` | `+Url, +Data, +Headers, -Body` | POST with custom headers. |
 
 ```clausal
 --8<-- "tests/fixtures/docs/http_sigs.txt:simple_request_examples"
@@ -51,19 +51,19 @@ Main <- (
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Request(Options, Status, Body)` | `+Options, -Status, -Body` | General HTTP request with full control. |
+| `request(Options, Status, Body)` | `+Options, -Status, -Body` | General HTTP request with full control. |
 
 `Options` is a [`DictTerm`](dicts_sets.md) with keys:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `"url"` | string | *required* | Request URL |
+| `"url"` | string | *required* | request URL |
 | `"method"` | string | `"GET"` | HTTP method |
-| `"headers"` | DictTerm | `{}` | Request headers |
-| `"data"` | string | `None` | Request body |
+| `"headers"` | DictTerm | `{}` | request headers |
+| `"data"` | string | `None` | request body |
 | `"timeout"` | number | `30` | Timeout in seconds |
 
-Unlike `Get` and `Post`, `Request` does **not** fail on 4xx/5xx — it returns
+Unlike `get` and `post`, `request` does **not** fail on 4xx/5xx — it returns
 the status code so you can handle errors explicitly.
 
 ```clausal
@@ -74,8 +74,8 @@ the status code so you can handle errors explicitly.
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `JSONGet(Url, Term)` | `+Url, -Term` | GET + parse JSON → DictTerm/list |
-| `JSONPost(Url, Term, Response)` | `+Url, +Term, -Response` | POST JSON + parse response |
+| `json_get(Url, Term)` | `+Url, -Term` | GET + parse JSON → DictTerm/list |
+| `json_post(Url, Term, Response)` | `+Url, +Term, -Response` | POST JSON + parse response |
 
 JSON objects are converted to [`DictTerm`](dicts_sets.md), arrays to lists, using the same
 conversion as the [`py.json`](json.md) module.
@@ -89,27 +89,27 @@ conversion as the [`py.json`](json.md) module.
 ## `py.url` — URL Utilities
 
 ```clausal
--import_from(py.url, [Encode, Decode, Parse, Join])
+-import_from(py.url, [encode, decode, parse, join])
 ```
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Encode(String, Encoded)` | `+String, -Encoded` | URL-encode (`%20` for spaces, etc.) |
-| `Decode(Encoded, String)` | `+Encoded, -String` | URL-decode |
-| `Parse(Url, Parts)` | `+Url, -Parts` | Parse URL into DictTerm |
-| `Join(Parts, Url)` | `+Parts, -Url` | Assemble URL from DictTerm |
+| `encode(String, Encoded)` | `+String, -Encoded` | URL-encode (`%20` for spaces, etc.) |
+| `decode(Encoded, String)` | `+Encoded, -String` | URL-decode |
+| `parse(Url, Parts)` | `+Url, -Parts` | parse URL into DictTerm |
+| `join(Parts, Url)` | `+Parts, -Url` | Assemble URL from DictTerm |
 
-### Encode / Decode
+### encode / decode
 
 ```clausal
 --8<-- "tests/fixtures/docs/http_sigs.txt:url_encode_examples"
 ```
 
-Encode uses `safe=""` — all special characters are encoded.
+encode uses `safe=""` — all special characters are encoded.
 
-### Parse / Join
+### parse / join
 
-`Parse` returns a DictTerm with keys: `scheme`, `host`, `port`, `path`, `query`,
+`parse` returns a DictTerm with keys: `scheme`, `host`, `port`, `path`, `query`,
 `fragment`. Port is an integer (0 if not specified).
 
 ```clausal

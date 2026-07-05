@@ -64,9 +64,9 @@ color("green"),
 
 --8<-- [start:regex_auto_binding]
 # What you write:
-Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
+match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
 
 # What the compiler sees (after expansion):
-Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S, _G),
+match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S, _G),
 YEAR is _G["YEAR"], MONTH is _G["MONTH"]
 --8<-- [end:regex_auto_binding]

@@ -1,76 +1,76 @@
 # Companion tests for docs/graphs.md display snippets.
 
 -import_from(graphs, [
-    Vertices, Neighbors, Degree, HasEdge,
-    IsConnected, BreadthFirstNodes, DepthFirstNodes,
-    FindPath, ShortestPath, PathCost,
-    ConnectedComponents, TopologicalSort, HasCycle,
-    SpanningTree, MinSpanningTree,
-    ReverseEdges, MergeGraphs
+    vertices, neighbors, degree, has_edge,
+    is_connected, breadth_first_nodes, depth_first_nodes,
+    find_path, shortest_path, path_cost,
+    connected_components, topological_sort, has_cycle,
+    spanning_tree, min_spanning_tree,
+    reverse_edges, merge_graphs
 ])
 
 # ── Query predicates ─────────────────────────────────────────────────────────
 
 Test("vertices") <- (
-    Vertices([["a", "b"], ["b", "c"]], V),
+    vertices([["a", "b"], ["b", "c"]], V),
     length(V, 3)
 )  # nv
 
 Test("neighbors") <- (
-    Neighbors([["a", "b"], ["b", "c"]], "b", N),
+    neighbors([["a", "b"], ["b", "c"]], "b", N),
     in_("a", N),
     in_("c", N)
 )  # nv
 
-Test("degree") <- Degree([["a", "b"], ["b", "c"]], "b", 2)  # nv
+Test("degree") <- degree([["a", "b"], ["b", "c"]], "b", 2)  # nv
 
-Test("has edge") <- HasEdge([["a", "b"], ["b", "c"]], "a", "b")  # nv
+Test("has edge") <- has_edge([["a", "b"], ["b", "c"]], "a", "b")  # nv
 
 # ── Traversal ────────────────────────────────────────────────────────────────
 
 Test("bfs") <- (
-    BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N),
+    breadth_first_nodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N),
     length(N, 4)
 )  # nv
 
 Test("dfs") <- (
-    DepthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N),
+    depth_first_nodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N),
     length(N, 4)
 )  # nv
 
 # ── Pathfinding ──────────────────────────────────────────────────────────────
 
-Test("find path") <- FindPath([["a", "b"], ["b", "c"], ["a", "c"]], "a", "c", _)  # nv
+Test("find path") <- find_path([["a", "b"], ["b", "c"], ["a", "c"]], "a", "c", _)  # nv
 
 Test("shortest path weighted") <- (
-    ShortestPath([["a", "b", 1], ["b", "c", 2], ["a", "c", 10]], "a", "c", P),
+    shortest_path([["a", "b", 1], ["b", "c", 2], ["a", "c", 10]], "a", "c", P),
     P == ["a", "b", "c"]
 )  # nv
 
-Test("path cost") <- PathCost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], 8)  # nv
+Test("path cost") <- path_cost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], 8)  # nv
 
 # ── Components ───────────────────────────────────────────────────────────────
 
 Test("connected components") <- (
-    ConnectedComponents([["a", "b"], ["c", "d"]], C),
+    connected_components([["a", "b"], ["c", "d"]], C),
     length(C, 2)
 )  # nv
 
-Test("topological sort") <- TopologicalSort([["a", "b"], ["b", "c"], ["a", "c"]], _)  # nv
+Test("topological sort") <- topological_sort([["a", "b"], ["b", "c"], ["a", "c"]], _)  # nv
 
-Test("is connected") <- IsConnected([["a", "b"], ["b", "c"]])  # nv
+Test("is connected") <- is_connected([["a", "b"], ["b", "c"]])  # nv
 
 # ── Trees ────────────────────────────────────────────────────────────────────
 
 Test("min spanning tree") <- (
-    MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], _, C),
+    min_spanning_tree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], _, C),
     C == 3
 )  # nv
 
 # ── Transforms ───────────────────────────────────────────────────────────────
 
 Test("reverse edges") <- (
-    ReverseEdges([["a", "b"], ["c", "d"]], R),
+    reverse_edges([["a", "b"], ["c", "d"]], R),
     in_(["b", "a"], R),
     in_(["d", "c"], R)
 )  # nv

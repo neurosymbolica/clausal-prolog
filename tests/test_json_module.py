@@ -8,7 +8,7 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.json import (
-    Parse, Generate, PrettyGenerate, Get, ReadFile, WriteFile,
+    parse, generate, pretty_generate, get, read_file, write_file,
     _parse_2, _generate_2, _pretty_generate_2,
     _get_3, _read_file_2, _write_file_2,
     _python_to_clausal, _clausal_to_python,
@@ -96,7 +96,7 @@ class TestConverters:
             _clausal_to_python(Var())
 
 
-# ── Parse/2 ─────────────────────────────────────────────────────────────
+# ── parse/2 ─────────────────────────────────────────────────────────────
 
 
 class TestParse:
@@ -191,12 +191,12 @@ class TestParse:
     def test_trampoline(self):
         # nv
         t = Var()
-        sols, trail = trampoline_solutions(Parse, '{"x": 1}', t)
+        sols, trail = trampoline_solutions(parse, '{"x": 1}', t)
         assert len(sols) == 1
         assert isinstance(deref(t), DictTerm)
 
 
-# ── Generate/2 ──────────────────────────────────────────────────────────
+# ── generate/2 ──────────────────────────────────────────────────────────
 
 
 class TestGenerate:
@@ -239,7 +239,7 @@ class TestGenerate:
         assert len(sols) == 0
 
     def test_round_trip(self):
-        """Parse then generate yields equivalent JSON."""
+        """parse then generate yields equivalent JSON."""
         # nv
         import json
         original = '{"name": "alice", "scores": [1, 2, 3]}'
@@ -250,7 +250,7 @@ class TestGenerate:
         assert json.loads(deref(s)) == json.loads(original)
 
 
-# ── PrettyGenerate/2 ───────────────────────────────────────────────────
+# ── pretty_generate/2 ───────────────────────────────────────────────────
 
 
 class TestPrettyGenerate:
@@ -265,7 +265,7 @@ class TestPrettyGenerate:
         assert "  " in result
 
 
-# ── Get/3 ──────────────────────────────────────────────────────────────
+# ── get/3 ──────────────────────────────────────────────────────────────
 
 
 class TestGet:
@@ -315,12 +315,12 @@ class TestGet:
         # nv
         v = Var()
         dt = DictTerm({"a": 42})
-        sols, trail = trampoline_solutions(Get, dt, "a", v)
+        sols, trail = trampoline_solutions(get, dt, "a", v)
         assert len(sols) == 1
         assert deref(v) == 42
 
 
-# ── ReadFile/2 & WriteFile/2 ───────────────────────────────────────────
+# ── read_file/2 & write_file/2 ───────────────────────────────────────────
 
 
 class TestFileIO:

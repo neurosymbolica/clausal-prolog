@@ -4,13 +4,13 @@ Provides relational predicates for file and directory operations:
 existence checks, listing, metadata, CRUD, path manipulation, and
 temporary files.  Import via::
 
-    -import_from(py.files, [FileExists, DirectoryFiles, ReadFileToString,
-                            WriteStringToFile, JoinPath])
+    -import_from(py.files, [file_exists, directory_files, read_file_to_string,
+                            write_string_to_file, join_path])
 
 Or via module import::
 
     -import_module(py.files)
-    # then use py.files.FileExists("data.csv"), py.files.JoinPath(A_, B_, P_), etc.
+    # then use py.files.file_exists("data.csv"), py.files.join_path(A_, B_, P_), etc.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def _require_ground_str(val, label="argument"):
 
 
 def _file_exists_1(path, trail, k):
-    """FileExists/1: succeeds if Path is a regular file."""
+    """file_exists/1: succeeds if Path is a regular file."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -49,7 +49,7 @@ def _file_exists_1(path, trail, k):
 
 
 def _directory_exists_1(path, trail, k):
-    """DirectoryExists/1: succeeds if Path is a directory."""
+    """directory_exists/1: succeeds if Path is a directory."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -58,7 +58,7 @@ def _directory_exists_1(path, trail, k):
 
 
 def _path_exists_1(path, trail, k):
-    """PathExists/1: succeeds if Path exists (file, directory, or other)."""
+    """path_exists/1: succeeds if Path exists (file, directory, or other)."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -70,7 +70,7 @@ def _path_exists_1(path, trail, k):
 
 
 def _directory_files_2(dir_path, files, trail, k):
-    """DirectoryFiles/2: unify Files with list of filenames in Dir."""
+    """directory_files/2: unify Files with list of filenames in Dir."""
     dir_path = _require_ground_str(dir_path)
     if dir_path is None:
         return
@@ -86,7 +86,7 @@ def _directory_files_2(dir_path, files, trail, k):
 
 
 def _directory_entries_2(dir_path, entry, trail, k):
-    """DirectoryEntries/2: enumerate directory entries via backtracking."""
+    """directory_entries/2: enumerate directory entries via backtracking."""
     dir_path = _require_ground_str(dir_path)
     if dir_path is None:
         return
@@ -108,7 +108,7 @@ def _directory_entries_2(dir_path, entry, trail, k):
 
 
 def _file_size_2(path, size, trail, k):
-    """FileSize/2: unify Size with file size in bytes."""
+    """file_size/2: unify Size with file size in bytes."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -121,7 +121,7 @@ def _file_size_2(path, size, trail, k):
 
 
 def _file_modification_time_2(path, time, trail, k):
-    """FileModificationTime/2: unify Time with modification timestamp."""
+    """file_modification_time/2: unify Time with modification timestamp."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -137,7 +137,7 @@ def _file_modification_time_2(path, time, trail, k):
 
 
 def _delete_file_1(path, trail, k):
-    """DeleteFile/1: delete a file."""
+    """delete_file/1: delete a file."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -149,7 +149,7 @@ def _delete_file_1(path, trail, k):
 
 
 def _delete_directory_1(path, trail, k):
-    """DeleteDirectory/1: delete an empty directory."""
+    """delete_directory/1: delete an empty directory."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -161,7 +161,7 @@ def _delete_directory_1(path, trail, k):
 
 
 def _rename_file_2(old, new, trail, k):
-    """RenameFile/2: rename/move a file or directory."""
+    """rename_file/2: rename/move a file or directory."""
     old = _require_ground_str(old)
     new = _require_ground_str(new)
     if old is None or new is None:
@@ -174,7 +174,7 @@ def _rename_file_2(old, new, trail, k):
 
 
 def _copy_file_2(source, destination, trail, k):
-    """CopyFile/2: copy a file (not directory)."""
+    """copy_file/2: copy a file (not directory)."""
     source = _require_ground_str(source)
     destination = _require_ground_str(destination)
     if source is None or destination is None:
@@ -190,7 +190,7 @@ def _copy_file_2(source, destination, trail, k):
 
 
 def _make_directory_1(path, trail, k):
-    """MakeDirectory/1: create a directory. Fails if it already exists."""
+    """make_directory/1: create a directory. Fails if it already exists."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -202,7 +202,7 @@ def _make_directory_1(path, trail, k):
 
 
 def _make_directory_path_1(path, trail, k):
-    """MakeDirectoryPath/1: create a directory and all parents (mkdir -p)."""
+    """make_directory_path/1: create a directory and all parents (mkdir -p)."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -217,7 +217,7 @@ def _make_directory_path_1(path, trail, k):
 
 
 def _read_file_to_string_2(path, contents, trail, k):
-    """ReadFileToString/2: read entire file as a string."""
+    """read_file_to_string/2: read entire file as a string."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -230,7 +230,7 @@ def _read_file_to_string_2(path, contents, trail, k):
 
 
 def _write_string_to_file_2(path, contents, trail, k):
-    """WriteStringToFile/2: write a string to a file (overwrite)."""
+    """write_string_to_file/2: write a string to a file (overwrite)."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -245,7 +245,7 @@ def _write_string_to_file_2(path, contents, trail, k):
 
 
 def _append_string_to_file_2(path, contents, trail, k):
-    """AppendStringToFile/2: append a string to a file."""
+    """append_string_to_file/2: append a string to a file."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -264,7 +264,7 @@ def _append_string_to_file_2(path, contents, trail, k):
 
 
 def _absolute_path_2(relative, absolute, trail, k):
-    """AbsolutePath/2: resolve relative path to absolute."""
+    """absolute_path/2: resolve relative path to absolute."""
     relative = _require_ground_str(relative)
     if relative is None:
         return
@@ -274,7 +274,7 @@ def _absolute_path_2(relative, absolute, trail, k):
 
 
 def _join_path_3(base, relative, joined, trail, k):
-    """JoinPath/3: join two path components."""
+    """join_path/3: join two path components."""
     base = _require_ground_str(base)
     relative = _require_ground_str(relative)
     if base is None or relative is None:
@@ -285,7 +285,7 @@ def _join_path_3(base, relative, joined, trail, k):
 
 
 def _split_path_3(path, directory, filename, trail, k):
-    """SplitPath/3: split path into directory and filename."""
+    """split_path/3: split path into directory and filename."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -297,7 +297,7 @@ def _split_path_3(path, directory, filename, trail, k):
 
 
 def _file_extension_2(path, extension, trail, k):
-    """FileExtension/2: unify Extension with the file extension (including dot)."""
+    """file_extension/2: unify Extension with the file extension (including dot)."""
     path = _require_ground_str(path)
     if path is None:
         return
@@ -310,7 +310,7 @@ def _file_extension_2(path, extension, trail, k):
 
 
 def _temp_file_1(path, trail, k):
-    """TempFile/1: create a temporary file and unify Path with its path."""
+    """temp_file/1: create a temporary file and unify Path with its path."""
     try:
         fd, tmp_path = _tempfile.mkstemp()
         _os.close(fd)
@@ -321,7 +321,7 @@ def _temp_file_1(path, trail, k):
 
 
 def _temp_directory_1(path, trail, k):
-    """TempDirectory/1: create a temporary directory and unify Path with its path."""
+    """temp_directory/1: create a temporary directory and unify Path with its path."""
     try:
         tmp_path = _tempfile.mkdtemp()
     except OSError:
@@ -332,68 +332,68 @@ def _temp_directory_1(path, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-FileExists = ModulePredicate("FileExists")
-FileExists._register(1, simple_to_trampoline(_file_exists_1))
+file_exists = ModulePredicate("file_exists")
+file_exists._register(1, simple_to_trampoline(_file_exists_1))
 
-DirectoryExists = ModulePredicate("DirectoryExists")
-DirectoryExists._register(1, simple_to_trampoline(_directory_exists_1))
+directory_exists = ModulePredicate("directory_exists")
+directory_exists._register(1, simple_to_trampoline(_directory_exists_1))
 
-PathExists = ModulePredicate("PathExists")
-PathExists._register(1, simple_to_trampoline(_path_exists_1))
+path_exists = ModulePredicate("path_exists")
+path_exists._register(1, simple_to_trampoline(_path_exists_1))
 
-DirectoryFiles = ModulePredicate("DirectoryFiles")
-DirectoryFiles._register(2, simple_to_trampoline(_directory_files_2))
+directory_files = ModulePredicate("directory_files")
+directory_files._register(2, simple_to_trampoline(_directory_files_2))
 
-DirectoryEntries = ModulePredicate("DirectoryEntries")
-DirectoryEntries._register(2, simple_to_trampoline(_directory_entries_2))
+directory_entries = ModulePredicate("directory_entries")
+directory_entries._register(2, simple_to_trampoline(_directory_entries_2))
 
-FileSize = ModulePredicate("FileSize")
-FileSize._register(2, simple_to_trampoline(_file_size_2))
+file_size = ModulePredicate("file_size")
+file_size._register(2, simple_to_trampoline(_file_size_2))
 
-FileModificationTime = ModulePredicate("FileModificationTime")
-FileModificationTime._register(2, simple_to_trampoline(_file_modification_time_2))
+file_modification_time = ModulePredicate("file_modification_time")
+file_modification_time._register(2, simple_to_trampoline(_file_modification_time_2))
 
-DeleteFile = ModulePredicate("DeleteFile")
-DeleteFile._register(1, simple_to_trampoline(_delete_file_1))
+delete_file = ModulePredicate("delete_file")
+delete_file._register(1, simple_to_trampoline(_delete_file_1))
 
-DeleteDirectory = ModulePredicate("DeleteDirectory")
-DeleteDirectory._register(1, simple_to_trampoline(_delete_directory_1))
+delete_directory = ModulePredicate("delete_directory")
+delete_directory._register(1, simple_to_trampoline(_delete_directory_1))
 
-RenameFile = ModulePredicate("RenameFile")
-RenameFile._register(2, simple_to_trampoline(_rename_file_2))
+rename_file = ModulePredicate("rename_file")
+rename_file._register(2, simple_to_trampoline(_rename_file_2))
 
-CopyFile = ModulePredicate("CopyFile")
-CopyFile._register(2, simple_to_trampoline(_copy_file_2))
+copy_file = ModulePredicate("copy_file")
+copy_file._register(2, simple_to_trampoline(_copy_file_2))
 
-MakeDirectory = ModulePredicate("MakeDirectory")
-MakeDirectory._register(1, simple_to_trampoline(_make_directory_1))
+make_directory = ModulePredicate("make_directory")
+make_directory._register(1, simple_to_trampoline(_make_directory_1))
 
-MakeDirectoryPath = ModulePredicate("MakeDirectoryPath")
-MakeDirectoryPath._register(1, simple_to_trampoline(_make_directory_path_1))
+make_directory_path = ModulePredicate("make_directory_path")
+make_directory_path._register(1, simple_to_trampoline(_make_directory_path_1))
 
-ReadFileToString = ModulePredicate("ReadFileToString")
-ReadFileToString._register(2, simple_to_trampoline(_read_file_to_string_2))
+read_file_to_string = ModulePredicate("read_file_to_string")
+read_file_to_string._register(2, simple_to_trampoline(_read_file_to_string_2))
 
-WriteStringToFile = ModulePredicate("WriteStringToFile")
-WriteStringToFile._register(2, simple_to_trampoline(_write_string_to_file_2))
+write_string_to_file = ModulePredicate("write_string_to_file")
+write_string_to_file._register(2, simple_to_trampoline(_write_string_to_file_2))
 
-AppendStringToFile = ModulePredicate("AppendStringToFile")
-AppendStringToFile._register(2, simple_to_trampoline(_append_string_to_file_2))
+append_string_to_file = ModulePredicate("append_string_to_file")
+append_string_to_file._register(2, simple_to_trampoline(_append_string_to_file_2))
 
-AbsolutePath = ModulePredicate("AbsolutePath")
-AbsolutePath._register(2, simple_to_trampoline(_absolute_path_2))
+absolute_path = ModulePredicate("absolute_path")
+absolute_path._register(2, simple_to_trampoline(_absolute_path_2))
 
-JoinPath = ModulePredicate("JoinPath")
-JoinPath._register(3, simple_to_trampoline(_join_path_3))
+join_path = ModulePredicate("join_path")
+join_path._register(3, simple_to_trampoline(_join_path_3))
 
-SplitPath = ModulePredicate("SplitPath")
-SplitPath._register(3, simple_to_trampoline(_split_path_3))
+split_path = ModulePredicate("split_path")
+split_path._register(3, simple_to_trampoline(_split_path_3))
 
-FileExtension = ModulePredicate("FileExtension")
-FileExtension._register(2, simple_to_trampoline(_file_extension_2))
+file_extension = ModulePredicate("file_extension")
+file_extension._register(2, simple_to_trampoline(_file_extension_2))
 
-TempFile = ModulePredicate("TempFile")
-TempFile._register(1, simple_to_trampoline(_temp_file_1))
+temp_file = ModulePredicate("temp_file")
+temp_file._register(1, simple_to_trampoline(_temp_file_1))
 
-TempDirectory = ModulePredicate("TempDirectory")
-TempDirectory._register(1, simple_to_trampoline(_temp_directory_1))
+temp_directory = ModulePredicate("temp_directory")
+temp_directory._register(1, simple_to_trampoline(_temp_directory_1))

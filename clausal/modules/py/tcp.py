@@ -3,7 +3,7 @@
 Provides relational predicates for TCP client/server connections.
 Import via::
 
-    -import_from(py.tcp, [Connect, Listen, Accept, Send, Receive, Close, SetTimeout])
+    -import_from(py.tcp, [connect, listen, accept, send, receive, close, set_timeout])
 
 Wraps Python's ``socket`` module. Socket handles are opaque Python objects.
 """
@@ -20,7 +20,7 @@ from clausal.logic.variables import deref, is_var, unify
 
 
 def _connect_3(host, port, sock_out, trail, k):
-    """Connect/3: Connect(Host, Port, Socket) — connect to TCP server."""
+    """connect/3: connect(Host, Port, Socket) — connect to TCP server."""
     host_d = deref(host)
     port_d = deref(port)
     if is_var(host_d) or not isinstance(host_d, str):
@@ -37,7 +37,7 @@ def _connect_3(host, port, sock_out, trail, k):
 
 
 def _listen_3(host, port, server_out, trail, k):
-    """Listen/3: Listen(Host, Port, ServerSocket) — create listening socket."""
+    """listen/3: listen(Host, Port, ServerSocket) — create listening socket."""
     host_d = deref(host)
     port_d = deref(port)
     if is_var(host_d) or not isinstance(host_d, str):
@@ -56,7 +56,7 @@ def _listen_3(host, port, server_out, trail, k):
 
 
 def _accept_2(server_sock, client_out, trail, k):
-    """Accept/2: Accept(ServerSocket, ClientSocket) — accept incoming connection."""
+    """accept/2: accept(ServerSocket, ClientSocket) — accept incoming connection."""
     server_d = deref(server_sock)
     if is_var(server_d) or not isinstance(server_d, _socket.socket):
         return
@@ -69,7 +69,7 @@ def _accept_2(server_sock, client_out, trail, k):
 
 
 def _send_2(sock, data, trail, k):
-    """Send/2: Send(Socket, Data) — send string (UTF-8) or bytes via sendall."""
+    """send/2: send(Socket, Data) — send string (UTF-8) or bytes via sendall."""
     sock_d = deref(sock)
     data_d = deref(data)
     if is_var(sock_d) or not isinstance(sock_d, _socket.socket):
@@ -90,7 +90,7 @@ def _send_2(sock, data, trail, k):
 
 
 def _receive_3(sock, bufsize, data_out, trail, k):
-    """Receive/3: Receive(Socket, BufferSize, Data) — receive with custom buffer."""
+    """receive/3: receive(Socket, BufferSize, Data) — receive with custom buffer."""
     sock_d = deref(sock)
     bufsize_d = deref(bufsize)
     if is_var(sock_d) or not isinstance(sock_d, _socket.socket):
@@ -114,12 +114,12 @@ def _receive_3(sock, bufsize, data_out, trail, k):
 
 
 def _receive_2(sock, data_out, trail, k):
-    """Receive/2: Receive(Socket, Data) — receive up to 4096 bytes."""
+    """receive/2: receive(Socket, Data) — receive up to 4096 bytes."""
     yield from _receive_3(sock, 4096, data_out, trail, k)
 
 
 def _close_1(sock, trail, k):
-    """Close/1: Close(Socket) — close socket. Always succeeds."""
+    """close/1: close(Socket) — close socket. Always succeeds."""
     sock_d = deref(sock)
     if is_var(sock_d) or not isinstance(sock_d, _socket.socket):
         return
@@ -131,7 +131,7 @@ def _close_1(sock, trail, k):
 
 
 def _set_timeout_2(sock, seconds, trail, k):
-    """SetTimeout/2: SetTimeout(Socket, Seconds) — set socket timeout."""
+    """set_timeout/2: set_timeout(Socket, Seconds) — set socket timeout."""
     sock_d = deref(sock)
     sec_d = deref(seconds)
     if is_var(sock_d) or not isinstance(sock_d, _socket.socket):
@@ -145,24 +145,24 @@ def _set_timeout_2(sock, seconds, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Connect = ModulePredicate("Connect")
-Connect._register(3, simple_to_trampoline(_connect_3))
+connect = ModulePredicate("connect")
+connect._register(3, simple_to_trampoline(_connect_3))
 
-Listen = ModulePredicate("Listen")
-Listen._register(3, simple_to_trampoline(_listen_3))
+listen = ModulePredicate("listen")
+listen._register(3, simple_to_trampoline(_listen_3))
 
-Accept = ModulePredicate("Accept")
-Accept._register(2, simple_to_trampoline(_accept_2))
+accept = ModulePredicate("accept")
+accept._register(2, simple_to_trampoline(_accept_2))
 
-Send = ModulePredicate("Send")
-Send._register(2, simple_to_trampoline(_send_2))
+send = ModulePredicate("send")
+send._register(2, simple_to_trampoline(_send_2))
 
-Receive = ModulePredicate("Receive")
-Receive._register(2, simple_to_trampoline(_receive_2))
-Receive._register(3, simple_to_trampoline(_receive_3))
+receive = ModulePredicate("receive")
+receive._register(2, simple_to_trampoline(_receive_2))
+receive._register(3, simple_to_trampoline(_receive_3))
 
-Close = ModulePredicate("Close")
-Close._register(1, simple_to_trampoline(_close_1))
+close = ModulePredicate("close")
+close._register(1, simple_to_trampoline(_close_1))
 
-SetTimeout = ModulePredicate("SetTimeout")
-SetTimeout._register(2, simple_to_trampoline(_set_timeout_2))
+set_timeout = ModulePredicate("set_timeout")
+set_timeout._register(2, simple_to_trampoline(_set_timeout_2))

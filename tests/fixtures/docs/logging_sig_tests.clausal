@@ -1,79 +1,79 @@
 # Companion tests for docs/logging.md display snippets.
 
 -import_from(py.logging, [
-    GetLogger, Debug, Info, Warning, Error, Critical,
-    SetLevel, GetLevel, IsEnabledFor, Log,
-    AddHandler, RemoveHandler,
-    StreamHandler, SetFormatter
+    get_logger, debug, info, warning, error, critical,
+    set_level, get_level, is_enabled_for, log,
+    add_handler, remove_handler,
+    stream_handler, set_formatter
 ])
 
 # ── Logger management ────────────────────────────────────────────────────────
 
-Test("get logger named") <- GetLogger("test.doc.named", _)  # nv
+Test("get logger named") <- get_logger("test.doc.named", _)  # nv
 
-Test("get logger default") <- GetLogger(_)  # nv
+Test("get logger default") <- get_logger(_)  # nv
 
 Test("set and get level") <- (
-    GetLogger("test.doc.level", L),
-    SetLevel(L, "debug"),
-    GetLevel(L, LEVEL),
+    get_logger("test.doc.level", L),
+    set_level(L, "debug"),
+    get_level(L, LEVEL),
     LEVEL == "DEBUG"
 )  # nv
 
 Test("is enabled for") <- (
-    GetLogger("test.doc.enabled", L),
-    SetLevel(L, "debug"),
-    IsEnabledFor(L, "debug")
+    get_logger("test.doc.enabled", L),
+    set_level(L, "debug"),
+    is_enabled_for(L, "debug")
 )  # nv
 
 # ── Logging predicates ───────────────────────────────────────────────────────
 
 Test("debug succeeds") <- (
-    GetLogger("test.doc.debug", L),
-    SetLevel(L, "debug"),
-    Debug(L, "test message")
+    get_logger("test.doc.debug", L),
+    set_level(L, "debug"),
+    debug(L, "test message")
 )  # nv
 
 Test("info succeeds") <- (
-    GetLogger("test.doc.info", L),
-    Info(L, "test message")
+    get_logger("test.doc.info", L),
+    info(L, "test message")
 )  # nv
 
 Test("warning succeeds") <- (
-    GetLogger("test.doc.warn", L),
-    Warning(L, "test message")
+    get_logger("test.doc.warn", L),
+    warning(L, "test message")
 )  # nv
 
 Test("error succeeds") <- (
-    GetLogger("test.doc.err", L),
-    Error(L, "test message")
+    get_logger("test.doc.err", L),
+    error(L, "test message")
 )  # nv
 
 Test("critical succeeds") <- (
-    GetLogger("test.doc.crit", L),
-    Critical(L, "test message")
+    get_logger("test.doc.crit", L),
+    critical(L, "test message")
 )  # nv
 
 Test("log at level") <- (
-    GetLogger("test.doc.log", L),
-    Log(L, "info", "test message")
+    get_logger("test.doc.log", L),
+    log(L, "info", "test message")
 )  # nv
 
 # ── Handler management ───────────────────────────────────────────────────────
 
 Test("stream handler") <- (
-    StreamHandler("stderr", H),
+    stream_handler("stderr", H),
     nonvar(H)
 )  # nv
 
 Test("set formatter") <- (
-    StreamHandler("stderr", H),
-    SetFormatter(H, "%(message)s")
+    stream_handler("stderr", H),
+    set_formatter(H, "%(message)s")
 )  # nv
 
 Test("add and remove handler") <- (
-    GetLogger("test.doc.handler", L),
-    StreamHandler("stderr", H),
-    AddHandler(L, H),
-    RemoveHandler(L, H)
+    get_logger("test.doc.handler", L),
+    stream_handler("stderr", H),
+    add_handler(L, H),
+    remove_handler(L, H)
 )  # nv

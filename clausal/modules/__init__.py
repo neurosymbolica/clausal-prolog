@@ -3,7 +3,7 @@
 Wrappers for Python stdlib and third-party packages all live in the
 ``py`` subpackage (``clausal.modules.py.<name>``). For example::
 
-    -import_from(py.uuid, [UUIDv4, UUIDStr])
+    -import_from(py.uuid, [uuid_v4, uuid_str])
     -import_from(py.torch, [tensor, zeros, randn])
     -import_from(py.sympy, [Simplify, Solve])
 

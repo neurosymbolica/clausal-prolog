@@ -254,10 +254,10 @@ class TestDirectives:
         assert directive.args == [["Color", 2]]
 
     def test_import_from_directive(self):
-        items = reify_source("-import_from(regex, [Match, Search])\n")
+        items = reify_source("-import_from(regex, [match, search])\n")
         (directive,) = directives_of(items)
         assert directive.name == "import_from"
-        assert directive.args == ["regex", ["Match", "Search"]]
+        assert directive.args == ["regex", ["match", "search"]]
 
     def test_module_declaration(self):
         items = reify_source(

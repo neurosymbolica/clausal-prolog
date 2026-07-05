@@ -91,7 +91,7 @@ Notation in signature lines:
 | [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2,3, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
 | [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
 | [I/O](#io) | write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
-| [Logging (`log` module)](#logging-log-module) | GetLogger, Debug, Info, Warning, Error, Critical, Log, SetLevel, GetLevel, StreamHandler, FileHandler |
+| [Logging (`log` module)](#logging-log-module) | get_logger, debug, info, warning, error, critical, log, set_level, get_level, stream_handler, file_handler |
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | now, now_utc, today, date, time, datetime, timedelta, date_add, date_sub, date_diff, datetime_string, timestamp, datetime_string_iso, date_string_iso, date_of, days_between, weekday, date_between |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
 | [Time & statistics](#time--statistics) | current_time/1, statistics/2 |
@@ -1155,7 +1155,7 @@ Succeeds if `Term` is a `DictTerm`.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:dict_pairs_2"
 ```
-Bidirectional: `Dict` ↔ list of `[Key, Value]` 2-element lists. in_ dict→pairs direction, pairs are sorted by key.
+Bidirectional: `Dict` ↔ list of `[Key, Value]` 2-element lists. In dict→pairs direction, pairs are sorted by key.
 
 ---
 
@@ -1235,7 +1235,7 @@ Succeeds if `Term` is a `SetTerm`.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:set_list_2"
 ```
-Bidirectional: `Set` ↔ sorted list. in_ list→set direction, duplicates are removed.
+Bidirectional: `Set` ↔ sorted list. In list→set direction, duplicates are removed.
 
 ---
 
@@ -1319,7 +1319,7 @@ Arithmetic uses `==` to post CLP(ℤ) constraints (e.g., `Y == X * 2`). The pred
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:between_3"
 ```
-Check or enumerate integers in `[Low, High]` inclusive. in_ check mode (X bound) succeeds iff `Low ≤ X ≤ High`. in_ generate mode (X unbound) backtracks over each integer.
+Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) succeeds iff `Low ≤ X ≤ High`. In generate mode (X unbound) backtracks over each integer.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:964`
@@ -1782,7 +1782,7 @@ Pair up elements from two lists into `[X, Y]` sublists. Truncates to the shorter
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:split_with_3"
 ```
-Split `List` by separator `Sep` into sublists (`Parts`). in_ join mode, interleaves `Parts` with `Sep`.
+Split `List` by separator `Sep` into sublists (`Parts`). In join mode, interleaves `Parts` with `Sep`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/lists.py` (`_split_with__3`)
@@ -2337,7 +2337,7 @@ Standard library module wrapping Python's `logging`. Import via `-import_from(lo
 
 All logging predicates always succeed (side-effect only). Messages below the logger's configured level are silently discarded.
 
-### `GetLogger/1`, `GetLogger/2`
+### `get_logger/1`, `get_logger/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:getlogger_1"
 ```
@@ -2349,73 +2349,73 @@ Unify `Logger` with a Python `logging.Logger` instance. Arity-1 returns the defa
 
 ---
 
-### `Debug/1`, `Debug/2`
+### `debug/1`, `debug/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:debug_1"
 ```
-Log at DEBUG level. Arity-1 uses default `"clausal"` logger.
+log at DEBUG level. Arity-1 uses default `"clausal"` logger.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/modules/log.py`
 
 ---
 
-### `Info/1`, `Info/2`
+### `info/1`, `info/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:info_1"
 ```
-Log at INFO level.
+log at INFO level.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/modules/log.py`
 
 ---
 
-### `Warning/1`, `Warning/2`
+### `warning/1`, `warning/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:warning_1"
 ```
-Log at WARNING level.
+log at WARNING level.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/modules/log.py`
 
 ---
 
-### `Error/1`, `Error/2`
+### `error/1`, `error/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:error_1"
 ```
-Log at ERROR level.
+log at ERROR level.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/modules/log.py`
 
 ---
 
-### `Critical/1`, `Critical/2`
+### `critical/1`, `critical/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:critical_1"
 ```
-Log at CRITICAL level.
+log at CRITICAL level.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/modules/log.py`
 
 ---
 
-### `Log/3`
+### `log/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:log_3"
 ```
-Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or integer.
+log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or integer.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/modules/log.py`
 
 ---
 
-### `SetLevel/2`
+### `set_level/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:setlevel_2"
 ```
@@ -2426,7 +2426,7 @@ Set the logger's effective level.
 
 ---
 
-### `GetLevel/2`
+### `get_level/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:getlevel_2"
 ```
@@ -2437,7 +2437,7 @@ Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`).
 
 ---
 
-### `IsEnabledFor/2`
+### `is_enabled_for/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:isenabledfor_2"
 ```
@@ -2448,7 +2448,7 @@ Succeeds if the logger would process a message at `Level`; fails otherwise. The 
 
 ---
 
-### `StreamHandler/2`
+### `stream_handler/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:streamhandler_2"
 ```
@@ -2459,7 +2459,7 @@ Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
 
 ---
 
-### `FileHandler/2`
+### `file_handler/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:filehandler_2"
 ```
@@ -2470,7 +2470,7 @@ Create a `logging.FileHandler` for the given path.
 
 ---
 
-### `SetFormatter/2`
+### `set_formatter/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:setformatter_2"
 ```
@@ -2481,7 +2481,7 @@ Set a `logging.Formatter` on the handler using Python format string syntax.
 
 ---
 
-### `AddHandler/2`
+### `add_handler/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:addhandler_2"
 ```
@@ -2492,7 +2492,7 @@ Add a handler to the logger.
 
 ---
 
-### `RemoveHandler/2`
+### `remove_handler/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:removehandler_2"
 ```
@@ -2503,7 +2503,7 @@ Remove a handler from the logger.
 
 ---
 
-### `BasicConfig/1`
+### `basic_config/1`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:basicconfig_1"
 ```
@@ -2749,7 +2749,7 @@ The following are not builtins in the registry — they are syntax forms compile
     | `tests/test_dcg.py` | DCG rules, `phrase/2`, `phrase/3` (26 tests) |
     | `tests/fixtures/dcg_grammar.clausal` | `phrase/2`, `phrase/3`, DCG with non-terminals, inline goals, pushback, negation |
     | `tests/fixtures/clpb_circuit.clausal` | `sat/1`, `bool_labeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
-    | `tests/fixtures/logging_basic.clausal` | `GetLogger`, `SetLevel`, `GetLevel`, `IsEnabledFor`, `Debug`, `Info`, `Warning`, `Error`, `Critical`, `Log`, `StreamHandler`, `SetFormatter`, `AddHandler`, `RemoveHandler` |
+    | `tests/fixtures/logging_basic.clausal` | `get_logger`, `set_level`, `get_level`, `is_enabled_for`, `debug`, `info`, `warning`, `error`, `critical`, `log`, `stream_handler`, `set_formatter`, `add_handler`, `remove_handler` |
     | `tests/test_date_time.py` (99 tests) | `now`, `now_utc`, `today`, `date`, `time`, `datetime`, `timedelta`, `date_add`, `date_sub`, `date_diff`, `datetime_string`, `weekday`, `date_between`, `timestamp`, `datetime_string_iso`, `date_string_iso` |
     | `tests/test_yaml_module.py` | `Read`, `write`, `ReadAll`, `WriteAll`, `ReadFile`, `WriteFile`, `Get` (45 tests) |
     | `tests/fixtures/yaml_basic.clausal` | `Read`, `write`, `Get` — parsing, nested access, round-trip |

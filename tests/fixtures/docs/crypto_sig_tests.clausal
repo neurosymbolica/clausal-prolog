@@ -1,24 +1,24 @@
 # Companion tests for docs/crypto.md display snippets.
 # Validates that documented predicates exist and work as shown.
 
--import_from(py.hash, [Hash, HashBytes])
--import_from(py.hmac, [sign, Verify])
--import_from(py.pbkdf2, [Derive])
+-import_from(py.hash, [hash, hash_bytes])
+-import_from(py.hmac, [sign, verify])
+-import_from(py.pbkdf2, [derive])
 
-# ── Hash ─────────────────────────────────────────────────────────────────────
+# ── hash ─────────────────────────────────────────────────────────────────────
 
 Test("hash sha256") <- (
-    Hash("sha256", "abc", HEX),
+    hash("sha256", "abc", HEX),
     HEX == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 )  # nv
 
 Test("hash md5 empty") <- (
-    Hash("md5", "", HEX),
+    hash("md5", "", HEX),
     HEX == "d41d8cd98f00b204e9800998ecf8427e"
 )  # nv
 
 Test("hash bytes sha256") <- (
-    HashBytes("sha256", "abc", RAW),
+    hash_bytes("sha256", "abc", RAW),
     LEN is ++len(RAW),
     LEN == 32
 )  # nv
@@ -27,7 +27,7 @@ Test("hash bytes sha256") <- (
 
 Test("hmac sign and verify") <- (
     sign("secret-key", "message", SIG),
-    Verify("secret-key", "message", SIG)
+    verify("secret-key", "message", SIG)
 )  # nv
 
 Test("hmac sha512") <- (
@@ -38,13 +38,13 @@ Test("hmac sha512") <- (
 # ── PBKDF2 ───────────────────────────────────────────────────────────────────
 
 Test("pbkdf2 derive") <- (
-    Derive("password", "salt", 100000, HASH),
+    derive("password", "salt", 100000, HASH),
     LEN is ++len(HASH),
     LEN == 64
 )  # nv
 
 Test("pbkdf2 derive custom length") <- (
-    Derive("password", "salt", 100000, 64, HASH),
+    derive("password", "salt", 100000, 64, HASH),
     LEN is ++len(HASH),
     LEN == 128
 )  # nv

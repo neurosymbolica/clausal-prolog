@@ -7,10 +7,10 @@ The `regex` standard library module provides regular expression predicates for `
 ## Quick Example
 
 ```clausal
--import_from(regex, [Match])
+-import_from(regex, [match])
 
 ParseDate(DATE, YEAR, MONTH) <- (
-    Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", DATE)
+    match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", DATE)
 )
 
 Test("parse date") <- (
@@ -40,27 +40,27 @@ Or via [module import](import.md):
 
 ## Predicates
 
-### Match/2 — Boolean Match
+### match/2 — Boolean match
 
-`Match(Pattern, String)` — succeeds if Pattern matches String (anchored at start):
+`match(Pattern, String)` — succeeds if Pattern matches String (anchored at start):
 
 ```clausal
--import_from(regex, [Match])
+-import_from(regex, [match])
 
-Test("match digits") <- Match(r"\d+", "123")
-Test("match fails") <- (not Match(r"\d+", "abc"))
-Test("match anchored") <- (not Match(r"\d+$", "123abc"))
+Test("match digits") <- match(r"\d+", "123")
+Test("match fails") <- (not match(r"\d+", "abc"))
+Test("match anchored") <- (not match(r"\d+$", "123abc"))
 ```
 
-### Match/3 — Group Extraction
+### match/3 — Group Extraction
 
-`Match(Pattern, String, Groups)` — unifies Groups with a dict of named groups (or tuple of positional groups):
+`match(Pattern, String, Groups)` — unifies Groups with a dict of named groups (or tuple of positional groups):
 
 ```clausal
--import_from(regex, [Match])
+-import_from(regex, [match])
 
 Test("named groups") <- (
-    Match(r"(?P<year>\d{4})-(?P<month>\d{2})", "2026-03", G),
+    match(r"(?P<year>\d{4})-(?P<month>\d{2})", "2026-03", G),
     YEAR is ++G["year"],
     MONTH is ++G["month"],
     YEAR == "2026",
@@ -68,23 +68,23 @@ Test("named groups") <- (
 )
 
 Test("positional groups") <- (
-    Match(r"(\d+)-(\d+)", "42-99", G),
+    match(r"(\d+)-(\d+)", "42-99", G),
     G == ("42", "99")
 )
 ```
 
-### Search/2, Search/3
+### search/2, search/3
 
-Like Match but unanchored — finds the pattern anywhere in the string:
+Like match but unanchored — finds the pattern anywhere in the string:
 
 ```clausal
--import_from(regex, [Search])
+-import_from(regex, [search])
 
-Test("search found") <- Search(r"\d+", "abc123def")
-Test("search not found") <- (not Search(r"\d+", "abcdef"))
+Test("search found") <- search(r"\d+", "abc123def")
+Test("search not found") <- (not search(r"\d+", "abcdef"))
 
 Test("search groups") <- (
-    Search(r"(?P<key>\w+)=(?P<val>\w+)", "foo bar=baz", G),
+    search(r"(?P<key>\w+)=(?P<val>\w+)", "foo bar=baz", G),
     KEY is ++G["key"],
     VAL is ++G["val"],
     KEY == "bar",
@@ -92,31 +92,31 @@ Test("search groups") <- (
 )
 ```
 
-### Replace/4
+### replace/4
 
-`Replace(Pattern, Replacement, String, Result)` — regex substitution:
+`replace(Pattern, Replacement, String, Result)` — regex substitution:
 
 ```clausal
--import_from(regex, [Replace])
+-import_from(regex, [replace])
 
-Test("collapse spaces") <- (Replace(r"\s+", " ", "a  b   c", R), R == "a b c")
-Test("remove digits") <- (Replace(r"\d+", "", "a1b2c3", R), R == "abc")
+Test("collapse spaces") <- (replace(r"\s+", " ", "a  b   c", R), R == "a b c")
+Test("remove digits") <- (replace(r"\d+", "", "a1b2c3", R), R == "abc")
 ```
 
-### Split/3
+### split/3
 
-`Split(Pattern, String, Fragments)` — split string by pattern:
+`split(Pattern, String, Fragments)` — split string by pattern:
 
 ```clausal
--import_from(regex, [Split])
+-import_from(regex, [split])
 
-Test("split csv") <- (Split(r",\s*", "a, b, c", F), F == ["a", "b", "c"])
-Test("split whitespace") <- (Split(r"\s+", "x y z", F), F == ["x", "y", "z"])
+Test("split csv") <- (split(r",\s*", "a, b, c", F), F == ["a", "b", "c"])
+Test("split whitespace") <- (split(r"\s+", "x y z", F), F == ["x", "y", "z"])
 ```
 
 ### findall/3 (Regex)
 
-`findall(Pattern, String, Match)` — nondeterministic; succeeds once for each non-overlapping match:
+`findall(Pattern, String, match)` — nondeterministic; succeeds once for each non-overlapping match:
 
 ```clausal
 -import_from(regex, [findall])
@@ -135,10 +135,10 @@ Named groups using ALLCAPS or leading-underscore names are automatically bound t
 ### ALLCAPS Groups
 
 ```clausal
--import_from(regex, [Match])
+-import_from(regex, [match])
 
 ParseEmail(EMAIL, USER, DOMAIN) <- (
-    Match(r"(?P<USER>[^@]+)@(?P<DOMAIN>.+)", EMAIL)
+    match(r"(?P<USER>[^@]+)@(?P<DOMAIN>.+)", EMAIL)
 )
 
 Test("parse email") <- (
@@ -151,10 +151,10 @@ Test("parse email") <- (
 ### Leading-Underscore Groups
 
 ```clausal
--import_from(regex, [Search])
+-import_from(regex, [search])
 
 ExtractPort(URL, _port) <- (
-    Search(r":(?P<_port>\d+)", URL)
+    search(r":(?P<_port>\d+)", URL)
 )
 
 Test("extract port") <- (
@@ -165,7 +165,7 @@ Test("extract port") <- (
 
 ### How It Works
 
-The goal expansion pass detects `(?P<NAME>...)` patterns where NAME matches a variable in scope. It rewrites the Match/2 call into Match/3 plus unification:
+The goal expansion pass detects `(?P<NAME>...)` patterns where NAME matches a variable in scope. It rewrites the match/2 call into match/3 plus unification:
 
 ```clausal
 --8<-- "tests/fixtures/docs/regex_sigs.txt:expansion_example"
@@ -180,13 +180,13 @@ You never see the expanded form — just use the variable names in your pattern.
 ### Log Parsing
 
 ```clausal
--import_from(regex, [Match])
+-import_from(regex, [match])
 
 ParseLogLine(LINE, LEVEL, MESSAGE) <- (
-    Match(r"(?P<LEVEL>INFO|WARN|ERROR)\s+(?P<MESSAGE>.+)", LINE)
+    match(r"(?P<LEVEL>INFO|WARN|ERROR)\s+(?P<MESSAGE>.+)", LINE)
 )
 
-IsError(LINE) <- Match(r"^ERROR", LINE)
+IsError(LINE) <- match(r"^ERROR", LINE)
 
 Test("parse log info") <- (
     ParseLogLine("INFO system started", LEVEL, MSG),
@@ -200,9 +200,9 @@ Test("not error") <- (not IsError("INFO ok"))
 ### CSV Field Extraction
 
 ```clausal
--import_from(regex, [Split])
+-import_from(regex, [split])
 
-ParseCsv(LINE, FIELDS) <- Split(r",\s*", LINE, FIELDS)
+ParseCsv(LINE, FIELDS) <- split(r",\s*", LINE, FIELDS)
 
 Test("parse csv") <- (
     ParseCsv("a, b, c", FIELDS),
@@ -213,13 +213,13 @@ Test("parse csv") <- (
 ### URL Routing
 
 ```clausal
--import_from(regex, [Match])
+-import_from(regex, [match])
 
 RouteUser(PATH, USER_ID) <- (
-    Match(r"/users/(?P<USER_ID>\d+)", PATH)
+    match(r"/users/(?P<USER_ID>\d+)", PATH)
 )
 
-RouteApi(PATH) <- Match(r"^/api/v\d+/", PATH)
+RouteApi(PATH) <- match(r"^/api/v\d+/", PATH)
 
 Test("route user") <- (RouteUser("/users/42", UID), UID == "42")
 Test("route api") <- RouteApi("/api/v2/data")
@@ -229,10 +229,10 @@ Test("not api") <- (not RouteApi("/users/1"))
 ### Data Validation
 
 ```clausal
--import_from(regex, [Match])
+-import_from(regex, [match])
 
-ValidEmail(S) <- Match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", S)
-ValidIpv4(S) <- Match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", S)
+ValidEmail(S) <- match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", S)
+ValidIpv4(S) <- match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", S)
 
 Test("valid email") <- ValidEmail("alice@example.com")
 Test("invalid email") <- (not ValidEmail("not-an-email"))
@@ -273,11 +273,11 @@ The goal expansion pass (`clausal/logic/goal_expansion.py`) detects string-liter
 Patterns can be variables or f-strings — they are compiled at runtime:
 
 ```clausal
--import_from(regex, [Match])
+-import_from(regex, [match])
 
 MatchPrefix(PREFIX, TEXT) <- (
     PAT is f"^{PREFIX}",
-    Match(PAT, TEXT)
+    match(PAT, TEXT)
 )
 
 Test("dynamic prefix") <- MatchPrefix("hello", "hello world")
@@ -290,7 +290,7 @@ Dynamic patterns are compiled at runtime (no precompilation).
 
 ## Gotchas
 
-- **Match is anchored at start**; Search is not. Use `Search` when you want to find a pattern anywhere in the string.
+- **match is anchored at start**; search is not. Use `search` when you want to find a pattern anywhere in the string.
 - **Auto-binding requires ALLCAPS or leading-underscore** group names. A group named `(?P<year>...)` (lowercase, no leading underscore) will NOT auto-bind — use `(?P<YEAR>...)` instead.
 - **Regex findall vs [meta-predicate findall](meta_predicates.md)**: The regex `findall/3` is nondeterministic (yields one match at a time). The meta-predicate `findall/3` collects all solutions into a list. Use qualified names (`regex.findall`) if both are imported.
 - **Dynamic patterns skip precompilation**. For hot loops, prefer string literals so the pattern is compiled once at load time.
@@ -301,12 +301,12 @@ Dynamic patterns are compiled at runtime (no precompilation).
 
     Tests are in `tests/test_regex.py` (93 tests).
 
-    - **Match/2**: digits, anchoring, email, empty, unicode
-    - **Match/3**: named groups, positional groups, no match
+    - **match/2**: digits, anchoring, email, empty, unicode
+    - **match/3**: named groups, positional groups, no match
     - **Auto-binding**: ALLCAPS groups, leading-underscore groups
-    - **Search/2,3**: unanchored search, group extraction
-    - **Replace/4**: whitespace, digit removal, backreferences
-    - **Split/3**: comma, whitespace
+    - **search/2,3**: unanchored search, group extraction
+    - **replace/4**: whitespace, digit removal, backreferences
+    - **split/3**: comma, whitespace
     - **findall/3**: multiple matches, no matches
     - **Edge cases**: dynamic patterns, pattern variables
     - **Fixture integration**: `regex_basic.clausal` (25 tests), `regex_autobind.clausal` (17 tests)

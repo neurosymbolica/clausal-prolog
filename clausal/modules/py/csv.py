@@ -3,12 +3,12 @@
 Provides relational predicates for parsing and generating CSV data.
 Import via::
 
-    -import_from(py.csv, [Parse, ParseRow, ParseRecords, Generate, ReadFile])
+    -import_from(py.csv, [parse, parse_row, parse_records, generate, read_file])
 
 Or via module import::
 
     -import_module(py.csv)
-    # then use py.csv.Parse(S_, ROWS_), py.csv.ReadFile("data.csv", ROWS_), etc.
+    # then use py.csv.parse(S_, ROWS_), py.csv.read_file("data.csv", ROWS_), etc.
 
 Type mapping
 ------------
@@ -48,7 +48,7 @@ def _deref_row(row):
 
 
 def _parse_row_2(string, row, trail, k):
-    """ParseRow/2: parse a single CSV line into a list of strings."""
+    """parse_row/2: parse a single CSV line into a list of strings."""
     string = deref(string)
     if is_var(string) or not isinstance(string, str):
         return
@@ -62,7 +62,7 @@ def _parse_row_2(string, row, trail, k):
 
 
 def _parse_2(string, rows, trail, k):
-    """Parse/2: parse a multi-line CSV string into a list of rows."""
+    """parse/2: parse a multi-line CSV string into a list of rows."""
     string = deref(string)
     if is_var(string) or not isinstance(string, str):
         return
@@ -73,7 +73,7 @@ def _parse_2(string, rows, trail, k):
 
 
 def _parse_records_3(string, headers, records, trail, k):
-    """ParseRecords/3: parse CSV with headers → list of DictTerms."""
+    """parse_records/3: parse CSV with headers → list of DictTerms."""
     string = deref(string)
     if is_var(string) or not isinstance(string, str):
         return
@@ -90,7 +90,7 @@ def _parse_records_3(string, headers, records, trail, k):
 
 
 def _generate_2(rows, string, trail, k):
-    """Generate/2: serialize a list of rows to CSV string."""
+    """generate/2: serialize a list of rows to CSV string."""
     rows = deref(rows)
     if is_var(rows) or not isinstance(rows, list):
         return
@@ -110,7 +110,7 @@ def _generate_2(rows, string, trail, k):
 
 
 def _generate_records_3(headers, records, string, trail, k):
-    """GenerateRecords/3: serialize DictTerm records with header row."""
+    """generate_records/3: serialize DictTerm records with header row."""
     headers, records = deref(headers), deref(records)
     if is_var(headers) or not isinstance(headers, list):
         return
@@ -135,7 +135,7 @@ def _generate_records_3(headers, records, string, trail, k):
 
 
 def _read_file_2(path, rows, trail, k):
-    """ReadFile/2: read and parse a CSV file into list of rows."""
+    """read_file/2: read and parse a CSV file into list of rows."""
     path = deref(path)
     if is_var(path) or not isinstance(path, str):
         return
@@ -150,7 +150,7 @@ def _read_file_2(path, rows, trail, k):
 
 
 def _read_records_2(path, records, trail, k):
-    """ReadRecords/2: read CSV file with headers → list of DictTerms."""
+    """read_records/2: read CSV file with headers → list of DictTerms."""
     path = deref(path)
     if is_var(path) or not isinstance(path, str):
         return
@@ -165,7 +165,7 @@ def _read_records_2(path, records, trail, k):
 
 
 def _write_file_2(path, rows, trail, k):
-    """WriteFile/2: serialize rows and write to CSV file."""
+    """write_file/2: serialize rows and write to CSV file."""
     path, rows = deref(path), deref(rows)
     if is_var(path) or not isinstance(path, str):
         return
@@ -186,26 +186,26 @@ def _write_file_2(path, rows, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-ParseRow = ModulePredicate("ParseRow")
-ParseRow._register(2, simple_to_trampoline(_parse_row_2))
+parse_row = ModulePredicate("parse_row")
+parse_row._register(2, simple_to_trampoline(_parse_row_2))
 
-Parse = ModulePredicate("Parse")
-Parse._register(2, simple_to_trampoline(_parse_2))
+parse = ModulePredicate("parse")
+parse._register(2, simple_to_trampoline(_parse_2))
 
-ParseRecords = ModulePredicate("ParseRecords")
-ParseRecords._register(3, simple_to_trampoline(_parse_records_3))
+parse_records = ModulePredicate("parse_records")
+parse_records._register(3, simple_to_trampoline(_parse_records_3))
 
-Generate = ModulePredicate("Generate")
-Generate._register(2, simple_to_trampoline(_generate_2))
+generate = ModulePredicate("generate")
+generate._register(2, simple_to_trampoline(_generate_2))
 
-GenerateRecords = ModulePredicate("GenerateRecords")
-GenerateRecords._register(3, simple_to_trampoline(_generate_records_3))
+generate_records = ModulePredicate("generate_records")
+generate_records._register(3, simple_to_trampoline(_generate_records_3))
 
-ReadFile = ModulePredicate("ReadFile")
-ReadFile._register(2, simple_to_trampoline(_read_file_2))
+read_file = ModulePredicate("read_file")
+read_file._register(2, simple_to_trampoline(_read_file_2))
 
-ReadRecords = ModulePredicate("ReadRecords")
-ReadRecords._register(2, simple_to_trampoline(_read_records_2))
+read_records = ModulePredicate("read_records")
+read_records._register(2, simple_to_trampoline(_read_records_2))
 
-WriteFile = ModulePredicate("WriteFile")
-WriteFile._register(2, simple_to_trampoline(_write_file_2))
+write_file = ModulePredicate("write_file")
+write_file._register(2, simple_to_trampoline(_write_file_2))

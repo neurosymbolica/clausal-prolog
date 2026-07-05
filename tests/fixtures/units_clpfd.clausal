@@ -3,7 +3,7 @@
     Newton, Joule, Watt,
     Volt, Ampere, Ohm,
     Dimensionless,
-    StripUnits])
+    strip_units])
 
 # Units + CLP(FD): label integer variables, then wrap with unit predicates
 # and verify dimensional correctness.
@@ -18,7 +18,7 @@ Test("clpfd label as newton") <- (
     F_INT == 12,
     F := ++(Newton(F_INT)),
     has_units(F, Newton),
-    StripUnits(F, 12)
+    strip_units(F, 12)
 )  # nv
 
 # Find two distinct integers whose product is 12,
@@ -64,7 +64,7 @@ Test("clpfd kinetic energy") <- (
     KE := MASS * SPD ** 2,
     HALF := KE / 2,
     has_units(HALF, Joule),
-    StripUnits(HALF, 25)
+    strip_units(HALF, 25)
 )  # nv
 
 # Generate integer power values, filter those divisible by 3,
@@ -87,7 +87,7 @@ Test("clpfd force equals mass times accel") <- (
     F_INT == 20,
     F := ++(Newton(F_INT)),
     has_units(F, Newton),
-    StripUnits(F, 20)
+    strip_units(F, 20)
 )  # nv
 
 # Power = V^2 / R: find integers V in 1..12, R in 1..6 where V^2 / R = 12.

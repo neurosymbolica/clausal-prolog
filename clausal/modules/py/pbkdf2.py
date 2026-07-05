@@ -3,7 +3,7 @@
 Provides relational predicates for PBKDF2-HMAC-SHA256 key derivation.
 Import via::
 
-    -import_from(py.pbkdf2, [Derive])
+    -import_from(py.pbkdf2, [derive])
 
 Wraps Python's ``hashlib.pbkdf2_hmac``.
 """
@@ -20,7 +20,7 @@ from clausal.logic.variables import deref, is_var, unify
 
 
 def _derive_5(password, salt, iterations, key_length, derived_key, trail, k):
-    """Derive/5: Derive(Password, Salt, Iterations, KeyLength, DerivedKey)."""
+    """derive/5: derive(Password, Salt, Iterations, KeyLength, DerivedKey)."""
     pw = deref(password)
     sa = deref(salt)
     it = deref(iterations)
@@ -41,12 +41,12 @@ def _derive_5(password, salt, iterations, key_length, derived_key, trail, k):
 
 
 def _derive_4(password, salt, iterations, derived_key, trail, k):
-    """Derive/4: default KeyLength=32 bytes."""
+    """derive/4: default KeyLength=32 bytes."""
     yield from _derive_5(password, salt, iterations, 32, derived_key, trail, k)
 
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Derive = ModulePredicate("Derive")
-Derive._register(4, simple_to_trampoline(_derive_4))
-Derive._register(5, simple_to_trampoline(_derive_5))
+derive = ModulePredicate("derive")
+derive._register(4, simple_to_trampoline(_derive_4))
+derive._register(5, simple_to_trampoline(_derive_5))

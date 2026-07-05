@@ -4,25 +4,25 @@
     Newton, Joule, Watt, Hertz, Pascal,
     Volt, Ampere, Ohm, Coulomb,
     Bar, Quantity, Dimensionless,
-    StripUnits, DimensionOf, MakeQuantity,
+    strip_units, dimension_of, make_quantity,
     SpeedOfLight, StandardGravity])
 
-# SI base unit constructors: build with n(Unit) sugar, extract with StripUnits
+# SI base unit constructors: build with n(Unit) sugar, extract with strip_units
 
-Test("meter roundtrip") <- StripUnits(5(Metre), 5)  # nv
-Test("kilogram roundtrip") <- StripUnits(70(Kilogram), 70)  # nv
-Test("second roundtrip") <- StripUnits(60(Second), 60)  # nv
-Test("kelvin roundtrip") <- StripUnits(300(Kelvin), 300)  # nv
-Test("newton roundtrip") <- StripUnits(9.8(Newton), 9.8)  # nv
-Test("joule roundtrip") <- StripUnits(100(Joule), 100)  # nv
-Test("hertz roundtrip") <- StripUnits(440(Hertz), 440)  # nv
-Test("ohm roundtrip") <- StripUnits(10(Ohm), 10)  # nv
-Test("volt roundtrip") <- StripUnits(230(Volt), 230)  # nv
-Test("coulomb roundtrip") <- StripUnits(3(Coulomb), 3)  # nv
+Test("meter roundtrip") <- strip_units(5(Metre), 5)  # nv
+Test("kilogram roundtrip") <- strip_units(70(Kilogram), 70)  # nv
+Test("second roundtrip") <- strip_units(60(Second), 60)  # nv
+Test("kelvin roundtrip") <- strip_units(300(Kelvin), 300)  # nv
+Test("newton roundtrip") <- strip_units(9.8(Newton), 9.8)  # nv
+Test("joule roundtrip") <- strip_units(100(Joule), 100)  # nv
+Test("hertz roundtrip") <- strip_units(440(Hertz), 440)  # nv
+Test("ohm roundtrip") <- strip_units(10(Ohm), 10)  # nv
+Test("volt roundtrip") <- strip_units(230(Volt), 230)  # nv
+Test("coulomb roundtrip") <- strip_units(3(Coulomb), 3)  # nv
 
 Test("centimeter roundtrip") <- (
     D := 200(Centimeter),
-    StripUnits(D, RAW),
+    strip_units(D, RAW),
     ERR := ++(abs(RAW - 2.0)),
     ERR < 1.0e-9
 )  # nv
@@ -55,7 +55,7 @@ Test("velocity from distance over time") <- (
     D := 100(Metre),
     T := 10(Second),
     V := D / T,
-    StripUnits(V, 10.0),
+    strip_units(V, 10.0),
     has_units(V, Metre/Second)
 )  # nv
 
@@ -64,7 +64,7 @@ Test("acceleration from velocity over time") <- (
     T := 2(Second),
     V := D / T,
     A := V / T,
-    StripUnits(A, 5.0),
+    strip_units(A, 5.0),
     has_units(A, Metre/Second**2)
 )  # nv
 
@@ -81,14 +81,14 @@ Test("force from mass times acceleration") <- (
 Test("area from side squared") <- (
     SIDE := 4(Metre),
     AREA := SIDE ** 2,
-    StripUnits(AREA, 16),
+    strip_units(AREA, 16),
     has_units(AREA, Metre**2)
 )  # nv
 
 Test("volume from side cubed") <- (
     SIDE := 2(Metre),
     VOL := SIDE ** 3,
-    StripUnits(VOL, 8),
+    strip_units(VOL, 8),
     has_units(VOL, Metre**3)
 )  # nv
 
@@ -148,7 +148,7 @@ Test("bar stores as pascals") <- (
 
 Test("make dimensioned from dict") <- (
     DIMS := ++{Kilogram: 1, Metre: 1, Second: -2},
-    MakeQuantity(10, DIMS, D),
+    make_quantity(10, DIMS, D),
     D == 10(Newton)
 )  # nv
 
@@ -172,7 +172,7 @@ Test("weight from standard gravity") <- (
 
 Test("dimensionless roundtrip") <- (
     PARTIAL := 5.0(),
-    StripUnits(PARTIAL, VALUE),
+    strip_units(PARTIAL, VALUE),
     VALUE == 5.0,
     PARTIAL == ++(Quantity(5.0, {}))
 )  # nv
@@ -201,8 +201,8 @@ Test("ischarge") <- (Q := 1(Coulomb), has_units(Q, Coulomb))  # nv
 
 Test("valueof and stripdimensions") <- (
     F := 9.8(Newton),
-    StripUnits(F, 9.8),
-    StripUnits(F, 9.8)
+    strip_units(F, 9.8),
+    strip_units(F, 9.8)
 )  # nv
 
 # X(Unit) in expression position: wraps a runtime value in a Quantity.
@@ -212,7 +212,7 @@ Test("var construction sugar") <- (
     N := 9.8,
     F := N(Newton),
     has_units(F, Newton),
-    StripUnits(F, 9.8)
+    strip_units(F, 9.8)
 )  # nv
 
 Test("constraint accepts matching unit") <- (
@@ -276,7 +276,7 @@ Test("compound dims constraint rejects wrong unit") <- (
 Test("dimensionless integer sugar") <- (
     D := 42(),
     has_units(D, Dimensionless),
-    StripUnits(D, 42)
+    strip_units(D, 42)
 )  # nv
 
 Test("dimensionless float sugar") <- (
@@ -307,7 +307,7 @@ Test("dimensionless via dimensionless check") <- (D := 0(), has_units(D, Dimensi
 Test("dimensionless arithmetic via escape") <- (
     S := ++(Quantity(3, {}) + Quantity(2, {})),
     has_units(S, Dimensionless),
-    StripUnits(S, 5)
+    strip_units(S, 5)
 )  # nv
 
 Test("dimensionless ratio from division") <- (

@@ -28,28 +28,28 @@ def _clear_query_cache():
 
 _MATCHERS = """\
 -import_from(reflection, [
-    ReifiedItem, ReifiedClause, ReifiedSubterm,
-    ClauseBody, GoalFunctor,
+    reified_item, reified_clause, reified_subterm,
+    clause_body, goal_functor,
     Clause, Goal, Variable,
 ])
 
-ShapeXY(SRC) <- ReifiedClause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))
+ShapeXY(SRC) <- reified_clause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))
 
-CaptureFirstArg(SRC, A) <- ReifiedClause(SRC, MyPred(A, _) <- GOALS)
+CaptureFirstArg(SRC, A) <- reified_clause(SRC, MyPred(A, _) <- GOALS)
 
-CaptureBody(SRC, GOALS) <- ReifiedClause(SRC, MyPred(_, _) <- GOALS)
+CaptureBody(SRC, GOALS) <- reified_clause(SRC, MyPred(_, _) <- GOALS)
 
-FactWithAtom(SRC) <- ReifiedClause(SRC, Tagged(_, ok) <- True)
+FactWithAtom(SRC) <- reified_clause(SRC, Tagged(_, ok) <- True)
 
-OperatorBody(SRC) <- ReifiedClause(SRC, Positive(A) <- (A > 0))
+OperatorBody(SRC) <- reified_clause(SRC, Positive(A) <- (A > 0))
 
-NestedCompound(SRC) <- ReifiedClause(SRC, Holds(State(A)) <- Check(A))
+NestedCompound(SRC) <- reified_clause(SRC, Holds(State(A)) <- Check(A))
 
-NegationBody(SRC) <- ReifiedClause(SRC, Free(A) <- (not Busy(A)))
+NegationBody(SRC) <- reified_clause(SRC, Free(A) <- (not Busy(A)))
 
 # Sugar goal inside a multi-goal body (exercises conjunction recursion).
 TwoGoalBody(SRC) <- (
-    ReifiedClause(SRC, MyPred(_, _) <- GOALS),
+    reified_clause(SRC, MyPred(_, _) <- GOALS),
     GOALS is [_, _]
 )
 

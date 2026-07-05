@@ -1,78 +1,78 @@
--import_from(py.uuid, [UUIDv4, UUIDv1, UUIDv3, UUIDv5, UUIDStr, UUIDHex, UUIDUrn, UUIDBytes, UUIDInt, UUIDVersion, UUIDFields, IsUUID])
+-import_from(py.uuid, [uuid_v4, uuid_v1, uuid_v3, uuid_v5, uuid_str, uuid_hex, uuid_urn, uuid_bytes, uuid_int, uuid_version, uuid_fields, is_uuid])
 
 # ── Generation ──────────────────────────────────────────────────────
 
 Test("uuid4 generates") <- (
-    UUIDv4(U),
-    IsUUID(U)
+    uuid_v4(U),
+    is_uuid(U)
 )  # nv
 
 Test("uuid1 generates") <- (
-    UUIDv1(U),
-    IsUUID(U)
+    uuid_v1(U),
+    is_uuid(U)
 )  # nv
 
 Test("uuid3 deterministic") <- (
-    UUIDv3("dns", "example.com", U1),
-    UUIDv3("dns", "example.com", U2),
-    UUIDStr(U1, S1),
-    UUIDStr(U2, S2),
+    uuid_v3("dns", "example.com", U1),
+    uuid_v3("dns", "example.com", U2),
+    uuid_str(U1, S1),
+    uuid_str(U2, S2),
     S1 == S2
 )  # nv
 
 Test("uuid5 deterministic") <- (
-    UUIDv5("url", "https://example.com", U1),
-    UUIDv5("url", "https://example.com", U2),
-    UUIDStr(U1, S1),
-    UUIDStr(U2, S2),
+    uuid_v5("url", "https://example.com", U1),
+    uuid_v5("url", "https://example.com", U2),
+    uuid_str(U1, S1),
+    uuid_str(U2, S2),
     S1 == S2
 )  # nv
 
 # ── Conversion roundtrips ──────────────────────────────────────────
 
 Test("uuid str roundtrip") <- (
-    UUIDv4(U),
-    UUIDStr(U, S),
-    UUIDStr(U2, S),
-    UUIDStr(U2, S2),
+    uuid_v4(U),
+    uuid_str(U, S),
+    uuid_str(U2, S),
+    uuid_str(U2, S2),
     S == S2
 )  # nv
 
 Test("uuid hex roundtrip") <- (
-    UUIDv4(U),
-    UUIDHex(U, HEX),
-    UUIDHex(U2, HEX),
-    UUIDHex(U2, HEX2),
+    uuid_v4(U),
+    uuid_hex(U, HEX),
+    uuid_hex(U2, HEX),
+    uuid_hex(U2, HEX2),
     HEX == HEX2
 )  # nv
 
 Test("uuid int roundtrip") <- (
-    UUIDv4(U),
-    UUIDInt(U, N),
-    UUIDInt(U2, N),
-    UUIDInt(U2, N2),
+    uuid_v4(U),
+    uuid_int(U, N),
+    uuid_int(U2, N),
+    uuid_int(U2, N2),
     N == N2
 )  # nv
 
 # ── Inspection ─────────────────────────────────────────────────────
 
 Test("uuid4 version is 4") <- (
-    UUIDv4(U),
-    UUIDVersion(U, 4)
+    uuid_v4(U),
+    uuid_version(U, 4)
 )  # nv
 
 Test("uuid3 version is 3") <- (
-    UUIDv3("dns", "test", U),
-    UUIDVersion(U, 3)
+    uuid_v3("dns", "test", U),
+    uuid_version(U, 3)
 )  # nv
 
 Test("uuid5 version is 5") <- (
-    UUIDv5("dns", "test", U),
-    UUIDVersion(U, 5)
+    uuid_v5("dns", "test", U),
+    uuid_version(U, 5)
 )  # nv
 
 Test("uuid fields decompose") <- (
-    UUIDv4(U),
-    UUIDFields(U, TIME_LOW, TIME_MID, TIME_HI, CLOCK_SEQ_HI, CLOCK_SEQ_LOW, NODE),
-    IsUUID(U)
+    uuid_v4(U),
+    uuid_fields(U, TIME_LOW, TIME_MID, TIME_HI, CLOCK_SEQ_HI, CLOCK_SEQ_LOW, NODE),
+    is_uuid(U)
 )  # nv

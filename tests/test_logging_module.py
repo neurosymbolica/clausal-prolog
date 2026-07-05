@@ -419,17 +419,17 @@ class TestLoggingFixture:
         request.cls.mod = _load_fixture("logging_basic")
 
     @pytest.mark.parametrize("name", [
-        # GetLogger
+        # get_logger
         "get_logger named",
         "get_logger same name",
         "get_logger default",
-        # SetLevel / GetLevel
+        # set_level / get_level
         "set_level debug",
         "set_level warning",
         "set_level error",
         "set_level critical",
         "set_level info",
-        # IsEnabledFor
+        # is_enabled_for
         "enabled_for yes",
         "enabled_for no",
         "enabled_for same level",
@@ -439,7 +439,7 @@ class TestLoggingFixture:
         "warning succeeds",
         "error succeeds",
         "critical succeeds",
-        # Log/3
+        # log/3
         "log at info",
         "log at debug",
         # Arity-1 shorthand
@@ -448,11 +448,11 @@ class TestLoggingFixture:
         "warning arity 1",
         "error arity 1",
         "critical arity 1",
-        # StreamHandler / AddHandler
+        # stream_handler / add_handler
         "stream_handler stdout",
         "stream_handler stderr",
         "add_handler",
-        # SetFormatter
+        # set_formatter
         "set_formatter",
         # Hierarchy
         "logger hierarchy",

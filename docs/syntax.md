@@ -12,7 +12,7 @@ Clausal uses 'grammatical holes' which are and must remain syntactically valid, 
 
 **Expression statements ending in `,` are interpreted as logical terms (facts or goals).**
 
-in_ standard Python, an expression statement that ends in a comma produces a tuple which is then discarded. So this is never used despite being valid (a grammatical hole). It also means these logic terms are easy to cut, copy, paste, and indent — unlike Prolog, they don't require `.` terminators.
+In standard Python, an expression statement that ends in a comma produces a tuple which is then discarded. So this is never used despite being valid (a grammatical hole). It also means these logic terms are easy to cut, copy, paste, and indent — unlike Prolog, they don't require `.` terminators.
 
 ---
 
@@ -23,7 +23,7 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 | Operator | Meaning |
 |---|---|
 | `--expr` | Python expression embedded inside a logic term |
-| `++expr` | in_ Python context: logic term inside a Python expression. in_ `.clausal` context: evaluate Python expression at search time |
+| `++expr` | In a Python context: logic term inside a Python expression. In a `.clausal` context: evaluate Python expression at search time |
 | `~~expr` | Capture expression as a `simple_ast` AST node (works anywhere) |
 
 `--` was chosen because:
@@ -60,7 +60,7 @@ A single `_` is the anonymous variable — it never stores a value, and unificat
 
 Logic variables are not declared; they come into existence by appearing in logical context. They work differently from Python variables: they can be unbound, and their bindings are undone on backtracking. This difference warrants a clear visual marker.
 
-This is a deliberate departure from Prolog, where variables start with an uppercase letter (`Foo`, `Bar`). in_ Python, titlecase names are conventionally class names — and Clausal uses them for predicates and functors (e.g. `findall`, `in_`, `length`). Using titlecase for both variables and predicates would create ambiguity: is `Foo(Bar)` calling predicate `Foo` with atom `Bar`, or with variable `Bar`? ALL-CAPS resolves this cleanly — `findall(X, in_(X, LIST), BAG)` is unambiguous.
+This is a deliberate departure from Prolog, where variables start with an uppercase letter (`Foo`, `Bar`). In Python, TitleCase names are conventionally class names, so Clausal reserves TitleCase for atoms and compound-term functors (`Red`, `Point(X, Y)`); predicates themselves are lowercase (`findall`, `in_`, `length`). Reusing TitleCase for variables as well would create ambiguity: in `Foo(Bar)`, is `Bar` the atom `Bar` or a logic variable? ALL-CAPS resolves this cleanly — `findall(X, in_(X, LIST), BAG)` is unambiguous.
 
 Why ALL-CAPS works well:
 - Python programmers already associate titlecase with class names — static, global, noun-like. This is actually close to how atoms and predicates behave, not variables.
@@ -108,13 +108,13 @@ Predicates with arity ≥ 1 do **not** participate in the global default: they r
 
 ## Builtin predicate naming
 
-All built-in predicates use **PascalCase** (e.g. `findall`, `in_`, `assertz`, `var`). This is a deliberate design choice — not aesthetic — with two goals:
+Built-in predicates are lowercase `snake_case` (e.g. `findall`, `assertz`, `var`, `read_file`). Where a natural name collides with Python, a **trailing underscore** disambiguates. This is a deliberate design choice — not aesthetic — with two goals:
 
-1. **Avoid Python keyword conflicts.** Many natural predicate names are Python reserved words: `not`, `in`, `is`, `and`, `or`, `if`, `for`, `assert`, `lambda`, `global`, `return`, `yield`. A Prolog-style lowercase predicate named `in` or `not` would be a syntax error the moment it appears as a function call in a clause body.
+1. **Avoid Python keyword conflicts.** Many natural predicate names are Python reserved words: `in`, `is`, `not`, `and`, `or`, `if`, `for`, `assert`, `lambda`, `global`, `return`, `yield`. A predicate named `in` would be a syntax error the moment it appears as a call in a clause body — so membership is spelled `in_`.
 
-2. **Avoid Python builtin conflicts.** Names like `abs`, `all`, `any`, `callable`, `filter`, `float`, `int`, `map`, `max`, `min`, `set`, `str`, `sum`, `var` are Python builtins that shadow (or would shadow) predicates if used lowercase.
+2. **Avoid Python builtin conflicts.** Names like `abs`, `all`, `any`, `filter`, `float`, `int`, `map`, `max`, `min`, `set`, `str`, `sum` are Python builtins that would shadow (or be shadowed by) a same-named predicate — so these take a trailing underscore: `abs_`, `float_`, `max_`, `min_`, `sum_`, `divmod_`.
 
-PascalCase keeps the builtin namespace cleanly separate from both Python keywords and user-defined (lowercase) predicates. User predicates are written in `lowercase` or `snake_case` as usual; they never conflict with builtins.
+The trailing underscore keeps the builtin namespace cleanly separate from Python keywords and builtins. User predicates follow the same `snake_case` convention, and only need the underscore where they would hit the same collision.
 
 ---
 
@@ -658,13 +658,13 @@ EDCGs are based on Peter Van Roy's 1989 design and use three directives to decla
 An accumulator has a name and a **joiner goal** that relates a pushed value to the input/output state:
 
 ```clausal
-# Numeric counter: Out = in_ + Value
+# Numeric counter: Out = in + Value
 -edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 
 # List accumulator: prepend items
 -edcg_acc(items, ITEM, IN, OUT, {OUT is [ITEM, *IN]})
 
-# Product accumulator: Out = in_ * Value
+# Product accumulator: Out = in * Value
 -edcg_acc(product, X, IN, OUT, {OUT == IN * X})
 ```
 
