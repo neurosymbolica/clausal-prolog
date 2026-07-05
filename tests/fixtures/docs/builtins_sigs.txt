@@ -947,57 +947,53 @@ BasicConfig(+Opts)
 # === Date & Time (`date_time` module) ===
 
 --8<-- [start:now_1]
-Now(-DT)
+now(-DT)
 --8<-- [end:now_1]
 
 --8<-- [start:nowutc_1]
-NowUTC(-DT)
+now_utc(-DT)
 --8<-- [end:nowutc_1]
 
 --8<-- [start:today_1]
-Today(-D)
+today(-D)
 --8<-- [end:today_1]
 
 --8<-- [start:date_4]
-Date(?Year, ?Month, ?Day, ?DateObj)
+date(?Year, ?Month, ?Day, ?DateObj)
 --8<-- [end:date_4]
 
 --8<-- [start:time_4]
-Time(?Hour, ?Minute, ?Second, ?TimeObj)
+time(?Hour, ?Minute, ?Second, ?TimeObj)
 --8<-- [end:time_4]
 
 --8<-- [start:datetime_7]
-DateTime(?Year, ?Month, ?Day, ?Hour, ?Minute, ?Second, ?DtObj)
+datetime(?Year, ?Month, ?Day, ?Hour, ?Minute, ?Second, ?DtObj)
 --8<-- [end:datetime_7]
 
 --8<-- [start:timedelta_3]
-TimeDelta(?Days, ?Seconds, ?TdObj)
+timedelta(?Days, ?Seconds, ?TdObj)
 --8<-- [end:timedelta_3]
 
 --8<-- [start:dateadd_3]
-DateAdd(+DateOrDatetime, +Timedelta, -Result)
+date_add(+DateOrDatetime, +Timedelta, -Result)
 --8<-- [end:dateadd_3]
 
 --8<-- [start:datesub_3]
-DateSub(+DateOrDatetime, +Timedelta, -Result)
+date_sub(+DateOrDatetime, +Timedelta, -Result)
 --8<-- [end:datesub_3]
 
 --8<-- [start:datediff_3]
-DateDiff(+D1, +D2, -Timedelta)
+date_diff(+D1, +D2, -Timedelta)
 --8<-- [end:datediff_3]
 
---8<-- [start:formatdate_3]
-FormatDate(+DateOrDatetime, +FormatStr, -ResultStr)
---8<-- [end:formatdate_3]
+--8<-- [start:datetime_string_3]
+datetime_string(?DateTime, ?String, +Format)
+--8<-- [end:datetime_string_3]
 
---8<-- [start:parsedate_3]
-ParseDate(+String, +FormatStr, -DatetimeObj)
---8<-- [end:parsedate_3]
-
---8<-- [start:dayofweek_2]
-DayOfWeek(+DateOrDatetime, -Weekday)
---8<-- [end:dayofweek_2]
+--8<-- [start:weekday_2]
+weekday(+DateOrDatetime, -Weekday)
+--8<-- [end:weekday_2]
 
 --8<-- [start:datebetween_3]
-DateBetween(+Start, +End, -D)
+date_between(+Start, +End, -D)
 --8<-- [end:datebetween_3]

@@ -1,120 +1,120 @@
 # Companion tests for docs/date_time.md display snippets.
 
--import_from(date_time, [Now, NowUTC, Today, Date, Time, DateTime,
-                         TimeDelta, DateAdd, DateSub, DateDiff, DaysBetween,
-                         FormatDate, ParseDate, DateOf, DayOfWeek])
+-import_from(date_time, [now, now_utc, today, date, time, datetime,
+                         timedelta, date_add, date_sub, date_diff, days_between,
+                         datetime_string, date_of, weekday])
 
-# ── Now/Today ────────────────────────────────────────────────────────────────
+# ── now/today ────────────────────────────────────────────────────────────────
 
-Test("now") <- Now(_)  # nv
-Test("now utc") <- NowUTC(_)  # nv
-Test("today") <- Today(_)  # nv
+Test("now") <- now(_)  # nv
+Test("now utc") <- now_utc(_)  # nv
+Test("today") <- today(_)  # nv
 
-# ── Date ─────────────────────────────────────────────────────────────────────
+# ── date ─────────────────────────────────────────────────────────────────────
 
-Test("date construct") <- Date(2026, 3, 16, _)  # nv
+Test("date construct") <- date(2026, 3, 16, _)  # nv
 
 Test("date decompose") <- (
-    Date(2026, 3, 16, D),
-    Date(Y, M, DAY, D),
+    date(2026, 3, 16, D),
+    date(Y, M, DAY, D),
     Y == 2026,
     M == 3,
     DAY == 16
 )  # nv
 
-# ── Time ─────────────────────────────────────────────────────────────────────
+# ── time ─────────────────────────────────────────────────────────────────────
 
-Test("time construct") <- Time(14, 30, 0, _)  # nv
+Test("time construct") <- time(14, 30, 0, _)  # nv
 
 Test("time decompose") <- (
-    Time(14, 30, 0, T),
-    Time(H, M, S, T),
+    time(14, 30, 0, T),
+    time(H, M, S, T),
     H == 14,
     M == 30,
     S == 0
 )  # nv
 
-# ── DateTime ─────────────────────────────────────────────────────────────────
+# ── datetime ─────────────────────────────────────────────────────────────────
 
-Test("datetime construct") <- DateTime(2026, 3, 16, 14, 30, 0, _)  # nv
+Test("datetime construct") <- datetime(2026, 3, 16, 14, 30, 0, _)  # nv
 
-# ── TimeDelta ────────────────────────────────────────────────────────────────
+# ── timedelta ────────────────────────────────────────────────────────────────
 
-Test("timedelta construct") <- TimeDelta(7, 0, _)  # nv
+Test("timedelta construct") <- timedelta(7, 0, _)  # nv
 
 # ── Arithmetic ───────────────────────────────────────────────────────────────
 
 Test("date add") <- (
-    Date(2026, 3, 16, D),
-    TimeDelta(7, 0, TD),
-    DateAdd(D, TD, R),
-    Date(2026, 3, 23, R)
+    date(2026, 3, 16, D),
+    timedelta(7, 0, TD),
+    date_add(D, TD, R),
+    date(2026, 3, 23, R)
 )  # nv
 
 Test("date sub") <- (
-    Date(2026, 3, 23, D),
-    TimeDelta(7, 0, TD),
-    DateSub(D, TD, R),
-    Date(2026, 3, 16, R)
+    date(2026, 3, 23, D),
+    timedelta(7, 0, TD),
+    date_sub(D, TD, R),
+    date(2026, 3, 16, R)
 )  # nv
 
 Test("date diff") <- (
-    Date(2026, 3, 23, D1),
-    Date(2026, 3, 16, D2),
-    DateDiff(D1, D2, TD),
-    TimeDelta(7, 0, TD)
+    date(2026, 3, 23, D1),
+    date(2026, 3, 16, D2),
+    date_diff(D1, D2, TD),
+    timedelta(7, 0, TD)
 )  # nv
 
-# ── Format/Parse ─────────────────────────────────────────────────────────────
+# ── datetime_string ───────────────────────────────────────────────────────────
 
 Test("format date") <- (
-    Date(2026, 3, 16, D),
-    FormatDate(D, "%Y-%m-%d", S),
+    date(2026, 3, 16, D),
+    datetime_string(D, S, "%Y-%m-%d"),
     S == "2026-03-16"
 )  # nv
 
 Test("parse date") <- (
-    ParseDate("2026-03-16", "%Y-%m-%d", DT),
+    datetime_string(DT, "2026-03-16", "%Y-%m-%d"),
     nonvar(DT)
-)  # nv
+)  # vn
 
-# ── DateOf (datetime → date, no ++DT.date()) ──────────────────────────────────
+# ── date_of (datetime → date, no ++DT.date()) ─────────────────────────────────
 
 Test("date of datetime") <- (
-    DateTime(2026, 3, 16, 14, 30, 0, DT),
-    DateOf(DT, D),
-    Date(2026, 3, 16, D)
+    datetime(2026, 3, 16, 14, 30, 0, DT),
+    date_of(DT, D),
+    date(2026, 3, 16, D)
 )  # nv
 
 Test("date of inverse midnight") <- (
-    Date(2026, 3, 16, D),
-    DateOf(DT, D),
-    DateTime(2026, 3, 16, 0, 0, 0, DT)
+    date(2026, 3, 16, D),
+    date_of(DT, D),
+    datetime(2026, 3, 16, 0, 0, 0, DT)
 )  # vn
 
-# ── DaysBetween (direct integer day count) ────────────────────────────────────
+# ── days_between (direct integer day count) ───────────────────────────────────
 
 Test("days between") <- (
-    Date(2026, 3, 23, A),
-    Date(2026, 3, 16, B),
-    DaysBetween(A, B, N),
+    date(2026, 3, 23, A),
+    date(2026, 3, 16, B),
+    days_between(A, B, N),
     N == 7
 )  # nnv
 
 # Schengen-style "parse ISO → date → diff" with no ++ Python escapes.
 Test("parse iso to date diff no escapes") <- (
-    ParseDate("2026-03-23", "%Y-%m-%d", DT_A),
-    ParseDate("2026-03-16", "%Y-%m-%d", DT_B),
-    DateOf(DT_A, A),
-    DateOf(DT_B, B),
-    DaysBetween(A, B, N),
+    datetime_string(DT_A, "2026-03-23", "%Y-%m-%d"),
+    datetime_string(DT_B, "2026-03-16", "%Y-%m-%d"),
+    date_of(DT_A, A),
+    date_of(DT_B, B),
+    days_between(A, B, N),
     N == 7
-)  # nv
+)  # vn
 
-# ── DayOfWeek ────────────────────────────────────────────────────────────────
+# ── weekday ──────────────────────────────────────────────────────────────────
 
 Test("day of week") <- (
-    Date(2026, 3, 16, D),
-    DayOfWeek(D, DOW),
+    date(2026, 3, 16, D),
+    weekday(D, DOW),
     number(DOW)
 )  # nv

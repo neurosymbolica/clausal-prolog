@@ -92,7 +92,7 @@ Notation in signature lines:
 | [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
 | [I/O](#io) | write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | GetLogger, Debug, Info, Warning, Error, Critical, Log, SetLevel, GetLevel, StreamHandler, FileHandler |
-| [Date & Time (`date_time` module)](#date--time-date_time-module) | Now, Today, Date, Time, DateTime, DateAdd, DateSub, DateDiff, FormatDate, ParseDate, DateBetween |
+| [Date & Time (`date_time` module)](#date--time-date_time-module) | now, today, date, time, datetime, date_add, date_sub, date_diff, datetime_string, weekday, date_between |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
 | [Time & statistics](#time--statistics) | current_time/1, statistics/2 |
 | [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `:=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
@@ -2516,9 +2516,9 @@ Call `logging.basicConfig()` with a dict of options (level, format, datefmt, fil
 
 ## Date & Time (`date_time` module)
 
-Standard library module wrapping Python's `datetime`. Import via `-import_from(date_time, [Now, Today, Date, ...])`. All predicates produce and consume **real Python `datetime` objects** — `datetime.date`, `datetime.time`, `datetime.datetime`, `datetime.timedelta` — not custom term types. Unification uses Python's native `==`. Any `datetime` method can be called via `++()` interop (e.g. `S is ++D.isoformat()`).
+Standard library module wrapping Python's `datetime`. Import via `-import_from(date_time, [now, today, date, ...])`. All predicates produce and consume **real Python `datetime` objects** — `datetime.date`, `datetime.time`, `datetime.datetime`, `datetime.timedelta` — not custom term types. Unification uses Python's native `==`. Any `datetime` method can be called via `++()` interop (e.g. `S is ++D.isoformat()`).
 
-### `Now/1`
+### `now/1`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:now_1"
 ```
@@ -2530,7 +2530,7 @@ Unify `DT` with `datetime.datetime.now()` (naive, local time).
 
 ---
 
-### `NowUTC/1`
+### `now_utc/1`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:nowutc_1"
 ```
@@ -2541,7 +2541,7 @@ Unify `DT` with `datetime.datetime.now(datetime.timezone.utc)` (timezone-aware).
 
 ---
 
-### `Today/1`
+### `today/1`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:today_1"
 ```
@@ -2552,7 +2552,7 @@ Unify `D` with `datetime.date.today()`.
 
 ---
 
-### `Date/4`
+### `date/4`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:date_4"
 ```
@@ -2564,7 +2564,7 @@ Bidirectional. If `DateObj` is unbound, constructs `datetime.date(Year, Month, D
 
 ---
 
-### `Time/4`
+### `time/4`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:time_4"
 ```
@@ -2575,7 +2575,7 @@ Bidirectional. If `TimeObj` is unbound, constructs `datetime.time(Hour, Minute, 
 
 ---
 
-### `DateTime/7`
+### `datetime/7`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:datetime_7"
 ```
@@ -2586,7 +2586,7 @@ Bidirectional. If `DtObj` is unbound, constructs `datetime.datetime(Year, Month,
 
 ---
 
-### `TimeDelta/3`
+### `timedelta/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:timedelta_3"
 ```
@@ -2597,7 +2597,7 @@ Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, 
 
 ---
 
-### `DateAdd/3`
+### `date_add/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:dateadd_3"
 ```
@@ -2608,7 +2608,7 @@ Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, 
 
 ---
 
-### `DateSub/3`
+### `date_sub/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:datesub_3"
 ```
@@ -2619,7 +2619,7 @@ Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, 
 
 ---
 
-### `DateDiff/3`
+### `date_diff/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:datediff_3"
 ```
@@ -2630,31 +2630,20 @@ Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, 
 
 ---
 
-### `FormatDate/3`
+### `datetime_string/3`
 ```clausal
---8<-- "tests/fixtures/docs/builtins_sigs.txt:formatdate_3"
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:datetime_string_3"
 ```
-`ResultStr = DateOrDatetime.strftime(FormatStr)`. Works with `datetime.date`, `datetime.time`, and `datetime.datetime`.
+Bidirectional. Format mode (`DateTime` has `strftime`): `String = DateTime.strftime(Format)`. Parse mode (`DateTime` unbound, `String` a string): `DateTime = datetime.strptime(String, Format)`. `Format` must be a ground string. Note: `strptime` always yields a `datetime`, so a `date` round-trips to a midnight `datetime`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/modules/date_time.py`
 
 ---
 
-### `ParseDate/3`
+### `weekday/2`
 ```clausal
---8<-- "tests/fixtures/docs/builtins_sigs.txt:parsedate_3"
-```
-`DatetimeObj = datetime.datetime.strptime(String, FormatStr)`. Fails if the string does not match the format.
-
-??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
-
----
-
-### `DayOfWeek/2`
-```clausal
---8<-- "tests/fixtures/docs/builtins_sigs.txt:dayofweek_2"
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:weekday_2"
 ```
 `Weekday = DateOrDatetime.weekday()`. Monday = 0, Sunday = 6.
 
@@ -2663,7 +2652,7 @@ Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, 
 
 ---
 
-### `DateBetween/3`
+### `date_between/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:datebetween_3"
 ```
@@ -2737,6 +2726,6 @@ The following are not builtins in the registry — they are syntax forms compile
     | `tests/fixtures/dcg_grammar.clausal` | `phrase/2`, `phrase/3`, DCG with non-terminals, inline goals, pushback, negation |
     | `tests/fixtures/clpb_circuit.clausal` | `sat/1`, `bool_labeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
     | `tests/fixtures/logging_basic.clausal` | `GetLogger`, `SetLevel`, `GetLevel`, `IsEnabledFor`, `Debug`, `Info`, `Warning`, `Error`, `Critical`, `Log`, `StreamHandler`, `SetFormatter`, `AddHandler`, `RemoveHandler` |
-    | `tests/test_date_time.py` | `Now`, `NowUTC`, `Today`, `Date`, `Time`, `DateTime`, `TimeDelta`, `DateAdd`, `DateSub`, `DateDiff`, `FormatDate`, `ParseDate`, `DayOfWeek`, `DateBetween` (64 tests) |
+    | `tests/test_date_time.py` | `now`, `now_utc`, `today`, `date`, `time`, `datetime`, `timedelta`, `date_add`, `date_sub`, `date_diff`, `datetime_string`, `weekday`, `date_between` (81 tests) |
     | `tests/test_yaml_module.py` | `Read`, `write`, `ReadAll`, `WriteAll`, `ReadFile`, `WriteFile`, `Get` (45 tests) |
     | `tests/fixtures/yaml_basic.clausal` | `Read`, `write`, `Get` — parsing, nested access, round-trip |

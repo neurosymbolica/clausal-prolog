@@ -88,9 +88,9 @@ _skip_no_venv = pytest.mark.skipif(
 def test_transitive_python_backed_module_import(tmp_path):
     """B (.clausal) imports A (.clausal) which re-exports a py-backed module."""
     (tmp_path / "mod_dt.clausal").write_text(textwrap.dedent("""\
-        -import_from(date_time, [Date, DateDiff])
+        -import_from(date_time, [date, date_diff])
         days_between(Y1,M1,D1, Y2,M2,D2, N) <- (
-            Date(Y1,M1,D1, S), Date(Y2,M2,D2, E), DateDiff(E, S, TD), N is ++TD.days)
+            date(Y1,M1,D1, S), date(Y2,M2,D2, E), date_diff(E, S, TD), N is ++TD.days)
     """))
     (tmp_path / "use_dt.clausal").write_text(textwrap.dedent("""\
         -import_from(mod_dt, [days_between])
@@ -120,9 +120,9 @@ def test_transitive_python_backed_module_import(tmp_path):
 def test_direct_python_backed_module_import(tmp_path):
     """A single .clausal file importing a py-backed module also works from any cwd."""
     (tmp_path / "direct_dt.clausal").write_text(textwrap.dedent("""\
-        -import_from(date_time, [Date, DateDiff])
+        -import_from(date_time, [date, date_diff])
         Test("direct date_time import") <- (
-            Date(2026,1,1, S), Date(2026,4,1, E), DateDiff(E, S, TD), ++TD.days == 90)
+            date(2026,1,1, S), date(2026,4,1, E), date_diff(E, S, TD), ++TD.days == 90)
     """))
 
     proc = subprocess.run(

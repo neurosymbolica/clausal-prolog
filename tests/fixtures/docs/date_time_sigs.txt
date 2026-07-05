@@ -1,60 +1,57 @@
 # Display snippets for docs/date_time.md
 
 --8<-- [start:now_today]
-Now(DT)        # DT = datetime.datetime.now()
-NowUTC(DT)     # DT = datetime.datetime.now(UTC)
-Today(D)       # D = datetime.date.today()
+now(DT)        # DT = datetime.datetime.now()
+now_utc(DT)    # DT = datetime.datetime.now(UTC)
+today(D)       # D = datetime.date.today()
 --8<-- [end:now_today]
 
 --8<-- [start:date_examples]
 # Construct
-Date(2026, 3, 16, D)    # D = datetime.date(2026, 3, 16)
+date(2026, 3, 16, D)    # D = datetime.date(2026, 3, 16)
 
 # Decompose
-Date(Y, M, D, SomeDateObj)    # Y, M, D bound to components
+date(Y, M, D, SomeDateObj)    # Y, M, D bound to components
 --8<-- [end:date_examples]
 
 --8<-- [start:time_examples]
-Time(14, 30, 0, T)      # T = datetime.time(14, 30, 0)
-Time(H, M, S, T)      # decompose T into components
+time(14, 30, 0, T)      # T = datetime.time(14, 30, 0)
+time(H, M, S, T)      # decompose T into components
 --8<-- [end:time_examples]
 
 --8<-- [start:datetime_example]
-DateTime(2026, 3, 16, 14, 30, 0, DT)
+datetime(2026, 3, 16, 14, 30, 0, DT)
 # DT = datetime.datetime(2026, 3, 16, 14, 30, 0)
 --8<-- [end:datetime_example]
 
 --8<-- [start:timedelta_examples]
-TimeDelta(7, 0, TD)     # TD = datetime.timedelta(days=7)
-TimeDelta(D, S, TD)    # decompose TD into days and seconds
+timedelta(7, 0, TD)     # TD = datetime.timedelta(days=7)
+timedelta(D, S, TD)    # decompose TD into days and seconds
 --8<-- [end:timedelta_examples]
 
 --8<-- [start:date_add_sub]
-DateAdd(DATE, DELTA, RESULT)    # RESULT = DATE + DELTA
-DateSub(DATE, DELTA, RESULT)    # RESULT = DATE - DELTA
+date_add(DATE, DELTA, RESULT)    # RESULT = DATE + DELTA
+date_sub(DATE, DELTA, RESULT)    # RESULT = DATE - DELTA
 --8<-- [end:date_add_sub]
 
 --8<-- [start:date_diff]
-DateDiff(D1, D2, TD)    # TD = D1 - D2 (timedelta)
+date_diff(D1, D2, TD)    # TD = D1 - D2 (timedelta)
 --8<-- [end:date_diff]
 
 --8<-- [start:days_between]
-DaysBetween(A, B, N)    # N = (A - B).days (integer) — no DateDiff+decompose
+days_between(A, B, N)    # N = (A - B).days (integer) — no date_diff+decompose
 --8<-- [end:days_between]
 
 --8<-- [start:date_of]
-DateOf(DT, D)    # D = DT.date()        (datetime → date)
-DateOf(DT, D)    # DT = midnight of D   (date → datetime; DT unbound)
+date_of(DT, D)    # D = DT.date()        (datetime → date)
+date_of(DT, D)    # DT = midnight of D   (date → datetime; DT unbound)
 --8<-- [end:date_of]
 
---8<-- [start:format_date]
-FormatDate(DT, "%Y-%m-%d", S)    # S = "2026-03-16"
---8<-- [end:format_date]
+--8<-- [start:datetime_string]
+datetime_string(DT, S, "%Y-%m-%d")    # format: S = "2026-03-16"
+datetime_string(DT, "2026-03-16", "%Y-%m-%d")    # parse: DT = midnight datetime
+--8<-- [end:datetime_string]
 
---8<-- [start:parse_date]
-ParseDate("2026-03-16", "%Y-%m-%d", DT)    # DT = datetime.datetime(...)
---8<-- [end:parse_date]
-
---8<-- [start:day_of_week]
-DayOfWeek(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
---8<-- [end:day_of_week]
+--8<-- [start:weekday]
+weekday(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
+--8<-- [end:weekday]

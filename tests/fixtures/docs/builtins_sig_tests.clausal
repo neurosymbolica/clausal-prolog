@@ -378,20 +378,20 @@ Test("log: SetLevel/GetLevel exist") <- (
 
 # ── Date & Time (date_time module) ───────────────────────────────────────────
 
--import_from(date_time, [Now, Today, Date, Time, DateTime, TimeDelta,
-    DateAdd, DateDiff, FormatDate, DayOfWeek])
+-import_from(date_time, [now, today, date, time, datetime, timedelta,
+    date_add, date_diff, datetime_string, weekday])
 
-Test("date_time: Now exists") <- Now(_)  # nv
-Test("date_time: Today exists") <- Today(_)  # nv
+Test("date_time: now exists") <- now(_)  # nv
+Test("date_time: today exists") <- today(_)  # nv
 
-Test("date_time: Date exists") <- (
-    Date(2024, 1, 15, D),
-    FormatDate(D, "%Y-%m-%d", S),
+Test("date_time: date exists") <- (
+    date(2024, 1, 15, D),
+    datetime_string(D, S, "%Y-%m-%d"),
     S == "2024-01-15"
 )  # nv
 
-Test("date_time: DayOfWeek exists") <- (
-    Date(2024, 1, 15, D),
-    DayOfWeek(D, W),
+Test("date_time: weekday exists") <- (
+    date(2024, 1, 15, D),
+    weekday(D, W),
     integer(W)
 )  # nv

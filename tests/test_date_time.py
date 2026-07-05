@@ -11,13 +11,13 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.datetime import (
-    Now, NowUTC, Today, Date, Time, DateTime, TimeDelta,
-    DateAdd, DateSub, DateDiff, FormatDate, ParseDate,
-    DayOfWeek, DateBetween, DateOf, DaysBetween,
+    now, now_utc, today, date, time, datetime, timedelta,
+    date_add, date_sub, date_diff, date_between, date_of, days_between,
+    weekday, datetime_string,
     _now_1, _now_utc_1, _today_1,
     _date_4, _time_4, _datetime_7, _timedelta_3,
     _date_add_3, _date_sub_3, _date_diff_3,
-    _format_date_3, _parse_date_3, _day_of_week_2,
+    _datetime_string_3, _weekday_2,
     _date_of_2, _days_between_3,
 )
 from clausal.logic.trampoline import DONE
@@ -360,15 +360,15 @@ class TestDateDiff:
         assert len(results) == 0
 
 
-# ── FormatDate/3 ────────────────────────────────────────────────────────
+# ── datetime_string/3 — bidirectional strftime/strptime ─────────────────
 
 
-class TestFormatDate:
+class TestDatetimeString:
     def test_format_date(self):
-        # nv
+        # nv — format mode
         s = Var()
         results, _ = simple_solutions(
-            _format_date_3, dt.date(2026, 3, 16), "%Y-%m-%d", s
+            _datetime_string_3, dt.date(2026, 3, 16), s, "%Y-%m-%d"
         )
         assert len(results) == 1
         assert deref(s) == "2026-03-16"
@@ -377,10 +377,8 @@ class TestFormatDate:
         # nv
         s = Var()
         results, _ = simple_solutions(
-            _format_date_3,
-            dt.datetime(2026, 3, 16, 14, 30, 0),
-            "%Y-%m-%d %H:%M",
-            s,
+            _datetime_string_3,
+            dt.datetime(2026, 3, 16, 14, 30, 0), s, "%Y-%m-%d %H:%M",
         )
         assert len(results) == 1
         assert deref(s) == "2026-03-16 14:30"
@@ -389,57 +387,62 @@ class TestFormatDate:
         # nv
         s = Var()
         results, _ = simple_solutions(
-            _format_date_3, dt.time(14, 30, 0), "%H:%M:%S", s
+            _datetime_string_3, dt.time(14, 30, 0), s, "%H:%M:%S"
         )
         assert len(results) == 1
         assert deref(s) == "14:30:00"
 
-
-# ── ParseDate/3 ─────────────────────────────────────────────────────────
-
-
-class TestParseDate:
-    def test_parse_date_string(self):
-        # nv
+    def test_parse_to_datetime(self):
+        # vn — parse mode
         v = Var()
         results, _ = simple_solutions(
-            _parse_date_3, "2026-03-16", "%Y-%m-%d", v
+            _datetime_string_3, v, "2026-03-16 14:30", "%Y-%m-%d %H:%M"
         )
         assert len(results) == 1
-        val = deref(v)
-        assert isinstance(val, dt.datetime)
-        assert val.year == 2026
-        assert val.month == 3
-        assert val.day == 16
+        assert deref(v) == dt.datetime(2026, 3, 16, 14, 30)
 
-    def test_parse_datetime_string(self):
-        # nv
-        v = Var()
+    def test_check_mode_matches(self):
+        # nn — both ground, format matches
         results, _ = simple_solutions(
-            _parse_date_3, "2026-03-16 14:30", "%Y-%m-%d %H:%M", v
+            _datetime_string_3, dt.date(2026, 3, 16), "2026-03-16", "%Y-%m-%d"
         )
         assert len(results) == 1
-        val = deref(v)
-        assert val == dt.datetime(2026, 3, 16, 14, 30)
 
-    def test_parse_invalid_fails(self):
-        # nv
-        v = Var()
+    def test_check_mode_mismatch_fails(self):
+        # nn
         results, _ = simple_solutions(
-            _parse_date_3, "not-a-date", "%Y-%m-%d", v
+            _datetime_string_3, dt.date(2026, 3, 16), "2026-03-17", "%Y-%m-%d"
         )
         assert len(results) == 0
 
-    def test_parse_format_roundtrip(self):
-        """Parse then format should round-trip."""
-        # nv
-        parsed = Var()
-        simple_solutions(_parse_date_3, "2026-03-16", "%Y-%m-%d", parsed)
-        formatted = Var()
-        simple_solutions(
-            _format_date_3, deref(parsed), "%Y-%m-%d", formatted
+    def test_parse_invalid_fails(self):
+        # vn
+        v = Var()
+        results, _ = simple_solutions(
+            _datetime_string_3, v, "not-a-date", "%Y-%m-%d"
         )
-        assert deref(formatted) == "2026-03-16"
+        assert len(results) == 0
+
+    def test_both_unbound_fails(self):
+        # vv
+        results, _ = simple_solutions(_datetime_string_3, Var(), Var(), "%Y-%m-%d")
+        assert len(results) == 0
+
+    def test_unbound_format_fails(self):
+        # format arg must be ground
+        results, _ = simple_solutions(
+            _datetime_string_3, dt.date(2026, 3, 16), Var(), Var()
+        )
+        assert len(results) == 0
+
+    def test_date_roundtrips_to_midnight_datetime(self):
+        """A date → string → back yields a midnight datetime (documented asymmetry)."""
+        # nv then vn
+        s = Var()
+        simple_solutions(_datetime_string_3, dt.date(2026, 3, 16), s, "%Y-%m-%d")
+        v = Var()
+        simple_solutions(_datetime_string_3, v, deref(s), "%Y-%m-%d")
+        assert deref(v) == dt.datetime(2026, 3, 16, 0, 0, 0)
 
 
 # ── DayOfWeek/2 ─────────────────────────────────────────────────────────
@@ -450,7 +453,7 @@ class TestDayOfWeek:
         # nv
         dow = Var()
         results, _ = simple_solutions(
-            _day_of_week_2, dt.date(2026, 3, 16), dow  # Monday
+            _weekday_2, dt.date(2026, 3, 16), dow  # Monday
         )
         assert len(results) == 1
         assert deref(dow) == 0  # Monday = 0
@@ -459,7 +462,7 @@ class TestDayOfWeek:
         # nv
         dow = Var()
         results, _ = simple_solutions(
-            _day_of_week_2, dt.date(2026, 3, 22), dow  # Sunday
+            _weekday_2, dt.date(2026, 3, 22), dow  # Sunday
         )
         assert len(results) == 1
         assert deref(dow) == 6
@@ -467,7 +470,7 @@ class TestDayOfWeek:
     def test_non_date_fails(self):
         # nv
         dow = Var()
-        results, _ = simple_solutions(_day_of_week_2, "not-a-date", dow)
+        results, _ = simple_solutions(_weekday_2, "not-a-date", dow)
         assert len(results) == 0
 
 
@@ -476,11 +479,11 @@ class TestDayOfWeek:
 
 class TestDateBetween:
     def test_range_three_days(self):
-        """DateBetween generates each date in [start, end]."""
+        """date_between generates each date in [start, end]."""
         # nv
         d = Var()
         solutions, trail = trampoline_solutions(
-            DateBetween,
+            date_between,
             dt.date(2026, 3, 14),
             dt.date(2026, 3, 16),
             d,
@@ -491,7 +494,7 @@ class TestDateBetween:
         # nv
         d = Var()
         solutions, _ = trampoline_solutions(
-            DateBetween,
+            date_between,
             dt.date(2026, 3, 16),
             dt.date(2026, 3, 16),
             d,
@@ -502,7 +505,7 @@ class TestDateBetween:
         # nv
         d = Var()
         solutions, _ = trampoline_solutions(
-            DateBetween,
+            date_between,
             dt.date(2026, 3, 17),
             dt.date(2026, 3, 16),
             d,
@@ -513,7 +516,7 @@ class TestDateBetween:
         # nv
         d = Var()
         solutions, _ = trampoline_solutions(
-            DateBetween,
+            date_between,
             dt.date(2026, 3, 10),
             dt.date(2026, 3, 16),
             d,
@@ -524,7 +527,7 @@ class TestDateBetween:
         # nv
         d = Var()
         solutions, _ = trampoline_solutions(
-            DateBetween, "2026-03-10", "2026-03-16", d
+            date_between, "2026-03-10", "2026-03-16", d
         )
         assert len(solutions) == 0
 
@@ -690,65 +693,61 @@ class TestUnification:
 class TestAdapters:
     def test_now_has_dispatch(self):
         # nv
-        assert callable(Now._get_dispatch())
+        assert callable(now._get_dispatch())
 
     def test_today_has_dispatch(self):
         # nv
-        assert callable(Today._get_dispatch())
+        assert callable(today._get_dispatch())
 
     def test_date_has_dispatch(self):
         # nv
-        assert callable(Date._get_dispatch())
+        assert callable(date._get_dispatch())
 
     def test_time_has_dispatch(self):
         # nv
-        assert callable(Time._get_dispatch())
+        assert callable(time._get_dispatch())
 
     def test_datetime_has_dispatch(self):
         # nv
-        assert callable(DateTime._get_dispatch())
+        assert callable(datetime._get_dispatch())
 
     def test_timedelta_has_dispatch(self):
         # nv
-        assert callable(TimeDelta._get_dispatch())
+        assert callable(timedelta._get_dispatch())
 
     def test_date_add_has_dispatch(self):
         # nv
-        assert callable(DateAdd._get_dispatch())
+        assert callable(date_add._get_dispatch())
 
     def test_date_sub_has_dispatch(self):
         # nv
-        assert callable(DateSub._get_dispatch())
+        assert callable(date_sub._get_dispatch())
 
     def test_date_diff_has_dispatch(self):
         # nv
-        assert callable(DateDiff._get_dispatch())
+        assert callable(date_diff._get_dispatch())
 
-    def test_format_date_has_dispatch(self):
+    def test_datetime_string_has_dispatch(self):
         # nv
-        assert callable(FormatDate._get_dispatch())
+        assert callable(datetime_string._get_dispatch())
 
-    def test_parse_date_has_dispatch(self):
+    def test_weekday_has_dispatch(self):
         # nv
-        assert callable(ParseDate._get_dispatch())
-
-    def test_day_of_week_has_dispatch(self):
-        # nv
-        assert callable(DayOfWeek._get_dispatch())
+        assert callable(weekday._get_dispatch())
 
     def test_date_between_has_dispatch(self):
         # nv
-        assert callable(DateBetween._get_dispatch())
+        assert callable(date_between._get_dispatch())
 
     def test_date_of_has_dispatch(self):
         # nv
-        assert callable(DateOf._get_dispatch())
+        assert callable(date_of._get_dispatch())
 
     def test_days_between_has_dispatch(self):
         # nv
-        assert callable(DaysBetween._get_dispatch())
+        assert callable(days_between._get_dispatch())
 
     def test_repr(self):
         # nv
-        assert "datetime.Date" in repr(Date)
-        assert "datetime.DateBetween" in repr(DateBetween)
+        assert "datetime.date" in repr(date)
+        assert "datetime.date_between" in repr(date_between)

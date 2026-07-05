@@ -3,24 +3,24 @@
 Provides relational predicates for constructing, decomposing, and
 manipulating dates and times.  Import via::
 
-    -import_from(py.datetime, [Now, Today, Date, Time, DateTime,
-                             TimeDelta, DateAdd, DateSub, DateDiff,
-                             DaysBetween, FormatDate, ParseDate,
-                             DateOf, DayOfWeek, DateBetween])
+    -import_from(date_time, [now, today, date, time, datetime,
+                             timedelta, date_add, date_sub, date_diff,
+                             days_between, datetime_string,
+                             date_of, weekday, date_between])
 
 Or via module import::
 
     -import_module(py.datetime)
-    # then use py.datetime.Now(...), py.datetime.Date(...), etc.
+    # then use py.datetime.now(...), py.datetime.date(...), etc.
 
 Python interop
 --------------
 All predicates produce and consume **real Python datetime objects**:
 
-- ``Date/4``      ↔ ``datetime.date``
-- ``Time/4``      ↔ ``datetime.time``
-- ``DateTime/7``  ↔ ``datetime.datetime``
-- ``TimeDelta/3`` ↔ ``datetime.timedelta``
+- ``date/4``      ↔ ``datetime.date``
+- ``time/4``      ↔ ``datetime.time``
+- ``datetime/7``  ↔ ``datetime.datetime``
+- ``timedelta/3`` ↔ ``datetime.timedelta``
 
 These are not custom term types — they are the actual Python classes from
 the ``datetime`` module.  Unification uses Python's native ``==``.  Any
@@ -29,15 +29,15 @@ values, e.g. ``S_ is ++D_.isoformat()`` or ``++D_.strftime("%Y-%m-%d")``.
 
 Bidirectional predicates
 ------------------------
-``Date/4``, ``Time/4``, ``DateTime/7``, ``TimeDelta/3``, and ``DateOf/2``
+``date/4``, ``time/4``, ``datetime/7``, ``timedelta/3``, and ``date_of/2``
 are bidirectional: pass ground components to construct, or pass a ground
 datetime object to decompose into components.
 
 Prefer these declarative predicates over ``++`` Python escapes:
-``DateOf(DT, D)`` instead of ``D is ++DT.date()``; ``TimeDelta(N, _, TD)``
-instead of ``N is ++TD.days``; ``FormatDate(DT, "%Y-%m-%d", S)`` instead
-of ``S is ++DT.isoformat()``; and ``DaysBetween(A, B, N)`` for a direct
-integer day count instead of ``DateDiff(A, B, TD), TimeDelta(N, _, TD)``.
+``date_of(DT, D)`` instead of ``D is ++DT.date()``; ``timedelta(N, _, TD)``
+instead of ``N is ++TD.days``; ``datetime_string(DT, S, "%Y-%m-%d")``
+instead of ``S is ++DT.isoformat()``; and ``days_between(A, B, N)`` for a
+direct integer day count instead of ``date_diff(A, B, TD), timedelta(N, _, TD)``.
 """
 
 from __future__ import annotations
@@ -259,40 +259,38 @@ def _date_diff_3(d1, d2, td, trail, k):
         yield None
 
 
-# ── FormatDate/3 — strftime ──────────────────────────────────────────────
+# ── datetime_string/3 — bidirectional strftime/strptime ──────────────────
 
 
-def _format_date_3(dt, fmt, s, trail, k):
-    """FormatDate/3: FormatDate(DateOrDatetime, FormatStr, ResultStr).
+def _datetime_string_3(dt_obj, s, fmt, trail, k):
+    """datetime_string/3: bidirectional — datetime_string(DateTime, String, Format).
 
-    ResultStr = dt.strftime(fmt).
+    Format mode (DateTime has ``strftime``): String = DateTime.strftime(Format);
+    with String bound this is a check.
+    Parse mode (DateTime unbound, String a string): DateTime =
+    datetime.strptime(String, Format).
+
+    Format must be a ground string in both modes.  Note: ``strftime`` accepts a
+    ``date``/``time``/``datetime`` but ``strptime`` always yields a ``datetime``,
+    so a date round-trips to a midnight datetime.
     """
-    dt, fmt, s = deref(dt), deref(fmt), deref(s)
-    if not hasattr(dt, 'strftime'):
+    dt_obj, s, fmt = deref(dt_obj), deref(s), deref(fmt)
+    if not isinstance(fmt, str):
         return
-    try:
-        out = dt.strftime(str(fmt))
-    except (TypeError, ValueError):
-        return
-    if unify(s, out, trail):
-        yield None
-
-
-# ── ParseDate/3 — strptime ──────────────────────────────────────────────
-
-
-def _parse_date_3(s, fmt, dt, trail, k):
-    """ParseDate/3: ParseDate(String, FormatStr, DatetimeObj).
-
-    DatetimeObj = datetime.datetime.strptime(s, fmt).
-    """
-    s, fmt, dt = deref(s), deref(fmt), deref(dt)
-    try:
-        out = _dt.datetime.strptime(str(s), str(fmt))
-    except (TypeError, ValueError):
-        return
-    if unify(dt, out, trail):
-        yield None
+    if hasattr(dt_obj, 'strftime'):
+        try:
+            out = dt_obj.strftime(fmt)
+        except (TypeError, ValueError):
+            return
+        if unify(s, out, trail):
+            yield None
+    elif is_var(dt_obj) and isinstance(s, str):
+        try:
+            out = _dt.datetime.strptime(s, fmt)
+        except (TypeError, ValueError):
+            return
+        if unify(dt_obj, out, trail):
+            yield None
 
 
 # ── DateOf/2 — datetime ↔ date ──────────────────────────────────────────
@@ -352,11 +350,11 @@ def _days_between_3(d1, d2, n, trail, k):
         yield None
 
 
-# ── DayOfWeek/2 — weekday ───────────────────────────────────────────────
+# ── weekday/2 — weekday ─────────────────────────────────────────────────
 
 
-def _day_of_week_2(d, dow, trail, k):
-    """DayOfWeek/2: DayOfWeek(DateOrDatetime, Weekday).
+def _weekday_2(d, dow, trail, k):
+    """weekday/2: weekday(DateOrDatetime, Weekday).
 
     Weekday = d.weekday() (0=Monday, 6=Sunday).
     """
@@ -392,50 +390,47 @@ def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, tr
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Now = ModulePredicate("Now", module="datetime")
-Now._register(1, simple_to_trampoline(_now_1))
+now = ModulePredicate("now", module="datetime")
+now._register(1, simple_to_trampoline(_now_1))
 
-NowUTC = ModulePredicate("NowUTC", module="datetime")
-NowUTC._register(1, simple_to_trampoline(_now_utc_1))
+now_utc = ModulePredicate("now_utc", module="datetime")
+now_utc._register(1, simple_to_trampoline(_now_utc_1))
 
-Today = ModulePredicate("Today", module="datetime")
-Today._register(1, simple_to_trampoline(_today_1))
+today = ModulePredicate("today", module="datetime")
+today._register(1, simple_to_trampoline(_today_1))
 
-Date = ModulePredicate("Date", module="datetime")
-Date._register(4, simple_to_trampoline(_date_4))
+date = ModulePredicate("date", module="datetime")
+date._register(4, simple_to_trampoline(_date_4))
 
-Time = ModulePredicate("Time", module="datetime")
-Time._register(4, simple_to_trampoline(_time_4))
+time = ModulePredicate("time", module="datetime")
+time._register(4, simple_to_trampoline(_time_4))
 
-DateTime = ModulePredicate("DateTime", module="datetime")
-DateTime._register(7, simple_to_trampoline(_datetime_7))
+datetime = ModulePredicate("datetime", module="datetime")
+datetime._register(7, simple_to_trampoline(_datetime_7))
 
-TimeDelta = ModulePredicate("TimeDelta", module="datetime")
-TimeDelta._register(3, simple_to_trampoline(_timedelta_3))
+timedelta = ModulePredicate("timedelta", module="datetime")
+timedelta._register(3, simple_to_trampoline(_timedelta_3))
 
-DateAdd = ModulePredicate("DateAdd", module="datetime")
-DateAdd._register(3, simple_to_trampoline(_date_add_3))
+date_add = ModulePredicate("date_add", module="datetime")
+date_add._register(3, simple_to_trampoline(_date_add_3))
 
-DateSub = ModulePredicate("DateSub", module="datetime")
-DateSub._register(3, simple_to_trampoline(_date_sub_3))
+date_sub = ModulePredicate("date_sub", module="datetime")
+date_sub._register(3, simple_to_trampoline(_date_sub_3))
 
-DateDiff = ModulePredicate("DateDiff", module="datetime")
-DateDiff._register(3, simple_to_trampoline(_date_diff_3))
+date_diff = ModulePredicate("date_diff", module="datetime")
+date_diff._register(3, simple_to_trampoline(_date_diff_3))
 
-FormatDate = ModulePredicate("FormatDate", module="datetime")
-FormatDate._register(3, simple_to_trampoline(_format_date_3))
+datetime_string = ModulePredicate("datetime_string", module="datetime")
+datetime_string._register(3, simple_to_trampoline(_datetime_string_3))
 
-ParseDate = ModulePredicate("ParseDate", module="datetime")
-ParseDate._register(3, simple_to_trampoline(_parse_date_3))
+date_of = ModulePredicate("date_of", module="datetime")
+date_of._register(2, simple_to_trampoline(_date_of_2))
 
-DateOf = ModulePredicate("DateOf", module="datetime")
-DateOf._register(2, simple_to_trampoline(_date_of_2))
+days_between = ModulePredicate("days_between", module="datetime")
+days_between._register(3, simple_to_trampoline(_days_between_3))
 
-DaysBetween = ModulePredicate("DaysBetween", module="datetime")
-DaysBetween._register(3, simple_to_trampoline(_days_between_3))
+weekday = ModulePredicate("weekday", module="datetime")
+weekday._register(2, simple_to_trampoline(_weekday_2))
 
-DayOfWeek = ModulePredicate("DayOfWeek", module="datetime")
-DayOfWeek._register(2, simple_to_trampoline(_day_of_week_2))
-
-DateBetween = ModulePredicate("DateBetween", module="datetime")
-DateBetween._register(3, _date_between_3)
+date_between = ModulePredicate("date_between", module="datetime")
+date_between._register(3, _date_between_3)
