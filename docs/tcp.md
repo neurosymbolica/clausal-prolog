@@ -4,16 +4,16 @@
 
 The `tcp` module provides predicates for TCP client/server socket operations,
 wrapping Python's `socket` module. Socket handles are opaque Python objects —
-use them with `Send`, `Receive`, and `Close`.
+use them with `send`, `receive`, and `close`.
 
 ```clausal
--import_from(py.tcp, [Connect, Send, Receive, Close])
+-import_from(py.tcp, [connect, send, receive, close])
 
 EchoClient(HOST, PORT, MESSAGE, RESPONSE) <- (
-    Connect(HOST, PORT, SOCKET),
-    Send(SOCKET, MESSAGE),
-    Receive(SOCKET, RESPONSE),
-    Close(SOCKET)
+    connect(HOST, PORT, SOCKET),
+    send(SOCKET, MESSAGE),
+    receive(SOCKET, RESPONSE),
+    close(SOCKET)
 )
 ```
 
@@ -23,11 +23,11 @@ Or via [module import](import.md):
 -import_module(py.tcp)
 
 Main <- (
-    py.tcp.Connect("localhost", 8080, S),
-    py.tcp.Send(S, "hello"),
-    py.tcp.Receive(S, REPLY),
+    py.tcp.connect("localhost", 8080, S),
+    py.tcp.send(S, "hello"),
+    py.tcp.receive(S, REPLY),
     ++print(REPLY),
-    py.tcp.Close(S)
+    py.tcp.close(S)
 )
 ```
 
@@ -37,8 +37,8 @@ Main <- (
 
 ```clausal
 -import_from(py.tcp, [
-    Connect, Listen, Accept,
-    Send, Receive, Close, SetTimeout
+    connect, listen, accept,
+    send, receive, close, set_timeout
 ])
 ```
 
@@ -48,7 +48,7 @@ Main <- (
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Connect(Host, Port, Socket)` | `+Host, +Port, -Socket` | Connect to TCP server, bind opaque socket handle |
+| `connect(Host, Port, Socket)` | `+Host, +Port, -Socket` | connect to TCP server, bind opaque socket handle |
 
 ```clausal
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:connect_example"
@@ -62,8 +62,8 @@ Fails if the connection is refused or the host is unreachable.
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Listen(Host, Port, ServerSocket)` | `+Host, +Port, -ServerSocket` | Create listening socket with `SO_REUSEADDR`. Port `0` → ephemeral. |
-| `Accept(ServerSocket, ClientSocket)` | `+Server, -Client` | Accept incoming connection. Blocks until a client connects. |
+| `listen(Host, Port, ServerSocket)` | `+Host, +Port, -ServerSocket` | Create listening socket with `SO_REUSEADDR`. Port `0` → ephemeral. |
+| `accept(ServerSocket, ClientSocket)` | `+Server, -Client` | accept incoming connection. Blocks until a client connects. |
 
 ```clausal
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:server_example"
@@ -75,11 +75,11 @@ Fails if the connection is refused or the host is unreachable.
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Send(Socket, Data)` | `+Socket, +Data` | Send string (UTF-8) or bytes via `sendall()` |
-| `Receive(Socket, Data)` | `+Socket, -Data` | Receive up to 4096 bytes, decode UTF-8 |
-| `Receive(Socket, BufferSize, Data)` | `+Socket, +BufSize, -Data` | Receive with custom buffer size |
+| `send(Socket, Data)` | `+Socket, +Data` | send string (UTF-8) or bytes via `sendall()` |
+| `receive(Socket, Data)` | `+Socket, -Data` | receive up to 4096 bytes, decode UTF-8 |
+| `receive(Socket, BufferSize, Data)` | `+Socket, +BufSize, -Data` | receive with custom buffer size |
 
-`Receive` returns a string if the data is valid UTF-8, or raw `bytes` if
+`receive` returns a string if the data is valid UTF-8, or raw `bytes` if
 decoding fails. Fails if the connection is closed (no data received).
 
 ```clausal
@@ -92,8 +92,8 @@ decoding fails. Fails if the connection is closed (no data received).
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Close(Socket)` | `+Socket` | Close socket. Always succeeds (even on already-closed sockets). |
-| `SetTimeout(Socket, Seconds)` | `+Socket, +Seconds` | Set socket timeout (float). Subsequent operations fail on timeout. |
+| `close(Socket)` | `+Socket` | close socket. Always succeeds (even on already-closed sockets). |
+| `set_timeout(Socket, Seconds)` | `+Socket, +Seconds` | Set socket timeout (float). Subsequent operations fail on timeout. |
 
 ```clausal
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:socket_management_example"
@@ -120,14 +120,14 @@ decoding fails. Fails if the connection is closed (no data received).
 ## Gotchas
 
 - **Sockets are impure** — socket operations have side effects and do not
-  [backtrack](control.md) cleanly. If a `Send` succeeds but a later goal fails, the data
+  [backtrack](control.md) cleanly. If a `send` succeeds but a later goal fails, the data
   has already been sent.
-- **`Accept` blocks** — it waits for a connection. Use `SetTimeout` on the
+- **`accept` blocks** — it waits for a connection. Use `set_timeout` on the
   server socket to limit the wait time.
-- **No automatic cleanup** — always `Close` sockets explicitly. Python's
+- **No automatic cleanup** — always `close` sockets explicitly. Python's
   garbage collector will eventually close them, but relying on GC is bad
   practice for network resources.
-- **Port 0** in `Listen` lets the OS pick an ephemeral port — useful for tests.
+- **Port 0** in `listen` lets the OS pick an ephemeral port — useful for tests.
 
 ---
 

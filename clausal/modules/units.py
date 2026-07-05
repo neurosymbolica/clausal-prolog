@@ -28,12 +28,12 @@ Imperial and non-SI unit vectors live in ``imperial``::
 
 Usage in .clausal files::
 
-    -import_from(py.units, [Metre, Newton, Watt, kilo, StripUnits])
+    -import_from(py.units, [Metre, Newton, Watt, kilo, strip_units])
 
     D := 5(Metre)                        # SI sugar
     F := 9.8(Newton)                     # SI sugar
     BIG := ++(5 * kilo * Newton(1))      # prefix via ++
-    StripUnits(D, V)                     # extract numeric value
+    strip_units(D, V)                     # extract numeric value
 """
 
 from __future__ import annotations
@@ -440,7 +440,7 @@ StefanBoltzmann       = 5.670374419e-8    * SI_Power / Metre(1)**2 / Kelvin(1)**
 
 
 def _dimension_of_impl(d, dims_out, trail):
-    """DimensionOf(D, Dims): unify Dims with the dimension dict of D.
+    """dimension_of(D, Dims): unify Dims with the dimension dict of D.
 
     Works for ground Quantity values and for uninstantiated AttVars that
     carry a dimensional constraint.
@@ -461,7 +461,7 @@ def _dimension_of_impl(d, dims_out, trail):
 
 
 def _strip_dimensions_impl(d, value_out, trail):
-    """StripUnits(Quantity, Value): unify Value with the numeric component."""
+    """strip_units(Quantity, Value): unify Value with the numeric component."""
     dv = deref(d)
     if not isinstance(dv, Quantity):
         return
@@ -470,7 +470,7 @@ def _strip_dimensions_impl(d, value_out, trail):
 
 
 def _make_dimensioned_impl(value, dims_in, d_out, trail):
-    """MakeQuantity(Value, Dims, D): construct Quantity from value + dims dict."""
+    """make_quantity(Value, Dims, D): construct Quantity from value + dims dict."""
     from clausal.terms import DictTerm
     v = deref(value)
     di = deref(dims_in)
@@ -487,14 +487,14 @@ def _make_dimensioned_impl(value, dims_in, d_out, trail):
         yield None
 
 
-DimensionOf = _UnitsPredicate("DimensionOf")
-DimensionOf._register(2, _simple_to_trampoline(_dimension_of_impl))
+dimension_of = _UnitsPredicate("dimension_of")
+dimension_of._register(2, _simple_to_trampoline(_dimension_of_impl))
 
-StripUnits = _UnitsPredicate("StripUnits")
-StripUnits._register(2, _simple_to_trampoline(_strip_dimensions_impl))
+strip_units = _UnitsPredicate("strip_units")
+strip_units._register(2, _simple_to_trampoline(_strip_dimensions_impl))
 
-MakeQuantity = _UnitsPredicate("MakeQuantity")
-MakeQuantity._register(3, _simple_to_trampoline(_make_dimensioned_impl))
+make_quantity = _UnitsPredicate("make_quantity")
+make_quantity._register(3, _simple_to_trampoline(_make_dimensioned_impl))
 
 # Register the "units" attribute hook for AttVar-based dimensional variables.
 import clausal.logic.units_constraint as _units_constraint  # noqa: F401

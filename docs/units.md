@@ -9,7 +9,7 @@ syntactic sugar for writing measurements inline.
 ## Quick start
 
 ```python
--import_from(py.units,    [m, kg, s, Newton, kilo, has_units, StripUnits])
+-import_from(py.units,    [m, kg, s, Newton, kilo, has_units, strip_units])
 -import_from(py.imperial, [foot, inch, pound_mass, mph])
 
 # SI sugar: n(Unit) — Unit must be an SI predicate
@@ -27,7 +27,7 @@ height := ++(6 * foot + 2 * inch)       # Quantity(1.879…, {Metre: 1})
 has_units(speed, m/s)            # succeeds: dims match
 
 # Extract numeric component
-StripUnits(9.8(Newton), V)      # V = 9.8
+strip_units(9.8(Newton), V)      # V = 9.8
 ```
 
 ---
@@ -141,13 +141,13 @@ d.dims    # MappingProxyType({<Metre>: 1, <Second>: -1})
 ### `py.units` — SI units and prefixes
 
 ```python
--import_from(py.units, [m, kg, s, Newton, kilo, has_units, StripUnits])
+-import_from(py.units, [m, kg, s, Newton, kilo, has_units, strip_units])
 ```
 
 Contains: SI base unit predicates, scaled SI unit predicates, named derived SI
 unit predicates, SI prefix constants, IEC binary prefix constants, SI
 abbreviations, SI unit vectors, digital information units, physical constants,
-and utility predicates (`has_units`, `StripUnits`, `DimensionOf`, `MakeQuantity`).
+and utility predicates (`has_units`, `strip_units`, `dimension_of`, `make_quantity`).
 
 ### `py.imperial` — imperial and non-SI unit vectors
 
@@ -456,9 +456,9 @@ ratio scales.
 
 | Predicate                  | Description |
 |----------------------------|-------------|
-| `DimensionOf(D, Dims)`     | Unify `Dims` with a `DictTerm` of the dimension dict |
-| `StripUnits(D, V)`         | Unify `V` with the numeric component |
-| `MakeQuantity(V, Dims, D)` | Construct `Quantity` from value `V` and `DictTerm` dims |
+| `dimension_of(D, Dims)`     | Unify `Dims` with a `DictTerm` of the dimension dict |
+| `strip_units(D, V)`         | Unify `V` with the numeric component |
+| `make_quantity(V, Dims, D)` | Construct `Quantity` from value `V` and `DictTerm` dims |
 
 ### `has_units/2`
 

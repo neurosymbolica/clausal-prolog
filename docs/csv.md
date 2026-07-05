@@ -50,12 +50,12 @@ parse_line(LINE, FIELDS) <- ParseRow(LINE, FIELDS)
 
 ```clausal
 -import_from(py.csv, [ParseRecords])
--import_from(py.json, [Get])
+-import_from(py.json, [get])
 
 parse_and_get_name(CSV_TEXT, NAME) <- (
     ParseRecords(CSV_TEXT, HEADERS, RECORDS),
     Member(RECORD, RECORDS),
-    Get(RECORD, "name", NAME)
+    get(RECORD, "name", NAME)
 )
 ```
 

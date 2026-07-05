@@ -11,7 +11,7 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 
 from clausal.modules.py.tcp import (
-    Connect, Listen, Accept, Send, Receive, Close, SetTimeout,
+    connect, listen, accept, send, receive, close, set_timeout,
     _connect_3, _listen_3, _accept_2,
     _send_2, _receive_2, _receive_3,
     _close_1, _set_timeout_2,
@@ -110,7 +110,7 @@ def multi_echo_server():
     t.join(timeout=2)
 
 
-# ── Connect/3 ────────────────────────────────────────────────────────────
+# ── connect/3 ────────────────────────────────────────────────────────────
 
 
 class TestConnect:
@@ -126,7 +126,7 @@ class TestConnect:
         s.close()
 
     def test_connection_refused_fails(self):
-        """Connect to a port that's definitely not listening."""
+        """connect to a port that's definitely not listening."""
         # nv
         sock = Var()
         sols, _ = simple_solutions(_connect_3, "127.0.0.1", 1, sock)
@@ -145,13 +145,13 @@ class TestConnect:
         assert len(sols) == 0
 
 
-# ── Listen/3 + Accept/2 ─────────────────────────────────────────────────
+# ── listen/3 + accept/2 ─────────────────────────────────────────────────
 
 
 class TestListenAccept:
 
     def test_listen_and_accept(self):
-        """Listen on ephemeral port, connect from client, accept."""
+        """listen on ephemeral port, connect from client, accept."""
         # nv
         server_sock = Var()
         sols, trail = simple_solutions(_listen_3, "127.0.0.1", 0, server_sock)
@@ -159,11 +159,11 @@ class TestListenAccept:
         server = deref(server_sock)
         port = server.getsockname()[1]
 
-        # Connect from a client
+        # connect from a client
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.connect(("127.0.0.1", port))
 
-        # Accept on server
+        # accept on server
         accepted = Var()
         sols2, trail2 = simple_solutions(_accept_2, server, accepted)
         assert len(sols2) == 1
@@ -174,7 +174,7 @@ class TestListenAccept:
         server.close()
 
     def test_ephemeral_port(self):
-        """Listen with port 0 picks an available port."""
+        """listen with port 0 picks an available port."""
         # nv
         server_sock = Var()
         sols, trail = simple_solutions(_listen_3, "127.0.0.1", 0, server_sock)
@@ -184,24 +184,24 @@ class TestListenAccept:
         server.close()
 
 
-# ── Send/2 + Receive/2,3 ────────────────────────────────────────────────
+# ── send/2 + receive/2,3 ────────────────────────────────────────────────
 
 
 class TestSendReceive:
 
     def test_echo_round_trip(self, echo_server):
-        """Connect, send, receive echoed data, close."""
+        """connect, send, receive echoed data, close."""
         # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, host, port, sock)
         s = deref(sock)
 
-        # Send
+        # send
         sols, _ = simple_solutions(_send_2, s, "hello")
         assert len(sols) == 1
 
-        # Receive
+        # receive
         data = Var()
         sols, trail = simple_solutions(_receive_2, s, data)
         assert len(sols) == 1
@@ -247,7 +247,7 @@ class TestSendReceive:
         s.close()
 
 
-# ── Close/1 ──────────────────────────────────────────────────────────────
+# ── close/1 ──────────────────────────────────────────────────────────────
 
 
 class TestClose:
@@ -278,7 +278,7 @@ class TestClose:
         assert len(sols) == 0
 
 
-# ── SetTimeout/2 ─────────────────────────────────────────────────────────
+# ── set_timeout/2 ─────────────────────────────────────────────────────────
 
 
 class TestSetTimeout:
@@ -315,16 +315,16 @@ class TestTcpTrampoline:
         # nv
         host, port = echo_server
         sock = Var()
-        sols, trail = trampoline_solutions(Connect, host, port, sock)
+        sols, trail = trampoline_solutions(connect, host, port, sock)
         assert len(sols) == 1
         s = deref(sock)
 
-        sols, _ = trampoline_solutions(Send, s, "trampoline test")
+        sols, _ = trampoline_solutions(send, s, "trampoline test")
         assert len(sols) == 1
 
         data = Var()
-        sols, trail = trampoline_solutions(Receive, s, data)
+        sols, trail = trampoline_solutions(receive, s, data)
         assert len(sols) == 1
         assert deref(data) == "trampoline test"
 
-        trampoline_solutions(Close, s)
+        trampoline_solutions(close, s)

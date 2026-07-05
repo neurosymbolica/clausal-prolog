@@ -31,31 +31,31 @@ def _clear_query_cache():
 
 _MATCHERS = """\
 -import_from(reflection, [
-    ReifiedItem, ReifiedClause, ReifiedFileItem,
-    ClauseHead, ClauseBody, GoalFunctor, ReifiedSubterm,
+    reified_item, reified_clause, reified_file_item,
+    clause_head, clause_body, goal_functor, reified_subterm,
     Clause, Goal, Variable, Atom, Escape,
 ])
 
 HeadName(SRC, NAME) <- (
-    ReifiedClause(SRC, CLAUSE),
-    ClauseHead(CLAUSE, HEAD),
-    GoalFunctor(HEAD, NAME, _)
+    reified_clause(SRC, CLAUSE),
+    clause_head(CLAUSE, HEAD),
+    goal_functor(HEAD, NAME, _)
 )
 
-DirectHeadName(SRC, NAME) <- ReifiedClause(SRC, Clause(Goal(NAME, _, _), _, _))
+DirectHeadName(SRC, NAME) <- reified_clause(SRC, Clause(Goal(NAME, _, _), _, _))
 
 FactName(SRC, NAME) <- (
-    ReifiedClause(SRC, CLAUSE),
-    ClauseBody(CLAUSE, []),
-    ClauseHead(CLAUSE, HEAD),
-    GoalFunctor(HEAD, NAME, _)
+    reified_clause(SRC, CLAUSE),
+    clause_body(CLAUSE, []),
+    clause_head(CLAUSE, HEAD),
+    goal_functor(HEAD, NAME, _)
 )
 
 CalledPredicate(SRC, NAME, ARITY) <- (
-    ReifiedClause(SRC, CLAUSE),
-    ClauseBody(CLAUSE, GOALS),
+    reified_clause(SRC, CLAUSE),
+    clause_body(CLAUSE, GOALS),
     GOAL in GOALS,
-    GoalFunctor(GOAL, NAME, ARITY)
+    goal_functor(GOAL, NAME, ARITY)
 )
 
 DefinedName(SRC, NAME) <- HeadName(SRC, NAME)
@@ -66,14 +66,14 @@ UndefinedCall(SRC, NAME) <- (
 )
 
 EscapeCode(SRC, CODE) <- (
-    ReifiedItem(SRC, ITEM),
-    ReifiedSubterm(ITEM, Escape(CODE, _, _))
+    reified_item(SRC, ITEM),
+    reified_subterm(ITEM, Escape(CODE, _, _))
 )
 
 FileHeadName(PATH, NAME) <- (
-    ReifiedFileItem(PATH, CLAUSE),
-    ClauseHead(CLAUSE, HEAD),
-    GoalFunctor(HEAD, NAME, _)
+    reified_file_item(PATH, CLAUSE),
+    clause_head(CLAUSE, HEAD),
+    goal_functor(HEAD, NAME, _)
 )
 
 # ── DCG construction matching over a body's goal list (phase 3) ──────────────
@@ -86,10 +86,10 @@ any_goals >> (any_goal, any_goals)
 starts_with_edge >> (edge_goal, any_goals)
 
 StartsWithEdge(SRC, NAME) <- (
-    ReifiedClause(SRC, CLAUSE),
-    ClauseHead(CLAUSE, HEAD),
-    GoalFunctor(HEAD, NAME, _),
-    ClauseBody(CLAUSE, GOALS),
+    reified_clause(SRC, CLAUSE),
+    clause_head(CLAUSE, HEAD),
+    goal_functor(HEAD, NAME, _),
+    clause_body(CLAUSE, GOALS),
     phrase(starts_with_edge, GOALS)
 )
 """
@@ -176,8 +176,8 @@ class TestPythonSide:
         from clausal.modules import reflection
 
         for name in (
-            "ReifiedItem", "ReifiedClause", "ReifiedFileItem",
-            "ClauseHead", "ClauseBody", "GoalFunctor", "ReifiedSubterm",
+            "reified_item", "reified_clause", "reified_file_item",
+            "clause_head", "clause_body", "goal_functor", "reified_subterm",
             "Clause", "Goal", "Variable", "Atom", "Escape",
         ):
             assert hasattr(reflection, name), name

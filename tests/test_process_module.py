@@ -8,7 +8,7 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.process import (
-    Shell, ShellOutput, ProcessCreate, Sleep,
+    shell, shell_output, process_create, sleep,
     _shell_1, _shell_2, _shell_output_2, _shell_output_3,
     _process_create_3, _process_create_4, _sleep_1,
 )
@@ -39,7 +39,7 @@ def trampoline_solutions(pred, *args):
     return solutions, trail
 
 
-# ── Shell/1 ────────────────────────────────────────────────────────────
+# ── shell/1 ────────────────────────────────────────────────────────────
 
 
 class TestShell1:
@@ -66,11 +66,11 @@ class TestShell1:
     def test_trampoline_multi_arity(self):
         # Arity 1 via multi-dispatch
         # nv
-        sols, _ = trampoline_solutions(Shell, "true")
+        sols, _ = trampoline_solutions(shell, "true")
         assert len(sols) == 1
 
 
-# ── Shell/2 ────────────────────────────────────────────────────────────
+# ── shell/2 ────────────────────────────────────────────────────────────
 
 
 class TestShell2:
@@ -91,12 +91,12 @@ class TestShell2:
     def test_trampoline(self):
         # nv
         code = Var()
-        sols, trail = trampoline_solutions(Shell, "true", code)
+        sols, trail = trampoline_solutions(shell, "true", code)
         assert len(sols) == 1
         assert deref(code) == 0
 
 
-# ── ShellOutput/2 ─────────────────────────────────────────────────────
+# ── shell_output/2 ─────────────────────────────────────────────────────
 
 
 class TestShellOutput2:
@@ -120,12 +120,12 @@ class TestShellOutput2:
     def test_trampoline(self):
         # nv
         output = Var()
-        sols, trail = trampoline_solutions(ShellOutput, "echo world", output)
+        sols, trail = trampoline_solutions(shell_output, "echo world", output)
         assert len(sols) == 1
         assert deref(output).strip() == "world"
 
 
-# ── ShellOutput/3 ─────────────────────────────────────────────────────
+# ── shell_output/3 ─────────────────────────────────────────────────────
 
 
 class TestShellOutput3:
@@ -143,14 +143,14 @@ class TestShellOutput3:
         # nv
         out, err = Var(), Var()
         sols, trail = trampoline_solutions(
-            ShellOutput, "echo hello && echo warn >&2", out, err
+            shell_output, "echo hello && echo warn >&2", out, err
         )
         assert len(sols) == 1
         assert deref(out).strip() == "hello"
         assert deref(err).strip() == "warn"
 
 
-# ── ProcessCreate/3 ──────────────────────────────────────────────────
+# ── process_create/3 ──────────────────────────────────────────────────
 
 
 class TestProcessCreate3:
@@ -187,14 +187,14 @@ class TestProcessCreate3:
         # nv
         result = Var()
         sols, trail = trampoline_solutions(
-            ProcessCreate, "echo", ["test"], result
+            process_create, "echo", ["test"], result
         )
         assert len(sols) == 1
         r = deref(result)
         assert r.data["exit_code"] == 0
 
 
-# ── ProcessCreate/4 ──────────────────────────────────────────────────
+# ── process_create/4 ──────────────────────────────────────────────────
 
 
 class TestProcessCreate4:
@@ -235,14 +235,14 @@ class TestProcessCreate4:
         result = Var()
         opts = DictTerm({})
         sols, trail = trampoline_solutions(
-            ProcessCreate, "echo", ["trampoline"], opts, result
+            process_create, "echo", ["trampoline"], opts, result
         )
         assert len(sols) == 1
         r = deref(result)
         assert "trampoline" in r.data["stdout"]
 
 
-# ── Sleep/1 ──────────────────────────────────────────────────────────
+# ── sleep/1 ──────────────────────────────────────────────────────────
 
 
 class TestSleep:
@@ -266,5 +266,5 @@ class TestSleep:
 
     def test_trampoline(self):
         # nv
-        sols, _ = trampoline_solutions(Sleep, 0.01)
+        sols, _ = trampoline_solutions(sleep, 0.01)
         assert len(sols) == 1

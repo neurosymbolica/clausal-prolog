@@ -10,12 +10,12 @@ from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm
 
 from clausal.modules.py.http import (
-    Get, Post, Request, JSONGet, JSONPost,
+    get, post, request, json_get, json_post,
     _get_2, _get_3, _post_3, _post_4, _request_3,
     _json_get_2, _json_post_3,
 )
 from clausal.modules.py.url import (
-    Encode, Decode, Parse, Join,
+    encode, decode, parse, join,
     _encode_2, _decode_2, _parse_2, _join_2,
 )
 
@@ -53,7 +53,7 @@ def _mock_response(body=b"hello", status=200):
     return mock_resp
 
 
-# ── Get/2,3 ──────────────────────────────────────────────────────────────
+# ── get/2,3 ──────────────────────────────────────────────────────────────
 
 
 class TestHttpGet:
@@ -93,7 +93,7 @@ class TestHttpGet:
         assert deref(body) == "ok"
 
 
-# ── Post/3,4 ─────────────────────────────────────────────────────────────
+# ── post/3,4 ─────────────────────────────────────────────────────────────
 
 
 class TestHttpPost:
@@ -134,7 +134,7 @@ class TestHttpPost:
         assert len(sols) == 0
 
 
-# ── Request/3 ────────────────────────────────────────────────────────────
+# ── request/3 ────────────────────────────────────────────────────────────
 
 
 class TestHttpRequest:
@@ -152,7 +152,7 @@ class TestHttpRequest:
 
     @patch("clausal.modules.py.http._urlopen")
     def test_non_200_still_succeeds(self, mock_urlopen):
-        """Request/3 does NOT fail on 4xx/5xx — returns status code."""
+        """request/3 does NOT fail on 4xx/5xx — returns status code."""
         # nv
         from urllib.error import HTTPError
         import io
@@ -166,7 +166,7 @@ class TestHttpRequest:
         assert deref(status) == 500
 
 
-# ── JSONGet/2, JSONPost/3 ────────────────────────────────────────────────
+# ── json_get/2, json_post/3 ────────────────────────────────────────────────
 
 
 class TestHttpJson:
@@ -212,13 +212,13 @@ class TestHttpJson:
         assert len(sols) == 0
 
 
-# ── URL Encode/Decode ────────────────────────────────────────────────────
+# ── URL encode/decode ────────────────────────────────────────────────────
 
 
 class TestUrlEncode:
 
     def test_encode_special_chars(self):
-        """Encode("hello world", E) → "hello%20world"."""
+        """encode("hello world", E) → "hello%20world"."""
         # nv
         e = Var()
         sols, trail = simple_solutions(_encode_2, "hello world", e)
@@ -226,7 +226,7 @@ class TestUrlEncode:
         assert deref(e) == "hello%20world"
 
     def test_encode_preserves_safe(self):
-        """Encode encodes everything (safe="")."""
+        """encode encodes everything (safe="")."""
         # nv
         e = Var()
         simple_solutions(_encode_2, "a/b", e)
@@ -253,13 +253,13 @@ class TestUrlEncode:
         assert len(sols) == 0
 
 
-# ── URL Parse/Join ───────────────────────────────────────────────────────
+# ── URL parse/join ───────────────────────────────────────────────────────
 
 
 class TestUrlParse:
 
     def test_parse_full_url(self):
-        """Parse("https://example.com:8080/path?q=1#frag", P) → DictTerm."""
+        """parse("https://example.com:8080/path?q=1#frag", P) → DictTerm."""
         # nv
         p = Var()
         sols, trail = simple_solutions(_parse_2, "https://example.com:8080/path?q=1#frag", p)

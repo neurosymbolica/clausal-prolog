@@ -7,7 +7,7 @@ Covers:
   - Clausal unification protocol (__unify__, __walk__, __occurs_check__)
   - Named-unit constructor predicates
   - Scaled unit predicates
-  - Utility predicates (DimensionOf, StripUnits, MakeQuantity)
+  - Utility predicates (dimension_of, strip_units, make_quantity)
   - Python interop via is/2 evaluator through query()
 """
 
@@ -626,9 +626,9 @@ class TestDerivedUnits:
 class TestUtilityPredicates:
     def test_dimension_of(self):
         # nv
-        from clausal.modules.py.units import DimensionOf
+        from clausal.modules.py.units import dimension_of
         velocity = d(10, m=1, s=-1)
-        sols = run(DimensionOf, velocity, "DIMS")
+        sols = run(dimension_of, velocity, "DIMS")
         assert sols
         dims = sols[0]["DIMS"]
         assert isinstance(dims, DictTerm)
@@ -637,25 +637,25 @@ class TestUtilityPredicates:
 
     def test_value_of(self):
         # nv
-        from clausal.modules.py.units import StripUnits
+        from clausal.modules.py.units import strip_units
         force = d(9.8, kg=1, m=1, s=-2)
-        sols = run(StripUnits, force, "V")
+        sols = run(strip_units, force, "V")
         assert sols
         assert sols[0]["V"] == 9.8
 
     def test_strip_dimensions(self):
         # nv
-        from clausal.modules.py.units import StripUnits
+        from clausal.modules.py.units import strip_units
         x = d(42, m=2)
-        sols = run(StripUnits, x, "V")
+        sols = run(strip_units, x, "V")
         assert sols
         assert sols[0]["V"] == 42
 
     def test_make_dimensioned(self):
         # nv
-        from clausal.modules.py.units import MakeQuantity
+        from clausal.modules.py.units import make_quantity
         dims = DictTerm({Kilogram: 1, Metre: 1, Second: -2})
-        sols = run(MakeQuantity, 10, dims, "D")
+        sols = run(make_quantity, 10, dims, "D")
         assert sols
         result = sols[0]["D"]
         assert isinstance(result, Quantity)
@@ -664,14 +664,14 @@ class TestUtilityPredicates:
 
     def test_dimension_of_plain_number_fails(self):
         # nv
-        from clausal.modules.py.units import DimensionOf
-        sols = run(DimensionOf, 42, "DIMS")
+        from clausal.modules.py.units import dimension_of
+        sols = run(dimension_of, 42, "DIMS")
         assert not sols
 
     def test_value_of_plain_number_fails(self):
         # nv
-        from clausal.modules.py.units import StripUnits
-        sols = run(StripUnits, 42, "V")
+        from clausal.modules.py.units import strip_units
+        sols = run(strip_units, 42, "V")
         assert not sols
 
 

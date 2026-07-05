@@ -10,7 +10,7 @@ Built-in expansions
   are rewritten to ``Match/3`` + ``Unify`` chains.  The compiled
   ``re.Pattern`` object is injected into ``module_dict`` for runtime use.
 - **Arrow match patterns** (reflection sugar): a ``(HEAD <- BODY)``
-  expression in an argument of a reflection builtin (``ReifiedClause`` et
+  expression in an argument of a reflection builtin (``reified_clause`` et
   al.) is rewritten into the equivalent reified-vocabulary pattern —
   ``Clause(Goal(...), [...])`` construction — so matchers are written in
   natural clause syntax.  Pattern variables remain the matcher clause's
@@ -310,7 +310,7 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
 
 # ── Arrow match-pattern expansion (reflection sugar) ────────────────────────
 #
-# ``ReifiedClause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))`` — the arrow
+# ``reified_clause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))`` — the arrow
 # argument arrives here as a runtime ``Predicate`` node (head/goals are
 # middle-layer ``Call`` nodes, variables are the clause's real ``Var``
 # objects).  It is rewritten into construction of the reified vocabulary,
@@ -327,8 +327,8 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
 # the reifier's raw-operator representation.
 
 _REFLECTION_BUILTIN_NAMES = frozenset((
-    "ReifiedItem", "ReifiedClause", "ReifiedFileItem", "ReifiedSubterm",
-    "ClauseHead", "ClauseBody", "GoalFunctor",
+    "reified_item", "reified_clause", "reified_file_item", "reified_subterm",
+    "clause_head", "clause_body", "goal_functor",
 ))
 
 # Vocabulary functors referenced by generated pattern constructions.
@@ -344,7 +344,7 @@ def _is_reflection_goal(goal: Call, ctx: _ExpansionContext) -> bool:
     name = _get_call_name(goal)
     if name is None:
         return False
-    # Imported names are remapped to dotted form ("reflection.ReifiedClause");
+    # Imported names are remapped to dotted form ("reflection.reified_clause");
     # _process_imports stores the value under both the short and dotted keys.
     short_name = name.rsplit(".", 1)[-1]
     if short_name not in _REFLECTION_BUILTIN_NAMES:

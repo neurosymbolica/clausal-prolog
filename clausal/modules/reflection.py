@@ -5,8 +5,8 @@ Phase 2 of ``implementation_plans/clausal-ast-reflection-and-structural-matching
 Import the reified vocabulary and the enumeration/destructuring builtins::
 
     -import_from(reflection, [
-        ReifiedItem, ReifiedClause, ReifiedFileItem,
-        ClauseHead, ClauseBody, GoalFunctor, ReifiedSubterm,
+        reified_item, reified_clause, reified_file_item,
+        clause_head, clause_body, goal_functor, reified_subterm,
         Clause, Goal, Variable, Atom, Escape,
     ])
 
@@ -14,24 +14,24 @@ Then linters and matchers are ordinary Clausal — e.g. the call-graph lint
 from the feature plan::
 
     UndefinedCall(SRC, NAME) <- (
-        ReifiedClause(SRC, CLAUSE),
-        ClauseBody(CLAUSE, GOALS),
+        reified_clause(SRC, CLAUSE),
+        clause_body(CLAUSE, GOALS),
         GOAL in GOALS,
-        GoalFunctor(GOAL, NAME, _),
+        goal_functor(GOAL, NAME, _),
         not DefinedName(SRC, NAME)
     )
 
 Builtins
 --------
-- ``ReifiedItem(SOURCE, ITEM)`` — enumerate every reified top-level item of
+- ``reified_item(SOURCE, ITEM)`` — enumerate every reified top-level item of
   a ``.clausal`` source *text* (``ModuleDirective`` / ``Clause`` /
   ``PythonCode``).
-- ``ReifiedClause(SOURCE, CLAUSE)`` — clauses only.
-- ``ReifiedFileItem(PATH, ITEM)`` — like ``ReifiedItem`` over a file path.
-- ``ClauseHead(CLAUSE, HEAD)`` / ``ClauseBody(CLAUSE, GOALS)`` — accessors.
-- ``GoalFunctor(GOAL, NAME, ARITY)`` — functor name (string) and arity of a
+- ``reified_clause(SOURCE, CLAUSE)`` — clauses only.
+- ``reified_file_item(PATH, ITEM)`` — like ``reified_item`` over a file path.
+- ``clause_head(CLAUSE, HEAD)`` / ``clause_body(CLAUSE, GOALS)`` — accessors.
+- ``goal_functor(GOAL, NAME, ARITY)`` — functor name (string) and arity of a
   ``Goal`` term (arity counts positional plus keyword arguments).
-- ``ReifiedSubterm(TERM, SUB)`` — enumerate every subterm, depth-first,
+- ``reified_subterm(TERM, SUB)`` — enumerate every subterm, depth-first,
   starting with ``TERM`` itself; recurses through vocabulary terms, raw
   operator nodes, lists, tuples, and dict values.
 
@@ -185,23 +185,23 @@ def _goal_functor_3(goal, name, arity, trail, k):
 # ── Registration ─────────────────────────────────────────────────────────────
 
 
-ReifiedItem = ModulePredicate("ReifiedItem", module="reflection")
-ReifiedItem._register(2, _reified_item_2)
+reified_item = ModulePredicate("reified_item", module="reflection")
+reified_item._register(2, _reified_item_2)
 
-ReifiedClause = ModulePredicate("ReifiedClause", module="reflection")
-ReifiedClause._register(2, _reified_clause_2)
+reified_clause = ModulePredicate("reified_clause", module="reflection")
+reified_clause._register(2, _reified_clause_2)
 
-ReifiedFileItem = ModulePredicate("ReifiedFileItem", module="reflection")
-ReifiedFileItem._register(2, _reified_file_item_2)
+reified_file_item = ModulePredicate("reified_file_item", module="reflection")
+reified_file_item._register(2, _reified_file_item_2)
 
-ReifiedSubterm = ModulePredicate("ReifiedSubterm", module="reflection")
-ReifiedSubterm._register(2, _reified_subterm_2)
+reified_subterm = ModulePredicate("reified_subterm", module="reflection")
+reified_subterm._register(2, _reified_subterm_2)
 
-ClauseHead = ModulePredicate("ClauseHead", module="reflection")
-ClauseHead._register(2, simple_to_trampoline(_clause_head_2))
+clause_head = ModulePredicate("clause_head", module="reflection")
+clause_head._register(2, simple_to_trampoline(_clause_head_2))
 
-ClauseBody = ModulePredicate("ClauseBody", module="reflection")
-ClauseBody._register(2, simple_to_trampoline(_clause_body_2))
+clause_body = ModulePredicate("clause_body", module="reflection")
+clause_body._register(2, simple_to_trampoline(_clause_body_2))
 
-GoalFunctor = ModulePredicate("GoalFunctor", module="reflection")
-GoalFunctor._register(3, simple_to_trampoline(_goal_functor_3))
+goal_functor = ModulePredicate("goal_functor", module="reflection")
+goal_functor._register(3, simple_to_trampoline(_goal_functor_3))

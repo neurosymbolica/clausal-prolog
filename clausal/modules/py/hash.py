@@ -3,7 +3,7 @@
 Provides relational predicates for computing cryptographic hashes.
 Import via::
 
-    -import_from(py.hash, [Hash, HashBytes])
+    -import_from(py.hash, [hash, hash_bytes])
 
 Or via module import::
 
@@ -26,7 +26,7 @@ from clausal.logic.variables import deref, is_var, unify
 
 
 def _hash_3(algorithm, data, hex_out, trail, k):
-    """Hash/3: Hash(Algorithm, Data, Hex) — compute hex digest."""
+    """hash/3: hash(Algorithm, Data, Hex) — compute hex digest."""
     algo = deref(algorithm)
     data_d = deref(data)
     if is_var(algo) or not isinstance(algo, str):
@@ -46,7 +46,7 @@ def _hash_3(algorithm, data, hex_out, trail, k):
 
 
 def _hash_bytes_3(algorithm, data, bytes_out, trail, k):
-    """HashBytes/3: HashBytes(Algorithm, Data, Bytes) — compute raw digest bytes."""
+    """hash_bytes/3: hash_bytes(Algorithm, Data, Bytes) — compute raw digest bytes."""
     algo = deref(algorithm)
     data_d = deref(data)
     if is_var(algo) or not isinstance(algo, str):
@@ -67,8 +67,8 @@ def _hash_bytes_3(algorithm, data, bytes_out, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Hash = ModulePredicate("Hash")
-Hash._register(3, simple_to_trampoline(_hash_3))
+hash = ModulePredicate("hash")
+hash._register(3, simple_to_trampoline(_hash_3))
 
-HashBytes = ModulePredicate("HashBytes")
-HashBytes._register(3, simple_to_trampoline(_hash_bytes_3))
+hash_bytes = ModulePredicate("hash_bytes")
+hash_bytes._register(3, simple_to_trampoline(_hash_bytes_3))

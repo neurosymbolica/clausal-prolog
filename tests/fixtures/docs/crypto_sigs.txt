@@ -1,38 +1,38 @@
 # Display snippets for docs/crypto.md
 
 --8<-- [start:hash_examples]
-Hash("sha256", "abc", HEX)
+hash("sha256", "abc", HEX)
 # HEX = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 
-Hash("md5", "", HEX)
+hash("md5", "", HEX)
 # HEX = "d41d8cd98f00b204e9800998ecf8427e"
 
-HashBytes("sha256", "abc", RAW)
+hash_bytes("sha256", "abc", RAW)
 # RAW is 32 bytes
 --8<-- [end:hash_examples]
 
 --8<-- [start:hmac_examples]
 sign("secret-key", "message", SIG)
-Verify("secret-key", "message", SIG)   # succeeds
+verify("secret-key", "message", SIG)   # succeeds
 
 sign("sha512", "key", "data", SIG)     # SHA-512 HMAC
 --8<-- [end:hmac_examples]
 
 --8<-- [start:pbkdf2_examples]
-Derive("password", "salt", 100000, HASH)
+derive("password", "salt", 100000, HASH)
 # HASH is a 64-character hex string (32 bytes)
 
-Derive("password", "salt", 100000, 64, HASH)
+derive("password", "salt", 100000, 64, HASH)
 # HASH is a 128-character hex string (64 bytes)
 --8<-- [end:pbkdf2_examples]
 
 --8<-- [start:file_integrity]
--import_from(py.hash, [Hash])
+-import_from(py.hash, [hash])
 -import_from(py.files, [ReadFileToString])
 
 FileHash(PATH, HASH) <- (
     ReadFileToString(PATH, CONTENT),
-    Hash("sha256", CONTENT, HASH)
+    hash("sha256", CONTENT, HASH)
 )
 --8<-- [end:file_integrity]
 
@@ -45,7 +45,7 @@ SignedRequest(KEY, BODY, SIGNATURE) <- (
 --8<-- [end:api_signing]
 
 --8<-- [start:password_hashing]
--import_from(py.pbkdf2, [Derive])
+-import_from(py.pbkdf2, [derive])
 
-HashPassword(PASSWORD, SALT, HASH) <- Derive(PASSWORD, SALT, 100000, HASH)
+HashPassword(PASSWORD, SALT, HASH) <- derive(PASSWORD, SALT, 100000, HASH)
 --8<-- [end:password_hashing]

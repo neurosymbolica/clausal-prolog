@@ -3,12 +3,12 @@
 Provides relational predicates for parsing, generating, and querying
 JSON data.  Import via::
 
-    -import_from(py.json, [Parse, Generate, Get, ReadFile, WriteFile])
+    -import_from(py.json, [parse, generate, get, read_file, write_file])
 
 Or via module import::
 
     -import_module(py.json)
-    # then use py.json.Parse(S_, T_), py.json.Get(T_, "key", V_), etc.
+    # then use py.json.parse(S_, T_), py.json.get(T_, "key", V_), etc.
 
 Type mapping
 ------------
@@ -69,7 +69,7 @@ def _clausal_to_python(term: Any) -> Any:
 
 
 def _parse_2(string, term, trail, k):
-    """Parse/2: parse JSON string into Clausal terms."""
+    """parse/2: parse JSON string into Clausal terms."""
     string = deref(string)
     if is_var(string) or not isinstance(string, str):
         return
@@ -83,7 +83,7 @@ def _parse_2(string, term, trail, k):
 
 
 def _generate_2(term, string, trail, k):
-    """Generate/2: serialize Clausal term to JSON string."""
+    """generate/2: serialize Clausal term to JSON string."""
     term = deref(term)
     if is_var(term):
         return
@@ -97,7 +97,7 @@ def _generate_2(term, string, trail, k):
 
 
 def _pretty_generate_2(term, string, trail, k):
-    """PrettyGenerate/2: serialize Clausal term to indented JSON string."""
+    """pretty_generate/2: serialize Clausal term to indented JSON string."""
     term = deref(term)
     if is_var(term):
         return
@@ -111,7 +111,7 @@ def _pretty_generate_2(term, string, trail, k):
 
 
 def _get_3(term, key, value, trail, k):
-    """Get/3: extract a value from a DictTerm by key.
+    """get/3: extract a value from a DictTerm by key.
 
     If Key is bound: look up and unify Value.
     If Key is unbound: enumerate all key-value pairs.
@@ -136,7 +136,7 @@ def _get_3(term, key, value, trail, k):
 
 
 def _read_file_2(path, term, trail, k):
-    """ReadFile/2: read and parse a JSON file."""
+    """read_file/2: read and parse a JSON file."""
     path = deref(path)
     if is_var(path) or not isinstance(path, str):
         return
@@ -151,7 +151,7 @@ def _read_file_2(path, term, trail, k):
 
 
 def _write_file_2(path, term, trail, k):
-    """WriteFile/2: serialize and write a JSON file."""
+    """write_file/2: serialize and write a JSON file."""
     path, term = deref(path), deref(term)
     if is_var(path) or not isinstance(path, str):
         return
@@ -168,20 +168,20 @@ def _write_file_2(path, term, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-Parse = ModulePredicate("Parse")
-Parse._register(2, simple_to_trampoline(_parse_2))
+parse = ModulePredicate("parse")
+parse._register(2, simple_to_trampoline(_parse_2))
 
-Generate = ModulePredicate("Generate")
-Generate._register(2, simple_to_trampoline(_generate_2))
+generate = ModulePredicate("generate")
+generate._register(2, simple_to_trampoline(_generate_2))
 
-PrettyGenerate = ModulePredicate("PrettyGenerate")
-PrettyGenerate._register(2, simple_to_trampoline(_pretty_generate_2))
+pretty_generate = ModulePredicate("pretty_generate")
+pretty_generate._register(2, simple_to_trampoline(_pretty_generate_2))
 
-Get = ModulePredicate("Get")
-Get._register(3, simple_to_trampoline(_get_3))
+get = ModulePredicate("get")
+get._register(3, simple_to_trampoline(_get_3))
 
-ReadFile = ModulePredicate("ReadFile")
-ReadFile._register(2, simple_to_trampoline(_read_file_2))
+read_file = ModulePredicate("read_file")
+read_file._register(2, simple_to_trampoline(_read_file_2))
 
-WriteFile = ModulePredicate("WriteFile")
-WriteFile._register(2, simple_to_trampoline(_write_file_2))
+write_file = ModulePredicate("write_file")
+write_file._register(2, simple_to_trampoline(_write_file_2))

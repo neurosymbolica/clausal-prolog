@@ -3,12 +3,12 @@
 Provides relational predicates for running shell commands, launching
 subprocesses, and sleeping.  Import via::
 
-    -import_from(py.process, [Shell, ShellOutput, ProcessCreate, Sleep])
+    -import_from(py.process, [shell, shell_output, process_create, sleep])
 
 Or via module import::
 
     -import_module(py.process)
-    # then use py.process.Shell("ls"), py.process.Sleep(1.0), etc.
+    # then use py.process.shell("ls"), py.process.sleep(1.0), etc.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from clausal.terms import DictTerm
 
 
 def _shell_1(command, trail, k):
-    """Shell/1: run shell command. Succeeds if exit code is 0."""
+    """shell/1: run shell command. Succeeds if exit code is 0."""
     command = deref(command)
     if is_var(command) or not isinstance(command, str):
         return
@@ -38,7 +38,7 @@ def _shell_1(command, trail, k):
 
 
 def _shell_2(command, exit_code, trail, k):
-    """Shell/2: run shell command, unify ExitCode with the exit code."""
+    """shell/2: run shell command, unify ExitCode with the exit code."""
     command = deref(command)
     if is_var(command) or not isinstance(command, str):
         return
@@ -51,7 +51,7 @@ def _shell_2(command, exit_code, trail, k):
 
 
 def _shell_output_2(command, output, trail, k):
-    """ShellOutput/2: run shell command, capture stdout. Fails on non-zero exit."""
+    """shell_output/2: run shell command, capture stdout. Fails on non-zero exit."""
     command = deref(command)
     if is_var(command) or not isinstance(command, str):
         return
@@ -68,7 +68,7 @@ def _shell_output_2(command, output, trail, k):
 
 
 def _shell_output_3(command, output, error, trail, k):
-    """ShellOutput/3: run shell command, capture stdout and stderr. Fails on non-zero exit."""
+    """shell_output/3: run shell command, capture stdout and stderr. Fails on non-zero exit."""
     command = deref(command)
     if is_var(command) or not isinstance(command, str):
         return
@@ -85,7 +85,7 @@ def _shell_output_3(command, output, error, trail, k):
 
 
 def _process_create_3(program, args, result_var, trail, k):
-    """ProcessCreate/3: run a program with argument list (no shell)."""
+    """process_create/3: run a program with argument list (no shell)."""
     program = deref(program)
     args = deref(args)
     if is_var(program) or not isinstance(program, str):
@@ -107,7 +107,7 @@ def _process_create_3(program, args, result_var, trail, k):
 
 
 def _process_create_4(program, args, options, result_var, trail, k):
-    """ProcessCreate/4: run a program with options DictTerm."""
+    """process_create/4: run a program with options DictTerm."""
     program = deref(program)
     args = deref(args)
     options = deref(options)
@@ -175,7 +175,7 @@ def _process_create_4(program, args, options, result_var, trail, k):
 
 
 def _sleep_1(seconds, trail, k):
-    """Sleep/1: pause execution for the given number of seconds."""
+    """sleep/1: pause execution for the given number of seconds."""
     seconds = deref(seconds)
     if is_var(seconds):
         return
@@ -187,17 +187,17 @@ def _sleep_1(seconds, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-Shell = ModulePredicate("Shell")
-Shell._register(1, simple_to_trampoline(_shell_1))
-Shell._register(2, simple_to_trampoline(_shell_2))
+shell = ModulePredicate("shell")
+shell._register(1, simple_to_trampoline(_shell_1))
+shell._register(2, simple_to_trampoline(_shell_2))
 
-ShellOutput = ModulePredicate("ShellOutput")
-ShellOutput._register(2, simple_to_trampoline(_shell_output_2))
-ShellOutput._register(3, simple_to_trampoline(_shell_output_3))
+shell_output = ModulePredicate("shell_output")
+shell_output._register(2, simple_to_trampoline(_shell_output_2))
+shell_output._register(3, simple_to_trampoline(_shell_output_3))
 
-ProcessCreate = ModulePredicate("ProcessCreate")
-ProcessCreate._register(3, simple_to_trampoline(_process_create_3))
-ProcessCreate._register(4, simple_to_trampoline(_process_create_4))
+process_create = ModulePredicate("process_create")
+process_create._register(3, simple_to_trampoline(_process_create_3))
+process_create._register(4, simple_to_trampoline(_process_create_4))
 
-Sleep = ModulePredicate("Sleep")
-Sleep._register(1, simple_to_trampoline(_sleep_1))
+sleep = ModulePredicate("sleep")
+sleep._register(1, simple_to_trampoline(_sleep_1))

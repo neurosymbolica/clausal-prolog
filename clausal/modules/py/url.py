@@ -3,7 +3,7 @@
 Provides relational predicates for URL encoding, decoding, parsing, and joining.
 Import via::
 
-    -import_from(py.url, [Encode, Decode, Parse, Join])
+    -import_from(py.url, [encode, decode, parse, join])
 
 Wraps Python's ``urllib.parse`` module.
 """
@@ -21,7 +21,7 @@ from clausal.terms import DictTerm
 
 
 def _encode_2(string, encoded, trail, k):
-    """Encode/2: Encode(String, Encoded) — URL-encode."""
+    """encode/2: encode(String, Encoded) — URL-encode."""
     s = deref(string)
     if is_var(s) or not isinstance(s, str):
         return
@@ -31,7 +31,7 @@ def _encode_2(string, encoded, trail, k):
 
 
 def _decode_2(encoded, string, trail, k):
-    """Decode/2: Decode(Encoded, String) — URL-decode."""
+    """decode/2: decode(Encoded, String) — URL-decode."""
     e = deref(encoded)
     if is_var(e) or not isinstance(e, str):
         return
@@ -41,7 +41,7 @@ def _decode_2(encoded, string, trail, k):
 
 
 def _parse_2(url, parts, trail, k):
-    """Parse/2: Parse(Url, Parts) — parse URL into DictTerm."""
+    """parse/2: parse(Url, Parts) — parse URL into DictTerm."""
     u = deref(url)
     if is_var(u) or not isinstance(u, str):
         return
@@ -60,7 +60,7 @@ def _parse_2(url, parts, trail, k):
 
 
 def _join_2(parts, url, trail, k):
-    """Join/2: Join(Parts, Url) — assemble URL from DictTerm parts."""
+    """join/2: join(Parts, Url) — assemble URL from DictTerm parts."""
     p = deref(parts)
     if is_var(p) or not isinstance(p, DictTerm):
         return
@@ -85,14 +85,14 @@ def _join_2(parts, url, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Encode = ModulePredicate("Encode")
-Encode._register(2, simple_to_trampoline(_encode_2))
+encode = ModulePredicate("encode")
+encode._register(2, simple_to_trampoline(_encode_2))
 
-Decode = ModulePredicate("Decode")
-Decode._register(2, simple_to_trampoline(_decode_2))
+decode = ModulePredicate("decode")
+decode._register(2, simple_to_trampoline(_decode_2))
 
-Parse = ModulePredicate("Parse")
-Parse._register(2, simple_to_trampoline(_parse_2))
+parse = ModulePredicate("parse")
+parse._register(2, simple_to_trampoline(_parse_2))
 
-Join = ModulePredicate("Join")
-Join._register(2, simple_to_trampoline(_join_2))
+join = ModulePredicate("join")
+join._register(2, simple_to_trampoline(_join_2))

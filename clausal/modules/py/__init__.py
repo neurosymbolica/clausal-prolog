@@ -56,8 +56,8 @@ class ModulePredicate:
 
     Usage::
 
-        Hash = ModulePredicate("Hash")
-        Hash._register(3, simple_to_trampoline(_hash_3))
+        hash = ModulePredicate("hash")
+        hash._register(3, simple_to_trampoline(_hash_3))
     """
 
     __slots__ = ("_name", "_module", "_dispatch_fns")

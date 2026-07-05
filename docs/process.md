@@ -9,63 +9,63 @@ The implementation lives in `clausal/modules/py/process.py`.
 ## Import
 
 ```clausal
--import_from(py.process, [Shell, ShellOutput, ProcessCreate, Sleep])
+-import_from(py.process, [shell, shell_output, process_create, sleep])
 ```
 
 Or via [module import](import.md):
 
 ```clausal
 -import_module(py.process)
-# then use py.process.Shell("ls"), py.process.Sleep(1.0), etc.
+# then use py.process.shell("ls"), py.process.sleep(1.0), etc.
 ```
 
 ---
 
 ## Predicates
 
-### Shell/1
+### shell/1
 
-`Shell(Command)` — run a shell command. Succeeds if the exit code is 0, fails otherwise.
-
-```clausal
-run_tests <- Shell("python -m pytest -x")
-```
-
-### Shell/2
-
-`Shell(Command, ExitCode)` — run a shell command and unify ExitCode with the integer exit code. Always succeeds (even for non-zero exit codes).
+`shell(Command)` — run a shell command. Succeeds if the exit code is 0, fails otherwise.
 
 ```clausal
-check_status(CMD, CODE) <- Shell(CMD, CODE)
+run_tests <- shell("python -m pytest -x")
 ```
 
-### ShellOutput/2
+### shell/2
 
-`ShellOutput(Command, Output)` — run a shell command and capture stdout as a string. Fails on non-zero exit code.
+`shell(Command, ExitCode)` — run a shell command and unify ExitCode with the integer exit code. Always succeeds (even for non-zero exit codes).
 
 ```clausal
-git_status(STATUS) <- ShellOutput("git status --porcelain", STATUS)
+check_status(CMD, CODE) <- shell(CMD, CODE)
 ```
 
-### ShellOutput/3
+### shell_output/2
 
-`ShellOutput(Command, Output, Error)` — run a shell command and capture both stdout and stderr. Fails on non-zero exit code.
+`shell_output(Command, Output)` — run a shell command and capture stdout as a string. Fails on non-zero exit code.
 
 ```clausal
-compile_and_check(CMD, OUT, ERR) <- ShellOutput(CMD, OUT, ERR)
+git_status(STATUS) <- shell_output("git status --porcelain", STATUS)
 ```
 
-### ProcessCreate/3
+### shell_output/3
 
-`ProcessCreate(Program, Args, Result)` — run a program with an argument list (no shell). Result is a [`DictTerm`](dicts_sets.md) with keys `exit_code`, `stdout`, `stderr`.
+`shell_output(Command, Output, Error)` — run a shell command and capture both stdout and stderr. Fails on non-zero exit code.
 
 ```clausal
-run_python(CODE, RESULT) <- ProcessCreate("python3", ["-c", CODE], RESULT)
+compile_and_check(CMD, OUT, ERR) <- shell_output(CMD, OUT, ERR)
 ```
 
-### ProcessCreate/4
+### process_create/3
 
-`ProcessCreate(Program, Args, Options, Result)` — like ProcessCreate/3 with an options [`DictTerm`](dicts_sets.md). Supported options:
+`process_create(Program, Args, Result)` — run a program with an argument list (no shell). Result is a [`DictTerm`](dicts_sets.md) with keys `exit_code`, `stdout`, `stderr`.
+
+```clausal
+run_python(CODE, RESULT) <- process_create("python3", ["-c", CODE], RESULT)
+```
+
+### process_create/4
+
+`process_create(Program, Args, Options, Result)` — like process_create/3 with an options [`DictTerm`](dicts_sets.md). Supported options:
 
 | Key | Type | Description |
 |---|---|---|
@@ -75,22 +75,22 @@ run_python(CODE, RESULT) <- ProcessCreate("python3", ["-c", CODE], RESULT)
 | `"env"` | DictTerm | Extra environment variables (merged with current env) |
 
 ```clausal
-run_in_dir(DIR, RESULT) <- ProcessCreate(
+run_in_dir(DIR, RESULT) <- process_create(
     "python3", ["-c", "import os; print(os.getcwd())"],
     {"cwd": DIR}, RESULT
 )
 
-run_with_input(INPUT, RESULT) <- ProcessCreate(
+run_with_input(INPUT, RESULT) <- process_create(
     "cat", [], {"input": INPUT}, RESULT
 )
 ```
 
-### Sleep/1
+### sleep/1
 
-`Sleep(Seconds)` — pause execution for the given number of seconds (integer or float).
+`sleep(Seconds)` — pause execution for the given number of seconds (integer or float).
 
 ```clausal
-wait_and_retry(GOAL) <- (Sleep(1.0), call(GOAL))
+wait_and_retry(GOAL) <- (sleep(1.0), call(GOAL))
 ```
 
 ---
@@ -98,16 +98,16 @@ wait_and_retry(GOAL) <- (Sleep(1.0), call(GOAL))
 ## Example
 
 ```clausal
--import_from(py.process, [Shell, ShellOutput, ProcessCreate, Sleep])
--import_from(py.json, [Parse, Get])
+-import_from(py.process, [shell, shell_output, process_create, sleep])
+-import_from(py.json, [parse, get])
 
-git_status(STATUS) <- ShellOutput("git status --porcelain", STATUS)
+git_status(STATUS) <- shell_output("git status --porcelain", STATUS)
 
-run_tests(RESULT) <- ProcessCreate(
+run_tests(RESULT) <- process_create(
     "python3", ["-m", "pytest", "-x"],
     {"timeout": 60.0}, RESULT
 )
 
-poll_until_ready(URL) <- (ShellOutput(f"curl -sf {URL}", _))
-poll_until_ready(URL) <- (Sleep(1.0), poll_until_ready(URL))
+poll_until_ready(URL) <- (shell_output(f"curl -sf {URL}", _))
+poll_until_ready(URL) <- (sleep(1.0), poll_until_ready(URL))
 ```

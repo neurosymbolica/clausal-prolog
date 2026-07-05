@@ -3,7 +3,7 @@
 Provides relational predicates for HTTP requests.
 Import via::
 
-    -import_from(py.http, [Get, Post, Request, JSONGet, JSONPost])
+    -import_from(py.http, [get, post, request, json_get, json_post])
 
 Primary backend: ``urllib.request`` (stdlib, zero deps).
 """
@@ -67,7 +67,7 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30):
 
 
 def _get_2(url, body, trail, k):
-    """Get/2: Get(Url, Body) — GET request, body as string."""
+    """get/2: get(Url, Body) — GET request, body as string."""
     url_d = deref(url)
     if is_var(url_d) or not isinstance(url_d, str):
         return
@@ -82,7 +82,7 @@ def _get_2(url, body, trail, k):
 
 
 def _get_3(url, headers, body, trail, k):
-    """Get/3: Get(Url, Headers, Body) — GET with custom headers."""
+    """get/3: get(Url, Headers, Body) — GET with custom headers."""
     url_d = deref(url)
     headers_d = deref(headers)
     if is_var(url_d) or not isinstance(url_d, str):
@@ -99,7 +99,7 @@ def _get_3(url, headers, body, trail, k):
 
 
 def _post_3(url, data, body, trail, k):
-    """Post/3: Post(Url, Data, Body) — POST string data."""
+    """post/3: post(Url, Data, Body) — POST string data."""
     url_d = deref(url)
     data_d = deref(data)
     if is_var(url_d) or not isinstance(url_d, str):
@@ -117,7 +117,7 @@ def _post_3(url, data, body, trail, k):
 
 
 def _post_4(url, data, headers, body, trail, k):
-    """Post/4: Post(Url, Data, Headers, Body) — POST with custom headers."""
+    """post/4: post(Url, Data, Headers, Body) — POST with custom headers."""
     url_d = deref(url)
     data_d = deref(data)
     headers_d = deref(headers)
@@ -137,7 +137,7 @@ def _post_4(url, data, headers, body, trail, k):
 
 
 def _request_3(options, status_out, body_out, trail, k):
-    """Request/3: general request. Options is DictTerm with url, method, headers, data, timeout."""
+    """request/3: general request. Options is DictTerm with url, method, headers, data, timeout."""
     opts = deref(options)
     if is_var(opts) or not isinstance(opts, DictTerm):
         return
@@ -168,7 +168,7 @@ def _request_3(options, status_out, body_out, trail, k):
 
 
 def _json_get_2(url, term_out, trail, k):
-    """JSONGet/2: GET + parse JSON response into DictTerm/list."""
+    """json_get/2: GET + parse JSON response into DictTerm/list."""
     url_d = deref(url)
     if is_var(url_d) or not isinstance(url_d, str):
         return
@@ -188,7 +188,7 @@ def _json_get_2(url, term_out, trail, k):
 
 
 def _json_post_3(url, term_in, term_out, trail, k):
-    """JSONPost/3: POST JSON body + parse JSON response."""
+    """json_post/3: POST JSON body + parse JSON response."""
     url_d = deref(url)
     term_d = deref(term_in)
     if is_var(url_d) or not isinstance(url_d, str):
@@ -219,19 +219,19 @@ def _json_post_3(url, term_in, term_out, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Get = ModulePredicate("Get")
-Get._register(2, simple_to_trampoline(_get_2))
-Get._register(3, simple_to_trampoline(_get_3))
+get = ModulePredicate("get")
+get._register(2, simple_to_trampoline(_get_2))
+get._register(3, simple_to_trampoline(_get_3))
 
-Post = ModulePredicate("Post")
-Post._register(3, simple_to_trampoline(_post_3))
-Post._register(4, simple_to_trampoline(_post_4))
+post = ModulePredicate("post")
+post._register(3, simple_to_trampoline(_post_3))
+post._register(4, simple_to_trampoline(_post_4))
 
-Request = ModulePredicate("Request")
-Request._register(3, simple_to_trampoline(_request_3))
+request = ModulePredicate("request")
+request._register(3, simple_to_trampoline(_request_3))
 
-JSONGet = ModulePredicate("JSONGet")
-JSONGet._register(2, simple_to_trampoline(_json_get_2))
+json_get = ModulePredicate("json_get")
+json_get._register(2, simple_to_trampoline(_json_get_2))
 
-JSONPost = ModulePredicate("JSONPost")
-JSONPost._register(3, simple_to_trampoline(_json_post_3))
+json_post = ModulePredicate("json_post")
+json_post._register(3, simple_to_trampoline(_json_post_3))
