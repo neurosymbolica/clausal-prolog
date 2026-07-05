@@ -60,3 +60,8 @@ weekday(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
 timestamp(DT, TS)    # forward: TS = DT.timestamp() (float epoch)
 timestamp(DT, 0)     # inverse: DT = datetime.fromtimestamp(0)
 --8<-- [end:timestamp]
+
+--8<-- [start:iso]
+datetime_string_iso(DT, S)    # S = "2026-03-16T14:30:00" / inverse parses it
+date_string_iso(D, S)         # S = "2026-03-16" / inverse parses it
+--8<-- [end:iso]

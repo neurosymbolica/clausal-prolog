@@ -417,6 +417,48 @@ def _timestamp_2(dt_obj, stamp, trail, k):
             yield None
 
 
+# ── ISO-8601 helpers — bidirectional, via isoformat/fromisoformat ────────
+
+
+def _datetime_string_iso_2(dt_obj, s, trail, k):
+    """datetime_string_iso/2: bidirectional ISO-8601 datetime.
+
+    Forward (DateTime is a ``datetime``): String = DateTime.isoformat().
+    Inverse (DateTime unbound, String a string): DateTime =
+    datetime.fromisoformat(String).
+    """
+    dt_obj, s = deref(dt_obj), deref(s)
+    if isinstance(dt_obj, _dt.datetime):
+        if unify(s, dt_obj.isoformat(), trail):
+            yield None
+    elif is_var(dt_obj) and isinstance(s, str):
+        try:
+            out = _dt.datetime.fromisoformat(s)
+        except (TypeError, ValueError):
+            return
+        if unify(dt_obj, out, trail):
+            yield None
+
+
+def _date_string_iso_2(d_obj, s, trail, k):
+    """date_string_iso/2: bidirectional ISO-8601 date (YYYY-MM-DD).
+
+    Forward (Date is a ``date`` and not a ``datetime``): String = Date.isoformat().
+    Inverse (Date unbound, String a string): Date = date.fromisoformat(String).
+    """
+    d_obj, s = deref(d_obj), deref(s)
+    if isinstance(d_obj, _dt.date) and not isinstance(d_obj, _dt.datetime):
+        if unify(s, d_obj.isoformat(), trail):
+            yield None
+    elif is_var(d_obj) and isinstance(s, str):
+        try:
+            out = _dt.date.fromisoformat(s)
+        except (TypeError, ValueError):
+            return
+        if unify(d_obj, out, trail):
+            yield None
+
+
 # ── Build and export predicate objects ───────────────────────────────────
 
 now = ModulePredicate("now", module="datetime")
@@ -466,3 +508,9 @@ date_between._register(3, _date_between_3)
 
 timestamp = ModulePredicate("timestamp", module="datetime")
 timestamp._register(2, simple_to_trampoline(_timestamp_2))
+
+datetime_string_iso = ModulePredicate("datetime_string_iso", module="datetime")
+datetime_string_iso._register(2, simple_to_trampoline(_datetime_string_iso_2))
+
+date_string_iso = ModulePredicate("date_string_iso", module="datetime")
+date_string_iso._register(2, simple_to_trampoline(_date_string_iso_2))

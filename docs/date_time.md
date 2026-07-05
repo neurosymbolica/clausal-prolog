@@ -12,7 +12,8 @@ The implementation lives in `clausal/modules/date_time.py`.
 -import_from(date_time, [now, today, date, time, datetime,
                          timedelta, date_add, date_sub, date_diff,
                          days_between, datetime_string,
-                         date_of, weekday, date_between, timestamp])
+                         date_of, weekday, date_between, timestamp,
+                         datetime_string_iso, date_string_iso])
 ```
 
 Or via [module import](import.md):
@@ -149,6 +150,16 @@ IsoDate(Y, M, D, S) <- (
 
 Forward (DateTime bound to a `datetime`): Stamp = `DateTime.timestamp()` (float seconds since epoch). With Stamp already bound this acts as a check. Inverse (DateTime unbound, Stamp a number): DateTime = `datetime.fromtimestamp(Stamp)`. A plain `date` has no `timestamp()`, so the forward direction requires a `datetime` — pass a `datetime` object or use `datetime/7` to construct one first.
 
+### datetime_string_iso/2, date_string_iso/2 — Bidirectional ISO-8601
+
+Bidirectional ISO-8601 string conversion without a format argument:
+
+```clausal
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:iso"
+```
+
+`datetime_string_iso/2` forward requires a `datetime.datetime` and produces the full ISO-8601 string via `isoformat()`; inverse (datetime unbound, string bound) parses via `fromisoformat`. `date_string_iso/2` forward requires a plain `datetime.date` (a `datetime` is rejected — use `date_of/2` first if needed) and produces `YYYY-MM-DD`; inverse parses via `date.fromisoformat`. Both predicates catch `(TypeError, ValueError)` and fail cleanly; both-unbound fails.
+
 ### date_between/3 — Nondeterministic
 
 `date_between(Start, End, D)` — generates each date in the range [Start, End]:
@@ -179,6 +190,7 @@ This is nondeterministic — it succeeds once for each date in the range via [ba
     - **weekday**: weekday computation
     - **date_between**: date range enumeration
     - **timestamp**: bidirectional datetime ↔ POSIX epoch
+    - **datetime_string_iso/date_string_iso**: bidirectional ISO-8601 helpers
 
 ---
 

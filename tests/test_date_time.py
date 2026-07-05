@@ -14,11 +14,13 @@ from clausal.modules.py.datetime import (
     now, now_utc, today, date, time, datetime, timedelta,
     date_add, date_sub, date_diff, date_between, date_of, days_between,
     weekday, datetime_string, timestamp,
+    datetime_string_iso, date_string_iso,
     _now_1, _now_utc_1, _today_1,
     _date_4, _time_4, _datetime_7, _timedelta_3,
     _date_add_3, _date_sub_3, _date_diff_3,
     _datetime_string_3, _weekday_2,
     _date_of_2, _days_between_3, _timestamp_2,
+    _datetime_string_iso_2, _date_string_iso_2,
 )
 from clausal.logic.trampoline import DONE
 
@@ -799,3 +801,79 @@ class TestAdapters:
         # nv
         assert "datetime.date" in repr(date)
         assert "datetime.date_between" in repr(date_between)
+
+    def test_datetime_string_iso_has_dispatch(self):
+        # nv
+        assert callable(datetime_string_iso._get_dispatch())
+
+    def test_date_string_iso_has_dispatch(self):
+        # nv
+        assert callable(date_string_iso._get_dispatch())
+
+
+# ── DatetimeStringIso/2 (bidirectional ISO-8601 datetime) ───────────────
+
+
+class TestDatetimeStringIso:
+    def test_forward(self):
+        # nv
+        s = Var()
+        d = dt.datetime(2026, 3, 16, 14, 30, 0)
+        results, _ = simple_solutions(_datetime_string_iso_2, d, s)
+        assert len(results) == 1
+        assert deref(s) == "2026-03-16T14:30:00"
+
+    def test_inverse(self):
+        # vn
+        v = Var()
+        results, _ = simple_solutions(
+            _datetime_string_iso_2, v, "2026-03-16T14:30:00"
+        )
+        assert len(results) == 1
+        assert deref(v) == dt.datetime(2026, 3, 16, 14, 30, 0)
+
+    def test_inverse_invalid_fails(self):
+        # vn
+        v = Var()
+        results, _ = simple_solutions(_datetime_string_iso_2, v, "nope")
+        assert len(results) == 0
+
+    def test_both_unbound_fails(self):
+        # vv
+        results, _ = simple_solutions(_datetime_string_iso_2, Var(), Var())
+        assert len(results) == 0
+
+
+# ── DateStringIso/2 (bidirectional ISO-8601 date) ───────────────────────
+
+
+class TestDateStringIso:
+    def test_forward(self):
+        # nv
+        s = Var()
+        results, _ = simple_solutions(_date_string_iso_2, dt.date(2026, 3, 16), s)
+        assert len(results) == 1
+        assert deref(s) == "2026-03-16"
+
+    def test_inverse(self):
+        # vn
+        v = Var()
+        results, _ = simple_solutions(_date_string_iso_2, v, "2026-03-16")
+        assert len(results) == 1
+        out = deref(v)
+        assert out == dt.date(2026, 3, 16)
+        assert isinstance(out, dt.date) and not isinstance(out, dt.datetime)
+
+    def test_forward_rejects_datetime(self):
+        """A datetime is not a plain date → forward fails (guarded like date/4)."""
+        # nv
+        results, _ = simple_solutions(
+            _date_string_iso_2, dt.datetime(2026, 3, 16, 1, 2, 3), Var()
+        )
+        assert len(results) == 0
+
+    def test_inverse_invalid_fails(self):
+        # vn
+        v = Var()
+        results, _ = simple_solutions(_date_string_iso_2, v, "2026-03-16T00:00:00")
+        assert len(results) == 0

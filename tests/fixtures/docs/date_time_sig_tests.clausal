@@ -2,7 +2,8 @@
 
 -import_from(date_time, [now, now_utc, today, date, time, datetime,
                          timedelta, date_add, date_sub, date_diff, days_between,
-                         datetime_string, date_of, weekday, timestamp])
+                         datetime_string, date_of, weekday, timestamp,
+                         datetime_string_iso, date_string_iso])
 
 # ── now/today ────────────────────────────────────────────────────────────────
 
@@ -126,4 +127,20 @@ Test("timestamp roundtrip") <- (
     timestamp(DT, TS),
     timestamp(DT2, TS),
     DT == DT2
+)  # nv
+
+# ── ISO-8601 helpers ──────────────────────────────────────────────────────────
+
+Test("datetime iso roundtrip") <- (
+    datetime(2026, 3, 16, 14, 30, 0, DT),
+    datetime_string_iso(DT, S),
+    datetime_string_iso(DT2, S),
+    DT == DT2
+)  # nv
+
+Test("date iso roundtrip") <- (
+    date(2026, 3, 16, D),
+    date_string_iso(D, S),
+    date_string_iso(D2, S),
+    D == D2
 )  # nv
