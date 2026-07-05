@@ -1,6 +1,6 @@
 # Bytes as Lists of Codes
 
-in_ Clausal, a Python `bytes` value behaves as a **list of byte codes** — integers
+In Clausal, a Python `bytes` value behaves as a **list of byte codes** — integers
 in the range `[0, 255]` — at the logic level. This is the classical Prolog
 *codes* representation, and it makes byte sequences participate in unification,
 term inspection, and DCGs the way character strings do under

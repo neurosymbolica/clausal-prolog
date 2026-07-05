@@ -106,7 +106,7 @@ Use `term_to_string` when building human-readable strings. Use `write_to_string`
 
 ## F-String Support
 
-in_ `.clausal` files, f-strings build strings with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated:
+In `.clausal` files, f-strings build strings with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated:
 
 ```clausal
 describe(NAME, AGE, S) <- (

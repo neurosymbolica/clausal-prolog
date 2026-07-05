@@ -1,6 +1,6 @@
 # Meta-Interpreters
 
-A *meta-interpreter* is an interpreter written in the same language it interprets. in_ logic programming, this means a Prolog (or Clausal) program that evaluates another logic program represented as data. Meta-interpreters are a classical demonstration of logic programming's homoiconicity: programs and data share the same representation.
+A *meta-interpreter* is an interpreter written in the same language it interprets. In logic programming, this means a Prolog (or Clausal) program that evaluates another logic program represented as data. Meta-interpreters are a classical demonstration of logic programming's homoiconicity: programs and data share the same representation.
 
 This page follows the structure of Markus Triska's [A Couple of Meta-Interpreters in Prolog](https://www.metalevel.at/acomip/), adapting the examples to Clausal syntax.
 
@@ -18,7 +18,7 @@ The full source is in `clausal/examples/metainterpreters.clausal`.
 
 The key idea is to represent an *object-level* program — the program being interpreted — as a list of clauses, where each clause is a pair `[Head, Body]`. `Head` is a term, `Body` is a list of goals (also terms).
 
-in_ Clausal, object-level terms are ordinary predicate instances. We declare private functor classes for the object level so they are treated purely as data, not called directly:
+In Clausal, object-level terms are ordinary predicate instances. We declare private functor classes for the object level so they are treated purely as data, not called directly:
 
 ```clausal
 -private([Natnum(VALUE), succ(INNER), Edge(FROM, TO), Path(FROM, TO)])
@@ -219,7 +219,7 @@ Path("a", "c")
    └─ Edge("b", "c")       ← leaf (fact)
 ```
 
-in_ Clausal list notation:
+In Clausal list notation:
 
 ```clausal
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:metainterp_graph_test"

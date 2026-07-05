@@ -1155,7 +1155,7 @@ Succeeds if `Term` is a `DictTerm`.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:dict_pairs_2"
 ```
-Bidirectional: `Dict` ↔ list of `[Key, Value]` 2-element lists. in_ dict→pairs direction, pairs are sorted by key.
+Bidirectional: `Dict` ↔ list of `[Key, Value]` 2-element lists. In dict→pairs direction, pairs are sorted by key.
 
 ---
 
@@ -1235,7 +1235,7 @@ Succeeds if `Term` is a `SetTerm`.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:set_list_2"
 ```
-Bidirectional: `Set` ↔ sorted list. in_ list→set direction, duplicates are removed.
+Bidirectional: `Set` ↔ sorted list. In list→set direction, duplicates are removed.
 
 ---
 
@@ -1319,7 +1319,7 @@ Arithmetic uses `==` to post CLP(ℤ) constraints (e.g., `Y == X * 2`). The pred
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:between_3"
 ```
-Check or enumerate integers in `[Low, High]` inclusive. in_ check mode (X bound) succeeds iff `Low ≤ X ≤ High`. in_ generate mode (X unbound) backtracks over each integer.
+Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) succeeds iff `Low ≤ X ≤ High`. In generate mode (X unbound) backtracks over each integer.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:964`
@@ -1782,7 +1782,7 @@ Pair up elements from two lists into `[X, Y]` sublists. Truncates to the shorter
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:split_with_3"
 ```
-Split `List` by separator `Sep` into sublists (`Parts`). in_ join mode, interleaves `Parts` with `Sep`.
+Split `List` by separator `Sep` into sublists (`Parts`). In join mode, interleaves `Parts` with `Sep`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/lists.py` (`_split_with__3`)

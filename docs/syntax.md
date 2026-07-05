@@ -12,7 +12,7 @@ Clausal uses 'grammatical holes' which are and must remain syntactically valid, 
 
 **Expression statements ending in `,` are interpreted as logical terms (facts or goals).**
 
-in_ standard Python, an expression statement that ends in a comma produces a tuple which is then discarded. So this is never used despite being valid (a grammatical hole). It also means these logic terms are easy to cut, copy, paste, and indent — unlike Prolog, they don't require `.` terminators.
+In standard Python, an expression statement that ends in a comma produces a tuple which is then discarded. So this is never used despite being valid (a grammatical hole). It also means these logic terms are easy to cut, copy, paste, and indent — unlike Prolog, they don't require `.` terminators.
 
 ---
 
@@ -658,13 +658,13 @@ EDCGs are based on Peter Van Roy's 1989 design and use three directives to decla
 An accumulator has a name and a **joiner goal** that relates a pushed value to the input/output state:
 
 ```clausal
-# Numeric counter: Out = in_ + Value
+# Numeric counter: Out = in + Value
 -edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 
 # List accumulator: prepend items
 -edcg_acc(items, ITEM, IN, OUT, {OUT is [ITEM, *IN]})
 
-# Product accumulator: Out = in_ * Value
+# Product accumulator: Out = in * Value
 -edcg_acc(product, X, IN, OUT, {OUT == IN * X})
 ```
 

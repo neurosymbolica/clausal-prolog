@@ -10,7 +10,7 @@ Clausal has first-class support for dictionaries and sets as logic terms. Unlike
 
 ### Syntax
 
-in_ [`.clausal` files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`:
+In [`.clausal` files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`:
 
 ```python
 # Fact with a ground dict
@@ -123,7 +123,7 @@ partial(PERSON, NAME) <- sub_dict({"name": NAME, "role": "admin"}, PERSON)
 
 ### Syntax
 
-in_ `.clausal` files, Python set literals `{a, b, c}` produce `SetTerm` objects when the elements are ground constants:
+In `.clausal` files, Python set literals `{a, b, c}` produce `SetTerm` objects when the elements are ground constants:
 
 ```python
 colors({1, 2, 3}),

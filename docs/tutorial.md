@@ -51,7 +51,7 @@ This prints every greeting in turn: `hello`, `hi`, `hey there`.
 
 ??? tip "Thinking relationally"
 
-    in_ Clausal, every predicate defines a **relation** — it describes when
+    In Clausal, every predicate defines a **relation** — it describes when
     something is true about its arguments. This is different from functions,
     which map inputs to outputs. A single relation can often be used in
     multiple directions: to compute, to verify, to generate. See

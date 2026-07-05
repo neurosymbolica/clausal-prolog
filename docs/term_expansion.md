@@ -67,7 +67,7 @@ The `q()` function creates term templates in expansion rules. It quotes a term s
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:quasi_quotation"
 ```
 
-Variables inside `q()` are shared between the pattern and the replacement. in_ the example above, `X` in the input pattern is the same `X` in both output terms.
+Variables inside `q()` are shared between the pattern and the replacement. In the example above, `X` in the input pattern is the same `X` in both output terms.
 
 ### Module State Threading
 

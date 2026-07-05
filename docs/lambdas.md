@@ -256,7 +256,7 @@ All higher-order list predicates use **committed choice** — they take the firs
     )
     ```
 
-    in_ practice, lambdas are most naturally written in `.clausal` files where the term transformer handles the translation automatically.
+    In practice, lambdas are most naturally written in `.clausal` files where the term transformer handles the translation automatically.
 
     ---
 

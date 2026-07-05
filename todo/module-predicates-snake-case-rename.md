@@ -127,10 +127,13 @@ Also fixed a cross-package prose ref: `clausal-spacy/docs/spacy.md` compared its
 - [x] `README.md` — quick-start now says predicates are lowercase `snake_case`; the family example
       updated to `parent`/`grandparent`.
 
-**Found while here (SEPARATE bug, not naming):** a prior botched rename turned sentence-initial
-"In " → "in_ " across ~7 docs (`bytes_as_lists.md:3`, `indexing.md:44`, `for_python_programmers.md`
-11/55/62/269, `tutorial.md:54`, `for_decision_makers.md:32`, and the two in `syntax.md` I fixed
-here). Mechanical fix (`^in_ ` / `. in_ ` → `In `). Left for a dedicated pass — flagged to the user.
+**Found & fixed while here (SEPARATE bug, not naming) — done 2026-07-05:** a prior botched rename
+turned sentence-initial "In " → "in_ " across the docs — **53 occurrences in 27 files** (far more
+than first thought: also IPython `In [1]:` prompts in `index.md`, EOL-wrapped `In`, and `In` before
+backticked words like "In `.clausal` files"). Fixed with `s/\bin_ ([A-Za-z[\`])/In \1/` +
+`s/\bin_$/In/`, protecting the legit membership predicate (`in_(`, `in_/2`, the `### in_ (Member)`
+header) and the two accumulator comments where it was lowercase `in` (`Out = in + Value`). Verified
+`test_doc_snippet_coverage` still green.
 
 ## Rollout (mirror the datetime precedent)
 

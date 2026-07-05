@@ -210,7 +210,7 @@ The `-table(pred/arity)` directive is parsed by the [import hook](import.md) alo
 Tabling wrapping happens in `_compile_all_pending` (the deferred compilation entry point):
 
 1. All predicates are compiled first (in trampoline mode).
-2. in_ a second pass, tabled predicates are wrapped with `make_tabled_wrapper_trampoline`.
+2. In a second pass, tabled predicates are wrapped with `make_tabled_wrapper_trampoline`.
 
 The two-pass approach ensures all cross-predicate references resolve before wrapping. This is important because the tabling wrapper captures the original dispatch function — if predicate `A` calls predicate `B`, `B`'s dispatch must be installed before `A`'s wrapper captures it.
 

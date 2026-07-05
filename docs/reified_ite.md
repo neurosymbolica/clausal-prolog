@@ -10,7 +10,7 @@ Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (so
 
 ## Syntax
 
-in_ `.clausal` files, use the `If` function call:
+In `.clausal` files, use the `If` function call:
 
 ```clausal
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:if_signature"
