@@ -28,10 +28,10 @@ derive("password", "salt", 100000, 64, HASH)
 
 --8<-- [start:file_integrity]
 -import_from(py.hash, [hash])
--import_from(py.files, [ReadFileToString])
+-import_from(py.files, [read_file_to_string])
 
 FileHash(PATH, HASH) <- (
-    ReadFileToString(PATH, CONTENT),
+    read_file_to_string(PATH, CONTENT),
     hash("sha256", CONTENT, HASH)
 )
 --8<-- [end:file_integrity]

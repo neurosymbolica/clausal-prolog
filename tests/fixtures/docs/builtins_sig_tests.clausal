@@ -365,14 +365,14 @@ Test("term_to_string exists") <- (
 
 # ── Logging (log module) ─────────────────────────────────────────────────────
 
--import_from(log, [GetLogger, Debug, Info, SetLevel, GetLevel])
+-import_from(log, [get_logger, debug, info, set_level, get_level])
 
-Test("log: GetLogger exists") <- GetLogger("builtins_sig_test", _)  # nv
+Test("log: get_logger exists") <- get_logger("builtins_sig_test", _)  # nv
 
-Test("log: SetLevel/GetLevel exist") <- (
-    GetLogger("builtins_sig_level", L),
-    SetLevel(L, "warning"),
-    GetLevel(L, LVL),
+Test("log: set_level/get_level exist") <- (
+    get_logger("builtins_sig_level", L),
+    set_level(L, "warning"),
+    get_level(L, LVL),
     LVL == "WARNING"
 )  # nv
 

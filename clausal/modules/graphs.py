@@ -3,18 +3,18 @@
 Provides graph creation, pathfinding, cycle detection, connectivity checks,
 degree analysis, MST, and more.  Import via::
 
-    -import_from(graphs, [Vertices, ShortestPath, FindPath])
+    -import_from(graphs, [vertices, shortest_path, find_path])
 
 Or via module import::
 
     -import_module(graphs)
-    # then use graphs.Vertices(...), graphs.ShortestPath(...), etc.
+    # then use graphs.vertices(...), graphs.shortest_path(...), etc.
 
 Edge representation
 -------------------
 - **Unweighted**: ``[[u, v], [v, w], ...]`` — list of 2-element lists
 - **Weighted**:   ``[[u, v, weight], ...]`` — list of 3-element lists
-- **Vertices**:   extracted automatically from edges
+- **vertices**:   extracted automatically from edges
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def _build_weighted_adj(edges):
 
 
 def _vertices__2(this_generator, _proceed, _fail, _catcher, edges, verts, trail):
-    """Vertices(Edges, Verts) — extract unique vertex list from edges."""
+    """vertices(Edges, Verts) — extract unique vertex list from edges."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
         result = _extract_vertices(edges_val)
@@ -134,7 +134,7 @@ def _vertices__2(this_generator, _proceed, _fail, _catcher, edges, verts, trail)
 
 
 def _neighbors__3(this_generator, _proceed, _fail, _catcher, edges, node, nbrs, trail):
-    """Neighbors(Edges, Node, Nbrs) — list of adjacent nodes for Node."""
+    """neighbors(Edges, Node, Nbrs) — list of adjacent nodes for Node."""
     edges_val = deref(edges)
     node_val = deref(node)
     if isinstance(edges_val, list) and not is_var(node_val):
@@ -148,7 +148,7 @@ def _neighbors__3(this_generator, _proceed, _fail, _catcher, edges, node, nbrs, 
 
 
 def _has_edge__3(this_generator, _proceed, _fail, _catcher, edges, u, v, trail):
-    """HasEdge(Edges, U, V) — succeeds if edge [U,V] exists."""
+    """has_edge(Edges, U, V) — succeeds if edge [U,V] exists."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
         for edge in edges_val:
@@ -163,7 +163,7 @@ def _has_edge__3(this_generator, _proceed, _fail, _catcher, edges, u, v, trail):
 
 
 def _degree__3(this_generator, _proceed, _fail, _catcher, edges, node, deg, trail):
-    """Degree(Edges, Node, Deg) — degree of Node (count of incident edges)."""
+    """degree(Edges, Node, Deg) — degree of Node (count of incident edges)."""
     edges_val = deref(edges)
     node_val = deref(node)
     if isinstance(edges_val, list) and not is_var(node_val):
@@ -184,7 +184,7 @@ def _degree__3(this_generator, _proceed, _fail, _catcher, edges, node, deg, trai
 
 
 def _is_connected__1(this_generator, _proceed, _fail, _catcher, edges, trail):
-    """IsConnected(Edges) — succeeds if graph is connected."""
+    """is_connected(Edges) — succeeds if graph is connected."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
         verts = _extract_vertices(edges_val)
@@ -208,7 +208,7 @@ def _is_connected__1(this_generator, _proceed, _fail, _catcher, edges, trail):
 
 
 def _is_isolated__2(this_generator, _proceed, _fail, _catcher, edges, node, trail):
-    """IsIsolated(Edges, Node) — check/enumerate isolated nodes (degree 0)."""
+    """is_isolated(Edges, Node) — check/enumerate isolated nodes (degree 0)."""
     edges_val = deref(edges)
     node_val = deref(node)
     if isinstance(edges_val, list):
@@ -231,7 +231,7 @@ def _is_isolated__2(this_generator, _proceed, _fail, _catcher, edges, node, trai
 
 
 def _breadth_first_nodes__3(this_generator, _proceed, _fail, _catcher, edges, source, nodes, trail):
-    """BreadthFirstNodes(Edges, Source, Nodes) — BFS node ordering from Source."""
+    """breadth_first_nodes(Edges, Source, Nodes) — BFS node ordering from Source."""
     edges_val = deref(edges)
     source_val = deref(source)
     if isinstance(edges_val, list) and not is_var(source_val):
@@ -255,7 +255,7 @@ def _breadth_first_nodes__3(this_generator, _proceed, _fail, _catcher, edges, so
 
 
 def _depth_first_nodes__3(this_generator, _proceed, _fail, _catcher, edges, source, nodes, trail):
-    """DepthFirstNodes(Edges, Source, Nodes) — DFS preorder node ordering from Source."""
+    """depth_first_nodes(Edges, Source, Nodes) — DFS preorder node ordering from Source."""
     edges_val = deref(edges)
     source_val = deref(source)
     if isinstance(edges_val, list) and not is_var(source_val):
@@ -282,7 +282,7 @@ def _depth_first_nodes__3(this_generator, _proceed, _fail, _catcher, edges, sour
 
 
 def _find_path__4(this_generator, _proceed, _fail, _catcher, edges, start, end, path, trail):
-    """FindPath(Edges, Start, End, Path) — enumerate simple paths via backtracking."""
+    """find_path(Edges, Start, End, Path) — enumerate simple paths via backtracking."""
     edges_val = deref(edges)
     start_val = deref(start)
     end_val = deref(end)
@@ -308,7 +308,7 @@ def _find_path__4(this_generator, _proceed, _fail, _catcher, edges, start, end, 
 
 
 def _shortest_path__4(this_generator, _proceed, _fail, _catcher, edges, start, end, path, trail):
-    """ShortestPath(Edges, Start, End, Path) — shortest path.
+    """shortest_path(Edges, Start, End, Path) — shortest path.
 
     Uses BFS for unweighted graphs (2-element edges),
     Dijkstra for weighted graphs (3-element edges).
@@ -378,7 +378,7 @@ def _shortest_path__4(this_generator, _proceed, _fail, _catcher, edges, start, e
 
 
 def _path_cost__3(this_generator, _proceed, _fail, _catcher, edges, path, cost, trail):
-    """PathCost(Edges, Path, Cost) — cost of a path in a weighted graph."""
+    """path_cost(Edges, Path, Cost) — cost of a path in a weighted graph."""
     edges_val = deref(edges)
     path_val = deref(path)
     if isinstance(edges_val, list) and isinstance(path_val, list) and len(path_val) >= 2:
@@ -415,7 +415,7 @@ def _path_cost__3(this_generator, _proceed, _fail, _catcher, edges, path, cost, 
 
 
 def _connected_components__2(this_generator, _proceed, _fail, _catcher, edges, components, trail):
-    """ConnectedComponents(Edges, Components) — list of components (each a vertex list)."""
+    """connected_components(Edges, Components) — list of components (each a vertex list)."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
         verts = _extract_vertices(edges_val)
@@ -443,7 +443,7 @@ def _connected_components__2(this_generator, _proceed, _fail, _catcher, edges, c
 
 
 def _topological_sort__2(this_generator, _proceed, _fail, _catcher, edges, order, trail):
-    """TopologicalSort(Edges, Order) — topological ordering of DAG (Kahn's algorithm).
+    """topological_sort(Edges, Order) — topological ordering of DAG (Kahn's algorithm).
 
     Fails if graph has a cycle.
     """
@@ -477,7 +477,7 @@ def _topological_sort__2(this_generator, _proceed, _fail, _catcher, edges, order
 
 
 def _has_cycle__1(this_generator, _proceed, _fail, _catcher, edges, trail):
-    """HasCycle(Edges) — succeeds if graph contains a cycle."""
+    """has_cycle(Edges) — succeeds if graph contains a cycle."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
         adj = _build_directed_adj(edges_val)
@@ -513,7 +513,7 @@ def _has_cycle__1(this_generator, _proceed, _fail, _catcher, edges, trail):
 
 
 def _spanning_tree__2(this_generator, _proceed, _fail, _catcher, edges, tree, trail):
-    """SpanningTree(Edges, Tree) — a spanning tree (edge subset) via BFS."""
+    """spanning_tree(Edges, Tree) — a spanning tree (edge subset) via BFS."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
         verts = _extract_vertices(edges_val)
@@ -543,7 +543,7 @@ def _spanning_tree__2(this_generator, _proceed, _fail, _catcher, edges, tree, tr
 
 
 def _min_spanning_tree__3(this_generator, _proceed, _fail, _catcher, edges, tree, total_cost, trail):
-    """MinSpanningTree(Edges, Tree, TotalCost) — MST via Prim's algorithm."""
+    """min_spanning_tree(Edges, Tree, TotalCost) — MST via Prim's algorithm."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
         verts = _extract_vertices(edges_val)
@@ -582,7 +582,7 @@ def _min_spanning_tree__3(this_generator, _proceed, _fail, _catcher, edges, tree
 
 
 def _reverse_edges__2(this_generator, _proceed, _fail, _catcher, edges, reversed_edges, trail):
-    """ReverseEdges(Edges, Reversed) — reverse all edge directions."""
+    """reverse_edges(Edges, Reversed) — reverse all edge directions."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
         result = []
@@ -600,7 +600,7 @@ def _reverse_edges__2(this_generator, _proceed, _fail, _catcher, edges, reversed
 
 
 def _merge_graphs__3(this_generator, _proceed, _fail, _catcher, edges1, edges2, merged, trail):
-    """MergeGraphs(Edges1, Edges2, Merged) — union of two edge lists."""
+    """merge_graphs(Edges1, Edges2, Merged) — union of two edge lists."""
     e1 = deref(edges1)
     e2 = deref(edges2)
     if isinstance(e1, list) and isinstance(e2, list):
@@ -614,56 +614,56 @@ def _merge_graphs__3(this_generator, _proceed, _fail, _catcher, edges1, edges2, 
 
 # ── Build and export predicate objects ───────────────────────────────────────
 
-Vertices = _GraphPredicate("Vertices")
-Vertices._register(2, _vertices__2)
+vertices = _GraphPredicate("vertices")
+vertices._register(2, _vertices__2)
 
-Neighbors = _GraphPredicate("Neighbors")
-Neighbors._register(3, _neighbors__3)
+neighbors = _GraphPredicate("neighbors")
+neighbors._register(3, _neighbors__3)
 
-HasEdge = _GraphPredicate("HasEdge")
-HasEdge._register(3, _has_edge__3)
+has_edge = _GraphPredicate("has_edge")
+has_edge._register(3, _has_edge__3)
 
-Degree = _GraphPredicate("Degree")
-Degree._register(3, _degree__3)
+degree = _GraphPredicate("degree")
+degree._register(3, _degree__3)
 
-IsConnected = _GraphPredicate("IsConnected")
-IsConnected._register(1, _is_connected__1)
+is_connected = _GraphPredicate("is_connected")
+is_connected._register(1, _is_connected__1)
 
-IsIsolated = _GraphPredicate("IsIsolated")
-IsIsolated._register(2, _is_isolated__2)
+is_isolated = _GraphPredicate("is_isolated")
+is_isolated._register(2, _is_isolated__2)
 
-BreadthFirstNodes = _GraphPredicate("BreadthFirstNodes")
-BreadthFirstNodes._register(3, _breadth_first_nodes__3)
+breadth_first_nodes = _GraphPredicate("breadth_first_nodes")
+breadth_first_nodes._register(3, _breadth_first_nodes__3)
 
-DepthFirstNodes = _GraphPredicate("DepthFirstNodes")
-DepthFirstNodes._register(3, _depth_first_nodes__3)
+depth_first_nodes = _GraphPredicate("depth_first_nodes")
+depth_first_nodes._register(3, _depth_first_nodes__3)
 
-FindPath = _GraphPredicate("FindPath")
-FindPath._register(4, _find_path__4)
+find_path = _GraphPredicate("find_path")
+find_path._register(4, _find_path__4)
 
-ShortestPath = _GraphPredicate("ShortestPath")
-ShortestPath._register(4, _shortest_path__4)
+shortest_path = _GraphPredicate("shortest_path")
+shortest_path._register(4, _shortest_path__4)
 
-PathCost = _GraphPredicate("PathCost")
-PathCost._register(3, _path_cost__3)
+path_cost = _GraphPredicate("path_cost")
+path_cost._register(3, _path_cost__3)
 
-ConnectedComponents = _GraphPredicate("ConnectedComponents")
-ConnectedComponents._register(2, _connected_components__2)
+connected_components = _GraphPredicate("connected_components")
+connected_components._register(2, _connected_components__2)
 
-TopologicalSort = _GraphPredicate("TopologicalSort")
-TopologicalSort._register(2, _topological_sort__2)
+topological_sort = _GraphPredicate("topological_sort")
+topological_sort._register(2, _topological_sort__2)
 
-HasCycle = _GraphPredicate("HasCycle")
-HasCycle._register(1, _has_cycle__1)
+has_cycle = _GraphPredicate("has_cycle")
+has_cycle._register(1, _has_cycle__1)
 
-SpanningTree = _GraphPredicate("SpanningTree")
-SpanningTree._register(2, _spanning_tree__2)
+spanning_tree = _GraphPredicate("spanning_tree")
+spanning_tree._register(2, _spanning_tree__2)
 
-MinSpanningTree = _GraphPredicate("MinSpanningTree")
-MinSpanningTree._register(3, _min_spanning_tree__3)
+min_spanning_tree = _GraphPredicate("min_spanning_tree")
+min_spanning_tree._register(3, _min_spanning_tree__3)
 
-ReverseEdges = _GraphPredicate("ReverseEdges")
-ReverseEdges._register(2, _reverse_edges__2)
+reverse_edges = _GraphPredicate("reverse_edges")
+reverse_edges._register(2, _reverse_edges__2)
 
-MergeGraphs = _GraphPredicate("MergeGraphs")
-MergeGraphs._register(3, _merge_graphs__3)
+merge_graphs = _GraphPredicate("merge_graphs")
+merge_graphs._register(3, _merge_graphs__3)

@@ -9,14 +9,14 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.files import (
-    FileExists, DirectoryExists, PathExists,
-    DirectoryFiles, DirectoryEntries,
-    FileSize, FileModificationTime,
-    DeleteFile, DeleteDirectory, RenameFile, CopyFile,
-    MakeDirectory, MakeDirectoryPath,
-    ReadFileToString, WriteStringToFile, AppendStringToFile,
-    AbsolutePath, JoinPath, SplitPath, FileExtension,
-    TempFile, TempDirectory,
+    file_exists, directory_exists, path_exists,
+    directory_files, directory_entries,
+    file_size, file_modification_time,
+    delete_file, delete_directory, rename_file, copy_file,
+    make_directory, make_directory_path,
+    read_file_to_string, write_string_to_file, append_string_to_file,
+    absolute_path, join_path, split_path, file_extension,
+    temp_file, temp_directory,
     _file_exists_1, _directory_exists_1, _path_exists_1,
     _directory_files_2, _directory_entries_2,
     _file_size_2, _file_modification_time_2,
@@ -52,7 +52,7 @@ def trampoline_solutions(pred, *args):
     return solutions, trail
 
 
-# ── FileExists/1 ───────────────────────────────────────────────────────
+# ── file_exists/1 ───────────────────────────────────────────────────────
 
 
 class TestFileExists:
@@ -82,11 +82,11 @@ class TestFileExists:
         # nv
         f = tmp_path / "test.txt"
         f.write_text("hello")
-        sols, _ = trampoline_solutions(FileExists, str(f))
+        sols, _ = trampoline_solutions(file_exists, str(f))
         assert len(sols) == 1
 
 
-# ── DirectoryExists/1 ─────────────────────────────────────────────────
+# ── directory_exists/1 ─────────────────────────────────────────────────
 
 
 class TestDirectoryExists:
@@ -108,7 +108,7 @@ class TestDirectoryExists:
         assert len(sols) == 0
 
 
-# ── PathExists/1 ──────────────────────────────────────────────────────
+# ── path_exists/1 ──────────────────────────────────────────────────────
 
 
 class TestPathExists:
@@ -130,7 +130,7 @@ class TestPathExists:
         assert len(sols) == 0
 
 
-# ── DirectoryFiles/2 ──────────────────────────────────────────────────
+# ── directory_files/2 ──────────────────────────────────────────────────
 
 
 class TestDirectoryFiles:
@@ -160,12 +160,12 @@ class TestDirectoryFiles:
         # nv
         (tmp_path / "x.txt").write_text("x")
         files = Var()
-        sols, trail = trampoline_solutions(DirectoryFiles, str(tmp_path), files)
+        sols, trail = trampoline_solutions(directory_files, str(tmp_path), files)
         assert len(sols) == 1
         assert "x.txt" in deref(files)
 
 
-# ── DirectoryEntries/2 ────────────────────────────────────────────────
+# ── directory_entries/2 ────────────────────────────────────────────────
 
 
 class TestDirectoryEntries:
@@ -184,11 +184,11 @@ class TestDirectoryEntries:
         # nv
         (tmp_path / "x.txt").write_text("x")
         (tmp_path / "y.txt").write_text("y")
-        # Collect via DirectoryFiles
+        # Collect via directory_files
         files_var = Var()
         simple_solutions(_directory_files_2, str(tmp_path), files_var)
         files_list = deref(files_var)
-        # Count via DirectoryEntries
+        # Count via directory_entries
         entry = Var()
         trail = Trail()
         count = 0
@@ -197,7 +197,7 @@ class TestDirectoryEntries:
         assert count == len(files_list)
 
 
-# ── FileSize/2 ────────────────────────────────────────────────────────
+# ── file_size/2 ────────────────────────────────────────────────────────
 
 
 class TestFileSize:
@@ -218,7 +218,7 @@ class TestFileSize:
         assert len(sols) == 0
 
 
-# ── FileModificationTime/2 ───────────────────────────────────────────
+# ── file_modification_time/2 ───────────────────────────────────────────
 
 
 class TestFileModificationTime:
@@ -241,7 +241,7 @@ class TestFileModificationTime:
         assert len(sols) == 0
 
 
-# ── DeleteFile/1 ─────────────────────────────────────────────────────
+# ── delete_file/1 ─────────────────────────────────────────────────────
 
 
 class TestDeleteFile:
@@ -265,7 +265,7 @@ class TestDeleteFile:
         assert len(sols) == 0
 
 
-# ── DeleteDirectory/1 ────────────────────────────────────────────────
+# ── delete_directory/1 ────────────────────────────────────────────────
 
 
 class TestDeleteDirectory:
@@ -287,7 +287,7 @@ class TestDeleteDirectory:
         assert len(sols) == 0
 
 
-# ── RenameFile/2 ─────────────────────────────────────────────────────
+# ── rename_file/2 ─────────────────────────────────────────────────────
 
 
 class TestRenameFile:
@@ -310,7 +310,7 @@ class TestRenameFile:
         assert len(sols) == 0
 
 
-# ── CopyFile/2 ───────────────────────────────────────────────────────
+# ── copy_file/2 ───────────────────────────────────────────────────────
 
 
 class TestCopyFile:
@@ -333,7 +333,7 @@ class TestCopyFile:
         assert len(sols) == 0
 
 
-# ── MakeDirectory/1 ─────────────────────────────────────────────────
+# ── make_directory/1 ─────────────────────────────────────────────────
 
 
 class TestMakeDirectory:
@@ -351,7 +351,7 @@ class TestMakeDirectory:
         assert len(sols) == 0
 
 
-# ── MakeDirectoryPath/1 ─────────────────────────────────────────────
+# ── make_directory_path/1 ─────────────────────────────────────────────
 
 
 class TestMakeDirectoryPath:
@@ -369,7 +369,7 @@ class TestMakeDirectoryPath:
         assert len(sols) == 1
 
 
-# ── ReadFileToString/2 ──────────────────────────────────────────────
+# ── read_file_to_string/2 ──────────────────────────────────────────────
 
 
 class TestReadFileToString:
@@ -399,12 +399,12 @@ class TestReadFileToString:
         f = tmp_path / "test.txt"
         f.write_text("trampoline test")
         contents = Var()
-        sols, trail = trampoline_solutions(ReadFileToString, str(f), contents)
+        sols, trail = trampoline_solutions(read_file_to_string, str(f), contents)
         assert len(sols) == 1
         assert deref(contents) == "trampoline test"
 
 
-# ── WriteStringToFile/2 ────────────────────────────────────────────
+# ── write_string_to_file/2 ────────────────────────────────────────────
 
 
 class TestWriteStringToFile:
@@ -430,7 +430,7 @@ class TestWriteStringToFile:
         assert len(sols) == 0
 
 
-# ── AppendStringToFile/2 ───────────────────────────────────────────
+# ── append_string_to_file/2 ───────────────────────────────────────────
 
 
 class TestAppendStringToFile:
@@ -450,7 +450,7 @@ class TestAppendStringToFile:
         assert f.read_text() == "first"
 
 
-# ── AbsolutePath/2 ─────────────────────────────────────────────────
+# ── absolute_path/2 ─────────────────────────────────────────────────
 
 
 class TestAbsolutePath:
@@ -468,7 +468,7 @@ class TestAbsolutePath:
         assert len(sols) == 0
 
 
-# ── JoinPath/3 ─────────────────────────────────────────────────────
+# ── join_path/3 ─────────────────────────────────────────────────────
 
 
 class TestJoinPath:
@@ -492,12 +492,12 @@ class TestJoinPath:
     def test_trampoline(self):
         # nv
         result = Var()
-        sols, trail = trampoline_solutions(JoinPath, "/a", "b", result)
+        sols, trail = trampoline_solutions(join_path, "/a", "b", result)
         assert len(sols) == 1
         assert deref(result) == str(pathlib.Path("/a") / "b")
 
 
-# ── SplitPath/3 ────────────────────────────────────────────────────
+# ── split_path/3 ────────────────────────────────────────────────────
 
 
 class TestSplitPath:
@@ -517,7 +517,7 @@ class TestSplitPath:
         assert len(sols) == 0
 
 
-# ── FileExtension/2 ────────────────────────────────────────────────
+# ── file_extension/2 ────────────────────────────────────────────────
 
 
 class TestFileExtension:
@@ -543,7 +543,7 @@ class TestFileExtension:
         assert deref(ext) == ".gz"
 
 
-# ── TempFile/1 ─────────────────────────────────────────────────────
+# ── temp_file/1 ─────────────────────────────────────────────────────
 
 
 class TestTempFile:
@@ -561,14 +561,14 @@ class TestTempFile:
     def test_trampoline(self):
         # nv
         path = Var()
-        sols, trail = trampoline_solutions(TempFile, path)
+        sols, trail = trampoline_solutions(temp_file, path)
         assert len(sols) == 1
         result = deref(path)
         assert os.path.exists(result)
         os.unlink(result)
 
 
-# ── TempDirectory/1 ────────────────────────────────────────────────
+# ── temp_directory/1 ────────────────────────────────────────────────
 
 
 class TestTempDirectory:
@@ -586,7 +586,7 @@ class TestTempDirectory:
     def test_trampoline(self):
         # nv
         path = Var()
-        sols, trail = trampoline_solutions(TempDirectory, path)
+        sols, trail = trampoline_solutions(temp_directory, path)
         assert len(sols) == 1
         result = deref(path)
         assert os.path.isdir(result)

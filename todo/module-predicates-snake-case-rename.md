@@ -79,7 +79,7 @@ flag-day (no deprecated aliases, matching the datetime precedent).
 2. ~~Batch the **trivial modules** (tcp, url, json, http, hash, pbkdf2, process, units, reflection)~~
    ✅ **DONE 2026-07-04** — see "Trivial batch — done" below.
 3. ~~Handle **`re`** carefully (goal-expansion + README)~~ ✅ **DONE 2026-07-04** — see "re — done" below.
-4. Do the **big three** (files, graphs, logging) once the pattern is proven.
+4. ~~Do the **big three** (files, graphs, logging)~~ ✅ **DONE 2026-07-05** — see "Big three — done" below.
 5. Fix the **docs** (above) in the same series.
 6. Hand off the **external sweep** as a tracked follow-up (see below).
 
@@ -139,6 +139,31 @@ those lowercase names (no collision).
   (`ModulesFinder` redirect) — cover both spellings.
 - **Prose collisions in mixed docs** (`compiler.md` "Search exhausted" = trampoline, not regex;
   `term_expansion.md` "Replace the goal" = English verb) — edited those pages by hand, not by sed.
+
+## Big three (files, graphs, logging) — done 2026-07-05
+
+56 predicates renamed. graphs/files were clean; **logging repeated the stdlib-class collision**
+(`_pylogging.StreamHandler`/`FileHandler` in both `logging.py` AND `test_logging_module.py`'s
+`isinstance(x, pylogging.FileHandler)` checks — sed lowercased them, restored by hand). graphs has
+no Python test — validated by running `graphs_sig_tests.clausal` directly
+(`python -m clausal.testing …`, 14/14).
+
+**NEW lesson — the global reference doc `docs/builtins.md`.** It enumerates module predicates in
+section headers (`### GetLogger/1`), a summary table (line ~94), a per-fixture coverage table (line
+~2752), and pulls display snippets from `tests/fixtures/docs/builtins_sigs.txt` — none of which
+appear in a module's own per-file reference set. The executable part is
+`tests/fixtures/docs/builtins_sig_tests.clausal` (compiled via `--8<--`, caught by
+`test_doc_snippet_coverage`); the rest is prose that must be swept for consistency.
+**For every remaining batch, also grep `docs/builtins.md` + `builtins_sig{s.txt,_tests.clausal}`.**
+Scope edits there to line ranges — generic names recur across sections (`?Error` is a mode
+annotation in the *exceptions* section; `logging.StreamHandler`/`FileHandler`/`Formatter`/`Logger`
+are stdlib-class prose to protect).
+
+**False-positive to NOT rename:** `-import_from(myapp.graphs.utils, [ShortestPath, Reachable])` in
+`docs/import.md` / `import_sigs.txt` is a *user application* module illustrating PredicateMeta
+imports — its `ShortestPath` is a user predicate, unrelated to the stdlib `graphs` module. Leave it.
+
+Commits: `14c38ffb` (trivial), `e0c71ba1` (re), plus the big-three commit.
 
 ## Done when
 - [ ] `grep -rhoE '(ModulePredicate|_[A-Za-z]+Predicate)\(\s*"[A-Z]' clausal/modules/` is empty.

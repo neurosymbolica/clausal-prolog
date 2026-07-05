@@ -575,7 +575,7 @@ All static patterns (string literals) in `match` and `search` calls are pre-comp
 
 Currently provides:
 - **`regex`** — match/2,3, search/2,3, replace/4, split/3, findall/3
-- **`log`** — GetLogger/1,2, Debug/1,2, Info/1,2, Warning/1,2, Error/1,2, Critical/1,2, Log/3, SetLevel/2, GetLevel/2, IsEnabledFor/2, StreamHandler/2, FileHandler/2, SetFormatter/2, AddHandler/2, RemoveHandler/2, BasicConfig/1. See [logging.md](logging.md)
+- **`log`** — get_logger/1,2, debug/1,2, info/1,2, warning/1,2, error/1,2, critical/1,2, log/3, set_level/2, get_level/2, is_enabled_for/2, stream_handler/2, file_handler/2, set_formatter/2, add_handler/2, remove_handler/2, basic_config/1. See [logging.md](logging.md)
 - **`date_time`** — now/1, now_utc/1, today/1, date/4, time/4, datetime/7, timedelta/3, date_add/3, date_sub/3, date_diff/3, datetime_string/3, weekday/2, date_between/3, timestamp/2, datetime_string_iso/2, date_string_iso/2. All predicates produce and consume real Python `datetime` objects (`datetime.date`, `datetime.time`, `datetime.datetime`, `datetime.timedelta`) — not custom term types. See [Date & Time](date_time.md)
 - **`yaml_module`** — Read/2, write/2, ReadAll/2, WriteAll/2, ReadFile/2, WriteFile/2, Get/3. Wraps PyYAML (`yaml.safe_load`/`yaml.safe_dump`); data represented as native Python dicts/lists/scalars. See [yaml.md](yaml.md)
 

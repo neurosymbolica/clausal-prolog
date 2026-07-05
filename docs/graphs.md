@@ -20,13 +20,13 @@ Or via [module import](import.md):
 
 ```clausal
 -import_from(graphs, [
-    Vertices, Neighbors, HasEdge, Degree,
-    IsConnected, IsIsolated,
-    BreadthFirstNodes, DepthFirstNodes,
-    FindPath, ShortestPath, PathCost,
-    ConnectedComponents, TopologicalSort, HasCycle,
-    SpanningTree, MinSpanningTree,
-    ReverseEdges, MergeGraphs
+    vertices, neighbors, has_edge, degree,
+    is_connected, is_isolated,
+    breadth_first_nodes, depth_first_nodes,
+    find_path, shortest_path, path_cost,
+    connected_components, topological_sort, has_cycle,
+    spanning_tree, min_spanning_tree,
+    reverse_edges, merge_graphs
 ])
 ```
 
@@ -36,7 +36,7 @@ Or via [module import](import.md):
 
 - **Unweighted**: `[["a", "b"], ["b", "c"], ...]` — list of 2-element lists
 - **Weighted**: `[["a", "b", 3], ["b", "c", 5], ...]` — list of 3-element lists
-- **Vertices** are extracted automatically from edges
+- **vertices** are extracted automatically from edges
 
 ---
 
@@ -44,10 +44,10 @@ Or via [module import](import.md):
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Vertices(Edges, Verts)` | `+Edges, -Verts` | Extract unique vertex list from edges |
-| `Neighbors(Edges, Node, Nbrs)` | `+Edges, +Node, -Nbrs` | List of adjacent nodes |
-| `HasEdge(Edges, U, V)` | `+Edges, ?U, ?V` | Succeeds if edge `[U, V]` exists; enumerates on backtrack |
-| `Degree(Edges, Node, Deg)` | `+Edges, +Node, -Deg` | Count of incident edges |
+| `vertices(Edges, Verts)` | `+Edges, -Verts` | Extract unique vertex list from edges |
+| `neighbors(Edges, Node, Nbrs)` | `+Edges, +Node, -Nbrs` | List of adjacent nodes |
+| `has_edge(Edges, U, V)` | `+Edges, ?U, ?V` | Succeeds if edge `[U, V]` exists; enumerates on backtrack |
+| `degree(Edges, Node, Deg)` | `+Edges, +Node, -Deg` | Count of incident edges |
 
 ```clausal
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:query_examples"
@@ -59,8 +59,8 @@ Or via [module import](import.md):
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `IsConnected(Edges)` | `+Edges` | Succeeds if graph is connected |
-| `IsIsolated(Edges, Node)` | `+Edges, ?Node` | Check or enumerate isolated nodes (degree 0) |
+| `is_connected(Edges)` | `+Edges` | Succeeds if graph is connected |
+| `is_isolated(Edges, Node)` | `+Edges, ?Node` | Check or enumerate isolated nodes (degree 0) |
 
 ---
 
@@ -68,8 +68,8 @@ Or via [module import](import.md):
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `BreadthFirstNodes(Edges, Source, Nodes)` | `+Edges, +Source, -Nodes` | BFS node ordering from source |
-| `DepthFirstNodes(Edges, Source, Nodes)` | `+Edges, +Source, -Nodes` | DFS preorder node ordering from source |
+| `breadth_first_nodes(Edges, Source, Nodes)` | `+Edges, +Source, -Nodes` | BFS node ordering from source |
+| `depth_first_nodes(Edges, Source, Nodes)` | `+Edges, +Source, -Nodes` | DFS preorder node ordering from source |
 
 ```clausal
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:traversal_example"
@@ -81,9 +81,9 @@ Or via [module import](import.md):
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `FindPath(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Enumerate all simple paths via [backtracking](control.md) |
-| `ShortestPath(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Shortest path (BFS for unweighted, Dijkstra for weighted) |
-| `PathCost(Edges, Path, Cost)` | `+Edges, +Path, -Cost` | sum_ of edge weights along a path |
+| `find_path(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Enumerate all simple paths via [backtracking](control.md) |
+| `shortest_path(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Shortest path (BFS for unweighted, Dijkstra for weighted) |
+| `path_cost(Edges, Path, Cost)` | `+Edges, +Path, -Cost` | sum_ of edge weights along a path |
 
 ```clausal
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:pathfinding_examples"
@@ -95,9 +95,9 @@ Or via [module import](import.md):
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `ConnectedComponents(Edges, Components)` | `+Edges, -Components` | List of components (each a vertex list) |
-| `TopologicalSort(Edges, Order)` | `+Edges, -Order` | Topological ordering of a DAG; fails if cyclic |
-| `HasCycle(Edges)` | `+Edges` | Succeeds if the directed graph contains a cycle |
+| `connected_components(Edges, Components)` | `+Edges, -Components` | List of components (each a vertex list) |
+| `topological_sort(Edges, Order)` | `+Edges, -Order` | Topological ordering of a DAG; fails if cyclic |
+| `has_cycle(Edges)` | `+Edges` | Succeeds if the directed graph contains a cycle |
 
 ```clausal
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:component_examples"
@@ -109,8 +109,8 @@ Or via [module import](import.md):
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `SpanningTree(Edges, Tree)` | `+Edges, -Tree` | A spanning tree (edge subset) via BFS |
-| `MinSpanningTree(Edges, Tree, Cost)` | `+Edges, -Tree, -Cost` | Minimum spanning tree via Prim's algorithm |
+| `spanning_tree(Edges, Tree)` | `+Edges, -Tree` | A spanning tree (edge subset) via BFS |
+| `min_spanning_tree(Edges, Tree, Cost)` | `+Edges, -Tree, -Cost` | Minimum spanning tree via Prim's algorithm |
 
 ```clausal
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:tree_example"
@@ -122,8 +122,8 @@ Or via [module import](import.md):
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `ReverseEdges(Edges, Reversed)` | `+Edges, -Reversed` | reverse all edge directions |
-| `MergeGraphs(Edges1, Edges2, Merged)` | `+Edges1, +Edges2, -Merged` | union of two edge lists |
+| `reverse_edges(Edges, Reversed)` | `+Edges, -Reversed` | reverse all edge directions |
+| `merge_graphs(Edges1, Edges2, Merged)` | `+Edges1, +Edges2, -Merged` | union of two edge lists |
 
 ```clausal
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:transform_example"

@@ -9,15 +9,15 @@ The implementation lives in `clausal/modules/py/files.py`.
 ## Import
 
 ```clausal
--import_from(py.files, [FileExists, DirectoryFiles, ReadFileToString,
-                        WriteStringToFile, JoinPath, MakeDirectoryPath])
+-import_from(py.files, [file_exists, directory_files, read_file_to_string,
+                        write_string_to_file, join_path, make_directory_path])
 ```
 
 Or via [module import](import.md):
 
 ```clausal
 -import_module(py.files)
-# then use py.files.FileExists("data.csv"), py.files.JoinPath(A_, B_, P_), etc.
+# then use py.files.file_exists("data.csv"), py.files.join_path(A_, B_, P_), etc.
 ```
 
 ---
@@ -26,35 +26,35 @@ Or via [module import](import.md):
 
 ### Existence Checks
 
-#### FileExists/1
+#### file_exists/1
 
-`FileExists(Path)` — succeeds if Path is a regular file.
+`file_exists(Path)` — succeeds if Path is a regular file.
 
 ```clausal
-check_config <- FileExists("config.json")
+check_config <- file_exists("config.json")
 ```
 
-#### DirectoryExists/1
+#### directory_exists/1
 
-`DirectoryExists(Path)` — succeeds if Path is a directory.
+`directory_exists(Path)` — succeeds if Path is a directory.
 
-#### PathExists/1
+#### path_exists/1
 
-`PathExists(Path)` — succeeds if Path exists (file, directory, or other).
+`path_exists(Path)` — succeeds if Path exists (file, directory, or other).
 
 ### Directory listing
 
-#### DirectoryFiles/2
+#### directory_files/2
 
-`DirectoryFiles(Dir, Files)` — unify Files with a sorted list of filenames in Dir. Deterministic (one solution, full list).
+`directory_files(Dir, Files)` — unify Files with a sorted list of filenames in Dir. Deterministic (one solution, full list).
 
 ```clausal
-list_dir(DIR, FILES) <- DirectoryFiles(DIR, FILES)
+list_dir(DIR, FILES) <- directory_files(DIR, FILES)
 ```
 
-#### DirectoryEntries/2
+#### directory_entries/2
 
-`DirectoryEntries(Dir, Entry)` — enumerate directory entries one at a time via backtracking.
+`directory_entries(Dir, Entry)` — enumerate directory entries one at a time via backtracking.
 
 ```clausal
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:directory_listing"
@@ -62,109 +62,109 @@ list_dir(DIR, FILES) <- DirectoryFiles(DIR, FILES)
 
 ### File Metadata
 
-#### FileSize/2
+#### file_size/2
 
-`FileSize(Path, Size)` — unify Size with file size in bytes (integer).
+`file_size(Path, Size)` — unify Size with file size in bytes (integer).
 
 ```clausal
-is_large_file(PATH) <- (FileSize(PATH, SIZE), SIZE > 1000000)
+is_large_file(PATH) <- (file_size(PATH, SIZE), SIZE > 1000000)
 ```
 
-#### FileModificationTime/2
+#### file_modification_time/2
 
-`FileModificationTime(Path, Time)` — unify Time with the modification timestamp (float, seconds since epoch).
+`file_modification_time(Path, Time)` — unify Time with the modification timestamp (float, seconds since epoch).
 
 ### Destructive Operations
 
 All destructive predicates require ground path arguments.
 
-#### DeleteFile/1
+#### delete_file/1
 
-`DeleteFile(Path)` — delete a file. Fails if the file does not exist.
+`delete_file(Path)` — delete a file. Fails if the file does not exist.
 
-#### DeleteDirectory/1
+#### delete_directory/1
 
-`DeleteDirectory(Path)` — delete an empty directory. Fails if not empty or not found.
+`delete_directory(Path)` — delete an empty directory. Fails if not empty or not found.
 
-#### RenameFile/2
+#### rename_file/2
 
-`RenameFile(Old, New)` — rename or move a file or directory.
+`rename_file(Old, New)` — rename or move a file or directory.
 
-#### CopyFile/2
+#### copy_file/2
 
-`CopyFile(Source, Destination)` — copy a file (preserves metadata). Not for directories.
+`copy_file(Source, Destination)` — copy a file (preserves metadata). Not for directories.
 
 ### Directory Creation
 
-#### MakeDirectory/1
+#### make_directory/1
 
-`MakeDirectory(Path)` — create a directory. Fails if it already exists.
+`make_directory(Path)` — create a directory. Fails if it already exists.
 
-#### MakeDirectoryPath/1
+#### make_directory_path/1
 
-`MakeDirectoryPath(Path)` — create a directory and all parents (like `mkdir -p`). Succeeds even if the directory already exists.
+`make_directory_path(Path)` — create a directory and all parents (like `mkdir -p`). Succeeds even if the directory already exists.
 
 ```clausal
-ensure_output_dir <- MakeDirectoryPath("output/reports/2024")
+ensure_output_dir <- make_directory_path("output/reports/2024")
 ```
 
 ### File I/O
 
-#### ReadFileToString/2
+#### read_file_to_string/2
 
-`ReadFileToString(Path, Contents)` — read an entire file as a UTF-8 string. Fails on missing files or binary content.
+`read_file_to_string(Path, Contents)` — read an entire file as a UTF-8 string. Fails on missing files or binary content.
 
 ```clausal
-read_config(PATH, CONTENT) <- (FileExists(PATH), ReadFileToString(PATH, CONTENT))
+read_config(PATH, CONTENT) <- (file_exists(PATH), read_file_to_string(PATH, CONTENT))
 ```
 
-#### WriteStringToFile/2
+#### write_string_to_file/2
 
-`WriteStringToFile(Path, Contents)` — write a string to a file, overwriting any existing content.
+`write_string_to_file(Path, Contents)` — write a string to a file, overwriting any existing content.
 
-#### AppendStringToFile/2
+#### append_string_to_file/2
 
-`AppendStringToFile(Path, Contents)` — append a string to a file. Creates the file if it does not exist.
+`append_string_to_file(Path, Contents)` — append a string to a file. Creates the file if it does not exist.
 
 ### Path Manipulation
 
-#### AbsolutePath/2
+#### absolute_path/2
 
-`AbsolutePath(Relative, Absolute)` — resolve a relative path to an absolute path.
+`absolute_path(Relative, Absolute)` — resolve a relative path to an absolute path.
 
-#### JoinPath/3
+#### join_path/3
 
-`JoinPath(Base, Relative, Joined)` — join two path components.
+`join_path(Base, Relative, Joined)` — join two path components.
 
 ```clausal
-output_path(DIR, NAME, PATH) <- JoinPath(DIR, NAME, PATH)
+output_path(DIR, NAME, PATH) <- join_path(DIR, NAME, PATH)
 ```
 
-#### SplitPath/3
+#### split_path/3
 
-`SplitPath(Path, Directory, Filename)` — split a path into its directory and filename parts.
+`split_path(Path, Directory, Filename)` — split a path into its directory and filename parts.
 
 ```clausal
-get_filename(PATH, NAME) <- SplitPath(PATH, _, NAME)
+get_filename(PATH, NAME) <- split_path(PATH, _, NAME)
 ```
 
-#### FileExtension/2
+#### file_extension/2
 
-`FileExtension(Path, Extension)` — unify Extension with the file extension (including the dot, e.g. `".csv"`). Empty string if no extension.
+`file_extension(Path, Extension)` — unify Extension with the file extension (including the dot, e.g. `".csv"`). Empty string if no extension.
 
 ```clausal
-is_python_file(PATH) <- FileExtension(PATH, ".py")
+is_python_file(PATH) <- file_extension(PATH, ".py")
 ```
 
 ### Temporary Files
 
-#### TempFile/1
+#### temp_file/1
 
-`TempFile(Path)` — create a temporary file and unify Path with its path. The caller is responsible for cleanup.
+`temp_file(Path)` — create a temporary file and unify Path with its path. The caller is responsible for cleanup.
 
-#### TempDirectory/1
+#### temp_directory/1
 
-`TempDirectory(Path)` — create a temporary directory and unify Path with its path. The caller is responsible for cleanup.
+`temp_directory(Path)` — create a temporary directory and unify Path with its path. The caller is responsible for cleanup.
 
 ---
 
@@ -173,24 +173,24 @@ is_python_file(PATH) <- FileExtension(PATH, ".py")
 This example uses [`include`](higher_order.md) to select files by extension.
 
 ```clausal
--import_from(py.files, [FileExists, DirectoryFiles, ReadFileToString,
-                        WriteStringToFile, JoinPath, MakeDirectoryPath,
-                        FileExtension])
+-import_from(py.files, [file_exists, directory_files, read_file_to_string,
+                        write_string_to_file, join_path, make_directory_path,
+                        file_extension])
 
 save_output(DIR, NAME, CONTENT) <- (
-    MakeDirectoryPath(DIR),
-    JoinPath(DIR, NAME, PATH),
-    WriteStringToFile(PATH, CONTENT)
+    make_directory_path(DIR),
+    join_path(DIR, NAME, PATH),
+    write_string_to_file(PATH, CONTENT)
 )
 
 python_files(DIR, FILES) <- (
-    DirectoryFiles(DIR, ALL),
+    directory_files(DIR, ALL),
     include(is_py, ALL, FILES)
 )
-is_py(F) <- FileExtension(F, ".py")
+is_py(F) <- file_extension(F, ".py")
 
 read_config(PATH, CONTENT) <- (
-    FileExists(PATH),
-    ReadFileToString(PATH, CONTENT)
+    file_exists(PATH),
+    read_file_to_string(PATH, CONTENT)
 )
 ```

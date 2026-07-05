@@ -1,13 +1,13 @@
 # Display snippets for docs/graphs.md
 
 --8<-- [start:overview_import]
--import_from(graphs, [Vertices, ShortestPath, IsConnected])
+-import_from(graphs, [vertices, shortest_path, is_connected])
 
 Main <- (
     G = [["a", "b"], ["b", "c"], ["a", "c"]],
-    Vertices(G, V),
-    ++print(f"Vertices: {V}"),
-    ShortestPath(G, "a", "c", P),
+    vertices(G, V),
+    ++print(f"vertices: {V}"),
+    shortest_path(G, "a", "c", P),
     ++print(f"Shortest path: {P}")
 )
 --8<-- [end:overview_import]
@@ -17,50 +17,50 @@ Main <- (
 
 Main <- (
     G = [["a", "b"], ["b", "c"]],
-    graphs.Vertices(G, V),
-    graphs.IsConnected(G)
+    graphs.vertices(G, V),
+    graphs.is_connected(G)
 )
 --8<-- [end:overview_module]
 
 --8<-- [start:query_examples]
-Vertices([["a", "b"], ["b", "c"]], V)    % V = ["a", "b", "c"]
-Neighbors([["a", "b"], ["b", "c"]], "b", N)  % N = ["a", "c"]
-Degree([["a", "b"], ["b", "c"]], "b", D)     % D = 2
+vertices([["a", "b"], ["b", "c"]], V)    % V = ["a", "b", "c"]
+neighbors([["a", "b"], ["b", "c"]], "b", N)  % N = ["a", "c"]
+degree([["a", "b"], ["b", "c"]], "b", D)     % D = 2
 --8<-- [end:query_examples]
 
 --8<-- [start:traversal_example]
-BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N)
+breadth_first_nodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N)
 # N = ["a", "b", "c", "d"]
 --8<-- [end:traversal_example]
 
 --8<-- [start:pathfinding_examples]
 # Enumerate all paths
-FindPath([["a", "b"], ["b", "c"], ["a", "c"]], "a", "c", P)
+find_path([["a", "b"], ["b", "c"], ["a", "c"]], "a", "c", P)
 # P = ["a", "b", "c"]  then  P = ["a", "c"]
 
 # Shortest path in a weighted graph
-ShortestPath([["a", "b", 1], ["b", "c", 2], ["a", "c", 10]], "a", "c", P)
+shortest_path([["a", "b", 1], ["b", "c", 2], ["a", "c", 10]], "a", "c", P)
 # P = ["a", "b", "c"]
 
 # Cost of a path
-PathCost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], C)
+path_cost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], C)
 # C = 8
 --8<-- [end:pathfinding_examples]
 
 --8<-- [start:component_examples]
-ConnectedComponents([["a", "b"], ["c", "d"]], C)
+connected_components([["a", "b"], ["c", "d"]], C)
 # C = [["a", "b"], ["c", "d"]]
 
-TopologicalSort([["a", "b"], ["b", "c"], ["a", "c"]], O)
+topological_sort([["a", "b"], ["b", "c"], ["a", "c"]], O)
 # O = ["a", "b", "c"]
 --8<-- [end:component_examples]
 
 --8<-- [start:tree_example]
-MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], T, C)
+min_spanning_tree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], T, C)
 # T = [["a", "b", 1], ["b", "c", 2]]   C = 3
 --8<-- [end:tree_example]
 
 --8<-- [start:transform_example]
-ReverseEdges([["a", "b"], ["c", "d"]], R)
+reverse_edges([["a", "b"], ["c", "d"]], R)
 # R = [["b", "a"], ["d", "c"]]
 --8<-- [end:transform_example]
