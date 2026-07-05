@@ -73,10 +73,12 @@ contracts it covers, including:
   0-based `nth0`; there is no `nth1`; SWI `succ` → `succ/2`).
 
 Caveats: sections marked *(unverified)* are documentation-derived, not
-executed — treat as weaker evidence. A live `todo/cheatsheet-remove-python-
-escapes.md` indicates the `++()` / `:=` escape guidance is being revised, so
-prefer the cheat-sheet's verified relational idioms over escape-based examples
-when they conflict. The cheat-sheet lives in the sibling **clausify** repo
+executed — treat as weaker evidence. A live clausify todo
+(`/workspace/clausify/todo/cheatsheet-remove-python-escapes.md`) indicates the
+`++()` / `:=` escape guidance is being revised, so prefer the cheat-sheet's
+verified relational
+idioms over escape-based examples when they conflict. The cheat-sheet lives in
+the sibling **clausify** repo
 (read-only for this audit); do not modify it.
 
 ### Other standing constraints (from project memory)
@@ -201,8 +203,8 @@ classes:
     on PATH**, so the agent checks availability first and, if the backend can't
     be built/run, logs the divergence class it *would* test as an open item
     rather than skipping silently.
-  This mirrors clausify's `docs/adversarial-verification/fable-oracle-prompts/`
-  differential pattern.
+  This mirrors clausify's differential pattern at
+  `/workspace/clausify/docs/adversarial-verification/fable-oracle-prompts/`.
 - **C-finding verification toolkit** (audits owning `.c`: 1, 4, 5, 6, 7, 8, 9).
   pytest alone can't confirm a leak or an FT bug. Concrete methods:
   - Refcount/leak: `sys.getrefcount` deltas and `gc.get_objects()` /
