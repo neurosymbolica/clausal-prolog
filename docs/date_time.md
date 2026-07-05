@@ -12,7 +12,7 @@ The implementation lives in `clausal/modules/date_time.py`.
 -import_from(date_time, [now, today, date, time, datetime,
                          timedelta, date_add, date_sub, date_diff,
                          days_between, datetime_string,
-                         date_of, weekday, date_between])
+                         date_of, weekday, date_between, timestamp])
 ```
 
 Or via [module import](import.md):
@@ -139,6 +139,16 @@ IsoDate(Y, M, D, S) <- (
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:weekday"
 ```
 
+### timestamp/2 — Bidirectional
+
+`timestamp(DateTime, Stamp)` — convert between a `datetime.datetime` and a POSIX epoch float:
+
+```clausal
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:timestamp"
+```
+
+Forward (DateTime bound to a `datetime`): Stamp = `DateTime.timestamp()` (float seconds since epoch). With Stamp already bound this acts as a check. Inverse (DateTime unbound, Stamp a number): DateTime = `datetime.fromtimestamp(Stamp)`. A plain `date` has no `timestamp()`, so the forward direction requires a `datetime` — pass a `datetime` object or use `datetime/7` to construct one first.
+
 ### date_between/3 — Nondeterministic
 
 `date_between(Start, End, D)` — generates each date in the range [Start, End]:
@@ -168,6 +178,7 @@ This is nondeterministic — it succeeds once for each date in the range via [ba
     - **date_of**: datetime ↔ date (both modes)
     - **weekday**: weekday computation
     - **date_between**: date range enumeration
+    - **timestamp**: bidirectional datetime ↔ POSIX epoch
 
 ---
 

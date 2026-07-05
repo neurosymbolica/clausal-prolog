@@ -997,3 +997,7 @@ weekday(+DateOrDatetime, -Weekday)
 --8<-- [start:datebetween_3]
 date_between(+Start, +End, -D)
 --8<-- [end:datebetween_3]
+
+--8<-- [start:timestamp_2]
+timestamp(?DateTime, ?Stamp)
+--8<-- [end:timestamp_2]

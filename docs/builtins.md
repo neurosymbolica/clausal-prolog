@@ -92,7 +92,7 @@ Notation in signature lines:
 | [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
 | [I/O](#io) | write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | GetLogger, Debug, Info, Warning, Error, Critical, Log, SetLevel, GetLevel, StreamHandler, FileHandler |
-| [Date & Time (`date_time` module)](#date--time-date_time-module) | now, today, date, time, datetime, date_add, date_sub, date_diff, datetime_string, weekday, date_between |
+| [Date & Time (`date_time` module)](#date--time-date_time-module) | now, today, date, time, datetime, date_add, date_sub, date_diff, datetime_string, weekday, date_between, timestamp |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
 | [Time & statistics](#time--statistics) | current_time/1, statistics/2 |
 | [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `:=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
@@ -2664,6 +2664,18 @@ Nondeterministic — generates one solution for each `datetime.date` in `[Start,
 
 ---
 
+### `timestamp/2`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:timestamp_2"
+```
+Bidirectional. Forward (`DateTime` is a `datetime.datetime`): `Stamp = DateTime.timestamp()` (float epoch seconds); with `Stamp` already bound this acts as a check. Inverse (`DateTime` unbound, `Stamp` a number): `DateTime = datetime.fromtimestamp(Stamp)`. A plain `date` has no `timestamp()` — the forward direction requires a `datetime`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/modules/date_time.py`
+    **Python tests:** `tests/test_date_time.py`
+
+---
+
 ## Operator Syntax (Compiler Special Forms)
 
 The following are not builtins in the registry — they are syntax forms compiled directly by `compile_goal`/`compile_goal_trampoline`.
@@ -2726,6 +2738,6 @@ The following are not builtins in the registry — they are syntax forms compile
     | `tests/fixtures/dcg_grammar.clausal` | `phrase/2`, `phrase/3`, DCG with non-terminals, inline goals, pushback, negation |
     | `tests/fixtures/clpb_circuit.clausal` | `sat/1`, `bool_labeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
     | `tests/fixtures/logging_basic.clausal` | `GetLogger`, `SetLevel`, `GetLevel`, `IsEnabledFor`, `Debug`, `Info`, `Warning`, `Error`, `Critical`, `Log`, `StreamHandler`, `SetFormatter`, `AddHandler`, `RemoveHandler` |
-    | `tests/test_date_time.py` | `now`, `now_utc`, `today`, `date`, `time`, `datetime`, `timedelta`, `date_add`, `date_sub`, `date_diff`, `datetime_string`, `weekday`, `date_between` (81 tests) |
+    | `tests/test_date_time.py` | `now`, `now_utc`, `today`, `date`, `time`, `datetime`, `timedelta`, `date_add`, `date_sub`, `date_diff`, `datetime_string`, `weekday`, `date_between`, `timestamp` (88 tests) |
     | `tests/test_yaml_module.py` | `Read`, `write`, `ReadAll`, `WriteAll`, `ReadFile`, `WriteFile`, `Get` (45 tests) |
     | `tests/fixtures/yaml_basic.clausal` | `Read`, `write`, `Get` — parsing, nested access, round-trip |

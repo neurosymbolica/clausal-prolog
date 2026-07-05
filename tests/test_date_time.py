@@ -13,12 +13,12 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.datetime import (
     now, now_utc, today, date, time, datetime, timedelta,
     date_add, date_sub, date_diff, date_between, date_of, days_between,
-    weekday, datetime_string,
+    weekday, datetime_string, timestamp,
     _now_1, _now_utc_1, _today_1,
     _date_4, _time_4, _datetime_7, _timedelta_3,
     _date_add_3, _date_sub_3, _date_diff_3,
     _datetime_string_3, _weekday_2,
-    _date_of_2, _days_between_3,
+    _date_of_2, _days_between_3, _timestamp_2,
 )
 from clausal.logic.trampoline import DONE
 
@@ -651,6 +651,50 @@ class TestDaysBetween:
         assert len(results) == 0
 
 
+# ── Timestamp/2 (bidirectional datetime ↔ POSIX epoch) ──────────────────
+
+
+class TestTimestamp:
+    def test_forward_datetime_to_float(self):
+        # nv
+        v = Var()
+        d = dt.datetime(2026, 3, 16, 12, 0, 0)
+        results, _ = simple_solutions(_timestamp_2, d, v)
+        assert len(results) == 1
+        assert deref(v) == d.timestamp()
+
+    def test_inverse_float_to_datetime(self):
+        # vn
+        d = dt.datetime(2026, 3, 16, 12, 0, 0)
+        v = Var()
+        results, _ = simple_solutions(_timestamp_2, v, d.timestamp())
+        assert len(results) == 1
+        assert deref(v) == d
+
+    def test_inverse_int_stamp(self):
+        # vn
+        v = Var()
+        results, _ = simple_solutions(_timestamp_2, v, 0)
+        assert len(results) == 1
+        assert isinstance(deref(v), dt.datetime)
+
+    def test_check_mode_matches(self):
+        # nn
+        d = dt.datetime(2026, 3, 16, 12, 0, 0)
+        results, _ = simple_solutions(_timestamp_2, d, d.timestamp())
+        assert len(results) == 1
+
+    def test_date_has_no_timestamp_fails(self):
+        # a plain date is not a datetime → forward fails
+        results, _ = simple_solutions(_timestamp_2, dt.date(2026, 3, 16), Var())
+        assert len(results) == 0
+
+    def test_both_unbound_fails(self):
+        # vv
+        results, _ = simple_solutions(_timestamp_2, Var(), Var())
+        assert len(results) == 0
+
+
 # ── Unification of datetime objects ─────────────────────────────────────
 
 
@@ -746,6 +790,10 @@ class TestAdapters:
     def test_days_between_has_dispatch(self):
         # nv
         assert callable(days_between._get_dispatch())
+
+    def test_timestamp_has_dispatch(self):
+        # nv
+        assert callable(timestamp._get_dispatch())
 
     def test_repr(self):
         # nv

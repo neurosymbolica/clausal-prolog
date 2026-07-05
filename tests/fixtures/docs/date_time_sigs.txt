@@ -55,3 +55,8 @@ datetime_string(DT, "2026-03-16", "%Y-%m-%d")    # parse: DT = midnight datetime
 --8<-- [start:weekday]
 weekday(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
 --8<-- [end:weekday]
+
+--8<-- [start:timestamp]
+timestamp(DT, TS)    # forward: TS = DT.timestamp() (float epoch)
+timestamp(DT, 0)     # inverse: DT = datetime.fromtimestamp(0)
+--8<-- [end:timestamp]

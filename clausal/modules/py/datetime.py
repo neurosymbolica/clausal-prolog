@@ -388,6 +388,35 @@ def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, tr
     yield (_fail, DONE)
 
 
+# ── timestamp/2 — bidirectional datetime ↔ POSIX epoch ───────────────────
+
+
+def _timestamp_2(dt_obj, stamp, trail, k):
+    """timestamp/2: bidirectional — timestamp(DateTime, Stamp).
+
+    Forward (DateTime is a ``datetime``): Stamp = DateTime.timestamp() (float
+    epoch seconds); with Stamp bound this is a check.
+    Inverse (DateTime unbound, Stamp a number): DateTime =
+    datetime.fromtimestamp(Stamp).  A plain ``date`` has no ``timestamp()``, so
+    the forward direction requires a ``datetime``.
+    """
+    dt_obj, stamp = deref(dt_obj), deref(stamp)
+    if isinstance(dt_obj, _dt.datetime):
+        try:
+            out = dt_obj.timestamp()
+        except (OverflowError, OSError, ValueError):
+            return
+        if unify(stamp, out, trail):
+            yield None
+    elif is_var(dt_obj) and isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+        try:
+            out = _dt.datetime.fromtimestamp(stamp)
+        except (OverflowError, OSError, ValueError, TypeError):
+            return
+        if unify(dt_obj, out, trail):
+            yield None
+
+
 # ── Build and export predicate objects ───────────────────────────────────
 
 now = ModulePredicate("now", module="datetime")
@@ -434,3 +463,6 @@ weekday._register(2, simple_to_trampoline(_weekday_2))
 
 date_between = ModulePredicate("date_between", module="datetime")
 date_between._register(3, _date_between_3)
+
+timestamp = ModulePredicate("timestamp", module="datetime")
+timestamp._register(2, simple_to_trampoline(_timestamp_2))

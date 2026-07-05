@@ -2,7 +2,7 @@
 
 -import_from(date_time, [now, now_utc, today, date, time, datetime,
                          timedelta, date_add, date_sub, date_diff, days_between,
-                         datetime_string, date_of, weekday])
+                         datetime_string, date_of, weekday, timestamp])
 
 # ── now/today ────────────────────────────────────────────────────────────────
 
@@ -117,4 +117,13 @@ Test("day of week") <- (
     date(2026, 3, 16, D),
     weekday(D, DOW),
     number(DOW)
+)  # nv
+
+# ── timestamp ─────────────────────────────────────────────────────────────────
+
+Test("timestamp roundtrip") <- (
+    datetime(2026, 3, 16, 12, 0, 0, DT),
+    timestamp(DT, TS),
+    timestamp(DT2, TS),
+    DT == DT2
 )  # nv
