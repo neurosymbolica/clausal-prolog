@@ -118,11 +118,19 @@ Also fixed a cross-package prose ref: `clausal-spacy/docs/spacy.md` compared its
 
 ## Docs to fix in the same series (stale / self-contradictory)
 
-- [ ] `docs/for_prolog_programmers.md:156` — naming table says "lowercase for user predicates" but
-      "**PascalCase** builtins" in the same table. Rewrite for the snake_case convention.
-- [ ] `docs/syntax.md:63` — still claims titlecase is used for predicates.
-- [ ] `README.md` — quick-start says "Predicate names are CamelCase"; `Match`/`Call`/`Phrase`
-      examples.
+- [x] `docs/for_prolog_programmers.md` — naming table rewritten (predicates/builtins `snake_case`,
+      variables `ALL_CAPS`, TitleCase for atoms/functors); also fixed line 94 "PascalCase builtins".
+- [x] `docs/syntax.md` — fixed the variable-rationale paragraph (63) and the whole "Builtin predicate
+      naming" section (111) that claimed builtins are **PascalCase** (they're lowercase + trailing
+      underscore for keyword/builtin collisions: `in_`, `abs_`, `float_`, `max_`…). Kept that real
+      rationale; corrected the conclusion.
+- [x] `README.md` — quick-start now says predicates are lowercase `snake_case`; the family example
+      updated to `parent`/`grandparent`.
+
+**Found while here (SEPARATE bug, not naming):** a prior botched rename turned sentence-initial
+"In " → "in_ " across ~7 docs (`bytes_as_lists.md:3`, `indexing.md:44`, `for_python_programmers.md`
+11/55/62/269, `tutorial.md:54`, `for_decision_makers.md:32`, and the two in `syntax.md` I fixed
+here). Mechanical fix (`^in_ ` / `. in_ ` → `In `). Left for a dedicated pass — flagged to the user.
 
 ## Rollout (mirror the datetime precedent)
 
@@ -131,7 +139,7 @@ Also fixed a cross-package prose ref: `clausal-spacy/docs/spacy.md` compared its
    ✅ **DONE 2026-07-04** — see "Trivial batch — done" below.
 3. ~~Handle **`re`** carefully (goal-expansion + README)~~ ✅ **DONE 2026-07-04** — see "re — done" below.
 4. ~~Do the **big three** (files, graphs, logging)~~ ✅ **DONE 2026-07-05** — see "Big three — done" below.
-5. Fix the **docs** (above) in the same series.
+5. ~~Fix the **docs** (above) in the same series.~~ ✅ **DONE 2026-07-05** (convention docs).
 6. Hand off the **external sweep** as a tracked follow-up (see below).
 
 ## Trivial batch — done 2026-07-04

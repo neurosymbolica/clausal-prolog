@@ -69,7 +69,7 @@ shuffle_deck(DECK, SHUFFLED) <- permutation(DECK, SHUFFLED)
 
 ### sample/3
 
-`sample(List, SampleSize, Sample)` — bind Sample to `SampleSize` randomly chosen elements without replacement. Fails if `SampleSize` > length of List.
+`sample(List, Size, Sample)` — bind Sample to `Size` randomly chosen elements without replacement. Fails if `Size` > length of List.
 
 ```clausal
 draw_hand(DECK, HAND) <- sample(DECK, 5, HAND)

@@ -90,7 +90,7 @@ def _random_permutation_2(lst, shuffled, trail, k):
 
 
 def _random_sample_3(lst, size, sample, trail, k_cont):
-    """sample/3: bind Sample to SampleSize randomly chosen elements (no replacement)."""
+    """sample/3: bind Sample to Size randomly chosen elements (no replacement)."""
     lst, size_val = deref(lst), deref(size)
     if is_var(lst) or not isinstance(lst, list):
         return
