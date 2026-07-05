@@ -163,10 +163,10 @@ deref(v)  # → datetime.date(2026, 3, 16)
 This means `datetime`, `Decimal`, `pathlib.Path`, and any other Python type with `__eq__` works as a logic term without wrapping. Call methods via `++()`:
 
 ```clausal
--import_from(date_time, [Date])
+-import_from(date_time, [date])
 
 IsoDate(Y, M, D, S) <- (
-    Date(Y, M, D, DT),
+    date(Y, M, D, DT),
     S is ++DT.isoformat()
 )
 ```

@@ -3,24 +3,24 @@
 Provides relational predicates for constructing, decomposing, and
 manipulating dates and times.  Import via::
 
-    -import_from(py.datetime, [Now, Today, Date, Time, DateTime,
-                             TimeDelta, DateAdd, DateSub, DateDiff,
-                             DaysBetween, FormatDate, ParseDate,
-                             DateOf, DayOfWeek, DateBetween])
+    -import_from(date_time, [now, today, date, time, datetime,
+                             timedelta, date_add, date_sub, date_diff,
+                             days_between, datetime_string,
+                             date_of, weekday, date_between])
 
 Or via module import::
 
     -import_module(py.datetime)
-    # then use py.datetime.Now(...), py.datetime.Date(...), etc.
+    # then use py.datetime.now(...), py.datetime.date(...), etc.
 
 Python interop
 --------------
 All predicates produce and consume **real Python datetime objects**:
 
-- ``Date/4``      ↔ ``datetime.date``
-- ``Time/4``      ↔ ``datetime.time``
-- ``DateTime/7``  ↔ ``datetime.datetime``
-- ``TimeDelta/3`` ↔ ``datetime.timedelta``
+- ``date/4``      ↔ ``datetime.date``
+- ``time/4``      ↔ ``datetime.time``
+- ``datetime/7``  ↔ ``datetime.datetime``
+- ``timedelta/3`` ↔ ``datetime.timedelta``
 
 These are not custom term types — they are the actual Python classes from
 the ``datetime`` module.  Unification uses Python's native ``==``.  Any
@@ -29,15 +29,15 @@ values, e.g. ``S_ is ++D_.isoformat()`` or ``++D_.strftime("%Y-%m-%d")``.
 
 Bidirectional predicates
 ------------------------
-``Date/4``, ``Time/4``, ``DateTime/7``, ``TimeDelta/3``, and ``DateOf/2``
+``date/4``, ``time/4``, ``datetime/7``, ``timedelta/3``, and ``date_of/2``
 are bidirectional: pass ground components to construct, or pass a ground
 datetime object to decompose into components.
 
 Prefer these declarative predicates over ``++`` Python escapes:
-``DateOf(DT, D)`` instead of ``D is ++DT.date()``; ``TimeDelta(N, _, TD)``
-instead of ``N is ++TD.days``; ``FormatDate(DT, "%Y-%m-%d", S)`` instead
-of ``S is ++DT.isoformat()``; and ``DaysBetween(A, B, N)`` for a direct
-integer day count instead of ``DateDiff(A, B, TD), TimeDelta(N, _, TD)``.
+``date_of(DT, D)`` instead of ``D is ++DT.date()``; ``timedelta(N, _, TD)``
+instead of ``N is ++TD.days``; ``datetime_string(DT, S, "%Y-%m-%d")``
+instead of ``S is ++DT.isoformat()``; and ``days_between(A, B, N)`` for a
+direct integer day count instead of ``date_diff(A, B, TD), timedelta(N, _, TD)``.
 """
 
 from __future__ import annotations
@@ -51,32 +51,32 @@ from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
 
-# ── Now / Today ──────────────────────────────────────────────────────────
+# ── now / today ──────────────────────────────────────────────────────────
 
 
 def _now_1(dt, trail, k):
-    """Now/1: bind dt to datetime.datetime.now()."""
+    """now/1: bind dt to datetime.datetime.now()."""
     if unify(dt, _dt.datetime.now(), trail):
         yield None
 
 
 def _now_utc_1(dt, trail, k):
-    """NowUTC/1: bind dt to datetime.datetime.now(datetime.timezone.utc)."""
+    """now_utc/1: bind dt to datetime.datetime.now(datetime.timezone.utc)."""
     if unify(dt, _dt.datetime.now(_dt.timezone.utc), trail):
         yield None
 
 
 def _today_1(d, trail, k):
-    """Today/1: bind d to datetime.date.today()."""
+    """today/1: bind d to datetime.date.today()."""
     if unify(d, _dt.date.today(), trail):
         yield None
 
 
-# ── Date/4 — construct or decompose datetime.date ───────────────────────
+# ── date/4 — construct or decompose datetime.date ───────────────────────
 
 
 def _date_4(year, month, day, dt, trail, k):
-    """Date/4: bidirectional — Date(Y, M, D, DateObj).
+    """date/4: bidirectional — date(Y, M, D, DateObj).
 
     If DateObj is unbound: construct datetime.date(Y, M, D) → DateObj.
     If DateObj is a datetime.date: decompose → Y, M, D.
@@ -110,11 +110,11 @@ def _date_4(year, month, day, dt, trail, k):
             trail.undo(mark)
 
 
-# ── Time/4 — construct or decompose datetime.time ───────────────────────
+# ── time/4 — construct or decompose datetime.time ───────────────────────
 
 
 def _time_4(hour, minute, second, t, trail, k):
-    """Time/4: bidirectional — Time(H, M, S, TimeObj).
+    """time/4: bidirectional — time(H, M, S, TimeObj).
 
     If TimeObj is unbound: construct datetime.time(H, M, S) → TimeObj.
     If TimeObj is a datetime.time: decompose → H, M, S.
@@ -137,11 +137,11 @@ def _time_4(hour, minute, second, t, trail, k):
             trail.undo(mark)
 
 
-# ── DateTime/7 — construct or decompose datetime.datetime ────────────────
+# ── datetime/7 — construct or decompose datetime.datetime ────────────────
 
 
 def _datetime_7(year, month, day, hour, minute, second, dt, trail, k):
-    """DateTime/7: bidirectional — DateTime(Y, Mo, D, H, Mi, S, DtObj).
+    """datetime/7: bidirectional — datetime(Y, Mo, D, H, Mi, S, DtObj).
 
     If DtObj is unbound: construct datetime.datetime(Y, Mo, D, H, Mi, S) → DtObj.
     If DtObj is a datetime.datetime: decompose → Y, Mo, D, H, Mi, S.
@@ -169,11 +169,11 @@ def _datetime_7(year, month, day, hour, minute, second, dt, trail, k):
             trail.undo(mark)
 
 
-# ── TimeDelta/3 — construct or decompose datetime.timedelta ──────────────
+# ── timedelta/3 — construct or decompose datetime.timedelta ──────────────
 
 
 def _timedelta_3(days, seconds, td, trail, k):
-    """TimeDelta/3: bidirectional — TimeDelta(Days, Seconds, TdObj).
+    """timedelta/3: bidirectional — timedelta(Days, Seconds, TdObj).
 
     If TdObj is unbound: construct datetime.timedelta(days, seconds) → TdObj.
     If TdObj is a datetime.timedelta: decompose → Days, Seconds.
@@ -196,11 +196,11 @@ def _timedelta_3(days, seconds, td, trail, k):
             trail.undo(mark)
 
 
-# ── DateAdd/3 — date + timedelta → result ────────────────────────────────
+# ── date_add/3 — date + timedelta → result ────────────────────────────────
 
 
 def _date_add_3(d, td, result, trail, k):
-    """DateAdd/3: DateAdd(DateOrDatetime, Timedelta, Result).
+    """date_add/3: date_add(DateOrDatetime, Timedelta, Result).
 
     Result = D + TD.
     """
@@ -217,11 +217,11 @@ def _date_add_3(d, td, result, trail, k):
         yield None
 
 
-# ── DateSub/3 — date - timedelta → result ────────────────────────────────
+# ── date_sub/3 — date - timedelta → result ────────────────────────────────
 
 
 def _date_sub_3(d, td, result, trail, k):
-    """DateSub/3: DateSub(DateOrDatetime, Timedelta, Result).
+    """date_sub/3: date_sub(DateOrDatetime, Timedelta, Result).
 
     Result = D - TD.
     """
@@ -238,11 +238,11 @@ def _date_sub_3(d, td, result, trail, k):
         yield None
 
 
-# ── DateDiff/3 — date - date → timedelta ─────────────────────────────────
+# ── date_diff/3 — date - date → timedelta ─────────────────────────────────
 
 
 def _date_diff_3(d1, d2, td, trail, k):
-    """DateDiff/3: DateDiff(D1, D2, Timedelta).
+    """date_diff/3: date_diff(D1, D2, Timedelta).
 
     Timedelta = D1 - D2.
     """
@@ -259,47 +259,45 @@ def _date_diff_3(d1, d2, td, trail, k):
         yield None
 
 
-# ── FormatDate/3 — strftime ──────────────────────────────────────────────
+# ── datetime_string/3 — bidirectional strftime/strptime ──────────────────
 
 
-def _format_date_3(dt, fmt, s, trail, k):
-    """FormatDate/3: FormatDate(DateOrDatetime, FormatStr, ResultStr).
+def _datetime_string_3(dt_obj, s, fmt, trail, k):
+    """datetime_string/3: bidirectional — datetime_string(DateTime, String, Format).
 
-    ResultStr = dt.strftime(fmt).
+    Format mode (DateTime has ``strftime``): String = DateTime.strftime(Format);
+    with String bound this is a check.
+    Parse mode (DateTime unbound, String a string): DateTime =
+    datetime.strptime(String, Format).
+
+    Format must be a ground string in both modes.  Note: ``strftime`` accepts a
+    ``date``/``time``/``datetime`` but ``strptime`` always yields a ``datetime``,
+    so a date round-trips to a midnight datetime.
     """
-    dt, fmt, s = deref(dt), deref(fmt), deref(s)
-    if not hasattr(dt, 'strftime'):
+    dt_obj, s, fmt = deref(dt_obj), deref(s), deref(fmt)
+    if not isinstance(fmt, str):
         return
-    try:
-        out = dt.strftime(str(fmt))
-    except (TypeError, ValueError):
-        return
-    if unify(s, out, trail):
-        yield None
+    if hasattr(dt_obj, 'strftime'):
+        try:
+            out = dt_obj.strftime(fmt)
+        except (TypeError, ValueError):
+            return
+        if unify(s, out, trail):
+            yield None
+    elif is_var(dt_obj) and isinstance(s, str):
+        try:
+            out = _dt.datetime.strptime(s, fmt)
+        except (TypeError, ValueError):
+            return
+        if unify(dt_obj, out, trail):
+            yield None
 
 
-# ── ParseDate/3 — strptime ──────────────────────────────────────────────
-
-
-def _parse_date_3(s, fmt, dt, trail, k):
-    """ParseDate/3: ParseDate(String, FormatStr, DatetimeObj).
-
-    DatetimeObj = datetime.datetime.strptime(s, fmt).
-    """
-    s, fmt, dt = deref(s), deref(fmt), deref(dt)
-    try:
-        out = _dt.datetime.strptime(str(s), str(fmt))
-    except (TypeError, ValueError):
-        return
-    if unify(dt, out, trail):
-        yield None
-
-
-# ── DateOf/2 — datetime ↔ date ──────────────────────────────────────────
+# ── date_of/2 — datetime ↔ date ──────────────────────────────────────────
 
 
 def _date_of_2(dt_obj, d, trail, k):
-    """DateOf/2: bidirectional — DateOf(DateTime, Date).
+    """date_of/2: bidirectional — date_of(DateTime, Date).
 
     The clean, declarative replacement for ``++DT.date()``:
 
@@ -327,16 +325,16 @@ def _date_of_2(dt_obj, d, trail, k):
             yield None
 
 
-# ── DaysBetween/3 — integer day count ────────────────────────────────────
+# ── days_between/3 — integer day count ────────────────────────────────────
 
 
 def _days_between_3(d1, d2, n, trail, k):
-    """DaysBetween/3: DaysBetween(DateA, DateB, N).
+    """days_between/3: days_between(DateA, DateB, N).
 
     N = whole days in ``DateA - DateB`` (``(DateA - DateB).days``).  The
-    one-goal form of ``DateDiff(A, B, TD), TimeDelta(N, _, TD)`` — for
+    one-goal form of ``date_diff(A, B, TD), timedelta(N, _, TD)`` — for
     datetimes the count is the timedelta's whole-day component, matching
-    DateDiff.  With N bound this acts as a check.
+    date_diff.  With N bound this acts as a check.
     """
     d1, d2, n = deref(d1), deref(d2), deref(n)
     if not isinstance(d1, (_dt.date, _dt.datetime)):
@@ -352,11 +350,11 @@ def _days_between_3(d1, d2, n, trail, k):
         yield None
 
 
-# ── DayOfWeek/2 — weekday ───────────────────────────────────────────────
+# ── weekday/2 — weekday ─────────────────────────────────────────────────
 
 
-def _day_of_week_2(d, dow, trail, k):
-    """DayOfWeek/2: DayOfWeek(DateOrDatetime, Weekday).
+def _weekday_2(d, dow, trail, k):
+    """weekday/2: weekday(DateOrDatetime, Weekday).
 
     Weekday = d.weekday() (0=Monday, 6=Sunday).
     """
@@ -367,13 +365,13 @@ def _day_of_week_2(d, dow, trail, k):
         yield None
 
 
-# ── DateBetween/3 — nondeterministic date range ─────────────────────────
+# ── date_between/3 — nondeterministic date range ─────────────────────────
 
 
 def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, trail):
-    """DateBetween/3: nondeterministic — generates each date from start to end.
+    """date_between/3: nondeterministic — generates each date from start to end.
 
-    DateBetween(Start, End, D) succeeds once for each date D in [Start, End].
+    date_between(Start, End, D) succeeds once for each date D in [Start, End].
     """
     start, end = deref(start), deref(end)
     if not isinstance(start, _dt.date) or not isinstance(end, _dt.date):
@@ -390,52 +388,129 @@ def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, tr
     yield (_fail, DONE)
 
 
+# ── timestamp/2 — bidirectional datetime ↔ POSIX epoch ───────────────────
+
+
+def _timestamp_2(dt_obj, stamp, trail, k):
+    """timestamp/2: bidirectional — timestamp(DateTime, Stamp).
+
+    Forward (DateTime is a ``datetime``): Stamp = DateTime.timestamp() (float
+    epoch seconds); with Stamp bound this is a check.
+    Inverse (DateTime unbound, Stamp a number): DateTime =
+    datetime.fromtimestamp(Stamp).  A plain ``date`` has no ``timestamp()``, so
+    the forward direction requires a ``datetime``.
+    """
+    dt_obj, stamp = deref(dt_obj), deref(stamp)
+    if isinstance(dt_obj, _dt.datetime):
+        try:
+            out = dt_obj.timestamp()
+        except (OverflowError, OSError, ValueError):
+            return
+        if unify(stamp, out, trail):
+            yield None
+    elif is_var(dt_obj) and isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+        try:
+            out = _dt.datetime.fromtimestamp(stamp)
+        except (OverflowError, OSError, ValueError, TypeError):
+            return
+        if unify(dt_obj, out, trail):
+            yield None
+
+
+# ── ISO-8601 helpers — bidirectional, via isoformat/fromisoformat ────────
+
+
+def _datetime_string_iso_2(dt_obj, s, trail, k):
+    """datetime_string_iso/2: bidirectional ISO-8601 datetime.
+
+    Forward (DateTime is a ``datetime``): String = DateTime.isoformat().
+    Inverse (DateTime unbound, String a string): DateTime =
+    datetime.fromisoformat(String).
+    """
+    dt_obj, s = deref(dt_obj), deref(s)
+    if isinstance(dt_obj, _dt.datetime):
+        if unify(s, dt_obj.isoformat(), trail):
+            yield None
+    elif is_var(dt_obj) and isinstance(s, str):
+        try:
+            out = _dt.datetime.fromisoformat(s)
+        except (TypeError, ValueError):
+            return
+        if unify(dt_obj, out, trail):
+            yield None
+
+
+def _date_string_iso_2(d_obj, s, trail, k):
+    """date_string_iso/2: bidirectional ISO-8601 date (YYYY-MM-DD).
+
+    Forward (Date is a ``date`` and not a ``datetime``): String = Date.isoformat().
+    Inverse (Date unbound, String a string): Date = date.fromisoformat(String).
+    """
+    d_obj, s = deref(d_obj), deref(s)
+    if isinstance(d_obj, _dt.date) and not isinstance(d_obj, _dt.datetime):
+        if unify(s, d_obj.isoformat(), trail):
+            yield None
+    elif is_var(d_obj) and isinstance(s, str):
+        try:
+            out = _dt.date.fromisoformat(s)
+        except (TypeError, ValueError):
+            return
+        if unify(d_obj, out, trail):
+            yield None
+
+
 # ── Build and export predicate objects ───────────────────────────────────
 
-Now = ModulePredicate("Now", module="datetime")
-Now._register(1, simple_to_trampoline(_now_1))
+now = ModulePredicate("now", module="datetime")
+now._register(1, simple_to_trampoline(_now_1))
 
-NowUTC = ModulePredicate("NowUTC", module="datetime")
-NowUTC._register(1, simple_to_trampoline(_now_utc_1))
+now_utc = ModulePredicate("now_utc", module="datetime")
+now_utc._register(1, simple_to_trampoline(_now_utc_1))
 
-Today = ModulePredicate("Today", module="datetime")
-Today._register(1, simple_to_trampoline(_today_1))
+today = ModulePredicate("today", module="datetime")
+today._register(1, simple_to_trampoline(_today_1))
 
-Date = ModulePredicate("Date", module="datetime")
-Date._register(4, simple_to_trampoline(_date_4))
+date = ModulePredicate("date", module="datetime")
+date._register(4, simple_to_trampoline(_date_4))
 
-Time = ModulePredicate("Time", module="datetime")
-Time._register(4, simple_to_trampoline(_time_4))
+time = ModulePredicate("time", module="datetime")
+time._register(4, simple_to_trampoline(_time_4))
 
-DateTime = ModulePredicate("DateTime", module="datetime")
-DateTime._register(7, simple_to_trampoline(_datetime_7))
+datetime = ModulePredicate("datetime", module="datetime")
+datetime._register(7, simple_to_trampoline(_datetime_7))
 
-TimeDelta = ModulePredicate("TimeDelta", module="datetime")
-TimeDelta._register(3, simple_to_trampoline(_timedelta_3))
+timedelta = ModulePredicate("timedelta", module="datetime")
+timedelta._register(3, simple_to_trampoline(_timedelta_3))
 
-DateAdd = ModulePredicate("DateAdd", module="datetime")
-DateAdd._register(3, simple_to_trampoline(_date_add_3))
+date_add = ModulePredicate("date_add", module="datetime")
+date_add._register(3, simple_to_trampoline(_date_add_3))
 
-DateSub = ModulePredicate("DateSub", module="datetime")
-DateSub._register(3, simple_to_trampoline(_date_sub_3))
+date_sub = ModulePredicate("date_sub", module="datetime")
+date_sub._register(3, simple_to_trampoline(_date_sub_3))
 
-DateDiff = ModulePredicate("DateDiff", module="datetime")
-DateDiff._register(3, simple_to_trampoline(_date_diff_3))
+date_diff = ModulePredicate("date_diff", module="datetime")
+date_diff._register(3, simple_to_trampoline(_date_diff_3))
 
-FormatDate = ModulePredicate("FormatDate", module="datetime")
-FormatDate._register(3, simple_to_trampoline(_format_date_3))
+datetime_string = ModulePredicate("datetime_string", module="datetime")
+datetime_string._register(3, simple_to_trampoline(_datetime_string_3))
 
-ParseDate = ModulePredicate("ParseDate", module="datetime")
-ParseDate._register(3, simple_to_trampoline(_parse_date_3))
+date_of = ModulePredicate("date_of", module="datetime")
+date_of._register(2, simple_to_trampoline(_date_of_2))
 
-DateOf = ModulePredicate("DateOf", module="datetime")
-DateOf._register(2, simple_to_trampoline(_date_of_2))
+days_between = ModulePredicate("days_between", module="datetime")
+days_between._register(3, simple_to_trampoline(_days_between_3))
 
-DaysBetween = ModulePredicate("DaysBetween", module="datetime")
-DaysBetween._register(3, simple_to_trampoline(_days_between_3))
+weekday = ModulePredicate("weekday", module="datetime")
+weekday._register(2, simple_to_trampoline(_weekday_2))
 
-DayOfWeek = ModulePredicate("DayOfWeek", module="datetime")
-DayOfWeek._register(2, simple_to_trampoline(_day_of_week_2))
+date_between = ModulePredicate("date_between", module="datetime")
+date_between._register(3, _date_between_3)
 
-DateBetween = ModulePredicate("DateBetween", module="datetime")
-DateBetween._register(3, _date_between_3)
+timestamp = ModulePredicate("timestamp", module="datetime")
+timestamp._register(2, simple_to_trampoline(_timestamp_2))
+
+datetime_string_iso = ModulePredicate("datetime_string_iso", module="datetime")
+datetime_string_iso._register(2, simple_to_trampoline(_datetime_string_iso_2))
+
+date_string_iso = ModulePredicate("date_string_iso", module="datetime")
+date_string_iso._register(2, simple_to_trampoline(_date_string_iso_2))
