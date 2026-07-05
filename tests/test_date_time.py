@@ -877,3 +877,8 @@ class TestDateStringIso:
         v = Var()
         results, _ = simple_solutions(_date_string_iso_2, v, "2026-03-16T00:00:00")
         assert len(results) == 0
+
+    def test_both_unbound_fails(self):
+        # vv
+        results, _ = simple_solutions(_date_string_iso_2, Var(), Var())
+        assert len(results) == 0
