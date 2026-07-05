@@ -46,3 +46,19 @@ spelling is better — noted in the third column):
 - Sibling request: spell out + snake_case the `formalize_lib` helpers (`prof_get`→`profile_get`,
   `prof_has`→`profile_has`, `attr`→`attribute`) — see that lib's todo. Same rationale (less for the
   local models to learn; closer to Prolog).
+
+---
+
+## Closed 2026-07-04 — implemented
+
+Implemented in commits on branch `fix/qualified-atoms-term-position`. Deltas from the original proposal above:
+
+- **Flag-day rename, no deprecated aliases** — only snake_case names exist (external `clausify-domains`/`kit` swept separately in their own repo).
+- **`datetime` and `timedelta` spelled as single words** (matching Python's class names), not `date_time`/`time_delta`.
+- **`DayOfWeek` → `weekday`** (Python `datetime.weekday()`, 0=Mon..6=Sun), not `day_of_week`.
+- **`FormatDate` + `ParseDate` folded into one bidirectional `datetime_string(DateTime, String, Format)/3`** (format when the datetime is bound, parse when the string is bound).
+- **New predicates added:** `timestamp/2` (datetime ↔ POSIX epoch), `datetime_string_iso/2` and `date_string_iso/2` (ISO-8601 via `isoformat`/`fromisoformat`).
+
+Design + plan: `docs/superpowers/specs/2026-07-04-datetime-snake-case-design.md`, `docs/superpowers/plans/2026-07-04-datetime-snake-case.md`.
+
+Still outstanding (separate TODOs): the external `clausify-domains`/`kit` rulebase sweep; the sibling `formalize_lib` rename; `date-max-min-ordinal-apis.md`.
