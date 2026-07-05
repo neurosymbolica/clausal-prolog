@@ -92,7 +92,7 @@ Notation in signature lines:
 | [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
 | [I/O](#io) | write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | GetLogger, Debug, Info, Warning, Error, Critical, Log, SetLevel, GetLevel, StreamHandler, FileHandler |
-| [Date & Time (`date_time` module)](#date--time-date_time-module) | now, today, date, time, datetime, date_add, date_sub, date_diff, datetime_string, weekday, date_between, timestamp, datetime_string_iso/2, date_string_iso/2 |
+| [Date & Time (`date_time` module)](#date--time-date_time-module) | now, now_utc, today, date, time, datetime, timedelta, date_add, date_sub, date_diff, datetime_string, timestamp, datetime_string_iso, date_string_iso, date_of, days_between, weekday, date_between |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
 | [Time & statistics](#time--statistics) | current_time/1, statistics/2 |
 | [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `:=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
@@ -2525,7 +2525,7 @@ Standard library module wrapping Python's `datetime`. Import via `-import_from(d
 Unify `DT` with `datetime.datetime.now()` (naive, local time).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
     **Python tests:** `tests/test_date_time.py`
 
 ---
@@ -2537,7 +2537,7 @@ Unify `DT` with `datetime.datetime.now()` (naive, local time).
 Unify `DT` with `datetime.datetime.now(datetime.timezone.utc)` (timezone-aware).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
 
 ---
 
@@ -2548,7 +2548,7 @@ Unify `DT` with `datetime.datetime.now(datetime.timezone.utc)` (timezone-aware).
 Unify `D` with `datetime.date.today()`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
 
 ---
 
@@ -2559,7 +2559,7 @@ Unify `D` with `datetime.date.today()`.
 Bidirectional. If `DateObj` is unbound, constructs `datetime.date(Year, Month, Day)`. If `DateObj` is a `datetime.date` (or `datetime.datetime`), decomposes into `Year`, `Month`, `Day`. Fails on invalid dates (e.g. month 13, Feb 29 in non-leap year).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
     **Python tests:** `tests/test_date_time.py`
 
 ---
@@ -2571,7 +2571,7 @@ Bidirectional. If `DateObj` is unbound, constructs `datetime.date(Year, Month, D
 Bidirectional. If `TimeObj` is unbound, constructs `datetime.time(Hour, Minute, Second)`. If `TimeObj` is a `datetime.time`, decomposes into `Hour`, `Minute`, `Second`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
 
 ---
 
@@ -2582,7 +2582,7 @@ Bidirectional. If `TimeObj` is unbound, constructs `datetime.time(Hour, Minute, 
 Bidirectional. If `DtObj` is unbound, constructs `datetime.datetime(Year, Month, Day, Hour, Minute, Second)`. If `DtObj` is a `datetime.datetime`, decomposes into all six components.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
 
 ---
 
@@ -2593,7 +2593,7 @@ Bidirectional. If `DtObj` is unbound, constructs `datetime.datetime(Year, Month,
 Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, seconds=Seconds)`. If `TdObj` is a `datetime.timedelta`, decomposes into `Days` and `Seconds`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
 
 ---
 
@@ -2604,7 +2604,7 @@ Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, 
 `Result = DateOrDatetime + Timedelta`. Both inputs must be ground.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
 
 ---
 
@@ -2615,7 +2615,7 @@ Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, 
 `Result = DateOrDatetime - Timedelta`. Both inputs must be ground.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
 
 ---
 
@@ -2626,7 +2626,7 @@ Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, 
 `Timedelta = D1 - D2`. Both inputs must be `datetime.date` or `datetime.datetime`. Result is a `datetime.timedelta` (may be negative).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
 
 ---
 
@@ -2637,7 +2637,7 @@ Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, 
 Bidirectional. Format mode (`DateTime` has `strftime`): `String = DateTime.strftime(Format)`. Parse mode (`DateTime` unbound, `String` a string): `DateTime = datetime.strptime(String, Format)`. `Format` must be a ground string. Note: `strptime` always yields a `datetime`, so a `date` round-trips to a midnight `datetime`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
 
 ---
 
@@ -2648,7 +2648,7 @@ Bidirectional. Format mode (`DateTime` has `strftime`): `String = DateTime.strft
 `Weekday = DateOrDatetime.weekday()`. Monday = 0, Sunday = 6.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
 
 ---
 
@@ -2659,7 +2659,7 @@ Bidirectional. Format mode (`DateTime` has `strftime`): `String = DateTime.strft
 Nondeterministic — generates one solution for each `datetime.date` in `[Start, End]` (inclusive). Fails if `Start > End`. This is the only date_time predicate that backtracks.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
     **Python tests:** `tests/test_date_time.py`
 
 ---
@@ -2671,7 +2671,7 @@ Nondeterministic — generates one solution for each `datetime.date` in `[Start,
 Bidirectional. Forward (`DateTime` is a `datetime.datetime`): `Stamp = DateTime.timestamp()` (float epoch seconds); with `Stamp` already bound this acts as a check. Inverse (`DateTime` unbound, `Stamp` a number): `DateTime = datetime.fromtimestamp(Stamp)`. A plain `date` has no `timestamp()` — the forward direction requires a `datetime`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/date_time.py`
+    **Implementation:** `clausal/modules/py/datetime.py`
     **Python tests:** `tests/test_date_time.py`
 
 ---
@@ -2750,6 +2750,6 @@ The following are not builtins in the registry — they are syntax forms compile
     | `tests/fixtures/dcg_grammar.clausal` | `phrase/2`, `phrase/3`, DCG with non-terminals, inline goals, pushback, negation |
     | `tests/fixtures/clpb_circuit.clausal` | `sat/1`, `bool_labeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
     | `tests/fixtures/logging_basic.clausal` | `GetLogger`, `SetLevel`, `GetLevel`, `IsEnabledFor`, `Debug`, `Info`, `Warning`, `Error`, `Critical`, `Log`, `StreamHandler`, `SetFormatter`, `AddHandler`, `RemoveHandler` |
-    | `tests/test_date_time.py` | `now`, `now_utc`, `today`, `date`, `time`, `datetime`, `timedelta`, `date_add`, `date_sub`, `date_diff`, `datetime_string`, `weekday`, `date_between`, `timestamp`, `datetime_string_iso`, `date_string_iso` |
+    | `tests/test_date_time.py` (99 tests) | `now`, `now_utc`, `today`, `date`, `time`, `datetime`, `timedelta`, `date_add`, `date_sub`, `date_diff`, `datetime_string`, `weekday`, `date_between`, `timestamp`, `datetime_string_iso`, `date_string_iso` |
     | `tests/test_yaml_module.py` | `Read`, `write`, `ReadAll`, `WriteAll`, `ReadFile`, `WriteFile`, `Get` (45 tests) |
     | `tests/fixtures/yaml_basic.clausal` | `Read`, `write`, `Get` — parsing, nested access, round-trip |

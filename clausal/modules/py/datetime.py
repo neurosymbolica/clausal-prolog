@@ -51,32 +51,32 @@ from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
 
-# ── Now / Today ──────────────────────────────────────────────────────────
+# ── now / today ──────────────────────────────────────────────────────────
 
 
 def _now_1(dt, trail, k):
-    """Now/1: bind dt to datetime.datetime.now()."""
+    """now/1: bind dt to datetime.datetime.now()."""
     if unify(dt, _dt.datetime.now(), trail):
         yield None
 
 
 def _now_utc_1(dt, trail, k):
-    """NowUTC/1: bind dt to datetime.datetime.now(datetime.timezone.utc)."""
+    """now_utc/1: bind dt to datetime.datetime.now(datetime.timezone.utc)."""
     if unify(dt, _dt.datetime.now(_dt.timezone.utc), trail):
         yield None
 
 
 def _today_1(d, trail, k):
-    """Today/1: bind d to datetime.date.today()."""
+    """today/1: bind d to datetime.date.today()."""
     if unify(d, _dt.date.today(), trail):
         yield None
 
 
-# ── Date/4 — construct or decompose datetime.date ───────────────────────
+# ── date/4 — construct or decompose datetime.date ───────────────────────
 
 
 def _date_4(year, month, day, dt, trail, k):
-    """Date/4: bidirectional — Date(Y, M, D, DateObj).
+    """date/4: bidirectional — date(Y, M, D, DateObj).
 
     If DateObj is unbound: construct datetime.date(Y, M, D) → DateObj.
     If DateObj is a datetime.date: decompose → Y, M, D.
@@ -110,11 +110,11 @@ def _date_4(year, month, day, dt, trail, k):
             trail.undo(mark)
 
 
-# ── Time/4 — construct or decompose datetime.time ───────────────────────
+# ── time/4 — construct or decompose datetime.time ───────────────────────
 
 
 def _time_4(hour, minute, second, t, trail, k):
-    """Time/4: bidirectional — Time(H, M, S, TimeObj).
+    """time/4: bidirectional — time(H, M, S, TimeObj).
 
     If TimeObj is unbound: construct datetime.time(H, M, S) → TimeObj.
     If TimeObj is a datetime.time: decompose → H, M, S.
@@ -137,11 +137,11 @@ def _time_4(hour, minute, second, t, trail, k):
             trail.undo(mark)
 
 
-# ── DateTime/7 — construct or decompose datetime.datetime ────────────────
+# ── datetime/7 — construct or decompose datetime.datetime ────────────────
 
 
 def _datetime_7(year, month, day, hour, minute, second, dt, trail, k):
-    """DateTime/7: bidirectional — DateTime(Y, Mo, D, H, Mi, S, DtObj).
+    """datetime/7: bidirectional — datetime(Y, Mo, D, H, Mi, S, DtObj).
 
     If DtObj is unbound: construct datetime.datetime(Y, Mo, D, H, Mi, S) → DtObj.
     If DtObj is a datetime.datetime: decompose → Y, Mo, D, H, Mi, S.
@@ -169,11 +169,11 @@ def _datetime_7(year, month, day, hour, minute, second, dt, trail, k):
             trail.undo(mark)
 
 
-# ── TimeDelta/3 — construct or decompose datetime.timedelta ──────────────
+# ── timedelta/3 — construct or decompose datetime.timedelta ──────────────
 
 
 def _timedelta_3(days, seconds, td, trail, k):
-    """TimeDelta/3: bidirectional — TimeDelta(Days, Seconds, TdObj).
+    """timedelta/3: bidirectional — timedelta(Days, Seconds, TdObj).
 
     If TdObj is unbound: construct datetime.timedelta(days, seconds) → TdObj.
     If TdObj is a datetime.timedelta: decompose → Days, Seconds.
@@ -196,11 +196,11 @@ def _timedelta_3(days, seconds, td, trail, k):
             trail.undo(mark)
 
 
-# ── DateAdd/3 — date + timedelta → result ────────────────────────────────
+# ── date_add/3 — date + timedelta → result ────────────────────────────────
 
 
 def _date_add_3(d, td, result, trail, k):
-    """DateAdd/3: DateAdd(DateOrDatetime, Timedelta, Result).
+    """date_add/3: date_add(DateOrDatetime, Timedelta, Result).
 
     Result = D + TD.
     """
@@ -217,11 +217,11 @@ def _date_add_3(d, td, result, trail, k):
         yield None
 
 
-# ── DateSub/3 — date - timedelta → result ────────────────────────────────
+# ── date_sub/3 — date - timedelta → result ────────────────────────────────
 
 
 def _date_sub_3(d, td, result, trail, k):
-    """DateSub/3: DateSub(DateOrDatetime, Timedelta, Result).
+    """date_sub/3: date_sub(DateOrDatetime, Timedelta, Result).
 
     Result = D - TD.
     """
@@ -238,11 +238,11 @@ def _date_sub_3(d, td, result, trail, k):
         yield None
 
 
-# ── DateDiff/3 — date - date → timedelta ─────────────────────────────────
+# ── date_diff/3 — date - date → timedelta ─────────────────────────────────
 
 
 def _date_diff_3(d1, d2, td, trail, k):
-    """DateDiff/3: DateDiff(D1, D2, Timedelta).
+    """date_diff/3: date_diff(D1, D2, Timedelta).
 
     Timedelta = D1 - D2.
     """
@@ -293,11 +293,11 @@ def _datetime_string_3(dt_obj, s, fmt, trail, k):
             yield None
 
 
-# ── DateOf/2 — datetime ↔ date ──────────────────────────────────────────
+# ── date_of/2 — datetime ↔ date ──────────────────────────────────────────
 
 
 def _date_of_2(dt_obj, d, trail, k):
-    """DateOf/2: bidirectional — DateOf(DateTime, Date).
+    """date_of/2: bidirectional — date_of(DateTime, Date).
 
     The clean, declarative replacement for ``++DT.date()``:
 
@@ -325,16 +325,16 @@ def _date_of_2(dt_obj, d, trail, k):
             yield None
 
 
-# ── DaysBetween/3 — integer day count ────────────────────────────────────
+# ── days_between/3 — integer day count ────────────────────────────────────
 
 
 def _days_between_3(d1, d2, n, trail, k):
-    """DaysBetween/3: DaysBetween(DateA, DateB, N).
+    """days_between/3: days_between(DateA, DateB, N).
 
     N = whole days in ``DateA - DateB`` (``(DateA - DateB).days``).  The
-    one-goal form of ``DateDiff(A, B, TD), TimeDelta(N, _, TD)`` — for
+    one-goal form of ``date_diff(A, B, TD), timedelta(N, _, TD)`` — for
     datetimes the count is the timedelta's whole-day component, matching
-    DateDiff.  With N bound this acts as a check.
+    date_diff.  With N bound this acts as a check.
     """
     d1, d2, n = deref(d1), deref(d2), deref(n)
     if not isinstance(d1, (_dt.date, _dt.datetime)):
@@ -365,13 +365,13 @@ def _weekday_2(d, dow, trail, k):
         yield None
 
 
-# ── DateBetween/3 — nondeterministic date range ─────────────────────────
+# ── date_between/3 — nondeterministic date range ─────────────────────────
 
 
 def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, trail):
-    """DateBetween/3: nondeterministic — generates each date from start to end.
+    """date_between/3: nondeterministic — generates each date from start to end.
 
-    DateBetween(Start, End, D) succeeds once for each date D in [Start, End].
+    date_between(Start, End, D) succeeds once for each date D in [Start, End].
     """
     start, end = deref(start), deref(end)
     if not isinstance(start, _dt.date) or not isinstance(end, _dt.date):

@@ -48,7 +48,7 @@ def trampoline_solutions(pred, *args):
     return solutions, trail
 
 
-# ── Now / NowUTC / Today ────────────────────────────────────────────────
+# ── now / now_utc / today ────────────────────────────────────────────────
 
 
 class TestNow:
@@ -80,7 +80,7 @@ class TestNow:
         assert val == dt.date.today()
 
 
-# ── Date/4 ──────────────────────────────────────────────────────────────
+# ── date/4 ──────────────────────────────────────────────────────────────
 
 
 class TestDate:
@@ -157,7 +157,7 @@ class TestDate:
         assert len(results) == 0
 
 
-# ── Time/4 ──────────────────────────────────────────────────────────────
+# ── time/4 ──────────────────────────────────────────────────────────────
 
 
 class TestTime:
@@ -191,7 +191,7 @@ class TestTime:
         assert deref(t) == dt.time(0, 0, 0)
 
 
-# ── DateTime/7 ──────────────────────────────────────────────────────────
+# ── datetime/7 ──────────────────────────────────────────────────────────
 
 
 class TestDateTime:
@@ -227,7 +227,7 @@ class TestDateTime:
         assert len(results) == 0
 
 
-# ── TimeDelta/3 ─────────────────────────────────────────────────────────
+# ── timedelta/3 ─────────────────────────────────────────────────────────
 
 
 class TestTimeDelta:
@@ -257,7 +257,7 @@ class TestTimeDelta:
         assert deref(secs) == 1234
 
 
-# ── DateAdd/3 ───────────────────────────────────────────────────────────
+# ── date_add/3 ───────────────────────────────────────────────────────────
 
 
 class TestDateAdd:
@@ -295,7 +295,7 @@ class TestDateAdd:
         assert len(results) == 0
 
 
-# ── DateSub/3 ───────────────────────────────────────────────────────────
+# ── date_sub/3 ───────────────────────────────────────────────────────────
 
 
 class TestDateSub:
@@ -321,7 +321,7 @@ class TestDateSub:
         assert deref(r) == dt.datetime(2026, 3, 16, 5, 0, 0)
 
 
-# ── DateDiff/3 ──────────────────────────────────────────────────────────
+# ── date_diff/3 ──────────────────────────────────────────────────────────
 
 
 class TestDateDiff:
@@ -447,10 +447,10 @@ class TestDatetimeString:
         assert deref(v) == dt.datetime(2026, 3, 16, 0, 0, 0)
 
 
-# ── DayOfWeek/2 ─────────────────────────────────────────────────────────
+# ── weekday/2 ─────────────────────────────────────────────────────────
 
 
-class TestDayOfWeek:
+class TestWeekday:
     def test_weekday(self):
         # nv
         dow = Var()
@@ -476,7 +476,7 @@ class TestDayOfWeek:
         assert len(results) == 0
 
 
-# ── DateBetween/3 (nondeterministic) ────────────────────────────────────
+# ── date_between/3 (nondeterministic) ────────────────────────────────────
 
 
 class TestDateBetween:
@@ -534,7 +534,7 @@ class TestDateBetween:
         assert len(solutions) == 0
 
 
-# ── DateOf/2 (datetime ↔ date) ──────────────────────────────────────────
+# ── date_of/2 (datetime ↔ date) ──────────────────────────────────────────
 
 
 class TestDateOf:
@@ -586,7 +586,7 @@ class TestDateOf:
         assert len(results) == 0
 
 
-# ── DaysBetween/3 (integer day count) ───────────────────────────────────
+# ── days_between/3 (integer day count) ───────────────────────────────────
 
 
 class TestDaysBetween:
@@ -653,7 +653,7 @@ class TestDaysBetween:
         assert len(results) == 0
 
 
-# ── Timestamp/2 (bidirectional datetime ↔ POSIX epoch) ──────────────────
+# ── timestamp/2 (bidirectional datetime ↔ POSIX epoch) ──────────────────
 
 
 class TestTimestamp:
@@ -811,7 +811,7 @@ class TestAdapters:
         assert callable(date_string_iso._get_dispatch())
 
 
-# ── DatetimeStringIso/2 (bidirectional ISO-8601 datetime) ───────────────
+# ── datetime_string_iso/2 (bidirectional ISO-8601 datetime) ───────────────
 
 
 class TestDatetimeStringIso:
@@ -844,7 +844,7 @@ class TestDatetimeStringIso:
         assert len(results) == 0
 
 
-# ── DateStringIso/2 (bidirectional ISO-8601 date) ───────────────────────
+# ── date_string_iso/2 (bidirectional ISO-8601 date) ───────────────────────
 
 
 class TestDateStringIso:

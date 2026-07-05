@@ -2,7 +2,7 @@
 
 The `date_time` standard library module provides relational predicates for constructing, decomposing, and manipulating dates and times. All predicates work with **real Python datetime objects** — not custom term types.
 
-The implementation lives in `clausal/modules/date_time.py`.
+The implementation lives in `clausal/modules/py/datetime.py`.
 
 ---
 
