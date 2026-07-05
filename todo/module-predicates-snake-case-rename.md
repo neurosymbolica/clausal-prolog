@@ -65,6 +65,28 @@ flag-day (no deprecated aliases, matching the datetime precedent).
    `JSONGet`→`json_get`, `CPUCount`→`cpu_count`; and whether the module prefix is redundant under
    qualified call — `sqlite.sqlite_connect` vs `sqlite.connect`, `uuid.uuid_v4` vs `uuid.v4`.
 
+## Acronym / prefix policy (snag 3) — DECIDED 2026-07-05: Policy C (hybrid)
+
+**Acronyms** always lowercase + split at the word boundary (settled precedent: `JSONGet`→`json_get`,
+`NowUTC`→`now_utc`). So `UUIDv4`→`uuid_v4`, `CPUCount`→`cpu_count`, `SQLite`→`sqlite`.
+
+**Redundant module prefix** — *drop it where the bare name stays clear and doesn't shadow; keep it
+where dropping is cryptic or shadows a builtin.* Only `sqlite`/`uuid`/`random` have a redundant
+prefix (os/csv don't). Concrete mapping for the remaining modules:
+
+| module | mapping | notes |
+|---|---|---|
+| **os** | verbatim snake_case (no prefix) | `EnvironmentVariable`→`environment_variable`, `CPUCount`→`cpu_count`, `Pid`→`pid`, `Argv`→`argv`, `Platform`→`platform`, `WorkingDirectory`→`working_directory`, `ChangeDirectory`→`change_directory`, `SetEnvironmentVariable`/`UnsetEnvironmentVariable`→`set_/unset_environment_variable`. `platform` is safe — os.py uses `_sys.platform`, not the `platform` module. |
+| **csv** | verbatim snake_case (no prefix) | `Parse`→`parse`, `ParseRow`→`parse_row`, `ParseRecords`→`parse_records`, `Generate`→`generate`, `GenerateRecords`→`generate_records`, `ReadFile`→`read_file`, `ReadRecords`→`read_records`, `WriteFile`→`write_file`. |
+| **sqlite** | **DROP** `SQLite` prefix | `connect`, `disconnect`, `current_connection`, `query`, `exec`, `row_count`, `table`, `column`. None shadow (sqlite3 is `_sqlite3`). `exec`: verbatim drop — `execute` would match the DB-API and read better; pick at implementation time. |
+| **random** | **DROP** `Random` prefix | `random`, `float`, `integer`, `member`, `permutation`, `sample`, `seed`; `Maybe`→`maybe`. ⚠ **`float` shadows the builtin** — `random.py:47` calls `float(low)`; add `_float = float` (or `from builtins import float as _float`) near the top and use `_float(...)` there, so the module-level `float = ModulePredicate("float")` is safe. `integer` is fine (`int` is the builtin, not `integer`). Stdlib is `_random`, so the `random` predicate is safe. |
+| **uuid** | **KEEP** `uuid` prefix | `uuid_v4`, `uuid_v1`, `uuid_v3`, `uuid_v5`, `uuid_str`, `uuid_hex`, `uuid_urn`, `uuid_bytes`, `uuid_int`, `uuid_version`, `uuid_fields`, `IsUUID`→`is_uuid`. Dropping would give `v4`/`str`/`hex`/`int`/`bytes` — cryptic and shadowing; keep the prefix. |
+
+Reminder for each of these: also sweep `docs/builtins.md` + `builtins_sig{s.txt,_tests.clausal}`
+(see the big-three lesson), and watch stdlib-attr collisions inside each source
+(`_sqlite3.connect` is `_sqlite3`-qualified so safe; the `random.float` guard above is the one live
+hazard).
+
 ## Docs to fix in the same series (stale / self-contradictory)
 
 - [ ] `docs/for_prolog_programmers.md:156` — naming table says "lowercase for user predicates" but
@@ -75,7 +97,7 @@ flag-day (no deprecated aliases, matching the datetime precedent).
 
 ## Rollout (mirror the datetime precedent)
 
-1. Decide the acronym/redundant-prefix policy (snag 3).
+1. ~~Decide the acronym/redundant-prefix policy (snag 3).~~ ✅ **DECIDED 2026-07-05** — Policy C, see below.
 2. ~~Batch the **trivial modules** (tcp, url, json, http, hash, pbkdf2, process, units, reflection)~~
    ✅ **DONE 2026-07-04** — see "Trivial batch — done" below.
 3. ~~Handle **`re`** carefully (goal-expansion + README)~~ ✅ **DONE 2026-07-04** — see "re — done" below.
