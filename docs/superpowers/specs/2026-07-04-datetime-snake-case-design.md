@@ -25,7 +25,7 @@ into one bidirectional relation and adds timestamp + ISO-8601 conveniences.
   attribute and the `ModulePredicate(...)` `_name` string) to snake_case.
 - Two new predicates: `datetime_string/3` (replaces `FormatDate` + `ParseDate`) and
   `timestamp/2`.
-- Two ISO-8601 helper predicates: `datetime_string_iso8601/2`, `date_string_iso8601/2`.
+- Two ISO-8601 helper predicates: `datetime_string_iso/2`, `date_string_iso/2`.
 - Update the module docstring.
 - Sweep the in-repo consumers so nothing breaks: `tests/test_date_time.py`,
   `tests/test_transitive_py_module_import.py`, the doc-signature fixtures under
@@ -119,13 +119,13 @@ Arity 3, `simple_to_trampoline` wrapper, same shape as the other simple predicat
 Mirrors Python `datetime.timestamp()` / `datetime.fromtimestamp()`; same bidirectional shape as
 `date_of/2`.
 
-### `datetime_string_iso8601(DATETIME, STRING)` — bidirectional ISO-8601 datetime
+### `datetime_string_iso(DATETIME, STRING)` — bidirectional ISO-8601 datetime
 
 - **Forward** (DATETIME is a `datetime`): `STRING = DATETIME.isoformat()`.
 - **Inverse** (DATETIME unbound, STRING a ground string): `DATETIME = datetime.fromisoformat(STRING)`.
 - Otherwise fail.
 
-### `date_string_iso8601(DATE, STRING)` — bidirectional ISO-8601 date
+### `date_string_iso(DATE, STRING)` — bidirectional ISO-8601 date
 
 - **Forward** (DATE is a `date` and *not* a `datetime`, guarded like `_date_4`):
   `STRING = DATE.isoformat()` → `"YYYY-MM-DD"`.
@@ -147,8 +147,8 @@ Mirrors Python `datetime.timestamp()` / `datetime.fromtimestamp()`; same bidirec
 | `weekday` | 2 | 0=Mon..6=Sun |
 | `datetime_string` | 3 | **new** — bidirectional format/parse |
 | `timestamp` | 2 | **new** — bidirectional datetime ↔ epoch |
-| `datetime_string_iso8601` | 2 | **new** — bidirectional ISO datetime |
-| `date_string_iso8601` | 2 | **new** — bidirectional ISO date |
+| `datetime_string_iso` | 2 | **new** — bidirectional ISO datetime |
+| `date_string_iso` | 2 | **new** — bidirectional ISO date |
 
 ## Consumer sweep
 
