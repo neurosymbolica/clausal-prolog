@@ -16,15 +16,19 @@
 
 ## Goal
 
-Audit the entire `clausal` Python package by partitioning it into ~11 disjoint
-subsystems and running one **Fable** agent per subsystem. Each agent hunts for
-issues against a shared rubric plus subsystem-specific hotspots, confirms each
-correctness finding by running an adversarial pytest, and writes two artifacts:
-a findings ledger and an adversarial test file.
+Audit the entire `clausal` Python package by partitioning it into 11 disjoint
+subsystems and running one **Fable** agent per subsystem, then a final seams &
+synthesis session (#12) that covers the interfaces between subsystems and
+consolidates the results. Each agent hunts for issues against a shared rubric
+plus subsystem-specific hotspots, confirms each correctness finding by running
+an adversarial pytest, and writes three artifacts: a code-findings ledger, a
+design-questions ledger, and an adversarial test file.
 
-This is an **audit-only** round (findings + tests, no fix commits). The
-deliverable of the *planning* work is a spec plus 11 ready-to-paste agent
-prompts; **the user launches the agents** (not this session).
+This is an **audit-only** round (findings + tests, no fix commits) with one
+exception: design contradictions/ambiguities are resolved in-session with the
+user and recorded. The deliverable of the *planning* work is a spec plus 12
+ready-to-paste agent prompts; **the user launches each as its own interactive
+Fable session** (not this session).
 
 ---
 
@@ -144,7 +148,14 @@ classes:
    (FT) safety.
 5. **Error handling** — silent failure vs proper `throw/1`, exception term
    shape, resource cleanup on the failure path.
-6. **Cross-module interaction** — composition with tabling, dif, CLP, DCG.
+6. **Cross-module interaction & seams** — composition with tabling, dif, CLP,
+   DCG, *and the interfaces between subsystems* (compiler-emits ↔
+   runtime-consumes, `terms.py` dunders ↔ the C unifier, tabling ↔ dif). Seam
+   bugs are the ones a strict partition is most likely to drop: each side
+   assumes the other is correct. Each agent declares the upstream contracts it
+   *depends on* and the downstream contracts it *provides*, and writes at least
+   one test that crosses each boundary it touches. Anything still ambiguous at a
+   boundary is handed to the seams & synthesis session (#12).
 7. **Design contradictions & ambiguities** — first-class, not a footnote. A
    design issue is any place where the *design itself* is unsound or
    under-specified, independent of whether the code has a bug: two docs (or a
@@ -160,23 +171,60 @@ classes:
 
 ## Per-agent method: deep, run-to-confirm, resolve-design-issues
 
-- **Deep (loop-until-dry):** the agent repeats audit passes over its subsystem
-  until a full pass surfaces nothing new (suggested cap: stop after 2
-  consecutive dry passes, or a per-agent finding/token budget). Cores (audits
-  1–4) warrant the most passes.
+- **Coverage-map first, then deep (loop-until-dry).** Before probing, the agent
+  emits a **coverage map** for its subsystem: the public functions/predicates ×
+  the dimensions to exercise (input vs output mode, ground vs partial vs unbound
+  args, empty/singleton/cyclic inputs, backtracking, error paths). "Dry" is
+  defined *against this map* — the loop repeats until the map is covered AND a
+  full pass surfaces nothing new, not merely "found nothing this pass" (which
+  quits early on huge files like `term_rewriting.py`). Backstops: stop after 2
+  consecutive dry passes or a per-session token budget, whichever first. Cores
+  (audits 1–4) warrant the most passes. The mode dimension is not optional — a
+  numeric-head-literal bug survived 8085 tests because every test used input
+  mode only (`todo/audit-tests-input-output-mode-coverage.md`).
 - **Run to confirm:** every correctness finding must be reproduced by an
   executed pytest before it is logged as confirmed. Runs are **per-file**
   (`pytest tests/audit_2026_07_05/test_NN_*.py`) — never the whole suite (OOM).
   Findings that cannot be reproduced are logged as **unconfirmed** with a note.
+- **Differential oracles (where one exists).** Reasoning about code is weaker
+  than diffing it against an external ground-truth. Where a reference is
+  available, the agent generates inputs and compares outputs:
+  - `modules/py/*` wrappers → Python's own stdlib (`csv`, `json`, `datetime`,
+    `hashlib`, `re`, `sqlite3`, …) is the exact oracle.
+  - CLP(Z3)/Z3 constraints → the `z3` package directly.
+  - CLP(Q/R) → **known-incorrect**; SICStus/Scryer is canonical. Prolog oracles
+    live under `prolog_backends/{gprolog,scryer}` as *sources* — **no binary is
+    on PATH**, so the agent checks availability first and, if the backend can't
+    be built/run, logs the divergence class it *would* test as an open item
+    rather than skipping silently.
+  This mirrors clausify's `docs/adversarial-verification/fable-oracle-prompts/`
+  differential pattern.
+- **C-finding verification toolkit** (audits owning `.c`: 1, 4, 5, 6, 7, 8, 9).
+  pytest alone can't confirm a leak or an FT bug. Concrete methods:
+  - Refcount/leak: `sys.getrefcount` deltas and `gc.get_objects()` /
+    `tracemalloc` snapshots across a stress loop (N×1000 iterations); a stable
+    plateau is the pass condition, monotonic growth the finding.
+  - Trail/borrowed-ref/error-path: exercise the failure path (pass a non-Trail
+    object, force an allocation failure where reachable) — cross-reference the
+    already-catalogued patterns in `todo/cross_cutting_issues.md` (Trail_Check,
+    unchecked `PyObject_IsInstance` -1 returns) rather than re-discovering them.
+  - **Free-threading:** this box runs a **GIL build (3.13)**; FT claims can only
+    be *executed* on the `.cpython-314t` free-threaded build. If it isn't
+    available in-session, FT findings are reasoned about statically (against
+    `_ft_compat.h`) and logged **unconfirmed — needs 3.14t** rather than
+    asserted.
 - **Resolve design issues interactively.** Each audit runs in its **own
   interactive session**, so the agent is expected to *ask the user* when it hits
   a design-level contradiction or ambiguity it cannot resolve from the docs +
   cheat-sheet. The loop per design issue:
   1. State the issue, the conflicting sources, and 2–3 candidate resolutions
      with trade-offs and a recommendation.
-  2. Ask the user (a real question — this is not a headless subagent).
+  2. **First check `DESIGN-DECISIONS.md`** — an earlier session may have already
+     resolved the same (often cross-cutting) question; if so, cite it and skip
+     the ask. Otherwise ask the user (a real question — not a headless subagent).
   3. Record the user's decision, its rationale, and any follow-up work in the
-     subsystem's `design-questions.md`.
+     subsystem's `design-questions.md`, and append cross-cutting decisions to
+     `DESIGN-DECISIONS.md` so later sessions see them.
   Design issues the agent *can* resolve unambiguously from the cheat-sheet/docs
   are logged with the resolution and the citation, no question needed. Design
   issues that are out of the agent's scope to decide, or that the user defers,
@@ -201,6 +249,8 @@ docs/superpowers/audits/2026-07-05-fable-partition/
   11-modules-interop/
     findings.md
     design-questions.md
+  12-seams/                        # session 12: cross-subsystem seam findings
+    findings.md
 tests/audit_2026_07_05/
   __init__.py
   conftest.py
@@ -208,6 +258,7 @@ tests/audit_2026_07_05/
   test_02_compiler_heads.py
   ...
   test_11_modules_interop.py
+  test_12_seams.py              # session 12: boundary-crossing tests
 ```
 
 `findings.md` ledger row format (stable across all audits):
@@ -216,6 +267,9 @@ tests/audit_2026_07_05/
 | ID | Severity | Title | Location (file:line) | Repro | Expected vs Actual | Test ref |
 ```
 
+- **ID is namespaced per subsystem** to avoid collisions across the 11 parallel
+  sessions: `A<NN>-F<NNN>` (e.g. `A04-F007` = audit 4, finding 7). Design-question
+  IDs use `A<NN>-D<NNN>`.
 - Severity: `correctness` > `memory` > `design` > `perf` > `doc-drift`.
 - Confirmed correctness findings get a test in the subsystem's test file.
 - Suspected-but-unreproduced findings are marked `xfail(strict=False)`; findings
@@ -246,9 +300,15 @@ tests/audit_2026_07_05/
   contradictions/ambiguities in real time (the design-issues loop above), which
   a headless subagent could not do. The implementation plan provides 11
   ready-to-paste prompt blocks — one per session.
-- The prompt opens with required reading:
-  `/workspace/clausify/docs/clausal-cheatsheet.md` (intended semantics) plus
-  the subsystem's own docstrings/`docs/` — before any code reading.
+- The prompt opens with required reading, before any code reading:
+  1. `/workspace/clausify/docs/clausal-cheatsheet.md` (intended semantics).
+  2. The subsystem's own docstrings and `docs/`.
+  3. **Prior art for this subsystem** — the relevant slices of
+     `todo/cross_cutting_issues.md`, `todo/audit-tests-input-output-mode-
+     coverage.md`, `tests/audit_2026_05_25/`, `DUPLICATE_TESTS.md`, and any
+     matching `implementation_plans/*/todo/*audit*`. Known issues are **not**
+     re-reported; the agent references the existing entry and moves on.
+  4. The current `DESIGN-DECISIONS.md` (may be empty for the first sessions).
 - Each session writes only to its own disjoint audit + test paths, so multiple
   sessions can run concurrently without conflict. Because each is interactive
   and may block on a user question, run as many in parallel as you can attend
@@ -257,6 +317,23 @@ tests/audit_2026_07_05/
   builtins/rewriting/modules (9 → 11). Cross-cutting design questions surfaced
   by the early core sessions may pre-answer questions in later ones — landing
   their decisions in `DESIGN-DECISIONS.md` first reduces duplicate questions.
+
+### Session 12 — seams & synthesis (runs last)
+
+A final interactive Fable session, launched after 1–11 complete, that does what
+no single partition audit can:
+
+- **Seams:** pick up every boundary ambiguity handed off by audits 1–11, and
+  probe the interfaces the partition split apart (compiler↔runtime,
+  terms↔C-unifier, tabling↔dif↔CLP composition). Writes seam findings and a
+  `test_12_seams.py` file.
+- **Synthesis:** dedup findings across all 11 ledgers, cull false positives
+  (re-run the repro; downgrade what doesn't reproduce), and merge the
+  cross-cutting design questions into `DESIGN-DECISIONS.md` with a single
+  triage-ready ordering.
+- **Memory:** capture confirmed design decisions that are now standing contracts
+  into project memory (`/home/node/.claude/projects/-workspace-clausal/memory/`)
+  so future work inherits them, per the memory convention.
 
 ---
 
@@ -274,11 +351,15 @@ core file.
 
 ## Success criteria
 
-- All 11 code-findings ledgers written, each with a status line in the audit
-  README.
+- All 11 code-findings ledgers + a session-12 seam ledger written, each with a
+  status line in the audit README.
 - All 11 design-questions ledgers written; `resolved-by-user` and `open` items
-  rolled up into `DESIGN-DECISIONS.md`.
-- One adversarial test file per subsystem; per-file `pytest` runs are green.
-- Every confirmed correctness finding has a reproducing test reference.
-- 11 ready-to-paste agent prompts delivered so the user can launch each audit
-  as its own interactive Fable session.
+  rolled up (and deduped by session 12) into `DESIGN-DECISIONS.md`.
+- One adversarial test file per subsystem plus `test_12_seams.py`; per-file
+  `pytest` runs are green.
+- Every confirmed correctness finding has a reproducing test reference; C
+  findings use the C toolkit (or are flagged `unconfirmed — needs 3.14t` for FT).
+- Session 12 has deduped across ledgers, culled false positives, and captured
+  standing design decisions into project memory.
+- 12 ready-to-paste agent prompts delivered (11 subsystem + 1 seams/synthesis)
+  so the user can launch each as its own interactive Fable session.
