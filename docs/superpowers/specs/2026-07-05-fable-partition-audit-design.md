@@ -1,9 +1,12 @@
 # Fable Partition Audit — Design Spec
 
 > **Audit principle:** log *every* issue you find — correctness, design,
-> performance, memory, or doc-drift. This round produces a findings ledger
-> and an adversarial test suite per subsystem. It does **not** fix production
-> code; triage and remediation happen after the user reviews the findings.
+> performance, memory, or doc-drift. Design-level contradictions and
+> ambiguities are first-class: they are tracked and *dealt with* (resolved from
+> the docs, or by asking the user in-session), not just noted. This round
+> produces, per subsystem, a code-findings ledger, a design-questions ledger,
+> and an adversarial test suite. It does **not** fix production code; code
+> triage and remediation happen after the user reviews the findings.
 
 **Date:** 2026-07-05
 **Author:** Michael Amy (with Claude)
@@ -142,10 +145,20 @@ classes:
 5. **Error handling** — silent failure vs proper `throw/1`, exception term
    shape, resource cleanup on the failure path.
 6. **Cross-module interaction** — composition with tabling, dif, CLP, DCG.
+7. **Design contradictions & ambiguities** — first-class, not a footnote. A
+   design issue is any place where the *design itself* is unsound or
+   under-specified, independent of whether the code has a bug: two docs (or a
+   doc and the cheat-sheet) that specify incompatible behavior; a contract that
+   is silent on a case the code must handle (so the implementation picks a
+   behavior by accident); an abstraction whose boundary leaks (a "unit" whose
+   internals can't change without breaking consumers); an API that is
+   internally inconsistent with its siblings; or a semantics that is defensible
+   two different ways with no recorded decision. These are tracked and *dealt
+   with*, not merely noted (see method + output below).
 
 ---
 
-## Per-agent method: deep, run-to-confirm
+## Per-agent method: deep, run-to-confirm, resolve-design-issues
 
 - **Deep (loop-until-dry):** the agent repeats audit passes over its subsystem
   until a full pass surfaces nothing new (suggested cap: stop after 2
@@ -155,6 +168,20 @@ classes:
   executed pytest before it is logged as confirmed. Runs are **per-file**
   (`pytest tests/audit_2026_07_05/test_NN_*.py`) — never the whole suite (OOM).
   Findings that cannot be reproduced are logged as **unconfirmed** with a note.
+- **Resolve design issues interactively.** Each audit runs in its **own
+  interactive session**, so the agent is expected to *ask the user* when it hits
+  a design-level contradiction or ambiguity it cannot resolve from the docs +
+  cheat-sheet. The loop per design issue:
+  1. State the issue, the conflicting sources, and 2–3 candidate resolutions
+     with trade-offs and a recommendation.
+  2. Ask the user (a real question — this is not a headless subagent).
+  3. Record the user's decision, its rationale, and any follow-up work in the
+     subsystem's `design-questions.md`.
+  Design issues the agent *can* resolve unambiguously from the cheat-sheet/docs
+  are logged with the resolution and the citation, no question needed. Design
+  issues that are out of the agent's scope to decide, or that the user defers,
+  are logged as **open** with enough context for later triage. A design finding
+  never blocks the correctness pass — log it and continue.
 
 ---
 
@@ -162,11 +189,18 @@ classes:
 
 ```
 docs/superpowers/audits/2026-07-05-fable-partition/
-  README.md                     # index: partition table, rubric, per-audit status
-  01-term-layer/findings.md
-  02-compiler-heads/findings.md
+  README.md                        # index: partition table, rubric, per-audit status
+  DESIGN-DECISIONS.md              # rolled-up log of design issues + user decisions
+  01-term-layer/
+    findings.md                    # code-level findings ledger
+    design-questions.md            # design contradictions/ambiguities: resolved + open
+  02-compiler-heads/
+    findings.md
+    design-questions.md
   ...
-  11-modules-interop/findings.md
+  11-modules-interop/
+    findings.md
+    design-questions.md
 tests/audit_2026_07_05/
   __init__.py
   conftest.py
@@ -188,21 +222,41 @@ tests/audit_2026_07_05/
   that pin confirmed-correct behavior are plain regression guards.
 - The suite must stay **green** on a per-file run after the audit.
 
+`design-questions.md` row format (design contradictions/ambiguities):
+
+```
+| ID | Status | Title | Conflicting sources | Options considered | Decision + rationale | Follow-up |
+```
+
+- Status: `resolved-from-docs` (cite the doc/cheat-sheet), `resolved-by-user`
+  (record the decision), or `open` (needs a decision the user deferred or that
+  is out of scope for this round).
+- `DESIGN-DECISIONS.md` at the audit root aggregates every `resolved-by-user`
+  and `open` row across all 11 subsystems into one triage list, so cross-cutting
+  design conflicts (e.g. a contract that two subsystems read differently) are
+  visible in one place.
+
 ---
 
 ## Launch model
 
-- **User launches** the agents (not this session). The implementation plan
-  provides 11 ready-to-paste prompt blocks.
-- Each agent: `model: "fable"`, `subagent_type: general-purpose` (needs
-  Read / Grep / Glob / Bash / Write).
-- Every agent prompt opens with required reading:
+- **Each audit runs in its own interactive session**, launched by the user (not
+  this session), using **Fable** as the session model. This is deliberate: an
+  interactive session lets the agent ask the user to resolve design-level
+  contradictions/ambiguities in real time (the design-issues loop above), which
+  a headless subagent could not do. The implementation plan provides 11
+  ready-to-paste prompt blocks — one per session.
+- The prompt opens with required reading:
   `/workspace/clausify/docs/clausal-cheatsheet.md` (intended semantics) plus
   the subsystem's own docstrings/`docs/` — before any code reading.
-- Agents write only to disjoint audit + test paths → safe to run in parallel;
-  no worktrees. Suggested batch size **4–5** concurrent to bound token burn.
+- Each session writes only to its own disjoint audit + test paths, so multiple
+  sessions can run concurrently without conflict. Because each is interactive
+  and may block on a user question, run as many in parallel as you can attend
+  to — a few at a time is realistic.
 - Recommended order: core engine first (1 → 4), then constraints (5 → 8), then
-  builtins/rewriting/modules (9 → 11).
+  builtins/rewriting/modules (9 → 11). Cross-cutting design questions surfaced
+  by the early core sessions may pre-answer questions in later ones — landing
+  their decisions in `DESIGN-DECISIONS.md` first reduces duplicate questions.
 
 ---
 
@@ -220,8 +274,11 @@ core file.
 
 ## Success criteria
 
-- All 11 findings ledgers written, each with a status line in the audit README.
+- All 11 code-findings ledgers written, each with a status line in the audit
+  README.
+- All 11 design-questions ledgers written; `resolved-by-user` and `open` items
+  rolled up into `DESIGN-DECISIONS.md`.
 - One adversarial test file per subsystem; per-file `pytest` runs are green.
 - Every confirmed correctness finding has a reproducing test reference.
 - 11 ready-to-paste agent prompts delivered so the user can launch each audit
-  independently.
+  as its own interactive Fable session.
