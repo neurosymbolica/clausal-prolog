@@ -105,7 +105,7 @@ todos.
 - Trail restoration correctness across suspension and backtracking.
 
 **C toolkit:** `refcount_stable` over solve/backtrack and table-fill loops; audit
-`_trampoline.c`, `_tabling_core.c`, `runtime/_list_unify.c` against
+`clausal/logic/runtime/_trampoline.c`, `clausal/logic/_tabling_core.c`, `clausal/logic/runtime/_list_unify.c` against
 `todo/cross_cutting_issues.md`. FT: log `unconfirmed — needs 3.14t` unless run there.
 
 **Oracle:** `docs/tabling.md` for intended tabling semantics; internal differential

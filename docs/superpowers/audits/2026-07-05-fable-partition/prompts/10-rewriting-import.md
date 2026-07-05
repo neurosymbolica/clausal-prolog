@@ -108,7 +108,7 @@ coverage-map discipline matters most here):**
 - Goal expansion (`goal_expansion.py`): ALLCAPS/trailing_ auto-binding, arrow-
   pattern sugar, recursion into multi-goal bodies.
 
-**Oracle:** `clausal/tools/dump_transformed.py` / `show_generated.py` to compare
+**Oracle:** `clausal/tools/dump_transformed.py` / repo-root `show_generated.py` to compare
 intended vs produced AST; round-trip `.clausal` example files through the hook.
 
 **Seam notes for A12:** produces the Predicate/term AST the compiler (A02/A03)

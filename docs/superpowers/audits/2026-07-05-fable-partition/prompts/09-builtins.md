@@ -98,7 +98,7 @@ todos.
 `clausal/logic/builtins/dcg.py`, `clausal/logic/builtins/database_ops.py`,
 `clausal/logic/builtins/keyword_ops.py`, `clausal/logic/builtins/control.py`,
 `clausal/logic/builtins/translations_builtin.py`,
-`clausal/logic/builtins/_chars_core.c`, `clausal/logic/runtime/_list_unify.c`.
+`clausal/logic/builtins/_chars_core.c`, `clausal/logic/_lists_core.c`.
 
 (Solver-specific builtin adapters — z3/ortools/sat — belong to A07/A08, not here.)
 
@@ -113,7 +113,7 @@ todos.
 - `chars` C core (`_chars_core.c`).
 
 **C toolkit:** `refcount_stable` over char/list-builtin loops; audit
-`_chars_core.c`, `runtime/_list_unify.c` against `todo/cross_cutting_issues.md`.
+`_chars_core.c`, `clausal/logic/_lists_core.c` against `todo/cross_cutting_issues.md`.
 
 **Oracle:** Python's own list/string semantics for the pure list ops; DCG example
 `clausal/examples/dcg_state.clausal`.
