@@ -50,8 +50,7 @@ todos.
    `python -m pytest tests/audit_2026_07_05/test_06_clpfd.py -v` — never `pytest tests/`
    (it OOM-SIGKILLs). Unreproducible → log `unconfirmed`.
 4. **C findings** (if this subsystem owns `.c`): use the `refcount_stable`
-   fixture in `tests/audit_2026_07_05/conftest.py` (object-count deltas over a
-   stress loop) for leaks; exercise failure paths for borrowed-ref/Trail bugs;
+   fixture in `tests/audit_2026_07_05/conftest.py` (object-count + allocation deltas via `refcount_stable`, plus per-object `sys.getrefcount` via `getrefcount_stable` for C-level leaks) for leaks; exercise failure paths for borrowed-ref/Trail bugs;
    cross-reference `todo/cross_cutting_issues.md`. Free-threading claims can only
    be *executed* on the `.cpython-314t` build — this box is a 3.13 GIL build, so
    log FT findings `unconfirmed — needs 3.14t` unless that build is available.
