@@ -1,24 +1,24 @@
 """clausal.modules.py.sqlite — SQLite predicates for Clausal.
 
-Provides SQLiteConnect, SQLiteDisconnect, SQLiteQuery, SQLiteExec,
-SQLiteRowCount, SQLiteTable, SQLiteColumn, and SQLiteCurrentConnection
+Provides connect, disconnect, query, exec,
+row_count, table, column, and current_connection
 as importable predicate objects for use in .clausal files via::
 
-    -import_from(py.sqlite, [SQLiteConnect, SQLiteDisconnect, SQLiteQuery,
-                          SQLiteExec, SQLiteTable, SQLiteColumn])
+    -import_from(py.sqlite, [connect, disconnect, query,
+                          exec, table, column])
 
 Or via module import::
 
     -import_module(py.sqlite)
-    # then use py.sqlite.SQLiteConnect(...), py.sqlite.SQLiteQuery(...), etc.
+    # then use py.sqlite.connect(...), py.sqlite.query(...), etc.
 
 Layers
 ------
-1. **Connection management** — SQLiteConnect/2,3, SQLiteDisconnect/1,
-   SQLiteCurrentConnection/1
-2. **Raw SQL** — SQLiteQuery/3,4 (parameterized, nondeterministic),
-   SQLiteExec/2,3, SQLiteRowCount/3
-3. **Schema introspection** — SQLiteTable/2, SQLiteColumn/4
+1. **Connection management** — connect/2,3, disconnect/1,
+   current_connection/1
+2. **Raw SQL** — query/3,4 (parameterized, nondeterministic),
+   exec/2,3, row_count/3
+3. **Schema introspection** — table/2, column/4
 
 All SQL execution uses parameterized queries (``?`` placeholders) —
 never string interpolation.
@@ -53,7 +53,7 @@ def _get_connection(alias: str) -> _sqlite3.Connection:
 # ── Layer 1: Connection management ───────────────────────────────────────
 
 def _sqlite_connect_2(path, alias, trail, k):
-    """SQLiteConnect/2: open a database and register under alias."""
+    """connect/2: open a database and register under alias."""
     path = deref(path)
     alias = deref(alias)
     path_str = str(path)
@@ -69,7 +69,7 @@ def _sqlite_connect_2(path, alias, trail, k):
 
 
 def _sqlite_disconnect_1(alias, trail, k):
-    """SQLiteDisconnect/1: close and unregister a connection."""
+    """disconnect/1: close and unregister a connection."""
     alias = deref(alias)
     alias_str = str(alias)
     with _LOCK:
@@ -81,7 +81,7 @@ def _sqlite_disconnect_1(alias, trail, k):
 
 
 def _sqlite_current_connection_1(this_generator, _proceed, _fail, _catcher, alias, trail):
-    """SQLiteCurrentConnection/1: enumerate open connection aliases."""
+    """current_connection/1: enumerate open connection aliases."""
     alias = deref(alias)
     if not is_var(alias):
         # Check if this specific alias exists
@@ -103,7 +103,7 @@ def _sqlite_current_connection_1(this_generator, _proceed, _fail, _catcher, alia
 # ── Layer 2: Raw SQL queries ─────────────────────────────────────────────
 
 def _sqlite_query_3(this_generator, _proceed, _fail, _catcher, alias, sql, row_var, trail):
-    """SQLiteQuery/3: execute SQL, backtrack over result rows as tuples."""
+    """query/3: execute SQL, backtrack over result rows as tuples."""
     alias = deref(alias)
     sql = deref(sql)
     conn = _get_connection(alias)
@@ -119,7 +119,7 @@ def _sqlite_query_3(this_generator, _proceed, _fail, _catcher, alias, sql, row_v
 
 
 def _sqlite_query_4(this_generator, _proceed, _fail, _catcher, alias, sql, params, row_var, trail):
-    """SQLiteQuery/4: parameterized query with ? placeholders."""
+    """query/4: parameterized query with ? placeholders."""
     alias = deref(alias)
     sql = deref(sql)
     params = deref(params)
@@ -140,7 +140,7 @@ def _sqlite_query_4(this_generator, _proceed, _fail, _catcher, alias, sql, param
 
 
 def _sqlite_exec_2(alias, sql, trail, k):
-    """SQLiteExec/2: execute DDL/DML statement, succeed once."""
+    """exec/2: execute DDL/DML statement, succeed once."""
     alias = deref(alias)
     sql = deref(sql)
     conn = _get_connection(alias)
@@ -150,7 +150,7 @@ def _sqlite_exec_2(alias, sql, trail, k):
 
 
 def _sqlite_exec_3(alias, sql, params, trail, k):
-    """SQLiteExec/3: parameterized DDL/DML with ? placeholders."""
+    """exec/3: parameterized DDL/DML with ? placeholders."""
     alias = deref(alias)
     sql = deref(sql)
     params = deref(params)
@@ -165,7 +165,7 @@ def _sqlite_exec_3(alias, sql, params, trail, k):
 
 
 def _sqlite_row_count_3(alias, sql, count_var, trail, k):
-    """SQLiteRowCount/3: execute DML and unify affected row count."""
+    """row_count/3: execute DML and unify affected row count."""
     alias = deref(alias)
     sql = deref(sql)
     conn = _get_connection(alias)
@@ -178,7 +178,7 @@ def _sqlite_row_count_3(alias, sql, count_var, trail, k):
 # ── Layer 3: Schema introspection ────────────────────────────────────────
 
 def _sqlite_table_2(this_generator, _proceed, _fail, _catcher, alias, table_var, trail):
-    """SQLiteTable/2: enumerate table names (nondeterministic)."""
+    """table/2: enumerate table names (nondeterministic)."""
     alias = deref(alias)
     table_var_d = deref(table_var)
     conn = _get_connection(alias)
@@ -206,7 +206,7 @@ def _sqlite_table_2(this_generator, _proceed, _fail, _catcher, alias, table_var,
 
 
 def _sqlite_column_4(this_generator, _proceed, _fail, _catcher, alias, table, col_name, col_type, trail):
-    """SQLiteColumn/4: enumerate columns of a table with their types."""
+    """column/4: enumerate columns of a table with their types."""
     alias = deref(alias)
     table = deref(table)
     conn = _get_connection(alias)
@@ -224,28 +224,28 @@ def _sqlite_column_4(this_generator, _proceed, _fail, _catcher, alias, table, co
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-SQLiteConnect = ModulePredicate("SQLiteConnect")
-SQLiteConnect._register(2, simple_to_trampoline(_sqlite_connect_2))
+connect = ModulePredicate("connect")
+connect._register(2, simple_to_trampoline(_sqlite_connect_2))
 
-SQLiteDisconnect = ModulePredicate("SQLiteDisconnect")
-SQLiteDisconnect._register(1, simple_to_trampoline(_sqlite_disconnect_1))
+disconnect = ModulePredicate("disconnect")
+disconnect._register(1, simple_to_trampoline(_sqlite_disconnect_1))
 
-SQLiteCurrentConnection = ModulePredicate("SQLiteCurrentConnection")
-SQLiteCurrentConnection._register(1, _sqlite_current_connection_1)
+current_connection = ModulePredicate("current_connection")
+current_connection._register(1, _sqlite_current_connection_1)
 
-SQLiteQuery = ModulePredicate("SQLiteQuery")
-SQLiteQuery._register(3, _sqlite_query_3)
-SQLiteQuery._register(4, _sqlite_query_4)
+query = ModulePredicate("query")
+query._register(3, _sqlite_query_3)
+query._register(4, _sqlite_query_4)
 
-SQLiteExec = ModulePredicate("SQLiteExec")
-SQLiteExec._register(2, simple_to_trampoline(_sqlite_exec_2))
-SQLiteExec._register(3, simple_to_trampoline(_sqlite_exec_3))
+exec = ModulePredicate("exec")
+exec._register(2, simple_to_trampoline(_sqlite_exec_2))
+exec._register(3, simple_to_trampoline(_sqlite_exec_3))
 
-SQLiteRowCount = ModulePredicate("SQLiteRowCount")
-SQLiteRowCount._register(3, simple_to_trampoline(_sqlite_row_count_3))
+row_count = ModulePredicate("row_count")
+row_count._register(3, simple_to_trampoline(_sqlite_row_count_3))
 
-SQLiteTable = ModulePredicate("SQLiteTable")
-SQLiteTable._register(2, _sqlite_table_2)
+table = ModulePredicate("table")
+table._register(2, _sqlite_table_2)
 
-SQLiteColumn = ModulePredicate("SQLiteColumn")
-SQLiteColumn._register(4, _sqlite_column_4)
+column = ModulePredicate("column")
+column._register(4, _sqlite_column_4)

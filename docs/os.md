@@ -9,91 +9,91 @@ The implementation lives in `clausal/modules/py/os.py`.
 ## Import
 
 ```clausal
--import_from(py.os, [EnvironmentVariable, SetEnvironmentVariable,
-                     WorkingDirectory, ChangeDirectory,
-                     Pid, Argv, Platform, CPUCount])
+-import_from(py.os, [environment_variable, set_environment_variable,
+                     working_directory, change_directory,
+                     pid, argv, platform, cpu_count])
 ```
 
 Or via [module import](import.md):
 
 ```clausal
 -import_module(py.os)
-# then use py.os.EnvironmentVariable("HOME", H_), py.os.Pid(P_), etc.
+# then use py.os.environment_variable("HOME", H_), py.os.pid(P_), etc.
 ```
 
 ---
 
 ## Predicates
 
-### EnvironmentVariable/2
+### environment_variable/2
 
-`EnvironmentVariable(Name, Value)` — get or enumerate environment variables.
+`environment_variable(Name, Value)` — get or enumerate environment variables.
 
 - **Name bound**: look up the value. Fails if the variable is not set.
 - **Name unbound**: enumerate all environment variables via backtracking.
 
 ```clausal
-home_directory(HOME) <- EnvironmentVariable("HOME", HOME)
+home_directory(HOME) <- environment_variable("HOME", HOME)
 ```
 
-### SetEnvironmentVariable/2
+### set_environment_variable/2
 
-`SetEnvironmentVariable(Name, Value)` — set an environment variable. Both arguments must be ground strings.
+`set_environment_variable(Name, Value)` — set an environment variable. Both arguments must be ground strings.
 
 ```clausal
-configure_env <- SetEnvironmentVariable("MY_APP_MODE", "production")
+configure_env <- set_environment_variable("MY_APP_MODE", "production")
 ```
 
-### UnsetEnvironmentVariable/1
+### unset_environment_variable/1
 
-`UnsetEnvironmentVariable(Name)` — remove an environment variable. Fails if the variable is not set.
+`unset_environment_variable(Name)` — remove an environment variable. Fails if the variable is not set.
 
-### WorkingDirectory/1
+### working_directory/1
 
-`WorkingDirectory(Path)` — unify Path with the current working directory.
+`working_directory(Path)` — unify Path with the current working directory.
 
 ```clausal
-show_cwd(CWD) <- WorkingDirectory(CWD)
+show_cwd(CWD) <- working_directory(CWD)
 ```
 
-### ChangeDirectory/1
+### change_directory/1
 
-`ChangeDirectory(Path)` — change the current working directory. Path must be ground. Fails if the path does not exist.
+`change_directory(Path)` — change the current working directory. Path must be ground. Fails if the path does not exist.
 
 ```clausal
-work_in_tmp <- ChangeDirectory("/tmp")
+work_in_tmp <- change_directory("/tmp")
 ```
 
-### Pid/1
+### pid/1
 
-`Pid(P)` — unify P with the current process ID (integer).
+`pid(P)` — unify P with the current process ID (integer).
 
 ```clausal
-show_pid(P) <- Pid(P)
+show_pid(P) <- pid(P)
 ```
 
-### Argv/1
+### argv/1
 
-`Argv(Args)` — unify Args with `sys.argv` as a Python list.
+`argv(Args)` — unify Args with `sys.argv` as a Python list.
 
 ```clausal
-get_args(ARGS) <- Argv(ARGS)
+get_args(ARGS) <- argv(ARGS)
 ```
 
-### Platform/1
+### platform/1
 
-`Platform(P)` — unify P with `sys.platform` (e.g. `"linux"`, `"darwin"`, `"win32"`).
+`platform(P)` — unify P with `sys.platform` (e.g. `"linux"`, `"darwin"`, `"win32"`).
 
 ```clausal
-is_linux <- Platform("linux")
+is_linux <- platform("linux")
 ```
 
-### CPUCount/1
+### cpu_count/1
 
-`CPUCount(N)` — unify N with the number of CPUs available.
+`cpu_count(N)` — unify N with the number of CPUs available.
 
 ```clausal
-show_cpus(N) <- CPUCount(N)
+show_cpus(N) <- cpu_count(N)
 ```
 
 ---
@@ -101,14 +101,14 @@ show_cpus(N) <- CPUCount(N)
 ## Example
 
 ```clausal
--import_from(py.os, [EnvironmentVariable, WorkingDirectory, Pid, Platform])
+-import_from(py.os, [environment_variable, working_directory, pid, platform])
 
 show_info(INFO) <- (
-    WorkingDirectory(CWD),
-    Pid(P),
-    Platform(PLAT),
+    working_directory(CWD),
+    pid(P),
+    platform(PLAT),
     INFO is f"PID {P} on {PLAT} in {CWD}"
 )
 
-home_directory(HOME) <- EnvironmentVariable("HOME", HOME)
+home_directory(HOME) <- environment_variable("HOME", HOME)
 ```

@@ -3,12 +3,12 @@
 Provides relational predicates for generating, converting, and inspecting
 UUIDs.  Import via::
 
-    -import_from(py.uuid, [UUIDv4, UUIDStr, UUIDVersion, IsUUID])
+    -import_from(py.uuid, [uuid_v4, uuid_str, uuid_version, is_uuid])
 
 Or via module import::
 
     -import_module(py.uuid)
-    # then use py.uuid.UUIDv4(U_), py.uuid.UUIDStr(U_, S_), etc.
+    # then use py.uuid.uuid_v4(U_), py.uuid.uuid_str(U_, S_), etc.
 
 Python interop
 --------------
@@ -101,7 +101,7 @@ def _uuid5_3(ns, name, u, trail, k):
 
 
 def _uuid_str_2(u, s, trail, k):
-    """UUIDStr/2: bidirectional — UUID ↔ hyphenated string.
+    """uuid_str/2: bidirectional — UUID ↔ hyphenated string.
 
     If U is ground UUID: decompose → S = str(U).
     If S is ground string: construct → U = uuid.UUID(S).
@@ -120,7 +120,7 @@ def _uuid_str_2(u, s, trail, k):
 
 
 def _uuid_hex_2(u, h, trail, k):
-    """UUIDHex/2: bidirectional — UUID ↔ 32-char hex string.
+    """uuid_hex/2: bidirectional — UUID ↔ 32-char hex string.
 
     If U is ground UUID: decompose → H = U.hex.
     If H is ground string: construct → U = uuid.UUID(hex=H).
@@ -139,7 +139,7 @@ def _uuid_hex_2(u, h, trail, k):
 
 
 def _uuid_urn_2(u, urn, trail, k):
-    """UUIDUrn/2: bidirectional — UUID ↔ URN string.
+    """uuid_urn/2: bidirectional — UUID ↔ URN string.
 
     If U is ground UUID: decompose → Urn = U.urn.
     If Urn is ground string: construct → U from URN.
@@ -158,7 +158,7 @@ def _uuid_urn_2(u, urn, trail, k):
 
 
 def _uuid_bytes_2(u, b, trail, k):
-    """UUIDBytes/2: bidirectional — UUID ↔ 16-byte bytes.
+    """uuid_bytes/2: bidirectional — UUID ↔ 16-byte bytes.
 
     If U is ground UUID: decompose → B = U.bytes.
     If B is ground bytes: construct → U = uuid.UUID(bytes=B).
@@ -177,7 +177,7 @@ def _uuid_bytes_2(u, b, trail, k):
 
 
 def _uuid_int_2(u, n, trail, k):
-    """UUIDInt/2: bidirectional — UUID ↔ 128-bit integer.
+    """uuid_int/2: bidirectional — UUID ↔ 128-bit integer.
 
     If U is ground UUID: decompose → N = U.int.
     If N is ground int: construct → U = uuid.UUID(int=N).
@@ -199,7 +199,7 @@ def _uuid_int_2(u, n, trail, k):
 
 
 def _uuid_version_2(u, v, trail, k):
-    """UUIDVersion/2: UUIDVersion(UUID, Version) — extract version number."""
+    """uuid_version/2: uuid_version(UUID, Version) — extract version number."""
     u = deref(u)
     if not isinstance(u, _uuid.UUID):
         return
@@ -208,9 +208,9 @@ def _uuid_version_2(u, v, trail, k):
 
 
 def _uuid_fields_7(u, tl, tm, th, csh, csl, node, trail, k):
-    """UUIDFields/7: decompose UUID into 6 integer fields.
+    """uuid_fields/7: decompose UUID into 6 integer fields.
 
-    UUIDFields(UUID, TimeLow, TimeMid, TimeHiVersion, ClkSeqHi, ClkSeqLo, Node).
+    uuid_fields(UUID, TimeLow, TimeMid, TimeHiVersion, ClkSeqHi, ClkSeqLo, Node).
     """
     u = deref(u)
     if not isinstance(u, _uuid.UUID):
@@ -229,7 +229,7 @@ def _uuid_fields_7(u, tl, tm, th, csh, csl, node, trail, k):
 
 
 def _is_uuid_1(u, trail, k):
-    """IsUUID/1: type test — succeeds if U is a uuid.UUID."""
+    """is_uuid/1: type test — succeeds if U is a uuid.UUID."""
     u = deref(u)
     if isinstance(u, _uuid.UUID):
         yield None
@@ -237,38 +237,38 @@ def _is_uuid_1(u, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-UUIDv4 = ModulePredicate("UUIDv4")
-UUIDv4._register(1, simple_to_trampoline(_uuid4_1))
+uuid_v4 = ModulePredicate("uuid_v4")
+uuid_v4._register(1, simple_to_trampoline(_uuid4_1))
 
-UUIDv1 = ModulePredicate("UUIDv1")
-UUIDv1._register(1, simple_to_trampoline(_uuid1_1))
+uuid_v1 = ModulePredicate("uuid_v1")
+uuid_v1._register(1, simple_to_trampoline(_uuid1_1))
 
-UUIDv3 = ModulePredicate("UUIDv3")
-UUIDv3._register(3, simple_to_trampoline(_uuid3_3))
+uuid_v3 = ModulePredicate("uuid_v3")
+uuid_v3._register(3, simple_to_trampoline(_uuid3_3))
 
-UUIDv5 = ModulePredicate("UUIDv5")
-UUIDv5._register(3, simple_to_trampoline(_uuid5_3))
+uuid_v5 = ModulePredicate("uuid_v5")
+uuid_v5._register(3, simple_to_trampoline(_uuid5_3))
 
-UUIDStr = ModulePredicate("UUIDStr")
-UUIDStr._register(2, simple_to_trampoline(_uuid_str_2))
+uuid_str = ModulePredicate("uuid_str")
+uuid_str._register(2, simple_to_trampoline(_uuid_str_2))
 
-UUIDHex = ModulePredicate("UUIDHex")
-UUIDHex._register(2, simple_to_trampoline(_uuid_hex_2))
+uuid_hex = ModulePredicate("uuid_hex")
+uuid_hex._register(2, simple_to_trampoline(_uuid_hex_2))
 
-UUIDUrn = ModulePredicate("UUIDUrn")
-UUIDUrn._register(2, simple_to_trampoline(_uuid_urn_2))
+uuid_urn = ModulePredicate("uuid_urn")
+uuid_urn._register(2, simple_to_trampoline(_uuid_urn_2))
 
-UUIDBytes = ModulePredicate("UUIDBytes")
-UUIDBytes._register(2, simple_to_trampoline(_uuid_bytes_2))
+uuid_bytes = ModulePredicate("uuid_bytes")
+uuid_bytes._register(2, simple_to_trampoline(_uuid_bytes_2))
 
-UUIDInt = ModulePredicate("UUIDInt")
-UUIDInt._register(2, simple_to_trampoline(_uuid_int_2))
+uuid_int = ModulePredicate("uuid_int")
+uuid_int._register(2, simple_to_trampoline(_uuid_int_2))
 
-UUIDVersion = ModulePredicate("UUIDVersion")
-UUIDVersion._register(2, simple_to_trampoline(_uuid_version_2))
+uuid_version = ModulePredicate("uuid_version")
+uuid_version._register(2, simple_to_trampoline(_uuid_version_2))
 
-UUIDFields = ModulePredicate("UUIDFields")
-UUIDFields._register(7, simple_to_trampoline(_uuid_fields_7))
+uuid_fields = ModulePredicate("uuid_fields")
+uuid_fields._register(7, simple_to_trampoline(_uuid_fields_7))
 
-IsUUID = ModulePredicate("IsUUID")
-IsUUID._register(1, simple_to_trampoline(_is_uuid_1))
+is_uuid = ModulePredicate("is_uuid")
+is_uuid._register(1, simple_to_trampoline(_is_uuid_1))

@@ -87,6 +87,35 @@ Reminder for each of these: also sweep `docs/builtins.md` + `builtins_sig{s.txt,
 (`_sqlite3.connect` is `_sqlite3`-qualified so safe; the `random.float` guard above is the one live
 hazard).
 
+### os/csv/uuid/sqlite/random — done 2026-07-05
+
+All five renamed; **core `clausal/modules/` now has ZERO CamelCase predicate registrations**. os/csv
+verbatim, uuid kept its prefix, sqlite dropped its prefix (`connect`, `query`, `exec`, …). `exec`
+kept verbatim (not `execute`).
+
+**random deviated from the table above** — after review the bare-drop names were poor (`float`
+shadows the builtin; `member`/`seed`/`sample` bare are vague/clashy), so it moved to descriptive,
+Python/SWI-aligned names, no prefix, self-documenting under the `random.` qualifier:
+
+| old | new | note |
+|---|---|---|
+| `Random/1` | `float_0_to_1` | float in [0,1) |
+| `RandomFloat/3` | `float_between` | float in [Lo,Hi) |
+| `RandomInteger/3` | `integer_between` | int in [Lo,Hi]; echoes SWI `random_between` |
+| `RandomMember/2` | `choice` | Python `random.choice` |
+| `RandomSample/3` | `sample` | arg self-documented as `SampleSize` |
+| `RandomPermutation/2` | `permutation` | |
+| `RandomSeed/1` | `set_seed` | it's a setter |
+| `Maybe/0,1` | `maybe` | |
+
+Choosing `float_0_to_1`/`float_between` (not `float`) **eliminated the shadow-guard** entirely — no
+predicate is named `float`. But `Random=float_0_to_1` still corrupted the stdlib class
+`_random.Random()` and three prose spots (module title "Random number predicates", the
+`random.Random` docstring, the "random predicates are impure" purity warning, the `# Random Module`
+doc heading) — all restored by hand. Lesson holds: **renaming FROM a name that is also an English
+word / stdlib class corrupts prose and stdlib refs even when the target is distinctive.**
+Also fixed a cross-package prose ref: `clausal-spacy/docs/spacy.md` compared itself to `SQLiteQuery/4`.
+
 ## Docs to fix in the same series (stale / self-contradictory)
 
 - [ ] `docs/for_prolog_programmers.md:156` — naming table says "lowercase for user predicates" but

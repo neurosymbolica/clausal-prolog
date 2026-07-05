@@ -1,19 +1,19 @@
-"""clausal.modules.py.random — Random number predicates for Clausal.
+"""clausal.modules.py.random — random number predicates for Clausal.
 
 Provides relational predicates for random number generation, random
 selection, and seeding.  Import via::
 
-    -import_from(py.random, [Random, RandomInteger, RandomMember, Maybe])
+    -import_from(py.random, [float_0_to_1, integer_between, choice, maybe])
 
 Or via module import::
 
     -import_module(py.random)
-    # then use py.random.Random(X_), py.random.RandomInteger(1, 6, X_), etc.
+    # then use py.random.float_0_to_1(X_), py.random.integer_between(1, 6, X_), etc.
 
 Python interop
 --------------
 Uses a module-local ``random.Random`` instance to avoid polluting the
-global PRNG state.  ``RandomSeed/1`` seeds this local instance.
+global PRNG state.  ``set_seed/1`` seeds this local instance.
 """
 
 from __future__ import annotations
@@ -33,13 +33,13 @@ _rng = _random.Random()
 
 
 def _random_1(x, trail, k):
-    """Random/1: bind X to a random float in [0.0, 1.0)."""
+    """float_0_to_1/1: bind X to a random float in [0.0, 1.0)."""
     if unify(x, _rng.random(), trail):
         yield None
 
 
 def _random_float_3(low, high, x, trail, k):
-    """RandomFloat/3: bind X to a random float in [Low, High)."""
+    """float_between/3: bind X to a random float in [Low, High)."""
     low, high = deref(low), deref(high)
     if is_var(low) or is_var(high):
         return
@@ -54,7 +54,7 @@ def _random_float_3(low, high, x, trail, k):
 
 
 def _random_integer_3(low, high, x, trail, k):
-    """RandomInteger/3: bind X to a random integer in [Low, High]."""
+    """integer_between/3: bind X to a random integer in [Low, High]."""
     low, high = deref(low), deref(high)
     if is_var(low) or is_var(high):
         return
@@ -69,7 +69,7 @@ def _random_integer_3(low, high, x, trail, k):
 
 
 def _random_member_2(lst, x, trail, k):
-    """RandomMember/2: bind X to a randomly chosen element of List."""
+    """choice/2: bind X to a randomly chosen element of List."""
     lst = deref(lst)
     if is_var(lst) or not isinstance(lst, list) or len(lst) == 0:
         return
@@ -79,7 +79,7 @@ def _random_member_2(lst, x, trail, k):
 
 
 def _random_permutation_2(lst, shuffled, trail, k):
-    """RandomPermutation/2: bind Shuffled to a random permutation of List."""
+    """permutation/2: bind Shuffled to a random permutation of List."""
     lst = deref(lst)
     if is_var(lst) or not isinstance(lst, list):
         return
@@ -89,26 +89,26 @@ def _random_permutation_2(lst, shuffled, trail, k):
         yield None
 
 
-def _random_sample_3(lst, k, sample, trail, k_cont):
-    """RandomSample/3: bind Sample to K randomly chosen elements (no replacement)."""
-    lst, k_val = deref(lst), deref(k)
+def _random_sample_3(lst, size, sample, trail, k_cont):
+    """sample/3: bind Sample to SampleSize randomly chosen elements (no replacement)."""
+    lst, size_val = deref(lst), deref(size)
     if is_var(lst) or not isinstance(lst, list):
         return
-    if is_var(k_val):
+    if is_var(size_val):
         return
     try:
-        k_int = int(k_val)
+        size_int = int(size_val)
     except (TypeError, ValueError):
         return
-    if k_int < 0 or k_int > len(lst):
+    if size_int < 0 or size_int > len(lst):
         return
-    result = _rng.sample(lst, k_int)
+    result = _rng.sample(lst, size_int)
     if unify(sample, result, trail):
         yield None
 
 
 def _random_seed_1(seed, trail, k):
-    """RandomSeed/1: set the PRNG seed for reproducibility."""
+    """set_seed/1: set the PRNG seed for reproducibility."""
     seed = deref(seed)
     if is_var(seed):
         return
@@ -117,13 +117,13 @@ def _random_seed_1(seed, trail, k):
 
 
 def _maybe_0(trail, k):
-    """Maybe/0: succeeds with probability 0.5."""
+    """maybe/0: succeeds with probability 0.5."""
     if _rng.random() < 0.5:
         yield None
 
 
 def _maybe_1(p, trail, k):
-    """Maybe/1: succeeds with probability P."""
+    """maybe/1: succeeds with probability P."""
     p = deref(p)
     if is_var(p):
         return
@@ -137,27 +137,27 @@ def _maybe_1(p, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-Random = ModulePredicate("Random")
-Random._register(1, simple_to_trampoline(_random_1))
+float_0_to_1 = ModulePredicate("float_0_to_1")
+float_0_to_1._register(1, simple_to_trampoline(_random_1))
 
-RandomFloat = ModulePredicate("RandomFloat")
-RandomFloat._register(3, simple_to_trampoline(_random_float_3))
+float_between = ModulePredicate("float_between")
+float_between._register(3, simple_to_trampoline(_random_float_3))
 
-RandomInteger = ModulePredicate("RandomInteger")
-RandomInteger._register(3, simple_to_trampoline(_random_integer_3))
+integer_between = ModulePredicate("integer_between")
+integer_between._register(3, simple_to_trampoline(_random_integer_3))
 
-RandomMember = ModulePredicate("RandomMember")
-RandomMember._register(2, simple_to_trampoline(_random_member_2))
+choice = ModulePredicate("choice")
+choice._register(2, simple_to_trampoline(_random_member_2))
 
-RandomPermutation = ModulePredicate("RandomPermutation")
-RandomPermutation._register(2, simple_to_trampoline(_random_permutation_2))
+permutation = ModulePredicate("permutation")
+permutation._register(2, simple_to_trampoline(_random_permutation_2))
 
-RandomSample = ModulePredicate("RandomSample")
-RandomSample._register(3, simple_to_trampoline(_random_sample_3))
+sample = ModulePredicate("sample")
+sample._register(3, simple_to_trampoline(_random_sample_3))
 
-RandomSeed = ModulePredicate("RandomSeed")
-RandomSeed._register(1, simple_to_trampoline(_random_seed_1))
+set_seed = ModulePredicate("set_seed")
+set_seed._register(1, simple_to_trampoline(_random_seed_1))
 
-Maybe = ModulePredicate("Maybe")
-Maybe._register(0, simple_to_trampoline(_maybe_0))
-Maybe._register(1, simple_to_trampoline(_maybe_1))
+maybe = ModulePredicate("maybe")
+maybe._register(0, simple_to_trampoline(_maybe_0))
+maybe._register(1, simple_to_trampoline(_maybe_1))

@@ -419,7 +419,7 @@ NounLemmas(TEXT, LEMMAS) <- (
 
     1. **Doc as opaque handle** — the spaCy `Doc` object is passed directly as a logic term. It can be unified, stored, and passed around, but its internal structure is accessed only via the provided predicates.
     2. **Token as dict** — tokens are converted to plain Python dicts. This makes them easy to access with `++TOK["text"]` and compatible with dict-handling builtins. Dicts are ground (no logic variables inside), so they unify structurally.
-    3. **Filtered iteration** — `Entity/3` and similar predicates filter at iteration time rather than via a separate filter predicate, following the pattern of `SQLiteQuery/4` with SQL `WHERE` clauses.
+    3. **Filtered iteration** — `Entity/3` and similar predicates filter at iteration time rather than via a separate filter predicate, following the pattern of `query/4` with SQL `WHERE` clauses.
     4. **Model aliases** — models are referenced by string aliases throughout, making predicates composable without carrying model references. The same pattern is used in the SQLite module.
     5. **`Pos` not `POS`** — `POS` is all-uppercase and would be treated as a logic variable by the term transformer. `Pos` (title-case) avoids the collision.
     6. **Lazy spaCy import** — `import spacy` is deferred to first use so that `.clausal` files importing this module compile correctly even when spaCy is not installed. Errors are reported at predicate call time with a clear message.

@@ -1,4 +1,4 @@
-"""Tests for clausal.modules.py.random — Random predicates."""
+"""Tests for clausal.modules.py.random — float_0_to_1 predicates."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.random import (
-    Random, RandomFloat, RandomInteger, RandomMember,
-    RandomPermutation, RandomSample, RandomSeed, Maybe,
+    float_0_to_1, float_between, integer_between, choice,
+    permutation, sample, set_seed, maybe,
     _random_1, _random_float_3, _random_integer_3,
     _random_member_2, _random_permutation_2, _random_sample_3,
     _random_seed_1, _maybe_0, _maybe_1, _rng,
@@ -38,7 +38,7 @@ def trampoline_solutions(pred, *args):
     return solutions, trail
 
 
-# ── Random/1 ─────────────────────────────────────────────────────────────
+# ── float_0_to_1/1 ─────────────────────────────────────────────────────────────
 
 
 class TestRandom:
@@ -54,14 +54,14 @@ class TestRandom:
     def test_trampoline(self):
         # nv
         x = Var()
-        sols, trail = trampoline_solutions(Random, x)
+        sols, trail = trampoline_solutions(float_0_to_1, x)
         assert len(sols) == 1
         val = deref(x)
         assert isinstance(val, float)
         assert 0.0 <= val < 1.0
 
 
-# ── RandomFloat/3 ───────────────────────────────────────────────────────
+# ── float_between/3 ───────────────────────────────────────────────────────
 
 
 class TestRandomFloat:
@@ -96,7 +96,7 @@ class TestRandomFloat:
         assert len(sols) == 0
 
 
-# ── RandomInteger/3 ─────────────────────────────────────────────────────
+# ── integer_between/3 ─────────────────────────────────────────────────────
 
 
 class TestRandomInteger:
@@ -133,7 +133,7 @@ class TestRandomInteger:
         assert len(sols) == 0
 
 
-# ── RandomMember/2 ──────────────────────────────────────────────────────
+# ── choice/2 ──────────────────────────────────────────────────────
 
 
 class TestRandomMember:
@@ -158,12 +158,12 @@ class TestRandomMember:
     def test_trampoline(self):
         # nv
         x = Var()
-        sols, trail = trampoline_solutions(RandomMember, ["x", "y"], x)
+        sols, trail = trampoline_solutions(choice, ["x", "y"], x)
         assert len(sols) == 1
         assert deref(x) in ["x", "y"]
 
 
-# ── RandomPermutation/2 ────────────────────────────────────────────────
+# ── permutation/2 ────────────────────────────────────────────────
 
 
 class TestRandomPermutation:
@@ -189,7 +189,7 @@ class TestRandomPermutation:
         assert len(sols) == 0
 
 
-# ── RandomSample/3 ─────────────────────────────────────────────────────
+# ── sample/3 ─────────────────────────────────────────────────────
 
 
 class TestRandomSample:
@@ -220,7 +220,7 @@ class TestRandomSample:
         assert len(sols) == 0
 
 
-# ── RandomSeed/1 ───────────────────────────────────────────────────────
+# ── set_seed/1 ───────────────────────────────────────────────────────
 
 
 class TestRandomSeed:
@@ -242,7 +242,7 @@ class TestRandomSeed:
         assert val1 == val2
 
     def test_via_predicate(self):
-        """RandomSeed/1 followed by Random/1 is reproducible."""
+        """set_seed/1 followed by float_0_to_1/1 is reproducible."""
         # nv
         sols1, _ = simple_solutions(_random_seed_1, 42)
         assert len(sols1) == 1
@@ -263,12 +263,12 @@ class TestRandomSeed:
         assert len(sols) == 0
 
 
-# ── Maybe/0, Maybe/1 ───────────────────────────────────────────────────
+# ── maybe/0, maybe/1 ───────────────────────────────────────────────────
 
 
 class TestMaybe:
     def test_maybe_0_roughly_half(self):
-        """Over many trials, Maybe/0 succeeds ~50% of the time."""
+        """Over many trials, maybe/0 succeeds ~50% of the time."""
         # nv
         _rng.seed(0)
         successes = 0
@@ -282,14 +282,14 @@ class TestMaybe:
         assert 0.4 < ratio < 0.6, f"ratio={ratio}"
 
     def test_maybe_1_always_succeeds(self):
-        """Maybe(1.0) always succeeds."""
+        """maybe(1.0) always succeeds."""
         # nv
         for _ in range(20):
             sols, _ = simple_solutions(_maybe_1, 1.0)
             assert len(sols) == 1
 
     def test_maybe_1_always_fails(self):
-        """Maybe(0.0) always fails."""
+        """maybe(0.0) always fails."""
         # nv
         for _ in range(20):
             sols, _ = simple_solutions(_maybe_1, 0.0)
@@ -301,12 +301,12 @@ class TestMaybe:
         assert len(sols) == 0
 
     def test_maybe_trampoline_multi_arity(self):
-        """Maybe supports both arity 0 and 1 via multi-dispatch."""
+        """maybe supports both arity 0 and 1 via multi-dispatch."""
         # Arity 0
         # nv
         _rng.seed(1)
         trail = Trail()
-        dispatch = Maybe._get_dispatch()
+        dispatch = maybe._get_dispatch()
         gen = dispatch(None, None, None, None, trail)
         results = []
         for parent, value in gen:

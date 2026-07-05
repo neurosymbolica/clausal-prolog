@@ -1,9 +1,9 @@
 """Tests for the SQLite module — clausal.modules.sqlite.
 
 Covers three layers:
-1. Connection management (SQLiteConnect, SQLiteDisconnect, SQLiteCurrentConnection)
-2. Raw SQL queries (SQLiteQuery, SQLiteExec, SQLiteRowCount)
-3. Schema introspection (SQLiteTable, SQLiteColumn)
+1. Connection management (connect, disconnect, current_connection)
+2. Raw SQL queries (query, exec, row_count)
+3. Schema introspection (table, column)
 """
 
 from __future__ import annotations
@@ -26,22 +26,22 @@ from clausal.modules.py.sqlite import (
     _sqlite_table_2,
     _sqlite_column_4,
     _sqlite_current_connection_1,
-    SQLiteConnect,
-    SQLiteDisconnect,
-    SQLiteQuery,
-    SQLiteExec,
-    SQLiteRowCount,
-    SQLiteTable,
-    SQLiteColumn,
-    SQLiteCurrentConnection,
+    connect,
+    disconnect,
+    query,
+    exec,
+    row_count,
+    table,
+    column,
+    current_connection,
 )
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 _SQLITE_IMPORT = (
-    "-import_from(sqlite, [SQLiteConnect, SQLiteDisconnect, SQLiteQuery, "
-    "SQLiteExec, SQLiteRowCount, SQLiteTable, SQLiteColumn])\n"
+    "-import_from(sqlite, [connect, disconnect, query, "
+    "exec, row_count, table, column])\n"
 )
 
 
@@ -126,7 +126,7 @@ def _cleanup_connections():
 
 
 class TestSQLiteConnect:
-    """SQLiteConnect/2: open database and register alias."""
+    """connect/2: open database and register alias."""
 
     def test_connect_memory(self):
         # nv
@@ -156,7 +156,7 @@ class TestSQLiteConnect:
 
 
 class TestSQLiteDisconnect:
-    """SQLiteDisconnect/1: close and unregister."""
+    """disconnect/1: close and unregister."""
 
     def test_disconnect(self):
         # nv
@@ -172,7 +172,7 @@ class TestSQLiteDisconnect:
 
 
 class TestSQLiteCurrentConnection:
-    """SQLiteCurrentConnection/1: enumerate open aliases."""
+    """current_connection/1: enumerate open aliases."""
 
     def test_enumerate_all(self):
         # nv
@@ -231,7 +231,7 @@ def _setup_people_db(alias="qdb"):
 
 
 class TestSQLiteQuery:
-    """SQLiteQuery/3,4: nondeterministic row iteration."""
+    """query/3,4: nondeterministic row iteration."""
 
     def test_query_all_rows(self):
         # nv
@@ -374,7 +374,7 @@ class TestSQLiteQuery:
 
 
 class TestSQLiteExec:
-    """SQLiteExec/2,3: DDL/DML execution."""
+    """exec/2,3: DDL/DML execution."""
 
     def test_exec_create_table(self):
         # nv
@@ -427,7 +427,7 @@ class TestSQLiteExec:
 
 
 class TestSQLiteRowCount:
-    """SQLiteRowCount/3: row count unification."""
+    """row_count/3: row count unification."""
 
     def test_row_count_insert(self):
         # nv
@@ -472,7 +472,7 @@ class TestSQLiteRowCount:
 
 
 class TestSQLiteTable:
-    """SQLiteTable/2: enumerate table names."""
+    """table/2: enumerate table names."""
 
     def test_table_enumerate(self):
         # nv
@@ -519,7 +519,7 @@ class TestSQLiteTable:
 
 
 class TestSQLiteColumn:
-    """SQLiteColumn/4: enumerate columns with types."""
+    """column/4: enumerate columns with types."""
 
     def test_column_enumerate(self):
         # nv
@@ -565,9 +565,9 @@ class TestSQLiteClausalIntegration:
     def test_connect_exec_query(self, tmp_path):
         # nv
         mod = _load("sq1", """
-setup(_db) <- (SQLiteConnect(":memory:", _db) and SQLiteExec(_db, "CREATE TABLE items (name TEXT, qty INTEGER)") and SQLiteExec(_db, "INSERT INTO items VALUES ('apple', 3)") and SQLiteExec(_db, "INSERT INTO items VALUES ('banana', 5)"))
+setup(_db) <- (connect(":memory:", _db) and exec(_db, "CREATE TABLE items (name TEXT, qty INTEGER)") and exec(_db, "INSERT INTO items VALUES ('apple', 3)") and exec(_db, "INSERT INTO items VALUES ('banana', 5)"))
 
-item_name(_n) <- (setup("testdb") and SQLiteQuery("testdb", "SELECT name FROM items", _n))
+item_name(_n) <- (setup("testdb") and query("testdb", "SELECT name FROM items", _n))
 """, tmp_path)
         names = _all("item_name", module=mod)
         assert names == ["apple", "banana"]
@@ -575,9 +575,9 @@ item_name(_n) <- (setup("testdb") and SQLiteQuery("testdb", "SELECT name FROM it
     def test_parameterized_query(self, tmp_path):
         # nv
         mod = _load("sq2", """
-setup <- (SQLiteConnect(":memory:", "db2") and SQLiteExec("db2", "CREATE TABLE nums (v INTEGER)") and SQLiteExec("db2", "INSERT INTO nums VALUES (10)") and SQLiteExec("db2", "INSERT INTO nums VALUES (20)") and SQLiteExec("db2", "INSERT INTO nums VALUES (30)"))
+setup <- (connect(":memory:", "db2") and exec("db2", "CREATE TABLE nums (v INTEGER)") and exec("db2", "INSERT INTO nums VALUES (10)") and exec("db2", "INSERT INTO nums VALUES (20)") and exec("db2", "INSERT INTO nums VALUES (30)"))
 
-big_num(_n) <- (setup() and SQLiteQuery("db2", "SELECT v FROM nums WHERE v > ?", [15], _n))
+big_num(_n) <- (setup() and query("db2", "SELECT v FROM nums WHERE v > ?", [15], _n))
 """, tmp_path)
         nums = _all("big_num", module=mod)
         assert nums == [20, 30]
@@ -585,9 +585,9 @@ big_num(_n) <- (setup() and SQLiteQuery("db2", "SELECT v FROM nums WHERE v > ?",
     def test_table_introspection(self, tmp_path):
         # nv
         mod = _load("sq3", """
-setup <- (SQLiteConnect(":memory:", "db3") and SQLiteExec("db3", "CREATE TABLE alpha (x TEXT)") and SQLiteExec("db3", "CREATE TABLE beta (y INTEGER)"))
+setup <- (connect(":memory:", "db3") and exec("db3", "CREATE TABLE alpha (x TEXT)") and exec("db3", "CREATE TABLE beta (y INTEGER)"))
 
-table_name(_t) <- (setup() and SQLiteTable("db3", _t))
+table_name(_t) <- (setup() and table("db3", _t))
 """, tmp_path)
         tables = _all("table_name", module=mod)
         assert set(tables) >= {"alpha", "beta"}
@@ -595,9 +595,9 @@ table_name(_t) <- (setup() and SQLiteTable("db3", _t))
     def test_column_introspection(self, tmp_path):
         # nv
         mod = _load("sq4", """
-setup <- (SQLiteConnect(":memory:", "db4") and SQLiteExec("db4", "CREATE TABLE things (id INTEGER, label TEXT, weight REAL)"))
+setup <- (connect(":memory:", "db4") and exec("db4", "CREATE TABLE things (id INTEGER, label TEXT, weight REAL)"))
 
-col(_name, _type) <- (setup() and SQLiteColumn("db4", "things", _name, _type))
+col(_name, _type) <- (setup() and column("db4", "things", _name, _type))
 """, tmp_path)
         v1 = Var()
         v2 = Var()
@@ -611,7 +611,7 @@ col(_name, _type) <- (setup() and SQLiteColumn("db4", "things", _name, _type))
     def test_disconnect(self, tmp_path):
         # nv
         mod = _load("sq5", """
-open_close <- (SQLiteConnect(":memory:", "db5") and SQLiteDisconnect("db5"))
+open_close <- (connect(":memory:", "db5") and disconnect("db5"))
 """, tmp_path)
         assert _succeeds("open_close", module=mod)
         assert "db5" not in _CONNECTIONS  # cleanup ran
@@ -619,9 +619,9 @@ open_close <- (SQLiteConnect(":memory:", "db5") and SQLiteDisconnect("db5"))
     def test_exec_with_params(self, tmp_path):
         # nv
         mod = _load("sq6", """
-setup <- (SQLiteConnect(":memory:", "db6") and SQLiteExec("db6", "CREATE TABLE kv (k TEXT, v INTEGER)") and SQLiteExec("db6", "INSERT INTO kv VALUES (?, ?)", ["x", 1]) and SQLiteExec("db6", "INSERT INTO kv VALUES (?, ?)", ["y", 2]))
+setup <- (connect(":memory:", "db6") and exec("db6", "CREATE TABLE kv (k TEXT, v INTEGER)") and exec("db6", "INSERT INTO kv VALUES (?, ?)", ["x", 1]) and exec("db6", "INSERT INTO kv VALUES (?, ?)", ["y", 2]))
 
-kv_key(_k) <- (setup() and SQLiteQuery("db6", "SELECT k FROM kv", _k))
+kv_key(_k) <- (setup() and query("db6", "SELECT k FROM kv", _k))
 """, tmp_path)
         keys = _all("kv_key", module=mod)
         assert set(keys) == {"x", "y"}

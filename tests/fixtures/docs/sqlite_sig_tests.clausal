@@ -1,56 +1,56 @@
 # Companion tests for docs/sqlite.md display snippets.
 
--import_from(sqlite, [SQLiteConnect, SQLiteDisconnect, SQLiteCurrentConnection,
-                      SQLiteExec, SQLiteQuery, SQLiteRowCount,
-                      SQLiteTable, SQLiteColumn])
+-import_from(sqlite, [connect, disconnect, current_connection,
+                      exec, query, row_count,
+                      table, column])
 
 # ── Connection ───────────────────────────────────────────────────────────────
 
 Test("connect") <- (
-    SQLiteConnect(":memory:", "doc_test_conn"),
-    SQLiteCurrentConnection("doc_test_conn")
+    connect(":memory:", "doc_test_conn"),
+    current_connection("doc_test_conn")
 )  # nv
 
 # ── Exec and Query ───────────────────────────────────────────────────────────
 
 Test("exec and query") <- (
-    SQLiteConnect(":memory:", "doc_test_eq"),
-    SQLiteExec("doc_test_eq", "CREATE TABLE t1 (x INTEGER)"),
-    SQLiteExec("doc_test_eq", "INSERT INTO t1 VALUES (?)", [42]),
-    SQLiteQuery("doc_test_eq", "SELECT x FROM t1", V),
+    connect(":memory:", "doc_test_eq"),
+    exec("doc_test_eq", "CREATE TABLE t1 (x INTEGER)"),
+    exec("doc_test_eq", "INSERT INTO t1 VALUES (?)", [42]),
+    query("doc_test_eq", "SELECT x FROM t1", V),
     V == 42
 )  # nv
 
 Test("query params") <- (
-    SQLiteConnect(":memory:", "doc_test_qp"),
-    SQLiteExec("doc_test_qp", "CREATE TABLE t2 (x INTEGER)"),
-    SQLiteExec("doc_test_qp", "INSERT INTO t2 VALUES (1)"),
-    SQLiteExec("doc_test_qp", "INSERT INTO t2 VALUES (2)"),
-    SQLiteQuery("doc_test_qp", "SELECT x FROM t2 WHERE x > ?", [1], V),
+    connect(":memory:", "doc_test_qp"),
+    exec("doc_test_qp", "CREATE TABLE t2 (x INTEGER)"),
+    exec("doc_test_qp", "INSERT INTO t2 VALUES (1)"),
+    exec("doc_test_qp", "INSERT INTO t2 VALUES (2)"),
+    query("doc_test_qp", "SELECT x FROM t2 WHERE x > ?", [1], V),
     V == 2
 )  # nv
 
 # ── Row count ────────────────────────────────────────────────────────────────
 
 Test("row count") <- (
-    SQLiteConnect(":memory:", "doc_test_rc"),
-    SQLiteExec("doc_test_rc", "CREATE TABLE t3 (x INTEGER)"),
-    SQLiteExec("doc_test_rc", "INSERT INTO t3 VALUES (1)"),
-    SQLiteExec("doc_test_rc", "INSERT INTO t3 VALUES (2)"),
-    SQLiteRowCount("doc_test_rc", "DELETE FROM t3", N),
+    connect(":memory:", "doc_test_rc"),
+    exec("doc_test_rc", "CREATE TABLE t3 (x INTEGER)"),
+    exec("doc_test_rc", "INSERT INTO t3 VALUES (1)"),
+    exec("doc_test_rc", "INSERT INTO t3 VALUES (2)"),
+    row_count("doc_test_rc", "DELETE FROM t3", N),
     N == 2
 )  # nv
 
 # ── Schema introspection ─────────────────────────────────────────────────────
 
 Test("table exists") <- (
-    SQLiteConnect(":memory:", "doc_test_tbl"),
-    SQLiteExec("doc_test_tbl", "CREATE TABLE users (name TEXT, age INTEGER)"),
-    SQLiteTable("doc_test_tbl", "users")
+    connect(":memory:", "doc_test_tbl"),
+    exec("doc_test_tbl", "CREATE TABLE users (name TEXT, age INTEGER)"),
+    table("doc_test_tbl", "users")
 )  # nv
 
 Test("column info") <- (
-    SQLiteConnect(":memory:", "doc_test_col"),
-    SQLiteExec("doc_test_col", "CREATE TABLE items (id INTEGER, name TEXT)"),
-    SQLiteColumn("doc_test_col", "items", "id", _)
+    connect(":memory:", "doc_test_col"),
+    exec("doc_test_col", "CREATE TABLE items (id INTEGER, name TEXT)"),
+    column("doc_test_col", "items", "id", _)
 )  # nv
