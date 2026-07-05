@@ -5,8 +5,10 @@
 > ambiguities are first-class: they are tracked and *dealt with* (resolved from
 > the docs, or by asking the user in-session), not just noted. This round
 > produces, per subsystem, a code-findings ledger, a design-questions ledger,
-> and an adversarial test suite. It does **not** fix production code; code
-> triage and remediation happen after the user reviews the findings.
+> and an adversarial test suite. It does **not** fix production code — every
+> remediation is written as a **todo** under `todo/`, so fixes are queued, not
+> applied. When a finding needs deeper analysis than a Fable session should
+> spend, it becomes an **investigation todo** tagged for Opus to pick up later.
 
 **Date:** 2026-07-05
 **Author:** Michael Amy (with Claude)
@@ -24,11 +26,13 @@ plus subsystem-specific hotspots, confirms each correctness finding by running
 an adversarial pytest, and writes three artifacts: a code-findings ledger, a
 design-questions ledger, and an adversarial test file.
 
-This is an **audit-only** round (findings + tests, no fix commits) with one
-exception: design contradictions/ambiguities are resolved in-session with the
-user and recorded. The deliverable of the *planning* work is a spec plus 12
-ready-to-paste agent prompts; **the user launches each as its own interactive
-Fable session** (not this session).
+This is an **audit-only** round: no production-code fixes are applied. Instead,
+each remediation is filed as a **fix todo** under `todo/`, and anything needing
+deeper root-cause or design work is filed as an **investigation todo** tagged
+for Opus. The one in-session exception is design contradictions/ambiguities,
+which are resolved with the user and recorded. The deliverable of the *planning*
+work is a spec plus 12 ready-to-paste agent prompts; **the user launches each as
+its own interactive Fable session** (not this session).
 
 ---
 
@@ -259,12 +263,17 @@ tests/audit_2026_07_05/
   ...
   test_11_modules_interop.py
   test_12_seams.py              # session 12: boundary-crossing tests
+todo/audit-2026-07-05/
+  README.md                        # index of fix + investigation todos by finding ID
+  fix-A01-seglist-str-promotion.md
+  investigate-A08-clpq-simplex-correctness.md
+  ...
 ```
 
 `findings.md` ledger row format (stable across all audits):
 
 ```
-| ID | Severity | Title | Location (file:line) | Repro | Expected vs Actual | Test ref |
+| ID | Severity | Title | Location (file:line) | Repro | Expected vs Actual | Test ref | Todo ref |
 ```
 
 - **ID is namespaced per subsystem** to avoid collisions across the 11 parallel
@@ -289,6 +298,30 @@ tests/audit_2026_07_05/
   and `open` row across all 11 subsystems into one triage list, so cross-cutting
   design conflicts (e.g. a contract that two subsystems read differently) are
   visible in one place.
+
+### Fix & investigation todos
+
+The audit **queues** remediation as todos under `todo/audit-2026-07-05/` (the
+project's existing `todo/` convention; completed ones later move to
+`todo/done/`). Two kinds, distinguished by filename prefix:
+
+- **`fix-<ID>-<slug>.md`** — the finding is understood *and* the remediation is
+  clear enough to hand to any implementer. Contains: the finding ID + link back
+  to its ledger row, the affected file(s), the intended fix, and how the
+  audit's adversarial test will flip from `xfail` to pass once it lands.
+- **`investigate-<ID>-<slug>.md`** — the finding is real (or strongly suspected)
+  but the root cause, the correct behavior, or the safe fix needs deeper
+  analysis than a Fable session should spend. **Explicitly tagged for Opus.**
+  Contains: what's known, what's uncertain, the specific question to resolve,
+  and why it was escalated rather than fixed inline. This is also the escape
+  hatch that keeps a Fable session from burning its budget going deep — when a
+  thread gets expensive, write the investigation todo and move on.
+
+Every confirmed correctness finding has *either* a fix todo or an investigation
+todo (never neither); the ledger row's final column points to it. Session 12
+dedups todos alongside findings so the same cross-cutting fix isn't filed by
+three subsystems. Known cross-cutting work already captured in
+`todo/cross_cutting_issues.md` is referenced, not re-filed.
 
 ---
 
@@ -327,10 +360,12 @@ no single partition audit can:
   probe the interfaces the partition split apart (compiler↔runtime,
   terms↔C-unifier, tabling↔dif↔CLP composition). Writes seam findings and a
   `test_12_seams.py` file.
-- **Synthesis:** dedup findings across all 11 ledgers, cull false positives
-  (re-run the repro; downgrade what doesn't reproduce), and merge the
+- **Synthesis:** dedup findings *and todos* across all 11 ledgers (collapse a
+  cross-cutting fix filed by several subsystems into one todo), cull false
+  positives (re-run the repro; downgrade what doesn't reproduce), and merge the
   cross-cutting design questions into `DESIGN-DECISIONS.md` with a single
-  triage-ready ordering.
+  triage-ready ordering. Produce `todo/audit-2026-07-05/README.md` as the master
+  index (fix vs investigate, severity, owning subsystem).
 - **Memory:** capture confirmed design decisions that are now standing contracts
   into project memory (`/home/node/.claude/projects/-workspace-clausal/memory/`)
   so future work inherits them, per the memory convention.
@@ -342,10 +377,11 @@ no single partition audit can:
 **In:** every `.py` and owning `.c` file listed in the partition table;
 findings ledgers; adversarial per-file test suite.
 
-**Out:** production-code fixes (deferred to post-review triage); pure-perf
-remediation (log only); benchmarks/`benchmarks/`; docs prose rewrites;
-the `packages/` extracted distributions except where they mirror an audited
-core file.
+**Out:** applying production-code fixes (remediation is *queued* as fix /
+investigation todos, not committed); pure-perf remediation (log + optional
+todo, never applied); benchmarks/`benchmarks/`; docs prose rewrites; the
+`packages/` extracted distributions except where they mirror an audited core
+file.
 
 ---
 
@@ -359,6 +395,8 @@ core file.
   `pytest` runs are green.
 - Every confirmed correctness finding has a reproducing test reference; C
   findings use the C toolkit (or are flagged `unconfirmed — needs 3.14t` for FT).
+- Every confirmed finding needing remediation has a `fix-*` or `investigate-*`
+  todo under `todo/audit-2026-07-05/`; no fixes are applied to production code.
 - Session 12 has deduped across ledgers, culled false positives, and captured
   standing design decisions into project memory.
 - 12 ready-to-paste agent prompts delivered (11 subsystem + 1 seams/synthesis)
