@@ -19,6 +19,13 @@ spec: `docs/superpowers/specs/2026-07-05-fable-partition-audit-design.md`.
 | A09 | builtins | **done 2026-07-05** | 32 (F001–F032; F022 design-parked; F023–F026 doc-drift; F027–F031 low) | 5 (D001–D005 parked; D001/D002 appended cross-cutting) | 23 fix + 4 investigate | test_09_builtins.py (28 passed, 45 xfailed) |
 | A10 | rewriting-import | **done 2026-07-06** | 18 (F001–F018; F008 doc-drift/seam; F013 boundary→A11; F018 unconfirmed) | 5 (D005 resolved-from-docs; D001–D004 parked by user preference) | 15 fix + 2 investigate | test_10_rewriting_import.py (33 passed, 23 xfailed) |
 | A11 | modules-interop | **done 2026-07-06** | 59 (F001–F059; F042 maintenance; F008/F009, F054–F056, F058/F059 design/doc-drift) | 11 (D001–D011 parked by user preference; D001/D002 appended cross-cutting) | 43 fix + 1 investigate | test_11_modules_interop.py (20 passed, 59 xfailed) |
-| A12 | seams | not started | – | – | – | test_12_seams.py |
+| A12 | seams | **done 2026-07-06** | 6 (F001–F006; F004 design; F006 doc-note, not reproduced) | 2 (D001/D002 parked by user preference) | 4 fix + 1 investigate | test_12_seams.py (30 passed, 12 xfailed) |
 
 Each session updates its own row on completion.
+
+**Synthesis (A12, 2026-07-06):** all 11 subsystem test files re-run per-file —
+every recorded pass/xfail count reproduced exactly (no false positives culled,
+no regression guards broken). Design questions rolled into
+`DESIGN-DECISIONS.md` §"Triage order" (9 decision clusters);
+`todo/audit-2026-07-05/README.md` is the master todo index (161 fix +
+23 investigate, cross-cutting collapse clusters at top).

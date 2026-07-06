@@ -3,6 +3,47 @@
 Append `resolved-by-user` and `open` design questions here as sessions
 resolve them, so later sessions check here BEFORE asking the user again.
 
+## Triage order (A12 roll-up, 2026-07-06)
+
+All open questions below, grouped into decision clusters and ordered by
+unblocking power (earlier decisions gate later ones). One user sitting per
+cluster should close every member question.
+
+1. **Cross-type term identity (numeric/bool conflation)** — the root
+   decision the most other questions inherit: `A01-D001` (in
+   `investigate-A01-parked-design-decisions.md`), then members A02-D002
+   (index keys), A05-D001 (dif/reify truth), A06-D005 + A07-D002 (bools in
+   CLP domains), A09-F015/F022 acceptance matrices, A04-F006 tabling
+   variant keys.
+2. **Error protocol** — one decision closes the largest confirmed-bug
+   family: A09-D002 (typed LogicException + narrow the trampoline's
+   RuntimeError catch) + A11-D001 (module/wrapper predicates convert at
+   the boundary), with A06-D002's silent-no-op principle and A12-F002's
+   acceptance folded in. Affects ~14 queued fix todos across
+   A06/A09/A10/A11/A12.
+3. **Attr-hook & solver-store contract** — A04-D001 (semidet boolean hook
+   protocol), A05-D002 (reserved attr keys), A07-D003 (PySAT bridge
+   depth), A08-D002 (Z3/ortools/LP hook registration), A12-D001
+   (constraints in tabled answers). These must be decided together: the
+   hook contract determines what tabling and the backends can preserve.
+4. **Tabling soundness semantics** — A04-D004 (NAF-on-tabled spawn vs
+   scan), A04-D002 (invalidation granularity); joint with the A04-F001
+   SLG completion re-architecture and cluster 3's A12-D001.
+5. **Compound ↔ declared-functor-instance identity** — A01-D004 +
+   A03-D001 (catch/3 catchers) + A10-D004 (TermExpansion patterns).
+6. **Arithmetic `//`/`%` + optimization contracts across backends** —
+   A08-D001 (Python semantics everywhere; also fixes the A11 Prolog
+   translator's mod/floordiv exports), A08-D005 (optimize result
+   contracts), A08-D003/A08-D004 (CLP(Q) float rejection + strict
+   inequalities), A07-D001 (taut/sat_count store-awareness).
+7. **findall/copy semantics** — A03-D002 (template copy vs sharing) +
+   `investigate-A09-copy-term-attrs.md` (copy_term and attributes).
+8. **Namespace & import policy** — A10-D002 (stdlib shadowing), A10-D003
+   (imported-head clobber), A10-D001 (ALLCAPS names in embedded Python),
+   A12-D002 (engine-name leak), plus A10-F013's fix.
+9. **Higher-order commit semantics** — A09-D001 (maplist/foldl
+   backtracking), A11-D002 (wrapper argument coercion policy).
+
 | ID | Status | Title | Decision + rationale | Raised by | Affects |
 |----|--------|-------|----------------------|-----------|---------|
 | A02-D001 | resolved-from-docs | Indexed dispatch must be semantics-preserving for every caller shape (uncomputable non-var key ⇒ all-clauses fallback, never the default bucket) | F095 fix history restored unify parity at the dispatch layer; indexing is threshold-triggered (≥4 clauses) so solution sets must not depend on clause count. See A02 design-questions.md | A02 | A02 arg_index/list_dispatch; A03 predicate.py always-fail defaults |
@@ -31,4 +72,6 @@ resolve them, so later sessions check here BEFORE asking the user again.
 | A10-D003 | open — parked by user preference | Clause head naming an `-import_from`-ed predicate: currently silently REPLACES the source module's predicate process-wide (A10-F004) — extend, error, or local shadow? | Recommendation: load-time error (implicit cross-module mutation must not be a side effect of a clause definition; explicit assertz remains). Joint with A11 module semantics + A03 compile_module class sync. `todo/audit-2026-07-05/investigate-A10-imported-head-clobber.md` | A10 | A10 head handling/_import_remap; A03 compile_module; A11 module semantics; docs/import.md assertz contract |
 | A10-D004 | open — parked by user preference | TermExpansion pattern vocabulary: docs match items with bare `q(head)` patterns, engine matches whole Predicate nodes — q() examples never fire (A10-F008) | Recommendation: match non-Predicate patterns against `item.head` for fact items + fix docs now; reflection-vocabulary reification is the principled fix but blocked on A01-D004/A03-D001 (Compound↔instance unification). `todo/audit-2026-07-05/fix-A10-term-expansion-doc-examples.md` | A10 | clausal/logic/term_expansion.py engine (A03 seam); docs/term_expansion.md; A01-D004/A03-D001 |
 | A09-D001 | open — parked by user preference | Committed choice in higher-order builtins: maplist/2,3 + foldl/4 take first-solution-per-element, silently losing answers (A09-F004); docs document commit only for include/exclude | Recommendation: restore backtracking in maplist/foldl (implicit commit is a hidden cut, contradicting the cut-free contract; once/1 is the sanctioned *explicit* escape); include/exclude stay committed as documented. `todo/audit-2026-07-05/investigate-A09-ho-committed-choice.md` | A09 | A09 higher_order; corpus rulebases using maplist with nondeterministic goals; docs/higher_order.md |
+| A12-D001 | open — parked by user preference | Constraints attached to tabled answers: tables store the answer skeleton and DROP dif/FD attrs on replay — second identical query is unsound (A12-F001) | Recommendation: refuse-to-table-constrained-answers error as stopgap; SLG(C)-style residue storage folded into the A04-F001 completion re-architecture. `todo/audit-2026-07-05/investigate-A12-tabling-answer-constraints.md` | A12 | A04 tabling answer representation (F001/F005); A05/A06/A07 hook families; A04-D001 protocol |
+| A12-D002 | open — parked by user preference | Reserved names in .clausal module namespaces: engine helpers (walk/deref/unify/Var/Trail/Compound) leak in and break same-named user predicates with a cryptic TypeError (A12-F004); `solve` is not leaked, so the reserved set is accidental | Recommendation: underscore-prefix the injected engine bindings (no public name reserved); interim clear load error on collision; document. Sequence with A10-F013 (same seam, opposite direction). `todo/audit-2026-07-05/fix-A12-engine-namespace-leak.md` | A12 | A10 import hook module-dict; A01/A04 helper exports; docs/syntax.md |
 | A09-D002 | open — parked by user preference | Builtin error-signaling convention: silent fail vs LogicException vs raw Python exceptions vs RuntimeError-that-the-engine-EATS — _trampoline.c treats any RuntimeError (incl. subclass RecursionError) as generator exhaustion, so locked-assertz permission errors and cyclic-input RecursionErrors become silent "no" (A09-F006/F007/F011/F012) | Recommendation: typed LogicException for type/domain/permission errors; never signal via RuntimeError; narrow the drive-loop catch to StopIteration + the PEP-479/"already executing" RuntimeErrors only (exact-type match, not subclasses). Extends A06-D002 (silent no-op indistinguishable in a cut-free language). `todo/audit-2026-07-05/investigate-A09-runtimeerror-swallow.md` | A09 | A03/A04 runtime/_trampoline.c drive loops; every builtin's error paths; docs/database_ops.md; docs/exceptions.md |
