@@ -17,7 +17,7 @@ spec: `docs/superpowers/specs/2026-07-05-fable-partition-audit-design.md`.
 | A07 | clpb-sat | **done 2026-07-05** | 11 (F001–F011; F010/F011 doc-drift) | 4 (D004 resolved-from-docs; D001–D003 parked) | 8 fix + 1 investigate | test_07_clpb_sat.py (35 passed, 12 xfailed) |
 | A08 | clpqr-z3 | **done 2026-07-05** | 18 (F001–F018; F017 doc-drift; F018 design, unconfirmed-impact) | 5 (D001–D005 parked) | 11 fix + 5 investigate | test_08_clpqr_z3.py (26 passed, 29 xfailed) |
 | A09 | builtins | **done 2026-07-05** | 32 (F001–F032; F022 design-parked; F023–F026 doc-drift; F027–F031 low) | 5 (D001–D005 parked; D001/D002 appended cross-cutting) | 23 fix + 4 investigate | test_09_builtins.py (28 passed, 45 xfailed) |
-| A10 | rewriting-import | not started | – | – | – | test_10_rewriting_import.py |
+| A10 | rewriting-import | **done 2026-07-06** | 18 (F001–F018; F008 doc-drift/seam; F013 boundary→A11; F018 unconfirmed) | 5 (D005 resolved-from-docs; D001–D004 parked by user preference) | 15 fix + 2 investigate | test_10_rewriting_import.py (33 passed, 23 xfailed) |
 | A11 | modules-interop | not started | – | – | – | test_11_modules_interop.py |
 | A12 | seams | not started | – | – | – | test_12_seams.py |
 
