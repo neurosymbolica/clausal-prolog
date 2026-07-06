@@ -28,3 +28,14 @@ maintains this index.
 | `fix-A02-multistar-trailing-fixed.md` | fix | correctness | A02-F004 | A02 compiler-heads | queued |
 | `fix-A02-dispatch-docstring-arg-offsets.md` | fix | doc-drift | A02-F005 | A02 compiler-heads | queued |
 | `investigate-A02-parked-design-decisions.md` | investigate (**USER**, not Opus) | design | A02-D002 (depends on A01-D001) | A02 (cross-cuts A04 tabling keys) | parked by user preference 2026-07-05 |
+| `fix-A03-tro-nondet-prefix.md` | fix | correctness (solution loss) | A03-F001 | A03 compiler-goals | queued |
+| `fix-A03-dr-nondet-prefix.md` | fix | correctness (data corruption; same root as F001) | A03-F002 | A03 compiler-goals | queued |
+| `fix-A03-tro-signal-bucket-not-generator.md` | fix | correctness (crash) | A03-F003 | A03 compiler-goals | queued |
+| `fix-A03-catch-functor-catcher.md` | fix | correctness | A03-F004 | A03 compiler-goals (unify seam → A01-D004) | queued |
+| `fix-A03-setof-not-sorted.md` | fix | correctness | A03-F005 | A03 compiler-goals | queued |
+| `fix-A03-findall-template-sharing.md` | fix | correctness | A03-F006 | A03 compiler-goals (design A03-D002) | queued |
+| `fix-A03-specialize-midbody-goals.md` | fix | correctness | A03-F007 | A03 specialization (design A03-D003) | queued |
+| `fix-A03-deep-unfold-const-args.md` | fix | correctness | A03-F008 | A03 specialization | queued |
+| `fix-A03-cpd-extension-chaining.md` | fix | correctness (solution loss) | A03-F009 | A03 specialization | queued |
+| `fix-A03-readme-ctco-drift.md` | fix | doc-drift | A03-F010 | A03 compiler-goals | queued |
+| `investigate-A03-parked-design-decisions.md` | investigate (**USER**, not Opus) | design | A03-D001 / A03-D002 / A03-D003 (+ determinism-table governance) | A03 (D001 cross-cuts A01) | parked by user preference 2026-07-05 |
