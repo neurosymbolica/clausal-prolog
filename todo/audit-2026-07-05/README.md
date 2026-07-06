@@ -22,3 +22,9 @@ maintains this index.
 | `fix-A01-seg-getitem-slice-in-prefix.md` | fix | design (low) | A01-F010 | A01 term-layer | queued |
 | `fix-A01-terms-all-exports.md` | fix | doc-drift | A01-F011 | A01 term-layer | queued |
 | `investigate-A01-parked-design-decisions.md` | investigate (**USER**, not Opus) | design | A01-D001 / A01-D002 / A01-D004 | A01 (D001 cross-cuts A02/A04) | parked by user 2026-07-05 |
+| `fix-A02-dispatch-partial-term-fallback.md` | fix | correctness | A02-F001 | A02 compiler-heads | queued |
+| `fix-A02-list-dispatch-fallthrough.md` | fix | correctness | A02-F002 | A02 compiler-heads | queued |
+| `fix-A02-head-wildcard-accept-all.md` | fix | correctness | A02-F003 | A02 compiler-heads (assertz seam → A09) | queued |
+| `fix-A02-multistar-trailing-fixed.md` | fix | correctness | A02-F004 | A02 compiler-heads | queued |
+| `fix-A02-dispatch-docstring-arg-offsets.md` | fix | doc-drift | A02-F005 | A02 compiler-heads | queued |
+| `investigate-A02-parked-design-decisions.md` | investigate (**USER**, not Opus) | design | A02-D002 (depends on A01-D001) | A02 (cross-cuts A04 tabling keys) | parked by user preference 2026-07-05 |
