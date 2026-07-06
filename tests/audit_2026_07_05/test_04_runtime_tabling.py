@@ -1,0 +1,785 @@
+"""A04 runtime, search & tabling — adversarial audit tests (2026-07-05).
+
+Findings ledger: docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md
+
+Suspected-bug tests assert the *correct* behaviour and are marked
+``@pytest.mark.xfail(strict=False)`` with the finding ID; confirmed-correct
+behaviour is a plain regression guard.  Run PER FILE only:
+
+    python -m pytest tests/audit_2026_07_05/test_04_runtime_tabling.py -v
+
+Fixture discipline: every module is loaded exactly ONCE under a unique module
+name (atoms/functors and table state are module-scoped), and modules whose
+tables a test mutates or poisons are private to that test.
+"""
+import gc
+
+import pytest
+
+from clausal.import_hook import _load_module
+from clausal.logic.solve import solve, call, once, query, query_wfs, _query_cache
+from clausal.logic.variables import Var, Trail, deref, is_var, unify
+
+
+# ── Fixture loader ────────────────────────────────────────────────────────────
+
+_loaded = {}
+
+
+@pytest.fixture(scope="session")
+def load(tmp_path_factory):
+    def _load(name, source):
+        if name not in _loaded:
+            d = tmp_path_factory.mktemp("a04fix")
+            p = d / f"{name}.clausal"
+            p.write_text(source)
+            _loaded[name] = _load_module(f"a04_{name}", str(p))
+        return _loaded[name]
+    yield _load
+    _loaded.clear()
+
+
+def answers(gen, *vars_):
+    out = []
+    for _ in gen:
+        out.append(tuple(deref(v) for v in vars_))
+    return out
+
+
+PATH_SRC = """-table(path/2)
+
+edge(1, 2),
+edge(2, 3),
+edge(3, 4),
+
+path(X, Y) <- edge(X, Y)
+path(X, Y) <- (
+    path(X, Z),
+    edge(Z, Y)
+)
+"""
+
+TWOREC_FACTSFIRST_SRC = """-table(p/1)
+
+p(1),
+p(X) <- (
+    p(Y),
+    a(Y, X)
+)
+p(X) <- (
+    p(Y),
+    b(Y, X)
+)
+
+a(1, 2),
+b(2, 3),
+a(3, 4),
+b(4, 5),
+"""
+
+TWOREC_RECFIRST_SRC = """-table(p/1)
+
+p(X) <- (
+    p(Y),
+    a(Y, X)
+)
+p(X) <- (
+    p(Y),
+    b(Y, X)
+)
+p(1),
+
+a(1, 2),
+b(2, 3),
+a(3, 4),
+b(4, 5),
+"""
+
+MUTUAL_RECFIRST_SRC = """-table(ra/2)
+-table(rb/2)
+
+ra(X, Y) <- (
+    rb(X, Z),
+    la(Z, Y)
+)
+ra(X, Y) <- la(X, Y)
+
+rb(X, Y) <- (
+    ra(X, Z),
+    lb(Z, Y)
+)
+rb(X, Y) <- lb(X, Y)
+
+la(1, 2),
+la(3, 4),
+lb(2, 3),
+lb(4, 1),
+"""
+
+NAF_SRC = """-table(tp/2)
+
+tp(1, 2),
+
+ntp(R) <- (
+    not tp(1, 2),
+    R is "negation succeeded"
+)
+"""
+
+WIN_ASYM_SRC = """-table(win/1)
+
+move("a", "b"),
+move("b", "a"),
+move("a", "c"),
+
+win(X) <- (
+    move(X, Y),
+    not win(Y)
+)
+"""
+
+WIN_SYM_SRC = """-table(win/1)
+
+move(1, 2),
+move(2, 1),
+
+win(X) <- (
+    move(X, Y),
+    not win(Y)
+)
+"""
+
+EVEN_ODD_SRC = """-table(even_node/1)
+-table(odd_node/1)
+
+edge(1, 2),
+edge(2, 3),
+
+even_node(X) <- (
+    edge(X, Y),
+    not odd_node(Y)
+)
+odd_node(X) <- (
+    edge(X, Y),
+    not even_node(Y)
+)
+"""
+
+TYPES_SRC = """-table(tt/1)
+
+tt(1),
+tt(True),
+tt(2.0),
+tt(2),
+
+utt(1),
+utt(True),
+utt(2.0),
+utt(2),
+"""
+
+BOOM_SRC = """-table(boom/1)
+
+boom(1),
+boom(X) <- (
+    X is 2,
+    BAD := 1 / 0
+)
+"""
+
+RTE_SRC = """rte(X) <- (
+    X is 1,
+    ++boom_rt()
+)
+"""
+
+DEEP_SRC = """count_down(0),
+count_down(N) <- (
+    N > 0,
+    N1 := N - 1,
+    count_down(N1)
+)
+
+build(0, []),
+build(N, [N, *T]) <- (
+    N > 0,
+    N1 := N - 1,
+    build(N1, T)
+)
+"""
+
+PA_SRC = """pa(1, 2),
+pa(3, 3),
+"""
+
+DYN_SRC = """-table(tz/1)
+-dynamic(tz/1)
+
+tz(1),
+tz(2),
+"""
+
+TRAIL_SRC = """tr7(Y) <- (([Y, *T, 6] is [5, 8, 7]) or (Y is 1))
+"""
+
+WHEN_SRC = """w8(R) <- (
+    when((nonvar(X) or nonvar(Y)), R is "fired"),
+    ((X is 1, 1 == 2) or (Y is 2))
+)
+"""
+
+FREEZE_SRC = """f9(X, Y) <- (
+    freeze(X, in_(Y, [10, 20])),
+    X is 1
+)
+"""
+
+THROW_SRC = """lethrow(X) <- (
+    X is 1,
+    throw("kaboom")
+)
+"""
+
+TS_LIST_SRC = """-table(ts/1)
+
+ts([1, *T]) <- (T is [2, 3])
+"""
+
+TD_DICT_SRC = """-table(td/1)
+
+td(D) <- (
+    D := ++{"k": X},
+    X is 7
+)
+"""
+
+TW_TERM_SRC = """-table(tw/1)
+-private([wrap(V)])
+
+tw(W) <- (
+    D is 7,
+    W is wrap(D)
+)
+"""
+
+
+# ══ Regression guards (confirmed-correct behaviour) ═══════════════════════════
+
+
+class TestModeMatrixGuards:
+    def test_solve_call_once_query_matrix(self, load, clear_query_cache):
+        m = load("mode", PA_SRC)
+        Y = Var()
+        assert answers(solve(m.pa(1, Y), m), Y) == [(2,)]
+        from clausal.terms import Compound
+        Y2 = Var()
+        assert answers(solve(Compound("pa", (1, Y2)), m), Y2) == [(2,)]
+        assert sum(1 for _ in solve(True, m)) == 1
+        assert sum(1 for _ in solve(False, m)) == 0
+        assert once(m.pa(1, Var()), m) is not None
+        assert once(m.pa(7, Var()), m) is None
+        # module inference from the goal term
+        Z = Var()
+        assert answers(solve(m.pa(3, Z)), Z) == [(3,)]
+        # call with string functor and with the predicate class
+        V = Var()
+        assert answers(call("pa", 1, V, module=m), V) == [(2,)]
+        V2 = Var()
+        assert answers(call(m.pa, 1, V2), V2) == [(2,)]
+        # deprecated query() still dereferences
+        import warnings
+        Q = Var()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            assert list(query(m.pa(1, Q), {"Q": Q}, m)) == [{"Q": 2}]
+
+    def test_query_cache_distinguishes_aliased_vars(self, load, clear_query_cache):
+        m = load("mode", PA_SRC)
+        V, W = Var(), Var()
+        distinct = answers(solve(m.pa(V, W), m), V, W)
+        A = Var()
+        aliased = answers(solve(m.pa(A, A), m), A)
+        assert sorted(map(repr, distinct)) == ["(1, 2)", "(3, 3)"]
+        assert aliased == [(3,)]
+
+
+class TestTrampolineGuards:
+    def test_deep_recursion_no_stack_overflow(self, load):
+        m = load("deep", DEEP_SRC)
+        assert sum(1 for _ in call("count_down", 30000, module=m)) == 1
+
+    def test_deep_output_list_construction(self, load):
+        m = load("deep", DEEP_SRC)
+        L = Var()
+        got = answers(call("build", 2000, L, module=m), L)
+        assert len(got) == 1 and len(got[0][0]) == 2000
+
+    def test_uncaught_logic_exception_surfaces(self, load):
+        from clausal.logic.exceptions import LogicException
+        m = load("throw", THROW_SRC)
+        with pytest.raises(LogicException):
+            list(call("lethrow", Var(), module=m))
+
+    def test_star_unify_failure_restores_trail_for_or_arm(self, load):
+        m = load("trail", TRAIL_SRC)
+        Y = Var()
+        assert answers(call("tr7", Y, module=m), Y) == [(1,)]
+
+
+class TestTablingGuards:
+    def test_left_recursion_facts_first_single_rec_clause(self, load):
+        m = load("leftrec", PATH_SRC)
+        Y = Var()
+        got = sorted(a[0] for a in answers(call("path", 1, Y, module=m), Y))
+        assert got == [2, 3, 4]
+
+    def test_dynamic_tabled_assertz_retract_invalidation(self, load):
+        m = load("dyn", DYN_SRC)
+        db = m.__clausal_module__.db
+        V = Var()
+        assert sorted(a[0] for a in answers(call("tz", V, module=m), V)) == [1, 2]
+        assert sum(1 for _ in call("assertz", m.tz(99), module=m)) == 1
+        assert db.table_store == {}  # auto-invalidated
+        V2 = Var()
+        assert sorted(a[0] for a in answers(call("tz", V2, module=m), V2)) == [1, 2, 99]
+        assert sum(1 for _ in call("retract", m.tz(1), module=m)) == 1
+        V3 = Var()
+        assert sorted(a[0] for a in answers(call("tz", V3, module=m), V3)) == [2, 99]
+
+    def test_manual_abolish_table_recomputes(self, load):
+        m = load("abolish", PATH_SRC.replace("path", "path9"))
+        db = m.__clausal_module__.db
+        Y = Var()
+        assert sorted(a[0] for a in answers(call("path9", 1, Y, module=m), Y)) == [2, 3, 4]
+        db.abolish_table("path9", 2)
+        assert not any(k[0] == "path9" for k in db.table_store)
+        Y2 = Var()
+        assert sorted(a[0] for a in answers(call("path9", 1, Y2, module=m), Y2)) == [2, 3, 4]
+
+    def test_wfs_symmetric_win_internal_truth_values(self, load):
+        m = load("winsym_guard", WIN_SYM_SRC)
+        X = Var()
+        got = sorted(a[0] for a in answers(call("win", X, module=m), X))
+        assert got == [1, 2]  # documented: undefined answers are yielded
+        (entry,) = m.__clausal_module__.db.table_store.values()
+        truths = [entry.truth_value(i) for i in range(len(entry.answers))]
+        assert truths == ["undefined", "undefined"]
+
+    def test_asym_win_ground_docs_order(self, load):
+        # docs/wfs.md truth table holds when 'a' is queried first
+        m = load("winasym_guard", WIN_ASYM_SRC)
+        assert sum(1 for _ in call("win", "a", module=m)) == 1
+        assert sum(1 for _ in call("win", "b", module=m)) == 0
+        assert sum(1 for _ in call("win", "c", module=m)) == 0
+
+
+class TestCToolkitGuards:
+    def test_deref_walk_deep_nesting_no_crash(self):
+        import clausal.logic.tabling  # registers the _VAR sentinel
+        from clausal.logic.solve import _deref_walk
+        x = []
+        for _ in range(40000):
+            x = [x]
+        _deref_walk(x)  # must not segfault
+
+    def test_deref_walk_depth_guard_graceful(self):
+        import clausal.logic.tabling
+        from clausal.logic.solve import _deref_walk
+        x = []
+        for _ in range(60000):
+            x = [x]
+        with pytest.raises(RecursionError):
+            _deref_walk(x)
+
+    def test_subgoal_key_depth_guard_graceful(self):
+        from clausal.logic.tabling import _normalize_for_key
+        x = []
+        for _ in range(60000):
+            x = [x]
+        with pytest.raises(RecursionError):
+            _normalize_for_key(x)
+
+    def test_head_list_unify_c_python_parity(self):
+        from clausal.logic.runtime.list_unify import (
+            _head_list_unify_input_py, _head_list_unify_output_py,
+            _head_list_unify_input, _head_list_unify_output)
+        from clausal.terms import SegList, ConcreteSeg, VarSeg, SegString
+
+        def snap(vs):
+            return ["VAR" if is_var(deref(v)) else repr(deref(v)) for v in vs]
+
+        def make_target(kind):
+            return {
+                "var": lambda: Var(),
+                "list": lambda: [1, 2, 3],
+                "str": lambda: "abc",
+                "bytes": lambda: b"abc",
+                "shortlist": lambda: [1],
+                "empty": lambda: [],
+                "int": lambda: 7,
+                "seglist_ground": lambda: SegList([ConcreteSeg([1, 2, 3])]),
+                "segstr_ground": lambda: SegString(["ab", "c"]),
+                "seglist_open": lambda: SegList([ConcreteSeg([1]), VarSeg(Var())]),
+                "segstr_open": lambda: SegString(["a", VarSeg(Var())]),
+            }[kind]()
+
+        kinds = ["var", "list", "str", "bytes", "shortlist", "empty", "int",
+                 "seglist_ground", "segstr_ground", "seglist_open", "segstr_open"]
+        shapes = [(1, True, 0), (2, False, 0), (1, True, 1), (0, True, 0), (3, False, 0)]
+        mismatches = []
+        for pair, label in (((_head_list_unify_input, _head_list_unify_input_py), "in"),
+                            ((_head_list_unify_output, _head_list_unify_output_py), "out")):
+            fc, fp = pair
+            for kind in kinds:
+                for nb, has_star, na in shapes:
+                    for prebind in (False, True):
+                        res = {}
+                        for which, fn in (("C", fc), ("Py", fp)):
+                            tr = Trail()
+                            tgt = make_target(kind)
+                            before = [Var() for _ in range(nb)]
+                            star = Var() if has_star else None
+                            after = [Var() for _ in range(na)]
+                            if prebind:
+                                for i, v in enumerate(before):
+                                    unify(v, 10 + i, tr)
+                                if star is not None:
+                                    unify(star, [77], tr)
+                                for i, v in enumerate(after):
+                                    unify(v, 20 + i, tr)
+                            try:
+                                r = fn(tgt, before, star, after, tr)
+                                res[which] = (repr(r), snap(before),
+                                              snap([star] if star is not None else []),
+                                              snap(after))
+                            except Exception as e:  # noqa: BLE001
+                                res[which] = ("EXC:" + type(e).__name__,)
+                        if res["C"] != res["Py"]:
+                            mismatches.append((label, kind, nb, has_star, na, prebind, res))
+        assert mismatches == []
+
+    def test_refcount_stable_complete_table_loop(self, load, refcount_stable):
+        m = load("rc1", PATH_SRC.replace("path", "pathrc").replace("edge", "edgerc"))
+
+        def thunk():
+            Y = Var()
+            for _ in call("pathrc", 1, Y, module=m):
+                pass
+
+        refcount_stable(thunk, iterations=1500)
+
+    def test_refcount_stable_fill_abolish_loop(self, load, refcount_stable):
+        m = load("rc2", PATH_SRC.replace("path", "pathrd").replace("edge", "edgerd"))
+        db = m.__clausal_module__.db
+
+        def thunk():
+            db.abolish_table("pathrd", 2)
+            Y = Var()
+            for _ in call("pathrd", 1, Y, module=m):
+                pass
+
+        refcount_stable(thunk, iterations=1500)
+
+    def test_solutions_propagates_runtime_error(self, load):
+        # control for A04-F009: the solutions() driver does NOT swallow it
+        m = load("rte_sol", RTE_SRC.replace("rte", "rtesol"))
+        def boom_rt():
+            raise RuntimeError("user error")
+        m.__clausal_module__.module_dict["boom_rt"] = boom_rt
+        from clausal.logic.trampoline import StepGenerator, solutions
+        pred = m.__clausal_module__.module_dict["rtesol"]
+        sg = StepGenerator(pred._get_dispatch(), None, None, None, Var(), Trail())
+        with pytest.raises(RuntimeError):
+            solutions(sg)
+
+
+# ══ A04-F001: SLG completion loses suspended-consumer derivations ═════════════
+
+
+class TestF001CompletionLosesConsumers:
+    @pytest.mark.xfail(strict=False, reason="A04-F001: completion phase cannot "
+                       "resume consumer continuations; answers silently lost")
+    def test_two_recursive_clauses_facts_first(self, load):
+        m = load("f001a", TWOREC_FACTSFIRST_SRC)
+        X = Var()
+        got = sorted(set(a[0] for a in answers(call("p", X, module=m), X)))
+        assert got == [1, 2, 3, 4, 5]
+
+    @pytest.mark.xfail(strict=False, reason="A04-F001: recursive-clause-first "
+                       "ordering loses all derived answers")
+    def test_two_recursive_clauses_rec_first(self, load):
+        m = load("f001b", TWOREC_RECFIRST_SRC)
+        X = Var()
+        got = sorted(set(a[0] for a in answers(call("p", X, module=m), X)))
+        assert got == [1, 2, 3, 4, 5]
+
+    @pytest.mark.xfail(strict=False, reason="A04-F001: inner leader completes "
+                       "prematurely in mutual recursion (rec-clause-first)")
+    def test_mutual_recursion_rec_first_ra(self, load):
+        m = load("f001c", MUTUAL_RECFIRST_SRC)
+        Y = Var()
+        got = sorted(set(a[0] for a in answers(call("ra", 1, Y, module=m), Y)))
+        assert got == [2, 4]
+
+    @pytest.mark.xfail(strict=False, reason="A04-F001: rb table marked complete "
+                       "with zero answers")
+    def test_mutual_recursion_rec_first_rb(self, load):
+        m = load("f001d", MUTUAL_RECFIRST_SRC.replace("ra", "rc").replace("rb", "rd")
+                 .replace("la", "lc").replace("lb", "ld"))
+        Y = Var()
+        got = sorted(set(a[0] for a in answers(call("rd", 1, Y, module=m), Y)))
+        assert got == [1, 3]
+
+    def test_mutual_recursion_facts_first_control(self, load):
+        # in-tree fixture ordering (base clauses first) — the passing control
+        src = MUTUAL_RECFIRST_SRC.replace("ra", "re").replace("rb", "rf") \
+                                 .replace("la", "le").replace("lb", "lf")
+        # move base clauses before recursive ones
+        src = src.replace(
+            "re(X, Y) <- (\n    rf(X, Z),\n    le(Z, Y)\n)\nre(X, Y) <- le(X, Y)",
+            "re(X, Y) <- le(X, Y)\nre(X, Y) <- (\n    rf(X, Z),\n    le(Z, Y)\n)")
+        src = src.replace(
+            "rf(X, Y) <- (\n    re(X, Z),\n    lf(Z, Y)\n)\nrf(X, Y) <- lf(X, Y)",
+            "rf(X, Y) <- lf(X, Y)\nrf(X, Y) <- (\n    re(X, Z),\n    lf(Z, Y)\n)")
+        m = load("f001e", src)
+        Y = Var()
+        got = sorted(set(a[0] for a in answers(call("re", 1, Y, module=m), Y)))
+        assert got == [2, 4]
+
+
+# ══ A04-F002: _naf_tabled unsound on never-called / other-variant subgoals ════
+
+
+class TestF002NafTabledNoEntry:
+    @pytest.mark.xfail(strict=False, reason="A04-F002: NAF on a never-called "
+                       "tabled subgoal succeeds although the goal is derivable")
+    def test_naf_before_any_positive_query(self, load):
+        m = load("f002a", NAF_SRC)
+        R = Var()
+        got = answers(call("ntp", R, module=m), R)
+        assert got == []  # tp(1,2) is a fact — negation must fail
+
+    def test_naf_after_positive_query_control(self, load):
+        m = load("f002b", NAF_SRC.replace("tp", "tq").replace("ntp", "ntq"))
+        assert sum(1 for _ in call("tq", 1, 2, module=m)) == 1
+        R = Var()
+        assert answers(call("ntq", R, module=m), R) == []
+
+    @pytest.mark.xfail(strict=False, reason="A04-F002: exact-variant lookup "
+                       "ignores a complete var-variant table holding the answer")
+    def test_naf_ignores_subsuming_complete_variant(self, load):
+        m = load("f002c", NAF_SRC.replace("tp", "tr2").replace("ntp", "ntr"))
+        X, Y = Var(), Var()
+        assert answers(call("tr2", X, Y, module=m), X, Y) == [(1, 2)]
+        R = Var()
+        got = answers(call("ntr", R, module=m), R)
+        assert got == []
+
+    @pytest.mark.xfail(strict=False, reason="A04-F002: acyclic negation chain — "
+                       "even_node(1) is provably false but succeeds as true")
+    def test_acyclic_negation_chain_truth(self, load):
+        m = load("f002d", EVEN_ODD_SRC)
+        X = Var()
+        got = sorted(a[0] for a in answers(call("even_node", X, module=m), X))
+        assert got == [2]  # even_node(1) fails: odd_node(2) is true
+
+
+# ══ A04-F003: WFS resolution is mode- and order-dependent ═════════════════════
+
+
+class TestF003WfsModeOrderDependence:
+    @pytest.mark.xfail(strict=False, reason="A04-F003: win('b') queried first "
+                       "yields a sticky undefined answer; docs say false")
+    def test_asym_win_b_first_ground(self, load):
+        m = load("f003a", WIN_ASYM_SRC.replace("win", "wing").replace("move", "movg"))
+        assert sum(1 for _ in call("wing", "b", module=m)) == 0
+
+    @pytest.mark.xfail(strict=False, reason="A04-F003: var-mode solution set "
+                       "differs from ground-mode (win('b') extra answer)")
+    def test_asym_win_var_mode(self, load):
+        m = load("f003b", WIN_ASYM_SRC.replace("win", "winv").replace("move", "movv"))
+        X = Var()
+        got = sorted(a[0] for a in answers(call("winv", X, module=m), X))
+        assert got == ["a"]
+
+
+# ══ A04-F004: query_wfs truth annotation is a stub ════════════════════════════
+
+
+class TestF004QueryWfsStub:
+    @pytest.mark.xfail(strict=False, reason="A04-F004: query_wfs hardcodes "
+                       "_truth=True; symmetric win answers are undefined")
+    def test_query_wfs_reports_undefined(self, load):
+        m = load("f004", WIN_SYM_SRC.replace("win", "winu").replace("move", "movu"))
+        X = Var()
+        res = query_wfs(m.winu(X), {"X": X}, m)
+        assert len(res) == 2
+        assert all(r["_truth"] == "undefined" for r in res)
+
+
+# ══ A04-F005: unhashable tabled answers crash add_answer ══════════════════════
+
+
+class TestF005UnhashableAnswers:
+    @pytest.mark.xfail(strict=False, reason="A04-F005: list answer → TypeError "
+                       "unhashable in TableEntry.add_answer")
+    def test_list_answer(self, load):
+        m = load("f005a", TS_LIST_SRC)
+        V = Var()
+        got = answers(call("ts", V, module=m), V)
+        assert got == [([1, 2, 3],)]
+
+    @pytest.mark.xfail(strict=False, reason="A04-F005: dict answer → TypeError")
+    def test_dict_answer(self, load):
+        m = load("f005b", TD_DICT_SRC)
+        V = Var()
+        got = answers(call("td", V, module=m), V)
+        assert got == [({"k": 7},)]
+
+    @pytest.mark.xfail(strict=False, reason="A04-F005: declared-functor term "
+                       "answer → TypeError (term instances are unhashable)")
+    def test_term_instance_answer(self, load):
+        m = load("f005c", TW_TERM_SRC)
+        V = Var()
+        got = answers(call("tw", V, module=m), V)
+        assert len(got) == 1 and type(got[0][0]).__name__ == "wrap"
+
+
+# ══ A04-F006: cross-type variant/answer conflation ════════════════════════════
+
+
+class TestF006CrossTypeConflation:
+    def test_untabled_control_keeps_all_four(self, load):
+        # 4 facts, 4 answers, types preserved
+        m = load("f006", TYPES_SRC)
+        V = Var()
+        got = []
+        for _ in call("utt", V, module=m):
+            v = deref(V)
+            got.append((repr(v), type(v).__name__))
+        assert got == [("1", "int"), ("True", "bool"), ("2.0", "float"), ("2", "int")]
+
+    @pytest.mark.xfail(strict=False, reason="A04-F006: tabled answers deduped "
+                       "by Python == — True/2 suppressed as dups of 1/2.0")
+    def test_tabled_matches_untabled_solution_set(self, load):
+        m = load("f006", TYPES_SRC)
+        V = Var()
+        got = []
+        for _ in call("tt", V, module=m):
+            v = deref(V)
+            got.append((repr(v), type(v).__name__))
+        assert got == [("1", "int"), ("True", "bool"), ("2.0", "float"), ("2", "int")]
+
+    def test_subgoal_keys_conflate_cross_type(self):
+        # mechanism guard documenting current behaviour (see A01-D001/A02-D002)
+        from clausal.logic.tabling import make_subgoal_key
+        tr = Trail()
+        assert make_subgoal_key([1], tr) == make_subgoal_key([True], tr)
+        assert make_subgoal_key([1], tr) == make_subgoal_key([1.0], tr)
+
+
+# ══ A04-F007: abnormal leader exit poisons the table ══════════════════════════
+
+
+class TestF007PoisonedEvaluatingTables:
+    @pytest.mark.xfail(strict=False, reason="A04-F007: once() abandonment leaves "
+                       "entry 'evaluating'; later queries silently partial")
+    def test_once_then_full_query(self, load):
+        m = load("f007a", PATH_SRC.replace("path", "patha").replace("edge", "edgea"))
+        Y = Var()
+        t = once(m.patha(1, Y), m)
+        assert t is not None and deref(Y) == 2
+        _query_cache.clear()
+        gc.collect()  # ensure the abandoned solve generator is finalized
+        Y2 = Var()
+        got = sorted(set(a[0] for a in answers(call("patha", 1, Y2, module=m), Y2)
+                         if not is_var(a[0])))
+        assert got == [2, 3, 4]
+
+    @pytest.mark.xfail(strict=False, reason="A04-F007: exception during leader "
+                       "leaves entry 'evaluating'; re-query silently partial "
+                       "instead of re-raising/recomputing")
+    def test_exception_then_requery(self, load):
+        m = load("f007b", BOOM_SRC)
+        with pytest.raises(ZeroDivisionError):
+            list(call("boom", Var(), module=m))
+        with pytest.raises(ZeroDivisionError):
+            list(call("boom", Var(), module=m))
+
+    def test_poisoned_entry_status_mechanism(self, load):
+        # mechanism guard: documents the poisoned state itself
+        m = load("f007c", PATH_SRC.replace("path", "pathc").replace("edge", "edgec"))
+        Y = Var()
+        once(m.pathc(1, Y), m)
+        gc.collect()
+        store = m.__clausal_module__.db.table_store
+        statuses = {e.status for e in store.values()}
+        assert "evaluating" in statuses  # current (buggy) state — fix flips this
+
+
+# ══ A04-F008: root-level suspend sentinel yields spurious solution ════════════
+
+
+class TestF008RootSuspendSpuriousSolution:
+    @pytest.mark.xfail(strict=False, reason="A04-F008: (None, _TABLING_SUSPEND) "
+                       "misread as a solution — unbound answer yielded")
+    def test_no_unbound_answers_from_consumer_query(self, load):
+        m = load("f008", PATH_SRC.replace("path", "pathe").replace("edge", "edgee"))
+        Y = Var()
+        once(m.pathe(1, Y), m)  # poison: leaves consumer-only table state
+        gc.collect()
+        Y2 = Var()
+        got = answers(call("pathe", 1, Y2, module=m), Y2)
+        assert all(not is_var(v) for (v,) in got), f"spurious unbound answer: {got}"
+
+
+# ══ A04-F009: C _drive_until_yield swallows RuntimeError ══════════════════════
+
+
+class TestF009RuntimeErrorSwallowed:
+    @pytest.mark.xfail(strict=False, reason="A04-F009: user RuntimeError from a "
+                       "++ escape is converted to silent failure by call()/solve()")
+    def test_call_propagates_user_runtime_error(self, load):
+        m = load("f009", RTE_SRC)
+        def boom_rt():
+            raise RuntimeError("user error")
+        m.__clausal_module__.module_dict["boom_rt"] = boom_rt
+        with pytest.raises(RuntimeError):
+            list(call("rte", Var(), module=m))
+
+
+# ══ A04-F010: when-disjunction fired flag survives backtracking ═══════════════
+
+
+class TestF010WhenDisjunctionFiredFlag:
+    @pytest.mark.xfail(strict=False, reason="A04-F010: fired flag is not "
+                       "trailed; goal skipped in the surviving branch")
+    def test_goal_fires_in_second_branch(self, load):
+        m = load("f010", WHEN_SRC)
+        R = Var()
+        got = []
+        for _ in call("w8", R, module=m):
+            v = deref(R)
+            got.append("UNBOUND" if is_var(v) else v)
+        assert got == ["fired"]
+
+
+# ══ A04-F011: freeze commits to the first solution of the frozen goal ═════════
+
+
+class TestF011FreezeFirstSolutionOnly:
+    @pytest.mark.xfail(strict=False, reason="A04-F011: frozen goal is semidet — "
+                       "choice points of the frozen goal are discarded "
+                       "(SWI freeze/2 backtracks); design question parked")
+    def test_frozen_goal_backtracks(self, load):
+        m = load("f011", FREEZE_SRC)
+        X, Y = Var(), Var()
+        got = answers(call("f9", X, Y, module=m), X, Y)
+        assert got == [(1, 10), (1, 20)]
+
+    def test_frozen_goal_first_solution_binding_guard(self, load):
+        # current behaviour: first solution's bindings stick (regression guard)
+        m = load("f011b", FREEZE_SRC.replace("f9", "f9b"))
+        X, Y = Var(), Var()
+        got = answers(call("f9b", X, Y, module=m), X, Y)
+        assert got == [(1, 10)]
