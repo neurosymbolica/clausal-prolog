@@ -2791,12 +2791,20 @@ class EmbedTransformer(NodeTransformer):
         declared field names rather than inferring them from the first clause.
         """
         statements = []
-        module_name = ""
         exports_info = []  # for ModuleAST accumulation
-        if len(args) >= 1 and isinstance(args[0], Name):
-            module_name = args[0].id
-        # args[1] should be the export list: ast.List of Call nodes.
-        if len(args) >= 2 and isinstance(args[1], List):
+        # A10-F012: validate shape instead of silently dropping malformed
+        # parts (every other directive raises on bad args).
+        if len(args) < 1 or len(args) > 2 or not isinstance(args[0], Name):
+            raise SyntaxError(
+                "-module requires a name and an export list: "
+                "-module(name, [ ... ])")
+        module_name = args[0].id
+        if len(args) == 2 and not isinstance(args[1], List):
+            raise SyntaxError(
+                "-module requires a name and an export list: "
+                "-module(name, [ ... ])")
+        # args[1] should be the export list: ast.List of Call / Name nodes.
+        if len(args) == 2:
             for export in args[1].elts:
                 if isinstance(export, Name):
                     # Bare atom: generate zero-arity PredicateMeta class
@@ -2824,6 +2832,9 @@ class EmbedTransformer(NodeTransformer):
                                 functor_name, field_names, expr_stmt
                             )
                         )
+                # Other item shapes (e.g. the ISO ``foo/2`` arity form, a
+                # BinOp) are not pre-registered here — the signature is taken
+                # from the first clause — but the list itself is well-formed.
         transformer._module_items.append(
             ModuleDeclItem(module_name=module_name, exports=exports_info)
         )
@@ -2842,10 +2853,14 @@ class EmbedTransformer(NodeTransformer):
         """
         statements = []
         private_info = []  # for ModuleAST accumulation
-        export_list = args[0] if len(args) >= 1 and isinstance(args[0], List) else None
-        if export_list is None:
-            transformer._module_items.append(PrivateDeclItem(items=[]))
-            return replace(Pass(), expr_stmt)
+        # A10-F012: a missing/malformed list (e.g. -private(helper(X))) used to
+        # silently become a no-op, so the predicate signature was later
+        # inferred from the first clause with no warning. Raise instead.
+        if len(args) != 1 or not isinstance(args[0], List):
+            raise SyntaxError(
+                "-private requires a single list: "
+                "-private([atom, pred(A, B), ...])")
+        export_list = args[0]
         for item in export_list.elts:
             if isinstance(item, Name):
                 # Bare atom: generate zero-arity PredicateMeta class
@@ -2871,6 +2886,8 @@ class EmbedTransformer(NodeTransformer):
                             functor_name, field_names, expr_stmt
                         )
                     )
+            # Other item shapes (e.g. the ISO ``foo/2`` arity form) are not
+            # pre-registered here; the list itself is still well-formed.
         transformer._module_items.append(PrivateDeclItem(items=private_info))
         if not statements:
             return replace(Pass(), expr_stmt)

@@ -455,9 +455,6 @@ def test_F011_guard_zero_arity_rule(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F012: -private(pred(X)) without a "
-                   "list is silently dropped (returns Pass); other directives "
-                   "raise SyntaxError on malformed args")
 def test_F012_malformed_private_raises(tmp_path):
     with pytest.raises(SyntaxError):
         _load(tmp_path, """
@@ -466,8 +463,6 @@ def test_F012_malformed_private_raises(tmp_path):
         """)
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F012: -module with a non-Name "
-                   "module name / non-list exports silently drops them")
 def test_F012_malformed_module_exports_raise(tmp_path):
     with pytest.raises(SyntaxError):
         _load(tmp_path, """
