@@ -71,17 +71,15 @@ def test_F001_regex_shim_importable():
     assert hasattr(clausal.regex, "match")
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F002: re predicates str() their "
-                   "subject; an unbound Var matches its own internal name")
 def test_F002_search_unbound_subject_no_solution():
+    # A11-F002 (fixed): unbound subject fails cleanly, no repr scanning.
     from clausal.modules.py.re import _search_2
     sols = list(_search_2(r"^_\d+$", Var(), Trail(), None))
     assert sols == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F002: char-list subject coerced "
-                   "to its Python repr, violating strings-as-lists Liskov")
 def test_F002_match_charlist_equals_string(tmp_path):
+    # A11-F002 (fixed): char-list subject joined per strings-as-lists Liskov.
     m = _load(tmp_path, '''
         -import_from(regex, [match, replace])
         M2(S) <- match(r"\\d+", S)
@@ -92,9 +90,8 @@ def test_F002_match_charlist_equals_string(tmp_path):
     assert _values(m.R4(["a", "b", "c"], R), R, m) == ["aXc"]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F002: bound non-str subject "
-                   "silently stringified — search finds repr punctuation")
 def test_F002_charlist_repr_false_positive(tmp_path):
+    # A11-F002 (fixed): char-list joins to "a", no repr-quote false positive.
     m = _load(tmp_path, '''
         -import_from(regex, [search])
         SQ(S) <- search(r"'", S)

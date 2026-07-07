@@ -31,9 +31,45 @@ from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE, StepGenerator
+from clausal.logic.runtime._seg_helpers import maybe_promote_to_str
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+# Sentinel: the subject cannot be interpreted as a string, so the predicate
+# must fail cleanly (yield no solution) rather than scan a Python repr.
+_NO_SUBJECT = object()
+
+
+def _coerce_subject(string: Any) -> Any:
+    """Resolve a match/search/replace/split subject to a ``str``.
+
+    Never ``str()``-coerces an arbitrary term (F002): an unbound Var used to
+    match its own internal name ("_23"), and a char-list matched the repr
+    brackets/quotes. Instead:
+
+    - unbound Var → ``_NO_SUBJECT`` (fail cleanly — no repr scanning);
+    - ``str`` → itself;
+    - a ``SegString``/``SegList`` that walks to a ``str`` → that ``str``;
+    - a list/tuple of 1-char strings → joined ``str`` (strings-as-lists
+      Liskov, docs/strings_as_lists.md); empty list → "";
+    - anything else (int, non-char list, …) → ``_NO_SUBJECT``.
+    """
+    s = deref(string)
+    if is_var(s):
+        return _NO_SUBJECT
+    walk = getattr(s, "__walk__", None)
+    if callable(walk):
+        s = walk()
+    if isinstance(s, str):
+        return s
+    if isinstance(s, (list, tuple)):
+        if not s:
+            return ""
+        promoted = maybe_promote_to_str([deref(e) for e in s])
+        if isinstance(promoted, str):
+            return promoted
+    return _NO_SUBJECT
 
 
 def _compile_pattern(pat: Any) -> "_re.Pattern":
@@ -64,9 +100,11 @@ def _groups_dict(m: "_re.Match") -> dict | tuple:
 def _match_2(pat, string, trail, k):
     """match/2: boolean test — re.match(pattern, string)."""
     pat = deref(pat)
-    string = deref(string)
+    string = _coerce_subject(string)
+    if string is _NO_SUBJECT:
+        return
     compiled = _compile_pattern(pat)
-    m = compiled.match(str(string))
+    m = compiled.match(string)
     if m is not None:
         yield None
 
@@ -74,9 +112,11 @@ def _match_2(pat, string, trail, k):
 def _match_3(pat, string, groups, trail, k):
     """match/3: explicit group extraction — re.match(pattern, string) → groups dict."""
     pat = deref(pat)
-    string = deref(string)
+    string = _coerce_subject(string)
+    if string is _NO_SUBJECT:
+        return
     compiled = _compile_pattern(pat)
-    m = compiled.match(str(string))
+    m = compiled.match(string)
     if m is not None:
         result = _groups_dict(m)
         if unify(groups, result, trail):
@@ -89,9 +129,11 @@ def _match_3(pat, string, groups, trail, k):
 def _search_2(pat, string, trail, k):
     """search/2: boolean test — re.search(pattern, string)."""
     pat = deref(pat)
-    string = deref(string)
+    string = _coerce_subject(string)
+    if string is _NO_SUBJECT:
+        return
     compiled = _compile_pattern(pat)
-    m = compiled.search(str(string))
+    m = compiled.search(string)
     if m is not None:
         yield None
 
@@ -99,9 +141,11 @@ def _search_2(pat, string, trail, k):
 def _search_3(pat, string, groups, trail, k):
     """search/3: explicit group extraction — re.search(pattern, string) → groups dict."""
     pat = deref(pat)
-    string = deref(string)
+    string = _coerce_subject(string)
+    if string is _NO_SUBJECT:
+        return
     compiled = _compile_pattern(pat)
-    m = compiled.search(str(string))
+    m = compiled.search(string)
     if m is not None:
         result = _groups_dict(m)
         if unify(groups, result, trail):
@@ -115,9 +159,11 @@ def _replace_4(pat, repl, string, result, trail, k):
     """replace/4: re.sub(pattern, replacement, string) → result."""
     pat = deref(pat)
     repl = deref(repl)
-    string = deref(string)
+    string = _coerce_subject(string)
+    if string is _NO_SUBJECT:
+        return
     compiled = _compile_pattern(pat)
-    out = compiled.sub(repl, str(string))
+    out = compiled.sub(repl, string)
     if unify(result, out, trail):
         yield None
 
@@ -128,9 +174,11 @@ def _replace_4(pat, repl, string, result, trail, k):
 def _split_3(pat, string, parts, trail, k):
     """split/3: re.split(pattern, string) → parts list."""
     pat = deref(pat)
-    string = deref(string)
+    string = _coerce_subject(string)
+    if string is _NO_SUBJECT:
+        return
     compiled = _compile_pattern(pat)
-    out = compiled.split(str(string))
+    out = compiled.split(string)
     if unify(parts, out, trail):
         yield None
 
@@ -145,9 +193,12 @@ def _findall_3(this_generator, _proceed, _fail, _catcher, pat, string, match_var
     Groups → each match is a tuple of group strings.
     """
     pat = deref(pat)
-    string = deref(string)
+    string = _coerce_subject(string)
+    if string is _NO_SUBJECT:
+        yield (_fail, DONE)
+        return
     compiled = _compile_pattern(pat)
-    matches = compiled.finditer(str(string))
+    matches = compiled.finditer(string)
     for m in matches:
         mark = trail.mark()
         groups = m.groups()
