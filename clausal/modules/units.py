@@ -110,8 +110,11 @@ class _UnitsPredicate(ModulePredicate):
         result._dims = _dims_combine(self._dims or {}, other._dims or {}, sign=-1)
         return result
 
-    def __pow__(self, exp: int | float) -> "_UnitsPredicate":
-        if not isinstance(exp, (int, float)):
+    def __pow__(self, exp: int) -> "_UnitsPredicate":
+        # Integer exponents only: a fractional exponent would build fractional
+        # dimensions that Quantity.__pow__ itself refuses, so nothing else can
+        # produce or consume them consistently (F057).
+        if not isinstance(exp, int) or isinstance(exp, bool):
             return NotImplemented
         result = _UnitsPredicate(f"({self._name}**{exp})")
         result._dims = {k: v * exp for k, v in (self._dims or {}).items() if v * exp != 0}

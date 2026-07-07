@@ -756,9 +756,8 @@ def test_F056_prefix_in_unit_parens_clean_error():
         Quantity(5, 1000)  # currently AttributeError
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F057: _UnitsPredicate.__pow__ "
-                   "accepts float exponents; Quantity itself refuses them")
 def test_F057_unit_pred_pow_integer_only():
+    # A11-F057 (fixed): float exponents rejected.
     from clausal.modules.units import Metre
     with pytest.raises(Exception):
         Metre ** 0.5
