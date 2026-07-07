@@ -20,6 +20,7 @@ Edge representation
 from __future__ import annotations
 
 import heapq
+import itertools
 from collections import deque
 
 from clausal.logic.variables import deref, is_var, unify
@@ -49,7 +50,14 @@ def _extract_vertices(edges):
         e = deref(edge)
         if isinstance(e, list) and len(e) >= 2:
             for node in (deref(e[0]), deref(e[1])):
-                h = id(node) if isinstance(node, list) else node
+                # Fall back to object identity for any unhashable vertex
+                # (list, dict, set) so it doesn't crash with a raw TypeError
+                # (F052).
+                try:
+                    hash(node)
+                    h = node
+                except TypeError:
+                    h = id(node)
                 if h not in seen:
                     seen.add(h)
                     result.append(node)
@@ -555,11 +563,16 @@ def _min_spanning_tree__3(this_generator, _proceed, _fail, _catcher, edges, tree
         visited = {verts[0]}
         tree_edges = []
         cost = 0
+        # A monotone insertion counter breaks weight ties before the heap ever
+        # compares the vertices themselves, which may be of mixed, unorderable
+        # types (int vs str) — F052. It also makes tie-breaks deterministic
+        # (insertion order) rather than id()-dependent.
+        counter = itertools.count()
         heap = []
         for neighbor, w in wadj.get(verts[0], []):
-            heapq.heappush(heap, (w, verts[0], neighbor))
+            heapq.heappush(heap, (w, next(counter), verts[0], neighbor))
         while heap and len(visited) < len(verts):
-            w, u, v = heapq.heappop(heap)
+            w, _, u, v = heapq.heappop(heap)
             if v in visited:
                 continue
             visited.add(v)
@@ -567,7 +580,7 @@ def _min_spanning_tree__3(this_generator, _proceed, _fail, _catcher, edges, tree
             cost += w
             for neighbor, nw in wadj.get(v, []):
                 if neighbor not in visited:
-                    heapq.heappush(heap, (nw, v, neighbor))
+                    heapq.heappush(heap, (nw, next(counter), v, neighbor))
         if len(visited) < len(verts):
             # No spanning TREE exists for a disconnected graph (symmetric with
             # topological_sort failing on a cycle) — F050.

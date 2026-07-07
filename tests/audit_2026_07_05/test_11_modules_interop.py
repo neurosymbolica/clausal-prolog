@@ -637,18 +637,16 @@ def test_F051_neighbors_dedup():
     assert sols == [["b"]]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F052: MST heap tie-break "
-                   "compares mixed-type vertices → raw TypeError")
 def test_F052_mst_mixed_vertex_types():
+    # A11-F052 (fixed): monotone counter breaks weight ties before vertices.
     t, c = Var(), Var()
     sols = _gsols(G._min_spanning_tree__3,
                   [["a", "b", 1], ["a", 2, 1], [2, "b", 1]], t, c)
     assert sols  # should not raise TypeError
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F052: unhashable vertex "
-                   "(dict) crashes _extract_vertices with raw TypeError")
 def test_F052_vertices_unhashable_vertex():
+    # A11-F052 (fixed): unhashable vertices fall back to identity.
     v = Var()
     sols = _gsols(G._vertices__2, [[{"k": 1}, "b"]], v, out=v)
     assert isinstance(sols, list)  # clean fail/success, not TypeError
