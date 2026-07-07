@@ -607,9 +607,8 @@ def test_F046_guard_nonvertex_counts_isolated():
     assert _gsols(G._is_isolated__2, [["a", "b"]], "zzz") == [True]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F049: path_cost uses last "
-                   "parallel-edge weight; shortest_path uses the minimum")
 def test_F049_path_cost_parallel_edges_min():
+    # A11-F049 (fixed): path_cost keeps the minimum parallel-edge weight.
     c = Var()
     sols = _gsols(G._path_cost__3, [["a", "b", 3], ["a", "b", 5]],
                   ["a", "b"], c, out=c)

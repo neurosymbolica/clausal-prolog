@@ -365,12 +365,15 @@ def _path_cost__3(this_generator, _proceed, _fail, _catcher, edges, path, cost, 
             e = deref(edge)
             if isinstance(e, list) and len(e) >= 3:
                 u, v, w = deref(e[0]), deref(e[1]), deref(e[2])
-                weight_map[(u, v)] = w
-                weight_map[(v, u)] = w
+                # Keep the minimum weight across parallel edges so path_cost
+                # agrees with shortest_path (which keeps all parallel edges and
+                # takes the cheapest), rather than the last one seen (F049).
+                weight_map[(u, v)] = min(weight_map.get((u, v), w), w)
+                weight_map[(v, u)] = min(weight_map.get((v, u), w), w)
             elif isinstance(e, list) and len(e) == 2:
                 u, v = deref(e[0]), deref(e[1])
-                weight_map[(u, v)] = 1
-                weight_map[(v, u)] = 1
+                weight_map[(u, v)] = min(weight_map.get((u, v), 1), 1)
+                weight_map[(v, u)] = min(weight_map.get((v, u), 1), 1)
 
         total = 0
         valid = True
