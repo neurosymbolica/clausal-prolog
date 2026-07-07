@@ -41,7 +41,11 @@ def _hash_3(algorithm, data, hex_out, trail, k):
     except ValueError:
         return  # unknown algorithm
     h.update(data_bytes)
-    if unify(hex_out, h.hexdigest(), trail):
+    try:
+        digest = h.hexdigest()  # TypeError: shake_* needs a length (F019)
+    except TypeError:
+        return
+    if unify(hex_out, digest, trail):
         yield None
 
 
@@ -61,7 +65,11 @@ def _hash_bytes_3(algorithm, data, bytes_out, trail, k):
     except ValueError:
         return
     h.update(data_bytes)
-    if unify(bytes_out, h.digest(), trail):
+    try:
+        digest = h.digest()  # TypeError: shake_* needs a length (F019)
+    except TypeError:
+        return
+    if unify(bytes_out, digest, trail):
         yield None
 
 

@@ -110,8 +110,11 @@ class _UnitsPredicate(ModulePredicate):
         result._dims = _dims_combine(self._dims or {}, other._dims or {}, sign=-1)
         return result
 
-    def __pow__(self, exp: int | float) -> "_UnitsPredicate":
-        if not isinstance(exp, (int, float)):
+    def __pow__(self, exp: int) -> "_UnitsPredicate":
+        # Integer exponents only: a fractional exponent would build fractional
+        # dimensions that Quantity.__pow__ itself refuses, so nothing else can
+        # produce or consume them consistently (F057).
+        if not isinstance(exp, int) or isinstance(exp, bool):
             return NotImplemented
         result = _UnitsPredicate(f"({self._name}**{exp})")
         result._dims = {k: v * exp for k, v in (self._dims or {}).items() if v * exp != 0}
@@ -498,3 +501,9 @@ make_quantity._register(3, _simple_to_trampoline(_make_dimensioned_impl))
 
 # Register the "units" attribute hook for AttVar-based dimensional variables.
 import clausal.logic.units_constraint as _units_constraint  # noqa: F401
+
+# Re-export has_units/2 so the documented `-import_from(py.units, [...,
+# has_units, ...])` quick-start line resolves. It is also registered as a
+# global builtin; this importable wrapper shares the same implementation (F059).
+has_units = _UnitsPredicate("has_units")
+has_units._register(2, _simple_to_trampoline(_units_constraint._has_units))

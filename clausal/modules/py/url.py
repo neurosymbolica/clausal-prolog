@@ -46,7 +46,10 @@ def _parse_2(url, parts, trail, k):
     if is_var(u) or not isinstance(u, str):
         return
     parsed = _urllib_parse.urlparse(u)
-    port = parsed.port  # int or None
+    try:
+        port = parsed.port  # int or None; ValueError on out-of-range port
+    except ValueError:
+        return  # malformed port — fail cleanly (F017)
     result = DictTerm({
         "scheme": parsed.scheme,
         "host": parsed.hostname or "",

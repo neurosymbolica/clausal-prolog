@@ -52,8 +52,10 @@ class TestPrologModule:
     def test_trunc_mod_negative_dividend(self):
         # nv
         from clausal.modules.prolog import TruncMod
-        # ISO: sign follows dividend -> -1, Python %: floor mod -> 2
-        assert TruncMod(-7, 3) == -1
+        # ISO mod: sign follows the DIVISOR (floored, like Python %). A11-F020
+        # corrected this from the earlier rem semantics.
+        assert TruncMod(-7, 3) == 2
+        assert TruncMod(7, -3) == -2
 
     def test_rem_positive(self):
         # nv
@@ -202,7 +204,7 @@ class TestEndToEnd:
         assert results == [-3]
 
     def test_iso_mod(self, tmp_path):
-        """Prolog mod uses ISO sign-follows-dividend semantics."""
+        """Prolog mod uses ISO sign-follows-divisor (floored) semantics."""
         # nv
         path = _write_pl(tmp_path, "_plop_mod", """\
             my_mod(X, Y, R) :- R is X mod Y.
@@ -210,10 +212,9 @@ class TestEndToEnd:
         mod = _load_prolog_module("_plop_mod", path)
         lm = mod.__clausal_module__
         r = Var()
-        # ISO: -7 mod 3 = -1 (sign follows dividend)
-        # Python: -7 % 3 = 2 (floor mod)
+        # ISO/SWI: -7 mod 3 = 2 (sign follows the divisor; A11-F020)
         results = [deref(r) for _ in call("MyMod", -7, 3, r, module=lm)]
-        assert results == [-1]
+        assert results == [2]
 
     def test_mixed_atoms_and_arithmetic(self, tmp_path):
         """A .pl file that uses both atoms and arithmetic."""

@@ -231,6 +231,29 @@ def _get_call_name(goal: Call) -> str | None:
     return None
 
 
+def _is_regex_goal(goal: Any, ctx: _ExpansionContext) -> bool:
+    """True iff *goal* calls the regex ``match``/``search`` predicate.
+
+    Verified by identity against ``clausal.modules.py.re`` through the module's
+    own binding (mirrors :func:`_is_reflection_goal`), so a same-named
+    user predicate — ``match(A, B) <- (A is B)`` — is never hijacked (F003).
+    """
+    if not isinstance(goal, Call):
+        return False
+    name = _get_call_name(goal)
+    if name is None:
+        return False
+    short_name = name.rsplit(".", 1)[-1]
+    if short_name not in ("match", "search"):
+        return False
+    bound = ctx.module_dict.get(name)
+    if bound is None:
+        return False
+    from clausal.modules.py import re as _regex_mod
+
+    return bound is getattr(_regex_mod, short_name, None)
+
+
 def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
     """Expand match/2 and search/2 with auto-binding + pre-compilation.
 
@@ -239,18 +262,17 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
     if not isinstance(goal, Call):
         return goal
 
-    func_name = _get_call_name(goal)
-    if func_name is None:
-        return goal
-    # Support dotted names like "clausal.regex.match"
-    short_name = func_name.rsplit(".", 1)[-1] if "." in func_name else func_name
-    if short_name not in ("match", "search"):
+    if not _is_regex_goal(goal, ctx):
         return goal
 
     nargs = len(goal.args)
 
     pattern_str = _extract_static_pattern(goal)
     if pattern_str is None:
+        # Dynamic pattern (variable or f-string): group names are unknown at
+        # compile time, so wire in a runtime auto-binding fallback (F007).
+        if nargs == 2:
+            return _dynamic_autobind_chain(goal, ctx)
         return goal
 
     try:
@@ -304,6 +326,50 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
 
         unify_goal = Unify(left=target_var, right=thunk)
         chain = And(left=chain, right=unify_goal)
+
+    return chain
+
+
+def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
+    """Runtime named-group auto-binding for a dynamic ``match/2``/``search/2``.
+
+    The pattern is not a literal, so its group names are unknown until the goal
+    runs. Rewrite ``match(P, S)`` to ``match(P, S, G)`` and append one Unify per
+    clause variable: a thunk scans the runtime groups dict for a key whose
+    lowered/underscore-stripped name equals the variable's field name. When a
+    matching, non-None group value is present it binds; otherwise the thunk
+    returns the variable itself so the Unify is a harmless no-op. The goal's own
+    top-level argument variables (pattern, subject) are excluded so a group can
+    never clobber them.
+    """
+    from clausal.terms import PyThunk
+
+    groups_var = Var()
+    match_goal = Call(
+        func=goal.func,
+        args=[goal.args[0], goal.args[1], groups_var],
+        kwargs=[],
+    )
+
+    arg_vars = {id(deref(a)) for a in goal.args if is_var(deref(a))}
+
+    def _bind_if_present(g, _field, _self):
+        if isinstance(g, dict):
+            for key, val in g.items():
+                if isinstance(key, str) and key.lstrip("_").lower() == _field \
+                        and val is not None:
+                    return val
+        return _self
+
+    chain = match_goal
+    for field_name, target_var in ctx._clause_vars.items():
+        if id(deref(target_var)) in arg_vars:
+            continue
+        thunk = PyThunk(
+            lambda g, _f=field_name, _v=target_var: _bind_if_present(g, _f, _v),
+            (groups_var,),
+        )
+        chain = And(left=chain, right=Unify(left=target_var, right=thunk))
 
     return chain
 

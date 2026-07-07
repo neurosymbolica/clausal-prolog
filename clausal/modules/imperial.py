@@ -66,7 +66,9 @@ fluid_ounce_uk    = Quantity(2.84130625e-5,       {Metre: 3})
 # Pressure  (stored as Pascals = kg/(m·s²))
 # ═════════════════════════════════════════════════════════════════════════════
 
-psi               = Quantity(6_894.757,           {Kilogram: 1, Metre: -1, Second: -2})
+# psi = 1 lbf / 1 in² — derived exactly (was rounded to 6_894.757) — F055
+psi               = Quantity(pound_force.value / inch.value ** 2,
+                                                  {Kilogram: 1, Metre: -1, Second: -2})
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Energy  (stored as Joules = kg·m²/s²)
@@ -81,7 +83,9 @@ kilowatt_hour     = Quantity(3_600_000.0,         {Kilogram: 1, Metre: 2, Second
 # Power  (stored as Watts = kg·m²/s³)
 # ═════════════════════════════════════════════════════════════════════════════
 
-horsepower        = Quantity(745.69987,           {Kilogram: 1, Metre: 2, Second: -3})
+# 1 hp = 550 ft·lbf/s — derived exactly (was rounded to 745.69987) — F055
+horsepower        = Quantity(550 * foot.value * pound_force.value,
+                                                  {Kilogram: 1, Metre: 2, Second: -3})
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Speed  (stored as m/s)

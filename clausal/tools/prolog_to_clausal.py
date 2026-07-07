@@ -12,7 +12,18 @@ Public API:
 from __future__ import annotations
 
 import json
+import keyword
 from pathlib import Path
+
+
+def _is_plain_atom_name(name: str) -> bool:
+    """True if *name* can be emitted as a bare lowercase Clausal atom name."""
+    return (
+        bool(name)
+        and name[0].islower()
+        and name.isidentifier()
+        and not keyword.iskeyword(name)
+    )
 
 from clausal.tools.prolog_ast import (
     PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
@@ -88,6 +99,7 @@ _INFIX_MAP = {
     "/":    "/",
     "**":   "**",
     ",":    ",",        # conjunction stays
+    "div":  "//",       # SWI floored division → clausal // (also floored)
     "=..":  "=..",      # univ — no direct clausal equivalent, keep as comment
     "/\\":  "&",        # bitwise AND
     "\\/":  "|",        # bitwise OR
@@ -102,8 +114,8 @@ _INFIX_MAP = {
 # implementations (truncation toward zero, not floor).
 _PROLOG_QUALIFIED_OPS = {
     "//":  "TruncDiv",   # ISO truncate-div (toward zero) vs Python // (floor)
-    "mod": "TruncMod",   # ISO mod (sign follows dividend) vs Python %
-    "rem": "Rem",        # ISO remainder
+    "mod": "TruncMod",   # ISO mod (sign follows divisor) — floored, like Python %
+    "rem": "Rem",        # ISO remainder (sign follows dividend)
 }
 
 # Prolog prefix → clausal equivalent
@@ -203,6 +215,29 @@ class _PrologToClausal:
         self._dialect = dialect
         self._user_ops = operator_mappings or {}
         self._data_atoms: set[str] = set()  # atoms used as data values
+        # Per-clause variable rename table (reset in _emit_item). Prolog var
+        # names are scoped per clause; prolog_var_to_clausal is non-injective
+        # (Foo and FOO both → _foo), so without disambiguation a satisfiable
+        # clause could silently merge two variables into one (F022).
+        self._var_map: dict[str, str] = {}
+        self._var_used: set[str] = set()
+
+    def _var_name(self, name: str) -> str:
+        """Map a Prolog variable to a unique clausal name within the clause."""
+        if name == "_":
+            return "_"  # anonymous: every occurrence is independent
+        existing = self._var_map.get(name)
+        if existing is not None:
+            return existing
+        base = prolog_var_to_clausal(name)
+        candidate = base
+        n = 2
+        while candidate in self._var_used:
+            candidate = f"{base}_{n}"
+            n += 1
+        self._var_map[name] = candidate
+        self._var_used.add(candidate)
+        return candidate
 
     def emit_module(self, pmodule: PModule) -> str:
         """Emit a complete module as clausal source text."""
@@ -224,6 +259,9 @@ class _PrologToClausal:
         return body
 
     def _emit_item(self, item: PItem) -> str | None:
+        # Variable names are scoped per top-level item (clause/rule/directive).
+        self._var_map = {}
+        self._var_used = set()
         if isinstance(item, PClause):
             return self._emit_clause(item)
         if isinstance(item, PDCGRule):
@@ -249,6 +287,15 @@ class _PrologToClausal:
 
     def _emit_head(self, term: PTerm) -> str:
         """Emit a clause head as a clausal predicate call."""
+        # A ','/2 head is a DCG pushback (`Head, [Tokens] --> Body`), not a
+        # callable predicate — emitting it bare produced invalid Python
+        # silently (F039). Reject with a clear message.
+        if isinstance(term, PCompound) and term.functor == ",":
+            raise PrologTranslationError(
+                "DCG pushback heads ('Head, [Tokens] --> Body') are not "
+                "supported by the translator.\n"
+                "Rewrite the grammar rule without a pushback list."
+            )
         if isinstance(term, PCompound):
             name = self._predicate_name(term.functor)
             if not term.args:
@@ -371,7 +418,16 @@ class _PrologToClausal:
     # ── DCG rules ────────────────────────────────────────────────────
 
     def _emit_dcg_rule(self, rule: PDCGRule) -> str:
-        head = self._emit_head(rule.head)
+        # A ','/2 DCG head is a pushback (`Head, [Tokens] --> Body`), which
+        # Clausal expresses as `(Head, [Tokens]) >> (Body)`; translate it
+        # faithfully rather than mangling it into invalid Python (F039).
+        if isinstance(rule.head, PCompound) and rule.head.functor == ",":
+            parts = ", ".join(
+                self._emit_term(p) for p in self._flatten_conjunction(rule.head)
+            )
+            head = f"({parts})"
+        else:
+            head = self._emit_head(rule.head)
         body = self._emit_dcg_body(rule.body)
         return f"{head} >> ({body})"
 
@@ -495,7 +551,7 @@ class _PrologToClausal:
         if isinstance(term, PAtom):
             return self._emit_atom(term)
         if isinstance(term, PVar):
-            return prolog_var_to_clausal(term.name)
+            return self._var_name(term.name)
         if isinstance(term, PNumber):
             if isinstance(term.value, float):
                 return repr(term.value)
@@ -549,6 +605,14 @@ class _PrologToClausal:
             return "[]"
         if name == "{}":
             return "{}"
+        # A quoted atom, or one whose spelling is not a plain lowercase
+        # identifier (space, punctuation, uppercase) or collides with a Python
+        # keyword, cannot be emitted as a bare Clausal name — `p('hello world')`
+        # / `p(class)` would be a SyntaxError and `p('Foo')` would silently
+        # become a variable/predicate reference. Emit a Python string literal
+        # instead (F025).
+        if getattr(atom, "quoted", False) or not _is_plain_atom_name(name):
+            return repr(name)
         # Register as a data atom (will be declared via -private).
         self._data_atoms.add(name)
         return name
@@ -557,6 +621,43 @@ class _PrologToClausal:
         """Emit a compound term."""
         functor = term.functor
         args = term.args
+
+        # Control constructs in term/metacall position (e.g. inside findall's
+        # goal argument) are rejected the same way as in goal position — the
+        # bare fall-through would otherwise emit invalid `->(...)` / `*->(...)`
+        # (F024, sibling of A10-F001).
+        if functor in ("->", "*->") and len(args) == 2:
+            raise PrologTranslationError(
+                f"If-then(-else) / soft-cut ('{functor}') cannot be translated "
+                "to Clausal, even in a metacall argument.\n"
+                "Rewrite using reified conditionals or dif/2 guards.\n"
+                "See: docs/reified_ite.md, docs/for_prolog_programmers.md"
+            )
+
+        # ','/2 in term position is a tuple, NOT a flattened argument list:
+        # emitting it bare turned foo(a, (b, c)) into a foo/3 call (F023).
+        if functor == "," and len(args) == 2:
+            parts = ", ".join(
+                self._emit_term(p) for p in self._flatten_conjunction(term)
+            )
+            return f"({parts})"
+
+        # Univ: T =.. L → unpack(T, L) (=.. is not valid Clausal syntax) — F033.
+        if functor == "=.." and len(args) == 2:
+            left = self._emit_term(args[0])
+            right = self._emit_term(args[1])
+            return f"unpack({left}, {right})"
+
+        # Module-qualified goal: Module:Goal → Module.Goal(...) (F033).
+        if functor == ":" and len(args) == 2 and isinstance(args[0], PAtom):
+            module = args[0].name
+            goal = args[1]
+            if isinstance(goal, PCompound):
+                goal_name = _REVERSE_BUILTIN_MAP.get(goal.functor, goal.functor)
+                inner = ", ".join(self._emit_term(a) for a in goal.args)
+                return f"{module}.{goal_name}({inner})"
+            if isinstance(goal, PAtom):
+                return f"{module}.{goal.name}()"
 
         # Check user-defined operator mappings
         if functor in self._user_ops:
@@ -631,7 +732,7 @@ class _PrologToClausal:
         "xor": 1, "\\/": 2, "/\\": 3,
         "<<": 4, ">>": 4,
         "+": 5, "-": 5,
-        "*": 6, "/": 6,
+        "*": 6, "/": 6, "div": 6,
         "**": 8,
     }
 
@@ -640,7 +741,7 @@ class _PrologToClausal:
         if isinstance(term, PNumber):
             return str(term.value) if isinstance(term.value, int) else repr(term.value)
         if isinstance(term, PVar):
-            return prolog_var_to_clausal(term.name)
+            return self._var_name(term.name)
         if isinstance(term, PAtom):
             return term.name
         if isinstance(term, PCompound):
@@ -653,8 +754,15 @@ class _PrologToClausal:
             # Arithmetic binary operators
             if len(term.args) == 2 and term.functor in self._EXPR_PREC:
                 my_prec = self._EXPR_PREC[term.functor]
-                left = self._emit_expr(term.args[0], my_prec)
-                right = self._emit_expr(term.args[1], my_prec + 1)
+                if term.functor == "**":
+                    # ** is right-associative in Python: the LEFT child needs
+                    # parens at equal precedence so (2**3)**2 doesn't collapse
+                    # to 2**3**2 == 2**(3**2) (F030).
+                    left = self._emit_expr(term.args[0], my_prec + 1)
+                    right = self._emit_expr(term.args[1], my_prec)
+                else:
+                    left = self._emit_expr(term.args[0], my_prec)
+                    right = self._emit_expr(term.args[1], my_prec + 1)
                 op = _INFIX_MAP.get(term.functor, term.functor)
                 result = f"{left} {op} {right}"
                 if my_prec < parent_prec:

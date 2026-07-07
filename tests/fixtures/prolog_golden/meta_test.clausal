@@ -1,6 +1,6 @@
-Squares(_numbers, _squares) <- (findall(_square, in_(X, _numbers) , _square := X * X, _squares))
+Squares(_numbers, _squares) <- (findall(_square, (in_(X, _numbers), _square := X * X), _squares))
 
-Positives(_numbers, _positives) <- (findall(X, in_(X, _numbers) , X > 0, _positives))
+Positives(_numbers, _positives) <- (findall(X, (in_(X, _numbers), X > 0), _positives))
 
 UniqueMembers(_numbers, _unique) <- (setof(X, in_(X, _numbers), _unique))
 
@@ -18,15 +18,15 @@ Test('all positive fails: [1,-2,3]') <- (not AllPositive([1, -2, 3]))
 
 Test('findall basic: member of [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), L == [1, 2, 3])
 
-Test('findall with filter: X > 1') <- (findall(X, in_(X, [1, 2, 3]) , X > 1, L), L == [2, 3])
+Test('findall with filter: X > 1') <- (findall(X, (in_(X, [1, 2, 3]), X > 1), L), L == [2, 3])
 
 Test('findall empty: no solutions yields []') <- (findall(X, False, L), L == [])
 
-Test('findall cartesian product') <- (findall([X, Y], in_(X, ['a', 'b']) , in_(Y, [1, 2]), L), L == [['a', 1], ['a', 2], ['b', 1], ['b', 2]])
+Test('findall cartesian product') <- (findall([X, Y], (in_(X, ['a', 'b']), in_(Y, [1, 2])), L), L == [['a', 1], ['a', 2], ['b', 1], ['b', 2]])
 
 Test('findall no side effects on outer vars') <- (findall(X, in_(X, [10, 20]), L), L == [10, 20])
 
-Test('findall nested: outer + inner') <- (findall([Y, _inner], in_(Y, [10, 20]) , findall(X, in_(X, [1, 2]), _inner), L), L == [[10, [1, 2]], [20, [1, 2]]])
+Test('findall nested: outer + inner') <- (findall([Y, _inner], (in_(Y, [10, 20]), findall(X, in_(X, [1, 2]), _inner)), L), L == [[10, [1, 2]], [20, [1, 2]]])
 
 Test('bagof basic') <- (bagof(X, in_(X, [1, 2]), L), L == [1, 2])
 

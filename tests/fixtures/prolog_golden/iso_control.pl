@@ -47,7 +47,7 @@ test("triple conjunction") :-
     X = 1,
     Y = 2,
     Z = 3,
-    X + Y + Z == 6.
+    X + Y + Z =:= 6.
 
 test("disjunction first succeeds") :-
     X = 1 ; X = 2.

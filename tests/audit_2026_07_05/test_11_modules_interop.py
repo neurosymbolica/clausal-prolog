@@ -65,24 +65,21 @@ def _gsols(fn, *args, out=None):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F001: clausal/regex.py imports "
-                   "nonexistent clausal.modules.regex (impl is modules/py/re.py)")
 def test_F001_regex_shim_importable():
+    """A11-F001 (fixed): clausal/regex.py re-exports modules/py/re.py."""
     import clausal.regex
     assert hasattr(clausal.regex, "match")
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F002: re predicates str() their "
-                   "subject; an unbound Var matches its own internal name")
 def test_F002_search_unbound_subject_no_solution():
+    # A11-F002 (fixed): unbound subject fails cleanly, no repr scanning.
     from clausal.modules.py.re import _search_2
     sols = list(_search_2(r"^_\d+$", Var(), Trail(), None))
     assert sols == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F002: char-list subject coerced "
-                   "to its Python repr, violating strings-as-lists Liskov")
 def test_F002_match_charlist_equals_string(tmp_path):
+    # A11-F002 (fixed): char-list subject joined per strings-as-lists Liskov.
     m = _load(tmp_path, '''
         -import_from(regex, [match, replace])
         M2(S) <- match(r"\\d+", S)
@@ -93,9 +90,8 @@ def test_F002_match_charlist_equals_string(tmp_path):
     assert _values(m.R4(["a", "b", "c"], R), R, m) == ["aXc"]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F002: bound non-str subject "
-                   "silently stringified — search finds repr punctuation")
 def test_F002_charlist_repr_false_positive(tmp_path):
+    # A11-F002 (fixed): char-list joins to "a", no repr-quote false positive.
     m = _load(tmp_path, '''
         -import_from(regex, [search])
         SQ(S) <- search(r"'", S)
@@ -105,9 +101,8 @@ def test_F002_charlist_repr_false_positive(tmp_path):
     assert list(solve(m.SQ(["a"]), module=m)) == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F003: goal expansion hijacks any "
-                   "predicate named match/search (name-only gate)")
 def test_F003_user_defined_match_not_hijacked(tmp_path):
+    # A11-F003 (fixed): regex expansion gated on object identity, not name.
     m = _load(tmp_path, '''
         match(A, B) <- (A is B)
         Caller(X) <- match("hello", X)
@@ -116,9 +111,8 @@ def test_F003_user_defined_match_not_hijacked(tmp_path):
     assert _values(m.Caller(X), X, m) == ["hello"]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F004: re.PatternError bypasses "
-                   "catch/3 catch-all (++-thunk Python errors ARE caught)")
 def test_F004_invalid_pattern_catchable(tmp_path):
+    # A11-F004 (fixed): module-predicate errors are catchable via catch/3.
     m = _load(tmp_path, '''
         -private([caught])
         -import_from(regex, [match])
@@ -129,17 +123,15 @@ def test_F004_invalid_pattern_catchable(tmp_path):
     assert [str(v) for v in out] == ["caught"]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F004: re.replace leaks raw "
-                   "TypeError on unbound replacement arg")
 def test_F004_replace_unbound_repl_fails_cleanly():
+    # A11-F004 (fixed): unbound replacement fails cleanly.
     from clausal.modules.py.re import _replace_4
     sols = list(_replace_4("x", Var(), "x", Var(), Trail(), None))
     assert sols == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F005: unregistered arity fails "
-                   "silently on multi-arity py.* predicates")
 def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
+    # A11-F005 (fixed): unregistered arity raises a catchable existence error.
     m = _load(tmp_path, '''
         -import_from(regex, [match])
         Bad(S) <- match(r"x", S, G, H)
@@ -148,9 +140,8 @@ def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
         list(solve(m.Bad("x"), module=m))
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F006: unnamed group values "
-                   "unreachable when any named group is present")
 def test_F006_mixed_groups_expose_positional_values(tmp_path):
+    # A11-F006 (fixed): unnamed groups added under 1-based int keys.
     m = _load(tmp_path, '''
         -import_from(regex, [match])
         M(S, G) <- match(r"(?P<A>\\d+)-(\\d+)", S, G)
@@ -160,9 +151,8 @@ def test_F006_mixed_groups_expose_positional_values(tmp_path):
     assert g.get("A") == "1" and "2" in g.values()
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F007: dynamic patterns silently "
-                   "skip named-group auto-binding (undocumented)")
 def test_F007_dynamic_pattern_autobind_or_documented(tmp_path):
+    # A11-F007 (fixed): dynamic patterns auto-bind present named groups.
     m = _load(tmp_path, '''
         -import_from(regex, [match])
         Dyn(P, S, YEAR) <- match(P, S)
@@ -213,9 +203,8 @@ def test_guard_regex_ground_modes_match_re_oracle(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F010: keyword-form heads reify "
-                   "positionally in WRITTEN order; runtime canonicalizes by name")
 def test_F010_keyword_head_reify_matches_runtime_order():
+    # A11-F010 (fixed): keyword heads reify as [name, value] kwargs pairs.
     from clausal.reflection import reify_source
     items = reify_source('kp(x=1, y=2),\nkp(y=20, x=10),\n')
     second = items[1].head
@@ -223,27 +212,24 @@ def test_F010_keyword_head_reify_matches_runtime_order():
     assert list(second.args) == [10, 20] or ["x", 10] in list(second.kwargs)
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F011: anonymous-var numbering _1 "
-                   "collides with a real user variable named _1")
 def test_F011_anon_var_does_not_alias_user_underscore_one():
+    # A11-F011 (fixed): anonymous vars use non-identifier #anonN names.
     from clausal.reflection import reify_source
     clause = reify_source('Foo(_1, _, X) <- Bar(_1, _, X)\n')[0]
     a0, a1 = clause.head.args[0], clause.head.args[1]
     assert a0 != a1  # user _1 and anonymous _ are distinct at runtime
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F012: reify_ast ' < -' arrow "
-                   "repair corrupts genuine X < -1 comparisons")
 def test_F012_reify_ast_preserves_lt_negative():
+    # A11-F012 (fixed): only the top-level arrow is repaired.
     from clausal.reflection import reify_ast, reify_source
     got = reify_ast(ast.parse('Foo(X) <- (X < -1)'))
     want = reify_source('Foo(X) <- (X < -1)')[0]
     assert type(got.goals[0]).__name__ == type(want.goals[0]).__name__ == "Lt"
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F013: dict literal reifies as "
-                   "Goal('DictTerm',...); identical arrow pattern never matches")
 def test_F013_dict_literal_pattern_matches(tmp_path):
+    # A11-F013 (fixed): dict literals reify as raw dicts, matching patterns.
     m = _load(tmp_path, '''
         -import_from(reflection, [reified_clause])
         DictPattern(SRC) <- reified_clause(SRC, Pt({"k": 5}) <- True)
@@ -251,9 +237,8 @@ def test_F013_dict_literal_pattern_matches(tmp_path):
     assert len(list(solve(m.DictPattern('Pt({"k": 5}),\n'), module=m))) == 1
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F014: reflection builtins fail "
-                   "silently on unbound source (docs claim Clause-match parity)")
 def test_F014_reified_item_unbound_source_instantiation_error(tmp_path):
+    # A11-F014 (fixed): unbound source raises instantiation_error.
     from clausal.logic.exceptions import LogicException
     m = _load(tmp_path, '''
         -import_from(reflection, [reified_item])
@@ -277,9 +262,8 @@ def test_guard_reified_item_enumerates(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F015: date/4 int()-truncates "
-                   "float components instead of rejecting them")
 def test_F015_date4_rejects_float_components():
+    # A11-F015 (fixed): float components rejected, not truncated.
     from clausal.modules.py.datetime import _date_4
     sols = list(_date_4(2020.9, 1.9, 5, Var(), Trail(), None))
     assert sols == []  # stdlib datetime.date raises TypeError on floats
@@ -293,9 +277,8 @@ def test_F015_guard_date4_construct_and_decompose():
     assert len(sols) == 1 and deref(D) == pydt.date(2020, 1, 5)
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F016: date_between raises raw "
-                   "TypeError on date/datetime mix (siblings fail cleanly)")
 def test_F016_date_between_mixed_types_fails_cleanly():
+    # A11-F016 (fixed): date/datetime mix fails cleanly.
     import datetime as pydt
     from clausal.modules.py.datetime import _date_between_3
     gen = _date_between_3(None, "P", "F", None,
@@ -305,25 +288,22 @@ def test_F016_date_between_mixed_types_fails_cleanly():
     assert sols == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F017: url.parse leaks ValueError "
-                   "on out-of-range port instead of failing cleanly")
 def test_F017_url_parse_bad_port_fails_cleanly():
+    # A11-F017 (fixed): out-of-range port fails cleanly.
     from clausal.modules.py.url import _parse_2
     sols = list(_parse_2("http://h:99999/", Var(), Trail(), None))
     assert sols == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F018: http.get leaks ValueError "
-                   "on malformed URL (refused connection fails cleanly)")
 def test_F018_http_get_malformed_url_fails_cleanly():
+    # A11-F018 (fixed): malformed URL fails cleanly.
     from clausal.modules.py.http import _get_2
     sols = list(_get_2("not-a-url", Var(), Trail(), None))
     assert sols == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F019: hash/3 leaks TypeError for "
-                   "shake_* variable-length digests")
 def test_F019_hash_shake_fails_cleanly():
+    # A11-F019 (fixed): shake_* variable-length digest fails cleanly.
     from clausal.modules.py.hash import _hash_3
     sols = list(_hash_3("shake_128", "abc", Var(), Trail(), None))
     assert sols == []
@@ -343,17 +323,15 @@ def test_F019_guard_hash_sha256_matches_hashlib():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F020: TruncMod implements ISO "
-                   "rem, not ISO mod (sign must follow the divisor)")
 def test_F020_mod_is_floored():
+    # A11-F020 (fixed): TruncMod is floored ISO mod (sign follows divisor).
     from clausal.modules.prolog import TruncMod
     assert TruncMod(-7, 3) == 2      # ISO: -7 mod 3 =:= 2
     assert TruncMod(7, -3) == -2     # sign follows divisor
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F021: TruncDiv routes through "
-                   "float — loses precision on ints >= 2**53")
 def test_F021_truncdiv_bignum_exact():
+    # A11-F021 (fixed): TruncDiv uses exact integer arithmetic.
     from clausal.modules.prolog import TruncDiv
     n = 10 ** 18 + 1
     assert TruncDiv(n, 1) == n
@@ -365,9 +343,8 @@ def test_F021_truncdiv_bignum_exact():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F022: Foo and FOO both map to "
-                   "_foo — distinct Prolog variables silently merged")
 def test_F022_var_mapping_injective():
+    # A11-F022 (fixed): per-clause rename table disambiguates collisions.
     import re as _re
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("p(Foo, FOO) :- Foo = 1, FOO = 2.\n")
@@ -375,42 +352,37 @@ def test_F022_var_mapping_injective():
     assert v1 != v2
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F023: ','/2 argument flattened "
-                   "in emission — foo/2 fact silently becomes Foo/3")
 def test_F023_tuple_arg_arity_preserved():
+    # A11-F023 (fixed): ,/2 in arg position emits a tuple.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("foo(a, (b, c)).\n")
     assert "Foo(a, b , c)" not in out
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F024: -> in metacall args emitted "
-                   "as ->(...) instead of the designed rejection (sibling of A10-F001)")
 def test_F024_arrow_rejected_in_term_position():
+    # A11-F024 (fixed): -> in term position is rejected.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal, PrologTranslationError
     with pytest.raises(PrologTranslationError):
         prolog_to_clausal("q(L) :- findall(X, (c(X) -> t ; e), L).\n")
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F025: quoted/keyword/graphic "
-                   "atoms emitted bare — invalid or silently different Clausal")
 def test_F025_atom_emission_fidelity():
+    # A11-F025 (fixed): non-identifier/keyword atoms emit as string literals.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("p('hello world').\np(class).\n")
     ast.parse(out)  # must at minimum be syntactically valid Python
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F026: ISO ops @< @> @=< @>= ^ div "
-                   "missing from every operator table (bagof ^ unparseable)")
 def test_F026_iso_operator_table_complete():
+    # A11-F026 (fixed): @<, ^ etc added to operator tables.
     from clausal.tools.prolog_parser import parse_term
     t = parse_term("bagof(X, Y^p(X,Y), L)")
     assert t.functor == "bagof" and t.args[1].functor == "^"
     assert parse_term("X @< Y").functor == "@<"
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F027: bare ':- dynamic p/1.' "
-                   "(SWI prefix-op form) fails to parse")
 def test_F027_bare_dynamic_directive():
+    # A11-F027 (fixed): bare `:- dynamic p/1.` parses via 1150 fx op.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     assert "-dynamic(P/1)" in prolog_to_clausal(":- dynamic p/1.\n")
 
@@ -425,9 +397,8 @@ def test_F027_guard_paren_dynamic_directive():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F028: xfx chaining accepted "
-                   "(a=b=c, 2**3**2, x:-y:-z) — ISO syntax errors")
 def test_F028_xfx_not_chainable():
+    # A11-F028 (fixed): parser enforces xfx left-priority.
     from clausal.tools.prolog_parser import parse_term, ParseError
     with pytest.raises(ParseError):
         parse_term("a = b = c")
@@ -435,49 +406,43 @@ def test_F028_xfx_not_chainable():
         parse_term("2 ** 3 ** 2")
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F029: quoted functor 'foo'(1) "
-                   "unparseable (adjacency uses unquoted token length)")
 def test_F029_quoted_functor():
+    # A11-F029 (fixed): adjacency uses recorded token end position.
     from clausal.tools.prolog_parser import parse
     m = parse("'foo'(1).")
     assert m.items[0].head.functor == "foo"
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F034: ISO escapes (\\r, \\x41\\, "
-                   "octal, 0''', line continuation) mangled or fatal")
 def test_F034_iso_escapes():
+    # A11-F034 (fixed): full ISO 6.4.2 escape table.
     from clausal.tools.prolog_tokenizer import tokenize
     assert tokenize(r"'\r'.")[0].value == "\r"
     assert tokenize(r"'\x41\'.")[0].value == "A"
     assert tokenize("X = 0'''.")[2].value == 39
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F035: PAtom.quoted never set by "
-                   "the parser; docs promise quoted atoms → Python strings")
 def test_F035_quoted_flag_set():
+    # A11-F035 (fixed): parser sets PAtom.quoted for quoted atoms.
     from clausal.tools.prolog_parser import parse_term
     assert parse_term("'red'").quoted is True
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F037: spaced '- 1' folded to "
-                   "integer -1 (ISO: -(1)); breaks emit→parse fixpoint")
 def test_F037_spaced_minus_is_compound():
+    # A11-F037 (fixed): spaced '- 1' is the compound -(1).
     from clausal.tools.prolog_parser import parse_term
     from clausal.tools.prolog_ast import PCompound
     assert isinstance(parse_term("- 1"), PCompound)
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F038: ':- op(0, xfx, Name)' does "
-                   "not remove the operator (ISO 8.14.3.4 requires removal)")
 def test_F038_op_zero_removes():
+    # A11-F038 (fixed): op(0, ...) removes the operator.
     from clausal.tools.prolog_parser import parse, ParseError
     with pytest.raises(ParseError):
         parse(":- op(0, xfx, ===).\na === b.")
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F040: malformed numeric literals "
-                   "raise bare ValueError instead of TokenizeError with position")
 def test_F040_malformed_number_tokenize_error():
+    # A11-F040 (fixed): malformed numbers raise a positioned TokenizeError.
     from clausal.tools.prolog_tokenizer import tokenize, TokenizeError
     with pytest.raises(TokenizeError):
         tokenize("X = 0x.")
@@ -494,50 +459,44 @@ def test_guard_tokenizer_radix_and_bignum():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F030: (2**3)**2 emitted as "
-                   "2 ** 3 ** 2 — Python right-assoc gives 512, Prolog 64")
 def test_F030_pow_grouping_preserved():
+    # A11-F030 (fixed): ** emits right-associative parens.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("q(X) :- X is (2 ** 3) ** 2.\n")
     assert "(2 ** 3) ** 2" in out
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F031: Clausal // (floor div) "
-                   "exported as Prolog // (truncating)")
 def test_F031_floordiv_export_semantics():
+    # A11-F031 (fixed): // exported as floored div.
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
     out = clausal_source_to_prolog("P(X, A, B) <- (X := A // B)\n")
     assert " A // B" not in out  # must be div / floored equivalent
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F032: =:= → == round-trips to "
-                   "structural \\== semantics; arithmetic nature lost")
 def test_F032_arith_eq_roundtrip():
+    # A11-F032 (fixed): arithmetic-operand == exports as =:=.
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
     back = clausal_source_to_prolog("Q(X, Y) <- (X == Y + 1)\n")
     assert "=:=" in back or " is " in back
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F033: =.. and lists:member emit "
-                   "invalid Clausal; docs promise unpack/2 and lists.in_")
 def test_F033_univ_and_qualified_emission():
+    # A11-F033 (fixed): =.. emits unpack/2.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("q(T, L) :- T =.. L.\n")
     ast.parse(out)
     assert "unpack" in out
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F036: Cut() exported as ! — the "
-                   "exporter emits the construct Clausal forbids")
 def test_F036_no_cut_emission():
+    # A11-F036 (fixed): Cut() no longer laundered as Prolog !.
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
     out = clausal_source_to_prolog("P() <- (Q(), Cut())\n")
     assert "!" not in out
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F039: DCG pushback head emits "
-                   "invalid Python silently instead of a clear rejection")
 def test_F039_dcg_pushback_clear_error_or_valid():
+    # A11-F039 (fixed): DCG pushback head raises a clear error.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal, PrologTranslationError
     try:
         out = prolog_to_clausal("h, [t] --> b.\n")
@@ -546,9 +505,8 @@ def test_F039_dcg_pushback_clear_error_or_valid():
     ast.parse(out)  # otherwise the output must at least be valid
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F041: *-> gives generic "
-                   "ParseError token soup, not the designed clear rejection")
 def test_F041_soft_cut_clear_error():
+    # A11-F041 (fixed): *-> parses then is rejected by the translator.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal, PrologTranslationError
     with pytest.raises(PrologTranslationError, match="soft|[*]->"):
         prolog_to_clausal("p :- (a *-> b ; c).\n")
@@ -590,25 +548,22 @@ def test_guard_pow_emit_parse_fixpoint_c2p():
 from clausal.modules import graphs as G  # noqa: E402
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F043: recursive DFS overflows on "
-                   "deep graphs; trampoline eats RecursionError → silent 'no cycle'")
 def test_F043_has_cycle_deep_graph():
+    # A11-F043 (fixed): iterative 3-color DFS handles deep graphs.
     edges = [[i, i + 1] for i in range(3000)] + [[3000, 0]]
     assert _gsols(G._has_cycle__1, edges) == [True]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F044: recursive path DFS "
-                   "overflows on ~1000+ deep paths → silent no-path")
 def test_F044_find_path_long_chain():
+    # A11-F044 (fixed): iterative path DFS handles long chains.
     edges = [[i, i + 1] for i in range(2500)]
     p = Var()
     sols = _gsols(G._find_path__4, edges, 0, 2500, p, out=p)
     assert sols and len(sols[0]) == 2501
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F045: Dijkstra silently returns "
-                   "a non-shortest path when weights are negative")
 def test_F045_shortest_path_negative_weight():
+    # A11-F045 (fixed): negative weights fail cleanly (Dijkstra precondition).
     edges = [["a", "b", 1], ["a", "c", 5], ["c", "b", -100]]
     p = Var()
     sols = _gsols(G._shortest_path__4, edges, "a", "b", p, out=p)
@@ -616,9 +571,8 @@ def test_F045_shortest_path_negative_weight():
     assert sols == [] or sols[0] == ["a", "c", "b"]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F046: is_isolated ?Node "
-                   "enumerate mode is documented but unsatisfiable dead code")
 def test_F046_is_isolated_enumerate():
+    # A11-F046 (fixed): 1-element [v] entries make enumerate mode reachable.
     n = Var()
     sols = _gsols(G._is_isolated__2, [["a", "b"], ["c"]], n, out=n)
     assert sols == ["c"]
@@ -629,59 +583,52 @@ def test_F046_guard_nonvertex_counts_isolated():
     assert _gsols(G._is_isolated__2, [["a", "b"]], "zzz") == [True]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F049: path_cost uses last "
-                   "parallel-edge weight; shortest_path uses the minimum")
 def test_F049_path_cost_parallel_edges_min():
+    # A11-F049 (fixed): path_cost keeps the minimum parallel-edge weight.
     c = Var()
     sols = _gsols(G._path_cost__3, [["a", "b", 3], ["a", "b", 5]],
                   ["a", "b"], c, out=c)
     assert sols == [3]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F050: min_spanning_tree returns "
-                   "a partial one-component tree on disconnected graphs")
 def test_F050_mst_disconnected_fails():
+    # A11-F050 (fixed): disconnected graph has no spanning tree, fails.
     t, c = Var(), Var()
     sols = _gsols(G._min_spanning_tree__3, [["a", "b", 1], ["c", "d", 2]], t, c)
     assert sols == []  # no spanning tree exists
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F051: parallel edges duplicate "
-                   "find_path solutions / neighbor entries")
 def test_F051_find_path_dup_edges_single_solution():
+    # A11-F051 (fixed): deduped adjacency yields one path.
     p = Var()
     sols = _gsols(G._find_path__4, [["a", "b"], ["a", "b"]], "a", "b", p, out=p)
     assert sols == [["a", "b"]]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F051: neighbors returns "
-                   "duplicate entries for parallel edges")
 def test_F051_neighbors_dedup():
+    # A11-F051 (fixed): neighbor lists are deduped.
     n = Var()
     sols = _gsols(G._neighbors__3, [["a", "b"], ["a", "b"]], "a", n, out=n)
     assert sols == [["b"]]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F052: MST heap tie-break "
-                   "compares mixed-type vertices → raw TypeError")
 def test_F052_mst_mixed_vertex_types():
+    # A11-F052 (fixed): monotone counter breaks weight ties before vertices.
     t, c = Var(), Var()
     sols = _gsols(G._min_spanning_tree__3,
                   [["a", "b", 1], ["a", 2, 1], [2, "b", 1]], t, c)
     assert sols  # should not raise TypeError
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F052: unhashable vertex "
-                   "(dict) crashes _extract_vertices with raw TypeError")
 def test_F052_vertices_unhashable_vertex():
+    # A11-F052 (fixed): unhashable vertices fall back to identity.
     v = Var()
     sols = _gsols(G._vertices__2, [[{"k": 1}, "b"]], v, out=v)
     assert isinstance(sols, list)  # clean fail/success, not TypeError
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F053: _GraphPredicate."
-                   "_multi_dispatch drops _fail/_catcher when forwarding")
 def test_F053_multi_dispatch_forwards_all_params():
+    # A11-F053 (fixed): graph predicates use the shared ModulePredicate base.
     gp = G._GraphPredicate("fake")
     gp._register(2, G._vertices__2)
     gp._register(3, G._neighbors__3)
@@ -728,9 +675,8 @@ def test_guard_graphs_classic_dijkstra_and_mst():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F047: -3(Second) is "
-                   "Negate(thunk) in unification contexts — silent failure")
 def test_F047_negative_unit_literal_in_is(tmp_path):
+    # A11-F047 (fixed): -n(Unit) folds negation into the sugar constant.
     mod = _load(tmp_path, '''
         -import_from(py.units, [Second, strip_units])
         T(V) <- (Q is -3(Second), strip_units(Q, V))
@@ -749,9 +695,8 @@ def test_F047_guard_negative_unit_literal_in_assign(tmp_path):
     assert [deref(v) for _ in call("T", v, module=_logic(mod))] == [-3]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F048: docs' own example "
-                   "mebi * Byte(1) raises TypeError (Byte is a Quantity)")
 def test_F048_byte_call_style_from_docs():
+    # A11-F048 (fixed): Quantity.__call__ scales (Byte(1) == 1*Byte).
     from clausal.modules.units import Byte, mebi
     assert (1 * mebi * Byte(1)).value == 8 * 2 ** 20
 
@@ -761,9 +706,8 @@ def test_F048_guard_byte_noncall_style():
     assert (1 * mebi * Byte).value == 8 * 2 ** 20
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F055: psi/horsepower constants "
-                   "rounded; every other imperial constant is exact")
 def test_F055_psi_consistent_with_lbf_per_sq_inch():
+    # A11-F055 (fixed): psi derived from lbf/in^2.
     from clausal.modules.imperial import psi, pound_force, inch
     assert psi.value == pytest.approx(pound_force.value / inch.value ** 2,
                                       rel=1e-12)
@@ -781,25 +725,22 @@ def test_F056_guard_imperial_in_unit_parens_works(tmp_path):
     assert got == pytest.approx(0.127)
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F056: SI prefix inside n(Unit) "
-                   "dies with raw AttributeError, not a designed error")
 def test_F056_prefix_in_unit_parens_clean_error():
+    # A11-F056 (fixed): prefix-as-unit raises a designed TypeError.
     from clausal.terms import Quantity, UnitsMismatch
     with pytest.raises((TypeError, UnitsMismatch)):
         Quantity(5, 1000)  # currently AttributeError
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F057: _UnitsPredicate.__pow__ "
-                   "accepts float exponents; Quantity itself refuses them")
 def test_F057_unit_pred_pow_integer_only():
+    # A11-F057 (fixed): float exponents rejected.
     from clausal.modules.units import Metre
     with pytest.raises(Exception):
         Metre ** 0.5
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F059: docs quick-start import "
-                   "line raises ImportError (has_units is a builtin, not exported)")
 def test_F059_docs_quickstart_import_line(tmp_path):
+    # A11-F059 (fixed): has_units re-exported from py.units.
     _load(tmp_path, '''
         -import_from(py.units, [m, kg, s, Newton, kilo, has_units, strip_units])
         T(V) <- strip_units(5(m), V)

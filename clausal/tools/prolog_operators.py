@@ -20,15 +20,20 @@ class OperatorTable:
         self._default_names: set[str] = set()
 
     def define(self, prec: int, spec: str, name: str) -> None:
-        entry = OpEntry(prec, spec, name)
-        if name not in self._ops:
-            self._ops[name] = []
-        # Replace existing entry with same specifier class (prefix/infix/postfix)
+        # Replace any existing entry of the same specifier class.
         kind = _specifier_kind(spec)
-        self._ops[name] = [
-            e for e in self._ops[name] if _specifier_kind(e.specifier) != kind
-        ]
-        self._ops[name].append(entry)
+        if name in self._ops:
+            self._ops[name] = [
+                e for e in self._ops[name]
+                if _specifier_kind(e.specifier) != kind
+            ]
+        if prec == 0:
+            # op(0, Spec, Name) REMOVES the operator of this kind rather than
+            # defining a priority-0 one (ISO 8.14.3.4) — F038.
+            if name in self._ops and not self._ops[name]:
+                del self._ops[name]
+            return
+        self._ops.setdefault(name, []).append(OpEntry(prec, spec, name))
 
     def lookup_infix(self, name: str) -> OpEntry | None:
         for e in self._ops.get(name, []):
@@ -130,7 +135,14 @@ def _load_iso(t: OperatorTable) -> None:
     d(700, "xfx", ">=")
     d(700, "xfx", "=<")
     d(700, "xfx", "=..")
+    # Standard-order-of-terms comparison (ISO Table 7) — F026.
+    d(700, "xfx", "@<")
+    d(700, "xfx", "@>")
+    d(700, "xfx", "@=<")
+    d(700, "xfx", "@>=")
     d(600, "xfy", ":")
+    # ^ — bagof/setof existential quantifier and integer power (F026).
+    d(200, "xfy", "^")
     d(500, "yfx", "+")
     d(500, "yfx", "-")
     d(500, "yfx", "/\\")
@@ -156,6 +168,18 @@ def _load_swi(t: OperatorTable) -> None:
     d(700, "xfx", ":<")    # dict unification
     d(500, "yfx", "xor")
     d(400, "yfx", "rdiv")
+    d(400, "yfx", "div")    # floored integer division (F026)
+    # Prefix directive operators (1150 fx) so `:- dynamic p/1.` parses in the
+    # documented bare-prefix form, not only `:- dynamic(p/1).` (F027).
+    for _name in ("dynamic", "discontiguous", "multifile", "module_transparent",
+                  "initialization", "volatile", "public", "meta_predicate",
+                  "table"):
+        d(1150, "fx", _name)
+    # Parsed so the AST is built and the translator emits the designed
+    # rejection, rather than generic token soup (F041).
+    d(1050, "xfy", "*->")   # soft cut
+    d(700, "xfx", "=@=")    # variant equivalence
+    d(700, "xfx", "\\=@=")  # not variant
 
 
 # ── Scryer additions ────────────────────────────────────────────────

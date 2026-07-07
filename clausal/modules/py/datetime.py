@@ -83,9 +83,11 @@ def _date_4(year, month, day, dt, trail, k):
     """
     year, month, day, dt = deref(year), deref(month), deref(day), deref(dt)
     if is_var(dt):
-        # construct mode — all components must be ground
+        # construct mode — all components must be ground integers. Pass them
+        # through unchanged so datetime.date rejects floats with a TypeError
+        # instead of int()-truncating 2020.9 to 2020 (F015).
         try:
-            d = _dt.date(int(year), int(month), int(day))
+            d = _dt.date(year, month, day)
         except (TypeError, ValueError):
             return
         if unify(dt, d, trail):
@@ -375,6 +377,11 @@ def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, tr
     """
     start, end = deref(start), deref(end)
     if not isinstance(start, _dt.date) or not isinstance(end, _dt.date):
+        yield (_fail, DONE)
+        return
+    # A plain date and a datetime are not comparable (datetime subclasses
+    # date, so the isinstance checks above both pass) — fail cleanly (F016).
+    if isinstance(start, _dt.datetime) != isinstance(end, _dt.datetime):
         yield (_fail, DONE)
         return
     current = start

@@ -1,52 +1,52 @@
 :- module(iso_arithmetic, [test/1]).
 
 double(X, Y) :-
-    Y == X * 2.
+    Y =:= X * 2.
 
 square(X, Y) :-
-    Y == X * X.
+    Y =:= X * X.
 
 triangle_number(N, T) :-
-    T == N * (N + 1) // 2.
+    T =:= div(N * (N + 1), 2).
 
 test("addition: 1+2=3") :-
-    1 + 2 == 3.
+    1 + 2 =:= 3.
 
 test("subtraction: 5-3=2") :-
-    5 - 3 == 2.
+    5 - 3 =:= 2.
 
 test("multiplication: 3*4=12") :-
-    3 * 4 == 12.
+    3 * 4 =:= 12.
 
 test("integer division: 7//2=3") :-
-    7 // 2 == 3.
+    div(7, 2) =:= 3.
 
 test("modulo: 7%2=1") :-
-    7 mod 2 == 1.
+    7 mod 2 =:= 1.
 
 test("power: 2**3=8") :-
-    2 ** 3 == 8.
+    2 ** 3 =:= 8.
 
 test("negation: -3") :-
-    -3 == -3.
+    -3 =:= -3.
 
 test("nested: (2+3)*4=20") :-
-    (2 + 3) * 4 == 20.
+    (2 + 3) * 4 =:= 20.
 
 test("float addition: 1.5+2.5=4.0") :-
-    1.5 + 2.5 == 4.0.
+    1.5 + 2.5 =:= 4.0.
 
 test("double negation: --5=5") :-
-    5 == 5.
+    5 =:= 5.
 
 test("subtraction negative: 3-5=-2") :-
-    3 - 5 == -2.
+    3 - 5 =:= -2.
 
 test("negative floor div: -7//2=-4") :-
-    -7 // 2 == -4.
+    div(-7, 2) =:= -4.
 
 test("negative mod: -7%2=1") :-
-    -7 mod 2 == 1.
+    -7 mod 2 =:= 1.
 
 test("1 < 2") :-
     1 < 2.
@@ -132,17 +132,17 @@ test("eval binds var: X := 42") :-
     X == 42.
 
 test("eval check: 3 == 1+2") :-
-    3 == 1 + 2.
+    3 =:= 1 + 2.
 
 test("eval check fails: 4 == 1+2") :-
-    \+ 4 == 1 + 2.
+    \+ 4 =:= 1 + 2.
 
 test("mixed int/float: 1 + 2.0 == 3.0") :-
-    1 + 2.0 == 3.0.
+    1 + 2.0 =:= 3.0.
 
 test("large integer: 10^100 + 1") :-
     X is 10 ** 100,
-    X + 1 == 10 ** 100 + 1.
+    X + 1 =:= 10 ** 100 + 1.
 
 test("mixed int/float compare: not 1 < 1.0") :-
     \+ 1 < 1.0.
@@ -184,7 +184,7 @@ test("sign positive") :-
 
 test("sign negative") :-
     sign(-7, S),
-    S == -1.
+    S =:= -1.
 
 test("sign zero") :-
     sign(0, S),
@@ -192,7 +192,7 @@ test("sign zero") :-
 
 test("sign float negative") :-
     sign(-3.14, S),
-    S == -1.
+    S =:= -1.
 
 test("sign unbound fails") :-
     \+ sign(X, _).
@@ -237,7 +237,7 @@ test("divmod by zero fails") :-
 
 test("divmod negative: -7 // 2 = -4, -7 % 2 = 1 (Python floor)") :-
     divmod_(-7, 2, Q, R),
-    Q == -4,
+    Q =:= -4,
     R == 1.
 
 test("divmod unbound fails") :-

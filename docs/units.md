@@ -45,10 +45,12 @@ strip_units(9.8(Newton), V)      # V = 9.8
 ```
 
 **The argument inside the parentheses must be an SI unit predicate** (or a
-compound expression built from SI unit predicates using `*`, `/`, `**`).  SI
-prefix names (`kilo`, `milli`, …) and imperial unit names (`inch`, `foot`, …)
-are plain numbers / Quantity values — they are **not** predicates and cannot
-appear inside `n(Unit)` parentheses.
+compound expression built from SI unit predicates using `*`, `/`, `**`).
+Imperial and other scaled-unit **Quantity** values (`inch`, `foot`, `Byte`, …)
+also work — `5(inch)` is `5 * inch` — because a `Quantity` is callable and
+scales itself. SI prefix names (`kilo`, `milli`, …) are plain numbers, not
+units; `5(kilo)` raises a `TypeError` ("SI prefixes cannot be used as units").
+Multiply a prefix in instead: `++(5 * kilo * m)`.
 
 For unusual constructions, use `++()` directly:
 

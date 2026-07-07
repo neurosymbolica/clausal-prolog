@@ -20,47 +20,35 @@ Edge representation
 from __future__ import annotations
 
 import heapq
+import itertools
 from collections import deque
-from typing import Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate
 
 
-# ── Dispatch adapter (same pattern as py/re.py / py/uuid.py) ─────────────
-
-
-class _GraphPredicate:
-    """Adapter with ``_get_dispatch()`` for a graph predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (_fail, DONE)
-            return
-        yield from fn(this_generator, _proceed, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"graphs.{self._name}/{arities}"
+# ── Dispatch adapter ─────────────────────────────────────────────────────────
+#
+# Graph predicates use the shared ModulePredicate base rather than a bespoke
+# adapter: the old `_GraphPredicate._multi_dispatch` forwarded only
+# `this_generator, _proceed, *args`, dropping `_fail`/`_catcher` — latent while
+# every predicate registered a single arity (so `_get_dispatch` returned the fn
+# directly), but a TypeError the moment a second arity was registered (F053).
+# The base also gives catchable errors and consistent wrong-arity handling.
+_GraphPredicate = ModulePredicate
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _vertex_key(node):
+    """A hashable key for *node*, falling back to identity when unhashable."""
+    try:
+        hash(node)
+        return node
+    except TypeError:
+        return id(node)
 
 
 def _extract_vertices(edges):
@@ -69,13 +57,31 @@ def _extract_vertices(edges):
     result = []
     for edge in edges:
         e = deref(edge)
-        if isinstance(e, list) and len(e) >= 2:
-            for node in (deref(e[0]), deref(e[1])):
-                h = id(node) if isinstance(node, list) else node
-                if h not in seen:
-                    seen.add(h)
-                    result.append(node)
+        if not isinstance(e, list) or len(e) < 1:
+            continue
+        # A 1-element entry [v] names a lone vertex with no incident edge,
+        # making single-vertex graphs representable and the documented
+        # is_isolated ?Node enumerate mode reachable (F046).
+        nodes = (deref(e[0]), deref(e[1])) if len(e) >= 2 else (deref(e[0]),)
+        for node in nodes:
+            # Fall back to object identity for any unhashable vertex
+            # (list, dict, set) so it doesn't crash with a raw TypeError (F052).
+            h = _vertex_key(node)
+            if h not in seen:
+                seen.add(h)
+                result.append(node)
     return result
+
+
+def _adj_append(adj, key, value):
+    """Append *value* to ``adj[key]`` unless it is already present.
+
+    Order-preserving dedup so parallel edges don't produce duplicate neighbor
+    entries (and hence duplicate find_path solutions / neighbor lists) — F051.
+    """
+    lst = adj.setdefault(key, [])
+    if value not in lst:
+        lst.append(value)
 
 
 def _build_adj(edges):
@@ -85,8 +91,8 @@ def _build_adj(edges):
         e = deref(edge)
         if isinstance(e, list) and len(e) >= 2:
             u, v = deref(e[0]), deref(e[1])
-            adj.setdefault(u, []).append(v)
-            adj.setdefault(v, []).append(u)
+            _adj_append(adj, u, v)
+            _adj_append(adj, v, u)
     return adj
 
 
@@ -97,7 +103,7 @@ def _build_directed_adj(edges):
         e = deref(edge)
         if isinstance(e, list) and len(e) >= 2:
             u, v = deref(e[0]), deref(e[1])
-            adj.setdefault(u, []).append(v)
+            _adj_append(adj, u, v)
             adj.setdefault(v, [])  # ensure v is in adj
     return adj
 
@@ -151,10 +157,16 @@ def _has_edge__3(this_generator, _proceed, _fail, _catcher, edges, u, v, trail):
     """has_edge(Edges, U, V) — succeeds if edge [U,V] exists."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
+        seen = set()
         for edge in edges_val:
             e = deref(edge)
             if isinstance(e, list) and len(e) >= 2:
                 eu, ev = deref(e[0]), deref(e[1])
+                # Don't re-yield a parallel edge's identical (U,V) pair (F051).
+                key = (_vertex_key(eu), _vertex_key(ev))
+                if key in seen:
+                    continue
+                seen.add(key)
                 mark = trail.mark()
                 if unify(u, eu, trail) and unify(v, ev, trail):
                     yield (_proceed, None)
@@ -289,17 +301,39 @@ def _find_path__4(this_generator, _proceed, _fail, _catcher, edges, start, end, 
     if isinstance(edges_val, list) and not is_var(start_val) and not is_var(end_val):
         adj = _build_adj(edges_val)
 
-        def _dfs(current, target, visited):
-            if current == target:
-                yield list(visited)
+        def _dfs(start_node, target):
+            # Iterative simple-path enumeration (explicit node/iterator stack)
+            # so a long path does not overflow the recursion limit — the
+            # trampoline would eat the RecursionError and answer "no path"
+            # (F044). Yields the same paths, in the same order, as the former
+            # recursion.
+            if start_node == target:
+                yield [start_node]
                 return
-            for neighbor in adj.get(current, []):
-                if neighbor not in visited:
-                    visited.append(neighbor)
-                    yield from _dfs(neighbor, target, visited)
-                    visited.pop()
+            path = [start_node]
+            inpath = {_vertex_key(start_node)}
+            stack = [(start_node, iter(adj.get(start_node, [])))]
+            while stack:
+                _node, it = stack[-1]
+                advanced = False
+                for neighbor in it:
+                    nk = _vertex_key(neighbor)
+                    if nk in inpath:
+                        continue
+                    if neighbor == target:
+                        yield path + [neighbor]
+                        continue
+                    path.append(neighbor)
+                    inpath.add(nk)
+                    stack.append((neighbor, iter(adj.get(neighbor, []))))
+                    advanced = True
+                    break
+                if not advanced:
+                    stack.pop()
+                    if stack:
+                        inpath.discard(_vertex_key(path.pop()))
 
-        for p in _dfs(start_val, end_val, [start_val]):
+        for p in _dfs(start_val, end_val):
             mark = trail.mark()
             if unify(path, p, trail):
                 yield (_proceed, None)
@@ -322,6 +356,18 @@ def _shortest_path__4(this_generator, _proceed, _fail, _catcher, edges, start, e
             for e in edges_val
         )
         if has_weights:
+            # Dijkstra is unsound with negative weights and would silently
+            # return a non-shortest path; fail cleanly instead (F045). A
+            # Bellman-Ford fallback could be added later if needed.
+            has_negative = any(
+                isinstance(deref(e), list) and len(deref(e)) >= 3
+                and isinstance(deref(deref(e)[2]), (int, float))
+                and deref(deref(e)[2]) < 0
+                for e in edges_val
+            )
+            if has_negative:
+                yield (_fail, DONE)
+                return
             wadj = _build_weighted_adj(edges_val)
             dist = {start_val: 0}
             prev: dict = {start_val: None}
@@ -387,12 +433,15 @@ def _path_cost__3(this_generator, _proceed, _fail, _catcher, edges, path, cost, 
             e = deref(edge)
             if isinstance(e, list) and len(e) >= 3:
                 u, v, w = deref(e[0]), deref(e[1]), deref(e[2])
-                weight_map[(u, v)] = w
-                weight_map[(v, u)] = w
+                # Keep the minimum weight across parallel edges so path_cost
+                # agrees with shortest_path (which keeps all parallel edges and
+                # takes the cheapest), rather than the last one seen (F049).
+                weight_map[(u, v)] = min(weight_map.get((u, v), w), w)
+                weight_map[(v, u)] = min(weight_map.get((v, u), w), w)
             elif isinstance(e, list) and len(e) == 2:
                 u, v = deref(e[0]), deref(e[1])
-                weight_map[(u, v)] = 1
-                weight_map[(v, u)] = 1
+                weight_map[(u, v)] = min(weight_map.get((u, v), 1), 1)
+                weight_map[(v, u)] = min(weight_map.get((v, u), 1), 1)
 
         total = 0
         valid = True
@@ -482,29 +531,38 @@ def _has_cycle__1(this_generator, _proceed, _fail, _catcher, edges, trail):
     if isinstance(edges_val, list):
         adj = _build_directed_adj(edges_val)
         all_nodes = list(adj.keys())
+        # 0 = white (unseen), 1 = grey (on the current DFS stack), 2 = black
+        # (finished). A grey neighbour is a back-edge, i.e. a cycle. Iterative
+        # so deep graphs don't overflow the recursion limit (the trampoline
+        # would eat the RecursionError and answer "no cycle") — F043.
         color: dict = {n: 0 for n in all_nodes}
-        has_cycle = False
+        found = False
 
-        def _dfs(node):
-            nonlocal has_cycle
-            color[node] = 1
-            for neighbor in adj.get(node, []):
-                if has_cycle:
-                    return
-                if color.get(neighbor, 0) == 1:
-                    has_cycle = True
-                    return
-                if color.get(neighbor, 0) == 0:
-                    _dfs(neighbor)
-            color[node] = 2
-
-        for n in all_nodes:
-            if has_cycle:
+        for root in all_nodes:
+            if found:
                 break
-            if color[n] == 0:
-                _dfs(n)
+            if color.get(root, 0) != 0:
+                continue
+            color[root] = 1
+            stack = [(root, iter(adj.get(root, [])))]
+            while stack and not found:
+                node, it = stack[-1]
+                advanced = False
+                for neighbor in it:
+                    c = color.get(neighbor, 0)
+                    if c == 1:
+                        found = True
+                        break
+                    if c == 0:
+                        color[neighbor] = 1
+                        stack.append((neighbor, iter(adj.get(neighbor, []))))
+                        advanced = True
+                        break
+                if not advanced and not found:
+                    color[node] = 2
+                    stack.pop()
 
-        if has_cycle:
+        if found:
             yield (_proceed, None)
     yield (_fail, DONE)
 
@@ -535,6 +593,10 @@ def _spanning_tree__2(this_generator, _proceed, _fail, _catcher, edges, tree, tr
                     visited.add(neighbor)
                     tree_edges.append([current, neighbor])
                     queue.append(neighbor)
+        if len(visited) < len(verts):
+            # No spanning tree exists for a disconnected graph (F050).
+            yield (_fail, DONE)
+            return
         mark = trail.mark()
         if unify(tree, tree_edges, trail):
             yield (_proceed, None)
@@ -558,11 +620,16 @@ def _min_spanning_tree__3(this_generator, _proceed, _fail, _catcher, edges, tree
         visited = {verts[0]}
         tree_edges = []
         cost = 0
+        # A monotone insertion counter breaks weight ties before the heap ever
+        # compares the vertices themselves, which may be of mixed, unorderable
+        # types (int vs str) — F052. It also makes tie-breaks deterministic
+        # (insertion order) rather than id()-dependent.
+        counter = itertools.count()
         heap = []
         for neighbor, w in wadj.get(verts[0], []):
-            heapq.heappush(heap, (w, verts[0], neighbor))
+            heapq.heappush(heap, (w, next(counter), verts[0], neighbor))
         while heap and len(visited) < len(verts):
-            w, u, v = heapq.heappop(heap)
+            w, _, u, v = heapq.heappop(heap)
             if v in visited:
                 continue
             visited.add(v)
@@ -570,7 +637,12 @@ def _min_spanning_tree__3(this_generator, _proceed, _fail, _catcher, edges, tree
             cost += w
             for neighbor, nw in wadj.get(v, []):
                 if neighbor not in visited:
-                    heapq.heappush(heap, (nw, v, neighbor))
+                    heapq.heappush(heap, (nw, next(counter), v, neighbor))
+        if len(visited) < len(verts):
+            # No spanning TREE exists for a disconnected graph (symmetric with
+            # topological_sort failing on a cycle) — F050.
+            yield (_fail, DONE)
+            return
         mark = trail.mark()
         if unify(tree, tree_edges, trail) and unify(total_cost, cost, trail):
             yield (_proceed, None)

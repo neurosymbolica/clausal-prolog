@@ -187,7 +187,7 @@ test("float_: var fails") :-
     \+ float(X).
 
 test("number: large int (via eval)") :-
-    X == 10 ** 100,
+    X =:= 10 ** 100,
     number(X).
 
 test("is_list: list of mixed types") :-

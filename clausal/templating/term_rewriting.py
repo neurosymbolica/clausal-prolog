@@ -1092,6 +1092,25 @@ class TermTransformer(NodeTransformer):
             var_names = _collect_logic_var_names(expression)
             return _build_py_thunk_ast(transformer, unary_op, expression, var_names)
 
+        # -n(Unit) / -n(): fold the USub into the numeric callee so the
+        # unit-sugar transform sees (-n)(Unit) and yields ++(Quantity(-n, Unit))
+        # rather than Negate(++thunk), which term unification never evaluates —
+        # so -3(Second) works in `is`/argument position, not only after `:=`
+        # (F047).
+        if (
+            isinstance(unary_op.op, USub)
+            and isinstance(unary_op.operand, Call)
+            and isinstance(unary_op.operand.func, Constant)
+            and isinstance(unary_op.operand.func.value, (int, float))
+        ):
+            call = unary_op.operand
+            negated_func = replace(Constant(value=-call.func.value), call.func)
+            folded = replace(
+                Call(func=negated_func, args=call.args, keywords=call.keywords),
+                call,
+            )
+            return transformer.visit(folded)
+
         # Fold negative numeric literals: -3 → Constant(-3), not Negate(3).
         if (
             isinstance(unary_op.op, USub)

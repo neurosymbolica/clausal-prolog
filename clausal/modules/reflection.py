@@ -46,8 +46,9 @@ import functools
 import os
 
 from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.exceptions import LogicException, instantiation_error
 from clausal.logic.trampoline import DONE
-from clausal.logic.variables import deref, unify
+from clausal.logic.variables import deref, is_var, unify
 from clausal.modules.py import ModulePredicate, simple_to_trampoline
 from clausal.pythonic_ast import nodes as simple_ast
 from clausal.reflection import (
@@ -93,6 +94,8 @@ def _yield_matches(candidates, pattern, _proceed, _fail, trail):
 def _reified_item_2(this_generator, _proceed, _fail, _catcher,
                     source, item, trail):
     source = deref(source)
+    if is_var(source):
+        raise LogicException(instantiation_error("reified_item/2"))
     if not isinstance(source, str):
         yield (_fail, DONE)
         return
@@ -103,6 +106,8 @@ def _reified_item_2(this_generator, _proceed, _fail, _catcher,
 def _reified_clause_2(this_generator, _proceed, _fail, _catcher,
                       source, clause, trail):
     source = deref(source)
+    if is_var(source):
+        raise LogicException(instantiation_error("reified_clause/2"))
     if not isinstance(source, str):
         yield (_fail, DONE)
         return
@@ -116,6 +121,8 @@ def _reified_clause_2(this_generator, _proceed, _fail, _catcher,
 def _reified_file_item_2(this_generator, _proceed, _fail, _catcher,
                          path, item, trail):
     path = deref(path)
+    if is_var(path):
+        raise LogicException(instantiation_error("reified_file_item/2"))
     if not isinstance(path, str) or not os.path.exists(path):
         yield (_fail, DONE)
         return
