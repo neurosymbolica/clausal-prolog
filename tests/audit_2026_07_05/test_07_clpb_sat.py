@@ -664,9 +664,6 @@ class TestSuspectedBugs:
         unify(y, 0, tr)
         assert not sat_check(tr), "X|Y with X=0, Y=0 is unsatisfiable"
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F006: _var_to_id/_id_to_var/_unique_tables grow without bound — "
-        "every CLP(B) var and its BDD nodes are pinned forever"))
     def test_A07_F006_global_tables_bounded(self):
         import gc
         before = len(clpb._id_to_var)

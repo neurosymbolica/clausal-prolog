@@ -24,6 +24,7 @@ on backtrack.  Never mutate in place.
 
 from __future__ import annotations
 
+import weakref
 from typing import Any
 
 from clausal.logic.variables import (
@@ -77,11 +78,43 @@ class BDDNode:
 
 _next_var_id: int = 0
 _var_to_id: dict[int, int] = {}   # id(Var) → ordering index
-_id_to_var: dict[int, Var] = {}   # ordering index → Var
+_id_to_var: dict[int, Var] = {}   # ordering index → Var (strong ref)
+
+# Per-trail record of the (vid, idx) allocated while a trail was live, so the
+# module-global tables can be pruned when the trail is garbage-collected
+# (A07-F006).  _id_to_var holds a STRONG ref to each Var (Var is not
+# weakref-able, so we can't hang the cleanup off the var itself); without
+# pruning, every CLP(B) var and its whole BDD level are pinned forever, a
+# linear leak per query.  Keying cleanup on the (weakref-able) Trail bounds
+# the tables to the lifetime of the constraint store that owns them.
+_trail_allocs: dict[int, list] = {}   # id(Trail) → [(vid, idx), ...]
 
 
-def enumerate_var(var: Var) -> int:
-    """Assign a monotonic ordering ID to a variable on first encounter."""
+def _register_alloc(trail, vid: int, idx: int) -> None:
+    if trail is None:
+        return
+    tid = id(trail)
+    allocs = _trail_allocs.get(tid)
+    if allocs is None:
+        allocs = []
+        _trail_allocs[tid] = allocs
+        weakref.finalize(trail, _cleanup_trail_allocs, tid)
+    allocs.append((vid, idx))
+
+
+def _cleanup_trail_allocs(tid: int) -> None:
+    for vid, idx in _trail_allocs.pop(tid, ()):
+        _var_to_id.pop(vid, None)
+        _id_to_var.pop(idx, None)
+        _unique_tables.pop(vid, None)
+
+
+def enumerate_var(var: Var, trail: Trail | None = None) -> int:
+    """Assign a monotonic ordering ID to a variable on first encounter.
+
+    When *trail* is given, the allocation is registered for cleanup when that
+    trail is garbage-collected (A07-F006); direct/test callers may omit it.
+    """
     global _next_var_id
     vid = id(var)
     if vid in _var_to_id:
@@ -90,6 +123,7 @@ def enumerate_var(var: Var) -> int:
     _next_var_id += 1
     _var_to_id[vid] = idx
     _id_to_var[idx] = var
+    _register_alloc(trail, vid, idx)
     return idx
 
 
@@ -306,7 +340,7 @@ def _expr_to_bdd(expr, trail: Trail | None = None):
 
     # Logic variable → identity BDD
     if is_var(expr):
-        var_id = enumerate_var(expr)
+        var_id = enumerate_var(expr, trail)
         var = expr
         return make_node(var_id, BDD_TRUE, BDD_FALSE, var)
 
@@ -417,7 +451,7 @@ def _ensure_bool(var: Var, trail: Trail) -> BoolState:
     if state is not None:
         return state
     # Create identity BDD for this variable
-    var_id = enumerate_var(var)
+    var_id = enumerate_var(var, trail)
     bdd = make_node(var_id, BDD_TRUE, BDD_FALSE, var)
     state = BoolState(sat_expr=None, bdd=bdd, root_var=var)
     put_attr(var, B_KEY, state, trail)
