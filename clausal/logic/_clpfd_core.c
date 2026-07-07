@@ -108,6 +108,17 @@ py_domain_from_range(PyObject *self, PyObject *args)
         if (hi == -1 && PyErr_Occurred()) return NULL;
     }
 
+    /* An integer bound landing exactly on a sentinel (INT64_MIN/MAX) would be
+     * indistinguishable from ±inf after make_interval; keep exact bounds via
+     * the Python fallback (A06-F007).  Float ±inf inputs legitimately map to
+     * the sentinels and stay on the fast path. */
+    if ((lo == INT64_MIN && !PyFloat_Check(lo_obj)) ||
+        (hi == INT64_MAX && !PyFloat_Check(hi_obj))) {
+        if (ensure_py_fallbacks() < 0) return NULL;
+        return PyObject_CallFunctionObjArgs(fn_py_domain_from_range,
+                                            lo_obj, hi_obj, NULL);
+    }
+
     if (lo > hi) {
         /* Empty domain */
         return PyTuple_New(0);

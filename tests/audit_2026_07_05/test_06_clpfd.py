@@ -354,9 +354,6 @@ class TestRationalSubexpression:
 
 
 class TestInt64BoundarySentinel:
-    @pytest.mark.xfail(strict=False, reason="A06-F007: make_interval maps exactly "
-                       "INT64_MAX/MIN to float inf; in_domain(X, 0, 2**63-1) accepts "
-                       "values outside the declared domain")
     def test_exact_int64_max_bound_is_finite(self):
         t = Trail()
         x = Var()
@@ -364,7 +361,6 @@ class TestInt64BoundarySentinel:
         # 2**100 is outside the declared domain — must be rejected
         assert not fd_eq(x, 2 ** 100, t)
 
-    @pytest.mark.xfail(strict=False, reason="A06-F007: domain [0, 2^63-1] reports size inf")
     def test_exact_int64_max_domain_size_finite(self):
         d = domain_from_range(0, 2 ** 63 - 1)
         assert domain_size(d) == 2 ** 63
