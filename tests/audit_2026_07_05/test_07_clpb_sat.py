@@ -726,9 +726,6 @@ class TestSuspectedBugs:
         # true count: x0=1 ∧ x3=1, x1/x2 free → 4
         assert _count_paths_py(bdd, lm, 4, {}) == 4
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F009: bool_labeling silently succeeds over non-0/1 ground "
-        "elements (SWI clpb raises a type error)"))
     def test_A07_F009_bool_labeling_validates_ground_elements(self):
         tr = Trail()
         results = None
@@ -739,9 +736,6 @@ class TestSuspectedBugs:
         assert results == [], (
             "bool_labeling([2, 'a']) yielded a solution for non-Boolean terms")
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F010: _bool_hook accepts Python bool (subclass of int) — the var "
-        "stays bound to True/False though docs pin the domain to 0/1 integers"))
     def test_A07_F010_python_bool_binding(self):
         tr = Trail()
         x, y = Var(), Var()

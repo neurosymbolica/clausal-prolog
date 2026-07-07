@@ -648,6 +648,15 @@ def bool_labeling(vars_list, trail: Trail):
 
 def _label_bools(vars_: list, trail: Trail):
     """Recursive labeling of Boolean variables."""
+    # Validate: every already-ground element must be a Boolean 0/1 integer
+    # (A07-F009).  bool is excluded per A01-D001 (bool is not an int here);
+    # SWI clpb raises type_error(sat, _) for non-Boolean terms.
+    for v in vars_:
+        dv = deref(v)
+        if not is_var(dv) and (type(dv) is not int or dv not in (0, 1)):
+            raise TypeError(
+                f"bool_labeling: expected a Boolean variable or 0/1, got {dv!r}"
+            )
     # Find first unbound variable
     target = None
     target_idx = None
@@ -682,6 +691,13 @@ def _bool_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
     """
     state = attr_value
     bound_to = deref(bound_to)
+
+    # Python bool is a subclass of int, so True/False would otherwise slip
+    # through the 0/1 check and pin the var to True/False.  CLP(B)'s domain is
+    # the integers {0, 1}; reject bool, consistent with CLP(Z)/CLP(R) and the
+    # A01-D001 decision to stop conflating bool with int (A07-F010).
+    if isinstance(bound_to, bool):
+        return False
 
     if isinstance(bound_to, int):
         if bound_to not in (0, 1):
