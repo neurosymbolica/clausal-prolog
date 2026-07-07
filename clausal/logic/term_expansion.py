@@ -169,6 +169,46 @@ def _make_module_state(init_list, final_list, user_state):
     return module_cls(init_list, final_list, user_state)
 
 
+def _collect_functor_arities(node, out: dict, seen: set) -> None:
+    """Collect ``functor_name -> arity`` for every ``Call(LoadName(name), args)``
+    reachable from *node* (term-instances, lists, and pythonic_ast Nodes are
+    all descended). Names are ordinary lowercase functor identifiers — the
+    quasi-quote ``q`` wrapper is already stripped to plain Call data by the
+    time TermExpansion clauses reach here."""
+    from clausal.pythonic_ast.nodes import Call as _Call, LoadName as _LoadName
+    from clausal.logic.predicate import is_term_instance, term_field_names
+
+    if id(node) in seen:
+        return
+    seen.add(id(node))
+
+    if isinstance(node, _Call):
+        func = node.func
+        if isinstance(func, _LoadName):
+            nm = func.name
+            if nm.isidentifier() and nm[:1].islower() and not nm.startswith("_"):
+                out.setdefault(nm, len(node.args))
+        for a in node.args:
+            _collect_functor_arities(a, out, seen)
+        return
+    if isinstance(node, list):
+        for elem in node:
+            _collect_functor_arities(elem, out, seen)
+        return
+    if is_term_instance(node):
+        for fname in term_field_names(node):
+            _collect_functor_arities(getattr(node, fname), out, seen)
+        return
+    children = getattr(node, "children", None)
+    if callable(children):
+        try:
+            kids = children()
+        except Exception:
+            kids = []
+        for kid in kids:
+            _collect_functor_arities(kid, out, seen)
+
+
 def _compile_expansion_rules(expansion_clauses, module_dict):
     """Compile TermExpansion clauses into a mini LogicModule."""
     from clausal.logic.database import Module as LogicModule
@@ -186,6 +226,19 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     # Also ensure ModuleExpansionState class exists for state threading.
     mod_cls = make_predicate("ModuleExpansionState", ["init", "final", "state"])
     lm.module_dict["ModuleExpansionState"] = mod_cls
+
+    # A10-F008 / A10-D004(a): pre-mint term classes for functors referenced in
+    # the (quasi-quoted) expansion patterns — e.g. a brand-new ``logged_fact``
+    # introduced by an expansion. Without this, constructing ``logged_fact(X)``
+    # at expansion time fails with "not in scope as a term class".
+    functor_arities: dict[str, int] = {}
+    _seen_ids: set = set()
+    for pred_node in expansion_clauses:
+        _collect_functor_arities(pred_node, functor_arities, _seen_ids)
+    for name, arity in functor_arities.items():
+        if name not in lm.module_dict:
+            lm.module_dict[name] = make_predicate(
+                name, [f"arg{i}" for i in range(arity)])
 
     # assertz each expansion clause.
     for pred_node in expansion_clauses:
@@ -213,38 +266,69 @@ def _expand_item(item, expansion_module, module_state):
     - None (suppressed)
     - The original item (no match)
     """
+    # First try matching the whole Predicate item (var / Predicate patterns).
+    result = _try_te_match(item, item, expansion_module, module_state,
+                           wrap_head=False)
+    if result is not None:
+        return result
+
+    # A10-F008 / A10-D004(a): a bare-term pattern like ``q(fact(X))`` never
+    # unifies with the whole Predicate item (which is Predicate(head=fact(..),
+    # body=..)). Retry against the item's HEAD; the expansion terms are then
+    # head terms, so wrap each back into a fact Predicate.
+    head = getattr(item, "head", None)
+    if head is not None:
+        result = _try_te_match(item, head, expansion_module, module_state,
+                               wrap_head=True)
+        if result is not None:
+            return result
+
+    # No match: pass through unchanged.
+    return item, module_state
+
+
+def _try_te_match(item, match_target, expansion_module, module_state, wrap_head):
+    """Solve TermExpansion(match_target, Expansion, S0, S) once.
+
+    Returns (expanded_result, new_state) on a match, or None if no clause
+    matched *match_target*. When *wrap_head* is True the expansion terms are
+    head terms (the pattern matched item.head) and are wrapped into fact
+    Predicate nodes.
+    """
     from clausal.logic.solve import call
 
-    term_var = item  # The actual Predicate node
     expansion_var = Var()
-    state_before = module_state
     state_after = Var()
-
-    # Try to solve TermExpansion(item, Expansion_, state_before, state_after).
     found = False
-    for trail in call(
-        "TermExpansion", term_var, expansion_var, state_before, state_after,
+    for _trail in call(
+        "TermExpansion", match_target, expansion_var, module_state, state_after,
         module=expansion_module,
     ):
-        # Committed choice: use first solution.
-        expansion = deref(expansion_var)
+        expansion = deref(expansion_var)   # committed choice: first solution
         new_state = deref(state_after)
         found = True
         break
 
     if not found:
-        # No match: pass through unchanged.
-        return item, module_state
+        return None
 
-    # Process expansion result.
     if expansion == "none":
         return None, new_state
-
     if isinstance(expansion, list):
+        if wrap_head:
+            expansion = [_wrap_as_predicate(e) for e in expansion]
         return expansion, new_state
-
-    # Single replacement.
+    if wrap_head:
+        return _wrap_as_predicate(expansion), new_state
     return expansion, new_state
+
+
+def _wrap_as_predicate(term):
+    """Wrap a head term into a fact Predicate; pass a Predicate through."""
+    term = deref(term)
+    if isinstance(term, PredicateItem):
+        return term
+    return PredicateItem(head=term, body=True)
 
 
 def _extract_init_final(module_state):

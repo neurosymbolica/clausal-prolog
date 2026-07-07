@@ -306,10 +306,6 @@ def test_F007_dump_source_arrow_fidelity(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F008: TE items are whole Predicate "
-                   "nodes; a q(fact(X)) Call pattern never matches, so the "
-                   "docs' quick_example/suppression/quasi-quotation examples "
-                   "do nothing (and quick_example as written NameErrors)")
 def test_F008_te_doc_quick_example(tmp_path):
     m = _load(tmp_path, """
         TermExpansion(
@@ -325,8 +321,6 @@ def test_F008_te_doc_quick_example(tmp_path):
     assert len(lm.db.clauses_for("logged_fact", 1)) == 2
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F008: q(debug(X)) suppression "
-                   "pattern from docs never matches — item survives")
 def test_F008_te_doc_suppression_example(tmp_path):
     m = _load(tmp_path, """
         TermExpansion(q(debug(X)), [], STATE, STATE) <- True

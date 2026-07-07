@@ -78,6 +78,13 @@ sessions/instances: treat these as settled — do not re-ask.
   accident. The extension finder emits a `ClausalLintWarning` and defers to
   the standard library (returns None → PathFinder loads the real module)
   rather than silently shadowing it. import.md corrected. Gates A10-F010.
+- **A10-D004 (TermExpansion patterns) → (a) match item.head + docs.** A
+  non-Predicate TermExpansion pattern (`q(fact(X))`) matches the fact item's
+  HEAD; the expansion terms are then wrapped back into fact Predicates. Also
+  pre-mint term classes for functors referenced in expansion patterns (a new
+  `logged_fact` introduced by an expansion). Doc snippets get their missing
+  trailing commas. Full reflection-vocabulary reification (c) is still
+  deferred (needs A01-D004/A03-D001). Gates A10-F008.
 
 | ID | Status | Title | Decision + rationale | Raised by | Affects |
 |----|--------|-------|----------------------|-----------|---------|
