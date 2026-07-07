@@ -714,6 +714,12 @@ def _compile_multi_star_guard(
     pos_sp: list[str] = []  # split-var names added to position so far
     star_idx = 0
     fixed_idx = 0
+    # A02-F004: once the LAST star is consumed, absolute position tracking
+    # (pos_const/pos_sp) no longer applies — trailing fixed segments must be
+    # indexed backward from ``n`` (they sit at n - trailing_fixed, ...).
+    after_last_star = False
+    post_star_trailing = 0  # total trailing fixed element count
+    post_star_offset = 0    # trailing fixed elements emitted so far
 
     def _pos_expr():
         """Build AST expr for current position."""
@@ -734,19 +740,32 @@ def _compile_multi_star_guard(
         if seg_type == "fixed":
             # Unify each fixed element with list[pos], list[pos+1], ...
             for j, elem in enumerate(seg_val):
-                idx_expr = _pos_expr()
-                if j > 0:
+                if after_last_star:
+                    # A02-F004: trailing fixed elements are indexed relative to
+                    # the last star's end (n - trailing_fixed), not from 0. The
+                    # element at offset ``post_star_offset`` into the trailing
+                    # region sits at ``n - (trailing_fixed - post_star_offset)``.
+                    back = post_star_trailing - post_star_offset
                     idx_expr = ast.BinOp(
-                        left=idx_expr, op=ast.Add(),
-                        right=ast.Constant(value=j),
+                        left=_name(n_name), op=ast.Sub(),
+                        right=ast.Constant(value=back),
                     )
+                    post_star_offset += 1
+                else:
+                    idx_expr = _pos_expr()
+                    if j > 0:
+                        idx_expr = ast.BinOp(
+                            left=idx_expr, op=ast.Add(),
+                            right=ast.Constant(value=j),
+                        )
                 subscript = ast.Subscript(
                     value=_name(d_name), slice=idx_expr, ctx=ast.Load(),
                 )
                 unify_calls.append(
                     _call(_name("unify"), _var_or_const_expr(elem), subscript, _name(trail_name))
                 )
-            pos_const += len(seg_val)
+            if not after_last_star:
+                pos_const += len(seg_val)
         else:
             # Star segment: slice from pos to pos+length
             star_var = seg_val
@@ -793,12 +812,12 @@ def _compile_multi_star_guard(
             if star_idx < n_stars - 1:
                 pass  # pos_sp already updated above
             else:
-                # For trailing fixed segments after last star, update pos
-                pos_const = 0
-                pos_sp = []
-                # pos is now end_expr + ... but we don't need it (no more segments
-                # that need position tracking — if there are trailing fixed elems,
-                # they were already counted above)
+                # A02-F004: the last star consumed [start : n - trailing_fixed],
+                # so trailing fixed segments start at n - trailing_fixed. Switch
+                # to backward-from-n indexing for them (see the fixed branch).
+                after_last_star = True
+                post_star_trailing = trailing_fixed
+                post_star_offset = 0
             star_idx += 1
 
     # Build the if-unify chain

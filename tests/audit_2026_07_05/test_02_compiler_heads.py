@@ -405,22 +405,18 @@ class TestF004MultiStarTrailingFixed:
         A = Var()
         assert collect(mod, "ssok", "xd", A, outv=[A]) == [("x",)]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F004: trailing fixed after last star unifies at index 0")
     def test_minimal_input(self, mod):
         A, B = Var(), Var()
         assert collect(mod, "ms3", [1, 2], A, B, outv=[A, B]) == [([], [])]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F004: trailing fixed after last star unifies at index 0")
     def test_nonempty_stars_input(self, mod):
         A, B = Var(), Var()
         assert collect(mod, "ms3", [0, 1, 5, 2], A, B, outv=[A, B]) == [([0], [5])]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F004: two trailing fixed elements after last star")
     def test_two_trailing_fixed(self, mod):
         A, B = Var(), Var()
         assert collect(mod, "mst", [0, 1, 5, 2, 3], A, B, outv=[A, B]) == [([0], [5])]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F004: str caller, char fixed elements")
     def test_str_caller_trailing_fixed(self, mod):
         A, B = Var(), Var()
         assert collect(mod, "mchr", "xayb", A, B, outv=[A, B]) == [("x", "y")]
