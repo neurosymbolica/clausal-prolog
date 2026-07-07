@@ -3152,12 +3152,15 @@ capi_put_attr(PyObject *var_obj, PyObject *key, PyObject *value,
     if (AttVar_Check(root)) {
         av = AttVar_CAST(root);
     } else if (Var_Check(root)) {
-        /* Promote Var → AttVar (simplified — full promote in py_put_attr) */
-        PyObject *result = py_put_attr(NULL, Py_BuildValue("(OOsO)",
-            root, key, value, (PyObject *)trail));
-        if (!result) return -1;
-        Py_DECREF(result);
-        return 0;
+        /* A01-F002: a plain Var cannot be promoted in place (Var identity
+         * must be preserved), and the old "(OOsO)" promote path was broken
+         * three ways — it passed `value` (a PyObject*) where Py_BuildValue
+         * expected a char* (UB), leaked the args tuple, and py_put_attr does
+         * not actually promote (it raises TypeError unless the arg derefs to
+         * an AttVar). Raise a clean TypeError, mirroring py_put_attr. */
+        PyErr_SetString(PyExc_TypeError,
+            "put_attr requires an AttVar (plain Var cannot be promoted)");
+        return -1;
     } else {
         PyErr_SetString(PyExc_TypeError, "put_attr requires a Var");
         return -1;
