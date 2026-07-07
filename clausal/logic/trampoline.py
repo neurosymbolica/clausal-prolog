@@ -192,6 +192,11 @@ except ImportError:
             if gen is None:
                 if value is DONE:
                     return results
+                if value is _TABLING_SUSPEND:
+                    # A04-F008: a root/orphaned consumer yields
+                    # (None, _TABLING_SUSPEND) — a control sentinel, never a
+                    # solution. Treating it as one fabricates an unbound answer.
+                    return results
                 if value is FINAL:
                     # Producer is retiring with its last solution: deliver
                     # it and stop — no further pull from the (now-retired)
@@ -244,8 +249,8 @@ except ImportError:
             raise
         while True:
             if gen is None:
-                if value is DONE:
-                    return None
+                if value is DONE or value is _TABLING_SUSPEND:
+                    return None   # A04-F008: suspend sentinel is not a solution
                 return True
             try:
                 if value is _TABLING_SUSPEND:

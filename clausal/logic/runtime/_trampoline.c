@@ -539,6 +539,16 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
                 Py_DECREF(step);
                 return results;
             }
+            {
+                /* A04-F008: a root/orphaned consumer yields
+                 * (None, _TABLING_SUSPEND) — a control sentinel, never a
+                 * solution; treat it as exhaustion. */
+                PyObject *ts = get_TABLING_SUSPEND();
+                if (ts && value == ts) {
+                    Py_DECREF(step);
+                    return results;
+                }
+            }
             if (value == g_FINAL) {
                 /* Producer is retiring with its last solution: deliver
                  * it and stop — no further pull from the (now-retired)
@@ -708,7 +718,11 @@ drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
         PyObject *value = PyTuple_GET_ITEM(step, 1);  /* borrowed */
 
         if (gen == Py_None) {
-            int is_done = (value == g_DONE);
+            /* A04-F008: (None, _TABLING_SUSPEND) is a control sentinel, never a
+             * solution — a root/orphaned consumer would otherwise fabricate an
+             * unbound answer. Treat it as exhaustion alongside DONE. */
+            PyObject *ts = get_TABLING_SUSPEND();
+            int is_done = (value == g_DONE) || (ts && value == ts);
             Py_DECREF(step);
             if (is_done) {
                 Py_RETURN_NONE;   /* search exhausted */

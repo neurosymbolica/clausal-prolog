@@ -92,11 +92,18 @@ except ImportError:
 def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Trail]:
     """Drive a trampoline-protocol dispatch function, yielding trail per solution."""
     sg = StepGenerator(dispatch_fn, None, None, None, *args, trail)
-    while True:
-        result = _drive_until_yield(sg)
-        if result is None:
-            return
-        yield trail
+    try:
+        while True:
+            result = _drive_until_yield(sg)
+            if result is None:
+                return
+            yield trail
+    finally:
+        # A04-F007: close the root generator on ANY exit — normal, caller
+        # abandonment (GeneratorExit), or a body exception that propagated past
+        # the trampoline. This synchronously runs the tabled-wrapper cleanup
+        # (drop a poisoned "evaluating" entry) instead of leaving it to GC.
+        sg.close()
 
 
 def _term_to_goal(term: Any) -> Any:

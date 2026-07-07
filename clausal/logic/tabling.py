@@ -432,6 +432,12 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                 changed = len(entry.answers) > old_count
 
             _resolve_conditions(entry, table_store)
+        except BaseException:
+            # A04-F007: drop a poisoned "evaluating" entry on abnormal exit so
+            # a later query recomputes (or re-raises) rather than silently
+            # returning the partial set. Simple mode has no suspended consumers.
+            table_store.pop(store_key, None)
+            raise
         finally:
             pop_leader()
 
@@ -583,6 +589,23 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             entry.suspended.clear()
 
             _resolve_conditions(entry, table_store)
+        except BaseException:
+            # A04-F007: an abnormal leader exit — GeneratorExit (once() takes
+            # the first answer and abandons the solve loop) or a body exception
+            # (e.g. ZeroDivisionError from `:=`) — must not leave a half-filled
+            # "evaluating" entry behind. Later queries would take the consumer
+            # path and silently return the partial answer set (and, orphaned at
+            # the root, fabricate an unbound answer — A04-F008). Drop the entry
+            # so the next query recomputes (or re-raises), and tear down any
+            # suspended consumers registered on it so their callers don't hang.
+            table_store.pop(store_key, None)
+            for sc in entry.suspended:
+                try:
+                    sc.generator.close()
+                except BaseException:
+                    pass
+            entry.suspended.clear()
+            raise
         finally:
             pop_leader()
 
@@ -611,8 +634,8 @@ def _trampoline_to_simple_adapter(trampoline_dispatch, arity):
         gen, value = root.send(None)
         while True:
             if gen is None:
-                if value is DONE:
-                    return
+                if value is DONE or value is _TABLING_SUSPEND:
+                    return   # A04-F008: suspend sentinel is not a solution
                 yield None  # solution — bindings are live on trail
                 gen, value = root.send(None)
             else:

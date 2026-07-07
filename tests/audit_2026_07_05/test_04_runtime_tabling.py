@@ -770,8 +770,6 @@ class TestF006CrossTypeConflation:
 
 
 class TestF007PoisonedEvaluatingTables:
-    @pytest.mark.xfail(strict=False, reason="A04-F007: once() abandonment leaves "
-                       "entry 'evaluating'; later queries silently partial")
     def test_once_then_full_query(self, load):
         m = load("f007a", PATH_SRC.replace("path", "patha").replace("edge", "edgea"))
         Y = Var()
@@ -784,10 +782,10 @@ class TestF007PoisonedEvaluatingTables:
                          if not is_var(a[0])))
         assert got == [2, 3, 4]
 
-    @pytest.mark.xfail(strict=False, reason="A04-F007: exception during leader "
-                       "leaves entry 'evaluating'; re-query silently partial "
-                       "instead of re-raising/recomputing")
     def test_exception_then_requery(self, load):
+        # A04-F007: a body exception drops the poisoned entry (the drive closes
+        # the StepGenerator chain), so the re-query recomputes and re-raises
+        # rather than silently returning the pre-crash partial answer set.
         m = load("f007b", BOOM_SRC)
         with pytest.raises(ZeroDivisionError):
             list(call("boom", Var(), module=m))
@@ -795,23 +793,26 @@ class TestF007PoisonedEvaluatingTables:
             list(call("boom", Var(), module=m))
 
     def test_poisoned_entry_status_mechanism(self, load):
-        # mechanism guard: documents the poisoned state itself
+        # A04-F007: an abandoned once() no longer leaves an "evaluating" entry —
+        # the tabled-wrapper cleanup drops it on GeneratorExit (was a guard
+        # pinning the poisoned state).
         m = load("f007c", PATH_SRC.replace("path", "pathc").replace("edge", "edgec"))
         Y = Var()
         once(m.pathc(1, Y), m)
         gc.collect()
         store = m.__clausal_module__.db.table_store
         statuses = {e.status for e in store.values()}
-        assert "evaluating" in statuses  # current (buggy) state — fix flips this
+        assert "evaluating" not in statuses
 
 
 # ══ A04-F008: root-level suspend sentinel yields spurious solution ════════════
 
 
 class TestF008RootSuspendSpuriousSolution:
-    @pytest.mark.xfail(strict=False, reason="A04-F008: (None, _TABLING_SUSPEND) "
-                       "misread as a solution — unbound answer yielded")
     def test_no_unbound_answers_from_consumer_query(self, load):
+        # A04-F008: every root driver treats (None, _TABLING_SUSPEND) as
+        # exhaustion, not a solution, so a root/orphaned consumer never
+        # fabricates an unbound answer (defense in depth with F007).
         m = load("f008", PATH_SRC.replace("path", "pathe").replace("edge", "edgee"))
         Y = Var()
         once(m.pathe(1, Y), m)  # poison: leaves consumer-only table state
