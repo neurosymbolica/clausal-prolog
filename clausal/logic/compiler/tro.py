@@ -580,7 +580,7 @@ def _compile_tro_tail(
     for i, arg in enumerate(ordered_args):
         arg_expr = term_to_ast_expr(arg, var_context, eval_arith=False)
         tro_name = f"_tro_arg{i}"
-        stmts.append(_assign(tro_name, _call(_name("deref"), arg_expr)))
+        stmts.append(_assign(tro_name, _call(_name("$deref"), arg_expr)))
 
     # Build the TRO-set statements.
     if tro_mode == "signal":

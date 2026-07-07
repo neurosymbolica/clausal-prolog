@@ -45,6 +45,13 @@ except ImportError:
 
 # ── String-as-list helpers ───────────────────────────────────────────────────
 
+def _is_int(v) -> bool:
+    """A09-F015 / A01-D001(c): a genuine int used as an index/count/length —
+    a bool is NOT accepted (True is not 1) so length(L, True), list_item(True,
+    …), take(True, …) etc. fail instead of silently treating True as 1."""
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
 def _as_items(val):
     """Return list of elements if *val* is a sequence (list or str), else None.
 
@@ -272,7 +279,7 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
         if unify(n, len(items), trail):
             yield (_proceed, None)
         trail.undo(mark)
-    elif not is_var(n_val) and isinstance(n_val, int) and n_val >= 0:
+    elif not is_var(n_val) and _is_int(n_val) and n_val >= 0:
         result = [Var() for _ in range(n_val)]
         mark = trail.mark()
         if unify(lst, result, trail):
@@ -350,7 +357,7 @@ def _nth0__3(this_generator, _proceed, _fail, _catcher, n, lst, elem, trail):
     items = _as_items(lst_val)
     if items is not None:
         if not is_var(n_val):
-            if isinstance(n_val, int) and 0 <= n_val < len(items):
+            if _is_int(n_val) and 0 <= n_val < len(items):
                 mark = trail.mark()
                 if unify(elem, items[n_val], trail):
                     yield (_proceed, None)
@@ -435,11 +442,12 @@ def _msort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail)
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
+        items = [deref(x) for x in items]
         try:
             result = sorted(items)
         except TypeError:
             result = sorted(items, key=lambda x: (type(x).__name__, repr(x)))
-        out = _seq_result(result, isinstance(lst_val, str), _was_bytes(lst_val))
+        out = _seq_result(result, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):
             yield (_proceed, None)
@@ -453,6 +461,7 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
+        items = [deref(x) for x in items]
         seen: list = []
         for x in items:
             if x not in seen:
@@ -461,7 +470,7 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
             result = sorted(seen)
         except TypeError:
             result = sorted(seen, key=lambda x: (type(x).__name__, repr(x)))
-        out = _seq_result(result, isinstance(lst_val, str), _was_bytes(lst_val))
+        out = _seq_result(result, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):
             yield (_proceed, None)
@@ -476,7 +485,7 @@ def _permutation__2(this_generator, _proceed, _fail, _catcher, lst, perm, trail)
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
-        was_str = isinstance(lst_val, str)
+        was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
         if _c_permutation_find is not None and not was_bytes:
             perm_iter = itertools.permutations(items)
@@ -501,7 +510,7 @@ def _select__3(this_generator, _proceed, _fail, _catcher, elem, lst, rest, trail
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
-        was_str = isinstance(lst_val, str)
+        was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
         if _c_select_find is not None and not was_bytes:
             idx = 0
@@ -561,7 +570,11 @@ def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inte
 
 @_trampoline_builtin("union", 3)
 def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail):
-    """union(Set1, Set2, union) — union is Set1 ∪ Set2 (no duplicates)."""
+    """union(Set1, Set2, Union) — Union is Set1 followed by the elements of
+    Set2 not already in Set1 (SWI-consistent). Set1's OWN duplicates are
+    preserved (``union([1,1],[],U)`` = ``[1,1]``); only elements of Set2 that
+    already occur in Set1 are dropped. Use list_to_set/2 first for a true set.
+    """
     s1 = deref(set1)
     s2 = deref(set2)
     s1_items = _as_items(s1)
@@ -587,11 +600,12 @@ def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, tra
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
+        items = [deref(x) for x in items]
         seen: list = []
         for x in items:
             if x not in seen:
                 seen.append(x)
-        out = _seq_result(seen, isinstance(lst_val, str), _was_bytes(lst_val))
+        out = _seq_result(seen, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(set_out, out, trail):
             yield (_proceed, None)
@@ -691,8 +705,8 @@ def _take__3(this_generator, _proceed, _fail, _catcher, n, lst, taken, trail):
     """take(N, List, Taken) — Taken is the first N elements of List."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
-    if isinstance(n_val, int) and items is not None:
-        was_str = isinstance(lst_val, str)
+    if _is_int(n_val) and items is not None:
+        was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
         result = _seq_result(items[:n_val] if n_val >= 0 else [], was_str, was_bytes)
         mark = trail.mark()
@@ -707,8 +721,8 @@ def _drop__3(this_generator, _proceed, _fail, _catcher, n, lst, rest, trail):
     """drop(N, List, Rest) — Rest is List after dropping the first N elements."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
-    if isinstance(n_val, int) and items is not None:
-        was_str = isinstance(lst_val, str)
+    if _is_int(n_val) and items is not None:
+        was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
         result = _seq_result(items[n_val:] if n_val >= 0 else items, was_str, was_bytes)
         mark = trail.mark()
@@ -723,8 +737,8 @@ def _split_at__4(this_generator, _proceed, _fail, _catcher, n, lst, left, right,
     """split_at(N, List, Left, Right) — split List at index N."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
-    if isinstance(n_val, int) and items is not None:
-        was_str = isinstance(lst_val, str)
+    if _is_int(n_val) and items is not None:
+        was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
         idx = max(0, min(n_val, len(items)))
         l_out = _seq_result(items[:idx], was_str, was_bytes)
@@ -789,7 +803,7 @@ def _split_with__3(this_generator, _proceed, _fail, _catcher, sep, lst, parts, t
 
     items = _as_items(lst_val)
     if items is not None:
-        was_str = isinstance(lst_val, str)
+        was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
         # Split mode
         result: list = [[]]
@@ -839,7 +853,7 @@ def _numlist__3(low, high, lst, trail, k):
     high_val = deref(high)
     if is_var(low_val) or is_var(high_val):
         return
-    if not isinstance(low_val, int) or not isinstance(high_val, int):
+    if not _is_int(low_val) or not _is_int(high_val):
         return
     if low_val > high_val:
         return
@@ -854,7 +868,7 @@ def _numlist__2(high, lst, trail, k):
     high_val = deref(high)
     if is_var(high_val):
         return
-    if not isinstance(high_val, int):
+    if not _is_int(high_val):
         return
     if high_val < 1:
         return
@@ -896,8 +910,13 @@ def _same_length__2(l1, l2, trail, k):
     ``list`` sibling the placeholder is the classic list of fresh
     ``Var`` objects.
     """
-    l1_val = deref(l1)
-    l2_val = deref(l2)
+    from clausal.logic.runtime._seg_helpers import normalize_seg_input
+    # F019: walk ground SegList / SegString / SegBytes to their concrete
+    # shape so the seq/placeholder arms below (and _fresh_same_shape's Seg*
+    # branches) fire — the raw isinstance check rejected ground Seg* even
+    # though the docstring and _fresh_same_shape promise support.
+    l1_val = normalize_seg_input(deref(l1))
+    l2_val = normalize_seg_input(deref(l2))
     l1_is_seq = isinstance(l1_val, (list, str, bytes))
     l2_is_seq = isinstance(l2_val, (list, str, bytes))
     if l1_is_seq and l2_is_seq:
@@ -934,10 +953,10 @@ def _transpose__2(matrix, transposed, trail, k):
         r = deref(row)
         items = _as_items(r)
         if items is None:
-            # F055: outer str-matrix mode — a 1-char-str "row" treated
-            # as a single-element row so transpose("ab") yields
-            # [['a'], ['b']]. Falls through here only for outer
-            # sequences that aren't themselves sequences.
+            # A non-sequence row (e.g. an int) is treated as a single-cell
+            # row. This does NOT fire for str rows: _as_items("a") is ['a'],
+            # so transpose("ab") reads two 1-char rows and yields the single
+            # column [['a', 'b']] (F024: not [['a'], ['b']]).
             items = [r]
         rows.append(items)
     if len(set(len(r) for r in rows)) != 1:

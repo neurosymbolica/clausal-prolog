@@ -8,17 +8,36 @@ from clausal.logic.trampoline import DONE
 from clausal.logic.builtins._registry import _trampoline_builtin
 
 
+def _as_valid_pairs(pairs_val):
+    """A09-F018: return the list of deref'd [K, V] pairs if EVERY entry is a
+    2-element list, else None (a malformed entry makes the relation fail).
+
+    Previously the pairs builtins silently skipped non-list entries
+    (``pairs_keys([[1,"a"],"junk"],K)`` → K=[1]) and hit a raw IndexError on a
+    too-short entry (``[deref(p)[1]``). group_pairs_by_key already validates
+    length — this aligns the three pairs_* predicates with it."""
+    valid = []
+    for p in pairs_val:
+        pd = deref(p)
+        if not isinstance(pd, list) or len(pd) != 2:
+            return None
+        valid.append(pd)
+    return valid
+
+
 @_trampoline_builtin("pairs_keys_values", 3)
 def _pairs_keys_values__3(this_generator, _proceed, _fail, _catcher, pairs, keys, values, trail):
     """pairs_keys_values(Pairs, Keys, Values) — Pairs is a list of [K, V] lists."""
     pairs_val = deref(pairs)
     if isinstance(pairs_val, list):
-        ks = [deref(p)[0] for p in pairs_val if isinstance(deref(p), list)]
-        vs = [deref(p)[1] for p in pairs_val if isinstance(deref(p), list)]
-        mark = trail.mark()
-        if unify(keys, ks, trail) and unify(values, vs, trail):
-            yield (_proceed, None)
-        trail.undo(mark)
+        valid = _as_valid_pairs(pairs_val)
+        if valid is not None:
+            ks = [p[0] for p in valid]
+            vs = [p[1] for p in valid]
+            mark = trail.mark()
+            if unify(keys, ks, trail) and unify(values, vs, trail):
+                yield (_proceed, None)
+            trail.undo(mark)
     else:
         ks_val = deref(keys)
         vs_val = deref(values)
@@ -36,11 +55,13 @@ def _pairs_keys__2(this_generator, _proceed, _fail, _catcher, pairs, keys, trail
     """pairs_keys(Pairs, Keys) — Keys are the first elements of each pair."""
     pairs_val = deref(pairs)
     if isinstance(pairs_val, list):
-        ks = [deref(p)[0] for p in pairs_val if isinstance(deref(p), list)]
-        mark = trail.mark()
-        if unify(keys, ks, trail):
-            yield (_proceed, None)
-        trail.undo(mark)
+        valid = _as_valid_pairs(pairs_val)
+        if valid is not None:
+            ks = [p[0] for p in valid]
+            mark = trail.mark()
+            if unify(keys, ks, trail):
+                yield (_proceed, None)
+            trail.undo(mark)
     yield (_fail, DONE)
 
 
@@ -49,11 +70,13 @@ def _pairs_values__2(this_generator, _proceed, _fail, _catcher, pairs, values, t
     """pairs_values(Pairs, Values) — Values are the second elements of each pair."""
     pairs_val = deref(pairs)
     if isinstance(pairs_val, list):
-        vs = [deref(p)[1] for p in pairs_val if isinstance(deref(p), list)]
-        mark = trail.mark()
-        if unify(values, vs, trail):
-            yield (_proceed, None)
-        trail.undo(mark)
+        valid = _as_valid_pairs(pairs_val)
+        if valid is not None:
+            vs = [p[1] for p in valid]
+            mark = trail.mark()
+            if unify(values, vs, trail):
+                yield (_proceed, None)
+            trail.undo(mark)
     yield (_fail, DONE)
 
 

@@ -82,6 +82,13 @@ def _detect_magic_args(arguments: ast.arguments):
     if len(all_args) != 1:
         raise TemplateCompileError(
             f"{_MAGIC_ARGS} must be the sole parameter (found {len(all_args)})")
+    # A10-F014: __args__ must be an ordinary positional parameter. A posonly
+    # (`__args__, /`) or kwonly (`*, __args__`) placement keeps its default in
+    # a different list — indexing arguments.defaults raised a bare
+    # StopIteration; reject it with a clean TemplateCompileError instead.
+    if not any(a.arg == _MAGIC_ARGS for a in arguments.args):
+        raise TemplateCompileError(
+            f"{_MAGIC_ARGS} must be a positional parameter")
     idx = next(i for i, a in enumerate(arguments.args) if a.arg == _MAGIC_ARGS)
     didx = idx - (len(arguments.args) - len(arguments.defaults))
     if didx < 0:

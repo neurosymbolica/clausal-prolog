@@ -8,6 +8,7 @@ from typing import Any
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.predicate import PredicateMeta, is_term_instance
 from clausal.terms import Compound
+from clausal.logic.exceptions import LogicException, permission_error
 
 from clausal.logic.builtins._registry import (
     _db_builtin, structural_unify,
@@ -50,14 +51,21 @@ def _normalize_fact_clause(term: Any):
 def _build_clause(term_val: Any) -> "Any":
     """Build a Clause from a runtime term passed to assertz/asserta.
 
-    Handles Predicate nodes (rules) and plain terms (facts).
-    Ground Compound facts are normalized to Var+Is form.
+    Only plain terms (facts) are accepted; ground Compound facts are
+    normalized to Var+Is form.
+
+    A09-F005 (decision b): a Predicate node (a rule, ``h(X) <- b(X)``) is
+    rejected with a typed ``permission_error`` — its body cannot be lowered
+    by ``compile_predicate_trampoline``, and previously the clause was stored
+    *before* that failure surfaced, poisoning every later query of the
+    predicate. Rejecting here, before ``db.assertz``, keeps the existing
+    clauses queryable. See docs/database_ops.md (A09-F026).
     """
-    from clausal.logic.database import Clause, _flatten_body  # avoid top-level cycle
     from clausal.terms import Predicate as _Predicate
 
     if isinstance(term_val, _Predicate):
-        return Clause(head=term_val.head, body=_flatten_body(term_val.body))
+        raise LogicException(
+            permission_error("assert", "rule", term_val.head, "assert/1"))
     return _normalize_fact_clause(term_val)
 
 
@@ -95,10 +103,13 @@ def _assertz_factory(db):
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, module_dict)
         if pred_cls is not None and pred_cls._locked:
-            raise RuntimeError(
-                f"Predicate {functor}/{arity} is locked. "
-                "Use dynamic() to allow runtime assertion."
-            )
+            # A09-F006 (decision A09-D002 a): raise a typed permission_error,
+            # not RuntimeError — the drive loop treats RuntimeError as
+            # generator exhaustion and silently swallows it. LogicException
+            # routes correctly and is catchable by catch/3.
+            raise LogicException(permission_error(
+                "modify", "static_procedure",
+                Compound("/", (functor, arity)), "assertz/1"))
         # db.assertz syncs pred_cls._clauses and clears its dispatch.
         db.assertz(clause)
         clauses = db.clauses_for(functor, arity)
@@ -128,10 +139,10 @@ def _asserta_factory(db):
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, module_dict)
         if pred_cls is not None and pred_cls._locked:
-            raise RuntimeError(
-                f"Predicate {functor}/{arity} is locked. "
-                "Use dynamic() to allow runtime assertion."
-            )
+            # A09-F006: typed permission_error (see assertz/1 above).
+            raise LogicException(permission_error(
+                "modify", "static_procedure",
+                Compound("/", (functor, arity)), "asserta/1"))
         # db.asserta syncs pred_cls._clauses and clears its dispatch.
         db.asserta(clause)
         clauses = db.clauses_for(functor, arity)
@@ -170,10 +181,10 @@ def _retract_factory(db):
             return
         pred_cls = _find_pred_cls(functor, module_dict)
         if pred_cls is not None and pred_cls._locked:
-            raise RuntimeError(
-                f"Predicate {functor}/{arity} is locked. "
-                "Use dynamic() to allow runtime retraction."
-            )
+            # A09-F006: typed permission_error (see assertz/1 above).
+            raise LogicException(permission_error(
+                "modify", "static_procedure",
+                Compound("/", (functor, arity)), "retract/1"))
         # Find first clause whose head unifies with term_val (and whose
         # Is-body goals are consistent with that unification).
         from clausal.terms import Unify as _Unify  # avoid top-level cycle
@@ -214,6 +225,15 @@ def _retract_factory(db):
             if clauses:
                 compile_predicate_trampoline(functor, arity, clauses, db,
                                              globals_=module_dict, pred_cls=pred_cls)
+            # A09-F008 (decision A09-D003 a): bind the pattern on the REAL
+            # trail so the retracted clause's argument values escape with the
+            # solution (ISO/SWI "retract by pattern"). The clause is already
+            # removed, so binding its template vars is safe; normal
+            # backtracking undoes these bindings via the engine trail.
+            structural_unify(term_val, clause.head, trail)
+            for goal in clause.body:
+                if isinstance(goal, _Unify):
+                    structural_unify(deref(goal.left), deref(goal.right), trail)
             yield None
             return  # retract is not backtrackable
 

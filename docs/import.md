@@ -397,7 +397,7 @@ SyntaxError: Cannot import foo.pl: Cut (!/0) cannot be translated to Clausal.
 - **Bare Prolog atoms** (lowercase identifiers like `red`, `foo`) become bare Python names in the translated output. Unless declared via `-module(...)`, they cause `NameError` at runtime. Use quoted atoms (`'red'`), integers, or strings for data values.
 - **The `.pl` extension is also used by Perl.** If a Perl script ends up on `sys.path`, the import hook will attempt to parse it as Prolog and raise a `SyntaxError`. Avoid placing Perl scripts in directories on `sys.path`.
 - **Encoding:** All `.pl` files must be UTF-8 encoded. Non-UTF-8 files will raise `UnicodeDecodeError`.
-- **Stdlib shadowing:** A file like `os.pl` or `re.pl` on `sys.path` will not shadow the Python standard library (Python's built-in finders run after the Clausal finders only find their own extensions), but a file like `json.pl` could shadow `clausal.modules.json` via `ModulesFinder`. Avoid naming `.pl` files after standard Python or Clausal modules.
+- **Stdlib shadowing:** The Clausal finders (`.clausal`, `.pl`) run *before* Python's `PathFinder` on `sys.meta_path`. A file like `os.clausal` or `re.pl` on `sys.path` named after a standard-library module is almost always an accident, so Clausal does **not** shadow it: the finder emits a `ClausalLintWarning` and defers to the standard library (the stdlib module is imported). Rename the file to avoid the warning. Avoid naming `.clausal`/`.pl` files after standard Python or Clausal modules.
 
 ### Loading `.pl` files programmatically
 

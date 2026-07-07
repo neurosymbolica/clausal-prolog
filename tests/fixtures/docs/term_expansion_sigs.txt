@@ -6,7 +6,7 @@ TermExpansion(
     q(fact(X)),
     [q(fact(X)), q(logged_fact(X))],
     STATE, STATE
-)
+),
 
 fact("a"),
 fact("b"),
@@ -38,7 +38,7 @@ TermExpansion(TERM, [TERM, TERM], STATE, STATE) <- True
 --8<-- [start:quasi_quotation]
 # Without q(): the expansion rule would try to CALL double_fact(X)
 # With q(): double_fact(X) is treated as data to be transformed
-TermExpansion(q(double_fact(X)), [q(fact(X)), q(fact(X))], S, S)
+TermExpansion(q(double_fact(X)), [q(fact(X)), q(fact(X))], S, S),
 --8<-- [end:quasi_quotation]
 
 --8<-- [start:module_state_threading]

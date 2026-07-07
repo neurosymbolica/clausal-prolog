@@ -26,6 +26,15 @@ def _is_numeric(val) -> bool:
     return isinstance(val, (int, float, Quantity))
 
 
+def _all_known_numeric(*vals) -> bool:
+    """A09-F011: True if every already-bound (non-Var) operand is numeric
+    (int/float/Quantity, not bool). Var operands are allowed — the mode is not
+    yet determined. Used to guard plus/max_/min_ at the dispatch boundary so a
+    non-numeric operand fails cleanly instead of the C fast path concatenating
+    strings or leaking a raw TypeError. bool is excluded (A09-F015/A01-D001)."""
+    return all(is_var(v) or _is_numeric(v) for v in vals)
+
+
 def _is_int_like(val) -> bool:
     """True if val is a plain int or a Quantity with integer value (not bool)."""
     if isinstance(val, bool):
@@ -117,12 +126,16 @@ def _between__3_py(low, high, x, trail, k):
     high_val = deref(high)
     if is_var(low_val) or is_var(high_val):
         return
-    if not isinstance(low_val, int) or not isinstance(high_val, int):
+    # A09-F015 / A01-D001(c): reject bool bounds — the C path already does, so
+    # this removes the between(False, True, X) C-vs-Python divergence.
+    if not isinstance(low_val, int) or isinstance(low_val, bool) or \
+       not isinstance(high_val, int) or isinstance(high_val, bool):
         return
     x_val = deref(x)
     if not is_var(x_val):
         # Check mode
-        if isinstance(x_val, int) and low_val <= x_val <= high_val:
+        if isinstance(x_val, int) and not isinstance(x_val, bool) \
+                and low_val <= x_val <= high_val:
             yield None
     else:
         # Generate mode
@@ -165,14 +178,11 @@ def _plus__3_py(x, y, z, trail, k):
     y_known = not is_var(y_val)
     z_known = not is_var(z_val)
 
-    # plus/3 is a numeric relation: a non-numeric known operand (e.g. a
-    # string) must fail cleanly, not concatenate or raise TypeError from the
-    # inverse subtraction (A06-F015).
-    if x_known and not _is_numeric(x_val):
-        return
-    if y_known and not _is_numeric(y_val):
-        return
-    if z_known and not _is_numeric(z_val):
+    # plus/3 is a numeric relation: every KNOWN operand must be numeric — a
+    # non-numeric operand (e.g. a string) must fail cleanly, not concatenate
+    # (C fast path) or raise TypeError from the inverse subtraction
+    # (A06-F015 / A09-F011; also enforced at the dispatch boundary).
+    if not _all_known_numeric(x_val, y_val, z_val):
         return
 
     if x_known and y_known:
@@ -215,8 +225,8 @@ def _max__3_py(x, y, z, trail, k):
     y_val = deref(y)
     if is_var(x_val) or is_var(y_val):
         return
-    if not _is_numeric(x_val) or not _is_numeric(y_val):
-        return  # A06-F015: reject non-numeric operands
+    if not _all_known_numeric(x_val, y_val):  # A06-F015 / A09-F011
+        return
     # max() uses __gt__ which Quantity implements (raises on dim mismatch)
     mark = trail.mark()
     if unify(z, max(x_val, y_val), trail):
@@ -233,8 +243,8 @@ def _min__3_py(x, y, z, trail, k):
     y_val = deref(y)
     if is_var(x_val) or is_var(y_val):
         return
-    if not _is_numeric(x_val) or not _is_numeric(y_val):
-        return  # A06-F015: reject non-numeric operands
+    if not _all_known_numeric(x_val, y_val):  # A06-F015 / A09-F011
+        return
     mark = trail.mark()
     if unify(z, min(x_val, y_val), trail):
         yield None
@@ -567,6 +577,10 @@ def _succ__2(x, y, trail, k):
 
 @_builtin("plus", 3)
 def _plus__3(x, y, z, trail, k):
+    # A09-F011: guard here so the C fast path (which concatenates strings and
+    # raises a raw TypeError on mixed operands) never runs on non-numerics.
+    if not _all_known_numeric(deref(x), deref(y), deref(z)):
+        return
     yield from (_plus__3_c if _USE_C_ARITH else _plus__3_py)(x, y, z, trail, k)
 
 @_builtin("abs_", 2)
@@ -575,10 +589,14 @@ def _abs__2(x, y, trail, k):
 
 @_builtin("max_", 3)
 def _max__3(x, y, z, trail, k):
+    if not _all_known_numeric(deref(x), deref(y)):  # A09-F011 (see plus/3)
+        return
     yield from (_max__3_c if _USE_C_ARITH else _max__3_py)(x, y, z, trail, k)
 
 @_builtin("min_", 3)
 def _min__3(x, y, z, trail, k):
+    if not _all_known_numeric(deref(x), deref(y)):  # A09-F011 (see plus/3)
+        return
     yield from (_min__3_c if _USE_C_ARITH else _min__3_py)(x, y, z, trail, k)
 
 @_builtin("sign", 2)
@@ -599,7 +617,14 @@ def _lcm__3(x, y, l, trail, k):
 
 @_builtin("exp_mod", 4)
 def _expmod__4(base, exp, mod, result, trail, k):
-    yield from (_expmod__4_c if _USE_C_ARITH else _expmod__4_py)(base, exp, mod, result, trail, k)
+    # A09-F012: pow(base, -1, mod) raises a raw ValueError when base has no
+    # modular inverse (uncatchable by catch/3). Convert to a typed
+    # evaluation_error(undefined) — this covers both the C and Python paths.
+    try:
+        yield from (_expmod__4_c if _USE_C_ARITH else _expmod__4_py)(base, exp, mod, result, trail, k)
+    except ValueError:
+        from clausal.logic.exceptions import LogicException, evaluation_error
+        raise LogicException(evaluation_error("undefined", "exp_mod/4"))
 
 @_builtin("popcount", 2)
 def _popcount__2(x, count, trail, k):

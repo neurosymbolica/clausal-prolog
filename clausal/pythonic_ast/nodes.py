@@ -88,6 +88,8 @@ __all__ = [
     "Directive", "ImportFromDirective", "ImportModuleDirective",
     "ModuleDeclaration", "PrivateDeclaration", "TranslationsDirective",
     "BareAtomRefs", "StrictAtomsDeclaration", "OverwritesDeclaration",
+    # A10-F016: these were defined but absent from __all__.
+    "SpecializeDirective", "EdcgAccDecl", "EdcgPassDecl", "EdcgPredDecl",
     # Imports
     "Import", "ImportFrom",
     # Compound statements
@@ -265,9 +267,15 @@ class SubscriptNode(Node):
         return f"{subscript.object}[{subscript.index}]"
 
 
-@dataclass
+@node_class
 class ElementsLiteral(Node):
-    """Base for collection literals that hold a flat element list."""
+    """Base for collection literals that hold a flat element list.
+
+    A10-F016: uses ``@node_class`` (like the sibling ``PatternList``) so
+    ``elements`` is a traversed node-list — ``visit_children`` /
+    ``transform_children`` descend into it. Plain ``@dataclass`` inherited
+    Node's no-op traversal, silently skipping the elements.
+    """
     elements: list[Node] = field(default_factory=list)
 
 

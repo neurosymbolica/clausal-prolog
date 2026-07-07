@@ -159,9 +159,6 @@ badeq(X) <- (X == myatom)
 badeqs(X) <- (X == "somestr")
 """
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A12-F002: X == atom succeeds vacuously with an "
-                              "unbounded FD var instead of type-error/failure")
     def test_eq_atom_operand_rejected(self, load):
         m = load("f002", self.SRC)
         x = Var()
@@ -171,8 +168,6 @@ badeqs(X) <- (X == "somestr")
             return  # a (catchable) type error is acceptable
         assert sols == [], "X == myatom must not succeed"
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A12-F002: X == \"str\" succeeds vacuously")
     def test_eq_str_operand_rejected(self, load):
         m = load("f002", self.SRC)
         x = Var()
@@ -182,22 +177,14 @@ badeqs(X) <- (X == "somestr")
             return
         assert sols == [], 'X == "somestr" must not succeed'
 
-    def test_eq_atom_current_behaviour_is_inverted(self, load):
-        # Pin the wrongness so a future fix flips this guard consciously:
-        # after badeq(X) "succeeds", X unifies with 42 but not with myatom.
+    def test_eq_atom_raises_catchable_type_error(self, load):
+        # A12-F002 fixed: X == myatom now raises a catchable LogicException
+        # (type error) instead of leaving X an inverted-semantics FD var.
+        from clausal.logic.exceptions import LogicException
         m = load("f002", self.SRC)
         x = Var()
-        n = 0
-        for _ in solve(m.badeq(x)):
-            n += 1
-            xv = deref(x)
-            assert is_var(xv) and get_attr(xv, FD_KEY) is not None
-            t = Trail()
-            assert unify(x, 42, t)      # "equals myatom" but 42 fits...
-            t.undo(0)
-            t2 = Trail()
-            assert not unify(x, m.myatom, t2)   # ...and myatom itself doesn't
-        assert n == 1
+        with pytest.raises(LogicException):
+            list(solve(m.badeq(x)))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -211,9 +198,6 @@ badeqs(X) <- (X == "somestr")
 
 class TestF003DirectiveTargetValidation:
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A12-F003: -table naming an undefined predicate "
-                              "is silently ignored — should be a load error")
     def test_table_of_undefined_predicate_errors_at_load(self, load):
         with pytest.raises(Exception):
             load("f003_ghost", """\
@@ -222,9 +206,6 @@ class TestF003DirectiveTargetValidation:
 q(1),
 """)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A12-F003: -table with wrong arity silently "
-                              "leaves the predicate untabled (dup answers)")
     def test_table_with_wrong_arity(self, load):
         # -table(reach/3) but reach/2 is defined: load should error, or at
         # minimum reach/2 must not silently lose tabling (diamond dedup).
@@ -258,10 +239,9 @@ reach(X, Y) <- (
 class TestF004EngineNamespaceLeak:
 
     @pytest.mark.parametrize("name", ["walk", "deref", "unify"])
-    @pytest.mark.xfail(strict=False,
-                       reason="A12-F004: user predicate named after a leaked "
-                              "engine helper breaks at load (cryptic TypeError)")
     def test_user_predicate_named_after_engine_helper(self, load, name):
+        # A12-F004 fixed: walk/deref/unify are injected $-prefixed only, so
+        # a user predicate can use those public names.
         m = load(f"f004_{name}", f'{name}("a", "b"),\n')
         x = Var()
         got = [deref(x) for _ in solve(getattr(m, name)("a", x))]
@@ -273,8 +253,11 @@ class TestF004EngineNamespaceLeak:
         leaked = {k for k in m.__dict__
                   if not k.startswith("_")
                   and getattr(V, k, None) is m.__dict__[k]}
-        # pin the current leak set so a fix (or a widening) is visible
-        assert {"walk", "deref", "unify", "Var", "Trail"} <= leaked
+        # A12-F004: walk/deref/unify are no longer leaked under public names
+        # (generated bodies use the reserved $-prefix). The user-facing types
+        # Var/Trail are intentionally still injected for embedded Python.
+        assert not ({"walk", "deref", "unify"} & leaked)
+        assert {"Var", "Trail"} <= leaked
 
     def test_solve_named_predicate_currently_works(self, load):
         # control: 'solve' is NOT leaked, so a solve/2 user predicate is fine
@@ -298,10 +281,6 @@ class TestF005DynamicForwardDeclaration:
 seed <- assertz(ghost("x"))
 """
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A12-F005: -dynamic with no clauses does not "
-                              "bring the predicate into scope; assertz raises "
-                              "NameError")
     def test_assertz_into_clauseless_dynamic_predicate(self, load):
         m = load("f005", self.SRC)
         logic_mod = m.__dict__["$module"]

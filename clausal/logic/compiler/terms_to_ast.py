@@ -313,7 +313,7 @@ def term_to_ast_expr(
                 py_keys.append(None)
                 py_vals.append(
                     ast.Attribute(
-                        value=_call(_name("deref"), _rec(v)),
+                        value=_call(_name("$deref"), _rec(v)),
                         attr="data",
                         ctx=ast.Load(),
                     )
@@ -422,13 +422,13 @@ def term_to_ast_expr(
         for var_obj in term.var_objects:
             vid = var_obj._id
             if vid in var_context:
-                arg_exprs.append(_call(_name("deref"), _name(var_context[vid])))
+                arg_exprs.append(_call(_name("$deref"), _name(var_context[vid])))
             else:
                 # Body-only var — allocate and deref
                 vname = _var_python_name(var_obj)
                 var_context[vid] = vname
                 arg_exprs.append(_call(
-                    _name("deref"),
+                    _name("$deref"),
                     ast.NamedExpr(
                         target=ast.Name(id=vname, ctx=ast.Store()),
                         value=_call(_name("Var")),
@@ -475,7 +475,7 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
     if is_var(term):
         vid = term._id
         vname = var_context.get(vid, _var_python_name(term))
-        return _call(_name("deref"), _name(vname))
+        return _call(_name("$deref"), _name(vname))
 
     term = literal_value(term)
     if isinstance(term, (int, float, Fraction)) and not isinstance(term, bool):

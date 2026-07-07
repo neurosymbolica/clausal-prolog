@@ -41,7 +41,11 @@ def dump_source(path: str) -> str:
             category=SyntaxWarning,
         )
         tree = ast.parse(source, filename=path)
-    tree = EmbedTransformer().visit(tree)
+    # A10-F007: pass source_lines so arrow detection is byte-faithful to
+    # import_hook._parse_clausal_source. Without it, a legal Lt guard like
+    # ``X< -3`` uses the column-gap heuristic and dumps a Lambda/Predicate,
+    # diverging from what the import hook actually compiles.
+    tree = EmbedTransformer(source_lines=source.splitlines(keepends=True)).visit(tree)
     ast.fix_missing_locations(tree)
 
     unparsed = ast.unparse(tree)
@@ -49,8 +53,14 @@ def dump_source(path: str) -> str:
     # Try to format with black if available.
     # The transformed source contains $-prefixed names which aren't valid Python,
     # so we temporarily rename them for formatting, then restore them.
+    # A10-F007: guard the import separately — referencing black.parsing in the
+    # except tuple when `import black` itself failed raised UnboundLocalError
+    # on every call in a black-less environment.
     try:
         import black
+    except ImportError:
+        black = None
+    if black is not None:
         import re
 
         # Replace $name with __dollar_name__ for parsing
@@ -62,13 +72,14 @@ def dump_source(path: str) -> str:
             return safe
 
         safe_source = re.sub(r"\$\w+", _replace_dollar, unparsed)
-        formatted = black.format_str(safe_source, mode=black.Mode())
-        # Restore $names
-        for safe, orig in dollar_names.items():
-            formatted = formatted.replace(safe, orig)
-        unparsed = formatted
-    except (ImportError, black.parsing.InvalidInput):
-        pass
+        try:
+            formatted = black.format_str(safe_source, mode=black.Mode())
+            # Restore $names
+            for safe, orig in dollar_names.items():
+                formatted = formatted.replace(safe, orig)
+            unparsed = formatted
+        except black.parsing.InvalidInput:
+            pass
 
     return unparsed
 

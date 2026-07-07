@@ -23,6 +23,7 @@ from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.builtins._registry import _builtin
+from clausal.logic.builtins.lists import _as_items
 
 # ── C-accelerated inner loops (Option B: C helpers from Python generators) ───
 
@@ -106,7 +107,14 @@ for _t in _CHAR_TYPES:
 # keep the relation consistent across modes. Lazy per-type cache: the
 # first enumeration of a Unicode-eligible type walks the BMP once and
 # memoises the full char list.
-_UNICODE_TYPES = {"alpha", "alnum", "upper", "lower", "print"}
+# F013 (A09): digit (str.isdigit: '٣', '²'…), space (NBSP '\xa0'…) and
+# punct ('¡'…) are Unicode-aware in test-mode, so their enumeration must be
+# too — otherwise char_type(C, digit) yields only the 10 ASCII digits while
+# char_type('٣', digit) succeeds (mode-inconsistent). ascii/control stay
+# ASCII: their classifiers are codepoint-bounded (< 128 / < 32 or == 127),
+# so ASCII coverage is genuinely exhaustive.
+_UNICODE_TYPES = {"alpha", "alnum", "upper", "lower", "print",
+                  "digit", "space", "punct"}
 _TYPE_TO_CHARS_UNICODE: dict[str, list[str]] = {}
 
 
@@ -115,9 +123,8 @@ def _type_to_chars_unicode(type_name: str) -> list[str]:
 
     Walks the Basic Multilingual Plane (0x0000-0xFFFF) on first call
     and caches the result. Returns the ASCII-only list for types not
-    in ``_UNICODE_TYPES`` (e.g. ``ascii``, ``control``, ``digit``,
-    ``space``, ``punct``) where ASCII coverage is already exhaustive
-    or the classification is intentionally narrow.
+    in ``_UNICODE_TYPES`` (``ascii``, ``control``) where the classifier
+    is codepoint-bounded so ASCII coverage is already exhaustive.
     """
     if type_name not in _UNICODE_TYPES:
         return _TYPE_TO_CHARS.get(type_name, [])
@@ -189,8 +196,15 @@ def _char_type__2(char, type_, trail, k):
                 yield None
                 trail.undo(mark)
         else:
-            # Char bound, Type unbound → enumerate matching types
-            for t_name in _CHAR_TO_TYPES.get(vc, []):
+            # Char bound, Type unbound → enumerate matching types.
+            # F014 (A09): _CHAR_TO_TYPES is a precomputed ASCII table, so a
+            # non-ASCII char is absent → test each classifier dynamically
+            # (mirrors the C helper), otherwise char_type('α', T) would
+            # enumerate nothing on a build without the C extension.
+            matching = _CHAR_TO_TYPES.get(vc)
+            if matching is None:
+                matching = [t for t, fn in _CHAR_TYPES.items() if fn(vc)]
+            for t_name in matching:
                 mark = trail.mark()
                 if unify(type_, t_name, trail):
                     yield None
@@ -214,8 +228,8 @@ def _char_type__2(char, type_, trail, k):
             trail.undo(mark)
     else:
         # Type bound, Char unbound → C-accelerated ASCII enumeration
-        # (used for types whose classifier is intentionally ASCII-only,
-        # e.g. ``ascii``, ``control``, ``digit``, ``space``, ``punct``).
+        # (used for types whose classifier is codepoint-bounded ASCII,
+        # e.g. ``ascii``, ``control``).
         if not isinstance(vt, str):
             return
         tidx = _c_type_name_index(vt)
@@ -264,7 +278,9 @@ def _char_code__2(char, code, trail, k):
             yield None
         trail.undo(mark)
     elif n_bound:
-        if not isinstance(vn, int):
+        # A09-F015 / A01-D001(c): a bool code is rejected (char_code(C, True)
+        # must not build '\x01').
+        if not isinstance(vn, int) or isinstance(vn, bool):
             raise LogicException(type_error("integer", vn, "char_code/2"))
         if not (0 <= vn < 0x110000):
             return  # logical failure — out-of-range code point
@@ -351,11 +367,15 @@ def _atom_chars__2(atom, chars, trail, k):
             yield None
         trail.undo(mark)
     elif c_bound:
-        if not isinstance(vc, list):
+        # F017 (A09): a str IS a char list and a bytes IS a code list under
+        # strings-as-lists / bytes-as-codes, so route through _as_items
+        # (str/bytes/ground Seg* → element list) rather than a bare
+        # isinstance-list check. A str element then validates as a character.
+        items = _as_items(vc)
+        if items is None:
             raise LogicException(type_error("list", vc, "atom_chars/2"))
-        # Deref each element and validate
         elems = []
-        for elem in vc:
+        for elem in items:
             e = deref(elem)
             if is_var(e):
                 raise LogicException(instantiation_error("atom_chars/2"))
@@ -393,10 +413,11 @@ def _atom_codes__2(atom, codes, trail, k):
             yield None
         trail.undo(mark)
     elif c_bound:
-        if not isinstance(vc, list):
+        items = _as_items(vc)  # F017: bytes/str/ground Seg* → element list
+        if items is None:
             raise LogicException(type_error("list", vc, "atom_codes/2"))
         elems = []
-        for elem in vc:
+        for elem in items:
             e = deref(elem)
             if is_var(e):
                 raise LogicException(instantiation_error("atom_codes/2"))
@@ -428,6 +449,14 @@ def _atom_concat__3(a, b, c, trail, k):
     (append may return a list when inputs are mixed).
     """
     va, vb, vc = deref(a), deref(b), deref(c)
+    # A09-F031 / F077: validate every BOUND arg is atom-shaped up front,
+    # regardless of mode. Previously the check lived only in the final
+    # instantiation branch, so a check-mode call like
+    # atom_concat(12, "a", "12a") silently failed instead of raising the same
+    # type_error(atom, 12) the open mode does.
+    for arg_val in (va, vb, vc):
+        if not is_var(arg_val) and _atom_to_str(arg_val) is None:
+            raise LogicException(type_error("atom", arg_val, "atom_concat/3"))
     sa = _atom_to_str(va) if not is_var(va) else None
     sb = _atom_to_str(vb) if not is_var(vb) else None
     sc = _atom_to_str(vc) if not is_var(vc) else None
@@ -473,19 +502,8 @@ def _atom_concat__3(a, b, c, trail, k):
                 yield None
             trail.undo(mark)
     else:
-        # F077 (C9 audit): if any arg is bound but not atom-shaped
-        # (list, int, float, compound, …), surface the real ISO error —
-        # ``type_error(atom, NonAtom)`` — rather than masking it as
-        # ``instantiation_error`` (which the boundness-via-
-        # ``_atom_to_str is None`` inference would otherwise emit and
-        # which any ``catch(_, instantiation_error, _)`` handler would
-        # swallow).
-        for arg_val in (va, vb, vc):
-            if not is_var(arg_val) and _atom_to_str(arg_val) is None:
-                raise LogicException(
-                    type_error("atom", arg_val, "atom_concat/3")
-                )
-        # C unbound and not enough info to compute it
+        # Non-atom bound args are already rejected up front (F031/F077), so
+        # reaching here means too few args are bound to compute C.
         raise LogicException(instantiation_error("atom_concat/3"))
 
 
@@ -507,6 +525,10 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
 
     va = va_str
     n = len(va)
+    # A09-F015 / A01-D001(c): a bool bound to Before/Length/After is not an
+    # integer position (True is not 1) — reject before either search path.
+    if any(isinstance(deref(p), bool) for p in (before, length, after)):
+        return
     vs = deref(sub)
 
     # Optimization: if Sub is bound, use str.find to locate occurrences.
@@ -593,6 +615,13 @@ def _number_chars__2(number, chars, trail, k):
     Number bound → unify Chars with list(str(Number)).
     Chars bound (list of single-char strings) → parse as int or float.
     Both bound → test equality.
+
+    A09-F030: parsing is deliberately Python-native (``int()`` then
+    ``float()``), per the language-is-Python contract (A08-D001). It is
+    therefore *lenient* relative to ISO ``number_chars``: surrounding
+    whitespace (``" 1"``), digit-group underscores (``"1_0"``), and the float
+    literals ``"inf"`` / ``"nan"`` are accepted. A char list that Python
+    cannot parse as a number fails (no solution).
     """
     vn = deref(number)
     vc = deref(chars)
@@ -607,10 +636,11 @@ def _number_chars__2(number, chars, trail, k):
             yield None
         trail.undo(mark)
     elif c_bound:
-        if not isinstance(vc, list):
+        items = _as_items(vc)  # F017: str/ground Seg* → element list
+        if items is None:
             raise LogicException(type_error("list", vc, "number_chars/2"))
         elems = []
-        for elem in vc:
+        for elem in items:
             e = deref(elem)
             if is_var(e):
                 raise LogicException(instantiation_error("number_chars/2"))
@@ -641,6 +671,9 @@ def _number_codes__2(number, codes, trail, k):
 
     Number bound → unify Codes with [ord(c) for c in str(Number)].
     Codes bound (list of ints) → join as chars, parse as int or float.
+
+    A09-F030: parsing is deliberately Python-native and therefore lenient
+    (accepts whitespace, ``1_0``, ``inf``/``nan``) — see number_chars/2.
     """
     vn = deref(number)
     vc = deref(codes)
@@ -655,10 +688,11 @@ def _number_codes__2(number, codes, trail, k):
             yield None
         trail.undo(mark)
     elif c_bound:
-        if not isinstance(vc, list):
+        items = _as_items(vc)  # F017: bytes/str/ground Seg* → element list
+        if items is None:
             raise LogicException(type_error("list", vc, "number_codes/2"))
         elems = []
-        for elem in vc:
+        for elem in items:
             e = deref(elem)
             if is_var(e):
                 raise LogicException(instantiation_error("number_codes/2"))

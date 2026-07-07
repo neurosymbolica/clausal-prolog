@@ -269,18 +269,19 @@ greeting --> ["hello", "world"].
         result = prolog_to_clausal(src)
         assert ">>" in result
 
-    def test_cut_translated(self):
-        # nv
+    def test_cut_rejected(self):
+        # nv — A10-F001: cut cannot be translated (cut-free contract); a
+        # body-position ! raises, matching term-position ! and docs/import.md.
         src = "foo(X) :- bar(X), !."
-        result = prolog_to_clausal(src)
-        assert "Cut()" in result
+        with pytest.raises(PrologTranslationError, match="[Cc]ut"):
+            prolog_to_clausal(src)
 
-    def test_cut_fact_translated(self):
-        """A bare cut as a goal in a clause body is translated."""
+    def test_cut_fact_rejected(self):
+        """A bare cut as a goal in a clause body is rejected (A10-F001)."""
         # nv
         src = "foo :- !."
-        result = prolog_to_clausal(src)
-        assert "Cut()" in result
+        with pytest.raises(PrologTranslationError, match="[Cc]ut"):
+            prolog_to_clausal(src)
 
     def test_op_directive_as_comment(self):
         # nv

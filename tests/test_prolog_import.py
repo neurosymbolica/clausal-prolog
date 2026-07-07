@@ -346,14 +346,15 @@ class TestPriority:
 class TestErrors:
     """Translation errors surface as SyntaxError."""
 
-    def test_cut_loads_successfully(self, tmp_path):
-        # nv
+    def test_cut_rejected(self, tmp_path):
+        # nv — A10-F001: cut is rejected at import (cut-free contract), not
+        # emitted as a dead Cut() goal that fails at query time.
         path = _write_pl(tmp_path, "_pl_test_cut", """\
             first(X, [X|_]) :- !.
             first(X, [_|T]) :- first(X, T).
         """)
-        mod = _load_prolog_module("_pl_test_cut", path)
-        assert "First" in mod.__dict__
+        with pytest.raises(SyntaxError, match="[Cc]ut"):
+            _load_prolog_module("_pl_test_cut", path)
 
     def test_if_then_else_raises_syntax_error(self, tmp_path):
         # nv

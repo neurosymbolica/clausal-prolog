@@ -34,6 +34,6 @@ test("decompose float: functor(1.0, N, A)") :-
     functor(1.0, N, A),
     A == 0.
 
-test("unpack int: 1 =.. X gives ['1']") :-
+test("unpack int: 1 =.. X gives [1]") :-
     unpack(1, X),
-    X == ["1"].
+    X == [1].

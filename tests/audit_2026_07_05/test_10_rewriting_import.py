@@ -55,9 +55,6 @@ def _values(goal, var):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F001: body-position ! emits Cut() "
-                   "instead of the documented SyntaxError (prolog_to_clausal "
-                   "_emit_goal preempts _emit_atom's rejection)")
 def test_F001_pl_cut_rejected_at_import(tmp_path):
     pl = tmp_path / "a10_cut.pl"
     pl.write_text("f(X) :- X > 0, !.\n")
@@ -85,9 +82,6 @@ def test_F001_guard_pl_non_utf8_rejected(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F002: EmbedTransformer.visit_Name "
-                   "rewrites Store-context names to X.value (ctx=Load) — "
-                   "'MAX = 5' fails module load with a cryptic ValueError")
 def test_F002_allcaps_python_assignment_loads(tmp_path):
     m = _load(tmp_path, """
         MAX = 5
@@ -96,8 +90,6 @@ def test_F002_allcaps_python_assignment_loads(tmp_path):
     assert m.MAX == 5
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F002: '_tmp = 5' inside a def in a "
-                   ".clausal file breaks module load the same way")
 def test_F002_underscore_python_local_loads(tmp_path):
     m = _load(tmp_path, """
         def helper():
@@ -121,9 +113,6 @@ def test_F002_guard_lowercase_python_code_ok(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F003: non-EDCG callees consume "
-                   "straight to the final out var — a(S0,SF), b(SF,SF) instead "
-                   "of a(S0,S1), b(S1,SF)")
 def test_F003_edcg_sequence_of_plain_dcg_nonterminals(tmp_path):
     m = _load(tmp_path, """
         a >> (["a"])
@@ -248,10 +237,6 @@ def test_F005_guard_regex_pattern_precompiled(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F006: _build_arrow_lambda builds "
-                   "the inner TermTransformer without source_lines, so 'X< -3' "
-                   "in a lambda body hits the gap<=2 heuristic and is misparsed "
-                   "as a nested arrow lambda")
 def test_F006_lambda_body_lt_negative_literal(tmp_path):
     m = _load(tmp_path, """
         f(L, R) <- include((X <- (X< -3)), L, R)
@@ -294,10 +279,6 @@ def test_F006_guard_module_atom_in_lambda_body(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F007a: except (ImportError, "
-                   "black.parsing.InvalidInput) evaluates 'black' when the "
-                   "import itself failed -> UnboundLocalError on any call "
-                   "without black installed")
 def test_F007_dump_source_runs_without_black(tmp_path):
     try:
         import black  # noqa: F401
@@ -311,10 +292,6 @@ def test_F007_dump_source_runs_without_black(tmp_path):
     assert "$define_predicate" in out
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F007b: dump_source builds "
-                   "EmbedTransformer() without source_lines, so arrow detection "
-                   "uses the heuristic and diverges from the import path for "
-                   "'X< -3'")
 def test_F007_dump_source_arrow_fidelity(tmp_path):
     from clausal.tools.dump_transformed import dump_source
     path = tmp_path / "a10_dumpfid.clausal"
@@ -329,10 +306,6 @@ def test_F007_dump_source_arrow_fidelity(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F008: TE items are whole Predicate "
-                   "nodes; a q(fact(X)) Call pattern never matches, so the "
-                   "docs' quick_example/suppression/quasi-quotation examples "
-                   "do nothing (and quick_example as written NameErrors)")
 def test_F008_te_doc_quick_example(tmp_path):
     m = _load(tmp_path, """
         TermExpansion(
@@ -348,8 +321,6 @@ def test_F008_te_doc_quick_example(tmp_path):
     assert len(lm.db.clauses_for("logged_fact", 1)) == 2
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F008: q(debug(X)) suppression "
-                   "pattern from docs never matches — item survives")
 def test_F008_te_doc_suppression_example(tmp_path):
     m = _load(tmp_path, """
         TermExpansion(q(debug(X)), [], STATE, STATE) <- True
@@ -376,9 +347,6 @@ def test_F008_guard_te_var_pattern_one_to_many(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F009: TermTransformer emits "
-                   "CompareChain for '0 < X < 10' but terms_to_goalop raises "
-                   "NotImplementedError — produced-but-unconsumable node")
 def test_F009_compare_chain_goal(tmp_path):
     m = _load(tmp_path, """
         mid(X) <- (0 < X < 10)
@@ -410,9 +378,6 @@ print("PYFILE" if (wave.__file__ or "").endswith(".py") else wave.__file__)
 
 
 @pytest.mark.timeout(60)
-@pytest.mark.xfail(strict=False, reason="A10-F010: PredicateFinder/PrologFinder "
-                   "run before PathFinder, so wave.clausal on sys.path shadows "
-                   "the stdlib module — import.md claims the opposite")
 def test_F010_stdlib_not_shadowed_by_clausal_file(tmp_path):
     clone = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     shadow = tmp_path / "shadow"
@@ -431,9 +396,6 @@ def test_F010_stdlib_not_shadowed_by_clausal_file(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F011: 'flag,' parses as a 1-tuple "
-                   "of a Name (not a Call) so no $define_predicate is emitted — "
-                   "the fact silently vanishes")
 def test_F011_zero_arity_fact(tmp_path):
     m = _load(tmp_path, """
         -private([flag])
@@ -458,9 +420,6 @@ def test_F011_guard_zero_arity_rule(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F012: -private(pred(X)) without a "
-                   "list is silently dropped (returns Pass); other directives "
-                   "raise SyntaxError on malformed args")
 def test_F012_malformed_private_raises(tmp_path):
     with pytest.raises(SyntaxError):
         _load(tmp_path, """
@@ -469,8 +428,6 @@ def test_F012_malformed_private_raises(tmp_path):
         """)
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F012: -module with a non-Name "
-                   "module name / non-list exports silently drops them")
 def test_F012_malformed_module_exports_raise(tmp_path):
     with pytest.raises(SyntaxError):
         _load(tmp_path, """
@@ -500,9 +457,6 @@ def test_F012_guard_import_from_arity_errors(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F013 (A11 boundary): "
-                   "_export_builtin_classes overwrites the documented query API "
-                   "clausal.call with the builtin call/N PredicateMeta class")
 def test_F013_clausal_call_is_query_api():
     import clausal
     from clausal.logic.solve import call as solve_call
@@ -514,9 +468,6 @@ def test_F013_clausal_call_is_query_api():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F014: _detect_magic_args indexes "
-                   "arguments.args only; kwonly __args__ escapes as a raw "
-                   "StopIteration instead of TemplateCompileError")
 def test_F014_magic_args_kwonly_clean_error():
     from clausal.templating.compiler import compile_template_func
     from clausal.templating.parser import TemplateCompileError
@@ -531,9 +482,6 @@ def test_F014_magic_args_kwonly_clean_error():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F015: NamedExpr fields are visited "
-                   "target-first, so 'y = (x := x + 1)' fails to infer x as a "
-                   "parameter despite the load-before-store")
 def test_F015_infer_args_walrus_load_before_store():
     from clausal.codegen import _infer_args
     stmts = ast.parse("y = (x := x + 1)").body
@@ -554,9 +502,6 @@ def test_F015_guard_infer_args_basics():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F016a: ElementsLiteral subclasses "
-                   "define no transform_children — child nodes are silently not "
-                   "descended into")
 def test_F016_list_literal_transform_children():
     from clausal.pythonic_ast.nodes import ListLiteral, IntLiteral
     lit = ListLiteral(elements=[IntLiteral(value=1)])
@@ -564,9 +509,6 @@ def test_F016_list_literal_transform_children():
     assert replaced.elements[0].value == 99
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F016b: _transform_node_list's "
-                   "docstring promises REMOVED filtering; the code appends the "
-                   "sentinel instead of removing the node")
 def test_F016_removed_sentinel_honored():
     from clausal.pythonic_ast.nodes import REMOVED, IntLiteral
     from clausal.pythonic_ast.transform import _transform_node_list
@@ -575,9 +517,6 @@ def test_F016_removed_sentinel_honored():
     assert all(getattr(n, "value", None) != 1 and n is not REMOVED for n in out)
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F016c: SpecializeDirective and the "
-                   "Edcg* module-item nodes are missing from nodes.__all__ "
-                   "(sibling of the A01 terms __all__ finding)")
 def test_F016_all_exports_module_items():
     from clausal.pythonic_ast import nodes
     for name in ("SpecializeDirective", "EdcgAccDecl", "EdcgPassDecl",
@@ -597,9 +536,6 @@ def test_F016_guard_yield_dataclass_traversal_documented():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F017: alias to a logic-var-shaped "
-                   "name (documented as unsupported) should fail at the "
-                   "directive, not as a cryptic runtime NotImplementedError")
 def test_F017_single_letter_alias_rejected_at_load(tmp_path):
     lib = tmp_path / "a10_f017_lib.clausal"
     lib.write_text('twice(X, Y) <- (Y == X * 2)\n')
@@ -816,3 +752,24 @@ def test_guard_lambda_keyword_rejected(tmp_path):
 def test_guard_ternary_rejected(tmp_path):
     with pytest.raises(SyntaxError, match="If"):
         _load(tmp_path, 'c(X, L) <- (L is (1 if X else 2))')
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# A10-F018 — .pyc cache invalidation on transformer upgrade (version tag)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def test_F018_path_stats_folds_bytecode_tag(tmp_path):
+    """A10-F018: the transformer-version tag is folded into the reported mtime
+    so bumping it invalidates cached bytecode even when the source is
+    unchanged. Consistent per version, so cache hits still work."""
+    import os
+    from clausal.import_hook import _ClausalSourceLoader, CLAUSAL_BYTECODE_TAG
+    src = tmp_path / "a10f018.clausal"
+    src.write_text("fact(1),\n")
+    loader = _ClausalSourceLoader("a10f018", str(src))
+    stats = loader.path_stats(str(src))
+    raw_mtime = int(os.stat(str(src)).st_mtime)
+    assert stats["mtime"] == raw_mtime ^ CLAUSAL_BYTECODE_TAG
+    # Idempotent within a version.
+    assert loader.path_stats(str(src))["mtime"] == stats["mtime"]

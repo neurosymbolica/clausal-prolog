@@ -194,12 +194,22 @@ def _functor__3(term, name, arity, trail, k):
         arity_val = deref(arity)
         if is_var(name_val) or is_var(arity_val):
             return
-        if not isinstance(arity_val, int) or arity_val < 0:
+        # A09-F015 / A01-D001(c): a bool arity is rejected (True is not 1).
+        if not isinstance(arity_val, int) or isinstance(arity_val, bool) or arity_val < 0:
             return
         if arity_val == 0:
             constructed = name_val
         else:
-            functor_str = name_val.__name__ if isinstance(name_val, PredicateMeta) else str(name_val)
+            # A09-F027: with arity > 0 the name must be atom-shaped (a str or
+            # a PredicateMeta). ISO raises type_error(atom, Name) otherwise —
+            # str(name_val) previously built a bogus functor like "f(1)".
+            if isinstance(name_val, PredicateMeta):
+                functor_str = name_val.__name__
+            elif isinstance(name_val, str):
+                functor_str = name_val
+            else:
+                from clausal.logic.exceptions import LogicException, type_error
+                raise LogicException(type_error("atom", name_val, "functor/3"))
             args = tuple(Var() for _ in range(arity_val))
             constructed = Compound(functor_str, args)
         mark = trail.mark()
@@ -234,7 +244,8 @@ def _arg__3(n, term, arg_out, trail, k):
     term_val = deref(term)
     if is_var(n_val) or is_var(term_val):
         return
-    if not isinstance(n_val, int):
+    # A09-F015 / A01-D001(c): a bool index is rejected (True is not 1).
+    if not isinstance(n_val, int) or isinstance(n_val, bool):
         return
     # SegList/SegString never appear at the Clausal surface — walk
     # to ground form first (user decision 2026-06-13).
@@ -289,7 +300,16 @@ def _univ__2(term, lst, trail, k):
         if len(args_vals) == 0:
             constructed: Any = f_val  # atom
         else:
-            functor_str = f_val.__name__ if isinstance(f_val, PredicateMeta) else str(f_val)
+            # A09-F027: the functor of a compound must be atom-shaped (ISO:
+            # type_error(atom, Name)). unpack(T, [3, 1, 2]) previously built
+            # Compound("3", (1, 2)) instead of raising.
+            if isinstance(f_val, PredicateMeta):
+                functor_str = f_val.__name__
+            elif isinstance(f_val, str):
+                functor_str = f_val
+            else:
+                from clausal.logic.exceptions import LogicException, type_error
+                raise LogicException(type_error("atom", f_val, "unpack/2"))
             constructed = Compound(functor_str, tuple(args_vals))
         mark = trail.mark()
         if unify(term, constructed, trail):

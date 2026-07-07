@@ -36,6 +36,7 @@ from __future__ import annotations
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm, SetTerm
+from clausal.logic.exceptions import LogicException, type_error
 
 # ── Destructive-reuse: CPython refcount availability ────────────────────────
 
@@ -46,6 +47,14 @@ _HAS_REFCOUNT: bool = (
     _platform.python_implementation() == "CPython"
     and hasattr(_sys, "getrefcount")
 )
+
+
+def _is_hashable(x) -> bool:
+    try:
+        hash(x)
+        return True
+    except TypeError:
+        return False
 
 from clausal.logic.builtins._registry import _builtin, _trampoline_builtin
 
@@ -149,7 +158,14 @@ def _dict_pairs__2(this_generator, _proceed, _fail, _catcher, d, pairs, trail):
                 if is_var(k):
                     ok = False
                     break
-                data[k] = v
+                try:
+                    data[k] = v
+                except TypeError:
+                    # A09-F012: an unhashable key (e.g. a list) escaped as a
+                    # raw TypeError, uncatchable by catch/3. Raise a typed
+                    # error instead (A09-D002).
+                    raise LogicException(
+                        type_error("hashable", k, "dict_pairs/2"))
             else:
                 ok = False
                 break
@@ -356,8 +372,14 @@ def _set_list__2(this_generator, _proceed, _fail, _catcher, s, lst, trail):
     elif isinstance(lst_val, list):
         elems = [deref(e) for e in lst_val]
         if all(not is_var(e) for e in elems):
+            try:
+                set_term = SetTerm(elems)
+            except TypeError:
+                # A09-F012: an unhashable element escaped as a raw TypeError.
+                bad = next((e for e in elems if not _is_hashable(e)), elems)
+                raise LogicException(type_error("hashable", bad, "set_list/2"))
             mark = trail.mark()
-            if unify(s, SetTerm(elems), trail):
+            if unify(s, set_term, trail):
                 yield (_proceed, None)
             trail.undo(mark)
 

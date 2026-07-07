@@ -78,6 +78,12 @@ def predicate_to_source(
     """
     func_def = predicate_ast(functor, arity, clauses, db, trampoline=trampoline)
     raw = ast.unparse(func_def)
+    # The generated AST references engine internals under reserved ``$``-names
+    # (``$deref``, ``$unify``, ``$fd_eq``, ``$module`` …) which are not valid
+    # Python identifiers. Render them display-safe so the source round-trips
+    # through ast.parse (A12-F004 made every predicate body use ``$deref``).
+    import re as _re
+    raw = _re.sub(r"\$(\w+)", r"__dollar_\1__", raw)
 
     # Try black for nicer formatting
     try:

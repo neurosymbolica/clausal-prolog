@@ -144,22 +144,18 @@ def _dw(t):
 # A09-F001 — sort/2 & msort/2 do not deref elements
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F001: msort sorts bound Vars by "
-                   "type-name fallback, not by their values")
 def test_F001_msort_bound_var_element(fix):
     _, m = fix
     S = Var()
     assert _first(m, "msortvar", S)
-    assert _dw(S) == [1, 2, 5]  # actual: [5, 1, 2]
+    assert _dw(S) == [1, 2, 5]  # A09-F001 fixed: was [5, 1, 2]
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F001: sort neither orders nor "
-                   "dedups a bound-Var element against its own value")
 def test_F001_sort_bound_var_element(fix):
     _, m = fix
     S = Var()
     assert _first(m, "sortvar", S)
-    assert _dw(S) == [1, 5]  # actual: [5, 1, 5] — unsorted AND dup kept
+    assert _dw(S) == [1, 5]  # A09-F001 fixed: was [5, 1, 5] — unsorted AND dup kept
 
 
 def test_F001_regression_sum_max_do_deref(fix):
@@ -173,8 +169,6 @@ def test_F001_regression_sum_max_do_deref(fix):
 # A09-F002 — filter_map/3 loses inner bindings of compound outputs
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F002: filter_map undoes goal "
-                   "bindings before capturing the output term")
 def test_F002_filter_map_inner_bindings(fix):
     pymod, m = fix
     R = Var()
@@ -189,8 +183,6 @@ def test_F002_filter_map_inner_bindings(fix):
 # A09-F003 — include/take_while/… lose bindings of Var elements
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F003: include appends "
-                   "deref(elem) AFTER trail.undo — var element stays unbound")
 def test_F003_include_var_element_binding(fix):
     _, m = fix
     X, R = Var(), Var()
@@ -198,7 +190,6 @@ def test_F003_include_var_element_binding(fix):
     assert not is_var(deref(X)) and deref(X) == 1  # SWI binds X=1
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F003: take_while same pattern")
 def test_F003_take_while_var_element_binding(fix):
     _, m = fix
     X, P = Var(), Var()
@@ -235,19 +226,23 @@ def test_F004_regression_maplist_first_solution(fix):
 # A09-F005 — assertz of a rule poisons the predicate
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F005: asserted rule clause is "
-                   "not lowered — every later query raises NotImplementedError")
 def test_F005_assertz_rule(fix):
+    """A09-F005 (decision b): assertz of a rule is rejected with a typed
+    LogicException at assert time, and the target predicate is NOT poisoned —
+    its pre-existing facts stay queryable."""
     _, m = fix
-    assert _first(m, "azrule", Var())
+    # azrule(OK) <- (assertz(seen2(Z) <- q3(Z)), OK is 1) — the assertz of a
+    # rule must raise, propagating out of azrule.
+    with pytest.raises(LogicException):
+        _first(m, "azrule", Var())
     V = Var()
     got = set()
     try:
         got = set(_collect(m, V, "seen2", V))
     except NotImplementedError:
         pytest.fail("predicate poisoned: NotImplementedError on later query")
-    # rule seen2(Z) <- q3(Z) should derive 7 alongside the base fact
-    assert 7 in got and "dummy" in got
+    # The base fact survives; the rejected rule never derived 7.
+    assert "dummy" in got and 7 not in got
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -255,17 +250,12 @@ def test_F005_assertz_rule(fix):
 # (RuntimeError raised, then swallowed by the trampoline drive loop)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F006: locked-predicate "
-                   "RuntimeError is eaten by the engine — docs promise a "
-                   "permission error")
 def test_F006_assertz_locked_raises(locked_mod):
     _, m = locked_mod
     with pytest.raises(Exception):  # permission_error LogicException expected
         _first(m, "lockassert", Var())
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F006: retract on locked "
-                   "predicate silently fails too")
 def test_F006_retract_locked_raises(locked_mod):
     _, m = locked_mod
     with pytest.raises(Exception):
@@ -302,21 +292,21 @@ def test_F007_regression_direct_generator_raises():
 # A09-F008 — retract/1 undoes the head-unification bindings
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F008: retract(seen2(X)) leaves "
-                   "X unbound (ISO binds the retracted clause's args)")
 def test_F008_retract_binds_pattern(fix):
+    # A09-F008 (decision A09-D003 a): retract/1 binds the pattern to the
+    # retracted clause's args. retract(seen2(X)) removes the FIRST matching
+    # clause — seen2("dummy"), loaded before the asserted seen2(5) — so X is
+    # bound to "dummy" (ISO first-match), not left unbound.
     _, m = fix
     X = Var()
     assert _first(m, "retprobe", X)
-    assert not is_var(deref(X)) and deref(X) == 5
+    assert not is_var(deref(X)) and deref(X) == "dummy"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # A09-F009 — sequence//1 compares terminals with == instead of unify
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F009: var terminal never "
-                   "unifies — prefix check uses Python ==")
 def test_F009_sequence_var_terminal(fix):
     _, m = fix
     X, S = Var(), Var()
@@ -349,15 +339,11 @@ def test_F010_copy_term_copies_dif(fix):
 # A09-F011 — plus/max_/min_ lack numeric type checks
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F011: plus/3 concatenates "
-                   "strings — docstring says numeric")
 def test_F011_plus_string_concat(fix):
     _, m = fix
     assert not _first(m, "plus", "a", "b", Var())
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F011: mixed-type plus raises "
-                   "raw TypeError instead of a typed logic error / failure")
 def test_F011_plus_mixed_raw_typeerror(fix):
     _, m = fix
     try:
@@ -366,7 +352,6 @@ def test_F011_plus_mixed_raw_typeerror(fix):
         pytest.fail("raw TypeError escaped from plus/3")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F011: max_/3 accepts strings")
 def test_F011_max_strings(fix):
     _, m = fix
     assert not _first(m, "max_", "a", "b", Var())
@@ -376,52 +361,43 @@ def test_F011_max_strings(fix):
 # A09-F012 — raw Python exceptions escape from builtins
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F012: short pair → IndexError")
 def test_F012_pairs_values_short_pair(fix):
+    # A09-F018/F012: a too-short pair fails (no raw IndexError escapes).
     _, m = fix
     try:
-        _first(m, "pairs_values", [[1]], Var())
+        assert not _first(m, "pairs_values", [[1]], Var())
     except IndexError:
         pytest.fail("raw IndexError escaped from pairs_values/2")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F012: unhashable dict key → "
-                   "raw TypeError")
 def test_F012_dict_pairs_unhashable_key(fix):
+    # A09-F012 (D002 a): an unhashable key raises a typed LogicException,
+    # catchable by catch/3 — not a raw TypeError that kills the query.
     _, m = fix
-    try:
+    with pytest.raises(LogicException):
         _first(m, "dict_pairs", Var(), [[[1], 2]])
-    except TypeError:
-        pytest.fail("raw TypeError escaped from dict_pairs/2")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F012: unhashable set element → "
-                   "raw TypeError")
 def test_F012_set_list_unhashable(fix):
     _, m = fix
-    try:
+    with pytest.raises(LogicException):
         _first(m, "set_list", Var(), [[1]])
-    except TypeError:
-        pytest.fail("raw TypeError escaped from set_list/2")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F012: exp_mod non-invertible "
-                   "base → raw ValueError")
 def test_F012_exp_mod_raw_valueerror(fix):
+    # A09-F012: a non-invertible modular inverse raises a typed
+    # evaluation_error, not a raw ValueError.
     _, m = fix
-    try:
+    with pytest.raises(LogicException):
         _first(m, "exp_mod", 2, -1, 4, Var())
-    except ValueError:
-        pytest.fail("raw ValueError escaped from exp_mod/4")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F012: max_by raises raw "
-                   "TypeError on incomparable keys while sort_by silently "
-                   "falls back")
 def test_F012_max_by_incomparable_keys(fix):
+    # A09-F012: max_by now uses sort_by's (type-name, repr) fallback for
+    # incomparable keys instead of leaking a raw TypeError, so it succeeds.
     _, m = fix
     try:
-        _first(m, "mbprobe", Var())
+        assert _first(m, "mbprobe", Var())
     except TypeError:
         pytest.fail("raw TypeError escaped from max_by/3")
 
@@ -438,8 +414,6 @@ def test_F012_regression_sort_by_incomparable_keys(fix):
 # A09-F013 — char_type test-mode vs enumeration-mode Unicode inconsistency
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F013: digit test-mode is "
-                   "Unicode, enumeration is ASCII-only")
 def test_F013_char_type_digit_consistency(fix):
     _, m = fix
     assert _first(m, "char_type", "٣", "digit")  # ARABIC-INDIC THREE
@@ -448,7 +422,6 @@ def test_F013_char_type_digit_consistency(fix):
     assert "٣" in chars
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F013: space — NBSP")
 def test_F013_char_type_space_consistency(fix):
     _, m = fix
     assert _first(m, "char_type", "\xa0", "space")
@@ -456,7 +429,6 @@ def test_F013_char_type_space_consistency(fix):
     assert "\xa0" in _collect(m, C, "char_type", C, "space")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F013: punct — INVERTED !")
 def test_F013_char_type_punct_consistency(fix):
     _, m = fix
     assert _first(m, "char_type", "\xa1", "punct")
@@ -476,8 +448,6 @@ def test_F013_regression_alpha_enum_unicode(fix):
 # A09-F014 — char_type char-bound Python fallback is ASCII-table-only
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F014: with the C helper "
-                   "disabled, char_type('α',T) enumerates NOTHING")
 def test_F014_char_type_python_fallback_non_ascii(fix):
     import clausal.logic.builtins.chars as ch
     _, m = fix
@@ -502,22 +472,16 @@ def test_F014_regression_char_type_c_path_non_ascii(fix):
 # A09-F015 — bool-as-int acceptance is inconsistent; between C/Py diverge
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F015: length(L, True) builds a "
-                   "1-element list — bool accepted as a length")
 def test_F015_length_bool(fix):
     _, m = fix
     assert not _first(m, "length", Var(), True)
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F015: list_item/take/arg/"
-                   "functor/sub_atom/numlist/char_code accept bool indices")
 def test_F015_list_item_bool_index(fix):
     _, m = fix
     assert not _first(m, "list_item", True, ["a", "b"], Var())
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F015: between/3 C rejects bool "
-                   "bounds but the Python fallback accepts them")
 def test_F015_between_bool_c_py_divergence(fix):
     import clausal.logic.builtins.arithmetic as ar
     _, m = fix
@@ -541,8 +505,6 @@ def test_F015_regression_succ_rejects_bool(fix):
 # A09-F016 — must_be/can_be "list" contradicts strings-as-lists
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F016: is_list('abc') succeeds "
-                   "but must_be('list','abc') raises type_error")
 def test_F016_must_be_list_string(fix):
     _, m = fix
     assert _first(m, "is_list", "abc")  # locked-in F080 behaviour
@@ -554,8 +516,6 @@ def test_F016_must_be_list_string(fix):
 # str/bytes forms of their char/code lists
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F017: a str IS a char list — "
-                   "atom_chars(A, 'abc') should bind A='abc'")
 def test_F017_atom_chars_str_arg(fix):
     _, m = fix
     A = Var()
@@ -563,8 +523,6 @@ def test_F017_atom_chars_str_arg(fix):
     assert deref(A) == "abc"
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F017: a bytes IS a code list — "
-                   "atom_codes(A, b'ab') should bind A='ab'")
 def test_F017_atom_codes_bytes_arg(fix):
     _, m = fix
     A = Var()
@@ -584,21 +542,17 @@ def test_F017_regression_list_forms_work(fix):
 # A09-F018 — pairs_* silently skip malformed pairs
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F018: non-list 'pair' entries "
-                   "are silently dropped — should fail or raise")
 def test_F018_pairs_keys_values_skips_junk(fix):
     _, m = fix
     K, V = Var(), Var()
     ok = _first(m, "pairs_keys_values", [[1, "a"], "junk"], K, V)
-    assert not ok  # today: succeeds with K=[1], V=['a']
+    assert not ok  # A09-F018 fixed: was succeeding with K=[1], V=['a']
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # A09-F019 — same_length/2 ground-Seg* support is dead code
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F019: docstring promises "
-                   "SegString siblings work; the entry check rejects them")
 def test_F019_same_length_ground_segstring(fix):
     _, m = fix
     L = Var()
@@ -612,12 +566,28 @@ def test_F019_regression_same_length_str(fix):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# A09-F029 — type-check predicates disagree on ground Seg* values
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_F029_ground_segstring_typecheck_coherent(fix):
+    """A09-F029: for a ground SegString the type-check matrix must cohere —
+    is_str = string = is_list = atomic = is_chars = True, compound = False.
+    Before the fix, atomic and is_chars rejected it while is_str/is_list
+    accepted it (is_str(X) implying not-atomic(X) is incoherent)."""
+    _, m = fix
+    seg = SegString(["ab"])
+    assert _first(m, "is_str", seg)
+    assert _first(m, "string", seg)
+    assert _first(m, "is_list", seg)
+    assert _first(m, "atomic", seg)
+    assert _first(m, "is_chars", seg)
+    assert not _first(m, "compound", seg)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # A09-F020 / A09-F021 — C-level defence (subprocess probes)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F020: _chars_core has no "
-                   "Trail_Check — non-Trail arg is cast blind (UB); today it "
-                   "surfaces as a garbage-read RuntimeError, not TypeError")
 def test_F020_chars_core_non_trail():
     p = run_snippet("""
         import resource
@@ -632,8 +602,6 @@ def test_F020_chars_core_non_trail():
     assert p.returncode == 0 and "TYPEERROR-OK" in p.stdout
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F020: empty string → "
-                   "PyUnicode_READ_CHAR out-of-bounds read, garbage result")
 def test_F020_chars_core_empty_string():
     p = run_snippet("""
         import resource
@@ -648,8 +616,6 @@ def test_F020_chars_core_empty_string():
                                   or "TypeError" in p.stderr)
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F021: member_find segfaults on "
-                   "a non-list items arg (PyList_GET_SIZE unchecked)")
 def test_F021_lists_core_non_list_segfault():
     p = run_snippet("""
         import resource
@@ -749,8 +715,6 @@ def test_F025_regression_append_supported_modes(fix):
 # A09-F027 — functor/unpack non-atom functor handling (low)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F027: functor(3,N,0) gives "
-                   "N='3' (str) — not roundtrippable, ISO gives the number")
 def test_F027_functor_numeric_roundtrip(fix):
     _, m = fix
     N, A = Var(), Var()
@@ -758,8 +722,6 @@ def test_F027_functor_numeric_roundtrip(fix):
     assert deref(N) == 3 and deref(A) == 0
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F027: unpack(T,[3,1,2]) builds "
-                   "Compound('3',(1,2)) instead of raising type_error(atom)")
 def test_F027_unpack_numeric_functor(fix):
     _, m = fix
     with pytest.raises(LogicException):
@@ -767,16 +729,65 @@ def test_F027_unpack_numeric_functor(fix):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# A09-F028/F030/F031 — minor ISO divergences (must_be, number parse, atom_concat)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_F028_must_be_unknown_type_domain_error(fix):
+    """A09-F028: an unknown type name is a domain_error(type, Name) — the
+    TYPE is wrong, not the term — not a misleading type_error(Name, Term)."""
+    _, m = fix
+    with pytest.raises(LogicException) as ei:
+        _first(m, "must_be", "nonsense", 5)
+    inner = ei.value.term.args[0]
+    assert getattr(inner, "functor", None) == "domain_error"
+
+
+def test_F028_must_be_unbound_type_raises(fix):
+    """A09-F028: must_be raises on violation — an unbound Type is a usage
+    error, not a silent failure."""
+    _, m = fix
+    with pytest.raises(LogicException):
+        _first(m, "must_be", Var(), 5)
+
+
+def test_F028_regression_must_be_known_types(fix):
+    _, m = fix
+    assert _first(m, "must_be", "integer", 5)
+    with pytest.raises(LogicException):
+        _first(m, "must_be", "integer", "x")
+
+
+def test_F031_atom_concat_check_mode_type_error(fix):
+    """A09-F031: a non-atom bound arg raises type_error(atom, _) in check
+    mode too, not just the open mode (was a silent failure)."""
+    _, m = fix
+    with pytest.raises(LogicException):
+        _first(m, "atom_concat", 12, "a", "12a")
+
+
+def test_F031_regression_atom_concat_valid(fix):
+    _, m = fix
+    C = Var()
+    assert _first(m, "atom_concat", "1", "2", C) and deref(C) == "12"
+
+
+def test_F030_number_chars_python_lenient(fix):
+    """A09-F030: parsing is deliberately Python-native/lenient — a char list
+    with surrounding whitespace parses (documented in docs/builtins.md)."""
+    _, m = fix
+    N = Var()
+    assert _first(m, "number_chars", N, " 1") and deref(N) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # A09-F032 — Seg*-input str promotion inconsistency (low)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F032: msort(ground SegString) "
-                   "returns a list; reverse promotes to str via _was_string")
 def test_F032_msort_segstring_promotion(fix):
     _, m = fix
     S = Var()
     assert _first(m, "msort", SegString(["ba"]), S)
-    assert deref(S) == "ab"  # actual: ['a', 'b']
+    assert deref(S) == "ab"  # A09-F032 fixed: was ['a', 'b']
 
 
 def test_F032_regression_reverse_segstring_promotion(fix):

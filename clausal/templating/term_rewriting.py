@@ -804,8 +804,14 @@ class TermTransformer(NodeTransformer):
 
         Uses the same capture/LoadName mechanism as ``visit_Lambda``.
         """
+        # A10-F006: thread source_lines and atoms through (as
+        # _make_term_transformer does). Without source_lines, arrow detection
+        # inside the lambda body falls back to the column-gap heuristic and
+        # misparses a legal Lt guard like ``X_ < -3`` as a nested arrow lambda.
         lambda_transformer = TermTransformer(
+            atoms=transformer.atoms,
             import_remap=transformer._import_remap,
+            source_lines=transformer._source_lines,
             bare_atom_refs=transformer._bare_atom_refs,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
@@ -2001,13 +2007,19 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             # if 'dcg' is available.
             if "dcg" in acc_states:
                 in_var, out_var = acc_states["dcg"]
+                # A10-F003: mint a fresh mid var (like _rewrite_edcg_subcall
+                # and the terminal-list case) — consuming straight to out_var
+                # and setting the state to (out_var, out_var) collapsed every
+                # following sequence element to ``out = out``.
+                mid = f"_edcg_dcg_{counter}_"
+                counter += 1
                 call_node = Call(
                     func=Name(id=name, ctx=load),
-                    args=[Name(id=in_var, ctx=load), Name(id=out_var, ctx=load)],
+                    args=[Name(id=in_var, ctx=load), Name(id=mid, ctx=load)],
                     keywords=[],
                 )
                 new_acc_states = dict(acc_states)
-                new_acc_states["dcg"] = (out_var, out_var)
+                new_acc_states["dcg"] = (mid, out_var)
                 return replace(call_node, source), new_acc_states, counter
             else:
                 # 0-arity call.
@@ -2022,13 +2034,16 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             # Non-EDCG call with args; if dcg available, add state args.
             if "dcg" in acc_states:
                 in_var, out_var = acc_states["dcg"]
+                # A10-F003: mint a fresh mid var (see the Name branch above).
+                mid = f"_edcg_dcg_{counter}_"
+                counter += 1
                 new_args = list(args) + [
-                    Name(id=in_var, ctx=load), Name(id=out_var, ctx=load),
+                    Name(id=in_var, ctx=load), Name(id=mid, ctx=load),
                 ]
                 call_node = Call(func=Name(id=name, ctx=load),
                                 args=new_args, keywords=list(kwargs))
                 new_acc_states = dict(acc_states)
-                new_acc_states["dcg"] = (out_var, out_var)
+                new_acc_states["dcg"] = (mid, out_var)
                 return replace(call_node, source), new_acc_states, counter
             else:
                 call_node = Call(func=Name(id=name, ctx=load),
@@ -2511,6 +2526,54 @@ class EmbedTransformer(NodeTransformer):
                     )
                 statements.append(define_stmt)
                 return statements if len(statements) > 1 else statements[0]
+            case Tuple(elts=[Name(id=functor_name) as name_node], ctx=Load()) if (
+                transformer._scope_depth == 0
+                and not _is_logic_var_name(functor_name)
+            ):
+                # A10-F011: zero-arity trailing-comma fact ``flag,`` — define
+                # flag/0, symmetric with ``flag <- True`` and with the
+                # ``edge(1,2),`` Call case above. Previously the 1-tuple of a
+                # bare (non-logic-var) Name fell through and was silently
+                # evaluated and discarded — no clause, no diagnostic.
+                head_ast = replace(
+                    Call(
+                        func=replace(Name(id=functor_name, ctx=load), name_node),
+                        args=[],
+                        keywords=[],
+                    ),
+                    name_node,
+                )
+                predicate_ast = node_ast(
+                    "Predicate", expr_stmt.value,
+                    head=head_ast,
+                    body=replace(Constant(value=True), expr_stmt.value),
+                )
+                define_stmt = replace(
+                    Expr(
+                        value=replace(
+                            Call(
+                                func=replace(
+                                    Name(id="$define_predicate", ctx=load), expr_stmt.value
+                                ),
+                                args=[
+                                    predicate_ast,
+                                    replace(Name(id="$module", ctx=load), expr_stmt.value),
+                                ],
+                                keywords=[],
+                            ),
+                            expr_stmt.value,
+                        )
+                    ),
+                    expr_stmt,
+                )
+                statements = []
+                if functor_name not in transformer._seen_functors:
+                    transformer._seen_functors[functor_name] = []
+                    statements.append(
+                        _make_functor_class_ast(functor_name, [], expr_stmt)
+                    )
+                statements.append(define_stmt)
+                return statements if len(statements) > 1 else statements[0]
             case BinOp(left=lhs, op=RShift(), right=rhs) if (
                 transformer._scope_depth == 0
             ):
@@ -2695,7 +2758,25 @@ class EmbedTransformer(NodeTransformer):
         if name == "dynamic":
             specs = _parse_pred_arity_args(args, "dynamic")
             transformer._module_items.append(DirectiveItem(name="dynamic", specs=specs))
-            return transformer._handle_predspec_directive("mark_dynamic", args, expr_stmt)
+            # A12-F005: mint an empty term class for each dynamic predicate so
+            # the module's own clause bodies (and the m.ghost/call APIs) can
+            # construct ghost(...) terms before any clause exists — the ISO
+            # declare-then-assertz pattern. (-table/-discontiguous do NOT mint;
+            # a dangling target there is a load error — A12-F003.)
+            statements = []
+            for functor, arity in specs:
+                if functor not in transformer._seen_functors:
+                    field_names = [f"arg_{i}" for i in range(arity)]
+                    transformer._seen_functors[functor] = field_names
+                    statements.append(
+                        _make_functor_class_ast(functor, field_names, expr_stmt))
+            predspec = transformer._handle_predspec_directive(
+                "mark_dynamic", args, expr_stmt)
+            if isinstance(predspec, list):
+                statements.extend(predspec)
+            else:
+                statements.append(predspec)
+            return statements if len(statements) > 1 else statements[0]
         if name == "discontiguous":
             specs = _parse_pred_arity_args(args, "discontiguous")
             transformer._module_items.append(DirectiveItem(name="discontiguous", specs=specs))
@@ -2743,12 +2824,20 @@ class EmbedTransformer(NodeTransformer):
         declared field names rather than inferring them from the first clause.
         """
         statements = []
-        module_name = ""
         exports_info = []  # for ModuleAST accumulation
-        if len(args) >= 1 and isinstance(args[0], Name):
-            module_name = args[0].id
-        # args[1] should be the export list: ast.List of Call nodes.
-        if len(args) >= 2 and isinstance(args[1], List):
+        # A10-F012: validate shape instead of silently dropping malformed
+        # parts (every other directive raises on bad args).
+        if len(args) < 1 or len(args) > 2 or not isinstance(args[0], Name):
+            raise SyntaxError(
+                "-module requires a name and an export list: "
+                "-module(name, [ ... ])")
+        module_name = args[0].id
+        if len(args) == 2 and not isinstance(args[1], List):
+            raise SyntaxError(
+                "-module requires a name and an export list: "
+                "-module(name, [ ... ])")
+        # args[1] should be the export list: ast.List of Call / Name nodes.
+        if len(args) == 2:
             for export in args[1].elts:
                 if isinstance(export, Name):
                     # Bare atom: generate zero-arity PredicateMeta class
@@ -2776,6 +2865,9 @@ class EmbedTransformer(NodeTransformer):
                                 functor_name, field_names, expr_stmt
                             )
                         )
+                # Other item shapes (e.g. the ISO ``foo/2`` arity form, a
+                # BinOp) are not pre-registered here — the signature is taken
+                # from the first clause — but the list itself is well-formed.
         transformer._module_items.append(
             ModuleDeclItem(module_name=module_name, exports=exports_info)
         )
@@ -2794,10 +2886,14 @@ class EmbedTransformer(NodeTransformer):
         """
         statements = []
         private_info = []  # for ModuleAST accumulation
-        export_list = args[0] if len(args) >= 1 and isinstance(args[0], List) else None
-        if export_list is None:
-            transformer._module_items.append(PrivateDeclItem(items=[]))
-            return replace(Pass(), expr_stmt)
+        # A10-F012: a missing/malformed list (e.g. -private(helper(X))) used to
+        # silently become a no-op, so the predicate signature was later
+        # inferred from the first clause with no warning. Raise instead.
+        if len(args) != 1 or not isinstance(args[0], List):
+            raise SyntaxError(
+                "-private requires a single list: "
+                "-private([atom, pred(A, B), ...])")
+        export_list = args[0]
         for item in export_list.elts:
             if isinstance(item, Name):
                 # Bare atom: generate zero-arity PredicateMeta class
@@ -2823,6 +2919,8 @@ class EmbedTransformer(NodeTransformer):
                             functor_name, field_names, expr_stmt
                         )
                     )
+            # Other item shapes (e.g. the ISO ``foo/2`` arity form) are not
+            # pre-registered here; the list itself is still well-formed.
         transformer._module_items.append(PrivateDeclItem(items=private_info))
         if not statements:
             return replace(Pass(), expr_stmt)
@@ -2961,6 +3059,15 @@ class EmbedTransformer(NodeTransformer):
             ):
                 orig_name = item.args[0].id
                 local_name = item.args[1].id
+                # A10-F017: a logic-var-shaped alias (e.g. ``T``) is
+                # unreachable — visit_Name treats it as a variable before the
+                # remap fires, so the call site later fails with a cryptic
+                # NotImplementedError. Reject it here at the directive.
+                if _is_logic_var_name(local_name):
+                    raise SyntaxError(
+                        f"-import_from alias {local_name!r} is a logic-variable "
+                        f"name; use a TitleCase alias (e.g. Reach)"
+                    )
                 dotted_key = f"{module_path}.{orig_name}"
                 transformer._import_remap[local_name] = dotted_key
                 aliases.append(alias(name=orig_name, asname=local_name))
@@ -3622,10 +3729,12 @@ class EmbedTransformer(NodeTransformer):
         return node
 
     def visit_Name(transformer, name):
-        # In outer Python code, rewrite var_ / ALL_CAPS → .value to unbox a logic variable.
-        if _is_logic_var_name(name.id):
-            return replace(
-                Attribute(value=name, attr="value", ctx=load),
-                name,
-            )
+        # A10-F002 / A10-D001: unescaped ALLCAPS / _leading names in outer
+        # Python code are ordinary Python names (constants, JSON, UUID, a local
+        # ``_tmp``, ``MAX = 5``) — NOT logic variables, so they are left alone.
+        # A logic variable's value is reached inside embedded Python via the
+        # ``++`` escape (handled by the PyThunk machinery), not by unboxing a
+        # bare Name here. The previous ``X → X.value`` rewrite broke both
+        # assignment (``MAX = 5`` → ``MAX.value = 5``) and reads of Python
+        # locals (``return _tmp`` → ``5 .value``).
         return name

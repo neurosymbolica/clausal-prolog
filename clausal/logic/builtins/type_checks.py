@@ -10,6 +10,7 @@ from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
 from clausal.logic.builtins._helpers import _is_ground
+from clausal.logic.runtime._seg_helpers import normalize_seg_input
 
 
 @_builtin("var", 1)
@@ -131,12 +132,15 @@ def _atomic__1(x, trail, k):
     zero-arity ``PredicateMeta`` classes. Rejects ``Var``, ``Compound``,
     ``KWTerm``, term-instances, ``list``, ``SegList``, ``SegString``.
     """
-    x_val = deref(x)
+    # F029 (A09): walk a ground Seg* to its concrete form first — a ground
+    # SegString walks to a str (atomic) so is_str(X) no longer contradicts
+    # atomic(X). A non-ground Seg* stays a Seg* and is rejected below.
+    x_val = normalize_seg_input(deref(x))
     if is_var(x_val):
         return
     # Reject compound shapes explicitly so we don't accidentally accept
     # them via the "anything else" fallthrough.
-    if isinstance(x_val, (Compound, KWTerm, list, SegList, SegString)):
+    if isinstance(x_val, (Compound, KWTerm, list, SegList, SegString, SegBytes)):
         return
     if is_term_instance(x_val):
         return
@@ -258,8 +262,12 @@ def _is_chars__1(x, trail, k):
 
     A ``bytes`` is a *code* sequence, not a *char* sequence, so it is rejected
     here — use ``is_codes/1``.
+
+    F029 (A09): a ground ``SegString`` / ``SegList`` walks to a str / list
+    and succeeds (coherent with ``is_str`` / ``is_list``); a ground
+    ``SegBytes`` walks to bytes and is rejected (codes model).
     """
-    if isinstance(deref(x), (list, str)):
+    if isinstance(normalize_seg_input(deref(x)), (list, str)):
         yield None
 
 
@@ -293,8 +301,16 @@ def _ground__1(x, trail, k):
 
 # ── Type checking map for must_be/can_be ─────────────────────────────────
 
+# A09-F028: the set of type names must_be/can_be recognise. An unknown name
+# is a domain_error(type, Name) — the TYPE is wrong, not the term.
+_KNOWN_TYPES = frozenset({
+    "integer", "int", "float", "number", "atom", "string", "str", "list",
+    "boolean", "bool", "callable", "dict", "compound",
+})
+
+
 def _check_type(type_name: str, term) -> bool:
-    """Return True if *term* satisfies *type_name*."""
+    """Return True if *term* satisfies *type_name* (assumes a known type)."""
     if type_name in ("integer", "int"):
         return isinstance(term, int) and not isinstance(term, bool)
     elif type_name == "float":
@@ -308,7 +324,12 @@ def _check_type(type_name: str, term) -> bool:
             return True
         return False
     elif type_name == "list":
-        return isinstance(term, list)
+        # F016 (A09): align with is_list/1 — under strings-as-lists a str is
+        # a char list and a bytes is a code list, and a ground Seg* walks to
+        # one. Rejecting them here contradicted is_list("abc") succeeding.
+        if isinstance(term, (list, str, bytes)):
+            return True
+        return isinstance(term, (SegList, SegString, SegBytes)) and _is_ground(term)
     elif type_name in ("boolean", "bool"):
         return isinstance(term, bool)
     elif type_name == "callable":
@@ -342,9 +363,18 @@ def _must_be__2(type_name, term, trail, k):
     """
     from clausal.logic.exceptions import LogicException, type_error, instantiation_error
 
+    from clausal.logic.exceptions import domain_error
+
     type_val = deref(type_name)
-    if is_var(type_val) or not isinstance(type_val, str):
-        return
+    # A09-F028: must_be raises on violation — an unbound or non-atom Type is a
+    # usage error, not a silent failure; an unknown type name is a
+    # domain_error(type, Type) (the TYPE is wrong, not the term).
+    if is_var(type_val):
+        raise LogicException(instantiation_error("must_be/2"))
+    if not isinstance(type_val, str):
+        raise LogicException(type_error("atom", type_val, "must_be/2"))
+    if type_val not in _KNOWN_TYPES:
+        raise LogicException(domain_error("type", type_val, "must_be/2"))
     term_val = deref(term)
     if is_var(term_val):
         raise LogicException(instantiation_error("must_be/2"))
@@ -361,11 +391,17 @@ def _can_be__2(type_name, term, trail, k):
     Succeeds if Term is unbound (could become anything) or already matches.
     Throws type_error if Term is ground and definitely not the type.
     """
-    from clausal.logic.exceptions import LogicException, type_error
+    from clausal.logic.exceptions import (
+        LogicException, type_error, domain_error, instantiation_error)
 
     type_val = deref(type_name)
-    if is_var(type_val) or not isinstance(type_val, str):
-        return
+    # A09-F028: same Type-validation as must_be/2.
+    if is_var(type_val):
+        raise LogicException(instantiation_error("can_be/2"))
+    if not isinstance(type_val, str):
+        raise LogicException(type_error("atom", type_val, "can_be/2"))
+    if type_val not in _KNOWN_TYPES:
+        raise LogicException(domain_error("type", type_val, "can_be/2"))
     term_val = deref(term)
     if is_var(term_val):
         # Unbound — could become anything

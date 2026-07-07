@@ -165,7 +165,9 @@ class TestFunctor:
         mod = fresh_module()
         f, a = Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=[42, f, a], kwargs=[])
-        assert sol_var(goal, f, mod=mod) == ["42"]
+        # A09-F027: an atomic constant is its own functor name (ISO), so
+        # functor(42, F, A) gives F=42 (not the string "42"), A=0.
+        assert sol_var(goal, f, mod=mod) == [42]
         assert sol_var(goal, a, mod=mod) == [0]
 
     def test_compose_compound(self):

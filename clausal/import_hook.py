@@ -185,9 +185,15 @@ predicate_builtins["Compound"] = Compound
 predicate_builtins["DictTerm"] = DictTerm
 predicate_builtins["SetTerm"] = SetTerm
 predicate_builtins["Trail"] = Trail
-predicate_builtins["unify"] = unify
-predicate_builtins["deref"] = deref
-predicate_builtins["walk"] = walk
+# A12-F004 / A12-D002: the engine helpers walk/deref/unify are pure internals
+# used only by generated predicate bodies (which reference them under the
+# reserved ``$``-prefix). Injecting them under their PUBLIC names reserved
+# those names — a user predicate ``walk/2``/``deref/2``/``unify/2`` failed at
+# load with a cryptic TypeError. Inject them ``$``-prefixed only, freeing the
+# public names for user code.
+predicate_builtins["$unify"] = unify
+predicate_builtins["$deref"] = deref
+predicate_builtins["$walk"] = walk
 from clausal.terms import PyThunk, FStringThunk, Quantity
 predicate_builtins["PyThunk"] = PyThunk
 predicate_builtins["FStringThunk"] = FStringThunk  # alias for PyThunk
@@ -242,6 +248,15 @@ def _preseed_py_submodules(module_items) -> None:
 # ── Loader ───────────────────────────────────────────────────────────────────
 
 
+# A10-F018: cached .pyc bytecode is the OUTPUT of EmbedTransformer, but the
+# default source-loader invalidates only on (mtime, size) + CPython magic — so
+# upgrading clausal (new transformer semantics) leaves stale transformed
+# bytecode live until the source file itself changes. Fold this tag into the
+# reported mtime so a clausal upgrade invalidates every cached .clausal/.pl
+# .pyc. BUMP THIS whenever EmbedTransformer / the codegen output changes.
+CLAUSAL_BYTECODE_TAG = 2
+
+
 class _ClausalSourceLoader(SourceLoader):
     """Common file I/O for .clausal and .pl loaders.
 
@@ -263,7 +278,12 @@ class _ClausalSourceLoader(SourceLoader):
 
     def path_stats(self, path):
         st = os.stat(path)
-        return {"mtime": int(st.st_mtime), "size": st.st_size}
+        # A10-F018: XOR the transformer-version tag into the mtime so bumping
+        # CLAUSAL_BYTECODE_TAG invalidates cached bytecode even when the source
+        # file's mtime/size are unchanged (consistent per version → cache hits
+        # still work within a version).
+        return {"mtime": int(st.st_mtime) ^ CLAUSAL_BYTECODE_TAG,
+                "size": st.st_size}
 
     def set_data(self, path, data):
         # Write .pyc file; create __pycache__/ dir if needed.
@@ -474,6 +494,22 @@ class _ExtensionFinder(MetaPathFinder):
         for dir_entry in search_dirs:
             candidate = os.path.join(dir_entry, tail + self._extension)
             if os.path.isfile(candidate):
+                # A10-F010 / A10-D002(a): a .clausal/.pl file named after a
+                # standard-library module is almost always an accident. These
+                # finders run before PathFinder, so shadowing would be silent —
+                # defer to the stdlib (return None) and warn loudly instead.
+                if tail in sys.stdlib_module_names:
+                    from clausal.templating.term_rewriting import (
+                        ClausalLintWarning,
+                    )
+                    warnings.warn(
+                        f"{candidate!r} is named after the standard-library "
+                        f"module {tail!r}; the stdlib module is used instead. "
+                        f"Rename the file to avoid shadowing it.",
+                        ClausalLintWarning,
+                        stacklevel=2,
+                    )
+                    return None
                 loader = self._loader_cls(fullname, candidate)
                 return ModuleSpec(fullname, loader, origin=candidate)
 
@@ -606,9 +642,10 @@ _simple_ast_builtins["PredicateMeta"] = PredicateMeta
 _simple_ast_builtins["Var"] = Var
 _simple_ast_builtins["Compound"] = Compound
 _simple_ast_builtins["Trail"] = Trail
-_simple_ast_builtins["unify"] = unify
-_simple_ast_builtins["deref"] = deref
-_simple_ast_builtins["walk"] = walk
+# A12-F004: see predicate_builtins above — engine helpers are $-prefixed only.
+_simple_ast_builtins["$unify"] = unify
+_simple_ast_builtins["$deref"] = deref
+_simple_ast_builtins["$walk"] = walk
 _simple_ast_builtins["PyThunk"] = PyThunk
 _simple_ast_builtins["FStringThunk"] = FStringThunk  # alias
 _simple_ast_builtins["BoolEq"] = BoolEq

@@ -120,11 +120,14 @@ does not require dynamic predicates.)
 
 ## Gotchas
 
-- **Must declare `-dynamic`** — without it, assertz/retract raise a permission
-  error. This is intentional: it prevents accidental modification of predicates
-  that should be stable.
+- **Must declare `-dynamic`** — without it, assertz/asserta/retract raise a
+  typed `permission_error(modify, static_procedure, Name/Arity)` (catchable by
+  `catch/3`). This is intentional: it prevents accidental modification of
+  predicates that should be stable.
 - **assertz adds facts, not rules** — `assertz(foo(X) <- bar(X))` is not
-  supported. Only ground or partially-ground facts can be asserted.
+  supported and raises a typed `permission_error(assert, rule, Head)` at
+  assert time (the predicate's existing clauses are left untouched). Only
+  ground or partially-ground facts can be asserted.
 - **retract removes one clause** — it removes the *first* matching clause only.
   Call it in a loop (or use `findall` + multiple retracts) to remove all
   matches.

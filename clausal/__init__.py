@@ -42,8 +42,16 @@ def _export_builtin_classes():
     """Inject all builtin PredicateMeta classes into this module's namespace."""
     import sys
     mod = sys.modules[__name__]
+    # A10-F013: never overwrite the documented query API — the builtin call/N
+    # PredicateMeta class would otherwise shadow clausal.call (the query
+    # function), so `call(..., module=…)` raised a TypeError. The builtin
+    # classes remain registered for dispatch; only the module attribute is
+    # protected. (solve/query/once do not collide today, but are guarded too.)
+    _RESERVED = {"call", "solve", "query", "once"}
     names = []
     for name, cls in _BUILTIN_CLASSES.items():
+        if name in _RESERVED:
+            continue
         setattr(mod, name, cls)
         names.append(name)
     return names

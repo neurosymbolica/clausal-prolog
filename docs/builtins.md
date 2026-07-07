@@ -2195,6 +2195,8 @@ Substring relation. Relates `Atom` to its substrings with position information: 
 ```
 Bidirectional number ↔ character-list conversion. Number bound → `Chars` unifies with `list(str(Number))`. Chars bound (list of single-char strings) → parse as `int` or `float`. Both bound → test equality. Both unbound → instantiation error. Rejects `bool` values (not considered numbers).
 
+Parsing is deliberately Python-native (`int()` then `float()`), per the language-is-Python contract. It is therefore *lenient* relative to ISO `number_chars`: surrounding whitespace (`" 1"`), digit-group underscores (`"1_0"`), and the float literals `"inf"`/`"nan"` are accepted; anything Python cannot parse as a number fails. `number_codes/2` shares this behaviour.
+
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:number_chars_2_ex2"
 ```

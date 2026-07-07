@@ -150,7 +150,7 @@ def _lower_shared_body(
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return lambda_defs + [
                 _assign_mark(mark, trail_name),
-                _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
+                _if(_call(_name("$unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
                 _undo_stmt(mark, trail_name),
             ]
 
@@ -160,7 +160,7 @@ def _lower_shared_body(
             r_expr = arith_to_ast_expr(r, var_context)
             return [
                 _assign_mark(mark, trail_name),
-                _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
+                _if(_call(_name("$unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
                 _undo_stmt(mark, trail_name),
             ]
 
@@ -276,7 +276,7 @@ def _lower_shared_body(
                     body=[
                         _assign_mark(mark, trail_name),
                         _if(
-                            _call(_name("unify"), elem_expr, _name(loop_var), _name(trail_name)),
+                            _call(_name("$unify"), elem_expr, _name(loop_var), _name(trail_name)),
                             k_stmts,
                         ),
                         _undo_stmt(mark, trail_name),
@@ -299,7 +299,7 @@ def _lower_shared_body(
                     body=[
                         _assign_mark(mark, trail_name),
                         ast.If(
-                            test=_call(_name("unify"), elem_expr, _name(loop_var), _name(trail_name)),
+                            test=_call(_name("$unify"), elem_expr, _name(loop_var), _name(trail_name)),
                             body=[
                                 _assign(found_flag, ast.Constant(value=True)),
                                 _undo_stmt(mark, trail_name),
@@ -352,7 +352,7 @@ def _lower_reified_branch(
         mark = ctx.fresh(_MARK_PREFIX)
         undetermined = [
             _assign_mark(mark, trail_name),
-            _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), true_stmts),
+            _if(_call(_name("$unify"), l_expr, r_expr, _name(trail_name)), true_stmts),
             _undo_stmt(mark, trail_name),
             _if(_call(_name("$dif"), l_expr, r_expr, _name(trail_name)), false_stmts),
         ]

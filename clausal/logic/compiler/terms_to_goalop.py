@@ -143,6 +143,15 @@ def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
         _extend(ops, body.left, db)
         _extend(ops, body.right, db)
         return
+    if isinstance(body, nodes.CompareChain):
+        # A10-F009: a chained comparison ``0 < X < 10`` is emitted as
+        # CompareChain([Lt(0, X), Lt(X, 10)]) but had no lowerer here. Expand
+        # it into its individual comparison goals — the shared operand (X) is
+        # the same Var by identity, so it is still evaluated once (the node's
+        # documented single-evaluation semantics).
+        for comparison in body.comparisons:
+            _extend(ops, comparison, db)
+        return
     ops.append(_convert(body, db))
 
 

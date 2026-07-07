@@ -2338,10 +2338,13 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
         else
             return PyUnicode_FromString(".");
     }
-    /* Primitives */
+    /* Primitives — A09-F027: an atomic constant IS its own functor name
+       (ISO: functor(3, N, A) → N=3, A=0), so it roundtrips. Returning
+       repr(term) ("3") broke functor(T, "3", 0) → T="3" != 3. */
     if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
         PyFloat_Check(term)) {
-        return PyObject_Repr(term);
+        Py_INCREF(term);
+        return term;
     }
     /* Zero-arity PredicateMeta class (atom) */
     if (PredicateMeta_type) {

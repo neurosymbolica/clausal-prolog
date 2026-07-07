@@ -10,14 +10,16 @@ codebase as a whole and should be addressed uniformly, not piecemeal.
 Every C extension casts `trail_obj` to `TrailObject *` without calling
 `Trail_Check(trail_obj)`. Passing a non-Trail object causes undefined behavior.
 
-**Affected files:** `_constraints_dif.c`, `_tabling_core.c`, `_list_unify.c`,
-`_lists_core.c`
+**Affected files:** `_constraints_dif.c`, `_tabling_core.c`, `_list_unify.c`
 
 **Audited clean (2026-07-05, A06-F017):** `_arithmetic_core.c` — all 14
 exported functions call `Trail_Check(trail_obj)` before `Trail_CAST`
 (regression guard: `test_06_clpfd.py::TestArithmeticCore::test_trail_type_checked`).
 `_clpfd_propagate.c` — never casts a trail; it threads the trail through to
 the Python variables API (`unify`/`put_attr`), which validates.
+
+**Fixed (A09-F020):** `_lists_core.c`, `_chars_core.c` — all 5 entry points
+guarded.
 
 **Fix:** Add `Trail_Check()` guard at entry to every exported function that
 receives a trail. Must be done project-wide.
@@ -65,12 +67,16 @@ state structs.
 
 ## Maintenance
 
-### 6. PyTuple_GET_SIZE macro without type guards
+### 6. PyList/PyTuple_GET_SIZE macro without type guards
 
-Several places use unchecked `PyTuple_GET_SIZE` on values assumed to be tuples.
-Segfault risk if assumptions are violated.
+Several places use unchecked `PyList_GET_SIZE` / `PyTuple_GET_SIZE` on values
+assumed to be lists/tuples. Segfault risk if assumptions are violated.
 
-**Fix:** Use `PyTuple_Size()` (checked) or add explicit `PyTuple_Check()`.
+**Fixed:** `_lists_core.c` member_find/memberchk_find/append_split_find/
+select_find/nth0_find (A09-F021 — `PyList_Check(items)` at each entry).
+
+**Fix:** Use `PyList_Size()` / `PyTuple_Size()` (checked) or add explicit
+`PyList_Check()` / `PyTuple_Check()`.
 
 ### 7. PredicateMeta registration order dependency
 

@@ -387,11 +387,11 @@ def _build_predicate_trampoline_funcdef(
         # Deref each argument once into a local before the clause match arms.
         deref_names = [f"_d{i}" for i in range(arity)]
         for i, arg in enumerate(arg_names):
-            loop_stmts.append(_assign(deref_names[i], _call(_name("deref"), _name(arg))))
+            loop_stmts.append(_assign(deref_names[i], _call(_name("$deref"), _name(arg))))
         subject = ast.Tuple(elts=[_name(n) for n in deref_names], ctx=ast.Load())
     else:
         subject = ast.Tuple(
-            elts=[_call(_name("deref"), _name(n)) for n in arg_names],
+            elts=[_call(_name("$deref"), _name(n)) for n in arg_names],
             ctx=ast.Load(),
         )
 
@@ -640,6 +640,13 @@ def compile_predicate_trampoline(
         "DictTerm": _DictTerm_t,
         "SetTerm": _SetTerm_t,
         "Var": Var,
+        # A12-F004: generated bodies reference the engine helpers under the
+        # reserved ``$``-prefix so a user predicate named unify/2 or deref/2
+        # (which lands in the module dict and is merged in below) cannot shadow
+        # them. The bare "unify"/"deref" keys are kept for backward compat with
+        # any older cached bytecode but are not emitted by current codegen.
+        "$unify": unify,
+        "$deref": deref,
         "unify": unify,
         "deref": deref,
         "is_var": is_var,
@@ -1173,11 +1180,11 @@ def _build_predicate_funcdef(
         # Deref each argument once into a local before the clause match arms.
         deref_names = [f"_d{i}" for i in range(arity)]
         for i, arg in enumerate(arg_names):
-            all_stmts.append(_assign(deref_names[i], _call(_name("deref"), _name(arg))))
+            all_stmts.append(_assign(deref_names[i], _call(_name("$deref"), _name(arg))))
         subject = ast.Tuple(elts=[_name(n) for n in deref_names], ctx=ast.Load())
     else:
         subject = ast.Tuple(
-            elts=[_call(_name("deref"), _name(n)) for n in arg_names],
+            elts=[_call(_name("$deref"), _name(n)) for n in arg_names],
             ctx=ast.Load(),
         )
 
@@ -1315,6 +1322,10 @@ def compile_predicate_shallow(
         "DictTerm": _DictTerm_s,
         "SetTerm": _SetTerm_s,
         "Var": Var,
+        # A12-F004: $-prefixed engine helpers for the shallow path (see the
+        # trampoline base_globals above).
+        "$unify": unify,
+        "$deref": deref,
         "unify": unify,
         "deref": deref,
         "is_var": is_var,

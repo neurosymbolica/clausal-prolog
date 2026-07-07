@@ -149,6 +149,9 @@ def compile_module(
         else:
             pending[key] = None
 
+    # ── Step 4b: validate directive targets (A12-F003) ───────────────────
+    _validate_directive_targets(module_items, db, module_dict)
+
     # ── Step 5: Compile each predicate ───────────────────────────────────
     for (functor, arity), pred_cls in pending.items():
         clauses = db.clauses_for(functor, arity)
@@ -300,6 +303,36 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
             # Store the top-level name (e.g., "foo" for "foo.bar.baz").
             top_name = item.module.split(".")[0]
             module_dict[top_name] = mod
+
+
+def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) -> None:
+    """A12-F003: reject a -table/-discontiguous/-shallow directive whose target
+    predicate is never defined (or defined only at a different arity).
+
+    A one-character typo in such a target silently forfeits the
+    termination/dedup guarantee the author explicitly asked for (the predicate
+    just runs untabled). The check runs after all clauses are collected, so
+    forward declaration stays legal. ``-dynamic`` is exempt — it mints its own
+    empty predicate (A12-F005) and a clause-less dynamic predicate is legit
+    ISO. A target that is a defined PredicateMeta class (e.g. an imported or
+    -private-declared predicate) also counts as defined."""
+    _checked = ("table", "discontiguous", "shallow")
+    for item in module_items:
+        if not isinstance(item, DirectiveItem) or item.name not in _checked:
+            continue
+        for functor, arity in item.specs:
+            if db.clauses_for(functor, arity):
+                continue
+            cls = module_dict.get(functor)
+            if isinstance(cls, PredicateMeta) and len(cls._fields) == arity:
+                continue
+            near = sorted({a for (f, a) in db._clauses if f == functor})
+            hint = (f"; predicate {functor} is defined at arity/arities {near}"
+                    if near else f"; predicate {functor} is never defined")
+            raise SyntaxError(
+                f"-{item.name}({functor}/{arity}): target predicate "
+                f"{functor}/{arity} is not defined in this module{hint}"
+            )
 
 
 def _process_directives(module_items: list, db: Any) -> None:

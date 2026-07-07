@@ -77,12 +77,20 @@ class TestCharType:
         assert "digit" not in results
 
     def test_enum_chars_for_digit(self):
-        """char_type(C, 'digit') → enumerate '0'..'9' (10 solutions)."""
+        """char_type(C, 'digit') → enumerate every Unicode digit.
+
+        A09-F013: digit is Unicode-aware in test-mode (``char_type('٣',
+        digit)`` succeeds via ``str.isdigit``), so the enumeration must be
+        too — it includes the ASCII digits and Unicode digits like the
+        Arabic-Indic three.
+        """
         # nv
         C = Var()
         results = _run_collect("char_type", 2, C, "digit",
                                snap=lambda: deref(C))
-        assert sorted(results) == [str(i) for i in range(10)]
+        assert set(str(i) for i in range(10)) <= set(results)
+        assert "٣" in results  # ARABIC-INDIC THREE
+        assert all(c.isdigit() for c in results)
 
     def test_both_unbound_error(self):
         # nv

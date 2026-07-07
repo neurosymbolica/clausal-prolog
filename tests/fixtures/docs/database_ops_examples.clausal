@@ -70,5 +70,8 @@ Test("retract by pattern") <- (
 # --8<-- [start:abolish_table_example]
 -table(MemoFib/2)
 
+MemoFib(0, 0),
+MemoFib(1, 1),
+
 Test("clear") <- abolish_table("MemoFib", 2)  # nv
 # --8<-- [end:abolish_table_example]

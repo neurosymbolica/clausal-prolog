@@ -65,7 +65,7 @@ Test("decompose float: functor(1.0, N, A)") <- (
     functor(1.0, _n, _a),
     _a == 0
 )  # nv
-Test("unpack int: 1 =.. X gives ['1']") <- (
+Test("unpack int: 1 =.. X gives [1]") <- (
     unpack(1, _x),
-    _x == ["1"]
+    _x == [1]
 )  # nv
