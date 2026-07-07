@@ -119,8 +119,8 @@ def _deref_cmp(
 ) -> list[ast.stmt]:
     """Compile a structural comparison using deref on both sides."""
     var_context = ctx.var_context
-    l_expr = _call(_name("deref"), term_to_ast_expr(l, var_context, eval_arith=False))
-    r_expr = _call(_name("deref"), term_to_ast_expr(r, var_context, eval_arith=False))
+    l_expr = _call(_name("$deref"), term_to_ast_expr(l, var_context, eval_arith=False))
+    r_expr = _call(_name("$deref"), term_to_ast_expr(r, var_context, eval_arith=False))
     test = ast.Compare(left=l_expr, ops=[ast_op], comparators=[r_expr])
     return [_if(test, k_stmts)]
 
@@ -234,7 +234,7 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
 
     return [
         _assign(count_var, ast.Constant(value=0)),
-        _assign(n_var, _call(_name("deref"), n_expr)),
+        _assign(n_var, _call(_name("$deref"), n_expr)),
         type_check,
         _assign_mark(mark_var, trail_name),
         gen_fn,
@@ -283,7 +283,7 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
     )
 
     unify_check = ast.If(
-        test=_call(_name("unify"), count_expr, _name(n_var), _name(trail_name)),
+        test=_call(_name("$unify"), count_expr, _name(n_var), _name(trail_name)),
         body=k_stmts or [ast.Pass()],
         orelse=[],
     )
@@ -474,7 +474,7 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
     )
 
     return [
-        _assign(x_var, _call(_name("deref"), x_expr)),
+        _assign(x_var, _call(_name("$deref"), x_expr)),
         check,
     ]
 
@@ -603,7 +603,7 @@ def _compile_find_all_core(
     unify_block = [
         _assign_mark(unify_mark, trail_name),
         ast.If(
-            test=_call(_name("unify"), bag_expr, _name(results_var), _name(trail_name)),
+            test=_call(_name("$unify"), bag_expr, _name(results_var), _name(trail_name)),
             body=k_stmts or [ast.Pass()],
             orelse=[],
         ),
@@ -696,7 +696,7 @@ def _compile_catch_impl(
         _assign_mark(unify_mark, trail_name),
         ast.If(
             test=_call(
-                _name("unify"), catcher_expr, _name(term_name), _name(trail_name),
+                _name("$unify"), catcher_expr, _name(term_name), _name(trail_name),
             ),
             body=recovery_body_stmts or [ast.Pass()],
             orelse=orelse_stmts or [ast.Pass()],

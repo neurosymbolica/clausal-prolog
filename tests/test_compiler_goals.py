@@ -196,7 +196,7 @@ class TestArithToAstExpr:
         expr = arith_to_ast_expr(v, vc)
         assert isinstance(expr, ast.Call)
         assert isinstance(expr.func, ast.Name)
-        assert expr.func.id == "deref"
+        assert expr.func.id == "$deref"  # A12-F004: engine helpers are $-prefixed
 
     def test_add_gives_binop_add(self):
         # nv

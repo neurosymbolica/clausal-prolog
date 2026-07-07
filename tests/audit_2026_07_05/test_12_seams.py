@@ -239,10 +239,9 @@ reach(X, Y) <- (
 class TestF004EngineNamespaceLeak:
 
     @pytest.mark.parametrize("name", ["walk", "deref", "unify"])
-    @pytest.mark.xfail(strict=False,
-                       reason="A12-F004: user predicate named after a leaked "
-                              "engine helper breaks at load (cryptic TypeError)")
     def test_user_predicate_named_after_engine_helper(self, load, name):
+        # A12-F004 fixed: walk/deref/unify are injected $-prefixed only, so
+        # a user predicate can use those public names.
         m = load(f"f004_{name}", f'{name}("a", "b"),\n')
         x = Var()
         got = [deref(x) for _ in solve(getattr(m, name)("a", x))]
@@ -254,8 +253,11 @@ class TestF004EngineNamespaceLeak:
         leaked = {k for k in m.__dict__
                   if not k.startswith("_")
                   and getattr(V, k, None) is m.__dict__[k]}
-        # pin the current leak set so a fix (or a widening) is visible
-        assert {"walk", "deref", "unify", "Var", "Trail"} <= leaked
+        # A12-F004: walk/deref/unify are no longer leaked under public names
+        # (generated bodies use the reserved $-prefix). The user-facing types
+        # Var/Trail are intentionally still injected for embedded Python.
+        assert not ({"walk", "deref", "unify"} & leaked)
+        assert {"Var", "Trail"} <= leaked
 
     def test_solve_named_predicate_currently_works(self, load):
         # control: 'solve' is NOT leaked, so a solve/2 user predicate is fine

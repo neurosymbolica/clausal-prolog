@@ -753,7 +753,8 @@ class TestVisualizer:
         show("demo", 1, clauses, db, trampoline=True)
         captured = capsys.readouterr()
         assert "def demo__1" in captured.out
-        assert "$DONE" in captured.out
+        # A12-F004: reserved $-names are rendered display-safe (valid Python).
+        assert "__dollar_DONE__" in captured.out
 
     def test_source_is_valid_python(self):
         """predicate_to_source returns syntactically valid Python."""

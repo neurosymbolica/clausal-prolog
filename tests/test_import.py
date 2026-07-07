@@ -150,17 +150,19 @@ def test_trail_injected():
 
 
 def test_unify_injected():
-    # nv
+    # nv — A12-F004: injected under the reserved $-prefix, not the public name.
     from clausal.logic.variables import unify
     mod = _load_fixture("edge_graph.clausal")
-    assert mod.__dict__["unify"] is unify
+    assert mod.__dict__["$unify"] is unify
+    assert "unify" not in mod.__dict__  # public name freed for user predicates
 
 
 def test_deref_injected():
-    # nv
+    # nv — A12-F004: injected under the reserved $-prefix.
     from clausal.logic.variables import deref
     mod = _load_fixture("edge_graph.clausal")
-    assert mod.__dict__["deref"] is deref
+    assert mod.__dict__["$deref"] is deref
+    assert "deref" not in mod.__dict__
 
 
 # ── edge dispatch: ground queries ─────────────────────────────────────────────

@@ -185,9 +185,15 @@ predicate_builtins["Compound"] = Compound
 predicate_builtins["DictTerm"] = DictTerm
 predicate_builtins["SetTerm"] = SetTerm
 predicate_builtins["Trail"] = Trail
-predicate_builtins["unify"] = unify
-predicate_builtins["deref"] = deref
-predicate_builtins["walk"] = walk
+# A12-F004 / A12-D002: the engine helpers walk/deref/unify are pure internals
+# used only by generated predicate bodies (which reference them under the
+# reserved ``$``-prefix). Injecting them under their PUBLIC names reserved
+# those names — a user predicate ``walk/2``/``deref/2``/``unify/2`` failed at
+# load with a cryptic TypeError. Inject them ``$``-prefixed only, freeing the
+# public names for user code.
+predicate_builtins["$unify"] = unify
+predicate_builtins["$deref"] = deref
+predicate_builtins["$walk"] = walk
 from clausal.terms import PyThunk, FStringThunk, Quantity
 predicate_builtins["PyThunk"] = PyThunk
 predicate_builtins["FStringThunk"] = FStringThunk  # alias for PyThunk
@@ -248,7 +254,7 @@ def _preseed_py_submodules(module_items) -> None:
 # bytecode live until the source file itself changes. Fold this tag into the
 # reported mtime so a clausal upgrade invalidates every cached .clausal/.pl
 # .pyc. BUMP THIS whenever EmbedTransformer / the codegen output changes.
-CLAUSAL_BYTECODE_TAG = 1
+CLAUSAL_BYTECODE_TAG = 2
 
 
 class _ClausalSourceLoader(SourceLoader):
@@ -636,9 +642,10 @@ _simple_ast_builtins["PredicateMeta"] = PredicateMeta
 _simple_ast_builtins["Var"] = Var
 _simple_ast_builtins["Compound"] = Compound
 _simple_ast_builtins["Trail"] = Trail
-_simple_ast_builtins["unify"] = unify
-_simple_ast_builtins["deref"] = deref
-_simple_ast_builtins["walk"] = walk
+# A12-F004: see predicate_builtins above — engine helpers are $-prefixed only.
+_simple_ast_builtins["$unify"] = unify
+_simple_ast_builtins["$deref"] = deref
+_simple_ast_builtins["$walk"] = walk
 _simple_ast_builtins["PyThunk"] = PyThunk
 _simple_ast_builtins["FStringThunk"] = FStringThunk  # alias
 _simple_ast_builtins["BoolEq"] = BoolEq

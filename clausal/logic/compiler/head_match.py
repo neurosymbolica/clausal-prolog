@@ -744,7 +744,7 @@ def _compile_multi_star_guard(
                     value=_name(d_name), slice=idx_expr, ctx=ast.Load(),
                 )
                 unify_calls.append(
-                    _call(_name("unify"), _var_or_const_expr(elem), subscript, _name(trail_name))
+                    _call(_name("$unify"), _var_or_const_expr(elem), subscript, _name(trail_name))
                 )
             pos_const += len(seg_val)
         else:
@@ -784,7 +784,7 @@ def _compile_multi_star_guard(
             )
             unify_calls.append(
                 _call(
-                    _name("unify"),
+                    _name("$unify"),
                     _var_or_const_expr(star_var),
                     slice_expr,
                     _name(trail_name),
@@ -914,7 +914,7 @@ def _compile_multi_star_guard(
             _assign_mark(var_build_mark, trail_name),
             _assign(var_sl_name, _call(_name("$build_multi_star_list"), segments_ast)),
             ast.If(
-                test=_call(_name("unify"), _name(cap_name), _name(var_sl_name), _name(trail_name)),
+                test=_call(_name("$unify"), _name(cap_name), _name(var_sl_name), _name(trail_name)),
                 body=body_stmts,
                 orelse=[],
             ),
@@ -930,7 +930,7 @@ def _compile_multi_star_guard(
     )
 
     # _d = deref(_lcap)
-    deref_assign = _assign(d_name, _call(_name("deref"), _name(cap_name)))
+    deref_assign = _assign(d_name, _call(_name("$deref"), _name(cap_name)))
 
     # If _d is a SegList, walk it: a fully-ground SegList becomes a plain list
     # so the existing isinstance(list) branch fires; a non-ground SegList stays
@@ -1117,7 +1117,7 @@ def compile_head_to_match_case(
         # if unify(orig, dup, trail): <inner>
         inner = [ast.If(
             test=_call(
-                _name("unify"),
+                _name("$unify"),
                 _name(orig_name),
                 _name(dup_name),
                 _name(trail_name),
@@ -1157,7 +1157,7 @@ def compile_head_to_match_case(
                 ast.Dict(keys=dict_keys_ast, values=dict_vals_ast),
             )
             inner = [ast.If(
-                test=_call(_name("unify"), _name(cap_name), expected_expr, _name(trail_name)),
+                test=_call(_name("$unify"), _name(cap_name), expected_expr, _name(trail_name)),
                 body=inner,
                 orelse=[],
             )]
@@ -1174,7 +1174,7 @@ def compile_head_to_match_case(
                 ast.List(elts=elts, ctx=ast.Load()),
             )
             inner = [ast.If(
-                test=_call(_name("unify"), _name(cap_name), expected_expr, _name(trail_name)),
+                test=_call(_name("$unify"), _name(cap_name), expected_expr, _name(trail_name)),
                 body=inner,
                 orelse=[],
             )]
@@ -1199,7 +1199,7 @@ def compile_head_to_match_case(
                         comparators=[ast.Constant(value=literal)],
                     ),
                     _call(
-                        _name("unify"),
+                        _name("$unify"),
                         _name(cap_name),
                         ast.Constant(value=literal),
                         _name(trail_name),
@@ -1224,7 +1224,7 @@ def compile_head_to_match_case(
                         comparators=[ast.Constant(value=literal)],
                     ),
                     _call(
-                        _name("unify"),
+                        _name("$unify"),
                         _name(cap_name),
                         ast.Constant(value=literal),
                         _name(trail_name),
@@ -1253,7 +1253,7 @@ def compile_head_to_match_case(
                         comparators=[ast.Constant(value=literal)],
                     ),
                     _call(
-                        _name("unify"),
+                        _name("$unify"),
                         _name(cap_name),
                         ast.Constant(value=literal),
                         _name(trail_name),
@@ -1272,7 +1272,7 @@ def compile_head_to_match_case(
     for _tag, cap_name, atom in atom_guards:
         inner = [ast.If(
             test=_call(
-                _name("unify"),
+                _name("$unify"),
                 _name(cap_name),
                 term_to_ast_expr(atom, var_context, eval_arith=False),
                 _name(trail_name),

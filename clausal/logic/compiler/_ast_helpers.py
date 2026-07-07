@@ -346,7 +346,7 @@ def _in_iter_expr(elem: Any, coll_expr: ast.expr) -> ast.expr:
     if isinstance(elem, TupleLiteral):
         return _call(
             _name("$in_iter"),
-            _call(_name("deref"), coll_expr),
+            _call(_name("$deref"), coll_expr),
             _locate(ast.Constant(value=True)),
         )
-    return _call(_name("deref"), coll_expr)
+    return _call(_name("$deref"), coll_expr)

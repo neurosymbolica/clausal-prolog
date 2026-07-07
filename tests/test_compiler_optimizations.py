@@ -27,7 +27,7 @@ The specific fragilities are documented below so that a future maintainer
 knows what to expect when a test breaks.
 
 TestDerefOnce
-  • _count_calls_to("deref", func_def) walks the entire FunctionDef,
+  • _count_calls_to("$deref", func_def) walks the entire FunctionDef,
     including body statements.  The tests use fact-only predicates
     (empty bodies) to avoid body goals that call deref() internally.
     A predicate with body goals that internally call deref() would inflate
@@ -181,25 +181,25 @@ class TestDerefOnce:
     def test_single_clause_one_deref_per_arg(self):
         # nv
         _, _, func_def = _make_multi_clause_predicate(1, arity=2)
-        assert _count_calls_to("deref", func_def) == 2
+        assert _count_calls_to("$deref", func_def) == 2
 
     def test_two_clauses_still_one_deref_per_arg(self):
         # nv
         _, _, func_def = _make_multi_clause_predicate(2, arity=2)
         # Would be 4 without the optimization; should be 2.
-        assert _count_calls_to("deref", func_def) == 2
+        assert _count_calls_to("$deref", func_def) == 2
 
     def test_three_clauses_still_one_deref_per_arg(self):
         # nv
         _, _, func_def = _make_multi_clause_predicate(3, arity=2)
         # Would be 6 without the optimization; should be 2.
-        assert _count_calls_to("deref", func_def) == 2
+        assert _count_calls_to("$deref", func_def) == 2
 
     def test_five_clauses_arity3_one_deref_per_arg(self):
         # nv
         _, _, func_def = _make_multi_clause_predicate(5, arity=3)
         # Would be 15 without the optimization; should be 3.
-        assert _count_calls_to("deref", func_def) == 3
+        assert _count_calls_to("$deref", func_def) == 3
 
     def test_match_subjects_use_deref_locals(self):
         """Match subjects reference _d0, _d1 locals, not raw arg names."""
@@ -241,14 +241,14 @@ class TestDerefOnce:
         clauses = db.clauses_for("fact0", 0)
         func_def = compile_predicate_trampoline_ast("fact0", 0, clauses, db)
         # Should have zero deref calls
-        assert _count_calls_to("deref", func_def) == 0
+        assert _count_calls_to("$deref", func_def) == 0
 
     def test_deref_count_scales_with_arity_not_clauses(self):
         """Verify the scaling property: deref count == arity, not n_clauses * arity."""
         # nv
         for n in range(1, 6):
             _, _, func_def = _make_multi_clause_predicate(n, arity=2)
-            n_derefs = _count_calls_to("deref", func_def)
+            n_derefs = _count_calls_to("$deref", func_def)
             assert n_derefs == 2, \
                 f"{n} clauses, arity 2: expected 2 deref calls, got {n_derefs}"
 

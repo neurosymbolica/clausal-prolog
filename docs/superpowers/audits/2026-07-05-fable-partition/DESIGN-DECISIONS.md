@@ -78,6 +78,14 @@ sessions/instances: treat these as settled — do not re-ask.
   accident. The extension finder emits a `ClausalLintWarning` and defers to
   the standard library (returns None → PathFinder loads the real module)
   rather than silently shadowing it. import.md corrected. Gates A10-F010.
+- **A12-D002 (engine-namespace leak) → (a) unleak, partial.** The engine
+  helper *functions* `walk`/`deref`/`unify` are injected into module
+  namespaces under the reserved `$`-prefix only (generated bodies reference
+  `$deref`/`$unify`), freeing the public names so a user predicate
+  `walk/2`/`deref/2`/`unify/2` loads and runs. The user-facing *types*
+  `Var`/`Trail`/`Compound` (and `PredicateMeta`/`DictTerm`/`SetTerm`/`PyThunk`/
+  `Quantity`) remain injected for embedded Python and are documented reserved.
+  Mirror of the A10-F013 `clausal.call` fix. Gates A12-F004.
 - **A10-D004 (TermExpansion patterns) → (a) match item.head + docs.** A
   non-Predicate TermExpansion pattern (`q(fact(X))`) matches the fact item's
   HEAD; the expansion terms are then wrapped back into fact Predicates. Also
