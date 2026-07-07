@@ -168,16 +168,17 @@ class TestSegBytesCrossDomainAndEdges:
         # nv  — 256 in b"abc" would raise ValueError natively; must be guarded
         assert (256 in SegBytes([b"abc"])) is False
 
-    def test_segbytes_varseg_wrong_type_stays_non_ground(self):
-        # nv  — DOCUMENTED: a VarSeg bound to a bare non-bytes (str/int) is
-        # kept as an unbound hole rather than raising, mirroring SegString's
-        # handling of a bare wrong-type binding. (A *list* with bad elements
-        # does raise — see the test above.) Recorded so the behaviour is
-        # intentional, not accidental.
+    def test_segbytes_varseg_wrong_type_raises_partial_term_error(self):
+        # nv  — REVERSED by A01-F009: a VarSeg bound to a bare non-bytes
+        # (str/int) used to be kept as a silent "hole", leaving the term
+        # non-ground forever with every unify quietly failing. The A01 audit
+        # re-decided this is a contract violation — consistent with the
+        # list-with-bad-elements case above and the F024 char-list guard — so
+        # __walk__ now raises PartialTermError instead of returning limbo.
         X = Var()
         unify(X, "abc", Trail())  # str into a bytes hole
-        walked = SegBytes([VarSeg(X)]).__walk__()
-        assert isinstance(walked, SegBytes)  # stays non-ground, no raise
+        with pytest.raises(PartialTermError):
+            SegBytes([VarSeg(X)]).__walk__()
 
 
 class TestBytesPromiscuityRoundTrip:

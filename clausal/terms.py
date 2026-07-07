@@ -357,7 +357,17 @@ class SegList:
                             else:
                                 new_segs.append(inner_seg)
                 else:
-                    # Still unbound — keep as VarSeg with walked var
+                    # Either still an unbound Var (keep the hole) or bound to
+                    # an out-of-contract scalar. The latter left the term in
+                    # silent limbo — non-ground forever, every unify quietly
+                    # failing (A01-F009, mirroring the F024 char-list guard).
+                    from .logic.variables import is_var
+                    if not is_var(v):
+                        raise PartialTermError(
+                            f"SegList VarSeg bound to non-sequence value: "
+                            f"{type(v).__name__} ({v!r}); VarSegs of a SegList "
+                            f"must bind to list/str."
+                        )
                     new_segs.append(VarSeg(v))
 
         # If no VarSegs remain, return a plain Python list (promoted to
@@ -891,7 +901,17 @@ class SegString:
                             else:
                                 new_segs.append(inner_seg)
                 else:
-                    # Still unbound — keep as VarSeg
+                    # Either still an unbound Var (keep the hole) or bound to
+                    # an out-of-contract scalar — the latter left the term in
+                    # silent limbo (A01-F009, mirroring the F024 char-list
+                    # guard above).
+                    from .logic.variables import is_var
+                    if not is_var(v):
+                        raise PartialTermError(
+                            f"SegString VarSeg bound to non-str value: "
+                            f"{type(v).__name__} ({v!r}); VarSegs of a "
+                            f"SegString must bind to str."
+                        )
                     new_segs.append(VarSeg(v))
 
         # If no VarSegs remain, return a plain str
@@ -1220,6 +1240,17 @@ class SegBytes:
                             else:
                                 new_segs.append(inner_seg)
                 else:
+                    # Either still an unbound Var (keep the hole) or bound to
+                    # an out-of-contract scalar — the latter left the term in
+                    # silent limbo (A01-F009, mirroring the F024 byte-list
+                    # guard above).
+                    from .logic.variables import is_var
+                    if not is_var(v):
+                        raise PartialTermError(
+                            f"SegBytes VarSeg bound to non-bytes value: "
+                            f"{type(v).__name__} ({v!r}); VarSegs of a "
+                            f"SegBytes must bind to bytes or a list of byte codes."
+                        )
                     new_segs.append(VarSeg(v))
 
         if all(isinstance(s, bytes) for s in new_segs):

@@ -286,7 +286,6 @@ class TestF008WalkFunctorTerms:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF009SegStringScalarBinding:
-    @pytest.mark.xfail(strict=False, reason="A01-F009: contract violation should raise typed error (F024 precedent)")
     def test_scalar_varseg_binding_raises_partial_term_error(self, trail):
         Z = Var()
         assert unify(Z, 5, trail)
