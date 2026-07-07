@@ -19,7 +19,7 @@ when/2 generalizes freeze by supporting compound conditions:
 from __future__ import annotations
 
 from clausal.logic.variables import (
-    register_attr_hook, get_attr, put_attr, deref, is_var,
+    register_attr_hook, get_attr, put_attr, deref, is_var, Var, unify,
 )
 
 FREEZE_KEY = "freeze"
@@ -107,14 +107,19 @@ def _install_when_disjunction(cond_left, cond_right, goal_thunk, trail):
     Attaches to vars in both conditions. Whichever fires first runs Goal.
     Uses a shared flag to ensure Goal fires at most once.
     """
-    fired = [False]
+    # A04-F010: the at-most-once flag must be *backtrackable*. A plain closure
+    # cell survives trail unwinding, so a branch that fires the goal and then
+    # FAILS leaves the flag set — the surviving branch then skips the goal.
+    # Bind an unbound Var via unify(): the trail undoes the "already fired"
+    # state exactly when the firing branch is undone.
+    fired = Var()
 
     def _guarded_thunk():
-        if not fired[0]:
-            fired[0] = True
+        if is_var(deref(fired)):
+            unify(fired, True, trail)
             yield from goal_thunk()
         else:
-            yield None  # already fired — succeed silently
+            yield None  # already fired in this surviving world — succeed silently
 
     _install_when_condition(cond_left, _guarded_thunk, trail)
     _install_when_condition(cond_right, _guarded_thunk, trail)

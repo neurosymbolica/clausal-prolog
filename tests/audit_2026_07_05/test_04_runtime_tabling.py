@@ -814,15 +814,26 @@ class TestF009RuntimeErrorSwallowed:
 
 
 class TestF010WhenDisjunctionFiredFlag:
-    @pytest.mark.xfail(strict=False, reason="A04-F010: fired flag is not "
-                       "trailed; goal skipped in the surviving branch")
     def test_goal_fires_in_second_branch(self, load):
+        # A04-F010: branch 1 fires the goal then FAILS (1 == 2); the trailed
+        # fired-flag is undone with the branch, so branch 2 (Y is 2) fires the
+        # goal in the surviving world. R must be bound, not skipped.
         m = load("f010", WHEN_SRC)
         R = Var()
         got = []
         for _ in call("w8", R, module=m):
             v = deref(R)
             got.append("UNBOUND" if is_var(v) else v)
+        assert got == ["fired"]
+
+    def test_both_conditions_satisfied_fires_once(self, load):
+        # Regression guard: when both disjuncts become true in a SURVIVING
+        # branch, the goal still fires (at most once — the second fire sees the
+        # bound flag and yields silently), giving exactly one solution.
+        m = load("f010b", 'w8b(R) <- (when((nonvar(A) or nonvar(B)), '
+                          'R is "fired"), (A is 1, B is 2))\n')
+        R = Var()
+        got = [deref(R) for _ in call("w8b", R, module=m)]
         assert got == ["fired"]
 
 
