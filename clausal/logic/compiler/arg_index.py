@@ -638,8 +638,10 @@ def _make_secondary_dispatch_impl(
 
     Strategy differences are the same as in ``_make_indexed_dispatch_impl``:
 
-    - ``arg_offset``: 0 for simple, 2 for trampoline (to skip the
-      ``self_generator``/``parent`` prefix in trampoline-mode args).
+    - ``arg_offset``: 0 for simple, 4 for trampoline. The Phase-2 trampoline
+      layout is ``(this_generator, _proceed, _fail, _catcher, arg0, …,
+      trail)`` — skip four slots (this_generator + three continuations) to
+      reach arg0.
     - ``tail_yield``: ``None`` for simple (early returns terminate the
       generator); ``lambda args: (args[1], done)`` for trampoline, which
       emits the ``(parent, DONE)`` exhaustion sentinel at the end.
@@ -727,7 +729,9 @@ def _make_indexed_dispatch_impl(all_fn, idx_dict, default_fn, *, arg_offset, tai
     The strategy differences are minimal:
 
     - ``arg_offset``: 0 for simple (predicate args start at position 0);
-      2 for trampoline (positions 0/1 are ``self_generator``/``parent``).
+      4 for trampoline. The Phase-2 trampoline layout is
+      ``(this_generator, _proceed, _fail, _catcher, arg0, …, trail)`` — skip
+      four slots (this_generator + three continuations) to reach arg0.
     - ``tail_yield``: ``None`` for simple; ``lambda args: (args[1], done)``
       for trampoline, which terminates with a ``(parent, DONE)`` tuple
       as required by the Step protocol.
@@ -812,8 +816,10 @@ def _groundness_dispatch_body_multi(args, plans, fallback_fn, arg_offset):
     arg triggers its index lookup and short-circuits.  If all positions
     are unbound Vars, fall back to the all-clauses scan.
 
-    ``arg_offset`` is added to each plan's ``pos`` — 0 for simple mode,
-    2 for trampoline (to skip ``self_generator`` / ``parent``).
+    ``arg_offset`` is added to each plan's ``pos`` — 0 for simple mode, 4 for
+    trampoline. The Phase-2 trampoline layout is ``(this_generator, _proceed,
+    _fail, _catcher, arg0, …, trail)`` — skip four slots (this_generator +
+    three continuations) to reach arg0.
     """
     for _pos, _idx_dict, _dflt_fn in plans:
         _a = deref(args[_pos + arg_offset])
