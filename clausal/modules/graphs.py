@@ -300,6 +300,18 @@ def _shortest_path__4(this_generator, _proceed, _fail, _catcher, edges, start, e
             for e in edges_val
         )
         if has_weights:
+            # Dijkstra is unsound with negative weights and would silently
+            # return a non-shortest path; fail cleanly instead (F045). A
+            # Bellman-Ford fallback could be added later if needed.
+            has_negative = any(
+                isinstance(deref(e), list) and len(deref(e)) >= 3
+                and isinstance(deref(deref(e)[2]), (int, float))
+                and deref(deref(e)[2]) < 0
+                for e in edges_val
+            )
+            if has_negative:
+                yield (_fail, DONE)
+                return
             wadj = _build_weighted_adj(edges_val)
             dist = {start_val: 0}
             prev: dict = {start_val: None}

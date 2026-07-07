@@ -584,9 +584,8 @@ def test_F044_find_path_long_chain():
     assert sols and len(sols[0]) == 2501
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F045: Dijkstra silently returns "
-                   "a non-shortest path when weights are negative")
 def test_F045_shortest_path_negative_weight():
+    # A11-F045 (fixed): negative weights fail cleanly (Dijkstra precondition).
     edges = [["a", "b", 1], ["a", "c", 5], ["c", "b", -100]]
     p = Var()
     sols = _gsols(G._shortest_path__4, edges, "a", "b", p, out=p)

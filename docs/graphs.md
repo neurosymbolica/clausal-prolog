@@ -82,7 +82,7 @@ Or via [module import](import.md):
 | Predicate | Mode | Description |
 |-----------|------|-------------|
 | `find_path(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Enumerate all simple paths via [backtracking](control.md) |
-| `shortest_path(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Shortest path (BFS for unweighted, Dijkstra for weighted) |
+| `shortest_path(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Shortest path (BFS for unweighted, Dijkstra for weighted). **Precondition:** weighted edges must be non-negative; a graph with any negative weight fails (Dijkstra is unsound with negative weights). |
 | `path_cost(Edges, Path, Cost)` | `+Edges, +Path, -Cost` | sum_ of edge weights along a path |
 
 ```clausal
