@@ -66,22 +66,18 @@ def _fresh_pred_class(fields=("a", "b")):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF001OccursCheckBlindness:
-    @pytest.mark.xfail(strict=False, reason="A01-F001: no __occurs_check__ on Compound")
     def test_occurs_check_sees_var_in_compound_args(self, trail):
         X = Var()
         assert occurs_check(X, Compound("f", (X,))) is True
 
-    @pytest.mark.xfail(strict=False, reason="A01-F001: uoc builds cyclic term through Compound")
     def test_uoc_rejects_cyclic_compound(self, trail):
         X = Var()
         assert unify_with_occurs_check(X, Compound("f", (X,)), trail) is False
 
-    @pytest.mark.xfail(strict=False, reason="A01-F001: no __occurs_check__ on KWTerm")
     def test_occurs_check_sees_var_in_kwterm(self, trail):
         X = Var()
         assert occurs_check(X, KWTerm("r", a=X)) is True
 
-    @pytest.mark.xfail(strict=False, reason="A01-F001: PredicateMeta instances not traversed")
     def test_occurs_check_sees_var_in_predicate_meta_instance(self, trail):
         X = Var()
         inst = _fresh_pred_class()(X, 2)

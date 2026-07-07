@@ -99,6 +99,18 @@ class Compound:
                 return False
         return True
 
+    def __occurs_check__(self, var) -> bool:
+        """Called by C do_occurs_check: check if var appears in any arg.
+
+        Without this hook do_occurs_check falls through to ``return 0`` for
+        Compound, so unify_with_occurs_check would build the very cyclic term
+        the check exists to prevent (A01-F001). The functor slot is not
+        traversed here — Var functors are gated on parked decision A01-D004;
+        a str functor is a no-op for occurs_check regardless.
+        """
+        from .logic.variables import occurs_check
+        return any(occurs_check(var, a) for a in self.args)
+
 
 
 # ── Open-world keyword term ────────────────────────────────────────────────────
@@ -176,6 +188,12 @@ class KWTerm:
                 trail.undo(mark)
                 return False
         return True
+
+    def __occurs_check__(self, var) -> bool:
+        """Called by C do_occurs_check: check if var appears in any field
+        value (A01-F001). Mirrors :meth:`DictTerm.__occurs_check__`."""
+        from .logic.variables import occurs_check
+        return any(occurs_check(var, v) for v in self._fields.values())
 
     def keys(self):
         return self._fields.keys()

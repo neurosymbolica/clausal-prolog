@@ -83,6 +83,19 @@ def _make_unify(fields: tuple[str, ...]):
     return __unify__
 
 
+def _make_occurs_check(fields: tuple[str, ...]):
+    """Generate an ``__occurs_check__`` that recurses into field values.
+
+    Called by the C ``do_occurs_check`` for PredicateMeta instances. Without
+    it, occurs-check falls through to ``return 0`` and unify_with_occurs_check
+    would build a cyclic term through a predicate term (A01-F001).
+    """
+    def __occurs_check__(self, var):
+        from clausal.logic.variables import occurs_check  # noqa: PLC0415
+        return any(occurs_check(var, getattr(self, f)) for f in fields)
+    return __occurs_check__
+
+
 def _make_repr(fields: tuple[str, ...]):
     """Generate an instance __repr__: ``fib(n=1, f=2)``."""
     def __repr__(self):
@@ -127,9 +140,11 @@ class PredicateMeta(type):
         cls.__iter__ = _term_iter
         if fields:
             cls.__unify__ = _make_unify(fields)
-        # For zero-field classes (atoms), skip __unify__: the class IS the
-        # value, so identity comparison (C line 886: t1 == t2) and the
-        # fallback PyObject_RichCompareBool handle unification correctly.
+            cls.__occurs_check__ = _make_occurs_check(fields)
+        # For zero-field classes (atoms), skip __unify__/__occurs_check__: the
+        # class IS the value, so identity comparison (C line 886: t1 == t2) and
+        # the fallback PyObject_RichCompareBool handle unification correctly,
+        # and an atom can never contain a Var.
 
         return cls
 

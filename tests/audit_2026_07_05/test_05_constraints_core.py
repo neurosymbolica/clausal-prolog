@@ -454,7 +454,6 @@ class TestF005HasUnitsErrorPath:
 
 class TestF006DifOccursCheckCompound:
 
-    @pytest.mark.xfail(strict=False, reason="A05-F006/A01-F001: Compound-blind occurs check leaves dif(X,f(X)) pending")
     def test_dif_x_fx_immediately_satisfied(self):
         t = Trail()
         x = Var()
