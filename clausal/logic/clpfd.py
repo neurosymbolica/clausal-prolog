@@ -2381,14 +2381,15 @@ class GlobalCardinalityConstraint(Constraint):
     def propagate(self, trail: Trail, queue: deque) -> bool:
         for value, count in self.pairs:
             count = deref(count)
-            if not isinstance(count, int):
-                continue  # can't propagate variable counts yet
+            count_is_var = is_var(count)
+            if not count_is_var and not isinstance(count, int):
+                continue  # malformed count — leave pending
 
             # Re-deref all vars each iteration (prior narrowing may have
             # bound some vars, making the old references stale).
             vars_ = [deref(v) for v in self.gc_vars]
 
-            if count == 0:
+            if not count_is_var and count == 0:
                 # Remove this value from all variable domains
                 for v in vars_:
                     if is_var(v):
@@ -2410,12 +2411,27 @@ class GlobalCardinalityConstraint(Constraint):
                         definite += 1
                 elif is_var(v):
                     state = get_attr(v, FD_KEY)
-                    if state is not None and domain_contains(state.domain, value):
+                    if state is None or domain_contains(state.domain, value):
                         possible += 1
                         possible_vars.append(v)
-                    elif state is None:
-                        possible += 1
-                        possible_vars.append(v)
+
+            if count_is_var:
+                # Bound the count variable to [definite, definite + possible]
+                # (A06-F013): definite occurrences are locked in, and at most
+                # `possible` more vars can still take this value.  A singleton
+                # (possible == 0) binds the count; the value-level narrowing
+                # then runs on the next pass via the int-count branch once the
+                # count deref's to an int.  Intersect with any existing count
+                # domain so a user-posted bound still constrains.
+                new_cnt_d = domain_from_range(definite, definite + possible)
+                cnt_state = get_attr(count, FD_KEY)
+                if cnt_state is not None:
+                    new_cnt_d = domain_intersection(cnt_state.domain, new_cnt_d)
+                if not new_cnt_d:
+                    return False
+                if not _narrow_if_changed(count, new_cnt_d, trail, queue):
+                    return False
+                continue
 
             if definite > count:
                 return False  # too many already assigned

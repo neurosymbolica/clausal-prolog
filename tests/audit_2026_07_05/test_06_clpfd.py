@@ -565,8 +565,6 @@ class TestGlobalCardinality:
         assert global_cardinality(vs, [(1, 2), (2, 1)], t)
         assert label_set(vs, t) == {(1, 1, 2), (1, 2, 1), (2, 1, 1)}
 
-    @pytest.mark.xfail(strict=False, reason="A06-F013: variable counts are never bound "
-                       "even when all vars are ground (SWI binds Count)")
     def test_var_count_bound_when_ground(self):
         t = Trail()
         vs = [Var() for _ in range(3)]
