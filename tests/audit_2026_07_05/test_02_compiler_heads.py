@@ -247,41 +247,44 @@ class TestF001IndexedDispatchPartialTerms:
         R = Var()
         assert collect(mod, "kind3", Decimal(1), R, outv=[R]) == [("one",)]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F001: partial charlist caller routed to defaults, misses str bucket")
     def test_partial_charlist_indexed(self, mod):
         X, R = Var(), Var()
         assert collect(mod, "strs4", [X, "b", "c"], R, outv=[X, R]) == [("a", "A")]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F001: [] caller misses \"\" bucket")
     def test_empty_list_vs_empty_str_indexed(self, mod):
         R = Var()
         assert collect(mod, "emp4", [], R, outv=[R]) == [("empty",)]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F001: partial code-list caller misses bytes bucket")
     def test_partial_codelist_indexed(self, mod):
         X, R = Var(), Var()
         assert collect(mod, "byt4", [97, X], R, outv=[X, R]) == [(98, "AB")]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F001: SegList caller misses str bucket")
     def test_seglist_indexed(self, mod):
         A, R = Var(), Var()
         sl = SegList([VarSeg(A), ConcreteSeg(["c"])])
         assert collect(mod, "strs4", sl, R, outv=[A, R]) == [("ab", "A")]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F001: Decimal caller (outside _INDEXABLE_TYPES) misses int bucket; cf. A01-D001")
     def test_decimal_indexed(self, mod):
         R = Var()
         assert collect(mod, "kind4", Decimal(1), R, outv=[R]) == [("one",)]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F001: joint dispatch, partial container at pos_j hits empty joint-default")
     def test_joint_partial_container(self, mod):
         X, R = Var(), Var()
         assert collect(mod, "jnt2", [X, "a"], 2, R, outv=[X, R]) == [("a", ["a2"])]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F001: secondary dispatch, partial container at level-0 pos hits always-fail default")
     def test_secondary_partial_container(self, mod):
+        # [X] is a *partial* charlist at the level-0 position: its index key is
+        # uncomputable, so dispatch must scan ALL clauses. [X] unifies with
+        # every single-char first arg ("a".."d"), and second arg 1 matches the
+        # =1 and var-second clauses — i.e. the full linear-scan result. (The
+        # original expected [("a",["sa1"]),("a",["sav"])] was the answer for a
+        # *ground* "a" at level 0, not [X]; forcing it would drop 6 valid
+        # solutions — the very F001 bug.)
         X, R = Var(), Var()
-        assert collect(mod, "sec2", [X], 1, R, outv=[X, R]) == [("a", ["sa1"]), ("a", ["sav"])]
+        assert collect(mod, "sec2", [X], 1, R, outv=[X, R]) == [
+            ("a", ["sa1"]), ("b", ["sb1"]), ("c", ["sc1"]), ("d", ["sd1"]),
+            ("a", ["sav"]), ("b", ["sbv"]), ("c", ["scv"]), ("d", ["sdv"]),
+        ]
 
 
 # ── A02-F002: list-structure dispatch drops non-list/str/Var callers ─────────

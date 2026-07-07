@@ -460,15 +460,29 @@ def _joint_dispatch_body(
     _ai = deref(args[pos_i])
     _aj = deref(args[pos_j])
     if not is_var(_ai) and not is_var(_aj):
-        _jk = (_runtime_arg_key(_ai), _runtime_arg_key(_aj))
-        try:
-            _bfn = joint_dict.get(_jk)
-        except TypeError:
-            _bfn = None
-        if _bfn is not None:
-            yield from _bfn(*args)
+        _ki = _runtime_arg_key(_ai)
+        _kj = _runtime_arg_key(_aj)
+        # A02-F001: an uncomputable component means the joint key can't be
+        # formed. Degrade to the single-position dispatch on the OTHER
+        # (computable) component — which itself scans when its key is also
+        # uncomputable — rather than hitting the joint default (often an
+        # always-fail bucket that drops all solutions).
+        if _ki is _INDEX_VAR and _kj is _INDEX_VAR:
+            yield from fallback_fn(*args)
+        elif _ki is _INDEX_VAR:
+            yield from single_j_dispatch(*args)
+        elif _kj is _INDEX_VAR:
+            yield from single_i_dispatch(*args)
         else:
-            yield from joint_default_fn(*args)
+            _jk = (_ki, _kj)
+            try:
+                _bfn = joint_dict.get(_jk)
+            except TypeError:
+                _bfn = None
+            if _bfn is not None:
+                yield from _bfn(*args)
+            else:
+                yield from joint_default_fn(*args)
     elif not is_var(_ai):
         yield from single_i_dispatch(*args)
     elif not is_var(_aj):
@@ -651,10 +665,15 @@ def _make_secondary_dispatch_impl(
 
     def dispatch(*args):
         _ai = deref(args[pos_i])
-        if is_var(_ai):
+        _ki = _runtime_arg_key(_ai) if not is_var(_ai) else None
+        if is_var(_ai) or _ki is _INDEX_VAR:
+            # A02-F001: an unbound arg OR a non-var arg with an uncomputable
+            # level-0 key (partial container, Decimal, …) must scan all
+            # clauses. Routing an uncomputable key to the level-0 default —
+            # an always-fail bucket when no clause has a var first arg —
+            # would drop every solution the arg would unify with.
             yield from fallback_fn(*args)
         else:
-            _ki = _runtime_arg_key(_ai)
             try:
                 _entry = level0_compiled.get(_ki)
             except TypeError:
@@ -798,10 +817,19 @@ def _groundness_dispatch_body_single(args, pos, idx_dict, dflt_fn, fallback_fn):
         yield from fallback_fn(*args)
         return
     _k = _runtime_arg_key(_a)
+    if _k is _INDEX_VAR:
+        # A02-F001: a non-var arg whose index key is uncomputable (partial
+        # char/code-list, empty list, SegList, Decimal, …) must scan ALL
+        # clauses — not the default bucket (var-headed only), which would
+        # silently drop keyed buckets the arg would happily unify with.
+        yield from fallback_fn(*args)
+        return
     try:
         _bfn = idx_dict.get(_k)
     except TypeError:
-        _bfn = None
+        # Unhashable key (defensive) → same uncomputable-key fallback.
+        yield from fallback_fn(*args)
+        return
     if _bfn is not None:
         yield from _bfn(*args)
     else:
@@ -825,10 +853,14 @@ def _groundness_dispatch_body_multi(args, plans, fallback_fn, arg_offset):
         _a = deref(args[_pos + arg_offset])
         if not is_var(_a):
             _k = _runtime_arg_key(_a)
+            if _k is _INDEX_VAR:
+                # A02-F001: uncomputable key at this plan — try the NEXT
+                # plan (another position may index) before falling back.
+                continue
             try:
                 _bfn = _idx_dict.get(_k)
             except TypeError:
-                _bfn = None
+                continue
             if _bfn is not None:
                 yield from _bfn(*args)
             else:
