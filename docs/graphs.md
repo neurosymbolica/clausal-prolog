@@ -36,7 +36,40 @@ Or via [module import](import.md):
 
 - **Unweighted**: `[["a", "b"], ["b", "c"], ...]` — list of 2-element lists
 - **Weighted**: `[["a", "b", 3], ["b", "c", 5], ...]` — list of 3-element lists
+- **Lone vertex**: a 1-element `[["v"]]` entry names a vertex with no incident
+  edge (makes single-vertex graphs representable and `is_isolated` enumeration
+  reachable)
 - **vertices** are extracted automatically from edges
+- **Malformed entries** (not a 1-, 2-, or 3-element list) are silently skipped
+
+---
+
+## Directionality and conventions
+
+Most predicates treat the edge list as **undirected** — `neighbors`, `degree`,
+`find_path`, `shortest_path`, `path_cost`, `is_connected`,
+`connected_components`, `spanning_tree`, and `min_spanning_tree` all follow an
+edge in both directions. The exceptions are **directed**: `has_cycle`,
+`topological_sort`, and `reverse_edges` respect edge direction, and `has_edge`
+matches an edge only in the stored `[U, V]` order (so `has_edge([["a","b"]],
+"b", "a")` fails even though `"a"` and `"b"` are neighbors).
+
+Other conventions worth noting:
+
+- **`degree` counts a self-loop once** (`[["a","a"]]` → degree 1), not twice.
+- **`path_cost` requires at least two vertices**; a single-vertex path fails
+  rather than reporting cost 0.
+- **`breadth_first_nodes`/`find_path` from an absent source** succeed with just
+  `[Source]` — the source is treated as a phantom isolated vertex.
+- **`shortest_path` requires non-negative weights** (Dijkstra); a graph with a
+  negative weight fails.
+- **`min_spanning_tree`/`spanning_tree` require a connected graph**; a
+  disconnected graph has no spanning tree and fails.
+- **`merge_graphs` concatenates** the two edge lists (duplicates are kept); it
+  is not a set union.
+- **`is_connected([])`** is vacuously true (no vertices to disconnect).
+- Parallel edges are de-duplicated in adjacency, so `neighbors` and `find_path`
+  do not report a neighbor or path more than once per distinct edge.
 
 ---
 
@@ -46,7 +79,7 @@ Or via [module import](import.md):
 |-----------|------|-------------|
 | `vertices(Edges, Verts)` | `+Edges, -Verts` | Extract unique vertex list from edges |
 | `neighbors(Edges, Node, Nbrs)` | `+Edges, +Node, -Nbrs` | List of adjacent nodes |
-| `has_edge(Edges, U, V)` | `+Edges, ?U, ?V` | Succeeds if edge `[U, V]` exists; enumerates on backtrack |
+| `has_edge(Edges, U, V)` | `+Edges, ?U, ?V` | Succeeds if a **directed** edge `[U, V]` exists (order matters); enumerates on backtrack |
 | `degree(Edges, Node, Deg)` | `+Edges, +Node, -Deg` | Count of incident edges |
 
 ```clausal
