@@ -144,22 +144,18 @@ def _dw(t):
 # A09-F001 — sort/2 & msort/2 do not deref elements
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F001: msort sorts bound Vars by "
-                   "type-name fallback, not by their values")
 def test_F001_msort_bound_var_element(fix):
     _, m = fix
     S = Var()
     assert _first(m, "msortvar", S)
-    assert _dw(S) == [1, 2, 5]  # actual: [5, 1, 2]
+    assert _dw(S) == [1, 2, 5]  # A09-F001 fixed: was [5, 1, 2]
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F001: sort neither orders nor "
-                   "dedups a bound-Var element against its own value")
 def test_F001_sort_bound_var_element(fix):
     _, m = fix
     S = Var()
     assert _first(m, "sortvar", S)
-    assert _dw(S) == [1, 5]  # actual: [5, 1, 5] — unsorted AND dup kept
+    assert _dw(S) == [1, 5]  # A09-F001 fixed: was [5, 1, 5] — unsorted AND dup kept
 
 
 def test_F001_regression_sum_max_do_deref(fix):

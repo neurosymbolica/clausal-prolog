@@ -435,6 +435,7 @@ def _msort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail)
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
+        items = [deref(x) for x in items]
         try:
             result = sorted(items)
         except TypeError:
@@ -453,6 +454,7 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
+        items = [deref(x) for x in items]
         seen: list = []
         for x in items:
             if x not in seen:
@@ -587,6 +589,7 @@ def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, tra
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
+        items = [deref(x) for x in items]
         seen: list = []
         for x in items:
             if x not in seen:
