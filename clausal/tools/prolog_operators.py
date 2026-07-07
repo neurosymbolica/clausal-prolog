@@ -20,15 +20,20 @@ class OperatorTable:
         self._default_names: set[str] = set()
 
     def define(self, prec: int, spec: str, name: str) -> None:
-        entry = OpEntry(prec, spec, name)
-        if name not in self._ops:
-            self._ops[name] = []
-        # Replace existing entry with same specifier class (prefix/infix/postfix)
+        # Replace any existing entry of the same specifier class.
         kind = _specifier_kind(spec)
-        self._ops[name] = [
-            e for e in self._ops[name] if _specifier_kind(e.specifier) != kind
-        ]
-        self._ops[name].append(entry)
+        if name in self._ops:
+            self._ops[name] = [
+                e for e in self._ops[name]
+                if _specifier_kind(e.specifier) != kind
+            ]
+        if prec == 0:
+            # op(0, Spec, Name) REMOVES the operator of this kind rather than
+            # defining a priority-0 one (ISO 8.14.3.4) — F038.
+            if name in self._ops and not self._ops[name]:
+                del self._ops[name]
+            return
+        self._ops.setdefault(name, []).append(OpEntry(prec, spec, name))
 
     def lookup_infix(self, name: str) -> OpEntry | None:
         for e in self._ops.get(name, []):

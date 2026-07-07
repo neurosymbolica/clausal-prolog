@@ -150,6 +150,12 @@ class PrologParser:
     def _parse_term(self, max_prec: int) -> PTerm:
         """Parse a term with operators up to *max_prec*."""
         left = self._parse_primary(max_prec)
+        # Priority of the term built so far. Primaries (atoms, numbers, vars,
+        # functor(...) calls, parenthesised terms) have priority 0; an operator
+        # compound gets the operator's priority. Used to enforce xfx/xfy/yfx
+        # argument-priority limits so `a = b = c` / `2 ** 3 ** 2` are rejected
+        # (F028) rather than silently accepted.
+        left_prec = 0
         while True:
             tok = self._peek()
             if tok.type == TokenType.END:
@@ -175,14 +181,25 @@ class PrologParser:
                 # Could be infix with too-high precedence — stop
                 break
 
+            # Enforce the left-argument priority limit (x → strictly less,
+            # y → less-or-equal). A violation is an ISO priority-clash error.
+            if left_prec > self._left_prec(entry):
+                raise ParseError(
+                    f"operator priority clash: {name!r} cannot take a "
+                    f"left operand of priority {left_prec}",
+                    tok.line, tok.col,
+                )
+
             if entry.specifier in ("xfx", "xfy", "yfx"):
                 self._advance()
                 r_prec = self._right_prec(entry)
                 right = self._parse_term(r_prec)
                 left = PCompound(entry.name, (left, right))
+                left_prec = entry.precedence
             elif entry.specifier in ("xf", "yf"):
                 self._advance()
                 left = PCompound(entry.name, (left,))
+                left_prec = entry.precedence
             else:
                 break
 

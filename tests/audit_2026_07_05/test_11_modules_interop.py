@@ -397,9 +397,8 @@ def test_F027_guard_paren_dynamic_directive():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F028: xfx chaining accepted "
-                   "(a=b=c, 2**3**2, x:-y:-z) — ISO syntax errors")
 def test_F028_xfx_not_chainable():
+    # A11-F028 (fixed): parser enforces xfx left-priority.
     from clausal.tools.prolog_parser import parse_term, ParseError
     with pytest.raises(ParseError):
         parse_term("a = b = c")
@@ -435,9 +434,8 @@ def test_F037_spaced_minus_is_compound():
     assert isinstance(parse_term("- 1"), PCompound)
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F038: ':- op(0, xfx, Name)' does "
-                   "not remove the operator (ISO 8.14.3.4 requires removal)")
 def test_F038_op_zero_removes():
+    # A11-F038 (fixed): op(0, ...) removes the operator.
     from clausal.tools.prolog_parser import parse, ParseError
     with pytest.raises(ParseError):
         parse(":- op(0, xfx, ===).\na === b.")
