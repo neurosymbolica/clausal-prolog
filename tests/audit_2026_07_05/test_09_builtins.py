@@ -729,6 +729,57 @@ def test_F027_unpack_numeric_functor(fix):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# A09-F028/F030/F031 — minor ISO divergences (must_be, number parse, atom_concat)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_F028_must_be_unknown_type_domain_error(fix):
+    """A09-F028: an unknown type name is a domain_error(type, Name) — the
+    TYPE is wrong, not the term — not a misleading type_error(Name, Term)."""
+    _, m = fix
+    with pytest.raises(LogicException) as ei:
+        _first(m, "must_be", "nonsense", 5)
+    inner = ei.value.term.args[0]
+    assert getattr(inner, "functor", None) == "domain_error"
+
+
+def test_F028_must_be_unbound_type_raises(fix):
+    """A09-F028: must_be raises on violation — an unbound Type is a usage
+    error, not a silent failure."""
+    _, m = fix
+    with pytest.raises(LogicException):
+        _first(m, "must_be", Var(), 5)
+
+
+def test_F028_regression_must_be_known_types(fix):
+    _, m = fix
+    assert _first(m, "must_be", "integer", 5)
+    with pytest.raises(LogicException):
+        _first(m, "must_be", "integer", "x")
+
+
+def test_F031_atom_concat_check_mode_type_error(fix):
+    """A09-F031: a non-atom bound arg raises type_error(atom, _) in check
+    mode too, not just the open mode (was a silent failure)."""
+    _, m = fix
+    with pytest.raises(LogicException):
+        _first(m, "atom_concat", 12, "a", "12a")
+
+
+def test_F031_regression_atom_concat_valid(fix):
+    _, m = fix
+    C = Var()
+    assert _first(m, "atom_concat", "1", "2", C) and deref(C) == "12"
+
+
+def test_F030_number_chars_python_lenient(fix):
+    """A09-F030: parsing is deliberately Python-native/lenient — a char list
+    with surrounding whitespace parses (documented in docs/builtins.md)."""
+    _, m = fix
+    N = Var()
+    assert _first(m, "number_chars", N, " 1") and deref(N) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # A09-F032 — Seg*-input str promotion inconsistency (low)
 # ═══════════════════════════════════════════════════════════════════════════
 

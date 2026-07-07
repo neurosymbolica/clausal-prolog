@@ -71,6 +71,16 @@ def permission_error(
     return Compound("error", (inner, context))
 
 
+def domain_error(domain: str, culprit: Any, context: str = "") -> Compound:
+    """Build error(domain_error(Domain, Culprit), Context).
+
+    ISO domain error: *culprit* is the right Python/logic type but its value is
+    outside the set the operation admits (e.g. an unknown type name given to
+    must_be/2, where the TYPE — not the term — is wrong)."""
+    inner = Compound("domain_error", (domain, culprit))
+    return Compound("error", (inner, context))
+
+
 def evaluation_error(error_type: str, context: str = "") -> Compound:
     """Build error(evaluation_error(ErrorType), Context).
 

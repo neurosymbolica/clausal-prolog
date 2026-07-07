@@ -449,6 +449,14 @@ def _atom_concat__3(a, b, c, trail, k):
     (append may return a list when inputs are mixed).
     """
     va, vb, vc = deref(a), deref(b), deref(c)
+    # A09-F031 / F077: validate every BOUND arg is atom-shaped up front,
+    # regardless of mode. Previously the check lived only in the final
+    # instantiation branch, so a check-mode call like
+    # atom_concat(12, "a", "12a") silently failed instead of raising the same
+    # type_error(atom, 12) the open mode does.
+    for arg_val in (va, vb, vc):
+        if not is_var(arg_val) and _atom_to_str(arg_val) is None:
+            raise LogicException(type_error("atom", arg_val, "atom_concat/3"))
     sa = _atom_to_str(va) if not is_var(va) else None
     sb = _atom_to_str(vb) if not is_var(vb) else None
     sc = _atom_to_str(vc) if not is_var(vc) else None
@@ -494,19 +502,8 @@ def _atom_concat__3(a, b, c, trail, k):
                 yield None
             trail.undo(mark)
     else:
-        # F077 (C9 audit): if any arg is bound but not atom-shaped
-        # (list, int, float, compound, …), surface the real ISO error —
-        # ``type_error(atom, NonAtom)`` — rather than masking it as
-        # ``instantiation_error`` (which the boundness-via-
-        # ``_atom_to_str is None`` inference would otherwise emit and
-        # which any ``catch(_, instantiation_error, _)`` handler would
-        # swallow).
-        for arg_val in (va, vb, vc):
-            if not is_var(arg_val) and _atom_to_str(arg_val) is None:
-                raise LogicException(
-                    type_error("atom", arg_val, "atom_concat/3")
-                )
-        # C unbound and not enough info to compute it
+        # Non-atom bound args are already rejected up front (F031/F077), so
+        # reaching here means too few args are bound to compute C.
         raise LogicException(instantiation_error("atom_concat/3"))
 
 
@@ -618,6 +615,13 @@ def _number_chars__2(number, chars, trail, k):
     Number bound → unify Chars with list(str(Number)).
     Chars bound (list of single-char strings) → parse as int or float.
     Both bound → test equality.
+
+    A09-F030: parsing is deliberately Python-native (``int()`` then
+    ``float()``), per the language-is-Python contract (A08-D001). It is
+    therefore *lenient* relative to ISO ``number_chars``: surrounding
+    whitespace (``" 1"``), digit-group underscores (``"1_0"``), and the float
+    literals ``"inf"`` / ``"nan"`` are accepted. A char list that Python
+    cannot parse as a number fails (no solution).
     """
     vn = deref(number)
     vc = deref(chars)
@@ -667,6 +671,9 @@ def _number_codes__2(number, codes, trail, k):
 
     Number bound → unify Codes with [ord(c) for c in str(Number)].
     Codes bound (list of ints) → join as chars, parse as int or float.
+
+    A09-F030: parsing is deliberately Python-native and therefore lenient
+    (accepts whitespace, ``1_0``, ``inf``/``nan``) — see number_chars/2.
     """
     vn = deref(number)
     vc = deref(codes)

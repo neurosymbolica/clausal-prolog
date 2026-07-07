@@ -301,8 +301,16 @@ def _ground__1(x, trail, k):
 
 # ── Type checking map for must_be/can_be ─────────────────────────────────
 
+# A09-F028: the set of type names must_be/can_be recognise. An unknown name
+# is a domain_error(type, Name) — the TYPE is wrong, not the term.
+_KNOWN_TYPES = frozenset({
+    "integer", "int", "float", "number", "atom", "string", "str", "list",
+    "boolean", "bool", "callable", "dict", "compound",
+})
+
+
 def _check_type(type_name: str, term) -> bool:
-    """Return True if *term* satisfies *type_name*."""
+    """Return True if *term* satisfies *type_name* (assumes a known type)."""
     if type_name in ("integer", "int"):
         return isinstance(term, int) and not isinstance(term, bool)
     elif type_name == "float":
@@ -355,9 +363,18 @@ def _must_be__2(type_name, term, trail, k):
     """
     from clausal.logic.exceptions import LogicException, type_error, instantiation_error
 
+    from clausal.logic.exceptions import domain_error
+
     type_val = deref(type_name)
-    if is_var(type_val) or not isinstance(type_val, str):
-        return
+    # A09-F028: must_be raises on violation — an unbound or non-atom Type is a
+    # usage error, not a silent failure; an unknown type name is a
+    # domain_error(type, Type) (the TYPE is wrong, not the term).
+    if is_var(type_val):
+        raise LogicException(instantiation_error("must_be/2"))
+    if not isinstance(type_val, str):
+        raise LogicException(type_error("atom", type_val, "must_be/2"))
+    if type_val not in _KNOWN_TYPES:
+        raise LogicException(domain_error("type", type_val, "must_be/2"))
     term_val = deref(term)
     if is_var(term_val):
         raise LogicException(instantiation_error("must_be/2"))
@@ -374,11 +391,17 @@ def _can_be__2(type_name, term, trail, k):
     Succeeds if Term is unbound (could become anything) or already matches.
     Throws type_error if Term is ground and definitely not the type.
     """
-    from clausal.logic.exceptions import LogicException, type_error
+    from clausal.logic.exceptions import (
+        LogicException, type_error, domain_error, instantiation_error)
 
     type_val = deref(type_name)
-    if is_var(type_val) or not isinstance(type_val, str):
-        return
+    # A09-F028: same Type-validation as must_be/2.
+    if is_var(type_val):
+        raise LogicException(instantiation_error("can_be/2"))
+    if not isinstance(type_val, str):
+        raise LogicException(type_error("atom", type_val, "can_be/2"))
+    if type_val not in _KNOWN_TYPES:
+        raise LogicException(domain_error("type", type_val, "can_be/2"))
     term_val = deref(term)
     if is_var(term_val):
         # Unbound — could become anything
