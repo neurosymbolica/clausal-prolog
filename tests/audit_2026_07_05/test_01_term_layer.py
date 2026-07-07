@@ -239,7 +239,6 @@ class TestF006SegListElementVarGroundPath:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF007SegListVsBytes:
-    @pytest.mark.xfail(strict=False, reason="A01-F007: SegList vs bytes silently fails")
     def test_seglist_of_codes_unifies_with_bytes(self, trail):
         A = Var()
         assert unify(SegList([ConcreteSeg([71]), VarSeg(A)]), b"GET", trail) is True

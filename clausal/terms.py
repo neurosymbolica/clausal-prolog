@@ -444,6 +444,14 @@ class SegList:
         surface all four splits.
         """
         from .logic.variables import unify, walk
+        if isinstance(other, bytes):
+            # Codes-model symmetry (A01-F007): the C layer unifies plain
+            # int-lists with bytes, and SegBytes accepts list targets — so a
+            # SegList of codes must accept a bytes target too. Convert to the
+            # code list (list(b"GET") == [71, 69, 84]) and reuse the list path;
+            # the conversion is deterministic, so cached retry drives stay
+            # consistent.
+            return self.__unify__(list(other), trail)
         if isinstance(other, (list, str)):
             walked = self.__walk__()
             if isinstance(walked, (list, str)):
