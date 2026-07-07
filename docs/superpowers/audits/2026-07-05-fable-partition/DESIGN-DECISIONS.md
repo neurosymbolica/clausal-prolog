@@ -44,8 +44,33 @@ cluster should close every member question.
 9. **Higher-order commit semantics** — A09-D001 (maplist/foldl
    backtracking), A11-D002 (wrapper argument coercion policy).
 
+## Resolved by user — 2026-07-07 (A09 fix session)
+
+The user resolved the following, all per the audit recommendation. Later
+sessions/instances: treat these as settled — do not re-ask.
+
+- **A09-D002 (error convention) → (a) typed exceptions.** Raise a typed
+  `LogicException` for all type/domain/permission errors; bare failure only
+  for legitimate out-of-domain relations; NEVER signal via `RuntimeError`,
+  and narrow the trampoline drive-loop's `RuntimeError` catch to
+  `StopIteration` + the exact PEP-479 / "already executing" RuntimeErrors
+  (not subclasses like `RecursionError`). Gates A09-F006/F011/F012/F018/
+  F027/F028 and the A10/A11/A12 error-family items.
+- **A01-D001 (cross-type identity) → (c) split.** Stop conflating `bool`
+  with `int` (reject `True` as a length/index/arithmetic operand) but keep
+  `1 == 1.0` numeric-value equality as Python-native. Gates A09-F015 and the
+  A06-D005/A07-D002 bool-in-domain items.
+- **A09-D003 (retract bindings) → (a) bind on the real trail.** `retract/1`
+  keeps its head-unification bindings (ISO/SWI + output-mode contract);
+  re-satisfiability can follow later. Gates A09-F008.
+- **A09-F005 (assertz of a rule) → (b) reject cleanly.** Reject asserted
+  rules at assert time with a typed error (matches current docs), validating
+  before mutating the clause list. A09-F026 doc then cites the clean error.
+
 | ID | Status | Title | Decision + rationale | Raised by | Affects |
 |----|--------|-------|----------------------|-----------|---------|
+| A01-D001 | resolved-by-user 2026-07-07 | Cross-type numeric/bool unification (1 ≡ True ≡ 1.0 via Python ==) | (c) split — reject bool/int conflation, keep 1==1.0. `investigate-A01-parked-design-decisions.md` | A01 | A01 unify; A02/A04 keys; A05/A06/A07 constraint layers; A09-F015/F022 |
+| A09-D003 | resolved-by-user 2026-07-07 | retract/1 binding semantics vs ISO | (a) bind on the real trail (keep bindings). `fix-A09-retract-bindings.md` | A09 | A09 database_ops; docs/database_ops.md |
 | A02-D001 | resolved-from-docs | Indexed dispatch must be semantics-preserving for every caller shape (uncomputable non-var key ⇒ all-clauses fallback, never the default bucket) | F095 fix history restored unify parity at the dispatch layer; indexing is threshold-triggered (≥4 clauses) so solution sets must not depend on clause count. See A02 design-questions.md | A02 | A02 arg_index/list_dispatch; A03 predicate.py always-fail defaults |
 | A02-D002 | open — parked by user preference | Cross-type numeric index keys (Decimal/Fraction/complex ↔ int buckets) — blocked on A01-D001 (cross-type unification) | Recommendation: fallback-scan now (falls out of the A02-F001 fix); key-by-`numbers.Number` only if A01-D001 endorses Python `==` semantics. `todo/audit-2026-07-05/investigate-A02-parked-design-decisions.md` | A02 | A02 dispatch keys; A04 tabling keys; A01-D001 |
 | A03-D001 | open — parked by user preference | Exception-term identity: should `unify(Compound(f, args), f_instance)` succeed, or should catch-catcher lowering resolve declared functor classes? | Recommendation: fix locally in `_catcher_to_structural` (resolve term class from module env, Compound only as fallback) — no unification change; global Compound↔instance unification belongs to A01-D004. `todo/audit-2026-07-05/investigate-A03-parked-design-decisions.md` | A03 | A03 catch/3 (F004); A01 unify/term identity; A02 index keys; A04 tabling keys |
@@ -74,4 +99,4 @@ cluster should close every member question.
 | A09-D001 | open — parked by user preference | Committed choice in higher-order builtins: maplist/2,3 + foldl/4 take first-solution-per-element, silently losing answers (A09-F004); docs document commit only for include/exclude | Recommendation: restore backtracking in maplist/foldl (implicit commit is a hidden cut, contradicting the cut-free contract; once/1 is the sanctioned *explicit* escape); include/exclude stay committed as documented. `todo/audit-2026-07-05/investigate-A09-ho-committed-choice.md` | A09 | A09 higher_order; corpus rulebases using maplist with nondeterministic goals; docs/higher_order.md |
 | A12-D001 | open — parked by user preference | Constraints attached to tabled answers: tables store the answer skeleton and DROP dif/FD attrs on replay — second identical query is unsound (A12-F001) | Recommendation: refuse-to-table-constrained-answers error as stopgap; SLG(C)-style residue storage folded into the A04-F001 completion re-architecture. `todo/audit-2026-07-05/investigate-A12-tabling-answer-constraints.md` | A12 | A04 tabling answer representation (F001/F005); A05/A06/A07 hook families; A04-D001 protocol |
 | A12-D002 | open — parked by user preference | Reserved names in .clausal module namespaces: engine helpers (walk/deref/unify/Var/Trail/Compound) leak in and break same-named user predicates with a cryptic TypeError (A12-F004); `solve` is not leaked, so the reserved set is accidental | Recommendation: underscore-prefix the injected engine bindings (no public name reserved); interim clear load error on collision; document. Sequence with A10-F013 (same seam, opposite direction). `todo/audit-2026-07-05/fix-A12-engine-namespace-leak.md` | A12 | A10 import hook module-dict; A01/A04 helper exports; docs/syntax.md |
-| A09-D002 | open — parked by user preference | Builtin error-signaling convention: silent fail vs LogicException vs raw Python exceptions vs RuntimeError-that-the-engine-EATS — _trampoline.c treats any RuntimeError (incl. subclass RecursionError) as generator exhaustion, so locked-assertz permission errors and cyclic-input RecursionErrors become silent "no" (A09-F006/F007/F011/F012) | Recommendation: typed LogicException for type/domain/permission errors; never signal via RuntimeError; narrow the drive-loop catch to StopIteration + the PEP-479/"already executing" RuntimeErrors only (exact-type match, not subclasses). Extends A06-D002 (silent no-op indistinguishable in a cut-free language). `todo/audit-2026-07-05/investigate-A09-runtimeerror-swallow.md` | A09 | A03/A04 runtime/_trampoline.c drive loops; every builtin's error paths; docs/database_ops.md; docs/exceptions.md |
+| A09-D002 | resolved-by-user 2026-07-07 → (a) typed exceptions + narrow the trampoline RuntimeError catch | Builtin error-signaling convention: silent fail vs LogicException vs raw Python exceptions vs RuntimeError-that-the-engine-EATS — _trampoline.c treats any RuntimeError (incl. subclass RecursionError) as generator exhaustion, so locked-assertz permission errors and cyclic-input RecursionErrors become silent "no" (A09-F006/F007/F011/F012) | Recommendation: typed LogicException for type/domain/permission errors; never signal via RuntimeError; narrow the drive-loop catch to StopIteration + the PEP-479/"already executing" RuntimeErrors only (exact-type match, not subclasses). Extends A06-D002 (silent no-op indistinguishable in a cut-free language). `todo/audit-2026-07-05/investigate-A09-runtimeerror-swallow.md` | A09 | A03/A04 runtime/_trampoline.c drive loops; every builtin's error paths; docs/database_ops.md; docs/exceptions.md |
