@@ -84,6 +84,11 @@ def _isub_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, flo
 
 def _imul_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
     corners = [alo * blo, alo * bhi, ahi * blo, ahi * bhi]
+    # A 0*inf corner is NaN; Python min/max propagate NaN (order-dependent),
+    # which _narrow_real then reads as a wipeout → spurious failure.  Skip NaN
+    # corners like the C fmin/fmax path so the fallback stays bit-identical
+    # (A08-F012).
+    corners = [c for c in corners if not math.isnan(c)] or [0.0]
     return _dn(min(corners)), _up(max(corners))
 
 
@@ -92,6 +97,7 @@ def _idiv_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, flo
     if blo <= 0.0 <= bhi:
         return -math.inf, math.inf
     corners = [alo / blo, alo / bhi, ahi / blo, ahi / bhi]
+    corners = [c for c in corners if not math.isnan(c)] or [0.0]  # A08-F012
     return _dn(min(corners)), _up(max(corners))
 
 
@@ -175,14 +181,21 @@ def _ifloordiv_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float
 
 
 def _imod_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
-    """Interval of a % b (modulo). Conservative outer bound."""
+    """Interval of a % b (real modulo). Conservative outer bound.
+
+    Python float ``%`` takes the sign of the divisor: ``a % b`` lies in
+    ``[0, b)`` for ``b > 0`` and ``(b, 0]`` for ``b < 0``.  The previous
+    ``[0, |b|-1]`` bound was integer-modulo semantics — it excluded real
+    results (1.5 % 2 == 1.5 fell outside [0, 1]) and, for ``|b| < 1``, produced
+    an inverted/empty interval that failed every posting (A08-F009).
+    """
     if blo <= 0.0 <= bhi:
         return -math.inf, math.inf
-    # Result of a % b is in [0, |b|-1] for positive b, [-(|b|-1), 0] for negative b
-    abs_max = max(abs(blo), abs(bhi))
     if blo > 0:
-        return 0.0, _up(abs_max - 1.0)
-    return _dn(-(abs_max - 1.0)), 0.0
+        # b > 0: result in [0, b) ⊆ [0, bhi] (upper end kept closed for soundness)
+        return 0.0, _up(bhi)
+    # b < 0: result in (b, 0] ⊆ [blo, 0]
+    return _dn(blo), 0.0
 
 
 def _iatan_py(alo: float, ahi: float) -> tuple[float, float]:
@@ -559,6 +572,11 @@ class RealLtConstraint(RealConstraint):
     def propagate(self, trail: Trail, queue: deque) -> bool:
         lhs = deref(self.lhs)
         rhs = deref(self.rhs)
+        # Aliased operands: X < X is unsatisfiable.  Also prevents the
+        # ULP-by-ULP narrowing hang when {X<Y} is followed by X is Y
+        # (A08-F010).
+        if lhs is rhs:
+            return False
         llo, lhi = _expr_interval(lhs, trail)
         rlo, rhi = _expr_interval(rhs, trail)
         if llo >= rhi:
@@ -574,6 +592,10 @@ class RealNeConstraint(RealConstraint):
     def propagate(self, trail: Trail, queue: deque) -> bool:
         lhs = deref(self.lhs)
         rhs = deref(self.rhs)
+        # Aliased operands: X != X is unsatisfiable.  The point-interval check
+        # below misses this after X is Y aliases the two vars (A08-F011).
+        if lhs is rhs:
+            return False
         llo, lhi = _expr_interval(lhs, trail)
         rlo, rhi = _expr_interval(rhs, trail)
         # Only fail when both sides are a single point with equal value
@@ -585,11 +607,26 @@ class RealNeConstraint(RealConstraint):
 # ── Propagation engine ────────────────────────────────────────────────────────
 
 
+# A strict-inequality cycle ({X<Y, Y<X}) provably narrows the store to empty,
+# but only over ~1/ULP passes as each pass shaves a single ULP off both ends —
+# an effective hang.  Interval CLP(R) cannot decide such strict cycles exactly
+# without ε-augmented rationals (deferred, A08-D004), so bound the fixpoint:
+# a well-posed system reaches its fixpoint in far fewer steps, while ULP-creep
+# blows past the budget and is reported unsatisfiable (A08-F010).
+_PROPAGATE_STEP_BUDGET = 100_000
+
+
 def _propagate(queue: deque, trail: Trail) -> bool:
     """Fixpoint narrowing loop: process constraints until stable or wipeout."""
+    steps = 0
     while queue:
         constraint = queue.popleft()
         if not constraint.propagate(trail, queue):
+            return False
+        steps += 1
+        if steps > _PROPAGATE_STEP_BUDGET:
+            # Non-terminating ULP-creep — treat as unsatisfiable rather than
+            # hang (A08-F010).
             return False
     return True
 

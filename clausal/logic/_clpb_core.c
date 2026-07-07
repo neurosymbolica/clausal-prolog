@@ -29,8 +29,8 @@ static PyObject *BDD_FALSE_OBJ;  /* Python int 0 */
 
 /* Macro for terminal checks — pointer comparison is safe because
    CPython caches small ints (-5..256) as singletons, and this is a
-   CPython C extension.  For extra safety, is_bdd_true/false also
-   accepts value comparison as fallback. */
+   CPython C extension.  BDD_TRUE/FALSE are those cached 1/0 singletons,
+   so is_bdd_true/false compare by pointer only (no value fallback). */
 static inline int is_bdd_true(PyObject *obj) {
     return obj == BDD_TRUE_OBJ;
 }
@@ -459,71 +459,99 @@ apply_terminal(int op, PyObject *f, PyObject *g)
     return NULL;           /* not terminal — caller recurses */
 }
 
-/* ── Recursive apply (uses C memo table) ────────────────────────── */
+/* ── Iterative apply (uses C memo table) ────────────────────────────
+ *
+ * An explicit heap work-stack replaces C-stack recursion so a deep BDD (e.g.
+ * a 100k-level chain) completes like the Python fallback instead of
+ * overflowing the C stack and segfaulting (A07-F007).  Standard memoised
+ * post-order DFS: a (f, g) node reduces only once both cofactor results are in
+ * the memo; otherwise the missing cofactors are pushed above it.  All (f, g)
+ * pairs are sub-nodes of the roots, hence borrowed refs kept alive by the
+ * caller — the stack stores no owned references. */
+
+typedef struct { PyObject *f; PyObject *g; } ApplyPair;
 
 static PyObject *
-c_apply_rec(int op, PyObject *f, PyObject *g,
+c_apply_rec(int op, PyObject *root_f, PyObject *root_g,
             MemoTable *memo, PyObject *unique_tables, PyObject *id_to_var)
 {
-    /* ── Memo lookup ─────────────────────────────────────────── */
-    PyObject *cached = memo_get(memo, op, f, g);
-    if (cached) {
-        Py_INCREF(cached);
-        return cached;
+    PyObject *cached = memo_get(memo, op, root_f, root_g);
+    if (cached) { Py_INCREF(cached); return cached; }
+
+    Py_ssize_t cap = 4096, top = 0;
+    ApplyPair *stack = (ApplyPair *)PyMem_Malloc((size_t)cap * sizeof(ApplyPair));
+    if (!stack) { PyErr_NoMemory(); return NULL; }
+    stack[top].f = root_f; stack[top].g = root_g; top++;
+
+    while (top > 0) {
+        PyObject *f = stack[top - 1].f;
+        PyObject *g = stack[top - 1].g;
+
+        /* Already computed (shared node reached via two parents)? */
+        if (memo_get(memo, op, f, g)) { top--; continue; }
+
+        /* Terminal? */
+        PyObject *term = apply_terminal(op, f, g);
+        if (term) {
+            int rc = memo_set(memo, op, f, g, term);
+            Py_DECREF(term);
+            if (rc < 0) { PyMem_Free(stack); return NULL; }
+            top--;
+            continue;
+        }
+
+        /* Shannon expansion on the lowest var_id. */
+        int fid = var_id_of(f);
+        int gid = var_id_of(g);
+        int min_id = (fid < gid) ? fid : gid;
+
+        PyObject *fh, *fl, *gh, *gl;
+        if (is_bdd_node(f) && ((BDDNodeObject *)f)->var_id == min_id) {
+            fh = ((BDDNodeObject *)f)->high; fl = ((BDDNodeObject *)f)->low;
+        } else { fh = f; fl = f; }
+        if (is_bdd_node(g) && ((BDDNodeObject *)g)->var_id == min_id) {
+            gh = ((BDDNodeObject *)g)->high; gl = ((BDDNodeObject *)g)->low;
+        } else { gh = g; gl = g; }
+
+        PyObject *ch = memo_get(memo, op, fh, gh);  /* borrowed */
+        PyObject *cl = memo_get(memo, op, fl, gl);  /* borrowed */
+        if (ch && cl) {
+            PyObject *result = c_make_node(min_id, ch, cl,
+                                           unique_tables, id_to_var);
+            if (!result) { PyMem_Free(stack); return NULL; }
+            int rc = memo_set(memo, op, f, g, result);
+            Py_DECREF(result);
+            if (rc < 0) { PyMem_Free(stack); return NULL; }
+            top--;
+        } else {
+            if (top + 2 > cap) {
+                Py_ssize_t ncap = cap * 2;
+                ApplyPair *ns = (ApplyPair *)PyMem_Realloc(
+                    stack, (size_t)ncap * sizeof(ApplyPair));
+                if (!ns) { PyMem_Free(stack); PyErr_NoMemory(); return NULL; }
+                stack = ns; cap = ncap;
+            }
+            /* Leave (f, g) in place; push the missing cofactors above it. */
+            if (!cl) { stack[top].f = fl; stack[top].g = gl; top++; }
+            if (!ch) { stack[top].f = fh; stack[top].g = gh; top++; }
+        }
     }
 
-    /* ── Terminal case ───────────────────────────────────────── */
-    PyObject *result = apply_terminal(op, f, g);
-    if (result) {
-        memo_set(memo, op, f, g, result);
-        return result;
+    PyMem_Free(stack);
+    PyObject *out = memo_get(memo, op, root_f, root_g);
+    if (!out) {
+        PyErr_SetString(PyExc_RuntimeError, "c_apply: root not computed");
+        return NULL;
     }
-
-    /* ── Shannon expansion on the lowest var_id ─────────────── */
-    int fid = var_id_of(f);
-    int gid = var_id_of(g);
-    int min_id = (fid < gid) ? fid : gid;
-
-    PyObject *f_high, *f_low, *g_high, *g_low;
-
-    if (is_bdd_node(f) && ((BDDNodeObject *)f)->var_id == min_id) {
-        f_high = ((BDDNodeObject *)f)->high;
-        f_low  = ((BDDNodeObject *)f)->low;
-    } else {
-        f_high = f;
-        f_low  = f;
-    }
-
-    if (is_bdd_node(g) && ((BDDNodeObject *)g)->var_id == min_id) {
-        g_high = ((BDDNodeObject *)g)->high;
-        g_low  = ((BDDNodeObject *)g)->low;
-    } else {
-        g_high = g;
-        g_low  = g;
-    }
-
-    PyObject *high = c_apply_rec(op, f_high, g_high,
-                                 memo, unique_tables, id_to_var);
-    if (!high) return NULL;
-
-    PyObject *low = c_apply_rec(op, f_low, g_low,
-                                memo, unique_tables, id_to_var);
-    if (!low) { Py_DECREF(high); return NULL; }
-
-    result = c_make_node(min_id, high, low, unique_tables, id_to_var);
-    Py_DECREF(high);
-    Py_DECREF(low);
-    if (!result) return NULL;
-
-    memo_set(memo, op, f, g, result);
-    return result;
+    Py_INCREF(out);
+    return out;
 }
 
 /* ── Recursive restrict ─────────────────────────────────────────── */
 
 static PyObject *
 c_restrict_rec(PyObject *bdd, int var_id, int value,
-               PyObject *unique_tables, PyObject *id_to_var)
+               PyObject *unique_tables, PyObject *id_to_var, PyObject *memo)
 {
     if (!is_bdd_node(bdd)) {
         Py_INCREF(bdd);
@@ -542,19 +570,43 @@ c_restrict_rec(PyObject *bdd, int var_id, int value,
         return bdd;
     }
 
+    /* Memoize by node identity so a hash-consed DAG is restricted in
+       O(nodes), not O(paths).  Without it, _propagate_forced's per-variable
+       restrict sweep is O(vars x 2^vars) — the dominant cost of the
+       exponential-sat blowup (A07-F001).  var_id/value are fixed per call, so
+       the node pointer alone keys the result. */
+    PyObject *memo_key = PyLong_FromVoidPtr(bdd);
+    if (!memo_key) return NULL;
+    PyObject *cached = PyDict_GetItemWithError(memo, memo_key);
+    if (cached) { Py_INCREF(cached); Py_DECREF(memo_key); return cached; }
+    if (PyErr_Occurred()) { Py_DECREF(memo_key); return NULL; }
+
+    /* Guard the C-stack recursion (A07-F007). */
+    if (Py_EnterRecursiveCall(" in CLP(B) restrict")) {
+        Py_DECREF(memo_key);
+        return NULL;
+    }
+
     PyObject *high = c_restrict_rec(node->high, var_id, value,
-                                    unique_tables, id_to_var);
-    if (!high) return NULL;
+                                    unique_tables, id_to_var, memo);
+    if (!high) { Py_LeaveRecursiveCall(); Py_DECREF(memo_key); return NULL; }
 
     PyObject *low = c_restrict_rec(node->low, var_id, value,
-                                   unique_tables, id_to_var);
-    if (!low) { Py_DECREF(high); return NULL; }
+                                   unique_tables, id_to_var, memo);
+    if (!low) { Py_LeaveRecursiveCall(); Py_DECREF(high); Py_DECREF(memo_key); return NULL; }
 
     /* Reduction + hash-consing via make_node */
     PyObject *result = c_make_node(node->var_id, high, low,
                                    unique_tables, id_to_var);
     Py_DECREF(high);
     Py_DECREF(low);
+    Py_LeaveRecursiveCall();
+    if (result && PyDict_SetItem(memo, memo_key, result) < 0) {
+        Py_DECREF(result);
+        Py_DECREF(memo_key);
+        return NULL;
+    }
+    Py_DECREF(memo_key);
     return result;         /* may be NULL on error */
 }
 
@@ -707,10 +759,22 @@ c_count_paths_big(PyObject *bdd, PyObject *level_map, int n_vars,
 /* ── Recursive collect_bdd_var_ids ──────────────────────────────── */
 
 static int
-c_collect_ids_rec(PyObject *bdd, PyObject *result_set)
+c_collect_ids_rec(PyObject *bdd, PyObject *result_set, PyObject *seen)
 {
     if (!is_bdd_node(bdd))
         return 0;
+
+    /* A BDD is a hash-consed DAG: shared sub-nodes are the same object, so a
+       visited-set keyed by node pointer keeps this O(nodes) rather than
+       O(paths) — without it an n-var XOR chain (2n-1 nodes, 2^n paths) makes
+       sat/sat_count exponential (A07-F001). */
+    PyObject *nid = PyLong_FromVoidPtr(bdd);
+    if (!nid) return -1;
+    int contains = PySet_Contains(seen, nid);
+    if (contains < 0) { Py_DECREF(nid); return -1; }
+    if (contains) { Py_DECREF(nid); return 0; }
+    if (PySet_Add(seen, nid) < 0) { Py_DECREF(nid); return -1; }
+    Py_DECREF(nid);
 
     BDDNodeObject *node = (BDDNodeObject *)bdd;
     PyObject *vid = PyLong_FromLong(node->var_id);
@@ -719,8 +783,19 @@ c_collect_ids_rec(PyObject *bdd, PyObject *result_set)
     if (PySet_Add(result_set, vid) < 0) { Py_DECREF(vid); return -1; }
     Py_DECREF(vid);
 
-    if (c_collect_ids_rec(node->high, result_set) < 0) return -1;
-    if (c_collect_ids_rec(node->low, result_set) < 0) return -1;
+    /* Guard the C-stack recursion: the visited set caps total work but not the
+       descent depth, so a deep chain BDD would still overflow (A07-F007). */
+    if (Py_EnterRecursiveCall(" in CLP(B) collect_var_ids"))
+        return -1;
+    if (c_collect_ids_rec(node->high, result_set, seen) < 0) {
+        Py_LeaveRecursiveCall();
+        return -1;
+    }
+    if (c_collect_ids_rec(node->low, result_set, seen) < 0) {
+        Py_LeaveRecursiveCall();
+        return -1;
+    }
+    Py_LeaveRecursiveCall();
     return 0;
 }
 
@@ -778,7 +853,12 @@ py_restrict(PyObject *self, PyObject *args)
                           &PyDict_Type, &id_to_var))
         return NULL;
 
-    return c_restrict_rec(bdd, var_id, value, unique_tables, id_to_var);
+    PyObject *memo = PyDict_New();
+    if (!memo) return NULL;
+    PyObject *result = c_restrict_rec(bdd, var_id, value,
+                                      unique_tables, id_to_var, memo);
+    Py_DECREF(memo);
+    return result;
 }
 
 /*
@@ -828,7 +908,11 @@ py_collect_bdd_var_ids(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "OO!", &bdd, &PySet_Type, &result_set))
         return NULL;
 
-    if (c_collect_ids_rec(bdd, result_set) < 0)
+    PyObject *seen = PySet_New(NULL);
+    if (!seen) return NULL;
+    int rc = c_collect_ids_rec(bdd, result_set, seen);
+    Py_DECREF(seen);
+    if (rc < 0)
         return NULL;
 
     Py_RETURN_NONE;

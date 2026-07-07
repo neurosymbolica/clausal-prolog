@@ -24,6 +24,7 @@ on backtrack.  Never mutate in place.
 
 from __future__ import annotations
 
+import weakref
 from typing import Any
 
 from clausal.logic.variables import (
@@ -41,7 +42,6 @@ from clausal.logic.predicate import make_predicate
 # ── Constants ────────────────────────────────────────────────────────────────
 
 B_KEY = "clpb"
-HASH_KEY = "clpb_hash"
 
 BDD_TRUE = 1
 BDD_FALSE = 0
@@ -78,11 +78,43 @@ class BDDNode:
 
 _next_var_id: int = 0
 _var_to_id: dict[int, int] = {}   # id(Var) → ordering index
-_id_to_var: dict[int, Var] = {}   # ordering index → Var
+_id_to_var: dict[int, Var] = {}   # ordering index → Var (strong ref)
+
+# Per-trail record of the (vid, idx) allocated while a trail was live, so the
+# module-global tables can be pruned when the trail is garbage-collected
+# (A07-F006).  _id_to_var holds a STRONG ref to each Var (Var is not
+# weakref-able, so we can't hang the cleanup off the var itself); without
+# pruning, every CLP(B) var and its whole BDD level are pinned forever, a
+# linear leak per query.  Keying cleanup on the (weakref-able) Trail bounds
+# the tables to the lifetime of the constraint store that owns them.
+_trail_allocs: dict[int, list] = {}   # id(Trail) → [(vid, idx), ...]
 
 
-def enumerate_var(var: Var) -> int:
-    """Assign a monotonic ordering ID to a variable on first encounter."""
+def _register_alloc(trail, vid: int, idx: int) -> None:
+    if trail is None:
+        return
+    tid = id(trail)
+    allocs = _trail_allocs.get(tid)
+    if allocs is None:
+        allocs = []
+        _trail_allocs[tid] = allocs
+        weakref.finalize(trail, _cleanup_trail_allocs, tid)
+    allocs.append((vid, idx))
+
+
+def _cleanup_trail_allocs(tid: int) -> None:
+    for vid, idx in _trail_allocs.pop(tid, ()):
+        _var_to_id.pop(vid, None)
+        _id_to_var.pop(idx, None)
+        _unique_tables.pop(vid, None)
+
+
+def enumerate_var(var: Var, trail: Trail | None = None) -> int:
+    """Assign a monotonic ordering ID to a variable on first encounter.
+
+    When *trail* is given, the allocation is registered for cleanup when that
+    trail is garbage-collected (A07-F006); direct/test callers may omit it.
+    """
     global _next_var_id
     vid = id(var)
     if vid in _var_to_id:
@@ -91,6 +123,7 @@ def enumerate_var(var: Var) -> int:
     _next_var_id += 1
     _var_to_id[vid] = idx
     _id_to_var[idx] = var
+    _register_alloc(trail, vid, idx)
     return idx
 
 
@@ -307,7 +340,7 @@ def _expr_to_bdd(expr, trail: Trail | None = None):
 
     # Logic variable → identity BDD
     if is_var(expr):
-        var_id = enumerate_var(expr)
+        var_id = enumerate_var(expr, trail)
         var = expr
         return make_node(var_id, BDD_TRUE, BDD_FALSE, var)
 
@@ -418,7 +451,7 @@ def _ensure_bool(var: Var, trail: Trail) -> BoolState:
     if state is not None:
         return state
     # Create identity BDD for this variable
-    var_id = enumerate_var(var)
+    var_id = enumerate_var(var, trail)
     bdd = make_node(var_id, BDD_TRUE, BDD_FALSE, var)
     state = BoolState(sat_expr=None, bdd=bdd, root_var=var)
     put_attr(var, B_KEY, state, trail)
@@ -454,6 +487,10 @@ def sat(expr, trail: Trail) -> bool:
     seen_bdd_ids: set[int] = {id(bdd)}
     all_vars: list[Var] = list(vars_)
     processed: set[int] = set()
+    # Accumulate every formula posted to this network so var-var aliasing can
+    # rebuild the BDD from source and collapse the merged levels (A07-F002).
+    formulas: list = [expr]
+    formula_ids: set[int] = {id(expr)}
 
     i = 0
     while i < len(all_vars):
@@ -474,6 +511,12 @@ def sat(expr, trail: Trail) -> bool:
             continue
         seen_bdd_ids.add(bid)
 
+        # Carry this component's posted formulas into the merged network.
+        for f in _formulas_of(state):
+            if id(f) not in formula_ids:
+                formula_ids.add(id(f))
+                formulas.append(f)
+
         # Conjoin this existing BDD
         combined_bdd = apply('and', combined_bdd, state.bdd)
         if combined_bdd is BDD_FALSE:
@@ -492,12 +535,13 @@ def sat(expr, trail: Trail) -> bool:
     if combined_bdd is BDD_FALSE:
         return False
 
-    # Store combined BDD on all unbound variables in the network
+    # Store combined BDD + the accumulated formula set on all unbound vars.
+    merged_expr = tuple(formulas)
     for v in all_vars:
         v = deref(v)
         if not is_var(v):
             continue
-        new_state = BoolState(sat_expr=expr, bdd=combined_bdd, root_var=all_vars[0])
+        new_state = BoolState(sat_expr=merged_expr, bdd=combined_bdd, root_var=all_vars[0])
         put_attr(v, B_KEY, new_state, trail)
 
     # Propagate: check if any variable is forced to 0 or 1
@@ -537,13 +581,33 @@ def _propagate_forced(bdd, trail: Trail) -> bool:
     return True
 
 
-def _collect_bdd_var_ids(bdd, result: set):
-    """Collect all variable IDs present in a BDD."""
+def _collect_bdd_var_ids_impl(bdd, result: set, _seen: set | None = None):
+    """Collect all variable IDs present in a BDD.
+
+    A BDD is a hash-consed DAG: shared sub-nodes are the same object, so a
+    visited-set keyed by node identity keeps this O(nodes) instead of
+    O(paths) — without it an n-var XOR chain (2n-1 nodes, 2^n paths) makes
+    sat/sat_count exponential (A07-F001).
+
+    Recurses via its own private name so it stays a correct pure-Python
+    reference even after the module-global ``_collect_bdd_var_ids`` is rebound
+    to the 2-arg C wrapper (A07-F008).
+    """
+    if _seen is None:
+        _seen = set()
     if not isinstance(bdd, BDDNode):
         return
+    nid = id(bdd)
+    if nid in _seen:
+        return
+    _seen.add(nid)
     result.add(bdd.var_id)
-    _collect_bdd_var_ids(bdd.high, result)
-    _collect_bdd_var_ids(bdd.low, result)
+    _collect_bdd_var_ids_impl(bdd.high, result, _seen)
+    _collect_bdd_var_ids_impl(bdd.low, result, _seen)
+
+
+# Dispatch name (rebound to the C wrapper below when the extension loads).
+_collect_bdd_var_ids = _collect_bdd_var_ids_impl
 
 
 def taut(expr, t_var, trail: Trail) -> bool:
@@ -595,11 +659,16 @@ def sat_count(expr, count_var, trail: Trail) -> bool:
     return unify(count_var, count, trail)
 
 
-def _count_paths(bdd, level_map: dict, n_vars: int, memo: dict,
-                 current_level: int = 0) -> int:
+def _count_paths_impl(bdd, level_map: dict, n_vars: int, memo: dict,
+                      current_level: int = 0) -> int:
     """Count satisfying paths in a BDD, accounting for skipped variables.
 
     current_level is the expected level at this point in the BDD traversal.
+
+    Recurses via its own private name (not the module-global ``_count_paths``,
+    which the C block rebinds to a wrapper that drops current_level/memo), so
+    this stays a correct pure-Python reference even when C is loaded
+    (A07-F008).
     """
     if bdd is BDD_TRUE:
         # All remaining variables can be 0 or 1
@@ -618,14 +687,18 @@ def _count_paths(bdd, level_map: dict, n_vars: int, memo: dict,
     skipped = node_level - current_level
     multiplier = 2 ** skipped if skipped > 0 else 1
 
-    high_count = _count_paths(bdd.high, level_map, n_vars, memo,
-                              node_level + 1)
-    low_count = _count_paths(bdd.low, level_map, n_vars, memo,
-                             node_level + 1)
+    high_count = _count_paths_impl(bdd.high, level_map, n_vars, memo,
+                                   node_level + 1)
+    low_count = _count_paths_impl(bdd.low, level_map, n_vars, memo,
+                                  node_level + 1)
 
     result = multiplier * (high_count + low_count)
     memo[key] = result
     return result
+
+
+# Dispatch name (rebound to the C wrapper below when the extension loads).
+_count_paths = _count_paths_impl
 
 
 def bool_labeling(vars_list, trail: Trail):
@@ -649,6 +722,15 @@ def bool_labeling(vars_list, trail: Trail):
 
 def _label_bools(vars_: list, trail: Trail):
     """Recursive labeling of Boolean variables."""
+    # Validate: every already-ground element must be a Boolean 0/1 integer
+    # (A07-F009).  bool is excluded per A01-D001 (bool is not an int here);
+    # SWI clpb raises type_error(sat, _) for non-Boolean terms.
+    for v in vars_:
+        dv = deref(v)
+        if not is_var(dv) and (type(dv) is not int or dv not in (0, 1)):
+            raise TypeError(
+                f"bool_labeling: expected a Boolean variable or 0/1, got {dv!r}"
+            )
     # Find first unbound variable
     target = None
     target_idx = None
@@ -675,6 +757,21 @@ def _label_bools(vars_: list, trail: Trail):
 # ── Attribute hook ───────────────────────────────────────────────────────────
 
 
+def _formulas_of(state) -> tuple:
+    """The posted formula(s) recorded on a BoolState, as a flat tuple.
+
+    ``sat_expr`` is a tuple of every formula posted to the variable's network
+    (or ``None`` for an auto-created identity state); older single-formula
+    values are wrapped for backward compatibility.
+    """
+    se = state.sat_expr if state is not None else None
+    if se is None:
+        return ()
+    if isinstance(se, tuple):
+        return se
+    return (se,)
+
+
 def _bool_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
     """Called when a CLP(B)-constrained variable is unified.
 
@@ -683,6 +780,13 @@ def _bool_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
     """
     state = attr_value
     bound_to = deref(bound_to)
+
+    # Python bool is a subclass of int, so True/False would otherwise slip
+    # through the 0/1 check and pin the var to True/False.  CLP(B)'s domain is
+    # the integers {0, 1}; reject bool, consistent with CLP(Z)/CLP(R) and the
+    # A01-D001 decision to stop conflating bool with int (A07-F010).
+    if isinstance(bound_to, bool):
+        return False
 
     if isinstance(bound_to, int):
         if bound_to not in (0, 1):
@@ -728,28 +832,49 @@ def _bool_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
         return True
 
     if is_var(bound_to):
-        # Var-var aliasing: conjoin BDDs and rebuild
+        # Var-var aliasing.  The two variables are now ONE logical variable but
+        # occupy two distinct BDD levels; conjoining the stale per-var BDDs
+        # (state.bdd & other.bdd) cannot express x_id == y_id, so it misses
+        # failures and forced propagation (A07-F002).  Instead rebuild from the
+        # posted formulas: the hook runs after the binding commits, so
+        # _expr_to_bdd derefs the aliased vars to a single level and the
+        # collapse falls out.
         other_state = get_attr(bound_to, B_KEY)
         if other_state is None:
-            # Other var has no CLP(B) — transfer our state
+            # Other var has no CLP(B) — transfer our state.
             put_attr(bound_to, B_KEY, state, trail)
             return True
 
-        # Both have CLP(B) — conjoin their BDDs
-        new_bdd = apply('and', state.bdd, other_state.bdd)
-        if new_bdd is BDD_FALSE:
-            return False
+        formulas: list = []
+        seen_f: set = set()
+        for f in _formulas_of(state) + _formulas_of(other_state):
+            if id(f) not in seen_f:
+                seen_f.add(id(f))
+                formulas.append(f)
 
-        # Create new combined state on the surviving variable
-        new_state = BoolState(
-            sat_expr=state.sat_expr,  # keep one formula for rebuild
-            bdd=new_bdd,
-            root_var=state.root_var,
-        )
-        put_attr(bound_to, B_KEY, new_state, trail)
+        new_bdd = BDD_TRUE
+        for f in formulas:
+            new_bdd = apply('and', new_bdd, _expr_to_bdd(f, trail))
+            if new_bdd is BDD_FALSE:
+                return False
 
-        # Propagate forced values
-        return _propagate_forced(new_bdd, trail)
+        merged_expr = tuple(formulas)
+        if isinstance(new_bdd, BDDNode):
+            # Re-store the rebuilt BDD on every (still unbound) network var.
+            ids: set = set()
+            _collect_bdd_var_ids(new_bdd, ids)
+            for vid in ids:
+                v = _get_var_for_id(vid)
+                if v is not None:
+                    v = deref(v)
+                    if is_var(v):
+                        put_attr(v, B_KEY,
+                                 BoolState(sat_expr=merged_expr, bdd=new_bdd,
+                                           root_var=v),
+                                 trail)
+            return _propagate_forced(new_bdd, trail)
+        # new_bdd is BDD_TRUE → the conjunction is a tautology, nothing to post.
+        return True
 
     # Non-integer, non-var → fail
     return False
@@ -765,8 +890,11 @@ _BDDNodePy = BDDNode
 _apply_py = apply
 _negate_py = negate
 _restrict_py = restrict
-_count_paths_py = _count_paths
-_collect_bdd_var_ids_py = _collect_bdd_var_ids
+# Point at the self-recursing _impl functions directly, so the saved
+# reference stays pure even after the dispatch names are rebound to C below
+# (A07-F008).
+_count_paths_py = _count_paths_impl
+_collect_bdd_var_ids_py = _collect_bdd_var_ids_impl
 
 try:
     from clausal.logic._clpb_core import (
@@ -803,7 +931,7 @@ except ImportError:
 
 __all__ = [
     "BDD_TRUE", "BDD_FALSE", "BDDNode",
-    "B_KEY", "HASH_KEY",
+    "B_KEY",
     "BoolEq", "BoolImpl", "BoolState",
     "enumerate_var", "make_node", "apply", "negate", "restrict",
     "sat", "taut", "sat_count", "bool_labeling",

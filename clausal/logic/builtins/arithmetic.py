@@ -165,6 +165,16 @@ def _plus__3_py(x, y, z, trail, k):
     y_known = not is_var(y_val)
     z_known = not is_var(z_val)
 
+    # plus/3 is a numeric relation: a non-numeric known operand (e.g. a
+    # string) must fail cleanly, not concatenate or raise TypeError from the
+    # inverse subtraction (A06-F015).
+    if x_known and not _is_numeric(x_val):
+        return
+    if y_known and not _is_numeric(y_val):
+        return
+    if z_known and not _is_numeric(z_val):
+        return
+
     if x_known and y_known:
         # Z = X + Y  (UnitsMismatch propagates naturally)
         mark = trail.mark()
@@ -205,6 +215,8 @@ def _max__3_py(x, y, z, trail, k):
     y_val = deref(y)
     if is_var(x_val) or is_var(y_val):
         return
+    if not _is_numeric(x_val) or not _is_numeric(y_val):
+        return  # A06-F015: reject non-numeric operands
     # max() uses __gt__ which Quantity implements (raises on dim mismatch)
     mark = trail.mark()
     if unify(z, max(x_val, y_val), trail):
@@ -221,6 +233,8 @@ def _min__3_py(x, y, z, trail, k):
     y_val = deref(y)
     if is_var(x_val) or is_var(y_val):
         return
+    if not _is_numeric(x_val) or not _is_numeric(y_val):
+        return  # A06-F015: reject non-numeric operands
     mark = trail.mark()
     if unify(z, min(x_val, y_val), trail):
         yield None

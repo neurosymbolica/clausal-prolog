@@ -425,11 +425,12 @@ py_imod(PyObject *self, PyObject *args)
         return NULL;
     if (blo <= 0.0 && 0.0 <= bhi)
         return make_pair(-INFINITY, INFINITY);
-    double abs_blo = fabs(blo), abs_bhi = fabs(bhi);
-    double abs_max = abs_blo > abs_bhi ? abs_blo : abs_bhi;
+    /* Real % takes the sign of the divisor: a % b in [0, b) for b > 0 and
+       (b, 0] for b < 0.  The old [0, |b|-1] bound was integer-modulo — it
+       excluded real results and inverted for |b| < 1 (A08-F009). */
     if (blo > 0.0)
-        return make_pair(0.0, up(abs_max - 1.0));
-    return make_pair(dn(-(abs_max - 1.0)), 0.0);
+        return make_pair(0.0, up(bhi));   /* [0, b) subset of [0, bhi] */
+    return make_pair(dn(blo), 0.0);        /* (b, 0] subset of [blo, 0] */
 }
 
 /* ================================================================

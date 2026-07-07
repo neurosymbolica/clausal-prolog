@@ -27,11 +27,21 @@
 
 /* From clausal.terms */
 static PyObject *Compound_type = NULL;
+static PyObject *DictTerm_type = NULL;
+static PyObject *Quantity_type = NULL;
+static PyObject *ConcreteSeg_type = NULL;
+static PyObject *VarSeg_type = NULL;
+static PyObject *Seg_types = NULL;       /* (SegList, SegString, SegBytes) tuple */
 
 /* Interned strings */
 static PyObject *DIF_KEY_STR = NULL;    /* "dif" */
 static PyObject *str_functor = NULL;    /* "functor" */
 static PyObject *str_args = NULL;       /* "args" */
+static PyObject *str_data = NULL;       /* "data" */
+static PyObject *str_segments = NULL;   /* "segments" */
+static PyObject *str_elements = NULL;   /* "elements" */
+static PyObject *str_var = NULL;        /* "var" */
+static PyObject *str_value = NULL;      /* "value" */
 
 
 /* ── Inline helpers ──────────────────────────────────────────────────── */
@@ -128,6 +138,99 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
         }
         Py_DECREF(args);
         return 0;
+    }
+
+    /* Containers the unifier can bind through via their __unify__ hook —
+     * kept in lockstep with the Python _collect_free_vars and with what
+     * unify() descends into (A05-F001).  SetTerm is intentionally absent:
+     * the unifier refuses var-element set unification, so a var inside a
+     * SetTerm cannot become equal and needs no constraint. */
+
+    /* DictTerm — walk values (keys are ground per contract) */
+    int idt = PyObject_IsInstance(t, DictTerm_type);
+    if (idt < 0) return -1;
+    if (idt) {
+        PyObject *data = PyObject_GetAttr(t, str_data);
+        if (!data) return -1;
+        if (PyDict_Check(data)) {
+            PyObject *key, *val;
+            Py_ssize_t pos = 0;
+            while (PyDict_Next(data, &pos, &key, &val)) {
+                if (collect_walk(val, seen, result, depth + 1) < 0) {
+                    Py_DECREF(data);
+                    return -1;
+                }
+            }
+        }
+        Py_DECREF(data);
+        return 0;
+    }
+
+    /* plain dict — walk values (symmetry with DictTerm) */
+    if (PyDict_Check(t)) {
+        PyObject *key, *val;
+        Py_ssize_t pos = 0;
+        while (PyDict_Next(t, &pos, &key, &val)) {
+            if (collect_walk(val, seen, result, depth + 1) < 0)
+                return -1;
+        }
+        return 0;
+    }
+
+    /* SegList / SegString / SegBytes — walk each segment's contained vars */
+    int iseg = PyObject_IsInstance(t, Seg_types);
+    if (iseg < 0) return -1;
+    if (iseg) {
+        PyObject *segments = PyObject_GetAttr(t, str_segments);
+        if (!segments) return -1;
+        PyObject *seq = PySequence_Fast(segments, "segments not iterable");
+        Py_DECREF(segments);
+        if (!seq) return -1;
+        Py_ssize_t ns = PySequence_Fast_GET_SIZE(seq);
+        for (Py_ssize_t i = 0; i < ns; i++) {
+            PyObject *seg = PySequence_Fast_GET_ITEM(seq, i);  /* borrowed */
+            int ivs = PyObject_IsInstance(seg, VarSeg_type);
+            if (ivs < 0) { Py_DECREF(seq); return -1; }
+            if (ivs) {
+                PyObject *var = PyObject_GetAttr(seg, str_var);
+                if (!var) { Py_DECREF(seq); return -1; }
+                int rc = collect_walk(var, seen, result, depth + 1);
+                Py_DECREF(var);
+                if (rc < 0) { Py_DECREF(seq); return -1; }
+                continue;
+            }
+            int ics = PyObject_IsInstance(seg, ConcreteSeg_type);
+            if (ics < 0) { Py_DECREF(seq); return -1; }
+            if (ics) {
+                PyObject *elements = PyObject_GetAttr(seg, str_elements);
+                if (!elements) { Py_DECREF(seq); return -1; }
+                PyObject *eseq = PySequence_Fast(elements, "elements not iterable");
+                Py_DECREF(elements);
+                if (!eseq) { Py_DECREF(seq); return -1; }
+                Py_ssize_t ne = PySequence_Fast_GET_SIZE(eseq);
+                for (Py_ssize_t j = 0; j < ne; j++) {
+                    if (collect_walk(PySequence_Fast_GET_ITEM(eseq, j),
+                                     seen, result, depth + 1) < 0) {
+                        Py_DECREF(eseq); Py_DECREF(seq); return -1;
+                    }
+                }
+                Py_DECREF(eseq);
+            }
+            /* plain str/bytes segment — ground, nothing to collect */
+        }
+        Py_DECREF(seq);
+        return 0;
+    }
+
+    /* Quantity — walk value */
+    int iq = PyObject_IsInstance(t, Quantity_type);
+    if (iq < 0) return -1;
+    if (iq) {
+        PyObject *value = PyObject_GetAttr(t, str_value);
+        if (!value) return -1;
+        int rc = collect_walk(value, seen, result, depth + 1);
+        Py_DECREF(value);
+        return rc;
     }
 
     /* Term instance (PredicateMeta / dataclass) */
@@ -350,8 +453,13 @@ attach_dif_pair(PyObject *x, PyObject *y, PyObject *pair,
             if (rc < 0) { Py_DECREF(unique); return -1; }
         } else {
             int skip = 0;
-            if (check_identity) {
-                /* Skip if pair already present (identity check) */
+            if (check_identity && PyList_Check(existing)) {
+                /* Skip if pair already present (identity check).
+                 * `existing` is only guaranteed a list when written by dif
+                 * itself; a malformed non-list value would make the
+                 * PyList_GET_SIZE/GET_ITEM fast macros UB, so gate the scan
+                 * on PyList_Check and let a non-list fall through to the
+                 * clean PySequence_List path below. */
                 Py_ssize_t en = PyList_GET_SIZE(existing);
                 for (Py_ssize_t j = 0; j < en; j++) {
                     if (PyList_GET_ITEM(existing, j) == pair) {
@@ -473,6 +581,11 @@ py_dif_hook(PyObject *Py_UNUSED(module), PyObject *args)
     Py_ssize_t n = PyList_GET_SIZE(attr_value);
     for (Py_ssize_t ci = 0; ci < n; ci++) {
         PyObject *pair = PyList_GET_ITEM(attr_value, ci);
+        if (!PyTuple_Check(pair) || PyTuple_GET_SIZE(pair) != 2) {
+            PyErr_SetString(PyExc_TypeError,
+                            "_dif_hook: attr pairs must be 2-tuples");
+            return NULL;
+        }
         PyObject *px = PyTuple_GET_ITEM(pair, 0);
         PyObject *py = PyTuple_GET_ITEM(pair, 1);
 
@@ -580,8 +693,28 @@ PyInit__constraints_dif(void)
     PyObject *terms_mod = PyImport_ImportModule("clausal.terms");
     if (!terms_mod) return NULL;
     Compound_type = PyObject_GetAttrString(terms_mod, "Compound");
+    DictTerm_type = PyObject_GetAttrString(terms_mod, "DictTerm");
+    Quantity_type = PyObject_GetAttrString(terms_mod, "Quantity");
+    ConcreteSeg_type = PyObject_GetAttrString(terms_mod, "ConcreteSeg");
+    VarSeg_type = PyObject_GetAttrString(terms_mod, "VarSeg");
+    PyObject *seglist_type = PyObject_GetAttrString(terms_mod, "SegList");
+    PyObject *segstring_type = PyObject_GetAttrString(terms_mod, "SegString");
+    PyObject *segbytes_type = PyObject_GetAttrString(terms_mod, "SegBytes");
     Py_DECREF(terms_mod);
-    if (!Compound_type) return NULL;
+    if (!Compound_type || !DictTerm_type || !Quantity_type ||
+        !ConcreteSeg_type || !VarSeg_type ||
+        !seglist_type || !segstring_type || !segbytes_type) {
+        Py_XDECREF(seglist_type);
+        Py_XDECREF(segstring_type);
+        Py_XDECREF(segbytes_type);
+        return NULL;
+    }
+    /* PyTuple_Pack steals no refs; it INCREFs, so drop our own refs after. */
+    Seg_types = PyTuple_Pack(3, seglist_type, segstring_type, segbytes_type);
+    Py_DECREF(seglist_type);
+    Py_DECREF(segstring_type);
+    Py_DECREF(segbytes_type);
+    if (!Seg_types) return NULL;
 
     /* Intern strings */
     DIF_KEY_STR = PyUnicode_InternFromString("dif");
@@ -590,6 +723,16 @@ PyInit__constraints_dif(void)
     if (!str_functor) return NULL;
     str_args = PyUnicode_InternFromString("args");
     if (!str_args) return NULL;
+    str_data = PyUnicode_InternFromString("data");
+    if (!str_data) return NULL;
+    str_segments = PyUnicode_InternFromString("segments");
+    if (!str_segments) return NULL;
+    str_elements = PyUnicode_InternFromString("elements");
+    if (!str_elements) return NULL;
+    str_var = PyUnicode_InternFromString("var");
+    if (!str_var) return NULL;
+    str_value = PyUnicode_InternFromString("value");
+    if (!str_value) return NULL;
 
     PyObject *m = PyModule_Create(&moduledef);
     if (!m) return NULL;

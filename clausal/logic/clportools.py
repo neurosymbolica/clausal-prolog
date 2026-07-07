@@ -992,11 +992,15 @@ def or_minimize(expr: Any, val: Any, trail: Trail):
     if status in (_OPTIMAL, _FEASIBLE):
         obj_val = int(state.solver.ObjectiveValue())
         mark = trail.mark()
-        for idx, clausal_var in state.rev_map.items():
-            cpsat_var = state.var_map[id(clausal_var)]
-            value = state.solver.Value(cpsat_var)
-            unify(clausal_var, value, trail)
-        if unify(val, obj_val, trail):
+        # A registered var may already be bound to a conflicting value (there
+        # is no OR attr hook, A08-F013), so honour the unify result instead of
+        # discarding it — otherwise an "optimal" solution inconsistent with the
+        # substitution escapes (A08-F016).
+        ok = all(
+            unify(cv, state.solver.Value(state.var_map[id(cv)]), trail)
+            for cv in state.rev_map.values()
+        )
+        if ok and unify(val, obj_val, trail):
             yield None
         trail.undo(mark)
 
@@ -1013,11 +1017,15 @@ def or_maximize(expr: Any, val: Any, trail: Trail):
     if status in (_OPTIMAL, _FEASIBLE):
         obj_val = int(state.solver.ObjectiveValue())
         mark = trail.mark()
-        for idx, clausal_var in state.rev_map.items():
-            cpsat_var = state.var_map[id(clausal_var)]
-            value = state.solver.Value(cpsat_var)
-            unify(clausal_var, value, trail)
-        if unify(val, obj_val, trail):
+        # A registered var may already be bound to a conflicting value (there
+        # is no OR attr hook, A08-F013), so honour the unify result instead of
+        # discarding it — otherwise an "optimal" solution inconsistent with the
+        # substitution escapes (A08-F016).
+        ok = all(
+            unify(cv, state.solver.Value(state.var_map[id(cv)]), trail)
+            for cv in state.rev_map.values()
+        )
+        if ok and unify(val, obj_val, trail):
             yield None
         trail.undo(mark)
 

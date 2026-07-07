@@ -17,6 +17,7 @@ each modification.  On backtrack the snapshot is restored automatically.
 
 from __future__ import annotations
 
+import weakref
 from fractions import Fraction
 from typing import Any
 
@@ -650,22 +651,29 @@ class Tableau:
                     min_ratio = ratio
                     leaving = bv
 
-            if leaving is None:
-                # No basic variable limits entering. Check if entering has
-                # its own upper bound (for max) that limits it.
-                e_hi = self.hi.get(entering)
-                if e_hi is None:
-                    return None  # truly unbounded
-                # Entering is bounded: set it to its upper bound
+            # The entering variable can also hit its OWN upper bound before any
+            # basic var does — a bound flip.  The ratio test previously checked
+            # this only when NO basic var limited entering, so in a degenerate
+            # maximum the entering var was pivoted past its bound (e.g. x rose
+            # to 10 with x <= 5), leaving an infeasible optimal vertex that a
+            # correct fix_variable then rejects (A08-F001 exposed this).
+            e_hi = self.hi.get(entering)
+            entering_ratio = (e_hi - self.assign.get(entering, ZERO)) \
+                if e_hi is not None else None
+            if entering_ratio is not None and (min_ratio is None
+                                               or entering_ratio <= min_ratio):
+                # Cap entering at its upper bound instead of pivoting.
                 old_val = self.assign.get(entering, ZERO)
                 self.assign[entering] = e_hi
                 delta = e_hi - old_val
                 for bv, brow in self.rows.items():
                     if entering in brow:
                         self.assign[bv] += brow[entering] * delta
-                # Remove entering from objective (it's now at its bound)
                 obj.pop(entering, None)
                 continue
+
+            if leaving is None:
+                return None  # truly unbounded (no basic limit, no own bound)
 
             # Determine which bound the leaving variable hit
             bv_coeff = self.rows[leaving][entering]
@@ -713,6 +721,17 @@ class Tableau:
                 # No variables left — pure constant check
                 return pk == value
             return self.add_equality(dict(pc), value - pk)
+
+        # Bounds may live only in the tableau (posted by the single-variable
+        # fast path of add_inequality via set_bound, which never refreshes the
+        # QVar attr).  Overwriting them unconditionally silently destroyed
+        # them, so in_q(X,0,100); q_le(X,5); X is 50 succeeded (A08-F001).
+        cur_lo = self.lo.get(vid)
+        cur_hi = self.hi.get(vid)
+        if cur_lo is not None and value < cur_lo:
+            return False
+        if cur_hi is not None and value > cur_hi:
+            return False
 
         self.lo[vid] = value
         self.hi[vid] = value
@@ -790,20 +809,28 @@ _tableaux: dict[int, Tableau] = {}
 _last_snapshot: dict[int, int] = {}  # trail_id → trail length at last snapshot
 
 
+def _cleanup_tableau(tid: int) -> None:
+    _tableaux.pop(tid, None)
+    _last_snapshot.pop(tid, None)
+
+
 def _get_tableau(trail: Trail) -> Tableau:
     """Get or create the global Tableau for this trail.
 
-    On first creation, registers an undo callback that removes the entry
-    when the trail is unwound past this point, preventing leaks.
+    On first creation, registers both an undo callback (for backtracking past
+    the point where CLP(Q) was first used) and a weakref.finalize (for the
+    normal case of a completed solve dropping the trail without a full undo).
+    Without the finalize the entry leaked forever, and a new Trail() allocated
+    at the same address inherited the stale tableau — cross-query constraint
+    contamination, not just a leak (A08-F005).
     """
     tid = id(trail)
     tab = _tableaux.get(tid)
     if tab is None:
         tab = Tableau()
         _tableaux[tid] = tab
-        # Clean up when trail unwinds past the point where CLP(Q) was first used
-        trail.record(lambda: (_tableaux.pop(tid, None),
-                              _last_snapshot.pop(tid, None)))
+        trail.record(lambda: _cleanup_tableau(tid))
+        weakref.finalize(trail, _cleanup_tableau, tid)
     return tab
 
 
@@ -993,6 +1020,12 @@ def _post_q_domain(target: Any, lo: Fraction | None,
             return False
         return True
     if not is_var(target):
+        return False
+
+    # Empty interval (lo > hi) — reject up front.  The fresh-registration
+    # branch below never compared the two bounds, so in_q(X, 10, 0) succeeded
+    # and left a poisoned var that rejected every later binding (A08-F003).
+    if lo is not None and hi is not None and lo > hi:
         return False
 
     tableau = _get_tableau(trail)

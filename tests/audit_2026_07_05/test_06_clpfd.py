@@ -176,8 +176,6 @@ class TestDifferential:
 
 
 class TestNeExpressionBlindness:
-    @pytest.mark.xfail(strict=False, reason="A06-F001: NeConstraint compares expression "
-                       "trees structurally; X+1 != Y is never enforced once bound")
     def test_ne_with_expr_fails_when_equal(self):
         t = Trail()
         x, y = Var(), Var()
@@ -186,7 +184,6 @@ class TestNeExpressionBlindness:
         r3 = unify(y, 2, t)
         assert not (r2 and r3), "1+1 != 2 must fail"
 
-    @pytest.mark.xfail(strict=False, reason="A06-F001: labeling yields violating tuples")
     def test_ne_with_expr_label_excludes_violators(self):
         t = Trail()
         x, y = Var(), Var()
@@ -196,7 +193,6 @@ class TestNeExpressionBlindness:
         assert all(a + 1 != b for a, b in sols), sorted(sols)
         assert len(sols) == 7
 
-    @pytest.mark.xfail(strict=False, reason="A06-F001: compiled != with expression operand")
     def test_compiled_ne_expr(self, load):
         m = load("ne_expr", source="""
 Bad(X, Y) <- (X + 1 != Y, X is 1, Y is 2)
@@ -219,8 +215,6 @@ Good(X, Y) <- (X + 1 != Y, X is 1, Y is 5)
 
 
 class TestOutputModeLinearEq:
-    @pytest.mark.xfail(strict=False, reason="A06-F002: nan-guard in sum/scalar narrowing "
-                       "skips vars with unbounded (default CLP(Z)) domains")
     def test_negate_output_mode(self):
         t = Trail()
         x, y = Var(), Var()
@@ -228,7 +222,6 @@ class TestOutputModeLinearEq:
         assert unify(y, 3, t)
         assert deref(x) == -3
 
-    @pytest.mark.xfail(strict=False, reason="A06-F002")
     def test_mult_output_mode(self):
         t = Trail()
         x, y = Var(), Var()
@@ -236,7 +229,6 @@ class TestOutputModeLinearEq:
         assert unify(y, 5, t)
         assert deref(x) == 10
 
-    @pytest.mark.xfail(strict=False, reason="A06-F002: compiled 8 == 2*X leaves X unbound")
     def test_compiled_reverse_double(self, load):
         m = load("dbl", source="""
 Double(X, Y) <- (Y == 2 * X)
@@ -267,8 +259,6 @@ Double(X, Y) <- (Y == 2 * X)
 
 
 class TestDoublePrecisionRounding:
-    @pytest.mark.xfail(strict=False, reason="A06-F003: C sum/scalar_propagate rounds in "
-                       "double; bounds near 2^53 over-prune, valid solution rejected")
     def test_sum_near_2_53(self):
         P = 2 ** 53
         t = Trail()
@@ -278,8 +268,6 @@ class TestDoublePrecisionRounding:
         assert fd_eq(Add(left=-P, right=y), 1, t)
         assert deref(y) == P + 1
 
-    @pytest.mark.xfail(strict=False, reason="A06-F004: _scalar_propagate_bignum uses float "
-                       "true division; large-int quotients round, over-pruning")
     def test_scalar_bignum_exact_division(self):
         t = Trail()
         x = Var()
@@ -301,9 +289,6 @@ class TestDoublePrecisionRounding:
 
 
 class TestElement:
-    @pytest.mark.xfail(strict=False, reason="A06-F005: fd_element pre-ensures an unbounded "
-                       "FD domain on the index, then ElementConstraint enumerates it "
-                       "→ ValueError instead of posting [1, n]")
     def test_element_unconstrained_index(self):
         t = Trail()
         i, v = Var(), Var()
@@ -342,9 +327,6 @@ class TestElement:
 
 
 class TestRationalSubexpression:
-    @pytest.mark.xfail(strict=False, reason="A06-F006: X == Y + 1/2 posts as CLP(Z); "
-                       "binding Y raises TypeError (Fraction bound in C domain ops) "
-                       "instead of CLP(Q) dispatch or clean failure")
     def test_rational_subexpr_no_crash(self):
         t = Trail()
         x, y = Var(), Var()
@@ -369,9 +351,6 @@ class TestRationalSubexpression:
 
 
 class TestInt64BoundarySentinel:
-    @pytest.mark.xfail(strict=False, reason="A06-F007: make_interval maps exactly "
-                       "INT64_MAX/MIN to float inf; in_domain(X, 0, 2**63-1) accepts "
-                       "values outside the declared domain")
     def test_exact_int64_max_bound_is_finite(self):
         t = Trail()
         x = Var()
@@ -379,7 +358,6 @@ class TestInt64BoundarySentinel:
         # 2**100 is outside the declared domain — must be rejected
         assert not fd_eq(x, 2 ** 100, t)
 
-    @pytest.mark.xfail(strict=False, reason="A06-F007: domain [0, 2^63-1] reports size inf")
     def test_exact_int64_max_domain_size_finite(self):
         d = domain_from_range(0, 2 ** 63 - 1)
         assert domain_size(d) == 2 ** 63
@@ -400,8 +378,6 @@ class TestInt64BoundarySentinel:
 
 
 class TestInDomainPropagation:
-    @pytest.mark.xfail(strict=False, reason="A06-F008: _post_domain writes the narrowed "
-                       "domain via put_attr without running the propagation queue")
     def test_in_domain_propagates_through_eq(self):
         t = Trail()
         x, y = Var(), Var()
@@ -456,8 +432,6 @@ class TestBooleanHandling:
 
 
 class TestNeReflexivity:
-    @pytest.mark.xfail(strict=False, reason="A06-F010: fd_ne(X, X) returns True; SWI "
-                       "#\\= fails immediately (constraint can never be satisfied)")
     def test_ne_same_var_fails_at_post(self):
         t = Trail()
         x = Var()
@@ -531,8 +505,6 @@ class TestZcompare:
         assert dom(x) == ((1, 4),)
         assert dom(y) == ((2, 5),)
 
-    @pytest.mark.xfail(strict=False, reason="A06-F012a: binding Order after posting does "
-                       "not propagate (constraint is not attached to the order var)")
     def test_binding_order_var_propagates(self):
         t = Trail()
         o, x, y = Var(), Var(), Var()
@@ -551,8 +523,6 @@ class TestZcompare:
         sols = label_set([x, y], t)
         assert sols == {(a, b) for a in range(1, 6) for b in range(1, 6) if a < b}
 
-    @pytest.mark.xfail(strict=False, reason="A06-F012b: zcompare(O, X, X) does not infer "
-                       "O = '=' (aliased operands)")
     def test_same_var_is_eq(self):
         t = Trail()
         o, x = Var(), Var()
@@ -572,8 +542,6 @@ class TestGlobalCardinality:
         assert global_cardinality(vs, [(1, 2), (2, 1)], t)
         assert label_set(vs, t) == {(1, 1, 2), (1, 2, 1), (2, 1, 1)}
 
-    @pytest.mark.xfail(strict=False, reason="A06-F013: variable counts are never bound "
-                       "even when all vars are ground (SWI binds Count)")
     def test_var_count_bound_when_ground(self):
         t = Trail()
         vs = [Var() for _ in range(3)]
@@ -597,14 +565,10 @@ class TestGlobalCardinality:
 
 
 class TestTypeHoles:
-    @pytest.mark.xfail(strict=False, reason="A06-F014: sum_ over non-integer elements "
-                       "silently succeeds treating them as unconstrained integers")
     def test_sum_over_strings_rejected(self):
         t = Trail()
         assert sum(1 for _ in fd_sum(["a", "b"], "#=", 5, t)) == 0
 
-    @pytest.mark.xfail(strict=False, reason="A06-F015: arith_plus accepts strings "
-                       "(concatenation) — plus/3 is an integer relation")
     def test_plus_strings_rejected(self):
         from clausal.logic._arithmetic_core import arith_plus
 
@@ -613,8 +577,6 @@ class TestTypeHoles:
         r = arith_plus("a", "b", z, t)
         assert r is None  # no solution — correct behaviour for non-numeric args
 
-    @pytest.mark.xfail(strict=False, reason="A06-F015: inverse mode raises TypeError "
-                       "instead of failing")
     def test_plus_string_inverse_no_crash(self):
         from clausal.logic._arithmetic_core import arith_plus
 
@@ -633,6 +595,32 @@ class TestTypeHoles:
         assert all_different([1, 2], t) is True
         t = Trail()
         assert all_different(["a", "b"], t) is False  # non-integers fail (silently)
+
+
+# ── A06-F016: non-FDVar "fd" attribute must not be struct-cast (UB) ───────────
+
+
+class TestFdVarDuckTypingUB:
+    def test_non_fdvar_fd_attr_no_crash(self):
+        # A user-supplied "fd" attribute that merely *looks* like an FDVar
+        # (has .domain / .constraints) was cast to FDVarObject* and read at
+        # fixed struct offsets — undefined behaviour, one refactor from a
+        # segfault.  It must now fail cleanly (TypeError), never crash.
+        import types as _types
+
+        t = Trail()
+        x = Var()
+        put_attr(x, "fd", _types.SimpleNamespace(domain=((1, 2),), constraints=()), t)
+        with pytest.raises(TypeError):
+            fd_ne(x, 1, t)
+
+    def test_real_fdvar_still_works(self):
+        # Control: a genuine FD var (real C FDVar under "fd") is unaffected.
+        t = Trail()
+        x = Var()
+        in_domain(x, 1, 5, t)
+        assert fd_ne(x, 3, t)
+        assert not domain_contains(dom(x), 3)
 
 
 # ── Global constraints: regression guards ────────────────────────────────────

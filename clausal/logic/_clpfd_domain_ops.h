@@ -87,8 +87,12 @@ has_bignum_bound(PyObject *domain)
             PyObject *b = PyTuple_GET_ITEM(pair, j);
             if (!PyLong_Check(b)) continue;  /* float +/-inf — fits */
             int ov = 0;
-            (void)PyLong_AsLongLongAndOverflow(b, &ov);
+            long long val = PyLong_AsLongLongAndOverflow(b, &ov);
             if (ov != 0) return 1;
+            /* A finite integer bound exactly at INT64_MIN/MAX collides with
+             * make_interval's ±inf sentinel, so it too must be handled by the
+             * exact-int Python path (A06-F007). */
+            if (val == INT64_MIN || val == INT64_MAX) return 1;
         }
     }
     return 0;

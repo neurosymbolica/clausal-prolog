@@ -64,6 +64,15 @@ from clausal.pythonic_ast.nodes import (
 
 LP_KEY = "lp"
 
+# LP solvers express only non-strict inequalities (<=, >=), so a strict `<`/`>`
+# is approximated by nudging the bound by this fixed absolute epsilon
+# (`x < c` → `x <= c - _STRICT_INEQ_EPSILON`).  This is a documented
+# approximation, not exact: it is too coarse for models whose feasible margin
+# is below the epsilon (it can cut valid points) and negligible for
+# large-magnitude models.  Prefer integer variables (where the caller can post
+# the exact `<= c-1`) when strictness must be precise (A08-F017).
+_STRICT_INEQ_EPSILON = 1e-6
+
 _LP_SOLVER_IDS = {
     'glop':   'GLOP_LINEAR_PROGRAMMING',
     'scip':   'SCIP_MIXED_INTEGER_PROGRAMMING',
@@ -346,12 +355,22 @@ def _translate_lp_constraint(expr: Any, trail: Trail) -> LPConstraintEntry:
     if isinstance(expr, _Lt):
         diff = clausal_to_lp_coeffs(_Sub(left=expr.left, right=expr.right), trail)
         const = diff.pop(-1, 0.0)
-        return LPConstraintEntry(-INF, -const - 1e-6, list(diff.items()), scope_id)
+        return LPConstraintEntry(-INF, -const - _STRICT_INEQ_EPSILON,
+                                 list(diff.items()), scope_id)
 
     if isinstance(expr, _Gt):
         diff = clausal_to_lp_coeffs(_Sub(left=expr.left, right=expr.right), trail)
         const = diff.pop(-1, 0.0)
-        return LPConstraintEntry(-const + 1e-6, INF, list(diff.items()), scope_id)
+        return LPConstraintEntry(-const + _STRICT_INEQ_EPSILON, INF,
+                                 list(diff.items()), scope_id)
+
+    if isinstance(expr, _ArithNeq):
+        raise TypeError(
+            "LP cannot express `!=`: a linear program's feasible region is "
+            "convex, so a strict disequality (a non-convex hole) has no LP "
+            "encoding.  Use two disjunctive `<`/`>` constraints across separate "
+            "solves, or an integer/CP model (clportools) instead."
+        )
 
     if isinstance(expr, _CompareChain):
         raise TypeError("LP does not support chained comparisons directly")
@@ -487,13 +506,19 @@ def lp_minimize(expr: Any, val: Any, trail: Trail):
     if status in (_pywraplp.Solver.OPTIMAL, _pywraplp.Solver.FEASIBLE):
         obj_val = solver.Objective().Value() + const
         mark = trail.mark()
+        # Honour unify results: a registered var already bound to a conflicting
+        # value (no LP attr hook, A08-F013) must not yield an inconsistent
+        # "optimal" solution (A08-F016).
+        ok = True
         for idx, clausal_var in state.rev_map.items():
             value = lp_vars[idx].solution_value()
             kind = state.var_entries[idx][3]
             if kind == 'integer':
                 value = int(round(value))
-            unify(clausal_var, value, trail)
-        if unify(val, obj_val, trail):
+            if not unify(clausal_var, value, trail):
+                ok = False
+                break
+        if ok and unify(val, obj_val, trail):
             yield None
         trail.undo(mark)
 
@@ -511,12 +536,18 @@ def lp_maximize(expr: Any, val: Any, trail: Trail):
     if status in (_pywraplp.Solver.OPTIMAL, _pywraplp.Solver.FEASIBLE):
         obj_val = solver.Objective().Value() + const
         mark = trail.mark()
+        # Honour unify results: a registered var already bound to a conflicting
+        # value (no LP attr hook, A08-F013) must not yield an inconsistent
+        # "optimal" solution (A08-F016).
+        ok = True
         for idx, clausal_var in state.rev_map.items():
             value = lp_vars[idx].solution_value()
             kind = state.var_entries[idx][3]
             if kind == 'integer':
                 value = int(round(value))
-            unify(clausal_var, value, trail)
-        if unify(val, obj_val, trail):
+            if not unify(clausal_var, value, trail):
+                ok = False
+                break
+        if ok and unify(val, obj_val, trail):
             yield None
         trail.undo(mark)

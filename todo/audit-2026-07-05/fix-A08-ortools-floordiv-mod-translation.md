@@ -1,5 +1,10 @@
 # fix(A08): CP-SAT adapter `//`/`%` diverge from Python; negative-numerator `%` is infeasible
 
+> **DEFERRED (2026-07-07):** intentionally not implemented — direction-sensitive
+> and gated on the parked design decision A08-D001 (`//`/`%` semantics across
+> backends), still open in DESIGN-DECISIONS.md. Same gate as the Z3 twin
+> (fix-A08-z3-floordiv-mod-translation). Flip once D001 lands.
+
 **Finding:** A08-F015 (correctness, medium); design question A08-D001 (parked)
 **Tests:** `tests/audit_2026_07_05/test_08_clpqr_z3.py::TestCpsatTranslationFidelity::test_floordiv_negative_numerator`, `::test_mod_negative_numerator`
 

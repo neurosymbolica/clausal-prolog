@@ -24,6 +24,7 @@ static PyObject *fn_register_attr_hook = NULL;
 /* From clausal.logic.clpfd (Python-level helpers) */
 static PyObject *fn_expr_domain = NULL;
 static PyObject *fn_resolve = NULL;
+static PyObject *fn_eval_ground = NULL;
 static PyObject *fn_any_real = NULL;
 static PyObject *fn_both_ground = NULL;
 static PyObject *fn_collect_constraint_vars = NULL;
@@ -498,26 +499,6 @@ static PyMemberDef ScalarProductConstraint_members[] = {
 };
 
 /* ================================================================
- * Helper: get FDVar from a variable, returns borrowed ref or NULL
- * ================================================================ */
-
-static inline FDVarObject *
-get_fdvar(PyObject *var)
-{
-    PyObject *state = call_get_attr(var, FD_KEY_STR);
-    if (!state) return NULL;
-    if (state == Py_None) {
-        Py_DECREF(state);
-        return NULL;
-    }
-    /* Caller gets an owned reference, must decref when done */
-    if (FDVar_Check(state))
-        return (FDVarObject *)state;
-    /* Python FDVar — wrap access via attribute */
-    return (FDVarObject *)state;  /* duck typing: has .domain, .constraints */
-}
-
-/* ================================================================
  * Helper: get domain for an expression (int, Var, or expr tree)
  * Inlines the fast paths, falls back to Python _expr_domain
  * ================================================================ */
@@ -644,8 +625,15 @@ c_ensure_fd(PyObject *var, PyObject *trail)
     if (state != Py_None) {
         if (FDVar_Check(state))
             return (FDVarObject *)state;
-        /* Python FDVar — return as-is (duck typing) */
-        return (FDVarObject *)state;
+        /* A non-FDVar object under the engine-reserved "fd" key (only
+         * reachable via a user put_attr(x, "fd", <obj>)) cannot be treated as
+         * an FDVarObject: callers read ->domain / ->constraints at fixed
+         * struct offsets, which is undefined behaviour for any other type.
+         * Reject cleanly rather than crash (A06-F016). */
+        Py_DECREF(state);
+        PyErr_SetString(PyExc_TypeError,
+                        "fd attribute must be an FDVar (engine-reserved key)");
+        return NULL;
     }
     Py_DECREF(state);
 
@@ -999,6 +987,13 @@ ne_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
     PyObject *rhs = call_deref(self->rhs);
     if (!rhs) { Py_DECREF(lhs); return -1; }
 
+    /* Aliased operands (e.g. unify merged the two vars after posting):
+     * X != X can never hold — fail (A06-F010). */
+    if (lhs == rhs) {
+        Py_DECREF(lhs); Py_DECREF(rhs);
+        return 0;
+    }
+
     int l_isvar = call_is_var(lhs);
     if (l_isvar < 0) goto error;
     int r_isvar = call_is_var(rhs);
@@ -1046,7 +1041,32 @@ ne_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
 
     /* Both ground */
     if (!l_isvar && !r_isvar) {
-        int eq = PyObject_RichCompareBool(lhs, rhs, Py_NE);
+        /* Evaluate expression operands (e.g. Add(X, 1)) before comparing:
+         * a structural compare of the expression node against an int is
+         * always "different" and would wrongly satisfy the constraint
+         * (A06-F001).  Plain ints skip the eval. */
+        PyObject *lv = lhs, *rv = rhs;
+        int owns_lv = 0, owns_rv = 0;
+        if (!PyLong_Check(lhs)) {
+            lv = PyObject_CallOneArg(fn_eval_ground, lhs);
+            if (!lv) goto error;
+            owns_lv = 1;
+        }
+        if (!PyLong_Check(rhs)) {
+            rv = PyObject_CallOneArg(fn_eval_ground, rhs);
+            if (!rv) { if (owns_lv) Py_DECREF(lv); goto error; }
+            owns_rv = 1;
+        }
+        if (lv == Py_None || rv == Py_None) {
+            /* An expression still has unbound vars — keep pending. */
+            if (owns_lv) Py_DECREF(lv);
+            if (owns_rv) Py_DECREF(rv);
+            Py_DECREF(lhs); Py_DECREF(rhs);
+            return 1;
+        }
+        int eq = PyObject_RichCompareBool(lv, rv, Py_NE);
+        if (owns_lv) Py_DECREF(lv);
+        if (owns_rv) Py_DECREF(rv);
         Py_DECREF(lhs); Py_DECREF(rhs);
         return eq < 0 ? -1 : eq;
     }
@@ -1559,10 +1579,35 @@ safe_mult_d(double a, double b)
     return a * b;
 }
 
+/* Exact integer floor/ceil division (C's / truncates toward zero); b != 0.
+ * Callers guarantee |a| < 2^53 (the DOUBLE_ABS_SUM_LIMIT guard), so no
+ * overflow.  Used for scalar_propagate's exact division (A06-F003). */
+static inline int64_t
+floor_div_i64(int64_t a, int64_t b)
+{
+    int64_t q = a / b, r = a % b;
+    if (r != 0 && ((r < 0) != (b < 0))) q--;
+    return q;
+}
+static inline int64_t
+ceil_div_i64(int64_t a, int64_t b)
+{
+    int64_t q = a / b, r = a % b;
+    if (r != 0 && ((r < 0) == (b < 0))) q++;
+    return q;
+}
+
 /* Threshold past which IEEE 754 double loses integer precision.  Used by
  * sum_propagate / scalar_propagate to decide when to fall back to the
  * bignum-safe Python helper. */
 #define DOUBLE_PRECISE_INT_LIMIT 9007199254740992.0 /* 2^53 */
+/* Σ|finite bound| ceiling: if the sum of the absolute values of all finite
+ * operand bounds stays under 2^52, then every partial sum AND every
+ * back-substitution difference (total - other, bounded by 2·Σ|bound|) stays
+ * under 2^53 and is represented exactly in double.  Above it, an intermediate
+ * such as `total - other` can need >53 bits and round (ties-to-even), so we
+ * hand off to the exact-integer Python helper (A06-F003). */
+#define DOUBLE_ABS_SUM_LIMIT 4503599627370496.0 /* 2^52 */
 
 /*
  * sum_propagate — SumConstraint.propagate(trail, queue)
@@ -1573,6 +1618,14 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
     Py_ssize_t nv = PyTuple_GET_SIZE(self->sum_vars);
 
     double min_sum = 0, max_sum = 0;
+    /* Finite-only running sums plus counts of ±inf contributions, so a var's
+     * "other side" bound (total minus every OTHER var) is finite whenever its
+     * OWN domain is the sole infinite contributor.  The old subtraction trick
+     * (max_sum - own_max) produced inf - inf = nan and skipped narrowing,
+     * leaving output-mode vars unbounded (A06-F002). */
+    double finite_hi_sum = 0, finite_lo_sum = 0;
+    int pos_inf_count = 0, neg_inf_count = 0;
+    double abs_bound = 0;  /* Σ|finite bound| — see DOUBLE_ABS_SUM_LIMIT */
     int needs_bignum = 0;
     for (Py_ssize_t i = 0; i < nv; i++) {
         PyObject *v = PyTuple_GET_ITEM(self->sum_vars, i);
@@ -1593,15 +1646,16 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
         double hi_f = (hi == INT64_MAX) ? HUGE_VAL : (double)hi;
         min_sum += lo_f;
         max_sum += hi_f;
+        if (hi_f == HUGE_VAL) pos_inf_count++; else { finite_hi_sum += hi_f; abs_bound += fabs(hi_f); }
+        if (lo_f == -HUGE_VAL) neg_inf_count++; else { finite_lo_sum += lo_f; abs_bound += fabs(lo_f); }
     }
 
-    /* Bignum fallback: any operand has bignum bounds, or the running double
-     * sum has exceeded 2^53 (where IEEE 754 doubles lose integer
-     * precision).  Slice 4 of clpz_bignum.md. */
-    if (!needs_bignum &&
-        (fabs(min_sum) > DOUBLE_PRECISE_INT_LIMIT ||
-         fabs(max_sum) > DOUBLE_PRECISE_INT_LIMIT) &&
-        min_sum != -HUGE_VAL && max_sum != HUGE_VAL) {
+    /* Bignum fallback: any operand has bignum bounds, or the sum of absolute
+     * finite bounds is large enough that an intermediate could lose integer
+     * precision in double (A06-F003).  Subsumes the old aggregate check —
+     * cancelling terms (e.g. -2^53 + [2^53, 2^53+2]) keep the aggregate small
+     * yet still overflow 53 bits under back-substitution. */
+    if (!needs_bignum && abs_bound >= DOUBLE_ABS_SUM_LIMIT) {
         needs_bignum = 1;
     }
     if (needs_bignum) {
@@ -1678,16 +1732,19 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
         double v_max_f = (v_hi_i == INT64_MAX) ? HUGE_VAL : (double)v_hi_i;
         double v_min_f = (v_lo_i == INT64_MIN) ? -HUGE_VAL : (double)v_lo_i;
 
-        double other_max = max_sum - v_max_f;
-        double other_min = min_sum - v_min_f;
-        /* nan guard */
-        if (other_max != other_max || other_min != other_min) {
-            Py_DECREF(d); Py_DECREF(dv);
-            continue;
-        }
+        /* other_max = Σ_{j≠i} hi_j : +inf iff some OTHER var is +inf, else
+         * the finite hi sum with var i's own finite hi removed (A06-F002). */
+        int others_pos_inf = pos_inf_count - (v_max_f == HUGE_VAL ? 1 : 0);
+        double other_max = (others_pos_inf > 0) ? HUGE_VAL
+                         : finite_hi_sum - (v_max_f == HUGE_VAL ? 0.0 : v_max_f);
+        int others_neg_inf = neg_inf_count - (v_min_f == -HUGE_VAL ? 1 : 0);
+        double other_min = (others_neg_inf > 0) ? -HUGE_VAL
+                         : finite_lo_sum - (v_min_f == -HUGE_VAL ? 0.0 : v_min_f);
 
-        double new_lo_f = tlo - other_max;
-        double new_hi_f = thi - other_min;
+        /* var_i ∈ [total_lo - other_max, total_hi - other_min].  An infinite
+         * other-side bound leaves the corresponding var bound unconstrained. */
+        double new_lo_f = (other_max == HUGE_VAL) ? -HUGE_VAL : (tlo - other_max);
+        double new_hi_f = (other_min == -HUGE_VAL) ? HUGE_VAL : (thi - other_min);
 
         int64_t new_lo_i = (new_lo_f <= (double)INT64_MIN) ? INT64_MIN :
                            (new_lo_f >= (double)INT64_MAX) ? INT64_MAX : (int64_t)new_lo_f;
@@ -1722,6 +1779,12 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
     Py_ssize_t nv = PyTuple_GET_SIZE(self->sum_vars);
 
     double min_sum = 0, max_sum = 0;
+    /* Finite-only running contribution sums plus ±inf counts, so a var's
+     * "other side" is finite whenever its OWN contribution is the sole
+     * infinite one (A06-F002 — see sum_propagate for the rationale). */
+    double finite_cmax_sum = 0, finite_cmin_sum = 0;
+    int cmax_pos_inf = 0, cmin_neg_inf = 0;
+    double abs_bound = 0;  /* Σ|finite contribution| — see DOUBLE_ABS_SUM_LIMIT */
     int needs_bignum = 0;
     for (Py_ssize_t i = 0; i < nv; i++) {
         PyObject *v = PyTuple_GET_ITEM(self->sum_vars, i);
@@ -1749,22 +1812,18 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
         double lo_f = (lo == INT64_MIN) ? -HUGE_VAL : (double)lo;
         double hi_f = (hi == INT64_MAX) ? HUGE_VAL : (double)hi;
 
-        if (c >= 0) {
-            min_sum += safe_mult_d(c, lo_f);
-            max_sum += safe_mult_d(c, hi_f);
-        } else {
-            min_sum += safe_mult_d(c, hi_f);
-            max_sum += safe_mult_d(c, lo_f);
-        }
+        double contrib_min = (c >= 0) ? safe_mult_d(c, lo_f) : safe_mult_d(c, hi_f);
+        double contrib_max = (c >= 0) ? safe_mult_d(c, hi_f) : safe_mult_d(c, lo_f);
+        min_sum += contrib_min;
+        max_sum += contrib_max;
+        if (contrib_max == HUGE_VAL) cmax_pos_inf++; else { finite_cmax_sum += contrib_max; abs_bound += fabs(contrib_max); }
+        if (contrib_min == -HUGE_VAL) cmin_neg_inf++; else { finite_cmin_sum += contrib_min; abs_bound += fabs(contrib_min); }
     }
 
-    /* Bignum fallback: any operand has bignum bounds, any coefficient is
-     * bignum, or the running double sum has exceeded 2^53 (where IEEE 754
-     * doubles lose integer precision).  Slice 4 of clpz_bignum.md. */
-    if (!needs_bignum &&
-        (fabs(min_sum) > DOUBLE_PRECISE_INT_LIMIT ||
-         fabs(max_sum) > DOUBLE_PRECISE_INT_LIMIT) &&
-        min_sum != -HUGE_VAL && max_sum != HUGE_VAL) {
+    /* Bignum fallback: any operand/coefficient is bignum, or the sum of
+     * absolute finite contributions is large enough that an intermediate
+     * could lose integer precision in double (A06-F003). */
+    if (!needs_bignum && abs_bound >= DOUBLE_ABS_SUM_LIMIT) {
         needs_bignum = 1;
     }
     if (needs_bignum) {
@@ -1846,33 +1905,36 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
 
         double contrib_max = (c > 0) ? safe_mult_d(c, v_hi) : safe_mult_d(c, v_lo);
         double contrib_min = (c > 0) ? safe_mult_d(c, v_lo) : safe_mult_d(c, v_hi);
-        double other_min = min_sum - contrib_min;
-        double other_max = max_sum - contrib_max;
+        /* Σ_{j≠i} of the min/max contributions, inf iff some OTHER var is the
+         * infinite one (A06-F002). */
+        int others_cmax_inf = cmax_pos_inf - (contrib_max == HUGE_VAL ? 1 : 0);
+        double other_max = (others_cmax_inf > 0) ? HUGE_VAL
+                         : finite_cmax_sum - (contrib_max == HUGE_VAL ? 0.0 : contrib_max);
+        int others_cmin_inf = cmin_neg_inf - (contrib_min == -HUGE_VAL ? 1 : 0);
+        double other_min = (others_cmin_inf > 0) ? -HUGE_VAL
+                         : finite_cmin_sum - (contrib_min == -HUGE_VAL ? 0.0 : contrib_min);
 
-        if (other_min != other_min || other_max != other_max) {
-            Py_DECREF(d); Py_DECREF(dv);
-            continue;
-        }
+        /* Bounds on c*var_i, guarding inf - inf.  With the DOUBLE_ABS_SUM_LIMIT
+         * guard above, finite num_lo/num_hi are exact integers < 2^53. */
+        double num_lo = (other_max == HUGE_VAL) ? -HUGE_VAL : (tlo - other_max);
+        double num_hi = (other_min == -HUGE_VAL) ? HUGE_VAL : (thi - other_min);
 
-        double new_lo_f, new_hi_f;
-        if (c > 0) {
-            new_lo_f = ceil((tlo - other_max) / c);
-            new_hi_f = floor((thi - other_min) / c);
-        } else {
-            new_lo_f = ceil((thi - other_min) / c);
-            new_hi_f = floor((tlo - other_max) / c);
-        }
+        /* var_i lower = ceil(lo_num / c), upper = floor(hi_num / c), with the
+         * numerator/operand ends swapped for c < 0.  Divide in int64 to avoid
+         * float-division rounding near 2^53 (A06-F003). */
+        double lo_num = (c_val > 0) ? num_lo : num_hi;
+        double hi_num = (c_val > 0) ? num_hi : num_lo;
 
         int64_t new_lo_i, new_hi_i;
-        if (new_lo_f == -HUGE_VAL || new_lo_f == HUGE_VAL)
-            new_lo_i = INT64_MIN;
+        if (lo_num == -HUGE_VAL || lo_num == HUGE_VAL)
+            new_lo_i = INT64_MIN;   /* the infinite lo end always yields -inf */
         else
-            new_lo_i = (int64_t)new_lo_f;
+            new_lo_i = ceil_div_i64((int64_t)lo_num, c_val);
 
-        if (new_hi_f == -HUGE_VAL || new_hi_f == HUGE_VAL)
-            new_hi_i = INT64_MAX;
+        if (hi_num == HUGE_VAL || hi_num == -HUGE_VAL)
+            new_hi_i = INT64_MAX;   /* the infinite hi end always yields +inf */
         else
-            new_hi_i = (int64_t)new_hi_f;
+            new_hi_i = floor_div_i64((int64_t)hi_num, c_val);
 
         PyObject *range = domain_from_range_i64(new_lo_i, new_hi_i);
         if (!range) { Py_DECREF(d); Py_DECREF(dv); return -1; }
@@ -3255,6 +3317,7 @@ PyInit__clpfd_propagate(void)
 
     fn_expr_domain = PyObject_GetAttrString(clpfd_mod, "_expr_domain");
     fn_resolve = PyObject_GetAttrString(clpfd_mod, "_resolve");
+    fn_eval_ground = PyObject_GetAttrString(clpfd_mod, "_eval_ground");
     fn_any_real = PyObject_GetAttrString(clpfd_mod, "_any_real");
     fn_both_ground = PyObject_GetAttrString(clpfd_mod, "_both_ground");
     fn_collect_constraint_vars = PyObject_GetAttrString(clpfd_mod, "_collect_constraint_vars");
@@ -3270,7 +3333,8 @@ PyInit__clpfd_propagate(void)
     fn_scalar_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_scalar_propagate_bignum");
     Py_DECREF(clpfd_mod);
 
-    if (!fn_expr_domain || !fn_resolve || !fn_any_real || !fn_both_ground ||
+    if (!fn_expr_domain || !fn_resolve || !fn_eval_ground ||
+        !fn_any_real || !fn_both_ground ||
         !fn_collect_constraint_vars || !fn_collect_vars_from || !fn_linearise ||
         !fn_eq_propagate_bignum || !fn_ne_propagate_bignum ||
         !fn_lt_propagate_bignum || !fn_le_propagate_bignum ||

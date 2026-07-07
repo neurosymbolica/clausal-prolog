@@ -253,10 +253,33 @@ def sat_add_clause(literals: list[int], trail: Trail) -> None:
 
 # ── Satisfiability check ───────────────────────────────────────────────────
 
+def _binding_assumptions(state) -> list:
+    """Solver assumptions reflecting the current ground Clausal bindings of
+    registered vars.
+
+    The backend registers no attr hook for SAT_KEY, so a Clausal binding like
+    ``X = 0`` is otherwise invisible to the solver and models violating it
+    escape (A07-F005).  Deref every registered var and, when it is ground
+    0/1, add the matching unit assumption (+sv for 1, -sv for 0).  Computed
+    fresh per call, so it is trail-safe by construction.  bool is excluded
+    per A01-D001 (bool is not a CLP 0/1 value)."""
+    extra: list = []
+    for sat_var, var in state.rev_map.items():
+        dv = deref(var)
+        if isinstance(dv, bool) or not isinstance(dv, int):
+            continue
+        if dv == 0:
+            extra.append(-sat_var)
+        elif dv == 1:
+            extra.append(sat_var)
+    return extra
+
+
 def sat_check(trail: Trail) -> bool:
     """Return True if current SAT constraints are satisfiable."""
     state = _get_existing_sat_state(trail)
-    return state.solver.solve(assumptions=state.assumptions)
+    return state.solver.solve(
+        assumptions=state.assumptions + _binding_assumptions(state))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -539,7 +562,12 @@ def label_sat(vars_list: Any, trail: Trail):
     )
 
     try:
-        while state.solver.solve(assumptions=state.assumptions):
+        # Include the ground Clausal bindings of registered vars so enumerated
+        # models cannot violate them (A07-F005).  Recomputed each iteration:
+        # the labeled vars are unbound at solve time (undone below), so only
+        # externally-bound vars contribute.
+        while state.solver.solve(
+                assumptions=state.assumptions + _binding_assumptions(state)):
             model = state.solver.get_model()
             model_set = set(model)
 

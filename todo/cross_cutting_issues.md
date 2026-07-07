@@ -11,7 +11,13 @@ Every C extension casts `trail_obj` to `TrailObject *` without calling
 `Trail_Check(trail_obj)`. Passing a non-Trail object causes undefined behavior.
 
 **Affected files:** `_constraints_dif.c`, `_tabling_core.c`, `_list_unify.c`,
-`_clpfd_propagate.c`, `_arithmetic_core.c`, `_lists_core.c`
+`_lists_core.c`
+
+**Audited clean (2026-07-05, A06-F017):** `_arithmetic_core.c` — all 14
+exported functions call `Trail_Check(trail_obj)` before `Trail_CAST`
+(regression guard: `test_06_clpfd.py::TestArithmeticCore::test_trail_type_checked`).
+`_clpfd_propagate.c` — never casts a trail; it threads the trail through to
+the Python variables API (`unify`/`put_attr`), which validates.
 
 **Fix:** Add `Trail_Check()` guard at entry to every exported function that
 receives a trail. Must be done project-wide.

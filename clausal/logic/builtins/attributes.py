@@ -5,7 +5,16 @@ from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var, unify, put_attr, get_attr, del_attr
 from clausal.logic.predicate import is_term_instance, term_field_names
-from clausal.terms import Compound, DictTerm
+from clausal.terms import (
+    Compound,
+    DictTerm,
+    SetTerm,
+    SegList,
+    SegString,
+    SegBytes,
+    ConcreteSeg,
+    VarSeg,
+)
 
 from clausal.logic.builtins._registry import _builtin
 
@@ -132,7 +141,8 @@ def _collect_attvars(term, seen, result):
             if raw:
                 result.append(term)
         return
-    if isinstance(term, list):
+    # tuple is a core Clausal structure, so it walks alongside list.
+    if isinstance(term, (list, tuple)):
         for item in term:
             _collect_attvars(deref(item), seen, result)
     elif isinstance(term, Compound):
@@ -144,3 +154,17 @@ def _collect_attvars(term, seen, result):
     elif isinstance(term, DictTerm):
         for v in term.data.values():
             _collect_attvars(deref(v), seen, result)
+    elif isinstance(term, dict):
+        for v in term.values():
+            _collect_attvars(deref(v), seen, result)
+    elif isinstance(term, (set, frozenset, SetTerm)):
+        for elem in term:
+            _collect_attvars(deref(elem), seen, result)
+    elif isinstance(term, (SegList, SegString, SegBytes)):
+        for seg in term.segments:
+            if isinstance(seg, VarSeg):
+                _collect_attvars(deref(seg.var), seen, result)
+            elif isinstance(seg, ConcreteSeg):
+                for elem in seg.elements:
+                    _collect_attvars(deref(elem), seen, result)
+            # plain str/bytes segments are ground — nothing to collect

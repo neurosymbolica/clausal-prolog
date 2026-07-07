@@ -465,8 +465,16 @@ def _ne_propagate_bignum(lhs, rhs, trail, queue) -> bool:
     """Equivalent of NeConstraint.propagate with bignum-safe operations."""
     lhs = deref(lhs)
     rhs = deref(rhs)
+    # Aliased operands: X != X can never hold — fail (A06-F010).
+    if lhs is rhs:
+        return False
     if not is_var(lhs) and not is_var(rhs):
-        return lhs != rhs
+        # Evaluate expression operands before comparing (A06-F001).
+        lv = lhs if type(lhs) is int else _eval_ground(lhs)
+        rv = rhs if type(rhs) is int else _eval_ground(rhs)
+        if lv is None or rv is None:
+            return True
+        return lv != rv
     if not is_var(lhs) and isinstance(lhs, int) and is_var(rhs):
         state = get_attr(rhs, FD_KEY)
         if state is not None:
@@ -504,13 +512,27 @@ def _sum_propagate_bignum(sum_vars, total, trail, queue) -> bool:
     vars_ = [deref(v) for v in sum_vars]
     total = deref(total)
 
+    # Finite-only sums + ±inf counts so an output-mode var whose OWN domain is
+    # the sole infinite contributor still narrows (A06-F002).
     min_sum = max_sum = 0
+    finite_hi_sum = finite_lo_sum = 0
+    pos_inf_count = neg_inf_count = 0
     for v in vars_:
         d = _expr_domain(v, trail)
         if not d:
             return False
-        min_sum += domain_min(d)
-        max_sum += domain_max(d)
+        v_lo = domain_min(d)
+        v_hi = domain_max(d)
+        min_sum += v_lo
+        max_sum += v_hi
+        if v_hi == _POS_INF:
+            pos_inf_count += 1
+        else:
+            finite_hi_sum += v_hi
+        if v_lo == _NEG_INF:
+            neg_inf_count += 1
+        else:
+            finite_lo_sum += v_lo
 
     total_d = _expr_domain(total, trail)
     new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
@@ -527,14 +549,14 @@ def _sum_propagate_bignum(sum_vars, total, trail, queue) -> bool:
         d = _expr_domain(v, trail)
         v_max = domain_max(d)
         v_min = domain_min(d)
-        # Guard against inf - inf = nan: skip narrowing when other-side
-        # bounds are infinite.
-        other_max = max_sum - v_max
-        other_min = min_sum - v_min
-        if other_max != other_max or other_min != other_min:
-            continue
-        new_lo = total_lo - other_max
-        new_hi = total_hi - other_min
+        others_pos_inf = pos_inf_count - (1 if v_max == _POS_INF else 0)
+        other_max = _POS_INF if others_pos_inf > 0 else \
+            finite_hi_sum - (0 if v_max == _POS_INF else v_max)
+        others_neg_inf = neg_inf_count - (1 if v_min == _NEG_INF else 0)
+        other_min = _NEG_INF if others_neg_inf > 0 else \
+            finite_lo_sum - (0 if v_min == _NEG_INF else v_min)
+        new_lo = _NEG_INF if other_max == _POS_INF else total_lo - other_max
+        new_hi = _POS_INF if other_min == _NEG_INF else total_hi - other_min
         new_d = domain_intersection(d, domain_from_range(new_lo, new_hi))
         if not new_d:
             return False
@@ -555,18 +577,27 @@ def _scalar_propagate_bignum(coeffs, sum_vars, total, trail, queue) -> bool:
     vars_ = [deref(v) for v in sum_vars]
     total = deref(total)
 
+    # Finite-only contribution sums + ±inf counts (A06-F002).
     min_sum = max_sum = 0
+    finite_cmax_sum = finite_cmin_sum = 0
+    cmax_pos_inf = cmin_neg_inf = 0
     for c, v in zip(coeffs, vars_):
         d = _expr_domain(v, trail)
         if not d:
             return False
         v_lo, v_hi = domain_min(d), domain_max(d)
-        if c >= 0:
-            min_sum += _safe_mult(c, v_lo)
-            max_sum += _safe_mult(c, v_hi)
+        contrib_min = _safe_mult(c, v_lo) if c >= 0 else _safe_mult(c, v_hi)
+        contrib_max = _safe_mult(c, v_hi) if c >= 0 else _safe_mult(c, v_lo)
+        min_sum += contrib_min
+        max_sum += contrib_max
+        if contrib_max == _POS_INF:
+            cmax_pos_inf += 1
         else:
-            min_sum += _safe_mult(c, v_hi)
-            max_sum += _safe_mult(c, v_lo)
+            finite_cmax_sum += contrib_max
+        if contrib_min == _NEG_INF:
+            cmin_neg_inf += 1
+        else:
+            finite_cmin_sum += contrib_min
 
     total_d = _expr_domain(total, trail)
     new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
@@ -584,24 +615,24 @@ def _scalar_propagate_bignum(coeffs, sum_vars, total, trail, queue) -> bool:
         v_lo, v_hi = domain_min(d), domain_max(d)
         contrib_max = _safe_mult(c, v_hi) if c > 0 else _safe_mult(c, v_lo)
         contrib_min = _safe_mult(c, v_lo) if c > 0 else _safe_mult(c, v_hi)
-        other_min = min_sum - contrib_min
-        other_max = max_sum - contrib_max
-        if other_min != other_min or other_max != other_max:
-            continue
+        others_cmax_inf = cmax_pos_inf - (1 if contrib_max == _POS_INF else 0)
+        other_max = _POS_INF if others_cmax_inf > 0 else \
+            finite_cmax_sum - (0 if contrib_max == _POS_INF else contrib_max)
+        others_cmin_inf = cmin_neg_inf - (1 if contrib_min == _NEG_INF else 0)
+        other_min = _NEG_INF if others_cmin_inf > 0 else \
+            finite_cmin_sum - (0 if contrib_min == _NEG_INF else contrib_min)
+        num_lo = _NEG_INF if other_max == _POS_INF else total_lo - other_max
+        num_hi = _POS_INF if other_min == _NEG_INF else total_hi - other_min
+        # Exact integer ceil/floor division — this is the designated
+        # bignum-safe path, so float true division (which loses precision past
+        # 2^53) would over-prune valid large-int solutions (A06-F004).
+        # ceil(a/c) == -((-a) // c); floor(a/c) == a // c  (Python // floors).
         if c > 0:
-            new_v_lo = math.ceil((total_lo - other_max) / c)
-            new_v_hi = math.floor((total_hi - other_min) / c)
+            new_v_lo = _NEG_INF if num_lo == _NEG_INF else -((-num_lo) // c)
+            new_v_hi = _POS_INF if num_hi == _POS_INF else num_hi // c
         else:
-            new_v_lo = math.ceil((total_hi - other_min) / c)
-            new_v_hi = math.floor((total_lo - other_max) / c)
-        if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
-            new_v_lo = _NEG_INF
-        else:
-            new_v_lo = int(new_v_lo)
-        if new_v_hi == _NEG_INF or new_v_hi == _POS_INF:
-            new_v_hi = _POS_INF
-        else:
-            new_v_hi = int(new_v_hi)
+            new_v_lo = _NEG_INF if num_hi == _POS_INF else -((-num_hi) // c)
+            new_v_hi = _POS_INF if num_lo == _NEG_INF else num_lo // c
         new_d = domain_intersection(d, domain_from_range(new_v_lo, new_v_hi))
         if not new_d:
             return False
@@ -640,82 +671,6 @@ class EqConstraint(Constraint):
         return True
 
 
-class ScalarProductConstraint(Constraint):
-    """Σ coeffs[i] * vars[i] == total. Bounds-consistency propagation."""
-    __slots__ = ('coeffs', 'sum_vars', 'total')
-
-    def __init__(self, coeffs: tuple, sum_vars: tuple, total):
-        self.coeffs = coeffs
-        self.sum_vars = sum_vars
-        self.total = total
-        result: list = []
-        for v in sum_vars:
-            _collect_vars_from(v, result)
-        _collect_vars_from(total, result)
-        super().__init__(tuple(result))
-
-    def propagate(self, trail: Trail, queue: deque) -> bool:
-        vars_ = [deref(v) for v in self.sum_vars]
-        total = deref(self.total)
-
-        min_sum = max_sum = 0
-        for c, v in zip(self.coeffs, vars_):
-            d = _expr_domain(v, trail)
-            if not d:
-                return False
-            v_lo, v_hi = domain_min(d), domain_max(d)
-            if c >= 0:
-                min_sum += _safe_mult(c, v_lo)
-                max_sum += _safe_mult(c, v_hi)
-            else:
-                min_sum += _safe_mult(c, v_hi)
-                max_sum += _safe_mult(c, v_lo)
-
-        total_d = _expr_domain(total, trail)
-        new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
-        if not new_total_d:
-            return False
-        if is_var(total) and not _narrow_if_changed(total, new_total_d, trail, queue):
-            return False
-        total_lo = domain_min(new_total_d)
-        total_hi = domain_max(new_total_d)
-
-        for c, v in zip(self.coeffs, vars_):
-            if not is_var(v) or c == 0:
-                continue
-            d = _expr_domain(v, trail)
-            v_lo, v_hi = domain_min(d), domain_max(d)
-            contrib_max = _safe_mult(c, v_hi) if c > 0 else _safe_mult(c, v_lo)
-            contrib_min = _safe_mult(c, v_lo) if c > 0 else _safe_mult(c, v_hi)
-            other_min = min_sum - contrib_min
-            other_max = max_sum - contrib_max
-            # Guard against nan from inf - inf
-            if other_min != other_min or other_max != other_max:
-                continue
-            if c > 0:
-                new_v_lo = math.ceil((total_lo - other_max) / c)
-                new_v_hi = math.floor((total_hi - other_min) / c)
-            else:
-                new_v_lo = math.ceil((total_hi - other_min) / c)
-                new_v_hi = math.floor((total_lo - other_max) / c)
-            # Guard against inf bounds (can't convert to int)
-            if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
-                new_v_lo = _NEG_INF
-            else:
-                new_v_lo = int(new_v_lo)
-            if new_v_hi == _NEG_INF or new_v_hi == _POS_INF:
-                new_v_hi = _POS_INF
-            else:
-                new_v_hi = int(new_v_hi)
-            new_d = domain_intersection(d, domain_from_range(new_v_lo, new_v_hi))
-            if not new_d:
-                return False
-            if not _narrow_if_changed(v, new_d, trail, queue):
-                return False
-
-        return True
-
-
 class NeConstraint(Constraint):
     """X != Y."""
     __slots__ = ('lhs', 'rhs')
@@ -728,9 +683,20 @@ class NeConstraint(Constraint):
     def propagate(self, trail: Trail, queue: deque) -> bool:
         lhs = deref(self.lhs)
         rhs = deref(self.rhs)
+        # Aliased operands (e.g. unify merged the two vars after posting):
+        # X != X can never hold — fail (A06-F010).
+        if lhs is rhs:
+            return False
         # Only propagate when one side is ground
         if not is_var(lhs) and not is_var(rhs):
-            return lhs != rhs
+            # Evaluate expression operands (e.g. Add(X, 1)): comparing the
+            # expression node structurally to an int is always "different" and
+            # would wrongly satisfy the constraint (A06-F001).
+            lv = lhs if type(lhs) is int else _eval_ground(lhs)
+            rv = rhs if type(rhs) is int else _eval_ground(rhs)
+            if lv is None or rv is None:
+                return True  # an expression still has unbound vars — pending
+            return lv != rv
         if not is_var(lhs) and isinstance(lhs, int) and is_var(rhs):
             state = get_attr(rhs, FD_KEY)
             if state is not None:
@@ -872,13 +838,30 @@ class SumConstraint(Constraint):
         vars_ = [deref(v) for v in self.sum_vars]
         total = deref(self.total)
 
+        # Track finite-only sums plus ±inf counts so a var's "other side"
+        # (total minus every OTHER var) is finite whenever its OWN domain is
+        # the sole infinite contributor — the old `max_sum - own_max` gave
+        # inf - inf = nan and skipped narrowing, leaving output-mode vars
+        # unbounded (A06-F002).
         min_sum = max_sum = 0
+        finite_hi_sum = finite_lo_sum = 0
+        pos_inf_count = neg_inf_count = 0
         for v in vars_:
             d = _expr_domain(v, trail)
             if not d:
                 return False
-            min_sum += domain_min(d)
-            max_sum += domain_max(d)
+            v_lo = domain_min(d)
+            v_hi = domain_max(d)
+            min_sum += v_lo
+            max_sum += v_hi
+            if v_hi == _POS_INF:
+                pos_inf_count += 1
+            else:
+                finite_hi_sum += v_hi
+            if v_lo == _NEG_INF:
+                neg_inf_count += 1
+            else:
+                finite_lo_sum += v_lo
 
         total_d = _expr_domain(total, trail)
         new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
@@ -895,14 +878,14 @@ class SumConstraint(Constraint):
             d = _expr_domain(v, trail)
             v_max = domain_max(d)
             v_min = domain_min(d)
-            # Guard against inf - inf = nan: if other-side bounds are
-            # infinite, we can't narrow this variable from sum info.
-            other_max = max_sum - v_max  # could be inf - inf = nan
-            other_min = min_sum - v_min
-            if other_max != other_max or other_min != other_min:
-                continue  # nan — skip narrowing
-            new_lo = total_lo - other_max
-            new_hi = total_hi - other_min
+            others_pos_inf = pos_inf_count - (1 if v_max == _POS_INF else 0)
+            other_max = _POS_INF if others_pos_inf > 0 else \
+                finite_hi_sum - (0 if v_max == _POS_INF else v_max)
+            others_neg_inf = neg_inf_count - (1 if v_min == _NEG_INF else 0)
+            other_min = _NEG_INF if others_neg_inf > 0 else \
+                finite_lo_sum - (0 if v_min == _NEG_INF else v_min)
+            new_lo = _NEG_INF if other_max == _POS_INF else total_lo - other_max
+            new_hi = _POS_INF if other_min == _NEG_INF else total_hi - other_min
             new_d = domain_intersection(d, domain_from_range(new_lo, new_hi))
             if not new_d:
                 return False
@@ -930,18 +913,29 @@ class ScalarProductConstraint(Constraint):
         vars_ = [deref(v) for v in self.sum_vars]
         total = deref(self.total)
 
+        # Finite-only contribution sums + ±inf counts, so a var's other-side
+        # bound is finite when its OWN contribution is the sole infinite one
+        # (A06-F002 — see SumConstraint.propagate).
         min_sum = max_sum = 0
+        finite_cmax_sum = finite_cmin_sum = 0
+        cmax_pos_inf = cmin_neg_inf = 0
         for c, v in zip(self.coeffs, vars_):
             d = _expr_domain(v, trail)
             if not d:
                 return False
             v_lo, v_hi = domain_min(d), domain_max(d)
-            if c >= 0:
-                min_sum += _safe_mult(c, v_lo)
-                max_sum += _safe_mult(c, v_hi)
+            contrib_min = _safe_mult(c, v_lo) if c >= 0 else _safe_mult(c, v_hi)
+            contrib_max = _safe_mult(c, v_hi) if c >= 0 else _safe_mult(c, v_lo)
+            min_sum += contrib_min
+            max_sum += contrib_max
+            if contrib_max == _POS_INF:
+                cmax_pos_inf += 1
             else:
-                min_sum += _safe_mult(c, v_hi)
-                max_sum += _safe_mult(c, v_lo)
+                finite_cmax_sum += contrib_max
+            if contrib_min == _NEG_INF:
+                cmin_neg_inf += 1
+            else:
+                finite_cmin_sum += contrib_min
 
         total_d = _expr_domain(total, trail)
         new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
@@ -959,26 +953,25 @@ class ScalarProductConstraint(Constraint):
             v_lo, v_hi = domain_min(d), domain_max(d)
             contrib_max = _safe_mult(c, v_hi) if c > 0 else _safe_mult(c, v_lo)
             contrib_min = _safe_mult(c, v_lo) if c > 0 else _safe_mult(c, v_hi)
-            other_min = min_sum - contrib_min
-            other_max = max_sum - contrib_max
-            # Guard against nan from inf - inf
-            if other_min != other_min or other_max != other_max:
-                continue
+            others_cmax_inf = cmax_pos_inf - (1 if contrib_max == _POS_INF else 0)
+            other_max = _POS_INF if others_cmax_inf > 0 else \
+                finite_cmax_sum - (0 if contrib_max == _POS_INF else contrib_max)
+            others_cmin_inf = cmin_neg_inf - (1 if contrib_min == _NEG_INF else 0)
+            other_min = _NEG_INF if others_cmin_inf > 0 else \
+                finite_cmin_sum - (0 if contrib_min == _NEG_INF else contrib_min)
+            # Bounds on c*var_i, guarding inf - inf; math.ceil/floor of ±inf
+            # raises OverflowError, so short-circuit the infinite ends.
+            num_lo = _NEG_INF if other_max == _POS_INF else total_lo - other_max
+            num_hi = _POS_INF if other_min == _NEG_INF else total_hi - other_min
+            # Exact integer ceil/floor division — float true division loses
+            # precision past 2^53 and over-prunes large-int solutions
+            # (A06-F004).  ceil(a/c) == -((-a) // c); floor(a/c) == a // c.
             if c > 0:
-                new_v_lo = math.ceil((total_lo - other_max) / c)
-                new_v_hi = math.floor((total_hi - other_min) / c)
+                new_v_lo = _NEG_INF if num_lo == _NEG_INF else -((-num_lo) // c)
+                new_v_hi = _POS_INF if num_hi == _POS_INF else num_hi // c
             else:
-                new_v_lo = math.ceil((total_hi - other_min) / c)
-                new_v_hi = math.floor((total_lo - other_max) / c)
-            # Guard against inf bounds (can't convert to int)
-            if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
-                new_v_lo = _NEG_INF
-            else:
-                new_v_lo = int(new_v_lo)
-            if new_v_hi == _NEG_INF or new_v_hi == _POS_INF:
-                new_v_hi = _POS_INF
-            else:
-                new_v_hi = int(new_v_hi)
+                new_v_lo = _NEG_INF if num_hi == _POS_INF else -((-num_hi) // c)
+                new_v_hi = _POS_INF if num_lo == _NEG_INF else num_lo // c
             new_d = domain_intersection(d, domain_from_range(new_v_lo, new_v_hi))
             if not new_d:
                 return False
@@ -1056,6 +1049,13 @@ class ElementConstraint(Constraint):
                 return False
             idx_domain = ((index, index),)
         else:
+            return False
+
+        # Defensive: clamp to valid positions so a hand-posted wide domain
+        # (or the default unbounded one) can never reach domain_values as an
+        # infinite range (A06-F005).
+        idx_domain = domain_intersection(idx_domain, domain_from_range(1, n))
+        if not idx_domain:
             return False
 
         val_domain = _expr_domain(value, trail)
@@ -1205,10 +1205,13 @@ def _expr_domain(expr, trail: Trail) -> Domain:
     if isinstance(expr, _Negate):
         od = _expr_domain(expr.operand, trail)
         return _domain_negate(od)
-    # Fallback: if ground, evaluate
+    # Fallback: if ground, evaluate.  Only an integer result is a valid CLP(Z)
+    # domain bound — a Fraction/float (e.g. from a Div subexpression that
+    # slipped past CLP(Q) dispatch) must NOT become a domain bound, or the C
+    # domain ops raise a TypeError that escapes through unify (A06-F006).
     try:
         val = _eval_ground(expr)
-        if val is not None:
+        if isinstance(val, int) and not isinstance(val, bool):
             return ((val, val),)
     except Exception:
         pass
@@ -1457,6 +1460,18 @@ def _is_fd_candidate(x) -> bool:
     return is_var(x) or (isinstance(x, int) and not isinstance(x, bool))
 
 
+def _is_fd_sum_element(x) -> bool:
+    """True if *x* may legally appear as a sum_/scalar_product element: an FD
+    candidate (Var or plain int) or an arithmetic-expression node such as the
+    compiler emits for ``X + 1`` (A06-F014).  A non-integer atom (string,
+    float, Fraction) would otherwise reach _expr_domain's catch-all and be
+    treated as an unconstrained integer."""
+    if _is_fd_candidate(x):
+        return True
+    _ensure_term_imports()
+    return isinstance(x, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow, _Negate))
+
+
 def _is_rational_arg(x) -> bool:
     """True if x is a Fraction, a Var with a rational-domain attribute,
     or an expression tree containing one of the above.
@@ -1476,7 +1491,15 @@ def _is_rational_arg(x) -> bool:
     # Walk expression trees (only reached for Add/Sub/Mult/... nodes)
     if _Add is None:
         _ensure_term_imports()
-    if isinstance(x, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow)):
+    if isinstance(x, _Div):
+        # Div is TRUE division in Clausal, so int/int → a Fraction: the node
+        # is CLP(Q) territory unless one side is real/float (A06-F006).
+        # Detecting this at post time routes `X == Y + 1/2` to q_eq rather
+        # than posting as CLP(Z) and crashing when Y is later bound.
+        if _is_real_arg(x.left) or _is_real_arg(x.right):
+            return _is_rational_arg(x.left) or _is_rational_arg(x.right)
+        return True
+    if isinstance(x, (_Add, _Sub, _Mult, _FloorDiv, _Mod, _Pow)):
         return _is_rational_arg(x.left) or _is_rational_arg(x.right)
     if isinstance(x, _Negate):
         return _is_rational_arg(x.operand)
@@ -1823,16 +1846,22 @@ def in_domain(var_or_list, lo, hi, trail: Trail) -> bool:
         return False
 
     targets = deref(var_or_list)
+    # One shared queue across all targets, then a single propagation fixpoint,
+    # so that constraints already posted on any target (or its peers) re-fire
+    # against the narrowed domains (A06-F008).
+    queue: deque = deque()
     if isinstance(targets, list):
         for v in targets:
-            if not _post_domain(deref(v), new_domain, trail):
+            if not _post_domain(deref(v), new_domain, trail, queue):
                 return False
-        return True
-    return _post_domain(targets, new_domain, trail)
+    else:
+        if not _post_domain(targets, new_domain, trail, queue):
+            return False
+    return propagate(queue, trail)
 
 
-def _post_domain(target, new_domain: Domain, trail: Trail) -> bool:
-    """Post domain on a single target."""
+def _post_domain(target, new_domain: Domain, trail: Trail, queue: deque) -> bool:
+    """Post domain on a single target, scheduling re-propagation via *queue*."""
     if isinstance(target, int):
         return domain_contains(new_domain, target)
     if not is_var(target):
@@ -1854,14 +1883,10 @@ def _post_domain(target, new_domain: Domain, trail: Trail) -> bool:
         final_domain = domain_intersection(final_domain, domain_from_range(r_lo, r_hi))
         if not final_domain:
             return False
-    old_constraints = state.constraints if state is not None else ()
-    new_state = FDVar(final_domain, old_constraints)
-    put_attr(target, FD_KEY, new_state, trail)
-    val = domain_singleton(final_domain)
-    if val is not None:
-        if not unify(target, val, trail):
-            return False
-    return True
+    # Route the narrow through _narrow_if_changed (queues the var and runs the
+    # singleton→unify step) rather than a bare put_attr, which left dependent
+    # vars un-narrowed because no constraint ever re-fired (A06-F008).
+    return _narrow_if_changed(target, final_domain, trail, queue)
 
 
 def label(vars_list, trail: Trail):
@@ -2030,6 +2055,11 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
 
     vars_deref = [deref(v) for v in vars_list]
 
+    # Reject non-integer elements up front (A06-F014): a string/float element
+    # would otherwise post happily and be treated as an unconstrained integer.
+    if not all(_is_fd_sum_element(v) for v in vars_deref):
+        return
+
     # If all ground and value is also ground, just check
     val = deref(value)
     if all(isinstance(v, int) for v in vars_deref) and isinstance(val, int):
@@ -2091,6 +2121,10 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
 
     vars_deref = [deref(v) for v in vars_list]
 
+    # Reject non-integer elements up front (A06-F014).
+    if not all(_is_fd_sum_element(v) for v in vars_deref):
+        return
+
     # If all ground and value is also ground, just check
     val = deref(value)
     if all(isinstance(v, int) for v in vars_deref) and isinstance(val, int):
@@ -2148,8 +2182,24 @@ def fd_element(index, lst, value, trail: Trail):
     if not is_var(index):
         return
 
-    # Index is a variable: post ElementConstraint
-    _ensure_fd(index, trail)
+    # Index is a variable: bound it to the valid positions [1, n] up front.
+    # A bare _ensure_fd would install the default unbounded (-inf, inf)
+    # domain, which defeats ElementConstraint's lazy [1, n] initialisation
+    # (that only fires when the index has NO fd attr) and makes propagate's
+    # domain_values() enumerate an unbounded domain → ValueError (A06-F005).
+    idx_state = get_attr(index, FD_KEY)
+    base_idx_d = domain_from_range(1, n)
+    if idx_state is not None:
+        base_idx_d = domain_intersection(idx_state.domain, base_idx_d)
+    if not _narrow(index, base_idx_d, trail, deque()):
+        return
+    index = deref(index)
+    if not is_var(index):
+        # Narrowing bound the index (singleton [1, 1] when n == 1)
+        item = deref(lst[index - 1])
+        if unify(value, item, trail):
+            yield None
+        return
     if is_var(value):
         _ensure_fd(value, trail)
 
@@ -2349,14 +2399,15 @@ class GlobalCardinalityConstraint(Constraint):
     def propagate(self, trail: Trail, queue: deque) -> bool:
         for value, count in self.pairs:
             count = deref(count)
-            if not isinstance(count, int):
-                continue  # can't propagate variable counts yet
+            count_is_var = is_var(count)
+            if not count_is_var and not isinstance(count, int):
+                continue  # malformed count — leave pending
 
             # Re-deref all vars each iteration (prior narrowing may have
             # bound some vars, making the old references stale).
             vars_ = [deref(v) for v in self.gc_vars]
 
-            if count == 0:
+            if not count_is_var and count == 0:
                 # Remove this value from all variable domains
                 for v in vars_:
                     if is_var(v):
@@ -2378,12 +2429,27 @@ class GlobalCardinalityConstraint(Constraint):
                         definite += 1
                 elif is_var(v):
                     state = get_attr(v, FD_KEY)
-                    if state is not None and domain_contains(state.domain, value):
+                    if state is None or domain_contains(state.domain, value):
                         possible += 1
                         possible_vars.append(v)
-                    elif state is None:
-                        possible += 1
-                        possible_vars.append(v)
+
+            if count_is_var:
+                # Bound the count variable to [definite, definite + possible]
+                # (A06-F013): definite occurrences are locked in, and at most
+                # `possible` more vars can still take this value.  A singleton
+                # (possible == 0) binds the count; the value-level narrowing
+                # then runs on the next pass via the int-count branch once the
+                # count deref's to an int.  Intersect with any existing count
+                # domain so a user-posted bound still constrains.
+                new_cnt_d = domain_from_range(definite, definite + possible)
+                cnt_state = get_attr(count, FD_KEY)
+                if cnt_state is not None:
+                    new_cnt_d = domain_intersection(cnt_state.domain, new_cnt_d)
+                if not new_cnt_d:
+                    return False
+                if not _narrow_if_changed(count, new_cnt_d, trail, queue):
+                    return False
+                continue
 
             if definite > count:
                 return False  # too many already assigned
@@ -2559,6 +2625,9 @@ class ZcompareConstraint(Constraint):
             else:
                 return False  # invalid order atom
         elif is_var(order):
+            # Aliased operands: X vs X is always equal (A06-F012b).
+            if x is y:
+                return unify(order, '=', trail)
             # Determine order from domains
             if x_hi < y_lo:
                 return unify(order, '<', trail)
@@ -2683,6 +2752,37 @@ def tuples_in(tuples_list, relation, trail: Trail) -> bool:
     return True
 
 
+# Wake-up attr key for the zcompare order variable.  The order var is bound
+# to a STRING atom ('<' / '=' / '>'), not an int, so the FD hook is the wrong
+# vehicle; this lightweight key re-runs the pending ZcompareConstraint(s) when
+# the order var is later ground (A06-F012a).
+ZCMP_KEY = "zcompare_wakeup"
+
+
+def _zcompare_hook(attr_value, bound_to, trail: Trail) -> bool:
+    """Fire the pending zcompare constraints when the order var is bound.
+
+    *attr_value* is the list of ZcompareConstraint objects waiting on this
+    order var.  Hooks run after the binding is committed, so each
+    constraint's propagate() sees the now-ground order atom.
+    """
+    bound_to = deref(bound_to)
+    if is_var(bound_to):
+        # Order unified with another var — carry the wake-up list across.
+        existing = get_attr(bound_to, ZCMP_KEY)
+        merged = attr_value if existing is None else existing + attr_value
+        put_attr(bound_to, ZCMP_KEY, merged, trail)
+        return True
+    queue: deque = deque()
+    for constraint in attr_value:
+        if not constraint.propagate(trail, queue):
+            return False
+    return propagate(queue, trail)
+
+
+register_attr_hook(ZCMP_KEY, _zcompare_hook)
+
+
 def zcompare(order, x, y, trail: Trail) -> bool:
     """Post zcompare/3 constraint.
 
@@ -2724,6 +2824,14 @@ def zcompare(order, x, y, trail: Trail) -> bool:
         v = deref(v)
         if is_var(v) and v is not deref(order):
             _add_constraint(v, constraint, trail)
+    # Attach a string-binding wake-up to the order var so that binding it
+    # AFTER posting re-fires the constraint and narrows x/y (A06-F012a).
+    od = deref(order)
+    if is_var(od):
+        existing = get_attr(od, ZCMP_KEY)
+        put_attr(od, ZCMP_KEY,
+                 [constraint] if existing is None else existing + [constraint],
+                 trail)
     queue: deque = deque()
     if not constraint.propagate(trail, queue):
         return False

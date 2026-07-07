@@ -108,10 +108,10 @@ def _has_units(d, unit_pred, trail, k):
     """
     from clausal.terms import Quantity  # avoid circular import at module load
 
-    if unit_pred._dims is None:
+    dims = getattr(unit_pred, "_dims", None)
+    if dims is None:
         return
     dv = deref(d)
-    dims = unit_pred._dims
     if isinstance(dv, Quantity):
         if dv.dims == dims:
             yield None

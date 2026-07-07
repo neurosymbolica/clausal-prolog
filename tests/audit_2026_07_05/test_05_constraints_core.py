@@ -112,7 +112,6 @@ def answers(gen, *vars_):
 
 class TestF001DifContainerBlindSpots:
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001: var inside DictTerm not collected — constraint dropped")
     def test_dif_dictterm_enforced(self):
         t = Trail()
         a = Var()
@@ -120,7 +119,6 @@ class TestF001DifContainerBlindSpots:
         # making the two terms equal must now fail
         assert unify(a, 1, t) is False
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001: var inside SegList not collected — constraint dropped")
     def test_dif_seglist_enforced(self):
         t = Trail()
         s = Var()
@@ -128,7 +126,6 @@ class TestF001DifContainerBlindSpots:
         assert dif(sl, [1, 2], t) is True
         assert unify(s, [2], t) is False
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001: var inside SegString not collected — constraint dropped")
     def test_dif_segstring_enforced(self):
         t = Trail()
         s = Var()
@@ -136,14 +133,12 @@ class TestF001DifContainerBlindSpots:
         assert dif(ss, "ab", t) is True
         assert unify(s, "b", t) is False
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001: var inside Quantity value not collected — constraint dropped")
     def test_dif_quantity_enforced(self):
         t = Trail()
         q = Var()
         assert dif(Quantity(q, {"m": 1}), Quantity(5, {"m": 1}), t) is True
         assert unify(q, 5, t) is False
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001: collector blind to DictTerm/Seg*/Quantity")
     def test_collect_free_vars_containers(self):
         x = Var()
         assert _collect_free_vars(DictTerm({"k": x})) == [x]
@@ -181,7 +176,6 @@ class TestF001DifContainerBlindSpots:
         assert dif(SetTerm([z]), SetTerm([2]), t2) is True
         assert get_attr(z, DIF_KEY) is None  # nothing pending — consistent
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001 at language level: `D is not {...}` unenforced")
     def test_language_level_dict_is_not(self, load):
         m = load("f001dict", """
 dictpred(D, V) <- (
@@ -218,7 +212,6 @@ except Exception as e:
 class TestF002DifHookMalformedAttr:
 
     @pytest.mark.parametrize("attr_value", [[42], [(1,)], ["ab"]])
-    @pytest.mark.xfail(strict=False, reason="A05-F002: C _dif_hook segfaults on non-2-tuple list items")
     def test_malformed_pair_items_no_crash(self, attr_value):
         r = run_snippet(F002_SNIPPET.format(attr_value=attr_value))
         # Correct behaviour: clean Python-level failure or exception,
@@ -256,18 +249,15 @@ class TestF002DifHookMalformedAttr:
 
 class TestF003StructuralEqInconsistencies:
 
-    @pytest.mark.xfail(strict=False, reason="A05-F003: structural_eq(SegString, str) asymmetric")
     def test_segstring_str_symmetric(self):
         ss = SegString(["ab"])
         assert structural_eq("ab", ss) == structural_eq(ss, "ab")
 
-    @pytest.mark.xfail(strict=False, reason="A05-F003: str vs char-list — reify_eq True but structural_eq False")
     def test_str_charlist_consistent_with_reify_eq(self):
         t = Trail()
         assert reify_eq("ab", ["a", "b"], t) is True   # identical, no bindings
         assert structural_eq("ab", ["a", "b"]) is True
 
-    @pytest.mark.xfail(strict=False, reason="A05-F003: ground SegList vs plain list — same walked value, not structural_eq")
     def test_ground_seglist_vs_list(self):
         sl = SegList([ConcreteSeg([1, 2])])
         t = Trail()
@@ -319,7 +309,6 @@ def _attvar_with_attr(t):
 
 class TestF004TermAttvarsBlindSpots:
 
-    @pytest.mark.xfail(strict=False, reason="A05-F004: term_attvars blind to tuples")
     def test_tuple(self):
         t = Trail()
         v = _attvar_with_attr(t)
@@ -327,7 +316,6 @@ class TestF004TermAttvarsBlindSpots:
         list(_term_attributed_variables__2((v,), out, t, []))
         assert deref(out) == [v]
 
-    @pytest.mark.xfail(strict=False, reason="A05-F004: term_attvars blind to plain dicts")
     def test_plain_dict(self):
         t = Trail()
         v = _attvar_with_attr(t)
@@ -335,7 +323,6 @@ class TestF004TermAttvarsBlindSpots:
         list(_term_attributed_variables__2({"a": v}, out, t, []))
         assert deref(out) == [v]
 
-    @pytest.mark.xfail(strict=False, reason="A05-F004: term_attvars blind to SegList")
     def test_seglist(self):
         t = Trail()
         v = _attvar_with_attr(t)
@@ -377,7 +364,6 @@ class TestF004TermAttvarsBlindSpots:
 
 class TestF005HasUnitsErrorPath:
 
-    @pytest.mark.xfail(strict=False, reason="A05-F005: has_units raises AttributeError on non-units 2nd arg")
     def test_has_units_bad_arg_fails_cleanly(self):
         t = Trail()
         d = Var()

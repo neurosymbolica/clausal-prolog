@@ -571,9 +571,6 @@ class TestClpsat:
 class TestSuspectedBugs:
 
     @pytest.mark.timeout(30)  # override the suite-wide 10s pytest-timeout
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F001: _collect_bdd_var_ids traverses the shared BDD as a tree "
-        "(no visited set) → sat/sat_count exponential in #vars on XOR chains"))
     def test_A07_F001_xor_chain_sat_not_exponential(self):
         # sat over a 30-var XOR chain builds a 59-node BDD; a linear
         # implementation finishes in milliseconds.  Current code needs minutes.
@@ -596,9 +593,6 @@ class TestSuspectedBugs:
             pytest.fail("sat(xor-30) did not finish within 5s (exponential blowup)")
         assert proc.returncode == 0 and "OK" in proc.stdout
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F002: var-var aliasing conjoins stale per-var BDDs instead of "
-        "rebuilding from sat_expr — sat(X^Y), X=Y must fail"))
     def test_A07_F002_alias_after_xor_must_fail(self):
         tr = Trail()
         x, y = Var(), Var()
@@ -607,8 +601,6 @@ class TestSuspectedBugs:
             "store is unsatisfiable after aliasing (labeling finds 0 solutions) "
             "but unify succeeded")
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F002: aliasing does not re-propagate — sat(X|Y), X=Y must force X=1"))
     def test_A07_F002_alias_or_propagates_forced(self):
         tr = Trail()
         x, y = Var(), Var()
@@ -637,9 +629,6 @@ class TestSuspectedBugs:
         # (X|Y) ∧ (X<->Y) admits only (1,1) — Triska counts 1; Clausal says 3.
         assert deref(n) == 1
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F005: no attr hook for SAT_KEY — Clausal bindings invisible to the "
-        "PySAT solver; label_sat enumerates models violating the bindings"))
     @needs_pysat
     def test_A07_F005_label_sat_respects_clausal_bindings(self):
         from clausal.logic.clpsat import sat_constraint_block, label_sat
@@ -652,8 +641,6 @@ class TestSuspectedBugs:
             got.add((deref(x), deref(y)))
         assert got == {(0, 1)}, f"unsound models: {got - {(0, 1)}}"
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F005: sat_check ignores Clausal bindings on registered vars"))
     @needs_pysat
     def test_A07_F005_sat_check_sees_bindings(self):
         from clausal.logic.clpsat import sat_constraint_block, sat_check
@@ -664,9 +651,6 @@ class TestSuspectedBugs:
         unify(y, 0, tr)
         assert not sat_check(tr), "X|Y with X=0, Y=0 is unsatisfiable"
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F006: _var_to_id/_id_to_var/_unique_tables grow without bound — "
-        "every CLP(B) var and its BDD nodes are pinned forever"))
     def test_A07_F006_global_tables_bounded(self):
         import gc
         before = len(clpb._id_to_var)
@@ -682,10 +666,6 @@ class TestSuspectedBugs:
             "throwaway queries")
 
     @pytest.mark.timeout(90)  # override the suite-wide 10s pytest-timeout
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F007: c_apply_rec/c_restrict_rec/c_collect_ids_rec recurse on the "
-        "C stack without depth limits — deep BDDs segfault (Python fallback "
-        "raises RecursionError instead)"))
     def test_A07_F007_deep_bdd_no_segfault(self):
         script = textwrap.dedent("""
             import sys
@@ -711,10 +691,6 @@ class TestSuspectedBugs:
             f"deep-BDD negate crashed: returncode={proc.returncode} "
             f"(-11 = SIGSEGV), stderr={proc.stderr[-200:]}")
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F008: _count_paths_py's inner recursion dispatches through the "
-        "rebound module global (the C wrapper drops current_level) — the saved "
-        "'Python reference' returns wrong counts while C is loaded"))
     def test_A07_F008_count_paths_py_reference_correct(self):
         from clausal.logic.clpb import _count_paths_py
         vs = [Var() for _ in range(4)]
@@ -726,9 +702,6 @@ class TestSuspectedBugs:
         # true count: x0=1 ∧ x3=1, x1/x2 free → 4
         assert _count_paths_py(bdd, lm, 4, {}) == 4
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F009: bool_labeling silently succeeds over non-0/1 ground "
-        "elements (SWI clpb raises a type error)"))
     def test_A07_F009_bool_labeling_validates_ground_elements(self):
         tr = Trail()
         results = None
@@ -739,9 +712,6 @@ class TestSuspectedBugs:
         assert results == [], (
             "bool_labeling([2, 'a']) yielded a solution for non-Boolean terms")
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F010: _bool_hook accepts Python bool (subclass of int) — the var "
-        "stays bound to True/False though docs pin the domain to 0/1 integers"))
     def test_A07_F010_python_bool_binding(self):
         tr = Trail()
         x, y = Var(), Var()

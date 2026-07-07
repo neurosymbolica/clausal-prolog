@@ -77,9 +77,6 @@ from clausal.terms import Add, Sub, Mult, Mod  # noqa: E402
 class TestClpqSoundness:
     """Confirmed soundness bugs: unsatisfiable stores accepted."""
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F001: fix_variable overwrites tableau bounds; "
-                              "q_le-only bound not enforced on unify")
     def test_qle_bound_then_unify_outside_fails(self):
         t = Trail()
         x = Var()
@@ -97,8 +94,6 @@ class TestClpqSoundness:
         assert in_q(y, 0, 10, t)
         assert not q_eq(Add(left=x, right=y), 100, t)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F003: in_q(X, 10, 0) (lo > hi) accepted")
     def test_in_q_empty_interval_fails(self):
         t = Trail()
         x = Var()
@@ -152,10 +147,6 @@ class TestClpqSoundness:
         assert bb_inf([y], x, rv, t)          # min X with Y integer: Y=1, X=1/2
         assert deref(rv) == F(1, 2)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F005: _tableaux keyed by id(trail); dropped "
-                              "trails leak entries, recycled ids inherit stale "
-                              "tableaux (cross-query contamination)")
     def test_no_stale_tableau_on_recycled_trail_id(self):
         gc.collect()
         t = Trail()
@@ -335,23 +326,14 @@ from clausal.logic.clpr import (  # noqa: E402
 
 
 class TestClprModInterval:
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F009: _imod assumes integer semantics "
-                              "[0,|b|-1]; excludes 1.5 % 2 == 1.5")
     def test_imod_contains_true_value_real_numerator(self):
         lo, hi = _imod(1.5, 1.5, 2.0, 2.0)
         assert lo <= 1.5 <= hi, f"true value 1.5 outside [{lo}, {hi}]"
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F009: fractional divisor |b|<1 yields an "
-                              "inverted (empty) interval")
     def test_imod_fractional_divisor_nonempty(self):
         lo, hi = _imod(0.0, 10.0, 0.5, 0.5)
         assert lo <= hi, f"empty interval [{lo}, {hi}] for satisfiable X % 0.5"
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F009 end-to-end: Y == 1.5 % 2.0 then Y=1.5 "
-                              "incorrectly fails")
     def test_mod_constraint_true_value_accepted(self):
         t = Trail()
         y = Var()
@@ -359,9 +341,6 @@ class TestClprModInterval:
         assert real_eq(Mod(left=1.5, right=2.0), y, t)
         assert unify(y, 1.5, t)   # 1.5 % 2.0 == 1.5
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F009 end-to-end: X % 0.5 == Y unsatisfiable "
-                              "at posting (empty interval)")
     def test_mod_constraint_fractional_divisor_posts(self):
         t = Trail()
         x, y = Var(), Var()
@@ -371,9 +350,6 @@ class TestClprModInterval:
 
 
 class TestClprAliasing:
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F011: RealNe does not detect aliasing; "
-                              "{X!=Y}, X is Y accepted")
     def test_real_ne_alias_fails(self):
         t = Trail()
         x, y = Var(), Var()
@@ -382,9 +358,6 @@ class TestClprAliasing:
         assert real_ne(x, y, t)
         assert not unify(x, y, t)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F010: {X<Y}, X is Y — strict-lt propagation "
-                              "walks the interval one ULP per pass (hang)")
     def test_real_lt_alias_unify_fails_promptly(self):
         code = (
             "from clausal.logic.variables import Var, Trail, unify\n"
@@ -398,9 +371,6 @@ class TestClprAliasing:
         assert cp is not None, "non-termination: unify after X<Y hung >6s"
         assert "RESULT False" in cp.stdout
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F010: {X<Y, Y<X} — ULP ping-pong hang "
-                              "instead of failure")
     def test_real_strict_cycle_fails_promptly(self):
         code = (
             "from clausal.logic.variables import Var, Trail\n"
@@ -417,10 +387,6 @@ class TestClprAliasing:
 
 
 class TestClprPythonCParity:
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F012: _imul_py propagates NaN from 0*inf "
-                              "corner (C fmin/fmax skips NaN) — spurious "
-                              "wipeout in pure-Python fallback")
     def test_imul_py_nan_corner_matches_c(self):
         py_lo, py_hi = _imul_py(0.0, 1.0, -math.inf, 2.0)
         assert not math.isnan(py_lo) and not math.isnan(py_hi)
@@ -642,10 +608,6 @@ class TestCpsatTranslationFidelity:
         sols = [deref(x) for _ in O.label_or([x], t)]
         assert sols == [-7 % 3]  # 2
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F016: or_minimize ignores unify failures on "
-                              "rev_map vars — yields solution inconsistent with "
-                              "existing bindings")
     def test_or_minimize_unify_failure_not_ignored(self):
         from clausal.logic import clportools as O
         t = Trail()
@@ -747,9 +709,6 @@ class TestClprCoreMemory:
             _imod(1.0, 6.0, 2.0, 2.0)
         refcount_stable(thunk, iterations=3000)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F005: dropped-trail tableaux accumulate on "
-                              "recycled ids — post/solve loop grows the heap")
     def test_clpq_post_solve_loop_no_leak(self, refcount_stable):
         def thunk():
             t = Trail()
