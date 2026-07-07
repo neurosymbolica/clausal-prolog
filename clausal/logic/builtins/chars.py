@@ -106,7 +106,14 @@ for _t in _CHAR_TYPES:
 # keep the relation consistent across modes. Lazy per-type cache: the
 # first enumeration of a Unicode-eligible type walks the BMP once and
 # memoises the full char list.
-_UNICODE_TYPES = {"alpha", "alnum", "upper", "lower", "print"}
+# F013 (A09): digit (str.isdigit: '٣', '²'…), space (NBSP '\xa0'…) and
+# punct ('¡'…) are Unicode-aware in test-mode, so their enumeration must be
+# too — otherwise char_type(C, digit) yields only the 10 ASCII digits while
+# char_type('٣', digit) succeeds (mode-inconsistent). ascii/control stay
+# ASCII: their classifiers are codepoint-bounded (< 128 / < 32 or == 127),
+# so ASCII coverage is genuinely exhaustive.
+_UNICODE_TYPES = {"alpha", "alnum", "upper", "lower", "print",
+                  "digit", "space", "punct"}
 _TYPE_TO_CHARS_UNICODE: dict[str, list[str]] = {}
 
 
@@ -115,9 +122,8 @@ def _type_to_chars_unicode(type_name: str) -> list[str]:
 
     Walks the Basic Multilingual Plane (0x0000-0xFFFF) on first call
     and caches the result. Returns the ASCII-only list for types not
-    in ``_UNICODE_TYPES`` (e.g. ``ascii``, ``control``, ``digit``,
-    ``space``, ``punct``) where ASCII coverage is already exhaustive
-    or the classification is intentionally narrow.
+    in ``_UNICODE_TYPES`` (``ascii``, ``control``) where the classifier
+    is codepoint-bounded so ASCII coverage is already exhaustive.
     """
     if type_name not in _UNICODE_TYPES:
         return _TYPE_TO_CHARS.get(type_name, [])
@@ -214,8 +220,8 @@ def _char_type__2(char, type_, trail, k):
             trail.undo(mark)
     else:
         # Type bound, Char unbound → C-accelerated ASCII enumeration
-        # (used for types whose classifier is intentionally ASCII-only,
-        # e.g. ``ascii``, ``control``, ``digit``, ``space``, ``punct``).
+        # (used for types whose classifier is codepoint-bounded ASCII,
+        # e.g. ``ascii``, ``control``).
         if not isinstance(vt, str):
             return
         tidx = _c_type_name_index(vt)

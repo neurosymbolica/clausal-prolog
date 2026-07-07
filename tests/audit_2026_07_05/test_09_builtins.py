@@ -432,8 +432,6 @@ def test_F012_regression_sort_by_incomparable_keys(fix):
 # A09-F013 — char_type test-mode vs enumeration-mode Unicode inconsistency
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F013: digit test-mode is "
-                   "Unicode, enumeration is ASCII-only")
 def test_F013_char_type_digit_consistency(fix):
     _, m = fix
     assert _first(m, "char_type", "٣", "digit")  # ARABIC-INDIC THREE
@@ -442,7 +440,6 @@ def test_F013_char_type_digit_consistency(fix):
     assert "٣" in chars
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F013: space — NBSP")
 def test_F013_char_type_space_consistency(fix):
     _, m = fix
     assert _first(m, "char_type", "\xa0", "space")
@@ -450,7 +447,6 @@ def test_F013_char_type_space_consistency(fix):
     assert "\xa0" in _collect(m, C, "char_type", C, "space")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F013: punct — INVERTED !")
 def test_F013_char_type_punct_consistency(fix):
     _, m = fix
     assert _first(m, "char_type", "\xa1", "punct")
