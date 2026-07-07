@@ -1585,6 +1585,12 @@ py_deref(PyObject *Py_UNUSED(module), PyObject *arg)
     return result;
 }
 
+/* Forward declarations — defined later, used by do_walk's term-instance arm
+ * (A01-F008). */
+static int c_is_term_instance(PyObject *obj);
+static PyObject *c_term_field_names(PyObject *obj);
+static PyObject *py_term_field_names(PyObject *module, PyObject *obj);
+
 /*
  * walk(term) -> term  — deep substitution
  */
@@ -1623,7 +1629,9 @@ do_walk(PyObject *term, int depth)
         }
         return result;
     }
-    /* __walk__ protocol: delegate to Python method if present */
+    /* __walk__ protocol: delegate to Python method if present.
+     * Compound, KWTerm, the Seg types and DictTerm all supply __walk__
+     * (A01-F008). */
     {
         PyObject *hook = PyObject_GetAttrString(term, "__walk__");
         if (hook) {
@@ -1632,6 +1640,47 @@ do_walk(PyObject *term, int depth)
             return result;  /* NULL propagates error */
         }
         PyErr_Clear();
+    }
+    /* Term instance (PredicateMeta or @dataclass) — A01-F008: rebuild with
+     * walked fields so walk() deep-substitutes term-instance children, keeping
+     * walk consistent with _deref_walk (the tabling/findall snapshot walker).
+     * Without this, a term instance nested inside a Compound would not be
+     * frozen and would decay after backtracking. */
+    {
+        int ti = c_is_term_instance(term);
+        if (ti < 0) return NULL;
+        if (ti) {
+            PyObject *fields = c_term_field_names(term);
+            if (!fields && PyErr_Occurred()) return NULL;
+            if (!fields) {
+                fields = py_term_field_names(NULL, term);
+                if (!fields) return NULL;
+            }
+            Py_ssize_t n = PyTuple_GET_SIZE(fields);
+            PyObject *kwargs = PyDict_New();
+            if (!kwargs) { Py_DECREF(fields); return NULL; }
+            for (Py_ssize_t i = 0; i < n; i++) {
+                PyObject *fname = PyTuple_GET_ITEM(fields, i);
+                PyObject *val = PyObject_GetAttr(term, fname);
+                if (!val) { Py_DECREF(fields); Py_DECREF(kwargs); return NULL; }
+                PyObject *walked = do_walk(val, depth + 1);
+                Py_DECREF(val);
+                if (!walked) { Py_DECREF(fields); Py_DECREF(kwargs); return NULL; }
+                if (PyDict_SetItem(kwargs, fname, walked) < 0) {
+                    Py_DECREF(walked); Py_DECREF(fields); Py_DECREF(kwargs);
+                    return NULL;
+                }
+                Py_DECREF(walked);
+            }
+            Py_DECREF(fields);
+            PyObject *cls = (PyObject *)Py_TYPE(term);
+            PyObject *empty = PyTuple_New(0);
+            if (!empty) { Py_DECREF(kwargs); return NULL; }
+            PyObject *result = PyObject_Call(cls, empty, kwargs);
+            Py_DECREF(empty);
+            Py_DECREF(kwargs);
+            return result;
+        }
     }
     Py_INCREF(term);
     return term;

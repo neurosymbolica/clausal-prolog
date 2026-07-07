@@ -277,13 +277,39 @@ class TestF007SegListVsBytes:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF008WalkFunctorTerms:
-    @pytest.mark.xfail(strict=False, reason="A01-F008: walk does not rebuild Compound args")
     def test_walk_snapshot_of_compound_survives_undo(self, trail):
         X = Var()
         assert unify(X, 1, trail)
         snap = walk(Compound("f", (X,)))
         trail.reset()
         assert deref(snap.args[0]) == 1  # snapshot must not decay to unbound
+
+    def test_walk_snapshot_of_kwterm_survives_undo(self, trail):
+        X = Var()
+        assert unify(X, 1, trail)
+        snap = walk(KWTerm("r", a=X, b=2))
+        trail.reset()
+        assert deref(snap.a) == 1
+        assert snap.functor == "r" and snap.b == 2
+
+    def test_walk_snapshot_of_term_instance_survives_undo(self, trail):
+        X = Var()
+        assert unify(X, 1, trail)
+        inst = _fresh_pred_class()(X, 2)
+        snap = walk(inst)
+        trail.reset()
+        assert deref(snap.a) == 1 and snap.b == 2
+
+    def test_walk_preserves_compound_position(self, trail):
+        X = Var()
+        assert unify(X, 1, trail)
+        snap = walk(Compound("f", (X,), _position=(1, 2, 3, 4)))
+        assert snap._position == (1, 2, 3, 4)  # Slice G metadata not dropped
+
+    def test_walk_shares_unbound_vars(self, trail):
+        X = Var()  # unbound
+        snap = walk(Compound("f", (X,)))
+        assert snap.args[0] is X  # unbound Vars left in place, not copied
 
     def test_control_walk_rebuilds_list_tuple_and_segs(self, trail):
         X = Var()

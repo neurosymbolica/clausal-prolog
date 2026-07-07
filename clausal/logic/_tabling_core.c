@@ -274,43 +274,32 @@ do_deref_walk(PyObject *term, int depth)
         return result;
     }
 
-    /* Compound → Compound(functor, (deref_walk(a) for a in args)) */
-    if (Compound_type) {
-        int r = PyObject_IsInstance(term, Compound_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *functor = PyObject_GetAttr(term, str_functor);
-            if (!functor) return NULL;
-            PyObject *old_args = PyObject_GetAttr(term, str_args);
-            if (!old_args) { Py_DECREF(functor); return NULL; }
-            if (!PyTuple_Check(old_args)) {
-                Py_DECREF(functor);
-                Py_DECREF(old_args);
-                PyErr_SetString(PyExc_TypeError, "Compound.args is not a tuple");
-                return NULL;
-            }
-            Py_ssize_t n = PyTuple_GET_SIZE(old_args);
-            PyObject *new_args = PyTuple_New(n);
-            if (!new_args) { Py_DECREF(functor); Py_DECREF(old_args); return NULL; }
-            for (Py_ssize_t i = 0; i < n; i++) {
-                PyObject *elem = do_deref_walk(
-                    PyTuple_GET_ITEM(old_args, i), depth + 1);
-                if (!elem) {
-                    Py_DECREF(functor);
-                    Py_DECREF(old_args);
-                    Py_DECREF(new_args);
-                    return NULL;
-                }
-                PyTuple_SET_ITEM(new_args, i, elem);
-            }
-            Py_DECREF(old_args);
-            /* Call Compound(functor, new_args) */
-            PyObject *result = PyObject_CallFunction(
-                Compound_type, "OO", functor, new_args);
-            Py_DECREF(functor);
-            Py_DECREF(new_args);
-            return result;
+    /* Tuple → (deref_walk(e) for e in term) — A01-F008: was blind, so tuple
+     * templates (findall snapshot path) decayed after backtracking. */
+    if (PyTuple_Check(term)) {
+        Py_ssize_t n = PyTuple_GET_SIZE(term);
+        PyObject *result = PyTuple_New(n);
+        if (!result) return NULL;
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *elem = do_deref_walk(PyTuple_GET_ITEM(term, i), depth + 1);
+            if (!elem) { Py_DECREF(result); return NULL; }
+            PyTuple_SET_ITEM(result, i, elem);
         }
+        return result;
+    }
+
+    /* __walk__ protocol (A01-F008): Compound, KWTerm, DictTerm and the Seg
+     * types all supply __walk__, which deep-substitutes bindings via the
+     * canonical walk(). This unifies _deref_walk with walk (they were blind to
+     * disjoint type sets) and preserves Compound _position + F018 promotion. */
+    {
+        PyObject *hook = PyObject_GetAttrString(term, "__walk__");
+        if (hook) {
+            PyObject *result = PyObject_CallNoArgs(hook);
+            Py_DECREF(hook);
+            return result;  /* NULL propagates error */
+        }
+        PyErr_Clear();
     }
 
     /* Term instance (PredicateMeta or @dataclass) */

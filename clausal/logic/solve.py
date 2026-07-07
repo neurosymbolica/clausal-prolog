@@ -58,8 +58,15 @@ def _deref_walk_py(term: Any) -> Any:
         return term
     if isinstance(term, list):
         return [_deref_walk_py(e) for e in term]
-    if isinstance(term, Compound):
-        return Compound(term.functor, tuple(_deref_walk_py(a) for a in term.args))
+    if isinstance(term, tuple):
+        return tuple(_deref_walk_py(e) for e in term)  # A01-F008: was blind
+    # A01-F008: delegate to __walk__ hooks (Compound, KWTerm, DictTerm, Seg*),
+    # keeping this Python fallback in sync with the C twin (_tabling_core
+    # do_deref_walk) and with walk() itself. Preserves Compound _position and
+    # F018 Seg promotion. KEEP THE THREE WALKERS IN SYNC.
+    hook = getattr(term, "__walk__", None)
+    if hook is not None:
+        return hook()
     if is_term_instance(term):
         return type(term)(**{
             name: _deref_walk_py(getattr(term, name))

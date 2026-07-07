@@ -137,6 +137,19 @@ class Compound:
         from .logic.variables import occurs_check
         return any(occurs_check(var, a) for a in self.args)
 
+    def __walk__(self):
+        """Deep-substitute bindings (A01-F008): rebuild with walked args so a
+        snapshot survives trail backtracking. The functor is dereferenced
+        (F003 deref-only floor) and ``_position`` (Slice G) is preserved.
+        Unbound Vars are left in place (walk sharing contract).
+        """
+        from .logic.variables import walk, deref
+        return Compound(
+            deref(self.functor),
+            tuple(walk(a) for a in self.args),
+            _position=self._position,
+        )
+
 
 
 # ── Open-world keyword term ────────────────────────────────────────────────────
@@ -220,6 +233,17 @@ class KWTerm:
         value (A01-F001). Mirrors :meth:`DictTerm.__occurs_check__`."""
         from .logic.variables import occurs_check
         return any(occurs_check(var, v) for v in self._fields.values())
+
+    def __walk__(self):
+        """Deep-substitute bindings (A01-F008): rebuild with walked field
+        values so a snapshot survives trail backtracking. ``_position``
+        (Slice G) is preserved; unbound Vars are left in place."""
+        from .logic.variables import walk
+        return KWTerm(
+            self._functor,
+            _position=self._position,
+            **{k: walk(v) for k, v in self._fields.items()},
+        )
 
     def keys(self):
         return self._fields.keys()

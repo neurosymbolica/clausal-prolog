@@ -373,6 +373,68 @@ class TestTablingGuards:
         assert sum(1 for _ in call("win", "c", module=m)) == 0
 
 
+class TestF008DerefWalkTemplateFreeze:
+    """A01-F008 seam: `_deref_walk` (the findall/bagof/setof + tabling snapshot
+    walker) was blind to tuple, KWTerm, DictTerm and the Seg types, and dropped
+    Compound `_position`. A snapshot over such a template decayed to unbound
+    after backtracking. Both walkers now delegate to `__walk__` hooks.
+    """
+
+    def _bound(self):
+        from clausal.logic.solve import _deref_walk
+        t = Trail()
+        X = Var()
+        unify(X, 1, t)
+        return _deref_walk, t, X
+
+    def test_tuple_template_frozen(self):
+        _deref_walk, t, X = self._bound()
+        snap = _deref_walk((X, "tag"))
+        t.reset()
+        assert snap == (1, "tag")  # was (unbound, "tag") after reset
+
+    def test_kwterm_template_frozen(self):
+        from clausal.terms import KWTerm
+        _deref_walk, t, X = self._bound()
+        snap = _deref_walk(KWTerm("r", a=X, b=2))
+        t.reset()
+        assert deref(snap.a) == 1 and snap.b == 2
+
+    def test_dictterm_template_frozen(self):
+        from clausal.terms import DictTerm
+        _deref_walk, t, X = self._bound()
+        snap = _deref_walk(DictTerm({"k": X}))
+        t.reset()
+        assert deref(dict(snap.items())["k"]) == 1
+
+    def test_segstring_template_promotes_and_freezes(self):
+        from clausal.terms import SegString, VarSeg
+        from clausal.logic.solve import _deref_walk
+        t = Trail()
+        A = Var()
+        unify(A, "!", t)
+        snap = _deref_walk(SegString(["hi", VarSeg(A)]))
+        t.reset()
+        assert snap == "hi!"  # F018 promotion preserved through _deref_walk
+
+    def test_compound_position_preserved(self):
+        from clausal.terms import Compound
+        _deref_walk, t, X = self._bound()
+        snap = _deref_walk(Compound("f", (X,), _position=(1, 2, 3, 4)))
+        t.reset()
+        assert deref(snap.args[0]) == 1
+        assert snap._position == (1, 2, 3, 4)  # was dropped by the Compound arm
+
+    def test_term_instance_nested_in_compound_frozen(self):
+        from clausal.logic.predicate import PredicateMeta
+        from clausal.terms import Compound
+        _deref_walk, t, X = self._bound()
+        pt = PredicateMeta("audit_f008", (), {"_fields": ("a", "b")})
+        snap = _deref_walk(Compound("f", (pt(X, 2),)))
+        t.reset()
+        assert deref(snap.args[0].a) == 1 and snap.args[0].b == 2
+
+
 class TestCToolkitGuards:
     def test_deref_walk_deep_nesting_no_crash(self):
         import clausal.logic.tabling  # registers the _VAR sentinel
