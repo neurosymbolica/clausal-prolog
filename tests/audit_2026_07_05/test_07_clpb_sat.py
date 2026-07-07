@@ -629,9 +629,6 @@ class TestSuspectedBugs:
         # (X|Y) ∧ (X<->Y) admits only (1,1) — Triska counts 1; Clausal says 3.
         assert deref(n) == 1
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F005: no attr hook for SAT_KEY — Clausal bindings invisible to the "
-        "PySAT solver; label_sat enumerates models violating the bindings"))
     @needs_pysat
     def test_A07_F005_label_sat_respects_clausal_bindings(self):
         from clausal.logic.clpsat import sat_constraint_block, label_sat
@@ -644,8 +641,6 @@ class TestSuspectedBugs:
             got.add((deref(x), deref(y)))
         assert got == {(0, 1)}, f"unsound models: {got - {(0, 1)}}"
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F005: sat_check ignores Clausal bindings on registered vars"))
     @needs_pysat
     def test_A07_F005_sat_check_sees_bindings(self):
         from clausal.logic.clpsat import sat_constraint_block, sat_check
