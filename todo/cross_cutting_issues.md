@@ -62,12 +62,16 @@ state structs.
 
 ## Maintenance
 
-### 6. PyTuple_GET_SIZE macro without type guards
+### 6. PyList/PyTuple_GET_SIZE macro without type guards
 
-Several places use unchecked `PyTuple_GET_SIZE` on values assumed to be tuples.
-Segfault risk if assumptions are violated.
+Several places use unchecked `PyList_GET_SIZE` / `PyTuple_GET_SIZE` on values
+assumed to be lists/tuples. Segfault risk if assumptions are violated.
 
-**Fix:** Use `PyTuple_Size()` (checked) or add explicit `PyTuple_Check()`.
+**Fixed:** `_lists_core.c` member_find/memberchk_find/append_split_find/
+select_find/nth0_find (A09-F021 — `PyList_Check(items)` at each entry).
+
+**Fix:** Use `PyList_Size()` / `PyTuple_Size()` (checked) or add explicit
+`PyList_Check()` / `PyTuple_Check()`.
 
 ### 7. PredicateMeta registration order dependency
 

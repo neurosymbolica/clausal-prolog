@@ -642,8 +642,6 @@ def test_F020_chars_core_empty_string():
                                   or "TypeError" in p.stderr)
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F021: member_find segfaults on "
-                   "a non-list items arg (PyList_GET_SIZE unchecked)")
 def test_F021_lists_core_non_list_segfault():
     p = run_snippet("""
         import resource
