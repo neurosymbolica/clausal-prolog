@@ -70,6 +70,13 @@ def _infer_args(stmts: list[ast.stmt], globals_: dict | None = None) -> ast.argu
                 self.visit(node.value)
             self.visit(node.target)
 
+        def visit_NamedExpr(self, node):
+            # A10-F015: walrus `(x := expr)` evaluates value before binding the
+            # target, like Assign — the generic (target, value) field order
+            # would mark the target assigned before scanning the value.
+            self.visit(node.value)
+            self.visit(node.target)
+
         def visit_AugAssign(self, node):
             # Read-modify-write: target is implicitly loaded before being stored.
             if isinstance(node.target, ast.Name):

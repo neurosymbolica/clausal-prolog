@@ -531,9 +531,6 @@ def test_F014_magic_args_kwonly_clean_error():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F015: NamedExpr fields are visited "
-                   "target-first, so 'y = (x := x + 1)' fails to infer x as a "
-                   "parameter despite the load-before-store")
 def test_F015_infer_args_walrus_load_before_store():
     from clausal.codegen import _infer_args
     stmts = ast.parse("y = (x := x + 1)").body
