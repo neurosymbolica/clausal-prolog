@@ -238,9 +238,8 @@ def test_F013_dict_literal_pattern_matches(tmp_path):
     assert len(list(solve(m.DictPattern('Pt({"k": 5}),\n'), module=m))) == 1
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F014: reflection builtins fail "
-                   "silently on unbound source (docs claim Clause-match parity)")
 def test_F014_reified_item_unbound_source_instantiation_error(tmp_path):
+    # A11-F014 (fixed): unbound source raises instantiation_error.
     from clausal.logic.exceptions import LogicException
     m = _load(tmp_path, '''
         -import_from(reflection, [reified_item])

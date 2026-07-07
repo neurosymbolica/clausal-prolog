@@ -112,7 +112,11 @@ per path and modification time).
 ### clause_head/2, clause_body/2 — Accessors
 
 `clause_head(CLAUSE, HEAD)` and `clause_body(CLAUSE, GOALS)` destructure a
-`Clause`. Equivalent to matching `Clause(HEAD, GOALS, _)` directly.
+`Clause` when `CLAUSE` is bound. Unlike matching `Clause(HEAD, GOALS, _)`
+directly, they do *not* construct: with `CLAUSE` unbound they fail rather than
+binding it, and a non-`Clause` term simply fails. The enumeration builtins
+(`reified_item/2`, `reified_clause/2`, `reified_file_item/2`) raise
+`instantiation_error` when their source/path argument is unbound.
 
 ### goal_functor/3 — Name and Arity
 
