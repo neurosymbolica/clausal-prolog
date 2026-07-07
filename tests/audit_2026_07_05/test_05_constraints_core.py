@@ -377,7 +377,6 @@ class TestF004TermAttvarsBlindSpots:
 
 class TestF005HasUnitsErrorPath:
 
-    @pytest.mark.xfail(strict=False, reason="A05-F005: has_units raises AttributeError on non-units 2nd arg")
     def test_has_units_bad_arg_fails_cleanly(self):
         t = Trail()
         d = Var()
