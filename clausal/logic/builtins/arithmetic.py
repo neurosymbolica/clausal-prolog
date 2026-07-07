@@ -611,7 +611,14 @@ def _lcm__3(x, y, l, trail, k):
 
 @_builtin("exp_mod", 4)
 def _expmod__4(base, exp, mod, result, trail, k):
-    yield from (_expmod__4_c if _USE_C_ARITH else _expmod__4_py)(base, exp, mod, result, trail, k)
+    # A09-F012: pow(base, -1, mod) raises a raw ValueError when base has no
+    # modular inverse (uncatchable by catch/3). Convert to a typed
+    # evaluation_error(undefined) — this covers both the C and Python paths.
+    try:
+        yield from (_expmod__4_c if _USE_C_ARITH else _expmod__4_py)(base, exp, mod, result, trail, k)
+    except ValueError:
+        from clausal.logic.exceptions import LogicException, evaluation_error
+        raise LogicException(evaluation_error("undefined", "exp_mod/4"))
 
 @_builtin("popcount", 2)
 def _popcount__2(x, count, trail, k):

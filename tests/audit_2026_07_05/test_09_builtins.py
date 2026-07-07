@@ -361,52 +361,43 @@ def test_F011_max_strings(fix):
 # A09-F012 — raw Python exceptions escape from builtins
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F012: short pair → IndexError")
 def test_F012_pairs_values_short_pair(fix):
+    # A09-F018/F012: a too-short pair fails (no raw IndexError escapes).
     _, m = fix
     try:
-        _first(m, "pairs_values", [[1]], Var())
+        assert not _first(m, "pairs_values", [[1]], Var())
     except IndexError:
         pytest.fail("raw IndexError escaped from pairs_values/2")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F012: unhashable dict key → "
-                   "raw TypeError")
 def test_F012_dict_pairs_unhashable_key(fix):
+    # A09-F012 (D002 a): an unhashable key raises a typed LogicException,
+    # catchable by catch/3 — not a raw TypeError that kills the query.
     _, m = fix
-    try:
+    with pytest.raises(LogicException):
         _first(m, "dict_pairs", Var(), [[[1], 2]])
-    except TypeError:
-        pytest.fail("raw TypeError escaped from dict_pairs/2")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F012: unhashable set element → "
-                   "raw TypeError")
 def test_F012_set_list_unhashable(fix):
     _, m = fix
-    try:
+    with pytest.raises(LogicException):
         _first(m, "set_list", Var(), [[1]])
-    except TypeError:
-        pytest.fail("raw TypeError escaped from set_list/2")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F012: exp_mod non-invertible "
-                   "base → raw ValueError")
 def test_F012_exp_mod_raw_valueerror(fix):
+    # A09-F012: a non-invertible modular inverse raises a typed
+    # evaluation_error, not a raw ValueError.
     _, m = fix
-    try:
+    with pytest.raises(LogicException):
         _first(m, "exp_mod", 2, -1, 4, Var())
-    except ValueError:
-        pytest.fail("raw ValueError escaped from exp_mod/4")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F012: max_by raises raw "
-                   "TypeError on incomparable keys while sort_by silently "
-                   "falls back")
 def test_F012_max_by_incomparable_keys(fix):
+    # A09-F012: max_by now uses sort_by's (type-name, repr) fallback for
+    # incomparable keys instead of leaking a raw TypeError, so it succeeds.
     _, m = fix
     try:
-        _first(m, "mbprobe", Var())
+        assert _first(m, "mbprobe", Var())
     except TypeError:
         pytest.fail("raw TypeError escaped from max_by/3")
 
@@ -557,13 +548,11 @@ def test_F017_regression_list_forms_work(fix):
 # A09-F018 — pairs_* silently skip malformed pairs
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F018: non-list 'pair' entries "
-                   "are silently dropped — should fail or raise")
 def test_F018_pairs_keys_values_skips_junk(fix):
     _, m = fix
     K, V = Var(), Var()
     ok = _first(m, "pairs_keys_values", [[1, "a"], "junk"], K, V)
-    assert not ok  # today: succeeds with K=[1], V=['a']
+    assert not ok  # A09-F018 fixed: was succeeding with K=[1], V=['a']
 
 
 # ═══════════════════════════════════════════════════════════════════════════

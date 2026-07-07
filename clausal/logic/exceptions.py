@@ -69,3 +69,13 @@ def permission_error(
     """Build error(permission_error(Op, ObjType, Culprit), Context)."""
     inner = Compound("permission_error", (operation, obj_type, culprit))
     return Compound("error", (inner, context))
+
+
+def evaluation_error(error_type: str, context: str = "") -> Compound:
+    """Build error(evaluation_error(ErrorType), Context).
+
+    ISO evaluation errors: ``zero_divisor``, ``undefined``, ``float_overflow``,
+    ``int_overflow``, ``underflow`` — a numeric operation is mathematically
+    undefined for its operands (e.g. a non-invertible modular inverse)."""
+    inner = Compound("evaluation_error", (error_type,))
+    return Compound("error", (inner, context))

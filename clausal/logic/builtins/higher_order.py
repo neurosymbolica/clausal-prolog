@@ -393,8 +393,7 @@ def _max_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, maximum, tr
         return
     dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
-    best_key = None
-    best_elem = None
+    keyed: list[tuple] = []
     for elem in items:
         key = Var()
         mark = trail.mark()
@@ -407,9 +406,18 @@ def _max_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, maximum, tr
             return
         k = deref(key)
         trail.undo(mark)
-        if best_key is None or k > best_key:
-            best_key = k
-            best_elem = deref(elem)
+        keyed.append((k, deref(elem)))
+    # A09-F012: incomparable keys (e.g. int vs str) raised a raw TypeError
+    # from `k > best_key`, uncatchable by catch/3 — while sort_by silently
+    # falls back. Use the same (type-name, repr) fallback so max_by/min_by
+    # are consistent with sort_by instead of crashing.
+    if keyed:
+        try:
+            best_elem = max(keyed, key=lambda pair: pair[0])[1]
+        except TypeError:
+            best_elem = max(keyed, key=lambda pair: (type(pair[0]).__name__, repr(pair[0])))[1]
+    else:
+        best_elem = None
     if best_elem is not None:
         m = trail.mark()
         if unify(maximum, best_elem, trail):
@@ -430,8 +438,7 @@ def _min_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, minimum, tr
         return
     dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
-    best_key = None
-    best_elem = None
+    keyed: list[tuple] = []
     for elem in items:
         key = Var()
         mark = trail.mark()
@@ -444,9 +451,16 @@ def _min_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, minimum, tr
             return
         k = deref(key)
         trail.undo(mark)
-        if best_key is None or k < best_key:
-            best_key = k
-            best_elem = deref(elem)
+        keyed.append((k, deref(elem)))
+    # A09-F012: same (type-name, repr) fallback as sort_by / max_by so
+    # incomparable keys do not leak a raw TypeError.
+    if keyed:
+        try:
+            best_elem = min(keyed, key=lambda pair: pair[0])[1]
+        except TypeError:
+            best_elem = min(keyed, key=lambda pair: (type(pair[0]).__name__, repr(pair[0])))[1]
+    else:
+        best_elem = None
     if best_elem is not None:
         m = trail.mark()
         if unify(minimum, best_elem, trail):
