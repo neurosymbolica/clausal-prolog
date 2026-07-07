@@ -899,8 +899,13 @@ def _same_length__2(l1, l2, trail, k):
     ``list`` sibling the placeholder is the classic list of fresh
     ``Var`` objects.
     """
-    l1_val = deref(l1)
-    l2_val = deref(l2)
+    from clausal.logic.runtime._seg_helpers import normalize_seg_input
+    # F019: walk ground SegList / SegString / SegBytes to their concrete
+    # shape so the seq/placeholder arms below (and _fresh_same_shape's Seg*
+    # branches) fire — the raw isinstance check rejected ground Seg* even
+    # though the docstring and _fresh_same_shape promise support.
+    l1_val = normalize_seg_input(deref(l1))
+    l2_val = normalize_seg_input(deref(l2))
     l1_is_seq = isinstance(l1_val, (list, str, bytes))
     l2_is_seq = isinstance(l2_val, (list, str, bytes))
     if l1_is_seq and l2_is_seq:

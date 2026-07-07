@@ -591,8 +591,6 @@ def test_F018_pairs_keys_values_skips_junk(fix):
 # A09-F019 — same_length/2 ground-Seg* support is dead code
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F019: docstring promises "
-                   "SegString siblings work; the entry check rejects them")
 def test_F019_same_length_ground_segstring(fix):
     _, m = fix
     L = Var()
