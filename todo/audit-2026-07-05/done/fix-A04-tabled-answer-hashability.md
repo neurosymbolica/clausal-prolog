@@ -1,3 +1,15 @@
+**DONE (with residual) — commit 5f0a5088.** add_answer keys answer_set by the
+canonical hashable form (make_subgoal_key); _normalize_for_key (Py+C) gained
+tuple/dict/set arms; _deref_walk (Py+C) and walk (C) now rebuild plain dict
+values + set elements, so stored/cache answers are correctly frozen. Flips
+list + term-instance. **Residual:** the tabling LEADER yields the live body
+binding, and a `++`-built dict holds a raw Var, so the FIRST (leader) query
+derefs to `{'k': <Var>}` (the cache-hit query is correct — see
+`test_dict_answer_cache_hit_is_frozen`). Presenting frozen answers from the
+leader is a separate change; `test_dict_answer_leader_query` stays xfail.
+
+---
+
 # fix(A04-F005): tabled answers containing list/dict/set/term instances crash add_answer
 
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F005

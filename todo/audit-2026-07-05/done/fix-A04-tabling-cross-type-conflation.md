@@ -1,3 +1,13 @@
+**DONE (with residual) — commit 5f0a5088.** Numeric leaves (bool/float/complex)
+are type-tagged `(type, value)` in `_normalize_for_key` (Py + C do_normalize,
+P52 parity); exact int stays canonical. Tabled `tt(X)` now yields all four
+types; `make_subgoal_key([1]) != [True] != [1.0]`. Semantics-neutral (answer
+unification untouched, deferring to A01-D001). **Residual:** Decimal/Fraction
+are left raw in BOTH impls (still conflate with int) — a narrower documented
+residual, tied to A01-D001; not exercised by any fixture.
+
+---
+
 # fix(A04-F006): tabling conflates 1/True/1.0/Decimal(1) in variant keys and answer dedup
 
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F006
