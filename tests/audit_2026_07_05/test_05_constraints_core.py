@@ -218,7 +218,6 @@ except Exception as e:
 class TestF002DifHookMalformedAttr:
 
     @pytest.mark.parametrize("attr_value", [[42], [(1,)], ["ab"]])
-    @pytest.mark.xfail(strict=False, reason="A05-F002: C _dif_hook segfaults on non-2-tuple list items")
     def test_malformed_pair_items_no_crash(self, attr_value):
         r = run_snippet(F002_SNIPPET.format(attr_value=attr_value))
         # Correct behaviour: clean Python-level failure or exception,

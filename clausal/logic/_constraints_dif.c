@@ -350,8 +350,13 @@ attach_dif_pair(PyObject *x, PyObject *y, PyObject *pair,
             if (rc < 0) { Py_DECREF(unique); return -1; }
         } else {
             int skip = 0;
-            if (check_identity) {
-                /* Skip if pair already present (identity check) */
+            if (check_identity && PyList_Check(existing)) {
+                /* Skip if pair already present (identity check).
+                 * `existing` is only guaranteed a list when written by dif
+                 * itself; a malformed non-list value would make the
+                 * PyList_GET_SIZE/GET_ITEM fast macros UB, so gate the scan
+                 * on PyList_Check and let a non-list fall through to the
+                 * clean PySequence_List path below. */
                 Py_ssize_t en = PyList_GET_SIZE(existing);
                 for (Py_ssize_t j = 0; j < en; j++) {
                     if (PyList_GET_ITEM(existing, j) == pair) {
@@ -473,6 +478,11 @@ py_dif_hook(PyObject *Py_UNUSED(module), PyObject *args)
     Py_ssize_t n = PyList_GET_SIZE(attr_value);
     for (Py_ssize_t ci = 0; ci < n; ci++) {
         PyObject *pair = PyList_GET_ITEM(attr_value, ci);
+        if (!PyTuple_Check(pair) || PyTuple_GET_SIZE(pair) != 2) {
+            PyErr_SetString(PyExc_TypeError,
+                            "_dif_hook: attr pairs must be 2-tuples");
+            return NULL;
+        }
         PyObject *px = PyTuple_GET_ITEM(pair, 0);
         PyObject *py = PyTuple_GET_ITEM(pair, 1);
 
