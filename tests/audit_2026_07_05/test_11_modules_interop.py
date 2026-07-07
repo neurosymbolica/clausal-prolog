@@ -416,9 +416,8 @@ def test_F029_quoted_functor():
     assert m.items[0].head.functor == "foo"
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F034: ISO escapes (\\r, \\x41\\, "
-                   "octal, 0''', line continuation) mangled or fatal")
 def test_F034_iso_escapes():
+    # A11-F034 (fixed): full ISO 6.4.2 escape table.
     from clausal.tools.prolog_tokenizer import tokenize
     assert tokenize(r"'\r'.")[0].value == "\r"
     assert tokenize(r"'\x41\'.")[0].value == "A"
@@ -448,9 +447,8 @@ def test_F038_op_zero_removes():
         parse(":- op(0, xfx, ===).\na === b.")
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F040: malformed numeric literals "
-                   "raise bare ValueError instead of TokenizeError with position")
 def test_F040_malformed_number_tokenize_error():
+    # A11-F040 (fixed): malformed numbers raise a positioned TokenizeError.
     from clausal.tools.prolog_tokenizer import tokenize, TokenizeError
     with pytest.raises(TokenizeError):
         tokenize("X = 0x.")

@@ -252,6 +252,42 @@ class _Tokenizer:
 
     # ── Quoted atom ──────────────────────────────────────────────────
 
+    # ── ISO 6.4.2 escape sequences ───────────────────────────────────
+    _SIMPLE_ESCAPES = {
+        "a": "\a", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t",
+        "v": "\v", "e": "\x1b", "s": " ", "\\": "\\", "'": "'", '"': '"',
+        "`": "`",
+    }
+
+    def _read_escape(self, line: int, col: int) -> str:
+        """Read an ISO escape after the backslash; '' for a line continuation."""
+        if self._at_end():
+            raise TokenizeError("Unterminated escape sequence", line, col)
+        nxt = self._advance()
+        if nxt == "\n":
+            return ""  # line continuation — the \<newline> is removed
+        if nxt == "x":
+            digits = ""
+            while not self._at_end() and self._peek() in "0123456789abcdefABCDEF":
+                digits += self._advance()
+            if not digits:
+                raise TokenizeError("Empty hex escape (\\x)", line, col)
+            if self._peek() == "\\":
+                self._advance()  # closing backslash
+            return chr(int(digits, 16))
+        if nxt in "01234567":
+            digits = nxt
+            while not self._at_end() and self._peek() in "01234567":
+                digits += self._advance()
+            if self._peek() == "\\":
+                self._advance()  # closing backslash
+            return chr(int(digits, 8))
+        mapped = self._SIMPLE_ESCAPES.get(nxt)
+        if mapped is not None:
+            return mapped
+        # Unknown escape: keep the backslash and the char (lenient).
+        return "\\" + nxt
+
     def _read_quoted_atom(self, line: int, col: int) -> None:
         self._advance()  # opening '
         chars: list[str] = []
@@ -267,19 +303,7 @@ class _Tokenizer:
                 else:
                     break
             elif ch == "\\":
-                # Escape sequences
-                nxt = self._advance() if not self._at_end() else ""
-                if nxt == "n":
-                    chars.append("\n")
-                elif nxt == "t":
-                    chars.append("\t")
-                elif nxt == "\\":
-                    chars.append("\\")
-                elif nxt == "'":
-                    chars.append("'")
-                else:
-                    chars.append("\\")
-                    chars.append(nxt)
+                chars.append(self._read_escape(line, col))
             else:
                 chars.append(ch)
         self._tokens.append(Token(TokenType.ATOM, "".join(chars), line, col))
@@ -301,23 +325,24 @@ class _Tokenizer:
                 else:
                     break
             elif ch == "\\":
-                nxt = self._advance() if not self._at_end() else ""
-                if nxt == "n":
-                    chars.append("\n")
-                elif nxt == "t":
-                    chars.append("\t")
-                elif nxt == "\\":
-                    chars.append("\\")
-                elif nxt == '"':
-                    chars.append('"')
-                else:
-                    chars.append("\\")
-                    chars.append(nxt)
+                chars.append(self._read_escape(line, col))
             else:
                 chars.append(ch)
         self._tokens.append(Token(TokenType.STRING, "".join(chars), line, col))
 
     # ── Numbers ──────────────────────────────────────────────────────
+
+    def _to_number(self, conv, text: str, label: str, line: int, col: int):
+        """Convert a numeric literal, raising a positioned TokenizeError.
+
+        Malformed literals (``0x``, ``1e``, ``1.5e``) would otherwise surface a
+        bare ValueError with no line/col, crashing callers that catch only
+        TokenizeError/ParseError (F040).
+        """
+        try:
+            return conv(text)
+        except ValueError:
+            raise TokenizeError(f"malformed {label} literal", line, col) from None
 
     def _read_number(self, line: int, col: int) -> None:
         start = self._pos
@@ -332,7 +357,8 @@ class _Tokenizer:
                 while not self._at_end() and self._peek() in "0123456789abcdefABCDEF_":
                     self._advance()
                 digits = self._src[hex_start:self._pos].replace("_", "")
-                self._tokens.append(Token(TokenType.INTEGER, int(digits, 16), line, col))
+                value = self._to_number(lambda d: int(d, 16), digits, "hexadecimal", line, col)
+                self._tokens.append(Token(TokenType.INTEGER, value, line, col))
                 return
             if nxt in "bB":
                 self._advance()  # 0
@@ -341,7 +367,8 @@ class _Tokenizer:
                 while not self._at_end() and self._peek() in "01_":
                     self._advance()
                 digits = self._src[bin_start:self._pos].replace("_", "")
-                self._tokens.append(Token(TokenType.INTEGER, int(digits, 2), line, col))
+                value = self._to_number(lambda d: int(d, 2), digits, "binary", line, col)
+                self._tokens.append(Token(TokenType.INTEGER, value, line, col))
                 return
             if nxt in "oO":
                 self._advance()  # 0
@@ -350,22 +377,25 @@ class _Tokenizer:
                 while not self._at_end() and self._peek() in "01234567_":
                     self._advance()
                 digits = self._src[oct_start:self._pos].replace("_", "")
-                self._tokens.append(Token(TokenType.INTEGER, int(digits, 8), line, col))
+                value = self._to_number(lambda d: int(d, 8), digits, "octal", line, col)
+                self._tokens.append(Token(TokenType.INTEGER, value, line, col))
                 return
             if nxt == "'":
-                # Character code: 0'a → 97
+                # Character code: 0'a → 97, 0'\n → 10, 0''' → 39 (doubled quote)
                 self._advance()  # 0
                 self._advance()  # '
                 if self._at_end():
                     raise TokenizeError("Unexpected end after 0'", line, col)
                 ch = self._advance()
                 if ch == "\\":
-                    # Escape: 0'\n etc.
-                    if self._at_end():
-                        raise TokenizeError("Unexpected end after 0'\\", line, col)
-                    esc = self._advance()
-                    ch = {"n": "\n", "t": "\t", "\\": "\\", "'": "'"}.get(esc, esc)
-                self._tokens.append(Token(TokenType.INTEGER, ord(ch), line, col))
+                    esc = self._read_escape(line, col)
+                    code = ord(esc) if esc else 0
+                elif ch == "'" and self._peek() == "'":
+                    self._advance()  # doubled '' → literal quote (ISO)
+                    code = ord("'")
+                else:
+                    code = ord(ch)
+                self._tokens.append(Token(TokenType.INTEGER, code, line, col))
                 return
 
         # Regular decimal number
@@ -393,9 +423,11 @@ class _Tokenizer:
 
         text = self._src[start:self._pos].replace("_", "")
         if is_float:
-            self._tokens.append(Token(TokenType.FLOAT, float(text), line, col))
+            value = self._to_number(float, text, "float", line, col)
+            self._tokens.append(Token(TokenType.FLOAT, value, line, col))
         else:
-            self._tokens.append(Token(TokenType.INTEGER, int(text), line, col))
+            value = self._to_number(int, text, "integer", line, col)
+            self._tokens.append(Token(TokenType.INTEGER, value, line, col))
 
     # ── Variables ────────────────────────────────────────────────────
 
