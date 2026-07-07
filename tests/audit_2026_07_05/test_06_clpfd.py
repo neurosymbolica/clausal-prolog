@@ -270,8 +270,6 @@ class TestDoublePrecisionRounding:
         assert fd_eq(Add(left=-P, right=y), 1, t)
         assert deref(y) == P + 1
 
-    @pytest.mark.xfail(strict=False, reason="A06-F004: _scalar_propagate_bignum uses float "
-                       "true division; large-int quotients round, over-pruning")
     def test_scalar_bignum_exact_division(self):
         t = Trail()
         x = Var()

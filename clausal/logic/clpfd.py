@@ -623,20 +623,16 @@ def _scalar_propagate_bignum(coeffs, sum_vars, total, trail, queue) -> bool:
             finite_cmin_sum - (0 if contrib_min == _NEG_INF else contrib_min)
         num_lo = _NEG_INF if other_max == _POS_INF else total_lo - other_max
         num_hi = _POS_INF if other_min == _NEG_INF else total_hi - other_min
+        # Exact integer ceil/floor division — this is the designated
+        # bignum-safe path, so float true division (which loses precision past
+        # 2^53) would over-prune valid large-int solutions (A06-F004).
+        # ceil(a/c) == -((-a) // c); floor(a/c) == a // c  (Python // floors).
         if c > 0:
-            new_v_lo = _NEG_INF if num_lo == _NEG_INF else math.ceil(num_lo / c)
-            new_v_hi = _POS_INF if num_hi == _POS_INF else math.floor(num_hi / c)
+            new_v_lo = _NEG_INF if num_lo == _NEG_INF else -((-num_lo) // c)
+            new_v_hi = _POS_INF if num_hi == _POS_INF else num_hi // c
         else:
-            new_v_lo = _NEG_INF if num_hi == _POS_INF else math.ceil(num_hi / c)
-            new_v_hi = _POS_INF if num_lo == _NEG_INF else math.floor(num_lo / c)
-        if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
-            new_v_lo = _NEG_INF
-        else:
-            new_v_lo = int(new_v_lo)
-        if new_v_hi == _NEG_INF or new_v_hi == _POS_INF:
-            new_v_hi = _POS_INF
-        else:
-            new_v_hi = int(new_v_hi)
+            new_v_lo = _NEG_INF if num_hi == _POS_INF else -((-num_hi) // c)
+            new_v_hi = _POS_INF if num_lo == _NEG_INF else num_lo // c
         new_d = domain_intersection(d, domain_from_range(new_v_lo, new_v_hi))
         if not new_d:
             return False
@@ -967,21 +963,15 @@ class ScalarProductConstraint(Constraint):
             # raises OverflowError, so short-circuit the infinite ends.
             num_lo = _NEG_INF if other_max == _POS_INF else total_lo - other_max
             num_hi = _POS_INF if other_min == _NEG_INF else total_hi - other_min
+            # Exact integer ceil/floor division — float true division loses
+            # precision past 2^53 and over-prunes large-int solutions
+            # (A06-F004).  ceil(a/c) == -((-a) // c); floor(a/c) == a // c.
             if c > 0:
-                new_v_lo = _NEG_INF if num_lo == _NEG_INF else math.ceil(num_lo / c)
-                new_v_hi = _POS_INF if num_hi == _POS_INF else math.floor(num_hi / c)
+                new_v_lo = _NEG_INF if num_lo == _NEG_INF else -((-num_lo) // c)
+                new_v_hi = _POS_INF if num_hi == _POS_INF else num_hi // c
             else:
-                new_v_lo = _NEG_INF if num_hi == _POS_INF else math.ceil(num_hi / c)
-                new_v_hi = _POS_INF if num_lo == _NEG_INF else math.floor(num_lo / c)
-            # Guard against inf bounds (can't convert to int)
-            if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
-                new_v_lo = _NEG_INF
-            else:
-                new_v_lo = int(new_v_lo)
-            if new_v_hi == _NEG_INF or new_v_hi == _POS_INF:
-                new_v_hi = _POS_INF
-            else:
-                new_v_hi = int(new_v_hi)
+                new_v_lo = _NEG_INF if num_hi == _POS_INF else -((-num_hi) // c)
+                new_v_hi = _POS_INF if num_lo == _NEG_INF else num_lo // c
             new_d = domain_intersection(d, domain_from_range(new_v_lo, new_v_hi))
             if not new_d:
                 return False
