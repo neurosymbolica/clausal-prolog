@@ -695,9 +695,8 @@ def test_guard_graphs_classic_dijkstra_and_mst():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F047: -3(Second) is "
-                   "Negate(thunk) in unification contexts — silent failure")
 def test_F047_negative_unit_literal_in_is(tmp_path):
+    # A11-F047 (fixed): -n(Unit) folds negation into the sugar constant.
     mod = _load(tmp_path, '''
         -import_from(py.units, [Second, strip_units])
         T(V) <- (Q is -3(Second), strip_units(Q, V))
