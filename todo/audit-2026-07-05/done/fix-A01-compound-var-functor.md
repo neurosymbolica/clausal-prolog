@@ -1,5 +1,17 @@
 # fix-A01: Compound Var-functor broken across the layer (A01-F003)
 
+**DONE (deref-only floor) — commit ec8a4a34.** Implemented the deref-only
+floor below (correct under D004 options a & b): unify/`c_is_ground`/
+`c_copy_term`/`c_collect_vars`/`term_str`/`term_pformat`/`term_html` all deref
+the functor. 7 `TestF003CompoundVarFunctor` xfails flipped (incl. new
+term_html/term_pformat render guards). **Residual:** the output-mode case
+`test_unbound_var_functor_binds` (binding an *unbound* functor Var) stays
+xfail — it needs D004 → (a) full-support. That is the only remaining piece
+and is tracked as the parked decision in
+`investigate-A01-parked-design-decisions.md` §3.
+
+---
+
 **Severity: correctness. BLOCKED on parked design decision A01-D004**
 (`investigate-A01-parked-design-decisions.md` §3) — the user must choose
 between full support / deref-only / reject-at-construction. The deref-only
