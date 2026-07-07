@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Optional
 
-from .logic.variables import Var
+from .logic.variables import Var, deref
 
 # Re-export operator/expression classes already defined in pythonic_ast.
 # They are plain dataclasses that work as both terms and goal nodes.
@@ -105,10 +105,17 @@ class Compound:
         return f"{f}({args_str})"
 
     def __unify__(self, other, trail) -> bool:
-        """Structural unification: same functor and arity, args unified pairwise."""
+        """Structural unification: same functor and arity, args unified pairwise.
+
+        Functors are dereferenced before comparison (A01-F003 deref-only floor,
+        parked decision A01-D004): a functor Var *bound* to a str matches the
+        corresponding str functor. Binding an *unbound* functor Var (output
+        mode) is out of scope for the deref-only floor, so two differing
+        functors — including an unbound Var vs a str — simply fail to unify.
+        """
         if not isinstance(other, Compound):
             return NotImplemented
-        if self.functor != other.functor or len(self.args) != len(other.args):
+        if deref(self.functor) != deref(other.functor) or len(self.args) != len(other.args):
             return False
         from .logic.variables import unify
         mark = trail.mark()
@@ -2137,8 +2144,9 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
     if isinstance(t, Var):
         return _c(style.anon_var, 'var', style)
     if isinstance(t, Compound):
-        functor_raw = _locale_name(t.functor, style, len(t.args)) if isinstance(t.functor, str) else term_str(t.functor, style, _bd)
-        functor_s = _c(functor_raw, 'atom', style) if isinstance(t.functor, str) else functor_raw
+        functor = deref(t.functor)  # A01-F003: bound functor Var renders as its value, not anon
+        functor_raw = _locale_name(functor, style, len(t.args)) if isinstance(functor, str) else term_str(functor, style, _bd)
+        functor_s = _c(functor_raw, 'atom', style) if isinstance(functor, str) else functor_raw
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
         args_str = ", ".join(term_str(a, style, _bd + 1) for a in t.args)
@@ -2262,8 +2270,9 @@ def term_pformat(
     if isinstance(t, Compound):
         if not t.args:
             return flat
-        functor_raw = t.functor if isinstance(t.functor, str) else term_pformat(t.functor, child, width, style, _bd)
-        functor_s = _c(functor_raw, 'atom', style) if isinstance(t.functor, str) else functor_raw
+        functor = deref(t.functor)  # A01-F003: bound functor Var renders as its value, not anon
+        functor_raw = functor if isinstance(functor, str) else term_pformat(functor, child, width, style, _bd)
+        functor_s = _c(functor_raw, 'atom', style) if isinstance(functor, str) else functor_raw
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
         items = [_r(a) for a in t.args]
@@ -2383,8 +2392,9 @@ def term_html(t: Any, _bd: int = 0) -> str:
     if isinstance(t, Var):
         return _html_c('_', 'var')
     if isinstance(t, Compound):
-        functor_raw = t.functor if isinstance(t.functor, str) else term_html(t.functor, _bd)
-        functor_s = _html_c(esc(functor_raw), 'atom') if isinstance(t.functor, str) else functor_raw
+        functor = deref(t.functor)  # A01-F003: bound functor Var renders as its value, not anon
+        functor_raw = functor if isinstance(functor, str) else term_html(functor, _bd)
+        functor_s = _html_c(esc(functor_raw), 'atom') if isinstance(functor, str) else functor_raw
         ob = _html_c('(', 'bracket', _bd)
         cb = _html_c(')', 'bracket', _bd)
         args_str = ", ".join(term_html(a, _bd + 1) for a in t.args)

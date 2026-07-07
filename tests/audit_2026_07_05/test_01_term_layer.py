@@ -100,43 +100,60 @@ class TestF001OccursCheckBlindness:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF003CompoundVarFunctor:
-    @pytest.mark.xfail(strict=False, reason="A01-F003: functor compared with !=, no deref")
+    # A01-F003 deref-only floor (parked decision A01-D004, options a/b): a
+    # functor Var *bound* to a str behaves as that str across unify, copy_term,
+    # _is_ground, _collect_vars and the render functions. The one output-mode
+    # case (binding an *unbound* functor Var) stays xfail — it needs D004→(a).
     def test_bound_var_functor_unifies(self, trail):
         F = Var()
         assert unify(F, "f", trail)
         assert unify(Compound(F, (1,)), Compound("f", (1,)), trail) is True
 
-    @pytest.mark.xfail(strict=False, reason="A01-F003: unbound functor var not bound (output mode)")
+    @pytest.mark.xfail(strict=False,
+                       reason="A01-F003/D004: unbound functor var binding (output mode) "
+                              "is out of scope for the deref-only floor; needs D004→(a)")
     def test_unbound_var_functor_binds(self, trail):
         F = Var()
         assert unify(Compound(F, (1,)), Compound("f", (1,)), trail) is True
         assert deref(F) == "f"
 
-    @pytest.mark.xfail(strict=False, reason="A01-F003: copy_term does not freshen functor var")
     def test_copy_term_freshens_functor_var(self):
         F, X = Var(), Var()
         copied = _c._copy_term_impl(Compound(F, (X,)), {})
         assert copied.args[0] is not X          # args are freshened (control)
         assert copied.functor is not F          # functor should be too
 
-    @pytest.mark.xfail(strict=False, reason="A01-F003: _is_ground ignores functor binding")
     def test_is_ground_derefs_functor(self, trail):
         F = Var()
         assert unify(F, "f", trail)
         assert _c._is_ground(Compound(F, (1,))) is True
 
-    @pytest.mark.xfail(strict=False, reason="A01-F003: _collect_vars misses functor var")
     def test_collect_vars_sees_functor_var(self):
         F = Var()
         out = []
         _c._collect_vars_impl(Compound(F, (1,)), out)
         assert F in out
 
-    @pytest.mark.xfail(strict=False, reason="A01-F003: term_str renders bound functor as anon '_'")
     def test_term_str_derefs_bound_functor(self, trail):
         F = Var()
         assert unify(F, "f", trail)
         assert term_str(Compound(F, (1,))) == "f(1)"
+
+    def test_term_html_derefs_bound_functor(self, trail):
+        from clausal.terms import term_html
+        F = Var()
+        assert unify(F, "f", trail)
+        assert ">f<" in term_html(Compound(F, (1,)))
+        assert ">_<" not in term_html(Compound(F, (1,)))
+
+    def test_term_pformat_derefs_bound_functor(self, trail):
+        from clausal.terms import term_pformat
+        F = Var()
+        assert unify(F, "f", trail)
+        # force the multi-line expansion path (narrow width) so the functor is
+        # rendered by term_pformat's own Compound arm, not term_str's flat form
+        out = term_pformat(Compound(F, (1, 2, 3)), width=4)
+        assert out.startswith("f(")
 
     def test_control_str_functor_semantics(self, trail):
         assert unify(Compound("f", ()), Compound("f", ()), trail)

@@ -2119,7 +2119,9 @@ c_is_ground(PyObject *term, int depth)
         if (r) {
             PyObject *functor = PyObject_GetAttr(term, str_functor);
             if (!functor) return -1;
-            int is_str = PyUnicode_Check(functor);
+            /* A01-F003: deref a functor Var before the str check — a functor
+             * bound to a str is ground; an unbound functor Var is not. */
+            int is_str = PyUnicode_Check(var_deref(functor));
             Py_DECREF(functor);
             if (!is_str) return 0;
             PyObject *args = PyObject_GetAttr(term, str_args);
@@ -2752,8 +2754,14 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
                 PyTuple_SET_ITEM(new_args, i, copied);  /* steals ref */
             }
             Py_DECREF(args);
-            PyObject *result = PyObject_CallFunctionObjArgs(Compound_type, functor, new_args, NULL);
+            /* A01-F003: freshen the functor too — an unbound functor Var must
+             * be remapped like any arg Var; a str functor derefs to itself and
+             * is returned as-is by c_copy_term. */
+            PyObject *new_functor = c_copy_term(functor, var_map, depth + 1);
             Py_DECREF(functor);
+            if (!new_functor) { Py_DECREF(new_args); return NULL; }
+            PyObject *result = PyObject_CallFunctionObjArgs(Compound_type, new_functor, new_args, NULL);
+            Py_DECREF(new_functor);
             Py_DECREF(new_args);
             return result;
         }
@@ -2986,6 +2994,14 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
         int r = PyObject_IsInstance(term, Compound_type);
         if (r < 0) return -1;
         if (r) {
+            /* A01-F003: visit the functor slot first — an unbound functor Var
+             * is a variable of the term; a str functor derefs to a primitive
+             * and collects nothing. */
+            PyObject *functor = PyObject_GetAttr(term, str_functor);
+            if (!functor) return -1;
+            int fr = c_collect_vars(functor, seen, result, depth + 1);
+            Py_DECREF(functor);
+            if (fr < 0) return -1;
             PyObject *args = PyObject_GetAttr(term, str_args);
             if (!args) return -1;
             if (!PyTuple_Check(args)) {
