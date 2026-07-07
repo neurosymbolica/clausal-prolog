@@ -2758,7 +2758,25 @@ class EmbedTransformer(NodeTransformer):
         if name == "dynamic":
             specs = _parse_pred_arity_args(args, "dynamic")
             transformer._module_items.append(DirectiveItem(name="dynamic", specs=specs))
-            return transformer._handle_predspec_directive("mark_dynamic", args, expr_stmt)
+            # A12-F005: mint an empty term class for each dynamic predicate so
+            # the module's own clause bodies (and the m.ghost/call APIs) can
+            # construct ghost(...) terms before any clause exists — the ISO
+            # declare-then-assertz pattern. (-table/-discontiguous do NOT mint;
+            # a dangling target there is a load error — A12-F003.)
+            statements = []
+            for functor, arity in specs:
+                if functor not in transformer._seen_functors:
+                    field_names = [f"arg_{i}" for i in range(arity)]
+                    transformer._seen_functors[functor] = field_names
+                    statements.append(
+                        _make_functor_class_ast(functor, field_names, expr_stmt))
+            predspec = transformer._handle_predspec_directive(
+                "mark_dynamic", args, expr_stmt)
+            if isinstance(predspec, list):
+                statements.extend(predspec)
+            else:
+                statements.append(predspec)
+            return statements if len(statements) > 1 else statements[0]
         if name == "discontiguous":
             specs = _parse_pred_arity_args(args, "discontiguous")
             transformer._module_items.append(DirectiveItem(name="discontiguous", specs=specs))

@@ -298,10 +298,6 @@ class TestF005DynamicForwardDeclaration:
 seed <- assertz(ghost("x"))
 """
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A12-F005: -dynamic with no clauses does not "
-                              "bring the predicate into scope; assertz raises "
-                              "NameError")
     def test_assertz_into_clauseless_dynamic_predicate(self, load):
         m = load("f005", self.SRC)
         logic_mod = m.__dict__["$module"]
