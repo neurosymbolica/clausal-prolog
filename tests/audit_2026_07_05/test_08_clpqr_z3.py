@@ -97,8 +97,6 @@ class TestClpqSoundness:
         assert in_q(y, 0, 10, t)
         assert not q_eq(Add(left=x, right=y), 100, t)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F003: in_q(X, 10, 0) (lo > hi) accepted")
     def test_in_q_empty_interval_fails(self):
         t = Trail()
         x = Var()

@@ -995,6 +995,12 @@ def _post_q_domain(target: Any, lo: Fraction | None,
     if not is_var(target):
         return False
 
+    # Empty interval (lo > hi) — reject up front.  The fresh-registration
+    # branch below never compared the two bounds, so in_q(X, 10, 0) succeeded
+    # and left a poisoned var that rejected every later binding (A08-F003).
+    if lo is not None and hi is not None and lo > hi:
+        return False
+
     tableau = _get_tableau(trail)
     _snapshot_tableau(trail)
 
