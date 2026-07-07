@@ -41,6 +41,7 @@ from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import (
     term_to_ast_expr,
     _is_star_list, _parse_star_segments, _count_stars,
+    _is_opaque_head_literal, headlit_global_key,
 )
 # Runtime helpers (``_head_list_unify_input`` / ``_head_list_unify_output``
 # / ``_head_multi_star_error``) are referenced by name string in the AST
@@ -614,7 +615,20 @@ def head_to_match_pattern(
             ],
         )
 
-    # Fallback: wildcard (accept anything, no binding)
+    # A02-F003: a ground head literal with no dedicated branch above (date,
+    # Decimal, Fraction, tuple, set, Path, …) previously fell through to a bare
+    # accept-all wildcard — matching EVERY caller in input mode and never
+    # binding an unbound caller in output mode. Capture it and unify against the
+    # value, injected into base_globals under $headlit_<id> by the globals
+    # collector (mirroring the str/bytes/atom capture+guard pattern).
+    if list_guards is not None and _is_opaque_head_literal(term):
+        cap_name = f"_xcap{len(list_guards)}"
+        list_guards.append(("headlit", cap_name, term))
+        return ast.MatchAs(pattern=None, name=cap_name)
+
+    # Fallback: wildcard (accept anything, no binding). Degraded path when there
+    # is no list_guards sink, and for var-functor Compound heads (blocked on
+    # A01-D004) which reach this only via the wildcard at the var-functor branch.
     return ast.MatchAs(pattern=None, name=None)
 
 
@@ -1283,6 +1297,35 @@ def compile_head_to_match_case(
             orelse=[],
         )]
 
+    # Emit opaque head-literal guards (A02-F003): wildcard capture + same-value
+    # short-circuit + unify against the value injected under $headlit_<id> in
+    # base_globals. Mirrors the scalar/str/bytes guards but references the value
+    # by name (it cannot go through ast.Constant — non-primitive — nor reliably
+    # through term_to_ast_expr, which raises for e.g. Fraction/date).
+    headlit_guards = [g for g in list_guards if g and g[0] == "headlit"]
+    for _tag, cap_name, literal in headlit_guards:
+        lit_key = headlit_global_key(literal)
+        inner = [ast.If(
+            test=ast.BoolOp(
+                op=ast.Or(),
+                values=[
+                    ast.Compare(
+                        left=_name(cap_name),
+                        ops=[ast.Eq()],
+                        comparators=[_name(lit_key)],
+                    ),
+                    _call(
+                        _name("unify"),
+                        _name(cap_name),
+                        _name(lit_key),
+                        _name(trail_name),
+                    ),
+                ],
+            ),
+            body=inner,
+            orelse=[],
+        )]
+
     # Emit atom guards (R1): wildcard capture + unify guard. Atoms compare by
     # identity/equality; unify() binds an unbound caller arg to the atom and
     # rejects a different atom/term. term_to_ast_expr emits the atom as a Name
@@ -1302,7 +1345,7 @@ def compile_head_to_match_case(
 
     # Emit list guards: input destructuring + deferred output construction
     # Filter out dict/set/str/bytes/atom guards from list_guards
-    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str", "bytes", "atom", "scalar")]
+    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal", "str", "bytes", "atom", "scalar", "headlit")]
     if actual_list_guards:
         # Separate single-star and multi-star guards
         single_star_guards = [g for g in actual_list_guards if len(g) == 5]

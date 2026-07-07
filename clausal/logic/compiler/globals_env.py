@@ -33,7 +33,10 @@ from clausal.logic.builtins import (
 
 from ._ast_helpers import _name, _call, _assign
 from ._vars import _var_python_name, _collect_vars
-from .terms_to_ast import _dotted_name_from_loadattr
+from .terms_to_ast import (
+    _dotted_name_from_loadattr,
+    _is_opaque_head_literal, headlit_global_key,
+)
 
 
 _PyThunk = PyThunk  # alias used below in a few places for clarity
@@ -285,6 +288,11 @@ def _collect_globals_info(
             types[cls.__name__] = cls
             for name in term_field_names(term):
                 _walk_head(getattr(term, name))
+        elif _is_opaque_head_literal(term):
+            # A02-F003: inject opaque ground head literals (date, Decimal,
+            # tuple, set, …) so head_to_match_pattern's capture+unify guard can
+            # reference them by $headlit_<id>. Keyed to match the guard emitter.
+            types[headlit_global_key(term)] = term
 
     def _walk_body(term: Any) -> None:
         # Call-target detection runs on the raw (pre-deref) term so that

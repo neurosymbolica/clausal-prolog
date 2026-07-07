@@ -338,32 +338,27 @@ class TestF003ExoticHeadWildcard:
         R = Var()
         assert (1,) in collect(mod, "dyn_date", datetime.date(2026, 1, 1), R, outv=[R])
 
-    @pytest.mark.xfail(strict=False, reason="A02-F003: date head literal compiles to accept-all wildcard — different date matches")
     def test_date_mismatch_must_fail(self, mod, moddict):
         self._assert_fact(mod, moddict["dyn_date"], datetime.date(2026, 1, 1), 1)
         R = Var()
         assert collect(mod, "dyn_date", datetime.date(1999, 9, 9), R, outv=[R]) == []
 
-    @pytest.mark.xfail(strict=False, reason="A02-F003: date head literal does not bind an unbound caller Var (output mode)")
     def test_date_output_mode_binds(self, mod, moddict):
         self._assert_fact(mod, moddict["dyn_date"], datetime.date(2026, 1, 1), 1)
         X, R = Var(), Var()
         sols = collect(mod, "dyn_date", X, R, outv=[X, R])
         assert (datetime.date(2026, 1, 1), 1) in sols
 
-    @pytest.mark.xfail(strict=False, reason="A02-F003: tuple head literal accept-all wildcard")
     def test_tuple_mismatch_must_fail(self, mod, moddict):
         self._assert_fact(mod, moddict["dyn_tuple"], (1, 2), 100)
         R = Var()
         assert collect(mod, "dyn_tuple", (9, 9), R, outv=[R]) == []
 
-    @pytest.mark.xfail(strict=False, reason="A02-F003: set head literal accept-all wildcard")
     def test_set_mismatch_must_fail(self, mod, moddict):
         self._assert_fact(mod, moddict["dyn_set"], {3, 4}, 200)
         R = Var()
         assert collect(mod, "dyn_set", {5, 6}, R, outv=[R]) == []
 
-    @pytest.mark.xfail(strict=False, reason="A02-F003: Decimal head literal accept-all wildcard")
     def test_decimal_mismatch_must_fail(self, mod, moddict):
         self._assert_fact(mod, moddict["dyn_dec"], Decimal("2.5"), 9)
         R = Var()

@@ -43,6 +43,49 @@ from ._vars import _var_python_name
 # ── Parsing helpers (used here and by .star_segments) ────────────────────────
 
 
+def headlit_global_key(term: Any) -> str:
+    """The base_globals key under which an opaque head literal is injected.
+
+    Keyed by ``id()`` (like ``_pyt_<id>`` for PyThunks) so the collector in
+    globals_env and the guard emitter in head_match reference the SAME entry.
+    The value is kept alive by the clause head, so the id is stable.
+    """
+    return f"$headlit_{id(term)}"
+
+
+def _is_opaque_head_literal(term: Any) -> bool:
+    """True for a GROUND Python value that ``head_to_match_pattern`` has no
+    dedicated branch for (``datetime.date``, ``Decimal``, ``Fraction``,
+    ``tuple``, ``set``/``frozenset``, ``Path``, …) and would otherwise compile
+    to the accept-all wildcard fallback (A02-F003).
+
+    Such a value is captured and unified against a ``$headlit_<id>`` global
+    injected by the globals collector. Types the compiler already handles
+    inline (primitives, str/bytes, and structural term nodes) return False, as
+    do non-ground containers (which stay structural / keep the old wildcard).
+    """
+    term = deref(term)
+    if is_var(term):
+        return False
+    # Primitives emitted as ast.Constant; str/bytes have dedicated guards.
+    if term is None or isinstance(term, (bool, int, float, complex, str, bytes)):
+        return False
+    # Structural term types with dedicated head_to_match_pattern branches.
+    if isinstance(term, (list, dict, Compound, DictTerm, SetTerm, KWTerm,
+                         StarUnpack, Call, LoadName, LoadAttr,
+                         TupleLiteral, DictLiteral, SetLiteral)):
+        return False
+    if is_term_instance(term):
+        return False
+    if isinstance(term, type) and isinstance(term, PredicateMeta):
+        return False
+    # Ground containers with a nested unbound Var stay structural (a captured
+    # literal can't bind the inner Var) — keep the degraded wildcard for them.
+    if isinstance(term, (tuple, set, frozenset)):
+        return all(not is_var(deref(e)) for e in term)
+    return True
+
+
 def _is_star_list(term: Any) -> bool:
     """Return True if term is a list containing at least one StarUnpack."""
     return isinstance(term, list) and any(isinstance(e, StarUnpack) for e in term)
