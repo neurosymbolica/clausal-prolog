@@ -570,7 +570,11 @@ def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inte
 
 @_trampoline_builtin("union", 3)
 def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail):
-    """union(Set1, Set2, union) — union is Set1 ∪ Set2 (no duplicates)."""
+    """union(Set1, Set2, Union) — Union is Set1 followed by the elements of
+    Set2 not already in Set1 (SWI-consistent). Set1's OWN duplicates are
+    preserved (``union([1,1],[],U)`` = ``[1,1]``); only elements of Set2 that
+    already occur in Set1 are dropped. Use list_to_set/2 first for a true set.
+    """
     s1 = deref(set1)
     s2 = deref(set2)
     s1_items = _as_items(s1)
@@ -949,10 +953,10 @@ def _transpose__2(matrix, transposed, trail, k):
         r = deref(row)
         items = _as_items(r)
         if items is None:
-            # F055: outer str-matrix mode — a 1-char-str "row" treated
-            # as a single-element row so transpose("ab") yields
-            # [['a'], ['b']]. Falls through here only for outer
-            # sequences that aren't themselves sequences.
+            # A non-sequence row (e.g. an int) is treated as a single-cell
+            # row. This does NOT fire for str rows: _as_items("a") is ['a'],
+            # so transpose("ab") reads two 1-char rows and yields the single
+            # column [['a', 'b']] (F024: not [['a'], ['b']]).
             items = [r]
         rows.append(items)
     if len(set(len(r) for r in rows)) != 1:

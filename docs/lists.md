@@ -71,7 +71,10 @@ Test("check") <- in_check("b", ["a", "b", "c"])
 ### append/3
 
 `append(L1, L2, L3)` — relates three lists such that `L3` is `L1` followed by
-`L2`. Works in all directions:
+`L2`. Works in the three modes shown below — concatenation (`L1`, `L2`
+bound), splitting a bound `L3`, and extracting the remainder from a bound
+`L1` and `L3`. (Open partial-list mode — `L1` bound with `L2` and `L3`
+unbound — is not supported.)
 
 ```clausal
 # Concatenate
@@ -255,7 +258,10 @@ Test("to_set") <- list_to_set([1, 2, 1, 3, 2], [1, 2, 3])
 
 ### union/3
 
-`union(S1, S2, Result)` — elements in either set, no duplicates.
+`union(S1, S2, Result)` — `S1` followed by the elements of `S2` not already
+in `S1` (SWI-consistent). `S1`'s own duplicates are preserved
+(`union([1,1], [], U)` gives `[1,1]`); run `list_to_set/2` first for a true
+set.
 
 ```clausal
 Test("union") <- union([1, 2, 3], [2, 3, 4], [1, 2, 3, 4])
