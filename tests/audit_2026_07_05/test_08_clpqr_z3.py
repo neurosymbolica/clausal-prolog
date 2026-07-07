@@ -77,9 +77,6 @@ from clausal.terms import Add, Sub, Mult, Mod  # noqa: E402
 class TestClpqSoundness:
     """Confirmed soundness bugs: unsatisfiable stores accepted."""
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F001: fix_variable overwrites tableau bounds; "
-                              "q_le-only bound not enforced on unify")
     def test_qle_bound_then_unify_outside_fails(self):
         t = Trail()
         x = Var()
