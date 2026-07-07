@@ -805,6 +805,22 @@ class _ClausalToProlog:
         op_str = op_map.get(type(node.op), "???")
         return PCompound(op_str, (left, right))
 
+    @staticmethod
+    def _is_arith_operand(node: python_ast.expr) -> bool:
+        """True if *node* is a compound arithmetic expression.
+
+        Used to distinguish arithmetic `==`/`!=` (`X == Y + 1`, an evaluation)
+        from structural `==`/`!=` (`X == foo`), so the former round-trips to
+        Prolog `=:=`/`=\\=` rather than `==`/`\\==` (F032).
+        """
+        if isinstance(node, python_ast.BinOp):
+            return True
+        if isinstance(node, python_ast.UnaryOp) and isinstance(
+            node.op, (python_ast.USub, python_ast.UAdd)
+        ):
+            return True
+        return False
+
     def _convert_compare(self, node: python_ast.Compare) -> PTerm:
         """Convert comparison operators.
 
@@ -812,8 +828,8 @@ class _ClausalToProlog:
         - X is Y → X = Y (Unify)
         - X is not Y → dif(X, Y) (DoesNotUnify)
         - X := Expr → X is Expr (Evaluate)
-        - X == Y → X == Y (ArithEq)
-        - X != Y → X \\== Y (ArithNeq)
+        - X == Y → X == Y (structural) / X =:= Y+1 (arithmetic operand)
+        - X != Y → X \\== Y (structural) / X =\\= Y+1 (arithmetic operand)
         """
         # First check for <- arrow (should already be handled at statement level)
         # Handle single comparison
@@ -835,10 +851,14 @@ class _ClausalToProlog:
                 return PCompound("dif", (left, right))
 
             if isinstance(op, python_ast.Eq):
-                return PCompound("==", (left, right))
+                arith = (self._is_arith_operand(node.left)
+                         or self._is_arith_operand(node.comparators[0]))
+                return PCompound("=:=" if arith else "==", (left, right))
 
             if isinstance(op, python_ast.NotEq):
-                return PCompound("\\==", (left, right))
+                arith = (self._is_arith_operand(node.left)
+                         or self._is_arith_operand(node.comparators[0]))
+                return PCompound("=\\=" if arith else "\\==", (left, right))
 
             if isinstance(op, python_ast.Lt):
                 # Check for := (walrus-like evaluation)

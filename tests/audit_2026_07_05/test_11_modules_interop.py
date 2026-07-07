@@ -486,9 +486,8 @@ def test_F031_floordiv_export_semantics():
     assert " A // B" not in out  # must be div / floored equivalent
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F032: =:= → == round-trips to "
-                   "structural \\== semantics; arithmetic nature lost")
 def test_F032_arith_eq_roundtrip():
+    # A11-F032 (fixed): arithmetic-operand == exports as =:=.
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
     back = clausal_source_to_prolog("Q(X, Y) <- (X == Y + 1)\n")
     assert "=:=" in back or " is " in back
