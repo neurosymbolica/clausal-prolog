@@ -10,7 +10,7 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify, is_var, put_attr, get_attr
 from clausal.logic.clpb import (
-    B_KEY, HASH_KEY,
+    B_KEY,
     BDD_TRUE, BDD_FALSE, BDDNode, BoolState,
     BoolEq, BoolImpl,
     enumerate_var, make_node, apply, negate, restrict,

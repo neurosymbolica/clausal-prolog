@@ -41,7 +41,6 @@ from clausal.logic.predicate import make_predicate
 # ── Constants ────────────────────────────────────────────────────────────────
 
 B_KEY = "clpb"
-HASH_KEY = "clpb_hash"
 
 BDD_TRUE = 1
 BDD_FALSE = 0
@@ -803,7 +802,7 @@ except ImportError:
 
 __all__ = [
     "BDD_TRUE", "BDD_FALSE", "BDDNode",
-    "B_KEY", "HASH_KEY",
+    "B_KEY",
     "BoolEq", "BoolImpl", "BoolState",
     "enumerate_var", "make_node", "apply", "negate", "restrict",
     "sat", "taut", "sat_count", "bool_labeling",

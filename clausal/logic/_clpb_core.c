@@ -29,8 +29,8 @@ static PyObject *BDD_FALSE_OBJ;  /* Python int 0 */
 
 /* Macro for terminal checks — pointer comparison is safe because
    CPython caches small ints (-5..256) as singletons, and this is a
-   CPython C extension.  For extra safety, is_bdd_true/false also
-   accepts value comparison as fallback. */
+   CPython C extension.  BDD_TRUE/FALSE are those cached 1/0 singletons,
+   so is_bdd_true/false compare by pointer only (no value fallback). */
 static inline int is_bdd_true(PyObject *obj) {
     return obj == BDD_TRUE_OBJ;
 }

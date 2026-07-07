@@ -171,7 +171,7 @@ CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`Tr
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_clpb.py` (87 tests).
+    Tests are in `tests/test_clpb.py` (113 tests).
 
     - **BDD operations**: make_node, apply, restrict, _expr_to_bdd
     - **sat**: forcing, contradiction, tautology, sequential conjunction
