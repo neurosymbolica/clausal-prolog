@@ -178,7 +178,6 @@ class TestF004KWTermUnify:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF005UnifyGensRetention:
-    @pytest.mark.xfail(strict=False, reason="A01-F005: suspended generators pin dead trails")
     def test_dead_trails_are_collectable(self):
         sl = SegList([VarSeg(Var()), VarSeg(Var())])
         refs = []

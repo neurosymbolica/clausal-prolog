@@ -297,6 +297,138 @@ def _seg_unify_cache_key(other, trail):
     return (id(other), id(trail))
 
 
+# ── Seg* __unify__ generator cache (A01-F005) ──────────────────────────────────
+#
+# The public ``_seglist_unify_gen`` / ``_segstring_unify_gen`` /
+# ``_segbytes_unify_gen`` generators (used directly by the compiler as
+# ``$seglist_unify_gen`` and by tests via ``for _ in gen``) close over the
+# ``trail`` and are fine when driven to exhaustion locally. But
+# ``__unify__`` caches a *suspended* generator on ``self._unify_gens`` to
+# expose non-determinism across calls; a suspended generator's frame pins
+# its Trail (and everything the trail references) for the lifetime of the
+# Seg* term, and the ``id(trail)`` key made the dict grow one entry per
+# query forever (F005 probe: 20/20 dead trails stayed alive).
+#
+# The cache therefore drives a *trail-free* split enumerator (below) and
+# applies each split against the current trail inline. A suspended entry
+# holds only the walked term + target + split-iterator state — never the
+# trail — so dropped trails are collectable. The cache also keeps only the
+# current ``(target, trail)`` drive, closing any prior entry, so it can't
+# grow unboundedly. Re-enumeration after eviction restarts from the first
+# split, which is indistinguishable from a fresh trail state for a
+# correctly-driven caller.
+
+
+def _seg_split_gen(segments, target_len, concrete_len):
+    """Trail-free enumerator of candidate splits: yield one size-tuple per
+    weak composition of the free length across the term's VarSegs.
+
+    *concrete_len* is the total length consumed by concrete segments.
+    Holds no trail and performs no binding — the driver applies each split.
+    """
+    if target_len < concrete_len:
+        return
+    n_stars = sum(1 for s in segments if isinstance(s, VarSeg))
+    yield from _multi_star_splits(n_stars, target_len - concrete_len)
+
+
+def _apply_seglist_split(seglist, target_list, split, trail):
+    """Bind *seglist* against *target_list* for one *split*; return True on
+    success (bindings left on *trail*), False otherwise. Mirrors the inner
+    loop of :func:`_seglist_unify_gen`."""
+    from .logic.variables import unify
+    pos = 0
+    si = 0
+    for seg in seglist.segments:
+        if isinstance(seg, VarSeg):
+            sz = split[si]; si += 1
+            if not unify(seg.var, target_list[pos:pos + sz], trail):
+                return False
+            pos += sz
+        else:
+            for elem in seg.elements:
+                if pos >= len(target_list):
+                    return False
+                if not unify(elem, target_list[pos], trail):
+                    return False
+                pos += 1
+    return True
+
+
+def _apply_segstring_split(segstring, target_str, split, trail):
+    """SegString analogue of :func:`_apply_seglist_split` (str segments are
+    compared, not unified). Mirrors :func:`_segstring_unify_gen`."""
+    from .logic.variables import unify
+    pos = 0
+    si = 0
+    for seg in segstring.segments:
+        if isinstance(seg, VarSeg):
+            sz = split[si]; si += 1
+            if not unify(seg.var, target_str[pos:pos + sz], trail):
+                return False
+            pos += sz
+        else:  # str
+            end = pos + len(seg)
+            if target_str[pos:end] != seg:
+                return False
+            pos = end
+    return True
+
+
+def _apply_segbytes_split(segbytes, target_bytes, split, trail):
+    """SegBytes analogue of :func:`_apply_seglist_split`. Mirrors
+    :func:`_segbytes_unify_gen`."""
+    from .logic.variables import unify
+    pos = 0
+    si = 0
+    for seg in segbytes.segments:
+        if isinstance(seg, VarSeg):
+            sz = split[si]; si += 1
+            if not unify(seg.var, target_bytes[pos:pos + sz], trail):
+                return False
+            pos += sz
+        else:  # bytes
+            end = pos + len(seg)
+            if target_bytes[pos:end] != seg:
+                return False
+            pos = end
+    return True
+
+
+def _drive_seg_unify(cache, walked, other, trail, concrete_len, apply_fn):
+    """Advance the ``__unify__`` split-drive by one successful split.
+
+    ``cache`` maps ``(target-content, id(trail)) -> (split_gen, last_mark)``.
+    The generator is trail-free (:func:`_seg_split_gen`); ``apply_fn`` binds a
+    split against *trail*. Keeps only the current drive's entry (A01-F005)."""
+    key = _seg_unify_cache_key(other, trail)
+    entry = cache.get(key)
+    if entry is None:
+        # New (target, trail) drive: drop and close any stale entry so the
+        # cache never holds more than the drive in progress.
+        for old_gen, _ in cache.values():
+            old_gen.close()
+        cache.clear()
+        gen = _seg_split_gen(walked.segments, len(other), concrete_len)
+    else:
+        gen, last_mark = entry
+        if last_mark is not None:
+            # Undo the previous split's bindings before the next attempt,
+            # mirroring the public generator's post-yield ``trail.undo``.
+            trail.undo(last_mark)
+    while True:
+        try:
+            split = next(gen)
+        except StopIteration:
+            cache.pop(key, None)
+            return False
+        mark = trail.mark()
+        if apply_fn(walked, other, split, trail):
+            cache[key] = (gen, mark)
+            return True
+        trail.undo(mark)
+
+
 class SegList:
     """A first-class term representing a list with variable-length holes.
 
@@ -497,19 +629,14 @@ class SegList:
                 if isinstance(other, str):
                     other = list(other)
                 return unify(walked, other, trail)
-            # Non-ground — drive the cached generator one step.
-            # Pass string targets directly (string slicing returns substrings).
-            key = _seg_unify_cache_key(other, trail)
-            gen = self._unify_gens.get(key)
-            if gen is None:
-                gen = _seglist_unify_gen(walked, other, trail)
-                self._unify_gens[key] = gen
-            try:
-                next(gen)
-                return True
-            except StopIteration:
-                self._unify_gens.pop(key, None)
-                return False
+            # Non-ground — drive the cached split enumerator one step.
+            # String targets pass through directly (list/str slicing both
+            # yield the right shape). The cache holds a trail-free enumerator
+            # so it never pins the trail (A01-F005).
+            concrete_len = sum(len(s.elements) for s in walked.segments
+                               if isinstance(s, ConcreteSeg))
+            return _drive_seg_unify(self._unify_gens, walked, other, trail,
+                                    concrete_len, _apply_seglist_split)
         if isinstance(other, SegList):
             return NotImplemented
         return NotImplemented
@@ -985,17 +1112,11 @@ class SegString:
             walked = self.__walk__()
             if isinstance(walked, str):
                 return walked == other
-            key = _seg_unify_cache_key(other, trail)
-            gen = self._unify_gens.get(key)
-            if gen is None:
-                gen = _segstring_unify_gen(walked, other, trail)
-                self._unify_gens[key] = gen
-            try:
-                next(gen)
-                return True
-            except StopIteration:
-                self._unify_gens.pop(key, None)
-                return False
+            # Non-ground — trail-free split-drive (A01-F005).
+            concrete_len = sum(len(s) for s in walked.segments
+                               if isinstance(s, str))
+            return _drive_seg_unify(self._unify_gens, walked, other, trail,
+                                    concrete_len, _apply_segstring_split)
         if isinstance(other, list):
             # Ground SegString → str, then let C-level str↔list unification
             # (Phase 1) handle the comparison.
@@ -1321,17 +1442,11 @@ class SegBytes:
             walked = self.__walk__()
             if isinstance(walked, bytes):
                 return walked == other
-            key = _seg_unify_cache_key(other, trail)
-            gen = self._unify_gens.get(key)
-            if gen is None:
-                gen = _segbytes_unify_gen(walked, other, trail)
-                self._unify_gens[key] = gen
-            try:
-                next(gen)
-                return True
-            except StopIteration:
-                self._unify_gens.pop(key, None)
-                return False
+            # Non-ground — trail-free split-drive (A01-F005).
+            concrete_len = sum(len(s) for s in walked.segments
+                               if isinstance(s, bytes))
+            return _drive_seg_unify(self._unify_gens, walked, other, trail,
+                                    concrete_len, _apply_segbytes_split)
         if isinstance(other, list):
             # Ground SegBytes → bytes, then let C-level bytes↔list
             # unification handle the comparison.
