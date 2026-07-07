@@ -716,9 +716,8 @@ def test_F047_guard_negative_unit_literal_in_assign(tmp_path):
     assert [deref(v) for _ in call("T", v, module=_logic(mod))] == [-3]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F048: docs' own example "
-                   "mebi * Byte(1) raises TypeError (Byte is a Quantity)")
 def test_F048_byte_call_style_from_docs():
+    # A11-F048 (fixed): Quantity.__call__ scales (Byte(1) == 1*Byte).
     from clausal.modules.units import Byte, mebi
     assert (1 * mebi * Byte(1)).value == 8 * 2 ** 20
 
@@ -728,9 +727,8 @@ def test_F048_guard_byte_noncall_style():
     assert (1 * mebi * Byte).value == 8 * 2 ** 20
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F055: psi/horsepower constants "
-                   "rounded; every other imperial constant is exact")
 def test_F055_psi_consistent_with_lbf_per_sq_inch():
+    # A11-F055 (fixed): psi derived from lbf/in^2.
     from clausal.modules.imperial import psi, pound_force, inch
     assert psi.value == pytest.approx(pound_force.value / inch.value ** 2,
                                       rel=1e-12)
@@ -748,9 +746,8 @@ def test_F056_guard_imperial_in_unit_parens_works(tmp_path):
     assert got == pytest.approx(0.127)
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F056: SI prefix inside n(Unit) "
-                   "dies with raw AttributeError, not a designed error")
 def test_F056_prefix_in_unit_parens_clean_error():
+    # A11-F056 (fixed): prefix-as-unit raises a designed TypeError.
     from clausal.terms import Quantity, UnitsMismatch
     with pytest.raises((TypeError, UnitsMismatch)):
         Quantity(5, 1000)  # currently AttributeError
@@ -763,9 +760,8 @@ def test_F057_unit_pred_pow_integer_only():
         Metre ** 0.5
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F059: docs quick-start import "
-                   "line raises ImportError (has_units is a builtin, not exported)")
 def test_F059_docs_quickstart_import_line(tmp_path):
+    # A11-F059 (fixed): has_units re-exported from py.units.
     _load(tmp_path, '''
         -import_from(py.units, [m, kg, s, Newton, kilo, has_units, strip_units])
         T(V) <- strip_units(5(m), V)

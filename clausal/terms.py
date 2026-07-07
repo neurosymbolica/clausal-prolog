@@ -1811,8 +1811,24 @@ class Quantity:
             actual_dims = dims._dims
         else:
             actual_dims = dims
+        if not hasattr(actual_dims, 'items'):
+            # e.g. Quantity(5, 1000) from `5(kilo)` — an SI prefix scale, not a
+            # unit. Raise a designed error instead of a raw AttributeError from
+            # `.items()` below (F056).
+            raise TypeError(
+                f"cannot build a Quantity from {dims!r}: SI prefixes cannot be "
+                f"used as units"
+            )
         self._value = value
         self._dims = MappingProxyType({k: v for k, v in actual_dims.items() if v != 0})
+
+    def __call__(self, value):
+        """Scale this quantity by *value* — ``Byte(4)`` is ``4 * Byte`` (F048).
+
+        Lets a scaled-unit constant (e.g. ``Byte``, ``mebi``) be used in the
+        published ``n(Unit)`` call style, mirroring ``_UnitsPredicate.__call__``.
+        """
+        return Quantity(value, self)
 
     # ── Properties ──────────────────────────────────────────────────────────
 

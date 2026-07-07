@@ -501,3 +501,9 @@ make_quantity._register(3, _simple_to_trampoline(_make_dimensioned_impl))
 
 # Register the "units" attribute hook for AttVar-based dimensional variables.
 import clausal.logic.units_constraint as _units_constraint  # noqa: F401
+
+# Re-export has_units/2 so the documented `-import_from(py.units, [...,
+# has_units, ...])` quick-start line resolves. It is also registered as a
+# global builtin; this importable wrapper shares the same implementation (F059).
+has_units = _UnitsPredicate("has_units")
+has_units._register(2, _simple_to_trampoline(_units_constraint._has_units))
