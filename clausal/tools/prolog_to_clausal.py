@@ -102,8 +102,8 @@ _INFIX_MAP = {
 # implementations (truncation toward zero, not floor).
 _PROLOG_QUALIFIED_OPS = {
     "//":  "TruncDiv",   # ISO truncate-div (toward zero) vs Python // (floor)
-    "mod": "TruncMod",   # ISO mod (sign follows dividend) vs Python %
-    "rem": "Rem",        # ISO remainder
+    "mod": "TruncMod",   # ISO mod (sign follows divisor) — floored, like Python %
+    "rem": "Rem",        # ISO remainder (sign follows dividend)
 }
 
 # Prolog prefix → clausal equivalent

@@ -323,17 +323,15 @@ def test_F019_guard_hash_sha256_matches_hashlib():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F020: TruncMod implements ISO "
-                   "rem, not ISO mod (sign must follow the divisor)")
 def test_F020_mod_is_floored():
+    # A11-F020 (fixed): TruncMod is floored ISO mod (sign follows divisor).
     from clausal.modules.prolog import TruncMod
     assert TruncMod(-7, 3) == 2      # ISO: -7 mod 3 =:= 2
     assert TruncMod(7, -3) == -2     # sign follows divisor
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F021: TruncDiv routes through "
-                   "float — loses precision on ints >= 2**53")
 def test_F021_truncdiv_bignum_exact():
+    # A11-F021 (fixed): TruncDiv uses exact integer arithmetic.
     from clausal.modules.prolog import TruncDiv
     n = 10 ** 18 + 1
     assert TruncDiv(n, 1) == n
