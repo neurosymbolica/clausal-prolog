@@ -312,7 +312,6 @@ def _attvar_with_attr(t):
 
 class TestF004TermAttvarsBlindSpots:
 
-    @pytest.mark.xfail(strict=False, reason="A05-F004: term_attvars blind to tuples")
     def test_tuple(self):
         t = Trail()
         v = _attvar_with_attr(t)
@@ -320,7 +319,6 @@ class TestF004TermAttvarsBlindSpots:
         list(_term_attributed_variables__2((v,), out, t, []))
         assert deref(out) == [v]
 
-    @pytest.mark.xfail(strict=False, reason="A05-F004: term_attvars blind to plain dicts")
     def test_plain_dict(self):
         t = Trail()
         v = _attvar_with_attr(t)
@@ -328,7 +326,6 @@ class TestF004TermAttvarsBlindSpots:
         list(_term_attributed_variables__2({"a": v}, out, t, []))
         assert deref(out) == [v]
 
-    @pytest.mark.xfail(strict=False, reason="A05-F004: term_attvars blind to SegList")
     def test_seglist(self):
         t = Trail()
         v = _attvar_with_attr(t)
