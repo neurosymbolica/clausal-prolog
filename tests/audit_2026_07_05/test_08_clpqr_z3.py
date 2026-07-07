@@ -350,9 +350,6 @@ class TestClprModInterval:
 
 
 class TestClprAliasing:
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F011: RealNe does not detect aliasing; "
-                              "{X!=Y}, X is Y accepted")
     def test_real_ne_alias_fails(self):
         t = Trail()
         x, y = Var(), Var()
@@ -361,9 +358,6 @@ class TestClprAliasing:
         assert real_ne(x, y, t)
         assert not unify(x, y, t)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F010: {X<Y}, X is Y — strict-lt propagation "
-                              "walks the interval one ULP per pass (hang)")
     def test_real_lt_alias_unify_fails_promptly(self):
         code = (
             "from clausal.logic.variables import Var, Trail, unify\n"
@@ -377,9 +371,6 @@ class TestClprAliasing:
         assert cp is not None, "non-termination: unify after X<Y hung >6s"
         assert "RESULT False" in cp.stdout
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F010: {X<Y, Y<X} — ULP ping-pong hang "
-                              "instead of failure")
     def test_real_strict_cycle_fails_promptly(self):
         code = (
             "from clausal.logic.variables import Var, Trail\n"

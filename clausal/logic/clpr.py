@@ -572,6 +572,11 @@ class RealLtConstraint(RealConstraint):
     def propagate(self, trail: Trail, queue: deque) -> bool:
         lhs = deref(self.lhs)
         rhs = deref(self.rhs)
+        # Aliased operands: X < X is unsatisfiable.  Also prevents the
+        # ULP-by-ULP narrowing hang when {X<Y} is followed by X is Y
+        # (A08-F010).
+        if lhs is rhs:
+            return False
         llo, lhi = _expr_interval(lhs, trail)
         rlo, rhi = _expr_interval(rhs, trail)
         if llo >= rhi:
@@ -587,6 +592,10 @@ class RealNeConstraint(RealConstraint):
     def propagate(self, trail: Trail, queue: deque) -> bool:
         lhs = deref(self.lhs)
         rhs = deref(self.rhs)
+        # Aliased operands: X != X is unsatisfiable.  The point-interval check
+        # below misses this after X is Y aliases the two vars (A08-F011).
+        if lhs is rhs:
+            return False
         llo, lhi = _expr_interval(lhs, trail)
         rlo, rhi = _expr_interval(rhs, trail)
         # Only fail when both sides are a single point with equal value
@@ -598,11 +607,26 @@ class RealNeConstraint(RealConstraint):
 # ── Propagation engine ────────────────────────────────────────────────────────
 
 
+# A strict-inequality cycle ({X<Y, Y<X}) provably narrows the store to empty,
+# but only over ~1/ULP passes as each pass shaves a single ULP off both ends —
+# an effective hang.  Interval CLP(R) cannot decide such strict cycles exactly
+# without ε-augmented rationals (deferred, A08-D004), so bound the fixpoint:
+# a well-posed system reaches its fixpoint in far fewer steps, while ULP-creep
+# blows past the budget and is reported unsatisfiable (A08-F010).
+_PROPAGATE_STEP_BUDGET = 100_000
+
+
 def _propagate(queue: deque, trail: Trail) -> bool:
     """Fixpoint narrowing loop: process constraints until stable or wipeout."""
+    steps = 0
     while queue:
         constraint = queue.popleft()
         if not constraint.propagate(trail, queue):
+            return False
+        steps += 1
+        if steps > _PROPAGATE_STEP_BUDGET:
+            # Non-terminating ULP-creep — treat as unsatisfiable rather than
+            # hang (A08-F010).
             return False
     return True
 
