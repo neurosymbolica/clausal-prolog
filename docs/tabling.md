@@ -52,6 +52,9 @@ The directive must appear before any clauses for that predicate. Multiple predic
 ```clausal
 -table(reach_a/2)
 -table(reach_b/2)
+
+reach_a(X, X),
+reach_b(X, X),
 ```
 
 Tabled predicates are queried exactly like non-tabled ones — the tabling wrapper is transparent:

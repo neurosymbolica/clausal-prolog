@@ -211,9 +211,6 @@ badeqs(X) <- (X == "somestr")
 
 class TestF003DirectiveTargetValidation:
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A12-F003: -table naming an undefined predicate "
-                              "is silently ignored — should be a load error")
     def test_table_of_undefined_predicate_errors_at_load(self, load):
         with pytest.raises(Exception):
             load("f003_ghost", """\
@@ -222,9 +219,6 @@ class TestF003DirectiveTargetValidation:
 q(1),
 """)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A12-F003: -table with wrong arity silently "
-                              "leaves the predicate untabled (dup answers)")
     def test_table_with_wrong_arity(self, load):
         # -table(reach/3) but reach/2 is defined: load should error, or at
         # minimum reach/2 must not silently lose tabling (diamond dedup).
