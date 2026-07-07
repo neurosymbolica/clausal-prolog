@@ -1,3 +1,7 @@
+**DONE — commits 0ca046ba (fixpoint-rerun) + 3c195a10 (SCC completion).** The trampoline leader now drives its dispatch to a FIXPOINT (option a/b hybrid) instead of a single pass + broken consumer-resume, and adds SCC-aware completion (option c): a leader that consumes an evaluating ancestor is an SCC member, dormant members are re-led from the root fixpoint, and _complete_scc sweeps the component. pop_leader(entry) removes the specific entry (robust to GC-ordered abandonment). All 4 F001 tests + a query-order-invariant test pass; solution sets are clause-order- and query-order-independent. Full suite green.
+
+---
+
 # investigate(A04-F001): SLG completion cannot resume consumer continuations — answers silently lost [Opus]
 
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F001
