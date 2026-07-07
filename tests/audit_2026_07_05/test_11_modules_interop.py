@@ -614,9 +614,8 @@ def test_F049_path_cost_parallel_edges_min():
     assert sols == [3]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F050: min_spanning_tree returns "
-                   "a partial one-component tree on disconnected graphs")
 def test_F050_mst_disconnected_fails():
+    # A11-F050 (fixed): disconnected graph has no spanning tree, fails.
     t, c = Var(), Var()
     sols = _gsols(G._min_spanning_tree__3, [["a", "b", 1], ["c", "d", 2]], t, c)
     assert sols == []  # no spanning tree exists

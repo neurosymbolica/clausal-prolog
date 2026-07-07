@@ -528,6 +528,10 @@ def _spanning_tree__2(this_generator, _proceed, _fail, _catcher, edges, tree, tr
                     visited.add(neighbor)
                     tree_edges.append([current, neighbor])
                     queue.append(neighbor)
+        if len(visited) < len(verts):
+            # No spanning tree exists for a disconnected graph (F050).
+            yield (_fail, DONE)
+            return
         mark = trail.mark()
         if unify(tree, tree_edges, trail):
             yield (_proceed, None)
@@ -564,6 +568,11 @@ def _min_spanning_tree__3(this_generator, _proceed, _fail, _catcher, edges, tree
             for neighbor, nw in wadj.get(v, []):
                 if neighbor not in visited:
                     heapq.heappush(heap, (nw, v, neighbor))
+        if len(visited) < len(verts):
+            # No spanning TREE exists for a disconnected graph (symmetric with
+            # topological_sort failing on a cycle) — F050.
+            yield (_fail, DONE)
+            return
         mark = trail.mark()
         if unify(tree, tree_edges, trail) and unify(total_cost, cost, trail):
             yield (_proceed, None)
