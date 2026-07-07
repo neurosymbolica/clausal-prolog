@@ -61,6 +61,25 @@ class PartialTermError(Exception):
     """
 
 
+def _slice_within_prefix(index, prefix_len: int) -> bool:
+    """True if ``index`` is a forward slice fully served by the first
+    ``prefix_len`` elements of a non-ground Seg* term (A01-F010).
+
+    Requires a non-negative ``start`` (or None → 0), a concrete ``stop``
+    no larger than the prefix, and a forward ``step``. Negative bounds,
+    open-ended (``stop is None``) or reverse slices depend on the trailing
+    VarSeg's eventual binding and are *not* knowable from the prefix.
+    """
+    if not isinstance(index, slice):
+        return False
+    start, stop, step = index.start, index.stop, index.step
+    return (
+        (start is None or (isinstance(start, int) and start >= 0))
+        and isinstance(stop, int) and 0 <= stop <= prefix_len
+        and (step is None or (isinstance(step, int) and step > 0))
+    )
+
+
 # ── New term types ─────────────────────────────────────────────────────────────
 
 @dataclass
@@ -601,6 +620,12 @@ class SegList:
                 # indices that land within the prefix already collected.
                 if isinstance(index, int) and 0 <= index < len(elements):
                     return elements[index]
+                # A forward slice bounded entirely within the collected
+                # prefix is fully knowable even though a VarSeg follows
+                # (A01-F010). Negative/open-ended/reverse slices still
+                # depend on the VarSeg and keep raising.
+                if _slice_within_prefix(index, len(elements)):
+                    return elements[index]
                 raise PartialTermError(
                     f"SegList[{index!r}] requires resolving an unbound "
                     f"VarSeg; only the concrete prefix (indices "
@@ -1076,6 +1101,10 @@ class SegString:
             else:
                 if isinstance(index, int) and 0 <= index < len(chars):
                     return chars[index]
+                # In-prefix forward slice is knowable (A01-F010); return a
+                # str to match ground SegString slicing.
+                if _slice_within_prefix(index, len(chars)):
+                    return "".join(chars)[index]
                 raise PartialTermError(
                     f"SegString[{index!r}] requires resolving an unbound "
                     f"VarSeg; only the concrete prefix (indices "
@@ -1369,6 +1398,10 @@ class SegBytes:
             else:
                 if isinstance(index, int) and 0 <= index < len(parts):
                     return parts[index]
+                # In-prefix forward slice is knowable (A01-F010); return
+                # bytes to match ground SegBytes slicing.
+                if _slice_within_prefix(index, len(parts)):
+                    return bytes(parts)[index]
                 raise PartialTermError(
                     f"SegBytes[{index!r}] requires resolving an unbound "
                     f"VarSeg; only the concrete prefix (indices "

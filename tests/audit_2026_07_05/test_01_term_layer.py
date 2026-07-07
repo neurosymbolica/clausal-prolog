@@ -312,11 +312,20 @@ class TestF009SegStringScalarBinding:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF010SliceWithinPrefix:
-    @pytest.mark.xfail(strict=False, reason="A01-F010: in-prefix slice is knowable but raises")
     def test_segstring_slice_in_prefix(self):
         B = Var()
         ss = SegString(["abc", VarSeg(B)])
         assert ss[0:2] == "ab"
+
+    def test_seglist_slice_in_prefix(self):
+        B = Var()
+        sl = SegList([ConcreteSeg([1, 2, 3]), VarSeg(B)])
+        assert sl[0:2] == [1, 2]
+
+    def test_segbytes_slice_in_prefix(self):
+        B = Var()
+        sb = SegBytes([b"abc", VarSeg(B)])
+        assert sb[0:2] == b"ab"
 
     def test_control_int_index_semantics(self):
         B = Var()
@@ -324,6 +333,16 @@ class TestF010SliceWithinPrefix:
         assert ss[1] == "b"
         with pytest.raises(PartialTermError):
             ss[5]  # beyond knowable prefix
+
+    def test_control_out_of_prefix_slice_still_raises(self):
+        B = Var()
+        ss = SegString(["abc", VarSeg(B)])
+        with pytest.raises(PartialTermError):
+            ss[0:5]        # stop past prefix depends on the VarSeg
+        with pytest.raises(PartialTermError):
+            ss[2:]         # open-ended depends on the VarSeg
+        with pytest.raises(PartialTermError):
+            ss[-1:2]       # negative start depends on total length
 
 
 # ─────────────────────────────────────────────────────────────────────────────
