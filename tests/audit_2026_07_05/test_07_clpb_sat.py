@@ -676,10 +676,6 @@ class TestSuspectedBugs:
             "throwaway queries")
 
     @pytest.mark.timeout(90)  # override the suite-wide 10s pytest-timeout
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F007: c_apply_rec/c_restrict_rec/c_collect_ids_rec recurse on the "
-        "C stack without depth limits — deep BDDs segfault (Python fallback "
-        "raises RecursionError instead)"))
     def test_A07_F007_deep_bdd_no_segfault(self):
         script = textwrap.dedent("""
             import sys
