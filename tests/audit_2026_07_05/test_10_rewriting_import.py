@@ -55,9 +55,6 @@ def _values(goal, var):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F001: body-position ! emits Cut() "
-                   "instead of the documented SyntaxError (prolog_to_clausal "
-                   "_emit_goal preempts _emit_atom's rejection)")
 def test_F001_pl_cut_rejected_at_import(tmp_path):
     pl = tmp_path / "a10_cut.pl"
     pl.write_text("f(X) :- X > 0, !.\n")

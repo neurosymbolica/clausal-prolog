@@ -268,9 +268,12 @@ class _PrologToClausal:
 
     def _emit_goal(self, goal: PTerm) -> str:
         """Emit a single goal in body context."""
-        # Cut: ! → Cut()
+        # A10-F001: a body-position cut must be REJECTED, not emitted as a
+        # dead ``Cut()`` goal (no Cut predicate exists — the query later died
+        # with KeyError). Delegate to _emit_atom, which raises the documented
+        # PrologTranslationError (the cut-free contract, docs/import.md).
         if isinstance(goal, PAtom) and goal.name == "!":
-            return "Cut()"
+            return self._emit_atom(goal)
         # Disjunction: (A ; B) → (A or B)
         if isinstance(goal, PCompound) and goal.functor == ";":
             return self._emit_disjunction(goal)
