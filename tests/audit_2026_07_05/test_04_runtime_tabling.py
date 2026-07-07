@@ -613,8 +613,12 @@ class TestF001CompletionLosesConsumers:
 
 
 class TestF002NafTabledNoEntry:
-    @pytest.mark.xfail(strict=False, reason="A04-F002: NAF on a never-called "
-                       "tabled subgoal succeeds although the goal is derivable")
+    @pytest.mark.xfail(strict=False, reason="A04-F002 residual: NAF on a "
+                       "never-called tabled subgoal needs SPAWNING the positive "
+                       "goal (no subsuming table exists yet). Spawn requires "
+                       "dispatch access threaded from the compiler + WFS-cycle "
+                       "integration — investigate-A04-wfs-variant-resolution.md "
+                       "(A04-D004). The subsuming-variant case is fixed.")
     def test_naf_before_any_positive_query(self, load):
         m = load("f002a", NAF_SRC)
         R = Var()
@@ -627,18 +631,22 @@ class TestF002NafTabledNoEntry:
         R = Var()
         assert answers(call("ntq", R, module=m), R) == []
 
-    @pytest.mark.xfail(strict=False, reason="A04-F002: exact-variant lookup "
-                       "ignores a complete var-variant table holding the answer")
     def test_naf_ignores_subsuming_complete_variant(self, load):
-        m = load("f002c", NAF_SRC.replace("tp", "tr2").replace("ntp", "ntr"))
+        # A04-F002: `not tr2(1,2)` has no exact-variant entry, but the complete
+        # var-variant table `tr2(_,_)` (populated by the query below) subsumes
+        # it and holds (1,2) — negation must fail. (Fixture built ntp-first so
+        # "tp" -> "tr2" does not corrupt "ntp".)
+        m = load("f002c", NAF_SRC.replace("ntp", "ntr").replace("tp", "tr2"))
         X, Y = Var(), Var()
         assert answers(call("tr2", X, Y, module=m), X, Y) == [(1, 2)]
         R = Var()
         got = answers(call("ntr", R, module=m), R)
         assert got == []
 
-    @pytest.mark.xfail(strict=False, reason="A04-F002: acyclic negation chain — "
-                       "even_node(1) is provably false but succeeds as true")
+    @pytest.mark.xfail(strict=False, reason="A04-F002 residual: the even/odd "
+                       "chain reaches NAF on never-yet-called variants, which "
+                       "needs SPAWNING (see test_naf_before_any_positive_query) "
+                       "— investigate-A04-wfs-variant-resolution.md (A04-D004).")
     def test_acyclic_negation_chain_truth(self, load):
         m = load("f002d", EVEN_ODD_SRC)
         X = Var()
@@ -669,9 +677,10 @@ class TestF003WfsModeOrderDependence:
 
 
 class TestF004QueryWfsStub:
-    @pytest.mark.xfail(strict=False, reason="A04-F004: query_wfs hardcodes "
-                       "_truth=True; symmetric win answers are undefined")
     def test_query_wfs_reports_undefined(self, load):
+        # A04-F004: query_wfs reads the tabled entry's real conditions — the
+        # symmetric-win answers are internally conditional, so both are
+        # annotated "undefined" instead of a hardcoded True.
         m = load("f004", WIN_SYM_SRC.replace("win", "winu").replace("move", "movu"))
         X = Var()
         res = query_wfs(m.winu(X), {"X": X}, m)

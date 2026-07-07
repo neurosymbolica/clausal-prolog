@@ -632,13 +632,58 @@ def query_wfs(
     for _ in solve(goal, module, trail):
         results.append({name: _deref_walk(var) for name, var in variables.items()})
 
-    # Annotate with truth values from tabling conditions.
-    # After solve() completes, all tabled predicates involved should be complete.
-    # We attach truth=True to all results by default (non-tabled or unconditional).
-    for r in results:
-        r["_truth"] = True
+    # A04-F004: annotate each result with its REAL WFS truth value read from the
+    # tabled entry's conditions, instead of hardcoding True. A single tabled-goal
+    # query maps each result to a stored answer (by normalized value) and uses
+    # TableEntry.truth_value(i) → True | "undefined". Non-tabled goals stay True
+    # (documented). Composite/conjunctive goals are not decomposed here and keep
+    # True (a min-truth semantics over tabled conjuncts is future work).
+    entry, goal_args = _tabled_entry_for_goal(goal, module, trail)
+    if entry is None:
+        for r in results:
+            r["_truth"] = True
+        return results
 
+    from clausal.logic.tabling import _normalize_for_key, _FAILED
+    var_to_name = {id(v): name for name, v in variables.items()}
+    norm_answers = [tuple(_normalize_for_key(x) for x in ans) for ans in entry.answers]
+    for r in results:
+        cand = []
+        for a in goal_args:
+            da = deref(a)
+            cand.append(r[var_to_name[id(da)]] if id(da) in var_to_name else da)
+        norm_cand = tuple(_normalize_for_key(x) for x in cand)
+        truth = True
+        for i, na in enumerate(norm_answers):
+            if entry.conditions[i] is _FAILED:
+                continue
+            if na == norm_cand:
+                truth = entry.truth_value(i)
+                break
+        r["_truth"] = truth
     return results
+
+
+def _tabled_entry_for_goal(goal, module, trail):
+    """Return ``(TableEntry, goal_args)`` for a single tabled-predicate goal,
+    or ``(None, None)`` for a non-tabled or composite goal (A04-F004)."""
+    if is_term_instance(goal):
+        functor = type(goal).__name__
+        goal_args = [getattr(goal, f) for f in term_field_names(goal)]
+    elif isinstance(goal, Compound):
+        functor = goal.functor
+        goal_args = list(goal.args)
+    else:
+        return None, None
+    if module is None:
+        return None, None
+    mod = _coerce_module(module)
+    arity = len(goal_args)
+    if not mod.db.is_tabled(functor, arity):
+        return None, None
+    from clausal.logic.tabling import make_subgoal_key
+    key = make_subgoal_key(goal_args, trail or Trail())
+    return mod.db.table_store.get((functor, arity, key)), goal_args
 
 
 __all__ = [

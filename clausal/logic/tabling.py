@@ -292,10 +292,34 @@ def _naf_tabled(functor, arity, args, trail, table_store):
             leader._current_delays.add(dn)
         return True  # conditionally succeed
 
-    # No exact variant entry. Check if ANY variant of this predicate is
-    # evaluating — if so, we're in a cycle through negation and must delay.
-    # This handles cases like: leader evaluates win(_), body calls not win(2),
-    # which is a different variant but still part of the same SLG cycle.
+    # No exact-variant entry. A COMPLETE same-functor entry whose variant key
+    # SUBSUMES this call already knows the full answer set for the call's
+    # instances (A04-F002): e.g. a complete ``tp(_,_)`` table answers
+    # ``not tp(1,2)`` even though there is no exact ``tp(1,2)`` entry. Check the
+    # call against such a table before any fallthrough.
+    from clausal.logic.variables import Trail as _Trail
+    for (f, a, k), e in table_store.items():
+        if f != functor or a != arity or e.status != "complete":
+            continue
+        if not _key_subsumes(k, key):
+            continue
+        scratch = _Trail()
+        for i, stored in enumerate(e.answers):
+            if e.conditions[i] is _FAILED:
+                continue
+            mark = scratch.mark()
+            if _unify_answer(list(args), list(stored), scratch):
+                scratch.undo(mark)
+                return False  # subsuming complete table has a matching answer
+            scratch.undo(mark)
+        # A subsuming complete table with no matching answer means the goal is
+        # false for this call → negation succeeds.
+        return True
+
+    # Check if ANY variant of this predicate is evaluating — if so, we're in a
+    # cycle through negation and must delay. This handles cases like: leader
+    # evaluates win(_), body calls not win(2), a different variant but still
+    # part of the same SLG cycle.
     for (f, a, _k), e in table_store.items():
         if f == functor and a == arity and e.status == "evaluating":
             frozen = freeze_args(args, trail)
@@ -305,8 +329,23 @@ def _naf_tabled(functor, arity, args, trail, table_store):
                 leader._current_delays.add(dn)
             return True  # conditionally succeed
 
-    # No entry at all — predicate not yet called. Treat as no answers.
+    # No entry at all — predicate never called for a subsuming variant.
+    # SOUND resolution requires spawning the positive subgoal (evaluate the
+    # table, then re-check) — that needs dispatch access threaded from the
+    # compiler and full WFS-cycle integration, tracked in
+    # investigate-A04-wfs-variant-resolution.md (parked decision A04-D004).
+    # Until then this conservatively succeeds (the historical behaviour).
     return True
+
+
+def _key_subsumes(general: tuple, specific: tuple) -> bool:
+    """True if variant key ``general`` is at least as general as ``specific``
+    — each position is the unbound ``_VAR`` sentinel or structurally identical.
+    A complete table under ``general`` then covers every instance of a call
+    whose key is ``specific`` (A04-F002 subsuming-variant NAF)."""
+    if len(general) != len(specific):
+        return False
+    return all(g is _VAR or g == s for g, s in zip(general, specific))
 
 
 # ── Conditional answer resolution (WFS) ─────────────────────────────────
