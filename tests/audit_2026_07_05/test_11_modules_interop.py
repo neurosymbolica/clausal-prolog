@@ -65,9 +65,8 @@ def _gsols(fn, *args, out=None):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F001: clausal/regex.py imports "
-                   "nonexistent clausal.modules.regex (impl is modules/py/re.py)")
 def test_F001_regex_shim_importable():
+    """A11-F001 (fixed): clausal/regex.py re-exports modules/py/re.py."""
     import clausal.regex
     assert hasattr(clausal.regex, "match")
 
