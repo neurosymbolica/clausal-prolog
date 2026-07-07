@@ -1,5 +1,13 @@
 # fix(A06-F011): sum_/scalar_product silently ignore Python-spelled ops
 
+> **DEFERRED (2026-07-07):** intentionally not implemented — gated on the parked
+> design decision A06-D002 (op-string vocabulary), which per standing mandate is
+> the USER's call and goes to a todo, never asked interactively. The
+> recommendation ("accept both spellings + raise on unknown") is clear and the
+> fix is low-risk/additive, but the direction is still a policy call. Flip once
+> D002 is answered. See
+> `todo/audit-2026-07-05/investigate-A06-parked-design-decisions.md` §2.
+
 **Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F011
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestSumOpStrings::test_python_style_ops_post (xfail — flip to pass)
 **Gated by:** A06-D002 (op vocabulary) — recommendation: accept both, raise on unknown.
