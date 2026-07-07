@@ -594,7 +594,7 @@ class TestF009CpdExtensionChaining:
         spec = sorted(sols(mod, mod.CountGraph([["path", "a", Y2]], C2), Y2, C2))
         assert spec == gen == [("b", 2), ("c", 4), ("d", 4)]
 
-    @pytest.mark.xfail(strict=False, reason="A03-F009: CPD chaining emits duplicate Evaluate targets; deep solutions lost")
+    @pytest.mark.xfail(strict=False, reason="A03-F009: CPD extension chaining — deep clauses telescope the count with one spurious increment per level (deforestation chain-join, not just var-freshening)")
     def test_cpd_counting_matches_generic(self, mod):
         Y, C = Var(), Var()
         got = sorted(sols(mod, mod.CountGraphCPD([["path", "a", Y]], C), Y, C))

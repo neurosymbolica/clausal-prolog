@@ -43,3 +43,32 @@ telescopes from the rec-call's count var to the head's count var.
   in-tree `specialize_cpd.clausal` fixture, SolveLimit pre-match chaining
   (docs claim `MAX > 0, MAX1 == MAX-1` chains per inlined step — add a CPD
   SolveLimit test while here; the same chain_subst path emits it).
+
+## STATUS 2026-07-07 (attempted, reverted — still xfail)
+
+Root cause confirmed **two-fold**, not one:
+
+1. **LHS collision** (the dump above): the recursive `_deforest_clause`
+   re-chain reuses a var as `Evaluate` LHS twice, so the clause always fails
+   and deep solutions are lost. A per-level freshening map for the chained
+   pre/post copies (a `_subst` map that mints a fresh `Var` for any non-seeded
+   id, seeded with the head→rec / rec→fresh boundary telescoping) makes every
+   LHS distinct and restores the deep solutions.
+
+2. **Off-by-one in the telescoped count** — the harder half. After (1),
+   `CountGraphCPD` returns `("c",5)`/`("d",5)` instead of `4`: clause 7 (the
+   2-hop path) emits **4** increments where the generic emits 3. The buggy
+   dump ALSO had 4 (with the collision), so just breaking the collision keeps
+   the extra link. The collision point is not a var that should be *freshened*
+   (that ADDS a link) — it is the **boundary where the inner level's
+   head-count var should JOIN the outer level's rec-count var** (one shared
+   increment, not two). Freshening and joining are opposite operations at
+   that seam.
+
+**Direction for the retry:** compute the whole extra-arg chain in ONE pass per
+final clause (the todo's second option) rather than re-chaining recursively —
+track, per output clause, the ordered list of increment links and coalesce the
+inner-head↔outer-rec boundary so consecutive chained/original segments share
+one link. The recursive `chain_subst` seam cannot express the join with a
+single-level `_subst`. Reverted the freshening-only attempt because it ships
+plausible-but-wrong counts (worse than the current lost-solutions failure).
