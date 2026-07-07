@@ -2225,10 +2225,18 @@ __all__ = [
     "DictTerm",
     "SetTerm",
     "KWTerm",
+    "SegList",
     "SegString",
     "SegBytes",
+    "ConcreteSeg",
+    "VarSeg",
     "PyThunk",
     "FStringThunk",
+    # Units
+    "Quantity",
+    "UnitsMismatch",
+    # Partial-term error (catchable by callers of partial Seg* ops)
+    "PartialTermError",
     # Rendering style
     "TermStyle",
     "ANSI_COLORS",

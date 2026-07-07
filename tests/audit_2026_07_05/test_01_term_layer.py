@@ -341,7 +341,6 @@ class TestF010SliceWithinPrefix:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF011AllExports:
-    @pytest.mark.xfail(strict=False, reason="A01-F011: public names missing from terms.__all__")
     def test_public_term_types_exported(self):
         import clausal.terms as terms_mod
         for name in ("SegList", "ConcreteSeg", "VarSeg", "Quantity",
