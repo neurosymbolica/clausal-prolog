@@ -571,9 +571,6 @@ class TestClpsat:
 class TestSuspectedBugs:
 
     @pytest.mark.timeout(30)  # override the suite-wide 10s pytest-timeout
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F001: _collect_bdd_var_ids traverses the shared BDD as a tree "
-        "(no visited set) → sat/sat_count exponential in #vars on XOR chains"))
     def test_A07_F001_xor_chain_sat_not_exponential(self):
         # sat over a 30-var XOR chain builds a 59-node BDD; a linear
         # implementation finishes in milliseconds.  Current code needs minutes.

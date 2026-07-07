@@ -570,13 +570,25 @@ def _propagate_forced(bdd, trail: Trail) -> bool:
     return True
 
 
-def _collect_bdd_var_ids(bdd, result: set):
-    """Collect all variable IDs present in a BDD."""
+def _collect_bdd_var_ids(bdd, result: set, _seen: set | None = None):
+    """Collect all variable IDs present in a BDD.
+
+    A BDD is a hash-consed DAG: shared sub-nodes are the same object, so a
+    visited-set keyed by node identity keeps this O(nodes) instead of
+    O(paths) — without it an n-var XOR chain (2n-1 nodes, 2^n paths) makes
+    sat/sat_count exponential (A07-F001).
+    """
+    if _seen is None:
+        _seen = set()
     if not isinstance(bdd, BDDNode):
         return
+    nid = id(bdd)
+    if nid in _seen:
+        return
+    _seen.add(nid)
     result.add(bdd.var_id)
-    _collect_bdd_var_ids(bdd.high, result)
-    _collect_bdd_var_ids(bdd.low, result)
+    _collect_bdd_var_ids(bdd.high, result, _seen)
+    _collect_bdd_var_ids(bdd.low, result, _seen)
 
 
 def taut(expr, t_var, trail: Trail) -> bool:

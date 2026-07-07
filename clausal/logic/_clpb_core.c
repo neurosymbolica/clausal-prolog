@@ -523,7 +523,7 @@ c_apply_rec(int op, PyObject *f, PyObject *g,
 
 static PyObject *
 c_restrict_rec(PyObject *bdd, int var_id, int value,
-               PyObject *unique_tables, PyObject *id_to_var)
+               PyObject *unique_tables, PyObject *id_to_var, PyObject *memo)
 {
     if (!is_bdd_node(bdd)) {
         Py_INCREF(bdd);
@@ -542,19 +542,36 @@ c_restrict_rec(PyObject *bdd, int var_id, int value,
         return bdd;
     }
 
+    /* Memoize by node identity so a hash-consed DAG is restricted in
+       O(nodes), not O(paths).  Without it, _propagate_forced's per-variable
+       restrict sweep is O(vars x 2^vars) — the dominant cost of the
+       exponential-sat blowup (A07-F001).  var_id/value are fixed per call, so
+       the node pointer alone keys the result. */
+    PyObject *memo_key = PyLong_FromVoidPtr(bdd);
+    if (!memo_key) return NULL;
+    PyObject *cached = PyDict_GetItemWithError(memo, memo_key);
+    if (cached) { Py_INCREF(cached); Py_DECREF(memo_key); return cached; }
+    if (PyErr_Occurred()) { Py_DECREF(memo_key); return NULL; }
+
     PyObject *high = c_restrict_rec(node->high, var_id, value,
-                                    unique_tables, id_to_var);
-    if (!high) return NULL;
+                                    unique_tables, id_to_var, memo);
+    if (!high) { Py_DECREF(memo_key); return NULL; }
 
     PyObject *low = c_restrict_rec(node->low, var_id, value,
-                                   unique_tables, id_to_var);
-    if (!low) { Py_DECREF(high); return NULL; }
+                                   unique_tables, id_to_var, memo);
+    if (!low) { Py_DECREF(high); Py_DECREF(memo_key); return NULL; }
 
     /* Reduction + hash-consing via make_node */
     PyObject *result = c_make_node(node->var_id, high, low,
                                    unique_tables, id_to_var);
     Py_DECREF(high);
     Py_DECREF(low);
+    if (result && PyDict_SetItem(memo, memo_key, result) < 0) {
+        Py_DECREF(result);
+        Py_DECREF(memo_key);
+        return NULL;
+    }
+    Py_DECREF(memo_key);
     return result;         /* may be NULL on error */
 }
 
@@ -707,10 +724,22 @@ c_count_paths_big(PyObject *bdd, PyObject *level_map, int n_vars,
 /* ── Recursive collect_bdd_var_ids ──────────────────────────────── */
 
 static int
-c_collect_ids_rec(PyObject *bdd, PyObject *result_set)
+c_collect_ids_rec(PyObject *bdd, PyObject *result_set, PyObject *seen)
 {
     if (!is_bdd_node(bdd))
         return 0;
+
+    /* A BDD is a hash-consed DAG: shared sub-nodes are the same object, so a
+       visited-set keyed by node pointer keeps this O(nodes) rather than
+       O(paths) — without it an n-var XOR chain (2n-1 nodes, 2^n paths) makes
+       sat/sat_count exponential (A07-F001). */
+    PyObject *nid = PyLong_FromVoidPtr(bdd);
+    if (!nid) return -1;
+    int contains = PySet_Contains(seen, nid);
+    if (contains < 0) { Py_DECREF(nid); return -1; }
+    if (contains) { Py_DECREF(nid); return 0; }
+    if (PySet_Add(seen, nid) < 0) { Py_DECREF(nid); return -1; }
+    Py_DECREF(nid);
 
     BDDNodeObject *node = (BDDNodeObject *)bdd;
     PyObject *vid = PyLong_FromLong(node->var_id);
@@ -719,8 +748,8 @@ c_collect_ids_rec(PyObject *bdd, PyObject *result_set)
     if (PySet_Add(result_set, vid) < 0) { Py_DECREF(vid); return -1; }
     Py_DECREF(vid);
 
-    if (c_collect_ids_rec(node->high, result_set) < 0) return -1;
-    if (c_collect_ids_rec(node->low, result_set) < 0) return -1;
+    if (c_collect_ids_rec(node->high, result_set, seen) < 0) return -1;
+    if (c_collect_ids_rec(node->low, result_set, seen) < 0) return -1;
     return 0;
 }
 
@@ -778,7 +807,12 @@ py_restrict(PyObject *self, PyObject *args)
                           &PyDict_Type, &id_to_var))
         return NULL;
 
-    return c_restrict_rec(bdd, var_id, value, unique_tables, id_to_var);
+    PyObject *memo = PyDict_New();
+    if (!memo) return NULL;
+    PyObject *result = c_restrict_rec(bdd, var_id, value,
+                                      unique_tables, id_to_var, memo);
+    Py_DECREF(memo);
+    return result;
 }
 
 /*
@@ -828,7 +862,11 @@ py_collect_bdd_var_ids(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "OO!", &bdd, &PySet_Type, &result_set))
         return NULL;
 
-    if (c_collect_ids_rec(bdd, result_set) < 0)
+    PyObject *seen = PySet_New(NULL);
+    if (!seen) return NULL;
+    int rc = c_collect_ids_rec(bdd, result_set, seen);
+    Py_DECREF(seen);
+    if (rc < 0)
         return NULL;
 
     Py_RETURN_NONE;
