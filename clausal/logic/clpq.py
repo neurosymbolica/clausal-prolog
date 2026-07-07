@@ -17,6 +17,7 @@ each modification.  On backtrack the snapshot is restored automatically.
 
 from __future__ import annotations
 
+import weakref
 from fractions import Fraction
 from typing import Any
 
@@ -808,20 +809,28 @@ _tableaux: dict[int, Tableau] = {}
 _last_snapshot: dict[int, int] = {}  # trail_id → trail length at last snapshot
 
 
+def _cleanup_tableau(tid: int) -> None:
+    _tableaux.pop(tid, None)
+    _last_snapshot.pop(tid, None)
+
+
 def _get_tableau(trail: Trail) -> Tableau:
     """Get or create the global Tableau for this trail.
 
-    On first creation, registers an undo callback that removes the entry
-    when the trail is unwound past this point, preventing leaks.
+    On first creation, registers both an undo callback (for backtracking past
+    the point where CLP(Q) was first used) and a weakref.finalize (for the
+    normal case of a completed solve dropping the trail without a full undo).
+    Without the finalize the entry leaked forever, and a new Trail() allocated
+    at the same address inherited the stale tableau — cross-query constraint
+    contamination, not just a leak (A08-F005).
     """
     tid = id(trail)
     tab = _tableaux.get(tid)
     if tab is None:
         tab = Tableau()
         _tableaux[tid] = tab
-        # Clean up when trail unwinds past the point where CLP(Q) was first used
-        trail.record(lambda: (_tableaux.pop(tid, None),
-                              _last_snapshot.pop(tid, None)))
+        trail.record(lambda: _cleanup_tableau(tid))
+        weakref.finalize(trail, _cleanup_tableau, tid)
     return tab
 
 

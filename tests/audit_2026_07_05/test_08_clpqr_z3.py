@@ -147,10 +147,6 @@ class TestClpqSoundness:
         assert bb_inf([y], x, rv, t)          # min X with Y integer: Y=1, X=1/2
         assert deref(rv) == F(1, 2)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F005: _tableaux keyed by id(trail); dropped "
-                              "trails leak entries, recycled ids inherit stale "
-                              "tableaux (cross-query contamination)")
     def test_no_stale_tableau_on_recycled_trail_id(self):
         gc.collect()
         t = Trail()
@@ -742,9 +738,6 @@ class TestClprCoreMemory:
             _imod(1.0, 6.0, 2.0, 2.0)
         refcount_stable(thunk, iterations=3000)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F005: dropped-trail tableaux accumulate on "
-                              "recycled ids — post/solve loop grows the heap")
     def test_clpq_post_solve_loop_no_leak(self, refcount_stable):
         def thunk():
             t = Trail()
