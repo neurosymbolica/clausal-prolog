@@ -73,6 +73,16 @@ Test("positional groups") <- (
 )
 ```
 
+**Mixed named + positional groups:** when a pattern mixes named and unnamed
+groups, `Groups` is a dict keyed by the named-group names, with each *unnamed*
+group added under its 1-based positional index (an integer key). For
+`r"(?P<A>\d+)-(\d+)"` against `"1-2"`, `Groups` is `{"A": "1", 2: "2"}`.
+
+> **Gotcha — unmatched optional named group binds `None`.** An optional named
+> group that does not participate in the match (e.g. `r"(?P<TAG>\d+)?x"`
+> against `"x"`) auto-binds Python `None`, mirroring `Match.groupdict()`. This
+> differs from SWI, which omits the key entirely.
+
 ### search/2, search/3
 
 Like match but unanchored — finds the pattern anywhere in the string:
@@ -124,7 +134,15 @@ Test("split whitespace") <- (split(r"\s+", "x y z", F), F == ["x", "y", "z"])
 Test("findall first") <- (findall(r"\d+", "a1b23c456", D), D == "1")
 ```
 
-Fails if no matches are found.
+Fails if no matches are found. Following the `re.findall` oracle, the match
+value is the whole-match string when the pattern has no capturing group, the
+group's bare string when it has exactly one group, and a tuple of group
+strings when it has two or more:
+
+```clausal
+Test("findall single group is a string") <-
+    (findall(r"(\d)x", "1x2x", D), D == "1")
+```
 
 ---
 

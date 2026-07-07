@@ -196,8 +196,10 @@ def _split_3(pat, string, parts, trail, k):
 def _findall_3(this_generator, _proceed, _fail, _catcher, pat, string, match_var, trail):
     """findall/3: nondeterministic — one solution per non-overlapping match.
 
-    No groups → each match is a string.
-    Groups → each match is a tuple of group strings.
+    Mirrors the ``re.findall`` oracle (F009):
+    - no capturing group → each match is the whole-match string;
+    - exactly one group → each match is that group's bare string;
+    - two or more groups → each match is a tuple of group strings.
     """
     pat = deref(pat)
     string = _coerce_subject(string)
