@@ -287,10 +287,6 @@ def test_F006_guard_module_atom_in_lambda_body(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F007a: except (ImportError, "
-                   "black.parsing.InvalidInput) evaluates 'black' when the "
-                   "import itself failed -> UnboundLocalError on any call "
-                   "without black installed")
 def test_F007_dump_source_runs_without_black(tmp_path):
     try:
         import black  # noqa: F401
@@ -304,10 +300,6 @@ def test_F007_dump_source_runs_without_black(tmp_path):
     assert "$define_predicate" in out
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F007b: dump_source builds "
-                   "EmbedTransformer() without source_lines, so arrow detection "
-                   "uses the heuristic and diverges from the import path for "
-                   "'X< -3'")
 def test_F007_dump_source_arrow_fidelity(tmp_path):
     from clausal.tools.dump_transformed import dump_source
     path = tmp_path / "a10_dumpfid.clausal"
