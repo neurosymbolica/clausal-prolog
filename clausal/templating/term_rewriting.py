@@ -3711,10 +3711,12 @@ class EmbedTransformer(NodeTransformer):
         return node
 
     def visit_Name(transformer, name):
-        # In outer Python code, rewrite var_ / ALL_CAPS → .value to unbox a logic variable.
-        if _is_logic_var_name(name.id):
-            return replace(
-                Attribute(value=name, attr="value", ctx=load),
-                name,
-            )
+        # A10-F002 / A10-D001: unescaped ALLCAPS / _leading names in outer
+        # Python code are ordinary Python names (constants, JSON, UUID, a local
+        # ``_tmp``, ``MAX = 5``) — NOT logic variables, so they are left alone.
+        # A logic variable's value is reached inside embedded Python via the
+        # ``++`` escape (handled by the PyThunk machinery), not by unboxing a
+        # bare Name here. The previous ``X → X.value`` rewrite broke both
+        # assignment (``MAX = 5`` → ``MAX.value = 5``) and reads of Python
+        # locals (``return _tmp`` → ``5 .value``).
         return name

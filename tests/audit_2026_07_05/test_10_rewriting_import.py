@@ -82,9 +82,6 @@ def test_F001_guard_pl_non_utf8_rejected(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F002: EmbedTransformer.visit_Name "
-                   "rewrites Store-context names to X.value (ctx=Load) — "
-                   "'MAX = 5' fails module load with a cryptic ValueError")
 def test_F002_allcaps_python_assignment_loads(tmp_path):
     m = _load(tmp_path, """
         MAX = 5
@@ -93,8 +90,6 @@ def test_F002_allcaps_python_assignment_loads(tmp_path):
     assert m.MAX == 5
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F002: '_tmp = 5' inside a def in a "
-                   ".clausal file breaks module load the same way")
 def test_F002_underscore_python_local_loads(tmp_path):
     m = _load(tmp_path, """
         def helper():

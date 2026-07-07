@@ -66,6 +66,13 @@ sessions/instances: treat these as settled — do not re-ask.
 - **A09-F005 (assertz of a rule) → (b) reject cleanly.** Reject asserted
   rules at assert time with a typed error (matches current docs), validating
   before mutating the clause list. A09-F026 doc then cites the clean error.
+- **A10-D001 (embedded-Python var names) → (a), strengthened.** Unescaped
+  ALLCAPS / `_leading` names in outer Python code are ordinary Python names
+  (constants, `JSON`, `UUID`, a local `_tmp`) — NOT logic variables.
+  EmbedTransformer.visit_Name no longer unboxes them at all (previously
+  `X → X.value` in every context, breaking `MAX = 5` and `return _tmp`). A
+  logic variable's value is reached inside embedded Python via the `++`
+  escape (PyThunk machinery), not by unboxing a bare Name. Gates A10-F002.
 
 | ID | Status | Title | Decision + rationale | Raised by | Affects |
 |----|--------|-------|----------------------|-----------|---------|
