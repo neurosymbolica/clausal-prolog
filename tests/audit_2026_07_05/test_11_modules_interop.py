@@ -499,9 +499,8 @@ def test_F033_univ_and_qualified_emission():
     assert "unpack" in out
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F036: Cut() exported as ! — the "
-                   "exporter emits the construct Clausal forbids")
 def test_F036_no_cut_emission():
+    # A11-F036 (fixed): Cut() no longer laundered as Prolog !.
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
     out = clausal_source_to_prolog("P() <- (Q(), Cut())\n")
     assert "!" not in out

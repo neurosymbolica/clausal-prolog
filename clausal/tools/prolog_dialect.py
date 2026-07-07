@@ -255,7 +255,9 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "retractall":    {"iso": "retractall"},
     "catch_error":   {"iso": "catch"},
     "once":          {"iso": "once"},
-    "Cut":           {"iso": "!"},
+    # No "Cut" entry: Clausal has no cut, so exporting a stray Cut() as Prolog
+    # `!` would launder cut through "cut-free" Clausal (A11-F036). It emits as a
+    # plain `cut` predicate instead.
     "freeze":        {"iso": "freeze"},
     "when":          {"iso": "when"},
     "call_nth":      {"iso": "call_nth"},
