@@ -431,9 +431,6 @@ def test_F010_stdlib_not_shadowed_by_clausal_file(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F011: 'flag,' parses as a 1-tuple "
-                   "of a Name (not a Call) so no $define_predicate is emitted — "
-                   "the fact silently vanishes")
 def test_F011_zero_arity_fact(tmp_path):
     m = _load(tmp_path, """
         -private([flag])

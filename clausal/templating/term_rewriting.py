@@ -2511,6 +2511,54 @@ class EmbedTransformer(NodeTransformer):
                     )
                 statements.append(define_stmt)
                 return statements if len(statements) > 1 else statements[0]
+            case Tuple(elts=[Name(id=functor_name) as name_node], ctx=Load()) if (
+                transformer._scope_depth == 0
+                and not _is_logic_var_name(functor_name)
+            ):
+                # A10-F011: zero-arity trailing-comma fact ``flag,`` — define
+                # flag/0, symmetric with ``flag <- True`` and with the
+                # ``edge(1,2),`` Call case above. Previously the 1-tuple of a
+                # bare (non-logic-var) Name fell through and was silently
+                # evaluated and discarded — no clause, no diagnostic.
+                head_ast = replace(
+                    Call(
+                        func=replace(Name(id=functor_name, ctx=load), name_node),
+                        args=[],
+                        keywords=[],
+                    ),
+                    name_node,
+                )
+                predicate_ast = node_ast(
+                    "Predicate", expr_stmt.value,
+                    head=head_ast,
+                    body=replace(Constant(value=True), expr_stmt.value),
+                )
+                define_stmt = replace(
+                    Expr(
+                        value=replace(
+                            Call(
+                                func=replace(
+                                    Name(id="$define_predicate", ctx=load), expr_stmt.value
+                                ),
+                                args=[
+                                    predicate_ast,
+                                    replace(Name(id="$module", ctx=load), expr_stmt.value),
+                                ],
+                                keywords=[],
+                            ),
+                            expr_stmt.value,
+                        )
+                    ),
+                    expr_stmt,
+                )
+                statements = []
+                if functor_name not in transformer._seen_functors:
+                    transformer._seen_functors[functor_name] = []
+                    statements.append(
+                        _make_functor_class_ast(functor_name, [], expr_stmt)
+                    )
+                statements.append(define_stmt)
+                return statements if len(statements) > 1 else statements[0]
             case BinOp(left=lhs, op=RShift(), right=rhs) if (
                 transformer._scope_depth == 0
             ):
