@@ -466,8 +466,6 @@ def test_F013_regression_alpha_enum_unicode(fix):
 # A09-F014 — char_type char-bound Python fallback is ASCII-table-only
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F014: with the C helper "
-                   "disabled, char_type('α',T) enumerates NOTHING")
 def test_F014_char_type_python_fallback_non_ascii(fix):
     import clausal.logic.builtins.chars as ch
     _, m = fix

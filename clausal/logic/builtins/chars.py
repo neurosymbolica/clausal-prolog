@@ -195,8 +195,15 @@ def _char_type__2(char, type_, trail, k):
                 yield None
                 trail.undo(mark)
         else:
-            # Char bound, Type unbound → enumerate matching types
-            for t_name in _CHAR_TO_TYPES.get(vc, []):
+            # Char bound, Type unbound → enumerate matching types.
+            # F014 (A09): _CHAR_TO_TYPES is a precomputed ASCII table, so a
+            # non-ASCII char is absent → test each classifier dynamically
+            # (mirrors the C helper), otherwise char_type('α', T) would
+            # enumerate nothing on a build without the C extension.
+            matching = _CHAR_TO_TYPES.get(vc)
+            if matching is None:
+                matching = [t for t, fn in _CHAR_TYPES.items() if fn(vc)]
+            for t_name in matching:
                 mark = trail.mark()
                 if unify(type_, t_name, trail):
                     yield None
