@@ -169,8 +169,6 @@ def test_F001_regression_sum_max_do_deref(fix):
 # A09-F002 — filter_map/3 loses inner bindings of compound outputs
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F002: filter_map undoes goal "
-                   "bindings before capturing the output term")
 def test_F002_filter_map_inner_bindings(fix):
     pymod, m = fix
     R = Var()
@@ -185,8 +183,6 @@ def test_F002_filter_map_inner_bindings(fix):
 # A09-F003 — include/take_while/… lose bindings of Var elements
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F003: include appends "
-                   "deref(elem) AFTER trail.undo — var element stays unbound")
 def test_F003_include_var_element_binding(fix):
     _, m = fix
     X, R = Var(), Var()
@@ -194,7 +190,6 @@ def test_F003_include_var_element_binding(fix):
     assert not is_var(deref(X)) and deref(X) == 1  # SWI binds X=1
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F003: take_while same pattern")
 def test_F003_take_while_var_element_binding(fix):
     _, m = fix
     X, P = Var(), Var()

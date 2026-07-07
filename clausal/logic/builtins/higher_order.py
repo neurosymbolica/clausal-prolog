@@ -129,9 +129,13 @@ def _include__3(this_generator, _proceed, _fail, _catcher, goal, lst, included, 
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
-        trail.undo(mark)
         if found:
+            # A09-F003: keep the successful test's bindings (SWI `->`
+            # semantics) so a Var element the test bound persists into the
+            # result; only a FAILED test's half-bindings are undone.
             kept.append(deref(elem))
+        else:
+            trail.undo(mark)
     if unify(included, _seq_result(kept, was_str), trail):
         yield (_proceed, None)
     trail.undo(outer_mark)
@@ -156,9 +160,11 @@ def _exclude__3(this_generator, _proceed, _fail, _catcher, goal, lst, excluded, 
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
-        trail.undo(mark)
         if not found:
+            # A09-F003: goal failed → element kept; undo its half-bindings.
+            trail.undo(mark)
             kept.append(deref(elem))
+        # goal succeeded → excluded; its bindings persist (SWI `->`).
     if unify(excluded, _seq_result(kept, was_str), trail):
         yield (_proceed, None)
     trail.undo(outer_mark)
@@ -218,10 +224,10 @@ def _take_while__3(this_generator, _proceed, _fail, _catcher, goal, lst, prefix,
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
-        trail.undo(mark)
         if not found:
+            trail.undo(mark)  # A09-F003: discard failed test's half-bindings
             break
-        taken.append(deref(elem))
+        taken.append(deref(elem))  # keep the successful test's bindings
     if unify(prefix, _seq_result(taken, was_str), trail):
         yield (_proceed, None)
     trail.undo(outer_mark)
@@ -246,8 +252,8 @@ def _drop_while__3(this_generator, _proceed, _fail, _catcher, goal, lst, suffix,
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
-        trail.undo(mark)
         if not found:
+            trail.undo(mark)  # A09-F003: discard failed test's half-bindings
             break
         i += 1
     if unify(suffix, _seq_result(items[i:], was_str), trail):
@@ -275,10 +281,10 @@ def _span__4(this_generator, _proceed, _fail, _catcher, goal, lst, yes, no, trai
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
-        trail.undo(mark)
         if not found:
+            trail.undo(mark)  # A09-F003: discard failed test's half-bindings
             break
-        taken.append(deref(elem))
+        taken.append(deref(elem))  # keep the successful test's bindings
         i += 1
     if unify(yes, _seq_result(taken, was_str), trail) and unify(no, _seq_result(items[i:], was_str), trail):
         yield (_proceed, None)
@@ -475,8 +481,12 @@ def _filter_map__3(this_generator, _proceed, _fail, _catcher, goal, lst, result,
         _st = yield (sg, None)
         found = _st is not DONE
         if found:
+            # A09-F002: keep the goal's bindings — deref(out) is a top-level
+            # walk, so undoing here would strip the bindings the goal made
+            # INSIDE the output term (e.g. pair(X, Y) with Y bound).
             kept.append(deref(out))
-        trail.undo(mark)
+        else:
+            trail.undo(mark)
     if unify(result, _seq_result(kept, was_str), trail):
         yield (_proceed, None)
     trail.undo(outer_mark)
@@ -506,10 +516,11 @@ def _partition__4(this_generator, _proceed, _fail, _catcher, goal, lst, included
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
-        trail.undo(mark)
         if found:
+            # A09-F003: keep the successful test's bindings (SWI `->`).
             yes.append(deref(elem))
         else:
+            trail.undo(mark)  # discard a failed test's half-bindings
             no.append(deref(elem))
     if unify(included, _seq_result(yes, was_str), trail) and unify(excluded, _seq_result(no, was_str), trail):
         yield (_proceed, None)
