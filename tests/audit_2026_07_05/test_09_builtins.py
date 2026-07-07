@@ -250,17 +250,12 @@ def test_F005_assertz_rule(fix):
 # (RuntimeError raised, then swallowed by the trampoline drive loop)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F006: locked-predicate "
-                   "RuntimeError is eaten by the engine — docs promise a "
-                   "permission error")
 def test_F006_assertz_locked_raises(locked_mod):
     _, m = locked_mod
     with pytest.raises(Exception):  # permission_error LogicException expected
         _first(m, "lockassert", Var())
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F006: retract on locked "
-                   "predicate silently fails too")
 def test_F006_retract_locked_raises(locked_mod):
     _, m = locked_mod
     with pytest.raises(Exception):

@@ -8,6 +8,7 @@ from typing import Any
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.predicate import PredicateMeta, is_term_instance
 from clausal.terms import Compound
+from clausal.logic.exceptions import LogicException, permission_error
 
 from clausal.logic.builtins._registry import (
     _db_builtin, structural_unify,
@@ -63,7 +64,6 @@ def _build_clause(term_val: Any) -> "Any":
     from clausal.terms import Predicate as _Predicate
 
     if isinstance(term_val, _Predicate):
-        from clausal.logic.exceptions import LogicException, permission_error
         raise LogicException(
             permission_error("assert", "rule", term_val.head, "assert/1"))
     return _normalize_fact_clause(term_val)
@@ -103,10 +103,13 @@ def _assertz_factory(db):
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, module_dict)
         if pred_cls is not None and pred_cls._locked:
-            raise RuntimeError(
-                f"Predicate {functor}/{arity} is locked. "
-                "Use dynamic() to allow runtime assertion."
-            )
+            # A09-F006 (decision A09-D002 a): raise a typed permission_error,
+            # not RuntimeError — the drive loop treats RuntimeError as
+            # generator exhaustion and silently swallows it. LogicException
+            # routes correctly and is catchable by catch/3.
+            raise LogicException(permission_error(
+                "modify", "static_procedure",
+                Compound("/", (functor, arity)), "assertz/1"))
         # db.assertz syncs pred_cls._clauses and clears its dispatch.
         db.assertz(clause)
         clauses = db.clauses_for(functor, arity)
@@ -136,10 +139,10 @@ def _asserta_factory(db):
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, module_dict)
         if pred_cls is not None and pred_cls._locked:
-            raise RuntimeError(
-                f"Predicate {functor}/{arity} is locked. "
-                "Use dynamic() to allow runtime assertion."
-            )
+            # A09-F006: typed permission_error (see assertz/1 above).
+            raise LogicException(permission_error(
+                "modify", "static_procedure",
+                Compound("/", (functor, arity)), "asserta/1"))
         # db.asserta syncs pred_cls._clauses and clears its dispatch.
         db.asserta(clause)
         clauses = db.clauses_for(functor, arity)
@@ -178,10 +181,10 @@ def _retract_factory(db):
             return
         pred_cls = _find_pred_cls(functor, module_dict)
         if pred_cls is not None and pred_cls._locked:
-            raise RuntimeError(
-                f"Predicate {functor}/{arity} is locked. "
-                "Use dynamic() to allow runtime retraction."
-            )
+            # A09-F006: typed permission_error (see assertz/1 above).
+            raise LogicException(permission_error(
+                "modify", "static_procedure",
+                Compound("/", (functor, arity)), "retract/1"))
         # Find first clause whose head unifies with term_val (and whose
         # Is-body goals are consistent with that unification).
         from clausal.terms import Unify as _Unify  # avoid top-level cycle
