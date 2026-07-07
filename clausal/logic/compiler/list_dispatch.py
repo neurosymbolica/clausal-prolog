@@ -201,14 +201,15 @@ def _build_list_dispatch_guard(
 
     Generates:
 
-        if isinstance(_d_pos, list):
+        if isinstance(_d_pos, (list, str, bytes)):
             if not _d_pos:          # nil branch
                 <nil_clauses + var_clauses>
             else:                   # cons branch
                 <cons_clauses + var_clauses>
         elif is_var(_d_pos):        # unbound — try all clauses
             <all clauses>
-        # non-list, non-var → falls through to yield DONE
+        else:                       # int/tuple/SegList/… → all-clauses scan
+            <all clauses>           # (nil/cons arms fail their list guards)
 
     ``var_clauses`` (wildcard heads) appear in both the nil and cons branches
     because a wildcard matches any list.  They also appear in the is_var
@@ -244,6 +245,13 @@ def _build_list_dispatch_guard(
     nil_body = _match_stmts(nil_clauses + var_clauses)
     cons_body = _match_stmts(cons_clauses + var_clauses)
     var_body = _match_stmts(nil_clauses + cons_clauses + var_clauses)
+    # A02-F002: callers that are neither list/str/bytes nor an unbound Var
+    # (int, tuple, a non-ground SegList, …) previously fell through to DONE,
+    # silently losing every clause the arg would unify with. Run all clauses
+    # through their match arms — the nil/cons arms fail their list guards on a
+    # non-list, and the cons guard routes SegLists through
+    # ``$head_list_unify_input`` — so this matches the un-dispatched compile.
+    other_body = _match_stmts(nil_clauses + cons_clauses + var_clauses)
 
     deref_name = f"_d{dispatch_pos}"
 
@@ -254,21 +262,22 @@ def _build_list_dispatch_guard(
         orelse=cons_body,
     )
 
-    # elif is_var(_d_pos): <all>
+    # elif is_var(_d_pos): <all>  else: <all-clauses fallback>
     is_var_branch = ast.If(
         test=_call(_name("is_var"), _name(deref_name)),
         body=var_body,
-        orelse=[],
+        orelse=other_body,
     )
 
-    # if isinstance(_d_pos, (list, str)): <nil_vs_cons> elif is_var(_d_pos): <all>
-    # Strings are treated as lists of characters for head pattern matching.
-    _list_or_str = ast.Tuple(
-        elts=[_name("list"), _name("str")], ctx=ast.Load(),
+    # if isinstance(_d_pos, (list, str, bytes)): <nil_vs_cons>
+    # elif is_var: <all>  else: <all-clauses fallback>
+    # Strings/bytes are treated as lists (of chars / codes) for head matching.
+    _list_str_bytes = ast.Tuple(
+        elts=[_name("list"), _name("str"), _name("bytes")], ctx=ast.Load(),
     )
     return [
         ast.If(
-            test=_call(_name("isinstance"), _name(deref_name), _list_or_str),
+            test=_call(_name("isinstance"), _name(deref_name), _list_str_bytes),
             body=[nil_vs_cons],
             orelse=[is_var_branch],
         )

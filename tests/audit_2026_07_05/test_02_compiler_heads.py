@@ -305,22 +305,19 @@ class TestF002ListDispatchFallthrough:
         X, R = Var(), Var()
         assert collect(mod, "ld2", X, R, outv=[R]) == [("nil2",), ("cons2",), ("any2",)]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F002: int caller falls through — var-headed clause lost")
     def test_int_caller_matches_var_clause(self, mod):
         R = Var()
         assert collect(mod, "ld2", 5, R, outv=[R]) == [("any2",)]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F002: tuple caller falls through — var-headed clause lost")
     def test_tuple_caller_matches_var_clause(self, mod):
         R = Var()
         assert collect(mod, "ld2", (1, 2), R, outv=[R]) == [("any2",)]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F002: bytes caller falls through — cons + var clauses lost (bytes-as-lists)")
     def test_bytes_caller(self, mod):
         R = Var()
         assert collect(mod, "ld2", b"ab", R, outv=[R]) == [("cons2",), ("any2",)]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F002: SegList caller falls through — all clauses lost")
+    @pytest.mark.xfail(strict=False, reason="A02-F002: non-ground SegList vs cons head needs SegList-vs-partial-pattern unify, blocked on F030 (Phase 6). The else-arm fix routes it to the var clause (any2); cons2 requires destructuring [1,*A] against [LH,*LT], which _head_list_unify_input returns False for by design.")
     def test_seglist_caller(self, mod):
         A, R = Var(), Var()
         sl = SegList([ConcreteSeg([1]), VarSeg(A)])
