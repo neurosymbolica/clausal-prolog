@@ -1837,16 +1837,22 @@ def in_domain(var_or_list, lo, hi, trail: Trail) -> bool:
         return False
 
     targets = deref(var_or_list)
+    # One shared queue across all targets, then a single propagation fixpoint,
+    # so that constraints already posted on any target (or its peers) re-fire
+    # against the narrowed domains (A06-F008).
+    queue: deque = deque()
     if isinstance(targets, list):
         for v in targets:
-            if not _post_domain(deref(v), new_domain, trail):
+            if not _post_domain(deref(v), new_domain, trail, queue):
                 return False
-        return True
-    return _post_domain(targets, new_domain, trail)
+    else:
+        if not _post_domain(targets, new_domain, trail, queue):
+            return False
+    return propagate(queue, trail)
 
 
-def _post_domain(target, new_domain: Domain, trail: Trail) -> bool:
-    """Post domain on a single target."""
+def _post_domain(target, new_domain: Domain, trail: Trail, queue: deque) -> bool:
+    """Post domain on a single target, scheduling re-propagation via *queue*."""
     if isinstance(target, int):
         return domain_contains(new_domain, target)
     if not is_var(target):
@@ -1868,14 +1874,10 @@ def _post_domain(target, new_domain: Domain, trail: Trail) -> bool:
         final_domain = domain_intersection(final_domain, domain_from_range(r_lo, r_hi))
         if not final_domain:
             return False
-    old_constraints = state.constraints if state is not None else ()
-    new_state = FDVar(final_domain, old_constraints)
-    put_attr(target, FD_KEY, new_state, trail)
-    val = domain_singleton(final_domain)
-    if val is not None:
-        if not unify(target, val, trail):
-            return False
-    return True
+    # Route the narrow through _narrow_if_changed (queues the var and runs the
+    # singleton→unify step) rather than a bare put_attr, which left dependent
+    # vars un-narrowed because no constraint ever re-fired (A06-F008).
+    return _narrow_if_changed(target, final_domain, trail, queue)
 
 
 def label(vars_list, trail: Trail):

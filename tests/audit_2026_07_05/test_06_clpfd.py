@@ -397,8 +397,6 @@ class TestInt64BoundarySentinel:
 
 
 class TestInDomainPropagation:
-    @pytest.mark.xfail(strict=False, reason="A06-F008: _post_domain writes the narrowed "
-                       "domain via put_attr without running the propagation queue")
     def test_in_domain_propagates_through_eq(self):
         t = Trail()
         x, y = Var(), Var()
