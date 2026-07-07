@@ -490,7 +490,6 @@ class TestF004CatchFunctorCatcher:
 
 
 class TestF005F006FindallFamily:
-    @pytest.mark.xfail(strict=False, reason="A03-F005: setof returns insertion order; docs promise sorted")
     def test_setof_is_sorted(self, mod):
         L = Var()
         assert sols(mod, mod.so(L), L) == [([1, 2, 3],)]

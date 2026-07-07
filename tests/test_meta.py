@@ -172,8 +172,10 @@ class TestSetOf:
         results = solutions_of(goal)
         assert results == []
 
-    def test_set_of_preserves_order(self):
-        """set_of preserves first occurrence order."""
+    def test_set_of_is_sorted(self):
+        """set_of returns a sorted list with duplicates removed (ISO /
+        docs/meta_predicates.md). Reversed from the previous insertion-order
+        behaviour by A03-F005 — findall/bagof still preserve order."""
         # nv
         x = Var()
         bag = Var()
@@ -183,7 +185,7 @@ class TestSetOf:
             bag,
         ], kwargs=[])
         results = bindings(goal, bag)
-        assert results == [[3, 1, 2]]
+        assert results == [[1, 2, 3]]
 
 
 # ── for_all/2 ────────────────────────────────────────────────────────────────

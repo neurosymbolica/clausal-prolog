@@ -619,9 +619,12 @@ def _compile_find_all_core(
     ]
 
     if dedup:
+        # setof/3 (the only dedup=True caller): sort into standard order AND
+        # remove duplicates, per ISO / docs (A03-F005). findall/bagof are
+        # dedup=False and keep insertion order + duplicates.
         stmts.append(_assign(
             results_var,
-            _call(_name("$set_of_dedup"), _name(results_var)),
+            _call(_name("$set_of_sort_dedup"), _name(results_var)),
         ))
 
     if fail_on_empty:

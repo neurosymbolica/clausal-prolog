@@ -71,7 +71,7 @@ from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
 from .terms_to_goalop import BareGoalVariableError
 from .globals_env import (
-    _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _disp_key,
+    _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup, _disp_key,
     _merge_builtin, _inject_call_targets, _inject_resolved_targets,
     _collect_globals_info, _preallocate_body_vars,
 )
@@ -639,6 +639,7 @@ def compile_predicate_trampoline(
         "$tramp_call": _tramp_call,
         "$deref_walk": _deref_walk_fn,
         "$set_of_dedup": _set_of_dedup,
+        "$set_of_sort_dedup": _set_of_sort_dedup,
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn,
         "$in_iter": _in_iter,
@@ -1308,6 +1309,7 @@ def compile_predicate_shallow(
         "$tramp_call": _tramp_call,
         "$deref_walk": _deref_walk_fn,
         "$set_of_dedup": _set_of_dedup,
+        "$set_of_sort_dedup": _set_of_sort_dedup,
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn_s,
         "$in_iter": _in_iter,
