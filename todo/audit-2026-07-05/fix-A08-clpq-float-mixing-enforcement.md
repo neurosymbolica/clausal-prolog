@@ -1,5 +1,11 @@
 # fix(A08): clpq entry points silently accept floats / R-vars (docs promise TypeError)
 
+> **DEFERRED (2026-07-07):** intentionally not implemented — gated on the parked
+> design decision A08-D003 (float literals in CLP(Q): raise TypeError vs silently
+> convert to binary-exact Fraction), still open in DESIGN-DECISIONS.md. The
+> recommendation (docs-conformant TypeError) is clear but the direction is a
+> user policy call. Flip once D003 is answered.
+
 **Finding:** A08-F007 (correctness/doc-drift, medium); design question A08-D003 (parked)
 **Tests:** `tests/audit_2026_07_05/test_08_clpqr_z3.py::TestClpqSemanticsVsReference::test_q_eq_float_raises_typeerror`,
 `::test_in_q_after_in_real_raises`

@@ -1,5 +1,11 @@
 # fix(A08): Z3 adapter translates `//` and `%` with SMT semantics, not Python's
 
+> **DEFERRED (2026-07-07):** intentionally not implemented — direction-sensitive
+> and gated on the parked design decision A08-D001 (`//`/`%` semantics across
+> backends: translate to Python floor-div/mod vs keep SMT/CP-SAT native
+> semantics), still open in DESIGN-DECISIONS.md. Choosing Python semantics is
+> the recommendation but is exactly the contested call. Flip once D001 lands.
+
 **Finding:** A08-F014 (correctness, medium); design question A08-D001 (parked)
 **Tests:** `tests/audit_2026_07_05/test_08_clpqr_z3.py::TestZ3TranslationFidelity` (3 xfails)
 
