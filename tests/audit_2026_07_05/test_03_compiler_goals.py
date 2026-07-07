@@ -386,7 +386,6 @@ class TestF002DestructiveReuseNondetPrefix:
 
 
 class TestF003TroSignalBucketNotGenerator:
-    @pytest.mark.xfail(strict=False, reason="A03-F003: default bucket with only TRO clauses → non-generator → TypeError")
     def test_dispatch_to_tro_only_bucket(self, mod):
         O = Var()
         assert sols(mod, mod.idx(3, O), O) == [("z0",)]

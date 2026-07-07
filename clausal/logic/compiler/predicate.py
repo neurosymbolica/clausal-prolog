@@ -266,6 +266,34 @@ def _sweep_tro_eligible(
     return frozenset(eligible)
 
 
+def _node_has_own_yield(node: ast.AST) -> bool:
+    """True if *node* contains a ``yield``/``yield from`` in its OWN scope
+    (not inside a nested function/lambda, whose yields don't make the outer a
+    generator)."""
+    if isinstance(node, (ast.Yield, ast.YieldFrom)):
+        return True
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        return False  # nested scope — its yields belong to that function
+    return any(_node_has_own_yield(c) for c in ast.iter_child_nodes(node))
+
+
+def _stmts_force_generator(stmts: list[ast.stmt]) -> list[ast.stmt]:
+    """Ensure *stmts* form a generator body (A03-F003).
+
+    A funcdef with no top-level ``yield`` compiles to a plain function that
+    returns ``None`` — an index bucket whose clauses are ALL signal-mode TRO
+    clauses (prefix goals + _tro_state stores + early ``return``, no yield)
+    then raises ``'NoneType' object is not iterable`` on first dispatch. Only
+    the empty-body case was handled before. Append the unreachable
+    ``return None; yield None`` tail whenever no own-scope yield is present."""
+    if any(_node_has_own_yield(s) for s in stmts):
+        return stmts
+    return list(stmts) + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+
+
 def _empty_predicate_funcdef(
     functor: str,
     arity: int,
@@ -488,12 +516,10 @@ def _build_predicate_trampoline_funcdef(
         if exhaust is not None:
             all_stmts.append(exhaust)
 
-    # A generator function needs at least one yield or a return+yield pair.
-    if not all_stmts:
-        all_stmts = [
-            ast.Return(value=ast.Constant(value=None)),
-            ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
-        ]
+    # A generator function needs at least one yield. Force it whenever the
+    # body has no own-scope yield — empty body, or an all-signal-mode-TRO
+    # bucket whose arm is prefix + tro-state stores + early return (A03-F003).
+    all_stmts = _stmts_force_generator(all_stmts)
 
     func_name = f"{functor}__{arity}"
     func_def = ast.FunctionDef(
