@@ -570,13 +570,17 @@ def _propagate_forced(bdd, trail: Trail) -> bool:
     return True
 
 
-def _collect_bdd_var_ids(bdd, result: set, _seen: set | None = None):
+def _collect_bdd_var_ids_impl(bdd, result: set, _seen: set | None = None):
     """Collect all variable IDs present in a BDD.
 
     A BDD is a hash-consed DAG: shared sub-nodes are the same object, so a
     visited-set keyed by node identity keeps this O(nodes) instead of
     O(paths) — without it an n-var XOR chain (2n-1 nodes, 2^n paths) makes
     sat/sat_count exponential (A07-F001).
+
+    Recurses via its own private name so it stays a correct pure-Python
+    reference even after the module-global ``_collect_bdd_var_ids`` is rebound
+    to the 2-arg C wrapper (A07-F008).
     """
     if _seen is None:
         _seen = set()
@@ -587,8 +591,12 @@ def _collect_bdd_var_ids(bdd, result: set, _seen: set | None = None):
         return
     _seen.add(nid)
     result.add(bdd.var_id)
-    _collect_bdd_var_ids(bdd.high, result, _seen)
-    _collect_bdd_var_ids(bdd.low, result, _seen)
+    _collect_bdd_var_ids_impl(bdd.high, result, _seen)
+    _collect_bdd_var_ids_impl(bdd.low, result, _seen)
+
+
+# Dispatch name (rebound to the C wrapper below when the extension loads).
+_collect_bdd_var_ids = _collect_bdd_var_ids_impl
 
 
 def taut(expr, t_var, trail: Trail) -> bool:
@@ -640,11 +648,16 @@ def sat_count(expr, count_var, trail: Trail) -> bool:
     return unify(count_var, count, trail)
 
 
-def _count_paths(bdd, level_map: dict, n_vars: int, memo: dict,
-                 current_level: int = 0) -> int:
+def _count_paths_impl(bdd, level_map: dict, n_vars: int, memo: dict,
+                      current_level: int = 0) -> int:
     """Count satisfying paths in a BDD, accounting for skipped variables.
 
     current_level is the expected level at this point in the BDD traversal.
+
+    Recurses via its own private name (not the module-global ``_count_paths``,
+    which the C block rebinds to a wrapper that drops current_level/memo), so
+    this stays a correct pure-Python reference even when C is loaded
+    (A07-F008).
     """
     if bdd is BDD_TRUE:
         # All remaining variables can be 0 or 1
@@ -663,14 +676,18 @@ def _count_paths(bdd, level_map: dict, n_vars: int, memo: dict,
     skipped = node_level - current_level
     multiplier = 2 ** skipped if skipped > 0 else 1
 
-    high_count = _count_paths(bdd.high, level_map, n_vars, memo,
-                              node_level + 1)
-    low_count = _count_paths(bdd.low, level_map, n_vars, memo,
-                             node_level + 1)
+    high_count = _count_paths_impl(bdd.high, level_map, n_vars, memo,
+                                   node_level + 1)
+    low_count = _count_paths_impl(bdd.low, level_map, n_vars, memo,
+                                  node_level + 1)
 
     result = multiplier * (high_count + low_count)
     memo[key] = result
     return result
+
+
+# Dispatch name (rebound to the C wrapper below when the extension loads).
+_count_paths = _count_paths_impl
 
 
 def bool_labeling(vars_list, trail: Trail):
@@ -826,8 +843,11 @@ _BDDNodePy = BDDNode
 _apply_py = apply
 _negate_py = negate
 _restrict_py = restrict
-_count_paths_py = _count_paths
-_collect_bdd_var_ids_py = _collect_bdd_var_ids
+# Point at the self-recursing _impl functions directly, so the saved
+# reference stays pure even after the dispatch names are rebound to C below
+# (A07-F008).
+_count_paths_py = _count_paths_impl
+_collect_bdd_var_ids_py = _collect_bdd_var_ids_impl
 
 try:
     from clausal.logic._clpb_core import (

@@ -701,10 +701,6 @@ class TestSuspectedBugs:
             f"deep-BDD negate crashed: returncode={proc.returncode} "
             f"(-11 = SIGSEGV), stderr={proc.stderr[-200:]}")
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F008: _count_paths_py's inner recursion dispatches through the "
-        "rebound module global (the C wrapper drops current_level) — the saved "
-        "'Python reference' returns wrong counts while C is loaded"))
     def test_A07_F008_count_paths_py_reference_correct(self):
         from clausal.logic.clpb import _count_paths_py
         vs = [Var() for _ in range(4)]
