@@ -275,6 +275,15 @@ class _PrologToClausal:
 
     def _emit_head(self, term: PTerm) -> str:
         """Emit a clause head as a clausal predicate call."""
+        # A ','/2 head is a DCG pushback (`Head, [Tokens] --> Body`), not a
+        # callable predicate — emitting it bare produced invalid Python
+        # silently (F039). Reject with a clear message.
+        if isinstance(term, PCompound) and term.functor == ",":
+            raise PrologTranslationError(
+                "DCG pushback heads ('Head, [Tokens] --> Body') are not "
+                "supported by the translator.\n"
+                "Rewrite the grammar rule without a pushback list."
+            )
         if isinstance(term, PCompound):
             name = self._predicate_name(term.functor)
             if not term.args:

@@ -505,9 +505,8 @@ def test_F036_no_cut_emission():
     assert "!" not in out
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F039: DCG pushback head emits "
-                   "invalid Python silently instead of a clear rejection")
 def test_F039_dcg_pushback_clear_error_or_valid():
+    # A11-F039 (fixed): DCG pushback head raises a clear error.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal, PrologTranslationError
     try:
         out = prolog_to_clausal("h, [t] --> b.\n")
