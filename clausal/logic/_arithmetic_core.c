@@ -228,6 +228,14 @@ py_arith_plus(PyObject *self, PyObject *args)
     if (y_known) { CHECK_QUANTITY(yv); }
     if (z_known) { CHECK_QUANTITY(zv); }
 
+    /* plus/3 is a numeric relation: reject non-numeric known operands so a
+     * string operand can't silently concatenate (forward) or raise a
+     * TypeError from PyNumber_Subtract (inverse) — fail cleanly instead
+     * (A06-F015). */
+    if (x_known && !is_numeric(xv)) Py_RETURN_NONE;
+    if (y_known && !is_numeric(yv)) Py_RETURN_NONE;
+    if (z_known && !is_numeric(zv)) Py_RETURN_NONE;
+
     PyObject *result, *ret;
 
     if (x_known && y_known) {
@@ -299,6 +307,7 @@ py_arith_max(PyObject *self, PyObject *args)
     if (VarAPI->is_var(xv) || VarAPI->is_var(yv)) Py_RETURN_NONE;
     CHECK_QUANTITY(xv);
     CHECK_QUANTITY(yv);
+    if (!is_numeric(xv) || !is_numeric(yv)) Py_RETURN_NONE;  /* A06-F015 */
 
     int cmp = PyObject_RichCompareBool(xv, yv, Py_GT);
     if (cmp < 0) return NULL;
@@ -325,6 +334,7 @@ py_arith_min(PyObject *self, PyObject *args)
     if (VarAPI->is_var(xv) || VarAPI->is_var(yv)) Py_RETURN_NONE;
     CHECK_QUANTITY(xv);
     CHECK_QUANTITY(yv);
+    if (!is_numeric(xv) || !is_numeric(yv)) Py_RETURN_NONE;  /* A06-F015 */
 
     int cmp = PyObject_RichCompareBool(xv, yv, Py_LT);
     if (cmp < 0) return NULL;

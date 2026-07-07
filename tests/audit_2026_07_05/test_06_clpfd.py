@@ -590,8 +590,6 @@ class TestTypeHoles:
         t = Trail()
         assert sum(1 for _ in fd_sum(["a", "b"], "#=", 5, t)) == 0
 
-    @pytest.mark.xfail(strict=False, reason="A06-F015: arith_plus accepts strings "
-                       "(concatenation) — plus/3 is an integer relation")
     def test_plus_strings_rejected(self):
         from clausal.logic._arithmetic_core import arith_plus
 
@@ -600,8 +598,6 @@ class TestTypeHoles:
         r = arith_plus("a", "b", z, t)
         assert r is None  # no solution — correct behaviour for non-numeric args
 
-    @pytest.mark.xfail(strict=False, reason="A06-F015: inverse mode raises TypeError "
-                       "instead of failing")
     def test_plus_string_inverse_no_crash(self):
         from clausal.logic._arithmetic_core import arith_plus
 
