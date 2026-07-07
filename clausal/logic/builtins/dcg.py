@@ -135,9 +135,14 @@ def _sequence__3(this_generator, _proceed, _fail, _catcher, lst, s0, s, trail):
         lst_pref = lst_val
         s0_pref_norm = list(s0_pref) if isinstance(s0_pref, (str, bytes)) else s0_pref
         lst_pref_norm = list(lst_pref) if isinstance(lst_pref, (str, bytes)) else lst_pref
-        if len(s0_val) >= n and s0_pref_norm == lst_pref_norm:
+        # F009: unify the prefix element-wise rather than comparing with
+        # Python ``==`` — a Var terminal (e.g. ``sequence([X], "a", S)``)
+        # must bind to the corresponding S0 element, which ``==`` never does.
+        # unify preserves the str/bytes divide (1-char str never unifies with
+        # the int a bytes element normalises to).
+        if len(s0_val) >= n:
             mark = trail.mark()
-            if unify(s, s0_val[n:], trail):
+            if unify(lst_pref_norm, s0_pref_norm, trail) and unify(s, s0_val[n:], trail):
                 yield (_proceed, None)
             trail.undo(mark)
     elif isinstance(s_val, (list, str, bytes)):

@@ -311,8 +311,6 @@ def test_F008_retract_binds_pattern(fix):
 # A09-F009 — sequence//1 compares terminals with == instead of unify
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F009: var terminal never "
-                   "unifies — prefix check uses Python ==")
 def test_F009_sequence_var_terminal(fix):
     _, m = fix
     X, S = Var(), Var()
