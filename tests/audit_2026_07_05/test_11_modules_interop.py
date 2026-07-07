@@ -657,9 +657,8 @@ def test_F052_vertices_unhashable_vertex():
     assert isinstance(sols, list)  # clean fail/success, not TypeError
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F053: _GraphPredicate."
-                   "_multi_dispatch drops _fail/_catcher when forwarding")
 def test_F053_multi_dispatch_forwards_all_params():
+    # A11-F053 (fixed): graph predicates use the shared ModulePredicate base.
     gp = G._GraphPredicate("fake")
     gp._register(2, G._vertices__2)
     gp._register(3, G._neighbors__3)

@@ -21,43 +21,21 @@ from __future__ import annotations
 
 import heapq
 from collections import deque
-from typing import Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate
 
 
-# ── Dispatch adapter (same pattern as py/re.py / py/uuid.py) ─────────────
-
-
-class _GraphPredicate:
-    """Adapter with ``_get_dispatch()`` for a graph predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (_fail, DONE)
-            return
-        yield from fn(this_generator, _proceed, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"graphs.{self._name}/{arities}"
+# ── Dispatch adapter ─────────────────────────────────────────────────────────
+#
+# Graph predicates use the shared ModulePredicate base rather than a bespoke
+# adapter: the old `_GraphPredicate._multi_dispatch` forwarded only
+# `this_generator, _proceed, *args`, dropping `_fail`/`_catcher` — latent while
+# every predicate registered a single arity (so `_get_dispatch` returned the fn
+# directly), but a TypeError the moment a second arity was registered (F053).
+# The base also gives catchable errors and consistent wrong-arity handling.
+_GraphPredicate = ModulePredicate
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
