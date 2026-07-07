@@ -225,6 +225,15 @@ def _retract_factory(db):
             if clauses:
                 compile_predicate_trampoline(functor, arity, clauses, db,
                                              globals_=module_dict, pred_cls=pred_cls)
+            # A09-F008 (decision A09-D003 a): bind the pattern on the REAL
+            # trail so the retracted clause's argument values escape with the
+            # solution (ISO/SWI "retract by pattern"). The clause is already
+            # removed, so binding its template vars is safe; normal
+            # backtracking undoes these bindings via the engine trail.
+            structural_unify(term_val, clause.head, trail)
+            for goal in clause.body:
+                if isinstance(goal, _Unify):
+                    structural_unify(deref(goal.left), deref(goal.right), trail)
             yield None
             return  # retract is not backtrackable
 

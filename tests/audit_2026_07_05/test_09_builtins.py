@@ -292,13 +292,15 @@ def test_F007_regression_direct_generator_raises():
 # A09-F008 — retract/1 undoes the head-unification bindings
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F008: retract(seen2(X)) leaves "
-                   "X unbound (ISO binds the retracted clause's args)")
 def test_F008_retract_binds_pattern(fix):
+    # A09-F008 (decision A09-D003 a): retract/1 binds the pattern to the
+    # retracted clause's args. retract(seen2(X)) removes the FIRST matching
+    # clause — seen2("dummy"), loaded before the asserted seen2(5) — so X is
+    # bound to "dummy" (ISO first-match), not left unbound.
     _, m = fix
     X = Var()
     assert _first(m, "retprobe", X)
-    assert not is_var(deref(X)) and deref(X) == 5
+    assert not is_var(deref(X)) and deref(X) == "dummy"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
