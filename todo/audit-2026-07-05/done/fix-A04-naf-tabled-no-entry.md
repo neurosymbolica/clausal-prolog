@@ -1,3 +1,7 @@
+**DONE (subsuming scan) — commit 433ca79e.** _naf_tabled now consults a subsuming COMPLETE same-functor entry (`_key_subsumes`) before any fallthrough, so `not tp(1,2)` respects a complete `tp(_,_)` table. **Residual:** NAF on a NEVER-called variant needs SPAWNING the positive goal (dispatch access from the compiler + WFS-cycle integration) — deferred to investigate-A04-wfs-variant-resolution.md (A04-D004); 2 tests stay xfail. Also fixed a fixture-build bug in the subsuming test.
+
+---
+
 # fix(A04-F002): _naf_tabled unsound for never-called / other-variant subgoals
 
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F002

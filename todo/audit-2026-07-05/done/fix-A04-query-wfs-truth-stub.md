@@ -1,3 +1,7 @@
+**DONE — commit 433ca79e.** query_wfs identifies the goal's tabled entry, matches each result to a stored answer by normalized value, and reports TableEntry.truth_value(i) (True | undefined). Non-tabled stays True; composite goals keep True (min-truth deferred). Symmetric win reports undefined.
+
+---
+
 # fix(A04-F004): query_wfs hardcodes _truth=True — never reads table conditions
 
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F004
