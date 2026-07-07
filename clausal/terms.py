@@ -377,10 +377,14 @@ class SegList:
         return SegList(new_segs)
 
     def is_ground(self) -> bool:
-        """True if all VarSegs are bound — i.e. ``__walk__`` returns a
-        plain list (or, under the F018 Liskov rule, a plain ``str`` when
-        every walked element is a 1-char str)."""
-        return isinstance(self.__walk__(), (list, str))
+        """True iff the term contains no unbound Var.
+
+        Not just "all VarSeg holes filled": a ConcreteSeg *element* Var
+        leaves the term non-ground too (A01-F006 / prior art F083). Delegate
+        to the canonical recursive ground check, which already understands
+        Seg* shapes and element Vars."""
+        from .logic.builtins._helpers import _is_ground
+        return _is_ground(self)
 
     def to_list(self) -> list:
         """Walk and flatten. Raises ``TypeError`` if not fully ground.
@@ -443,15 +447,19 @@ class SegList:
         if isinstance(other, (list, str)):
             walked = self.__walk__()
             if isinstance(walked, (list, str)):
-                # Fully ground SegList → compare with target. Under the
-                # F018 Liskov rule the walk may promote to ``str``; in
-                # that case compare via the equivalent char-list form
-                # to keep the existing semantics.
+                # No unbound *VarSeg* remains, but ConcreteSeg *element* Vars
+                # can still be present (``__walk__`` returns a plain list as
+                # soon as the holes are filled). Comparing with ``==`` would
+                # treat those element Vars by identity and drop satisfiable
+                # bindings (A01-F006), so delegate to real (Var-aware,
+                # trail-restoring) unification. Under the F018 Liskov rule
+                # ``walked`` may be a promoted ``str``; normalise both sides
+                # to char-lists first.
                 if isinstance(walked, str):
                     walked = list(walked)
                 if isinstance(other, str):
-                    return walked == list(other)
-                return walked == other
+                    other = list(other)
+                return unify(walked, other, trail)
             # Non-ground — drive the cached generator one step.
             # Pass string targets directly (string slicing returns substrings).
             key = _seg_unify_cache_key(other, trail)

@@ -212,13 +212,11 @@ class TestF005UnifyGensRetention:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF006SegListElementVarGroundPath:
-    @pytest.mark.xfail(strict=False, reason="A01-F006: walked all-ConcreteSeg compared with ==")
     def test_element_var_binds_direct(self, trail):
         E = Var()
         assert unify(SegList([ConcreteSeg([E, 2])]), [1, 2], trail) is True
         assert deref(E) == 1
 
-    @pytest.mark.xfail(strict=False, reason="A01-F006: same path reached after VarSeg gets bound")
     def test_element_var_binds_after_varseg_bound(self, trail):
         A, E = Var(), Var()
         sl = SegList([VarSeg(A), ConcreteSeg([E])])
@@ -226,7 +224,6 @@ class TestF006SegListElementVarGroundPath:
         assert unify(sl, [1, 2], trail) is True
         assert deref(E) == 2
 
-    @pytest.mark.xfail(strict=False, reason="A01-F006: is_ground True despite unbound element Var")
     def test_is_ground_false_with_element_var(self):
         E = Var()
         assert SegList([ConcreteSeg([E, 2])]).is_ground() is False
