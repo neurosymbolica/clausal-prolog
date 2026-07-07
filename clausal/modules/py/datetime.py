@@ -83,9 +83,11 @@ def _date_4(year, month, day, dt, trail, k):
     """
     year, month, day, dt = deref(year), deref(month), deref(day), deref(dt)
     if is_var(dt):
-        # construct mode — all components must be ground
+        # construct mode — all components must be ground integers. Pass them
+        # through unchanged so datetime.date rejects floats with a TypeError
+        # instead of int()-truncating 2020.9 to 2020 (F015).
         try:
-            d = _dt.date(int(year), int(month), int(day))
+            d = _dt.date(year, month, day)
         except (TypeError, ValueError):
             return
         if unify(dt, d, trail):

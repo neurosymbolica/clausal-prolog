@@ -262,9 +262,8 @@ def test_guard_reified_item_enumerates(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F015: date/4 int()-truncates "
-                   "float components instead of rejecting them")
 def test_F015_date4_rejects_float_components():
+    # A11-F015 (fixed): float components rejected, not truncated.
     from clausal.modules.py.datetime import _date_4
     sols = list(_date_4(2020.9, 1.9, 5, Var(), Trail(), None))
     assert sols == []  # stdlib datetime.date raises TypeError on floats
