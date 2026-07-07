@@ -308,7 +308,12 @@ def _check_type(type_name: str, term) -> bool:
             return True
         return False
     elif type_name == "list":
-        return isinstance(term, list)
+        # F016 (A09): align with is_list/1 — under strings-as-lists a str is
+        # a char list and a bytes is a code list, and a ground Seg* walks to
+        # one. Rejecting them here contradicted is_list("abc") succeeding.
+        if isinstance(term, (list, str, bytes)):
+            return True
+        return isinstance(term, (SegList, SegString, SegBytes)) and _is_ground(term)
     elif type_name in ("boolean", "bool"):
         return isinstance(term, bool)
     elif type_name == "callable":

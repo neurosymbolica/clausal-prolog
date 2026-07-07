@@ -529,8 +529,6 @@ def test_F015_regression_succ_rejects_bool(fix):
 # A09-F016 — must_be/can_be "list" contradicts strings-as-lists
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F016: is_list('abc') succeeds "
-                   "but must_be('list','abc') raises type_error")
 def test_F016_must_be_list_string(fix):
     _, m = fix
     assert _first(m, "is_list", "abc")  # locked-in F080 behaviour
