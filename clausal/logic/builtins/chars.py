@@ -278,7 +278,9 @@ def _char_code__2(char, code, trail, k):
             yield None
         trail.undo(mark)
     elif n_bound:
-        if not isinstance(vn, int):
+        # A09-F015 / A01-D001(c): a bool code is rejected (char_code(C, True)
+        # must not build '\x01').
+        if not isinstance(vn, int) or isinstance(vn, bool):
             raise LogicException(type_error("integer", vn, "char_code/2"))
         if not (0 <= vn < 0x110000):
             return  # logical failure — out-of-range code point
@@ -526,6 +528,10 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
 
     va = va_str
     n = len(va)
+    # A09-F015 / A01-D001(c): a bool bound to Before/Length/After is not an
+    # integer position (True is not 1) — reject before either search path.
+    if any(isinstance(deref(p), bool) for p in (before, length, after)):
+        return
     vs = deref(sub)
 
     # Optimization: if Sub is bound, use str.find to locate occurrences.

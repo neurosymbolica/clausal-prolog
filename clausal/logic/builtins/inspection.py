@@ -194,7 +194,8 @@ def _functor__3(term, name, arity, trail, k):
         arity_val = deref(arity)
         if is_var(name_val) or is_var(arity_val):
             return
-        if not isinstance(arity_val, int) or arity_val < 0:
+        # A09-F015 / A01-D001(c): a bool arity is rejected (True is not 1).
+        if not isinstance(arity_val, int) or isinstance(arity_val, bool) or arity_val < 0:
             return
         if arity_val == 0:
             constructed = name_val
@@ -243,7 +244,8 @@ def _arg__3(n, term, arg_out, trail, k):
     term_val = deref(term)
     if is_var(n_val) or is_var(term_val):
         return
-    if not isinstance(n_val, int):
+    # A09-F015 / A01-D001(c): a bool index is rejected (True is not 1).
+    if not isinstance(n_val, int) or isinstance(n_val, bool):
         return
     # SegList/SegString never appear at the Clausal surface — walk
     # to ground form first (user decision 2026-06-13).

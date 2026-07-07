@@ -45,6 +45,13 @@ except ImportError:
 
 # ── String-as-list helpers ───────────────────────────────────────────────────
 
+def _is_int(v) -> bool:
+    """A09-F015 / A01-D001(c): a genuine int used as an index/count/length —
+    a bool is NOT accepted (True is not 1) so length(L, True), list_item(True,
+    …), take(True, …) etc. fail instead of silently treating True as 1."""
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
 def _as_items(val):
     """Return list of elements if *val* is a sequence (list or str), else None.
 
@@ -272,7 +279,7 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
         if unify(n, len(items), trail):
             yield (_proceed, None)
         trail.undo(mark)
-    elif not is_var(n_val) and isinstance(n_val, int) and n_val >= 0:
+    elif not is_var(n_val) and _is_int(n_val) and n_val >= 0:
         result = [Var() for _ in range(n_val)]
         mark = trail.mark()
         if unify(lst, result, trail):
@@ -350,7 +357,7 @@ def _nth0__3(this_generator, _proceed, _fail, _catcher, n, lst, elem, trail):
     items = _as_items(lst_val)
     if items is not None:
         if not is_var(n_val):
-            if isinstance(n_val, int) and 0 <= n_val < len(items):
+            if _is_int(n_val) and 0 <= n_val < len(items):
                 mark = trail.mark()
                 if unify(elem, items[n_val], trail):
                     yield (_proceed, None)
@@ -694,7 +701,7 @@ def _take__3(this_generator, _proceed, _fail, _catcher, n, lst, taken, trail):
     """take(N, List, Taken) — Taken is the first N elements of List."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
-    if isinstance(n_val, int) and items is not None:
+    if _is_int(n_val) and items is not None:
         was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
         result = _seq_result(items[:n_val] if n_val >= 0 else [], was_str, was_bytes)
@@ -710,7 +717,7 @@ def _drop__3(this_generator, _proceed, _fail, _catcher, n, lst, rest, trail):
     """drop(N, List, Rest) — Rest is List after dropping the first N elements."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
-    if isinstance(n_val, int) and items is not None:
+    if _is_int(n_val) and items is not None:
         was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
         result = _seq_result(items[n_val:] if n_val >= 0 else items, was_str, was_bytes)
@@ -726,7 +733,7 @@ def _split_at__4(this_generator, _proceed, _fail, _catcher, n, lst, left, right,
     """split_at(N, List, Left, Right) — split List at index N."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
-    if isinstance(n_val, int) and items is not None:
+    if _is_int(n_val) and items is not None:
         was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
         idx = max(0, min(n_val, len(items)))
@@ -842,7 +849,7 @@ def _numlist__3(low, high, lst, trail, k):
     high_val = deref(high)
     if is_var(low_val) or is_var(high_val):
         return
-    if not isinstance(low_val, int) or not isinstance(high_val, int):
+    if not _is_int(low_val) or not _is_int(high_val):
         return
     if low_val > high_val:
         return
@@ -857,7 +864,7 @@ def _numlist__2(high, lst, trail, k):
     high_val = deref(high)
     if is_var(high_val):
         return
-    if not isinstance(high_val, int):
+    if not _is_int(high_val):
         return
     if high_val < 1:
         return

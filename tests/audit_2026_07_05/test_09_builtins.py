@@ -472,22 +472,16 @@ def test_F014_regression_char_type_c_path_non_ascii(fix):
 # A09-F015 — bool-as-int acceptance is inconsistent; between C/Py diverge
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F015: length(L, True) builds a "
-                   "1-element list — bool accepted as a length")
 def test_F015_length_bool(fix):
     _, m = fix
     assert not _first(m, "length", Var(), True)
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F015: list_item/take/arg/"
-                   "functor/sub_atom/numlist/char_code accept bool indices")
 def test_F015_list_item_bool_index(fix):
     _, m = fix
     assert not _first(m, "list_item", True, ["a", "b"], Var())
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F015: between/3 C rejects bool "
-                   "bounds but the Python fallback accepts them")
 def test_F015_between_bool_c_py_divergence(fix):
     import clausal.logic.builtins.arithmetic as ar
     _, m = fix

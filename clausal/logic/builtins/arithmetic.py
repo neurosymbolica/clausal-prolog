@@ -126,12 +126,16 @@ def _between__3_py(low, high, x, trail, k):
     high_val = deref(high)
     if is_var(low_val) or is_var(high_val):
         return
-    if not isinstance(low_val, int) or not isinstance(high_val, int):
+    # A09-F015 / A01-D001(c): reject bool bounds — the C path already does, so
+    # this removes the between(False, True, X) C-vs-Python divergence.
+    if not isinstance(low_val, int) or isinstance(low_val, bool) or \
+       not isinstance(high_val, int) or isinstance(high_val, bool):
         return
     x_val = deref(x)
     if not is_var(x_val):
         # Check mode
-        if isinstance(x_val, int) and low_val <= x_val <= high_val:
+        if isinstance(x_val, int) and not isinstance(x_val, bool) \
+                and low_val <= x_val <= high_val:
             yield None
     else:
         # Generate mode
