@@ -262,6 +262,13 @@ class _ClauseReifier:
                 self.term(kwargs["body"]),
                 self.term(kwargs["orelse"]),
             )
+        if name == "DictTerm":
+            # A dict literal is rewritten to DictTerm({...}) before reaching
+            # the reifier; docs promise "dicts appear as themselves", and the
+            # arrow-pattern side builds a runtime dict too, so reify to the raw
+            # dict rather than Goal('DictTerm', …) (F013).
+            if node.args and isinstance(node.args[0], ast.Dict):
+                return self.term(node.args[0])
         if name == "TupleLiteral":
             return tuple(self.term(elt) for elt in kwargs["elements"].elts)
         if name == "ListLiteral":

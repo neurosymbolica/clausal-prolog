@@ -229,9 +229,8 @@ def test_F012_reify_ast_preserves_lt_negative():
     assert type(got.goals[0]).__name__ == type(want.goals[0]).__name__ == "Lt"
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F013: dict literal reifies as "
-                   "Goal('DictTerm',...); identical arrow pattern never matches")
 def test_F013_dict_literal_pattern_matches(tmp_path):
+    # A11-F013 (fixed): dict literals reify as raw dicts, matching patterns.
     m = _load(tmp_path, '''
         -import_from(reflection, [reified_clause])
         DictPattern(SRC) <- reified_clause(SRC, Pt({"k": 5}) <- True)
