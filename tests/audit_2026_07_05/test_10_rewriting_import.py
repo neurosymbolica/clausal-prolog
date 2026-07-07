@@ -245,10 +245,6 @@ def test_F005_guard_regex_pattern_precompiled(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F006: _build_arrow_lambda builds "
-                   "the inner TermTransformer without source_lines, so 'X< -3' "
-                   "in a lambda body hits the gap<=2 heuristic and is misparsed "
-                   "as a nested arrow lambda")
 def test_F006_lambda_body_lt_negative_literal(tmp_path):
     m = _load(tmp_path, """
         f(L, R) <- include((X <- (X< -3)), L, R)

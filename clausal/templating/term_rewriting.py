@@ -804,8 +804,14 @@ class TermTransformer(NodeTransformer):
 
         Uses the same capture/LoadName mechanism as ``visit_Lambda``.
         """
+        # A10-F006: thread source_lines and atoms through (as
+        # _make_term_transformer does). Without source_lines, arrow detection
+        # inside the lambda body falls back to the column-gap heuristic and
+        # misparses a legal Lt guard like ``X_ < -3`` as a nested arrow lambda.
         lambda_transformer = TermTransformer(
+            atoms=transformer.atoms,
             import_remap=transformer._import_remap,
+            source_lines=transformer._source_lines,
             bare_atom_refs=transformer._bare_atom_refs,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
