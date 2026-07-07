@@ -374,18 +374,16 @@ def test_F025_atom_emission_fidelity():
     ast.parse(out)  # must at minimum be syntactically valid Python
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F026: ISO ops @< @> @=< @>= ^ div "
-                   "missing from every operator table (bagof ^ unparseable)")
 def test_F026_iso_operator_table_complete():
+    # A11-F026 (fixed): @<, ^ etc added to operator tables.
     from clausal.tools.prolog_parser import parse_term
     t = parse_term("bagof(X, Y^p(X,Y), L)")
     assert t.functor == "bagof" and t.args[1].functor == "^"
     assert parse_term("X @< Y").functor == "@<"
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F027: bare ':- dynamic p/1.' "
-                   "(SWI prefix-op form) fails to parse")
 def test_F027_bare_dynamic_directive():
+    # A11-F027 (fixed): bare `:- dynamic p/1.` parses via 1150 fx op.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     assert "-dynamic(P/1)" in prolog_to_clausal(":- dynamic p/1.\n")
 
@@ -515,9 +513,8 @@ def test_F039_dcg_pushback_clear_error_or_valid():
     ast.parse(out)  # otherwise the output must at least be valid
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F041: *-> gives generic "
-                   "ParseError token soup, not the designed clear rejection")
 def test_F041_soft_cut_clear_error():
+    # A11-F041 (fixed): *-> parses then is rejected by the translator.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal, PrologTranslationError
     with pytest.raises(PrologTranslationError, match="soft|[*]->"):
         prolog_to_clausal("p :- (a *-> b ; c).\n")

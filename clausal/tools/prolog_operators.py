@@ -130,7 +130,14 @@ def _load_iso(t: OperatorTable) -> None:
     d(700, "xfx", ">=")
     d(700, "xfx", "=<")
     d(700, "xfx", "=..")
+    # Standard-order-of-terms comparison (ISO Table 7) — F026.
+    d(700, "xfx", "@<")
+    d(700, "xfx", "@>")
+    d(700, "xfx", "@=<")
+    d(700, "xfx", "@>=")
     d(600, "xfy", ":")
+    # ^ — bagof/setof existential quantifier and integer power (F026).
+    d(200, "xfy", "^")
     d(500, "yfx", "+")
     d(500, "yfx", "-")
     d(500, "yfx", "/\\")
@@ -156,6 +163,18 @@ def _load_swi(t: OperatorTable) -> None:
     d(700, "xfx", ":<")    # dict unification
     d(500, "yfx", "xor")
     d(400, "yfx", "rdiv")
+    d(400, "yfx", "div")    # floored integer division (F026)
+    # Prefix directive operators (1150 fx) so `:- dynamic p/1.` parses in the
+    # documented bare-prefix form, not only `:- dynamic(p/1).` (F027).
+    for _name in ("dynamic", "discontiguous", "multifile", "module_transparent",
+                  "initialization", "volatile", "public", "meta_predicate",
+                  "table"):
+        d(1150, "fx", _name)
+    # Parsed so the AST is built and the translator emits the designed
+    # rejection, rather than generic token soup (F041).
+    d(1050, "xfy", "*->")   # soft cut
+    d(700, "xfx", "=@=")    # variant equivalence
+    d(700, "xfx", "\\=@=")  # not variant
 
 
 # ── Scryer additions ────────────────────────────────────────────────
