@@ -762,13 +762,11 @@ def test_F027_unpack_numeric_functor(fix):
 # A09-F032 — Seg*-input str promotion inconsistency (low)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F032: msort(ground SegString) "
-                   "returns a list; reverse promotes to str via _was_string")
 def test_F032_msort_segstring_promotion(fix):
     _, m = fix
     S = Var()
     assert _first(m, "msort", SegString(["ba"]), S)
-    assert deref(S) == "ab"  # actual: ['a', 'b']
+    assert deref(S) == "ab"  # A09-F032 fixed: was ['a', 'b']
 
 
 def test_F032_regression_reverse_segstring_promotion(fix):
