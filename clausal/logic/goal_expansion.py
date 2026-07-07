@@ -231,6 +231,29 @@ def _get_call_name(goal: Call) -> str | None:
     return None
 
 
+def _is_regex_goal(goal: Any, ctx: _ExpansionContext) -> bool:
+    """True iff *goal* calls the regex ``match``/``search`` predicate.
+
+    Verified by identity against ``clausal.modules.py.re`` through the module's
+    own binding (mirrors :func:`_is_reflection_goal`), so a same-named
+    user predicate — ``match(A, B) <- (A is B)`` — is never hijacked (F003).
+    """
+    if not isinstance(goal, Call):
+        return False
+    name = _get_call_name(goal)
+    if name is None:
+        return False
+    short_name = name.rsplit(".", 1)[-1]
+    if short_name not in ("match", "search"):
+        return False
+    bound = ctx.module_dict.get(name)
+    if bound is None:
+        return False
+    from clausal.modules.py import re as _regex_mod
+
+    return bound is getattr(_regex_mod, short_name, None)
+
+
 def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
     """Expand match/2 and search/2 with auto-binding + pre-compilation.
 
@@ -239,12 +262,7 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
     if not isinstance(goal, Call):
         return goal
 
-    func_name = _get_call_name(goal)
-    if func_name is None:
-        return goal
-    # Support dotted names like "clausal.regex.match"
-    short_name = func_name.rsplit(".", 1)[-1] if "." in func_name else func_name
-    if short_name not in ("match", "search"):
+    if not _is_regex_goal(goal, ctx):
         return goal
 
     nargs = len(goal.args)

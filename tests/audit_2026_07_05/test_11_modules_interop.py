@@ -101,9 +101,8 @@ def test_F002_charlist_repr_false_positive(tmp_path):
     assert list(solve(m.SQ(["a"]), module=m)) == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F003: goal expansion hijacks any "
-                   "predicate named match/search (name-only gate)")
 def test_F003_user_defined_match_not_hijacked(tmp_path):
+    # A11-F003 (fixed): regex expansion gated on object identity, not name.
     m = _load(tmp_path, '''
         match(A, B) <- (A is B)
         Caller(X) <- match("hello", X)
