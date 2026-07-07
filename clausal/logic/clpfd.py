@@ -1548,6 +1548,24 @@ def _both_ground(l, r) -> bool:
     return True
 
 
+def _reject_nonnumeric_eq(l, r) -> None:
+    """A12-F002: raise a catchable type_error when a Var is compared with ``==``
+    against a GROUND operand that is clearly not a number — an atom (a
+    zero-arity PredicateMeta *class*), a string, or a collection. That case
+    posted a broken FD var (equals anything EXCEPT the operand). Only the
+    exactly-one-Var case is checked: both-ground ``==`` falls back to Python
+    equality, and Var==Var / Var==<arith-expr> stay legal. Numbers,
+    Quantities, rationals/reals and arithmetic expr nodes all pass."""
+    dl, dr = deref(l), deref(r)
+    if is_var(dl) == is_var(dr):
+        return  # both Vars, or both ground — not the broken case
+    ground = dr if is_var(dl) else dl
+    if isinstance(ground, (str, bytes, list, tuple, dict, set)) or \
+            isinstance(ground, type):
+        from clausal.logic.exceptions import LogicException, type_error
+        raise LogicException(type_error("evaluable", ground, "(==)/2"))
+
+
 def fd_eq(l, r, trail: Trail) -> bool:
     """Post X == Y.
 
@@ -1602,6 +1620,11 @@ def fd_eq(l, r, trail: Trail) -> bool:
         # Non-linear: fall through to EqConstraint
     if _both_ground(l, r):
         return l == r
+    # A12-F002: at least one operand is a Var here. A ground NON-numeric
+    # operand (atom, str, list, …) is a type error for arithmetic ==: posting
+    # an FD eq against it made a broken var (one that equals anything EXCEPT
+    # the operand). Reject it as a catchable type error (A09-D002).
+    _reject_nonnumeric_eq(l, r)
     # At least one Var — use CLP(FD)
     if is_var(l):
         _ensure_fd(l, trail)
@@ -2775,7 +2798,13 @@ if _USE_C_PROPAGATE:
     propagate = _c_propagate
     _add_constraint = _c_add_constraint
     _post_constraint = _c_post_constraint
-    fd_eq = _c_fd_eq
+
+    def fd_eq(l, r, trail, _c_impl=_c_fd_eq):
+        # A12-F002: the C fd_eq does not type-check operands, so guard here
+        # (cheap: only touches the two derefs) before delegating.
+        _reject_nonnumeric_eq(l, r)
+        return _c_impl(l, r, trail)
+
     fd_ne = _c_fd_ne
     fd_lt = _c_fd_lt
     fd_le = _c_fd_le

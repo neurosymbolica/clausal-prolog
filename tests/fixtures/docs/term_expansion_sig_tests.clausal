@@ -9,10 +9,14 @@ color("green"),
 Test("identity passthrough red") <- color("red")  # nv
 Test("identity passthrough green") <- color("green")  # nv
 
-# Regex auto-binding via goal expansion
+# Regex auto-binding via goal expansion. The group name resolves to a HEAD
+# argument (YEAR of year_of/2); binding a group named only in the body is a
+# separate, deferred capability (A10-F005).
 -import_from(regex, [match])
 
+year_of(S, YEAR) <- match(r"(?P<YEAR>\d{4})-\d{2}", S)
+
 Test("regex auto-bind year") <- (
-    match(r"(?P<YEAR>\d{4})-\d{2}", "2026-03"),
-    YEAR == "2026"
+    year_of("2026-03", Y),
+    Y == "2026"
 )  # nv
