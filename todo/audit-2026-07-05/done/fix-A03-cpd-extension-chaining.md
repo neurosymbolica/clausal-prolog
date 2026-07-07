@@ -1,5 +1,19 @@
 # fix(A03-F009): CPD extension chaining emits duplicate Evaluate targets — deep solutions lost
 
+**DONE — commit 70fafac5.** Both halves of the two-fold bug resolved by the
+STATUS-recommended "one pass" direction: `_unfold_body_goal` now splices a
+single remapped copy of the CONSTANT per-step template
+(`pattern.pre/post_match_goals`) per level, telescoped at the recursive-call
+boundary (pattern head-role → current rec-extra R, rec-role → fresh F, new rec
+call extra → F), and keeps the accumulated body goals untouched. That both
+removes the LHS collision and adds exactly one link per level (no off-by-one).
+`CountGraphCPD` == generic `("b",2),("c",4),("d",4)`. Added `LimNatCPD` guard
+for the symmetric pre-match path (depth cutoff == non-CPD). Full suite: 8808
+passed, 0 failures.
+
+---
+
+
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/findings.md` A03-F009
 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::TestF009CpdExtensionChaining` (1 xfail — flip to pass)
 
