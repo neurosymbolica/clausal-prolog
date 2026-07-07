@@ -516,9 +516,6 @@ def test_F015_guard_infer_args_basics():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F016a: ElementsLiteral subclasses "
-                   "define no transform_children — child nodes are silently not "
-                   "descended into")
 def test_F016_list_literal_transform_children():
     from clausal.pythonic_ast.nodes import ListLiteral, IntLiteral
     lit = ListLiteral(elements=[IntLiteral(value=1)])
@@ -526,9 +523,6 @@ def test_F016_list_literal_transform_children():
     assert replaced.elements[0].value == 99
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F016b: _transform_node_list's "
-                   "docstring promises REMOVED filtering; the code appends the "
-                   "sentinel instead of removing the node")
 def test_F016_removed_sentinel_honored():
     from clausal.pythonic_ast.nodes import REMOVED, IntLiteral
     from clausal.pythonic_ast.transform import _transform_node_list
@@ -537,9 +531,6 @@ def test_F016_removed_sentinel_honored():
     assert all(getattr(n, "value", None) != 1 and n is not REMOVED for n in out)
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F016c: SpecializeDirective and the "
-                   "Edcg* module-item nodes are missing from nodes.__all__ "
-                   "(sibling of the A01 terms __all__ finding)")
 def test_F016_all_exports_module_items():
     from clausal.pythonic_ast import nodes
     for name in ("SpecializeDirective", "EdcgAccDecl", "EdcgPassDecl",
