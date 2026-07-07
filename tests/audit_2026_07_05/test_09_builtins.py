@@ -614,9 +614,6 @@ def test_F029_ground_segstring_typecheck_coherent(fix):
 # A09-F020 / A09-F021 — C-level defence (subprocess probes)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F020: _chars_core has no "
-                   "Trail_Check — non-Trail arg is cast blind (UB); today it "
-                   "surfaces as a garbage-read RuntimeError, not TypeError")
 def test_F020_chars_core_non_trail():
     p = run_snippet("""
         import resource
@@ -631,8 +628,6 @@ def test_F020_chars_core_non_trail():
     assert p.returncode == 0 and "TYPEERROR-OK" in p.stdout
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F020: empty string → "
-                   "PyUnicode_READ_CHAR out-of-bounds read, garbage result")
 def test_F020_chars_core_empty_string():
     p = run_snippet("""
         import resource

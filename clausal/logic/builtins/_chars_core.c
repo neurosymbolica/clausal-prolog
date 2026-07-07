@@ -159,6 +159,17 @@ py_char_type_find_types(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyArg_ParseTuple(args, "UnOO", &char_str, &start, &type_var, &trail_obj))
         return NULL;
 
+    /* F020 (cross-cutting #1): reject a non-Trail arg before casting it —
+       Trail_CAST reinterprets arbitrary memory as a TrailObject (UB). */
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
+    /* F020: guard the empty string — PyUnicode_READ_CHAR(s, 0) on "" is an
+       out-of-bounds read returning a garbage classification. */
+    if (PyUnicode_GET_LENGTH(char_str) < 1)
+        Py_RETURN_NONE;
+
     Py_UCS4 ch = PyUnicode_READ_CHAR(char_str, 0);
     TrailObject *trail = Trail_CAST(trail_obj);
 
@@ -220,6 +231,10 @@ py_char_type_find_chars(PyObject *Py_UNUSED(module), PyObject *args)
     if (type_idx < 0 || type_idx >= NUM_TYPES)
         Py_RETURN_NONE;
 
+    if (!Trail_Check(trail_obj)) {  /* F020: guard before Trail_CAST */
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
     int count = type_to_chars_count[type_idx];
 
@@ -263,6 +278,10 @@ py_atom_concat_split_find(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyArg_ParseTuple(args, "UnOOO", &c_str, &start, &a_var, &b_var, &trail_obj))
         return NULL;
 
+    if (!Trail_Check(trail_obj)) {  /* F020: guard before Trail_CAST */
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t n = PyUnicode_GET_LENGTH(c_str);
 
@@ -317,6 +336,10 @@ py_sub_atom_search(PyObject *Py_UNUSED(module), PyObject *args)
                           &before_var, &length_var, &after_var, &trail_obj))
         return NULL;
 
+    if (!Trail_Check(trail_obj)) {  /* F020: guard before Trail_CAST */
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t atom_len = PyUnicode_GET_LENGTH(atom_str);
     Py_ssize_t sub_len = PyUnicode_GET_LENGTH(sub_str);
@@ -396,6 +419,10 @@ py_sub_atom_enum(PyObject *Py_UNUSED(module), PyObject *args)
                           &vb_fixed, &vl_fixed, &trail_obj))
         return NULL;
 
+    if (!Trail_Check(trail_obj)) {  /* F020: guard before Trail_CAST */
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
     TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t n = PyUnicode_GET_LENGTH(atom_str);
     Py_ssize_t stride = n + 2;

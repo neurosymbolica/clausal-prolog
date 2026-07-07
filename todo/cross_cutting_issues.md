@@ -11,7 +11,10 @@ Every C extension casts `trail_obj` to `TrailObject *` without calling
 `Trail_Check(trail_obj)`. Passing a non-Trail object causes undefined behavior.
 
 **Affected files:** `_constraints_dif.c`, `_tabling_core.c`, `_list_unify.c`,
-`_clpfd_propagate.c`, `_arithmetic_core.c`, `_lists_core.c`
+`_clpfd_propagate.c`, `_arithmetic_core.c`
+
+**Fixed:** `_lists_core.c`, `_chars_core.c` (A09-F020 — all 5 entry points
+guarded).
 
 **Fix:** Add `Trail_Check()` guard at entry to every exported function that
 receives a trail. Must be done project-wide.
