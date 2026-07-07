@@ -88,12 +88,52 @@ def push_leader(entry: TableEntry) -> None:
     _leader_ctx.stack.append(entry)
 
 
-def pop_leader() -> TableEntry:
-    return _leader_ctx.stack.pop()
+def pop_leader(entry: TableEntry | None = None) -> TableEntry | None:
+    """Remove *entry* from the leader stack and return it (A04-F001).
+
+    An abandoned tabled generator's ``finally`` may run out of order (on GC),
+    long after its entry stopped being the stack top — blindly popping the top
+    would corrupt an unrelated leader's stack (breaking any dispatch that reads
+    it, e.g. SCC completion). Remove the specific entry instead; fall back to a
+    plain pop of the top only when no entry is given.
+    """
+    stack = _leader_ctx.stack
+    if entry is not None:
+        for i in range(len(stack) - 1, -1, -1):
+            if stack[i] is entry:
+                del stack[i]
+                return entry
+        return None
+    return stack.pop() if stack else None
 
 
 def current_leader() -> TableEntry | None:
     return _leader_ctx.stack[-1] if _leader_ctx.stack else None
+
+
+def _on_leader_stack(entry: TableEntry) -> bool:
+    """True if *entry* is an actively-leading ancestor (A04-F001 SCC)."""
+    return any(e is entry for e in _leader_ctx.stack)
+
+
+def _complete_scc(root: TableEntry, table_store) -> None:
+    """Mark *root* complete, then sweep dormant SCC members (A04-F001).
+
+    A member deferred completion while it consumed a still-evaluating
+    ancestor; once every dependency is complete it may complete too. Iterate
+    to a fixpoint so a chain of members resolves.
+    """
+    root.status = "complete"
+    changed = True
+    while changed:
+        changed = False
+        for e in table_store.values():
+            if (e.status != "evaluating" or _on_leader_stack(e)
+                    or not e.scc_deps):
+                continue
+            if all(dep is e or dep.status == "complete" for dep in e.scc_deps):
+                e.status = "complete"
+                changed = True
 
 
 # ── Table entry ───────────────────────────────────────────────────────────
@@ -102,7 +142,7 @@ def current_leader() -> TableEntry | None:
 class TableEntry:
     """Stores status, answers, and suspended consumers for one subgoal."""
     __slots__ = ("status", "answers", "answer_set", "suspended",
-                 "conditions", "_current_delays")
+                 "conditions", "_current_delays", "scc_deps")
 
     def __init__(self):
         self.status: str = "evaluating"       # "evaluating" | "complete"
@@ -111,6 +151,10 @@ class TableEntry:
         self.suspended: list = []             # list of SuspendedConsumer
         self.conditions: list = []            # parallel to answers: frozenset[DelayedNegation] | _FAILED
         self._current_delays: set[DelayedNegation] = set()
+        # A04-F001 SCC completion: entries this one consumed as an evaluating
+        # ANCESTOR (mutual recursion). While any dep is still evaluating this
+        # entry is an SCC member and must not complete on its own.
+        self.scc_deps: set = set()            # set[TableEntry]
 
     def add_answer(self, answer: tuple, delay_set: frozenset | None = None) -> bool:
         """Add a frozen answer tuple.  Returns True if it was new.
@@ -478,7 +522,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
             table_store.pop(store_key, None)
             raise
         finally:
-            pop_leader()
+            pop_leader(entry)
 
         entry.status = "complete"
         for i, stored in enumerate(entry.answers):
@@ -523,8 +567,19 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             yield (_fail, DONE)
             return
 
-        # ── CONSUMER: yield known answers, then SUSPEND ──
-        if entry is not None and entry.status == "evaluating":
+        # ── CONSUMER: an actively-leading ANCESTOR is evaluating this exact
+        # table (a genuine cycle) — yield its known answers, then suspend. A
+        # dormant "evaluating" entry (its leader finished without completing —
+        # an SCC member from mutual recursion) instead falls through to the
+        # LEADER path below and is RE-LED so it re-derives against grown answers
+        # (A04-F001). ──
+        if (entry is not None and entry.status == "evaluating"
+                and _on_leader_stack(entry)):
+            # Record the SCC dependency: the leader making this call depends on
+            # `entry` (the ancestor) and must not complete before it does.
+            cl = current_leader()
+            if cl is not None:
+                cl.scc_deps.add(entry)
             for i, stored in enumerate(entry.answers):
                 if entry.conditions[i] is _FAILED:
                     continue
@@ -563,9 +618,11 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             yield (_fail, DONE)
             return
 
-        # ── LEADER: drive original dispatch, then complete ──
-        entry = TableEntry()
-        table_store[store_key] = entry
+        # ── LEADER (fresh table) or RE-LEAD (a dormant "evaluating" SCC member
+        # whose leader deferred completion — A04-F001): drive to fixpoint. ──
+        if entry is None:
+            entry = TableEntry()
+            table_store[store_key] = entry
         push_leader(entry)
 
         try:
@@ -621,9 +678,18 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             entry.suspended.clear()
             raise
         finally:
-            pop_leader()
+            pop_leader(entry)
 
-        entry.status = "complete"
+        # A04-F001 SCC completion: a table that consumed an ANCESTOR still
+        # evaluating (mutual recursion) is an SCC member — leave it dormant for
+        # the SCC root to re-lead and complete. The root (no still-evaluating
+        # dep) completes itself and sweeps its members to a fixpoint.
+        deps_pending = any(
+            dep is not entry and dep.status == "evaluating"
+            for dep in entry.scc_deps
+        )
+        if not deps_pending:
+            _complete_scc(entry, table_store)
         yield (_fail, DONE)
 
     return tabled_dispatch

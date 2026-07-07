@@ -574,14 +574,11 @@ class TestF001CompletionLosesConsumers:
         got = sorted(set(a[0] for a in answers(call("p", X, module=m), X)))
         assert got == [1, 2, 3, 4, 5]
 
-    @pytest.mark.xfail(strict=False, reason="A04-F001 residual: MUTUAL recursion "
-                       "with the recursive clause first — the nested table (rb, "
-                       "called before ra derives a base answer) completes empty "
-                       "and stays stale. Needs SCC-aware completion (re-lead "
-                       "dormant SCC members from the root's fixpoint). The "
-                       "single-table cases and the rb-outer / facts-first mutual "
-                       "cases pass.")
     def test_mutual_recursion_rec_first_ra(self, load):
+        # A04-F001: SCC-aware completion — the nested table (rb) called before
+        # ra derives a base answer no longer completes empty. It stays a dormant
+        # SCC member, is re-led from the root's fixpoint until the whole SCC
+        # stabilizes, then the root completes it. ra(1,·) = [2,4] in any order.
         m = load("f001c", MUTUAL_RECFIRST_SRC)
         Y = Var()
         got = sorted(set(a[0] for a in answers(call("ra", 1, Y, module=m), Y)))
@@ -593,6 +590,20 @@ class TestF001CompletionLosesConsumers:
         Y = Var()
         got = sorted(set(a[0] for a in answers(call("rd", 1, Y, module=m), Y)))
         assert got == [1, 3]
+
+    def test_mutual_recursion_query_order_invariant(self, load):
+        # A04-F001 acceptance: the tabled solution set is independent of which
+        # SCC member is queried first.
+        m1 = load("f001inv1", MUTUAL_RECFIRST_SRC)
+        Ya = Var()
+        ra_first = sorted(set(a[0] for a in answers(call("ra", 1, Ya, module=m1), Ya)))
+        m2 = load("f001inv2", MUTUAL_RECFIRST_SRC)
+        _query_cache.clear()
+        list(call("rb", 1, Var(), module=m2))   # query rb first
+        Ya2 = Var()
+        _query_cache.clear()
+        ra_after = sorted(set(a[0] for a in answers(call("ra", 1, Ya2, module=m2), Ya2)))
+        assert ra_first == ra_after == [2, 4]
 
     def test_mutual_recursion_facts_first_control(self, load):
         # in-tree fixture ordering (base clauses first) — the passing control
