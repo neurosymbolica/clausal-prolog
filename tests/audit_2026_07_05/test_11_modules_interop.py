@@ -343,9 +343,8 @@ def test_F021_truncdiv_bignum_exact():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F022: Foo and FOO both map to "
-                   "_foo — distinct Prolog variables silently merged")
 def test_F022_var_mapping_injective():
+    # A11-F022 (fixed): per-clause rename table disambiguates collisions.
     import re as _re
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("p(Foo, FOO) :- Foo = 1, FOO = 2.\n")
