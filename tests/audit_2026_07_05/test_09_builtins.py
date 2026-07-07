@@ -732,8 +732,6 @@ def test_F025_regression_append_supported_modes(fix):
 # A09-F027 — functor/unpack non-atom functor handling (low)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F027: functor(3,N,0) gives "
-                   "N='3' (str) — not roundtrippable, ISO gives the number")
 def test_F027_functor_numeric_roundtrip(fix):
     _, m = fix
     N, A = Var(), Var()
@@ -741,8 +739,6 @@ def test_F027_functor_numeric_roundtrip(fix):
     assert deref(N) == 3 and deref(A) == 0
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F027: unpack(T,[3,1,2]) builds "
-                   "Compound('3',(1,2)) instead of raising type_error(atom)")
 def test_F027_unpack_numeric_functor(fix):
     _, m = fix
     with pytest.raises(LogicException):

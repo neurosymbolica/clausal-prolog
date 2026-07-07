@@ -199,7 +199,16 @@ def _functor__3(term, name, arity, trail, k):
         if arity_val == 0:
             constructed = name_val
         else:
-            functor_str = name_val.__name__ if isinstance(name_val, PredicateMeta) else str(name_val)
+            # A09-F027: with arity > 0 the name must be atom-shaped (a str or
+            # a PredicateMeta). ISO raises type_error(atom, Name) otherwise —
+            # str(name_val) previously built a bogus functor like "f(1)".
+            if isinstance(name_val, PredicateMeta):
+                functor_str = name_val.__name__
+            elif isinstance(name_val, str):
+                functor_str = name_val
+            else:
+                from clausal.logic.exceptions import LogicException, type_error
+                raise LogicException(type_error("atom", name_val, "functor/3"))
             args = tuple(Var() for _ in range(arity_val))
             constructed = Compound(functor_str, args)
         mark = trail.mark()
@@ -289,7 +298,16 @@ def _univ__2(term, lst, trail, k):
         if len(args_vals) == 0:
             constructed: Any = f_val  # atom
         else:
-            functor_str = f_val.__name__ if isinstance(f_val, PredicateMeta) else str(f_val)
+            # A09-F027: the functor of a compound must be atom-shaped (ISO:
+            # type_error(atom, Name)). unpack(T, [3, 1, 2]) previously built
+            # Compound("3", (1, 2)) instead of raising.
+            if isinstance(f_val, PredicateMeta):
+                functor_str = f_val.__name__
+            elif isinstance(f_val, str):
+                functor_str = f_val
+            else:
+                from clausal.logic.exceptions import LogicException, type_error
+                raise LogicException(type_error("atom", f_val, "unpack/2"))
             constructed = Compound(functor_str, tuple(args_vals))
         mark = trail.mark()
         if unify(term, constructed, trail):

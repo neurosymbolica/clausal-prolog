@@ -17,7 +17,7 @@ from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes, VarSeg
 # ── Python reference implementations ─────────────────────────────────────────
 
 
-def _functor_name_py(term: Any) -> str | None:
+def _functor_name_py(term: Any) -> Any:
     """Return the functor name of a ground term, or None.
 
     Lists and strings follow ISO cons-cell semantics:
@@ -42,7 +42,9 @@ def _functor_name_py(term: Any) -> str | None:
     if isinstance(term, bytes):
         return "[]" if len(term) == 0 else "."
     if isinstance(term, (bool, int, float)) or term is None:
-        return repr(term)
+        # A09-F027: the atomic constant IS its own functor name (ISO:
+        # functor(3, N, A) → N=3), so it roundtrips. repr(term) did not.
+        return term
     if isinstance(term, PredicateMeta) and not term._fields:
         return term
     return None

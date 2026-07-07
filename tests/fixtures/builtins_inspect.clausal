@@ -26,7 +26,7 @@ ListToTerm(LIST, TERM) <- unpack(TERM, LIST)
 #   unpack("foo", L)        → L=[".","f","oo"]  (cons-cell decomp)
 Test("functor str cons cell") <- (GetFunctor("hello", FUNCTOR, ARITY), FUNCTOR == ".", ARITY == 2)  # nv
 Test("functor empty str nil") <- (GetFunctor("", FUNCTOR, ARITY), FUNCTOR == "[]", ARITY == 0)  # nv
-Test("functor number") <- (GetFunctor(42, FUNCTOR, ARITY), FUNCTOR == "42", ARITY == 0)  # nv
+Test("functor number") <- (GetFunctor(42, FUNCTOR, ARITY), FUNCTOR == 42, ARITY == 0)  # nv A09-F027: constant is its own functor name
 Test("arg list head") <- (FirstArg([10, 20, 30], ARG), ARG == 10)  # nv
 Test("arg list tail") <- (SecondArg([10, 20, 30], ARG), ARG == [20, 30])  # nv
 Test("term to list str cons cell") <- (TermToList("foo", LIST), LIST == [".", "f", "oo"])  # nv
