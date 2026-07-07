@@ -203,7 +203,10 @@ FactProg(PROGRAM) <- (
     ]
 )
 
-# A03-F007: MI with goals BETWEEN MatchClause and the recursive call
+# A03-F007: MI with goals BETWEEN MatchClause and the recursive call. The
+# generic MI is exercised here; the -specialize is refused loudly (A03-D003)
+# and is asserted in a dedicated per-test module so it doesn't abort this
+# whole shared fixture's load.
 SolveGuard([], _PROGRAM, _LIM),
 SolveGuard([GOAL, *GOALS], PROGRAM, LIM) <- (
     MatchClause(GOAL, BODY, PROGRAM),
@@ -212,7 +215,6 @@ SolveGuard([GOAL, *GOALS], PROGRAM, LIM) <- (
     LIM1 := LIM - 1,
     SolveGuard(ALL_GOALS, PROGRAM, LIM1),
 )
--specialize(SolveGuard, NatProg, alias=SolveGuardNat)
 
 # A03-F008: deep unfolding vs single-clause functor with constant arg
 -specialize(Solve, ConstProg, alias=ConstShallow)
@@ -518,18 +520,51 @@ class TestF005F006FindallFamily:
 # ── A03-F007/F008/F009 — specialization ──────────────────────────────────────
 
 
+# A03-F007: SolveGuard has a non-MI goal (LIM > 0) between MatchClause and the
+# recursive call. Its -specialize must be refused loudly (A03-D003), so it is
+# asserted here in a dedicated module rather than the shared fixture (whose
+# whole load would otherwise abort).
+_SOLVEGUARD_SPEC_FIXTURE = '''
+MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
+    CLAUSE in PROGRAM,
+    copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
+    GOAL is FRESH_HEAD,
+)
+NatProg(PROGRAM) <- (
+    PROGRAM is [
+        [["natnum", 0], []],
+        [["natnum", ["s", NX2]], [["natnum", NX2]]]
+    ]
+)
+SolveGuard([], _PROGRAM, _LIM),
+SolveGuard([GOAL, *GOALS], PROGRAM, LIM) <- (
+    MatchClause(GOAL, BODY, PROGRAM),
+    LIM > 0,
+    append(BODY, GOALS, ALL_GOALS),
+    LIM1 := LIM - 1,
+    SolveGuard(ALL_GOALS, PROGRAM, LIM1),
+)
+-specialize(SolveGuard, NatProg, alias=SolveGuardNat)
+'''
+
+
 class TestF007SpecializationDropsMidBodyGoals:
     def test_generic_mi_respects_guard(self, mod):
         prog = _program(mod, mod.NatProg)
         assert not has_sol(mod, mod.SolveGuard(NAT3, prog, 1))
         assert has_sol(mod, mod.SolveGuard(NAT3, prog, 10))
 
-    @pytest.mark.xfail(strict=False, reason="A03-F007: goals between MatchClause and recursive call silently dropped")
-    def test_specialized_mi_respects_guard(self, mod):
-        assert not has_sol(mod, mod.SolveGuardNat(NAT3, 1))
-
-    def test_specialized_mi_succeeds_within_limit(self, mod):
-        assert has_sol(mod, mod.SolveGuardNat(NAT3, 10))
+    def test_midbody_goal_specialize_refused(self, tmp_path):
+        # A03-F007/D003: a non-MI goal (LIM > 0) between MatchClause and the
+        # recursive call would be silently dropped from every specialized
+        # clause, so -specialize must REFUSE LOUDLY at load time rather than
+        # emit a guard-less specialization. (Previously SolveGuardNat compiled
+        # with the depth guard dropped, so it recursed without bound.)
+        from clausal.logic.specialization import CannotSpecialize
+        p = tmp_path / "solveguard_spec.clausal"
+        p.write_text(_SOLVEGUARD_SPEC_FIXTURE)
+        with pytest.raises(CannotSpecialize, match="not MI-related"):
+            _load_module("a03_solveguard_refuse", str(p))
 
 
 class TestF008DeepUnfoldConstantCheck:

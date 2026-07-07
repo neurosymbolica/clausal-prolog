@@ -197,6 +197,24 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     post_match_goals = [body[i] for i in range(last_mi_idx + 1, len(body))
                         if i not in mi_indices]
 
+    # A03-F007: goals sitting BETWEEN MatchClause and the last MI-related goal
+    # (the recursive call) that are not themselves MI-related fall into neither
+    # pre_match nor post_match — they would be silently dropped from every
+    # specialized clause (e.g. the ``LIM > 0`` depth guard in a bounded
+    # meta-interpreter). Refuse loudly (A03-D003) rather than degrade; support
+    # for threading mid-body goals is future work.
+    mid_dropped = [i for i in range(match_idx + 1, last_mi_idx)
+                   if i not in mi_indices]
+    if mid_dropped:
+        raise CannotSpecialize(
+            f"{name}/{arity}: goal at body position {mid_dropped[0]} "
+            f"({body[mid_dropped[0]]!r}) sits between MatchClause and the "
+            f"recursive call but is not MI-related; specialization would "
+            f"silently drop it. Mid-body goals are not yet supported — move it "
+            f"before MatchClause or after the recursive call, or specialize a "
+            f"variant without it."
+        )
+
     return MIPattern(
         name=name,
         arity=arity,
