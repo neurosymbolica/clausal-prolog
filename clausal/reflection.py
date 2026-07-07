@@ -138,9 +138,13 @@ class _ClauseReifier:
     walrus-bound variable names and anonymous-variable numbering are scoped
     to the clause, mirroring logic-variable scope."""
 
-    def __init__(self):
+    def __init__(self, field_order=None):
         self._vars = {}
         self._anon_count = 0
+        # (functor, arity) → canonical field-name order (first definition wins),
+        # shared across the clauses of one source so keyword heads canonicalize
+        # to the runtime's field order (F010).
+        self._field_order = {} if field_order is None else field_order
 
     # -- variables ----------------------------------------------------------
 
@@ -281,11 +285,27 @@ class _ClauseReifier:
         # Goal: positional arguments first, then keyword values in field
         # order (head keyword form IS the field order).
         args = [self.term(arg) for arg in node.args]
-        args += [
-            self.term(value)
+        kw_items = [
+            (key, value)
             for key, value in kwargs.items()
             if key not in ("position", "_position")
         ]
+        # Positional heads are rewritten to keyword ctors whose field names are
+        # in positional order; genuine keyword heads carry the user's names in
+        # written order, which may differ from the functor's canonical field
+        # order. The runtime canonicalizes by the field order of a functor's
+        # FIRST definition, so `kp(y=20, x=10)` enumerates (10, 20) even though
+        # it is written (y, x). Reorder keyword args to the first-seen order
+        # for this functor so the reified positional args match the runtime
+        # instead of the written order (F010).
+        names = [k for k, _ in kw_items]
+        canonical = self._field_order.setdefault((name, len(kw_items)), names)
+        ordered = sorted(
+            kw_items,
+            key=lambda kv: canonical.index(kv[0]) if kv[0] in canonical
+            else len(canonical),
+        )
+        args += [self.term(value) for _, value in ordered]
         return Goal(name, args, [])
 
     def _goal_call(self, kwargs):
@@ -463,6 +483,9 @@ def reify_source(text, filename="<reflected>"):
             items.append(directive)
 
     clause_lines = set()
+    # Shared across the source's clauses so a functor's canonical field order
+    # is fixed by its first definition (F010).
+    field_order: dict = {}
     for stmt in transformed.body:
         call = stmt.value if isinstance(stmt, ast.Expr) else None
         if (
@@ -470,7 +493,7 @@ def reify_source(text, filename="<reflected>"):
             and isinstance(call.func, ast.Name)
             and call.func.id == "$define_predicate"
         ):
-            clause = _ClauseReifier().clause(call.args[0])
+            clause = _ClauseReifier(field_order=field_order).clause(call.args[0])
             items.append(clause)
             if clause.position is not None:
                 clause_lines.update(range(clause.position[0], clause.position[2] + 1))

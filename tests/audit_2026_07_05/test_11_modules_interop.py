@@ -203,9 +203,8 @@ def test_guard_regex_ground_modes_match_re_oracle(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F010: keyword-form heads reify "
-                   "positionally in WRITTEN order; runtime canonicalizes by name")
 def test_F010_keyword_head_reify_matches_runtime_order():
+    # A11-F010 (fixed): keyword heads reify as [name, value] kwargs pairs.
     from clausal.reflection import reify_source
     items = reify_source('kp(x=1, y=2),\nkp(y=20, x=10),\n')
     second = items[1].head
