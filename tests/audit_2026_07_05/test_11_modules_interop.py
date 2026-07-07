@@ -352,17 +352,15 @@ def test_F022_var_mapping_injective():
     assert v1 != v2
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F023: ','/2 argument flattened "
-                   "in emission — foo/2 fact silently becomes Foo/3")
 def test_F023_tuple_arg_arity_preserved():
+    # A11-F023 (fixed): ,/2 in arg position emits a tuple.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("foo(a, (b, c)).\n")
     assert "Foo(a, b , c)" not in out
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F024: -> in metacall args emitted "
-                   "as ->(...) instead of the designed rejection (sibling of A10-F001)")
 def test_F024_arrow_rejected_in_term_position():
+    # A11-F024 (fixed): -> in term position is rejected.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal, PrologTranslationError
     with pytest.raises(PrologTranslationError):
         prolog_to_clausal("q(L) :- findall(X, (c(X) -> t ; e), L).\n")
@@ -493,9 +491,8 @@ def test_F032_arith_eq_roundtrip():
     assert "=:=" in back or " is " in back
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F033: =.. and lists:member emit "
-                   "invalid Clausal; docs promise unpack/2 and lists.in_")
 def test_F033_univ_and_qualified_emission():
+    # A11-F033 (fixed): =.. emits unpack/2.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("q(T, L) :- T =.. L.\n")
     ast.parse(out)

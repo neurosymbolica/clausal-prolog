@@ -581,6 +581,43 @@ class _PrologToClausal:
         functor = term.functor
         args = term.args
 
+        # Control constructs in term/metacall position (e.g. inside findall's
+        # goal argument) are rejected the same way as in goal position — the
+        # bare fall-through would otherwise emit invalid `->(...)` / `*->(...)`
+        # (F024, sibling of A10-F001).
+        if functor in ("->", "*->") and len(args) == 2:
+            raise PrologTranslationError(
+                f"If-then(-else) / soft-cut ('{functor}') cannot be translated "
+                "to Clausal, even in a metacall argument.\n"
+                "Rewrite using reified conditionals or dif/2 guards.\n"
+                "See: docs/reified_ite.md, docs/for_prolog_programmers.md"
+            )
+
+        # ','/2 in term position is a tuple, NOT a flattened argument list:
+        # emitting it bare turned foo(a, (b, c)) into a foo/3 call (F023).
+        if functor == "," and len(args) == 2:
+            parts = ", ".join(
+                self._emit_term(p) for p in self._flatten_conjunction(term)
+            )
+            return f"({parts})"
+
+        # Univ: T =.. L → unpack(T, L) (=.. is not valid Clausal syntax) — F033.
+        if functor == "=.." and len(args) == 2:
+            left = self._emit_term(args[0])
+            right = self._emit_term(args[1])
+            return f"unpack({left}, {right})"
+
+        # Module-qualified goal: Module:Goal → Module.Goal(...) (F033).
+        if functor == ":" and len(args) == 2 and isinstance(args[0], PAtom):
+            module = args[0].name
+            goal = args[1]
+            if isinstance(goal, PCompound):
+                goal_name = _REVERSE_BUILTIN_MAP.get(goal.functor, goal.functor)
+                inner = ", ".join(self._emit_term(a) for a in goal.args)
+                return f"{module}.{goal_name}({inner})"
+            if isinstance(goal, PAtom):
+                return f"{module}.{goal.name}()"
+
         # Check user-defined operator mappings
         if functor in self._user_ops:
             mapping = self._user_ops[functor]
