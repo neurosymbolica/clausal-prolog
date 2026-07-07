@@ -499,26 +499,6 @@ static PyMemberDef ScalarProductConstraint_members[] = {
 };
 
 /* ================================================================
- * Helper: get FDVar from a variable, returns borrowed ref or NULL
- * ================================================================ */
-
-static inline FDVarObject *
-get_fdvar(PyObject *var)
-{
-    PyObject *state = call_get_attr(var, FD_KEY_STR);
-    if (!state) return NULL;
-    if (state == Py_None) {
-        Py_DECREF(state);
-        return NULL;
-    }
-    /* Caller gets an owned reference, must decref when done */
-    if (FDVar_Check(state))
-        return (FDVarObject *)state;
-    /* Python FDVar — wrap access via attribute */
-    return (FDVarObject *)state;  /* duck typing: has .domain, .constraints */
-}
-
-/* ================================================================
  * Helper: get domain for an expression (int, Var, or expr tree)
  * Inlines the fast paths, falls back to Python _expr_domain
  * ================================================================ */
@@ -645,8 +625,15 @@ c_ensure_fd(PyObject *var, PyObject *trail)
     if (state != Py_None) {
         if (FDVar_Check(state))
             return (FDVarObject *)state;
-        /* Python FDVar — return as-is (duck typing) */
-        return (FDVarObject *)state;
+        /* A non-FDVar object under the engine-reserved "fd" key (only
+         * reachable via a user put_attr(x, "fd", <obj>)) cannot be treated as
+         * an FDVarObject: callers read ->domain / ->constraints at fixed
+         * struct offsets, which is undefined behaviour for any other type.
+         * Reject cleanly rather than crash (A06-F016). */
+        Py_DECREF(state);
+        PyErr_SetString(PyExc_TypeError,
+                        "fd attribute must be an FDVar (engine-reserved key)");
+        return NULL;
     }
     Py_DECREF(state);
 

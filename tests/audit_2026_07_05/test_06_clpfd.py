@@ -597,6 +597,32 @@ class TestTypeHoles:
         assert all_different(["a", "b"], t) is False  # non-integers fail (silently)
 
 
+# ── A06-F016: non-FDVar "fd" attribute must not be struct-cast (UB) ───────────
+
+
+class TestFdVarDuckTypingUB:
+    def test_non_fdvar_fd_attr_no_crash(self):
+        # A user-supplied "fd" attribute that merely *looks* like an FDVar
+        # (has .domain / .constraints) was cast to FDVarObject* and read at
+        # fixed struct offsets — undefined behaviour, one refactor from a
+        # segfault.  It must now fail cleanly (TypeError), never crash.
+        import types as _types
+
+        t = Trail()
+        x = Var()
+        put_attr(x, "fd", _types.SimpleNamespace(domain=((1, 2),), constraints=()), t)
+        with pytest.raises(TypeError):
+            fd_ne(x, 1, t)
+
+    def test_real_fdvar_still_works(self):
+        # Control: a genuine FD var (real C FDVar under "fd") is unaffected.
+        t = Trail()
+        x = Var()
+        in_domain(x, 1, 5, t)
+        assert fd_ne(x, 3, t)
+        assert not domain_contains(dom(x), 3)
+
+
 # ── Global constraints: regression guards ────────────────────────────────────
 
 
