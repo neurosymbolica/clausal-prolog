@@ -469,7 +469,12 @@ def _ne_propagate_bignum(lhs, rhs, trail, queue) -> bool:
     if lhs is rhs:
         return False
     if not is_var(lhs) and not is_var(rhs):
-        return lhs != rhs
+        # Evaluate expression operands before comparing (A06-F001).
+        lv = lhs if type(lhs) is int else _eval_ground(lhs)
+        rv = rhs if type(rhs) is int else _eval_ground(rhs)
+        if lv is None or rv is None:
+            return True
+        return lv != rv
     if not is_var(lhs) and isinstance(lhs, int) and is_var(rhs):
         state = get_attr(rhs, FD_KEY)
         if state is not None:
@@ -737,7 +742,14 @@ class NeConstraint(Constraint):
             return False
         # Only propagate when one side is ground
         if not is_var(lhs) and not is_var(rhs):
-            return lhs != rhs
+            # Evaluate expression operands (e.g. Add(X, 1)): comparing the
+            # expression node structurally to an int is always "different" and
+            # would wrongly satisfy the constraint (A06-F001).
+            lv = lhs if type(lhs) is int else _eval_ground(lhs)
+            rv = rhs if type(rhs) is int else _eval_ground(rhs)
+            if lv is None or rv is None:
+                return True  # an expression still has unbound vars — pending
+            return lv != rv
         if not is_var(lhs) and isinstance(lhs, int) and is_var(rhs):
             state = get_attr(rhs, FD_KEY)
             if state is not None:

@@ -24,6 +24,7 @@ static PyObject *fn_register_attr_hook = NULL;
 /* From clausal.logic.clpfd (Python-level helpers) */
 static PyObject *fn_expr_domain = NULL;
 static PyObject *fn_resolve = NULL;
+static PyObject *fn_eval_ground = NULL;
 static PyObject *fn_any_real = NULL;
 static PyObject *fn_both_ground = NULL;
 static PyObject *fn_collect_constraint_vars = NULL;
@@ -1053,7 +1054,32 @@ ne_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
 
     /* Both ground */
     if (!l_isvar && !r_isvar) {
-        int eq = PyObject_RichCompareBool(lhs, rhs, Py_NE);
+        /* Evaluate expression operands (e.g. Add(X, 1)) before comparing:
+         * a structural compare of the expression node against an int is
+         * always "different" and would wrongly satisfy the constraint
+         * (A06-F001).  Plain ints skip the eval. */
+        PyObject *lv = lhs, *rv = rhs;
+        int owns_lv = 0, owns_rv = 0;
+        if (!PyLong_Check(lhs)) {
+            lv = PyObject_CallOneArg(fn_eval_ground, lhs);
+            if (!lv) goto error;
+            owns_lv = 1;
+        }
+        if (!PyLong_Check(rhs)) {
+            rv = PyObject_CallOneArg(fn_eval_ground, rhs);
+            if (!rv) { if (owns_lv) Py_DECREF(lv); goto error; }
+            owns_rv = 1;
+        }
+        if (lv == Py_None || rv == Py_None) {
+            /* An expression still has unbound vars — keep pending. */
+            if (owns_lv) Py_DECREF(lv);
+            if (owns_rv) Py_DECREF(rv);
+            Py_DECREF(lhs); Py_DECREF(rhs);
+            return 1;
+        }
+        int eq = PyObject_RichCompareBool(lv, rv, Py_NE);
+        if (owns_lv) Py_DECREF(lv);
+        if (owns_rv) Py_DECREF(rv);
         Py_DECREF(lhs); Py_DECREF(rhs);
         return eq < 0 ? -1 : eq;
     }
@@ -3262,6 +3288,7 @@ PyInit__clpfd_propagate(void)
 
     fn_expr_domain = PyObject_GetAttrString(clpfd_mod, "_expr_domain");
     fn_resolve = PyObject_GetAttrString(clpfd_mod, "_resolve");
+    fn_eval_ground = PyObject_GetAttrString(clpfd_mod, "_eval_ground");
     fn_any_real = PyObject_GetAttrString(clpfd_mod, "_any_real");
     fn_both_ground = PyObject_GetAttrString(clpfd_mod, "_both_ground");
     fn_collect_constraint_vars = PyObject_GetAttrString(clpfd_mod, "_collect_constraint_vars");
@@ -3277,7 +3304,8 @@ PyInit__clpfd_propagate(void)
     fn_scalar_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_scalar_propagate_bignum");
     Py_DECREF(clpfd_mod);
 
-    if (!fn_expr_domain || !fn_resolve || !fn_any_real || !fn_both_ground ||
+    if (!fn_expr_domain || !fn_resolve || !fn_eval_ground ||
+        !fn_any_real || !fn_both_ground ||
         !fn_collect_constraint_vars || !fn_collect_vars_from || !fn_linearise ||
         !fn_eq_propagate_bignum || !fn_ne_propagate_bignum ||
         !fn_lt_propagate_bignum || !fn_le_propagate_bignum ||

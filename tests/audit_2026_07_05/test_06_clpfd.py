@@ -176,8 +176,6 @@ class TestDifferential:
 
 
 class TestNeExpressionBlindness:
-    @pytest.mark.xfail(strict=False, reason="A06-F001: NeConstraint compares expression "
-                       "trees structurally; X+1 != Y is never enforced once bound")
     def test_ne_with_expr_fails_when_equal(self):
         t = Trail()
         x, y = Var(), Var()
@@ -186,7 +184,6 @@ class TestNeExpressionBlindness:
         r3 = unify(y, 2, t)
         assert not (r2 and r3), "1+1 != 2 must fail"
 
-    @pytest.mark.xfail(strict=False, reason="A06-F001: labeling yields violating tuples")
     def test_ne_with_expr_label_excludes_violators(self):
         t = Trail()
         x, y = Var(), Var()
@@ -196,7 +193,6 @@ class TestNeExpressionBlindness:
         assert all(a + 1 != b for a, b in sols), sorted(sols)
         assert len(sols) == 7
 
-    @pytest.mark.xfail(strict=False, reason="A06-F001: compiled != with expression operand")
     def test_compiled_ne_expr(self, load):
         m = load("ne_expr", source="""
 Bad(X, Y) <- (X + 1 != Y, X is 1, Y is 2)
