@@ -286,9 +286,8 @@ def test_F015_guard_date4_construct_and_decompose():
     assert len(sols) == 1 and deref(D) == pydt.date(2020, 1, 5)
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F016: date_between raises raw "
-                   "TypeError on date/datetime mix (siblings fail cleanly)")
 def test_F016_date_between_mixed_types_fails_cleanly():
+    # A11-F016 (fixed): date/datetime mix fails cleanly.
     import datetime as pydt
     from clausal.modules.py.datetime import _date_between_3
     gen = _date_between_3(None, "P", "F", None,
@@ -298,25 +297,22 @@ def test_F016_date_between_mixed_types_fails_cleanly():
     assert sols == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F017: url.parse leaks ValueError "
-                   "on out-of-range port instead of failing cleanly")
 def test_F017_url_parse_bad_port_fails_cleanly():
+    # A11-F017 (fixed): out-of-range port fails cleanly.
     from clausal.modules.py.url import _parse_2
     sols = list(_parse_2("http://h:99999/", Var(), Trail(), None))
     assert sols == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F018: http.get leaks ValueError "
-                   "on malformed URL (refused connection fails cleanly)")
 def test_F018_http_get_malformed_url_fails_cleanly():
+    # A11-F018 (fixed): malformed URL fails cleanly.
     from clausal.modules.py.http import _get_2
     sols = list(_get_2("not-a-url", Var(), Trail(), None))
     assert sols == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F019: hash/3 leaks TypeError for "
-                   "shake_* variable-length digests")
 def test_F019_hash_shake_fails_cleanly():
+    # A11-F019 (fixed): shake_* variable-length digest fails cleanly.
     from clausal.modules.py.hash import _hash_3
     sols = list(_hash_3("shake_128", "abc", Var(), Trail(), None))
     assert sols == []

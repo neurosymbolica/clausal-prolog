@@ -46,10 +46,10 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30):
             data_bytes = data.encode("utf-8")
         elif isinstance(data, bytes):
             data_bytes = data
-    req = _urllib_request.Request(url, data=data_bytes, method=method)
-    for k, v in headers.items():
-        req.add_header(k, v)
     try:
+        req = _urllib_request.Request(url, data=data_bytes, method=method)
+        for k, v in headers.items():
+            req.add_header(k, v)
         with _urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8")
             return resp.status, body
@@ -59,7 +59,8 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30):
         except Exception:
             body = ""
         return e.code, body
-    except (OSError, _urllib_error.URLError):
+    except (OSError, _urllib_error.URLError, ValueError):
+        # ValueError: urlopen on a malformed URL ("unknown url type") — F018
         return None
 
 

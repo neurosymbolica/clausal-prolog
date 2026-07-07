@@ -377,6 +377,11 @@ def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, tr
     if not isinstance(start, _dt.date) or not isinstance(end, _dt.date):
         yield (_fail, DONE)
         return
+    # A plain date and a datetime are not comparable (datetime subclasses
+    # date, so the isinstance checks above both pass) — fail cleanly (F016).
+    if isinstance(start, _dt.datetime) != isinstance(end, _dt.datetime):
+        yield (_fail, DONE)
+        return
     current = start
     one_day = _dt.timedelta(days=1)
     while current <= end:
