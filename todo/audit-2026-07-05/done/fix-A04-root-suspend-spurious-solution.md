@@ -1,3 +1,7 @@
+**DONE — commit a3408b08 (F007+F008 shipped together).** Both tabled wrappers drop a poisoned entry on abnormal exit; _drive_trampoline closes the StepGenerator chain in a finally so cleanup is synchronous (not GC-timed). All five root drivers treat (None, _TABLING_SUSPEND) as exhaustion. Flips the F007 (once/exception/mechanism) + F008 tests. Full suite: 8818 passed, 0 failures.
+
+---
+
 # fix(A04-F008): root-level (None, _TABLING_SUSPEND) misread as a solution — spurious unbound answers
 
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F008
