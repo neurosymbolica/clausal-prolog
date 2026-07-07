@@ -3009,6 +3009,15 @@ class EmbedTransformer(NodeTransformer):
             ):
                 orig_name = item.args[0].id
                 local_name = item.args[1].id
+                # A10-F017: a logic-var-shaped alias (e.g. ``T``) is
+                # unreachable — visit_Name treats it as a variable before the
+                # remap fires, so the call site later fails with a cryptic
+                # NotImplementedError. Reject it here at the directive.
+                if _is_logic_var_name(local_name):
+                    raise SyntaxError(
+                        f"-import_from alias {local_name!r} is a logic-variable "
+                        f"name; use a TitleCase alias (e.g. Reach)"
+                    )
                 dotted_key = f"{module_path}.{orig_name}"
                 transformer._import_remap[local_name] = dotted_key
                 aliases.append(alias(name=orig_name, asname=local_name))

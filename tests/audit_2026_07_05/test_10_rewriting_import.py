@@ -588,9 +588,6 @@ def test_F016_guard_yield_dataclass_traversal_documented():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F017: alias to a logic-var-shaped "
-                   "name (documented as unsupported) should fail at the "
-                   "directive, not as a cryptic runtime NotImplementedError")
 def test_F017_single_letter_alias_rejected_at_load(tmp_path):
     lib = tmp_path / "a10_f017_lib.clausal"
     lib.write_text('twice(X, Y) <- (Y == X * 2)\n')
