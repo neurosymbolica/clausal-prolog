@@ -1606,6 +1606,13 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
     Py_ssize_t nv = PyTuple_GET_SIZE(self->sum_vars);
 
     double min_sum = 0, max_sum = 0;
+    /* Finite-only running sums plus counts of ±inf contributions, so a var's
+     * "other side" bound (total minus every OTHER var) is finite whenever its
+     * OWN domain is the sole infinite contributor.  The old subtraction trick
+     * (max_sum - own_max) produced inf - inf = nan and skipped narrowing,
+     * leaving output-mode vars unbounded (A06-F002). */
+    double finite_hi_sum = 0, finite_lo_sum = 0;
+    int pos_inf_count = 0, neg_inf_count = 0;
     int needs_bignum = 0;
     for (Py_ssize_t i = 0; i < nv; i++) {
         PyObject *v = PyTuple_GET_ITEM(self->sum_vars, i);
@@ -1626,6 +1633,8 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
         double hi_f = (hi == INT64_MAX) ? HUGE_VAL : (double)hi;
         min_sum += lo_f;
         max_sum += hi_f;
+        if (hi_f == HUGE_VAL) pos_inf_count++; else finite_hi_sum += hi_f;
+        if (lo_f == -HUGE_VAL) neg_inf_count++; else finite_lo_sum += lo_f;
     }
 
     /* Bignum fallback: any operand has bignum bounds, or the running double
@@ -1711,16 +1720,19 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
         double v_max_f = (v_hi_i == INT64_MAX) ? HUGE_VAL : (double)v_hi_i;
         double v_min_f = (v_lo_i == INT64_MIN) ? -HUGE_VAL : (double)v_lo_i;
 
-        double other_max = max_sum - v_max_f;
-        double other_min = min_sum - v_min_f;
-        /* nan guard */
-        if (other_max != other_max || other_min != other_min) {
-            Py_DECREF(d); Py_DECREF(dv);
-            continue;
-        }
+        /* other_max = Σ_{j≠i} hi_j : +inf iff some OTHER var is +inf, else
+         * the finite hi sum with var i's own finite hi removed (A06-F002). */
+        int others_pos_inf = pos_inf_count - (v_max_f == HUGE_VAL ? 1 : 0);
+        double other_max = (others_pos_inf > 0) ? HUGE_VAL
+                         : finite_hi_sum - (v_max_f == HUGE_VAL ? 0.0 : v_max_f);
+        int others_neg_inf = neg_inf_count - (v_min_f == -HUGE_VAL ? 1 : 0);
+        double other_min = (others_neg_inf > 0) ? -HUGE_VAL
+                         : finite_lo_sum - (v_min_f == -HUGE_VAL ? 0.0 : v_min_f);
 
-        double new_lo_f = tlo - other_max;
-        double new_hi_f = thi - other_min;
+        /* var_i ∈ [total_lo - other_max, total_hi - other_min].  An infinite
+         * other-side bound leaves the corresponding var bound unconstrained. */
+        double new_lo_f = (other_max == HUGE_VAL) ? -HUGE_VAL : (tlo - other_max);
+        double new_hi_f = (other_min == -HUGE_VAL) ? HUGE_VAL : (thi - other_min);
 
         int64_t new_lo_i = (new_lo_f <= (double)INT64_MIN) ? INT64_MIN :
                            (new_lo_f >= (double)INT64_MAX) ? INT64_MAX : (int64_t)new_lo_f;
@@ -1755,6 +1767,11 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
     Py_ssize_t nv = PyTuple_GET_SIZE(self->sum_vars);
 
     double min_sum = 0, max_sum = 0;
+    /* Finite-only running contribution sums plus ±inf counts, so a var's
+     * "other side" is finite whenever its OWN contribution is the sole
+     * infinite one (A06-F002 — see sum_propagate for the rationale). */
+    double finite_cmax_sum = 0, finite_cmin_sum = 0;
+    int cmax_pos_inf = 0, cmin_neg_inf = 0;
     int needs_bignum = 0;
     for (Py_ssize_t i = 0; i < nv; i++) {
         PyObject *v = PyTuple_GET_ITEM(self->sum_vars, i);
@@ -1782,13 +1799,12 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
         double lo_f = (lo == INT64_MIN) ? -HUGE_VAL : (double)lo;
         double hi_f = (hi == INT64_MAX) ? HUGE_VAL : (double)hi;
 
-        if (c >= 0) {
-            min_sum += safe_mult_d(c, lo_f);
-            max_sum += safe_mult_d(c, hi_f);
-        } else {
-            min_sum += safe_mult_d(c, hi_f);
-            max_sum += safe_mult_d(c, lo_f);
-        }
+        double contrib_min = (c >= 0) ? safe_mult_d(c, lo_f) : safe_mult_d(c, hi_f);
+        double contrib_max = (c >= 0) ? safe_mult_d(c, hi_f) : safe_mult_d(c, lo_f);
+        min_sum += contrib_min;
+        max_sum += contrib_max;
+        if (contrib_max == HUGE_VAL) cmax_pos_inf++; else finite_cmax_sum += contrib_max;
+        if (contrib_min == -HUGE_VAL) cmin_neg_inf++; else finite_cmin_sum += contrib_min;
     }
 
     /* Bignum fallback: any operand has bignum bounds, any coefficient is
@@ -1879,21 +1895,26 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
 
         double contrib_max = (c > 0) ? safe_mult_d(c, v_hi) : safe_mult_d(c, v_lo);
         double contrib_min = (c > 0) ? safe_mult_d(c, v_lo) : safe_mult_d(c, v_hi);
-        double other_min = min_sum - contrib_min;
-        double other_max = max_sum - contrib_max;
+        /* Σ_{j≠i} of the min/max contributions, inf iff some OTHER var is the
+         * infinite one (A06-F002). */
+        int others_cmax_inf = cmax_pos_inf - (contrib_max == HUGE_VAL ? 1 : 0);
+        double other_max = (others_cmax_inf > 0) ? HUGE_VAL
+                         : finite_cmax_sum - (contrib_max == HUGE_VAL ? 0.0 : contrib_max);
+        int others_cmin_inf = cmin_neg_inf - (contrib_min == -HUGE_VAL ? 1 : 0);
+        double other_min = (others_cmin_inf > 0) ? -HUGE_VAL
+                         : finite_cmin_sum - (contrib_min == -HUGE_VAL ? 0.0 : contrib_min);
 
-        if (other_min != other_min || other_max != other_max) {
-            Py_DECREF(d); Py_DECREF(dv);
-            continue;
-        }
+        /* Bounds on c*var_i, guarding inf - inf. */
+        double num_lo = (other_max == HUGE_VAL) ? -HUGE_VAL : (tlo - other_max);
+        double num_hi = (other_min == -HUGE_VAL) ? HUGE_VAL : (thi - other_min);
 
         double new_lo_f, new_hi_f;
         if (c > 0) {
-            new_lo_f = ceil((tlo - other_max) / c);
-            new_hi_f = floor((thi - other_min) / c);
+            new_lo_f = ceil(num_lo / c);
+            new_hi_f = floor(num_hi / c);
         } else {
-            new_lo_f = ceil((thi - other_min) / c);
-            new_hi_f = floor((tlo - other_max) / c);
+            new_lo_f = ceil(num_hi / c);
+            new_hi_f = floor(num_lo / c);
         }
 
         int64_t new_lo_i, new_hi_i;

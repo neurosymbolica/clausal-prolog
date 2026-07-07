@@ -512,13 +512,27 @@ def _sum_propagate_bignum(sum_vars, total, trail, queue) -> bool:
     vars_ = [deref(v) for v in sum_vars]
     total = deref(total)
 
+    # Finite-only sums + ±inf counts so an output-mode var whose OWN domain is
+    # the sole infinite contributor still narrows (A06-F002).
     min_sum = max_sum = 0
+    finite_hi_sum = finite_lo_sum = 0
+    pos_inf_count = neg_inf_count = 0
     for v in vars_:
         d = _expr_domain(v, trail)
         if not d:
             return False
-        min_sum += domain_min(d)
-        max_sum += domain_max(d)
+        v_lo = domain_min(d)
+        v_hi = domain_max(d)
+        min_sum += v_lo
+        max_sum += v_hi
+        if v_hi == _POS_INF:
+            pos_inf_count += 1
+        else:
+            finite_hi_sum += v_hi
+        if v_lo == _NEG_INF:
+            neg_inf_count += 1
+        else:
+            finite_lo_sum += v_lo
 
     total_d = _expr_domain(total, trail)
     new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
@@ -535,14 +549,14 @@ def _sum_propagate_bignum(sum_vars, total, trail, queue) -> bool:
         d = _expr_domain(v, trail)
         v_max = domain_max(d)
         v_min = domain_min(d)
-        # Guard against inf - inf = nan: skip narrowing when other-side
-        # bounds are infinite.
-        other_max = max_sum - v_max
-        other_min = min_sum - v_min
-        if other_max != other_max or other_min != other_min:
-            continue
-        new_lo = total_lo - other_max
-        new_hi = total_hi - other_min
+        others_pos_inf = pos_inf_count - (1 if v_max == _POS_INF else 0)
+        other_max = _POS_INF if others_pos_inf > 0 else \
+            finite_hi_sum - (0 if v_max == _POS_INF else v_max)
+        others_neg_inf = neg_inf_count - (1 if v_min == _NEG_INF else 0)
+        other_min = _NEG_INF if others_neg_inf > 0 else \
+            finite_lo_sum - (0 if v_min == _NEG_INF else v_min)
+        new_lo = _NEG_INF if other_max == _POS_INF else total_lo - other_max
+        new_hi = _POS_INF if other_min == _NEG_INF else total_hi - other_min
         new_d = domain_intersection(d, domain_from_range(new_lo, new_hi))
         if not new_d:
             return False
@@ -563,18 +577,27 @@ def _scalar_propagate_bignum(coeffs, sum_vars, total, trail, queue) -> bool:
     vars_ = [deref(v) for v in sum_vars]
     total = deref(total)
 
+    # Finite-only contribution sums + ±inf counts (A06-F002).
     min_sum = max_sum = 0
+    finite_cmax_sum = finite_cmin_sum = 0
+    cmax_pos_inf = cmin_neg_inf = 0
     for c, v in zip(coeffs, vars_):
         d = _expr_domain(v, trail)
         if not d:
             return False
         v_lo, v_hi = domain_min(d), domain_max(d)
-        if c >= 0:
-            min_sum += _safe_mult(c, v_lo)
-            max_sum += _safe_mult(c, v_hi)
+        contrib_min = _safe_mult(c, v_lo) if c >= 0 else _safe_mult(c, v_hi)
+        contrib_max = _safe_mult(c, v_hi) if c >= 0 else _safe_mult(c, v_lo)
+        min_sum += contrib_min
+        max_sum += contrib_max
+        if contrib_max == _POS_INF:
+            cmax_pos_inf += 1
         else:
-            min_sum += _safe_mult(c, v_hi)
-            max_sum += _safe_mult(c, v_lo)
+            finite_cmax_sum += contrib_max
+        if contrib_min == _NEG_INF:
+            cmin_neg_inf += 1
+        else:
+            finite_cmin_sum += contrib_min
 
     total_d = _expr_domain(total, trail)
     new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
@@ -592,16 +615,20 @@ def _scalar_propagate_bignum(coeffs, sum_vars, total, trail, queue) -> bool:
         v_lo, v_hi = domain_min(d), domain_max(d)
         contrib_max = _safe_mult(c, v_hi) if c > 0 else _safe_mult(c, v_lo)
         contrib_min = _safe_mult(c, v_lo) if c > 0 else _safe_mult(c, v_hi)
-        other_min = min_sum - contrib_min
-        other_max = max_sum - contrib_max
-        if other_min != other_min or other_max != other_max:
-            continue
+        others_cmax_inf = cmax_pos_inf - (1 if contrib_max == _POS_INF else 0)
+        other_max = _POS_INF if others_cmax_inf > 0 else \
+            finite_cmax_sum - (0 if contrib_max == _POS_INF else contrib_max)
+        others_cmin_inf = cmin_neg_inf - (1 if contrib_min == _NEG_INF else 0)
+        other_min = _NEG_INF if others_cmin_inf > 0 else \
+            finite_cmin_sum - (0 if contrib_min == _NEG_INF else contrib_min)
+        num_lo = _NEG_INF if other_max == _POS_INF else total_lo - other_max
+        num_hi = _POS_INF if other_min == _NEG_INF else total_hi - other_min
         if c > 0:
-            new_v_lo = math.ceil((total_lo - other_max) / c)
-            new_v_hi = math.floor((total_hi - other_min) / c)
+            new_v_lo = _NEG_INF if num_lo == _NEG_INF else math.ceil(num_lo / c)
+            new_v_hi = _POS_INF if num_hi == _POS_INF else math.floor(num_hi / c)
         else:
-            new_v_lo = math.ceil((total_hi - other_min) / c)
-            new_v_hi = math.floor((total_lo - other_max) / c)
+            new_v_lo = _NEG_INF if num_hi == _POS_INF else math.ceil(num_hi / c)
+            new_v_hi = _POS_INF if num_lo == _NEG_INF else math.floor(num_lo / c)
         if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
             new_v_lo = _NEG_INF
         else:
@@ -645,82 +672,6 @@ class EqConstraint(Constraint):
         if is_var(rhs):
             if not _narrow_if_changed(rhs, inter, trail, queue):
                 return False
-        return True
-
-
-class ScalarProductConstraint(Constraint):
-    """Σ coeffs[i] * vars[i] == total. Bounds-consistency propagation."""
-    __slots__ = ('coeffs', 'sum_vars', 'total')
-
-    def __init__(self, coeffs: tuple, sum_vars: tuple, total):
-        self.coeffs = coeffs
-        self.sum_vars = sum_vars
-        self.total = total
-        result: list = []
-        for v in sum_vars:
-            _collect_vars_from(v, result)
-        _collect_vars_from(total, result)
-        super().__init__(tuple(result))
-
-    def propagate(self, trail: Trail, queue: deque) -> bool:
-        vars_ = [deref(v) for v in self.sum_vars]
-        total = deref(self.total)
-
-        min_sum = max_sum = 0
-        for c, v in zip(self.coeffs, vars_):
-            d = _expr_domain(v, trail)
-            if not d:
-                return False
-            v_lo, v_hi = domain_min(d), domain_max(d)
-            if c >= 0:
-                min_sum += _safe_mult(c, v_lo)
-                max_sum += _safe_mult(c, v_hi)
-            else:
-                min_sum += _safe_mult(c, v_hi)
-                max_sum += _safe_mult(c, v_lo)
-
-        total_d = _expr_domain(total, trail)
-        new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
-        if not new_total_d:
-            return False
-        if is_var(total) and not _narrow_if_changed(total, new_total_d, trail, queue):
-            return False
-        total_lo = domain_min(new_total_d)
-        total_hi = domain_max(new_total_d)
-
-        for c, v in zip(self.coeffs, vars_):
-            if not is_var(v) or c == 0:
-                continue
-            d = _expr_domain(v, trail)
-            v_lo, v_hi = domain_min(d), domain_max(d)
-            contrib_max = _safe_mult(c, v_hi) if c > 0 else _safe_mult(c, v_lo)
-            contrib_min = _safe_mult(c, v_lo) if c > 0 else _safe_mult(c, v_hi)
-            other_min = min_sum - contrib_min
-            other_max = max_sum - contrib_max
-            # Guard against nan from inf - inf
-            if other_min != other_min or other_max != other_max:
-                continue
-            if c > 0:
-                new_v_lo = math.ceil((total_lo - other_max) / c)
-                new_v_hi = math.floor((total_hi - other_min) / c)
-            else:
-                new_v_lo = math.ceil((total_hi - other_min) / c)
-                new_v_hi = math.floor((total_lo - other_max) / c)
-            # Guard against inf bounds (can't convert to int)
-            if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
-                new_v_lo = _NEG_INF
-            else:
-                new_v_lo = int(new_v_lo)
-            if new_v_hi == _NEG_INF or new_v_hi == _POS_INF:
-                new_v_hi = _POS_INF
-            else:
-                new_v_hi = int(new_v_hi)
-            new_d = domain_intersection(d, domain_from_range(new_v_lo, new_v_hi))
-            if not new_d:
-                return False
-            if not _narrow_if_changed(v, new_d, trail, queue):
-                return False
-
         return True
 
 
@@ -891,13 +842,30 @@ class SumConstraint(Constraint):
         vars_ = [deref(v) for v in self.sum_vars]
         total = deref(self.total)
 
+        # Track finite-only sums plus ±inf counts so a var's "other side"
+        # (total minus every OTHER var) is finite whenever its OWN domain is
+        # the sole infinite contributor — the old `max_sum - own_max` gave
+        # inf - inf = nan and skipped narrowing, leaving output-mode vars
+        # unbounded (A06-F002).
         min_sum = max_sum = 0
+        finite_hi_sum = finite_lo_sum = 0
+        pos_inf_count = neg_inf_count = 0
         for v in vars_:
             d = _expr_domain(v, trail)
             if not d:
                 return False
-            min_sum += domain_min(d)
-            max_sum += domain_max(d)
+            v_lo = domain_min(d)
+            v_hi = domain_max(d)
+            min_sum += v_lo
+            max_sum += v_hi
+            if v_hi == _POS_INF:
+                pos_inf_count += 1
+            else:
+                finite_hi_sum += v_hi
+            if v_lo == _NEG_INF:
+                neg_inf_count += 1
+            else:
+                finite_lo_sum += v_lo
 
         total_d = _expr_domain(total, trail)
         new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
@@ -914,14 +882,14 @@ class SumConstraint(Constraint):
             d = _expr_domain(v, trail)
             v_max = domain_max(d)
             v_min = domain_min(d)
-            # Guard against inf - inf = nan: if other-side bounds are
-            # infinite, we can't narrow this variable from sum info.
-            other_max = max_sum - v_max  # could be inf - inf = nan
-            other_min = min_sum - v_min
-            if other_max != other_max or other_min != other_min:
-                continue  # nan — skip narrowing
-            new_lo = total_lo - other_max
-            new_hi = total_hi - other_min
+            others_pos_inf = pos_inf_count - (1 if v_max == _POS_INF else 0)
+            other_max = _POS_INF if others_pos_inf > 0 else \
+                finite_hi_sum - (0 if v_max == _POS_INF else v_max)
+            others_neg_inf = neg_inf_count - (1 if v_min == _NEG_INF else 0)
+            other_min = _NEG_INF if others_neg_inf > 0 else \
+                finite_lo_sum - (0 if v_min == _NEG_INF else v_min)
+            new_lo = _NEG_INF if other_max == _POS_INF else total_lo - other_max
+            new_hi = _POS_INF if other_min == _NEG_INF else total_hi - other_min
             new_d = domain_intersection(d, domain_from_range(new_lo, new_hi))
             if not new_d:
                 return False
@@ -949,18 +917,29 @@ class ScalarProductConstraint(Constraint):
         vars_ = [deref(v) for v in self.sum_vars]
         total = deref(self.total)
 
+        # Finite-only contribution sums + ±inf counts, so a var's other-side
+        # bound is finite when its OWN contribution is the sole infinite one
+        # (A06-F002 — see SumConstraint.propagate).
         min_sum = max_sum = 0
+        finite_cmax_sum = finite_cmin_sum = 0
+        cmax_pos_inf = cmin_neg_inf = 0
         for c, v in zip(self.coeffs, vars_):
             d = _expr_domain(v, trail)
             if not d:
                 return False
             v_lo, v_hi = domain_min(d), domain_max(d)
-            if c >= 0:
-                min_sum += _safe_mult(c, v_lo)
-                max_sum += _safe_mult(c, v_hi)
+            contrib_min = _safe_mult(c, v_lo) if c >= 0 else _safe_mult(c, v_hi)
+            contrib_max = _safe_mult(c, v_hi) if c >= 0 else _safe_mult(c, v_lo)
+            min_sum += contrib_min
+            max_sum += contrib_max
+            if contrib_max == _POS_INF:
+                cmax_pos_inf += 1
             else:
-                min_sum += _safe_mult(c, v_hi)
-                max_sum += _safe_mult(c, v_lo)
+                finite_cmax_sum += contrib_max
+            if contrib_min == _NEG_INF:
+                cmin_neg_inf += 1
+            else:
+                finite_cmin_sum += contrib_min
 
         total_d = _expr_domain(total, trail)
         new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
@@ -978,17 +957,22 @@ class ScalarProductConstraint(Constraint):
             v_lo, v_hi = domain_min(d), domain_max(d)
             contrib_max = _safe_mult(c, v_hi) if c > 0 else _safe_mult(c, v_lo)
             contrib_min = _safe_mult(c, v_lo) if c > 0 else _safe_mult(c, v_hi)
-            other_min = min_sum - contrib_min
-            other_max = max_sum - contrib_max
-            # Guard against nan from inf - inf
-            if other_min != other_min or other_max != other_max:
-                continue
+            others_cmax_inf = cmax_pos_inf - (1 if contrib_max == _POS_INF else 0)
+            other_max = _POS_INF if others_cmax_inf > 0 else \
+                finite_cmax_sum - (0 if contrib_max == _POS_INF else contrib_max)
+            others_cmin_inf = cmin_neg_inf - (1 if contrib_min == _NEG_INF else 0)
+            other_min = _NEG_INF if others_cmin_inf > 0 else \
+                finite_cmin_sum - (0 if contrib_min == _NEG_INF else contrib_min)
+            # Bounds on c*var_i, guarding inf - inf; math.ceil/floor of ±inf
+            # raises OverflowError, so short-circuit the infinite ends.
+            num_lo = _NEG_INF if other_max == _POS_INF else total_lo - other_max
+            num_hi = _POS_INF if other_min == _NEG_INF else total_hi - other_min
             if c > 0:
-                new_v_lo = math.ceil((total_lo - other_max) / c)
-                new_v_hi = math.floor((total_hi - other_min) / c)
+                new_v_lo = _NEG_INF if num_lo == _NEG_INF else math.ceil(num_lo / c)
+                new_v_hi = _POS_INF if num_hi == _POS_INF else math.floor(num_hi / c)
             else:
-                new_v_lo = math.ceil((total_hi - other_min) / c)
-                new_v_hi = math.floor((total_lo - other_max) / c)
+                new_v_lo = _NEG_INF if num_hi == _POS_INF else math.ceil(num_hi / c)
+                new_v_hi = _POS_INF if num_lo == _NEG_INF else math.floor(num_lo / c)
             # Guard against inf bounds (can't convert to int)
             if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
                 new_v_lo = _NEG_INF

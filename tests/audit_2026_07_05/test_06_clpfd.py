@@ -215,8 +215,6 @@ Good(X, Y) <- (X + 1 != Y, X is 1, Y is 5)
 
 
 class TestOutputModeLinearEq:
-    @pytest.mark.xfail(strict=False, reason="A06-F002: nan-guard in sum/scalar narrowing "
-                       "skips vars with unbounded (default CLP(Z)) domains")
     def test_negate_output_mode(self):
         t = Trail()
         x, y = Var(), Var()
@@ -224,7 +222,6 @@ class TestOutputModeLinearEq:
         assert unify(y, 3, t)
         assert deref(x) == -3
 
-    @pytest.mark.xfail(strict=False, reason="A06-F002")
     def test_mult_output_mode(self):
         t = Trail()
         x, y = Var(), Var()
@@ -232,7 +229,6 @@ class TestOutputModeLinearEq:
         assert unify(y, 5, t)
         assert deref(x) == 10
 
-    @pytest.mark.xfail(strict=False, reason="A06-F002: compiled 8 == 2*X leaves X unbound")
     def test_compiled_reverse_double(self, load):
         m = load("dbl", source="""
 Double(X, Y) <- (Y == 2 * X)
