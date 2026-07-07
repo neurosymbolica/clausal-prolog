@@ -469,9 +469,8 @@ def test_guard_tokenizer_radix_and_bignum():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F030: (2**3)**2 emitted as "
-                   "2 ** 3 ** 2 — Python right-assoc gives 512, Prolog 64")
 def test_F030_pow_grouping_preserved():
+    # A11-F030 (fixed): ** emits right-associative parens.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("q(X) :- X is (2 ** 3) ** 2.\n")
     assert "(2 ** 3) ** 2" in out

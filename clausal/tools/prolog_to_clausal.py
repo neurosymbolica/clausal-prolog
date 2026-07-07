@@ -713,8 +713,15 @@ class _PrologToClausal:
             # Arithmetic binary operators
             if len(term.args) == 2 and term.functor in self._EXPR_PREC:
                 my_prec = self._EXPR_PREC[term.functor]
-                left = self._emit_expr(term.args[0], my_prec)
-                right = self._emit_expr(term.args[1], my_prec + 1)
+                if term.functor == "**":
+                    # ** is right-associative in Python: the LEFT child needs
+                    # parens at equal precedence so (2**3)**2 doesn't collapse
+                    # to 2**3**2 == 2**(3**2) (F030).
+                    left = self._emit_expr(term.args[0], my_prec + 1)
+                    right = self._emit_expr(term.args[1], my_prec)
+                else:
+                    left = self._emit_expr(term.args[0], my_prec)
+                    right = self._emit_expr(term.args[1], my_prec + 1)
                 op = _INFIX_MAP.get(term.functor, term.functor)
                 result = f"{left} {op} {right}"
                 if my_prec < parent_prec:
