@@ -274,20 +274,24 @@ def _program(mod, source_pred):
 
 
 class TestF001TroNondetPrefix:
-    @pytest.mark.xfail(strict=False, reason="A03-F001: MemberIn prefix wrongly deterministic → TRO drops solutions")
     def test_member_prefix_all_solutions(self, mod):
         O = Var()
         assert sorted(sols(mod, mod.trm(2, 0, O), O)) == [(2,), (3,), (3,), (4,)]
 
-    @pytest.mark.xfail(strict=False, reason="A03-F001: undetermined If (Branch) prefix wrongly deterministic")
     def test_branch_prefix_all_solutions(self, mod):
         O = Var()
         assert sorted(sols(mod, mod.tri(1, 0, O), O)) == [(5,), (7,)]
 
-    @pytest.mark.xfail(strict=False, reason="A03-F001: atom_concat/3 split mode is nondet but in _DETERMINISTIC_BUILTINS")
     def test_atom_concat_prefix_all_solutions(self, mod):
+        # atom_concat(P,Q,"ab") is nondet (3 splits), so TRO is off and all
+        # three prefix solutions survive. The P="a" accumulator ["a"] is
+        # promoted to the str "a" by the F018 Liskov strings-as-lists rule
+        # (a 1-char-string list ≡ the string); [""] and ["ab"] don't promote.
+        # sort by repr since the rows mix str and list.
         O = Var()
-        assert sorted(sols(mod, mod.tac(1, [], O), O)) == sorted([([""],), (["a"],), (["ab"],)])
+        assert sorted(sols(mod, mod.tac(1, [], O), O), key=repr) == sorted(
+            [([""],), ("a",), (["ab"],)], key=repr
+        )
 
     # controls / oracle
     def test_shallow_oracle_member(self, mod):
@@ -340,12 +344,10 @@ class TestF001TroNondetPrefix:
 
 
 class TestF002DestructiveReuseNondetPrefix:
-    @pytest.mark.xfail(strict=False, reason="A03-F002: DR mutates dead-source list behind member prefix")
     def test_member_prefix_append(self, mod):
         O = Var()
         assert sols(mod, mod.drm(O), O) == [([1, 2, 10],), ([1, 2, 20],)]
 
-    @pytest.mark.xfail(strict=False, reason="A03-F002: DR mutates dead-source list behind undetermined If")
     def test_branch_prefix_append(self, mod):
         O = Var()
         assert sols(mod, mod.drb(O), O) == [([1, 2, 10],), ([1, 2, 20],)]

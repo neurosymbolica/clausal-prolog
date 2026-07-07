@@ -104,13 +104,23 @@ def _is_deterministic_op_ir(op: Any) -> bool:
     from . import ir as _ir
     match op:
         case _ir.Unify() | _ir.Dif() | _ir.ArithEval() | _ir.FDCompare() \
-                | _ir.StructuralEq() | _ir.MemberIn() | _ir.ListPatternUnify() \
+                | _ir.StructuralEq() | _ir.ListPatternUnify() \
                 | _ir.Fail() | _ir.PyThunkOp():
             return True
+        case _ir.MemberIn(negate=neg):
+            # A03-F001: positive membership (``X in L``) is NONdeterministic —
+            # it generates members / succeeds once per matching occurrence
+            # (even a ground list with duplicates). Only not_in (negate=True)
+            # is semidet. Preceding a TRO tail call, a nondet prefix drops all
+            # but the last prefix solution.
+            return neg
         case _ir.Negate():
             return True
         case _ir.Branch():
-            return True
+            # A03-F001: a reified ``If`` explores BOTH arms when the condition
+            # is undetermined at runtime — not statically provable as
+            # single-solution, so the safe classification is nondeterministic.
+            return False
         case _ir.Sequence(ops=ops):
             return all(_is_deterministic_op_ir(c) for c in ops)
         case _ir.Alternate():
@@ -315,17 +325,22 @@ def _is_deterministic_goal(goal: Any) -> bool:
             return True
         case Lt() | LtE() | Gt() | GtE():
             return True
-        case in_() | NotIn():
+        case NotIn():
             return True
+        case in_():
+            # A03-F001: positive membership is nondeterministic (mirror of the
+            # IR-level MemberIn fix) — succeeds once per matching occurrence.
+            return False
         # NAF — deterministic (succeeds or fails once)
         case Not():
             return True
         # Conjunction — deterministic if both sides are
         case And(left=l, right=r):
             return _is_deterministic_goal(l) and _is_deterministic_goal(r)
-        # IfExpr — committed choice, one branch
+        # IfExpr — A03-F001: a reified If can explore both arms when the test
+        # is undetermined; not guaranteed single-solution (mirror of Branch).
         case IfExpr():
-            return True
+            return False
         # once/findall/bagof/setof — always produce exactly one result
         case Call(func=LoadName(name=name)) if name in (
             "once", "findall", "bagof", "setof",
@@ -365,7 +380,9 @@ _DETERMINISTIC_BUILTINS: frozenset[tuple[str, int]] = frozenset({
     ("succ", 2), ("plus", 3),
     ("copy_term", 2),
     # string builtins
-    ("atom_concat", 3), ("sub_atom", 5),
+    # A03-F001: atom_concat/3 (split mode enumerates all before/after splits)
+    # and sub_atom/5 (enumerates matches) are NONdeterministic — removed. The
+    # remaining entries are semidet in every mode.
     ("upcase_atom", 2), ("downcase_atom", 2),
 })
 
@@ -606,12 +623,9 @@ def _compile_tro_tail(
             self_name=self_name,
             proceed_name=proceed_name, fail_name=fail_name, catcher_name=catcher_name,
         )
-        fallback_stmts = _compile_predicate_call_impl(
-            _fallback_ctx, fname, [None] * arity, [],
-            [_yield_step_stmt(_name(proceed_name), ast.Constant(None))],
-        )
-        # Patch the arg expressions in the StepGenerator call to use _tro_arg values.
-        # The simplest approach: build the call directly.
+        # A03-F001 (step 5): the StepGenerator call is built directly below;
+        # the earlier _compile_predicate_call_impl() here was dead — its result
+        # was unconditionally overwritten before use.
         call_expr = _dispatch_call_trampoline(_fallback_ctx, fname, arity, arg_exprs)
         gen_name = ctx.fresh("_gen")
         status_name = ctx.fresh("_st")

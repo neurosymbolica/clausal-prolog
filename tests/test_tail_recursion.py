@@ -82,8 +82,10 @@ class TestIsDeterministicGoal(unittest.TestCase):
         self.assertTrue(_is_deterministic_goal(LtE(left=Var(), right=0)))
 
     def test_in_notin(self):
-        # nv
-        self.assertTrue(_is_deterministic_goal(in_(left=1, right=[1, 2])))
+        # nv — A03-F001: positive membership (in_) is NONdeterministic (it
+        # succeeds once per matching occurrence), so it is NOT safe before a
+        # TRO tail call. NotIn (not_in) is semidet and stays deterministic.
+        self.assertFalse(_is_deterministic_goal(in_(left=1, right=[1, 2])))
         self.assertTrue(_is_deterministic_goal(NotIn(left=3, right=[1, 2])))
 
     def test_not(self):
