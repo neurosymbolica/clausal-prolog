@@ -2,7 +2,60 @@
 
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F003
 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::TestF003WfsModeOrderDependence` (2 xfail — flip to pass)
-**Related:** A04-F002 (`fix-A04-naf-tabled-no-entry.md`), A04-F001 (completion architecture), A04-D004 (parked)
+**Related:** A04-F002 (`fix-A04-naf-tabled-no-entry.md`), A04-F001 (completion architecture — DONE), A04-D004 (parked)
+
+## Investigation findings (2026-07-07) — design validated, full fix DEFERRED
+
+Attempted a full fix on top of the F001 SCC rework and REVERTED it: it fixed
+ground-mode but each variant broke a different case, because correct var-mode
+WFS needs a **disjunction-of-conditions residual model** the engine does not
+have. What was built and learned (each piece is sound in isolation):
+
+1. **Compiler seam for spawning (works, reverted).** Inject `$naf_db` (the db)
+   into `base_globals` alongside `$table_store` (predicate.py, both trampoline
+   & simple paths) and emit it as a 6th arg of the `_naf_tabled(...)` call
+   (`compiler/tabled_naf.py`). `_naf_tabled(functor, arity, args, trail,
+   table_store, db=None)` can then `db.get_dispatch(functor, arity)` and drive
+   the +goal to completion via `_drive_trampoline(dispatch, scratch, *args)`.
+   This makes `not win("a")` actually EVALUATE win("a") — fixes ground-mode
+   asymmetric win (win("b")-first → 0) and is the F002 spawn residual too.
+
+2. **Global resolution at outermost-leader exit (works).** `_resolve_conditions`
+   should return whether it changed anything; a `_resolve_all_conditions(store)`
+   loops it over every complete entry to a fixpoint, run when `not
+   _leader_ctx.stack` after the root completes. Fixes the sticky-`win("b")`
+   cross-query staleness (root cause #2): a late-completing win("a") finalizes
+   win("b")'s delayed `not win("a")`.
+
+3. **Conditional-aware NAF re-check + answer completion (works partially).**
+   After a spawn, an UNCONDITIONAL matching answer → NAF fails; an only-
+   conditional match → undefined (delay). `add_answer` upgrades a conditional
+   answer to unconditional on an unconditional re-derivation.
+
+4. **The blocker — disjunction of conditions.** In the asymmetric win, `win(a)`
+   is derived two ways: via `move(a,b),not win(b)` (condition `{not win(b)}`)
+   and via `move(a,c),not win(c)` (condition `{not win(c)}`, which resolves to
+   TRUE). WFS truth = OR over derivations, so win(a) is TRUE. But the engine
+   stores ONE condition-set per answer (add_answer dedups and keeps the first),
+   so the true c-path derivation is lost and win(a) stays conditional. Two
+   spawn strategies were tried and each is wrong without disjunctions:
+   - *spawn-always* (spawn even under a subsuming evaluating variant): var-mode
+     asym win = {a} ✓, but SYMMETRIC win regresses to [1] (should be [1,2]
+     undefined) and it proliferates exact sub-tables (breaks the single-entry
+     guard `test_wfs_symmetric_win_internal_truth_values`).
+   - *subsuming-delay* (delay `not win(Y)` against an evaluating win(_) instead
+     of spawning): keeps one table, but var-mode asym win = {a,b} (the a-answer
+     never becomes unconditional — same disjunction gap).
+
+**Next implementer:** make an answer's condition a **set of condition-sets**
+(disjunction of conjunctions of delayed literals — the WFS residual program).
+`add_answer` unions a new derivation's condition-set in; `truth_value` is TRUE
+if any inner set is empty, FALSE if all became `_FAILED`, else undefined;
+`_resolve_conditions` resolves per inner set and drops satisfied disjuncts.
+With that, spawn-always + global resolution + subsuming-variant lookup in
+resolution give mode- and order-independent WFS. Also update the single-entry
+guard and re-check `query_wfs` (A04-F004) against the multi-table var-mode
+shape. Everything else in items 1–3 is ready to reinstate.
 
 ## Bug
 
