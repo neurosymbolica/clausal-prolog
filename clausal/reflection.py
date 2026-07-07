@@ -151,8 +151,10 @@ class _ClauseReifier:
         return term
 
     def _anonymous_var(self):
+        # Use a non-identifier prefix so an anonymous `_` never aliases a real
+        # user variable with a leading-underscore name like `_1` (F011).
         self._anon_count += 1
-        return Variable(f"_{self._anon_count}")
+        return Variable(f"#anon{self._anon_count}")
 
     # -- contexts -----------------------------------------------------------
 

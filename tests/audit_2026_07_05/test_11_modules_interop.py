@@ -213,9 +213,8 @@ def test_F010_keyword_head_reify_matches_runtime_order():
     assert list(second.args) == [10, 20] or ["x", 10] in list(second.kwargs)
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F011: anonymous-var numbering _1 "
-                   "collides with a real user variable named _1")
 def test_F011_anon_var_does_not_alias_user_underscore_one():
+    # A11-F011 (fixed): anonymous vars use non-identifier #anonN names.
     from clausal.reflection import reify_source
     clause = reify_source('Foo(_1, _, X) <- Bar(_1, _, X)\n')[0]
     a0, a1 = clause.head.args[0], clause.head.args[1]
