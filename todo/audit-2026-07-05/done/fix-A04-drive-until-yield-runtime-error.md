@@ -1,3 +1,7 @@
+**DONE — commit 8027e88d.** Narrowed the C catch (and Py fallback) to clear only PEP-479 StopIteration wrappers; genuine RuntimeErrors propagate. Also resolves the A09-F006/F007 swallowing (now xpass, owned by the A09 instance).
+
+---
+
 # fix(A04-F009): C _drive_until_yield swallows every RuntimeError — user errors become silent failure
 
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F009
