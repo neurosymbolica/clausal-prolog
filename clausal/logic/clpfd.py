@@ -1471,6 +1471,18 @@ def _is_fd_candidate(x) -> bool:
     return is_var(x) or (isinstance(x, int) and not isinstance(x, bool))
 
 
+def _is_fd_sum_element(x) -> bool:
+    """True if *x* may legally appear as a sum_/scalar_product element: an FD
+    candidate (Var or plain int) or an arithmetic-expression node such as the
+    compiler emits for ``X + 1`` (A06-F014).  A non-integer atom (string,
+    float, Fraction) would otherwise reach _expr_domain's catch-all and be
+    treated as an unconstrained integer."""
+    if _is_fd_candidate(x):
+        return True
+    _ensure_term_imports()
+    return isinstance(x, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow, _Negate))
+
+
 def _is_rational_arg(x) -> bool:
     """True if x is a Fraction, a Var with a rational-domain attribute,
     or an expression tree containing one of the above.
@@ -2046,6 +2058,11 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
 
     vars_deref = [deref(v) for v in vars_list]
 
+    # Reject non-integer elements up front (A06-F014): a string/float element
+    # would otherwise post happily and be treated as an unconstrained integer.
+    if not all(_is_fd_sum_element(v) for v in vars_deref):
+        return
+
     # If all ground and value is also ground, just check
     val = deref(value)
     if all(isinstance(v, int) for v in vars_deref) and isinstance(val, int):
@@ -2106,6 +2123,10 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
         return
 
     vars_deref = [deref(v) for v in vars_list]
+
+    # Reject non-integer elements up front (A06-F014).
+    if not all(_is_fd_sum_element(v) for v in vars_deref):
+        return
 
     # If all ground and value is also ground, just check
     val = deref(value)

@@ -584,8 +584,6 @@ class TestGlobalCardinality:
 
 
 class TestTypeHoles:
-    @pytest.mark.xfail(strict=False, reason="A06-F014: sum_ over non-integer elements "
-                       "silently succeeds treating them as unconstrained integers")
     def test_sum_over_strings_rejected(self):
         t = Trail()
         assert sum(1 for _ in fd_sum(["a", "b"], "#=", 5, t)) == 0
