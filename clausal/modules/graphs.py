@@ -42,6 +42,15 @@ _GraphPredicate = ModulePredicate
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
+def _vertex_key(node):
+    """A hashable key for *node*, falling back to identity when unhashable."""
+    try:
+        hash(node)
+        return node
+    except TypeError:
+        return id(node)
+
+
 def _extract_vertices(edges):
     """Extract unique vertices from an edge list, preserving first-seen order."""
     seen = set()
@@ -53,15 +62,22 @@ def _extract_vertices(edges):
                 # Fall back to object identity for any unhashable vertex
                 # (list, dict, set) so it doesn't crash with a raw TypeError
                 # (F052).
-                try:
-                    hash(node)
-                    h = node
-                except TypeError:
-                    h = id(node)
+                h = _vertex_key(node)
                 if h not in seen:
                     seen.add(h)
                     result.append(node)
     return result
+
+
+def _adj_append(adj, key, value):
+    """Append *value* to ``adj[key]`` unless it is already present.
+
+    Order-preserving dedup so parallel edges don't produce duplicate neighbor
+    entries (and hence duplicate find_path solutions / neighbor lists) — F051.
+    """
+    lst = adj.setdefault(key, [])
+    if value not in lst:
+        lst.append(value)
 
 
 def _build_adj(edges):
@@ -71,8 +87,8 @@ def _build_adj(edges):
         e = deref(edge)
         if isinstance(e, list) and len(e) >= 2:
             u, v = deref(e[0]), deref(e[1])
-            adj.setdefault(u, []).append(v)
-            adj.setdefault(v, []).append(u)
+            _adj_append(adj, u, v)
+            _adj_append(adj, v, u)
     return adj
 
 
@@ -83,7 +99,7 @@ def _build_directed_adj(edges):
         e = deref(edge)
         if isinstance(e, list) and len(e) >= 2:
             u, v = deref(e[0]), deref(e[1])
-            adj.setdefault(u, []).append(v)
+            _adj_append(adj, u, v)
             adj.setdefault(v, [])  # ensure v is in adj
     return adj
 
@@ -137,10 +153,16 @@ def _has_edge__3(this_generator, _proceed, _fail, _catcher, edges, u, v, trail):
     """has_edge(Edges, U, V) — succeeds if edge [U,V] exists."""
     edges_val = deref(edges)
     if isinstance(edges_val, list):
+        seen = set()
         for edge in edges_val:
             e = deref(edge)
             if isinstance(e, list) and len(e) >= 2:
                 eu, ev = deref(e[0]), deref(e[1])
+                # Don't re-yield a parallel edge's identical (U,V) pair (F051).
+                key = (_vertex_key(eu), _vertex_key(ev))
+                if key in seen:
+                    continue
+                seen.add(key)
                 mark = trail.mark()
                 if unify(u, eu, trail) and unify(v, ev, trail):
                     yield (_proceed, None)

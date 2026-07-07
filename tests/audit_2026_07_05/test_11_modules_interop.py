@@ -621,17 +621,15 @@ def test_F050_mst_disconnected_fails():
     assert sols == []  # no spanning tree exists
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F051: parallel edges duplicate "
-                   "find_path solutions / neighbor entries")
 def test_F051_find_path_dup_edges_single_solution():
+    # A11-F051 (fixed): deduped adjacency yields one path.
     p = Var()
     sols = _gsols(G._find_path__4, [["a", "b"], ["a", "b"]], "a", "b", p, out=p)
     assert sols == [["a", "b"]]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F051: neighbors returns "
-                   "duplicate entries for parallel edges")
 def test_F051_neighbors_dedup():
+    # A11-F051 (fixed): neighbor lists are deduped.
     n = Var()
     sols = _gsols(G._neighbors__3, [["a", "b"], ["a", "b"]], "a", n, out=n)
     assert sols == [["b"]]
