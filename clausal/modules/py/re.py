@@ -82,12 +82,19 @@ def _compile_pattern(pat: Any) -> "_re.Pattern":
 def _groups_dict(m: "_re.Match") -> dict | tuple:
     """Extract groups from a match object.
 
-    If there are named groups, returns a dict (named group name → value).
-    Otherwise returns a tuple of positional groups.
+    If there are named groups, returns a dict keyed by group name; any
+    *unnamed* groups present alongside them are added under their 1-based
+    positional index (int key) so mixed patterns don't silently drop the
+    positional values (F006). With only positional groups, returns a tuple.
     """
     gd = m.groupdict()
     if gd:
-        return gd
+        named_idx = set(m.re.groupindex.values())
+        result: dict = dict(gd)
+        for i, val in enumerate(m.groups(), start=1):
+            if i not in named_idx:
+                result[i] = val
+        return result
     groups = m.groups()
     if groups:
         return groups

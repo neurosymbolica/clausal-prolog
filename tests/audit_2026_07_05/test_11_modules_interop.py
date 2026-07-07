@@ -144,9 +144,8 @@ def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
         list(solve(m.Bad("x"), module=m))
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F006: unnamed group values "
-                   "unreachable when any named group is present")
 def test_F006_mixed_groups_expose_positional_values(tmp_path):
+    # A11-F006 (fixed): unnamed groups added under 1-based int keys.
     m = _load(tmp_path, '''
         -import_from(regex, [match])
         M(S, G) <- match(r"(?P<A>\\d+)-(\\d+)", S, G)
