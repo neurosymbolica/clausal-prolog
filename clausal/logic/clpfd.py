@@ -1205,10 +1205,13 @@ def _expr_domain(expr, trail: Trail) -> Domain:
     if isinstance(expr, _Negate):
         od = _expr_domain(expr.operand, trail)
         return _domain_negate(od)
-    # Fallback: if ground, evaluate
+    # Fallback: if ground, evaluate.  Only an integer result is a valid CLP(Z)
+    # domain bound — a Fraction/float (e.g. from a Div subexpression that
+    # slipped past CLP(Q) dispatch) must NOT become a domain bound, or the C
+    # domain ops raise a TypeError that escapes through unify (A06-F006).
     try:
         val = _eval_ground(expr)
-        if val is not None:
+        if isinstance(val, int) and not isinstance(val, bool):
             return ((val, val),)
     except Exception:
         pass
@@ -1488,7 +1491,15 @@ def _is_rational_arg(x) -> bool:
     # Walk expression trees (only reached for Add/Sub/Mult/... nodes)
     if _Add is None:
         _ensure_term_imports()
-    if isinstance(x, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow)):
+    if isinstance(x, _Div):
+        # Div is TRUE division in Clausal, so int/int → a Fraction: the node
+        # is CLP(Q) territory unless one side is real/float (A06-F006).
+        # Detecting this at post time routes `X == Y + 1/2` to q_eq rather
+        # than posting as CLP(Z) and crashing when Y is later bound.
+        if _is_real_arg(x.left) or _is_real_arg(x.right):
+            return _is_rational_arg(x.left) or _is_rational_arg(x.right)
+        return True
+    if isinstance(x, (_Add, _Sub, _Mult, _FloorDiv, _Mod, _Pow)):
         return _is_rational_arg(x.left) or _is_rational_arg(x.right)
     if isinstance(x, _Negate):
         return _is_rational_arg(x.operand)

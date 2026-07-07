@@ -327,9 +327,6 @@ class TestElement:
 
 
 class TestRationalSubexpression:
-    @pytest.mark.xfail(strict=False, reason="A06-F006: X == Y + 1/2 posts as CLP(Z); "
-                       "binding Y raises TypeError (Fraction bound in C domain ops) "
-                       "instead of CLP(Q) dispatch or clean failure")
     def test_rational_subexpr_no_crash(self):
         t = Trail()
         x, y = Var(), Var()
