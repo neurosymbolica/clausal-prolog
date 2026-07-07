@@ -156,7 +156,6 @@ class TestF003CompoundVarFunctor:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF004KWTermUnify:
-    @pytest.mark.xfail(strict=False, reason="A01-F004: KWTerm falls back to __eq__, no binding")
     def test_kwterm_var_field_binds(self, trail):
         Y = Var()
         assert unify(KWTerm("r", a=Y, b=2), KWTerm("r", a=1, b=2), trail) is True

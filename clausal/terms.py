@@ -156,6 +156,27 @@ class KWTerm:
         args = ", ".join(f"{k}={v!r}" for k, v in self._fields.items())
         return f"KWTerm({self._functor!r}, {args})"
 
+    def __unify__(self, other, trail):
+        """Called by C do_unify: match by functor + keyword name, then
+        pairwise-unify field values (so Var-valued fields bind).
+
+        Without this hook C ``do_unify`` falls back to rich-compare and
+        Var fields compare by identity instead of binding (A01-F004).
+        Mirrors :meth:`DictTerm.__unify__`.
+        """
+        if not isinstance(other, KWTerm):
+            return NotImplemented
+        if (self._functor != other._functor
+                or self._fields.keys() != other._fields.keys()):
+            return False
+        from .logic.variables import unify
+        mark = trail.mark()
+        for k in self._fields:
+            if not unify(self._fields[k], other._fields[k], trail):
+                trail.undo(mark)
+                return False
+        return True
+
     def keys(self):
         return self._fields.keys()
 
