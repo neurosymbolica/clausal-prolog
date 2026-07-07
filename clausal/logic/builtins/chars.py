@@ -23,6 +23,7 @@ from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.builtins._registry import _builtin
+from clausal.logic.builtins.lists import _as_items
 
 # ── C-accelerated inner loops (Option B: C helpers from Python generators) ───
 
@@ -364,11 +365,15 @@ def _atom_chars__2(atom, chars, trail, k):
             yield None
         trail.undo(mark)
     elif c_bound:
-        if not isinstance(vc, list):
+        # F017 (A09): a str IS a char list and a bytes IS a code list under
+        # strings-as-lists / bytes-as-codes, so route through _as_items
+        # (str/bytes/ground Seg* → element list) rather than a bare
+        # isinstance-list check. A str element then validates as a character.
+        items = _as_items(vc)
+        if items is None:
             raise LogicException(type_error("list", vc, "atom_chars/2"))
-        # Deref each element and validate
         elems = []
-        for elem in vc:
+        for elem in items:
             e = deref(elem)
             if is_var(e):
                 raise LogicException(instantiation_error("atom_chars/2"))
@@ -406,10 +411,11 @@ def _atom_codes__2(atom, codes, trail, k):
             yield None
         trail.undo(mark)
     elif c_bound:
-        if not isinstance(vc, list):
+        items = _as_items(vc)  # F017: bytes/str/ground Seg* → element list
+        if items is None:
             raise LogicException(type_error("list", vc, "atom_codes/2"))
         elems = []
-        for elem in vc:
+        for elem in items:
             e = deref(elem)
             if is_var(e):
                 raise LogicException(instantiation_error("atom_codes/2"))
@@ -620,10 +626,11 @@ def _number_chars__2(number, chars, trail, k):
             yield None
         trail.undo(mark)
     elif c_bound:
-        if not isinstance(vc, list):
+        items = _as_items(vc)  # F017: str/ground Seg* → element list
+        if items is None:
             raise LogicException(type_error("list", vc, "number_chars/2"))
         elems = []
-        for elem in vc:
+        for elem in items:
             e = deref(elem)
             if is_var(e):
                 raise LogicException(instantiation_error("number_chars/2"))
@@ -668,10 +675,11 @@ def _number_codes__2(number, codes, trail, k):
             yield None
         trail.undo(mark)
     elif c_bound:
-        if not isinstance(vc, list):
+        items = _as_items(vc)  # F017: bytes/str/ground Seg* → element list
+        if items is None:
             raise LogicException(type_error("list", vc, "number_codes/2"))
         elems = []
-        for elem in vc:
+        for elem in items:
             e = deref(elem)
             if is_var(e):
                 raise LogicException(instantiation_error("number_codes/2"))

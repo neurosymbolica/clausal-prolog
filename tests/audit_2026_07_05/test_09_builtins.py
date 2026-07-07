@@ -542,8 +542,6 @@ def test_F016_must_be_list_string(fix):
 # str/bytes forms of their char/code lists
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F017: a str IS a char list — "
-                   "atom_chars(A, 'abc') should bind A='abc'")
 def test_F017_atom_chars_str_arg(fix):
     _, m = fix
     A = Var()
@@ -551,8 +549,6 @@ def test_F017_atom_chars_str_arg(fix):
     assert deref(A) == "abc"
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F017: a bytes IS a code list — "
-                   "atom_codes(A, b'ab') should bind A='ab'")
 def test_F017_atom_codes_bytes_arg(fix):
     _, m = fix
     A = Var()
