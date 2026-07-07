@@ -766,3 +766,24 @@ def test_guard_lambda_keyword_rejected(tmp_path):
 def test_guard_ternary_rejected(tmp_path):
     with pytest.raises(SyntaxError, match="If"):
         _load(tmp_path, 'c(X, L) <- (L is (1 if X else 2))')
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# A10-F018 — .pyc cache invalidation on transformer upgrade (version tag)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def test_F018_path_stats_folds_bytecode_tag(tmp_path):
+    """A10-F018: the transformer-version tag is folded into the reported mtime
+    so bumping it invalidates cached bytecode even when the source is
+    unchanged. Consistent per version, so cache hits still work."""
+    import os
+    from clausal.import_hook import _ClausalSourceLoader, CLAUSAL_BYTECODE_TAG
+    src = tmp_path / "a10f018.clausal"
+    src.write_text("fact(1),\n")
+    loader = _ClausalSourceLoader("a10f018", str(src))
+    stats = loader.path_stats(str(src))
+    raw_mtime = int(os.stat(str(src)).st_mtime)
+    assert stats["mtime"] == raw_mtime ^ CLAUSAL_BYTECODE_TAG
+    # Idempotent within a version.
+    assert loader.path_stats(str(src))["mtime"] == stats["mtime"]

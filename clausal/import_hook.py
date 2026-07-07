@@ -242,6 +242,15 @@ def _preseed_py_submodules(module_items) -> None:
 # ── Loader ───────────────────────────────────────────────────────────────────
 
 
+# A10-F018: cached .pyc bytecode is the OUTPUT of EmbedTransformer, but the
+# default source-loader invalidates only on (mtime, size) + CPython magic — so
+# upgrading clausal (new transformer semantics) leaves stale transformed
+# bytecode live until the source file itself changes. Fold this tag into the
+# reported mtime so a clausal upgrade invalidates every cached .clausal/.pl
+# .pyc. BUMP THIS whenever EmbedTransformer / the codegen output changes.
+CLAUSAL_BYTECODE_TAG = 1
+
+
 class _ClausalSourceLoader(SourceLoader):
     """Common file I/O for .clausal and .pl loaders.
 
@@ -263,7 +272,12 @@ class _ClausalSourceLoader(SourceLoader):
 
     def path_stats(self, path):
         st = os.stat(path)
-        return {"mtime": int(st.st_mtime), "size": st.st_size}
+        # A10-F018: XOR the transformer-version tag into the mtime so bumping
+        # CLAUSAL_BYTECODE_TAG invalidates cached bytecode even when the source
+        # file's mtime/size are unchanged (consistent per version → cache hits
+        # still work within a version).
+        return {"mtime": int(st.st_mtime) ^ CLAUSAL_BYTECODE_TAG,
+                "size": st.st_size}
 
     def set_data(self, path, data):
         # Write .pyc file; create __pycache__/ dir if needed.
