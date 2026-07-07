@@ -62,9 +62,6 @@ class TokenizeError(Exception):
 # Characters that can form graphic/symbolic atoms
 _GRAPHIC_CHARS = frozenset("#$&*+-./:<=>?@\\^~")
 
-# Characters that terminate a graphic token
-_GRAPHIC_STOP = frozenset("()[]{},%\"' \t\n\r")
-
 
 def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
     """Tokenize Prolog source text into a list of tokens.
@@ -141,18 +138,14 @@ class _Tokenizer:
             ch = self._peek()
             if ch in " \t\n\r":
                 self._advance()
-            elif ch == "%" and not self._is_directive_percent():
-                # Line comment
+            elif ch == "%":
+                # Line comment ('%' is always a line comment in Prolog)
                 while self._pos < len(self._src) and self._peek() != "\n":
                     self._advance()
             elif ch == "/" and self._peek(1) == "*":
                 self._skip_block_comment()
             else:
                 break
-
-    def _is_directive_percent(self) -> bool:
-        """% is always a line comment in Prolog."""
-        return False
 
     def _skip_block_comment(self) -> None:
         # Consume /*

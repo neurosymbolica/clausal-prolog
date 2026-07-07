@@ -144,24 +144,6 @@ def _emit_compound(term: PCompound, op_table: OperatorTable,
     return functor + "(" + args_str + ")"
 
 
-def _needs_parens(op_prec: int, op_assoc: str, context_prec: int,
-                  context_assoc: str, side: str) -> bool:
-    """Determine if an operator expression needs parentheses.
-
-    *side* is 'left' or 'right' (which side of the parent operator this is).
-    """
-    if op_prec > context_prec:
-        return True
-    if op_prec == context_prec:
-        # Check associativity: xfx means neither side can have equal precedence
-        # xfy means right side can, yfx means left side can
-        if side == "left" and context_assoc in ("xfx", "xfy"):
-            return True
-        if side == "right" and context_assoc in ("xfx", "yfx"):
-            return True
-    return False
-
-
 def _emit_infix(term: PCompound, entry, op_table: OperatorTable,
                 context_prec: int, context_assoc: str) -> str:
     """Render infix operator: left op right."""
@@ -188,16 +170,15 @@ def _emit_infix(term: PCompound, entry, op_table: OperatorTable,
     else:
         result = left_str + " " + term.functor + " " + right_str
 
-    # Parenthesize if this operator's precedence exceeds context
+    # Parenthesize if this operator binds looser than the context, or has equal
+    # precedence in a non-associative (xfx) parent position. The caller already
+    # encodes whether an equal-precedence child is allowed by passing the
+    # parent's specifier as context_assoc only on the y-side (see left_assoc /
+    # right_assoc above), so an x-side child arrives with context_assoc "xfx".
     if prec > context_prec:
         return "(" + result + ")"
-    if prec == context_prec:
-        # Equal precedence: need parens for non-associative positions
-        if context_assoc in ("xfx",):
-            return "(" + result + ")"
-        # For xfy parent, left child with equal prec needs parens
-        # For yfx parent, right child with equal prec needs parens
-        # But we ARE the child here, so check if we need wrapping
+    if prec == context_prec and context_assoc == "xfx":
+        return "(" + result + ")"
     return result
 
 
@@ -477,9 +458,7 @@ class _ClausalToProlog:
         # Resolve via dialect library_map, or fallback to path
         library_name = self.dialect.library_map.get(mod_path)
         if library_name is not None:
-            # Known library: use_module(library(name))
-            prolog_mod = PCompound(library_name.split("(")[0] + "(", ())
-            # Parse "library(clpfd)" → PCompound("library", (PAtom("clpfd"),))
+            # Known library: parse "library(clpfd)" → library(clpfd).
             lib_inner = library_name[len("library("):-1]  # "clpfd"
             prolog_mod = PCompound("library", (PAtom(lib_inner),))
         else:
