@@ -789,7 +789,11 @@ class _ClausalToProlog:
             python_ast.Sub: "-",
             python_ast.Mult: "*",
             python_ast.Div: "/",
-            python_ast.FloorDiv: "//",
+            # Clausal/Python // is floored; Prolog // truncates toward zero, so
+            # emit SWI/Scryer `div` (floored) to preserve semantics (F031). The
+            # forward direction routes Prolog // through prolog.TruncDiv for the
+            # same reason. Python % and Prolog mod are both floored — mod is OK.
+            python_ast.FloorDiv: "div",
             python_ast.Mod: "mod",
             python_ast.Pow: "**",
             python_ast.BitAnd: "/\\",

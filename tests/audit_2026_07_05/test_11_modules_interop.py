@@ -479,9 +479,8 @@ def test_F030_pow_grouping_preserved():
     assert "(2 ** 3) ** 2" in out
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F031: Clausal // (floor div) "
-                   "exported as Prolog // (truncating)")
 def test_F031_floordiv_export_semantics():
+    # A11-F031 (fixed): // exported as floored div.
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
     out = clausal_source_to_prolog("P(X, A, B) <- (X := A // B)\n")
     assert " A // B" not in out  # must be div / floored equivalent
