@@ -118,9 +118,6 @@ def test_F002_guard_lowercase_python_code_ok(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F003: non-EDCG callees consume "
-                   "straight to the final out var — a(S0,SF), b(SF,SF) instead "
-                   "of a(S0,S1), b(S1,SF)")
 def test_F003_edcg_sequence_of_plain_dcg_nonterminals(tmp_path):
     m = _load(tmp_path, """
         a >> (["a"])

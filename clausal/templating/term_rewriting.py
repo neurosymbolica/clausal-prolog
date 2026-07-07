@@ -2007,13 +2007,19 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             # if 'dcg' is available.
             if "dcg" in acc_states:
                 in_var, out_var = acc_states["dcg"]
+                # A10-F003: mint a fresh mid var (like _rewrite_edcg_subcall
+                # and the terminal-list case) — consuming straight to out_var
+                # and setting the state to (out_var, out_var) collapsed every
+                # following sequence element to ``out = out``.
+                mid = f"_edcg_dcg_{counter}_"
+                counter += 1
                 call_node = Call(
                     func=Name(id=name, ctx=load),
-                    args=[Name(id=in_var, ctx=load), Name(id=out_var, ctx=load)],
+                    args=[Name(id=in_var, ctx=load), Name(id=mid, ctx=load)],
                     keywords=[],
                 )
                 new_acc_states = dict(acc_states)
-                new_acc_states["dcg"] = (out_var, out_var)
+                new_acc_states["dcg"] = (mid, out_var)
                 return replace(call_node, source), new_acc_states, counter
             else:
                 # 0-arity call.
@@ -2028,13 +2034,16 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             # Non-EDCG call with args; if dcg available, add state args.
             if "dcg" in acc_states:
                 in_var, out_var = acc_states["dcg"]
+                # A10-F003: mint a fresh mid var (see the Name branch above).
+                mid = f"_edcg_dcg_{counter}_"
+                counter += 1
                 new_args = list(args) + [
-                    Name(id=in_var, ctx=load), Name(id=out_var, ctx=load),
+                    Name(id=in_var, ctx=load), Name(id=mid, ctx=load),
                 ]
                 call_node = Call(func=Name(id=name, ctx=load),
                                 args=new_args, keywords=list(kwargs))
                 new_acc_states = dict(acc_states)
-                new_acc_states["dcg"] = (out_var, out_var)
+                new_acc_states["dcg"] = (mid, out_var)
                 return replace(call_node, source), new_acc_states, counter
             else:
                 call_node = Call(func=Name(id=name, ctx=load),
