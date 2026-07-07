@@ -84,6 +84,11 @@ def _isub_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, flo
 
 def _imul_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
     corners = [alo * blo, alo * bhi, ahi * blo, ahi * bhi]
+    # A 0*inf corner is NaN; Python min/max propagate NaN (order-dependent),
+    # which _narrow_real then reads as a wipeout → spurious failure.  Skip NaN
+    # corners like the C fmin/fmax path so the fallback stays bit-identical
+    # (A08-F012).
+    corners = [c for c in corners if not math.isnan(c)] or [0.0]
     return _dn(min(corners)), _up(max(corners))
 
 
@@ -92,6 +97,7 @@ def _idiv_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, flo
     if blo <= 0.0 <= bhi:
         return -math.inf, math.inf
     corners = [alo / blo, alo / bhi, ahi / blo, ahi / bhi]
+    corners = [c for c in corners if not math.isnan(c)] or [0.0]  # A08-F012
     return _dn(min(corners)), _up(max(corners))
 
 

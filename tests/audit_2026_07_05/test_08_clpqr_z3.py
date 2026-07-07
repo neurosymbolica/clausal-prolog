@@ -408,10 +408,6 @@ class TestClprAliasing:
 
 
 class TestClprPythonCParity:
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F012: _imul_py propagates NaN from 0*inf "
-                              "corner (C fmin/fmax skips NaN) — spurious "
-                              "wipeout in pure-Python fallback")
     def test_imul_py_nan_corner_matches_c(self):
         py_lo, py_hi = _imul_py(0.0, 1.0, -math.inf, 2.0)
         assert not math.isnan(py_lo) and not math.isnan(py_hi)
