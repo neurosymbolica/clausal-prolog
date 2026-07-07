@@ -496,6 +496,26 @@ def reify_file(path):
         return reify_source(source_file.read(), filename=path)
 
 
+def _unparse_clause(node):
+    """Unparse a ``.clausal`` statement, restoring the ``<-`` arrow.
+
+    ``ast.unparse`` renders the clause arrow ``HEAD <- BODY`` as ``HEAD < -BODY``
+    (a ``Compare`` with a single ``Lt`` and a ``USub`` comparator at the
+    statement root). A blanket ``" < -" → " <- "`` replace also corrupts a
+    genuine inner ``X < -1`` comparison (F012), so repair *only* the top-level
+    arrow: unparse head and body separately and rejoin with a real ``<-``.
+    """
+    inner = node.value if isinstance(node, ast.Expr) else None
+    if (isinstance(inner, ast.Compare)
+            and len(inner.ops) == 1 and isinstance(inner.ops[0], ast.Lt)
+            and isinstance(inner.comparators[0], ast.UnaryOp)
+            and isinstance(inner.comparators[0].op, ast.USub)):
+        head = ast.unparse(inner.left)
+        body = ast.unparse(inner.comparators[0].operand)
+        return f"{head} <- ({body})"
+    return ast.unparse(node)
+
+
 def reify_ast(node, source=None):
     """Reify a single parsed Python AST node of ``.clausal`` surface syntax.
 
@@ -507,8 +527,7 @@ def reify_ast(node, source=None):
     if isinstance(node, ast.Expression):
         node = node.body
     if isinstance(node, ast.stmt):
-        text = ast.unparse(node) if source is None else source
-        text = text.replace(" < -", " <- ")
+        text = source if source is not None else _unparse_clause(node)
         items = reify_source(text)
         if not items:
             raise ReifyError(f"no reifiable item in: {text}")

@@ -221,9 +221,8 @@ def test_F011_anon_var_does_not_alias_user_underscore_one():
     assert a0 != a1  # user _1 and anonymous _ are distinct at runtime
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F012: reify_ast ' < -' arrow "
-                   "repair corrupts genuine X < -1 comparisons")
 def test_F012_reify_ast_preserves_lt_negative():
+    # A11-F012 (fixed): only the top-level arrow is repaired.
     from clausal.reflection import reify_ast, reify_source
     got = reify_ast(ast.parse('Foo(X) <- (X < -1)'))
     want = reify_source('Foo(X) <- (X < -1)')[0]
