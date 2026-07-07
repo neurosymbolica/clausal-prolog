@@ -2607,6 +2607,9 @@ class ZcompareConstraint(Constraint):
             else:
                 return False  # invalid order atom
         elif is_var(order):
+            # Aliased operands: X vs X is always equal (A06-F012b).
+            if x is y:
+                return unify(order, '=', trail)
             # Determine order from domains
             if x_hi < y_lo:
                 return unify(order, '<', trail)
@@ -2731,6 +2734,37 @@ def tuples_in(tuples_list, relation, trail: Trail) -> bool:
     return True
 
 
+# Wake-up attr key for the zcompare order variable.  The order var is bound
+# to a STRING atom ('<' / '=' / '>'), not an int, so the FD hook is the wrong
+# vehicle; this lightweight key re-runs the pending ZcompareConstraint(s) when
+# the order var is later ground (A06-F012a).
+ZCMP_KEY = "zcompare_wakeup"
+
+
+def _zcompare_hook(attr_value, bound_to, trail: Trail) -> bool:
+    """Fire the pending zcompare constraints when the order var is bound.
+
+    *attr_value* is the list of ZcompareConstraint objects waiting on this
+    order var.  Hooks run after the binding is committed, so each
+    constraint's propagate() sees the now-ground order atom.
+    """
+    bound_to = deref(bound_to)
+    if is_var(bound_to):
+        # Order unified with another var — carry the wake-up list across.
+        existing = get_attr(bound_to, ZCMP_KEY)
+        merged = attr_value if existing is None else existing + attr_value
+        put_attr(bound_to, ZCMP_KEY, merged, trail)
+        return True
+    queue: deque = deque()
+    for constraint in attr_value:
+        if not constraint.propagate(trail, queue):
+            return False
+    return propagate(queue, trail)
+
+
+register_attr_hook(ZCMP_KEY, _zcompare_hook)
+
+
 def zcompare(order, x, y, trail: Trail) -> bool:
     """Post zcompare/3 constraint.
 
@@ -2772,6 +2806,14 @@ def zcompare(order, x, y, trail: Trail) -> bool:
         v = deref(v)
         if is_var(v) and v is not deref(order):
             _add_constraint(v, constraint, trail)
+    # Attach a string-binding wake-up to the order var so that binding it
+    # AFTER posting re-fires the constraint and narrows x/y (A06-F012a).
+    od = deref(order)
+    if is_var(od):
+        existing = get_attr(od, ZCMP_KEY)
+        put_attr(od, ZCMP_KEY,
+                 [constraint] if existing is None else existing + [constraint],
+                 trail)
     queue: deque = deque()
     if not constraint.propagate(trail, queue):
         return False

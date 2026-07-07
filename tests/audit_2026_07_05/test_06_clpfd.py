@@ -524,8 +524,6 @@ class TestZcompare:
         assert dom(x) == ((1, 4),)
         assert dom(y) == ((2, 5),)
 
-    @pytest.mark.xfail(strict=False, reason="A06-F012a: binding Order after posting does "
-                       "not propagate (constraint is not attached to the order var)")
     def test_binding_order_var_propagates(self):
         t = Trail()
         o, x, y = Var(), Var(), Var()
@@ -544,8 +542,6 @@ class TestZcompare:
         sols = label_set([x, y], t)
         assert sols == {(a, b) for a in range(1, 6) for b in range(1, 6) if a < b}
 
-    @pytest.mark.xfail(strict=False, reason="A06-F012b: zcompare(O, X, X) does not infer "
-                       "O = '=' (aliased operands)")
     def test_same_var_is_eq(self):
         t = Trail()
         o, x = Var(), Var()
