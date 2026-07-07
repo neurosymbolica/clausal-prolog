@@ -1592,10 +1592,35 @@ safe_mult_d(double a, double b)
     return a * b;
 }
 
+/* Exact integer floor/ceil division (C's / truncates toward zero); b != 0.
+ * Callers guarantee |a| < 2^53 (the DOUBLE_ABS_SUM_LIMIT guard), so no
+ * overflow.  Used for scalar_propagate's exact division (A06-F003). */
+static inline int64_t
+floor_div_i64(int64_t a, int64_t b)
+{
+    int64_t q = a / b, r = a % b;
+    if (r != 0 && ((r < 0) != (b < 0))) q--;
+    return q;
+}
+static inline int64_t
+ceil_div_i64(int64_t a, int64_t b)
+{
+    int64_t q = a / b, r = a % b;
+    if (r != 0 && ((r < 0) == (b < 0))) q++;
+    return q;
+}
+
 /* Threshold past which IEEE 754 double loses integer precision.  Used by
  * sum_propagate / scalar_propagate to decide when to fall back to the
  * bignum-safe Python helper. */
 #define DOUBLE_PRECISE_INT_LIMIT 9007199254740992.0 /* 2^53 */
+/* Σ|finite bound| ceiling: if the sum of the absolute values of all finite
+ * operand bounds stays under 2^52, then every partial sum AND every
+ * back-substitution difference (total - other, bounded by 2·Σ|bound|) stays
+ * under 2^53 and is represented exactly in double.  Above it, an intermediate
+ * such as `total - other` can need >53 bits and round (ties-to-even), so we
+ * hand off to the exact-integer Python helper (A06-F003). */
+#define DOUBLE_ABS_SUM_LIMIT 4503599627370496.0 /* 2^52 */
 
 /*
  * sum_propagate — SumConstraint.propagate(trail, queue)
@@ -1613,6 +1638,7 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
      * leaving output-mode vars unbounded (A06-F002). */
     double finite_hi_sum = 0, finite_lo_sum = 0;
     int pos_inf_count = 0, neg_inf_count = 0;
+    double abs_bound = 0;  /* Σ|finite bound| — see DOUBLE_ABS_SUM_LIMIT */
     int needs_bignum = 0;
     for (Py_ssize_t i = 0; i < nv; i++) {
         PyObject *v = PyTuple_GET_ITEM(self->sum_vars, i);
@@ -1633,17 +1659,16 @@ sum_propagate(SumConstraintObject *self, PyObject *trail, PyObject *queue)
         double hi_f = (hi == INT64_MAX) ? HUGE_VAL : (double)hi;
         min_sum += lo_f;
         max_sum += hi_f;
-        if (hi_f == HUGE_VAL) pos_inf_count++; else finite_hi_sum += hi_f;
-        if (lo_f == -HUGE_VAL) neg_inf_count++; else finite_lo_sum += lo_f;
+        if (hi_f == HUGE_VAL) pos_inf_count++; else { finite_hi_sum += hi_f; abs_bound += fabs(hi_f); }
+        if (lo_f == -HUGE_VAL) neg_inf_count++; else { finite_lo_sum += lo_f; abs_bound += fabs(lo_f); }
     }
 
-    /* Bignum fallback: any operand has bignum bounds, or the running double
-     * sum has exceeded 2^53 (where IEEE 754 doubles lose integer
-     * precision).  Slice 4 of clpz_bignum.md. */
-    if (!needs_bignum &&
-        (fabs(min_sum) > DOUBLE_PRECISE_INT_LIMIT ||
-         fabs(max_sum) > DOUBLE_PRECISE_INT_LIMIT) &&
-        min_sum != -HUGE_VAL && max_sum != HUGE_VAL) {
+    /* Bignum fallback: any operand has bignum bounds, or the sum of absolute
+     * finite bounds is large enough that an intermediate could lose integer
+     * precision in double (A06-F003).  Subsumes the old aggregate check —
+     * cancelling terms (e.g. -2^53 + [2^53, 2^53+2]) keep the aggregate small
+     * yet still overflow 53 bits under back-substitution. */
+    if (!needs_bignum && abs_bound >= DOUBLE_ABS_SUM_LIMIT) {
         needs_bignum = 1;
     }
     if (needs_bignum) {
@@ -1772,6 +1797,7 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
      * infinite one (A06-F002 — see sum_propagate for the rationale). */
     double finite_cmax_sum = 0, finite_cmin_sum = 0;
     int cmax_pos_inf = 0, cmin_neg_inf = 0;
+    double abs_bound = 0;  /* Σ|finite contribution| — see DOUBLE_ABS_SUM_LIMIT */
     int needs_bignum = 0;
     for (Py_ssize_t i = 0; i < nv; i++) {
         PyObject *v = PyTuple_GET_ITEM(self->sum_vars, i);
@@ -1803,17 +1829,14 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
         double contrib_max = (c >= 0) ? safe_mult_d(c, hi_f) : safe_mult_d(c, lo_f);
         min_sum += contrib_min;
         max_sum += contrib_max;
-        if (contrib_max == HUGE_VAL) cmax_pos_inf++; else finite_cmax_sum += contrib_max;
-        if (contrib_min == -HUGE_VAL) cmin_neg_inf++; else finite_cmin_sum += contrib_min;
+        if (contrib_max == HUGE_VAL) cmax_pos_inf++; else { finite_cmax_sum += contrib_max; abs_bound += fabs(contrib_max); }
+        if (contrib_min == -HUGE_VAL) cmin_neg_inf++; else { finite_cmin_sum += contrib_min; abs_bound += fabs(contrib_min); }
     }
 
-    /* Bignum fallback: any operand has bignum bounds, any coefficient is
-     * bignum, or the running double sum has exceeded 2^53 (where IEEE 754
-     * doubles lose integer precision).  Slice 4 of clpz_bignum.md. */
-    if (!needs_bignum &&
-        (fabs(min_sum) > DOUBLE_PRECISE_INT_LIMIT ||
-         fabs(max_sum) > DOUBLE_PRECISE_INT_LIMIT) &&
-        min_sum != -HUGE_VAL && max_sum != HUGE_VAL) {
+    /* Bignum fallback: any operand/coefficient is bignum, or the sum of
+     * absolute finite contributions is large enough that an intermediate
+     * could lose integer precision in double (A06-F003). */
+    if (!needs_bignum && abs_bound >= DOUBLE_ABS_SUM_LIMIT) {
         needs_bignum = 1;
     }
     if (needs_bignum) {
@@ -1904,29 +1927,27 @@ scalar_propagate(ScalarProductConstraintObject *self, PyObject *trail, PyObject 
         double other_min = (others_cmin_inf > 0) ? -HUGE_VAL
                          : finite_cmin_sum - (contrib_min == -HUGE_VAL ? 0.0 : contrib_min);
 
-        /* Bounds on c*var_i, guarding inf - inf. */
+        /* Bounds on c*var_i, guarding inf - inf.  With the DOUBLE_ABS_SUM_LIMIT
+         * guard above, finite num_lo/num_hi are exact integers < 2^53. */
         double num_lo = (other_max == HUGE_VAL) ? -HUGE_VAL : (tlo - other_max);
         double num_hi = (other_min == -HUGE_VAL) ? HUGE_VAL : (thi - other_min);
 
-        double new_lo_f, new_hi_f;
-        if (c > 0) {
-            new_lo_f = ceil(num_lo / c);
-            new_hi_f = floor(num_hi / c);
-        } else {
-            new_lo_f = ceil(num_hi / c);
-            new_hi_f = floor(num_lo / c);
-        }
+        /* var_i lower = ceil(lo_num / c), upper = floor(hi_num / c), with the
+         * numerator/operand ends swapped for c < 0.  Divide in int64 to avoid
+         * float-division rounding near 2^53 (A06-F003). */
+        double lo_num = (c_val > 0) ? num_lo : num_hi;
+        double hi_num = (c_val > 0) ? num_hi : num_lo;
 
         int64_t new_lo_i, new_hi_i;
-        if (new_lo_f == -HUGE_VAL || new_lo_f == HUGE_VAL)
-            new_lo_i = INT64_MIN;
+        if (lo_num == -HUGE_VAL || lo_num == HUGE_VAL)
+            new_lo_i = INT64_MIN;   /* the infinite lo end always yields -inf */
         else
-            new_lo_i = (int64_t)new_lo_f;
+            new_lo_i = ceil_div_i64((int64_t)lo_num, c_val);
 
-        if (new_hi_f == -HUGE_VAL || new_hi_f == HUGE_VAL)
-            new_hi_i = INT64_MAX;
+        if (hi_num == HUGE_VAL || hi_num == -HUGE_VAL)
+            new_hi_i = INT64_MAX;   /* the infinite hi end always yields +inf */
         else
-            new_hi_i = (int64_t)new_hi_f;
+            new_hi_i = floor_div_i64((int64_t)hi_num, c_val);
 
         PyObject *range = domain_from_range_i64(new_lo_i, new_hi_i);
         if (!range) { Py_DECREF(d); Py_DECREF(dv); return -1; }

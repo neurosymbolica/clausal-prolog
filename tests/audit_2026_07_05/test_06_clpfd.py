@@ -259,8 +259,6 @@ Double(X, Y) <- (Y == 2 * X)
 
 
 class TestDoublePrecisionRounding:
-    @pytest.mark.xfail(strict=False, reason="A06-F003: C sum/scalar_propagate rounds in "
-                       "double; bounds near 2^53 over-prune, valid solution rejected")
     def test_sum_near_2_53(self):
         P = 2 ** 53
         t = Trail()
