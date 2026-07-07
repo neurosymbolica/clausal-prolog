@@ -489,9 +489,6 @@ def test_F012_guard_import_from_arity_errors(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F013 (A11 boundary): "
-                   "_export_builtin_classes overwrites the documented query API "
-                   "clausal.call with the builtin call/N PredicateMeta class")
 def test_F013_clausal_call_is_query_api():
     import clausal
     from clausal.logic.solve import call as solve_call
