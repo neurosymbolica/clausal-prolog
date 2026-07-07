@@ -559,32 +559,34 @@ class TestCToolkitGuards:
 
 
 class TestF001CompletionLosesConsumers:
-    @pytest.mark.xfail(strict=False, reason="A04-F001: completion phase cannot "
-                       "resume consumer continuations; answers silently lost")
     def test_two_recursive_clauses_facts_first(self, load):
+        # A04-F001: the leader drives its dispatch to a FIXPOINT (re-run until no
+        # new answer), so both recursive clauses' derived answers are kept.
         m = load("f001a", TWOREC_FACTSFIRST_SRC)
         X = Var()
         got = sorted(set(a[0] for a in answers(call("p", X, module=m), X)))
         assert got == [1, 2, 3, 4, 5]
 
-    @pytest.mark.xfail(strict=False, reason="A04-F001: recursive-clause-first "
-                       "ordering loses all derived answers")
     def test_two_recursive_clauses_rec_first(self, load):
+        # A04-F001: clause order no longer matters for single-table recursion.
         m = load("f001b", TWOREC_RECFIRST_SRC)
         X = Var()
         got = sorted(set(a[0] for a in answers(call("p", X, module=m), X)))
         assert got == [1, 2, 3, 4, 5]
 
-    @pytest.mark.xfail(strict=False, reason="A04-F001: inner leader completes "
-                       "prematurely in mutual recursion (rec-clause-first)")
+    @pytest.mark.xfail(strict=False, reason="A04-F001 residual: MUTUAL recursion "
+                       "with the recursive clause first — the nested table (rb, "
+                       "called before ra derives a base answer) completes empty "
+                       "and stays stale. Needs SCC-aware completion (re-lead "
+                       "dormant SCC members from the root's fixpoint). The "
+                       "single-table cases and the rb-outer / facts-first mutual "
+                       "cases pass.")
     def test_mutual_recursion_rec_first_ra(self, load):
         m = load("f001c", MUTUAL_RECFIRST_SRC)
         Y = Var()
         got = sorted(set(a[0] for a in answers(call("ra", 1, Y, module=m), Y)))
         assert got == [2, 4]
 
-    @pytest.mark.xfail(strict=False, reason="A04-F001: rb table marked complete "
-                       "with zero answers")
     def test_mutual_recursion_rec_first_rb(self, load):
         m = load("f001d", MUTUAL_RECFIRST_SRC.replace("ra", "rc").replace("rb", "rd")
                  .replace("la", "lc").replace("lb", "ld"))

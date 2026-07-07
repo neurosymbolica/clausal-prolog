@@ -569,63 +569,38 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         push_leader(entry)
 
         try:
-            # Drive original dispatch through trampoline protocol
-            _gen = StepGenerator(original_dispatch, this_generator, this_generator, this_generator, *args, trail)
-            _st = yield (_gen, None)
-            while _st is not DONE:
-                answer = freeze_args(args, trail)
-                delay_set = frozenset(entry._current_delays)
-                entry._current_delays.clear()
-                if entry.add_answer(answer, delay_set):
-                    yield (_proceed, None)  # new answer to leader's caller (incremental)
-                _st = yield (_gen, None)
-            entry._current_delays.clear()
-
-            # ── Completion phase ──
+            # A04-F001: drive the dispatch to a FIXPOINT by re-running it until
+            # no new answer appears, rather than a single pass followed by the
+            # (broken) consumer-resume completion phase. On each re-run a
+            # consumer (an inner call to this same still-evaluating table) sees
+            # the grown answer set and routes it to its clause continuation,
+            # which derives further answers. New answers stream to the leader's
+            # caller exactly once (add_answer dedups). This makes tabled
+            # solution sets clause-order-independent for single-table recursion;
+            # mutual recursion additionally needs SCC-aware completion (below).
             changed = True
-            while changed and entry.suspended:
-                changed = False
-                pending = list(entry.suspended)
-                entry.suspended.clear()
-
-                for sc in pending:
-                    if sc.answers_seen >= len(entry.answers):
-                        continue
-
-                    old_count = len(entry.answers)
-
-                    gen, value = sc.generator.send(_TABLING_RESUME)
-
-                    while True:
-                        if gen is sc._proceed:
-                            if value is None:
-                                answer = freeze_args(sc.args, sc.trail)
-                                delay_set = frozenset(entry._current_delays)
-                                entry._current_delays.clear()
-                                if entry.add_answer(answer, delay_set):
-                                    yield (_proceed, None)
-                                gen, value = sc.generator.send(None)
-                            elif value is DONE:
-                                break
-                            elif value is _TABLING_SUSPEND:
-                                entry.suspended.append(sc)
-                                break
-                            else:
-                                break
-                        else:
-                            gen, value = gen.send(value)
-
+            while changed:
+                old_count = len(entry.answers)
+                _gen = StepGenerator(original_dispatch, this_generator,
+                                     this_generator, this_generator, *args, trail)
+                _st = yield (_gen, None)
+                while _st is not DONE:
+                    answer = freeze_args(args, trail)
+                    delay_set = frozenset(entry._current_delays)
                     entry._current_delays.clear()
-                    if len(entry.answers) > old_count:
-                        changed = True
-
-            # Send DONE to any remaining suspended consumers (cleanup)
-            for sc in entry.suspended:
-                try:
-                    sc.generator.send(DONE)
-                except StopIteration:
-                    pass
-            entry.suspended.clear()
+                    if entry.add_answer(answer, delay_set):
+                        yield (_proceed, None)  # new answer to caller (incremental)
+                    _st = yield (_gen, None)
+                entry._current_delays.clear()
+                # Consumers that suspended during this pass are re-derived by the
+                # next pass; finish their parked generators cleanly.
+                for sc in entry.suspended:
+                    try:
+                        sc.generator.close()
+                    except BaseException:
+                        pass
+                entry.suspended.clear()
+                changed = len(entry.answers) > old_count
 
             _resolve_conditions(entry, table_store)
         except BaseException:
