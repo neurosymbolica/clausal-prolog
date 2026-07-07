@@ -40,6 +40,7 @@ class Token:
     value: str | int | float
     line: int
     col: int
+    quoted: bool = False  # True for a quoted atom ('foo') — F035
 
     def __repr__(self) -> str:
         return f"Token({self.type.value!r}, {self.value!r}, {self.line}:{self.col})"
@@ -306,7 +307,8 @@ class _Tokenizer:
                 chars.append(self._read_escape(line, col))
             else:
                 chars.append(ch)
-        self._tokens.append(Token(TokenType.ATOM, "".join(chars), line, col))
+        self._tokens.append(
+            Token(TokenType.ATOM, "".join(chars), line, col, quoted=True))
 
     # ── Double-quoted string ─────────────────────────────────────────
 

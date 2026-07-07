@@ -12,7 +12,18 @@ Public API:
 from __future__ import annotations
 
 import json
+import keyword
 from pathlib import Path
+
+
+def _is_plain_atom_name(name: str) -> bool:
+    """True if *name* can be emitted as a bare lowercase Clausal atom name."""
+    return (
+        bool(name)
+        and name[0].islower()
+        and name.isidentifier()
+        and not keyword.iskeyword(name)
+    )
 
 from clausal.tools.prolog_ast import (
     PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
@@ -591,6 +602,14 @@ class _PrologToClausal:
             return "[]"
         if name == "{}":
             return "{}"
+        # A quoted atom, or one whose spelling is not a plain lowercase
+        # identifier (space, punctuation, uppercase) or collides with a Python
+        # keyword, cannot be emitted as a bare Clausal name — `p('hello world')`
+        # / `p(class)` would be a SyntaxError and `p('Foo')` would silently
+        # become a variable/predicate reference. Emit a Python string literal
+        # instead (F025).
+        if getattr(atom, "quoted", False) or not _is_plain_atom_name(name):
+            return repr(name)
         # Register as a data atom (will be declared via -private).
         self._data_atoms.add(name)
         return name

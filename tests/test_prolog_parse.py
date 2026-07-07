@@ -27,7 +27,8 @@ class TestTokenizeAtoms:
     def test_quoted_atom(self):
         # nv
         toks = tokenize("'hello world'")
-        assert toks[0] == Token(TokenType.ATOM, "hello world", 1, 1)
+        # A11-F035: quoted atoms carry quoted=True.
+        assert toks[0] == Token(TokenType.ATOM, "hello world", 1, 1, quoted=True)
 
     def test_quoted_atom_doubled_quote(self):
         # nv
@@ -359,7 +360,8 @@ class TestParseTerm:
     def test_quoted_atom(self):
         # nv
         t = parse_term("'hello world'")
-        assert t == PAtom("hello world")
+        # A11-F035: parser sets quoted=True on quoted atoms.
+        assert t == PAtom("hello world", quoted=True)
 
 
 class TestParseOperators:

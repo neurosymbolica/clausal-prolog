@@ -259,7 +259,7 @@ class PrologParser:
                 operand = self._parse_term(r_prec)
                 return PCompound(name, (operand,))
 
-        return PAtom(name)
+        return PAtom(name, quoted=tok.quoted)
 
     def _parse_compound_args(self, functor: str, line: int, col: int) -> PCompound:
         """Parse f(arg1, arg2, ...) after the functor name."""

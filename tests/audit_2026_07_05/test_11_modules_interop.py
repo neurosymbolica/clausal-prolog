@@ -366,9 +366,8 @@ def test_F024_arrow_rejected_in_term_position():
         prolog_to_clausal("q(L) :- findall(X, (c(X) -> t ; e), L).\n")
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F025: quoted/keyword/graphic "
-                   "atoms emitted bare — invalid or silently different Clausal")
 def test_F025_atom_emission_fidelity():
+    # A11-F025 (fixed): non-identifier/keyword atoms emit as string literals.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("p('hello world').\np(class).\n")
     ast.parse(out)  # must at minimum be syntactically valid Python
@@ -424,9 +423,8 @@ def test_F034_iso_escapes():
     assert tokenize("X = 0'''.")[2].value == 39
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F035: PAtom.quoted never set by "
-                   "the parser; docs promise quoted atoms → Python strings")
 def test_F035_quoted_flag_set():
+    # A11-F035 (fixed): parser sets PAtom.quoted for quoted atoms.
     from clausal.tools.prolog_parser import parse_term
     assert parse_term("'red'").quoted is True
 
