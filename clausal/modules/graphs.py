@@ -301,17 +301,39 @@ def _find_path__4(this_generator, _proceed, _fail, _catcher, edges, start, end, 
     if isinstance(edges_val, list) and not is_var(start_val) and not is_var(end_val):
         adj = _build_adj(edges_val)
 
-        def _dfs(current, target, visited):
-            if current == target:
-                yield list(visited)
+        def _dfs(start_node, target):
+            # Iterative simple-path enumeration (explicit node/iterator stack)
+            # so a long path does not overflow the recursion limit — the
+            # trampoline would eat the RecursionError and answer "no path"
+            # (F044). Yields the same paths, in the same order, as the former
+            # recursion.
+            if start_node == target:
+                yield [start_node]
                 return
-            for neighbor in adj.get(current, []):
-                if neighbor not in visited:
-                    visited.append(neighbor)
-                    yield from _dfs(neighbor, target, visited)
-                    visited.pop()
+            path = [start_node]
+            inpath = {_vertex_key(start_node)}
+            stack = [(start_node, iter(adj.get(start_node, [])))]
+            while stack:
+                _node, it = stack[-1]
+                advanced = False
+                for neighbor in it:
+                    nk = _vertex_key(neighbor)
+                    if nk in inpath:
+                        continue
+                    if neighbor == target:
+                        yield path + [neighbor]
+                        continue
+                    path.append(neighbor)
+                    inpath.add(nk)
+                    stack.append((neighbor, iter(adj.get(neighbor, []))))
+                    advanced = True
+                    break
+                if not advanced:
+                    stack.pop()
+                    if stack:
+                        inpath.discard(_vertex_key(path.pop()))
 
-        for p in _dfs(start_val, end_val, [start_val]):
+        for p in _dfs(start_val, end_val):
             mark = trail.mark()
             if unify(path, p, trail):
                 yield (_proceed, None)
@@ -509,29 +531,38 @@ def _has_cycle__1(this_generator, _proceed, _fail, _catcher, edges, trail):
     if isinstance(edges_val, list):
         adj = _build_directed_adj(edges_val)
         all_nodes = list(adj.keys())
+        # 0 = white (unseen), 1 = grey (on the current DFS stack), 2 = black
+        # (finished). A grey neighbour is a back-edge, i.e. a cycle. Iterative
+        # so deep graphs don't overflow the recursion limit (the trampoline
+        # would eat the RecursionError and answer "no cycle") — F043.
         color: dict = {n: 0 for n in all_nodes}
-        has_cycle = False
+        found = False
 
-        def _dfs(node):
-            nonlocal has_cycle
-            color[node] = 1
-            for neighbor in adj.get(node, []):
-                if has_cycle:
-                    return
-                if color.get(neighbor, 0) == 1:
-                    has_cycle = True
-                    return
-                if color.get(neighbor, 0) == 0:
-                    _dfs(neighbor)
-            color[node] = 2
-
-        for n in all_nodes:
-            if has_cycle:
+        for root in all_nodes:
+            if found:
                 break
-            if color[n] == 0:
-                _dfs(n)
+            if color.get(root, 0) != 0:
+                continue
+            color[root] = 1
+            stack = [(root, iter(adj.get(root, [])))]
+            while stack and not found:
+                node, it = stack[-1]
+                advanced = False
+                for neighbor in it:
+                    c = color.get(neighbor, 0)
+                    if c == 1:
+                        found = True
+                        break
+                    if c == 0:
+                        color[neighbor] = 1
+                        stack.append((neighbor, iter(adj.get(neighbor, []))))
+                        advanced = True
+                        break
+                if not advanced and not found:
+                    color[node] = 2
+                    stack.pop()
 
-        if has_cycle:
+        if found:
             yield (_proceed, None)
     yield (_fail, DONE)
 

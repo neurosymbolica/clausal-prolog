@@ -568,16 +568,14 @@ def test_guard_pow_emit_parse_fixpoint_c2p():
 from clausal.modules import graphs as G  # noqa: E402
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F043: recursive DFS overflows on "
-                   "deep graphs; trampoline eats RecursionError → silent 'no cycle'")
 def test_F043_has_cycle_deep_graph():
+    # A11-F043 (fixed): iterative 3-color DFS handles deep graphs.
     edges = [[i, i + 1] for i in range(3000)] + [[3000, 0]]
     assert _gsols(G._has_cycle__1, edges) == [True]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F044: recursive path DFS "
-                   "overflows on ~1000+ deep paths → silent no-path")
 def test_F044_find_path_long_chain():
+    # A11-F044 (fixed): iterative path DFS handles long chains.
     edges = [[i, i + 1] for i in range(2500)]
     p = Var()
     sols = _gsols(G._find_path__4, edges, 0, 2500, p, out=p)
