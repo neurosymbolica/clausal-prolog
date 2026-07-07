@@ -107,16 +107,25 @@ class TableEntry:
     def __init__(self):
         self.status: str = "evaluating"       # "evaluating" | "complete"
         self.answers: list[tuple] = []
-        self.answer_set: set[tuple] = set()
+        self.answer_set: set = set()   # canonical answer keys (A04-F005/F006)
         self.suspended: list = []             # list of SuspendedConsumer
         self.conditions: list = []            # parallel to answers: frozenset[DelayedNegation] | _FAILED
         self._current_delays: set[DelayedNegation] = set()
 
     def add_answer(self, answer: tuple, delay_set: frozenset | None = None) -> bool:
-        """Add a frozen answer tuple.  Returns True if it was new."""
-        if answer in self.answer_set:
+        """Add a frozen answer tuple.  Returns True if it was new.
+
+        Dedup uses the canonical, hashable key (A04-F005) — a frozen answer may
+        contain a list/dict/set/term instance, which are unhashable and cannot
+        go directly in ``answer_set``. The key also type-distinguishes numeric
+        leaves (A04-F006), so 1/True/1.0 answers are kept distinct exactly as
+        the untabled dispatch would. The original frozen tuple is stored in
+        ``answers`` for unification.
+        """
+        key = make_subgoal_key(answer, None)
+        if key in self.answer_set:
             return False
-        self.answer_set.add(answer)
+        self.answer_set.add(key)
         self.answers.append(answer)
         self.conditions.append(delay_set if delay_set is not None else frozenset())
         return True
@@ -146,20 +155,43 @@ class SuspendedConsumer:
 # ── Key computation (variant checking) ────────────────────────────────────
 
 
-_SCALAR_TYPES = (bool, int, float, str, bytes)
-
-
 def _normalize_for_key_py(term):
-    """Deref term; replace unbound Vars with _VAR sentinel."""
+    """Deref term into a hashable, type-distinguishing canonical key.
+
+    Exact ``int`` stays canonical (the fast path). Other numeric leaves
+    (``bool``/``float``/``complex``) are type-tagged as ``(type, value)`` so
+    ``1``/``True``/``1.0`` do not conflate in variant keys or answer dedup
+    (A04-F006 — semantics-neutral; unification is untouched, see A01-D001).
+    Containers (``list``/``tuple``/``dict``/``set``, ``Compound``, term
+    instances) are rebuilt into hashable forms so answers/keys holding them
+    can live in the dedup set (A04-F005).
+
+    Keep this in exact lock-step with the C twin ``do_normalize``
+    (``_tabling_core.c``) — the two must produce identical keys (P52).
+    ``Decimal``/``Fraction`` are intentionally left raw in BOTH (they still
+    conflate with ``int`` — a documented residual pending A01-D001).
+    """
     term = deref(term)
     if type(term) is int:
         return term
     if is_var(term):
         return _VAR
-    if term is None or isinstance(term, _SCALAR_TYPES):
+    if term is None:
+        return term
+    if isinstance(term, (bool, float, complex)):
+        return (type(term), term)          # A04-F006
+    if isinstance(term, (str, bytes)):
         return term
     if isinstance(term, list):
         return ("__list__",) + tuple(_normalize_for_key_py(e) for e in term)
+    if isinstance(term, tuple):
+        return ("__tuple__",) + tuple(_normalize_for_key_py(e) for e in term)
+    if isinstance(term, dict):
+        return ("__dict__", frozenset(
+            (_normalize_for_key_py(k), _normalize_for_key_py(v))
+            for k, v in term.items()))
+    if isinstance(term, (set, frozenset)):
+        return ("__set__", frozenset(_normalize_for_key_py(e) for e in term))
     if isinstance(term, Compound):
         return (term.functor,) + tuple(_normalize_for_key_py(a) for a in term.args)
     if is_term_instance(term):

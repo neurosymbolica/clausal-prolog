@@ -1629,6 +1629,45 @@ do_walk(PyObject *term, int depth)
         }
         return result;
     }
+    /* A04-F005: plain dict / set — deep-substitute so walk() stays consistent
+     * with _deref_walk (both must cover the same container types). */
+    if (PyDict_Check(term)) {
+        PyObject *result = PyDict_New();
+        if (!result) return NULL;
+        PyObject *k, *v;
+        Py_ssize_t pos = 0;
+        while (PyDict_Next(term, &pos, &k, &v)) {
+            PyObject *wk = do_walk(k, depth + 1);
+            if (!wk) { Py_DECREF(result); return NULL; }
+            PyObject *wv = do_walk(v, depth + 1);
+            if (!wv) { Py_DECREF(wk); Py_DECREF(result); return NULL; }
+            int rc = PyDict_SetItem(result, wk, wv);
+            Py_DECREF(wk); Py_DECREF(wv);
+            if (rc < 0) { Py_DECREF(result); return NULL; }
+        }
+        return result;
+    }
+    if (PyAnySet_Check(term)) {
+        PyObject *walked = PyList_New(0);
+        if (!walked) return NULL;
+        PyObject *iter = PyObject_GetIter(term);
+        if (!iter) { Py_DECREF(walked); return NULL; }
+        PyObject *item;
+        while ((item = PyIter_Next(iter))) {
+            PyObject *we = do_walk(item, depth + 1);
+            Py_DECREF(item);
+            if (!we) { Py_DECREF(iter); Py_DECREF(walked); return NULL; }
+            int rc = PyList_Append(walked, we);
+            Py_DECREF(we);
+            if (rc < 0) { Py_DECREF(iter); Py_DECREF(walked); return NULL; }
+        }
+        Py_DECREF(iter);
+        if (PyErr_Occurred()) { Py_DECREF(walked); return NULL; }
+        PyObject *result = PyFrozenSet_Check(term)
+            ? PyFrozenSet_New(walked) : PySet_New(walked);
+        Py_DECREF(walked);
+        return result;
+    }
     /* __walk__ protocol: delegate to Python method if present.
      * Compound, KWTerm, the Seg types and DictTerm all supply __walk__
      * (A01-F008). */

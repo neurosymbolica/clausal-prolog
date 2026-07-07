@@ -80,9 +80,11 @@ class TestTableEntry:
 class TestKeyComputation:
     def test_ground_scalar(self):
         # nv
-        assert _normalize_for_key(42) == 42
+        assert _normalize_for_key(42) == 42            # exact int stays canonical
         assert _normalize_for_key("hello") == "hello"
-        assert _normalize_for_key(True) is True
+        # A04-F006: numeric leaves are type-tagged so 1/True/1.0 do not conflate
+        assert _normalize_for_key(True) == (bool, True)
+        assert _normalize_for_key(1.0) == (float, 1.0)
         assert _normalize_for_key(None) is None
 
     def test_unbound_var(self):

@@ -60,6 +60,12 @@ def _deref_walk_py(term: Any) -> Any:
         return [_deref_walk_py(e) for e in term]
     if isinstance(term, tuple):
         return tuple(_deref_walk_py(e) for e in term)  # A01-F008: was blind
+    if isinstance(term, dict):
+        # A04-F005: rebuild plain-dict values so a frozen answer holding a dict
+        # does not share live inner Vars that unbind on backtracking.
+        return {_deref_walk_py(k): _deref_walk_py(v) for k, v in term.items()}
+    if isinstance(term, (set, frozenset)):
+        return type(term)(_deref_walk_py(e) for e in term)  # A04-F005
     # A01-F008: delegate to __walk__ hooks (Compound, KWTerm, DictTerm, Seg*),
     # keeping this Python fallback in sync with the C twin (_tabling_core
     # do_deref_walk) and with walk() itself. Preserves Compound _position and

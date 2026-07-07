@@ -35,6 +35,9 @@ static PyObject *str_functor = NULL;
 static PyObject *str_args = NULL;
 static PyObject *str___name__ = NULL;
 static PyObject *str___list__ = NULL;
+static PyObject *str___tuple__ = NULL;   /* A04-F005 */
+static PyObject *str___dict__ = NULL;    /* A04-F005 */
+static PyObject *str___set__ = NULL;     /* A04-F005 */
 /* _VAR sentinel — set by _register_var_sentinel() from tabling.py */
 static PyObject *VAR_sentinel = NULL;
 
@@ -84,9 +87,15 @@ do_normalize(PyObject *term, int depth)
         return term;
     }
 
-    /* Scalar types: bool, int (non-exact), float, str, bytes */
-    if (PyBool_Check(term) || PyLong_Check(term) || PyFloat_Check(term) ||
-        PyUnicode_Check(term) || PyBytes_Check(term)) {
+    /* A04-F006: type-tag numeric leaves (bool/float/complex) as (type, value)
+     * so 1/True/1.0 do not conflate in variant keys or answer dedup. Exact int
+     * is canonical (the fast path above); non-exact int, str and bytes stay
+     * raw. Keep in lock-step with _normalize_for_key_py. Decimal/Fraction are
+     * intentionally left raw in BOTH (documented residual, A01-D001). */
+    if (PyBool_Check(term) || PyFloat_Check(term) || PyComplex_Check(term)) {
+        return PyTuple_Pack(2, (PyObject *)Py_TYPE(term), term);
+    }
+    if (PyLong_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term)) {
         Py_INCREF(term);
         return term;
     }
@@ -103,6 +112,73 @@ do_normalize(PyObject *term, int depth)
             if (!elem) { Py_DECREF(result); return NULL; }
             PyTuple_SET_ITEM(result, i + 1, elem);
         }
+        return result;
+    }
+
+    /* A04-F005: tuple → ("__tuple__", elem0, ...) */
+    if (PyTuple_Check(term)) {
+        Py_ssize_t n = PyTuple_GET_SIZE(term);
+        PyObject *result = PyTuple_New(n + 1);
+        if (!result) return NULL;
+        Py_INCREF(str___tuple__);
+        PyTuple_SET_ITEM(result, 0, str___tuple__);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *elem = do_normalize(PyTuple_GET_ITEM(term, i), depth + 1);
+            if (!elem) { Py_DECREF(result); return NULL; }
+            PyTuple_SET_ITEM(result, i + 1, elem);
+        }
+        return result;
+    }
+
+    /* A04-F005: dict → ("__dict__", frozenset{(nk, nv), ...}) — order-free so
+     * a rebuilt answer dict keys identically regardless of insertion order. */
+    if (PyDict_Check(term)) {
+        PyObject *pairs = PySet_New(NULL);
+        if (!pairs) return NULL;
+        PyObject *k, *v;
+        Py_ssize_t pos = 0;
+        while (PyDict_Next(term, &pos, &k, &v)) {
+            PyObject *nk = do_normalize(k, depth + 1);
+            if (!nk) { Py_DECREF(pairs); return NULL; }
+            PyObject *nv = do_normalize(v, depth + 1);
+            if (!nv) { Py_DECREF(nk); Py_DECREF(pairs); return NULL; }
+            PyObject *pair = PyTuple_Pack(2, nk, nv);
+            Py_DECREF(nk); Py_DECREF(nv);
+            if (!pair) { Py_DECREF(pairs); return NULL; }
+            int rc = PySet_Add(pairs, pair);
+            Py_DECREF(pair);
+            if (rc < 0) { Py_DECREF(pairs); return NULL; }
+        }
+        PyObject *frozen = PyFrozenSet_New(pairs);
+        Py_DECREF(pairs);
+        if (!frozen) return NULL;
+        PyObject *result = PyTuple_Pack(2, str___dict__, frozen);
+        Py_DECREF(frozen);
+        return result;
+    }
+
+    /* A04-F005: set/frozenset → ("__set__", frozenset{ne, ...}) */
+    if (PyAnySet_Check(term)) {
+        PyObject *elems = PySet_New(NULL);
+        if (!elems) return NULL;
+        PyObject *iter = PyObject_GetIter(term);
+        if (!iter) { Py_DECREF(elems); return NULL; }
+        PyObject *item;
+        while ((item = PyIter_Next(iter))) {
+            PyObject *ne = do_normalize(item, depth + 1);
+            Py_DECREF(item);
+            if (!ne) { Py_DECREF(iter); Py_DECREF(elems); return NULL; }
+            int rc = PySet_Add(elems, ne);
+            Py_DECREF(ne);
+            if (rc < 0) { Py_DECREF(iter); Py_DECREF(elems); return NULL; }
+        }
+        Py_DECREF(iter);
+        if (PyErr_Occurred()) { Py_DECREF(elems); return NULL; }
+        PyObject *frozen = PyFrozenSet_New(elems);
+        Py_DECREF(elems);
+        if (!frozen) return NULL;
+        PyObject *result = PyTuple_Pack(2, str___set__, frozen);
+        Py_DECREF(frozen);
         return result;
     }
 
@@ -285,6 +361,48 @@ do_deref_walk(PyObject *term, int depth)
             if (!elem) { Py_DECREF(result); return NULL; }
             PyTuple_SET_ITEM(result, i, elem);
         }
+        return result;
+    }
+
+    /* A04-F005: plain dict → {deref_walk(k): deref_walk(v)} so a frozen answer
+     * holding a dict does not share live inner Vars that unbind on backtrack. */
+    if (PyDict_Check(term)) {
+        PyObject *result = PyDict_New();
+        if (!result) return NULL;
+        PyObject *k, *v;
+        Py_ssize_t pos = 0;
+        while (PyDict_Next(term, &pos, &k, &v)) {
+            PyObject *wk = do_deref_walk(k, depth + 1);
+            if (!wk) { Py_DECREF(result); return NULL; }
+            PyObject *wv = do_deref_walk(v, depth + 1);
+            if (!wv) { Py_DECREF(wk); Py_DECREF(result); return NULL; }
+            int rc = PyDict_SetItem(result, wk, wv);
+            Py_DECREF(wk); Py_DECREF(wv);
+            if (rc < 0) { Py_DECREF(result); return NULL; }
+        }
+        return result;
+    }
+
+    /* A04-F005: set/frozenset → walk each element, preserving the exact type. */
+    if (PyAnySet_Check(term)) {
+        PyObject *walked = PyList_New(0);
+        if (!walked) return NULL;
+        PyObject *iter = PyObject_GetIter(term);
+        if (!iter) { Py_DECREF(walked); return NULL; }
+        PyObject *item;
+        while ((item = PyIter_Next(iter))) {
+            PyObject *we = do_deref_walk(item, depth + 1);
+            Py_DECREF(item);
+            if (!we) { Py_DECREF(iter); Py_DECREF(walked); return NULL; }
+            int rc = PyList_Append(walked, we);
+            Py_DECREF(we);
+            if (rc < 0) { Py_DECREF(iter); Py_DECREF(walked); return NULL; }
+        }
+        Py_DECREF(iter);
+        if (PyErr_Occurred()) { Py_DECREF(walked); return NULL; }
+        PyObject *result = PyFrozenSet_Check(term)
+            ? PyFrozenSet_New(walked) : PySet_New(walked);
+        Py_DECREF(walked);
         return result;
     }
 
@@ -526,7 +644,11 @@ PyInit__tabling_core(void)
     str_args = PyUnicode_InternFromString("args");
     str___name__ = PyUnicode_InternFromString("__name__");
     str___list__ = PyUnicode_InternFromString("__list__");
-    if (!str_functor || !str_args || !str___name__ || !str___list__) {
+    str___tuple__ = PyUnicode_InternFromString("__tuple__");
+    str___dict__ = PyUnicode_InternFromString("__dict__");
+    str___set__ = PyUnicode_InternFromString("__set__");
+    if (!str_functor || !str_args || !str___name__ || !str___list__ ||
+        !str___tuple__ || !str___dict__ || !str___set__) {
         Py_DECREF(m);
         return NULL;
     }

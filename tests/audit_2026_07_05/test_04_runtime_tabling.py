@@ -683,24 +683,46 @@ class TestF004QueryWfsStub:
 
 
 class TestF005UnhashableAnswers:
-    @pytest.mark.xfail(strict=False, reason="A04-F005: list answer → TypeError "
-                       "unhashable in TableEntry.add_answer")
     def test_list_answer(self, load):
+        # A04-F005: a frozen list answer is canonicalized to a hashable key for
+        # answer_set membership (add_answer no longer crashes on `in`).
         m = load("f005a", TS_LIST_SRC)
         V = Var()
         got = answers(call("ts", V, module=m), V)
         assert got == [([1, 2, 3],)]
 
-    @pytest.mark.xfail(strict=False, reason="A04-F005: dict answer → TypeError")
-    def test_dict_answer(self, load):
+    def test_dict_answer_cache_hit_is_frozen(self, load):
+        # A04-F005: the STORED answer is now correctly frozen — a dict whose
+        # value was body-bound derefs to the ground {"k": 7} on the cache-hit
+        # (second) query. `_deref_walk` (both impls) rebuilds dict values so the
+        # inner Var does not decay on backtracking.
         m = load("f005b", TD_DICT_SRC)
+
+        def one_query():
+            _query_cache.clear()
+            V = Var()
+            return answers(call("td", V, module=m), V)
+
+        one_query()                       # populate the table (leader)
+        assert one_query() == [({"k": 7},)]   # cache hit → frozen answer
+
+    @pytest.mark.xfail(strict=False, reason="A04-F005 residual: the tabling "
+                       "LEADER yields the live body binding, and a ++-built dict "
+                       "holds a raw Var (X bound to 7 but the dict still "
+                       "references X), so the FIRST (leader) query derefs to "
+                       "{'k': <Var>}. The stored/cache answer is correctly "
+                       "frozen (see test_dict_answer_cache_hit_is_frozen); "
+                       "presenting frozen answers from the leader is a separate "
+                       "change — see the residual note in the archived todo.")
+    def test_dict_answer_leader_query(self, load):
+        m = load("f005b2", TD_DICT_SRC)
         V = Var()
         got = answers(call("td", V, module=m), V)
         assert got == [({"k": 7},)]
 
-    @pytest.mark.xfail(strict=False, reason="A04-F005: declared-functor term "
-                       "answer → TypeError (term instances are unhashable)")
     def test_term_instance_answer(self, load):
+        # A04-F005: a declared-functor term instance (unhashable) is
+        # canonicalized to (name, *fields) for answer_set membership.
         m = load("f005c", TW_TERM_SRC)
         V = Var()
         got = answers(call("tw", V, module=m), V)
@@ -721,9 +743,9 @@ class TestF006CrossTypeConflation:
             got.append((repr(v), type(v).__name__))
         assert got == [("1", "int"), ("True", "bool"), ("2.0", "float"), ("2", "int")]
 
-    @pytest.mark.xfail(strict=False, reason="A04-F006: tabled answers deduped "
-                       "by Python == — True/2 suppressed as dups of 1/2.0")
     def test_tabled_matches_untabled_solution_set(self, load):
+        # A04-F006: type-tagged variant/dedup keys keep 1/True/2.0/2 distinct,
+        # so the tabled solution set matches the untabled twin (types preserved).
         m = load("f006", TYPES_SRC)
         V = Var()
         got = []
@@ -732,12 +754,16 @@ class TestF006CrossTypeConflation:
             got.append((repr(v), type(v).__name__))
         assert got == [("1", "int"), ("True", "bool"), ("2.0", "float"), ("2", "int")]
 
-    def test_subgoal_keys_conflate_cross_type(self):
-        # mechanism guard documenting current behaviour (see A01-D001/A02-D002)
+    def test_subgoal_keys_distinguish_cross_type(self):
+        # A04-F006: numeric leaves are type-tagged, so 1/True/1.0 no longer
+        # share a variant key (was a conflation guard pinning the bug).
         from clausal.logic.tabling import make_subgoal_key
         tr = Trail()
-        assert make_subgoal_key([1], tr) == make_subgoal_key([True], tr)
-        assert make_subgoal_key([1], tr) == make_subgoal_key([1.0], tr)
+        assert make_subgoal_key([1], tr) != make_subgoal_key([True], tr)
+        assert make_subgoal_key([1], tr) != make_subgoal_key([1.0], tr)
+        assert make_subgoal_key([True], tr) != make_subgoal_key([1.0], tr)
+        # same-type calls still share a key (variant identity preserved)
+        assert make_subgoal_key([1], tr) == make_subgoal_key([1], tr)
 
 
 # ══ A04-F007: abnormal leader exit poisons the table ══════════════════════════
@@ -799,9 +825,10 @@ class TestF008RootSuspendSpuriousSolution:
 
 
 class TestF009RuntimeErrorSwallowed:
-    @pytest.mark.xfail(strict=False, reason="A04-F009: user RuntimeError from a "
-                       "++ escape is converted to silent failure by call()/solve()")
     def test_call_propagates_user_runtime_error(self, load):
+        # A04-F009: a user RuntimeError from a ++ escape must propagate out of
+        # call()/solve()/once() — the C _drive_until_yield now clears only
+        # PEP-479 StopIteration wrappers, not every RuntimeError.
         m = load("f009", RTE_SRC)
         def boom_rt():
             raise RuntimeError("user error")
