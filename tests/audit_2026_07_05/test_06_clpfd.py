@@ -301,9 +301,6 @@ class TestDoublePrecisionRounding:
 
 
 class TestElement:
-    @pytest.mark.xfail(strict=False, reason="A06-F005: fd_element pre-ensures an unbounded "
-                       "FD domain on the index, then ElementConstraint enumerates it "
-                       "→ ValueError instead of posting [1, n]")
     def test_element_unconstrained_index(self):
         t = Trail()
         i, v = Var(), Var()

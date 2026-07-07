@@ -1065,6 +1065,13 @@ class ElementConstraint(Constraint):
         else:
             return False
 
+        # Defensive: clamp to valid positions so a hand-posted wide domain
+        # (or the default unbounded one) can never reach domain_values as an
+        # infinite range (A06-F005).
+        idx_domain = domain_intersection(idx_domain, domain_from_range(1, n))
+        if not idx_domain:
+            return False
+
         val_domain = _expr_domain(value, trail)
 
         # Step 1: narrow index — keep only positions where List[i] intersects value domain
@@ -2155,8 +2162,24 @@ def fd_element(index, lst, value, trail: Trail):
     if not is_var(index):
         return
 
-    # Index is a variable: post ElementConstraint
-    _ensure_fd(index, trail)
+    # Index is a variable: bound it to the valid positions [1, n] up front.
+    # A bare _ensure_fd would install the default unbounded (-inf, inf)
+    # domain, which defeats ElementConstraint's lazy [1, n] initialisation
+    # (that only fires when the index has NO fd attr) and makes propagate's
+    # domain_values() enumerate an unbounded domain → ValueError (A06-F005).
+    idx_state = get_attr(index, FD_KEY)
+    base_idx_d = domain_from_range(1, n)
+    if idx_state is not None:
+        base_idx_d = domain_intersection(idx_state.domain, base_idx_d)
+    if not _narrow(index, base_idx_d, trail, deque()):
+        return
+    index = deref(index)
+    if not is_var(index):
+        # Narrowing bound the index (singleton [1, 1] when n == 1)
+        item = deref(lst[index - 1])
+        if unify(value, item, trail):
+            yield None
+        return
     if is_var(value):
         _ensure_fd(value, trail)
 
