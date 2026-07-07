@@ -18,7 +18,7 @@ Ab() >> (['b'], ab)
 
 Ab() >> ([])
 
-,(LookAhead(_token), [_token]) >> ([_token])
+(LookAhead(_token), [_token]) >> ([_token])
 
 NotA() >> (not ['a'], [X])
 

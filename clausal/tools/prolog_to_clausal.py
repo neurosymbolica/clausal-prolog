@@ -88,6 +88,7 @@ _INFIX_MAP = {
     "/":    "/",
     "**":   "**",
     ",":    ",",        # conjunction stays
+    "div":  "//",       # SWI floored division → clausal // (also floored)
     "=..":  "=..",      # univ — no direct clausal equivalent, keep as comment
     "/\\":  "&",        # bitwise AND
     "\\/":  "|",        # bitwise OR
@@ -403,7 +404,16 @@ class _PrologToClausal:
     # ── DCG rules ────────────────────────────────────────────────────
 
     def _emit_dcg_rule(self, rule: PDCGRule) -> str:
-        head = self._emit_head(rule.head)
+        # A ','/2 DCG head is a pushback (`Head, [Tokens] --> Body`), which
+        # Clausal expresses as `(Head, [Tokens]) >> (Body)`; translate it
+        # faithfully rather than mangling it into invalid Python (F039).
+        if isinstance(rule.head, PCompound) and rule.head.functor == ",":
+            parts = ", ".join(
+                self._emit_term(p) for p in self._flatten_conjunction(rule.head)
+            )
+            head = f"({parts})"
+        else:
+            head = self._emit_head(rule.head)
         body = self._emit_dcg_body(rule.body)
         return f"{head} >> ({body})"
 
@@ -700,7 +710,7 @@ class _PrologToClausal:
         "xor": 1, "\\/": 2, "/\\": 3,
         "<<": 4, ">>": 4,
         "+": 5, "-": 5,
-        "*": 6, "/": 6,
+        "*": 6, "/": 6, "div": 6,
         "**": 8,
     }
 

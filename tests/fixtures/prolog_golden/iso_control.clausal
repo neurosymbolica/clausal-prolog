@@ -30,9 +30,9 @@ SafeMax(X, Y, Y) <- (Y > X)
 
 Test('conjunction binds two vars') <- (X is 1, Y is 2, X == 1, Y == 2)
 
-Test('conjunction fails if first fails') <- (not a is b , X is 1)
+Test('conjunction fails if first fails') <- (not (a is b, X is 1))
 
-Test('conjunction fails if second fails') <- (not X is 1 , a is b)
+Test('conjunction fails if second fails') <- (not (X is 1, a is b))
 
 Test('triple conjunction') <- (X is 1, Y is 2, Z is 3, X + Y + Z == 6)
 
@@ -52,7 +52,7 @@ Test('not: member present fails') <- (not not b in [a, b, c])
 
 Test('double negation: not not (1=1)') <- (not not 1 is 1)
 
-Test('and + or: (X=1 and Y=a) or (X=2 and Y=b)') <- ((X is 1 , Y is a or X is 2 , Y is b))
+Test('and + or: (X=1 and Y=a) or (X=2 and Y=b)') <- (((X is 1, Y is a) or (X is 2, Y is b)))
 
 Test('not + member: d not in list') <- (not d in [a, b, c])
 
@@ -74,11 +74,11 @@ Test('true succeeds (1 == 1)') <- (1 == 1)
 
 Test('fail fails: not False') <- (not False)
 
-Test('conjunction backtracks: 2x2 = 4 solutions') <- (findall([X, Y], member(X, [1, 2]) , member(Y, [a, b]), L), length(L, 4), [1, a] in L, [2, b] in L)
+Test('conjunction backtracks: 2x2 = 4 solutions') <- (findall([X, Y], (member(X, [1, 2]), member(Y, [a, b])), L), length(L, 4), [1, a] in L, [2, b] in L)
 
 Test('disjunction yields 2 solutions') <- (findall(X, X is 1 or X is 2, L), L == [1, 2])
 
-Test('disjunction with conjunction: 2 solutions') <- (findall([X, Y], X is 1 , Y is a or X is 2 , Y is b, L), L == [[1, a], [2, b]])
+Test('disjunction with conjunction: 2 solutions') <- (findall([X, Y], (X is 1, Y is a) or (X is 2, Y is b), L), L == [[1, a], [2, b]])
 
 Test('naf does not bind: not(X is a) fails') <- (not not X is a)
 
