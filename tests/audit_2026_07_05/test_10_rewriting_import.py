@@ -361,9 +361,6 @@ def test_F008_guard_te_var_pattern_one_to_many(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F009: TermTransformer emits "
-                   "CompareChain for '0 < X < 10' but terms_to_goalop raises "
-                   "NotImplementedError — produced-but-unconsumable node")
 def test_F009_compare_chain_goal(tmp_path):
     m = _load(tmp_path, """
         mid(X) <- (0 < X < 10)
