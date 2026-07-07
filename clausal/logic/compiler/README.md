@@ -336,15 +336,29 @@ with a tiny per-hop constant factor. This is qualitatively different
 from a ``yield from`` chain, which incurs both Python frame overhead
 and linear resume cost at every level.
 
-**What does NOT happen today:** continuation-level tail-call optimisation,
-where a predicate whose body has no work after a sub-call could pass
-*its own parent* as the child's parent — letting the child yield
-directly to the grandparent and skip this level entirely. That would
-collapse pass-through frames (O(1) per solution regardless of depth).
-The compiler doesn't do this yet. TRO (see §6) handles a narrower case
-— self-recursive tail calls within the same predicate — but not general
-pass-through elision. Deferred as a future optimisation; see
-`todo/continuation_tco.md`.
+**Continuation-level tail-call optimisation (implemented):** when a
+predicate's body has no work after a sub-call, the compiler passes *its own
+parent* as the child's parent — letting the child yield directly to the
+grandparent and skip this level entirely, collapsing pass-through frames to
+O(1) per solution regardless of depth. This lives in
+`optimisations/continuation_tco.py` (an analyse/apply pass run from
+`_compile_body_impl` behind the `continuation_tco` flag) plus
+`TrampolineStrategy.emit_sub_call` (`strategy.py`), which, when a call is in
+`tail_position`, wires the child to yield solutions on the caller's own
+`_proceed` continuation. TRO (see §6) still handles the narrower
+self-recursive tail-call case within a single predicate; continuation-TCO
+covers the general pass-through elision across predicates.
+
+Two safety gates keep it correct:
+
+1. **Deferred-head-pattern skip** (`_head_has_deferred_pattern`,
+   `goal_shallow.py`): a predicate whose head defers a pattern match into the
+   body still has work pending after the sub-call, so tail-position rewriting
+   is disabled for it.
+2. **Emit-time bare-leaf check** (`_k_stmts_is_bare_leaf_yield`,
+   `strategy.py`): the continuation is only elided when the queued
+   `k_stmts` is genuinely a bare leaf yield — nothing runs after the child —
+   so no post-call work is dropped.
 
 Greenlets are **not** used in the main search path. A
 ``continuation_search.py`` module exists but isn't wired into the
@@ -693,9 +707,6 @@ private re-exports were removed in slice H.
 
 Open design questions tracked in `todo/`:
 
-- `todo/continuation_tco.md` — continuation-level TCO so a solution
-  yield can skip pass-through wrapper frames entirely (referenced
-  from §5).
 - `todo/jit_indexing.md` — profile and tune indexing thresholds,
   add a user directive for explicit indexing control, and eventually
   a JIT recompilation path for hot predicates.
