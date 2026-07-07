@@ -608,10 +608,6 @@ class TestCpsatTranslationFidelity:
         sols = [deref(x) for _ in O.label_or([x], t)]
         assert sols == [-7 % 3]  # 2
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F016: or_minimize ignores unify failures on "
-                              "rev_map vars — yields solution inconsistent with "
-                              "existing bindings")
     def test_or_minimize_unify_failure_not_ignored(self):
         from clausal.logic import clportools as O
         t = Trail()

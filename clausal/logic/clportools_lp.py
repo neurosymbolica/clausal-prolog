@@ -487,13 +487,19 @@ def lp_minimize(expr: Any, val: Any, trail: Trail):
     if status in (_pywraplp.Solver.OPTIMAL, _pywraplp.Solver.FEASIBLE):
         obj_val = solver.Objective().Value() + const
         mark = trail.mark()
+        # Honour unify results: a registered var already bound to a conflicting
+        # value (no LP attr hook, A08-F013) must not yield an inconsistent
+        # "optimal" solution (A08-F016).
+        ok = True
         for idx, clausal_var in state.rev_map.items():
             value = lp_vars[idx].solution_value()
             kind = state.var_entries[idx][3]
             if kind == 'integer':
                 value = int(round(value))
-            unify(clausal_var, value, trail)
-        if unify(val, obj_val, trail):
+            if not unify(clausal_var, value, trail):
+                ok = False
+                break
+        if ok and unify(val, obj_val, trail):
             yield None
         trail.undo(mark)
 
@@ -511,12 +517,18 @@ def lp_maximize(expr: Any, val: Any, trail: Trail):
     if status in (_pywraplp.Solver.OPTIMAL, _pywraplp.Solver.FEASIBLE):
         obj_val = solver.Objective().Value() + const
         mark = trail.mark()
+        # Honour unify results: a registered var already bound to a conflicting
+        # value (no LP attr hook, A08-F013) must not yield an inconsistent
+        # "optimal" solution (A08-F016).
+        ok = True
         for idx, clausal_var in state.rev_map.items():
             value = lp_vars[idx].solution_value()
             kind = state.var_entries[idx][3]
             if kind == 'integer':
                 value = int(round(value))
-            unify(clausal_var, value, trail)
-        if unify(val, obj_val, trail):
+            if not unify(clausal_var, value, trail):
+                ok = False
+                break
+        if ok and unify(val, obj_val, trail):
             yield None
         trail.undo(mark)
