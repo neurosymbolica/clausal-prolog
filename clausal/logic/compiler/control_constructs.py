@@ -591,7 +591,10 @@ def _compile_find_all_core(
 
     append_call = ast.Expr(value=_call(
         _attr(results_var, "append"),
-        _call(_name("$deref_walk"), template_expr),
+        # A03-F006: collect a per-solution copy with fresh unbound vars (ISO
+        # copy_term semantics) so rows don't share the caller's Var objects —
+        # a later binding must not rewrite already-collected rows.
+        _call(_name("$findall_copy"), template_expr),
     ))
     collect_loop = ast.For(
         target=_name("_", ast.Store()),

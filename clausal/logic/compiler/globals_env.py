@@ -70,6 +70,25 @@ def _set_of_sort_dedup(items: list) -> list:
     return _set_of_dedup(ordered)
 
 
+def _findall_copy_row(template):
+    """Collect one findall/bagof/setof solution as a copy with FRESH unbound
+    vars (ISO copy_term semantics, A03-F006).
+
+    ``_deref_walk`` resolves bindings but returns unbound vars *as-is*, so
+    every collected row would share the caller's Var objects — a later
+    binding then retroactively rewrites already-collected rows. Freshen the
+    unbound vars per row via ``copy_term``. Ground rows skip the copy (fast
+    path — ``_is_ground`` short-circuits on the first Var).
+    """
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+    from clausal.logic.builtins._helpers import _is_ground  # noqa: PLC0415
+    walked = _deref_walk(template)
+    if _is_ground(walked):
+        return walked
+    from clausal.logic.builtins.inspection import _copy_term  # noqa: PLC0415
+    return _copy_term(walked, {})
+
+
 # ── Predicate-as-class dispatch adapter ───────────────────────────────────────
 #
 # Phase 2 of the predicate-as-class refactor changes compiled dispatch calls

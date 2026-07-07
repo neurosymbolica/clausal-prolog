@@ -499,7 +499,6 @@ class TestF005F006FindallFamily:
         [(got,)] = sols(mod, mod.so(L), L)
         assert sorted(got) == [1, 2, 3] and len(got) == 3
 
-    @pytest.mark.xfail(strict=False, reason="A03-F006: findall shares free template vars; later binding mutates results")
     def test_findall_free_vars_are_fresh_per_solution(self, mod):
         L, Y = Var(), Var()
         [(got, _y)] = sols(mod, mod.fat2(L, Y), L, Y)
