@@ -10,6 +10,7 @@ from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
 from clausal.logic.builtins._helpers import _is_ground
+from clausal.logic.runtime._seg_helpers import normalize_seg_input
 
 
 @_builtin("var", 1)
@@ -131,12 +132,15 @@ def _atomic__1(x, trail, k):
     zero-arity ``PredicateMeta`` classes. Rejects ``Var``, ``Compound``,
     ``KWTerm``, term-instances, ``list``, ``SegList``, ``SegString``.
     """
-    x_val = deref(x)
+    # F029 (A09): walk a ground Seg* to its concrete form first — a ground
+    # SegString walks to a str (atomic) so is_str(X) no longer contradicts
+    # atomic(X). A non-ground Seg* stays a Seg* and is rejected below.
+    x_val = normalize_seg_input(deref(x))
     if is_var(x_val):
         return
     # Reject compound shapes explicitly so we don't accidentally accept
     # them via the "anything else" fallthrough.
-    if isinstance(x_val, (Compound, KWTerm, list, SegList, SegString)):
+    if isinstance(x_val, (Compound, KWTerm, list, SegList, SegString, SegBytes)):
         return
     if is_term_instance(x_val):
         return
@@ -258,8 +262,12 @@ def _is_chars__1(x, trail, k):
 
     A ``bytes`` is a *code* sequence, not a *char* sequence, so it is rejected
     here — use ``is_codes/1``.
+
+    F029 (A09): a ground ``SegString`` / ``SegList`` walks to a str / list
+    and succeeds (coherent with ``is_str`` / ``is_list``); a ground
+    ``SegBytes`` walks to bytes and is rejected (codes model).
     """
-    if isinstance(deref(x), (list, str)):
+    if isinstance(normalize_seg_input(deref(x)), (list, str)):
         yield None
 
 

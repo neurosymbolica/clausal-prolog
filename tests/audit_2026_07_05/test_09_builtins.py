@@ -592,6 +592,25 @@ def test_F019_regression_same_length_str(fix):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# A09-F029 — type-check predicates disagree on ground Seg* values
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_F029_ground_segstring_typecheck_coherent(fix):
+    """A09-F029: for a ground SegString the type-check matrix must cohere —
+    is_str = string = is_list = atomic = is_chars = True, compound = False.
+    Before the fix, atomic and is_chars rejected it while is_str/is_list
+    accepted it (is_str(X) implying not-atomic(X) is incoherent)."""
+    _, m = fix
+    seg = SegString(["ab"])
+    assert _first(m, "is_str", seg)
+    assert _first(m, "string", seg)
+    assert _first(m, "is_list", seg)
+    assert _first(m, "atomic", seg)
+    assert _first(m, "is_chars", seg)
+    assert not _first(m, "compound", seg)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # A09-F020 / A09-F021 — C-level defence (subprocess probes)
 # ═══════════════════════════════════════════════════════════════════════════
 
