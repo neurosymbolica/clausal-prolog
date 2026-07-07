@@ -999,6 +999,13 @@ ne_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
     PyObject *rhs = call_deref(self->rhs);
     if (!rhs) { Py_DECREF(lhs); return -1; }
 
+    /* Aliased operands (e.g. unify merged the two vars after posting):
+     * X != X can never hold — fail (A06-F010). */
+    if (lhs == rhs) {
+        Py_DECREF(lhs); Py_DECREF(rhs);
+        return 0;
+    }
+
     int l_isvar = call_is_var(lhs);
     if (l_isvar < 0) goto error;
     int r_isvar = call_is_var(rhs);

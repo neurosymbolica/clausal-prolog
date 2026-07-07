@@ -465,6 +465,9 @@ def _ne_propagate_bignum(lhs, rhs, trail, queue) -> bool:
     """Equivalent of NeConstraint.propagate with bignum-safe operations."""
     lhs = deref(lhs)
     rhs = deref(rhs)
+    # Aliased operands: X != X can never hold — fail (A06-F010).
+    if lhs is rhs:
+        return False
     if not is_var(lhs) and not is_var(rhs):
         return lhs != rhs
     if not is_var(lhs) and isinstance(lhs, int) and is_var(rhs):
@@ -728,6 +731,10 @@ class NeConstraint(Constraint):
     def propagate(self, trail: Trail, queue: deque) -> bool:
         lhs = deref(self.lhs)
         rhs = deref(self.rhs)
+        # Aliased operands (e.g. unify merged the two vars after posting):
+        # X != X can never hold — fail (A06-F010).
+        if lhs is rhs:
+            return False
         # Only propagate when one side is ground
         if not is_var(lhs) and not is_var(rhs):
             return lhs != rhs

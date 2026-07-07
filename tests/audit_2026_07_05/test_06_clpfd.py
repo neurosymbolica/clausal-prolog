@@ -456,8 +456,6 @@ class TestBooleanHandling:
 
 
 class TestNeReflexivity:
-    @pytest.mark.xfail(strict=False, reason="A06-F010: fd_ne(X, X) returns True; SWI "
-                       "#\\= fails immediately (constraint can never be satisfied)")
     def test_ne_same_var_fails_at_post(self):
         t = Trail()
         x = Var()
