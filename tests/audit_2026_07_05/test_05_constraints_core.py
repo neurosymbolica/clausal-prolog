@@ -112,7 +112,6 @@ def answers(gen, *vars_):
 
 class TestF001DifContainerBlindSpots:
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001: var inside DictTerm not collected — constraint dropped")
     def test_dif_dictterm_enforced(self):
         t = Trail()
         a = Var()
@@ -120,7 +119,6 @@ class TestF001DifContainerBlindSpots:
         # making the two terms equal must now fail
         assert unify(a, 1, t) is False
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001: var inside SegList not collected — constraint dropped")
     def test_dif_seglist_enforced(self):
         t = Trail()
         s = Var()
@@ -128,7 +126,6 @@ class TestF001DifContainerBlindSpots:
         assert dif(sl, [1, 2], t) is True
         assert unify(s, [2], t) is False
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001: var inside SegString not collected — constraint dropped")
     def test_dif_segstring_enforced(self):
         t = Trail()
         s = Var()
@@ -136,14 +133,12 @@ class TestF001DifContainerBlindSpots:
         assert dif(ss, "ab", t) is True
         assert unify(s, "b", t) is False
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001: var inside Quantity value not collected — constraint dropped")
     def test_dif_quantity_enforced(self):
         t = Trail()
         q = Var()
         assert dif(Quantity(q, {"m": 1}), Quantity(5, {"m": 1}), t) is True
         assert unify(q, 5, t) is False
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001: collector blind to DictTerm/Seg*/Quantity")
     def test_collect_free_vars_containers(self):
         x = Var()
         assert _collect_free_vars(DictTerm({"k": x})) == [x]
@@ -181,7 +176,6 @@ class TestF001DifContainerBlindSpots:
         assert dif(SetTerm([z]), SetTerm([2]), t2) is True
         assert get_attr(z, DIF_KEY) is None  # nothing pending — consistent
 
-    @pytest.mark.xfail(strict=False, reason="A05-F001 at language level: `D is not {...}` unenforced")
     def test_language_level_dict_is_not(self, load):
         m = load("f001dict", """
 dictpred(D, V) <- (

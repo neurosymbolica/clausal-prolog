@@ -24,7 +24,17 @@ from clausal.logic.variables import (
     Trail,
 )
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
-from clausal.terms import Compound, SegList, SegString, DictTerm, SetTerm
+from clausal.terms import (
+    Compound,
+    SegList,
+    SegString,
+    SegBytes,
+    DictTerm,
+    SetTerm,
+    Quantity,
+    ConcreteSeg,
+    VarSeg,
+)
 
 
 DIF_KEY = "dif"
@@ -172,6 +182,32 @@ def _collect_free_vars(term: Any) -> list:
         if isinstance(t, Compound):
             for arg in t.args:
                 _walk(arg)
+            return
+        # Containers the unifier can bind through via their __unify__ hook.
+        # Kept in lockstep with what unify() descends into: a var reachable
+        # only through one of these must still receive the dif constraint,
+        # else dif silently drops it (A05-F001).  SetTerm is intentionally
+        # absent — the unifier refuses var-element set unification, so a var
+        # inside a SetTerm cannot become equal and needs no constraint.
+        if isinstance(t, DictTerm):
+            for elem in t.data.values():
+                _walk(elem)
+            return
+        if isinstance(t, dict):
+            for elem in t.values():
+                _walk(elem)
+            return
+        if isinstance(t, (SegList, SegString, SegBytes)):
+            for seg in t.segments:
+                if isinstance(seg, VarSeg):
+                    _walk(seg.var)
+                elif isinstance(seg, ConcreteSeg):
+                    for elem in seg.elements:
+                        _walk(elem)
+                # plain str/bytes segments are ground — nothing to collect
+            return
+        if isinstance(t, Quantity):
+            _walk(t.value)
             return
         if is_term_instance(t):
             for fname in term_field_names(t):
