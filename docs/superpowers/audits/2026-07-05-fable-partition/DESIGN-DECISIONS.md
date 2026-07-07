@@ -73,6 +73,11 @@ sessions/instances: treat these as settled — do not re-ask.
   `X → X.value` in every context, breaking `MAX = 5` and `return _tmp`). A
   logic variable's value is reached inside embedded Python via the `++`
   escape (PyThunk machinery), not by unboxing a bare Name. Gates A10-F002.
+- **A10-D002 (stdlib shadowing) → (a) warn + defer + docs.** A `.clausal`/`.pl`
+  file named after a `sys.stdlib_module_names` module is almost always an
+  accident. The extension finder emits a `ClausalLintWarning` and defers to
+  the standard library (returns None → PathFinder loads the real module)
+  rather than silently shadowing it. import.md corrected. Gates A10-F010.
 
 | ID | Status | Title | Decision + rationale | Raised by | Affects |
 |----|--------|-------|----------------------|-----------|---------|

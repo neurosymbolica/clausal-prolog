@@ -384,9 +384,6 @@ print("PYFILE" if (wave.__file__ or "").endswith(".py") else wave.__file__)
 
 
 @pytest.mark.timeout(60)
-@pytest.mark.xfail(strict=False, reason="A10-F010: PredicateFinder/PrologFinder "
-                   "run before PathFinder, so wave.clausal on sys.path shadows "
-                   "the stdlib module — import.md claims the opposite")
 def test_F010_stdlib_not_shadowed_by_clausal_file(tmp_path):
     clone = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     shadow = tmp_path / "shadow"

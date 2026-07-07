@@ -488,6 +488,22 @@ class _ExtensionFinder(MetaPathFinder):
         for dir_entry in search_dirs:
             candidate = os.path.join(dir_entry, tail + self._extension)
             if os.path.isfile(candidate):
+                # A10-F010 / A10-D002(a): a .clausal/.pl file named after a
+                # standard-library module is almost always an accident. These
+                # finders run before PathFinder, so shadowing would be silent —
+                # defer to the stdlib (return None) and warn loudly instead.
+                if tail in sys.stdlib_module_names:
+                    from clausal.templating.term_rewriting import (
+                        ClausalLintWarning,
+                    )
+                    warnings.warn(
+                        f"{candidate!r} is named after the standard-library "
+                        f"module {tail!r}; the stdlib module is used instead. "
+                        f"Rename the file to avoid shadowing it.",
+                        ClausalLintWarning,
+                        stacklevel=2,
+                    )
+                    return None
                 loader = self._loader_cls(fullname, candidate)
                 return ModuleSpec(fullname, loader, origin=candidate)
 
