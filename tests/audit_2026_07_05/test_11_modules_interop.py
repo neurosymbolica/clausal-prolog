@@ -154,9 +154,8 @@ def test_F006_mixed_groups_expose_positional_values(tmp_path):
     assert g.get("A") == "1" and "2" in g.values()
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F007: dynamic patterns silently "
-                   "skip named-group auto-binding (undocumented)")
 def test_F007_dynamic_pattern_autobind_or_documented(tmp_path):
+    # A11-F007 (fixed): dynamic patterns auto-bind present named groups.
     m = _load(tmp_path, '''
         -import_from(regex, [match])
         Dyn(P, S, YEAR) <- match(P, S)

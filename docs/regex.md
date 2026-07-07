@@ -302,7 +302,20 @@ Test("dynamic prefix") <- MatchPrefix("hello", "hello world")
 Test("dynamic prefix fail") <- (not MatchPrefix("bye", "hello world"))
 ```
 
-Dynamic patterns are compiled at runtime (no precompilation).
+Dynamic patterns are compiled at runtime (no precompilation). Named-group
+auto-binding still applies: a group whose name (ALLCAPS or leading-underscore)
+matches an in-scope clause variable is bound at runtime when it participates in
+the match. Because the group names are unknown until the goal runs, a variable
+is only bound when its matching group is actually present — otherwise it is
+left untouched:
+
+```clausal
+-import_from(regex, [match])
+
+FindYear(PAT, S, YEAR) <- match(PAT, S)
+
+Test("dynamic autobind") <- FindYear(r"(?P<YEAR>\d+)", "2026", "2026")
+```
 
 ---
 

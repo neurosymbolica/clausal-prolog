@@ -269,6 +269,10 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
 
     pattern_str = _extract_static_pattern(goal)
     if pattern_str is None:
+        # Dynamic pattern (variable or f-string): group names are unknown at
+        # compile time, so wire in a runtime auto-binding fallback (F007).
+        if nargs == 2:
+            return _dynamic_autobind_chain(goal, ctx)
         return goal
 
     try:
@@ -322,6 +326,50 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
 
         unify_goal = Unify(left=target_var, right=thunk)
         chain = And(left=chain, right=unify_goal)
+
+    return chain
+
+
+def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
+    """Runtime named-group auto-binding for a dynamic ``match/2``/``search/2``.
+
+    The pattern is not a literal, so its group names are unknown until the goal
+    runs. Rewrite ``match(P, S)`` to ``match(P, S, G)`` and append one Unify per
+    clause variable: a thunk scans the runtime groups dict for a key whose
+    lowered/underscore-stripped name equals the variable's field name. When a
+    matching, non-None group value is present it binds; otherwise the thunk
+    returns the variable itself so the Unify is a harmless no-op. The goal's own
+    top-level argument variables (pattern, subject) are excluded so a group can
+    never clobber them.
+    """
+    from clausal.terms import PyThunk
+
+    groups_var = Var()
+    match_goal = Call(
+        func=goal.func,
+        args=[goal.args[0], goal.args[1], groups_var],
+        kwargs=[],
+    )
+
+    arg_vars = {id(deref(a)) for a in goal.args if is_var(deref(a))}
+
+    def _bind_if_present(g, _field, _self):
+        if isinstance(g, dict):
+            for key, val in g.items():
+                if isinstance(key, str) and key.lstrip("_").lower() == _field \
+                        and val is not None:
+                    return val
+        return _self
+
+    chain = match_goal
+    for field_name, target_var in ctx._clause_vars.items():
+        if id(deref(target_var)) in arg_vars:
+            continue
+        thunk = PyThunk(
+            lambda g, _f=field_name, _v=target_var: _bind_if_present(g, _f, _v),
+            (groups_var,),
+        )
+        chain = And(left=chain, right=Unify(left=target_var, right=thunk))
 
     return chain
 
