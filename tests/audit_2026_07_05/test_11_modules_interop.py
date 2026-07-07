@@ -111,9 +111,8 @@ def test_F003_user_defined_match_not_hijacked(tmp_path):
     assert _values(m.Caller(X), X, m) == ["hello"]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F004: re.PatternError bypasses "
-                   "catch/3 catch-all (++-thunk Python errors ARE caught)")
 def test_F004_invalid_pattern_catchable(tmp_path):
+    # A11-F004 (fixed): module-predicate errors are catchable via catch/3.
     m = _load(tmp_path, '''
         -private([caught])
         -import_from(regex, [match])
@@ -124,17 +123,15 @@ def test_F004_invalid_pattern_catchable(tmp_path):
     assert [str(v) for v in out] == ["caught"]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F004: re.replace leaks raw "
-                   "TypeError on unbound replacement arg")
 def test_F004_replace_unbound_repl_fails_cleanly():
+    # A11-F004 (fixed): unbound replacement fails cleanly.
     from clausal.modules.py.re import _replace_4
     sols = list(_replace_4("x", Var(), "x", Var(), Trail(), None))
     assert sols == []
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F005: unregistered arity fails "
-                   "silently on multi-arity py.* predicates")
 def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
+    # A11-F005 (fixed): unregistered arity raises a catchable existence error.
     m = _load(tmp_path, '''
         -import_from(regex, [match])
         Bad(S) <- match(r"x", S, G, H)

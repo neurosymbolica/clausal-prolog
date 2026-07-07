@@ -165,7 +165,9 @@ def _search_3(pat, string, groups, trail, k):
 def _replace_4(pat, repl, string, result, trail, k):
     """replace/4: re.sub(pattern, replacement, string) → result."""
     pat = deref(pat)
-    repl = deref(repl)
+    repl = _coerce_subject(repl)
+    if repl is _NO_SUBJECT:
+        return  # unbound / non-string replacement — fail cleanly (F004)
     string = _coerce_subject(string)
     if string is _NO_SUBJECT:
         return

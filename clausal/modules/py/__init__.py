@@ -71,22 +71,53 @@ class ModulePredicate:
         self._dispatch_fns[arity] = fn
 
     def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
+        # Always route through the arity-checking dispatcher so wrong-arity is
+        # a consistent, catchable error (F005) and stdlib exceptions raised by
+        # the implementation are converted to catchable terms (F004).
+        return _catchable_dispatch(self._name, self._multi_dispatch)
 
     def _multi_dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         arity = len(args) - 1  # exclude trail
         fn = self._dispatch_fns.get(arity)
         if fn is None:
-            yield (_fail, DONE)
-            return
+            # Unregistered arity is an existence error, not a silent failure —
+            # consistent whether the predicate has one arity or several (F005).
+            from clausal.logic.exceptions import (
+                LogicException, existence_error,
+            )
+            from clausal.terms import Compound
+            indicator = Compound("/", (self._name, arity))
+            raise LogicException(
+                existence_error("procedure", indicator, self._name)
+            )
         yield from fn(this_generator, _proceed, _fail, _catcher, *args)
 
     def __repr__(self) -> str:
         arities = sorted(self._dispatch_fns)
         prefix = f"{self._module}." if self._module else ""
         return f"{prefix}{self._name}/{arities}"
+
+
+def _catchable_dispatch(name, dispatch_fn):
+    """Wrap a module-predicate dispatch so stdlib exceptions are catchable.
+
+    Module predicates are driven by the top-level trampoline, so a raw Python
+    exception raised inside the implementation propagates *outside* any
+    enclosing catch/3 Python try-block and escapes solve() uncaught — unlike a
+    ``++`` thunk, whose errors the compiler converts. Only ``LogicException``
+    is routed through the catcher chain. Convert every other exception to a
+    ``LogicException`` carrying ``python_error_term(exc)`` so catch/3 catches
+    module-predicate errors the same way it catches ``throw/1`` (F004).
+    """
+    def wrapped(this_generator, _proceed, _fail, _catcher, *args):
+        from clausal.logic.exceptions import LogicException, python_error_term
+        try:
+            yield from dispatch_fn(this_generator, _proceed, _fail, _catcher, *args)
+        except LogicException:
+            raise
+        except Exception as exc:  # noqa: BLE001 — deliberate boundary conversion
+            raise LogicException(python_error_term(exc)) from exc
+    return wrapped
 
 
 def simple_to_trampoline(simple_fn):
