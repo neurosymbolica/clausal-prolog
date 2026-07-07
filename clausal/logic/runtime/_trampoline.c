@@ -644,6 +644,29 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
  *   - StopIteration from send()                        → returns Py_None
  *   - Error (LogicException unwound or propagated)     → returns NULL
  */
+
+/* A04-F009: distinguish a PEP-479 "generator raised StopIteration" wrapper
+ * (RuntimeError whose __cause__ is a StopIteration — a converted exhaustion,
+ * safe to treat as end-of-search) from a genuine RuntimeError raised by user
+ * code (e.g. a ``++`` escape) or by the StepGen protocol (a compiler bug),
+ * which MUST propagate rather than be silently reported as zero solutions.
+ * Precondition: the active exception matches RuntimeError. The current
+ * exception is left unchanged. Returns 1 for a PEP-479 wrapper, else 0. */
+static int
+is_pep479_stopiteration_wrapper(void)
+{
+    PyObject *exc = PyErr_GetRaisedException();  /* new ref; clears current */
+    if (!exc)
+        return 0;
+    PyObject *cause = PyException_GetCause(exc);  /* new ref or NULL */
+    int is_wrapper = (cause != NULL &&
+                      PyObject_TypeCheck(cause,
+                                         (PyTypeObject *)PyExc_StopIteration));
+    Py_XDECREF(cause);
+    PyErr_SetRaisedException(exc);  /* restore (consumes exc ref) */
+    return is_wrapper;
+}
+
 static PyObject *
 drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
 {
@@ -662,8 +685,11 @@ drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
     /* step = sg.send(None) */
     PyObject *step = StepGen_send(StepGen_CAST(sg_obj), Py_None);
     if (!step) {
+        /* A04-F009: exhaustion only — a real user/protocol RuntimeError
+         * propagates instead of becoming a silent zero-solution result. */
         if (PyErr_ExceptionMatches(PyExc_StopIteration) ||
-            PyErr_ExceptionMatches(PyExc_RuntimeError)) {
+            (PyErr_ExceptionMatches(PyExc_RuntimeError) &&
+             is_pep479_stopiteration_wrapper())) {
             PyErr_Clear();
             Py_RETURN_NONE;
         }
@@ -715,9 +741,11 @@ drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
         Py_DECREF(value);
 
         if (!step) {
-            /* StopIteration or RuntimeError from exhausted generator */
+            /* StopIteration (clean exhaustion) or a PEP-479 wrapper only;
+             * A04-F009: a genuine RuntimeError falls through to propagate. */
             if (PyErr_ExceptionMatches(PyExc_StopIteration) ||
-                PyErr_ExceptionMatches(PyExc_RuntimeError)) {
+                (PyErr_ExceptionMatches(PyExc_RuntimeError) &&
+                 is_pep479_stopiteration_wrapper())) {
                 PyErr_Clear();
                 Py_DECREF(gen);
                 Py_RETURN_NONE;

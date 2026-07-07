@@ -235,6 +235,13 @@ except ImportError:
             gen, value = sg.send(None)
         except StopIteration:
             return None
+        except RuntimeError as exc:
+            # A04-F009 (C≡Py parity): a PEP-479 "generator raised
+            # StopIteration" wrapper is a converted exhaustion; a genuine
+            # RuntimeError (user ++ escape, protocol bug) must propagate.
+            if isinstance(exc.__cause__, StopIteration):
+                return None
+            raise
         while True:
             if gen is None:
                 if value is DONE:
@@ -247,6 +254,11 @@ except ImportError:
                     gen, value = gen.send(value)
             except StopIteration:
                 return None
+            except RuntimeError as exc:
+                # A04-F009: mirror the narrowed C catch (PEP-479 → exhaustion).
+                if isinstance(exc.__cause__, StopIteration):
+                    return None
+                raise
             except LogicException as exc:
                 target = gen.catcher if hasattr(gen, 'catcher') else None
                 while target is not None:
