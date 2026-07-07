@@ -226,19 +226,23 @@ def test_F004_regression_maplist_first_solution(fix):
 # A09-F005 — assertz of a rule poisons the predicate
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F005: asserted rule clause is "
-                   "not lowered — every later query raises NotImplementedError")
 def test_F005_assertz_rule(fix):
+    """A09-F005 (decision b): assertz of a rule is rejected with a typed
+    LogicException at assert time, and the target predicate is NOT poisoned —
+    its pre-existing facts stay queryable."""
     _, m = fix
-    assert _first(m, "azrule", Var())
+    # azrule(OK) <- (assertz(seen2(Z) <- q3(Z)), OK is 1) — the assertz of a
+    # rule must raise, propagating out of azrule.
+    with pytest.raises(LogicException):
+        _first(m, "azrule", Var())
     V = Var()
     got = set()
     try:
         got = set(_collect(m, V, "seen2", V))
     except NotImplementedError:
         pytest.fail("predicate poisoned: NotImplementedError on later query")
-    # rule seen2(Z) <- q3(Z) should derive 7 alongside the base fact
-    assert 7 in got and "dummy" in got
+    # The base fact survives; the rejected rule never derived 7.
+    assert "dummy" in got and 7 not in got
 
 
 # ═══════════════════════════════════════════════════════════════════════════

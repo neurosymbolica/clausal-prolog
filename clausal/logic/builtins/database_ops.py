@@ -50,14 +50,22 @@ def _normalize_fact_clause(term: Any):
 def _build_clause(term_val: Any) -> "Any":
     """Build a Clause from a runtime term passed to assertz/asserta.
 
-    Handles Predicate nodes (rules) and plain terms (facts).
-    Ground Compound facts are normalized to Var+Is form.
+    Only plain terms (facts) are accepted; ground Compound facts are
+    normalized to Var+Is form.
+
+    A09-F005 (decision b): a Predicate node (a rule, ``h(X) <- b(X)``) is
+    rejected with a typed ``permission_error`` — its body cannot be lowered
+    by ``compile_predicate_trampoline``, and previously the clause was stored
+    *before* that failure surfaced, poisoning every later query of the
+    predicate. Rejecting here, before ``db.assertz``, keeps the existing
+    clauses queryable. See docs/database_ops.md (A09-F026).
     """
-    from clausal.logic.database import Clause, _flatten_body  # avoid top-level cycle
     from clausal.terms import Predicate as _Predicate
 
     if isinstance(term_val, _Predicate):
-        return Clause(head=term_val.head, body=_flatten_body(term_val.body))
+        from clausal.logic.exceptions import LogicException, permission_error
+        raise LogicException(
+            permission_error("assert", "rule", term_val.head, "assert/1"))
     return _normalize_fact_clause(term_val)
 
 
