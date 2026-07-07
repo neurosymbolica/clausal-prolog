@@ -514,9 +514,6 @@ def test_F013_clausal_call_is_query_api():
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F014: _detect_magic_args indexes "
-                   "arguments.args only; kwonly __args__ escapes as a raw "
-                   "StopIteration instead of TemplateCompileError")
 def test_F014_magic_args_kwonly_clean_error():
     from clausal.templating.compiler import compile_template_func
     from clausal.templating.parser import TemplateCompileError
