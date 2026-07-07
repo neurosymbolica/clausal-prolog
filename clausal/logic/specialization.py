@@ -1925,61 +1925,84 @@ def _unfold_body_goal(
     # Build new body: replace the recursive call at goal_idx.
     goal_field_idx = _get_goal_field_idx(pattern, pred_cls)
 
-    # Determine if we need to chain pre/post-match goals for the inlined step.
-    # Goals before goal_idx are pre-match; goals after are post-match.
-    # Each deforestation level inlines one MI resolution step, so we must
-    # add extra copies of pre-match and post-match goals to account for
-    # the inlined step's limit/counting contribution.
-    pre_match_goals = [clause.body[j] for j in range(goal_idx)]
-    post_match_goals = [clause.body[j] for j in range(goal_idx + 1, len(clause.body))]
-    needs_chain = bool(pre_match_goals) or bool(post_match_goals)
+    # A03-F009: splice the inlined step's extra-arg (count/limit) goals as a
+    # SINGLE telescoping link per deforestation level. The per-step goals come
+    # from the CONSTANT pattern template (pattern.pre/post_match_goals) — NOT the
+    # growing clause body. The previous code re-chained the accumulated body
+    # goals every level, which at depth ≥2 both duplicated links (off-by-one
+    # count) and reused a var as an Evaluate LHS twice (the `:=` then always
+    # failed, so every deep clause failed and deep solutions were lost).
+    #
+    # Instead, keep the already-accumulated body goals untouched and add exactly
+    # one remapped copy of the template, telescoped at the recursive-call
+    # boundary: the pattern's head-role extra var maps to the current recursive
+    # call's extra var R, the pattern's rec-role extra var maps to a fresh F, and
+    # the new recursive call's extra arg becomes F. This grows the chain by one
+    # link (F → R → … → head) with every LHS distinct and previously unbound.
+    spliced_pre: list = []
+    spliced_post: list = []
+    rec_extra_replace: dict = {}   # id(current rec-call extra) -> fresh F
+    needs_chain = bool(
+        goal_field_idx is not None
+        and pattern.extra_args
+        and (pattern.pre_match_goals or pattern.post_match_goals)
+    )
 
-    if needs_chain and goal_field_idx is not None:
-        # Identify extra arg variables in the recursive call and head.
-        extra_indices = [k for k in range(len(goal.args)) if k != goal_field_idx]
-        # Build chain_subst: maps head_extra → rec_extra, rec_extra → fresh.
-        # This makes the chained post-match copy transform:
-        #   fresh intermediate → rec_extra (via the copy)
-        # Then the original post-match transforms:
-        #   rec_extra → head_extra (via the original)
-        chain_subst = {}
+    if needs_chain:
         spec_fields = pred_cls._fields
+        orig_fields = pattern.recursive_clause.head.__class__._fields
+        orig_name_to_idx = {fn: i for i, fn in enumerate(orig_fields)}
+        rec_call_pat = pattern.recursive_clause.body[
+            pattern.recursive_call_indices[0]]
+
+        # boundary_map remaps the pattern template into the current clause's
+        # variable space: head-role -> R (current rec extra), rec-role -> fresh.
+        boundary_map: dict = {}
+        extra_indices = [k for k in range(len(goal.args)) if k != goal_field_idx]
         for k in extra_indices:
-            rec_var = deref(goal.args[k])
-            head_var = deref(getattr(clause.head, spec_fields[k]))
-            if is_var(rec_var):
-                fresh = Var()
-                chain_subst[id(rec_var)] = fresh
-            if is_var(head_var) and id(head_var) != id(rec_var):
-                chain_subst[id(head_var)] = rec_var
+            e = orig_name_to_idx.get(spec_fields[k])
+            if e is None or e >= len(rec_call_pat.args):
+                continue
+            head_role = deref(getattr(pattern.recursive_clause.head,
+                                      orig_fields[e]))
+            rec_role = deref(rec_call_pat.args[e])
+            if not is_var(rec_role):
+                continue                     # pass-through extra: no chaining
+            R = deref(goal.args[k])          # current recursive-call extra arg
+            F = Var()
+            boundary_map[id(rec_role)] = F
+            if is_var(head_role) and id(head_role) != id(rec_role):
+                boundary_map[id(head_role)] = R
+            if is_var(R):
+                rec_extra_replace[id(R)] = F
+
+        # Freshen any remaining template vars so successive levels never alias.
+        for g in (*pattern.pre_match_goals, *pattern.post_match_goals):
+            _ensure_vars_mapped(g, boundary_map)
+
+        spliced_pre = [_subst(g, boundary_map) for g in pattern.pre_match_goals]
+        spliced_post = [_subst(g, boundary_map) for g in pattern.post_match_goals]
 
     new_body = []
     for j, body_goal in enumerate(clause.body):
         if j < goal_idx:
-            # Original pre-match goals.
+            # Accumulated pre-match goals — kept as-is (telescope tail).
             new_body.append(_subst(body_goal, subst))
         elif j == goal_idx:
-            # Insert chained pre-match goals for the inlined step.
-            if needs_chain and pre_match_goals:
-                for pm_goal in pre_match_goals:
-                    chained = _subst(_subst(pm_goal, subst), chain_subst)
-                    new_body.append(chained)
+            # The inlined step's own pre-match goals (one copy).
+            new_body.extend(spliced_pre)
 
-            # Build the replacement recursive call with the new goal list.
+            # Build the replacement recursive call with the new goal list; its
+            # extra arg becomes the fresh boundary var so the chain telescopes.
             new_args = list(goal.args)
             if goal_field_idx is not None:
                 new_args[goal_field_idx] = _subst(new_goal_list, subst)
-            # Apply subst to non-goal-list args.
             final_args = []
             for k, a in enumerate(new_args):
                 if k == goal_field_idx:
                     final_args.append(new_args[k])
                 else:
-                    substituted = _subst(a, subst)
-                    # If chaining, use fresh intermediate variables.
-                    if needs_chain:
-                        substituted = _subst(substituted, chain_subst)
-                    final_args.append(substituted)
+                    final_args.append(_subst(_subst(a, subst), rec_extra_replace))
             new_call = Call(
                 func=goal.func,
                 args=final_args,
@@ -1987,13 +2010,10 @@ def _unfold_body_goal(
             )
             new_body.append(new_call)
 
-            # Insert chained post-match goals for the inlined step.
-            if needs_chain and post_match_goals:
-                for pm_goal in post_match_goals:
-                    chained = _subst(_subst(pm_goal, subst), chain_subst)
-                    new_body.append(chained)
+            # The inlined step's own post-match goals (one copy).
+            new_body.extend(spliced_post)
         else:
-            # Original post-match goals (j > goal_idx).
+            # Accumulated post-match goals — kept as-is (telescope tail).
             new_body.append(_subst(body_goal, subst))
 
     new_clause = Clause(head=new_clause_head, body=new_body)

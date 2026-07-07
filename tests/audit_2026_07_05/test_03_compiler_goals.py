@@ -228,6 +228,9 @@ SolveGuard([GOAL, *GOALS], PROGRAM, LIM) <- (
 
 # regression guards: limit (pre-match), tree (split), residual builtins
 -specialize(SolveLimit, NatProg, alias=LimNat)
+# A03-F009 guard: CPD SolveLimit exercises the pre-match chaining path (the
+# post-match count path is CountGraphCPD). Must match the non-CPD depth cutoff.
+-specialize(SolveLimit, NatProg, alias=LimNatCPD, cpd=True)
 -specialize(SolveTree, GraphProg, alias=TreeGraph)
 -specialize(Solve, FactProg, alias=FactSpec)
 '''
@@ -594,11 +597,21 @@ class TestF009CpdExtensionChaining:
         spec = sorted(sols(mod, mod.CountGraph([["path", "a", Y2]], C2), Y2, C2))
         assert spec == gen == [("b", 2), ("c", 4), ("d", 4)]
 
-    @pytest.mark.xfail(strict=False, reason="A03-F009: CPD extension chaining — deep clauses telescope the count with one spurious increment per level (deforestation chain-join, not just var-freshening)")
     def test_cpd_counting_matches_generic(self, mod):
+        # A03-F009: deep CPD clauses now telescope the count with exactly one
+        # increment per inlined step (single per-level template splice, not a
+        # re-chain of the accumulated body), so counts equal the generic MI.
         Y, C = Var(), Var()
         got = sorted(sols(mod, mod.CountGraphCPD([["path", "a", Y]], C), Y, C))
         assert got == [("b", 2), ("c", 4), ("d", 4)]
+
+    def test_cpd_limit_matches_non_cpd(self, mod):
+        # A03-F009: the pre-match chaining path (SolveLimit's ``MAX > 0`` /
+        # ``MAX1 := MAX - 1``) must telescope one guard+decrement per level, so
+        # the CPD depth cutoff matches the non-CPD specialization exactly.
+        for depth, expected in ((2, False), (3, False), (4, True), (9, True)):
+            assert has_sol(mod, mod.LimNatCPD(NAT3, depth)) is expected
+            assert has_sol(mod, mod.LimNat(NAT3, depth)) is expected
 
 
 class TestSpecializationRegressionGuards:
