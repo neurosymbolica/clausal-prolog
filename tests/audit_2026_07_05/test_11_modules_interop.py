@@ -593,9 +593,8 @@ def test_F045_shortest_path_negative_weight():
     assert sols == [] or sols[0] == ["a", "c", "b"]
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F046: is_isolated ?Node "
-                   "enumerate mode is documented but unsatisfiable dead code")
 def test_F046_is_isolated_enumerate():
+    # A11-F046 (fixed): 1-element [v] entries make enumerate mode reachable.
     n = Var()
     sols = _gsols(G._is_isolated__2, [["a", "b"], ["c"]], n, out=n)
     assert sols == ["c"]

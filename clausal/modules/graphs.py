@@ -57,15 +57,19 @@ def _extract_vertices(edges):
     result = []
     for edge in edges:
         e = deref(edge)
-        if isinstance(e, list) and len(e) >= 2:
-            for node in (deref(e[0]), deref(e[1])):
-                # Fall back to object identity for any unhashable vertex
-                # (list, dict, set) so it doesn't crash with a raw TypeError
-                # (F052).
-                h = _vertex_key(node)
-                if h not in seen:
-                    seen.add(h)
-                    result.append(node)
+        if not isinstance(e, list) or len(e) < 1:
+            continue
+        # A 1-element entry [v] names a lone vertex with no incident edge,
+        # making single-vertex graphs representable and the documented
+        # is_isolated ?Node enumerate mode reachable (F046).
+        nodes = (deref(e[0]), deref(e[1])) if len(e) >= 2 else (deref(e[0]),)
+        for node in nodes:
+            # Fall back to object identity for any unhashable vertex
+            # (list, dict, set) so it doesn't crash with a raw TypeError (F052).
+            h = _vertex_key(node)
+            if h not in seen:
+                seen.add(h)
+                result.append(node)
     return result
 
 
