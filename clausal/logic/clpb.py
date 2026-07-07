@@ -487,6 +487,10 @@ def sat(expr, trail: Trail) -> bool:
     seen_bdd_ids: set[int] = {id(bdd)}
     all_vars: list[Var] = list(vars_)
     processed: set[int] = set()
+    # Accumulate every formula posted to this network so var-var aliasing can
+    # rebuild the BDD from source and collapse the merged levels (A07-F002).
+    formulas: list = [expr]
+    formula_ids: set[int] = {id(expr)}
 
     i = 0
     while i < len(all_vars):
@@ -507,6 +511,12 @@ def sat(expr, trail: Trail) -> bool:
             continue
         seen_bdd_ids.add(bid)
 
+        # Carry this component's posted formulas into the merged network.
+        for f in _formulas_of(state):
+            if id(f) not in formula_ids:
+                formula_ids.add(id(f))
+                formulas.append(f)
+
         # Conjoin this existing BDD
         combined_bdd = apply('and', combined_bdd, state.bdd)
         if combined_bdd is BDD_FALSE:
@@ -525,12 +535,13 @@ def sat(expr, trail: Trail) -> bool:
     if combined_bdd is BDD_FALSE:
         return False
 
-    # Store combined BDD on all unbound variables in the network
+    # Store combined BDD + the accumulated formula set on all unbound vars.
+    merged_expr = tuple(formulas)
     for v in all_vars:
         v = deref(v)
         if not is_var(v):
             continue
-        new_state = BoolState(sat_expr=expr, bdd=combined_bdd, root_var=all_vars[0])
+        new_state = BoolState(sat_expr=merged_expr, bdd=combined_bdd, root_var=all_vars[0])
         put_attr(v, B_KEY, new_state, trail)
 
     # Propagate: check if any variable is forced to 0 or 1
@@ -746,6 +757,21 @@ def _label_bools(vars_: list, trail: Trail):
 # ── Attribute hook ───────────────────────────────────────────────────────────
 
 
+def _formulas_of(state) -> tuple:
+    """The posted formula(s) recorded on a BoolState, as a flat tuple.
+
+    ``sat_expr`` is a tuple of every formula posted to the variable's network
+    (or ``None`` for an auto-created identity state); older single-formula
+    values are wrapped for backward compatibility.
+    """
+    se = state.sat_expr if state is not None else None
+    if se is None:
+        return ()
+    if isinstance(se, tuple):
+        return se
+    return (se,)
+
+
 def _bool_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
     """Called when a CLP(B)-constrained variable is unified.
 
@@ -806,28 +832,49 @@ def _bool_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
         return True
 
     if is_var(bound_to):
-        # Var-var aliasing: conjoin BDDs and rebuild
+        # Var-var aliasing.  The two variables are now ONE logical variable but
+        # occupy two distinct BDD levels; conjoining the stale per-var BDDs
+        # (state.bdd & other.bdd) cannot express x_id == y_id, so it misses
+        # failures and forced propagation (A07-F002).  Instead rebuild from the
+        # posted formulas: the hook runs after the binding commits, so
+        # _expr_to_bdd derefs the aliased vars to a single level and the
+        # collapse falls out.
         other_state = get_attr(bound_to, B_KEY)
         if other_state is None:
-            # Other var has no CLP(B) — transfer our state
+            # Other var has no CLP(B) — transfer our state.
             put_attr(bound_to, B_KEY, state, trail)
             return True
 
-        # Both have CLP(B) — conjoin their BDDs
-        new_bdd = apply('and', state.bdd, other_state.bdd)
-        if new_bdd is BDD_FALSE:
-            return False
+        formulas: list = []
+        seen_f: set = set()
+        for f in _formulas_of(state) + _formulas_of(other_state):
+            if id(f) not in seen_f:
+                seen_f.add(id(f))
+                formulas.append(f)
 
-        # Create new combined state on the surviving variable
-        new_state = BoolState(
-            sat_expr=state.sat_expr,  # keep one formula for rebuild
-            bdd=new_bdd,
-            root_var=state.root_var,
-        )
-        put_attr(bound_to, B_KEY, new_state, trail)
+        new_bdd = BDD_TRUE
+        for f in formulas:
+            new_bdd = apply('and', new_bdd, _expr_to_bdd(f, trail))
+            if new_bdd is BDD_FALSE:
+                return False
 
-        # Propagate forced values
-        return _propagate_forced(new_bdd, trail)
+        merged_expr = tuple(formulas)
+        if isinstance(new_bdd, BDDNode):
+            # Re-store the rebuilt BDD on every (still unbound) network var.
+            ids: set = set()
+            _collect_bdd_var_ids(new_bdd, ids)
+            for vid in ids:
+                v = _get_var_for_id(vid)
+                if v is not None:
+                    v = deref(v)
+                    if is_var(v):
+                        put_attr(v, B_KEY,
+                                 BoolState(sat_expr=merged_expr, bdd=new_bdd,
+                                           root_var=v),
+                                 trail)
+            return _propagate_forced(new_bdd, trail)
+        # new_bdd is BDD_TRUE → the conjunction is a tautology, nothing to post.
+        return True
 
     # Non-integer, non-var → fail
     return False

@@ -593,9 +593,6 @@ class TestSuspectedBugs:
             pytest.fail("sat(xor-30) did not finish within 5s (exponential blowup)")
         assert proc.returncode == 0 and "OK" in proc.stdout
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F002: var-var aliasing conjoins stale per-var BDDs instead of "
-        "rebuilding from sat_expr — sat(X^Y), X=Y must fail"))
     def test_A07_F002_alias_after_xor_must_fail(self):
         tr = Trail()
         x, y = Var(), Var()
@@ -604,8 +601,6 @@ class TestSuspectedBugs:
             "store is unsatisfiable after aliasing (labeling finds 0 solutions) "
             "but unify succeeded")
 
-    @pytest.mark.xfail(strict=False, reason=(
-        "A07-F002: aliasing does not re-propagate — sat(X|Y), X=Y must force X=1"))
     def test_A07_F002_alias_or_propagates_forced(self):
         tr = Trail()
         x, y = Var(), Var()
