@@ -26,6 +26,15 @@ def _is_numeric(val) -> bool:
     return isinstance(val, (int, float, Quantity))
 
 
+def _all_known_numeric(*vals) -> bool:
+    """A09-F011: True if every already-bound (non-Var) operand is numeric
+    (int/float/Quantity, not bool). Var operands are allowed — the mode is not
+    yet determined. Used to guard plus/max_/min_ at the dispatch boundary so a
+    non-numeric operand fails cleanly instead of the C fast path concatenating
+    strings or leaking a raw TypeError. bool is excluded (A09-F015/A01-D001)."""
+    return all(is_var(v) or _is_numeric(v) for v in vals)
+
+
 def _is_int_like(val) -> bool:
     """True if val is a plain int or a Quantity with integer value (not bool)."""
     if isinstance(val, bool):
@@ -165,6 +174,11 @@ def _plus__3_py(x, y, z, trail, k):
     y_known = not is_var(y_val)
     z_known = not is_var(z_val)
 
+    # A09-F011: every KNOWN operand must be numeric (also enforced at the
+    # dispatch boundary, since the C fast path concatenates strings).
+    if not _all_known_numeric(x_val, y_val, z_val):
+        return
+
     if x_known and y_known:
         # Z = X + Y  (UnitsMismatch propagates naturally)
         mark = trail.mark()
@@ -205,6 +219,8 @@ def _max__3_py(x, y, z, trail, k):
     y_val = deref(y)
     if is_var(x_val) or is_var(y_val):
         return
+    if not _all_known_numeric(x_val, y_val):  # A09-F011
+        return
     # max() uses __gt__ which Quantity implements (raises on dim mismatch)
     mark = trail.mark()
     if unify(z, max(x_val, y_val), trail):
@@ -220,6 +236,8 @@ def _min__3_py(x, y, z, trail, k):
     x_val = deref(x)
     y_val = deref(y)
     if is_var(x_val) or is_var(y_val):
+        return
+    if not _all_known_numeric(x_val, y_val):  # A09-F011
         return
     mark = trail.mark()
     if unify(z, min(x_val, y_val), trail):
@@ -553,6 +571,10 @@ def _succ__2(x, y, trail, k):
 
 @_builtin("plus", 3)
 def _plus__3(x, y, z, trail, k):
+    # A09-F011: guard here so the C fast path (which concatenates strings and
+    # raises a raw TypeError on mixed operands) never runs on non-numerics.
+    if not _all_known_numeric(deref(x), deref(y), deref(z)):
+        return
     yield from (_plus__3_c if _USE_C_ARITH else _plus__3_py)(x, y, z, trail, k)
 
 @_builtin("abs_", 2)
@@ -561,10 +583,14 @@ def _abs__2(x, y, trail, k):
 
 @_builtin("max_", 3)
 def _max__3(x, y, z, trail, k):
+    if not _all_known_numeric(deref(x), deref(y)):  # A09-F011 (see plus/3)
+        return
     yield from (_max__3_c if _USE_C_ARITH else _max__3_py)(x, y, z, trail, k)
 
 @_builtin("min_", 3)
 def _min__3(x, y, z, trail, k):
+    if not _all_known_numeric(deref(x), deref(y)):  # A09-F011 (see plus/3)
+        return
     yield from (_min__3_c if _USE_C_ARITH else _min__3_py)(x, y, z, trail, k)
 
 @_builtin("sign", 2)

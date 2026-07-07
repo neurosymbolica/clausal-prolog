@@ -339,15 +339,11 @@ def test_F010_copy_term_copies_dif(fix):
 # A09-F011 — plus/max_/min_ lack numeric type checks
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F011: plus/3 concatenates "
-                   "strings — docstring says numeric")
 def test_F011_plus_string_concat(fix):
     _, m = fix
     assert not _first(m, "plus", "a", "b", Var())
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F011: mixed-type plus raises "
-                   "raw TypeError instead of a typed logic error / failure")
 def test_F011_plus_mixed_raw_typeerror(fix):
     _, m = fix
     try:
@@ -356,7 +352,6 @@ def test_F011_plus_mixed_raw_typeerror(fix):
         pytest.fail("raw TypeError escaped from plus/3")
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F011: max_/3 accepts strings")
 def test_F011_max_strings(fix):
     _, m = fix
     assert not _first(m, "max_", "a", "b", Var())
