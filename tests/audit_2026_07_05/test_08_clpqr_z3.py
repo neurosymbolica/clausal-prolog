@@ -326,23 +326,14 @@ from clausal.logic.clpr import (  # noqa: E402
 
 
 class TestClprModInterval:
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F009: _imod assumes integer semantics "
-                              "[0,|b|-1]; excludes 1.5 % 2 == 1.5")
     def test_imod_contains_true_value_real_numerator(self):
         lo, hi = _imod(1.5, 1.5, 2.0, 2.0)
         assert lo <= 1.5 <= hi, f"true value 1.5 outside [{lo}, {hi}]"
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F009: fractional divisor |b|<1 yields an "
-                              "inverted (empty) interval")
     def test_imod_fractional_divisor_nonempty(self):
         lo, hi = _imod(0.0, 10.0, 0.5, 0.5)
         assert lo <= hi, f"empty interval [{lo}, {hi}] for satisfiable X % 0.5"
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F009 end-to-end: Y == 1.5 % 2.0 then Y=1.5 "
-                              "incorrectly fails")
     def test_mod_constraint_true_value_accepted(self):
         t = Trail()
         y = Var()
@@ -350,9 +341,6 @@ class TestClprModInterval:
         assert real_eq(Mod(left=1.5, right=2.0), y, t)
         assert unify(y, 1.5, t)   # 1.5 % 2.0 == 1.5
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F009 end-to-end: X % 0.5 == Y unsatisfiable "
-                              "at posting (empty interval)")
     def test_mod_constraint_fractional_divisor_posts(self):
         t = Trail()
         x, y = Var(), Var()

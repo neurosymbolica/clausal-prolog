@@ -181,14 +181,21 @@ def _ifloordiv_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float
 
 
 def _imod_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
-    """Interval of a % b (modulo). Conservative outer bound."""
+    """Interval of a % b (real modulo). Conservative outer bound.
+
+    Python float ``%`` takes the sign of the divisor: ``a % b`` lies in
+    ``[0, b)`` for ``b > 0`` and ``(b, 0]`` for ``b < 0``.  The previous
+    ``[0, |b|-1]`` bound was integer-modulo semantics — it excluded real
+    results (1.5 % 2 == 1.5 fell outside [0, 1]) and, for ``|b| < 1``, produced
+    an inverted/empty interval that failed every posting (A08-F009).
+    """
     if blo <= 0.0 <= bhi:
         return -math.inf, math.inf
-    # Result of a % b is in [0, |b|-1] for positive b, [-(|b|-1), 0] for negative b
-    abs_max = max(abs(blo), abs(bhi))
     if blo > 0:
-        return 0.0, _up(abs_max - 1.0)
-    return _dn(-(abs_max - 1.0)), 0.0
+        # b > 0: result in [0, b) ⊆ [0, bhi] (upper end kept closed for soundness)
+        return 0.0, _up(bhi)
+    # b < 0: result in (b, 0] ⊆ [blo, 0]
+    return _dn(blo), 0.0
 
 
 def _iatan_py(alo: float, ahi: float) -> tuple[float, float]:
