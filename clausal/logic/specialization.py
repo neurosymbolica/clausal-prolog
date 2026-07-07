@@ -1525,28 +1525,29 @@ def _try_inline_goal(
     obj_clause = matching_clauses[0]
     obj_head, obj_body = obj_clause[0], obj_clause[1]
 
-    # Check unifiability: the first_goal must unify with obj_head.
-    if len(first_goal) != len(obj_head):
-        return None
-
     # Create fresh copies.
     var_map = {}
     fresh_head = _copy_term(obj_head, var_map)
     fresh_body = _copy_term(obj_body, var_map)
 
-    # Build substitution: unify fresh_head args with first_goal args.
-    subst_map = {}
-    for i in range(1, len(fresh_head)):
-        if is_var(deref(fresh_head[i])):
-            subst_map[id(deref(fresh_head[i]))] = first_goal[i]
+    # A03-F008: unify the whole goal against the fresh head with _ast_unify,
+    # which compares CONSTANT head args (f(2) goal vs f(1) head fails) and
+    # binds goal-side vars to head constants — not just var head args. The old
+    # code checked arity only and built a substitution for var head args
+    # exclusively, so it inlined f(2) against f(1)'s empty body and dropped the
+    # X=const constraint. Abandon inlining when unification fails.
+    raw_subst = _ast_unify(first_goal, fresh_head)
+    if raw_subst is None:
+        return None
+    # Flatten chains so _subst's single-level lookup resolves to final values.
+    subst_map = {vid: _ast_apply(val, raw_subst) for vid, val in raw_subst.items()}
 
     # Substitute into fresh body goals.
-    inlined_goals = []
-    for body_goal in fresh_body:
-        inlined_goals.append(_subst(body_goal, subst_map))
+    inlined_goals = [_subst(body_goal, subst_map) for body_goal in fresh_body]
 
-    # Build the remaining goal list (tail after first_goal).
-    remaining = goal_list_arg[1:]
+    # Build the remaining goal list (tail after first_goal). Goal-side vars may
+    # now be bound by the head unification, so substitute into them too.
+    remaining = [_subst(g, subst_map) for g in goal_list_arg[1:]]
 
     # Build the continuation: inlined body goals + recursive call with remaining goals.
     result = list(inlined_goals)
@@ -1555,7 +1556,7 @@ def _try_inline_goal(
     if remaining:
         # Build remaining-goals list, handling StarUnpack.
         remaining_goal_list = remaining
-        rec_args = list(goal.args)
+        rec_args = [_subst(a, subst_map) for a in goal.args]
         rec_args[goal_field_idx] = remaining_goal_list
         result.append(Call(
             func=LoadName(name=pred_cls.__name__),

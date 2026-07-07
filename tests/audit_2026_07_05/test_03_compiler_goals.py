@@ -538,7 +538,6 @@ class TestF008DeepUnfoldConstantCheck:
         assert not has_sol(mod, mod.Solve([["g"]], prog))
         assert not has_sol(mod, mod.ConstShallow([["g"]]))
 
-    @pytest.mark.xfail(strict=False, reason="A03-F008: deep unfold inlines single clause without checking constant args")
     def test_deep_spec_fails_like_generic(self, mod):
         assert not has_sol(mod, mod.ConstDeep([["g"]]))
 
