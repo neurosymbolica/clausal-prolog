@@ -438,12 +438,10 @@ class TestF003TroSignalBucketNotGenerator:
 
 
 class TestF004CatchFunctorCatcher:
-    @pytest.mark.xfail(strict=False, reason="A03-F004: catcher lowered to Compound; thrown term is functor instance")
     def test_functor_catcher_direct_throw(self, mod):
         N, R = Var(), Var()
         assert sols(mod, mod.cfun(N, R), N, R) == [(7, "caught")]
 
-    @pytest.mark.xfail(strict=False, reason="A03-F004: same through a call chain")
     def test_functor_catcher_through_chain(self, mod):
         N, R = Var(), Var()
         assert sols(mod, mod.cchain(N, R), N, R) == [(5, "caught")]

@@ -653,6 +653,31 @@ def _catcher_to_structural(term: Any) -> Any:
     return term
 
 
+def _lower_catcher(ctx: CompilationContext, catcher: Any) -> ast.expr:
+    """Lower a catch/3 catcher so it matches the THROW form (A03-F004).
+
+    A functor whose name resolves to a module term class (e.g. one declared
+    in ``-private([kab(KA)])``) is thrown as a class *instance* — the throw
+    site lowers it with ``term_to_ast_expr``, which emits ``kab(N)``
+    construction. The catcher must construct the same instance, or
+    ``unify(Compound('kab',(N,)), kab(7))`` is False and the catcher never
+    matches. Only names with no term class (builtin ``error(...)`` terms,
+    thrown as ``Compound``) fall back to ``_catcher_to_structural``.
+    """
+    from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+    if (isinstance(catcher, Call) and isinstance(catcher.func, LoadName)
+            and not catcher.kwargs):
+        env = ctx.base_globals or {}
+        resolved = env.get(catcher.func.name)
+        if isinstance(resolved, PredicateMeta):
+            # Known term class → construct the instance, exactly as the throw
+            # site does (term_to_ast_expr recurses into nested args too).
+            return term_to_ast_expr(catcher, ctx.var_context, eval_arith=False)
+    return term_to_ast_expr(
+        _catcher_to_structural(catcher), ctx.var_context, eval_arith=False
+    )
+
+
 def _compile_throw(
     ctx: CompilationContext,
     term_arg: Any,
@@ -681,7 +706,7 @@ def _compile_catch_impl(
     term_name = ctx.fresh("_term")
     unify_mark = ctx.fresh("_catch_um")
 
-    catcher_expr = term_to_ast_expr(_catcher_to_structural(catcher), var_context, eval_arith=False)
+    catcher_expr = _lower_catcher(ctx, catcher)
 
     term_extract = _assign(
         term_name,
