@@ -407,9 +407,8 @@ def test_F028_xfx_not_chainable():
         parse_term("2 ** 3 ** 2")
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F029: quoted functor 'foo'(1) "
-                   "unparseable (adjacency uses unquoted token length)")
 def test_F029_quoted_functor():
+    # A11-F029 (fixed): adjacency uses recorded token end position.
     from clausal.tools.prolog_parser import parse
     m = parse("'foo'(1).")
     assert m.items[0].head.functor == "foo"
@@ -429,9 +428,8 @@ def test_F035_quoted_flag_set():
     assert parse_term("'red'").quoted is True
 
 
-@pytest.mark.xfail(strict=False, reason="A11-F037: spaced '- 1' folded to "
-                   "integer -1 (ISO: -(1)); breaks emit→parse fixpoint")
 def test_F037_spaced_minus_is_compound():
+    # A11-F037 (fixed): spaced '- 1' is the compound -(1).
     from clausal.tools.prolog_parser import parse_term
     from clausal.tools.prolog_ast import PCompound
     assert isinstance(parse_term("- 1"), PCompound)

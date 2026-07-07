@@ -12,7 +12,7 @@ Public API:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -41,6 +41,10 @@ class Token:
     line: int
     col: int
     quoted: bool = False  # True for a quoted atom ('foo') — F035
+    # Position just past the token (F029/F037). Internal span metadata, excluded
+    # from equality/repr so existing Token(...) comparisons stay valid.
+    end_line: int = field(default=0, compare=False, repr=False)
+    end_col: int = field(default=0, compare=False, repr=False)
 
     def __repr__(self) -> str:
         return f"Token({self.type.value!r}, {self.value!r}, {self.line}:{self.col})"
@@ -99,7 +103,7 @@ class _Tokenizer:
             if self._pos >= len(self._src):
                 break
             self._read_token()
-        self._tokens.append(Token(TokenType.END, "", self._line, self._col))
+        self._push(TokenType.END, "", self._line, self._col)
         return self._tokens
 
     # ── Character access ─────────────────────────────────────────────
@@ -122,6 +126,13 @@ class _Tokenizer:
 
     def _at_end(self) -> bool:
         return self._pos >= len(self._src)
+
+    def _push(self, ttype, value, line, col, *, quoted: bool = False) -> None:
+        """Append a token, recording its end position (current cursor)."""
+        self._tokens.append(Token(
+            ttype, value, line, col,
+            quoted=quoted, end_line=self._line, end_col=self._col,
+        ))
 
     # ── Whitespace & comments ────────────────────────────────────────
 
@@ -171,35 +182,35 @@ class _Tokenizer:
         # Single-character structural tokens
         if ch == "(":
             self._advance()
-            self._tokens.append(Token(TokenType.LPAREN, "(", line, col))
+            self._push(TokenType.LPAREN, "(", line, col)
             return
         if ch == ")":
             self._advance()
-            self._tokens.append(Token(TokenType.RPAREN, ")", line, col))
+            self._push(TokenType.RPAREN, ")", line, col)
             return
         if ch == "[":
             self._advance()
-            self._tokens.append(Token(TokenType.LBRACKET, "[", line, col))
+            self._push(TokenType.LBRACKET, "[", line, col)
             return
         if ch == "]":
             self._advance()
-            self._tokens.append(Token(TokenType.RBRACKET, "]", line, col))
+            self._push(TokenType.RBRACKET, "]", line, col)
             return
         if ch == "{":
             self._advance()
-            self._tokens.append(Token(TokenType.LCURLY, "{", line, col))
+            self._push(TokenType.LCURLY, "{", line, col)
             return
         if ch == "}":
             self._advance()
-            self._tokens.append(Token(TokenType.RCURLY, "}", line, col))
+            self._push(TokenType.RCURLY, "}", line, col)
             return
         if ch == "|":
             self._advance()
-            self._tokens.append(Token(TokenType.BAR, "|", line, col))
+            self._push(TokenType.BAR, "|", line, col)
             return
         if ch == ",":
             self._advance()
-            self._tokens.append(Token(TokenType.COMMA, ",", line, col))
+            self._push(TokenType.COMMA, ",", line, col)
             return
 
         # Quoted atom
@@ -235,13 +246,13 @@ class _Tokenizer:
         # Exclamation mark (cut) — special atom
         if ch == "!":
             self._advance()
-            self._tokens.append(Token(TokenType.ATOM, "!", line, col))
+            self._push(TokenType.ATOM, "!", line, col)
             return
 
         # Semicolon — operator atom
         if ch == ";":
             self._advance()
-            self._tokens.append(Token(TokenType.ATOM, ";", line, col))
+            self._push(TokenType.ATOM, ";", line, col)
             return
 
         # Graphic token (operator characters)
@@ -307,8 +318,7 @@ class _Tokenizer:
                 chars.append(self._read_escape(line, col))
             else:
                 chars.append(ch)
-        self._tokens.append(
-            Token(TokenType.ATOM, "".join(chars), line, col, quoted=True))
+        self._push(TokenType.ATOM, "".join(chars), line, col, quoted=True)
 
     # ── Double-quoted string ─────────────────────────────────────────
 
@@ -330,7 +340,7 @@ class _Tokenizer:
                 chars.append(self._read_escape(line, col))
             else:
                 chars.append(ch)
-        self._tokens.append(Token(TokenType.STRING, "".join(chars), line, col))
+        self._push(TokenType.STRING, "".join(chars), line, col)
 
     # ── Numbers ──────────────────────────────────────────────────────
 
@@ -360,7 +370,7 @@ class _Tokenizer:
                     self._advance()
                 digits = self._src[hex_start:self._pos].replace("_", "")
                 value = self._to_number(lambda d: int(d, 16), digits, "hexadecimal", line, col)
-                self._tokens.append(Token(TokenType.INTEGER, value, line, col))
+                self._push(TokenType.INTEGER, value, line, col)
                 return
             if nxt in "bB":
                 self._advance()  # 0
@@ -370,7 +380,7 @@ class _Tokenizer:
                     self._advance()
                 digits = self._src[bin_start:self._pos].replace("_", "")
                 value = self._to_number(lambda d: int(d, 2), digits, "binary", line, col)
-                self._tokens.append(Token(TokenType.INTEGER, value, line, col))
+                self._push(TokenType.INTEGER, value, line, col)
                 return
             if nxt in "oO":
                 self._advance()  # 0
@@ -380,7 +390,7 @@ class _Tokenizer:
                     self._advance()
                 digits = self._src[oct_start:self._pos].replace("_", "")
                 value = self._to_number(lambda d: int(d, 8), digits, "octal", line, col)
-                self._tokens.append(Token(TokenType.INTEGER, value, line, col))
+                self._push(TokenType.INTEGER, value, line, col)
                 return
             if nxt == "'":
                 # Character code: 0'a → 97, 0'\n → 10, 0''' → 39 (doubled quote)
@@ -397,7 +407,7 @@ class _Tokenizer:
                     code = ord("'")
                 else:
                     code = ord(ch)
-                self._tokens.append(Token(TokenType.INTEGER, code, line, col))
+                self._push(TokenType.INTEGER, code, line, col)
                 return
 
         # Regular decimal number
@@ -426,10 +436,10 @@ class _Tokenizer:
         text = self._src[start:self._pos].replace("_", "")
         if is_float:
             value = self._to_number(float, text, "float", line, col)
-            self._tokens.append(Token(TokenType.FLOAT, value, line, col))
+            self._push(TokenType.FLOAT, value, line, col)
         else:
             value = self._to_number(int, text, "integer", line, col)
-            self._tokens.append(Token(TokenType.INTEGER, value, line, col))
+            self._push(TokenType.INTEGER, value, line, col)
 
     # ── Variables ────────────────────────────────────────────────────
 
@@ -439,7 +449,7 @@ class _Tokenizer:
         while not self._at_end() and (self._peek().isalnum() or self._peek() == "_"):
             self._advance()
         name = self._src[start:self._pos]
-        self._tokens.append(Token(TokenType.VAR, name, line, col))
+        self._push(TokenType.VAR, name, line, col)
 
     # ── Word atoms (lowercase identifiers) ───────────────────────────
 
@@ -449,7 +459,7 @@ class _Tokenizer:
         while not self._at_end() and (self._peek().isalnum() or self._peek() == "_"):
             self._advance()
         name = self._src[start:self._pos]
-        self._tokens.append(Token(TokenType.ATOM, name, line, col))
+        self._push(TokenType.ATOM, name, line, col)
 
     # ── Dot (clause terminator vs graphic) ───────────────────────────
 
@@ -458,7 +468,7 @@ class _Tokenizer:
         nxt = self._peek(1)
         if nxt == "" or nxt in " \t\n\r" or nxt == "%":
             self._advance()  # consume the dot
-            self._tokens.append(Token(TokenType.DOT, ".", line, col))
+            self._push(TokenType.DOT, ".", line, col)
             return
         # Dot followed by a digit → it's part of a graphic token (not a number
         # since we'd have entered _read_number first if it started with a digit)
@@ -478,7 +488,7 @@ class _Tokenizer:
         if name == ".":
             nxt = self._peek()
             if nxt == "" or nxt in " \t\n\r" or nxt == "%":
-                self._tokens.append(Token(TokenType.DOT, ".", line, col))
+                self._push(TokenType.DOT, ".", line, col)
                 return
 
-        self._tokens.append(Token(TokenType.ATOM, name, line, col))
+        self._push(TokenType.ATOM, name, line, col)

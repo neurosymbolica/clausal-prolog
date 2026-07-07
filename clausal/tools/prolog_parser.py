@@ -250,9 +250,13 @@ class PrologParser:
             # But not if it's also an atom that's being used as a term
             # Heuristic: if next token can start a term, treat as prefix
             if self._can_start_term():
-                # Special case: - before a number → negative number
+                # Special case: - IMMEDIATELY before a number → negative
+                # literal. ISO 6.3.1.2: only an adjacent `-1` is a negative
+                # number; a spaced `- 1` is the compound -(1) (F037).
                 nxt = self._peek()
-                if name == "-" and nxt.type in (TokenType.INTEGER, TokenType.FLOAT):
+                if (name == "-"
+                        and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)
+                        and self._adjacent(tok, nxt)):
                     self._advance()
                     return PNumber(-nxt.value)
                 r_prec = self._prefix_right_prec(prefix_entry)
@@ -319,15 +323,27 @@ class PrologParser:
         tok = self._advance()
         name = entry.name
 
-        # Special case: - before a number → negative number
+        # Special case: - IMMEDIATELY before a number → negative literal
+        # (a spaced `- 1` is the compound -(1), ISO 6.3.1.2) — F037.
         nxt = self._peek()
-        if name == "-" and nxt.type in (TokenType.INTEGER, TokenType.FLOAT):
+        if (name == "-"
+                and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)
+                and self._adjacent(tok, nxt)):
             self._advance()
             return PNumber(-nxt.value)
 
         r_prec = self._prefix_right_prec(entry)
         operand = self._parse_term(r_prec)
         return PCompound(name, (operand,))
+
+    @staticmethod
+    def _adjacent(left: Token, right: Token) -> bool:
+        """True if *right* immediately follows *left* with no gap."""
+        if left.end_col:
+            return right.line == left.end_line and right.col == left.end_col
+        # Fallback when no end position is recorded.
+        return (right.line == left.line and
+                right.col == left.col + len(str(left.value)))
 
     # ── Precedence helpers ───────────────────────────────────────────
 
@@ -394,6 +410,13 @@ class PrologParser:
         ``f`` followed by ``(X)`` in an operator context.  We detect this
         by checking column adjacency.
         """
+        # Use the token's recorded end position rather than col + len(value):
+        # a quoted functor like 'foo'(1) has a value ("foo") shorter than its
+        # source span ('foo'), so the length-based check wrongly rejected it
+        # (F029).
+        if functor_tok.end_col:
+            return (lparen_tok.line == functor_tok.end_line and
+                    lparen_tok.col == functor_tok.end_col)
         return (lparen_tok.line == functor_tok.line and
                 lparen_tok.col == functor_tok.col + len(str(functor_tok.value)))
 
