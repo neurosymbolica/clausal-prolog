@@ -48,6 +48,19 @@ def structural_eq(left: Any, right: Any) -> bool:
 
     No variables are bound and no arithmetic evaluation is performed.
     Corresponds to Prolog's ``==/2``.
+
+    Defined so the invariant
+
+        ``structural_eq(x, y) ⟺ reify_eq(x, y) is True``
+
+    holds by construction: two terms are structurally equal exactly when
+    they unify with no bindings.  Deferring the structured cases to
+    ``reify_eq`` (rather than maintaining a third, hand-written structural
+    walker) keeps ``==/2`` symmetric and consistent with unify / dif / setof
+    across every container the unifier understands — including the Liskov
+    str↔char-list contract, ground SegList↔list, DictTerm↔dict, and
+    SetTerm↔set equivalences (A05-F003).  A fast path short-circuits the
+    common identity / var / atomic cases without allocating a scratch Trail.
     """
     left = deref(left)
     right = deref(right)
@@ -56,96 +69,20 @@ def structural_eq(left: Any, right: Any) -> bool:
     if left is right:
         return True
 
-    # Two distinct unbound Vars → not structurally equal
+    # Two distinct unbound Vars → not structurally equal (unify would bind).
     if is_var(left) or is_var(right):
         return False
 
-    # Atomic types — value equality
-    if isinstance(left, (bool, int, float, str, bytes, complex, type(None))):
+    # Atomic fast path: when BOTH sides are atomic, value equality settles it
+    # without the reify_eq machinery.  A mixed atomic/structured pair (e.g.
+    # str vs char-list) deliberately falls through so the unify contract is
+    # honoured symmetrically.
+    _ATOMIC = (bool, int, float, str, bytes, complex, type(None))
+    if isinstance(left, _ATOMIC) and isinstance(right, _ATOMIC):
         return left == right
 
-    # Lists
-    if isinstance(left, list):
-        if not isinstance(right, list) or len(left) != len(right):
-            return False
-        return all(structural_eq(l, r) for l, r in zip(left, right))
-
-    # Tuples
-    if isinstance(left, tuple):
-        if not isinstance(right, tuple) or len(left) != len(right):
-            return False
-        return all(structural_eq(l, r) for l, r in zip(left, right))
-
-    # Compound terms
-    if isinstance(left, Compound):
-        if not isinstance(right, Compound):
-            return False
-        if left.functor != right.functor or len(left.args) != len(right.args):
-            return False
-        return all(structural_eq(l, r) for l, r in zip(left.args, right.args))
-
-    # SegList — walk each segment and compare element-by-element
-    if isinstance(left, SegList):
-        if not isinstance(right, SegList):
-            return False
-        left_walked = left.__walk__()
-        right_walked = right.__walk__()
-        # If both fully ground, compare as lists
-        if isinstance(left_walked, list) and isinstance(right_walked, list):
-            return structural_eq(left_walked, right_walked)
-        # Still partial — compare segment structure
-        l_segs, r_segs = left._segments, right._segments
-        if len(l_segs) != len(r_segs):
-            return False
-        return all(structural_eq(ls, rs) for ls, rs in zip(l_segs, r_segs))
-
-    # SegString — same approach as SegList
-    if isinstance(left, SegString):
-        if not isinstance(right, SegString):
-            return False
-        left_walked = left.__walk__()
-        right_walked = right.__walk__()
-        if isinstance(left_walked, str) and isinstance(right_walked, str):
-            return left_walked == right_walked
-        l_segs, r_segs = left._segments, right._segments
-        if len(l_segs) != len(r_segs):
-            return False
-        return all(structural_eq(ls, rs) for ls, rs in zip(l_segs, r_segs))
-
-    # DictTerm / plain dict — treated as equivalent representations of the
-    # same mapping. A DictTerm literal from Clausal source compares equal
-    # to a plain dict returned from a library predicate (e.g. tree_flatten's
-    # backward direction reconstructs into a Python dict).
-    if isinstance(left, (DictTerm, dict)) and isinstance(right, (DictTerm, dict)):
-        l_data = left.data if isinstance(left, DictTerm) else left
-        r_data = right.data if isinstance(right, DictTerm) else right
-        if l_data.keys() != r_data.keys():
-            return False
-        return all(
-            structural_eq(l_data[k], r_data[k]) for k in l_data
-        )
-
-    # SetTerm / plain set / frozenset — treated as equivalent representations
-    # of the same set. Mirrors the DictTerm/dict handling above: library
-    # predicates that return a Python set can still be compared with a
-    # Clausal-native set literal.
-    if isinstance(left, (SetTerm, set, frozenset)) \
-            and isinstance(right, (SetTerm, set, frozenset)):
-        l_elems = left.elements if isinstance(left, SetTerm) else frozenset(left)
-        r_elems = right.elements if isinstance(right, SetTerm) else frozenset(right)
-        return l_elems == r_elems
-
-    # User-defined term dataclasses (same functor class)
-    if is_term_instance(left):
-        if type(left) is not type(right):
-            return False
-        for name in term_field_names(left):
-            if not structural_eq(getattr(left, name), getattr(right, name)):
-                return False
-        return True
-
-    # Fallback: Python ==
-    return left == right
+    # General case: structurally equal iff unifiable with zero bindings.
+    return reify_eq(left, right, Trail()) is True
 
 
 def structural_neq(left: Any, right: Any) -> bool:

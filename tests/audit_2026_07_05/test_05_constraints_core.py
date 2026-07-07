@@ -249,18 +249,15 @@ class TestF002DifHookMalformedAttr:
 
 class TestF003StructuralEqInconsistencies:
 
-    @pytest.mark.xfail(strict=False, reason="A05-F003: structural_eq(SegString, str) asymmetric")
     def test_segstring_str_symmetric(self):
         ss = SegString(["ab"])
         assert structural_eq("ab", ss) == structural_eq(ss, "ab")
 
-    @pytest.mark.xfail(strict=False, reason="A05-F003: str vs char-list — reify_eq True but structural_eq False")
     def test_str_charlist_consistent_with_reify_eq(self):
         t = Trail()
         assert reify_eq("ab", ["a", "b"], t) is True   # identical, no bindings
         assert structural_eq("ab", ["a", "b"]) is True
 
-    @pytest.mark.xfail(strict=False, reason="A05-F003: ground SegList vs plain list — same walked value, not structural_eq")
     def test_ground_seglist_vs_list(self):
         sl = SegList([ConcreteSeg([1, 2])])
         t = Trail()
