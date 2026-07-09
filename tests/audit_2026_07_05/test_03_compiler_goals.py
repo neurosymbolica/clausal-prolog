@@ -196,6 +196,22 @@ ConstProg(PROGRAM) <- (
         [["g"], [["f", 2]]]
     ]
 )
+# A03-F008 (goal-side bindings): inlining f(GVX) against fact f(1) binds the
+# GOAL-side var — the binding must reach the enclosing clause head.
+GvProg(PROGRAM) <- (
+    PROGRAM is [
+        [["f", 1], []],
+        [["gv", GVX], [["f", GVX]]]
+    ]
+)
+# ... and a later sibling goal sharing the goal-side var (q(GSX, GSR)).
+GsProg(PROGRAM) <- (
+    PROGRAM is [
+        [["f", 1], []],
+        [["q", 1, "ok"], []],
+        [["gs", GSX, GSR], [["f", GSX], ["q", GSX, GSR]]]
+    ]
+)
 FactProg(PROGRAM) <- (
     PROGRAM is [
         [["fact", 0, 1], []],
@@ -219,6 +235,8 @@ SolveGuard([GOAL, *GOALS], PROGRAM, LIM) <- (
 # A03-F008: deep unfolding vs single-clause functor with constant arg
 -specialize(Solve, ConstProg, alias=ConstShallow)
 -specialize(Solve, ConstProg, alias=ConstDeep, depth=5)
+-specialize(Solve, GvProg, alias=GvDeep, depth=5)
+-specialize(Solve, GsProg, alias=GsDeep, depth=5)
 
 # A03-F009: CPD + counting-extension chaining
 -specialize(SolveCount, GraphProg, alias=CountGraph)
@@ -578,6 +596,29 @@ class TestF008DeepUnfoldConstantCheck:
 
     def test_deep_spec_fails_like_generic(self, mod):
         assert not has_sol(mod, mod.ConstDeep([["g"]]))
+
+    # A03-F008 remaining case: var-goal-arg vs const-head-arg. Inlining
+    # f(GV) against fact f(1) binds the GOAL-side var GV, but the binding
+    # had no channel back to the enclosing clause head — it surfaced
+    # unbound AND gv(2) wrongly succeeded.
+    def test_deep_spec_propagates_goal_side_binding(self, mod):
+        prog = _program(mod, mod.GvProg)
+        V1, V2 = Var(), Var()
+        assert sols(mod, mod.Solve([["gv", V1]], prog), V1) == [(1,)]
+        assert sols(mod, mod.GvDeep([["gv", V2]]), V2) == [(1,)]
+
+    def test_deep_spec_rejects_conflicting_goal_side_const(self, mod):
+        prog = _program(mod, mod.GvProg)
+        assert not has_sol(mod, mod.Solve([["gv", 2]], prog))
+        assert not has_sol(mod, mod.GvDeep([["gv", 2]]))
+
+    def test_deep_spec_goal_side_binding_reaches_later_sibling_goal(self, mod):
+        prog = _program(mod, mod.GsProg)
+        X1, R1, X2, R2 = Var(), Var(), Var(), Var()
+        gen = sols(mod, mod.Solve([["gs", X1, R1]], prog), X1, R1)
+        spec = sols(mod, mod.GsDeep([["gs", X2, R2]]), X2, R2)
+        assert spec == gen == [(1, "ok")]
+        assert not has_sol(mod, mod.GsDeep([["gs", 2, Var()]]))
 
 
 class TestF009CpdExtensionChaining:

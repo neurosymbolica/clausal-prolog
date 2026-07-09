@@ -1560,6 +1560,29 @@ def _try_inline_goal(
     # Flatten chains so _subst's single-level lookup resolves to final values.
     subst_map = {vid: _ast_apply(val, raw_subst) for vid, val in raw_subst.items()}
 
+    # A03-F008 (goal-side bindings): _ast_unify may also bind GOAL-side vars
+    # (a var in first_goal against a constant/compound in the inlined head).
+    # Those vars are shared with the enclosing specialized clause's head and
+    # sibling goals, but there is no channel from here back to that clause —
+    # _deepen_clause re-emits ``clause.head`` verbatim, so a purely textual
+    # substitution drops the constraint (gv(GV) surfaces GV unbound and
+    # gv(2) wrongly succeeds).  Emit an explicit runtime Unify goal per
+    # bound goal-side var instead: the Var objects ARE the clause-head vars,
+    # so head unification at call time sees the binding, and repeated /
+    # aliased vars fall out of ordinary runtime unification.  Fresh vars
+    # (the inlined clause's own copies) are fully handled by substitution
+    # and need no Unify.
+    fresh_ids = {id(v) for v in var_map.values()}
+    unify_goals = []
+    seen_goal_vars = set()
+    for v in _ast_vars(first_goal):
+        vid = id(v)
+        if vid in raw_subst and vid not in fresh_ids and vid not in seen_goal_vars:
+            seen_goal_vars.add(vid)
+            unify_goals.append(
+                Unify(left=v, right=_ast_deep_apply(v, raw_subst))
+            )
+
     # Substitute into fresh body goals.
     inlined_goals = [_subst(body_goal, subst_map) for body_goal in fresh_body]
 
@@ -1567,8 +1590,10 @@ def _try_inline_goal(
     # now be bound by the head unification, so substitute into them too.
     remaining = [_subst(g, subst_map) for g in goal_list_arg[1:]]
 
-    # Build the continuation: inlined body goals + recursive call with remaining goals.
-    result = list(inlined_goals)
+    # Build the continuation: goal-side Unify goals + inlined body goals +
+    # recursive call with remaining goals.  The Unify goals come first so
+    # every later goal already sees the bindings.
+    result = unify_goals + list(inlined_goals)
 
     # If there are remaining goals, add a recursive call.
     if remaining:
@@ -2083,3 +2108,23 @@ def _ast_apply(t, subst: dict):
     if is_var(t) and id(t) in subst:
         return _ast_apply(subst[id(t)], subst)
     return t
+
+
+def _ast_deep_apply(t, subst: dict):
+    """Apply a substitution recursively, descending into list-form terms."""
+    t = _ast_apply(t, subst)
+    if isinstance(t, list):
+        return [_ast_deep_apply(e, subst) for e in t]
+    return t
+
+
+def _ast_vars(t) -> list:
+    """All ``Var`` instances in a list-form term, depth-first (with repeats)."""
+    if is_var(t):
+        return [t]
+    if isinstance(t, list):
+        out = []
+        for e in t:
+            out.extend(_ast_vars(e))
+        return out
+    return []
