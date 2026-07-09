@@ -722,6 +722,21 @@ class _ClausalToProlog:
     def _convert_call(self, node: python_ast.Call) -> PTerm:
         """Convert a function call to a PCompound."""
         if isinstance(node.func, python_ast.Name):
+            # Clausal has no cut: a Cut() goal in source is a call to an
+            # undefined predicate, and exporting it (as `cut` or as `!`)
+            # would launder cut through cut-free Clausal (F036). Reject.
+            if node.func.id == "Cut":
+                from clausal.tools.prolog_to_clausal import PrologTranslationError
+                raise PrologTranslationError(
+                    "Cut() cannot be translated to Prolog.\n"
+                    "Clausal has no Cut predicate — cut is intentionally "
+                    "omitted (it breaks declarative semantics and "
+                    "monotonicity), so a Cut() goal in Clausal source is "
+                    "already an error and must not be exported as Prolog "
+                    "!/0 or as an undefined `cut` predicate.\n"
+                    "Rewrite using once/1, dif/2 guards, or reified "
+                    "conditionals. See: docs/for_prolog_programmers.md"
+                )
             functor = resolve_name(node.func.id, self.dialect)
         elif isinstance(node.func, python_ast.Attribute):
             # Check for qualified operator calls (e.g. prolog.TruncDiv)

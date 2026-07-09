@@ -207,3 +207,25 @@ class TestF034QuoteAtomEscapes:
     def test_no_raw_control_chars_in_output(self):
         out = _quote_atom("a\n\t\r\x02b")
         assert all(ord(c) >= 32 for c in out)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F036 — Cut() in Clausal source must be rejected on export
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestF036CutRejected:
+    def test_cut_call_in_body_rejected(self):
+        # Clausal has no Cut predicate; exporting it as an undefined `cut`
+        # goal (or worse, as !) would launder cut through cut-free Clausal.
+        with pytest.raises(PrologTranslationError):
+            clausal_source_to_prolog("P() <- (Q(), Cut())")
+
+    def test_cut_call_in_metacall_rejected(self):
+        with pytest.raises(PrologTranslationError):
+            clausal_source_to_prolog("P(L) <- findall(X, (Q(X), Cut()), L)")
+
+    def test_cut_snake_case_predicate_unaffected(self):
+        # A user predicate that merely contains "cut" is fine.
+        out = clausal_source_to_prolog("P(X) <- (CutList(X))")
+        assert "cut_list(X)" in out
