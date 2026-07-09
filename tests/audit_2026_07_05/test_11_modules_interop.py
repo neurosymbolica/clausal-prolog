@@ -831,11 +831,19 @@ def test_F057_unit_pred_pow_integer_only():
 
 
 def test_F059_docs_quickstart_import_line(tmp_path):
-    # A11-F059 (fixed): has_units re-exported from py.units.
-    _load(tmp_path, '''
+    # A11-F059 (fixed): has_units re-exported from py.units — and CALLABLE
+    # through the imported name (the first registration wrapped a builtin-
+    # style fn with a k-less trampoline, so every call raised).
+    mod = _load(tmp_path, '''
         -import_from(py.units, [m, kg, s, Newton, kilo, has_units, strip_units])
         T(V) <- strip_units(5(m), V)
+        Hu(R) <- (has_units(5(m), m), R is "yes")
+        HuBad(R) <- (has_units(5(m), s), R is "never")
     ''', "f059")  # must not raise ImportError
+    r = Var()
+    assert [deref(r) for _ in call("Hu", r, module=_logic(mod))] == ["yes"]
+    r2 = Var()
+    assert [deref(r2) for _ in call("HuBad", r2, module=_logic(mod))] == []
 
 
 def test_guard_units_mismatch_catchable(tmp_path):

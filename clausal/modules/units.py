@@ -43,7 +43,7 @@ from typing import Callable
 from clausal.terms import Quantity, UnitsMismatch  # noqa: F401
 from clausal.logic.variables import deref, is_var, unify, get_attr
 from clausal.logic.trampoline import DONE
-from clausal.modules.py import ModulePredicate
+from clausal.modules.py import ModulePredicate, simple_to_trampoline
 
 
 # ── Trampoline helper ────────────────────────────────────────────────────────
@@ -505,5 +505,9 @@ import clausal.logic.units_constraint as _units_constraint  # noqa: F401
 # Re-export has_units/2 so the documented `-import_from(py.units, [...,
 # has_units, ...])` quick-start line resolves. It is also registered as a
 # global builtin; this importable wrapper shares the same implementation (F059).
+# _has_units is builtin-style — fn(d, unit_pred, trail, k) — so it needs the
+# py-module simple_to_trampoline (which appends k=None), NOT the local
+# _simple_to_trampoline for k-less units functions: the latter left every
+# call through the imported name raising a missing-argument error.
 has_units = _UnitsPredicate("has_units")
-has_units._register(2, _simple_to_trampoline(_units_constraint._has_units))
+has_units._register(2, simple_to_trampoline(_units_constraint._has_units))
