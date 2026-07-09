@@ -507,6 +507,28 @@ class TestF004CatchFunctorCatcher:
         R2 = Var()
         assert sols(mod, mod.cr1(R2), R2) == [("rec",)]
 
+    # Spec acceptance (fix-A03-catch-functor-catcher.md): atoms/functors are
+    # module-scoped, so a catcher naming an IMPORTED functor must resolve to
+    # the SAME class the throw site constructs — two modules, `-import_from`.
+    _F004_CATCH_LIB = '''
+-module(a03_f004_catchlib, [kex(KX)])
+thrower(TX) <- throw(kex(TX))
+'''
+    _F004_CATCH_IMPORTER = '''
+-import_from(a03_f004_catchlib, [kex, thrower])
+cimp(N, R) <- catch(thrower(7), kex(N), R is "caught")
+'''
+
+    def test_imported_functor_catcher_resolves_to_same_class(self, tmp_path):
+        lib = tmp_path / "a03_f004_catchlib.clausal"
+        lib.write_text(self._F004_CATCH_LIB)
+        _load_module("a03_f004_catchlib", str(lib))
+        imp = tmp_path / "a03_f004_catchimp.clausal"
+        imp.write_text(self._F004_CATCH_IMPORTER)
+        m = _load_module("a03_f004_catchimp", str(imp))
+        N, R = Var(), Var()
+        assert sols(m, m.cimp(N, R), N, R) == [(7, "caught")]
+
 
 # ── A03-F005 / A03-F006 — setof sort, findall template freshness ─────────────
 
