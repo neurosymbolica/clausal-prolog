@@ -280,10 +280,10 @@ def test_F006_retract_locked_raises(locked_mod):
 # A09-F007 — RecursionError from builtin helpers swallowed as failure
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F007: RecursionError is a "
-                   "RuntimeError subclass; drive loop treats it as generator "
-                   "exhaustion → cyclic input reported as plain 'no'")
 def test_F007_flatten_cyclic_not_silent(fix):
+    # A09-F007 fixed incidentally by A04-F009 (commit 8027e88d): the drive
+    # loop no longer treats RecursionError (a RuntimeError subclass) as
+    # generator exhaustion, so cyclic input raises instead of a silent 'no'.
     _, m = fix
     l = [1]
     l.append(l)
