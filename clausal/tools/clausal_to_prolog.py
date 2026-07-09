@@ -60,9 +60,40 @@ def _needs_quoting(name: str) -> bool:
     return True
 
 
+# ISO 6.4.2 control escape sequences (emitter leg of F034 — the tokenizer
+# already reads all of these). NUL uses the octal form `\0\` (the closing
+# backslash keeps a following digit from being absorbed into the escape).
+_ATOM_ESCAPES = {
+    "\\": "\\\\",
+    "'":  "\\'",
+    "\n": "\\n",
+    "\t": "\\t",
+    "\r": "\\r",
+    "\b": "\\b",
+    "\f": "\\f",
+    "\v": "\\v",
+    "\a": "\\a",
+    "\0": "\\0\\",
+}
+
+
 def _quote_atom(name: str) -> str:
-    """Single-quote an atom, escaping internal single quotes."""
-    return "'" + name.replace("\\", "\\\\").replace("'", "\\'") + "'"
+    """Single-quote an atom, escaping quotes and control characters.
+
+    Control characters without a named ISO escape are emitted with the
+    ISO hex form ``\\xHH\\`` — raw control chars inside a quoted atom are
+    not valid ISO Prolog text (F034).
+    """
+    out: list[str] = []
+    for ch in name:
+        esc = _ATOM_ESCAPES.get(ch)
+        if esc is not None:
+            out.append(esc)
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+            out.append(f"\\x{ord(ch):x}\\")
+        else:
+            out.append(ch)
+    return "'" + "".join(out) + "'"
 
 
 def emit_term(term: PTerm, op_table: OperatorTable, *,

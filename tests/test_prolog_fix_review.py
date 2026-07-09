@@ -167,3 +167,43 @@ class TestF041VariantEqualityRejected:
     def test_variant_equality_rejected_in_metacall(self):
         with pytest.raises(PrologTranslationError):
             prolog_to_clausal("q(L) :- findall(X, (p(X), X =@= f(_)), L).")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F034 — _quote_atom must escape control characters (ISO 6.4.2)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestF034QuoteAtomEscapes:
+    @pytest.mark.parametrize("raw,expected", [
+        ("a\nb", r"'a\nb'"),
+        ("a\tb", r"'a\tb'"),
+        ("a\rb", r"'a\rb'"),
+        ("a\bb", r"'a\bb'"),
+        ("a\fb", r"'a\fb'"),
+        ("a\vb", r"'a\vb'"),
+        ("a\ab", r"'a\ab'"),
+        ("a\0b", "'a\\0\\b'"),      # NUL: octal escape with closing backslash
+        ("a\x01b", "'a\\x1\\b'"),   # other control chars: \xHH\ fallback
+        ("a\x1bb", "'a\\x1b\\b'"),
+        ("a\x7fb", "'a\\x7f\\b'"),
+        ("it's", r"'it\'s'"),
+        ("a\\b", r"'a\\b'"),
+    ])
+    def test_control_chars_escaped(self, raw, expected):
+        assert _quote_atom(raw) == expected
+
+    @pytest.mark.parametrize("raw", [
+        "a\nb", "tab\there", "bell\a", "nul\0end", "\x01\x02", "mixed'\n\\",
+    ])
+    def test_roundtrips_through_own_tokenizer(self, raw):
+        text = emit_term(PAtom(raw, quoted=True),
+                         Dialect.swi().operator_table)
+        module = parse(f"p({text}).", dialect=Dialect.swi())
+        atom = module.items[0].head.args[0]
+        assert isinstance(atom, PAtom)
+        assert atom.name == raw
+
+    def test_no_raw_control_chars_in_output(self):
+        out = _quote_atom("a\n\t\r\x02b")
+        assert all(ord(c) >= 32 for c in out)
