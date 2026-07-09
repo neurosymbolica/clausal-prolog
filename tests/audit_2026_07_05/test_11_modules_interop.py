@@ -320,6 +320,54 @@ def test_F015_guard_date4_construct_and_decompose():
     assert len(sols) == 1 and deref(D) == pydt.date(2020, 1, 5)
 
 
+def test_F015_time4_rejects_float_components():
+    # A11-F015 (completed): time/4 rejects floats like date/4, no truncation.
+    from clausal.modules.py.datetime import _time_4
+    sols = list(_time_4(10.9, 5.9, 0, Var(), Trail(), None))
+    assert sols == []  # stdlib datetime.time raises TypeError on floats
+
+
+def test_F015_guard_time4_construct_and_decompose():
+    import datetime as pydt
+    from clausal.modules.py.datetime import _time_4
+    T = Var()
+    sols = list(_time_4(10, 5, 0, T, Trail(), None))
+    assert len(sols) == 1 and deref(T) == pydt.time(10, 5, 0)
+
+
+def test_F015_datetime7_rejects_float_components():
+    # A11-F015 (completed): datetime/7 rejects floats, no truncation.
+    from clausal.modules.py.datetime import _datetime_7
+    sols = list(_datetime_7(2020.9, 1, 5, 10.9, 0, 0, Var(), Trail(), None))
+    assert sols == []
+
+
+def test_F015_guard_datetime7_construct():
+    import datetime as pydt
+    from clausal.modules.py.datetime import _datetime_7
+    DT = Var()
+    sols = list(_datetime_7(2020, 1, 5, 10, 30, 0, DT, Trail(), None))
+    assert len(sols) == 1 and deref(DT) == pydt.datetime(2020, 1, 5, 10, 30, 0)
+
+
+def test_F015_timedelta3_float_days_exact_not_truncated():
+    # A11-F015 (completed): stdlib timedelta legitimately accepts floats —
+    # pass them through exactly instead of int()-truncating 1.5 days to 1.
+    import datetime as pydt
+    from clausal.modules.py.datetime import _timedelta_3
+    TD = Var()
+    sols = list(_timedelta_3(1.5, 0, TD, Trail(), None))
+    assert len(sols) == 1 and deref(TD) == pydt.timedelta(days=1.5)
+
+
+def test_F015_guard_timedelta3_int_and_unbound_seconds():
+    import datetime as pydt
+    from clausal.modules.py.datetime import _timedelta_3
+    TD = Var()
+    sols = list(_timedelta_3(2, Var(), TD, Trail(), None))
+    assert len(sols) == 1 and deref(TD) == pydt.timedelta(days=2)
+
+
 def test_F016_date_between_mixed_types_fails_cleanly():
     # A11-F016 (fixed): date/datetime mix fails cleanly.
     import datetime as pydt

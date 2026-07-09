@@ -123,8 +123,11 @@ def _time_4(hour, minute, second, t, trail, k):
     """
     hour, minute, second, t = deref(hour), deref(minute), deref(second), deref(t)
     if is_var(t):
+        # construct mode — pass components through unchanged so datetime.time
+        # rejects floats with a TypeError instead of int()-truncating 10.9 to
+        # 10 (F015, same treatment as date/4).
         try:
-            tm = _dt.time(int(hour), int(minute), int(second))
+            tm = _dt.time(hour, minute, second)
         except (TypeError, ValueError):
             return
         if unify(t, tm, trail):
@@ -151,9 +154,11 @@ def _datetime_7(year, month, day, hour, minute, second, dt, trail, k):
     year, month, day = deref(year), deref(month), deref(day)
     hour, minute, second, dt = deref(hour), deref(minute), deref(second), deref(dt)
     if is_var(dt):
+        # construct mode — pass components through unchanged so
+        # datetime.datetime rejects floats with a TypeError instead of
+        # int()-truncating them (F015, same treatment as date/4).
         try:
-            obj = _dt.datetime(int(year), int(month), int(day),
-                               int(hour), int(minute), int(second))
+            obj = _dt.datetime(year, month, day, hour, minute, second)
         except (TypeError, ValueError):
             return
         if unify(dt, obj, trail):
@@ -182,9 +187,13 @@ def _timedelta_3(days, seconds, td, trail, k):
     """
     days, seconds, td = deref(days), deref(seconds), deref(td)
     if is_var(td):
+        # construct mode — pass components through unchanged (F015). Unlike
+        # date/time/datetime, stdlib timedelta legitimately accepts floats
+        # and converts them exactly (1.5 days → 1 day 12 h), so floats are
+        # supported here rather than rejected — never int()-truncated.
         try:
-            obj = _dt.timedelta(days=int(days),
-                                seconds=int(seconds) if not is_var(seconds) else 0)
+            obj = _dt.timedelta(days=days,
+                                seconds=seconds if not is_var(seconds) else 0)
         except (TypeError, ValueError):
             return
         if unify(td, obj, trail):
