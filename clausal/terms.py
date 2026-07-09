@@ -343,11 +343,12 @@ def _seg_unify_cache_key(other, trail):
 # The cache therefore drives a *trail-free* split enumerator (below) and
 # applies each split against the current trail inline. A suspended entry
 # holds only the walked term + target + split-iterator state — never the
-# trail — so dropped trails are collectable. The cache also keeps only the
-# current ``(target, trail)`` drive, closing any prior entry, so it can't
-# grow unboundedly. Re-enumeration after eviction restarts from the first
-# split, which is indistinguishable from a fresh trail state for a
-# correctly-driven caller.
+# trail — so dropped trails are collectable. The cache is a small LRU
+# (``_SEG_UNIFY_LRU_MAX`` entries) so it can't grow unboundedly, while
+# still keeping several interleaved drives alive at once (a clear-all
+# eviction livelocked them — A01-F005 follow-up). Re-enumeration after
+# eviction restarts from the first split, which is indistinguishable from
+# a fresh trail state for a correctly-driven caller.
 
 
 def _seg_split_gen(segments, target_len, concrete_len):
@@ -426,20 +427,29 @@ def _apply_segbytes_split(segbytes, target_bytes, split, trail):
     return True
 
 
+# LRU capacity for the per-term ``_unify_gens`` cache. Small on purpose: it
+# only needs to keep the handful of drives that can realistically be
+# interleaved at once, while guaranteeing dead-trail entries are evicted
+# quickly (A01-F005). Clear-all eviction (the first F005 fix) livelocked
+# interleaved drives of one term against different targets: each new drive
+# evicted the other's suspended generator, so every resume restarted from
+# split 1 and neither drive could ever exhaust.
+_SEG_UNIFY_LRU_MAX = 8
+
+
 def _drive_seg_unify(cache, walked, other, trail, concrete_len, apply_fn):
     """Advance the ``__unify__`` split-drive by one successful split.
 
     ``cache`` maps ``(target-content, id(trail)) -> (split_gen, last_mark)``.
-    The generator is trail-free (:func:`_seg_split_gen`); ``apply_fn`` binds a
-    split against *trail*. Keeps only the current drive's entry (A01-F005)."""
+    The generator is the trail-free :func:`_seg_split_gen`; ``apply_fn`` binds
+    a split against *trail*. The cache is a small LRU (at most
+    :data:`_SEG_UNIFY_LRU_MAX` entries, insertion order = recency): evicted
+    generators are ``close()``d, so stale drives are dropped promptly while
+    concurrently interleaved drives stay alive (A01-F005 follow-up)."""
     key = _seg_unify_cache_key(other, trail)
-    entry = cache.get(key)
+    # Pop so a resumed entry is re-inserted at the MRU end below.
+    entry = cache.pop(key, None)
     if entry is None:
-        # New (target, trail) drive: drop and close any stale entry so the
-        # cache never holds more than the drive in progress.
-        for old_gen, _ in cache.values():
-            old_gen.close()
-        cache.clear()
         gen = _seg_split_gen(walked.segments, len(other), concrete_len)
     else:
         gen, last_mark = entry
@@ -451,10 +461,12 @@ def _drive_seg_unify(cache, walked, other, trail, concrete_len, apply_fn):
         try:
             split = next(gen)
         except StopIteration:
-            cache.pop(key, None)
             return False
         mark = trail.mark()
         if apply_fn(walked, other, split, trail):
+            while len(cache) >= _SEG_UNIFY_LRU_MAX:
+                old_gen, _ = cache.pop(next(iter(cache)))
+                old_gen.close()
             cache[key] = (gen, mark)
             return True
         trail.undo(mark)
@@ -610,9 +622,9 @@ class SegList:
         return False
 
     def __unify__(self, other, trail):
-        """Called by C do_unify. Drives ``_seglist_unify_gen`` one split per
-        call against a list/str target, so repeated calls with the same
-        ``(other, trail)`` enumerate every valid split rather than
+        """Called by C do_unify. Drives the trail-free :func:`_seg_split_gen`
+        one split per call against a list/str target, so repeated calls with
+        the same ``(other, trail)`` enumerate every valid split rather than
         committing to the first.
 
         The C ``do_unify`` protocol hook is bool-valued, so we expose the
@@ -621,7 +633,7 @@ class SegList:
         the cached generator by one step:
 
         * First call with a given ``(other, trail)`` creates the generator
-          (via :func:`_seglist_unify_gen`) and pulls its first split — the
+          (via :func:`_seg_split_gen`) and pulls its first split — the
           target VarSegs are bound on ``trail`` and ``True`` is returned.
         * Subsequent calls resume the generator, undoing the previous
           split's bindings (a no-op if the caller already wound past them

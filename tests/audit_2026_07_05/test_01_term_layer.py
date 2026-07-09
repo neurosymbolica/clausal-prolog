@@ -208,7 +208,8 @@ class TestF005UnifyGensRetention:
         gc.collect()
         alive = sum(1 for r in refs if r() is not None)
         assert alive == 0, f"{alive}/20 dead trails pinned by _unify_gens"
-        assert len(sl._unify_gens) <= 1
+        # Bounded LRU (A01-F005 follow-up): never more than the LRU capacity.
+        assert len(sl._unify_gens) <= 8
 
     def test_control_exhausted_generator_is_dropped(self):
         sl = SegList([VarSeg(Var())])
@@ -221,6 +222,55 @@ class TestF005UnifyGensRetention:
             assert n < 10
         assert n == 1
         assert len(sl._unify_gens) == 0
+
+    def test_interleaved_drives_do_not_evict_each_other(self):
+        # A01-F005 follow-up: the clear-all eviction meant two interleaved
+        # drives of the same Seg* term against different targets evicted each
+        # other — every resume restarted from split 1 and the outer drive
+        # never exhausted (livelock).  With the LRU both drives stay live.
+        A, B = Var(), Var()
+        sl = SegList([VarSeg(A), VarSeg(B)])
+        t1, t2 = Trail(), Trail()
+        m1 = t1.mark()
+        outer_splits = []
+        inner_splits = []
+        n = 0
+        while unify(sl, [1, 2], t1):
+            n += 1
+            assert n <= 3, (
+                "outer drive livelocked: splits repeat forever because the "
+                "interleaved drive evicted its generator")
+            outer_splits.append((deref(A), deref(B)))
+            t1.undo(m1)
+            # Interleave one step of a drive against a DIFFERENT target.
+            m2 = t2.mark()
+            if unify(sl, [7, 8, 9], t2):
+                inner_splits.append((deref(A), deref(B)))
+                t2.undo(m2)
+        assert outer_splits == [([], [1, 2]), ([1], [2]), ([1, 2], [])]
+        # Finish the interleaved drive: it must resume where it left off and
+        # enumerate the remaining splits of [7, 8, 9].
+        m2 = t2.mark()
+        k = 0
+        while unify(sl, [7, 8, 9], t2):
+            k += 1
+            assert k <= 4, "inner drive livelocked after outer exhausted"
+            inner_splits.append((deref(A), deref(B)))
+            t2.undo(m2)
+        assert inner_splits == [
+            ([], [7, 8, 9]), ([7], [8, 9]), ([7, 8], [9]), ([7, 8, 9], []),
+        ]
+
+    def test_lru_eviction_bounds_cache_and_closes_generators(self):
+        # Drive many distinct (target, trail) pairs one step each: the cache
+        # must stay bounded at the LRU capacity (evicted generators closed).
+        sl = SegList([VarSeg(Var()), VarSeg(Var())])
+        t = Trail()
+        for i in range(30):
+            m = t.mark()
+            assert unify(sl, [i, i + 1, i + 2], t)
+            t.undo(m)
+        assert len(sl._unify_gens) <= 8
 
 
 # ─────────────────────────────────────────────────────────────────────────────
