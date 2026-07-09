@@ -233,8 +233,13 @@ def test_F005_assertz_rule(fix):
     _, m = fix
     # azrule(OK) <- (assertz(seen2(Z) <- q3(Z)), OK is 1) — the assertz of a
     # rule must raise, propagating out of azrule.
-    with pytest.raises(LogicException):
+    with pytest.raises(LogicException) as ei:
         _first(m, "azrule", Var())
+    inner = ei.value.term.args[0]
+    assert getattr(inner, "functor", None) == "permission_error"
+    # A09-F005 nit: the error context names the actual caller — there is no
+    # assert/1 builtin, only assertz/1 and asserta/1.
+    assert ei.value.term.args[1] == "assertz/1"
     V = Var()
     got = set()
     try:

@@ -48,8 +48,11 @@ def _normalize_fact_clause(term: Any):
     return Clause(head=term, body=[])
 
 
-def _build_clause(term_val: Any) -> "Any":
+def _build_clause(term_val: Any, context: str) -> "Any":
     """Build a Clause from a runtime term passed to assertz/asserta.
+
+    *context* is the calling builtin's indicator ("assertz/1" or
+    "asserta/1"), used as the error context on rejection.
 
     Only plain terms (facts) are accepted; ground Compound facts are
     normalized to Var+Is form.
@@ -65,7 +68,7 @@ def _build_clause(term_val: Any) -> "Any":
 
     if isinstance(term_val, _Predicate):
         raise LogicException(
-            permission_error("assert", "rule", term_val.head, "assert/1"))
+            permission_error("assert", "rule", term_val.head, context))
     return _normalize_fact_clause(term_val)
 
 
@@ -99,7 +102,7 @@ def _assertz_factory(db):
         term_val = deref(term)
         if is_var(term_val):
             return
-        clause = _build_clause(term_val)
+        clause = _build_clause(term_val, "assertz/1")
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, module_dict)
         if pred_cls is not None and pred_cls._locked:
@@ -135,7 +138,7 @@ def _asserta_factory(db):
         term_val = deref(term)
         if is_var(term_val):
             return
-        clause = _build_clause(term_val)
+        clause = _build_clause(term_val, "asserta/1")
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, module_dict)
         if pred_cls is not None and pred_cls._locked:
