@@ -341,6 +341,13 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
     returns the variable itself so the Unify is a harmless no-op. The goal's own
     top-level argument variables (pattern, subject) are excluded so a group can
     never clobber them.
+
+    The target variable is passed through the thunk's ``var_objects`` — NOT
+    captured in a closure default — so each activation sees its own renamed
+    Var. A closure default would pin the clause-TEMPLATE Var: in the no-group
+    case the Unify would then alias every activation through that one shared
+    variable, so two differently-instantiated calls in a single derivation
+    would wrongly conflict (F007 regression).
     """
     from clausal.terms import PyThunk
 
@@ -353,21 +360,24 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
 
     arg_vars = {id(deref(a)) for a in goal.args if is_var(deref(a))}
 
-    def _bind_if_present(g, _field, _self):
+    def _bind_if_present(g, v, _field):
         if isinstance(g, dict):
             for key, val in g.items():
                 if isinstance(key, str) and key.lstrip("_").lower() == _field \
                         and val is not None:
                     return val
-        return _self
+        return v
 
     chain = match_goal
     for field_name, target_var in ctx._clause_vars.items():
         if id(deref(target_var)) in arg_vars:
             continue
+        # ``v`` arrives dereferenced per activation: the activation's own Var
+        # when unbound (deref returns self), or its bound value — either way
+        # the no-group Unify is a per-activation no-op.
         thunk = PyThunk(
-            lambda g, _f=field_name, _v=target_var: _bind_if_present(g, _f, _v),
-            (groups_var,),
+            lambda g, v, _f=field_name: _bind_if_present(g, v, _f),
+            (groups_var, target_var),
         )
         chain = And(left=chain, right=Unify(left=target_var, right=thunk))
 

@@ -161,6 +161,34 @@ def test_F007_dynamic_pattern_autobind_or_documented(tmp_path):
     assert _values(m.Dyn(r"(?P<YEAR>\d+)", "2026", Y), Y, m) == ["2026"]
 
 
+def test_F007_dynamic_autobind_no_aliasing_across_activations(tmp_path):
+    # A11-F007 regression: when the runtime pattern has NO matching named
+    # group, the no-op Unify must not route through the clause-template Var —
+    # that would alias every activation through one shared variable. Two
+    # differently-instantiated Dyn calls in one derivation must both succeed.
+    m = _load(tmp_path, '''
+        -import_from(regex, [match])
+        Dyn(P, S, YEAR) <- match(P, S)
+        Pair(X) <- (Dyn(r"x", "x", "one"), Dyn(r"x", "x", "two"), X is "ok")
+    ''', "f007b")
+    X = Var()
+    assert _values(m.Pair(X), X, m) == ["ok"]
+
+
+def test_F007_dynamic_autobind_group_present_two_activations(tmp_path):
+    # A11-F007 regression companion: the group-PRESENT path stays per-
+    # activation too — two calls binding different years in one derivation.
+    m = _load(tmp_path, '''
+        -import_from(regex, [match])
+        Dyn(P, S, YEAR) <- match(P, S)
+        Two(A, B) <- (Dyn(r"(?P<YEAR>\\d+)", "2025", A),
+                      Dyn(r"(?P<YEAR>\\d+)", "2026", B))
+    ''', "f007c")
+    A, B = Var(), Var()
+    got = [(deref(A), deref(B)) for _ in solve(m.Two(A, B), module=m)]
+    assert got == [("2025", "2026")]
+
+
 def test_F008_guard_unmatched_optional_group_binds_none(tmp_path):
     """A11-F008 (design, current behavior guard): unmatched optional named
     group auto-binds Python None — Python-consistent, undocumented."""
