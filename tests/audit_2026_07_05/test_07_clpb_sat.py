@@ -593,6 +593,38 @@ class TestSuspectedBugs:
             pytest.fail("sat(xor-30) did not finish within 5s (exponential blowup)")
         assert proc.returncode == 0 and "OK" in proc.stdout
 
+    @pytest.mark.timeout(30)  # override the suite-wide 10s pytest-timeout
+    def test_A07_F001_xor_chain_sat_not_exponential_without_C(self):
+        # A07-F001 follow-up: c_restrict_rec got a per-call memo but the
+        # pure-Python restrict fallback didn't — with _clpb_core absent,
+        # restrict over a shared-BDD XOR chain re-explored 2^n paths of a
+        # 2n-1-node DAG (~4x per +2 vars; n=22 ≈ 3s).  Block the C module
+        # in a subprocess (sys.modules poisoning makes the `from ... import`
+        # raise ImportError, taking the pure-Python branch) and require the
+        # 30-var chain to solve well under the pytest timeout.
+        script = textwrap.dedent("""
+            import sys
+            sys.modules['clausal.logic._clpb_core'] = None  # force no-C path
+            from clausal.logic import clpb
+            assert clpb.restrict is clpb._restrict_py, "C fallback not active"
+            from clausal.logic.variables import Var, Trail
+            from clausal.pythonic_ast.nodes import BitXor
+            vs = [Var() for _ in range(30)]
+            e = vs[0]
+            for v in vs[1:]:
+                e = BitXor(left=e, right=v)
+            assert clpb.sat(e, Trail())
+            print("OK")
+        """)
+        env = dict(os.environ, PYTHONPATH=REPO_ROOT)
+        try:
+            proc = subprocess.run([sys.executable, "-c", script], env=env,
+                                  capture_output=True, text=True, timeout=5)
+        except subprocess.TimeoutExpired:
+            pytest.fail("pure-Python sat(xor-30) did not finish within 5s "
+                        "(restrict fallback exponential)")
+        assert proc.returncode == 0 and "OK" in proc.stdout, proc.stderr[-500:]
+
     def test_A07_F002_alias_after_xor_must_fail(self):
         tr = Trail()
         x, y = Var(), Var()

@@ -308,24 +308,41 @@ def restrict(bdd, var_id: int, value: int):
     """Restrict a BDD: substitute var_id = value (0 or 1).
 
     Follows the low branch for value=0, high branch for value=1.
+
+    Per-call memo keyed by node identity, mirroring the C
+    ``c_restrict_rec`` (A07-F001): a BDD is a hash-consed DAG, so without
+    the memo shared sub-nodes are re-explored once per path — exponential
+    on e.g. an n-var XOR chain (2n-1 nodes, 2^n paths).
     """
+    return _restrict_rec(bdd, var_id, value, {})
+
+
+def _restrict_rec(bdd, var_id: int, value: int, memo: dict):
     if not isinstance(bdd, BDDNode):
         return bdd
     if bdd.var_id == var_id:
         return bdd.high if value else bdd.low
     if bdd.var_id > var_id:
         return bdd
+    nid = id(bdd)
+    cached = memo.get(nid)
+    if cached is not None:
+        return cached
     # Recurse on both children
-    high = restrict(bdd.high, var_id, value)
-    low = restrict(bdd.low, var_id, value)
+    high = _restrict_rec(bdd.high, var_id, value, memo)
+    low = _restrict_rec(bdd.low, var_id, value, memo)
     if high is low:
-        return low
-    var = _get_var_for_id(bdd.var_id)
-    if var is not None:
-        return make_node(bdd.var_id, high, low, var)
-    if high is bdd.high and low is bdd.low:
-        return bdd
-    return BDDNode(bdd.var_id, high, low)
+        result = low
+    else:
+        var = _get_var_for_id(bdd.var_id)
+        if var is not None:
+            result = make_node(bdd.var_id, high, low, var)
+        elif high is bdd.high and low is bdd.low:
+            result = bdd
+        else:
+            result = BDDNode(bdd.var_id, high, low)
+    memo[nid] = result
+    return result
 
 
 # ── Expression → BDD conversion ─────────────────────────────────────────────
