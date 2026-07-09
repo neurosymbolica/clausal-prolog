@@ -73,37 +73,44 @@ def _extract_vertices(edges):
     return result
 
 
-def _adj_append(adj, key, value):
+def _adj_append(adj, key, value, seen):
     """Append *value* to ``adj[key]`` unless it is already present.
 
     Order-preserving dedup so parallel edges don't produce duplicate neighbor
     entries (and hence duplicate find_path solutions / neighbor lists) — F051.
+    *seen* is a per-key set of ``_vertex_key`` values maintained alongside the
+    ordered list so membership is O(1) instead of a linear scan per insert
+    (which made adjacency builds O(E·deg) — seconds on a 40k-edge star).
     """
-    lst = adj.setdefault(key, [])
-    if value not in lst:
-        lst.append(value)
+    keys = seen.setdefault(key, set())
+    vk = _vertex_key(value)
+    if vk not in keys:
+        keys.add(vk)
+        adj.setdefault(key, []).append(value)
 
 
 def _build_adj(edges):
     """Build undirected adjacency dict from edge list."""
     adj: dict = {}
+    seen: dict = {}
     for edge in edges:
         e = deref(edge)
         if isinstance(e, list) and len(e) >= 2:
             u, v = deref(e[0]), deref(e[1])
-            _adj_append(adj, u, v)
-            _adj_append(adj, v, u)
+            _adj_append(adj, u, v, seen)
+            _adj_append(adj, v, u, seen)
     return adj
 
 
 def _build_directed_adj(edges):
     """Build directed adjacency dict from edge list."""
     adj: dict = {}
+    seen: dict = {}
     for edge in edges:
         e = deref(edge)
         if isinstance(e, list) and len(e) >= 2:
             u, v = deref(e[0]), deref(e[1])
-            _adj_append(adj, u, v)
+            _adj_append(adj, u, v, seen)
             adj.setdefault(v, [])  # ensure v is in adj
     return adj
 

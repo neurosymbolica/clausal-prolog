@@ -703,6 +703,20 @@ def test_F051_neighbors_dedup():
     assert sols == [["b"]]
 
 
+def test_F051_adjacency_build_linear_perf():
+    # A11-F051 (perf): adjacency dedup uses a per-key seen-set, not a linear
+    # scan per insert — a 40k-edge star must build in well under 2 seconds
+    # (the quadratic scan took >4s here; linear is milliseconds; suite
+    # timeout is 10s).
+    import time
+    edges = [["c", i] for i in range(40000)]
+    t0 = time.perf_counter()
+    adj = G._build_adj(edges)
+    elapsed = time.perf_counter() - t0
+    assert len(adj["c"]) == 40000
+    assert elapsed < 2.0
+
+
 def test_F052_mst_mixed_vertex_types():
     # A11-F052 (fixed): monotone counter breaks weight ties before vertices.
     t, c = Var(), Var()
