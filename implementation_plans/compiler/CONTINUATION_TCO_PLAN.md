@@ -1,6 +1,13 @@
 # Continuation-level TCO — Plan
 
-Status: **proposal**.  Nothing implemented.  Sibling to
+Status: **Phases 1–3 implemented; Phase 4 partial; Phase 5 not
+started.**  The split `proceed`/`fail`/`catcher` protocol (§3, §4.1)
+is live in `clausal/logic/trampoline.py`, and the §5.1 eligibility
+pass (`clausal/logic/compiler/optimisations/continuation_tco.py`)
+drives TCO emission via `TrampolineStrategy.emit_sub_call` behind the
+`continuation_tco` optimisation flag.  Of Phase 4 (the `commit`
+variant, §3.4), only the `FINAL` sentinel and root-driver handling
+exist — no producer emits it yet.  Sibling to
 `LLVM_BACKEND.md` (both redesign aspects of the execution protocol);
 supersedes the diagnostic notes in `todo/continuation_tco.md` and is
 itself informed by `todo/commit_yield_determinism.md` and
@@ -433,5 +440,8 @@ the recursion structure above is reusable for the commit rule.
 
 ## 10. Status
 
-Proposal.  Not scheduled.  Revisit when LLVM-backend design
-resumes, or when a wrapper-heavy workload surfaces in benchmarking.
+Phases 1–3 landed (protocol split, codegen split, TCO emission at
+eligible sites).  Phase 4 stopped after the `FINAL` sentinel +
+root-driver handling — the structural analysis and lowering that
+would emit `yield (_proceed, FINAL)` remain unimplemented.  Phase 5
+(LLVM alignment) waits on the LLVM-backend design resuming.

@@ -149,8 +149,17 @@ runs our `_undo(mark)` on child DONE before forwarding DONE up, or
 moving head-unify outside the clause generator — there is no sound
 rewrite at compile time alone.
 
-**Status**: parked.  If revisited, start from the protocol change,
-not the lowering.  The comment-only groundwork (`SubCall.tail_position`,
-`parent_override` kwarg, a `continuation_tco` optimisation pass) was
-reverted cleanly; no code remains.  See commit history around
-2026-04-15 for the attempt.
+**Status**: superseded by `../CONTINUATION_TCO_PLAN.md` — and the
+revisit did start from the protocol change.  The plan's Phases 1–3
+are now implemented: `StepGenerator` carries split
+`proceed`/`fail`/`catcher` continuations, and a reimplemented
+`optimisations/continuation_tco.py` pass marks `SubCall.tail_position`
+for `TrampolineStrategy.emit_sub_call` to consume.  That resolves both
+failures above — `fail` still routes through the caller's frame, so
+trail undo, next-clause enumeration, and enclosing loops run on child
+DONE while only the solution path is redirected.  The 2026-04-15
+comment-only groundwork was reverted at the time (see commit history
+around that date for the failed single-parent attempt); the current
+code is a fresh implementation on the split protocol.  The plan's
+`commit`/`FINAL` variant (§3.4) is still unimplemented beyond the
+sentinel + root-driver handling.
