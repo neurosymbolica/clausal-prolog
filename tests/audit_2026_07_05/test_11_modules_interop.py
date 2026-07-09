@@ -189,6 +189,21 @@ def test_F007_dynamic_autobind_group_present_two_activations(tmp_path):
     assert got == [("2025", "2026")]
 
 
+def test_F007_dynamic_autobind_gated_on_logic_var_names(tmp_path):
+    # A11-F007 cleanup: runtime binding follows the same naming gate as
+    # static expansion (_is_logic_var_name) — the docs promise a lowercase
+    # group name "(?P<year>...)" will NOT auto-bind.
+    m = _load(tmp_path, '''
+        -import_from(regex, [match])
+        Dyn(P, S, YEAR) <- match(P, S)
+    ''', "f007d")
+    # lowercase group: no binding attempted, so the conflicting value "x"
+    # still succeeds.
+    assert len(list(solve(m.Dyn(r"(?P<year>\d+)", "2026", "x"), module=m))) == 1
+    # ALLCAPS group binds — and therefore conflicts with "x" here.
+    assert list(solve(m.Dyn(r"(?P<YEAR>\d+)", "2026", "x"), module=m)) == []
+
+
 def test_F008_guard_unmatched_optional_group_binds_none(tmp_path):
     """A11-F008 (design, current behavior guard): unmatched optional named
     group auto-binds Python None — Python-consistent, undocumented."""

@@ -363,7 +363,14 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
     def _bind_if_present(g, v, _field):
         if isinstance(g, dict):
             for key, val in g.items():
-                if isinstance(key, str) and key.lstrip("_").lower() == _field \
+                # Same naming gate as static expansion: only ALLCAPS /
+                # leading-underscore group names auto-bind (docs/regex.md).
+                # A group that matched nothing (val None) is skipped — unlike
+                # static expansion, which binds None — because in dynamic mode
+                # EVERY clause variable is a candidate, and binding None to a
+                # variable that merely shares a group's name would clobber it.
+                if isinstance(key, str) and _is_logic_var_name(key) \
+                        and key.lstrip("_").lower() == _field \
                         and val is not None:
                     return val
         return v

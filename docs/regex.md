@@ -307,7 +307,11 @@ auto-binding still applies: a group whose name (ALLCAPS or leading-underscore)
 matches an in-scope clause variable is bound at runtime when it participates in
 the match. Because the group names are unknown until the goal runs, a variable
 is only bound when its matching group is actually present — otherwise it is
-left untouched:
+left untouched. This is one deliberate divergence from static (string-literal)
+patterns, where an optional group that did not participate in the match binds
+its variable to Python `None`: in dynamic mode every in-scope clause variable
+is a binding candidate, so a non-participating group leaves the variable
+unbound rather than clobbering it with `None`.
 
 ```clausal
 -import_from(regex, [match])
