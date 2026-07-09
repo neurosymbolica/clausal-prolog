@@ -250,16 +250,30 @@ def test_F005_assertz_rule(fix):
 # (RuntimeError raised, then swallowed by the trampoline drive loop)
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _assert_static_procedure_error(ei, context):
+    """The term is error(permission_error(modify, static_procedure, F/A), Ctx)."""
+    inner = ei.value.term.args[0]
+    assert getattr(inner, "functor", None) == "permission_error"
+    assert inner.args[0] == "modify"
+    assert inner.args[1] == "static_procedure"
+    assert ei.value.term.args[1] == context
+
+
 def test_F006_assertz_locked_raises(locked_mod):
+    # Tightened post-A04-F009: pytest.raises(Exception) would also pass on
+    # the pre-fix raw RuntimeError (the narrowed trampoline no longer
+    # swallows it), so assert the typed LogicException specifically.
     _, m = locked_mod
-    with pytest.raises(Exception):  # permission_error LogicException expected
+    with pytest.raises(LogicException) as ei:
         _first(m, "lockassert", Var())
+    _assert_static_procedure_error(ei, "assertz/1")
 
 
 def test_F006_retract_locked_raises(locked_mod):
     _, m = locked_mod
-    with pytest.raises(Exception):
+    with pytest.raises(LogicException) as ei:
         _first(m, "lockretract", Var())
+    _assert_static_procedure_error(ei, "retract/1")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
