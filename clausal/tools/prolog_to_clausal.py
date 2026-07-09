@@ -98,6 +98,7 @@ _INFIX_MAP = {
     "*":    "*",
     "/":    "/",
     "**":   "**",
+    "^":    "**",       # ISO exponentiation (arithmetic context only, F026)
     ",":    ",",        # conjunction stays
     "div":  "//",       # SWI floored division → clausal // (also floored)
     "=..":  "=..",      # univ — no direct clausal equivalent, keep as comment
@@ -648,6 +649,56 @@ class _PrologToClausal:
                 "See: docs/reified_ite.md, docs/for_prolog_programmers.md"
             )
 
+        # Standard-order comparison has no Clausal equivalent — the language
+        # exposes no standard term order (setof's internal sort is not a
+        # user-facing builtin). Reject rather than emit `@<(X, Y)` (F026).
+        if functor in ("@<", "@>", "@=<", "@>=") and len(args) == 2:
+            raise PrologTranslationError(
+                f"Standard-order comparison ('{functor}') cannot be "
+                "translated: Clausal has no standard-order term comparison "
+                "builtins.\n"
+                "Use arithmetic comparison (<, =<, ...) for numbers, or "
+                "structural ==/\\== for term identity."
+            )
+
+        # Variant equality has no Clausal equivalent (F041 — the designed
+        # rejection promised when =@=/\=@= were added to the parser tables).
+        if functor in ("=@=", "\\=@=") and len(args) == 2:
+            raise PrologTranslationError(
+                f"Variant equality ('{functor}') cannot be translated: "
+                "Clausal has no term-variance builtin.\n"
+                "Rewrite using structural ==/\\== (for identical terms) or "
+                "an explicit double copy_term/subsumes check."
+            )
+
+        # bagof/setof: strip ISO existential quantifiers (V^Goal) from the
+        # goal argument. Clausal's bagof/setof never group by free variables
+        # (they collect over all solutions, failing when empty), which is
+        # exactly ISO's behaviour when the free variables are ^-quantified —
+        # dropping the quantifier is faithful (F026).
+        if functor in ("bagof", "setof") and len(args) == 3:
+            inner = args[1]
+            while (isinstance(inner, PCompound) and inner.functor == "^"
+                    and len(inner.args) == 2):
+                inner = inner.args[1]
+            if inner is not args[1]:
+                args = (args[0], inner, args[2])
+                term = PCompound(functor, args)
+
+        # (^)/2 anywhere else in goal/term position: in arithmetic context it
+        # is exponentiation (handled in _emit_expr → Python **); as a plain
+        # goal or data term Clausal has no equivalent — reject rather than
+        # emit `^(Y, Goal)` (F026).
+        if functor == "^" and len(args) == 2:
+            raise PrologTranslationError(
+                "The existential quantifier ((^)/2) is only supported inside "
+                "the goal argument of bagof/3 or setof/3, where it is "
+                "stripped (Clausal's bagof/setof never group by free "
+                "variables).\n"
+                "In arithmetic context, (^)/2 translates to Python's ** "
+                "operator."
+            )
+
         # ','/2 in term position is a tuple, NOT a flattened argument list:
         # emitting it bare turned foo(a, (b, c)) into a foo/3 call (F023).
         if functor == "," and len(args) == 2:
@@ -747,7 +798,7 @@ class _PrologToClausal:
         "<<": 4, ">>": 4,
         "+": 5, "-": 5,
         "*": 6, "/": 6, "div": 6,
-        "**": 8,
+        "**": 8, "^": 8,
     }
 
     def _emit_expr(self, term: PTerm, parent_prec: int = 0) -> str:
@@ -775,10 +826,11 @@ class _PrologToClausal:
             # Arithmetic binary operators
             if len(term.args) == 2 and term.functor in self._EXPR_PREC:
                 my_prec = self._EXPR_PREC[term.functor]
-                if term.functor == "**":
+                if term.functor in ("**", "^"):
                     # ** is right-associative in Python: the LEFT child needs
                     # parens at equal precedence so (2**3)**2 doesn't collapse
-                    # to 2**3**2 == 2**(3**2) (F030).
+                    # to 2**3**2 == 2**(3**2) (F030). ISO ^ is xfy (also
+                    # right-associative), so the same rule applies (F026).
                     left = self._emit_expr(term.args[0], my_prec + 1)
                     right = self._emit_expr(term.args[1], my_prec)
                 else:

@@ -114,3 +114,56 @@ class TestF035QuotedFunctorHeads:
         # 'foo' names the same atom as foo — a plain identifier head is fine.
         out = prolog_to_clausal("'foo'(x).")
         assert "Foo(x)," in out
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F026/F041 — newly-parsed operators must not emit invalid Clausal
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestF026BagofWitness:
+    def test_bagof_witness_stripped(self):
+        # Clausal bagof/setof never group by free variables, which is ISO's
+        # behaviour when the variable is ^-quantified — drop the quantifier.
+        out = prolog_to_clausal("q(L) :- bagof(X, Y^p(X,Y), L).")
+        assert "bagof(X, P(X, Y), L)" in out
+        assert "^" not in out
+
+    def test_setof_nested_witnesses_stripped(self):
+        out = prolog_to_clausal("q(L) :- setof(X, A^B^p(X, A, B), L).")
+        assert "setof(X, P(X, A, B), L)" in out
+        assert "^" not in out
+
+    def test_caret_outside_bagof_rejected(self):
+        # (^)/2 in plain goal/term position has no Clausal equivalent.
+        with pytest.raises(PrologTranslationError):
+            prolog_to_clausal("q(X) :- Y^p(X, Y).")
+
+    def test_arith_caret_maps_to_python_pow(self):
+        # In arithmetic context (^)/2 is ISO exponentiation → Python **.
+        out = prolog_to_clausal("f(X) :- X is 2 ^ 3.")
+        assert "X := 2 ** 3" in out
+
+    def test_arith_caret_right_associative(self):
+        # ISO ^ is xfy: 2^3^2 = 2^(3^2); Python ** is also right-assoc.
+        out = prolog_to_clausal("f(X) :- X is 2 ^ 3 ^ 2.")
+        assert "X := 2 ** 3 ** 2" in out
+
+
+class TestF026StandardOrderRejected:
+    @pytest.mark.parametrize("op", ["@<", "@>", "@=<", "@>="])
+    def test_standard_order_comparison_rejected(self, op):
+        # Clausal has no standard-order term comparison builtins.
+        with pytest.raises(PrologTranslationError):
+            prolog_to_clausal(f"q(X, Y) :- X {op} Y.")
+
+
+class TestF041VariantEqualityRejected:
+    @pytest.mark.parametrize("op", ["=@=", "\\=@="])
+    def test_variant_equality_rejected(self, op):
+        with pytest.raises(PrologTranslationError):
+            prolog_to_clausal(f"q(X, Y) :- X {op} Y.")
+
+    def test_variant_equality_rejected_in_metacall(self):
+        with pytest.raises(PrologTranslationError):
+            prolog_to_clausal("q(L) :- findall(X, (p(X), X =@= f(_)), L).")
