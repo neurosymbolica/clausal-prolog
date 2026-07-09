@@ -60,12 +60,13 @@ class ModulePredicate:
         hash._register(3, simple_to_trampoline(_hash_3))
     """
 
-    __slots__ = ("_name", "_module", "_dispatch_fns")
+    __slots__ = ("_name", "_module", "_dispatch_fns", "_dispatch_wrapper")
 
     def __init__(self, name: str, *, module: str = "") -> None:
         self._name = name
         self._module = module
         self._dispatch_fns: dict[int, Callable] = {}
+        self._dispatch_wrapper: Callable | None = None
 
     def _register(self, arity: int, fn: Callable) -> None:
         self._dispatch_fns[arity] = fn
@@ -73,8 +74,16 @@ class ModulePredicate:
     def _get_dispatch(self) -> Callable:
         # Always route through the arity-checking dispatcher so wrong-arity is
         # a consistent, catchable error (F005) and stdlib exceptions raised by
-        # the implementation are converted to catchable terms (F004).
-        return _catchable_dispatch(self._name, self._multi_dispatch)
+        # the implementation are converted to catchable terms (F004). Compiled
+        # goals call _get_dispatch per invocation, so cache the wrapper —
+        # _multi_dispatch reads _dispatch_fns at call time, so later
+        # _register calls are still honoured.
+        wrapper = self._dispatch_wrapper
+        if wrapper is None:
+            wrapper = self._dispatch_wrapper = _catchable_dispatch(
+                self._multi_dispatch
+            )
+        return wrapper
 
     def _multi_dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
         arity = len(args) - 1  # exclude trail
@@ -98,7 +107,7 @@ class ModulePredicate:
         return f"{prefix}{self._name}/{arities}"
 
 
-def _catchable_dispatch(name, dispatch_fn):
+def _catchable_dispatch(dispatch_fn):
     """Wrap a module-predicate dispatch so stdlib exceptions are catchable.
 
     Module predicates are driven by the top-level trampoline, so a raw Python
