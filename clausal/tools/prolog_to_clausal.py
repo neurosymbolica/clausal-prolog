@@ -118,6 +118,18 @@ _PROLOG_QUALIFIED_OPS = {
     "rem": "Rem",        # ISO remainder (sign follows dividend)
 }
 
+# ISO evaluable constants (functors of arity 0 in arithmetic context).
+# Emitted as math.* attribute references — emit_module adds the matching
+# -import_module(math) preamble. epsilon has no math.* name, so it is
+# emitted as the numeric literal (sys.float_info.epsilon) instead (F025).
+_EVALUABLE_CONSTANTS = {
+    "pi":      "math.pi",
+    "e":       "math.e",
+    "inf":     "math.inf",
+    "nan":     "math.nan",
+    "epsilon": "2.220446049250313e-16",  # sys.float_info.epsilon
+}
+
 # Prolog prefix → clausal equivalent
 _PREFIX_MAP = {
     "\\+": "not",
@@ -251,6 +263,8 @@ class _PrologToClausal:
         preamble_parts: list[str] = []
         if "prolog." in body:
             preamble_parts.append("-import_module(prolog)")
+        if "math." in body:
+            preamble_parts.append("-import_module(math)")
         if self._data_atoms:
             atom_list = ", ".join(sorted(self._data_atoms))
             preamble_parts.append(f"-private([{atom_list}])")
@@ -743,7 +757,14 @@ class _PrologToClausal:
         if isinstance(term, PVar):
             return self._var_name(term.name)
         if isinstance(term, PAtom):
-            return term.name
+            # ISO evaluable constants: X is pi must not emit a bare `pi`
+            # name (NameError at runtime) — map to math.* / a literal (F025).
+            mapped = _EVALUABLE_CONSTANTS.get(term.name)
+            if mapped is not None:
+                return mapped
+            # Any other atom goes through the normal atom path so it is
+            # quoted/registered like an arg-position atom.
+            return self._emit_atom(term)
         if isinstance(term, PCompound):
             # ISO operators with different semantics → prolog.Op(X, Y)
             if len(term.args) == 2 and term.functor in _PROLOG_QUALIFIED_OPS:
@@ -798,7 +819,23 @@ class _PrologToClausal:
         if clausal_name is not None:
             return clausal_name
         # Fall back to snake_to_pascal
-        return snake_to_pascal(prolog_name)
+        name = snake_to_pascal(prolog_name)
+        # A functor whose converted name is not a plain Python identifier
+        # (quoted atoms like 'hello world', operator soup from unmapped
+        # user ops, keyword collisions like `none` → None) cannot become a
+        # Clausal predicate — emitting it bare would be a SyntaxError or a
+        # silent rebinding downstream (F035, sibling of the F025 arg-position
+        # check in _emit_atom). Reject loudly instead.
+        if not name.isidentifier() or keyword.iskeyword(name):
+            raise PrologTranslationError(
+                f"Prolog functor {prolog_name!r} cannot be translated to a "
+                f"Clausal predicate name ({name!r} is not a valid Python "
+                "identifier).\n"
+                "Only plain (unquoted-style) functor names can name Clausal "
+                "predicates. Rename the predicate, or provide a user "
+                "operator mapping for operator functors."
+            )
+        return name
 
     def _emit_atom_name(self, term: PTerm) -> str:
         """Extract an atom name from a term."""

@@ -66,3 +66,51 @@ class TestF022VarRenameInjective:
     def test_anonymous_stays_anonymous(self):
         out = clausal_source_to_prolog("P(_, _) <- (Q(_))")
         assert "p(_, _)" in out
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F025/F035 — evaluable constants + quoted non-identifier functor heads
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestF025EvaluableConstants:
+    def test_pi_maps_to_math(self):
+        out = prolog_to_clausal("f(X) :- X is pi.")
+        assert "X := math.pi" in out
+        assert "-import_module(math)" in out
+
+    def test_e_inf_nan_map_to_math(self):
+        out = prolog_to_clausal("f(A, B, C) :- A is e, B is inf, C is nan.")
+        assert "math.e" in out
+        assert "math.inf" in out
+        assert "math.nan" in out
+
+    def test_epsilon_maps_to_literal(self):
+        # math has no epsilon; emit sys.float_info.epsilon as a literal.
+        out = prolog_to_clausal("f(X) :- X is epsilon.")
+        assert "2.220446049250313e-16" in out
+
+    def test_constant_inside_expression(self):
+        out = prolog_to_clausal("area(R, A) :- A is pi * R * R.")
+        assert "math.pi * R * R" in out
+
+    def test_plain_atom_in_arith_still_registered(self):
+        # A non-evaluable atom in arithmetic goes through _emit_atom and is
+        # declared via -private like every other data atom.
+        out = prolog_to_clausal("f(X) :- X is foo.")
+        assert "-private([foo])" in out
+
+
+class TestF035QuotedFunctorHeads:
+    def test_non_identifier_functor_head_rejected(self):
+        with pytest.raises(PrologTranslationError):
+            prolog_to_clausal("'hello world'(x).")
+
+    def test_non_identifier_functor_goal_rejected(self):
+        with pytest.raises(PrologTranslationError):
+            prolog_to_clausal("p(X) :- 'has space'(X).")
+
+    def test_plain_quoted_functor_still_accepted(self):
+        # 'foo' names the same atom as foo — a plain identifier head is fine.
+        out = prolog_to_clausal("'foo'(x).")
+        assert "Foo(x)," in out
