@@ -317,6 +317,30 @@ class _ClausalToProlog:
         self.dialect = dialect
         self._items: list[PItem] = []
         self._warnings: list[str] = []
+        # Per-clause variable rename table (reset per top-level item).
+        # clausal_var_to_prolog is non-injective (_result and RESULT both →
+        # Result), so without disambiguation two distinct clausal variables
+        # silently merge into one Prolog variable (F022). Mirrors
+        # _PrologToClausal._var_name.
+        self._var_map: dict[str, str] = {}
+        self._var_used: set[str] = set()
+
+    def _prolog_var_name(self, name: str) -> str:
+        """Map a clausal variable to a unique Prolog name within the clause."""
+        if name == "_":
+            return "_"  # anonymous: every occurrence is independent
+        existing = self._var_map.get(name)
+        if existing is not None:
+            return existing
+        base = clausal_var_to_prolog(name)
+        candidate = base
+        n = 2
+        while candidate in self._var_used:
+            candidate = f"{base}{n}"
+            n += 1
+        self._var_map[name] = candidate
+        self._var_used.add(candidate)
+        return candidate
 
     def _add_warning(self, construct: str) -> None:
         """Record an untranslatable construct warning."""
@@ -326,6 +350,9 @@ class _ClausalToProlog:
         """Convert a full Python AST Module to a PModule."""
         for stmt in tree.body:
             self._warnings.clear()
+            # Variable names are scoped per top-level item (F022).
+            self._var_map = {}
+            self._var_used = set()
             item = self._convert_stmt(stmt)
             # Emit any warnings accumulated during conversion
             for w in self._warnings:
@@ -647,7 +674,7 @@ class _ClausalToProlog:
         if name == "_":
             return PVar("_")
         if _is_logic_var_name(name):
-            return PVar(clausal_var_to_prolog(name))
+            return PVar(self._prolog_var_name(name))
         # Atoms: lowercase or PascalCase predicate name
         return PAtom(resolve_name(name, self.dialect))
 
