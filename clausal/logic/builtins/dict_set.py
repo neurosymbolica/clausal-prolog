@@ -490,6 +490,9 @@ def _set_add__3(this_generator, _proceed, _fail, _catcher, elem, old_set, new_se
     elem_val = deref(elem)
     old_val = deref(old_set)
     if not is_var(elem_val) and isinstance(old_val, SetTerm):
+        if not _is_hashable(elem_val):
+            # A09-F012: an unhashable element escaped as a raw TypeError.
+            raise LogicException(type_error("hashable", elem_val, "set_add/3"))
         mark = trail.mark()
         if unify(new_set, SetTerm(old_val.elements | {elem_val}), trail):
             yield (_proceed, None)
@@ -503,6 +506,10 @@ def _set_remove__3(this_generator, _proceed, _fail, _catcher, elem, old_set, new
     elem_val = deref(elem)
     old_val = deref(old_set)
     if not is_var(elem_val) and isinstance(old_val, SetTerm):
+        if not _is_hashable(elem_val):
+            # A09-F012: an unhashable element escaped as a raw TypeError.
+            raise LogicException(
+                type_error("hashable", elem_val, "set_remove/3"))
         mark = trail.mark()
         if unify(new_set, SetTerm(old_val.elements - {elem_val}), trail):
             yield (_proceed, None)

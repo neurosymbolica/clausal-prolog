@@ -24,7 +24,7 @@ from clausal.logic.solve import call
 from clausal.logic import solve as solve_mod
 from clausal.logic.variables import Var, deref, is_var
 from clausal.logic.exceptions import LogicException
-from clausal.terms import Compound, SegString
+from clausal.terms import Compound, SegString, SetTerm
 
 PYTHON = sys.executable
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -382,6 +382,37 @@ def test_F012_set_list_unhashable(fix):
     _, m = fix
     with pytest.raises(LogicException):
         _first(m, "set_list", Var(), [[1]])
+
+
+def test_F012_set_add_unhashable(fix):
+    # A09-F012 (D002 a): an unhashable Elem raises a typed LogicException
+    # (catchable by catch/3), not a raw TypeError that escapes the engine.
+    _, m = fix
+    with pytest.raises(LogicException) as ei:
+        _first(m, "set_add", [9], SetTerm([1, 2]), Var())
+    inner = ei.value.term.args[0]
+    assert getattr(inner, "functor", None) == "type_error"
+    assert inner.args[0] == "hashable"
+
+
+def test_F012_set_remove_unhashable(fix):
+    _, m = fix
+    with pytest.raises(LogicException) as ei:
+        _first(m, "set_remove", [9], SetTerm([1, 2]), Var())
+    inner = ei.value.term.args[0]
+    assert getattr(inner, "functor", None) == "type_error"
+    assert inner.args[0] == "hashable"
+
+
+def test_F012_regression_set_add_remove_hashable(fix):
+    """Hashable elements keep working after the F012 guard."""
+    _, m = fix
+    Z = Var()
+    assert _first(m, "set_add", 9, SetTerm([1, 2]), Z)
+    assert deref(Z) == SetTerm([1, 2, 9])
+    Z2 = Var()
+    assert _first(m, "set_remove", 1, SetTerm([1, 2]), Z2)
+    assert deref(Z2) == SetTerm([2])
 
 
 def test_F012_exp_mod_raw_valueerror(fix):
