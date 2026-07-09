@@ -651,6 +651,28 @@ class TestSuspectedBugs:
         unify(y, 0, tr)
         assert not sat_check(tr), "X|Y with X=0, Y=0 is unsatisfiable"
 
+    def test_A07_F006_second_trail_keeps_tables_alive(self):
+        # A07-F006 follow-up: the per-FIRST-trail alloc registration pruned
+        # _var_to_id/_id_to_var/_unique_tables when the first trail died even
+        # though a second live trail's BDDs still used those ordinals; after
+        # pruning, _get_var_for_id returned None and propagation silently
+        # skipped the level, making the constraint inert (both X=0 and Y=0
+        # succeeded against X|Y).  Refcounted registration must keep the
+        # tables alive while ANY registered trail lives.
+        import gc
+        tr1 = Trail()
+        x, y = Var(), Var()
+        assert sat(BitOr(left=x, right=y), tr1)
+        tr2 = Trail()
+        assert sat(BitOr(left=x, right=y), tr2)
+        del tr1
+        gc.collect()
+        assert unify(x, 0, tr2)
+        assert not unify(y, 0, tr2), (
+            "X|Y went inert on trail2: first trail's GC pruned the shared "
+            "var tables and propagation silently skipped the level")
+        assert deref(y) == 1, "X=0 must force Y=1 through X|Y"
+
     def test_A07_F006_global_tables_bounded(self):
         import gc
         before = len(clpb._id_to_var)
