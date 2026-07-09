@@ -388,10 +388,32 @@ def test_F016_date_between_mixed_types_fails_cleanly():
     assert sols == []
 
 
+def test_F016_date_between_naive_aware_mix_fails_cleanly():
+    # A11-F016 residual: tz-naive vs tz-aware datetimes pass the date/datetime
+    # guard but are not comparable — must fail cleanly, not raise at <=.
+    import datetime as pydt
+    from clausal.modules.py.datetime import _date_between_3
+    gen = _date_between_3(None, "P", "F", None,
+                          pydt.datetime(2020, 1, 1),
+                          pydt.datetime(2020, 1, 3, tzinfo=pydt.timezone.utc),
+                          Var(), Trail())
+    sols = [1 for parent, _v in gen if parent == "P"]  # must not raise
+    assert sols == []
+
+
 def test_F017_url_parse_bad_port_fails_cleanly():
     # A11-F017 (fixed): out-of-range port fails cleanly.
     from clausal.modules.py.url import _parse_2
     sols = list(_parse_2("http://h:99999/", Var(), Trail(), None))
+    assert sols == []
+
+
+def test_F017_url_parse_malformed_bracket_fails_cleanly():
+    # A11-F017 residual: urlparse itself raises ValueError on "http://[::1"
+    # (unclosed IPv6 bracket) — the wrapper must fail cleanly, uniformly with
+    # the bad-port path.
+    from clausal.modules.py.url import _parse_2
+    sols = list(_parse_2("http://[::1", Var(), Trail(), None))
     assert sols == []
 
 

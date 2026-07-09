@@ -45,11 +45,14 @@ def _parse_2(url, parts, trail, k):
     u = deref(url)
     if is_var(u) or not isinstance(u, str):
         return
-    parsed = _urllib_parse.urlparse(u)
     try:
-        port = parsed.port  # int or None; ValueError on out-of-range port
+        # urlparse itself raises ValueError on e.g. an unclosed IPv6 bracket
+        # ("http://[::1"); .port raises on an out-of-range port — both are
+        # malformed input and fail cleanly (F017).
+        parsed = _urllib_parse.urlparse(u)
+        port = parsed.port  # int or None
     except ValueError:
-        return  # malformed port — fail cleanly (F017)
+        return
     result = DictTerm({
         "scheme": parsed.scheme,
         "host": parsed.hostname or "",

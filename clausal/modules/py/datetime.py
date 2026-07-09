@@ -393,6 +393,12 @@ def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, tr
     if isinstance(start, _dt.datetime) != isinstance(end, _dt.datetime):
         yield (_fail, DONE)
         return
+    # Likewise a tz-naive and a tz-aware datetime are not comparable —
+    # fail cleanly instead of raising TypeError at `current <= end` (F016).
+    if (isinstance(start, _dt.datetime) and isinstance(end, _dt.datetime)
+            and (start.tzinfo is None) != (end.tzinfo is None)):
+        yield (_fail, DONE)
+        return
     current = start
     one_day = _dt.timedelta(days=1)
     while current <= end:
