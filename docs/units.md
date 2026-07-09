@@ -50,7 +50,9 @@ Imperial and other scaled-unit **Quantity** values (`inch`, `foot`, `Byte`, …)
 also work — `5(inch)` is `5 * inch` — because a `Quantity` is callable and
 scales itself. SI prefix names (`kilo`, `milli`, …) are plain numbers, not
 units; `5(kilo)` raises a `TypeError` ("SI prefixes cannot be used as units").
-Multiply a prefix in instead: `++(5 * kilo * m)`.
+Multiply a prefix in instead: `++(5 * kilo * m(1))` — call the unit as `m(1)`
+to get a multipliable `Quantity`; the bare predicate `m` cannot appear on the
+right of `*` (`5 * kilo * m` raises a `TypeError`).
 
 For unusual constructions, use `++()` directly:
 

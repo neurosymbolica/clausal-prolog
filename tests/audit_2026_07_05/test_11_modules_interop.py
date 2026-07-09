@@ -131,13 +131,22 @@ def test_F004_replace_unbound_repl_fails_cleanly():
 
 
 def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
-    # A11-F005 (fixed): unregistered arity raises a catchable existence error.
+    # A11-F005 (fixed): unregistered arity raises a catchable existence error
+    # whose term is error(existence_error(procedure, match/4), _).
+    from clausal.logic.exceptions import LogicException
+    from clausal.terms import Compound
     m = _load(tmp_path, '''
         -import_from(regex, [match])
         Bad(S) <- match(r"x", S, G, H)
     ''', "f005")
-    with pytest.raises(Exception):
+    with pytest.raises(LogicException) as excinfo:
         list(solve(m.Bad("x"), module=m))
+    term = excinfo.value.term
+    assert isinstance(term, Compound) and term.functor == "error"
+    inner = term.args[0]
+    assert inner.functor == "existence_error"
+    assert inner.args[0] == "procedure"
+    assert inner.args[1] == Compound("/", ("match", 4))
 
 
 def test_F006_mixed_groups_expose_positional_values(tmp_path):
@@ -686,6 +695,14 @@ def test_F050_mst_disconnected_fails():
     # A11-F050 (fixed): disconnected graph has no spanning tree, fails.
     t, c = Var(), Var()
     sols = _gsols(G._min_spanning_tree__3, [["a", "b", 1], ["c", "d", 2]], t, c)
+    assert sols == []  # no spanning tree exists
+
+
+def test_F050_spanning_tree_disconnected_fails():
+    # A11 companion to F050: unweighted spanning_tree also fails on a
+    # disconnected graph (verified correct behavior, previously untested).
+    t = Var()
+    sols = _gsols(G._spanning_tree__2, [["a", "b"], ["c", "d"]], t, out=t)
     assert sols == []  # no spanning tree exists
 
 

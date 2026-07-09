@@ -59,8 +59,14 @@ Other conventions worth noting:
 - **`degree` counts a self-loop once** (`[["a","a"]]` → degree 1), not twice.
 - **`path_cost` requires at least two vertices**; a single-vertex path fails
   rather than reporting cost 0.
-- **`breadth_first_nodes`/`find_path` from an absent source** succeed with just
-  `[Source]` — the source is treated as a phantom isolated vertex.
+- **`breadth_first_nodes` from an absent source** yields just `[Source]` — the
+  source is treated as a phantom isolated vertex. `find_path` from an absent
+  source fails unless `Start == End` (in which case it yields the
+  single-vertex path `[Start]`).
+- **`is_isolated` in check mode treats any term that is not a vertex as
+  isolated** — `is_isolated([["a","b"]], "zzz")` succeeds, since a non-vertex
+  trivially has degree 0 (accepted behavior, A11-D010). Enumerate mode only
+  yields actual vertices.
 - **`shortest_path` requires non-negative weights** (Dijkstra); a graph with a
   negative weight fails.
 - **`min_spanning_tree`/`spanning_tree` require a connected graph**; a
