@@ -116,6 +116,73 @@ def _on_leader_stack(entry: TableEntry) -> bool:
     return any(e is entry for e in _leader_ctx.stack)
 
 
+# ── Drive-episode tracking (A04-F007) ────────────────────────────────────
+#
+# The GeneratorExit route for abandonment cleanup (once() takes an answer and
+# drops the solve loop) is NOT reliable: StepGenerator.close() closes only its
+# OWN inner generator, and any SuspendedConsumer registered on a table entry
+# keeps the parked tabled-wrapper frame permanently reachable
+# (module → db.table_store → entry.suspended → consumer gen → parent chain →
+# wrapper frame), so the wrapper's except-BaseException repair never runs —
+# even after gc.collect() — and the module is poisoned for life (every later
+# query silently returns the partial answer set). The root driver therefore
+# tracks the table entries CREATED beneath it and repairs them itself.
+
+
+class _DriveContext(threading.local):
+    def __init__(self):
+        self.episodes: list[list] = []
+
+_drive_ctx = _DriveContext()
+
+
+def begin_drive_episode() -> None:
+    """Open a root-drive episode: entries created below are tracked."""
+    _drive_ctx.episodes.append([])
+
+
+def _record_created_entry(entry, table_store, store_key) -> None:
+    episodes = _drive_ctx.episodes
+    if episodes:
+        episodes[-1].append((entry, table_store, store_key))
+
+
+def end_drive_episode() -> None:
+    """Close a root-drive episode; repair abandoned tables (A04-F007).
+
+    If any entry created in this episode is still on the leader stack, the
+    drive was abandoned mid-fixpoint (a normally-finished wrapper always pops
+    its leader): drop every still-``evaluating`` entry the episode created —
+    from the store (identity-guarded), the leader stack, and its suspended
+    consumers — so later queries recompute instead of silently consuming the
+    partial answer set. Entries that completed normally are untouched, as are
+    entries belonging to enclosing episodes (nested drives from ``++``
+    escapes). Idempotent with the wrapper's own except-BaseException repair,
+    which still runs whenever GC eventually finalises the parked frame.
+    """
+    episodes = _drive_ctx.episodes
+    if not episodes:
+        return
+    created = episodes.pop()
+    if not created:
+        return
+    created_ids = {id(entry) for entry, _, _ in created}
+    if not any(id(e) in created_ids for e in _leader_ctx.stack):
+        return  # normal completion — nothing of ours is still leading
+    for entry, store, key in created:
+        if entry.status != "evaluating":
+            continue
+        if store.get(key) is entry:
+            del store[key]
+        for sc in entry.suspended:
+            try:
+                sc.generator.close()
+            except BaseException:
+                pass
+        entry.suspended.clear()
+        pop_leader(entry)
+
+
 def _complete_scc(root: TableEntry, table_store) -> None:
     """Mark *root* complete, then sweep dormant SCC members (A04-F001).
 
@@ -543,7 +610,10 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
             # A04-F007: drop a poisoned "evaluating" entry on abnormal exit so
             # a later query recomputes (or re-raises) rather than silently
             # returning the partial set. Simple mode has no suspended consumers.
-            table_store.pop(store_key, None)
+            # Identity-guarded against out-of-order GC finalisation replacing
+            # a fresh entry installed under the same key by a later query.
+            if table_store.get(store_key) is entry:
+                del table_store[store_key]
             raise
         finally:
             pop_leader(entry)
@@ -656,6 +726,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         if entry is None:
             entry = TableEntry()
             table_store[store_key] = entry
+            _record_created_entry(entry, table_store, store_key)  # A04-F007
             replay_count = 0
         else:
             # A04-F001 (re-lead replay): this caller has seen NONE of the
@@ -720,7 +791,12 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # the root, fabricate an unbound answer — A04-F008). Drop the entry
             # so the next query recomputes (or re-raises), and tear down any
             # suspended consumers registered on it so their callers don't hang.
-            table_store.pop(store_key, None)
+            # Identity-guarded: GC may deliver GeneratorExit to this parked
+            # frame long after end_drive_episode() already repaired the store
+            # and a LATER query installed a fresh entry under the same key —
+            # a blind pop would destroy that innocent entry (A04-F007).
+            if table_store.get(store_key) is entry:
+                del table_store[store_key]
             for sc in entry.suspended:
                 try:
                     sc.generator.close()
@@ -780,18 +856,25 @@ def _trampoline_to_simple_adapter(trampoline_dispatch, arity):
         args = args_trail_k[:arity]
         trail = args_trail_k[arity]
         root = StepGenerator(trampoline_dispatch, None, None, None, *args, trail)
-        gen, value = root.send(None)
-        while True:
-            if gen is None:
-                if value is DONE or value is _TABLING_SUSPEND:
-                    return   # A04-F008: suspend sentinel is not a solution
-                yield None  # solution — bindings are live on trail
-                gen, value = root.send(None)
-            else:
-                # Intercept _TABLING_SUSPEND → send DONE to parent
-                if value is _TABLING_SUSPEND:
-                    gen, value = gen.send(DONE)
+        begin_drive_episode()  # A04-F007: repair tables if abandoned mid-drive
+        try:
+            gen, value = root.send(None)
+            while True:
+                if gen is None:
+                    if value is DONE or value is _TABLING_SUSPEND:
+                        return   # A04-F008: suspend sentinel is not a solution
+                    yield None  # solution — bindings are live on trail
+                    gen, value = root.send(None)
                 else:
-                    gen, value = gen.send(value)
+                    # Intercept _TABLING_SUSPEND → send DONE to parent
+                    if value is _TABLING_SUSPEND:
+                        gen, value = gen.send(DONE)
+                    else:
+                        gen, value = gen.send(value)
+        finally:
+            try:
+                root.close()
+            finally:
+                end_drive_episode()
 
     return adapted

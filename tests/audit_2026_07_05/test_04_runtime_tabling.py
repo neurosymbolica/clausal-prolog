@@ -212,6 +212,24 @@ na(10, 2),
 nb(10, 20),
 """
 
+# A04-F007 rec-clause-first: the consumer suspends BEFORE the first answer
+# exists, so at once()-abandonment a SuspendedConsumer keeps the parked leader
+# frame reachable (entry.suspended → consumer gen → parent chain → leader gen)
+# and GC alone can never deliver GeneratorExit to the wrapper's cleanup.
+RECFIRST_ONCE_SRC = """-table(qq/1)
+
+qq(X) <- (
+    qq(Y),
+    ee(Y, X)
+)
+qq(1),
+
+ee(1, 2),
+ee(2, 3),
+ee(3, 4),
+ee(4, 5),
+"""
+
 NAF_SRC = """-table(tp/2)
 
 tp(1, 2),
@@ -999,6 +1017,54 @@ class TestF007PoisonedEvaluatingTables:
         store = m.__clausal_module__.db.table_store
         statuses = {e.status for e in store.values()}
         assert "evaluating" not in statuses
+
+
+class TestF007RecFirstAbandonment:
+    """A04-F007 residue: with the RECURSIVE clause first, a consumer suspends
+    before the first answer exists, so at once()-abandonment the
+    SuspendedConsumer keeps the parked leader frame reachable — GeneratorExit
+    is never delivered to the wrapper's cleanup and the module stays poisoned
+    for life. The root driver must repair the table itself."""
+
+    def test_recfirst_once_then_full_query(self, load):
+        m = load("f007r1", RECFIRST_ONCE_SRC)
+        Y = Var()
+        t = once(m.qq(Y), m)
+        assert t is not None and deref(Y) == 1
+        _query_cache.clear()
+        gc.collect()
+        Y2 = Var()
+        got = sorted(set(v[0] for v in answers(call("qq", Y2, module=m), Y2)
+                         if not is_var(v[0])))
+        assert got == [1, 2, 3, 4, 5]
+
+    def test_recfirst_once_no_evaluating_entries(self, load):
+        m = load("f007r2", RECFIRST_ONCE_SRC.replace("qq", "qr").replace("ee", "er"))
+        Y = Var()
+        once(m.qr(Y), m)
+        gc.collect()
+        store = m.__clausal_module__.db.table_store
+        assert "evaluating" not in {e.status for e in store.values()}
+        from clausal.logic.tabling import _leader_ctx
+        assert _leader_ctx.stack == []  # abandoned leader must not linger
+
+    def test_recfirst_mutual_once_then_full_queries(self, load):
+        src = MUTUAL_RECFIRST_SRC.replace("ra", "rg").replace("rb", "rh") \
+                                 .replace("la", "lg").replace("lb", "lh")
+        m = load("f007r3", src)
+        Y = Var()
+        once(m.rg(1, Y), m)
+        _query_cache.clear()
+        gc.collect()
+        Ya, Yb = Var(), Var()
+        got_a = sorted(set(v[0] for v in answers(call("rg", 1, Ya, module=m), Ya)
+                           if not is_var(v[0])))
+        _query_cache.clear()
+        got_b = sorted(set(v[0] for v in answers(call("rh", 1, Yb, module=m), Yb)
+                           if not is_var(v[0])))
+        assert (got_a, got_b) == ([2, 4], [1, 3])
+        store = m.__clausal_module__.db.table_store
+        assert "evaluating" not in {e.status for e in store.values()}
 
 
 # ══ A04-F008: root-level suspend sentinel yields spurious solution ════════════

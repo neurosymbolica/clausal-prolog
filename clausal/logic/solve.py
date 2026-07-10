@@ -91,7 +91,10 @@ except ImportError:
 
 def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Trail]:
     """Drive a trampoline-protocol dispatch function, yielding trail per solution."""
+    from clausal.logic.tabling import begin_drive_episode, end_drive_episode
+
     sg = StepGenerator(dispatch_fn, None, None, None, *args, trail)
+    begin_drive_episode()
     try:
         while True:
             result = _drive_until_yield(sg)
@@ -103,7 +106,17 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
         # abandonment (GeneratorExit), or a body exception that propagated past
         # the trampoline. This synchronously runs the tabled-wrapper cleanup
         # (drop a poisoned "evaluating" entry) instead of leaving it to GC.
-        sg.close()
+        # close() is NOT sufficient on its own: it closes only sg's inner
+        # generator, and a SuspendedConsumer registered on a table entry keeps
+        # a parked tabled-wrapper frame reachable forever, so GeneratorExit
+        # never reaches that wrapper's repair code. end_drive_episode() then
+        # drops any still-"evaluating" entry this drive created (store, leader
+        # stack, suspended consumers) so later queries recompute instead of
+        # silently consuming the partial answer set.
+        try:
+            sg.close()
+        finally:
+            end_drive_episode()
 
 
 def _term_to_goal(term: Any) -> Any:
