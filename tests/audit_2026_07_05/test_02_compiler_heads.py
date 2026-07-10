@@ -176,6 +176,46 @@ coll(["a", "b", "c"], "l"),
 coll("def", "d"),
 coll("ghi", "g"),
 
+# A02-F001 follow-up: TRO trampoline dispatch variants x uncomputable keys.
+# Each predicate has a TRO-eligible tail-recursive clause (deterministic
+# prefix, self tail call) so the dispatch compiles to the tro_state variant.
+# acc4: single-plan (int keys at pos0; other columns non-indexable)
+acc4(0, AZA, AZA),
+acc4(-1, AZB, ["neg1"]),
+acc4(-2, AZC, ["neg2"]),
+acc4(ACN, ACA, ACR) <- (ACN > 0, ACM := ACN - 1, ACB := ACA + 1, acc4(ACM, ACB, ACR))
+
+# sgl4: single-plan (str keys at pos0; second column non-charlist lists)
+sgl4("a", ["aye"]),
+sgl4("b", ["bee"]),
+sgl4("c", ["cee"]),
+sgl4(SGN, SGR) <- (SGN is "go", sgl4("a", SGR))
+
+# mp5: multi-plan (pos0 and pos1 each indexable; joint gain 4 < 4*1.5)
+mp5(1, "one"),
+mp5(2, "two"),
+mp5(3, "three"),
+mp5(4, "four"),
+mp5(MPN, MPR) <- (MPN > 4, MPM := MPN - 1, mp5(MPM, MPR))
+
+# str5: multi-plan, str keys at pos0
+str5("a", "A"),
+str5("b", "B"),
+str5("c", "C"),
+str5("d", "D"),
+str5("go", SGX) <- str5("a", SGX)
+
+# jt3: joint dispatch (8 joint keys > best single 4 * 1.5, coverage 8/9)
+jt3("a", 1, ["ja1"]),
+jt3("a", 2, ["ja2"]),
+jt3("a", 3, ["ja3"]),
+jt3("a", 4, ["ja4"]),
+jt3("b", 1, ["jb1"]),
+jt3("b", 2, ["jb2"]),
+jt3("b", 3, ["jb3"]),
+jt3("b", 4, ["jb4"]),
+jt3("go", JNB, JRC) <- (JMD := JNB - 1, jt3("a", JMD, JRC))
+
 # dynamic predicates for runtime-assertz probes (one per test, no coupling)
 -dynamic(dyn_date/2)
 dyn_date("seed", 0),
@@ -285,6 +325,90 @@ class TestF001IndexedDispatchPartialTerms:
             ("a", ["sa1"]), ("b", ["sb1"]), ("c", ["sc1"]), ("d", ["sd1"]),
             ("a", ["sav"]), ("b", ["sbv"]), ("c", ["scv"]), ("d", ["sdv"]),
         ]
+
+
+# ── A02-F001 follow-up: the TRO trampoline dispatch variants (joint inline
+# body, groundness single-plan loop, groundness multi-plan loop) must apply
+# the same uncomputable-key → full-scan guard as the non-TRO bodies. Before
+# the fix they routed _INDEX_VAR keys to the default bucket, dropping every
+# keyed clause the arg would unify with. ──────────────────────────────────────
+
+
+class TestF001TrampolineTRODispatchUncomputableKeys:
+    def test_fixtures_compile_to_tro_dispatch_variants(self, moddict):
+        # guard: each fixture must actually hit the TRO (tro_state) variant of
+        # the intended dispatch strategy, or the tests below probe nothing
+        for name, n_plans in (("acc4", 1), ("sgl4", 1), ("mp5", 2), ("str5", 2)):
+            fn = moddict[name]._get_dispatch()
+            assert "tro_state" in fn.__code__.co_freevars, name
+            assert len(moddict[name]._index_plans) == n_plans, name
+        jfn = moddict["jt3"]._get_dispatch()
+        assert "tro_state" in jfn.__code__.co_freevars
+        assert getattr(moddict["jt3"], "_index_plans_joint", None)
+
+    # controls: TRO recursion itself works through each dispatch variant
+    def test_control_single_plan_tro_recursion(self, mod):
+        R = Var()
+        assert collect(mod, "acc4", 3, 0, R, outv=[R]) == [(3,)]
+        R = Var()
+        assert collect(mod, "sgl4", "go", R, outv=[R]) == [(["aye"],)]
+
+    def test_control_multi_plan_tro_recursion(self, mod):
+        R = Var()
+        assert collect(mod, "str5", "go", R, outv=[R]) == [("A",)]
+
+    def test_control_joint_tro_recursion(self, mod):
+        R = Var()
+        assert collect(mod, "jt3", "go", 3, R, outv=[R]) == [(["ja2"],)]
+
+    # single-plan TRO loop
+    def test_single_plan_decimal_key(self, mod):
+        R = Var()
+        assert collect(mod, "acc4", Decimal(2), 0, R, outv=[R]) == [(2,)]
+
+    def test_single_plan_partial_charlist(self, mod):
+        X, R = Var(), Var()
+        assert collect(mod, "sgl4", [X], R, outv=[X, R]) == [
+            ("a", ["aye"]), ("b", ["bee"]), ("c", ["cee"])]
+
+    # multi-plan TRO loop
+    def test_multi_plan_decimal_key(self, mod):
+        R = Var()
+        assert collect(mod, "mp5", Decimal(2), R, outv=[R]) == [("two",)]
+
+    def test_multi_plan_partial_charlist(self, mod):
+        X, R = Var(), Var()
+        assert collect(mod, "str5", [X], R, outv=[X, R]) == [
+            ("a", "A"), ("b", "B"), ("c", "C"), ("d", "D")]
+
+    def test_multi_plan_decimal_tro_restart_from_fallback(self, mod):
+        # the fallback is compiled in SIGNAL mode: a tail call fired from its
+        # TRO clause must re-dispatch through the outer loop, not be dropped
+        R = Var()
+        assert collect(mod, "mp5", Decimal(6), R, outv=[R]) == [("four",)]
+
+    # joint TRO inline body: one component uncomputable → degrade to the
+    # single-position dispatch on the other; both → full scan
+    def test_joint_partial_charlist_component(self, mod):
+        X, R = Var(), Var()
+        assert collect(mod, "jt3", [X], 2, R, outv=[X, R]) == [
+            ("a", ["ja2"]), ("b", ["jb2"])]
+
+    def test_joint_decimal_component(self, mod):
+        R = Var()
+        assert collect(mod, "jt3", "a", Decimal(2), R, outv=[R]) == [(["ja2"],)]
+
+    def test_joint_both_components_uncomputable(self, mod):
+        X, R = Var(), Var()
+        assert collect(mod, "jt3", [X], Decimal(2), R, outv=[X, R]) == [
+            ("a", ["ja2"]), ("b", ["jb2"])]
+
+    def test_joint_decimal_tro_restart_through_single_dispatch(self, mod):
+        # Decimal at the (more selective) int column degrades to the str
+        # single dispatch, whose "go" bucket signals a TRO tail call that
+        # must re-dispatch into the "a" bucket
+        R = Var()
+        assert collect(mod, "jt3", "go", Decimal(3), R, outv=[R]) == [(["ja2"],)]
 
 
 # ── A02-F002: list-structure dispatch drops non-list/str/Var callers ─────────

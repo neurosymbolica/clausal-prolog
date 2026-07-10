@@ -525,7 +525,7 @@ def _make_joint_dispatch_trampoline(
     """Build a flat joint-key dispatch for trampoline mode.  (Phase 9b)
 
     Same decision tree as :func:`_make_joint_dispatch_simple`, wrapped
-    with the trampoline Step protocol (``(parent, DONE)`` tail-yield)
+    with the trampoline Step protocol (``(_fail, DONE)`` tail-yield)
     and, when *tro_state* is supplied, an inner TRO tail-call loop that
     restarts dispatch when a clause signals a tail call.
     """
@@ -547,22 +547,41 @@ def _make_joint_dispatch_trampoline(
                 _ai = deref(args_list[offset_i])
                 _aj = deref(args_list[offset_j])
                 if not is_var(_ai) and not is_var(_aj):
-                    _jk = (_runtime_arg_key(_ai), _runtime_arg_key(_aj))
-                    try:
-                        _bfn = joint_dict.get(_jk)
-                    except TypeError:
-                        _bfn = None
-                    if _bfn is not None:
-                        yield from _bfn(*args_list)
+                    _ki = _runtime_arg_key(_ai)
+                    _kj = _runtime_arg_key(_aj)
+                    # A02-F001: an uncomputable component means the joint
+                    # key can't be formed — degrade exactly like the non-TRO
+                    # body (_joint_dispatch_body): both uncomputable → full
+                    # scan; one uncomputable → single-position dispatch on
+                    # the OTHER (computable) component. Every route falls
+                    # through to the tro_state check below: the fallback is
+                    # compiled in SIGNAL mode (like the buckets), and the
+                    # single dispatches either own a TRO loop (they exit
+                    # with tro_state[0] False) or ARE the fallback.
+                    if _ki is _INDEX_VAR and _kj is _INDEX_VAR:
+                        yield from fallback_fn(*args_list)
+                    elif _ki is _INDEX_VAR:
+                        yield from single_j_dispatch(*args_list)
+                    elif _kj is _INDEX_VAR:
+                        yield from single_i_dispatch(*args_list)
                     else:
-                        yield from joint_default_fn(*args_list)
+                        _jk = (_ki, _kj)
+                        try:
+                            _bfn = joint_dict.get(_jk)
+                        except TypeError:
+                            _bfn = None
+                        if _bfn is not None:
+                            yield from _bfn(*args_list)
+                        else:
+                            yield from joint_default_fn(*args_list)
                 elif not is_var(_ai):
                     yield from single_i_dispatch(*args_list)
                 elif not is_var(_aj):
                     yield from single_j_dispatch(*args_list)
                 else:
+                    # A02-F001: neither arg ground — full scan; signal-mode
+                    # fallback falls through to the tro_state check.
                     yield from fallback_fn(*args_list)
-                    break  # fallback has internal TRO loop
                 if tro_state[0]:
                     for _i in range(arity):
                         args_list[_i + 4] = tro_state[_i + 1]
@@ -657,8 +676,9 @@ def _make_secondary_dispatch_impl(
       trail)`` — skip four slots (this_generator + three continuations) to
       reach arg0.
     - ``tail_yield``: ``None`` for simple (early returns terminate the
-      generator); ``lambda args: (args[1], done)`` for trampoline, which
-      emits the ``(parent, DONE)`` exhaustion sentinel at the end.
+      generator); ``lambda args: (args[2], done)`` for trampoline, which
+      emits the ``(_fail, DONE)`` exhaustion sentinel at the end
+      (``args[2]`` is the ``_fail`` continuation in the Phase-2 layout).
     """
     pos_i = sec_idx["pos_i"] + arg_offset
     pos_j = sec_idx["pos_j"] + arg_offset
@@ -751,8 +771,9 @@ def _make_indexed_dispatch_impl(all_fn, idx_dict, default_fn, *, arg_offset, tai
       4 for trampoline. The Phase-2 trampoline layout is
       ``(this_generator, _proceed, _fail, _catcher, arg0, …, trail)`` — skip
       four slots (this_generator + three continuations) to reach arg0.
-    - ``tail_yield``: ``None`` for simple; ``lambda args: (args[1], done)``
-      for trampoline, which terminates with a ``(parent, DONE)`` tuple
+    - ``tail_yield``: ``None`` for simple; ``lambda args: (args[2], done)``
+      for trampoline, which terminates with a ``(_fail, DONE)`` tuple
+      (``args[2]`` is the ``_fail`` continuation in the Phase-2 layout)
       as required by the Step protocol.
     """
     def dispatch(*args):
@@ -924,18 +945,30 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                     tro_state[0] = False
                     _current = args_list if args_list is not None else args
                     _a = deref(_current[offset])
+                    # A02-F001: an unbound Var, a non-var arg with an
+                    # uncomputable key (partial char/code-list, Decimal, …),
+                    # or an unhashable key (defensive) must scan ALL clauses,
+                    # not the default bucket — mirror the non-TRO
+                    # _groundness_dispatch_body_single guard. The fallback is
+                    # compiled in SIGNAL mode (emit_done=False ⇒
+                    # tro_mode="signal"), exactly like the buckets, so it must
+                    # fall through to the tro_state check below: a tail call
+                    # signalled from its TRO clause re-dispatches (possibly
+                    # into an indexed bucket) instead of being dropped.
                     if is_var(_a):
-                        yield from fallback_fn(*_current)
-                        break  # fallback has its own internal TRO loop
-                    _k = _runtime_arg_key(_a)
-                    try:
-                        _bfn = idx_dict.get(_k)
-                    except TypeError:
-                        _bfn = None
-                    if _bfn is not None:
-                        yield from _bfn(*_current)
+                        _bfn = fallback_fn
                     else:
-                        yield from dflt_fn(*_current)
+                        _k = _runtime_arg_key(_a)
+                        if _k is _INDEX_VAR:
+                            _bfn = fallback_fn
+                        else:
+                            try:
+                                _bfn = idx_dict.get(_k)
+                            except TypeError:
+                                _bfn = fallback_fn
+                            if _bfn is None:
+                                _bfn = dflt_fn
+                    yield from _bfn(*_current)
                     if tro_state[0]:
                         if args_list is None:
                             args_list = list(args)
@@ -967,10 +1000,16 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                     _a = deref(_current[_pos + 4])
                     if not is_var(_a):
                         _k = _runtime_arg_key(_a)
+                        if _k is _INDEX_VAR:
+                            # A02-F001: uncomputable key at this plan — try
+                            # the NEXT plan (another position may index)
+                            # before the full-scan fallback, mirroring the
+                            # non-TRO _groundness_dispatch_body_multi.
+                            continue
                         try:
                             _bfn = _idx_dict.get(_k)
                         except TypeError:
-                            _bfn = None
+                            continue
                         if _bfn is not None:
                             yield from _bfn(*_current)
                         else:
@@ -978,8 +1017,12 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                         _dispatched = True
                         break
                 if not _dispatched:
+                    # A02-F001: no plan had a ground arg with a computable
+                    # key — full scan. The fallback is compiled in SIGNAL
+                    # mode (like the buckets), so fall through to the
+                    # tro_state check: a tail call signalled from its TRO
+                    # clause must re-dispatch, not be dropped.
                     yield from fallback_fn(*_current)
-                    break  # fallback has its own internal TRO loop
                 if tro_state[0]:
                     if args_list is None:
                         args_list = list(args)
