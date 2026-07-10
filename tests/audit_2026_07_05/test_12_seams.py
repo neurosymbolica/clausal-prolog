@@ -447,12 +447,11 @@ bad_elem(R) <- (
         got = [deref(r) for _ in solve(m.guarded(r))]
         assert got == ["caught"]
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A04-F005 seam consequence: a tabled predicate "
-                              "whose answer contains a list crashes "
-                              "(unhashable) when queried with the char-list "
-                              "form of a str key")
     def test_tabled_list_answer_via_liskov_char_list(self, load):
+        # A04-F005 seam consequence, fixed by commit 5f0a5088 (tabled
+        # answers hashable + type-distinguishing keys): a tabled predicate
+        # whose answer contains a list used to crash (unhashable) when
+        # queried with the char-list form of a str key.
         m = load("kf_unhash", """\
 -table(sl/2)
 
