@@ -1574,17 +1574,32 @@ def _both_ground(l, r) -> bool:
 def _reject_nonnumeric_eq(l, r) -> None:
     """A12-F002: raise a catchable type_error when a Var is compared with ``==``
     against a GROUND operand that is clearly not a number — an atom (a
-    zero-arity PredicateMeta *class*), a string, or a collection. That case
-    posted a broken FD var (equals anything EXCEPT the operand). Only the
-    exactly-one-Var case is checked: both-ground ``==`` falls back to Python
-    equality, and Var==Var / Var==<arith-expr> stay legal. Numbers,
-    Quantities, rationals/reals and arithmetic expr nodes all pass."""
+    zero-arity PredicateMeta *class*), a string, a collection, or a ground
+    compound DATA term (a PredicateMeta term *instance* or a runtime
+    :class:`~clausal.terms.Compound`). Those cases posted a broken FD var
+    (equals anything EXCEPT the operand). Only the exactly-one-Var case is
+    checked: both-ground ``==`` falls back to Python equality, and Var==Var /
+    Var==<arith-expr> stay legal. Numbers, Quantities, rationals/reals and
+    arithmetic expr nodes all pass — the expr nodes (Add/…/Pow/Negate) are
+    plain ``pythonic_ast`` dataclasses, explicitly excluded below so that
+    non-linear/Pow trees falling through to EqConstraint are not rejected."""
     dl, dr = deref(l), deref(r)
     if is_var(dl) == is_var(dr):
         return  # both Vars, or both ground — not the broken case
     ground = dr if is_var(dl) else dl
     if isinstance(ground, (str, bytes, list, tuple, dict, set)) or \
             isinstance(ground, type):
+        from clausal.logic.exceptions import LogicException, type_error
+        raise LogicException(type_error("evaluable", ground, "(==)/2"))
+    # Ground compound data terms (point4(1,2), Compound("pt", …)) are not
+    # evaluable either — but arithmetic expression nodes must pass.
+    _ensure_term_imports()
+    if isinstance(ground, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow,
+                           _Negate)):
+        return
+    from clausal.logic.predicate import is_term_instance  # noqa: PLC0415
+    from clausal.terms import Compound as _Compound  # noqa: PLC0415
+    if is_term_instance(ground) or isinstance(ground, _Compound):
         from clausal.logic.exceptions import LogicException, type_error
         raise LogicException(type_error("evaluable", ground, "(==)/2"))
 

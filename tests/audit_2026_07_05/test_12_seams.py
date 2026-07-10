@@ -186,6 +186,52 @@ badeqs(X) <- (X == "somestr")
         with pytest.raises(LogicException):
             list(solve(m.badeq(x)))
 
+    # A12-F002 gap: a ground COMPOUND == operand kept the inverted semantics
+    # (after X == point4(1,2): unify(X, 42) → True, unify(X, point4(1,2)) →
+    # False). Ground data terms — PredicateMeta term instances and runtime
+    # Compounds — must raise the same catchable type_error, while arithmetic
+    # expression trees stay legal.
+    CMP_SRC = """\
+-private([point4(PPA, PPB)])
+
+badeqc(CX) <- (CX == point4(1, 2))
+
+okadd(AX) <- (AX == 3 + 4)
+
+oklin(LX, LY) <- (LX == LY * 2, LY == 3)
+"""
+
+    def test_eq_ground_compound_operand_raises_catchable_type_error(self, load):
+        from clausal.logic.exceptions import LogicException
+        m = load("f002_cmp", self.CMP_SRC)
+        x = Var()
+        with pytest.raises(LogicException):
+            list(solve(m.badeqc(x)))
+
+    def test_eq_runtime_compound_operand_raises_catchable_type_error(self):
+        from clausal.logic.exceptions import LogicException
+        from clausal.terms import Compound
+        tr = Trail()
+        x = Var()
+        with pytest.raises(LogicException):
+            fd_eq(x, Compound("pt", (1, 2)), tr)
+
+    def test_eq_arith_expression_operands_still_legal(self, load):
+        # controls: expression trees must NOT be caught by the compound guard
+        m = load("f002_cmp", self.CMP_SRC)
+        x = Var()
+        assert [deref(x) for _ in solve(m.okadd(x))] == [7]
+        _query_cache.clear()
+        x, y = Var(), Var()
+        assert [deref(x) for _ in solve(m.oklin(x, y))] == [6]
+        # ground non-linear expr node reaching the guard (Pow bypasses both
+        # the linearise arm and _both_ground) must also stay legal
+        from clausal.terms import Pow
+        tr = Trail()
+        z = Var()
+        assert fd_eq(z, Pow(left=2, right=3), tr) is True
+        assert deref(z) == 8
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # A12-F003 — directive targets are not validated: -table naming an undefined
