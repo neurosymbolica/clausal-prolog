@@ -159,6 +159,59 @@ def _rename_scc3(prefix):
     return src
 
 
+# A04-F001 re-lead replay: pa joins TWO calls to pb — the second call needs
+# pb's FULL answer set on every fixpoint pass, but a re-led dormant member
+# streams only NEW answers (add_answer dedups the old ones away).
+# Fixpoint: pa = {1} ∪ pb, pb = nx(pa) → pa = {1,2,3}, pb = {2,3}.
+RELEAD_JOIN_SRC = """-table(pa/1)
+-table(pb/1)
+
+pa(X) <- (
+    pb(W),
+    pb(X)
+)
+pa(1),
+
+pb(X) <- (
+    pa(Y),
+    nx(Y, X)
+)
+
+nx(1, 2),
+nx(2, 3),
+"""
+
+# A04-F001 re-lead replay, cross-product shape: rr = ta × tb where BOTH grow
+# across the root's fixpoint passes. Without replay, a pass streams only the
+# NEW answers of each re-led member, so (old ta answer × new tb answer) pairs
+# are never joined. Fixpoint: ta = {1,2}, tb = {10,20}, rr = ta × tb (4 pairs).
+CROSS_JOIN_SRC = """-table(ta/1)
+-table(tb/1)
+-table(rr/2)
+
+rr(X, Y) <- (
+    ta(X),
+    tb(Y)
+)
+
+ta(X) <- fa(X)
+ta(X) <- (
+    rr(Z, W),
+    na(W, X)
+)
+
+tb(Y) <- fb(Y)
+tb(Y) <- (
+    rr(Z, W),
+    nb(W, Y)
+)
+
+fa(1),
+fb(10),
+na(10, 2),
+nb(10, 20),
+"""
+
 NAF_SRC = """-table(tp/2)
 
 tp(1, 2),
@@ -703,6 +756,44 @@ class TestF001TransitiveSccDeps:
         assert (got2, got3) == ([3, 6], [4, 7])
         store = m.__clausal_module__.db.table_store
         assert "evaluating" not in {e.status for e in store.values()}
+
+
+# ══ A04-F001 (re-lead replay): re-led member streams only NEW answers ═════════
+
+
+class TestF001ReLeadReplay:
+    """Re-leading a dormant SCC member must replay the already-tabled answers
+    to the new call site (like the consumer and complete paths do) — otherwise
+    joins against the earlier answers are silently lost."""
+
+    def test_double_join_pa(self, load):
+        m = load("f001r1", RELEAD_JOIN_SRC)
+        X = Var()
+        got = sorted(set(v[0] for v in answers(call("pa", X, module=m), X)))
+        assert got == [1, 2, 3]
+
+    def test_double_join_pb_same_module(self, load):
+        m = load("f001r1", RELEAD_JOIN_SRC)  # same module: after pa query
+        list(call("pa", Var(), module=m))
+        X = Var()
+        got = sorted(set(v[0] for v in answers(call("pb", X, module=m), X)))
+        assert got == [2, 3]
+
+    def test_double_join_pb_first(self, load):
+        src = RELEAD_JOIN_SRC.replace("pa", "pc").replace("pb", "pd") \
+                             .replace("nx", "ny")
+        m = load("f001r2", src)
+        X = Var()
+        got = sorted(set(v[0] for v in answers(call("pd", X, module=m), X)))
+        assert got == [2, 3]
+
+    def test_cross_product_of_two_growing_tables(self, load):
+        # (old ta answer × new tb answer) pairs exist only if a re-led member
+        # REPLAYS its tabled answers each pass — new-only streaming loses them.
+        m = load("f001r3", CROSS_JOIN_SRC)
+        X, Y = Var(), Var()
+        got = sorted(set(answers(call("rr", X, Y, module=m), X, Y)))
+        assert got == [(1, 10), (1, 20), (2, 10), (2, 20)]
 
 
 # ══ A04-F002: _naf_tabled unsound on never-called / other-variant subgoals ════

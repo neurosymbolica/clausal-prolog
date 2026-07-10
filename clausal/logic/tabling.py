@@ -618,8 +618,17 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             )
             entry.suspended.append(sc)
 
-            # SUSPEND — trampoline intercepts this, sends DONE to _proceed
-            signal = yield (_proceed, _TABLING_SUSPEND)
+            # SUSPEND — the trampoline intercepts the sentinel and sends DONE
+            # to the yielded target. Suspension means "no more answers FOR
+            # NOW" — an exhaustion signal — so it must route to _fail exactly
+            # like the terminal ``yield (_fail, DONE)`` below. Routing it to
+            # _proceed (the old behaviour) breaks under continuation TCO: for
+            # a last-goal call site _proceed is the CALLER'S proceed (e.g. the
+            # enclosing tabled wrapper), so the DONE faked that whole frame's
+            # exhaustion — the enclosing leader ended its fixpoint pass early
+            # and any mid-flight re-led member was abandoned on the leader
+            # stack (A04-F001: lost joins / members frozen "evaluating").
+            signal = yield (_fail, _TABLING_SUSPEND)
 
             # Resumed by leader's completion phase with _TABLING_RESUME
             while signal is _TABLING_RESUME:
@@ -635,7 +644,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     trail.undo(mark)
                 # If table still evaluating, re-suspend for more answers
                 if entry.status == "evaluating":
-                    signal = yield (_proceed, _TABLING_SUSPEND)
+                    signal = yield (_fail, _TABLING_SUSPEND)
                 else:
                     break
 
@@ -647,9 +656,27 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         if entry is None:
             entry = TableEntry()
             table_store[store_key] = entry
+            replay_count = 0
+        else:
+            # A04-F001 (re-lead replay): this caller has seen NONE of the
+            # already-tabled answers, but the fixpoint loop below streams only
+            # NEW answers (add_answer dedups the old ones away). Replay the
+            # known answers first — exactly like the consumer and complete
+            # paths — or joins against them are silently lost (e.g. a clause
+            # calling this table twice never pairs an old first-call answer
+            # with a new second-call answer). No double delivery: everything
+            # replayed here dedups inside the drive.
+            replay_count = len(entry.answers)
         push_leader(entry)
 
         try:
+            for i in range(replay_count):
+                if entry.conditions[i] is _FAILED:
+                    continue
+                mark = trail.mark()
+                if _unify_answer(args, entry.answers[i], trail):
+                    yield (_proceed, None)
+                trail.undo(mark)
             # A04-F001: drive the dispatch to a FIXPOINT by re-running it until
             # no new answer appears, rather than a single pass followed by the
             # (broken) consumer-resume completion phase. On each re-run a
