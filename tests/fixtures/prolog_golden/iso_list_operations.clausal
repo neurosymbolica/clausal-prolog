@@ -152,7 +152,7 @@ Test('in_ enumerates [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), L == [1, 2,
 
 Test('in_ with duplicates [a,b,a]') <- (findall(X, in_(X, [a, b, a]), L), L == [a, b, a])
 
-Test('in enumerates [1,2,3]') <- (findall(X, member(X, [1, 2, 3]), L), L == [1, 2, 3])
+Test('in enumerates [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), L == [1, 2, 3])
 
 Test('append split mode') <- (findall([X, Y], append(X, Y, [1, 2, 3]), L), L == [[[], [1, 2, 3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3], []]])
 

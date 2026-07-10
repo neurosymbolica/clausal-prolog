@@ -229,3 +229,43 @@ class TestF036CutRejected:
         # A user predicate that merely contains "cut" is fine.
         out = clausal_source_to_prolog("P(X) <- (CutList(X))")
         assert "cut_list(X)" in out
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F033 — qualified goals must resolve builtin names like the unqualified path
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestF033QualifiedBuiltinNames:
+    """`lists:member(X, L)` must emit `lists.in_(X, L)` (the documented
+    mapping); `lists.member` does not exist on the Clausal side.  The
+    unqualified path already special-cases `member/2` into infix `X in L`,
+    so the reverse builtin map's `member` entry must point at `in_`.
+    """
+
+    def test_qualified_member_maps_to_in_(self):
+        import ast
+
+        out = prolog_to_clausal("r(X, L) :- lists:member(X, L).\n")
+        ast.parse(out)
+        assert "lists.in_(X, L)" in out
+        assert "lists.member" not in out
+
+    def test_qualified_memberchk_maps_to_in_check(self):
+        out = prolog_to_clausal("r(X, L) :- lists:memberchk(X, L).\n")
+        assert "lists.in_check(X, L)" in out
+
+    def test_qualified_nth0_maps_to_list_item(self):
+        out = prolog_to_clausal("r(L, X) :- lists:nth0(0, L, X).\n")
+        assert "lists.list_item(0, L, X)" in out
+
+    def test_unqualified_member_still_infix_in(self):
+        # Guard: the infix special case must survive the reverse-map change.
+        out = prolog_to_clausal("r(X, L) :- member(X, L).\n")
+        assert "X in L" in out
+
+    def test_member_in_metacall_position_maps_to_in_(self):
+        # member/2 inside findall goes through _emit_term, not the infix
+        # special case; it must also land on a predicate that exists.
+        out = prolog_to_clausal("r(L, Xs) :- findall(X, member(X, L), Xs).\n")
+        assert "in_(X, L)" in out

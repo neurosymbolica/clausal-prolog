@@ -58,6 +58,18 @@ class PrologTranslationError(Exception):
 # ── reverse builtin name map ────────────────────────────────────────
 # prolog_name -> clausal_name, built from BUILTIN_NAME_MAP
 
+# Prolog builtins whose Clausal predicate name cannot be derived from
+# BUILTIN_NAME_MAP alone.  Bare `member/2` in goal position is rendered as
+# infix `X in L`, so BUILTIN_NAME_MAP has no clausal-side name for it; but
+# wherever a predicate *name* is required (qualified goals like
+# `lists:member(X, L)`, metacall arguments like `findall(X, member(X, L), Xs)`)
+# the underlying Clausal builtin is `in_/2` — `member` does not exist on the
+# Clausal side (F033).
+_REVERSE_OVERRIDES: dict[str, str] = {
+    "member": "in_",
+}
+
+
 def _build_reverse_builtin_map() -> dict[str, str]:
     """Build a mapping from Prolog builtin names to clausal names."""
     rev: dict[str, str] = {}
@@ -69,6 +81,7 @@ def _build_reverse_builtin_map() -> dict[str, str]:
         # directly in Prolog sources and should not be pascal-cased).
         if clausal_name not in rev:
             rev[clausal_name] = clausal_name
+    rev.update(_REVERSE_OVERRIDES)
     return rev
 
 

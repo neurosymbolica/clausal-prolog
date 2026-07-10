@@ -74,7 +74,7 @@ Test('true succeeds (1 == 1)') <- (1 == 1)
 
 Test('fail fails: not False') <- (not False)
 
-Test('conjunction backtracks: 2x2 = 4 solutions') <- (findall([X, Y], (member(X, [1, 2]), member(Y, [a, b])), L), length(L, 4), [1, a] in L, [2, b] in L)
+Test('conjunction backtracks: 2x2 = 4 solutions') <- (findall([X, Y], (in_(X, [1, 2]), in_(Y, [a, b])), L), length(L, 4), [1, a] in L, [2, b] in L)
 
 Test('disjunction yields 2 solutions') <- (findall(X, X is 1 or X is 2, L), L == [1, 2])
 
