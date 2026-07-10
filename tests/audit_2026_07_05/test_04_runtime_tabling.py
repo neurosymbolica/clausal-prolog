@@ -116,6 +116,49 @@ lb(2, 3),
 lb(4, 1),
 """
 
+# A04-F001 transitive SCC: a 3-node cycle r1 → r3 → r2 → r1 (rec clause first).
+# The middle members never consume an ON-STACK ancestor directly (they call a
+# fresh nested leader), so edge-only dependency tracking lets them complete
+# mid-fixpoint. Expected fixpoint from 1 along the fact chain 1→2→…→7:
+#   r1(1,·) = {2,5}   r2(1,·) = {3,6}   r3(1,·) = {4,7}
+SCC3_SRC = """-table(r1/2)
+-table(r2/2)
+-table(r3/2)
+
+r1(X, Y) <- (
+    r3(X, Z),
+    l1(Z, Y)
+)
+r1(X, Y) <- l1(X, Y)
+
+r2(X, Y) <- (
+    r1(X, Z),
+    l2(Z, Y)
+)
+r2(X, Y) <- l2(X, Y)
+
+r3(X, Y) <- (
+    r2(X, Z),
+    l3(Z, Y)
+)
+r3(X, Y) <- l3(X, Y)
+
+l1(1, 2),
+l1(4, 5),
+l2(2, 3),
+l2(5, 6),
+l3(3, 4),
+l3(6, 7),
+"""
+
+
+def _rename_scc3(prefix):
+    src = SCC3_SRC
+    for tok in ("r1", "r2", "r3", "l1", "l2", "l3"):
+        src = src.replace(tok, f"{prefix}{tok}")
+    return src
+
+
 NAF_SRC = """-table(tp/2)
 
 tp(1, 2),
@@ -620,6 +663,46 @@ class TestF001CompletionLosesConsumers:
         Y = Var()
         got = sorted(set(a[0] for a in answers(call("re", 1, Y, module=m), Y)))
         assert got == [2, 4]
+
+
+# ══ A04-F001 (transitive): ≥3-node SCCs complete prematurely ══════════════════
+
+
+class TestF001TransitiveSccDeps:
+    """SCC dependency edges must propagate TRANSITIVELY: a middle member of a
+    longer cycle (calls a fresh nested leader, never an on-stack ancestor
+    directly) ends with dependencies only via that nested dormant leader; it
+    must not complete while the component is still growing."""
+
+    def test_three_cycle_root_query(self, load):
+        m = load("f001s1", _rename_scc3("a"))
+        Y = Var()
+        got = sorted(set(v[0] for v in answers(call("ar1", 1, Y, module=m), Y)))
+        assert got == [2, 5]
+
+    def test_three_cycle_middle_query(self, load):
+        m = load("f001s2", _rename_scc3("b"))
+        Y = Var()
+        got = sorted(set(v[0] for v in answers(call("br2", 1, Y, module=m), Y)))
+        assert got == [3, 6]
+
+    def test_three_cycle_last_query(self, load):
+        m = load("f001s3", _rename_scc3("c"))
+        Y = Var()
+        got = sorted(set(v[0] for v in answers(call("cr3", 1, Y, module=m), Y)))
+        assert got == [4, 7]
+
+    def test_three_cycle_members_complete_correctly_after_root(self, load):
+        # After the root query, the swept members' tables must hold the full
+        # component fixpoint (not be frozen empty/partial mid-fixpoint).
+        m = load("f001s4", _rename_scc3("d"))
+        list(call("dr1", 1, Var(), module=m))
+        Y2, Y3 = Var(), Var()
+        got2 = sorted(set(v[0] for v in answers(call("dr2", 1, Y2, module=m), Y2)))
+        got3 = sorted(set(v[0] for v in answers(call("dr3", 1, Y3, module=m), Y3)))
+        assert (got2, got3) == ([3, 6], [4, 7])
+        store = m.__clausal_module__.db.table_store
+        assert "evaluating" not in {e.status for e in store.values()}
 
 
 # ══ A04-F002: _naf_tabled unsound on never-called / other-variant subgoals ════

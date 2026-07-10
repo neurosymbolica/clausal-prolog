@@ -119,21 +119,45 @@ def _on_leader_stack(entry: TableEntry) -> bool:
 def _complete_scc(root: TableEntry, table_store) -> None:
     """Mark *root* complete, then sweep dormant SCC members (A04-F001).
 
-    A member deferred completion while it consumed a still-evaluating
-    ancestor; once every dependency is complete it may complete too. Iterate
-    to a fixpoint so a chain of members resolves.
+    A member deferred completion while it (transitively) consumed a
+    still-evaluating ancestor. Dormant members are re-led to an inner fixpoint
+    on every pass of the enclosing leader's fixpoint loop, so when the root of
+    the component stabilises, so have they — every dormant member whose
+    dependencies cannot reach a STILL-ACTIVE leader (an entry on the leader
+    stack, still growing) may complete now.
+
+    Members can depend on EACH OTHER (deps recorded across different re-lead
+    episodes form cycles among dormant members), so completion is decided per
+    blocked-set rather than per entry: a member is blocked only if some dep is
+    an active on-stack leader, unknown to this store's dormant set (e.g. an
+    abandoned entry), or itself blocked. The unblocked residue reached a joint
+    fixpoint under *root* and completes as a group.
     """
     root.status = "complete"
+    members = [e for e in table_store.values()
+               if e.status == "evaluating" and not _on_leader_stack(e)
+               and e.scc_deps]
+    if not members:
+        return
+    member_ids = {id(e) for e in members}
+    blocked: set[int] = set()
     changed = True
     while changed:
         changed = False
-        for e in table_store.values():
-            if (e.status != "evaluating" or _on_leader_stack(e)
-                    or not e.scc_deps):
+        for e in members:
+            if id(e) in blocked:
                 continue
-            if all(dep is e or dep.status == "complete" for dep in e.scc_deps):
-                e.status = "complete"
-                changed = True
+            for dep in e.scc_deps:
+                if dep is e or dep.status != "evaluating":
+                    continue
+                if (_on_leader_stack(dep) or id(dep) in blocked
+                        or id(dep) not in member_ids):
+                    blocked.add(id(e))
+                    changed = True
+                    break
+    for e in members:
+        if id(e) not in blocked:
+            e.status = "complete"
 
 
 # ── Table entry ───────────────────────────────────────────────────────────
@@ -690,6 +714,24 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         )
         if not deps_pending:
             _complete_scc(entry, table_store)
+        else:
+            # A04-F001 (transitive): this entry stays dormant, and its
+            # ENCLOSING leader transitively depends on the same still-active
+            # ancestors (Tarjan lowlink propagation). Without this edge, a
+            # middle member of a ≥3-node cycle — which only ever called FRESH
+            # nested leaders, never an on-stack ancestor directly — ends with
+            # no recorded deps of its own and completes mid-fixpoint, freezing
+            # the whole component with a wrong/empty answer set. Propagate
+            # only deps still ON the leader stack: an off-stack (dormant) dep
+            # is resolved by its root's `_complete_scc` sweep, and propagating
+            # it above its own root would deadlock completion.
+            cl = current_leader()
+            if cl is not None:
+                for dep in entry.scc_deps:
+                    if (dep is not cl and dep is not entry
+                            and dep.status == "evaluating"
+                            and _on_leader_stack(dep)):
+                        cl.scc_deps.add(dep)
         yield (_fail, DONE)
 
     return tabled_dispatch
