@@ -29,6 +29,11 @@ from clausal.logic.clpfd import (
     cumulative,
     domain_contains,
     domain_from_range,
+    domain_max,
+    domain_min,
+    domain_remove,
+    domain_remove_above,
+    domain_remove_below,
     domain_size,
     fd_element,
     fd_circuit,
@@ -372,6 +377,116 @@ class TestInt64BoundarySentinel:
         d2 = domain_from_range(0, 2 ** 64)
         assert domain_contains(d2, 2 ** 64)
         assert not domain_contains(d2, 2 ** 64 + 1)
+
+
+# ── A06-F007 follow-up: sentinel collision in value/limit ARGUMENTS ──────────
+# 7fad78d6 fixed domain *construction* at the int64 boundary; the same
+# collision existed for the value/limit arguments of domain_remove{,_above,
+# _below} and for the ne/lt/le propagators' int operands.
+
+
+_I64MAX = 2 ** 63 - 1
+_I64MIN = -(2 ** 63)
+_INF = float("inf")
+
+
+class TestInt64SentinelValueArgs:
+    def test_remove_above_at_int64_max_keeps_cap(self):
+        d = domain_remove_above(domain_from_range(0, _INF), _I64MAX)
+        assert domain_contains(d, _I64MAX)
+        assert not domain_contains(d, 2 ** 63)
+        assert not domain_contains(d, 2 ** 100)
+
+    def test_remove_below_at_int64_min_keeps_cap(self):
+        d = domain_remove_below(domain_from_range(-_INF, 0), _I64MIN)
+        assert domain_contains(d, _I64MIN)
+        assert not domain_contains(d, _I64MIN - 1)
+        assert not domain_contains(d, -(2 ** 100))
+
+    def test_remove_at_int64_max_removes_only_that_value(self):
+        d = domain_remove(domain_from_range(-_INF, _INF), _I64MAX)
+        assert not domain_contains(d, _I64MAX)
+        assert domain_contains(d, _I64MAX - 1)
+        assert domain_contains(d, 2 ** 63)
+
+    def test_remove_at_int64_min_removes_only_that_value(self):
+        d = domain_remove(domain_from_range(-_INF, _INF), _I64MIN)
+        assert not domain_contains(d, _I64MIN)
+        assert domain_contains(d, _I64MIN + 1)
+        assert domain_contains(d, _I64MIN - 1)
+
+    def test_fd_ne_at_int64_max_allows_neighbour(self):
+        t = Trail()
+        z = Var()
+        assert fd_ne(z, _I64MAX, t)
+        assert unify(z, 2 ** 63, t)  # 2**63 != 2**63-1 — must succeed
+
+    def test_fd_ne_at_int64_max_still_excludes_value(self):
+        t = Trail()
+        z = Var()
+        assert fd_ne(z, _I64MAX, t)
+        assert not unify(z, _I64MAX, t)
+
+    def test_fd_ne_at_int64_min_allows_neighbour(self):
+        t = Trail()
+        u = Var()
+        assert fd_ne(u, _I64MIN, t)
+        assert unify(u, _I64MIN - 1, t)  # -(2**63)-1 != -(2**63) — must succeed
+
+    def test_fd_ne_at_int64_min_still_excludes_value(self):
+        t = Trail()
+        u = Var()
+        assert fd_ne(u, _I64MIN, t)
+        assert not unify(u, _I64MIN, t)
+
+    def test_fd_le_at_int64_max_bounds_domain(self):
+        # Reflection: the cap must land in X's domain, not be silently dropped.
+        t = Trail()
+        x = Var()
+        assert fd_le(x, _I64MAX, t)
+        s = get_attr(x, FD_KEY)
+        assert s is not None
+        assert domain_max(s.domain) == _I64MAX
+        assert not domain_contains(s.domain, 2 ** 63)
+
+    def test_fd_ge_at_int64_min_bounds_domain(self):
+        t = Trail()
+        x = Var()
+        assert fd_ge(x, _I64MIN, t)
+        s = get_attr(x, FD_KEY)
+        assert s is not None
+        assert domain_min(s.domain) == _I64MIN
+        assert not domain_contains(s.domain, _I64MIN - 1)
+
+    def test_c_and_python_domain_ops_agree_at_boundaries(self):
+        unbounded = clpfd._py_domain_from_range(-_INF, _INF)
+        cases = [
+            (clpfd.domain_remove_above, clpfd._py_domain_remove_above, _I64MAX),
+            (clpfd.domain_remove_above, clpfd._py_domain_remove_above, _I64MAX - 1),
+            (clpfd.domain_remove_below, clpfd._py_domain_remove_below, _I64MIN),
+            (clpfd.domain_remove_below, clpfd._py_domain_remove_below, _I64MIN + 1),
+            (clpfd.domain_remove, clpfd._py_domain_remove, _I64MAX),
+            (clpfd.domain_remove, clpfd._py_domain_remove, _I64MIN),
+            (clpfd.domain_contains, clpfd._py_domain_contains, _I64MAX),
+            (clpfd.domain_contains, clpfd._py_domain_contains, _I64MIN),
+        ]
+        for c_op, py_op, arg in cases:
+            assert c_op(unbounded, arg) == py_op(unbounded, arg), (py_op, arg)
+
+    def test_near_boundary_and_bignum_limits_regression(self):
+        # Just inside the boundary stays on the fast path and is exact.
+        d = domain_remove_above(domain_from_range(0, _INF), _I64MAX - 1)
+        assert domain_contains(d, _I64MAX - 1)
+        assert not domain_contains(d, _I64MAX)
+        # True bignum limits keep working via the Python fallback.
+        d2 = domain_remove_above(domain_from_range(0, _INF), 2 ** 64)
+        assert domain_contains(d2, 2 ** 64)
+        assert not domain_contains(d2, 2 ** 64 + 1)
+        # ne just inside the boundary: neighbour above is the sentinel value.
+        t = Trail()
+        z = Var()
+        assert fd_ne(z, _I64MAX - 1, t)
+        assert unify(z, _I64MAX, t)
 
 
 # ── A06-F008: in_domain doesn't re-propagate existing constraints ────────────

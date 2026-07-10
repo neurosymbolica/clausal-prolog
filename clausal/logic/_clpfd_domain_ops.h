@@ -99,11 +99,16 @@ has_bignum_bound(PyObject *domain)
 }
 
 /*
- * Detect whether a single Python object is a bignum int (out of int64
- * range).  Used by domain_from_range to short-circuit to the Python
- * reference impl when constructing a bignum-bounded domain.
+ * Detect whether a single Python int needs the exact-int Python path:
+ * either a bignum (out of int64 range), or a finite int landing exactly
+ * on INT64_MIN/INT64_MAX.  The sentinels are reserved for ±inf — a user
+ * integer equal to one would be indistinguishable from "unbounded" after
+ * make_interval, so it must take the Python fallback too (A06-F007; the
+ * C fast range is effectively [INT64_MIN+1, INT64_MAX-1], mirroring
+ * has_bignum_bound above).  Used by the domain-op wrappers and the
+ * propagators to gate their value/limit arguments.
  *
- * Returns 1 if obj is a Python int outside int64 range, 0 otherwise.
+ * Returns 1 if obj is a Python int outside the C fast range, 0 otherwise.
  * Floats (+/-inf) and non-int objects return 0 (handled elsewhere).
  */
 static inline int
@@ -111,8 +116,9 @@ is_bignum_int(PyObject *obj)
 {
     if (!PyLong_Check(obj)) return 0;
     int ov = 0;
-    (void)PyLong_AsLongLongAndOverflow(obj, &ov);
-    return ov != 0;
+    long long val = PyLong_AsLongLongAndOverflow(obj, &ov);
+    if (ov != 0) return 1;
+    return val == INT64_MIN || val == INT64_MAX;
 }
 
 /*

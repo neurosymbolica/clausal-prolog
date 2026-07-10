@@ -510,9 +510,12 @@ expr_domain_fast(PyObject *expr)
     if (PyLong_Check(expr) && !PyBool_Check(expr)) {
         int ov = 0;
         int64_t val = PyLong_AsLongLongAndOverflow(expr, &ov);
-        if (ov != 0) {
-            /* Bignum int — build a singleton domain via the Python
-             * reference path which handles arbitrary-precision bounds. */
+        if (ov != 0 || val == INT64_MIN || val == INT64_MAX) {
+            /* Bignum int, or a finite int exactly at the INT64_MIN/MAX
+             * sentinel (A06-F007) — make_interval would turn the latter
+             * into ±inf.  Build the singleton with the exact PyLong so
+             * has_bignum_bound() routes downstream ops to the Python
+             * helpers, which handle arbitrary-precision bounds. */
             PyObject *pair = PyTuple_Pack(2, expr, expr);
             if (!pair) return NULL;
             PyObject *result = PyTuple_Pack(1, pair);
@@ -563,10 +566,12 @@ expr_domain_with_trail(PyObject *expr, PyObject *trail)
     if (PyLong_Check(expr) && !PyBool_Check(expr)) {
         int ov = 0;
         int64_t val = PyLong_AsLongLongAndOverflow(expr, &ov);
-        if (ov != 0) {
-            /* Bignum int — build a singleton domain that preserves the
-             * Python int.  Downstream callers detect bignum bounds via
-             * has_bignum_bound() and dispatch to the Python helpers. */
+        if (ov != 0 || val == INT64_MIN || val == INT64_MAX) {
+            /* Bignum int, or a finite int exactly at the INT64_MIN/MAX
+             * sentinel (A06-F007) — build a singleton domain that
+             * preserves the exact Python int.  Downstream callers detect
+             * such bounds via has_bignum_bound() and dispatch to the
+             * Python helpers. */
             PyObject *pair = PyTuple_Pack(2, expr, expr);
             if (!pair) return NULL;
             PyObject *result = PyTuple_Pack(1, pair);
