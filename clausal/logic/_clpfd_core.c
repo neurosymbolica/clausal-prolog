@@ -244,7 +244,17 @@ py_domain_size(PyObject *self, PyObject *arg)
         if (unpack_interval(pair, &lo, &hi) < 0) return NULL;
         if (lo == INT64_MIN || hi == INT64_MAX)
             return PyFloat_FromDouble(HUGE_VAL);
-        total += (hi - lo + 1);
+        /* Interval width can reach 2^64 - 3 on the fast path, which
+         * overflows a signed 64-bit accumulator (UB).  Compute it in
+         * unsigned arithmetic (well-defined; hi >= lo) and delegate to
+         * the bignum-safe Python reference when the running total would
+         * exceed INT64_MAX. */
+        uint64_t width = (uint64_t)hi - (uint64_t)lo + 1;
+        if (width > (uint64_t)(INT64_MAX - total)) {
+            if (ensure_py_fallbacks() < 0) return NULL;
+            return PyObject_CallOneArg(fn_py_domain_size, arg);
+        }
+        total += (long long)width;
     }
     return PyLong_FromLongLong(total);
 }

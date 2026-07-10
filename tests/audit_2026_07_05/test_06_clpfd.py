@@ -473,6 +473,13 @@ class TestInt64SentinelValueArgs:
         for c_op, py_op, arg in cases:
             assert c_op(unbounded, arg) == py_op(unbounded, arg), (py_op, arg)
 
+    def test_domain_size_wide_fast_path_no_overflow(self):
+        # Widest fast-path domain: width 2^64 - 2 overflows a signed
+        # 64-bit accumulator; must match the Python reference.
+        d = domain_from_range(-(2 ** 63) + 1, 2 ** 63 - 2)
+        assert domain_size(d) == 2 ** 64 - 2
+        assert domain_size(d) == clpfd._py_domain_size(d)
+
     def test_near_boundary_and_bignum_limits_regression(self):
         # Just inside the boundary stays on the fast path and is exact.
         d = domain_remove_above(domain_from_range(0, _INF), _I64MAX - 1)
