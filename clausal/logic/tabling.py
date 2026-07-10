@@ -8,19 +8,19 @@ Architecture
 ------------
 A tabled predicate's dispatch function is wrapped so that:
 
-- **Leader** (first call to a subgoal): drives the original dispatch, collects
-  and caches answers, then runs a completion phase that resumes any suspended
-  consumers.
-- **Consumer** (recursive call while leader is running): yields currently cached
-  answers, then suspends (``_TABLING_SUSPEND``) until the leader resumes it.
+- **Leader** (first call to a subgoal): drives the original dispatch to a
+  FIXPOINT — re-running it until no new answer appears — collecting and
+  caching answers (A04-F001).
+- **Consumer** (recursive call while a leader for the same table is on the
+  leader stack): yields currently cached answers, then suspends
+  (``_TABLING_SUSPEND``); the leader's next fixpoint pass re-derives what the
+  consumer would have produced and finishes the parked generator via close().
 - **Complete** (cache hit after leader finished): yields all cached answers
   directly.
 
 in_ trampoline mode, suspension is cooperative: the consumer yields
-``(parent, _TABLING_SUSPEND)`` and the trampoline converts this to DONE so the
-caller's while-loop exits normally.  The leader's completion phase resumes
-consumers via a mini-trampoline that uses the consumer's ``parent`` reference
-as a routing key.
+``(fail, _TABLING_SUSPEND)`` and the trampoline converts this to DONE so the
+caller's while-loop exits normally — exactly like ordinary exhaustion.
 
 Well-Founded Semantics (WFS)
 ----------------------------
@@ -45,7 +45,9 @@ from clausal.terms import Compound
 
 _VAR = object()              # unbound Var placeholder in subgoal keys
 _TABLING_SUSPEND = object()  # consumer → trampoline: park me
-_TABLING_RESUME = object()   # leader → consumer: wake up, check for answers
+_TABLING_RESUME = object()   # legacy: nothing sends this since the A04-F001
+                             # fixpoint rework; kept only because external
+                             # code (tests/test_tabling.py) still imports it
 _FAILED = object()           # sentinel for invalidated conditional answers
 
 # ── Delayed negation ─────────────────────────────────────────────────────
@@ -698,26 +700,12 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # exhaustion — the enclosing leader ended its fixpoint pass early
             # and any mid-flight re-led member was abandoned on the leader
             # stack (A04-F001: lost joins / members frozen "evaluating").
-            signal = yield (_fail, _TABLING_SUSPEND)
+            yield (_fail, _TABLING_SUSPEND)
 
-            # Resumed by leader's completion phase with _TABLING_RESUME
-            while signal is _TABLING_RESUME:
-                while sc.answers_seen < len(entry.answers):
-                    stored = entry.answers[sc.answers_seen]
-                    cond = entry.conditions[sc.answers_seen]
-                    sc.answers_seen += 1
-                    if cond is _FAILED:
-                        continue
-                    mark = trail.mark()
-                    if _unify_answer(args, stored, trail):
-                        yield (_proceed, None)
-                    trail.undo(mark)
-                # If table still evaluating, re-suspend for more answers
-                if entry.status == "evaluating":
-                    signal = yield (_fail, _TABLING_SUSPEND)
-                else:
-                    break
-
+            # Nothing sends _TABLING_RESUME any more: the leader re-derives a
+            # suspended consumer's answers by re-running its dispatch to a
+            # fixpoint (A04-F001) and finishes parked consumers via close().
+            # If this frame is ever resumed anyway, report exhaustion.
             yield (_fail, DONE)
             return
 
