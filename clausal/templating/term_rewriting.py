@@ -2308,6 +2308,11 @@ class EmbedTransformer(NodeTransformer):
     def __init__(transformer, source_lines=None):
         transformer._scope_depth = 0
         transformer._seen_functors: dict[str, list[str]] = {}
+        # Functors whose _seen_functors entry was minted by a -dynamic
+        # directive with PLACEHOLDER arg_i field names (A12-F005). The first
+        # real clause for such a functor unseats the placeholder so its
+        # derived head-var names win — see _unseat_directive_minted.
+        transformer._directive_minted_functors: set[str] = set()
         transformer._atoms: set[str] = set()
         transformer._import_remap: dict[str, str] = {}
         transformer._module_items: list = []
@@ -2322,6 +2327,21 @@ class EmbedTransformer(NodeTransformer):
         transformer._edcg_accs: dict[str, dict] = {}   # name → {val, in_, out, joiner_ast}
         transformer._edcg_passes: set[str] = set()      # set of pass names
         transformer._edcg_preds: dict[str, tuple[int, list[str]]] = {}  # pred → (visible_arity, [acc/pass names])
+
+    def _unseat_directive_minted(transformer, functor_name):
+        """Drop a -dynamic-minted placeholder registration for *functor_name*.
+
+        A12-F005: the -dynamic(p/N) handler mints the term class with default
+        arg_0..arg_{N-1} field names so the declare-then-assertz pattern works
+        with no clause in the file. But a REAL clause's derived head-var names
+        must win (pre-regression behaviour): call this before consulting
+        ``_seen_functors`` at a clause-head site, so the normal first-clause
+        path re-derives the names and re-emits the guarded class block (which
+        redefines the class iff the fields actually differ).
+        """
+        if functor_name in transformer._directive_minted_functors:
+            transformer._directive_minted_functors.discard(functor_name)
+            transformer._seen_functors.pop(functor_name, None)
 
     def _make_term_transformer(transformer, atoms=None):
         """Build a TermTransformer sharing this EmbedTransformer's
@@ -2484,7 +2504,10 @@ class EmbedTransformer(NodeTransformer):
                 all_field_names = arg_field_names + kwarg_field_names
 
                 # If the functor was already seen, remap positional arg field
-                # names to the established signature by position.
+                # names to the established signature by position — unless the
+                # entry is a -dynamic placeholder (A12-F005): the first REAL
+                # clause's derived head-var names win.
+                transformer._unseat_directive_minted(functor_name)
                 prev_fields = transformer._seen_functors.get(functor_name)
                 if prev_fields is not None:
                     for i in range(len(arg_field_names)):
@@ -2690,7 +2713,10 @@ class EmbedTransformer(NodeTransformer):
                 all_field_names = arg_field_names + kwarg_field_names
 
                 # If the functor was already seen, remap positional arg field
-                # names to the established signature by position.
+                # names to the established signature by position — unless the
+                # entry is a -dynamic placeholder (A12-F005): the first REAL
+                # clause's derived head-var names win.
+                transformer._unseat_directive_minted(functor_name)
                 prev_fields = transformer._seen_functors.get(functor_name)
                 if prev_fields is not None:
                     for i in range(len(arg_field_names)):
@@ -2787,6 +2813,10 @@ class EmbedTransformer(NodeTransformer):
                 if functor not in transformer._seen_functors:
                     field_names = [f"arg_{i}" for i in range(arity)]
                     transformer._seen_functors[functor] = field_names
+                    # Placeholder names: a later real clause unseats this
+                    # registration so its derived head-var names win
+                    # (A12-F005 — see _unseat_directive_minted).
+                    transformer._directive_minted_functors.add(functor)
                     statements.append(
                         _make_functor_class_ast(functor, field_names, expr_stmt))
             predspec = transformer._handle_predspec_directive(
@@ -3613,6 +3643,8 @@ class EmbedTransformer(NodeTransformer):
         kwarg_field_names = [kw.arg for kw in orig_kw_args]
         all_field_names = arg_field_names + kwarg_field_names
 
+        # A12-F005: a -dynamic placeholder must not clobber derived names.
+        transformer._unseat_directive_minted(functor_name)
         prev_fields = transformer._seen_functors.get(functor_name)
         if prev_fields is not None:
             for i in range(len(arg_field_names)):

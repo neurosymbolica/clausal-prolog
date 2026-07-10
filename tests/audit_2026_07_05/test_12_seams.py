@@ -317,6 +317,24 @@ seed <- assertz(ghost("x"))
         got = [deref(x) for _ in call("ghost", x, module=logic_mod)]
         assert got == ["x"]
 
+    def test_directive_then_clause_keeps_named_fields(self, load):
+        # A12-F005 regression: the -dynamic(pers/2) handler pre-registered
+        # placeholder arg_0/arg_1 field names, so a later real clause could no
+        # longer derive named fields from its head vars — pers._fields became
+        # ('arg_0','arg_1') and m.pers(name=..., age=...) raised TypeError.
+        # The first real clause's derived head-var names must win.
+        m = load("f005_fields", """\
+-dynamic(pers/2)
+
+likes("bob", 42),
+
+pers(NAME, AGE) <- likes(NAME, AGE)
+""")
+        assert m.pers._fields == ("name", "age")
+        x = Var()
+        got = [deref(x) for _ in solve(m.pers(name="bob", age=x))]
+        assert got == [42]
+
     def test_dynamic_with_seed_fact_works(self, load):
         # control: with one initial fact the same workflow is fine
         m = load("f005_ctrl", """\
