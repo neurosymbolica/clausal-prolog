@@ -38,6 +38,9 @@ static PyObject *fn_lt_propagate_bignum = NULL;
 static PyObject *fn_le_propagate_bignum = NULL;
 static PyObject *fn_sum_propagate_bignum = NULL;
 static PyObject *fn_scalar_propagate_bignum = NULL;
+/* Exact-int domain_remove reference impl — used by alldiff_propagate for a
+ * ground member at the INT64_MIN/MAX sentinel or beyond int64 (A06-F007). */
+static PyObject *fn_py_domain_remove = NULL;
 
 /*
  * Convert a Python truth value returned by a bignum-fallback propagate
@@ -1545,12 +1548,24 @@ alldiff_propagate(AllDiffConstraintObject *self, PyObject *trail, PyObject *queu
 
             for (Py_ssize_t j = 0; j < PyList_GET_SIZE(gv_list); j++) {
                 PyObject *gv = PyList_GET_ITEM(gv_list, j);
-                int64_t val = PyLong_AsLongLong(gv);
-                if (val == -1 && PyErr_Occurred()) {
-                    Py_DECREF(new_d); Py_DECREF(state); Py_DECREF(gv_list);
-                    goto ad_error;
+                PyObject *tmp;
+                if (is_bignum_int(gv) || has_bignum_bound(new_d)) {
+                    /* Exact-int Python fallback (A06-F007): a ground member
+                     * exactly at the INT64_MIN/MAX sentinel reads back as
+                     * ±inf through PyLong_AsLongLong (truncating the peer
+                     * domain), and a true bignum raises OverflowError; a
+                     * peer domain that already carries bignum bounds cannot
+                     * go through domain_remove_c either. */
+                    tmp = PyObject_CallFunctionObjArgs(
+                        fn_py_domain_remove, new_d, gv, NULL);
+                } else {
+                    int64_t val = PyLong_AsLongLong(gv);
+                    if (val == -1 && PyErr_Occurred()) {
+                        Py_DECREF(new_d); Py_DECREF(state); Py_DECREF(gv_list);
+                        goto ad_error;
+                    }
+                    tmp = domain_remove_c(new_d, val);
                 }
-                PyObject *tmp = domain_remove_c(new_d, val);
                 Py_DECREF(new_d);
                 if (!tmp) { Py_DECREF(state); Py_DECREF(gv_list); goto ad_error; }
                 new_d = tmp;
@@ -3336,6 +3351,7 @@ PyInit__clpfd_propagate(void)
     fn_le_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_le_propagate_bignum");
     fn_sum_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_sum_propagate_bignum");
     fn_scalar_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_scalar_propagate_bignum");
+    fn_py_domain_remove = PyObject_GetAttrString(clpfd_mod, "_py_domain_remove");
     Py_DECREF(clpfd_mod);
 
     if (!fn_expr_domain || !fn_resolve || !fn_eval_ground ||
@@ -3343,7 +3359,8 @@ PyInit__clpfd_propagate(void)
         !fn_collect_constraint_vars || !fn_collect_vars_from || !fn_linearise ||
         !fn_eq_propagate_bignum || !fn_ne_propagate_bignum ||
         !fn_lt_propagate_bignum || !fn_le_propagate_bignum ||
-        !fn_sum_propagate_bignum || !fn_scalar_propagate_bignum)
+        !fn_sum_propagate_bignum || !fn_scalar_propagate_bignum ||
+        !fn_py_domain_remove)
         return NULL;
 
     /* Try to import CLP(R) functions (optional) */

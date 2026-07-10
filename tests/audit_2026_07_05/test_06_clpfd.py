@@ -14,7 +14,11 @@ todo/cross_cutting_issues.md issue 3 (Cumulative stale snapshots) and
 issue 8 (int64 ceilings), implementation_plans/clpfd/todo/*.
 """
 import itertools
+import json
+import os
 import random
+import subprocess
+import sys
 from fractions import Fraction
 
 import pytest
@@ -494,6 +498,141 @@ class TestInt64SentinelValueArgs:
         z = Var()
         assert fd_ne(z, _I64MAX - 1, t)
         assert unify(z, _I64MAX, t)
+
+
+# ── A06-F007 sibling: alldiff ground members at the int64 sentinels ──────────
+# alldiff_propagate did an ungated PyLong_AsLongLong on a ground member before
+# domain_remove_c on the peers: a member at exactly 2**63-1 / -(2**63) read
+# back as ±inf (truncating the peer domains), and a true bignum member raised
+# OverflowError.  C path only — the pure-Python propagator was correct.
+
+
+def _open_fd_var(t):
+    """Fresh var with an unbounded FD domain (minus a marker hole)."""
+    v = Var()
+    assert fd_ne(v, 12345, t)
+    return v
+
+
+_ALLDIFF_AGREEMENT_SCRIPT = r"""
+import json, sys
+if sys.argv[1] == "py":
+    sys.modules['clausal.logic._clpfd_propagate'] = None
+    sys.modules['clausal.logic._clpfd_core'] = None
+from clausal.logic.variables import Var, Trail
+from clausal.logic import clpfd
+from clausal.logic.clpfd import all_different, fd_ne, domain_contains, FD_KEY
+from clausal.logic.variables import get_attr
+
+assert clpfd._USE_C_PROPAGATE == (sys.argv[1] == "c")
+assert clpfd._USE_C_DOMAINS == (sys.argv[1] == "c")
+
+I64MAX = 2 ** 63 - 1
+I64MIN = -(2 ** 63)
+out = []
+for g in (I64MAX, I64MIN, 2 ** 64, -(2 ** 64), I64MAX - 1, I64MIN + 1, 7):
+    t = Trail()
+    x = Var()
+    assert fd_ne(x, 12345, t)
+    assert all_different([x, g], t)
+    d = get_attr(x, FD_KEY).domain
+    out.append([bool(domain_contains(d, p))
+                for p in (g - 1, g, g + 1, 0, 2 ** 100, -(2 ** 100))])
+print(json.dumps(out))
+"""
+
+
+class TestAllDiffInt64Sentinel:
+    def test_ground_member_at_int64_max_removes_only_that_value(self):
+        t = Trail()
+        x = _open_fd_var(t)
+        assert all_different([x, _I64MAX], t)
+        d = dom(x)
+        assert not domain_contains(d, _I64MAX)
+        assert domain_contains(d, _I64MAX - 1)
+        assert domain_contains(d, 2 ** 63)   # was wrongly removed (truncation)
+        assert domain_contains(d, 2 ** 100)  # was wrongly removed (truncation)
+
+    def test_ground_member_at_int64_min_removes_only_that_value(self):
+        t = Trail()
+        x = _open_fd_var(t)
+        assert all_different([x, _I64MIN], t)
+        d = dom(x)
+        assert not domain_contains(d, _I64MIN)
+        assert domain_contains(d, _I64MIN + 1)
+        assert domain_contains(d, _I64MIN - 1)   # was wrongly removed
+        assert domain_contains(d, -(2 ** 100))   # was wrongly removed
+
+    def test_ground_member_true_bignum_no_overflow(self):
+        t = Trail()
+        x = _open_fd_var(t)
+        assert all_different([x, 2 ** 64], t)  # raised OverflowError before
+        d = dom(x)
+        assert not domain_contains(d, 2 ** 64)
+        assert domain_contains(d, 2 ** 64 - 1)
+        assert domain_contains(d, 2 ** 64 + 1)
+
+    def test_peer_domain_with_bignum_bound_small_ground_member(self):
+        # Same call site, mirrored shape: the PEER's domain carries a bignum
+        # bound, which domain_remove_c cannot unpack (raised OverflowError).
+        t = Trail()
+        x = Var()
+        assert fd_le(x, 2 ** 64, t)
+        assert all_different([x, 5], t)
+        d = dom(x)
+        assert not domain_contains(d, 5)
+        assert domain_contains(d, 4)
+        assert domain_contains(d, 2 ** 64)
+
+    def test_member_bound_to_sentinel_after_posting(self):
+        # Grounding a member AFTER posting re-fires the propagator through
+        # the unification hook — same guarded removal path.
+        t = Trail()
+        x = _open_fd_var(t)
+        y = _open_fd_var(t)
+        assert all_different([x, y], t)
+        assert unify(y, _I64MAX, t)
+        d = dom(x)
+        assert not domain_contains(d, _I64MAX)
+        assert domain_contains(d, 2 ** 63)
+
+    def test_c_and_python_alldiff_agree_at_boundaries(self):
+        if not clpfd._USE_C_PROPAGATE:
+            pytest.skip("C propagate extension not in use")
+        # _USE_C_PROPAGATE is read at import time, so the pure-Python leg
+        # runs in a subprocess with the C extensions import-blocked.
+        repo_root = os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))))
+        env = {**os.environ, "PYTHONPATH": repo_root}
+
+        def leg(which):
+            p = subprocess.run(
+                [sys.executable, "-c", _ALLDIFF_AGREEMENT_SCRIPT, which],
+                capture_output=True, text=True, env=env)
+            assert p.returncode == 0, p.stderr
+            return json.loads(p.stdout)
+
+        assert leg("c") == leg("py")
+
+    def test_ground_member_just_inside_fast_range_regression(self):
+        # 2**63-2 is the largest int on the C fast path — must stay there
+        # and remove exactly itself.
+        t = Trail()
+        x = _open_fd_var(t)
+        assert all_different([x, _I64MAX - 1], t)
+        d = dom(x)
+        assert not domain_contains(d, _I64MAX - 1)
+        assert domain_contains(d, _I64MAX - 2)
+        assert domain_contains(d, _I64MAX)
+
+    def test_small_int_alldiff_regression(self):
+        t = Trail()
+        x, y, z = Var(), Var(), Var()
+        assert in_domain([x, y, z], 1, 3, t)
+        assert all_different([x, y, z], t)
+        assert unify(x, 1, t)
+        assert unify(y, 2, t)
+        assert deref(z) == 3  # propagation forces the last value
 
 
 # ── A06-F008: in_domain doesn't re-propagate existing constraints ────────────
