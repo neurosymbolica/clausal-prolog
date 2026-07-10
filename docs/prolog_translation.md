@@ -105,13 +105,16 @@ for item in pmodule.items:
 |---|---|---|
 | `X is Y` | `X = Y` | Unification |
 | `X is not Y` | `dif(X, Y)` | Disequality ([dif/2](constraints.md)) |
-| `Y == X * 2` | `Y is X * 2` | Arithmetic constraint |
+| `Y == X * 2` | `Y =:= X * 2` | Arithmetic equality (compound arithmetic operand) |
 | `X == Y` | `X == Y` | Structural equality |
 | `X != Y` | `X \== Y` | Structural inequality |
 | `X <= Y` | `X =< Y` | ISO `=<` |
 | `not G` | `\+ G` | Negation as failure |
 | `A and B` or `A, B` | `A, B` | Conjunction |
 | `A or B` | `(A ; B)` | Disjunction |
+
+Note: on import, Prolog `=:=` with *atomic* operands (`X =:= Y`) still
+becomes structural `X == Y` — a known lossy case pending decision A11-D008.
 
 ### Lists
 
@@ -249,7 +252,8 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `findall(...)` | `findall(...)` | reverse builtin name map |
 | `X = Y` | `X is Y` | Unification |
 | `X \= Y` | `X is not Y` | Disequality |
-| `Y is X * 2` | `Y == X * 2` | Arithmetic constraint |
+| `Y is X * 2` | `Y := X * 2` | Arithmetic evaluation |
+| `Y =:= X * 2` | `Y == X * 2` | Arithmetic equality (atomic-operand `X =:= Y` imports as structural `==`; pending A11-D008) |
 | `X == Y` | `X == Y` | Structural equality |
 | `X \== Y` | `X != Y` | Structural inequality |
 | `X =< Y` | `X <= Y` | ISO `=<` → `<=` |

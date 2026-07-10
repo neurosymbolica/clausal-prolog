@@ -233,13 +233,13 @@ or compiler are needed.
 | `X = Y` | `X is Y` | Unification |
 | `X \= Y` | `X is not Y` | Dis-unification (dif/2) |
 | `\+ G` | `not G` | Negation-as-failure |
-| `Y is X * 2` | `Y == X * 2` | Arithmetic constraint |
-| `X =:= Y` | `X == Y` | Arithmetic equality constraint |
+| `Y is X * 2` | `Y := X * 2` | Arithmetic evaluation |
+| `Y =:= X * 2` | `Y == X * 2` | Arithmetic equality; atomic-operand `X =:= Y` imports as structural `==` (lossy, pending A11-D008) |
 | `X =\= Y` | `X != Y` | Arithmetic disequality constraint |
 | `A ; B` | `A or B` | Disjunction |
 | `X =< Y` | `X <= Y` | Less-or-equal |
 | `X =.. L` | `unpack(X, L)` | Univ |
-| `X mod Y` | `X % Y` | Modulo |
+| `X mod Y` | `prolog.TruncMod(X, Y)` | Floored modulo (see Arithmetic Semantics below) |
 | `X /\ Y` | `X & Y` | Bitwise AND |
 | `X \/ Y` | `X \| Y` | Bitwise OR |
 | `X xor Y` | `X ^ Y` | Bitwise XOR |
@@ -249,9 +249,16 @@ or compiler are needed.
 Python uses floor division and floor modulo; ISO Prolog implementations vary.
 The translation layer handles this:
 
-- Prolog `//` → Clausal `TruncateDiv` (when ISO mode is active)
-- Prolog `mod` → Clausal `TruncateMod` (when ISO mode is active)
-- Prolog `rem` → Clausal `%` (Python's floor mod, which matches some Prologs)
+- Prolog `//` → Clausal `prolog.TruncDiv(X, Y)` — integer division truncated
+  toward zero (ISO `(//)/2`; Python's `//` floors instead)
+- Prolog `mod` → Clausal `prolog.TruncMod(X, Y)` — floored modulo, sign
+  follows the divisor (ISO `mod/2`; equivalent to Python's `%`; the `Trunc`
+  prefix is a legacy family name, the operation is not truncating)
+- Prolog `rem` → Clausal `prolog.Rem(X, Y)` — truncating remainder, sign
+  follows the dividend (ISO `rem/2`)
+
+The translator emits an `-import_module(prolog)` preamble whenever any of
+these appear; the helpers live in `clausal/modules/prolog.py`.
 
 Alternatively, since most well-written Prolog uses CLP(FD)/CLP(Z) for integer
 arithmetic (per Markus's advocacy), the floor-vs-truncate distinction is
