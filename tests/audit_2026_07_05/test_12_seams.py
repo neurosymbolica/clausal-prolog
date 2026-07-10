@@ -317,6 +317,33 @@ seed <- assertz(ghost("x"))
         got = [deref(x) for _ in call("ghost", x, module=logic_mod)]
         assert got == ["x"]
 
+    def test_declared_but_empty_dynamic_predicate_fails_cleanly(self, load):
+        # A12-F005 spec acceptance: querying a declared-but-empty dynamic
+        # predicate fails cleanly (0 solutions). It raised
+        # NotImplementedError ("no compiled dispatch function") because
+        # compile_module's pending map was built only from predicate_nodes,
+        # so a clause-less minted class never got the always-fail dispatch.
+        m = load("f005_empty", """\
+-dynamic(ghost2/1)
+
+probe(PX) <- ghost2(PX)
+""")
+        logic_mod = m.__dict__["$module"]
+        x = Var()
+        assert list(call("ghost2", x, module=logic_mod)) == []
+        _query_cache.clear()
+        x = Var()
+        assert list(solve(m.ghost2(x))) == []
+        _query_cache.clear()
+        x = Var()
+        assert list(solve(m.probe(x))) == []
+        # assertz after the empty queries still works (dynamic stays open)
+        _query_cache.clear()
+        list(call("assertz", m.ghost2("y"), module=logic_mod))
+        _query_cache.clear()
+        x = Var()
+        assert [deref(x) for _ in solve(m.ghost2(x))] == ["y"]
+
     def test_directive_then_clause_keeps_named_fields(self, load):
         # A12-F005 regression: the -dynamic(pers/2) handler pre-registered
         # placeholder arg_0/arg_1 field names, so a later real clause could no

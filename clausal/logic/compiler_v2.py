@@ -149,6 +149,30 @@ def compile_module(
         else:
             pending[key] = None
 
+    # ── Step 4a: seed pending from -dynamic specs (A12-F005) ─────────────
+    #    A declared-but-clause-less dynamic predicate must still compile to
+    #    a dispatch (the always-fail trampoline) so querying it fails
+    #    cleanly with 0 solutions instead of raising NotImplementedError
+    #    from _get_dispatch(). The minted class (term_rewriting mints it at
+    #    directive processing) is attached only when its arity matches the
+    #    spec, so a same-name predicate at another arity keeps its dispatch.
+    for item in module_items:
+        if isinstance(item, DirectiveItem) and item.name == "dynamic":
+            for functor, arity in item.specs:
+                key = (functor, arity)
+                if key in pending:
+                    continue
+                pred_cls = module_dict.get(functor)
+                if (
+                    isinstance(pred_cls, PredicateMeta)
+                    and len(pred_cls._fields) == arity
+                ):
+                    if pred_cls._signature is None:
+                        pred_cls._signature = pred_cls._fields
+                    pending[key] = pred_cls
+                else:
+                    pending[key] = None
+
     # ── Step 4b: validate directive targets (A12-F003) ───────────────────
     _validate_directive_targets(module_items, db, module_dict)
 
