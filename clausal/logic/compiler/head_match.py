@@ -1315,7 +1315,10 @@ def compile_head_to_match_case(
                         comparators=[_name(lit_key)],
                     ),
                     _call(
-                        _name("unify"),
+                        # $-prefixed like every sibling guard: the public
+                        # "unify" key in the module dict is shadowable by a
+                        # user predicate of that name (A12-F004).
+                        _name("$unify"),
                         _name(cap_name),
                         _name(lit_key),
                         _name(trail_name),

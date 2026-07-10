@@ -265,6 +265,34 @@ class TestF004EngineNamespaceLeak:
         x = Var()
         assert [deref(x) for _ in solve(m.solve("a", x))] == ["b"]
 
+    def test_headlit_guard_immune_to_user_unify_predicate(self, load):
+        # A12-F004 follow-up: the opaque head-literal guard (A02-F003) must
+        # call the reserved $unify helper like its scalar/atom siblings. It
+        # emitted _name("unify"), which a user predicate named unify/3
+        # (loadable since A12-F004) shadows in the module dict — the guard
+        # then "succeeds" on ANY caller value (a PredicateMeta __call__
+        # returns a truthy term), so a non-matching exotic literal matched.
+        import datetime
+        m = load("f004_headlit", """\
+unify(1, 2, 3),
+
+-dynamic(hl_date/2)
+hl_date("seed", 0),
+""")
+        logic_mod = m.__dict__["$module"]
+        list(call("assertz", m.hl_date(datetime.date(2026, 1, 1), 1),
+                  module=logic_mod))
+        _query_cache.clear()
+        r = Var()
+        got = [deref(r) for _ in
+               call("hl_date", datetime.date(1999, 9, 9), r, module=logic_mod)]
+        assert got == [], "non-matching date head literal must NOT match"
+        _query_cache.clear()
+        r = Var()
+        got = [deref(r) for _ in
+               call("hl_date", datetime.date(2026, 1, 1), r, module=logic_mod)]
+        assert got == [1], "matching date head literal must still match"
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # A12-F005 — -dynamic forward declaration without an initial clause does not
