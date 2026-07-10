@@ -611,10 +611,13 @@ def test_F033_univ_and_qualified_emission():
 
 
 def test_F036_no_cut_emission():
-    # A11-F036 (fixed): Cut() no longer laundered as Prolog !.
+    # A11-F036 (fixed): Cut() is never laundered into Prolog. Clausal has no
+    # cut, so a Cut() goal in source is rejected outright on export rather than
+    # emitted as `!` or as an undefined `cut` predicate.
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
-    out = clausal_source_to_prolog("P() <- (Q(), Cut())\n")
-    assert "!" not in out
+    from clausal.tools.prolog_to_clausal import PrologTranslationError
+    with pytest.raises(PrologTranslationError, match="Cut"):
+        clausal_source_to_prolog("P() <- (Q(), Cut())\n")
 
 
 def test_F039_dcg_pushback_clear_error_or_valid():
