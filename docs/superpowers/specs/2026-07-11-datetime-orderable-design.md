@@ -65,18 +65,32 @@ This is **pre-existing, generic behavior** — not something dates introduced.
 
 ## Part 1 — Harden incomparable comparisons (behavior change)
 
-Convert the raw `TypeError` into a structured, catchable Clausal error term:
+Convert the raw `TypeError` into a structured, catchable Clausal error term,
+**reusing the vocabulary Clausal already uses for this exact situation.**
+`min_list/2` and `max_list/2` (`clausal/logic/builtins/lists.py`) already
+convert an incomparable-`TypeError` into
+`LogicException(type_error("orderable", Culprit, Context))`. The comparison
+operators will raise the same shape:
 
 ```
-error(type_error(<type-name-of-lhs>, <rhs-operand>), (<)/2)
+error(type_error(orderable, <rhs-operand>), (<)/2)
 ```
 
 Example: `date(...) < datetime(...)` throws
-`error(type_error(date, <the datetime value>), (<)/2)`. The left operand
-establishes the expected type; the right operand is the culprit; the context
-names the operator. This mirrors ISO `type_error/2` semantics and the existing
-`_reject_nonnumeric_eq` precedent (which throws `type_error` for the sibling
-`==` operator).
+`error(type_error(orderable, <the datetime value>), (<)/2)`. The culprit is the
+right-hand operand (the value that could not be ordered against the left); the
+context names the primitive operator. Matching the existing `orderable`
+vocabulary means a single handler —
+`catch(G, error(type_error(orderable, _), _), R)` — uniformly catches
+`min_list`, `max_list`, and the comparison operators. (This refines the
+error-term shape agreed during brainstorming, which used the LHS type name as
+the expected type; the `orderable` atom is preferred for consistency with the
+pre-existing `min_list`/`max_list` behavior.)
+
+`>` and `>=` are implemented as flipped `<` / `=<` (operands swapped), so an
+incomparable `A > B` surfaces as `error(type_error(orderable, A), (<)/2)` —
+same taxonomy, with the primitive operator/operand order reflecting the
+underlying `<`. This is documented and asserted in tests.
 
 ### Where
 
@@ -116,16 +130,37 @@ returns `False` for incomparable types rather than raising.
 
 ## Part 2 — Regression tests
 
-New file `tests/test_date_time_ordering.py`:
+New file `tests/test_date_time_ordering.py` (Python level) plus a
+`tests/fixtures/date_time_ordering.clausal` fixture run through
+`load_clausal_module` / `collect_tests` / `run_test` (end-to-end).
 
-- All four operators (`<`, `>`, `=<`, `>=`) on `date`, `datetime`, and `time`.
-- Correct chronological direction (earlier `<` later).
-- Equal-value cases succeed for `=<` / `>=` and fail for `<` / `>`.
-- End-to-end `sort/2`, `msort/2`, `min_list/2`, `max_list/2` on date lists
-  produce chronological order.
+Python level (exercises whichever `fd_*` implementation is active — the C
+wrapper when built, the pure-Python branch otherwise):
+
+- `fd_lt` / `fd_le` / `fd_gt` / `fd_ge` return the correct bool for `date`,
+  `datetime`, and `time` operands, in both directions and at equality.
+- `_sort__2` / `_msort__2` / `_min_list__2` / `_max_list__2` return date lists
+  in chronological order.
 - Incomparable pairs (`date` vs `datetime`, naive vs aware `datetime`,
-  `date` vs `int`) raise the structured `type_error`, and `catch/3` catches it.
-- Both the C and pure-Python paths are exercised where feasible.
+  `date` vs `int`) raise `LogicException` whose term is
+  `error(type_error(orderable, _), (<)/2)` (or `(=<)/2`).
+- The legitimate mixed CLP(Q)/CLP(R) `TypeError` is **not** swallowed — it
+  still propagates as a plain `TypeError` with its "cannot mix" message.
+- The `_incomparable_order_error` helper builds the expected term.
+
+End-to-end fixture:
+
+- All four operators on `date`, `datetime`, `time` (constructed via `date/4`
+  etc.), asserting chronological direction and equality.
+- `min_list/2` and `max_list/2` on a date list bind the earliest/latest.
+- `catch/3` catches the incomparable-comparison error.
+
+Note: the fixture must **not** assert ordering via `Sorted == [V1, V2, …]`
+against a literal list of bound variables — list-container structural equality
+has a representation quirk unrelated to ordering (integer literals match but
+var-bearing literals and `[H|T]` head-patterns do not reliably). Sorted-order
+correctness is asserted at the Python level (`_sort__2`/`_msort__2` return
+value) and end-to-end via `min_list`/`max_list`, which are proven to work.
 
 ## Part 3 — Documentation
 
