@@ -1,0 +1,15 @@
+# Ordering of date/datetime/time via the standard comparison operators,
+# plus min_list/max_list on dates and catchability of an incomparable
+# comparison. Companion to tests/test_date_time_ordering.py.
+
+-import_from(date_time, [date, datetime, time])
+
+Test("date lt") <- (date(2020,1,1,A), date(2021,1,1,B), A < B)  # nv
+Test("date gt") <- (date(2022,1,1,A), date(2021,1,1,B), A > B)  # nv
+Test("date le equal") <- (date(2021,1,1,A), date(2021,1,1,B), A <= B)  # nv
+Test("date ge equal") <- (date(2021,1,1,A), date(2021,1,1,B), A >= B)  # nv
+Test("datetime lt") <- (datetime(2020,1,1,10,0,0,A), datetime(2020,1,1,11,0,0,B), A < B)  # nv
+Test("time lt") <- (time(9,0,0,A), time(17,0,0,B), A < B)  # nv
+Test("min_list earliest") <- (date(2021,1,1,A), date(2019,5,5,B), min_list([A,B], M), M == B)  # nv
+Test("max_list latest") <- (date(2021,1,1,A), date(2019,5,5,B), max_list([A,B], M), M == A)  # nv
+Test("catch incomparable") <- catch((date(2020,1,1,A), datetime(2020,1,1,0,0,0,B), A < B), _E, writeln("caught"))  # nv

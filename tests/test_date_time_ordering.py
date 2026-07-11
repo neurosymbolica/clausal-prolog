@@ -163,3 +163,16 @@ class TestHelper:
         assert exc.term.args[0].args[0] == "orderable"
         assert exc.term.args[0].args[1] == culprit
         assert exc.term.args[1] == "(<)/2"
+
+
+class TestEndToEnd:
+    def test_fixture_ordering(self):
+        from clausal.testing import (
+            load_clausal_module, collect_tests, run_test,
+        )
+        mod = load_clausal_module("tests/fixtures/date_time_ordering.clausal")
+        descs = collect_tests(mod)
+        assert descs, "fixture defined no Test/1 clauses"
+        for desc in descs:
+            result = run_test(mod, desc)
+            assert result.passed, f"fixture test {desc!r} failed"
