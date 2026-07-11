@@ -1726,17 +1726,21 @@ def fd_lt(l, r, trail: Trail) -> bool:
     if not is_var(r):
         r = _resolve(r)
     _check_no_mixed_rational_real(l, r)
-    if _any_rational(l, r):
-        from clausal.logic.clpq import q_lt  # noqa: PLC0415
-        return q_lt(l, r, trail)
-    if _any_real(l, r):
-        from clausal.logic.clpr import real_lt
-        return real_lt(l, r, trail)
-    if _both_ground(l, r):
-        try:
+    try:
+        if _any_rational(l, r):
+            from clausal.logic.clpq import q_lt  # noqa: PLC0415
+            return q_lt(l, r, trail)
+        if _any_real(l, r):
+            from clausal.logic.clpr import real_lt
+            return real_lt(l, r, trail)
+        if _both_ground(l, r):
             return l < r
-        except TypeError:
-            raise _incomparable_order_error(r, "(<)/2")
+    except TypeError:
+        if is_var(l) or is_var(r):
+            raise
+        if _any_rational(l, r) and _any_real(l, r):
+            raise
+        raise _incomparable_order_error(r, "(<)/2")
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
@@ -1758,17 +1762,21 @@ def fd_le(l, r, trail: Trail) -> bool:
     if not is_var(r):
         r = _resolve(r)
     _check_no_mixed_rational_real(l, r)
-    if _any_rational(l, r):
-        from clausal.logic.clpq import q_le  # noqa: PLC0415
-        return q_le(l, r, trail)
-    if _any_real(l, r):
-        from clausal.logic.clpr import real_le
-        return real_le(l, r, trail)
-    if _both_ground(l, r):
-        try:
+    try:
+        if _any_rational(l, r):
+            from clausal.logic.clpq import q_le  # noqa: PLC0415
+            return q_le(l, r, trail)
+        if _any_real(l, r):
+            from clausal.logic.clpr import real_le
+            return real_le(l, r, trail)
+        if _both_ground(l, r):
             return l <= r
-        except TypeError:
-            raise _incomparable_order_error(r, "(=<)/2")
+    except TypeError:
+        if is_var(l) or is_var(r):
+            raise
+        if _any_rational(l, r) and _any_real(l, r):
+            raise
+        raise _incomparable_order_error(r, "(=<)/2")
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
