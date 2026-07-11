@@ -29,6 +29,10 @@ def _run_list_builtin(fn, in_list):
     """Drive a (this_generator, _proceed, _fail, _catcher, lst, out, trail)
     list builtin; return one dereferenced output list per solution.
 
+    Assumes a single deterministic solution — appropriate for deterministic
+    list builtins (sort, msort, min_list, max_list) which yield at most one
+    solution for a ground input list.
+
     For builtins that unify *out* with a single scalar (min_list, max_list)
     the scalar is wrapped in a one-element list so callers always see a
     uniform ``[[value, ...], ...]`` shape.
@@ -42,8 +46,13 @@ def _run_list_builtin(fn, in_list):
         resolved = deref(out)
         try:
             results.append([deref(x) for x in resolved])
-        except TypeError:
-            # out was unified to a scalar (e.g. min_list/max_list)
+        except TypeError as exc:
+            # out was unified to a scalar (e.g. min_list/max_list): the
+            # iteration above raised "object is not iterable".  Any other
+            # TypeError (e.g. from a bad deref of a malformed term) is an
+            # unrelated failure and must propagate, not produce a false green.
+            if "iterable" not in str(exc):
+                raise
             results.append([resolved])
     return results
 
@@ -122,7 +131,8 @@ class TestIncomparableRaises:
         _assert_orderable_error(ei, "(<)/2")
 
     def test_gt_surfaces_lt_context(self):
-        # fd_gt delegates to fd_lt with swapped operands.
+        # fd_gt(l, r) delegates to fd_lt(r, l), so the context is (<)/2 and
+        # the culprit is the original left operand (dt.date here).
         with pytest.raises(LogicException) as ei:
             fd_gt(dt.date(2020, 1, 1), dt.datetime(2020, 1, 1), Trail())
         _assert_orderable_error(ei, "(<)/2")
