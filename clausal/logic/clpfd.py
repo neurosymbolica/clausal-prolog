@@ -1604,6 +1604,18 @@ def _reject_nonnumeric_eq(l, r) -> None:
         raise LogicException(type_error("evaluable", ground, "(==)/2"))
 
 
+def _incomparable_order_error(culprit, context: str) -> "LogicException":
+    """Catchable error for an order comparison of two ground values that are
+    each orderable but not orderable against each other (e.g. a ``date`` vs a
+    ``datetime``, a naive vs a tz-aware ``datetime``, or a ``date`` vs an
+    ``int``).  Reuses the ``type_error(orderable, Culprit, Context)`` shape
+    that ``min_list/2`` / ``max_list/2`` already raise, so one handler
+    catches them all.  *culprit* is the right-hand operand; *context* names
+    the primitive operator (``"(<)/2"`` or ``"(=<)/2"``)."""
+    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    return LogicException(type_error("orderable", culprit, context))
+
+
 def fd_eq(l, r, trail: Trail) -> bool:
     """Post X == Y.
 
@@ -1721,7 +1733,10 @@ def fd_lt(l, r, trail: Trail) -> bool:
         from clausal.logic.clpr import real_lt
         return real_lt(l, r, trail)
     if _both_ground(l, r):
-        return l < r
+        try:
+            return l < r
+        except TypeError:
+            raise _incomparable_order_error(r, "(<)/2")
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
@@ -1750,7 +1765,10 @@ def fd_le(l, r, trail: Trail) -> bool:
         from clausal.logic.clpr import real_le
         return real_le(l, r, trail)
     if _both_ground(l, r):
-        return l <= r
+        try:
+            return l <= r
+        except TypeError:
+            raise _incomparable_order_error(r, "(=<)/2")
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
@@ -2929,7 +2947,32 @@ if _USE_C_PROPAGATE:
         return _c_impl(l, r, trail)
 
     fd_ne = _c_fd_ne
-    fd_lt = _c_fd_lt
-    fd_le = _c_fd_le
+
+    def fd_lt(l, r, trail, _c_impl=_c_fd_lt):
+        # The C fd_lt does no clean type-checking: an incomparable ground
+        # comparison escapes as a raw Python TypeError. Convert those to a
+        # catchable type_error, while preserving the legitimate mixed
+        # CLP(Q)/CLP(R) TypeError and any error involving an unbound operand.
+        try:
+            return _c_impl(l, r, trail)
+        except TypeError:
+            dl, dr = deref(l), deref(r)
+            if is_var(dl) or is_var(dr):
+                raise
+            if _any_rational(dl, dr) and _any_real(dl, dr):
+                raise
+            raise _incomparable_order_error(dr, "(<)/2")
+
+    def fd_le(l, r, trail, _c_impl=_c_fd_le):
+        try:
+            return _c_impl(l, r, trail)
+        except TypeError:
+            dl, dr = deref(l), deref(r)
+            if is_var(dl) or is_var(dr):
+                raise
+            if _any_rational(dl, dr) and _any_real(dl, dr):
+                raise
+            raise _incomparable_order_error(dr, "(=<)/2")
+
     # Re-register the C fd_hook
     register_attr_hook(FD_KEY, _c_fd_hook)
