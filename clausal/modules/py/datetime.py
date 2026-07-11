@@ -38,6 +38,15 @@ Prefer these declarative predicates over ``++`` Python escapes:
 instead of ``N is ++TD.days``; ``datetime_string(DT, S, "%Y-%m-%d")``
 instead of ``S is ++DT.isoformat()``; and ``days_between(A, B, N)`` for a
 direct integer day count instead of ``date_diff(A, B, TD), timedelta(N, _, TD)``.
+
+Ordering
+--------
+``date``, ``time`` and ``datetime`` values are orderable with the standard
+comparison operators ``<``, ``>``, ``<=``, ``>=`` and sort chronologically
+through ``sort/2``, ``msort/2``, ``min_list/2`` and ``max_list/2``.  Comparing
+two values that are not orderable against each other (``date`` vs
+``datetime``, naive vs tz-aware ``datetime``, ``date`` vs a number) raises a
+catchable ``error(type_error(orderable, Culprit), (<)/2)``.
 """
 
 from __future__ import annotations
