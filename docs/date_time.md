@@ -77,14 +77,17 @@ The same values sort chronologically through `sort/2`, `msort/2`,
 
 Only *comparable* values can be ordered against each other. Comparing a `date`
 with a `datetime`, a naive `datetime` with a tz-aware one, or a date with a
-number raises a catchable `error(type_error(orderable, Culprit), (<)/2)` —
-the same error `min_list/2` and `max_list/2` raise for a non-orderable list:
+number throws `error(type_error(orderable, Culprit), (<)/2)` — the same error
+`min_list/2` and `max_list/2` raise for a non-orderable list. `catch/3`
+intercepts it and binds the error term:
 
 ```clausal
-catch(
-    (date(2020, 1, 1, D), datetime(2020, 1, 1, 0, 0, 0, DT), D < DT),
-    error(type_error(orderable, _), _),
-    Recover
+-import_from(date_time, [date, datetime])
+
+CompareSafe(D, DT) <- catch(
+    (D < DT),
+    _Error,
+    writeln(_Error)
 )
 ```
 
