@@ -1,0 +1,8 @@
+# Importing module: both-args-ground call sites against the flat-joint
+# indexed predicate — drives the wrapped joint bucket directly.
+-import_from(tests.fixtures.callsite_joint_lib, [JCat])
+
+JBoth() <- JCat("x", 2)
+JMiss() <- JCat("y", 9)
+JTwo(R) <- (JCat("x", 1), R is "one")
+JTwo(R) <- (JCat("y", 3), R is "two")

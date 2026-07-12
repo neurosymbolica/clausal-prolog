@@ -84,3 +84,30 @@ class TestSecondaryDispatchTro:
     def test_unbound_key_negative_terminates(self, hop_mod):
         # nv
         assert _solutions(hop_mod, None, None, -1, None) == ["['neg']"]
+
+
+def _solutions2(mod, *args):
+    lm = mod.__dict__["$module"]
+    vals = [Var() if a is None else a for a in args]
+    return sorted(str(deref(vals[-1])) for _ in call("Hop2", *vals, module=lm))
+
+
+class TestSecondaryDispatchTroBucketLanding:
+    """Hop2's recursive clause binds the level-0 key, so the re-dispatched
+    tail call must land in a level-0 bucket — the other branch of the
+    secondary TRO loop (Hop only re-enters the fallback)."""
+
+    def test_strategy_is_hierarchical(self, hop_mod):
+        # nv
+        hop2 = hop_mod.__dict__["Hop2"]
+        assert getattr(hop2, "_index_plans_hierarchical", None)
+
+    def test_redispatch_lands_in_bucket(self, hop_mod):
+        """Unbound start signals from the fallback; the updated args are
+        ground ("a", 1) and must route into that level-0/level-1 bucket."""
+        # nv
+        assert _solutions2(hop_mod, None, None, 3, None) == ["['a1']"]
+
+    def test_ground_other_bucket_start(self, hop_mod):
+        # nv
+        assert _solutions2(hop_mod, "b", 2, 2, None) == ["['a1']"]

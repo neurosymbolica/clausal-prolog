@@ -574,13 +574,17 @@ The globals key `"Color.bucket(pos=0, 'red')"` is not a valid Python identifier,
 
 ??? abstract "Implementation"
 
-    **Bucket dict exposure** — `_index_plans`. After building all bucket functions inside `compile_predicate_trampoline`, the per-position dicts are stored on the predicate class:
+    **Bucket dict exposure** — `_index_plans`. After the final dispatch fn is built inside `compile_predicate_trampoline`, the per-position dicts are stored on the predicate class with every bucket wrapped by `_make_call_site_bucket_trampoline` — call sites drive these functions *directly* via `StepGenerator`, so each SIGNAL-mode bucket is completed to the full trampoline contract (terminal `(fail, DONE)` yield, TRO re-dispatch through the dispatch fn):
 
     ```python
-    pred_cls._index_plans = {pos: idx_dict for pos, idx_dict, _ in plans}
+    pred_cls._index_plans = {
+        pos: {key: _make_call_site_bucket_trampoline(bfn, fn, DONE, ...)
+              for key, bfn in idx_dict.items()}
+        for pos, idx_dict, _ in plans
+    }
     ```
 
-    Joint and hierarchical variants are stored as `_index_plans_joint` and `_index_plans_hierarchical` respectively. If the predicate has no indexing (below threshold), `_index_plans` is set to `{}` to clear any stale value from a previous compilation.
+    The joint variant `_index_plans_joint` is wrapped the same way; `_index_plans_hierarchical` stays raw (its level-0 entries are `(level1_fns, level1_default_fn)` tuples — informational only, no walker drives them). **Tabled predicates expose empty dicts for all three** — a direct bucket ref would bypass the tabling wrapper. If the predicate has no indexing (below threshold), all three are set to `{}` to clear any stale value from a previous compilation.
 
     **`_static_call_key(arg_expr)`** — Mirrors `_runtime_arg_key` for compile-time AST analysis:
 

@@ -4,6 +4,12 @@
 -import_from(tests.fixtures.callsite_bucket_lib, [BucketCat, BucketSteps])
 
 GroundFirst() <- BucketCat(1, "a")
+# Multi-clause caller: distinguishes a missing terminal DONE under the
+# pure-Python trampoline too (whose fallback driver converts a premature
+# generator return into exhaustion, silently truncating LATER solutions —
+# single-solution callers cannot observe that).
+Multi(R) <- (BucketCat(1, "a"), R is "one")
+Multi(R) <- (BucketCat(2, "b"), R is "two")
 GroundMiddle() <- BucketCat(3, "c")
 GroundLast() <- BucketCat(5, "e")
 GroundMiss() <- BucketCat(2, "a")

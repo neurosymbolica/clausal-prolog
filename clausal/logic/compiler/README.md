@@ -446,9 +446,15 @@ Trampoline-only (the DR builtins are all trampoline-mode).
 
 When a call site's indexed arguments are statically-known constants
 (`foo(1, X)`), the compiler emits a direct reference to the predicate's
-bucket-function for that key instead of the general dispatch wrapper.
-`_inject_bucket_refs_trampoline` populates `base_globals` with these
-refs; `_dispatch_call_trampoline` emits them when
+call-site bucket wrapper for that key instead of the general dispatch
+wrapper. The functions exposed via `_index_plans` / `_index_plans_joint`
+are wrapped by `_make_call_site_bucket_trampoline` (arg_index.py): call
+sites drive them directly via `StepGenerator`, so the wrapper completes
+the SIGNAL-mode bucket to the full trampoline contract (terminal
+`(fail, DONE)` yield, TRO re-dispatch through the dispatch fn). Tabled
+predicates expose empty plans — a direct ref would bypass the tabling
+wrapper. `_inject_bucket_refs_trampoline` populates `base_globals` with
+these refs; `_dispatch_call_trampoline` emits them when
 `ctx.bucket_ref_map` knows about the target.
 
 ---

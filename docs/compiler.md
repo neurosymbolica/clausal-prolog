@@ -156,7 +156,7 @@ _gen = StepGenerator(_disp_Foo_2, this_generator, arg0, arg1, trail)
 
 ### Call-site bucket specialisation
 
-Locked dispatch caching captures the dispatch *closure* for locked callees. Call-site specialisation goes one step further: when the argument in an indexed position is a statically-known literal at the call site, the dispatch closure is bypassed entirely and the specific *bucket function* is referenced directly.
+Locked dispatch caching captures the dispatch *closure* for locked callees. Call-site specialisation goes one step further: when the argument in an indexed position is a statically-known literal at the call site, the dispatch closure is bypassed and the call references a per-bucket *call-site wrapper* directly (`_make_call_site_bucket_trampoline` completes the SIGNAL-mode bucket to the full trampoline contract — terminal DONE yield plus TRO re-dispatch). Tabled predicates are never specialised: their `_index_plans` is empty because a direct bucket ref would bypass the tabling wrapper.
 
 `_inject_bucket_refs_trampoline` runs after `_inject_resolved_targets`. It scans each clause body for `Call` nodes whose callee is locked and has `_index_plans`. For each such call site it converts the term-level argument to an AST expression, extracts a static key via `_static_call_key`, and — if the key appears in the callee's bucket dict — injects the bucket function into `base_globals` under a readable string key:
 

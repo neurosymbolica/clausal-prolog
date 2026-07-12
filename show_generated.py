@@ -53,8 +53,8 @@ import ast
 from clausal.tools.visualize import predicate_to_source
 from clausal.logic.database import Clause
 from clausal.logic.variables import Var
-from clausal.logic.compiler import (
-    compile_predicate_trampoline,
+from clausal.logic.compiler import compile_predicate_trampoline
+from clausal.logic.compiler.predicate import (
     _build_predicate_trampoline_funcdef, _make_body_compiler_trampoline,
 )
 from clausal.logic.compiler.arg_index import _bucket_key

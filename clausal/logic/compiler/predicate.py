@@ -485,9 +485,13 @@ def _build_predicate_trampoline_funcdef(
         loop_stmts.append(ast.Break())
     elif use_tro and tro_mode == "signal":
         # Signal mode (bucket): _tro_state was set by _compile_tro_tail.
-        # Early exit via _tro_state[0] checks are emitted within the match
-        # arms by _compile_tro_tail.  After all match arms, just fall through.
-        # Add an early-exit check after the last TRO-eligible match arm:
+        # NOTE: _compile_tro_tail emits only the $tro_state stores — there is
+        # NO per-arm early exit, so match arms AFTER a signalling TRO arm
+        # still run with the flag set. If one of those arms re-enters the
+        # same predicate, the nested dispatch resets the shared flag and the
+        # pending tail call is dropped (lost solutions) — see
+        # todo/tro-signal-flag-clobbered-by-later-match-arms.md.
+        # The single flag check below runs after ALL match arms:
         loop_stmts.append(
             ast.If(
                 test=ast.Subscript(
@@ -783,7 +787,9 @@ def compile_predicate_trampoline(
                     base_globals["$tro_state"] = _tro_state_obj
 
             # Compile fallback (all clauses, for when no arg is ground).
-            # Fallback uses "loop" mode TRO (has all clauses, can restart internally).
+            # emit_done=False makes the fallback SIGNAL-mode TRO like the
+            # buckets — the enclosing dispatch loop re-dispatches its tail
+            # calls (arg_index.py groundness/joint/secondary TRO loops).
             fallback_def = _build_predicate_trampoline_funcdef(
                 f"{functor}__all", arity, clauses,
                 _effective_db, body_compiler, emit_done=False,
@@ -855,6 +861,7 @@ def compile_predicate_trampoline(
             # predicate class (as call-site-safe wrappers) AFTER the final
             # dispatch fn is built — see the _index_plans assignment below.
             _joint_exposed: tuple | None = None
+            _hier_exposed: tuple | None = None
 
             # Phase 9b/9c: attempt multi-argument indexing when arity ≥ 2.
             # Try secondary (hierarchical) dispatch first; fall back to joint
@@ -955,11 +962,10 @@ def compile_predicate_trampoline(
                                 sec, level0_compiled, level0_default_fn,
                                 fallback_fn, DONE,
                                 tro_state=_tro_state_obj, arity=arity)
-                            # Phase 10a: expose hierarchical bucket dicts.
-                            if pred_cls is not None:
-                                pred_cls._index_plans_hierarchical = {
-                                    (pos_i, pos_j): level0_compiled
-                                }
+                            # Phase 10a: hierarchical bucket dicts exposed
+                            # at the single choke point below (with the
+                            # tabled gate and staleness clearing).
+                            _hier_exposed = ((pos_i, pos_j), level0_compiled)
                     else:
                         # Phase 9b — flat joint key dispatch (high coverage).
                         joint_dict: dict = {}
@@ -1035,8 +1041,8 @@ def compile_predicate_trampoline(
             # call_site.analyse, the D6c shadow) consistently hint-free.
             if pred_cls is not None and _is_tabled:
                 pred_cls._index_plans = {}
-                if hasattr(pred_cls, "_index_plans_joint"):
-                    pred_cls._index_plans_joint = {}
+                pred_cls._index_plans_joint = {}
+                pred_cls._index_plans_hierarchical = {}
             elif pred_cls is not None:
                 pred_cls._index_plans = {
                     pos: {
@@ -1047,6 +1053,9 @@ def compile_predicate_trampoline(
                     }
                     for pos, idx_dict, _ in plans
                 }
+                # Joint/hierarchical always assigned — a recompile that no
+                # longer selects the joint/secondary strategy must not leave
+                # stale bucket dicts (wrapping the OLD clause set) behind.
                 if _joint_exposed is not None:
                     _jpos, _jdict = _joint_exposed
                     pred_cls._index_plans_joint = {
@@ -1057,12 +1066,25 @@ def compile_predicate_trampoline(
                             for jk, jfn in _jdict.items()
                         }
                     }
+                else:
+                    pred_cls._index_plans_joint = {}
+                # Hierarchical dicts stay RAW (level-0 entries are
+                # (level1_fns, level1_default_fn) tuples, not drivable
+                # bucket fns) — no walker consumes them for call-site
+                # specialisation; exposure is informational only.
+                if _hier_exposed is not None:
+                    _hpos, _hdict = _hier_exposed
+                    pred_cls._index_plans_hierarchical = {_hpos: _hdict}
+                else:
+                    pred_cls._index_plans_hierarchical = {}
         else:
-            # Phase 10a: no indexing — clear any stale _index_plans from a
+            # Phase 10a: no indexing — clear any stale plan dicts from a
             # previous compilation (e.g. after retract reduced clause count
             # below the indexing threshold).
             if pred_cls is not None:
                 pred_cls._index_plans = {}
+                pred_cls._index_plans_joint = {}
+                pred_cls._index_plans_hierarchical = {}
 
             # TRO: detect tail-recursive clauses with deterministic prefixes.
             # Disabled for tabled predicates (SLG has its own suspension

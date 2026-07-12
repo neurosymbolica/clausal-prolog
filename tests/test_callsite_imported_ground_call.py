@@ -104,3 +104,94 @@ class TestImportedTabledCallSite:
         caller = tabled_use_mod.module_dict["TabledGround"]
         caller_globals = caller._dispatch_fn.__globals__
         assert not any("TCat.bucket(" in k for k in caller_globals)
+
+
+class TestImportedGroundCallSiteMultiSolution:
+    """A multi-clause caller distinguishes a missing terminal DONE under the
+    pure-Python trampoline as well: its fallback driver converts a premature
+    generator return into exhaustion, silently TRUNCATING later solutions —
+    single-solution callers cannot observe that failure mode."""
+
+    def test_multi_clause_caller_yields_all_solutions(self, use_mod):
+        # nv
+        from clausal.logic.variables import Var, deref
+        r = Var()
+        results = sorted(
+            str(deref(r)) for _ in call("Multi", r, module=use_mod)
+        )
+        assert results == ["one", "two"]
+
+
+@pytest.fixture(scope="module")
+def joint_use_mod():
+    path = os.path.join(
+        os.path.dirname(__file__), "fixtures", "callsite_joint_use.clausal"
+    )
+    mod = _load_module("tests.fixtures.callsite_joint_use", path)
+    return mod.__dict__["$module"]
+
+
+class TestImportedJointGroundCallSite:
+    """Both-args-ground call sites against a flat-joint indexed import drive
+    the wrapped JOINT bucket (direct_joint_bucket_ref / _joint_exposed)."""
+
+    def test_joint_callee_is_specialised(self, joint_use_mod):
+        """Pin the strategy: the caller must carry a joint bucket gkey —
+        if joint exposure silently stops, this coverage evaporates."""
+        # nv
+        import sys
+        lib = sys.modules["tests.fixtures.callsite_joint_lib"]
+        assert getattr(lib.__dict__["JCat"], "_index_plans_joint", None)
+        caller = joint_use_mod.module_dict["JBoth"]
+        # The compiled clause must reference the JOINT gkey (joint hints are
+        # preferred over single-position ones) — co_names pins the emission,
+        # not just the globals injection.
+        assert any(
+            ".JCat.bucket(pos=(" in n
+            for n in caller._dispatch_fn.__code__.co_names
+        )
+
+    def test_joint_ground_hit(self, joint_use_mod):
+        # nv
+        assert len(list(call("JBoth", module=joint_use_mod))) == 1
+
+    def test_joint_ground_miss_terminates(self, joint_use_mod):
+        # nv
+        assert list(call("JMiss", module=joint_use_mod)) == []
+
+    def test_joint_multi_clause_caller(self, joint_use_mod):
+        # nv
+        from clausal.logic.variables import Var, deref
+        r = Var()
+        results = sorted(
+            str(deref(r)) for _ in call("JTwo", r, module=joint_use_mod)
+        )
+        assert results == ["one", "two"]
+
+
+@pytest.fixture(scope="module")
+def throw_use_mod():
+    path = os.path.join(
+        os.path.dirname(__file__), "fixtures", "callsite_throw_use.clausal"
+    )
+    mod = _load_module("tests.fixtures.callsite_throw_use", path)
+    return mod.__dict__["$module"]
+
+
+class TestImportedCallSiteExceptions:
+    """Exceptions thrown inside a directly-driven wrapped bucket must route
+    through the catcher chain like any dispatch-driven call."""
+
+    def test_throw_through_bucket_ref_is_catchable(self, throw_use_mod):
+        # nv
+        from clausal.logic.variables import Var, deref
+        r = Var()
+        results = [str(deref(r)) for _ in call("CatchIt", r, module=throw_use_mod)]
+        assert results == ["caught"]
+
+    def test_non_throwing_bucket_unaffected(self, throw_use_mod):
+        # nv
+        from clausal.logic.variables import Var, deref
+        r = Var()
+        results = [str(deref(r)) for _ in call("PassThru", r, module=throw_use_mod)]
+        assert results == ["ok"]

@@ -723,6 +723,14 @@ def _make_secondary_dispatch_impl(
       generator); ``lambda args: (args[2], done)`` for trampoline, which
       emits the ``(_fail, DONE)`` exhaustion sentinel at the end
       (``args[2]`` is the ``_fail`` continuation in the Phase-2 layout).
+    - ``tro_state`` / ``arity``: when *tro_state* is supplied (trampoline
+      TRO), the dispatch loops: level-0/level-1 buckets never signal
+      (compiled without ``tro_indices``), but *fallback_fn* is the shared
+      SIGNAL-mode ``{functor}__all`` — after each route, if
+      ``tro_state[0]`` is set the args are updated from
+      ``tro_state[1..arity]`` and the decision tree re-runs (the updated
+      args may now key into a level-0 bucket). Without the loop a
+      fallback tail call is silently dropped (0 solutions).
     """
     pos_i = sec_idx["pos_i"] + arg_offset
     pos_j = sec_idx["pos_j"] + arg_offset

@@ -1,0 +1,12 @@
+# Library module for exception propagation through a direct bucket ref:
+# the "b" bucket throws. NOTE: the bucket-ref walker only sees top-level
+# body goals, so the throwing call must sit in an intermediate predicate of
+# the importing module — a call nested inside catch(...) is never
+# specialised.
+-module(callsite_throw_lib, [ThrowCat(P, C)])
+
+ThrowCat(P, "a") <- (P == 1)
+ThrowCat(P, "b") <- (P == 2, throw("boom"))
+ThrowCat(P, "c") <- (P == 3)
+ThrowCat(P, "d") <- (P == 4)
+ThrowCat(P, "e") <- (P == 5)
