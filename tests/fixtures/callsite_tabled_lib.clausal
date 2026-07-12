@@ -1,0 +1,14 @@
+# Library module for the call-site tabling-bypass regression
+# (todo/call-site-specialisation-protocol-questions.md Q1).
+# TCat is TABLED, has >= _INDEX_THRESHOLD clauses and head constants at
+# pos 1 — the shape that would earn a direct bucket ref at an importing
+# ground call site.  The two "a" clauses both succeed for P == 1, so the
+# table's answer dedup is observable: 1 solution tabled, 2 if the call
+# site bypasses the tabling wrapper.
+-module(callsite_tabled_lib, [TCat(P, C)])
+-table(TCat/2)
+
+TCat(P, "a") <- (P == 1)
+TCat(P, "a") <- (P < 2)
+TCat(P, "b") <- (P == 2)
+TCat(P, "c") <- (P == 3)

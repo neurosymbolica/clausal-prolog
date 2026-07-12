@@ -5,18 +5,19 @@ Surfaced during
 (2026-07-11); neither is exercised by that bug's repro, so both were left
 untouched. Verify before acting — these are questions, not confirmed defects.
 
-## 1. Does call-site specialisation bypass tabling?
+## 1. Does call-site specialisation bypass tabling? — CONFIRMED + FIXED 2026-07-11
 
-The bucket-ref hint criteria are only `_locked` + `_index_plans`
-(`optimisations/call_site.py::analyse`). A **tabled** predicate is locked at
-end-of-module-load like any other (import_hook step 7) and gets
-`_index_plans` when it has >= `_INDEX_THRESHOLD` clauses — but its installed
-dispatch is wrapped by `make_tabled_wrapper_trampoline`
-(`compiler_v2.py` step 6-ish). A direct bucket ref at an importing call site
-would drive the (now call-site-wrapped) bucket and skip the table store
-entirely: no answer dedup, no SLG suspension, wrong WFS/NAF semantics.
-Question: should `analyse` skip callees with `db.is_tabled(fname, arity)`
-(and should `populate_runtime_from_plan` mirror that guard)?
+Yes, it was real: an imported tabled predicate with >= `_INDEX_THRESHOLD`
+clauses and head constants got bucket-specialised at ground call sites,
+bypassing `make_tabled_wrapper_trampoline` — probe showed 2 solutions
+(raw clause semantics, no answer dedup) at the call site vs 1 via the
+wrapped dispatch. Fixed in `compile_predicate_trampoline`: tabled
+predicates expose empty `_index_plans` / `_index_plans_joint`, so no
+bucket-ref walker (legacy inject, `call_site.analyse`, D6c shadow) ever
+writes a hint for them — one choke point keeps the walkers in parity with
+the D6c cross-check. Regression tests: `TestImportedTabledCallSite` in
+`tests/test_callsite_imported_ground_call.py` (+ fixtures
+`callsite_tabled_lib/use.clausal`).
 
 ## 2. Secondary (hierarchical) dispatch: SIGNAL-mode fallback without a TRO loop
 

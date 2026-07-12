@@ -1025,7 +1025,18 @@ def compile_predicate_trampoline(
             # StepGenerator, so each SIGNAL-mode bucket is wrapped to
             # complete the trampoline contract (terminal DONE yield + TRO
             # re-dispatch through the full dispatch fn).
-            if pred_cls is not None:
+            #
+            # Tabled predicates are NEVER exposed: their installed dispatch
+            # is the tabling wrapper (make_tabled_wrapper_trampoline, added
+            # after compilation), and a direct bucket ref would bypass it —
+            # no answer dedup, no SLG suspension, wrong WFS/NAF semantics.
+            # Empty plans here keep every bucket-ref walker (legacy inject,
+            # call_site.analyse, the D6c shadow) consistently hint-free.
+            if pred_cls is not None and _is_tabled:
+                pred_cls._index_plans = {}
+                if hasattr(pred_cls, "_index_plans_joint"):
+                    pred_cls._index_plans_joint = {}
+            elif pred_cls is not None:
                 pred_cls._index_plans = {
                     pos: {
                         key: _make_call_site_bucket_trampoline(

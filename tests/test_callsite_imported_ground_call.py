@@ -59,3 +59,48 @@ class TestImportedGroundCallSite:
         # 7 → 5 → 3 → 1, and BucketSteps(1, "even") has no solution.
         # nv
         assert list(call("GroundTail", 7, module=use_mod)) == []
+
+
+@pytest.fixture(scope="module")
+def tabled_use_mod():
+    path = os.path.join(
+        os.path.dirname(__file__), "fixtures", "callsite_tabled_use.clausal"
+    )
+    mod = _load_module("tests.fixtures.callsite_tabled_use", path)
+    return mod.__dict__["$module"]
+
+
+class TestImportedTabledCallSite:
+    """A ground call site must NOT be bucket-specialised when the imported
+    callee is tabled — a direct bucket ref bypasses the tabling wrapper
+    (answer dedup, SLG suspension, WFS/NAF semantics)."""
+
+    def _lib(self):
+        import sys
+        lib = sys.modules["tests.fixtures.callsite_tabled_lib"]
+        return lib.__dict__["TCat"], lib.__dict__["$module"]
+
+    def test_fixture_is_actually_tabled(self, tabled_use_mod):
+        # Guard against the silent-no-op dangling -table directive.
+        # nv
+        _, lib_lm = self._lib()
+        assert lib_lm.db.is_tabled("TCat", 2)
+
+    def test_direct_call_dedups(self, tabled_use_mod):
+        """Control: the wrapped dispatch dedups the two "a"-clause answers."""
+        # nv
+        assert len(list(call("TCat", 1, "a", module=tabled_use_mod))) == 1
+
+    def test_ground_call_site_respects_tabling(self, tabled_use_mod):
+        """The compiled ground call site must see the same deduped answers."""
+        # nv
+        assert len(list(call("TabledGround", module=tabled_use_mod))) == 1
+
+    def test_tabled_callee_not_specialised(self, tabled_use_mod):
+        """No bucket refs may exist for a tabled callee."""
+        # nv
+        tcat, _ = self._lib()
+        assert getattr(tcat, "_index_plans", {}) == {}
+        caller = tabled_use_mod.module_dict["TabledGround"]
+        caller_globals = caller._dispatch_fn.__globals__
+        assert not any("TCat.bucket(" in k for k in caller_globals)
