@@ -700,6 +700,8 @@ def _make_secondary_dispatch_impl(
     *,
     arg_offset: int,
     tail_yield,
+    tro_state=None,
+    arity: int = 0,
 ) -> Callable:
     """Shared two-level hierarchical dispatch builder.
 
@@ -725,7 +727,7 @@ def _make_secondary_dispatch_impl(
     pos_i = sec_idx["pos_i"] + arg_offset
     pos_j = sec_idx["pos_j"] + arg_offset
 
-    def dispatch(*args):
+    def _route(args):
         _ai = deref(args[pos_i])
         _ki = _runtime_arg_key(_ai) if not is_var(_ai) else None
         if is_var(_ai) or _ki is _INDEX_VAR:
@@ -760,8 +762,32 @@ def _make_secondary_dispatch_impl(
                             yield from _bfn(*args)
                         else:
                             yield from level1_default_fn(*args)
-        if tail_yield is not None:
-            yield tail_yield(args)
+
+    if tro_state is not None:
+        def dispatch(*args):
+            # The level-0/level-1 buckets are compiled without TRO, but
+            # fallback_fn is the shared SIGNAL-mode `{functor}__all` — a
+            # tail call signalled there must re-dispatch (the updated args
+            # may now key into a level-0 bucket), not be dropped.
+            args_list = None
+            while True:
+                tro_state[0] = False
+                _current = args_list if args_list is not None else args
+                yield from _route(_current)
+                if tro_state[0]:
+                    if args_list is None:
+                        args_list = list(args)
+                    for _i in range(arity):
+                        args_list[_i + arg_offset] = tro_state[_i + 1]
+                    continue
+                break
+            if tail_yield is not None:
+                yield tail_yield(args)
+    else:
+        def dispatch(*args):
+            yield from _route(args)
+            if tail_yield is not None:
+                yield tail_yield(args)
     dispatch.__name__ = fallback_fn.__name__
     dispatch.__qualname__ = fallback_fn.__qualname__
     return dispatch
@@ -790,12 +816,15 @@ def _make_secondary_dispatch_trampoline(
     level0_default_fn: Callable,
     fallback_fn: Callable,
     done: Any,
+    tro_state=None,
+    arity: int = 0,
 ) -> Callable:
     """Build a two-level hierarchical dispatch for trampoline mode.  (Phase 9c)"""
     return _make_secondary_dispatch_impl(
         sec_idx, level0_compiled, level0_default_fn, fallback_fn,
         arg_offset=4,
         tail_yield=lambda args: (args[2], done),
+        tro_state=tro_state, arity=arity,
     )
 
 

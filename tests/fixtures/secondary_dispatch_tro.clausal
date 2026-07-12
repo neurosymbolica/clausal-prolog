@@ -1,0 +1,21 @@
+# Fixture for the secondary-dispatch dropped-TRO-tail-call regression
+# (todo/call-site-specialisation-protocol-questions.md Q2).
+#
+# Shape forces Phase 9c hierarchical dispatch: 6 clauses with head constants
+# at pos 0 (3 distinct — best single index) and pos 1 (2 distinct), joint
+# distinct 6 > 3 * min_gain(1.5), coverage 6/8 = 0.75 < _JOINT_COVERAGE_
+# THRESHOLD(0.8). OUT is a non-indexable list so the result column cannot
+# become the best single index. The tail-recursive clause decrements N (a
+# never-indexed position, guarded by evaluated ==) and passes K/J through, so
+# an unbound-K call routes to the SIGNAL-mode fallback and the signalled tail
+# call must be re-dispatched by the secondary dispatch.
+-module(secondary_dispatch_tro, [Hop(K, J, N, OUT)])
+
+Hop("a", 1, N, OUT) <- (N == 0, OUT is ["a1"])
+Hop("b", 1, N, OUT) <- (N == 0, OUT is ["b1"])
+Hop("c", 1, N, OUT) <- (N == 0, OUT is ["c1"])
+Hop("a", 2, N, OUT) <- (N == 0, OUT is ["a2"])
+Hop("b", 2, N, OUT) <- (N == 0, OUT is ["b2"])
+Hop("c", 2, N, OUT) <- (N == 0, OUT is ["c2"])
+Hop(K, J, N, OUT) <- (N > 0, M is N - 1, Hop(K, J, M, OUT))
+Hop(K, J, N, OUT) <- (N < 0, OUT is ["neg"])

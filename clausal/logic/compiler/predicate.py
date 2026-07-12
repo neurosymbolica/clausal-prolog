@@ -953,7 +953,8 @@ def compile_predicate_trampoline(
                                     functor, arity)
                             fn = _make_secondary_dispatch_trampoline(
                                 sec, level0_compiled, level0_default_fn,
-                                fallback_fn, DONE)
+                                fallback_fn, DONE,
+                                tro_state=_tro_state_obj, arity=arity)
                             # Phase 10a: expose hierarchical bucket dicts.
                             if pred_cls is not None:
                                 pred_cls._index_plans_hierarchical = {
