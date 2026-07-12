@@ -1,0 +1,348 @@
+╭─── Claude Code v2.1.185 ─────────────────────────────────────────────────────╮
+│                                        │ Tips for getting started            │
+│           Welcome back Mike!           │ Run /init to create a CLAUDE.md fi… │
+│                                        │ ─────────────────────────────────── │
+│                 ▐▛███▜▌                │ What's new                          │
+│                ▝▜█████▛▘               │ The stream-stall hint now reads "W… │
+│                  ▘▘ ▝▝                 │ Improved auto mode safety: destruc… │
+│                                        │ Added a warning when the requested… │
+│   Fable 5 · Claude Max · Michael Amy   │ /release-notes for more             │
+│       /workspace/clausal-bug-fix       │                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ ▎ Fable 5 is here! Our newest model for complex, long-running work.
+ ▎ Included in your plan limits until Jul 8, then switch to usage credits to continue.
+
+❯ /clear                                                                        
+
+❯ get up to speed docs/superpowers/audits/2026-07-05-fable-partition/prompts/re 
+  quired_reading.md  before I give you any audits                               
+
+  Read 1 file (ctrl+o to expand)
+
+● I've read the required-reading brief. Now doing the pre-audit reading it
+  mandates: the cheatsheet, prior art, and design decisions.
+
+  Read 2 files (ctrl+o to expand)
+
+● Cheatsheet and design decisions read. Now the prior-art files and the audit
+  directory layout.
+
+  Read 3 files, listed 2 directories, recalled 2 memories (ctrl+o to expand)
+
+● One more quick look at the prompts/templates so I know what a session package
+  looks like.
+
+  Listed 1 directory (ctrl+o to expand)
+
+● I'm up to speed. Here's what I've internalized, ready for whichever audit
+  session you hand me:
+
+  The brief (required_reading.md): interactive audit of one Clausal subsystem at
+  a time — findings + adversarial pytest repros + queued todos, no
+  production-code edits. Method is coverage-map-first (input and output mode
+  mandatory), loop-until-dry probing, per-file pytest only
+  (tests/audit_2026_07_05/<file>.py, never the whole tree — OOM), differential
+  oracles where available, and design questions get parked in todos per your
+  standing preference (checked DESIGN-DECISIONS.md first).
+
+  Ground truth read: the full cheatsheet (standing contracts: is = unification,
+  == = CLP(ℤ) arithmetic, cut-free by design, strings are char-lists,
+  module-scoped atoms, PascalCase builtins, list_item/3 0-based) and all 17
+  entries in DESIGN-DECISIONS.md — notably the recurring cross-cutting threads:
+  A01-D001 (cross-type unification, blocks several downstream decisions), the
+  semidet attr-hook protocol (A04-D001, affects A05–A08), and bool/int
+  conflation.
+
+  Prior art read: todo/cross_cutting_issues.md (Trail casts, IsInstance -1, FT
+  static caches, int64 ceilings — won't re-report), the mode-coverage audit todo
+  (the 8085-test lesson; CLP labeling, string/regex, term-inspection, and
+  bagof/setof/aggregate_all sweeps still open — relevant to A09),
+  DUPLICATE_TESTS.md, and the audit_2026_05_25 class-test layout. Plus ~140
+  queued fix-*/investigate-* todos from A01–A08 in todo/audit-2026-07-05/.
+
+  State of the partition: A01–A08 are done (90 findings total); remaining
+  sessions are A09 builtins, A10 rewriting-import, A11 modules-interop, A12 
+  seams, each with a prompt file ready in prompts/.
+
+  Operational notes from my memory (verified still-relevant): run everything
+  with pyenv 3.13.3 + PYTHONPATH=/workspace/clausal-bug-fix (the shared venv
+  shadows the clone), and the 17 probe pitfalls from A02–A08 (module double-load
+  atom identity, query cache keyed by type, per-module table state, segfault
+  probes need RLIMIT_CORE=0, 10s pytest-timeout, etc.).
+
+  Ready for the first audit assignment.
+
+✻ Cogitated for 1m 30s
+
+❯ start audit A11 using prompts/11... and commit results without asking         
+
+  Searched for 2 patterns, read 5 files, listed 2 directories, ran 3 shell commands (ctrl+o to expand)
+
+● 4 agents finished (ctrl+o to expand)
+   ├ Probe modules/py stdlib wrappers · 46 tool uses · 114.8k tokens
+   │ ⎿  Done
+   ├ Probe Prolog tools round-trip · 25 tool uses · 133.0k tokens
+   │ ⎿  Done
+   ├ Probe regex and reflection · 60 tool uses · 109.1k tokens
+   │ ⎿  Done
+   └ Probe graphs/units/imperial modules · 50 tool uses · 140.4k tokens
+     ⎿  Done
+  Read 4 files, listed 1 directory, ran 3 shell commands (ctrl+o to expand)
+
+● All signatures check out. Grabbing the last few graph function names, then
+  writing the test file.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Write(tests/audit_2026_07_05/test_11_modules_interop.py)
+  ⎿  Wrote 818 lines to tests/audit_2026_07_05/test_11_modules_interop.py
+       1 """A11 audit — modules, interop & Prolog tools (2026-07-05 Fable
+       2 
+       3 Adversarial tests + regression guards for:
+       5   clausal/modules/py/* (stdlib wrappers), clausal/regex.py, clau
+         sal/reflection.py,
+         g_operators,
+       7                  prolog_dialect,prolog_to_clausal,clausal_to_pro
+       8 
+       9 Suspected-bug tests assert the CORRECT behavior and are marked
+         ed.
+     … +991 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Nearly green on first run — but one xpassed (a "bug" test that passed means
+  the finding may be wrong). Identifying it:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Update(tests/audit_2026_07_05/test_11_modules_interop.py)
+  ⎿  Added 5 lines, removed 6 lines
+       94  
+       95  
+       96  @pytest.mark.xfail(strict=False, reason="A11-F002: bound non-s
+           tr subject "
+       97 -                   "silently stringified (search on ['9'] repr
+          - succeeds)")                                                  
+       97 +                   "silently stringified — search finds repr p
+          +unctuation")                                                  
+       98  def test_F002_charlist_repr_false_positive(tmp_path):
+       99      m = _load(tmp_path, '''
+      100          -import_from(regex, [search])
+      101 -        S2(S) <- search(r"\\d+", S)                           
+      101 +        SQ(S) <- search(r"'", S)                              
+      102      ''', "f002b")
+      103 -    # "['9']" contains a digit — current code falsely succeeds
+          - on the repr                                                  
+      104 -    sols = list(solve(m.S2(["a"]), module=m))                 
+      105 -    assert sols == []  # 'a' has no digit; must also not scan 
+          -the repr quotes                                               
+      106 -    assert len(list(solve(m.S2(["9"]), module=m))) == 1  # dig
+          -it char-list = "9"                                            
+      103 +    # char-list "a" contains no quote; the repr "['a']" does —
+          + current code                                                 
+      104 +    # falsely succeeds by scanning the repr                   
+      105 +    assert list(solve(m.SQ(["a"]), module=m)) == []           
+      106  
+      107  
+      108  @pytest.mark.xfail(strict=False, reason="A11-F003: goal expans
+           ion hijacks any "
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● All green: 20 passed, 59 xfailed. Now writing the deliverables: findings
+  ledger, design questions, todos, status board update.
+
+● Write(docs/superpowers/audits/2026-07-05-fable-partition/11-modules-interop/fi
+       ndings.md)
+  ⎿  Wrote 144 lines to docs/superpowers/audits/2026-07-05-fable-partition/
+     11-modules-interop/findings.md
+       1 # Findings — A11 modules, interop & Prolog tools
+       3 Severity order: correctness > memory > design > perf > doc-drift
+         .
+       5 All tests in `tests/audit_2026_07_05/test_11_modules_interop.py`
+       6 Probed by four parallel sub-probes (py-wrappers, Prolog tools, r
+         egex/reflection,
+         ted output.
+       8 
+         d vs Actual | Test ref | Todo ref |
+         ------------|----------|----------|
+     … +511 lines (ctrl+o to expand)
+
+● Write(docs/superpowers/audits/2026-07-05-fable-partition/11-modules-interop/de
+       sign-questions.md)
+  ⎿  Wrote 20 lines to docs/superpowers/audits/2026-07-05-fable-partition/1
+     1-modules-interop/design-questions.md
+       1 # Design questions — A11 modules, interop & Prolog tools
+       3 Status: resolved-from-docs (cite) | resolved-by-user (record) | 
+       4 Per standing user preference, open questions are parked in
+       5 `todo/audit-2026-07-05/investigate-A11-parked-design-decisions.m
+       6 interactively. D001/D002 are cross-cutting and appended to DESIG
+       7 
+          | Decision + rationale | Follow-up |
+       9 |----|--------|-------|---------------------|-------------------
+      10 | A11-D001 | open — parked by user preference | Error protocol f
+         le term. The
+     … +111 lines (ctrl+o to expand)
+
+● Now the queued todos — 43 fix + 1 investigate, written in batches:
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● All 44 todos written. Now updating the status board and appending the two
+  cross-cutting design questions to DESIGN-DECISIONS.md:
+
+● Update(docs/superpowers/audits/2026-07-05-fable-partition/README.md)
+  ⎿  Added 1 line, removed 1 line
+      18  | A08 | clpqr-z3 | **done 2026-07-05** | 18 (F001–F018; F017 do
+          c-drift; F018 design, unconfirmed-impact) | 5 (D001–D005 parked
+          ) | 11 fix + 5 investigate | test_08_clpqr_z3.py (26 passed, 29
+           xfailed) |
+      19  | A09 | builtins | **done 2026-07-05** | 32 (F001–F032; F022 de
+          sign-parked; F023–F026 doc-drift; F027–F031 low) | 5 (D001–D005
+           parked; D001/D002 appended cross-cutting) | 23 fix + 4 investi
+          gate | test_09_builtins.py (28 passed, 45 xfailed) |
+      20  | A10 | rewriting-import | **done 2026-07-06** | 18 (F001–F018;
+           F008 doc-drift/seam; F013 boundary→A11; F018 unconfirmed) | 5 
+          (D005 resolved-from-docs; D001–D004 parked by user preference) 
+          | 15 fix + 2 investigate | test_10_rewriting_import.py (33 pass
+          ed, 23 xfailed) |
+      21 -| A11 | modules-interop | not started | – | – | – | test_11_mod
+         -ules_interop.py |                                              
+      21 +| A11 | modules-interop | **done 2026-07-06** | 59 (F001–F059; 
+         +F042 maintenance; F008/F009, F054–F056, F058/F059 design/doc-dr
+         +ift) | 11 (D001–D011 parked by user preference; D001/D002 appen
+         +ded cross-cutting) | 43 fix + 1 investigate | test_11_modules_i
+         +nterop.py (20 passed, 59 xfailed) |                            
+      22  | A12 | seams | not started | – | – | – | test_12_seams.py |
+      23  
+      24  Each session updates its own row on completion.
+
+● Update(docs/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md)
+  ⎿  Added 2 lines
+      24  | A08-D003 | open — parked by user preference | Float literals 
+          reaching CLP(Q): docs promise TypeError, code silently converts
+           to binary-exact Fraction (0.1 → 3602…/36028…); `in_q` after `i
+          n_real` succeeds | Recommendation: raise TypeError at clpq entr
+          y points (docs-conformant; exactness is CLP(Q)'s purpose). Note
+           the guard currently lives only in clpfd dispatch (A06/A07 seam
+          ) | A08 | A08 clpq; A06/A07 dispatch; docs/clpq.md |
+      25  | A08-D004 | open — parked by user preference | CLP(Q) strict i
+          nequalities: passive diseq is unsound (A08-F004) vs Holzbaur ε-
+          augmented rationals; docs claim Holzbaur fidelity | Recommendat
+          ion: ε-rationals staged with the F002 bound-enforcement rework;
+           interim aliasing fixes first. `todo/audit-2026-07-05/investiga
+          te-A08-clpq-strict-inequalities.md` | A08 | A08 clpq Tableau; e
+          ntailed semantics; docs/clpq.md comparison table |
+      26  | A08-D005 | open — parked by user preference | Optimization re
+          sult contracts across backends (FEASIBLE-as-optimal, non-attain
+          ed suprema, var binding, persistent objective on shared CpModel
+          ) | Recommendation: unify mirror-named predicates on clpq.maxim
+          ize's contract (bind vars, proven optimum only) | A08 | A08 clp
+          z3/clportools optimize; docs parity |
+      27 +| A11-D001 | open — parked by user preference | Error protocol 
+         +for py.* module predicates: exceptions from wrapper/module pred
+         +icates BYPASS catch/3 while ++-thunk Python errors are caught (
+         +executed differential, A11-F004/F014); the wrapper slice is int
+         +ernally inconsistent (json/csv/files fail clean; url/http/hash/
+         +re/datetime-between leak raw — A11-F016–F019) | Recommendation:
+         + convert Python exceptions to catchable logic exceptions at the
+         + ModulePredicate/trampoline boundary (one fix for every wrapper
+         + — same conversion ++ escapes get), then document a bad-data-fa
+         +ils / bad-usage-throws policy. Family of A09-F012. `todo/audit-
+         +2026-07-05/investigate-A11-parked-design-decisions.md` | A11 | 
+         +all modules/py wrappers; A09 builtins (F012 raw escapes); docs/
+         +exceptions.md |                                                
+      28 +| A11-D002 | open — parked by user preference | Wrapper argumen
+         +t coercion vs type guards: regex predicates `str()`-coerce subj
+         +ects (an unbound Var matches its own repr; char-lists violate t
+         +he strings-as-lists Liskov contract — A11-F002); datetime ctors
+         + `int()`-truncate float components (A11-F015) | Recommendation:
+         + Liskov char-list→str join + instantiation/type errors for rege
+         +x (chars.py house style); reject fractional floats in datetime 
+         +ctors. `str(term)`/`int(term)` of arbitrary terms is never what
+         + a logic program means. `todo/audit-2026-07-05/investigate-A11-
+         +parked-design-decisions.md` | A11 | modules/py/* argument handl
+         +ing; A01 strings-as-lists contract; docs/regex.md, date_time.md
+         + |                                                             
+      29  | A10-D001 | open — parked by user preference | Are logic-var-s
+          haped names (ALLCAPS/_leading) reserved in embedded Python code
+          ? Store/Del-context names currently break module load with a cr
+          yptic ValueError (A10-F002) | Recommendation: unbox `.value` in
+           Load context only (skip Store/Del) — unbreaks ordinary Python 
+          (`MAX = 5`, `_tmp`) while preserving documented Load-unboxing. 
+          `todo/audit-2026-07-05/fix-A10-embed-visitname-store-context.md
+          ` | A10 | A10 EmbedTransformer; any .clausal file mixing Python
+           code; docs/syntax.md conventions |
+      30  | A10-D002 | open — parked by user preference | Stdlib shadowin
+          g: PredicateFinder/PrologFinder precede PathFinder, so `wave.cl
+          ausal`/`colorsys.pl` on sys.path shadow not-yet-imported stdlib
+           modules; import.md claims the opposite (A10-F010) | Recommenda
+          tion: warn on `sys.stdlib_module_names` hits + fix the doc clai
+          m now; outright refusal needs a user call. `todo/audit-2026-07-
+          05/fix-A10-stdlib-shadowing-docs-guard.md` | A10 | A10 import h
+          ook; A11 module resolution; docs/import.md |
+      31  | A10-D003 | open — parked by user preference | Clause head nam
+          ing an `-import_from`-ed predicate: currently silently REPLACES
+           the source module's predicate process-wide (A10-F004) — extend
+          , error, or local shadow? | Recommendation: load-time error (im
+          plicit cross-module mutation must not be a side effect of a cla
+          use definition; explicit assertz remains). Joint with A11 modul
+          e semantics + A03 compile_module class sync. `todo/audit-2026-0
+          7-05/investigate-A10-imported-head-clobber.md` | A10 | A10 head
+           handling/_import_remap; A03 compile_module; A11 module semanti
+          cs; docs/import.md assertz contract |
+
+● Final verification run, then commit:
+
+  Committed be8abc7d, ran 1 shell command (ctrl+o to expand)
+● Audit A11 is complete and committed as be8abc7d. One quick memory note on a
+  test-design pitfall from this session:
+
+  Wrote 1 memory (ctrl+o to expand)
+
+● Audit A11 (modules, interop & Prolog tools) is done and committed (be8abc7d),
+  status board updated to done 2026-07-06.
+
+  How it ran: I fanned out four parallel probing agents (py-wrapper stdlib
+  differentials, Prolog-tools round-trip oracle, regex/reflection,
+  graphs/units), then integrated their executed-and-confirmed results into the
+  single deliverable set. After dedup across agents, the ledger has 59 findings 
+  (A11-F001–F059), all reproduced with executed output.
+
+  Test file: tests/audit_2026_07_05/test_11_modules_interop.py — 20 passed, 59 
+  xfailed, green per-file. One test initially xpassed, which exposed that I'd
+  picked a repro where the buggy repr-scan coincided with the correct answer;
+  fixed to a genuinely divergent input (and saved that pitfall to memory).
+
+  Highlights by severity:
+  - Regex: every predicate str()-coerces its subject — an unbound Var matches 
+  its own internal repr (answers depend on the allocation counter), and
+  char-lists violate the strings-as-lists Liskov contract (F002); goal expansion
+  hijacks any user predicate named match/search (F003); regex/reflection
+  exceptions bypass catch/3 while ++-thunk errors are caught — proven
+  differentially (F004).
+  - Prolog tools (24 findings): mod implements rem (ISO inversion, F020);
+  TruncDiv loses precision ≥2⁵³ (F021); Foo/FOO silently merge into one variable
+  (F022); foo(a,(b,c)) silently becomes arity 3 (F023); -> rejection bypassed
+  in metacall args (F024, sibling of A10-F001); Cut() is exported as ! (F036);
+  ISO op-table gaps make bagof with ^ and :- dynamic p/1. unparseable
+  (F026/F027).
+  - Graphs: recursive DFS + the trampoline eating RecursionError means a
+  3001-node cycle answers "no cycle" and a 2500-edge chain answers "no path" —
+  silent wrong answers (F043/F044); Dijkstra silently wrong on negative weights
+  (F045); spanning tree silently partial on disconnected graphs (F050).
+  - Units/docs: docs' own Byte(1) example crashes; the quick-start import line
+  raises ImportError; -3(Second) silently fails outside := (root cause in A10's
+  term_rewriting — flagged as a seam).
+
+  Design questions: 11 parked per your standing preference (D001
+  error-catchability protocol and D002 coercion-vs-type-guards appended to
+  DESIGN-DECISIONS.md as cross-cutting). Todos: 43 fix-A11-* + 1
+  investigate-A11-*. Boundary notes for A12 include the unaudited
+  tools/translate.py roundtrip checker, which likely masks the F032-class
+  semantic drift.
+
+  Only A12 (seams) remains on the board.
+
+✻ Worked for 39m 2s

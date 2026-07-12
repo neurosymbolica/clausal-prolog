@@ -1,0 +1,667 @@
+╭─── Claude Code v2.1.185 ─────────────────────────────────────────────────────╮
+│                                        │ Tips for getting started            │
+│           Welcome back Mike!           │ Run /init to create a CLAUDE.md fi… │
+│                                        │ ─────────────────────────────────── │
+│                 ▐▛███▜▌                │ What's new                          │
+│                ▝▜█████▛▘               │ The stream-stall hint now reads "W… │
+│                  ▘▘ ▝▝                 │ Improved auto mode safety: destruc… │
+│                                        │ Added a warning when the requested… │
+│   Fable 5 · Claude Max · Michael Amy   │ /release-notes for more             │
+│       /workspace/clausal-bug-fix       │                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ ▎ Fable 5 is here! Our newest model for complex, long-running work.
+ ▎ Included in your plan limits until Jul 13, then switch to usage credits to continue.
+
+❯ /model                                                                        
+  ⎿  Set model to Fable 5 and saved as your default for new sessions
+
+❯ Review the code fixes to your audit here. You can fix things as you find      
+  them. Not everything was fixed, we know. Just focus on the fixes.             
+
+● I'll review the fix commits against the audit findings. Let me start by
+  surveying what was fixed.
+
+  Listed 1 directory, ran 1 shell command (ctrl+o to expand)
+
+● This is a large set of fix commits merged from parallel branches. Let me scope
+  the review: find the baseline (where fixes started) and read the
+  fix-and-merge log.
+
+  Read 1 file, ran 5 shell commands, recalled 2 memories (ctrl+o to expand)
+
+● All 144 fix commits enumerated, spanning A01–A12. This calls for parallel
+  review agents — invoking the dispatching skill first.
+
+● Skill(superpowers:dispatching-parallel-agents)
+  ⎿  Successfully loaded skill
+
+● Before dispatching, let me check where the audit todos/archives live so agents
+  get correct paths.
+
+  Listed 1 directory, ran 1 shell command (ctrl+o to expand)
+
+● Todo archive and audit tests located. One more scoping check — the
+  design-decisions doc the fixes were made against:
+
+  Read 1 file, listed 1 directory, ran 1 shell command (ctrl+o to expand)
+
+● Background command "Run full test suite as baseline" completed (exit code 0)
+
+● 17 agents finished (ctrl+o to expand)
+   ├ Review A01 term-layer fixes · 53 tool uses · 103.3k tokens
+   │ ⎿  Done
+   ├ Review A02 dispatch fixes · 76 tool uses · 111.5k tokens
+   │ ⎿  Done
+   ├ Review A03 compiler-goal fixes · 84 tool uses · 131.4k tokens
+   │ ⎿  Done
+   ├ Review A04 tabling/SLG fixes · 54 tool uses · 131.2k tokens
+   │ ⎿  Done
+   ├ Review A05 constraints-core fixes · 34 tool uses · 71.8k tokens
+   │ ⎿  Done
+   ├ Review A06 CLP(FD) fixes · 76 tool uses · 158.6k tokens
+   │ ⎿  Done
+   ├ Review A07 CLP(B)/SAT fixes · 43 tool uses · 79.2k tokens
+   │ ⎿  Done
+   ├ Review A08 CLP(R)/(Q) fixes · 51 tool uses · 73.1k tokens
+   │ ⎿  Done
+   ├ Review A09 builtins fixes I · 55 tool uses · 104.1k tokens
+   │ ⎿  Done
+   ├ Review A09 builtins fixes II · 59 tool uses · 103.8k tokens
+   │ ⎿  Done
+   ├ Review A10 rewriting/import fixes
+   ├ Review A11 regex/reflection fixes · 43 tool uses · 96.2k tokens
+   │ ⎿  Done
+   ├ Review A11 wrappers/arith fixes · 64 tool uses · 85.1k tokens
+   │ ⎿  Done
+   ├ Review A11 Prolog-tools fixes · 76 tool uses · 111.7k tokens
+   │ ⎿  Done
+   ├ Review A11 graphs fixes · 58 tool uses · 74.0k tokens
+   │ ⎿  Done
+   ├ Review A11 units fixes · 54 tool uses · 67.4k tokens
+   │ ⎿  Done
+   └ Review A12 seams fixes · 73 tool uses · 107.5k tokens
+     ⎿  Done
+
+● Background command "Identify which tests xpassed" completed (exit code 0)
+
+● Agent "Review A10 rewriting/import fixes" came to rest · 19m 12s
+
+  Read 1 file (ctrl+o to expand)
+● 8 agents finished (ctrl+o to expand)
+   ├ Fix compiler/seams issues · 15 tool uses · 64.0k tokens
+   │ ⎿  Done
+   ├ Fix A04 tabling/SLG issues · 15 tool uses · 75.0k tokens
+   │ ⎿  Done
+   ├ Fix terms.py cache + clpb issues · 37 tool uses · 75.0k tokens
+   │ ⎿  Done
+   ├ Fix A09 builtins issues · 31 tool uses · 52.1k tokens
+   │ ⎿  Done
+   ├ Fix A11 Prolog-tools gaps · 74 tool uses · 139.4k tokens
+   │ ⎿  Done
+   ├ Fix A11 modules issues · 99 tool uses · 106.9k tokens
+   │ ⎿  Done
+   ├ Fix A03 specialization issues · 56 tool uses · 101.1k tokens
+   │ ⎿  Done
+   └ Finish A10 fixes review · 12 tool uses · 35.4k tokens
+     ⎿  Done
+  ⎿  You've hit your monthly spend limit · raise it at claude.ai/settings/usage
+     /usage-credits to adjust your monthly spend limit.
+
+✻ Cooked for 1h 4m 32s
+
+❯ /model opus 
+  ⎿  Kept model as Fable 5
+
+❯ /model opus                                                                   
+  ⎿  Set model to Opus 4.8 and saved as your default for new sessions
+
+❯ The session spend limit was hit, and some of the agents didn't complete. I    
+  saw they were all committing though, please check the status                  
+
+● Let me check the git state to see what committed cleanly and what's in a
+  partial/dirty state.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Working tree is clean — no half-written edits, which means every committed fix
+  is atomic. Let me verify exactly what landed vs. what's missing, and confirm
+  the committed work is coherent (tests green).
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Clear picture now. 23 commits landed cleanly with a clean working tree (no
+  half-written edits). Three agents died: Task #1 (A02/A12 compiler+seams) 
+  landed nothing, Task #2 (A04 tabling) landed nothing, and Task #5 (A11 
+  Prolog-tools) got 5 of 7 fixes in (missing F032/F020 docs and F033
+  qualified-goal names).
+
+  Let me confirm the 23 committed fixes are coherent — that no agent committed
+  something that leaves tests red.
+
+  Ran 1 shell command (ctrl+o to expand)
+● Background command "Run full audit test suite to verify coherence" completed
+(exit code 0)
+
+  Read 1 file (ctrl+o to expand)
+
+● One failure surfaced — the F036 Cut() commit broke a pre-existing test. Let me
+  see which one.
+
+  Searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+● The tail truncated the test name. Let me re-run targeted to identify it.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Root cause: a scope collision. The F036 fix (raise PrologTranslationError on
+  Cut()) lives in clausal_to_prolog.py, but the pre-existing audit test
+  test_F036_no_cut_emission is in test_11_modules_interop.py — a file that was
+  owned by a different agent, so the F036 agent couldn't update it to match the
+  new behavior. Let me read the failing test and reconcile it.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● The existing test asserted the old F036 behavior (Cut() exports without !);
+  the completed fix now deterministically rejects Cut() with
+  PrologTranslationError — a strict improvement, consistent with sibling tests
+  (test_F041, test_guard_*). I'll reconcile the test to expect the rejection.
+  Let me confirm the current behavior, then update.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Confirmed. Updating the test to expect the rejection (matching the test_F041
+  sibling idiom):
+
+● Update(tests/audit_2026_07_05/test_11_modules_interop.py)
+  ⎿  Added 6 lines, removed 3 lines
+      611  
+      612  
+      613  def test_F036_no_cut_emission():
+      614 -    # A11-F036 (fixed): Cut() no longer laundered as Prolog !.
+      614 +    # A11-F036 (fixed): Cut() is never laundered into Prolog. 
+          +Clausal has no                                                
+      615 +    # cut, so a Cut() goal in source is rejected outright on e
+          +xport rather than                                             
+      616 +    # emitted as `!` or as an undefined `cut` predicate.      
+      617      from clausal.tools.clausal_to_prolog import clausal_source
+           _to_prolog
+      616 -    out = clausal_source_to_prolog("P() <- (Q(), Cut())\n")   
+      617 -    assert "!" not in out                                     
+      618 +    from clausal.tools.prolog_to_clausal import PrologTranslat
+          +ionError                                                      
+      619 +    with pytest.raises(PrologTranslationError, match="Cut"):  
+      620 +        clausal_source_to_prolog("P() <- (Q(), Cut())\n")     
+      621  
+      622  
+      623  def test_F039_dcg_pushback_clear_error_or_valid():
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Test reconciled and committed. Let me confirm the whole audit suite is now
+  green.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The audit suite is fully green again (764 passed). Here's the status, then
+  I'll continue with the unfinished work.
+
+  Status
+
+  23 fixes committed cleanly before the spend limit hit, plus I just reconciled
+  one test that a scope collision had left red. Working tree is clean — no
+  half-written edits.
+
+  ┌─────────────────────────────────────┬───────────────────────────────────┐
+  │                Batch                │               State               │
+  ├─────────────────────────────────────┼───────────────────────────────────┤
+  │ A01/A07 (terms cache, clpb)         │ ✅ 3 fixes committed              │
+  ├─────────────────────────────────────┼───────────────────────────────────┤
+  │ A09 builtins                        │ ✅ 4 fixes committed              │
+  ├─────────────────────────────────────┼───────────────────────────────────┤
+  │ A11 modules (regex regression,      │ ✅ 8 fixes committed              │
+  │ datetime, graphs perf, units)       │                                   │
+  ├─────────────────────────────────────┼───────────────────────────────────┤
+  │ A03 specialization                  │ ✅ 3 fixes committed              │
+  ├─────────────────────────────────────┼───────────────────────────────────┤
+  │ A10 review                          │ ✅ done — no broken fixes, only   │
+  │                                     │ doc nits                          │
+  ├─────────────────────────────────────┼───────────────────────────────────┤
+  │ A11 Prolog-tools                    │ ⚠️ 5 of 7 committed; agent died — │
+  │                                     │  missing F032/F020 docs, F033     │
+  ├─────────────────────────────────────┼───────────────────────────────────┤
+  │ A02/A12 compiler+seams              │ ❌ agent died at 15 tools —       │
+  │                                     │ nothing committed                 │
+  ├─────────────────────────────────────┼───────────────────────────────────┤
+  │ A04 tabling/SLG                     │ ❌ agent died at 15 tools —       │
+  │                                     │ nothing committed                 │
+  └─────────────────────────────────────┴───────────────────────────────────┘
+
+  I fixed the one broken test (test_F036_no_cut_emission — the F036 behavior
+  change needed a test update in a file the F036 agent didn't own).
+
+  I'll now continue the unfinished work inline (not re-dispatching parallel
+  agents, to avoid burning spend and re-hitting the limit), starting with the
+  well-scoped remainders. Let me pick up the missing A11 Prolog-tools items.
+
+  Searched for 4 patterns, read 1 file (ctrl+o to expand)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ It seems like there has been some kind of spend limit reset, my weekly usage  
+  is sitting at 0 whereas yesterday it was 63%. Please spawn a single Fable     
+  agent to finih the A11 Prolog tools to test whether I have Fable credit now   
+● The spend reset explains it. Let me dispatch a single Fable agent to finish
+  the A11 Prolog-tools remainder — this doubles as a credit test.
+
+● Agent(Finish A11 Prolog-tools gaps) Fable 5
+  ⎿  Done (45 tool uses · 68.3k tokens · 8m 54s)
+  (ctrl+o to expand)
+
+● The Fable agent completed successfully — credit is confirmed working. It
+  landed both remaining A11 Prolog-tools items (F033 qualified-goal names →
+  lists.in_, and the F032/F020 doc reconciliation), 764 tests passing. Let me
+  verify and mark it done.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+❯ Fable usage ticked up to 1%. Spawn agent for the other A02/A12 and A04 agents 
+  that died                                                                     
+
+● Task #5 done. Fable credit confirmed. Now dispatching the two dead batches —
+  A02/A12 compiler+seams and A04 tabling — as parallel Fable agents.
+
+● 2 agents finished (ctrl+o to expand)
+   ├ Fix A02/A12 compiler+seams · 122 tool uses · 211.0k tokens
+   │ ⎿  Done
+   └ Fix A04 tabling/SLG · 81 tool uses · 166.2k tokens
+     ⎿  Done
+
+● Both dead batches are now fixed — the A04 agent even found and fixed a deeper
+  consumer-suspension routing defect under continuation-TCO, with no residual
+  xfails. Let me update tasks and run a full verification pass now that all
+  agent edits have landed.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Clean tree, 36 commits this session. Now the full suite to confirm all the
+  merged agent work is coherent (this catches any cross-batch interaction the
+  per-agent runs couldn't).
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● While the suite runs, let me prepare the last fix item — A06-F007's incomplete
+  C sentinel guard. Let me pull the exact reviewer evidence and current C code
+  so I can hand a focused agent a precise brief (I'll hold the rebuild until the
+  suite finishes so it doesn't collide).
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The A06-F007 fix needs careful C work across _clpfd_core.c and
+  _clpfd_domain_ops.h plus a rebuild. I'll dispatch a focused Fable agent for it
+  once the full suite finishes. Let me check the suite.
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● The suite is still running (pytest buffers its summary to the end). I'll wait
+  for it to complete before dispatching the A06-F007 agent, since that agent
+  rebuilds the .so and a mid-run rebuild would corrupt the verification. Waiting
+  for the background run to finish.
+
+● Monitor(full test suite completion)
+  ⎿  Monitor started · task b33z59j74 · timeout 180s
+
+● Background command "Run full test suite" completed (exit code 0)
+
+● Monitor event: "full test suite completion"
+● Monitor "full test suite completion" stream ended
+
+● Full suite is green: 9127 passed, 0 failed, 0 xpassed (up from the
+  9018/2-xpass baseline — both stale xpasses now resolved, ~109 new regression
+  tests added). The suite is done, so a .so rebuild is now safe. Dispatching the
+  final focused Fable agent for A06-F007.
+
+● Agent(Fix A06-F007 C sentinel gap) Fable 5
+  ⎿  Done (51 tool uses · 113.8k tokens · 1h 36m 47s)
+  (ctrl+o to expand)
+
+● A06-F007 is fixed (2 commits — the sentinel guard plus the py_domain_size
+  overflow NIT). The agent flagged one adjacent latent bug it correctly left out
+  of scope. Since the C extension was rebuilt, I must re-run the full suite to
+  confirm the rebuild is clean system-wide, then park the residual follow-up.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● While that runs, let me park the one substantive residual — the
+  alldiff_propagate sentinel/bignum bug the agent found (same class as A06-F007,
+  latent unsound). I'll check the existing todo format first.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A06-alldiff-int64-sentinel.md)
+  ⎿  Wrote 36 lines to
+     todo/audit-2026-07-05/fix-A06-alldiff-int64-sentinel.md
+       1 # fix(A06): all_different ground-value propagation shares the IN
+       2 
+       3 **Findings:** A06-F007 sibling (medium — C-only unsound; latent)
+         fd.py` next to `TestInt64SentinelValueArgs`
+       6 ## Problem
+       7 A06-F007 (commit 7fad78d6, extended in `eba8b8d5`) reserved the 
+       8 sentinels `INT64_MIN`/`INT64_MAX` for ±infinity and routed every
+          finite user
+         gnum path — but
+         on entry points.
+     … +46 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Follow-up parked. Now let me check the final full-suite result (post
+  C-rebuild).
+
+● Monitor(final post-rebuild full suite)
+  ⎿  Monitor started · task bm0hmlxtx · timeout 180s
+
+  Read 1 file (ctrl+o to expand)
+
+● The suite is still buffering its summary. Waiting for the monitor to report
+  completion.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● 39 commits this session. Waiting on the final post-rebuild full-suite result
+  before I close out.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Background command "Final full suite after C rebuild" completed (exit code 0)
+
+● Monitor event: "final post-rebuild full suite"
+
+● Monitor "final post-rebuild full suite" stream ended
+
+● Final suite green: 9140 passed, 2 skipped, 44 xfailed, 0 failed, 0 xpassed —
+  the C rebuild is clean system-wide. All work is complete.
+
+● Background command "Block until suite finishes and print summary" completed
+(exit code 0)
+
+● All done. Let me record the outcome to memory, then give you the summary.
+
+  Recalled 1 memory, wrote 2 memories (ctrl+o to expand)
+
+● The review of your audit fixes is complete. Every subsystem's fixes (A01–A12)
+  were verified against their specs empirically, and I fixed what the review
+  caught.
+
+  What the review found and fixed
+
+  The fixes were mostly sound, but the review caught several real defects that 
+  the fix wave had introduced or left incomplete — the kind only a red/green
+  re-verification surfaces:
+
+  Regressions introduced by the fixes:
+  - A11-F007 — the regex dynamic-autobind fix aliased every activation of a
+  clause through one template variable (closure-capture bug); ordinary clauses
+  silently failed.
+  - A11-F051 — the graph parallel-edge dedup made adjacency builds quadratic (5s
+  for a 40k-edge graph vs 7ms).
+  - A11-F059 — imported has_units/2 raised on every call (wrong trampoline
+  wrapper).
+  - A07-F006 — the clpb trail-lifetime fix opened a soundness hole (constraints
+  went inert across live trails).
+  - A01-F005 — the seg-unify cache fix livelocked interleaved drives.
+
+  Incomplete fixes (spec bullets dropped): A04 tabling had three
+  silent-wrong-answer defects still live (≥3-node SCCs completing early, re-lead
+  losing joins, poisoned tables surviving abandonment) — all now fixed soundly;
+  plus A02-F001 TRO dispatch, the A12 seams trio, A06-F007's C sentinel guard
+  (value/limit args), A03-F008 binding drop, A09 set leaks, and the A11
+  prolog-tools translator gaps (F022/F025/F026/F033) and doc drift.
+
+  Result
+
+  - 39 commits this session (fixes + strengthened tests + one parked follow-up).
+  - Full suite: 9140 passed, 0 failed, 0 xpassed (both previously-stale xpasses
+  now resolved), including a clean rebuild of the CLP(FD) C extension.
+  - A10 needed no code fixes — all 13 remaining fixes were correct; only
+  cosmetic doc nits.
+  - One follow-up queued as a todo: fix-A06-alldiff-int64-sentinel.md
+  (alldiff_propagate shares the same INT64-sentinel bug class — a latent C-only
+  unsoundness, scoped out to keep the A06-F007 commit tight).
+
+  On the spend question: the Fable subagents all worked after the reset (usage
+  ticked 0 → 1% → up), so credit is confirmed. The three batches that had died
+  mid-run (A11 prolog-tools remainder, A02/A12, A04) were all completed by fresh
+  Fable agents. Working tree is clean apart from the pre-existing untracked
+  audit .txt files.
+
+✻ Churned for 2h 34m 27s
+
+❯ fix the alldiff sentinel follow-up too                                        
+
+● I'll dispatch a focused Fable agent to fix the alldiff sentinel follow-up —
+  it's the same C-fix-plus-rebuild shape as A06-F007, and the todo I just wrote
+  has the full brief.
+
+● Agent(Fix alldiff INT64 sentinel bug) Fable 5  ⎿  Done (46 tool uses · 93.4k tokens · 9m 42s)
+  (ctrl+o to expand)
+
+● Fixed. The agent also audited every other PyLong_AsLongLong site to confirm no
+  sibling of the bug remains, and archived the todo. Since it rebuilt the C
+  extension, let me run one final full-suite pass to confirm system-wide
+  coherence.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Monitor(final full suite after alldiff fix)
+  ⎿  Monitor started · task b0mghnogf · timeout 180s
+
+● Let me update the memory to reflect the follow-up is now fixed while the suite
+  runs.
+
+  Wrote 2 memories (ctrl+o to expand)
+
+● Waiting on the final suite result.
+
+  Read 1 file (ctrl+o to expand)
+
+● The suite is still buffering its summary; the monitor will report when it
+  finishes. Waiting on that before I close out.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● I'll wait for the suite to complete — the monitor will fire when the summary
+  line appears.
+
+  Read 1 file (ctrl+o to expand)
+
+● I'll stop polling and wait for the completion notification from the running
+  suite.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The final full-suite run is still in progress (pytest buffers its summary
+  until the end). Both the monitor and the background waiter will re-invoke me
+  the moment it finishes, so I'll report the result then rather than poll
+  further.
+
+  Summary of where things stand: the alldiff INT64-sentinel follow-up is fixed 
+  and committed (754402c6), the agent audited every other PyLong_AsLongLong site
+  in _clpfd_propagate.c and confirmed no sibling of the bug remains, the todo
+  is archived to done/, and the targeted FD suite passed (367 passed, 3 xfailed,
+  0 failures). 41 commits this session; tree is clean apart from the untracked
+  build artifacts and pre-existing audit .txt files. I'm just confirming the
+  full 9,000-test suite is clean after the C rebuild before calling it done.
+
+✻ Baked for 11m 43s
+
+● Background command "Final full suite after alldiff C rebuild" completed (exit
+code 0)
+
+● Monitor event: "final full suite after alldiff fix"
+
+● Monitor "final full suite after alldiff fix" stream ended
+
+● Background command "Block until final suite prints summary" completed (exit
+code 0)
+
+● The final suite is green: 9148 passed, 2 skipped, 44 xfailed, 0 failed, 0 
+  xpassed — the alldiff C rebuild is clean system-wide.
+
+  The alldiff INT64-sentinel follow-up is done, and with it the entire
+  fix-review pass is complete. What that last fix covered:
+
+  - alldiff_propagate now gates ground-value removal on
+  is_bignum_int/has_bignum_bound and routes sentinel-valued or bignum members
+  through the Python domain_remove fallback — fixing both the silent peer-domain
+  truncation at exactly ±2⁶³ and the OverflowError on true bignum members (e.g.
+  2⁶⁴).
+  - The agent verified C-vs-Python agreement at the boundaries (subprocess
+  differential test, encoded permanently) and audited every other 
+  PyLong_AsLongLong site in _clpfd_propagate.c — ne propagator, scalar/sum
+  coefficients, linearisation merge, fd_hook — confirming no sibling of the bug
+  remains.
+  - Todo archived to done/ via git mv.
+
+  Final state
+
+  - 43 commits this session across all twelve audit areas (A01–A12): the
+  original 23 that survived the spend limit, plus the reconciliation, the A11
+  prolog-tools remainder, the two dead batches (A02/A12 compiler+seams and A04
+  tabling), A06-F007, and this alldiff fix.
+  - Full suite: 9148 passed, 0 failed, 0 xpassed — up from the 9018/2-xpass
+  starting baseline, with the CLP(FD) C extension rebuilt clean.
+  - No known audit-fix defects outstanding. Working tree clean apart from
+  untracked build artifacts and the pre-existing audit .txt files.
+
+  The review confirmed your fixes were largely sound but caught a meaningful set
+  of regressions and incomplete-vs-spec gaps — most consequentially the three
+  A04 tabling silent-wrong-answer defects, the A11-F007 regex aliasing
+  regression, and the A07-F006 clpb soundness hole — all now fixed with
+  red/green tests.
+
+✻ Sautéed for 20s
+
+❯ ok get this into /workspace/clausal/ main, carefully.                         
+
+● This is an integration into the primary repo — a hard-to-reverse, cross-repo
+  action. I'll investigate the relationship between the two repos thoroughly
+  before touching anything. Let me invoke the finishing-a-branch skill and
+  gather the facts in parallel.
+
+● Skill(superpowers:finishing-a-development-branch)
+  ⎿  Successfully loaded skill
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Key facts so far: these are two independent clones with file:// remotes
+  pointing at each other. /workspace/clausal is on main at af06d04a with a clean
+  working tree; my clone's main is at 2c6a0a3c and was "ahead of local/main by
+  285 commits" at session start. I need to know the exact divergence before
+  choosing an integration method — a fast-forward is very different from a
+  diverged merge. Let me determine that (all read-only).
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● This is the clean case: /workspace/clausal/main has zero unique commits — my
+  clone is a strict superset, 303 commits ahead. So integration is a pure
+  fast-forward (no merge, no possible conflicts). The 303 commits are the entire
+  accumulated audit-fix body (this session's 43 plus prior sessions' work that
+  never returned to the primary repo).
+
+  "Carefully" means: make it trivially reversible, watch for untracked-file
+  collisions, and rebuild + re-verify in the target since C sources change. Let
+  me check the target for untracked-file collision risk and confirm the fetch is
+  a true fast-forward before touching anything.
+
+  Ran 1 shell command (ctrl+o to expand)
+● Target is pristine — 0 untracked, 0 modified files, so the fast-forward is
+  collision-free. Now I'll make it reversible with a backup ref, then fetch and
+  fast-forward. Let me create the safety net and fetch the objects.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Backup created, objects fetched, FETCH_HEAD verified to exactly match my clone
+  tip and confirmed as a valid fast-forward. Now the actual fast-forward:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Fast-forward succeeded — /workspace/clausal/main is now at 2c6a0a3c with a
+  clean tree. But the 303 commits changed C sources, so the target's built .so
+  files are now stale. I must rebuild the C extensions there and re-verify.
+  Rebuilding now:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● C extensions rebuilt cleanly (exit 0, all linux-aarch64 .so fresh). Final
+  gate: run the full suite inside /workspace/clausal to confirm the integrated
+  tree plus freshly-built native code is coherent there.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Monitor(/workspace/clausal full suite)
+  ⎿  Monitor started · task b9iyv4mvx · timeout 240s
+
+● Waiting on the target-repo suite. Meanwhile, the integration is in place and
+  fully reversible — here's the rollback command in case it's needed:
+
+  git -C /workspace/clausal reset --hard backup/pre-audit-integration
+
+  That branch (and the tag pre-audit-integration-2026-07-10) both point at the
+  pre-integration tip af06d04a. I'll report the suite result as soon as it
+  finishes.
+
+  Read 1 file (ctrl+o to expand)
+
+● I'll wait for the monitor to report completion rather than poll.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Integration confirmed in place (target at 2c6a0a3c, backup ref preserved at
+  af06d04a). The /workspace/clausal test suite is running — the monitor will
+  re-invoke me when it finishes, and I'll report the result then. Waiting on
+  that.
+
+✻ Brewed for 3m 45s
+
+● Background command "Run full suite in /workspace/clausal" completed (exit code
+0)
+
+  Read 1 file (ctrl+o to expand)
+
+● Monitor event: "/workspace/clausal full suite"
+
+● Monitor "/workspace/clausal full suite" stream ended
+
+● Done — the integration is complete and verified in the target repo.
+
+  Integrated into /workspace/clausal main
+
+  - Fast-forward: af06d04a → 2c6a0a3c (303 commits). This was a clean
+  fast-forward — your primary repo had zero unique commits, so my clone's main
+  was a strict superset. No merge, no conflicts, nothing rewritten. The 303
+  commits are the full accumulated audit-fix body (this session's 43 plus prior
+  sessions' fixes that had never returned to the primary repo).
+  - C extensions rebuilt in /workspace/clausal (the incoming commits changed C
+  sources, so the installed .so were stale) — clean build, exit 0.
+  - Full suite in /workspace/clausal: 9150 passed, 44 xfailed, 0 failed — the
+  integrated tree plus freshly-built native code is coherent in the target.
+  (9150 vs the clone's 9148+2-skipped — the two environment-skipped tests ran
+  and passed here.)
+
+  Reversibility
+
+  It's a clean fast-forward, so nothing was lost, but I left two safety nets
+  pointing at the old tip in case you want to undo:
+  - branch backup/pre-audit-integration
+  - tag pre-audit-integration-2026-07-10
+
+  Roll back with: git -C /workspace/clausal reset --hard 
+  backup/pre-audit-integration
+
+  Two notes worth flagging: /workspace/clausal is the editable install backing
+  the shared venv, so anything importing clausal from that path now gets the
+  fixed code. And I only moved main — I didn't push to origin (gitlab) or touch
+  any other branch, since you said "into /workspace/clausal main" specifically.
+  Say the word if you want it pushed to origin as well.
+
+✻ Crunched for 25s

@@ -1,0 +1,1197 @@
+╭─── Claude Code v2.1.185 ─────────────────────────────────────────────────────╮
+│                                        │ Tips for getting started            │
+│           Welcome back Mike!           │ Run /init to create a CLAUDE.md fi… │
+│                                        │ ─────────────────────────────────── │
+│                 ▐▛███▜▌                │ What's new                          │
+│                ▝▜█████▛▘               │ The stream-stall hint now reads "W… │
+│                  ▘▘ ▝▝                 │ Improved auto mode safety: destruc… │
+│                                        │ Added a warning when the requested… │
+│   Fable 5 · Claude Max · Michael Amy   │ /release-notes for more             │
+│       /workspace/clausal-bug-fix       │                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ ▎ Fable 5 is here! Our newest model for complex, long-running work.
+ ▎ Included in your plan limits until Jul 8, then switch to usage credits to continue.
+
+❯ /clear                                                                        
+
+❯ /model fable                                                                  
+  ⎿  Set model to Fable 5 and saved as your default for new sessions
+
+❯ get up to speed docs/superpowers/audits/2026-07-05-fable-partition/prompts/re 
+  quired_reading.md  before I give you any audits                               
+
+  Read 3 files, listed 1 directory (ctrl+o to expand)
+
+● Cheatsheet and design decisions absorbed. Now the prior-art docs and the audit
+  README.
+
+  Read 5 files, recalled 3 memories (ctrl+o to expand)
+
+● I'm up to speed. Here's what I've internalized from the required reading and
+  its referenced materials:
+
+  The setup. I'll be running interactive audit sessions over subsystems of
+  Clausal (the logic-programming language embedded in Python). I produce
+  findings, adversarial pytest tests, and queued todos — I never fix production
+  code, the cheat-sheet, or another subsystem's files. Per the status board, A01
+  (term-layer), A02 (compiler-heads), and A03 (compiler-goals) are done; the
+  next wave-1 session is A04 runtime-tabling, then the constraints wave (05–08).
+
+  Ground truth absorbed. I read the full cheatsheet
+  (/workspace/clausify/docs/clausal-cheatsheet.md): is = unification, == =
+  CLP(ℤ) arithmetic constraint, := = eager Python eval, is not = dif/2; cut-free
+  by design; bare atoms are module-scoped strings/PredicateMeta objects;
+  strings are lists of single-char strings (Liskov). Violations of these
+  standing contracts are findings.
+
+  Prior art absorbed so I don't re-report: the 8 cross-cutting issues (Trail
+  casts without type-check, unchecked PyObject_IsInstance, static-cache FT
+  races, int64 ceilings, etc.), the mode-coverage audit (its headline lesson —
+  the numeric-head-literal bug survived 8085 tests because nothing tested output
+  mode — is why the coverage map must include var-query direction), and the
+  four existing DESIGN-DECISIONS entries (A02-D001 resolved,
+  A02-D002/A03-D001/A03-D002 parked).
+
+  Method points I'll follow: coverage map first, loop-until-dry probing, every
+  confirmed finding reproduced with an executed per-file pytest
+  (tests/audit_2026_07_05/<file>.py — never bare pytest tests/, it OOM-kills),
+  refcount_stable/getrefcount_stable fixtures for C leaks, FT claims logged
+  unconfirmed — needs 3.14t on this 3.13 box.
+
+  Two adjustments from my memory of the earlier sessions, which I'll apply
+  unless you say otherwise:
+  - Design questions get parked, not asked. The prompts say "ask the user," but
+  in A01 you asked me to park them in
+  todo/audit-2026-07-05/investigate-<id>-parked-design-decisions.md instead —
+  I'll default to that.
+  - Test execution uses pyenv 3.13.3 with PYTHONPATH=/workspace/clausal-bug-fix
+  (the shared venv lacks pytest and its editable install can shadow the clone).
+  I also have the accumulated probe-pitfall list from A02/A03 (module
+  double-load atom identity, query cache keyed by type, index-fixture
+  selectivity, zero-arity via call(), -shallow twins as differential oracle,
+  etc.) so I won't reburn those false positives.
+
+  Ready for an audit assignment whenever you are — the natural next one is
+  prompts/04-runtime-tabling.md.
+
+✻ Worked for 1m 19s
+
+❯ work on docs/superpowers/audits/2026-07-05-fable-partition/prompts/04-runtime 
+  -tabling.md - ignoring the required reading section which you already have    
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+  Read 3 files (ctrl+o to expand)
+
+● Now reading the subsystem sources.
+
+  Read 9 files (ctrl+o to expand)
+
+● Now the three C files.
+  Read 3 files (ctrl+o to expand)
+
+● Python + C sources are read. Now prior art: the audit conftest, an earlier
+  findings doc for format, and usage checks for continuation_search/coroutining.
+
+  Read 4 files, listed 2 directories (ctrl+o to expand)
+
+● All sources and docs are read. Marking tasks and writing the coverage map,
+  then probing.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● C extensions load from the clone. Writing the coverage map into the findings
+  ledger first (per method), then probing.
+
+● Write(docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/fi
+       ndings.md)
+  ⎿  Wrote 99 lines to docs/superpowers/audits/2026-07-05-fable-partition/0
+     4-runtime-tabling/findings.md
+      1 # Findings — A04 runtime, search & tabling
+      2 
+      3 Severity order: correctness > memory > design > perf > doc-drift.
+      4 Confirmed correctness findings have a Test ref AND a Todo ref.
+      5 Test file: `tests/audit_2026_07_05/test_04_runtime_tabling.py`.
+      7 | ID | Severity | Title | Location (file:line) | Repro | Expected
+         vs Actual | Test ref | Todo ref |
+      8 |----|----------|-------|----------------------|-------|---------
+        -----------|----------|----------|
+      9 | A04-F001 | | (probing in progress) | | | | | |
+     … +129 lines (ctrl+o to expand)
+
+● Probe pass 1 — the high-suspicion targets from code reading. First, check the
+  existing fixtures.
+
+  Read 1 file (ctrl+o to expand)
+
+● Writing probe pass 1 fixtures and script.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Write(/tmp/a04/probe1.py)
+  ⎿  Wrote 198 lines to ../../tmp/a04/probe1.py
+       1 """A04 probe pass 1 — runtime/search/tabling high-suspicion targ
+         ets."""
+       2 import sys, traceback
+       4 import clausal.import_hook
+       5 from clausal.import_hook import _load_module
+       6 from clausal.logic.solve import solve, call, once, query_wfs, _q
+         uery_cache
+       7 from clausal.logic.variables import Var, deref, is_var
+       9 
+      10 def sect(name):
+     … +215 lines (ctrl+o to expand)
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Write(/tmp/a04/probe2.py)
+  ⎿  Wrote 169 lines to ../../tmp/a04/probe2.py
+      1 """A04 probe pass 2 — NAF no-entry soundness, WFS cross-entry, as
+        sertz mid-eval,
+      2 query-cache id reuse, aliased-var cache keys, deep recursion, sim
+      3 import sys, traceback, gc
+      4 
+      5 import clausal.import_hook
+      6 from clausal.import_hook import _load_module
+      7 from clausal.logic.solve import solve, call, once, query_wfs, _qu
+      8 from clausal.logic.variables import Var, deref, is_var
+      9 
+     … +180 lines (ctrl+o to expand)
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+● Write(/tmp/a04/probe3.py)
+  ⎿  Wrote 185 lines to ../../tmp/a04/probe3.py
+      1 """A04 probe pass 3 — assertz invalidation deep-dive, id reuse re
+        try, deep recursion,
+      2 two-recursive-clause tabling, C-stack subprocess, refcount loops,
+      3 import sys, traceback, gc, subprocess
+      4 
+      5 import clausal.import_hook
+      6 from clausal.import_hook import _load_module
+      7 from clausal.logic.solve import solve, call, once, query, _query_
+      8 from clausal.logic.variables import Var, deref, is_var
+      9 
+     … +190 lines (ctrl+o to expand)
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Write(/tmp/a04/probe4.py)
+  ⎿  Wrote 197 lines to ../../tmp/a04/probe4.py
+      1 """A04 probe pass 4 — dynamic+tabled invalidation, retract table 
+        pollution,
+      2 variant-lookup NAF, C-stack retests, abolish builtins, C/Py list-
+        unify differential."""
+      3 import sys, traceback, gc, subprocess
+      5 import clausal.import_hook
+      6 from clausal.import_hook import _load_module
+      7 from clausal.logic.solve import solve, call, once, _query_cache
+      8 from clausal.logic.variables import Var, Trail, deref, is_var
+      9 
+     … +214 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Write(/tmp/a04/probe5.py)
+  ⎿  Wrote 173 lines to ../../tmp/a04/probe5.py
+      1 """A04 probe pass 5 — asym win docs example, solve() RuntimeError
+         swallow,
+      2 facts-first controls, _deref_walk / subgoal-key C/Py differential
+        ."""
+      3 import sys, traceback
+      5 import clausal.import_hook
+      6 from clausal.import_hook import _load_module
+      7 from clausal.logic.solve import solve, call, once, _query_cache
+      8 from clausal.logic.variables import Var, Trail, deref, is_var
+      9 
+     … +178 lines (ctrl+o to expand)
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● Write(tests/audit_2026_07_05/test_04_runtime_tabling.py)
+  ⎿  Wrote 788 lines to tests/audit_2026_07_05/test_04_runtime_tabling.py
+      1 """A04 runtime, search & tabling — adversarial audit tests (2026-
+        07-05).
+      3 Findings ledger: docs/superpowers/audits/2026-07-05-fable-partiti
+        on/04-runtime-tabling/findings.md
+      4 
+      6 ``@pytest.mark.xfail(strict=False)`` with the finding ID; confirm
+        ed-correct
+      7 behaviour is a plain regression guard.  Run PER FILE only:
+      9     python -m pytest tests/audit_2026_07_05/test_04_runtime_tabli
+        ng.py -v
+     … +910 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Update(tests/audit_2026_07_05/test_04_runtime_tabling.py)
+  ⎿  Added 3 lines, removed 6 lines
+      650  
+      651  class TestF006CrossTypeConflation:
+      652      def test_untabled_control_keeps_all_four(self, load):
+      653 +        # 4 facts, 4 answers, types preserved                 
+      654          m = load("f006", TYPES_SRC)
+      655          V = Var()
+      655 -        got = [(deref(V), type(deref(V)).__name__) for _ in ca
+          -ll("utt", V, module=m)                                        
+      656 -               for deref in (globals()["deref"],)]            
+      657 -        # 4 facts, 4 answers, types preserved                 
+      658 -        V2 = Var()                                            
+      656          got = []
+      660 -        for _ in call("utt", V2, module=m):                   
+      661 -            v = deref(V2)                                     
+      657 +        for _ in call("utt", V, module=m):                    
+      658 +            v = deref(V)                                      
+      659              got.append((repr(v), type(v).__name__))
+      660          assert got == [("1", "int"), ("True", "bool"), ("2.0",
+            "float"), ("2", "int")]
+      661  
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now the deliverables: full findings ledger, design questions, todos, README
+  row.
+
+● Write(docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/fi
+       ndings.md)
+  ⎿  Added 148 lines, removed 52 lines
+       2  
+       3  Severity order: correctness > memory > design > perf > doc-drif
+          t.
+       4  Confirmed correctness findings have a Test ref AND a Todo ref.
+       5 -Test file: `tests/audit_2026_07_05/test_04_runtime_tabling.py`.
+       5 +Test file: `tests/audit_2026_07_05/test_04_runtime_tabling.py` 
+         +(24 passed,                                                    
+       6 +20 xfailed on 2026-07-05 — every suspected-bug xfail actually f
+         +ails, i.e.                                                     
+       7 +every finding below reproduces).                               
+       8  
+       9  | ID | Severity | Title | Location (file:line) | Repro | Expect
+          ed vs Actual | Test ref | Todo ref |
+      10  |----|----------|-------|----------------------|-------|-------
+          -------------|----------|----------|
+       9 -| A04-F001 | | (probing in progress) | | | | | |               
+      11 +| A04-F001 | correctness | **SLG completion phase cannot resume
+         + suspended-consumer continuations — answers silently lost; tabl
+         +ed solution sets depend on clause order and even on idiomatic p
+         +rograms.** When a consumer suspends before the leader has produ
+         +ced the answers it needs, the completion phase resumes the cons
+         +umer's generator but its *parent chain is dead* (the original d
+         +ispatch generator already returned DONE). The mini-trampoline i
+         +ntercepts `(sc._proceed, None)` and freezes `sc.args` — the con
+         +sumer's *own call args*, which necessarily reproduce an already
+         +-stored answer — so the clause continuation after the recursive
+         + call **never runs** and the completion phase can never add a n
+         +ew answer. Consequences, all confirmed: (a) a tabled predicate 
+         +with TWO recursive clauses, facts-first (fully idiomatic), lose
+         +s answers: `p(X)` = `[1,2,3]` instead of `[1,2,3,4,5]`; (b) rec
+         +ursive-clause-first ordering loses everything derived: `[1]`; (
+         +c) mutual recursion with recursive clauses first: `ra(1,Y)` = `
+         +[2]` instead of `[2,4]`, and the inner leader `rb` is marked **
+         +complete with zero answers** (premature completion — no SCC tra
+         +cking), permanently caching the wrong empty result. In-tree fix
+         +tures pass only because they use one recursive clause with base
+         + clauses first, where the live-phase consumer (iterating `entry
+         +.answers` while it grows) reaches fixpoint before suspending | 
+         +`tabling.py:507-543` (completion mini-trampoline: `gen is sc._p
+         +roceed`/`value is None` arm freezes `sc.args`; forwarding arm `
+         +gen.send(value)` reaches dead frames), `:489-505` (leader marks
+         + complete after own dispatch exhausts — no cross-entry SCC chec
+         +k) | `-table(p/1)` + `p(1), p(X)<-(p(Y),a(Y,X)), p(X)<-(p(Y),b(
+         +Y,X))` with `a(1,2), b(2,3), a(3,4), b(4,5)`; query `p(X)` | `[
+         +1,2,3,4,5]` vs `[1,2,3]` (facts-first) / `[1]` (rec-first); mut
+         +ual `ra(1,Y)`: `[2,4]` vs `[2]`, `rb` complete-empty | `TestF00
+         +1CompletionLosesConsumers` (4 xfail + facts-first mutual contro
+         +l) | `todo/audit-2026-07-05/investigate-A04-slg-completion-arch
+         +itecture.md` |                                                 
+      12 +| A04-F002 | correctness | **`_naf_tabled` is unsound for never
+         +-called and other-variant subgoals — negation results depend on
+         + query order.** No table entry (and no same-functor variant eva
+         +luating) ⇒ "treat as no answers" ⇒ negation *succeeds* even whe
+         +n the positive goal is trivially derivable. `not tp(1,2)` with 
+         +fact `tp(1,2)`: succeeds before any positive query, fails after
+         + — same program, opposite answers. The complete-table arm requi
+         +res the **exact variant key**: a complete `tp(_,_)` table holdi
+         +ng `(1,2)` is ignored by `not tp(1,2)` (different variant) → fa
+         +lls to no-entry → unsound success. Downstream: acyclic negation
+         + chains give wrong TRUE answers (`even_node(1)` succeeds and is
+         + recorded unconditional though `odd_node(2)` is derivable). Sta
+         +ndard SLG calls the negated subgoal; this implementation never 
+         +spawns it | `tabling.py:276-277` (no-entry → `return True`), `:
+         +240-252` (complete arm — exact `store_key` only), `:267-274` (a
+         +ny-variant check limited to same functor+arity *evaluating*, of
+         +fers only delay) | `-table(tp/2)`, fact `tp(1,2)`, rule `ntp(R)
+         + <- (not tp(1,2), …)`; query `ntp` first | negation fails vs su
+         +cceeds; after `tp(1,2)` query: fails (order-dependent) | `TestF
+         +002NafTabledNoEntry` (3 xfail + order control) | `todo/audit-20
+         +26-07-05/fix-A04-naf-tabled-no-entry.md` |                     
+      13 +| A04-F003 | correctness | **WFS truth resolution is mode- and 
+         +order-dependent, and wrong results are cached permanently.** Do
+         +cs (`docs/wfs.md`) truth table for the asymmetric win game: a=t
+         +rue, b=false, c=false. Actual: `win("b")` queried FIRST yields 
+         +1 answer (stuck `undefined` — its delayed `not win("a")` target
+         +s a variant entry that is never created, so `_resolve_condition
+         +s` can never resolve it) and this wrong answer is cached `compl
+         +ete` forever; queried after `win("a")` it correctly yields 0. V
+         +ar-mode `win(X)` yields `{a, b}` while ground-mode (docs order)
+         + yields only `a` — the solution set depends on call mode. Root 
+         +causes shared with F002: negated subgoals are never spawned, an
+         +d `_resolve_conditions` looks up delayed negations by exact var
+         +iant key only (`tabling.py:302-306`), so cross-variant/cross-mo
+         +de information is unreachable | `tabling.py:283-339` (`_resolve
+         +_conditions` — exact-key lookup, per-leader local resolution), 
+         +`:254-274` (delay pathways) | fresh module: `sum(1 for _ in cal
+         +l("win","b"))` | 0 (docs) vs 1, sticky | `TestF003WfsModeOrderD
+         +ependence` (2 xfail) + `TestTablingGuards::test_asym_win_ground
+         +_docs_order` (control) | `todo/audit-2026-07-05/investigate-A04
+         +-wfs-variant-resolution.md` |                                  
+      14 +| A04-F004 | correctness | **`query_wfs` `_truth` annotation is
+         + a stub — every result is hardcoded `True`.** `docs/wfs.md` §"T
+         +he query_wfs API" promises `True` or `"undefined"`. The impleme
+         +ntation loops `r["_truth"] = True` over all results without eve
+         +r consulting `TableEntry.conditions`/`truth_value`. Symmetric w
+         +in: both answers are internally `undefined` (guard test confirm
+         +s the conditions machinery knows) yet `query_wfs` reports `True
+         +` for both. The in-tree test (`test_wfs.py:486-502`) only check
+         +s a non-cyclic case where `True` is correct | `solve.py:596-621
+         +` (`query_wfs`, comment even says "attach truth=True to all res
+         +ults by default") | `query_wfs(win(X), {"X": X}, m)` on symmetr
+         +ic win | `_truth == "undefined"` ×2 vs `True` ×2 | `TestF004Que
+         +ryWfsStub` (xfail) + `TestTablingGuards::test_wfs_symmetric_win
+         +_internal_truth_values` (mechanism guard) | `todo/audit-2026-07
+         +-05/fix-A04-query-wfs-truth-stub.md` |                         
+      15 +| A04-F005 | correctness | **Tabled answers containing lists, d
+         +icts, sets, or declared-functor term instances crash with `Type
+         +Error: unhashable type` — tabling only works for scalar/Compoun
+         +d answers.** `TableEntry.add_answer` does `answer in self.answe
+         +r_set`; `freeze_args` preserves container types (list stays lis
+         +t; term instances are rebuilt via their class, which is unhasha
+         +ble). Any tabled predicate whose *arguments* contain a list at 
+         +solution time crashes on the first answer — lists being the lan
+         +guage's core data structure. Secondary gap (blocked behind the 
+         +crash): `_deref_walk` (Py and C) does not walk dict/set/DictTer
+         +m/Seg* contents, so a "frozen" answer would share live sub-stru
+         +cture whose Vars unbind on backtracking | `tabling.py:115-122` 
+         +(`add_answer`), `:184-189` (`freeze_args` → `_deref_walk`), `so
+         +lve.py:49-68` (`_deref_walk_py` — no dict/set/Seg* arms), `_tab
+         +ling_core.c:239-369` (same shape) | `-table(ts/1)`, `ts([1,*T])
+         + <- (T is [2,3])`; query `ts(X)` | `[([1,2,3],)]` vs `TypeError
+         +: unhashable type: 'list'` | `TestF005UnhashableAnswers` (3 xfa
+         +il: list/dict/term-instance) | `todo/audit-2026-07-05/fix-A04-t
+         +abled-answer-hashability.md` |                                 
+      16 +| A04-F006 | correctness | **Cross-type conflation in variant k
+         +eys and answer dedup: tabled and untabled solution sets differ.
+         +** Keys and the answer set rely on Python `==`/`hash`, so `1 ==
+         + True == 1.0 == Decimal(1)` conflate: facts `tt(1), tt(True), t
+         +t(2.0), tt(2)` tabled yield `[1, 2.0]` (True and 2 silently sup
+         +pressed as "duplicates"); the untabled twin yields all four wit
+         +h types preserved. Subgoal variants conflate the same way (`key
+         +(1)==key(True)==key(1.0)`), so `p(True)` consumes `p(1)`'s tabl
+         +e. C and Python implementations agree (differential ✓) — the de
+         +fect is the equality relation, same family as the parked cross-
+         +type unification/index-key decisions (A01-D001, A02-D002) | `ta
+         +bling.py:115-122` (`answer_set` set-of-tuples), `:149-178` (`_n
+         +ormalize_for_key_py`), `_tabling_core.c:58-184` (`do_normalize`
+         +) | `TYPES_SRC` fixture; `tt(X)` vs `utt(X)` | identical 4-answ
+         +er sets vs `[1, 2.0]` tabled | `TestF006CrossTypeConflation` (1
+         + xfail + 2 guards incl. key-conflation mechanism guard) | `todo
+         +/audit-2026-07-05/fix-A04-tabling-cross-type-conflation.md` (in
+         +terim fix; final semantics blocked on A01-D001) |              
+      17 +| A04-F007 | correctness | **Abnormal leader exit (early abando
+         +nment via `once()`/loop-break, or an exception in the body) lea
+         +ves the table entry `"evaluating"` forever — every later query 
+         +silently returns partial answers.** The leader's `try/finally` 
+         +only pops the leader context; nothing removes or completes the 
+         +store entry. After `once(path(1,Y))`: entry stays `evaluating` 
+         +with 1 answer; the next `path(1,Y)` takes the CONSUMER path wit
+         +h no live leader, yields the single cached answer + a spurious 
+         +unbound answer (F008) and stops — `[2]` instead of `[2,3,4]`, n
+         +o error. After a body exception (ZeroDivisionError): re-query s
+         +ilently returns the pre-exception partial answers instead of re
+         +-raising or recomputing. `once/1` over a tabled goal is corpus-
+         +idiomatic — this poisons real programs | `tabling.py:489-558` (
+         +leader path; `finally: pop_leader()` only — no entry cleanup on
+         + GeneratorExit/exception), `solve.py:572-593` (`once` abandons 
+         +the solve generator) | `once(path(1,Y))` then `call("path",1,Y2
+         +)` | `[2,3,4]` vs `[2]` (+unbound); exception case: re-raise vs
+         + silent partial | `TestF007PoisonedEvaluatingTables` (2 xfail +
+         + poisoned-status mechanism guard) | `todo/audit-2026-07-05/fix-
+         +A04-poisoned-evaluating-tables.md` |                           
+      18 +| A04-F008 | correctness | **A root-level `(None, _TABLING_SUSP
+         +END)` step is misread as a solution — spurious unbound-variable
+         + answers.** All three drivers check `gen is None` and treat any
+         + value ≠ DONE as "solution found" BEFORE the tabling-suspend in
+         +terception (which only handles `gen is not None`). An orphaned 
+         +consumer at the root (the poisoned state of F007) suspends to `
+         +_proceed=None`, so the driver yields a "solution" whose output 
+         +vars are unbound (`AttVar`). Confirmed: post-`once()` query of 
+         +`path(1,Y)` yields `(2,)` then `(AttVar,)` | Py: `trampoline.py
+         +:238-241` (`_drive_until_yield` fallback), `:191-204` (`solutio
+         +ns`); C: `runtime/_trampoline.c:684-691` (`drive_until_yield_fu
+         +nc`), `:536-559` (`solutions_func`) | F007 repro, inspect yield
+         +ed bindings | all yielded answers ground vs one unbound AttVar 
+         +answer | `TestF008RootSuspendSpuriousSolution` (xfail) | `todo/
+         +audit-2026-07-05/fix-A04-root-suspend-spurious-solution.md` |  
+      19 +| A04-F009 | correctness | **C `_drive_until_yield` swallows ev
+         +ery `RuntimeError` and reports "search exhausted" — user errors
+         + from Python escapes become silent failure, and entry points di
+         +sagree.** Both the initial send and the loop clear `StopIterati
+         +on` **or `RuntimeError`** (`PyErr_ExceptionMatches(PyExc_Runtim
+         +eError)`) and return None. A `++user_fn()` raising `RuntimeErro
+         +r` therefore makes `call()`/`solve()`/`once()` silently yield n
+         +othing, while `solutions()` (C) propagates it — same program, d
+         +ivergent outcomes. The pure-Python fallback catches only `StopI
+         +teration` (C≠Py divergence). The RuntimeError catch presumably 
+         +guards the StepGen "returned unexpectedly" protocol error / PEP
+         +-479 conversion, but it is far too broad | `runtime/_trampoline
+         +.c:663-671` (first send), `:717-724` (loop); contrast `trampoli
+         +ne.py:224-259` (fallback: StopIteration only) and `_trampoline.
+         +c:609-628` (`solutions_func`: propagates) | `rte(X) <- (X is 1,
+         + ++boom_rt())` with `boom_rt` raising RuntimeError; `list(call(
+         +"rte", V))` | RuntimeError propagates vs `[]` silently; `soluti
+         +ons()` raises | `TestF009RuntimeErrorSwallowed` (xfail) + `Test
+         +CToolkitGuards::test_solutions_propagates_runtime_error` (diver
+         +gence control) | `todo/audit-2026-07-05/fix-A04-drive-until-yie
+         +ld-runtime-error.md` |                                         
+      20 +| A04-F010 | correctness | **`when/2` disjunction: the `fired` 
+         +once-flag is a plain closure cell, not trailed — after backtrac
+         +king out of the branch that fired, the goal is silently skipped
+         + in the surviving branch.** Branch 1 binds X → goal fires (`fir
+         +ed[0]=True`), branch fails, bindings/attrs are undone but the f
+         +lag survives; branch 2 binds Y → `_guarded_thunk` yields succes
+         +s WITHOUT running the goal → `R` stays unbound and the program 
+         +"succeeds" having skipped its condition | `coroutining.py:104-1
+         +21` (`_install_when_disjunction` — `fired = [False]` closure) |
+         + `w8(R) <- (when((nonvar(X) or nonvar(Y)), R is "fired"), ((X i
+         +s 1, 1 == 2) or (Y is 2)))` | `R == "fired"` vs `R` unbound | `
+         +TestF010WhenDisjunctionFiredFlag` (xfail) | `todo/audit-2026-07
+         +-05/fix-A04-when-disjunction-fired-flag.md` |                  
+      21 +| A04-F011 | design | **`freeze/2` commits to the first solutio
+         +n of the frozen goal — its choice points are discarded.** `_fre
+         +eze_hook` drives each frozen goal to one solution and breaks; `
+         +freeze(X, in_(Y,[10,20])), X is 1` yields only `(1,10)` where S
+         +WI enumerates both. First-solution bindings stick (guarded). No
+         +t documented in `docs/coroutining.md` (which is otherwise accur
+         +ate); the hook protocol is boolean (success/fail) so full backt
+         +racking needs a redesign of the attr-hook contract. Design ques
+         +tion parked | `coroutining.py:28-46` (`_freeze_hook` — `for _ i
+         +n goal_fn(): found=True; break`) | `FREEZE_SRC` fixture | 2 sol
+         +utions (SWI parity) vs 1 | `TestF011FreezeFirstSolutionOnly` (1
+         + xfail + current-behaviour guard) | `todo/audit-2026-07-05/inve
+         +stigate-A04-parked-design-decisions.md` (D001) |               
+      22  
+      23 +Minor / code-read notes (no ledger row, tracked in todos where 
+         +actionable):                                                   
+      24 +                                                               
+      25 +- `_query_cache` keys on `id(module)` (`solve.py:183`) with no 
+         +lifetime pinning:                                              
+      26 +  a GC'd Module whose address is reused would serve another mod
+         +ule's compiled                                                 
+      27 +  query. **unconfirmed** — could not force CPython id reuse for
+         + Module objects                                                
+      28 +  in 2k/50k-allocation attempts; noted in the parked-decisions 
+         +todo as a                                                      
+      29 +  hardening item, not a ledger finding.                        
+      30 +- `assertz`/`retract` on a **non-dynamic** tabled predicate fai
+         +l silently                                                     
+      31 +  (0 solutions, nothing added), and `retract` *queries through 
+         +the tabled                                                     
+      32 +  wrapper*, minting new table entries as a side effect (observe
+         +d a fresh                                                      
+      33 +  `('tz',1,(99,))` complete entry). Dynamic+tabled invalidation
+         + itself works                                                  
+      34 +  as documented (guard test). assertz-on-non-dynamic semantics 
+         +are A09/A11                                                    
+      35 +  territory — seam note below.                                 
+      36 +- Tabled predicate over a **dynamic non-tabled** predicate: ass
+         +ertz to the                                                    
+      37 +  dependency does NOT invalidate the dependent table (doc-consi
+         +stent by the                                                   
+      38 +  letter of `docs/tabling.md` — invalidation is per-predicate —
+         + but a footgun;                                                
+      39 +  design question parked, D002).                               
+      40 +- `continuation_search.py` (greenlet `Search`) has **no product
+         +ion callers**                                                  
+      41 +  (only `tests/test_continuation_search.py`); `make_tabled_wrap
+         +per_simple` and                                                
+      42 +  `_trampoline_to_simple_adapter` are referenced only by `tests
+         +/test_wfs.py` /                                                
+      43 +  `test_tabling.py`. Dead-code candidates — noted in parked tod
+         +o.                                                             
+      44 +- `_naf_tabled` complete-table arm unifies on a **scratch Trail
+         +** and iterates                                                
+      45 +  the whole `table_store` in the any-variant fallback (O(store)
+         + per NAF call) —                                               
+      46 +  perf note only.                                              
+      47 +- C cross-cutting citations (not re-reported): `_trampoline.c` 
+         +/                                                              
+      48 +  `_tabling_core.c` / `_list_unify.c` use `m_size = -1` (cross_
+         +cutting #5);                                                   
+      49 +  lazily-initialized statics `g_LogicException`/`g_TABLING_SUSP
+         +END`                                                           
+      50 +  (`_trampoline.c:34-63`) lack FT atomics (cross_cutting #4) — 
+         +FT impact                                                      
+      51 +  `unconfirmed — needs 3.14t`; `unwind_logic_exception` uses th
+         +e deprecated                                                   
+      52 +  `PyErr_Fetch`/`PyErr_Restore` pair (works on 3.13; maintenanc
+         +e).                                                            
+      53 +- `Database._table_store` is a plain dict shared across threads
+         +;                                                              
+      54 +  `_leader_ctx` is thread-local but the store is not — FT race 
+      55 +  `unconfirmed — needs 3.14t`.                                 
+      56 +                                                               
+      57  ## Coverage map
+      58  
+      59  Files: `solve.py`, `trampoline.py`, `continuation_search.py`, `
+          coroutining.py`,
+     ...
+       64  **PART** = partial instantiation, **E/S** = empty & singleton 
+           & edge values,
+       65  **BT** = backtracking + trail restoration, **ERR** = error pat
+           hs,
+       66  **ABANDON** = early abandonment (once / break mid-iteration),
+       21 -**C≡Py** = C-accelerated vs pure-Python parity (differential o
+          -racle).                                                       
+       67 +**C≡Py** = C vs pure-Python parity (differential oracle).     
+       68 +Legend: `✓` probed clean, `F###` finding, `cr` code-read only,
+          + `pa` prior art,                                              
+       69 +`doc` documented divergence, `unc` unconfirmed (needs 3.14t / 
+          +not reproducible).                                            
+       70  
+       71  ### Query API (`solve.py`)
+       72  
+       73  | Surface | IN | OUT | PART | E/S | BT | ERR | ABANDON | C≡Py 
+           |
+       74  |---|---|---|---|---|---|---|---|---|
+       27 -| `solve(goal, module)` — pred-instance goals | | | | | | | | 
+          -|                                                             
+       28 -| `solve` — Compound goals / control-node goals (And/Or/Not) |
+          - | | | | | | | |                                              
+       29 -| `solve` — `True`/`False` fast paths | | | | n/a | | n/a | n/
+          -a | n/a |                                                     
+       30 -| `solve` — module inference / `_coerce_module` forms | | | | 
+          -| n/a | | n/a | n/a |                                         
+       31 -| `call(functor,*args)` — string vs PredicateMeta functor; bui
+          -ltin fallback | | | | | | | | |                               
+       32 -| `once` | | | | | | | | |                                    
+       33 -| `query` (deprecated) / `_deref_walk` structure coverage (dic
+          -t/set/Seg*) | | | | | | | | |                                 
+       34 -| `query_wfs` `_truth` annotations | | | | | | | n/a | n/a |  
+       35 -| `_query_cache`: structural key (aliased vars, value keying, 
+          -unhashable) | | | | | | | n/a | n/a |                         
+       36 -| `_query_cache`: `id(module)` keying across module lifetimes 
+          -| | | | | | | n/a | n/a |                                     
+       37 -| `_templatize_query_goal` (scalar/atom params; structural exc
+          -luded) | | | | | | | n/a | n/a |                              
+       75 +| `solve` — pred-instance goals | ✓ | ✓ | ✓ | ✓ | ✓ | F009 | F
+          +007 (tabled) | ✓ |                                            
+       76 +| `solve` — Compound goals | ✓ | ✓ | ✓ | — | ✓ | — | — | — |  
+       77 +| `solve` — `True`/`False` fast paths | ✓ | n/a | n/a | n/a | 
+          +n/a | n/a | n/a | n/a |                                       
+       78 +| `solve` — module inference / `_coerce_module` | ✓ | ✓ | — | 
+          +— | n/a | cr (TypeError msg) | n/a | n/a |                    
+       79 +| `call` — string vs class functor; builtin fallback | ✓ | ✓ |
+          + ✓ | ✓ | ✓ | ✓ KeyError | F007 | ✓ |                          
+       80 +| `once` | ✓ | ✓ | — | ✓ fail→None | ✓ | F009 | F007 | — |    
+       81 +| `query` (deprecated) / `_deref_walk` structures | ✓ | ✓ | — 
+          +| — | — | — | — | ✓ (P52 grid) |                              
+       82 +| `query_wfs` | F004 | F004 | — | — | — | — | n/a | n/a |     
+       83 +| `_query_cache` structural key (aliased vars, values, unhasha
+          +ble skip) | ✓ | ✓ | ✓ | ✓ | n/a | ✓ | n/a | n/a |             
+       84 +| `_query_cache` `id(module)` lifetime | cr/unc (note) | | | |
+          + | | | |                                                      
+       85 +| `_templatize_query_goal` | ✓ (via solve matrix) | ✓ | — | — 
+          +| — | — | n/a | n/a |                                         
+       86  
+       87  ### Trampoline (`trampoline.py`, `runtime/_trampoline.c`, `run
+           time/tramp_call.py`)
+       88  
+       89  | Surface | IN | OUT | PART | E/S | BT | ERR | ABANDON | C≡Py 
+           |
+       90  |---|---|---|---|---|---|---|---|---|
+       43 -| `StepGenerator` send/throw/close protocol | | | | | | | | | 
+       44 -| `trampoline()` root drive + LogicException unwinding | | | |
+          - | | | | |                                                    
+       45 -| `solutions()` (+ snapshot, FINAL, suspend interception) | | 
+          -| | | | | | |                                                 
+       46 -| `_drive_until_yield` (exhaustion, error classes swallowed) |
+          - | | | | | | | |                                              
+       47 -| deep recursion (no Python stack overflow) | | | | | | | | | 
+       48 -| `_tramp_call` simple→trampoline bridge | | | | | | | | |    
+       91 +| `StepGenerator` send/close protocol | ✓ | ✓ | — | ✓ | ✓ | ✓ 
+          +| — | cr (same spec) |                                        
+       92 +| `trampoline()` LogicException unwinding | ✓ (via A03 catch f
+          +ixtures + P38) | — | — | — | ✓ | ✓ | — | cr |                 
+       93 +| `solutions()` (+suspend interception, snapshot) | ✓ | ✓ | — 
+          +| — | — | ✓ propagates RTE | — | cr; FINAL cold (no producer e
+          +mits) |                                                       
+       94 +| `_drive_until_yield` | ✓ | ✓ | — | ✓ | ✓ | F009 (RuntimeErro
+          +r swallow) / F008 (root suspend) | F007 trigger | F009 diverge
+          +nce |                                                         
+       95 +| deep recursion | ✓ 30k tail, 2k output-list | ✓ | — | — | ✓ 
+          +| — | — | — |                                                 
+       96 +| `_tramp_call` bridge | pa (A03 once/NAF probes) | | | | | | 
+          +| |                                                           
+       97  
+       98  ### Tabling (`tabling.py`, `_tabling_core.c`)
+       99  
+      100  | Surface | IN | OUT | PART | E/S | BT | ERR | ABANDON | C≡Py 
+           |
+      101  |---|---|---|---|---|---|---|---|---|
+       54 -| variant keys: scalars, cross-type (1/True/1.0), lists, compo
+          -unds, term instances, dict/set args | | | | | | | | |         
+       55 -| answer freezing (`freeze_args`/`_deref_walk`): structure cov
+          -erage incl. dict/set/Seg* | | | | | | | | |                   
+       56 -| answer dedup (`answer_set`) incl. cross-type equality | | | 
+          -| | | | | |                                                   
+       57 -| leader path: drive, incremental yield, completion fixpoint |
+          - | | | | | | | |                                              
+       58 -| consumer path: known answers, suspend/resume rounds | | | | 
+          -| | | | |                                                     
+       59 -| complete path: cache hit, unify vs caller shapes | | | | | |
+          - | | |                                                        
+       60 -| left recursion / cyclic graph / same-generation termination 
+          -| | | | | | | | |                                             
+       61 -| mutual recursion: cross-entry completion ordering | | | | | 
+          -| | | |                                                       
+       62 -| exception during leader → table state | | | | | | | | |     
+       63 -| abandonment (once/break) during leader → table state | | | |
+          - | | | | |                                                    
+       64 -| assertz/retract invalidation (incl. mid-evaluation) | | | | 
+          -| | | | |                                                     
+       65 -| WFS: `_naf_tabled` (complete/evaluating/no-entry/any-variant
+          -), `_resolve_conditions` (cross-entry), truth values | | | | |
+          - | | | |                                                      
+       66 -| simple-mode wrapper + `_trampoline_to_simple_adapter` | | | 
+          -| | | | | |                                                   
+      102 +| variant keys: scalars/lists/compounds/instances | ✓ | ✓ | ✓ 
+          +| ✓ | n/a | ✓ 60k-depth graceful | n/a | ✓ (P52) |            
+      103 +| variant keys: cross-type (1/True/1.0/Decimal) | F006 | F006 
+          +| — | — | — | — | — | ✓ (conflation identical) |              
+      104 +| answer freezing: dict/set/Seg*/instances | F005 | F005 | — |
+          + — | F005 (sharing, blocked by crash) | F005 TypeError | — | ✓
+          + |                                                            
+      105 +| answer dedup | F006 | F006 | — | ✓ | — | — | — | — |        
+      106 +| leader: drive, incremental yield | ✓ | ✓ | ✓ | ✓ | ✓ | F007 
+          +| F007 | — |                                                  
+      107 +| leader: completion fixpoint | F001 | F001 | — | ✓ (no consum
+          +ers) | F001 | — | — | — |                                     
+      108 +| consumer: live phase (answers grow under iteration) | ✓ | ✓ 
+          +| — | ✓ | ✓ | — | — | — |                                     
+      109 +| consumer: suspend/resume rounds | F001 | F001 | — | — | F001
+          + | — | F008 orphan | — |                                      
+      110 +| complete path cache hit | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | — |   
+      111 +| left recursion, 1 rec clause, facts first | ✓ | ✓ | — | — | 
+          +✓ | — | — | — |                                               
+      112 +| ≥2 rec clauses / rec-first ordering | F001 | F001 | — | — | 
+          +— | — | — | — |                                               
+      113 +| mutual recursion | F001 (rec-first) / ✓ (facts-first control
+          +) | F001 | — | — | — | — | — | — |                            
+      114 +| exception during leader | — | — | — | — | — | F007 | — | — |
+      115 +| abandonment (`once`/break) | — | — | — | — | — | — | F007 | 
+          +— |                                                           
+      116 +| assertz/retract invalidation (dynamic+tabled) | ✓ | ✓ | — | 
+          +— | — | ✓ | — | — |                                           
+      117 +| assertz/retract on non-dynamic tabled | note (seam A09/A11) 
+          +| | | | | | | |                                               
+      118 +| `abolish_table`/`abolish_all_tables` (db API + builtins exis
+          +t) | ✓ | — | — | — | — | — | — | — |                          
+      119 +| WFS `_naf_tabled`: complete / evaluating / no-entry / other-
+          +variant | ✓ / ✓ (delays) / F002 / F002 | F003 | — | — | ✓ scra
+          +tch trail | — | — | — |                                       
+      120 +| WFS `_resolve_conditions`: same-leader / cross-variant / ord
+          +er | ✓ (sym win undefined) | F003 | — | — | — | — | — | — |   
+      121 +| simple wrapper + adapter | cr — no production callers (note)
+          + | | | | | | | |                                              
+      122 +| FT: table_store races, C static caches | unc — needs 3.14t |
+          + | | | | | | |                                                
+      123  
+      124  ### Coroutining (`coroutining.py`)
+      125  
+       70 -| Surface | IN | OUT | PART | E/S | BT | ERR | ABANDON | C≡Py 
+          -|                                                             
+       71 -|---|---|---|---|---|---|---|---|---|                         
+       72 -| freeze: bound-now vs deferred; multiple freezes; failure rej
+          -ects unification | | | | | | | | n/a |                        
+       73 -| freeze: nondet frozen goal (choice points?) | | | | | | | | 
+          -n/a |                                                         
+       74 -| when nonvar/ground/conj/disj; re-install on partial ground |
+          - | | | | | | | n/a |                                          
+       75 -| when-disjunction `fired` flag across backtracking | | | | | 
+          -| | | n/a |                                                   
+      126 +| Surface | IN | OUT | PART | E/S | BT | ERR | C≡Py |         
+      127 +|---|---|---|---|---|---|---|---|                             
+      128 +| freeze bound-now / deferred / failure rejects / multiple | p
+          +a (in-tree 51 tests) + ✓ | ✓ | — | ✓ | pa (attr undone) | — | 
+          +n/a |                                                         
+      129 +| freeze: nondet frozen goal | F011 | F011 | — | — | F011 | — 
+          +| n/a |                                                       
+      130 +| when nonvar/ground/conj | pa + A03 compile-side ✓ | — | ✓ re
+          +-install | — | — | ✓ ValueError unknown cond (cr) | n/a |     
+      131 +| when disjunction across backtracking | F010 | F010 | — | — |
+          + F010 | — | n/a |                                             
+      132  
+      133  ### List/star unification runtime (`list_unify.py`, `body_star
+           _unify.py`, `_list_unify.c`, `_seg_helpers.py`)
+      134  
+       79 -| Surface | IN | OUT | PART | E/S | BT | ERR | ABANDON | C≡Py 
+          -|                                                             
+       80 -|---|---|---|---|---|---|---|---|---|                         
+       81 -| `_head_list_unify_input/output`: list/str/bytes/Seg*/Var tar
+          -gets × star/after shapes | | | | | | | n/a | |                
+       82 -| partial-binding restoration when pattern unify fails mid-way
+          - | | | | | | | n/a | |                                        
+       83 -| `_body_star_unify` / `_build_star_list` / `_build_multi_star
+          -_list` | | | | | | | n/a | |                                  
+       84 -| `_in_iter` pair mode | | | | | | | n/a | n/a |              
+       85 -| `_segstring_align` / `_segbytes_align` witness semantics | |
+          - | | | | | n/a | n/a |                                        
+      135 +| Surface | IN | OUT | PART | E/S | BT | ERR | C≡Py |         
+      136 +|---|---|---|---|---|---|---|---|                             
+      137 +| `_head_list_unify_input/output` × {var,list,str,bytes,Seg* g
+          +round/open,int,short,empty} × 5 shapes × prebind | ✓ | ✓ | ✓ |
+          + ✓ | ✓ | ✓ | ✓ 0 mismatches (220-cell grid) |                 
+      138 +| mid-pattern failure trail restoration (or-arm) | ✓ | ✓ | — |
+          + — | ✓ | — | — |                                              
+      139 +| `_body_star_unify` / builders | ✓ (via P7 + pa C3 audit F031
+          +-F043 guards) | ✓ | ✓ | ✓ | ✓ | — | pa |                      
+      140 +| `_segstring_align`/`_segbytes_align` | pa (C3 audit territor
+          +y; empty-witness semantics documented in code) | | | | | | |  
+      141 +| `_in_iter` pair mode | cr | | | | | | |                     
+      142  
+      143  ### C toolkit
+      144  
+      145  | Surface | Result |
+      146  |---|---|
+       91 -| refcount/alloc stability: solve+backtrack loop | |          
+       92 -| refcount/alloc stability: table fill + abolish loop | |     
+       93 -| `_tabling_core` deep-nesting C-stack recursion (MAX_DEPTH 50
+          -000 vs 8MB stack) | |                                         
+       94 -| `_trampoline` error-class handling vs Python fallback | |   
+       95 -| cross_cutting_issues.md items (Trail casts, IsInstance -1, m
+          -_size=-1, FT statics) | |                                     
+      147 +| refcount/alloc: complete-table solve loop ×1500 | ✓ stable (
+          +growth ≤ 0) |                                                 
+      148 +| refcount/alloc: fill+abolish loop ×1500 | ✓ stable |        
+      149 +| `_tabling_core` deep C recursion: 40k survive, 60k graceful 
+          +RecursionError (walk + key), Compound nesting 49k survive | ✓ 
+          +(MAX_DEPTH=50000 guard effective; no segfault) |              
+      150 +| `_trampoline` error classes vs Py fallback | F009 |         
+      151 +| cross_cutting_issues items | cited above, not re-reported | 
+      152  
+      153  ### Dry-pass log
+      154  
+       99 -(appended as passes complete)                                 
+      155 +Six probe passes (`/tmp/a04/probe1..6*`). Pass 1 (10 probes): 
+          +F004 (query_wfs                                               
+      156 +stub), F007 (once-abandon, +AttVar symptom), F007 (exception p
+          +oison), F006                                                  
+      157 +(cross-type), F005 (dict crash), F009 (RuntimeError swallow + 
+          +solutions                                                     
+      158 +divergence), F010 (when-disj flag), F011 (freeze semidet), F00
+          +1 (mutual-rec                                                 
+      159 +rec-first, rb complete-empty); trail-restoration probe clean. 
+          +Pass 2: F002                                                  
+      160 +(NAF no-entry order dependence), F002/F003 (acyclic chain wron
+          +g TRUE),                                                      
+      161 +dynamic-dependency staleness note; assertz-on-non-dynamic anom
+          +aly flagged;                                                  
+      162 +id-reuse attempt failed (unconfirmed); aliased-var cache keys 
+          +clean. Pass 3:                                                
+      163 +F001 single-predicate two-rec-clause (rec-first `[1]`), F005 l
+          +ist-answer                                                    
+      164 +crash, assertz deep-dive (non-dynamic fails silently; retract 
+          +mints table                                                   
+      165 +entries), C-stack walk 49k clean, refcount loops clean, mode m
+          +atrix clean.                                                  
+      166 +Pass 4: dynamic+tabled invalidation CLEAN (docs honored), F002
+          + var-variant                                                  
+      167 +isolation, C-stack graceful guards incl. key mode + Compounds,
+          + C≡Py                                                         
+      168 +list-unify differential 0 mismatches, LogicException surfacing
+          + clean,                                                       
+      169 +abolish builtins present. Pass 5: F003 asym var-mode `{a,b}`, 
+          +F001                                                          
+      170 +facts-first `[1,2,3]` (the idiomatic-program repro), F009 also
+          + via                                                          
+      171 +solve/once, C≡Py deref-walk/key differential clean (dict/set i
+          +dentity                                                       
+      172 +passthrough noted), F005 term-instance crash. Pass 6: F003 gro
+          +und-order                                                     
+      173 +(`win('b')` first → sticky undefined) — confirmed prediction, 
+          +nothing else                                                  
+      174 +new → findings stable across passes 5–6 (new evidence only dee
+          +pened known                                                   
+      175 +findings); stopped per budget with map covered.               
+      176 +                                                              
+      177 +### Seam notes for A12                                        
+      178 +                                                              
+      179 +- **assertz/retract on non-dynamic tabled predicates** fail si
+          +lently and                                                    
+      180 +  retract queries *through* the tabled wrapper (mints table en
+          +tries).                                                       
+      181 +  Database-ops semantics are A09/A11; the table-store side eff
+          +ect is A04's.                                                 
+      182 +- **`findall([X,Y], Path(X,Y), L)` stale-dispatch note** in   
+      183 +  `tests/fixtures/tabled_left_rec.clausal` (V2-2/V2-4b interac
+          +tion) — prior                                                 
+      184 +  art, intersects A03 findall + A04 tabling; not re-probed.   
+      185 +- **F009 divergence** means `python -m clausal.testing` (solut
+          +ions-driven)                                                  
+      186 +  and Python-embedding entry points (`solve`/`call`) disagree 
+          +on error                                                      
+      187 +  surfacing — affects every subsystem's error-path tests.     
+      188 +- **`_naf_tabled` is emitted by the compiler** (A03's `tabled_
+          +naf.py`); the                                                 
+      189 +  fix for F002 may need a compiler-side "call before negate" t
+          +ransform —                                                    
+      190 +  coordinate with A03 owners.                                 
+      191 +- Cross-type conflation (F006) is the tabling face of A01-D001
+          +/A02-D002 —                                                   
+      192 +  whatever unification semantics is decided must be applied to
+          + variant keys,                                                
+      193 +  answer sets, AND index buckets together.                    
+      194 +- `solve.py:83` DeprecationWarning seam noted by A03 — with th
+          +e C extension                                                 
+      195 +  active no warning was observed in A04 runs; likely fallback-
+          +path-only.                                                    
+
+● Write(docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/de
+       sign-questions.md)
+  ⎿  Wrote 14 lines to docs/superpowers/audits/2026-07-05-fable-partition/0
+     4-runtime-tabling/design-questions.md
+       1 # Design questions — A04 runtime, search & tabling
+       3 Status: resolved-from-docs (cite) | resolved-by-user (record) | 
+         open.
+       5 Per user preference (A01 precedent), open design questions are P
+         ARKED in
+         d` rather than
+       7 asked interactively.
+       9 | ID | Status | Title | Conflicting sources | Options considered
+          | Decision + rationale | Follow-up |
+         -|----------------------|-----------|
+     … +52 lines (ctrl+o to expand)
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+● Format understood. Writing the 11 todo files.
+
+● Write(todo/audit-2026-07-05/investigate-A04-slg-completion-architecture.md)
+  ⎿  Wrote 59 lines to
+     todo/audit-2026-07-05/investigate-A04-slg-completion-architecture.md
+       1 # investigate(A04-F001): SLG completion cannot resume consumer c
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::T
+         estF001CompletionLosesConsumers` (4 xfail — flip to pass)
+       6 ## Bug
+       7 
+         t, the
+       9 leader's completion phase (`tabling.py:507-543`) resumes the con
+      10 generator, but:
+     … +75 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A04-naf-tabled-no-entry.md)
+  ⎿  Wrote 45 lines to todo/audit-2026-07-05/fix-A04-naf-tabled-no-entry.md
+      1 # fix(A04-F002): _naf_tabled unsound for never-called / other-var
+        iant subgoals
+      3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/
+        04-runtime-tabling/findings.md` A04-F002
+      4 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::Te
+      5 **Design:** A04-D004 (parked) — spawn-vs-scan; see `investigate-A
+        04-wfs-variant-resolution.md`
+      6 
+      8 
+      9 `tabling.py:226-277` (`_naf_tabled`):
+     … +53 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/investigate-A04-wfs-variant-resolution.md)
+  ⎿  Wrote 47 lines to
+     todo/audit-2026-07-05/investigate-A04-wfs-variant-resolution.md
+      1 # investigate(A04-F003): WFS resolution is mode/order-dependent; 
+      2 
+      3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/
+        04-runtime-tabling/findings.md` A04-F003
+        stF003WfsModeOrderDependence` (2 xfail — flip to pass)
+      5 **Related:** A04-F002 (`fix-A04-naf-tabled-no-entry.md`), A04-F00
+      6 
+      7 ## Bug
+      8 
+        e. Actual:
+     … +54 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A04-query-wfs-truth-stub.md)
+  ⎿  Wrote 36 lines to
+     todo/audit-2026-07-05/fix-A04-query-wfs-truth-stub.md
+       1 # fix(A04-F004): query_wfs hardcodes _truth=True — never reads t
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::T
+       5 
+       6 ## Bug
+       8 `solve.py:596-621`: after collecting solutions, `query_wfs` loop
+         s
+         y_wfs API"
+         s are
+     … +37 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A04-tabled-answer-hashability.md)
+  ⎿  Wrote 45 lines to
+     todo/audit-2026-07-05/fix-A04-tabled-answer-hashability.md
+       1 # fix(A04-F005): tabled answers containing list/dict/set/term in
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::T
+         estF005UnhashableAnswers` (3 xfail — flip to pass)
+       6 ## Bug
+       7 
+       9 self.answer_set`; `freeze_args` (`tabling.py:184-189` → `_deref_
+         walk`)
+         ist`,
+     … +51 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A04-tabling-cross-type-conflation.md)
+  ⎿  Wrote 45 lines to
+     todo/audit-2026-07-05/fix-A04-tabling-cross-type-conflation.md
+       1 # fix(A04-F006): tabling conflates 1/True/1.0/Decimal(1) in vari
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+         /04-runtime-tabling/findings.md` A04-F006
+         estF006CrossTypeConflation` (1 xfail — flip to pass; 2 guards)
+       5 **Design:** A04-D003 → cite A02-D002 / A01-D001 (parked) — do NO
+       6 
+       7 ## Bug
+       8 
+      10 `_tabling_core.c:58-184`) and the answer dedup set
+     … +46 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A04-poisoned-evaluating-tables.md)
+  ⎿  Wrote 55 lines to
+     todo/audit-2026-07-05/fix-A04-poisoned-evaluating-tables.md
+       1 # fix(A04-F007): abandoned/crashed leader leaves table "evaluati
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::T
+         anism guard to flip)
+       5 
+       7 
+       8 `make_tabled_wrapper_trampoline`'s leader path (`tabling.py:489-
+       9 has `try/finally: pop_leader()` — but nothing removes or repairs
+      10 `table_store` entry when the leader exits abnormally:
+     … +66 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A04-root-suspend-spurious-solution.md)
+  ⎿  Wrote 38 lines to
+     todo/audit-2026-07-05/fix-A04-root-suspend-spurious-solution.md
+      1 # fix(A04-F008): root-level (None, _TABLING_SUSPEND) misread as a
+         solution — spurious unbound answers
+      3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/
+        04-runtime-tabling/findings.md` A04-F008
+      4 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::Te
+      5 
+      6 ## Bug
+      7 
+      9 tabling-suspend interception, and treat any value ≠ DONE as "solu
+        tion":
+     … +42 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A04-drive-until-yield-runtime-error.md)
+  ⎿  Wrote 50 lines to
+     todo/audit-2026-07-05/fix-A04-drive-until-yield-runtime-error.md
+      1 # fix(A04-F009): C _drive_until_yield swallows every RuntimeError
+      2 
+      3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/
+      4 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::Te
+        stF009RuntimeErrorSwallowed` (xfail — flip to pass) + `TestCToolk
+        ntrol, stays green)
+      5 
+      7 
+      8 `runtime/_trampoline.c` `drive_until_yield_func`, both at the fir
+      9 (`:663-671`) and in the loop (`:717-724`):
+     … +56 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A04-when-disjunction-fired-flag.md)
+  ⎿  Wrote 44 lines to
+     todo/audit-2026-07-05/fix-A04-when-disjunction-fired-flag.md
+       1 # fix(A04-F010): when/2 disjunction fired-flag survives backtrac
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::T
+       5 
+       6 ## Bug
+       8 `coroutining.py:104-121` (`_install_when_disjunction`): the at-m
+         ost-once
+         nch that
+         he
+     … +47 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/investigate-A04-parked-design-decisions.md)
+  ⎿  Wrote 59 lines to
+     todo/audit-2026-07-05/investigate-A04-parked-design-decisions.md
+       1 # investigate(A04): parked design decisions — freeze nondetermin
+       2 
+       3 **Source:** `docs/superpowers/audits/2026-07-05-fable-partition/
+         inor notes from the A04 findings ledger.
+         t mid-audit.
+       5 
+       7 
+       8 `_freeze_hook` (`coroutining.py:28-46`) drives each frozen goal 
+       9 FIRST solution and breaks; the attr-hook protocol is boolean
+         :
+     … +69 lines (ctrl+o to expand)
+
+● Update(docs/superpowers/audits/2026-07-05-fable-partition/README.md)
+  ⎿  Added 1 line, removed 1 line
+      11  | A01 | term-layer | **done 2026-07-05** | 11 (F001–F011; F002 
+          unconfirmed/capi-only) | 4 (D003 resolved-from-docs; D001/D002/
+          D004 parked by user) | 10 fix + 2 investigate | test_01_term_la
+          yer.py (37 passed, 20 xfailed) |
+      12  | A02 | compiler-heads | **done 2026-07-05** | 5 (F001–F005; F0
+          05 doc-drift) | 2 (D001 resolved-from-docs; D002 parked) | 5 fi
+          x + 1 investigate | test_02_compiler_heads.py (51 passed, 20 xf
+          ailed) |
+      13  | A03 | compiler-goals | **done 2026-07-05** | 10 (F001–F010; F
+          010 doc-drift) | 5 (D004/D005 resolved-from-docs; D001–D003 par
+          ked by user) | 10 fix + 1 investigate | test_03_compiler_goals.
+          py (51 passed, 17 xfailed) |
+      14 -| A04 | runtime-tabling | not started | – | – | – | test_04_run
+         -time_tabling.py |                                              
+      14 +| A04 | runtime-tabling | **done 2026-07-05** | 11 (F001–F011; 
+         +F011 design) | 4 (D003 resolved-from-docs/cites A02-D002; D001/
+         +D002/D004 parked by user) | 8 fix + 3 investigate | test_04_run
+         +time_tabling.py (24 passed, 20 xfailed) |                      
+      15  | A05 | constraints-core | not started | – | – | – | test_05_co
+          nstraints_core.py |
+      16  | A06 | clpfd | not started | – | – | – | test_06_clpfd.py |
+      17  | A07 | clpb-sat | not started | – | – | – | test_07_clpb_sat.p
+          y |
+
+● Update(docs/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md)
+  ⎿  Added 3 lines
+       9  | A02-D002 | open — parked by user preference | Cross-type nume
+          ric index keys (Decimal/Fraction/complex ↔ int buckets) — block
+          ed on A01-D001 (cross-type unification) | Recommendation: fallb
+          ack-scan now (falls out of the A02-F001 fix); key-by-`numbers.N
+          umber` only if A01-D001 endorses Python `==` semantics. `todo/a
+          udit-2026-07-05/investigate-A02-parked-design-decisions.md` | A
+          02 | A02 dispatch keys; A04 tabling keys; A01-D001 |
+      10  | A03-D001 | open — parked by user preference | Exception-term 
+          identity: should `unify(Compound(f, args), f_instance)` succeed
+          , or should catch-catcher lowering resolve declared functor cla
+          sses? | Recommendation: fix locally in `_catcher_to_structural`
+           (resolve term class from module env, Compound only as fallback
+          ) — no unification change; global Compound↔instance unification
+           belongs to A01-D004. `todo/audit-2026-07-05/investigate-A03-pa
+          rked-design-decisions.md` | A03 | A03 catch/3 (F004); A01 unify
+          /term identity; A02 index keys; A04 tabling keys |
+      11  | A03-D002 | open — parked by user preference | findall/bagof/s
+          etof template copy semantics: ISO fresh-variable copies vs Clau
+          sal structure sharing (retroactive mutation of collected result
+          s, A03-F006) | Recommendation: ISO copy (rename vars unbound at
+           collection time); sharing contradicts cheat-sheet §8 "describe
+           output as terms" and is undocumented | A03 | A03 find_all_core
+          ; A09 builtins using findall internally; any corpus code collec
+          ting templates with free vars |
+      12 +| A04-D001 | open — parked by user preference | freeze/2 frozen
+         +-goal nondeterminism: the attr-hook protocol is boolean, so fro
+         +zen goals are semidet (first solution only, A04-F011) — documen
+         +t as intended, or redesign the hook contract to yield choice po
+         +ints? | Recommendation: document + lint now; hook-contract rede
+         +sign only jointly with A05–A07 (dif/CLP hooks share the protoco
+         +l). `todo/audit-2026-07-05/investigate-A04-parked-design-decisi
+         +ons.md` | A04 | A04 coroutining; A05 dif hooks; A06/A07 CLP pro
+         +pagator hooks |                                                
+      13 +| A04-D002 | open — parked by user preference | Tabling invalid
+         +ation granularity: tables over `-dynamic` non-tabled dependenci
+         +es go silently stale on assertz to the dependency (per-predicat
+         +e invalidation only — doc-consistent but a footgun) | Recommend
+         +ation: document loudly now; dependency-graph invalidation folde
+         +d into the A04-F001 completion re-architecture. `todo/audit-202
+         +6-07-05/investigate-A04-parked-design-decisions.md` | A04 | A04
+         + tabling; A09/A11 database ops; corpus rulebases mixing `-dynam
+         +ic` + `-table` |                                               
+      14 +| A04-D004 | open — parked by user preference | NAF-on-tabled s
+         +emantics: should `not p(...)` spawn evaluation of a never-calle
+         +d tabled subgoal (standard SLG), or is "tables reflect only wha
+         +t was queried" intended? Current no-entry→succeed is unsound an
+         +d query-order-dependent (A04-F002/F003) | Recommendation: spawn
+         + (needs compiler seam — `_naf_tabled` is emitted by A03's table
+         +d_naf.py); stopgap = subsuming-variant scan + delay-instead-of-
+         +succeed. `todo/audit-2026-07-05/fix-A04-naf-tabled-no-entry.md`
+         +, `investigate-A04-wfs-variant-resolution.md` | A04 | A04 tabli
+         +ng/WFS; A03 tabled_naf codegen; docs/wfs.md contract |         
+
+  Committed 2af2b487, ran 2 shell commands (ctrl+o to expand)
+
+● Updating the probe-pitfalls memory with what this session learned, then
+  summarizing.
+
+  Wrote 1 memory (ctrl+o to expand)
+
+● A04 is done and committed (2af2b487). This subsystem turned out to be the
+  richest audit yet: 10 confirmed correctness findings + 1 design finding, all
+  reproduced with executed pytest — the test file is green per-file (24 passed,
+  20 xfailed, every xfail genuinely failing).
+
+  The headline findings (tabling is much more broken than its 97 passing in-tree
+  tests suggest):
+
+  - A04-F001 — SLG completion is architecturally broken. The completion phase
+  resumes suspended consumers whose parent generators are already dead, and its
+  interception freezes the consumer's call args (necessarily a duplicate)
+  instead of running the clause continuation — so completion can never add an
+  answer. An idiomatic facts-first program with two recursive clauses returns
+  [1,2,3] instead of [1,2,3,4,5]; recursive-clause-first returns [1]; mutual
+  recursion caches an inner table as complete-with-zero-answers. In-tree
+  fixtures pass only because one-recursive-clause/facts-first reaches fixpoint
+  during the live phase. Filed as an Opus investigate (needs SCC-aware
+  completion).
+  - A04-F002/F003 — negation is order- and mode-dependent. not tp(1,2) with fact
+  tp(1,2) succeeds if tp was never queried (the no-entry path "treats as no
+  answers" instead of evaluating the subgoal), and a complete tp(_,_) table
+  holding the answer is ignored (exact-variant lookup). The docs' asymmetric-win
+  example gives win("b")=1-answer-undefined if queried first — cached wrong
+  forever — and var-mode yields {a,b} where ground mode yields {a}.
+  - A04-F005 — tabled answers containing lists crash (TypeError: unhashable),
+  likewise dicts/sets/term instances — tabling only works for scalar answers
+  today.
+  - A04-F007/F008 — once() over a tabled goal poisons the table ("evaluating"
+  forever → later queries silently partial, plus a spurious unbound answer
+  because all four root drivers misread (None, _TABLING_SUSPEND) as a solution).
+  - A04-F009 — the C driver swallows any user RuntimeError from ++ escapes:
+  call/solve/once silently fail while solutions() raises — entry points
+  disagree.
+  - Plus: query_wfs truth annotation is a hardcoded-True stub (F004), cross-type
+  answer conflation 1≡True≡1.0 making tabled/untabled solution sets diverge
+  (F006, cites parked A01-D001/A02-D002), the when/2-disjunction fired-flag
+  surviving backtracking (F010), and freeze/2 committing to the frozen goal's
+  first solution (F011, design).
+
+  Clean bills of health: deep recursion (30k tail calls), the _tabling_core
+  C-stack depth guards, refcount/alloc stability, C≡Py parity for
+  list-unification (220-cell differential grid) and key/deref-walk, the
+  solve/call/once/query mode matrix, dynamic+tabled auto-invalidation (docs
+  honored), and trail restoration.
+
+  Deliverables: findings ledger + coverage map + 6-pass dry log,
+  design-questions (4 — D001/D002/D004 parked in
+  investigate-A04-parked-design-decisions.md per your preference, D003 cites
+  A02-D002), 8 fix + 3 investigate todos, README row updated, and three
+  cross-cutting entries appended to DESIGN-DECISIONS.md. The neighboring in-tree
+  suites (tabling/WFS/SLG/coroutining, 146 tests) still pass untouched.
+
+  Ready for A05 (constraints-core) whenever you are — wave 2 can also run 05–08
+  in parallel sessions per the runbook.
+
+✻ Sautéed for 33m 44s
+
+! git status                                                                    
+  ⎿  On branch main
+     Your branch is ahead of 'local/main' by 5 commits.
+       (use "git push" to publish your local commits)
+
+     Untracked files:
+       (use "git add <file>..." to include in what will be committed)
+        fable_audit_a03.txt
+
+     nothing added to commit but untracked files present (use "git add" to
+     track)

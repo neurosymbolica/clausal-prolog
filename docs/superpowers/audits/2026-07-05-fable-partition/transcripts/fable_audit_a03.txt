@@ -1,0 +1,676 @@
+╭─── Claude Code v2.1.185 ─────────────────────────────────────────────────────╮
+│                                        │ Tips for getting started            │
+│           Welcome back Mike!           │ Run /init to create a CLAUDE.md fi… │
+│                                        │ ─────────────────────────────────── │
+│                 ▐▛███▜▌                │ What's new                          │
+│                ▝▜█████▛▘               │ The stream-stall hint now reads "W… │
+│                  ▘▘ ▝▝                 │ Improved auto mode safety: destruc… │
+│                                        │ Added a warning when the requested… │
+│   Fable 5 · Claude Max · Michael Amy   │ /release-notes for more             │
+│       /workspace/clausal-bug-fix       │                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ ▎ Fable 5 is here! Our newest model for complex, long-running work.
+ ▎ Included in your plan limits until Jul 8, then switch to usage credits to continue.
+
+❯ /clear                                                                        
+
+❯ work on docs/superpowers/audits/2026-07-05-fable-partition/prompts/03-compile 
+  r-goals.md                                                                    
+
+● I'll read the prompt file to see what this audit task involves.
+
+  Read 4 files, listed 3 directories, recalled 2 memories (ctrl+o to expand)
+
+● Now the prior art and templates.
+
+  Read 7 files, listed 2 directories, ran 1 shell command (ctrl+o to expand)
+
+  Searched for 1 pattern, read 22 files (ctrl+o to expand)
+● The TCO safety hinges on _head_has_deferred_pattern — let me check exactly
+  which head shapes produce deferred output guards in head_match.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Reading phase done. Now moving to probes. Let me check the A02 test file
+  conventions first, then write probe pass 1.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Write(/tmp/a03_p1.clausal)
+  ⎿  Wrote 35 lines to ../../tmp/a03_p1.clausal
+       1 # A03 probe pass 1 — DR + TRO nondeterministic-prefix suspicions
+       3 # ── DR: append with dead source, nondet member prefix ─────────
+         ────────
+       4 drm(OUT) <- (SRC is [1, 2], X in [10, 20], append(SRC, [X], OUT)
+       5 
+       6 # control: SRC used after append → DR ineligible
+         ), length(SRC, _))
+       8 
+       9 # DR with undetermined If prefix
+         (SRC, [X], OUT))
+     … +39 lines (ctrl+o to expand)
+
+● Write(/tmp/a03_probe1.py)
+  ⎿  Wrote 59 lines to ../../tmp/a03_probe1.py
+       1 import sys
+       2 from clausal.import_hook import _load_module
+       3 from clausal import Var, solve
+       4 from clausal.logic import solve as solve_mod
+       5 from clausal.logic.variables import walk, deref
+       6 
+       7 m = _load_module("a03p1", "/tmp/a03_p1.clausal")
+       8 
+       9 
+      10 def sols(goal, *outvars):
+     … +60 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Write(/tmp/a03_p1b.clausal)
+  ⎿  Wrote 13 lines to ../../tmp/a03_p1b.clausal
+      1 # A03 probe 1b — controls + root-cause isolation
+      2 mem2(X) <- (X in [1, 2])
+      3 
+      4 # self-call NOT last (Unify after) → TRO must be ineligible
+      5 trn(0, ACC, ACC),
+         + X, trn(N1, ACC1, OUT0), OUT is OUT0)
+      7 
+      8 trin(0, ACC, ACC),
+      9 trin(N, ACC, OUT) <- (N > 0, If(C is 1, X := 5, X := 7), N1 := N 
+        - 1, ACC1 := ACC + X, trin(N1, ACC1, OUT0), OUT is OUT0)
+     … +6 lines (ctrl+o to expand)
+
+● Write(/tmp/a03_probe1b.py)
+  ⎿  Wrote 41 lines to ../../tmp/a03_probe1b.py
+       1 from clausal.import_hook import _load_module
+       2 from clausal import Var, solve
+       3 from clausal.logic import solve as solve_mod
+       4 from clausal.logic.variables import walk, deref
+       5 
+       6 m = _load_module("a03p1b", "/tmp/a03_p1b.clausal")
+       7 m1 = _load_module("a03p1x", "/tmp/a03_p1.clausal")
+       8 
+       9 
+      10 def sols(mod, goal, *outvars):
+     … +42 lines (ctrl+o to expand)
+
+  Listed 2 directories, ran 5 shell commands (ctrl+o to expand)
+● Write(/tmp/a03_p2.clausal)
+  ⎿  Wrote 100 lines to ../../tmp/a03_p2.clausal
+      1 # A03 probe pass 2 — specialization + ctco + control constructs
+      2 -import_from(clausal.examples.metainterpreters, [Solve, SolveCoun
+        t, MatchClause])
+      3 
+      4 NatnumProgram(PROGRAM) <- (
+      5     PROGRAM is [
+      6         [["natnum", 0], []],
+      7         [["natnum", ["s", X]], [["natnum", X]]]
+      8     ]
+      9 )
+     … +94 lines (ctrl+o to expand)
+
+● Write(/tmp/a03_probe2.py)
+  ⎿  Wrote 110 lines to ../../tmp/a03_probe2.py
+       1 from clausal.import_hook import _load_module
+       2 from clausal import Var, solve
+       3 from clausal.logic import solve as solve_mod
+       4 from clausal.logic.variables import walk, deref
+       5 
+       6 m = _load_module("a03p2", "/tmp/a03_p2.clausal")
+       7 
+       8 
+       9 def sols(goal, *outvars, limit=None):
+      10     solve_mod._query_cache.clear()
+     … +127 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Update(/tmp/a03_p2.clausal)
+  ⎿  Added 7 lines, removed 1 line
+       1  # A03 probe pass 2 — specialization + ctco + control constructs
+       2 --import_from(clausal.examples.metainterpreters, [Solve, SolveCo
+         -unt, MatchClause])                                             
+       2 +-import_from(clausal.examples.metainterpreters, [Solve, SolveCo
+         +unt])                                                          
+       3  
+       4 +MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (                    
+       5 +    CLAUSE in PROGRAM,                                         
+       6 +    copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),               
+       7 +    GOAL is FRESH_HEAD,                                        
+       8 +)                                                              
+       9 +                                                               
+      10  NatnumProgram(PROGRAM) <- (
+      11      PROGRAM is [
+      12          [["natnum", 0], []],
+
+  Listed 1 directory, ran 2 shell commands (ctrl+o to expand)
+
+● Write(/tmp/a03_p2c.clausal)
+  ⎿  Wrote 24 lines to ../../tmp/a03_p2c.clausal
+       1 # A03 probe 2c — catch isolation + ctco gate with ints + misc
+       2 -private([kaboom(KA), pick()])
+       3 
+       4 boom(X) <- (X > 0, throw(kaboom(X)))
+       5 wboom(X) <- boom(X)
+       7 cvar(R) <- catch(wboom(5), _E, R is "caught")
+       8 cdirect(N, R) <- catch(throw(kaboom(7)), kaboom(N), R is "caught
+         ")
+       9 cone(N, R) <- catch(boom(5), kaboom(N), R is "caught")
+      10 cstr(R) <- catch(wboom_s(), "bang", R is "caught")
+     … +14 lines (ctrl+o to expand)
+
+● Write(/tmp/a03_probe2c.py)
+  ⎿  Wrote 43 lines to ../../tmp/a03_probe2c.py
+       1 from clausal.import_hook import _load_module
+       2 from clausal import Var, solve
+       3 from clausal.logic import solve as solve_mod
+       4 from clausal.logic.variables import walk, deref
+       5 
+       6 m = _load_module("a03p2c", "/tmp/a03_p2c.clausal")
+       7 
+       8 
+       9 def sols(goal, *outvars):
+      10     solve_mod._query_cache.clear()
+     … +43 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Update(/tmp/a03_p2c.clausal)
+  ⎿  Added 1 line, removed 1 line
+      21  idx(N, R) <- (N > 0, N < 50, N1 := N - 1, idx(N1, R))
+      22  
+      23  # charlist/str canonicalization check
+      24 -ceq() <- ("abc" is ["a", "b", "c"])                            
+      24 +ceq(X) <- (X is ["a", "b", "c"], X is "abc")                   
+
+● Update(/tmp/a03_probe2c.py)
+  ⎿  Added 1 line, removed 1 line
+      28  R = Var(); try_sols("catch str catcher over chain", lambda: sol
+          s(m.cstr(R), R), [("caught",)])
+      29  
+      30  L = Var(); show("ctco sp2 output mode ints", sols(m.sp2(L), L),
+           [([1, 2, 3],), ([7, 8],)])
+      31 -show("str/charlist unify sanity", len(sols(m.ceq())), 1)       
+      31 +X = Var(); show("str/charlist unify sanity", len(sols(m.ceq(X))
+         +), 1)                                                          
+      32  
+      33  solve_mod._query_cache.clear()
+      34  R1, R2 = Var(), Var()
+
+  Read 1 file, ran 2 shell commands (ctrl+o to expand)
+
+● Write(/tmp/a03_p2d.clausal)
+  ⎿  Wrote 23 lines to ../../tmp/a03_p2d.clausal
+       1 # A03 probe 2d — TRO signal crash isolation + catch matrix
+       2 -private([err1(EA), kab(KA)])
+       3 
+         cket
+       5 idx(0, "z0"),
+       6 idx(90, "n90"),
+       7 idx(80, "n80"),
+       8 idx(N, R) <- (N > 0, N < 50, N1 := N - 1, idx(N1, R))
+      10 # 5-clause variant: default bucket has TRO clause + plain var cl
+         ause
+     … +13 lines (ctrl+o to expand)
+
+● Write(/tmp/a03_probe2d.py)
+  ⎿  Wrote 43 lines to ../../tmp/a03_probe2d.py
+       1 from clausal.import_hook import _load_module
+       2 from clausal import Var, solve
+       3 from clausal.logic import solve as solve_mod
+       4 from clausal.logic.variables import walk, deref
+       5 
+       6 m = _load_module("a03p2d", "/tmp/a03_p2d.clausal")
+       7 
+       8 
+       9 def sols(goal, *outvars):
+      10     solve_mod._query_cache.clear()
+     … +45 lines (ctrl+o to expand)
+
+  Searched for 1 pattern, read 1 file, listed 1 directory, ran 6 shell commands (ctrl+o to expand)
+● Write(/tmp/a03_p3.clausal)
+  ⎿  Wrote 78 lines to ../../tmp/a03_p3.clausal
+      1 # A03 probe pass 3 — shallow/trampoline differential, TRO check_i
+      2 # tabled ITE, freeze/when, ctco+bucket, specialization split/limi
+        t/cpd
+      3 -import_from(clausal.examples.metainterpreters, [Solve, SolveCoun
+      4 
+      5 -shallow([strm/3, stri/3, sfee/2, swalk/3])
+      7 # shallow twins of the TRO-affected predicates (shallow has no TR
+        O)
+      8 strm(0, ACC, ACC),
+        C + X, strm(N1, ACC1, OUT))
+     … +75 lines (ctrl+o to expand)
+
+● Write(/tmp/a03_probe3.py)
+  ⎿  Wrote 106 lines to ../../tmp/a03_probe3.py
+       1 from clausal.import_hook import _load_module
+       2 from clausal import Var, solve
+       3 from clausal.logic import solve as solve_mod
+       4 from clausal.logic.solve import call
+       5 from clausal.logic.variables import walk, deref
+       6 
+       7 m = _load_module("a03p3", "/tmp/a03_p3.clausal")
+       8 
+       9 
+      10 def sols(goal, *outvars, limit=None):
+     … +117 lines (ctrl+o to expand)
+
+  Ran 4 shell commands (ctrl+o to expand)
+
+● LOG is ALLCAPS so it parsed as a logic variable — renaming to lowercase:
+
+  Ran 8 shell commands (ctrl+o to expand)
+
+● Probing complete — 9 confirmed findings plus doc-drift and notes. Writing
+  deliverables now, starting with the test file.
+
+● Write(tests/audit_2026_07_05/test_03_compiler_goals.py)  ⎿  Wrote 697 lines to tests/audit_2026_07_05/test_03_compiler_goals.py
+       1 """A03 compiler goals, control & specialization — adversarial au
+       2 
+       3 Findings ledger: docs/superpowers/audits/2026-07-05-fable-partit
+       4 
+       5 Suspected-bug tests assert the *correct* behaviour and are marke
+       6 ``@pytest.mark.xfail(strict=False)`` with the finding ID; confir
+         med-correct
+       8 
+       9     python -m pytest tests/audit_2026_07_05/test_03_compiler_goa
+      10 """
+     … +799 lines (ctrl+o to expand)
+
+● Update(tests/audit_2026_07_05/test_03_compiler_goals.py)
+  ⎿  Added 1 line
+      120  ce1(R) <- (catch_error(throw("x"), E), R is "sw")
+      121  cr1(R) <- catch_recover(throw("x"), E2, R is "rec")
+      122  crec(R) <- catch(throw("p"), "p", in_(R, [1, 2]))
+      123 +cmiss(R) <- catch(throw("other"), "bang", R is "x")           
+      124  fal() <- forall(in_(X6, [1, 2, 3]), X6 > 0)
+      125  falf() <- forall(in_(X7, [1, 2, 3]), X7 > 1)
+      126  fz(X, R) <- (freeze(X, R is "fired"), X is 1)
+
+● Update(tests/audit_2026_07_05/test_03_compiler_goals.py)
+  ⎿  Added 1 line, removed 1 line
+      473      def test_rethrow_on_catcher_mismatch(self, mod):
+      474          from clausal.logic.exceptions import LogicException
+      475          with pytest.raises(LogicException):
+      476 -            sols(mod, mod.cstr2_missing(Var())) if hasattr(mod
+          -, "cstr2_missing") else (_ for _ in ()).throw(LogicException("
+          -x"))                                                          
+      476 +            sols(mod, mod.cmiss(Var()))                       
+      477  
+      478      def test_nondeterministic_recovery(self, mod):
+      479          R = Var()
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● 51 passed, 17 xfailed. Verify no xfail unexpectedly passes (they must all
+  genuinely reproduce):
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● All 17 xfails genuinely reproduce, none xpass. Now the findings ledger with
+  coverage map:
+
+● Write(docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/fin
+       dings.md)
+  ⎿  Wrote 174 lines to docs/superpowers/audits/2026-07-05-fable-partition/
+     03-compiler-goals/findings.md
+       1 # Findings — A03 compiler: goals, control & specialization
+       3 Severity order: correctness > memory > design > perf > doc-drift
+         .
+       5 Test file: `tests/audit_2026_07_05/test_03_compiler_goals.py` (5
+         1 passed,
+         ils, i.e.
+       7 every finding below reproduces).
+       9 | ID | Severity | Title | Location (file:line) | Repro | Expecte
+         d vs Actual | Test ref | Todo ref |
+         ------------|----------|----------|
+     … +396 lines (ctrl+o to expand)
+
+● Write(docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/des
+       ign-questions.md)
+  ⎿  Wrote 16 lines to docs/superpowers/audits/2026-07-05-fable-partition/0
+     3-compiler-goals/design-questions.md
+       1 # Design questions — A03 compiler: goals, control & specializati
+       2 
+       3 Status: resolved-from-docs (cite) | resolved-by-user (record) | 
+       4 
+       5 Per standing user preference (A01/A02 precedent, memory
+         h a
+       7 recommendation in `todo/audit-2026-07-05/investigate-A03-parked-
+       8 rather than asked interactively.
+       9 
+          | Decision + rationale | Follow-up |
+     … +62 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A03-tro-nondet-prefix.md)
+  ⎿  Wrote 54 lines to todo/audit-2026-07-05/fix-A03-tro-nondet-prefix.md
+       1 # fix(A03-F001): TRO drops solutions behind nondeterministic pre
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::Te
+         stF001TroNondetPrefix` (4 xfail — flip to pass)
+       6 ## Bug
+       7 
+         the restart
+       9 mechanism supports exactly one continuation per clause activatio
+      10 shared determinism classifier says True for goals that are NOT:
+     … +70 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A03-dr-nondet-prefix.md)
+  ⎿  Wrote 34 lines to todo/audit-2026-07-05/fix-A03-dr-nondet-prefix.md
+       1 # fix(A03-F002): destructive reuse corrupts containers behind no
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::Te
+         stF002DestructiveReuseNondetPrefix` (3 xfail — flip to pass)
+       6 ## Bug
+       7 
+         hoice
+       9 points can backtrack through the mutation",
+         on_issue.md`
+     … +39 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A03-tro-signal-bucket-not-generator.md)
+  ⎿  Wrote 37 lines to
+     todo/audit-2026-07-05/fix-A03-tro-signal-bucket-not-generator.md
+       1 # fix(A03-F003): signal-mode TRO-only index bucket compiles to a
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::Te
+       5 
+       6 ## Bug
+       8 `_build_predicate_trampoline_funcdef` (`predicate.py`) only forc
+         es
+         Y
+         m contains
+     … +41 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A03-catch-functor-catcher.md)
+  ⎿  Wrote 43 lines to
+     todo/audit-2026-07-05/fix-A03-catch-functor-catcher.md
+       1 # fix(A03-F004): catch/3 never matches declared-functor exceptio
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Design:** A03-D001 (parked — recommendation (a) below does not
+       5 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::Te
+         stF004CatchFunctorCatcher` (3 xfail — flip to pass)
+       7 ## Bug
+       8 
+         tes a
+         `. The
+     … +53 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A03-setof-not-sorted.md)
+  ⎿  Wrote 28 lines to todo/audit-2026-07-05/fix-A03-setof-not-sorted.md
+       1 # fix(A03-F005): setof/3 returns insertion order — docs and ISO 
+       2 
+         /03-compiler-goals/findings.md` A03-F005
+       4 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::Te
+         pass)
+       6 ## Bug
+       8 `_compile_find_all_core(dedup=True)` (`control_constructs.py:621
+         -624`)
+         0`,
+         tof:
+     … +26 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A03-findall-template-sharing.md)
+  ⎿  Wrote 32 lines to
+     todo/audit-2026-07-05/fix-A03-findall-template-sharing.md
+       1 # fix(A03-F006): findall/bagof/setof share free template variabl
+       2 
+         /03-compiler-goals/findings.md` A03-F006
+       4 **Design:** A03-D002 (parked — recommendation: ISO copy semantic
+       5 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::Te
+         lution` (xfail — flip to pass)
+       7 ## Bug
+       8 
+         cts
+         dings but
+     … +36 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A03-specialize-midbody-goals.md)
+  ⎿  Wrote 37 lines to
+     todo/audit-2026-07-05/fix-A03-specialize-midbody-goals.md
+       1 # fix(A03-F007): specialization silently drops MI goals between 
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Design:** A03-D003 (parked — recommendation: refuse loudly now
+       5 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::Te
+         stF007SpecializationDropsMidBodyGoals` (1 xfail — flip to pass)
+       7 ## Bug
+       8 
+         als as
+         +1, …)`).
+     … +42 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A03-deep-unfold-const-args.md)
+  ⎿  Wrote 33 lines to
+     todo/audit-2026-07-05/fix-A03-deep-unfold-const-args.md
+       1 # fix(A03-F008): deep unfolding inlines single-clause functors w
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::Te
+       5 
+       6 ## Bug
+       8 `_try_inline_goal` (`specialization.py:1528-1546`) gates inlinin
+         g on
+         ution
+         ).
+     … +35 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A03-cpd-extension-chaining.md)
+  ⎿  Wrote 45 lines to
+     todo/audit-2026-07-05/fix-A03-cpd-extension-chaining.md
+       1 # fix(A03-F009): CPD extension chaining emits duplicate Evaluate
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 **Tests:** `tests/audit_2026_07_05/test_03_compiler_goals.py::Te
+         stF009CpdExtensionChaining` (1 xfail — flip to pass)
+       6 ## Bug
+       7 
+         , the
+       9 second deforestation level produces clauses whose Evaluate chain
+      10 variable as LHS twice (dump of `CountGraphCPD` clauses [7]/[8]):
+     … +54 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/fix-A03-readme-ctco-drift.md)
+  ⎿  Wrote 19 lines to todo/audit-2026-07-05/fix-A03-readme-ctco-drift.md
+       1 # fix(A03-F010): compiler README §5 says continuation-TCO doesn'
+       2 
+       3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
+       4 
+         caller")
+       6 states: "**What does NOT happen today:** continuation-level tail
+       7 optimisation … The compiler doesn't do this yet. Deferred as a f
+         uture
+       9 
+         pass, run
+     … +20 lines (ctrl+o to expand)
+
+● Write(todo/audit-2026-07-05/investigate-A03-parked-design-decisions.md)
+  ⎿  Wrote 37 lines to
+     todo/audit-2026-07-05/investigate-A03-parked-design-decisions.md
+       1 # investigate(A03): parked design decisions (Opus)
+       3 **Source:** `docs/superpowers/audits/2026-07-05-fable-partition/
+         03-compiler-goals/design-questions.md`
+       5 
+         al fix
+       7   (`fix-A03-catch-functor-catcher.md`: resolve catcher through t
+       8   term classes) does not need this; the strategic question is wh
+         ether
+         teracts
+         alisation
+     … +47 lines (ctrl+o to expand)
+● Now update the audit README status board and the todo README if it indexes
+  entries:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(todo/audit-2026-07-05/README.md)
+  ⎿  File must be read first
+
+● Update(docs/superpowers/audits/2026-07-05-fable-partition/README.md)
+  ⎿  Added 1 line, removed 1 line
+      10  |----|-----------|----------------|----------|-----------|-----
+          --|-----------|
+      11  | A01 | term-layer | **done 2026-07-05** | 11 (F001–F011; F002 
+          unconfirmed/capi-only) | 4 (D003 resolved-from-docs; D001/D002/
+          D004 parked by user) | 10 fix + 2 investigate | test_01_term_la
+          yer.py (37 passed, 20 xfailed) |
+      12  | A02 | compiler-heads | **done 2026-07-05** | 5 (F001–F005; F0
+          05 doc-drift) | 2 (D001 resolved-from-docs; D002 parked) | 5 fi
+          x + 1 investigate | test_02_compiler_heads.py (51 passed, 20 xf
+          ailed) |
+      13 -| A03 | compiler-goals | not started | – | – | – | test_03_comp
+         -iler_goals.py |                                                
+      13 +| A03 | compiler-goals | **done 2026-07-05** | 10 (F001–F010; F
+         +010 doc-drift) | 5 (D004/D005 resolved-from-docs; D001–D003 par
+         +ked by user) | 10 fix + 1 investigate | test_03_compiler_goals.
+         +py (51 passed, 17 xfailed) |                                   
+      14  | A04 | runtime-tabling | not started | – | – | – | test_04_run
+          time_tabling.py |
+      15  | A05 | constraints-core | not started | – | – | – | test_05_co
+          nstraints_core.py |
+      16  | A06 | clpfd | not started | – | – | – | test_06_clpfd.py |
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(todo/audit-2026-07-05/README.md)
+  ⎿  Added 11 lines
+      28  | `fix-A02-multistar-trailing-fixed.md` | fix | correctness | A
+          02-F004 | A02 compiler-heads | queued |
+      29  | `fix-A02-dispatch-docstring-arg-offsets.md` | fix | doc-drift
+           | A02-F005 | A02 compiler-heads | queued |
+      30  | `investigate-A02-parked-design-decisions.md` | investigate (*
+          *USER**, not Opus) | design | A02-D002 (depends on A01-D001) | 
+          A02 (cross-cuts A04 tabling keys) | parked by user preference 2
+          026-07-05 |
+      31 +| `fix-A03-tro-nondet-prefix.md` | fix | correctness (solution 
+         +loss) | A03-F001 | A03 compiler-goals | queued |               
+      32 +| `fix-A03-dr-nondet-prefix.md` | fix | correctness (data corru
+         +ption; same root as F001) | A03-F002 | A03 compiler-goals | que
+         +ued |                                                          
+      33 +| `fix-A03-tro-signal-bucket-not-generator.md` | fix | correctn
+         +ess (crash) | A03-F003 | A03 compiler-goals | queued |         
+      34 +| `fix-A03-catch-functor-catcher.md` | fix | correctness | A03-
+         +F004 | A03 compiler-goals (unify seam → A01-D004) | queued |   
+      35 +| `fix-A03-setof-not-sorted.md` | fix | correctness | A03-F005 
+         +| A03 compiler-goals | queued |                                
+      36 +| `fix-A03-findall-template-sharing.md` | fix | correctness | A
+         +03-F006 | A03 compiler-goals (design A03-D002) | queued |      
+      37 +| `fix-A03-specialize-midbody-goals.md` | fix | correctness | A
+         +03-F007 | A03 specialization (design A03-D003) | queued |      
+      38 +| `fix-A03-deep-unfold-const-args.md` | fix | correctness | A03
+         +-F008 | A03 specialization | queued |                          
+      39 +| `fix-A03-cpd-extension-chaining.md` | fix | correctness (solu
+         +tion loss) | A03-F009 | A03 specialization | queued |          
+      40 +| `fix-A03-readme-ctco-drift.md` | fix | doc-drift | A03-F010 |
+         + A03 compiler-goals | queued |                                 
+      41 +| `investigate-A03-parked-design-decisions.md` | investigate (*
+         +*USER**, not Opus) | design | A03-D001 / A03-D002 / A03-D003 (+
+         + determinism-table governance) | A03 (D001 cross-cuts A01) | pa
+         +rked by user preference 2026-07-05 |                           
+
+● Update(docs/superpowers/audits/2026-07-05-fable-partition/DESIGN-DECISIONS.md)
+  ⎿  Added 2 lines
+       7  |----|--------|-------|----------------------|-----------|-----
+          ----|
+       8  | A02-D001 | resolved-from-docs | Indexed dispatch must be sema
+          ntics-preserving for every caller shape (uncomputable non-var k
+          ey ⇒ all-clauses fallback, never the default bucket) | F095 fix
+           history restored unify parity at the dispatch layer; indexing 
+          is threshold-triggered (≥4 clauses) so solution sets must not d
+          epend on clause count. See A02 design-questions.md | A02 | A02 
+          arg_index/list_dispatch; A03 predicate.py always-fail defaults 
+          |
+       9  | A02-D002 | open — parked by user preference | Cross-type nume
+          ric index keys (Decimal/Fraction/complex ↔ int buckets) — block
+          ed on A01-D001 (cross-type unification) | Recommendation: fallb
+          ack-scan now (falls out of the A02-F001 fix); key-by-`numbers.N
+          umber` only if A01-D001 endorses Python `==` semantics. `todo/a
+          udit-2026-07-05/investigate-A02-parked-design-decisions.md` | A
+          02 | A02 dispatch keys; A04 tabling keys; A01-D001 |
+      10 +| A03-D001 | open — parked by user preference | Exception-term 
+         +identity: should `unify(Compound(f, args), f_instance)` succeed
+         +, or should catch-catcher lowering resolve declared functor cla
+         +sses? | Recommendation: fix locally in `_catcher_to_structural`
+         + (resolve term class from module env, Compound only as fallback
+         +) — no unification change; global Compound↔instance unification
+         + belongs to A01-D004. `todo/audit-2026-07-05/investigate-A03-pa
+         +rked-design-decisions.md` | A03 | A03 catch/3 (F004); A01 unify
+         +/term identity; A02 index keys; A04 tabling keys |             
+      11 +| A03-D002 | open — parked by user preference | findall/bagof/s
+         +etof template copy semantics: ISO fresh-variable copies vs Clau
+         +sal structure sharing (retroactive mutation of collected result
+         +s, A03-F006) | Recommendation: ISO copy (rename vars unbound at
+         + collection time); sharing contradicts cheat-sheet §8 "describe
+         + output as terms" and is undocumented | A03 | A03 find_all_core
+         +; A09 builtins using findall internally; any corpus code collec
+         +ting templates with free vars |                                
+
+  Ran 2 shell commands, wrote 1 memory (ctrl+o to expand)
+
+● A03 (compiler goals, control & specialization) is complete and committed as
+  386467e7. 10 findings, 9 of them confirmed correctness bugs — the densest
+  session so far. All deliverables are in place: findings ledger with coverage
+  map, design-questions (parked per your preference), a green test file (51
+  passed, 17 xfailed — every xfail genuinely reproduces), 10 fix todos + 1
+  investigate, and the status-board row.
+
+  The headline findings:
+
+  One rotten root causes the two worst bugs. The determinism classifier in
+  tro.py (_is_deterministic_op_ir + _DETERMINISTIC_BUILTINS) claims X in L
+  (membership), reified If (which explores both arms when undetermined),
+  atom_concat/3, and sub_atom/5 are deterministic. They aren't, and two
+  optimisations trust it:
+  - A03-F001 (TRO): tail-recursion optimisation keeps only the last prefix
+  solution — a recursion with X in [1,2] before the tail call returns 1 solution
+  instead of 4. The shallow-compiled twin (your differential oracle) returns
+  the correct set.
+  - A03-F002 (destructive reuse): worse — the untrailed in-place append mutation
+  survives backtracking, so the second solution is built from a corrupted list:
+  [1,2,10] then [1,2,20,20]. Wrong values, not just missing ones. This directly
+  invalidates the safety argument in destructive_reuse_optimization_issue.md
+  §6.
+
+  A03-F003 is a hard crash: an indexed predicate whose default bucket holds only
+  a signal-mode TRO clause compiles to a function with no yield — not a
+  generator — so the first dispatch to it raises TypeError. It needs ≥4 clauses
+  to trigger, which is why the in-tree 3-clause fixtures never hit it.
+
+  A03-F004 breaks the documented exception idiom: catch(..., kab(N), ...) with a
+  -private-declared functor never catches, because the catcher is lowered to a
+  Compound while the throw site builds the functor-class instance, and those
+  don't unify. String/int/var catchers work, which is why existing tests never
+  noticed.
+
+  Specialization has three independent bugs (F007–F009): mid-body MI goals are
+  silently dropped (a depth-guard MI specializes into an unguarded one), deep
+  unfolding inlines single-clause functors without checking constant args (g :- 
+  f(2) succeeds against a program containing only f(1)), and CPD+counting emits
+  duplicate Evaluate targets so all multi-hop solutions vanish.
+
+  Also: setof doesn't sort (F005), findall shares free template variables so
+  later bindings retroactively mutate collected results (F006), and the compiler
+  README still claims continuation-TCO doesn't exist (F010 doc-drift).
+  Continuation-TCO itself probed clean across all its gates — wrappers, Or-arms,
+  ITE arms, deferred-head-pattern output mode, exceptions through TCO'd chains.
+
+  Seam notes queued for A12 include the zero-arity-predicate query gap (solve()
+  crashes, only call() works) and the Compound↔instance unification question
+  feeding A01-D004.
+
+✻ Worked for 57m 10s
+
+! git status                                                                    
+  ⎿  On branch main
+     Your branch is ahead of 'local/main' by 3 commits.
+       (use "git push" to publish your local commits)
+
+     nothing to commit, working tree clean
