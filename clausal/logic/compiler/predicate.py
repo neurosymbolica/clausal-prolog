@@ -95,6 +95,7 @@ from .arg_index import (
     _make_secondary_dispatch_simple, _make_secondary_dispatch_trampoline,
     _make_indexed_dispatch_simple, _make_indexed_dispatch_trampoline,
     _make_groundness_dispatch_simple, _make_groundness_dispatch_trampoline,
+    _make_call_site_bucket_trampoline,
 )
 from .compile_ctx import CompilationContext
 from .strategy import ShallowStrategy, TrampolineStrategy
@@ -850,12 +851,10 @@ def compile_predicate_trampoline(
                 pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
                 plans.append((pos, idx_dict, pos_default_fn))
 
-            # Phase 10a: expose single-position bucket dicts on the predicate
-            # class so that call-site specialisation can look up bucket functions
-            # for statically-known argument values without invoking the dispatch
-            # closure at runtime.
-            if pred_cls is not None:
-                pred_cls._index_plans = {pos: idx_dict for pos, idx_dict, _ in plans}
+            # Phase 10a: single-position bucket dicts are exposed on the
+            # predicate class (as call-site-safe wrappers) AFTER the final
+            # dispatch fn is built — see the _index_plans assignment below.
+            _joint_exposed: tuple | None = None
 
             # Phase 9b/9c: attempt multi-argument indexing when arity ≥ 2.
             # Try secondary (hierarchical) dispatch first; fall back to joint
@@ -1011,13 +1010,41 @@ def compile_predicate_trampoline(
                             single_i, single_j,
                             fallback_fn, DONE,
                             tro_state=_tro_state_obj, arity=arity)
-                        # Phase 10a: expose joint bucket dict.
-                        if pred_cls is not None:
-                            pred_cls._index_plans_joint = {(pos_i, pos_j): joint_dict}
+                        # Phase 10a: joint bucket dict exposed (wrapped)
+                        # after the final dispatch fn is built, below.
+                        _joint_exposed = ((pos_i, pos_j), joint_dict)
             if fn is None:
                 fn = _make_groundness_dispatch_trampoline(
                     plans, fallback_fn, DONE,
                     tro_state=_tro_state_obj, arity=arity)
+
+            # Phase 10a: expose bucket dicts on the predicate class so that
+            # call-site specialisation can look up bucket functions for
+            # statically-known argument values without invoking the dispatch
+            # closure at runtime.  Call sites drive these DIRECTLY via
+            # StepGenerator, so each SIGNAL-mode bucket is wrapped to
+            # complete the trampoline contract (terminal DONE yield + TRO
+            # re-dispatch through the full dispatch fn).
+            if pred_cls is not None:
+                pred_cls._index_plans = {
+                    pos: {
+                        key: _make_call_site_bucket_trampoline(
+                            bfn, fn, DONE,
+                            tro_state=_tro_state_obj, arity=arity)
+                        for key, bfn in idx_dict.items()
+                    }
+                    for pos, idx_dict, _ in plans
+                }
+                if _joint_exposed is not None:
+                    _jpos, _jdict = _joint_exposed
+                    pred_cls._index_plans_joint = {
+                        _jpos: {
+                            jk: _make_call_site_bucket_trampoline(
+                                jfn, fn, DONE,
+                                tro_state=_tro_state_obj, arity=arity)
+                            for jk, jfn in _jdict.items()
+                        }
+                    }
         else:
             # Phase 10a: no indexing — clear any stale _index_plans from a
             # previous compilation (e.g. after retract reduced clause count

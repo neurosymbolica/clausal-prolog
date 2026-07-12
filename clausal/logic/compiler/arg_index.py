@@ -235,6 +235,48 @@ def _joint_bucket_key(fname: str, pos_i: int, pos_j: int,
     return f"{fname}.bucket(pos=({pos_i},{pos_j}), ({ki!r},{kj!r}))"
 
 
+def _make_call_site_bucket_trampoline(bucket_fn, dispatch_fn, done,
+                                      tro_state=None, arity=0):
+    """Wrap a SIGNAL-mode bucket for direct call-site use (Phase 10 /
+    ``call_site`` optimisation).
+
+    Buckets are compiled with ``emit_done=False``: they neither emit the
+    terminal ``yield (fail, done)`` nor loop on TRO tail calls — the
+    enclosing dispatch closure does both.  A call-site-specialised caller
+    (``SubCall.direct_bucket_ref``) drives the bucket *directly* via
+    ``StepGenerator``, so the function exposed through ``_index_plans`` /
+    ``_index_plans_joint`` must complete the trampoline contract itself:
+    emit the terminal done, and when the bucket signals a TRO tail call,
+    delegate to the full *dispatch_fn* (the new args may key to a
+    different bucket).  Driving a raw bucket instead raises
+    ``RuntimeError: StepGenerator inner generator returned unexpectedly
+    (no final yield)`` — see
+    todo/call-site-imported-ground-arg-4plus-clauses-runtime-error.md.
+    """
+    if tro_state is None:
+        def call_site_fn(*args):
+            _fail = args[2]
+            yield from bucket_fn(*args)
+            yield (_fail, done)
+    else:
+        def call_site_fn(*args):
+            _fail = args[2]
+            tro_state[0] = False
+            yield from bucket_fn(*args)
+            if tro_state[0]:
+                args_list = list(args)
+                for _i in range(arity):
+                    args_list[_i + 4] = tro_state[_i + 1]
+                # dispatch_fn loops on any further tail calls and emits
+                # its own terminal ``(fail, done)``.
+                yield from dispatch_fn(*args_list)
+            else:
+                yield (_fail, done)
+    call_site_fn.__name__ = bucket_fn.__name__
+    call_site_fn.__qualname__ = bucket_fn.__qualname__
+    return call_site_fn
+
+
 def _extract_arg_key(clause: Clause, pos: int, arity: int) -> Any:
     """Extract the indexing key for a clause's argument at position *pos*.
 

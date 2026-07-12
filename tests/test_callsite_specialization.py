@@ -668,3 +668,66 @@ class TestCallsiteCorrectnessAndFallback:
         # Inject again — should NOT overwrite
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
         assert base_globals[gkey] is first_fn
+
+
+# ── Direct bucket refs must be drivable as full trampoline generators ─────────
+#
+# Regression for todo/call-site-imported-ground-arg-4plus-clauses-runtime-error:
+# when the callee is already locked at caller-compile time (the imported-
+# predicate case), _dispatch_call_trampoline emits StepGenerator(<bucket>, …)
+# directly.  The functions exposed via _index_plans must therefore satisfy the
+# full trampoline contract (terminal ``yield (fail, DONE)``, TRO re-dispatch)
+# — raw SIGNAL-mode buckets raise "StepGenerator inner generator returned
+# unexpectedly (no final yield)".
+
+
+class TestDirectBucketCallSiteExecution:
+    def _compile_caller(self, body_args, callee_name="cat"):
+        """Locked arity-2 callee + caller(x) <- cat(<body_args>) compiled
+        with the callee locked in globals_ (imported-predicate shape)."""
+        facts = [("a", 1), ("b", 2), ("c", 3), ("d", 4), ("e", 5)]
+        callee_cls, _ = _make_locked_pred_cls(callee_name, facts)
+        x = Var()
+        args = [x if a is None else a for a in body_args]
+        caller_clause = Clause(
+            head=Compound("caller", (x,)),
+            body=[Call(func=LoadName(name=callee_name), args=args)],
+        )
+        fn = compile_predicate(
+            "caller", 1, [caller_clause], globals_={callee_name: callee_cls},
+        )
+        return fn, callee_name
+
+    def _assert_specialised(self, fn, callee_name, key):
+        gkey = _bucket_key(callee_name, 0, key)
+        assert gkey in fn.__globals__, (
+            "caller was not bucket-specialised — test no longer exercises "
+            "the direct-bucket-ref path"
+        )
+
+    def test_direct_bucket_first_key_solves(self):
+        fn, callee = self._compile_caller(["a", None])
+        self._assert_specialised(fn, callee, "a")
+        assert _trampoline_solutions(fn, [Var()]) == [(1,)]
+
+    def test_direct_bucket_middle_key_solves(self):
+        fn, callee = self._compile_caller(["c", None])
+        self._assert_specialised(fn, callee, "c")
+        assert _trampoline_solutions(fn, [Var()]) == [(3,)]
+
+    def test_direct_bucket_last_key_solves(self):
+        fn, callee = self._compile_caller(["e", None])
+        self._assert_specialised(fn, callee, "e")
+        assert _trampoline_solutions(fn, [Var()]) == [(5,)]
+
+    def test_direct_bucket_ground_both_args_solves(self):
+        """Fully ground call (the BUG.md shape): cat("a", 1)."""
+        fn, callee = self._compile_caller(["a", 1])
+        self._assert_specialised(fn, callee, "a")
+        assert len(_trampoline_solutions(fn, [Var()])) == 1
+
+    def test_direct_bucket_no_solution_terminates(self):
+        """Exhaustion without a solution must yield DONE, not fall off the end."""
+        fn, callee = self._compile_caller(["a", 2])
+        self._assert_specialised(fn, callee, "a")
+        assert _trampoline_solutions(fn, [Var()]) == []

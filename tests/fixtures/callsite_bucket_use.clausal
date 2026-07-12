@@ -1,0 +1,15 @@
+# Importing module for the call-site direct-bucket regression: every ground
+# call below targets an imported (locked, indexed) predicate from inside a
+# compiled clause, so it compiles to a direct bucket reference.
+-import_from(tests.fixtures.callsite_bucket_lib, [BucketCat, BucketSteps])
+
+GroundFirst() <- BucketCat(1, "a")
+GroundMiddle() <- BucketCat(3, "c")
+GroundLast() <- BucketCat(5, "e")
+GroundMiss() <- BucketCat(2, "a")
+GroundTail(N) <- BucketSteps(N, "even")
+
+Test("imported ground, first clause") <- BucketCat(1, "a")  # nv
+Test("imported ground, middle clause") <- BucketCat(3, "c")  # nv
+Test("imported ground, last clause") <- BucketCat(5, "e")  # nv
+Test("imported ground, tail-call re-dispatch") <- BucketSteps(6, "even")  # nv

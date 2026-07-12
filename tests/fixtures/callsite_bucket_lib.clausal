@@ -1,0 +1,19 @@
+# Library module for the call-site direct-bucket regression
+# (todo/call-site-imported-ground-arg-4plus-clauses-runtime-error.md).
+# BucketCat: >= _INDEX_THRESHOLD clauses with head constants at pos 1, so the
+# importing module's ground call sites compile to direct bucket refs.
+-module(callsite_bucket_lib, [BucketCat(P, C), BucketSteps(N, R)])
+
+BucketCat(P, "a") <- (P == 1)
+BucketCat(P, "b") <- (P == 2)
+BucketCat(P, "c") <- (P == 3)
+BucketCat(P, "d") <- (P == 4)
+BucketCat(P, "e") <- (P == 5)
+
+# BucketSteps: indexed on pos 1, with a tail-recursive default clause — a
+# ground "even" call site routes to a bucket whose TRO tail call must
+# re-dispatch (possibly to another bucket), not be dropped.
+BucketSteps(N, "even") <- (N == 0)
+BucketSteps(N, "odd") <- (N == 1)
+BucketSteps(N, "big") <- (N >= 10)
+BucketSteps(N, R) <- (N > 1, N < 10, M is N - 2, BucketSteps(M, R))
