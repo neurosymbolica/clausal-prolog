@@ -301,6 +301,24 @@ class TestDictSetFixture:
         # nv
         assert self._query_test(mod, logic_mod, "delete absent throws")
 
+    # ── hardening: object/source type guards ──
+
+    def test_subscript_nondict_object_errors(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "subscript nondict object errors")
+
+    def test_get_nondict_fails(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "get nondict fails")
+
+    def test_splat_unbound_source_errors(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "splat unbound source errors")
+
+    def test_splat_nondict_source_errors(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "splat nondict source errors")
+
 
 # ── Subscript read: direct runtime behaviour ─────────────────────────────────
 

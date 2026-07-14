@@ -61,3 +61,26 @@ def _subscript(obj: Any, key: Any) -> Any:
         raise LogicException(
             type_error("dict_key", key, _SUBSCRIPT_CTX)
         ) from None
+
+
+_SPLAT_CTX = "{**}/1"
+
+
+def _splat_data(source: Any) -> dict:
+    """Return the underlying dict of a splat source ``{**source, ...}``.
+
+    Guards the merge lowering so an unbound or non-dict splat source raises a
+    catchable typed error instead of a raw ``AttributeError`` on ``.data``:
+      * unbound source → ``instantiation_error``;
+      * non-dict source → ``type_error(dict, source)``.
+    A plain Python dict is accepted (library-returned dicts merge without an
+    escape), mirroring ``DictTerm.__unify__``.
+    """
+    source = deref(source)
+    if isinstance(source, DictTerm):
+        return source.data
+    if isinstance(source, dict):
+        return source
+    if is_var(source):
+        raise LogicException(instantiation_error(_SPLAT_CTX))
+    raise LogicException(type_error("dict", source, _SPLAT_CTX))

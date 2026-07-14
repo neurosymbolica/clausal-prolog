@@ -7,10 +7,13 @@
 (`clausal/logic/compiler/terms_to_ast.py`) already folds it into `DictTerm({**deref(P).data, k: v, ...})`,
 which gives Python **last-wins** for free (later explicit pairs and later `**splat`s override). Verified all
 acceptance cases + multi-splat + value-var preserved; locked with tests (`merge override/default order/addkey/
-value var/multi splat` in the fixture + `test_dict_set_compiler.py`). Open edge left for the parser-gap
-todo: an **unbound splat source** (`{**P}` with `P` a Var) currently `deref(P).data` would `AttributeError` —
-not exercised by any consumer; document/harden if/when a use appears (todo item, not a blocker for the set
-surface, which always splats ground dicts).
+value var/multi splat` in the fixture + `test_dict_set_compiler.py`).
+
+**Hardened 2026-07-14:** the merge lowering now routes each splat source through the `$splat_data` runtime
+helper (`clausal/logic/runtime/dict_ops.py`) instead of a bare `deref(P).data`, so an **unbound splat
+source** (`{**P}` with `P` a Var) raises a catchable `instantiation_error` and a **non-dict source**
+(`{**5}`) raises `type_error(dict, …)` — previously both leaked a raw `AttributeError`. Covered by
+`splat unbound/nondict source errors` tests.
 
 ## Goal
 Evaluate splat/merge dict literals at runtime so functional profile update works:

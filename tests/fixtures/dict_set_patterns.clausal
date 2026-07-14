@@ -166,3 +166,28 @@ Test("delete absent throws") <- (
         KEY is "z",
     )
 )  # nv
+
+# ── Hardening: object/source type guards ──
+
+Test("subscript nondict object errors") <- (
+    catch(
+        (_ is 5["a"]),
+        error(type_error(TY, _), _),
+        TY is "dict",
+    )
+)  # nv
+Test("get nondict fails") <- (not get(5, "a", _))  # nv
+Test("splat unbound source errors") <- (
+    catch(
+        (_ is {**P, "b": 9}),
+        error(ETYPE, _),
+        ETYPE is "instantiation_error",
+    )
+)  # nv
+Test("splat nondict source errors") <- (
+    catch(
+        (_ is {**5, "b": 9}),
+        error(type_error(TY, _), _),
+        TY is "dict",
+    )
+)  # nv

@@ -323,13 +323,11 @@ def term_to_ast_expr(
         for k, v in zip(term.keys, term.values):
             if k is None:
                 py_keys.append(None)
-                py_vals.append(
-                    ast.Attribute(
-                        value=_call(_name("$deref"), _rec(v)),
-                        attr="data",
-                        ctx=ast.Load(),
-                    )
-                )
+                # Splat source: {**OLD, ...} → {**$splat_data(OLD), ...}.
+                # $splat_data derefs and validates OLD is a dict, raising a
+                # catchable typed error on an unbound/non-dict source rather
+                # than a raw AttributeError on ``.data``.
+                py_vals.append(_call(_name("$splat_data"), _rec(v)))
             else:
                 py_keys.append(_rec(k))
                 py_vals.append(_rec(v))
