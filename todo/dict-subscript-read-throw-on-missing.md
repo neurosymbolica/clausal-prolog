@@ -2,6 +2,22 @@
 
 **Part of:** [dict-native-profile-api.md](dict-native-profile-api.md) · **Order:** 1 (foundational read)
 
+## STATUS: IMPLEMENTED 2026-07-14 (str/int/atom keys; atom-key *literals* parked)
+- Runtime helper `_subscript` in `clausal/logic/runtime/dict_ops.py` (new module — home for the dict-op
+  family: get/in/merge/delete land here next).
+- `LoadSubscript` case in `term_to_ast_expr` (`clausal/logic/compiler/terms_to_ast.py`) lowers `P[K]` to
+  `$subscript(obj, key)`; wired into both `base_globals` tables in `clausal/logic/compiler/predicate.py`.
+- Errors: missing key → `existence_error(dict_key, KEY)`; non-ground index → `instantiation_error`;
+  non-dict object → `type_error(dict, OBJ)`. All `catch/3`-interceptable `LogicException`s.
+- Tests: `tests/test_dict_set_compiler.py` (`TestDictSetFixture` subscript cases + `TestDictSubscriptRead`),
+  fixture clauses in `tests/fixtures/dict_set_patterns.clausal`. Full suite green (9229 passed).
+- **Acceptance sugar `{a:1}[a]` (bare-atom key) is blocked** by the pre-existing atom-key-literal parser
+  gap → `dict-atom-key-literal-parser-gap.md`. The read runtime itself supports atom keys (proven with a
+  Python-built atom-keyed DictTerm); only literal *construction* of atom keys is missing.
+- Test-harness gotcha for future dict-op tests: `list(call(...))` exhausts the generator and **undoes the
+  trail**, so assert bindings *inside* the first-solution loop (`for _ in call(...): deref(out); break`),
+  not after — see `TestDictSubscriptRead._first_binding`.
+
 ## Goal
 `V is P[filing_status]` where `P` is a `DictTerm`:
 - key present → bind `V` to the stored value (a `Var` value participates in unification);

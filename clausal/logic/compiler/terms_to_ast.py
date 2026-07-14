@@ -24,7 +24,7 @@ from clausal.terms import (
     Compound,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
-    Call, LoadName, LoadAttr,
+    Call, LoadName, LoadAttr, LoadSubscript,
     DictTerm, SetTerm, KWTerm, PyThunk,
 )
 from clausal.pythonic_ast.nodes import (
@@ -185,6 +185,18 @@ def term_to_ast_expr(
             for attr in parts[1:]:
                 expr = ast.Attribute(value=expr, attr=attr, ctx=ast.Load())
             return expr
+
+    # Subscript read ``P[K]`` in value position (e.g. the RHS of ``V is P[K]``).
+    # Lower to the ``$subscript`` runtime helper, which derefs both operands,
+    # reads the DictTerm value, and throws a catchable error on a missing or
+    # non-ground key.  See clausal/logic/runtime/dict_ops.py and
+    # todo/dict-native-profile-api.md (item 1).
+    if isinstance(term, LoadSubscript):
+        return _call(
+            _name("$subscript"),
+            term_to_ast_expr(term.object, var_context, eval_arith=eval_arith),
+            term_to_ast_expr(term.index, var_context, eval_arith=eval_arith),
+        )
 
     term = literal_value(term)
     if term is None or isinstance(term, bool):

@@ -56,6 +56,7 @@ from clausal.logic.runtime.body_star_unify import (  # noqa: F401
     _in_iter,
 )
 from clausal.logic.runtime.tramp_call import _tramp_call  # noqa: F401
+from clausal.logic.runtime.dict_ops import _subscript  # noqa: F401
 
 from ._ast_helpers import (
     _name, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -683,6 +684,7 @@ def compile_predicate_trampoline(
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn,
         "$in_iter": _in_iter,
+        "$subscript": _subscript,
         "$type_error": _type_error_fn,
         "$get_attr": _get_attr_fn,
         "$put_attr": _put_attr_fn,
@@ -1414,6 +1416,7 @@ def compile_predicate_shallow(
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn_s,
         "$in_iter": _in_iter,
+        "$subscript": _subscript,
         "$type_error": _type_error_fn_s,
         "$get_attr": _get_attr_fn_s,
         "$put_attr": _put_attr_fn_s,

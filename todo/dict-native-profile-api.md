@@ -57,7 +57,11 @@ parser support for `{k:v}` (`visit_Dict`), `P[k]` (`visit_Subscript` → `LoadSu
 and a `**`-splat node.
 
 Missing / immature (the work below):
-1. **Subscript read runtime** over `DictTerm` under `is/2`, throw-on-missing — untested. → `dict-subscript-read-throw-on-missing.md`
+1. ~~**Subscript read runtime** over `DictTerm` under `is/2`, throw-on-missing~~ — **DONE 2026-07-14**
+   (`$subscript` runtime helper + `LoadSubscript` case in `term_to_ast_expr`; str/int/atom keys, throw
+   on missing/non-ground; tests in `tests/test_dict_set_compiler.py`). → `dict-subscript-read-throw-on-missing.md`.
+   **Blocker surfaced:** bare-atom dict-key *literals* (`{filing_status: V}`) don't load — the ergonomic
+   atom-key surface needs `dict-atom-key-literal-parser-gap.md` (pre-existing; affects items 2–5 too).
 2. **`in`-over-dict** = key membership (today `in_/2` is list-element) — → `dict-key-membership-in-operator.md`
 3. **`get/3` + `get/4`** builtins — → `dict-get-builtins-fail-and-default.md`
 4. **`{**P, k:V}` splat/merge** — code comment says "full splat/merge support is Phase 3" (term_rewriting.py:728); unimplemented at runtime. → `dict-splat-merge-functional-set.md`

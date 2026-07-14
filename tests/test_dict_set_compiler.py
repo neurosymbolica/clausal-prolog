@@ -191,6 +191,100 @@ class TestDictSetFixture:
         # nv
         assert self._query_test(mod, logic_mod, "empty dict")
 
+    # ── Dict subscript read: V is P[key] (dict-native-profile-api item 1) ──
+
+    def test_subscript_str_key_a(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "subscript str key a")
+
+    def test_subscript_str_key_b(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "subscript str key b")
+
+    def test_subscript_int_key(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "subscript int key")
+
+    def test_subscript_via_var(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "subscript via var")
+
+    def test_subscript_value_var(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "subscript value var")
+
+    def test_subscript_missing_throws(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "subscript missing throws")
+
+    def test_subscript_nonground_errors(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "subscript nonground errors")
+
+
+# ── Subscript read: direct runtime behaviour ─────────────────────────────────
+
+class TestDictSubscriptRead:
+    """V is P[K] over a DictTerm, driven from Python via subscript_get/3."""
+
+    @pytest.fixture(scope="class")
+    def mod(self):
+        return _load_fixture()
+
+    @pytest.fixture(scope="class")
+    def logic_mod(self, mod):
+        return mod.__dict__["$module"]
+
+    def _first_binding(self, logic_mod, obj, key, out):
+        """Read the binding of *out* inside the first solution — bindings are
+        undone once the generator backtracks past the last solution."""
+        for _ in call("subscript_get", obj, key, out, module=logic_mod):
+            return deref(out)
+        return None
+
+    def test_reads_present_string_key(self, mod, logic_mod):
+        # nv
+        assert self._first_binding(
+            logic_mod, DictTerm({"a": 1, "b": 2}), "a", Var()) == 1
+
+    def test_reads_present_int_key(self, mod, logic_mod):
+        # nv
+        assert self._first_binding(
+            logic_mod, DictTerm({1: "one"}), 1, Var()) == "one"
+
+    def test_reads_atom_key(self, mod, logic_mod):
+        """The read path works for atom (PredicateMeta) keys, even though
+        atom-key dict *literals* are a separate parser gap — here the dict is
+        built in Python and the key is passed as a runtime value."""
+        # nv
+        foo = mod.__dict__["colors"]  # any interned atom-like global would do
+        d = DictTerm({foo: 99})
+        assert self._first_binding(logic_mod, d, foo, Var()) == 99
+
+    def test_missing_key_raises_existence_error(self, mod, logic_mod):
+        # nv
+        from clausal.logic.exceptions import LogicException
+        v = Var()
+        with pytest.raises(LogicException) as exc:
+            list(call("subscript_get", DictTerm({"a": 1}), "z", v,
+                      module=logic_mod))
+        term = exc.value.term
+        # error(existence_error(_, "z"), _)
+        assert term.functor == "error"
+        assert term.args[0].functor == "existence_error"
+        assert term.args[0].args[1] == "z"
+
+    def test_nonground_key_raises_instantiation_error(self, mod, logic_mod):
+        # nv
+        from clausal.logic.exceptions import LogicException
+        v = Var()
+        with pytest.raises(LogicException) as exc:
+            list(call("subscript_get", DictTerm({"a": 1}), Var(), v,
+                      module=logic_mod))
+        term = exc.value.term
+        assert term.functor == "error"
+        assert term.args[0] == "instantiation_error"
+
 
 # ── Backtracking tests ──────────────────────────────────────────────────────
 

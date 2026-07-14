@@ -76,3 +76,44 @@ Test("var binds dict") <- (
 
 # --- Test: empty dict ---
 Test("empty dict") <- ({} is {})  # nv
+
+# ── Dict subscript read: V is P[key] (dict-native-profile-api item 1) ──
+
+# Helper: read via a runtime-evaluated (non-literal) key, so the index is
+# derefed at search time rather than being a compile-time constant.
+subscript_get(P, K, V) <- (V is P[K])
+
+# --- Test: subscript read binds the stored value (string key) ---
+Test("subscript str key a") <- (V is {"a": 1, "b": 2}["a"], V is 1)  # nv
+Test("subscript str key b") <- (V is {"a": 1, "b": 2}["b"], V is 2)  # nv
+
+# --- Test: subscript read with integer key ---
+Test("subscript int key") <- (V is {1: "one", 2: "two"}[2], V is "two")  # nv
+
+# --- Test: subscript over a bound dict variable ---
+Test("subscript via var") <- (P is {"x": 10, "y": 20}, V is P["y"], V is 20)  # nv
+
+# --- Test: value-var flows through subscript, then unifies ---
+Test("subscript value var") <- (
+    X is {"a": V}["a"],
+    V is 7,
+    X is 7,
+)  # nv
+
+# --- Test: missing key throws a catchable existence_error carrying the key ---
+Test("subscript missing throws") <- (
+    catch(
+        (_ is {"a": 1}["z"]),
+        error(existence_error(_, KEY), _),
+        KEY is "z",
+    )
+)  # nv
+
+# --- Test: non-ground key index throws a catchable instantiation_error ---
+Test("subscript nonground errors") <- (
+    catch(
+        (_ is {"a": 1}[K]),
+        error(ETYPE, _),
+        ETYPE is "instantiation_error",
+    )
+)  # nv
