@@ -319,6 +319,18 @@ class TestDictSetFixture:
         # nv
         assert self._query_test(mod, logic_mod, "splat nondict source errors")
 
+    def test_get_unhashable_key_fails(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "get unhashable key fails")
+
+    def test_get4_unhashable_key_fails(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "get4 unhashable key fails")
+
+    def test_delete_unhashable_key_throws(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "delete unhashable key throws")
+
 
 # ── Subscript read: direct runtime behaviour ─────────────────────────────────
 

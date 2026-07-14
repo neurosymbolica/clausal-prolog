@@ -348,7 +348,8 @@ def _get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail):
     """
     key_val = deref(key)
     d_val = deref(d)
-    if not is_var(key_val) and isinstance(d_val, DictTerm) and key_val in d_val:
+    if (not is_var(key_val) and _is_hashable(key_val)
+            and isinstance(d_val, DictTerm) and key_val in d_val):
         mark = trail.mark()
         if unify(value, d_val[key_val], trail):
             yield (_proceed, None)
@@ -361,11 +362,12 @@ def _get__4(this_generator, _proceed, _fail, _catcher, d, key, value, default, t
     """get(Dict, Key, Value, Default) — defaulted read (Python ``dict.get(k, default)``).
 
     Binds ``Value`` to ``Dict[Key]`` if present, else to ``Default``.  Always
-    succeeds when ``Dict`` is a dict and ``Key`` is ground.
+    succeeds when ``Dict`` is a dict and ``Key`` is a ground hashable key.
     """
     key_val = deref(key)
     d_val = deref(d)
-    if not is_var(key_val) and isinstance(d_val, DictTerm):
+    if (not is_var(key_val) and _is_hashable(key_val)
+            and isinstance(d_val, DictTerm)):
         result = d_val[key_val] if key_val in d_val else default
         mark = trail.mark()
         if unify(value, result, trail):
@@ -388,6 +390,8 @@ def _delete__3(this_generator, _proceed, _fail, _catcher, d, key, new_dict, trai
     d_val = deref(d)
     if is_var(key_val):
         raise LogicException(instantiation_error("delete/3"))
+    if not _is_hashable(key_val):
+        raise LogicException(type_error("dict_key", key_val, "delete/3"))
     if not isinstance(d_val, DictTerm):
         raise LogicException(type_error("dict", d_val, "delete/3"))
     if key_val not in d_val:

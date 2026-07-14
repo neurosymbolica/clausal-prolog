@@ -191,3 +191,14 @@ Test("splat nondict source errors") <- (
         TY is "dict",
     )
 )  # nv
+
+# --- unhashable ground key: soft ops fail, strict ops throw (no raw TypeError) ---
+Test("get unhashable key fails") <- (not get({"a": 1}, [1, 2], _))  # nv
+Test("get4 unhashable key fails") <- (not get({"a": 1}, [1, 2], _, 9))  # nv
+Test("delete unhashable key throws") <- (
+    catch(
+        delete({"a": 1}, [1, 2], _),
+        error(type_error(TY, _), _),
+        TY is "dict_key",
+    )
+)  # nv
