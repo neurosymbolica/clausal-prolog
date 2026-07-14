@@ -2,6 +2,14 @@
 
 **Part of:** [dict-native-profile-api.md](dict-native-profile-api.md) · **Order:** 2
 
+## STATUS: DONE 2026-07-14 — already worked; locked with tests
+The `in` operator compiles inline to the `$in_iter` runtime helper (`clausal/logic/runtime/body_star_unify.py`),
+which does `iter(collection)`; `DictTerm.__iter__` yields **keys** and `__contains__` is key-based, so
+`KEY in P` is key membership and enumeration (`K in P` yields each key) for free. Pair-mode `(K,V) in P`
+iterates items (bonus). No `in_/2` change was needed. Tests in `tests/fixtures/dict_set_patterns.clausal`
+(`in present/absent/is-key-not-value/enumerates/pair mode`) + `test_dict_set_compiler.py`. Ground-key
+semidet + unbound-key enumeration both covered.
+
 ## Goal
 `filing_status in P` succeeds iff `P` (a `DictTerm`) contains that **key** — Python's `k in d` semantics.
 This is the profile presence-test (replaces `profile_has/2`). Ground key.

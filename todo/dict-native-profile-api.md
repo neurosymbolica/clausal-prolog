@@ -62,17 +62,26 @@ Missing / immature (the work below):
    on missing/non-ground; tests in `tests/test_dict_set_compiler.py`). → `dict-subscript-read-throw-on-missing.md`.
    **Blocker surfaced:** bare-atom dict-key *literals* (`{filing_status: V}`) don't load — the ergonomic
    atom-key surface needs `dict-atom-key-literal-parser-gap.md` (pre-existing; affects items 2–5 too).
-2. **`in`-over-dict** = key membership (today `in_/2` is list-element) — → `dict-key-membership-in-operator.md`
-3. **`get/3` + `get/4`** builtins — → `dict-get-builtins-fail-and-default.md`
-4. **`{**P, k:V}` splat/merge** — code comment says "full splat/merge support is Phase 3" (term_rewriting.py:728); unimplemented at runtime. → `dict-splat-merge-functional-set.md`
-5. **`delete/3`** functional key removal — → `dict-delete-builtin.md`
+2. ~~**`in`-over-dict** = key membership~~ — **DONE 2026-07-14** (already worked: the `in` operator
+   compiles inline to `$in_iter`, and `DictTerm.__iter__`/`__contains__` are key-based; `(K,V) in D`
+   pair-mode too). Locked with tests. → `dict-key-membership-in-operator.md`.
+3. ~~**`get/3` + `get/4`** builtins~~ — **DONE 2026-07-14** (`get(Dict,Key,Value)` soft-fail +
+   `get(Dict,Key,Value,Default)` in `clausal/logic/builtins/dict_set.py`). → `dict-get-builtins-fail-and-default.md`.
+4. ~~**`{**P, k:V}` splat/merge**~~ — **DONE 2026-07-14** (already worked at runtime; the "Phase 3"
+   comment was stale — `term_to_ast_expr`'s `DictLiteral` case folds splats last-wins). Locked with tests,
+   incl. multi-splat + value-var. → `dict-splat-merge-functional-set.md`.
+5. ~~**`delete/3`** functional key removal~~ — **DONE 2026-07-14** (`delete(Dict,Key,NewDict)`, throw on
+   absent/non-ground/non-dict, immutable). Reserved siblings `discard/3`, `pop/4`, `pop/5` still
+   YAGNI-parked. → `dict-delete-builtin.md`.
 6. **SMT prover dict-read projection** (CLAUSIFY repo, `auto/formal`) — separate todo filed there, not here.
 
 ## Sequencing / acceptance
-Land 1–4 (read surface + set) first; 5 (`delete`) is YAGNI-gated (no current consumer — implement when the
-corpus migration needs it, but it is small and self-contained). The capability is "done" when a **single
-pilot domain** rewritten to the dict-native surface passes its full gate end-to-end (oracle refutations=0 +
-G3 baseline-identical) — that pilot is the hand-off signal to start the corpus-migration spec (Spec B).
+**Interpreter items 1–5 are all landed (2026-07-14).** Remaining before the capability is "done":
+- close the atom-key-literal parser gap (`dict-atom-key-literal-parser-gap.md`) so the ergonomic bare-atom
+  surface (`P[filing_status]`, `{filing_status: V}`) works — every current test uses string keys;
+- the SMT prover projection (item 6, clausify repo);
+- then a **single pilot domain** rewritten to the dict-native surface passing its full gate end-to-end
+  (oracle refutations=0 + G3 baseline-identical) — the hand-off signal to start the corpus-migration spec.
 
-Every piece ships with Clausal unit tests in `clausal/tests/` (there are currently **zero** tests exercising
-`DictTerm` reads — establish that coverage as part of this work).
+DictTerm read/op coverage now exists in `tests/test_dict_set_compiler.py` +
+`tests/fixtures/dict_set_patterns.clausal` (was zero at the start of this work).

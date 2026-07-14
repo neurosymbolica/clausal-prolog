@@ -2,6 +2,13 @@
 
 **Part of:** [dict-native-profile-api.md](dict-native-profile-api.md) · **Order:** 5 · **YAGNI-gated**
 
+## STATUS: `delete/3` DONE 2026-07-14; `discard/3`, `pop/4`, `pop/5` still reserved (YAGNI)
+`delete(Dict, Key, NewDict)` added to `clausal/logic/builtins/dict_set.py` (`_delete__3`): builds a fresh
+residual `DictTerm` (immutable — never mutates `_data`); **throws** `existence_error(dict_key, KEY)` on
+absent, `instantiation_error` on non-ground key, `type_error(dict, D)` on non-dict. Distinct from the older
+no-throw `dict_remove/3` (KEY-first). Tests: `delete removes key/keeps original/absent throws`. The reserved
+siblings below remain unimplemented until a consumer appears (names/signatures fixed here).
+
 ## Goal
 `delete(P, KEY, P2)` binds `P2` to a new `DictTerm` equal to `P` with `KEY` removed.
 (`del` is a Python keyword, so the predicate is `delete/3`.) Ground `KEY`.

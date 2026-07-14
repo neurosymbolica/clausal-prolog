@@ -36,7 +36,9 @@ from __future__ import annotations
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm, SetTerm
-from clausal.logic.exceptions import LogicException, type_error
+from clausal.logic.exceptions import (
+    LogicException, type_error, existence_error, instantiation_error,
+)
 
 # ── Destructive-reuse: CPython refcount availability ────────────────────────
 
@@ -326,6 +328,75 @@ def _sub_dict__2(this_generator, _proceed, _fail, _catcher, pattern, full_dict, 
         if ok:
             yield (_proceed, None)
         trail.undo(mark)
+    yield (_fail, DONE)
+
+
+# ── Dict-native profile API: Python dict-surface reads/removal ────────────────
+# The pinned surface (todo/dict-native-profile-api.md): DICT-first arg order,
+# Python-familiar names.  Distinct from the older dict_get/dict_remove family
+# above (which are KEY-first).  Strict reads/removal throw; soft ones fail.
+
+
+@_trampoline_builtin("get", 3)
+def _get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail):
+    """get(Dict, Key, Value) — soft read (Python ``dict.get``).
+
+    Binds ``Value`` to ``Dict[Key]`` if present; **fails** the clause if the
+    key is absent (the logic analogue of ``d.get(k)`` returning ``None`` — never
+    binds a sentinel).  A non-ground key or non-dict object fails (soft: this
+    predicate never throws — use ``V is P[K]`` for the strict, throwing read).
+    """
+    key_val = deref(key)
+    d_val = deref(d)
+    if not is_var(key_val) and isinstance(d_val, DictTerm) and key_val in d_val:
+        mark = trail.mark()
+        if unify(value, d_val[key_val], trail):
+            yield (_proceed, None)
+        trail.undo(mark)
+    yield (_fail, DONE)
+
+
+@_trampoline_builtin("get", 4)
+def _get__4(this_generator, _proceed, _fail, _catcher, d, key, value, default, trail):
+    """get(Dict, Key, Value, Default) — defaulted read (Python ``dict.get(k, default)``).
+
+    Binds ``Value`` to ``Dict[Key]`` if present, else to ``Default``.  Always
+    succeeds when ``Dict`` is a dict and ``Key`` is ground.
+    """
+    key_val = deref(key)
+    d_val = deref(d)
+    if not is_var(key_val) and isinstance(d_val, DictTerm):
+        result = d_val[key_val] if key_val in d_val else default
+        mark = trail.mark()
+        if unify(value, result, trail):
+            yield (_proceed, None)
+        trail.undo(mark)
+    yield (_fail, DONE)
+
+
+@_trampoline_builtin("delete", 3)
+def _delete__3(this_generator, _proceed, _fail, _catcher, d, key, new_dict, trail):
+    """delete(Dict, Key, NewDict) — functional key removal (Python ``del d[k]``).
+
+    Binds ``NewDict`` to a fresh ``DictTerm`` equal to ``Dict`` without ``Key``.
+    **Throws** ``existence_error`` if ``Key`` is absent (strict, mirroring
+    ``del d[missing]`` raising ``KeyError``); ``instantiation_error`` for a
+    non-ground key; ``type_error`` for a non-dict object.  ``Dict`` is never
+    mutated (the residual is constructed fresh).
+    """
+    key_val = deref(key)
+    d_val = deref(d)
+    if is_var(key_val):
+        raise LogicException(instantiation_error("delete/3"))
+    if not isinstance(d_val, DictTerm):
+        raise LogicException(type_error("dict", d_val, "delete/3"))
+    if key_val not in d_val:
+        raise LogicException(existence_error("dict_key", key_val, "delete/3"))
+    new_data = {k: v for k, v in d_val.items() if k != key_val}
+    mark = trail.mark()
+    if unify(new_dict, DictTerm(new_data), trail):
+        yield (_proceed, None)
+    trail.undo(mark)
     yield (_fail, DONE)
 
 

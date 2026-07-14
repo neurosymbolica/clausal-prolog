@@ -117,3 +117,52 @@ Test("subscript nonground errors") <- (
         ETYPE is "instantiation_error",
     )
 )  # nv
+
+# ── Key membership `KEY in P` (item 2) ──
+
+Test("in present key") <- ("a" in {"a": 1, "b": 2})  # nv
+Test("in absent key fails") <- (not ("z" in {"a": 1}))  # nv
+Test("in is key not value") <- (not (1 in {"a": 1}))  # nv
+Test("in enumerates keys") <- (
+    findall(K, K in {"a": 1, "b": 2}, KS),
+    KS is ++(sorted(["a", "b"])),
+)  # nv
+Test("in pair mode") <- (
+    findall([K, V], (K, V) in {"a": 1, "b": 2}, PS),
+    PS is ++(sorted([["a", 1], ["b", 2]])),
+)  # nv
+
+# ── Soft/defaulted read: get/3, get/4 (item 3) ──
+
+Test("get present") <- (get({"a": 1, "b": 2}, "a", V), V is 1)  # nv
+Test("get absent fails") <- (not get({"a": 1}, "z", _))  # nv
+Test("get value var") <- (get({"a": V}, "a", 7), V is 7)  # nv
+Test("get4 present") <- (get({"a": 1}, "a", V, 9), V is 1)  # nv
+Test("get4 default") <- (get({"a": 1}, "z", V, 9), V is 9)  # nv
+
+# ── Splat/merge functional set (item 4) ──
+
+Test("merge override") <- (P2 is {**{"a": 1, "b": 2}, "b": 9}, P2 is {"a": 1, "b": 9})  # nv
+Test("merge default order") <- (P2 is {"b": 9, **{"a": 1, "b": 2}}, P2 is {"a": 1, "b": 2})  # nv
+Test("merge addkey") <- (P2 is {**{"a": 1}, "c": 3}, P2 is {"a": 1, "c": 3})  # nv
+Test("merge value var") <- (P2 is {**{"a": 1}, "b": V}, V is 2, P2 is {"a": 1, "b": 2})  # nv
+Test("merge multi splat") <- (
+    P2 is {**{"a": 1, "b": 2}, **{"b": 3, "c": 4}},
+    P2 is {"a": 1, "b": 3, "c": 4},
+)  # nv
+
+# ── Functional delete/3 (item 5) ──
+
+Test("delete removes key") <- (delete({"a": 1, "b": 2}, "a", P2), P2 is {"b": 2})  # nv
+Test("delete keeps original") <- (
+    P is {"a": 1, "b": 2},
+    delete(P, "a", _),
+    P is {"a": 1, "b": 2},
+)  # nv
+Test("delete absent throws") <- (
+    catch(
+        delete({"a": 1}, "z", _),
+        error(existence_error(_, KEY), _),
+        KEY is "z",
+    )
+)  # nv

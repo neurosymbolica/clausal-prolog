@@ -2,6 +2,14 @@
 
 **Part of:** [dict-native-profile-api.md](dict-native-profile-api.md) · **Order:** 3
 
+## STATUS: DONE 2026-07-14
+`get/3` (soft, fails on absent) + `get/4` (defaulted) added to `clausal/logic/builtins/dict_set.py`
+(`_get__3`, `_get__4`; auto-merged to a multi-arity `get` builtin). DICT-first arg order per the pinned
+API; implemented directly against `DictTerm.__contains__`/`__getitem__` — no routing through the throwing
+subscript. Distinct from the older KEY-first `dict_get/3`. Non-ground key / non-dict → soft fail (never
+throws). Tests: `get present/absent-fails/value-var/get4-present/get4-default` in the fixture +
+`test_dict_set_compiler.py`.
+
 ## Goal
 The non-throwing reads, mirroring Python `dict.get`:
 - `get(P, KEY, VALUE)` — bind `VALUE` if `KEY` present; **fail** the clause if absent

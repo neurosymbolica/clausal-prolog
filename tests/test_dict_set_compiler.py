@@ -221,6 +221,86 @@ class TestDictSetFixture:
         # nv
         assert self._query_test(mod, logic_mod, "subscript nonground errors")
 
+    # ── item 2: KEY in P key membership ──
+
+    def test_in_present_key(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "in present key")
+
+    def test_in_absent_key_fails(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "in absent key fails")
+
+    def test_in_is_key_not_value(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "in is key not value")
+
+    def test_in_enumerates_keys(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "in enumerates keys")
+
+    def test_in_pair_mode(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "in pair mode")
+
+    # ── item 3: get/3, get/4 ──
+
+    def test_get_present(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "get present")
+
+    def test_get_absent_fails(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "get absent fails")
+
+    def test_get_value_var(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "get value var")
+
+    def test_get4_present(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "get4 present")
+
+    def test_get4_default(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "get4 default")
+
+    # ── item 4: splat/merge ──
+
+    def test_merge_override(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "merge override")
+
+    def test_merge_default_order(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "merge default order")
+
+    def test_merge_addkey(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "merge addkey")
+
+    def test_merge_value_var(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "merge value var")
+
+    def test_merge_multi_splat(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "merge multi splat")
+
+    # ── item 5: delete/3 ──
+
+    def test_delete_removes_key(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "delete removes key")
+
+    def test_delete_keeps_original(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "delete keeps original")
+
+    def test_delete_absent_throws(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "delete absent throws")
+
 
 # ── Subscript read: direct runtime behaviour ─────────────────────────────────
 

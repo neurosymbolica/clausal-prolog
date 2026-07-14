@@ -2,6 +2,16 @@
 
 **Part of:** [dict-native-profile-api.md](dict-native-profile-api.md) · **Order:** 4 (enables functional set)
 
+## STATUS: DONE 2026-07-14 — already worked at runtime; the "Phase 3" comment was stale
+`visit_Dict` emits a `DictLiteral` for splat dicts, and `term_to_ast_expr`'s `DictLiteral` case
+(`clausal/logic/compiler/terms_to_ast.py`) already folds it into `DictTerm({**deref(P).data, k: v, ...})`,
+which gives Python **last-wins** for free (later explicit pairs and later `**splat`s override). Verified all
+acceptance cases + multi-splat + value-var preserved; locked with tests (`merge override/default order/addkey/
+value var/multi splat` in the fixture + `test_dict_set_compiler.py`). Open edge left for the parser-gap
+todo: an **unbound splat source** (`{**P}` with `P` a Var) currently `deref(P).data` would `AttributeError` —
+not exercised by any consumer; document/harden if/when a use appears (todo item, not a blocker for the set
+surface, which always splats ground dicts).
+
 ## Goal
 Evaluate splat/merge dict literals at runtime so functional profile update works:
 - `P2 is {**P, filing_status: V}` → new `DictTerm` = P with `filing_status` **set/overridden** to `V`.
