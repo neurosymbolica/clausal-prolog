@@ -1,4 +1,4 @@
-# `delete(P, KEY, P2)` — functional key removal
+# `delete/3` — functional key removal (+ reserved `discard/3`, `pop/4`, `pop/5`)
 
 **Part of:** [dict-native-profile-api.md](dict-native-profile-api.md) · **Order:** 5 · **YAGNI-gated**
 
@@ -6,22 +6,36 @@
 `delete(P, KEY, P2)` binds `P2` to a new `DictTerm` equal to `P` with `KEY` removed.
 (`del` is a Python keyword, so the predicate is `delete/3`.) Ground `KEY`.
 
-**Decide the absent-key policy** (pick one, test it, document in the umbrella):
-- lenient: `KEY` absent → `P2 == P` (idempotent; matches "functional, always succeeds"); OR
-- strict: `KEY` absent → throw (Python `del d[missing]` raises KeyError).
-Recommendation: **lenient** (functional-update ops in this API "always succeed"; strictness belongs to the
-throwing *read* `P[k]`), but confirm during implementation.
+**Absent-key policy: THROW** (decided 2026-07-14) — mirrors Python `del d[missing]` raising `KeyError`.
+Consistent with the strict read `P[k]`: strict-named ops throw; softly-named ops don't.
+
+## Reserved sibling names (claim now; implement on demand)
+Same YAGNI gate — define when a consumer appears, but the names/signatures are fixed here so the vocabulary
+stays coherent:
+- **`discard(P, KEY, P2)`** — no-throw removal: `KEY` absent ⇒ `P2 == P` (idempotent). Name borrowed from
+  Python `set.discard` (remove-if-present, no error). *(Alternative considered: `delete_nothrow`; `discard`
+  preferred for Python familiarity + brevity — confirm.)*
+- **`pop(P, KEY, VALUE, P2)`** — remove + retrieve, **throws** if absent (Python `d.pop(k)`): binds `VALUE`
+  to the removed value and `P2` to the residual dict.
+- **`pop(P, KEY, VALUE, P2, DEFAULT)`** — remove + retrieve, no-throw (Python `d.pop(k, default)`):
+  `VALUE` = stored value or `DEFAULT`; `P2` = `P` minus `KEY` (or `P` unchanged if absent).
+
+  **Arity note (provisional):** Python's `pop` mutates in place and returns only the value; our immutable
+  dicts must ALSO output the residual, so the relational forms are `pop/4` + `pop/5`, not `/2` + `/3`.
+  Confirm before implementing.
 
 ## Status
 **No current consumer** — profiles are built-once/read-many; only the planner mutates, and it uses `set`,
-not `delete`. Implement when the corpus migration first needs it (it is small + self-contained, hence
-listed so it is not forgotten). Do not block the read surface / `set` on this.
+not `delete`/`pop`. Implement each when the corpus migration first needs it (all small + self-contained,
+listed so the names are reserved and not forgotten). Do not block the read surface / `set` on these.
 
 ## Where
-- Co-locate with the other dict builtins. Build a new `DictTerm` minus the key (the type is immutable —
-  construct fresh, do not mutate `_data`).
+- Co-locate with the other dict builtins. Build a new `DictTerm` for the residual (the type is immutable —
+  construct fresh, never mutate `_data`).
 
 ## Acceptance
-- `delete({a:1, b:2}, a, P2)` ⇒ `P2 == {b:2}`.
-- absent key follows the chosen policy (test it).
-- original `P` unchanged (immutability).
+- `delete({a:1, b:2}, a, P2)` ⇒ `P2 == {b:2}`; `delete({a:1}, z, _)` **throws** (catchable via `catch/3`).
+- `discard({a:1}, z, P2)` ⇒ `P2 == {a:1}` (no throw).
+- `pop({a:1, b:2}, a, V, P2)` ⇒ `V=1, P2 == {b:2}`; `pop({a:1}, z, _, _)` throws;
+  `pop({a:1}, z, V, P2, 9)` ⇒ `V=9, P2 == {a:1}`.
+- original `P` unchanged in all cases (immutability).

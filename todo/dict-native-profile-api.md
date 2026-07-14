@@ -32,7 +32,11 @@ provability, as long as reads use recognized forms with **ground, declared keys*
 | membership | `filing_status in P` | `k in d` | key presence |
 | set (functional) | `P2 is {**P, filing_status: V}` | `{**d, k: v}` | always succeeds; **last-wins** merge |
 | default-merge | `P2 is {filing_status: Default, **P}` | `{k: default, **d}` | P wins if present (this is the *default* order) |
-| delete (functional) | `delete(P, filing_status, P2)` | `del d[k]` (functional) | `del` is a Python keyword → predicate is `delete/3` |
+| delete (functional) | `delete(P, filing_status, P2)` | `del d[k]` | **throws** if absent; `del` keyword → `delete/3` |
+
+Reserved sibling names (claim now, implement on demand — see `dict-delete-builtin.md`): `discard/3`
+(no-throw removal, Python `set.discard`), `pop/4` (remove+retrieve, throws), `pop/5` (remove+retrieve,
+defaulted). Relational `pop` outputs the residual dict, so it is `/4` + `/5`, not Python's `/1` + `/2`.
 
 ### Binding operator: `is/2`
 `is/2` is Clausal's `=/2`-analogue and already binds computed/constructed RHSs (`W is [applicant_age(16), …]`).
