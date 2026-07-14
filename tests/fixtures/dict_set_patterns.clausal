@@ -202,3 +202,19 @@ Test("delete unhashable key throws") <- (
         TY is "dict_key",
     )
 )  # nv
+
+# ── Atom-key dict literals (the ergonomic profile surface) ──
+
+Test("atom key subscript") <- (V is {foo: 1, bar: 2}[foo], V is 1)  # nv
+Test("atom key subscript bar") <- (V is {foo: 1, bar: 2}[bar], V is 2)  # nv
+Test("atom key get") <- (get({foo: 1}, foo, V), V is 1)  # nv
+Test("atom key in") <- (foo in {foo: 1, bar: 2})  # nv
+Test("atom key unify") <- ({foo: 1, bar: 2} is {foo: 1, bar: 2})  # nv
+Test("atom key merge") <- (P2 is {**{foo: 1}, bar: 2}, P2 is {foo: 1, bar: 2})  # nv
+Test("atom key delete") <- (delete({foo: 1, bar: 2}, foo, P2), P2 is {bar: 2})  # nv
+# atom key `foo` and string key "foo" are DISTINCT (atoms don't unify with strings)
+Test("atom key distinct from string") <- (
+    D is {foo: 1},
+    not get(D, "foo", _),
+    get(D, foo, V), V is 1,
+)  # nv

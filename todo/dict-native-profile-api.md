@@ -76,10 +76,11 @@ Missing / immature (the work below):
 6. **SMT prover dict-read projection** (CLAUSIFY repo, `auto/formal`) — separate todo filed there, not here.
 
 ## Sequencing / acceptance
-**Interpreter items 1–5 are all landed (2026-07-14).** Remaining before the capability is "done":
-- close the atom-key-literal parser gap (`dict-atom-key-literal-parser-gap.md`) so the ergonomic bare-atom
-  surface (`P[filing_status]`, `{filing_status: V}`) works — every current test uses string keys;
-- the SMT prover projection (item 6, clausify repo);
+**Interpreter items 1–5 are all landed (2026-07-14), and the ergonomic bare-atom surface works** —
+`{filing_status: V}` / `P[filing_status]` / `get(P, filing_status, V)` / `filing_status in P` all parse and
+run (atom keys distinct from string keys; see `dict-atom-key-literal-parser-gap.md`, now DONE). Remaining
+before the capability is "done":
+- the SMT prover projection (item 6, clausify repo — `has_k`/`val_k` recognition of the dict-read forms);
 - then a **single pilot domain** rewritten to the dict-native surface passing its full gate end-to-end
   (oracle refutations=0 + G3 baseline-identical) — the hand-off signal to start the corpus-migration spec.
 

@@ -723,6 +723,43 @@ class TermTransformer(NodeTransformer):
         # The evaluator sees the native Python value (int, float, str, bool, None, …).
         return constant
 
+    def _visit_dict_key(transformer, key):
+        """Transform a dict-literal key.
+
+        A bare atom in key position (unquoted lowercase identifier, e.g.
+        ``{filing_status: V}``) must resolve to its **interned atom value**, not
+        to the ``LoadName`` reflection node ``visit_Name`` emits for atoms in
+        value position — a ``LoadName`` instance is unhashable and cannot key a
+        ``DictTerm``.  Emit ``$intern_atom("filing_status")`` so the key is the
+        process-wide interned atom at construction time (dict literals are built
+        eagerly during exec, before the bare-atom mint pass); ``setdefault`` in
+        that helper yields the same object a value-position use of the atom
+        resolves to, so ``{foo: 1}[foo]`` matches.  Atom keys are distinct from
+        string keys (atoms do not unify with strings), matching Python dict-key
+        identity.  Also register the name so a value-position use mints
+        consistently.
+
+        Everything else — string/int ``Constant`` keys, logic-variable keys
+        (left to their existing behaviour), and computed expressions — is
+        transformed as before.
+        """
+        if (
+            isinstance(key, Name)
+            and key.id != "_"
+            and not _is_logic_var_name(key.id)
+        ):
+            if not transformer._suppress_bare_atom_collection:
+                transformer._bare_atom_refs.add(key.id)
+            return replace(
+                Call(
+                    func=replace(Name(id="$intern_atom", ctx=load), key),
+                    args=[replace(Constant(value=key.id), key)],
+                    keywords=[],
+                ),
+                key,
+            )
+        return transformer.visit(key)
+
     def visit_Dict(transformer, dict_expr):
         # If any key is None, this is a **splat dict — fall back to DictLiteral
         # (full splat/merge support is Phase 3).
@@ -731,7 +768,7 @@ class TermTransformer(NodeTransformer):
             keys = list_ast(
                 [
                     (
-                        transformer.visit(key)
+                        transformer._visit_dict_key(key)
                         if key is not None
                         else replace(Constant(value=None), dict_expr)
                     )
@@ -747,7 +784,7 @@ class TermTransformer(NodeTransformer):
 
         # Emit DictTerm({k1: v1, k2: v2, ...}) constructor call.
         # Keys and values are transformed recursively.
-        key_asts = [transformer.visit(k) for k in dict_expr.keys]
+        key_asts = [transformer._visit_dict_key(k) for k in dict_expr.keys]
         val_asts = [transformer.visit(v) for v in dict_expr.values]
         dict_arg = replace(
             Dict(keys=key_asts, values=val_asts),

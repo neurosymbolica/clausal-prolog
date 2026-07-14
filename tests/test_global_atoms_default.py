@@ -170,6 +170,42 @@ def test_strict_atoms_undeclared_atom_raises():
     assert "phase3strict_undeclared_red" not in predicate_builtins
 
 
+def test_strict_atoms_undeclared_dict_key_raises_without_polluting():
+    """An undeclared bare-atom *dict key* under ``-strict_atoms`` must fail like
+    any other undeclared atom — and must NOT pollute ``predicate_builtins``.
+
+    Dict literals are built eagerly during exec (before the mint pass), so the
+    ``$intern_atom`` key helper has to enforce strict mode itself rather than
+    silently interning; this guards that regression.
+    """
+    assert "phase3strict_dictkey_violet" not in predicate_builtins
+    source = (
+        "-strict_atoms\n"
+        "\n"
+        "with_key(V) <- (V is {phase3strict_dictkey_violet: 1}"
+        "[phase3strict_dictkey_violet]),\n"
+    )
+    with pytest.raises(NameError) as exc_info:
+        _load_inline_clausal("_strict_atoms_dictkey_test", source)
+    assert "strict_atoms" in str(exc_info.value)
+    assert "phase3strict_dictkey_violet" in str(exc_info.value)
+    # The eager key-intern must not have leaked the atom into the process dict.
+    assert "phase3strict_dictkey_violet" not in predicate_builtins
+
+
+def test_non_strict_atom_dict_key_interns():
+    """A non-strict file with a bare-atom dict key mints the atom into the
+    process-wide dict, and it is the *same* object a value-position use binds —
+    so ``{k: 1}[k]`` reads back."""
+    assert "phase_atomkey_teal" not in predicate_builtins
+    source = (
+        "read_key(V) <- (V is {phase_atomkey_teal: 7}[phase_atomkey_teal]),\n"
+    )
+    mod = _load_inline_clausal("_atomkey_intern_test", source)
+    assert "phase_atomkey_teal" in predicate_builtins
+    assert mod.phase_atomkey_teal is predicate_builtins["phase_atomkey_teal"]
+
+
 def test_strict_atoms_private_atom_compiles():
     """A file with ``-strict_atoms`` and a bare reference to an atom listed
     in ``-private([...])`` must compile successfully — the private listing

@@ -331,6 +331,40 @@ class TestDictSetFixture:
         # nv
         assert self._query_test(mod, logic_mod, "delete unhashable key throws")
 
+    # ── atom-key dict literals ──
+
+    def test_atom_key_subscript(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "atom key subscript")
+
+    def test_atom_key_subscript_bar(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "atom key subscript bar")
+
+    def test_atom_key_get(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "atom key get")
+
+    def test_atom_key_in(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "atom key in")
+
+    def test_atom_key_unify(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "atom key unify")
+
+    def test_atom_key_merge(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "atom key merge")
+
+    def test_atom_key_delete(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "atom key delete")
+
+    def test_atom_key_distinct_from_string(self, mod, logic_mod):
+        # nv
+        assert self._query_test(mod, logic_mod, "atom key distinct from string")
+
 
 # ── Subscript read: direct runtime behaviour ─────────────────────────────────
 

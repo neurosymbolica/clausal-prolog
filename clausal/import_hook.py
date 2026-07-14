@@ -53,6 +53,46 @@ def _fact_to_predicate_node(term):
     return simple_ast.Predicate(head=term, body=simple_ast.BoolLiteral(value=True))
 
 
+def _make_intern_atom(module_dict, module_items, module_name):
+    """Build the ``$intern_atom`` helper for a module load.
+
+    A bare-atom dict-literal key (``{filing_status: V}``) is resolved to its
+    interned atom **at construction time**, because dict literals are built
+    eagerly during ``exec`` — before the bare-atom mint pass runs — so the key
+    cannot rely on a later module-global binding.  ``setdefault`` into the
+    process-wide ``predicate_builtins`` yields the *same* ``PredicateMeta`` the
+    mint pass would produce, so an atom key and any value-position use of the
+    atom are the identical object (``{foo: 1}[foo]`` matches).
+
+    Under ``-strict_atoms`` an undeclared atom must NOT be silently minted (that
+    would pollute ``predicate_builtins`` and defeat the directive), so the helper
+    refuses to mint a name that is not already available, mirroring the mint
+    pass's own strict check.  (Atom keys whose atom is declared post-exec via
+    ``-module``/``-private`` are a known limitation in strict files — declarations
+    are processed after ``exec`` — so strict files should use string keys or a
+    declared/imported atom; non-strict files, including the profile surface, are
+    unaffected.)
+    """
+    from clausal.logic.predicate import make_predicate
+    from clausal.pythonic_ast.nodes import StrictAtomsDeclaration
+
+    strict = any(isinstance(it, StrictAtomsDeclaration) for it in module_items)
+
+    def _intern_atom(name):
+        existing = module_dict.get(name)
+        if existing is not None:
+            return existing
+        if strict:
+            raise NameError(
+                f"strict_atoms: undeclared atom {name!r} used as a dict key in "
+                f"{module_name}; declare it (-module/-private/-import_from) or "
+                f"use a string key"
+            )
+        return predicate_builtins.setdefault(name, make_predicate(name, []))
+
+    return _intern_atom
+
+
 def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items_fn):
     """Shared V2 pipeline: exec bytecode, collect predicate_nodes, compile.
 
@@ -91,6 +131,9 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
         module_items = transformer._module_items
     else:
         module_items = recover_module_items_fn(filename)
+
+    module_dict["$intern_atom"] = _make_intern_atom(module_dict, module_items,
+                                                    module.__name__)
 
     _preseed_py_submodules(module_items)
     exec(code, module_dict)
