@@ -75,14 +75,35 @@ Missing / immature (the work below):
    YAGNI-parked. → `dict-delete-builtin.md`.
 6. **SMT prover dict-read projection** (CLAUSIFY repo, `auto/formal`) — separate todo filed there, not here.
 
-## Sequencing / acceptance
-**Interpreter items 1–5 are all landed (2026-07-14), and the ergonomic bare-atom surface works** —
-`{filing_status: V}` / `P[filing_status]` / `get(P, filing_status, V)` / `filing_status in P` all parse and
-run (atom keys distinct from string keys; see `dict-atom-key-literal-parser-gap.md`, now DONE). Remaining
-before the capability is "done":
-- the SMT prover projection (item 6, clausify repo — `has_k`/`val_k` recognition of the dict-read forms);
-- then a **single pilot domain** rewritten to the dict-native surface passing its full gate end-to-end
-  (oracle refutations=0 + G3 baseline-identical) — the hand-off signal to start the corpus-migration spec.
+## Sequencing / acceptance — ✅ ALL DONE (2026-07-14)
+Interpreter items 1–5 landed; the ergonomic bare-atom surface works
+(`{filing_status: V}` / `P[filing_status]` / `get(P, filing_status, V)` / `filing_status in P`; atom keys
+distinct from string keys — `dict-atom-key-literal-parser-gap.md` DONE). Item 6 (SMT prover projection)
+landed as clausify `41e617b`. The pilot + **the full 54-domain corpus migration are COMPLETE and green**
+(every domain decision-preserving; all SMT domains re-proved G3 PROVED ≥ baseline). DictTerm read/op
+coverage lives in `tests/test_dict_set_compiler.py` + `tests/fixtures/dict_set_patterns.clausal`.
 
-DictTerm read/op coverage now exists in `tests/test_dict_set_compiler.py` +
-`tests/fixtures/dict_set_patterns.clausal` (was zero at the start of this work).
+## Core promotion — STATUS + remaining (2026-07-14)
+The design planned "kit module now, promote to Clausal core later." The implementation **skipped the kit
+step and put the dict ops directly in the interpreter as global core builtins**, so the "promotion" is
+effectively already realized at the runtime level:
+- `get/3`, `get/4`, `delete/3` — registered builtins in `clausal/logic/builtins/dict_set.py`
+  (`@_trampoline_builtin("get", 3)` etc.), auto-loaded via `clausal/logic/builtins/__init__.py`.
+- `P[key]` subscript, `key in P` membership, `{**P, k:V}` splat/merge — lowered in the compiler
+  (`term_to_ast_expr` / `$subscript` / `$in_iter` / `$splat_data` runtime helpers).
+- **No import required** — the 54-domain corpus uses `get`/`in`/`P[k]` with zero `-import_from`, proving
+  they are always-available core.
+
+**Remaining to call the promotion formally "done" (finalization, not runtime work):**
+1. **Language-reference docs** — add the dict-profile ops to the canonical Clausal builtins reference / the
+   clausify cheat-sheet + scaffolding skeletons (the clausify-side doc sweep is in progress: `docs(clausal):
+   update cheat-sheet + scaffolding to dict-native`). Ensure `get`/`in`/subscript/`{**}`/`delete` are
+   documented as first-class core, alongside list/set ops.
+2. **Reserved-name siblings** (from `dict-delete-builtin.md`, still YAGNI) — implement `discard/3` (no-throw
+   remove), `pop/4`/`pop/5` (remove+retrieve) if/when a consumer appears; the corpus currently needs none.
+3. **Builtins registry / spec entry** — confirm the dict ops appear in whatever canonical builtin catalog
+   or language spec Clausal maintains (they are registered for execution; make sure they're *catalogued*
+   for discoverability + tooling, same as `in_/2`, `append/3`, etc.).
+4. **`length/2` on DictTerm** — a domain (diversity) hit `length/2` returning None on a `DictTerm` and used
+   `dict_size/2` instead. Decide whether `length/2` should also count dict keys, or standardize on
+   `dict_size/2` and document it.
