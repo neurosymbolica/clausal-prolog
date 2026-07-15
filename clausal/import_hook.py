@@ -535,26 +535,52 @@ class _ExtensionFinder(MetaPathFinder):
         tail = fullname.rsplit(".", 1)[-1]
         search_dirs = path if path else sys.path
         for dir_entry in search_dirs:
-            candidate = os.path.join(dir_entry, tail + self._extension)
-            if os.path.isfile(candidate):
-                # A10-F010 / A10-D002(a): a .clausal/.pl file named after a
-                # standard-library module is almost always an accident. These
-                # finders run before PathFinder, so shadowing would be silent —
-                # defer to the stdlib (return None) and warn loudly instead.
-                if tail in sys.stdlib_module_names:
-                    from clausal.templating.term_rewriting import (
-                        ClausalLintWarning,
-                    )
-                    warnings.warn(
-                        f"{candidate!r} is named after the standard-library "
-                        f"module {tail!r}; the stdlib module is used instead. "
-                        f"Rename the file to avoid shadowing it.",
-                        ClausalLintWarning,
-                        stacklevel=2,
-                    )
-                    return None
-                loader = self._loader_cls(fullname, candidate)
-                return ModuleSpec(fullname, loader, origin=candidate)
+            # Flat-file form: ``dir_entry/tail.clausal`` → module ``tail``.
+            file_candidate = os.path.join(dir_entry, tail + self._extension)
+            is_file = os.path.isfile(file_candidate)
+            # Package form: ``dir_entry/tail/__init__.clausal`` → package ``tail``.
+            # Reuses Python's __init__ package mechanism so submodule files
+            # (``tail/sub.clausal``) then resolve as ``fullname.sub``.  A bare
+            # directory *without* an __init__ is left to PathFinder as a PEP-420
+            # namespace package (return nothing here), so this must not fire.
+            pkg_dir = os.path.join(dir_entry, tail)
+            init_candidate = os.path.join(pkg_dir, "__init__" + self._extension)
+            is_pkg = os.path.isdir(pkg_dir) and os.path.isfile(init_candidate)
+
+            if not (is_file or is_pkg):
+                continue
+
+            # A10-F010 / A10-D002(a): a .clausal/.pl file (or package dir) named
+            # after a standard-library module is almost always an accident.
+            # These finders run before PathFinder, so shadowing would be silent —
+            # defer to the stdlib (return None) and warn loudly instead.
+            if tail in sys.stdlib_module_names:
+                from clausal.templating.term_rewriting import (
+                    ClausalLintWarning,
+                )
+                shadowed = file_candidate if is_file else init_candidate
+                warnings.warn(
+                    f"{shadowed!r} is named after the standard-library "
+                    f"module {tail!r}; the stdlib module is used instead. "
+                    f"Rename the file to avoid shadowing it.",
+                    ClausalLintWarning,
+                    stacklevel=2,
+                )
+                return None
+
+            # Flat file takes priority over a same-named package directory so
+            # existing flat-module resolution is unchanged.
+            if is_file:
+                loader = self._loader_cls(fullname, file_candidate)
+                return ModuleSpec(fullname, loader, origin=file_candidate)
+
+            loader = self._loader_cls(fullname, init_candidate)
+            spec = ModuleSpec(fullname, loader, origin=init_candidate)
+            # A non-None search-locations list is what marks the module a
+            # *package*: importlib sets ``__path__`` from it, so a later
+            # find_spec(fullname + ".sub", path=[pkg_dir]) resolves submodules.
+            spec.submodule_search_locations = [pkg_dir]
+            return spec
 
 
 class PredicateFinder(_ExtensionFinder):
