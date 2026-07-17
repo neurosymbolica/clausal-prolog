@@ -427,6 +427,24 @@ def _warn_isnot_partial_pattern(rhs, node, source_lines) -> None:
     )
 
 
+def _warn_walrus_deprecated(node, source_lines) -> None:
+    import warnings  # noqa: PLC0415
+    lineno = getattr(node, "lineno", None)
+    snippet = ""
+    if source_lines and lineno and 1 <= lineno <= len(source_lines):
+        snippet = " — " + source_lines[lineno - 1].strip()
+    where = f" (line {lineno})" if lineno else ""
+    warnings.warn(
+        f"`:=` (arithmetic evaluate-and-bind) is deprecated{where}{snippet}. "
+        "Use `eval_(EXPR, X)` for eager arithmetic (the old `:=` behaviour), "
+        "`==` for relational arithmetic constraints (e.g. `Y == X * 2`), "
+        "`is` for unification, or `is ++(...)` for an arbitrary Python "
+        "expression.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+
 def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyThunk"):
     """Build a ``PyThunk(lambda V1, ...: expr, [V1_var, ...])`` AST node.
 
@@ -1035,8 +1053,11 @@ class TermTransformer(NodeTransformer):
 
     def visit_NamedExpr(transformer, named_expr):
         # ':=' maps to Evaluate (arithmetic evaluate-and-bind) — Prolog-style 'is'.
-        # Python's walrus operator requires a Name on the left, which is exactly
-        # the common case: N := N1 + 1  →  Evaluate(N, Add(N1, 1)).
+        # DEPRECATED (Phase 1): this meaning is being retired. It still compiles
+        # to Evaluate for now, but every use warns; authors should move to ``==``
+        # (arithmetic constraint), ``is`` (unification), or ``is ++(...)`` (Python
+        # expression).  ':=' will be reintroduced as an inline-naming construct.
+        _warn_walrus_deprecated(named_expr, transformer._source_lines)
         return node_ast(
             "Evaluate",
             named_expr,

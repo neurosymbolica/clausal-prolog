@@ -753,3 +753,28 @@ def test_anon_var_not_reused_like_named_var():
     expr2 = ast.fix_missing_locations(ast.Expression(body=transformed2))
     anon_result = eval(compile(expr2, "<test>", "eval"), {**sa_ns, "Var": RealVar})
     assert anon_result.left is not anon_result.right
+
+
+# ── walrus (:=) deprecation (Phase 1) ─────────────────────────────────────────
+
+def test_walrus_emits_deprecation_warning():
+    """`:=` (arithmetic evaluate-and-bind) warns at transform time (Phase 1).
+
+    It still compiles to Evaluate for now; the warning steers authors to
+    ``eval_/2`` / ``==`` / ``is`` / ``is ++(...)``.
+    """
+    import warnings
+    tree = ast.parse("(Y := X * 2)", mode="eval")
+    ast.fix_missing_locations(tree)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = TermTransformer().visit(tree.body)
+    msgs = [str(w.message) for w in caught
+            if issubclass(w.category, DeprecationWarning)]
+    assert any(":=" in m and "==" in m and "eval_" in m for m in msgs), msgs
+    # Behavior unchanged in Phase 1: still an Evaluate node.
+    from clausal.pythonic_ast import nodes as sa
+    expr = ast.fix_missing_locations(ast.Expression(body=result))
+    node = eval(compile(expr, "<test>", "eval"),
+                {n: getattr(sa, n) for n in sa.__all__} | {"Var": RealVar})
+    assert isinstance(node, sa.Evaluate)
