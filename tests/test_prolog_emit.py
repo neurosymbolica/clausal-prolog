@@ -297,7 +297,7 @@ Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
 
     def test_arithmetic(self):
         # nv
-        source = 'Double(X, Y) <- (Y := X * 2)'
+        source = 'Double(X, Y) <- eval_(X * 2, Y)'
         result = clausal_source_to_prolog(source)
         assert "double(X, Y) :-" in result
         assert "Y is X * 2" in result
@@ -486,9 +486,9 @@ class TestPrologAstConversion:
         assert isinstance(body, PCompound)
         assert body.functor == "\\+"
 
-    def test_named_expr_becomes_is(self):
+    def test_eval_becomes_is(self):
         # nv
-        source = 'Double(X, Y) <- (Y := X * 2)'
+        source = 'Double(X, Y) <- eval_(X * 2, Y)'
         pmod = clausal_source_to_prolog_ast(source)
         item = pmod.items[0]
         body = item.body

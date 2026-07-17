@@ -761,12 +761,20 @@ class TestArrowLambdaTermTransformer:
         tt.visit(tree.body)
         assert tt.seen_vars == original_seen
 
-    def test_arrow_lambda_walrus_in_body(self):
-        """Arrow lambda supports := (Evaluate) in body — unlike Python lambda."""
+    def test_arrow_lambda_eval_in_body(self):
+        """Arrow lambda supports eager arithmetic via eval_/2 in body."""
         # nv
-        node = term_eval("(_x, _y) <- (_y := _x + 1)", sa.Lambda)
+        node = term_eval("(_x, _y) <- eval_(_x + 1, _y)", sa.Lambda)
         assert isinstance(node, sa.Lambda)
-        assert isinstance(node.body, Evaluate)
+        assert isinstance(node.body, sa.Call)
+
+    def test_arrow_lambda_walrus_in_body_is_syntax_error(self):
+        """':=' was removed; in a lambda body it raises like anywhere else."""
+        # nv
+        tree = ast.parse("(_x, _y) <- (_y := _x + 1)", mode="eval")
+        ast.fix_missing_locations(tree)
+        with pytest.raises(SyntaxError, match="eval_"):
+            TermTransformer().visit(tree.body)
 
     def test_functor_head_stays_predicate(self):
         """A functor call head like foo(_x) <- body stays as Predicate, not Lambda."""

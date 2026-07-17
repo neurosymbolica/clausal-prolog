@@ -427,24 +427,6 @@ def _warn_isnot_partial_pattern(rhs, node, source_lines) -> None:
     )
 
 
-def _warn_walrus_deprecated(node, source_lines) -> None:
-    import warnings  # noqa: PLC0415
-    lineno = getattr(node, "lineno", None)
-    snippet = ""
-    if source_lines and lineno and 1 <= lineno <= len(source_lines):
-        snippet = " — " + source_lines[lineno - 1].strip()
-    where = f" (line {lineno})" if lineno else ""
-    warnings.warn(
-        f"`:=` (arithmetic evaluate-and-bind) is deprecated{where}{snippet}. "
-        "Use `eval_(EXPR, X)` for eager arithmetic (the old `:=` behaviour), "
-        "`==` for relational arithmetic constraints (e.g. `Y == X * 2`), "
-        "`is` for unification, or `is ++(...)` for an arbitrary Python "
-        "expression.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
-
 def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyThunk"):
     """Build a ``PyThunk(lambda V1, ...: expr, [V1_var, ...])`` AST node.
 
@@ -1052,17 +1034,24 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_NamedExpr(transformer, named_expr):
-        # ':=' maps to Evaluate (arithmetic evaluate-and-bind) — Prolog-style 'is'.
-        # DEPRECATED (Phase 1): this meaning is being retired. It still compiles
-        # to Evaluate for now, but every use warns; authors should move to ``==``
-        # (arithmetic constraint), ``is`` (unification), or ``is ++(...)`` (Python
-        # expression).  ':=' will be reintroduced as an inline-naming construct.
-        _warn_walrus_deprecated(named_expr, transformer._source_lines)
-        return node_ast(
-            "Evaluate",
-            named_expr,
-            left=transformer.visit(named_expr.target),
-            right=transformer.visit(named_expr.value),
+        # ':=' (arithmetic evaluate-and-bind) was removed.  Its eager meaning
+        # lives in the reserved builtin ``eval_(EXPR, X)`` — same Evaluate →
+        # ArithEval backend — while ``==`` posts relational constraints and
+        # ``is`` unifies (chain ``A is B is C`` to name a term inline).  This
+        # raises rather than warns because ':=' used to kind-of-work, which
+        # taught authors (and LLMs) the wrong operator.
+        lineno = getattr(named_expr, "lineno", None)
+        snippet = ""
+        if transformer._source_lines and lineno \
+                and 1 <= lineno <= len(transformer._source_lines):
+            snippet = " — " + transformer._source_lines[lineno - 1].strip()
+        where = f" (line {lineno})" if lineno else ""
+        raise SyntaxError(
+            f"`:=` is not a Clausal operator{where}{snippet}. Use "
+            "`eval_(EXPR, X)` for eager arithmetic (the old `:=` behaviour), "
+            "`==` for relational arithmetic constraints, `is` for unification "
+            "(chain `A is B is C` to name a term inline), or `is ++(...)` "
+            "for an arbitrary Python expression."
         )
 
     def visit_JoinedStr(transformer, node):

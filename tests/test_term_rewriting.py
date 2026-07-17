@@ -227,22 +227,15 @@ def test_compare_chain():
     assert isinstance(node.comparisons[0], sa.Lt)
     assert isinstance(node.comparisons[1], sa.LtE)
 
-# ── TermTransformer: walrus operator ':=' → Evaluate (arithmetic evaluate-and-bind) ──
+# ── TermTransformer: walrus operator ':=' removed (was Evaluate) ──────────────
 
-def test_walrus_is_simple():
-    # N := expr  →  Evaluate(N, expr) — variable LHS becomes Var(), lowercase RHS is LoadName
+def test_walrus_is_syntax_error():
+    # ':=' no longer parses — its eager-arithmetic meaning lives in eval_/2.
     # nv
-    node = term_eval("(N := x)", sa.Evaluate)
-    assert node.left == '<Var>'   # uppercase N → Var() in mock namespace
-    assert node.right.name == 'x'
-
-
-def test_walrus_is_arithmetic():
-    # N := N1 + 1  →  Evaluate(Var, Add(Var, 1))
-    # nv
-    node = term_eval("(N := N1 + 1)", sa.Evaluate)
-    assert node.left == '<Var>'
-    assert isinstance(node.right, sa.Add)
+    tree = ast.parse("(N := N1 + 1)", mode="eval")
+    ast.fix_missing_locations(tree)
+    with pytest.raises(SyntaxError, match="eval_"):
+        TermTransformer().visit(tree.body)
 
 
 def test_plain_eq_not_arith_constraint():
@@ -755,26 +748,18 @@ def test_anon_var_not_reused_like_named_var():
     assert anon_result.left is not anon_result.right
 
 
-# ── walrus (:=) deprecation (Phase 1) ─────────────────────────────────────────
+# ── walrus (:=) removal (Phase 2) ─────────────────────────────────────────────
 
-def test_walrus_emits_deprecation_warning():
-    """`:=` (arithmetic evaluate-and-bind) warns at transform time (Phase 1).
+def test_walrus_error_names_all_replacements():
+    """The `:=` SyntaxError teaches every replacement idiom.
 
-    It still compiles to Evaluate for now; the warning steers authors to
-    ``eval_/2`` / ``==`` / ``is`` / ``is ++(...)``.
+    ':=' kind-of-worked as eager arithmetic, so LLMs reached for it where
+    ``==`` / ``is`` were meant; the removal error must point at ``eval_/2``
+    (the old behaviour), ``==``, ``is``, and ``++``.
     """
-    import warnings
     tree = ast.parse("(Y := X * 2)", mode="eval")
     ast.fix_missing_locations(tree)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        result = TermTransformer().visit(tree.body)
-    msgs = [str(w.message) for w in caught
-            if issubclass(w.category, DeprecationWarning)]
-    assert any(":=" in m and "==" in m and "eval_" in m for m in msgs), msgs
-    # Behavior unchanged in Phase 1: still an Evaluate node.
-    from clausal.pythonic_ast import nodes as sa
-    expr = ast.fix_missing_locations(ast.Expression(body=result))
-    node = eval(compile(expr, "<test>", "eval"),
-                {n: getattr(sa, n) for n in sa.__all__} | {"Var": RealVar})
-    assert isinstance(node, sa.Evaluate)
+    with pytest.raises(SyntaxError) as exc_info:
+        TermTransformer().visit(tree.body)
+    msg = str(exc_info.value)
+    assert "eval_" in msg and "==" in msg and "is" in msg and "++" in msg

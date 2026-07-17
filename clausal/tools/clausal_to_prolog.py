@@ -651,8 +651,8 @@ class _ClausalToProlog:
         if isinstance(node, python_ast.IfExp):
             return self._convert_ifexp(node)
 
-        if isinstance(node, python_ast.NamedExpr):
-            return self._convert_named_expr(node)
+        # python_ast.NamedExpr (':=') no longer reaches here: the Clausal
+        # transformer rejects it with a SyntaxError (use eval_/2, ==, or is).
 
         if isinstance(node, python_ast.Starred):
             # *X in list context — handled by _convert_list
@@ -886,7 +886,6 @@ class _ClausalToProlog:
         Handles special clausal patterns:
         - X is Y → X = Y (Unify)
         - X is not Y → dif(X, Y) (DoesNotUnify)
-        - X := Expr → X is Expr (Evaluate)
         - X == Y → X == Y (structural) / X =:= Y+1 (arithmetic operand)
         - X != Y → X \\== Y (structural) / X =\\= Y+1 (arithmetic operand)
         """
@@ -920,10 +919,7 @@ class _ClausalToProlog:
                 return PCompound("=\\=" if arith else "\\==", (left, right))
 
             if isinstance(op, python_ast.Lt):
-                # Check for := (walrus-like evaluation)
-                # in_ clausal, Y := X * 2 is parsed as Compare with LtE
-                # Actually in clausal, := is a NamedExpr. Let me check...
-                # Actually <- is Lt + USub. Pure Lt is just <.
+                # <- is Lt + USub (handled at statement level); pure Lt is <.
                 return PCompound("<", (left, right))
 
             if isinstance(op, python_ast.LtE):
@@ -1011,12 +1007,6 @@ class _ClausalToProlog:
                 parts.append(current.id)
             return ".".join(reversed(parts))
         return str(node)
-
-    def _convert_named_expr(self, node: python_ast.NamedExpr) -> PTerm:
-        """Convert := (walrus operator) to Prolog 'is' (arithmetic evaluation)."""
-        target = self._convert_expr(node.target)
-        value = self._convert_expr(node.value)
-        return PCompound("is", (target, value))
 
     def _convert_fstring(self, node: python_ast.JoinedStr) -> PTerm:
         """Convert f-string to format/2 (SWI) or warning.
