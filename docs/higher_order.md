@@ -171,7 +171,7 @@ Test("span") <- (
 `Goal(Elem, Key)` extracts the grouping key.
 
 ```clausal
-first_char(S, C) <- (C := ++S[0])
+first_char(S, C) <- (C is ++S[0])
 
 Test("group by first char") <- (
     group_by(first_char, ["apple", "avocado", "banana", "blueberry", "cherry"], [["apple", "avocado"], ["banana", "blueberry"], ["cherry"]])
@@ -199,7 +199,7 @@ Test("sort by abs") <- (
 largest/smallest projected key.
 
 ```clausal
-str_len(S, K) <- (K := ++len(S))    # see [Python interop](python_integration.md)
+str_len(S, K) <- (K is ++len(S))    # see [Python interop](python_integration.md)
 
 Test("longest") <- (
     max_by(str_len, ["hi", "hello", "hey"], "hello")

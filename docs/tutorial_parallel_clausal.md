@@ -26,9 +26,9 @@ locking internally.
 ```
 
 !!! tip "Use `==` for arithmetic"
-    Prefer `N1 == N - 1` over `N1 := N - 1`. The `==` operator uses
+    Prefer `N1 == N - 1` over `eval_(N - 1, N1)`. The `==` operator uses
     CLP(ℤ) constraints, making predicates bidirectional where possible.
-    `:=` forces eager evaluation in one direction only.
+    `eval_/2` forces eager evaluation in one direction only.
 
 Each thread creates its own Vars and Trail when it calls these
 predicates. The clause database is read-only during resolution —

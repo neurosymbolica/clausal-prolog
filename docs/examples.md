@@ -72,7 +72,7 @@ Classic Sudoku solver using CLP(ℤ) constraints, ported from [Markus Triska's `
 
 ```clausal
 Sudoku(ROWS) <- (
-    ROWS := [R1, R2, R3, R4, R5, R6, R7, R8, R9],
+    ROWS is [R1, R2, R3, R4, R5, R6, R7, R8, R9],
     flatten(ROWS, VS),
     in_domain(VS, 1, 9),
     maplist(all_different, ROWS),

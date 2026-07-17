@@ -13,15 +13,15 @@ syntactic sugar for writing measurements inline.
 -import_from(py.imperial, [foot, inch, pound_mass, mph])
 
 # SI sugar: n(Unit) — Unit must be an SI predicate
-distance := 100(m)              # Quantity(100, {Metre: 1})
-_time    := 9.58(s)             # Quantity(9.58, {Second: 1})
-speed    := distance / _time    # Quantity(10.4…, {Metre: 1, Second: -1})
+eval_(100(m), distance)              # Quantity(100, {Metre: 1})
+eval_(9.58(s), _time)                # Quantity(9.58, {Second: 1})
+eval_(distance / _time, speed)       # Quantity(10.4…, {Metre: 1, Second: -1})
 
 # SI prefix: plain number, multiply in ++ escape
-big_force := ++(5 * kilo * Newton(1))   # 5 kN → Quantity(5000, {kg:1, m:1, s:-2})
+big_force is ++(5 * kilo * Newton(1))   # 5 kN → Quantity(5000, {kg:1, m:1, s:-2})
 
 # Imperial: unit-vector Quantity, multiply in ++ escape
-height := ++(6 * foot + 2 * inch)       # Quantity(1.879…, {Metre: 1})
+height is ++(6 * foot + 2 * inch)       # Quantity(1.879…, {Metre: 1})
 
 # Check dimension type
 has_units(speed, m/s)            # succeeds: dims match
@@ -57,7 +57,7 @@ right of `*` (`5 * kilo * m` raises a `TypeError`).
 For unusual constructions, use `++()` directly:
 
 ```python
-custom := ++(Kilogram(1) * Metre(1) / Second(1)**2 * 9.8)   # same as 9.8(Newton)
+custom is ++(Kilogram(1) * Metre(1) / Second(1)**2 * 9.8)   # same as 9.8(Newton)
 ```
 
 ### `* unit` style — SI prefixes and imperial
@@ -66,11 +66,11 @@ SI prefixes are plain numbers; imperial/non-SI units are `Quantity` unit
 vectors.  Both are used via multiplication inside a `++()` escape:
 
 ```python
-F   := ++(5 * kilo * Newton(1))        # 5 kN
-t   := ++(100 * nano * Second(1))      # 100 ns
-f   := ++(2.4 * mega * Hertz(1))       # 2.4 GHz
-len := ++(20 * inch)                   # 20 inches → 0.508 m
-spd := ++(60 * mph)                    # 60 mph → 26.82 m/s
+F   is ++(5 * kilo * Newton(1))        # 5 kN
+t   is ++(100 * nano * Second(1))      # 100 ns
+f   is ++(2.4 * mega * Hertz(1))       # 2.4 GHz
+len is ++(20 * inch)                   # 20 inches → 0.508 m
+spd is ++(60 * mph)                    # 60 mph → 26.82 m/s
 ```
 
 ---
@@ -94,7 +94,7 @@ when the callee is a logic variable, `MY_VAL(Unit)` desugars to
 
 ```python
 N == 9.8
-F := N(Newton)          # → Quantity(9.8, Newton dims)
+eval_(N(Newton), F)     # → Quantity(9.8, Newton dims)
 ```
 
 ---
@@ -110,7 +110,7 @@ has_units(A, m/s**2)              # acceleration
 `has_units/2` posts an AttVar constraint on `F` if it is unbound. Compound unit
 expressions work directly — the transformer auto-wraps them.
 
-`has_units` cannot appear on the RHS of `:=` or `==`.
+`has_units` cannot appear inside an `eval_/2` expression or on the RHS of `==`.
 
 ---
 
@@ -218,9 +218,9 @@ These scale on the way in and store as SI base units.  Use with `n(Unit)` sugar.
 -import_from(py.units, [Bit, Byte, Kilobyte, Gigabyte, Kibibyte, Gibibyte,
                         Kilobit, Megabit, kibi, mebi, gibi, tebi])
 
-size   := 4(Gibibyte)                    # Quantity(34_359_738_368, {Bit: 1})
-rate   := 100(Megabit)                   # Quantity(100_000_000,    {Bit: 1})
-custom := ++(512 * mebi * Byte(1))       # 512 MiB via binary prefix
+eval_(4(Gibibyte), size)                 # Quantity(34_359_738_368, {Bit: 1})
+eval_(100(Megabit), rate)                # Quantity(100_000_000,    {Bit: 1})
+custom is ++(512 * mebi * Byte(1))       # 512 MiB via binary prefix
 ```
 
 Decimal (SI-prefixed) byte multiples:
@@ -361,10 +361,10 @@ use by multiplying a scalar inside a `++()` escape:
 ```python
 -import_from(py.imperial, [inch, foot, pound_mass, mph, kilowatt_hour])
 
-LEN  := ++(20 * inch)           # Quantity(0.508,   {Metre: 1})
-MASS := ++(150 * pound_mass)    # Quantity(68.04,   {Kilogram: 1})
-SPD  := ++(60 * mph)            # Quantity(26.82,   {Metre:1, Second:-1})
-E    := ++(1 * kilowatt_hour)   # Quantity(3.6e6,   {kg:1, m:2, s:-2})
+LEN  is ++(20 * inch)           # Quantity(0.508,   {Metre: 1})
+MASS is ++(150 * pound_mass)    # Quantity(68.04,   {Kilogram: 1})
+SPD  is ++(60 * mph)            # Quantity(26.82,   {Metre:1, Second:-1})
+E    is ++(1 * kilowatt_hour)   # Quantity(3.6e6,   {kg:1, m:2, s:-2})
 ```
 
 All values are stored in SI base units; dimensions are the same as their SI

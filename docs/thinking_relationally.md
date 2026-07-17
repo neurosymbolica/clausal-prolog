@@ -306,10 +306,10 @@ participate in unification. They can be bound on either side — in the goal or
 in the clause head. This bidirectionality is what makes relations work in all
 directions.
 
-**Using eager evaluation when constraints would be more general.** The
-`:=` operator requires the right-hand side to be ground. Use `==` instead —
+**Using eager evaluation when constraints would be more general.** Eager
+`eval_/2` requires its expression argument to be ground. Use `==` instead —
 it posts [CLP(ℤ)](constraints.md) constraints that work with unbound variables and preserve
-multi-directional use. Reserve `:=` for [Python interop](python_integration.md) (e.g., `++` for strings).
+multi-directional use. Reserve `eval_/2` and `++` escapes for [Python interop](python_integration.md) (e.g., strings).
 
 **Naming predicates with verbs that imply a direction.** "Find," "get,"
 "compute," "check," "remove" — all suggest a specific mode. Describe what the

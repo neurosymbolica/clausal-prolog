@@ -10,7 +10,7 @@ The `++()` operator evaluates an arbitrary Python expression at search time with
 
 ### As a Value
 
-Use `++expr` on the right side of `==`, `:=`, or `is` to compute a Python value:
+Use `++expr` on the right side of `==` or `is` to compute a Python value:
 
 ```clausal
 list_len(L, N) <- (N is ++len(L))

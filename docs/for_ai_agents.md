@@ -150,11 +150,11 @@ If you can state it clearly in natural language, the clause will be correct.
 ### Use constraints for arithmetic
 
 when the [arithmetic](arithmetic.md) direction isn't fixed, use [CLP(ℤ)](constraints.md) constraints instead of
-`:=`:
+eager `eval_/2` evaluation:
 
 ```clausal
 # Only works forward (N must be known):
-double(N, D) <- (D := N * 2)
+double(N, D) <- (eval_(N * 2, D))
 
 # Works in all directions:
 double_fd(N, D) <- (D #= N * 2)

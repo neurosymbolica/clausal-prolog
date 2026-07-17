@@ -233,7 +233,7 @@ or compiler are needed.
 | `X = Y` | `X is Y` | Unification |
 | `X \= Y` | `X is not Y` | Dis-unification (dif/2) |
 | `\+ G` | `not G` | Negation-as-failure |
-| `Y is X * 2` | `Y := X * 2` | Arithmetic evaluation |
+| `Y is X * 2` | `eval_(X * 2, Y)` | Eager arithmetic evaluation |
 | `Y =:= X * 2` | `Y == X * 2` | Arithmetic equality; atomic-operand `X =:= Y` imports as structural `==` (lossy, pending A11-D008) |
 | `X =\= Y` | `X != Y` | Arithmetic disequality constraint |
 | `A ; B` | `A or B` | Disjunction |

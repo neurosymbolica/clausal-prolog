@@ -183,7 +183,7 @@ The implementation lives in `clausal.logic.clpfd`.
 | `<` `>` `<=` `>=` | CLP(ℤ) comparison constraints |
 | `is` | Unification (unchanged) |
 | `is not` | `dif/2` constraint (unchanged) |
-| `:=` | Eager arithmetic eval + unify (unchanged) |
+| `eval_(Expr, X)` | Eager arithmetic eval + unify (builtin, Prolog `is/2`) |
 
 when both sides are ground (no unbound Vars), the operators fall back to direct Python comparison. when at least one side is an unbound Var, CLP(ℤ) constraints are posted.
 
@@ -338,14 +338,14 @@ sendmoney_slow(S, E, N, D, M, O, R, Y) <- (
     S != 0,
     M != 0,
     label([S, E, N, D, M, O, R, Y]),        # labels all 8 vars with no arithmetic constraint
-    SEND := S * 1000 + E * 100 + N * 10 + D,
-    MORE := M * 1000 + O * 100 + R * 10 + E,
-    MONEY := M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
+    eval_(S * 1000 + E * 100 + N * 10 + D, SEND),
+    eval_(M * 1000 + O * 100 + R * 10 + E, MORE),
+    eval_(M * 10000 + O * 1000 + N * 100 + E * 10 + Y, MONEY),
     SEND + MORE == MONEY                     # checked after the fact
 )
 ```
 
-`:=` is eager arithmetic evaluation (`is/2`), not a constraint — it requires its arguments to already be ground. Putting `label` before `:=` forces enumeration of all ~40,000 `all_different` permutations before any pruning from the equation can happen.
+`eval_/2` is eager arithmetic evaluation (Prolog `is/2`), not a constraint — it requires its arguments to already be ground. Putting `label` before the `eval_` goals forces enumeration of all ~40,000 `all_different` permutations before any pruning from the equation can happen.
 
 The fix is to post the equation as a `==` constraint *before* `label`:
 
@@ -363,7 +363,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
 
 `==` with unbound variables posts a CLP(ℤ) constraint. The equation is normalised to a `ScalarProductConstraint` and propagated via AC-3 before the first value is tried. This reduces the effective search space from ~40,000 to a handful of candidates, cutting solve time by ~70×.
 
-**Rule of thumb:** use `==` for arithmetic — it posts constraints that propagate before labeling. Reserve `:=` for [Python interop](python_integration.md) (e.g., string operations with `++`).
+**Rule of thumb:** use `==` for arithmetic — it posts constraints that propagate before labeling. Reserve `eval_/2` for eager Python-semantics evaluation, and `is` with `++` for [Python interop](python_integration.md) (e.g., string operations).
 
 ??? example "Python API"
 

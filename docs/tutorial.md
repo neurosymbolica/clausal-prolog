@@ -231,8 +231,8 @@ Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `**` (power),
 `mod` (modulo), `abs(X)`, `min(X, Y)`, `max(X, Y)`.
 
 `==` posts a [CLP(ℤ)](constraints.md) constraint that works in all directions — even when
-variables are unbound. Use `:=` only for eager Python-side evaluation
-(e.g., `LABEL := ++"fizz"` for string operations).
+variables are unbound. Use `is` with a `++` escape only for eager Python-side
+evaluation (e.g., `LABEL is ++"fizz"` for string operations).
 
 ### Comparisons
 
@@ -252,9 +252,9 @@ Comparison operators `<`, `>`, `>=`, `<=` work directly as goals. Use `==` and
 ### A worked example: fizzbuzz
 
 ```clausal
-fizzbuzz(N, LABEL) <- (N % 15 == 0, LABEL := ++"fizzbuzz")
-fizzbuzz(N, LABEL) <- (N % 3 == 0, LABEL := ++"fizz")
-fizzbuzz(N, LABEL) <- (N % 5 == 0, LABEL := ++"buzz")
+fizzbuzz(N, LABEL) <- (N % 15 == 0, LABEL is ++"fizzbuzz")
+fizzbuzz(N, LABEL) <- (N % 3 == 0, LABEL is ++"fizz")
+fizzbuzz(N, LABEL) <- (N % 5 == 0, LABEL is ++"buzz")
 fizzbuzz(N, N),
 ```
 

@@ -138,6 +138,25 @@ Conversely, `X is not Y` posts a disequality constraint (`dif/2`): X and Y must 
 
 The corresponding AST node is `Unify(left, right)`. Disequality is `DoesNotUnify(left, right)`.
 
+### Inline naming with `is`-chains
+
+Python's comparison chaining gives Clausal unification chains: `A is B is C`
+unifies pairwise, and the shared middle operand is evaluated **once**. This
+names a term and uses it in the same goal — where Python code would reach for
+the walrus operator:
+
+```clausal
+Test("name a term inline") <- (
+    D is {"k": [1, 2]},
+    VALUE is [1, X] is D["k"],
+    X == 2
+)
+```
+
+Here `[1, X]` is constructed once, named `VALUE`, and unified with `D["k"]` —
+binding `X` to `2` in the process. Chains of any length work; each link is an
+independent unification of the adjacent operands.
+
 ---
 
 ## Arithmetic binding
@@ -160,7 +179,7 @@ fib(N, RESULT) <- (
 The distinction from `is`:
 - `X is Y` — pure structural unification; neither side is evaluated arithmetically
 - `(X == expr)` — posts an arithmetic constraint (CLP(ℤ) or CLP(ℝ))
-- `(X := expr)` — eager arithmetic evaluation; evaluates `expr` as an arithmetic expression and binds the result to `X` (Prolog's `is/2`)
+- `eval_(expr, X)` — eager arithmetic evaluation; evaluates `expr` as an arithmetic expression with Python semantics and binds the result to `X` (Prolog's `is/2`). See [Arithmetic](arithmetic.md) for when to prefer it over `==`.
 
 ---
 

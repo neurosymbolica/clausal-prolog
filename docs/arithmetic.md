@@ -34,6 +34,35 @@ Test("eval") <- (X == 3 + 4 * 2, X == 11)
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `%` (modulo),
 `**` (power), `abs()`, `min()`, `max()`.
 
+### eval_/2 — eager evaluation
+
+`eval_(EXPR, RESULT)` evaluates `EXPR` immediately with Python semantics and
+unifies the value with `RESULT` (Prolog's `is/2`):
+
+```clausal
+Test("eval") <- (eval_(6 * 7, X), X == 42)
+```
+
+Prefer `==` for ordinary relational arithmetic — it works in all directions.
+Reach for `eval_/2` when you specifically need *eager Python evaluation*:
+
+- **Unit-carrying values** — `eval_(20(Metre), D)`, `eval_(D / T, V)`; CLP
+  constraints don't operate on [`Quantity`](units.md) objects.
+- **Catchable exceptions** — `catch(eval_(X // Y, R), _, ...)` sees the
+  `ZeroDivisionError`; a constraint would not raise it.
+- **Accumulator recursion** — an eagerly ground argument keeps
+  tail-recursive predicates eligible for [tail-call
+  optimisation](compiler.md).
+
+Choosing an arithmetic idiom:
+
+| Goal | Use |
+|---|---|
+| Relational arithmetic, any direction | `X == EXPR` |
+| Eager Python-semantics arithmetic | `eval_(EXPR, X)` |
+| Structural unification (no evaluation) | `X is TERM` |
+| Arbitrary Python expression | `X is ++(PYEXPR)` |
+
 ### Comparison operators
 
 ```clausal
@@ -203,8 +232,9 @@ Test("digit sum") <- digit_sum(123, 6)
 ## Gotchas
 
 - **`==` posts a constraint** — `X == 3 + 4` constrains X to 7 and works even
-  when X is unbound. Use `:=` only when you need eager Python-side evaluation
-  (e.g., with [`++`](python_integration.md) for string operations).
+  when X is unbound. Use `eval_/2` only when you need eager Python-side
+  evaluation (units, catchable exceptions, accumulator recursion), and
+  [`++`](python_integration.md) for arbitrary Python such as string operations.
 - **Both sides of comparisons must be ground** — `X > 3` fails if `X` is
   unbound. Use [CLP(ℤ)](constraints.md) for constraints over unbound variables.
 - **`plus/3` requires at least two bound arguments** — it cannot enumerate all

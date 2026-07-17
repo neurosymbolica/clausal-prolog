@@ -42,7 +42,7 @@ out of the box, but some Prolog conventions must change.
 | `X = Y` | `X is Y` | Unification uses `is` |
 | `X \= Y` | `not (X is Y)` | Immediate check |
 | `dif(X, Y)` | `X is not Y` or `dif(X, Y)` | Constraint — survives |
-| `X is Expr` | `X := Expr` | Arithmetic evaluation |
+| `X is Expr` | `eval_(Expr, X)` | Eager arithmetic evaluation; prefer `X == Expr` (CLP) |
 | `X =:= Y` | `X == Y` | Arithmetic / CLP(ℤ) equality |
 | `X =\= Y` | `X != Y` | Arithmetic / CLP(ℤ) disequality |
 | `X #= Y` | `X #= Y` | CLP(ℤ) — same |

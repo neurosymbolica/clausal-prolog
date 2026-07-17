@@ -261,7 +261,7 @@ X == Y,                # arithmetic equality constraint
 X != Y,                # arithmetic disequality constraint
 X < Y,                 # less-than constraint
 X <= Y,                # less-or-equal constraint
-N := X + 1,            # eager arithmetic evaluation (Prolog is/2)
+eval_(X + 1, N),       # eager arithmetic evaluation (Prolog is/2)
 in_domain(X, 1, 10),    # post integer domain
 all_different([X,Y,Z]), # pairwise disequality
 label([X, Y, Z]),      # enumerate solutions (first-fail)

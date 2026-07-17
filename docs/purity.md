@@ -132,8 +132,8 @@ even when variables are unbound:
 square(N, SQ) <- (SQ == N * N)
 ```
 
-The `:=` operator is available for eager Python-side evaluation (e.g., with
-`++` for string operations), but `==` should be the default for arithmetic.
+`eval_/2` and `is` with a `++` escape are available for eager Python-side
+evaluation (e.g., string operations), but `==` should be the default for arithmetic.
 
 ### I/O side effects
 
@@ -148,7 +148,7 @@ and reason about it with the full power of logic programming.
 ```clausal
 # Describe the output as a term:
 greeting_text(NAME, TEXT) <- (
-    TEXT := ++"Hello, " ++ NAME ++ "!"
+    TEXT is ++"Hello, " ++ NAME ++ "!"
 )
 
 # Test it without side effects:
@@ -178,7 +178,7 @@ Many common impure patterns have pure counterparts in Clausal:
 |---|---|---|
 | `not (X is Y)` (immediate check) | `X is not Y` (dif constraint) | Monotonic; works with unbound variables |
 | `N > 0` (arithmetic guard) | `N #> 0` (CLP(ℤ) constraint) | Works in all directions |
-| `:=` (eager evaluation) | `==` (CLP(ℤ) constraint) | Works with unbound variables |
+| `eval_/2` (eager evaluation) | `==` (CLP(ℤ) constraint) | Works with unbound variables |
 | `not Goal` with unbound vars | Reified if-then-else | Monotonic; see [If-Then-Else](reified_ite.md) |
 | Type-testing (`integer(X)`) | Clean representations | Symbolic distinction via functors; see [below](#clean-vs-defaulty-representations) |
 
@@ -282,8 +282,8 @@ to search. This decoupling makes the approach flexible and versatile.
 ## Practical guidance
 
 1. **Use `==` (CLP(ℤ) constraints) for arithmetic.** Constraints
-   work in all directions and preserve multi-directional use. Reserve `:=`
-   for Python interop (e.g., string operations with `++`).
+   work in all directions and preserve multi-directional use. Reserve `eval_/2`
+   and `++` escapes for Python interop (e.g., string operations).
 
 2. **Use `dif/2` (`is not`) instead of `not (X is Y)`.** dif is a monotonic
    constraint; negation-of-unification is a point-in-time check.

@@ -252,7 +252,7 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `findall(...)` | `findall(...)` | reverse builtin name map |
 | `X = Y` | `X is Y` | Unification |
 | `X \= Y` | `X is not Y` | Disequality |
-| `Y is X * 2` | `Y := X * 2` | Arithmetic evaluation |
+| `Y is X * 2` | `eval_(X * 2, Y)` | Eager arithmetic evaluation |
 | `Y =:= X * 2` | `Y == X * 2` | Arithmetic equality (atomic-operand `X =:= Y` imports as structural `==`; pending A11-D008) |
 | `X == Y` | `X == Y` | Structural equality |
 | `X \== Y` | `X != Y` | Structural inequality |

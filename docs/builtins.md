@@ -95,7 +95,7 @@ Notation in signature lines:
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | now, now_utc, today, date, time, datetime, timedelta, date_add, date_sub, date_diff, datetime_string, timestamp, datetime_string_iso, date_string_iso, date_of, days_between, weekday, date_between |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
 | [Time & statistics](#time--statistics) | current_time/1, statistics/2 |
-| [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `:=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
+| [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
 
 ---
 
