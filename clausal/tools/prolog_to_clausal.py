@@ -93,7 +93,7 @@ _REVERSE_BUILTIN_MAP = _build_reverse_builtin_map()
 # Prolog infix → clausal equivalent
 _INFIX_MAP = {
     ":-":   "<-",       # clause arrow (body context)
-    "is":   ":=",       # arithmetic evaluation
+# (Prolog ``is``/2 is handled as a special case → ``eval_(E, R)``, not infix.)
     "=":    "is",       # unification
     "\\=":  "is not",   # dis-unification
     "\\+":  "not",      # negation-as-failure (prefix, but listed here)
@@ -369,11 +369,12 @@ class _PrologToClausal:
             left = self._emit_term(goal.args[0])
             right = self._emit_term(goal.args[1])
             return f"{left} is not {right}"
-        # Arithmetic is: X is Expr → X := Expr
+        # Arithmetic is: R is Expr → eval_(Expr, R) — the eager arithmetic
+        # builtin (the former ':=' operator, now deprecated).
         if isinstance(goal, PCompound) and goal.functor == "is" and len(goal.args) == 2:
-            left = self._emit_term(goal.args[0])
-            right = self._emit_expr(goal.args[1])
-            return f"{left} := {right}"
+            result = self._emit_term(goal.args[0])
+            expr = self._emit_expr(goal.args[1])
+            return f"eval_({expr}, {result})"
         # Structural equality: X == Y → X == Y
         if isinstance(goal, PCompound) and goal.functor == "==" and len(goal.args) == 2:
             left = self._emit_term(goal.args[0])
@@ -766,11 +767,13 @@ class _PrologToClausal:
             right = self._emit_term(args[1])
             return f"{left} is not {right}"
 
-        # Arithmetic is: X is Expr → X := Expr
+        # Arithmetic is: R is Expr → eval_(Expr, R)
         if functor == "is" and len(args) == 2:
-            left = self._emit_term(args[0])
-            right = self._emit_expr(args[1])
-            return f"{left} := {right}"
+            # R is E → eval_(E, R): the eager arithmetic builtin (the former
+            # ':=' operator, now deprecated).
+            result = self._emit_term(args[0])
+            expr = self._emit_expr(args[1])
+            return f"eval_({expr}, {result})"
 
         # Arithmetic operators (precedence-aware)
         if functor in self._EXPR_PREC and len(args) == 2:

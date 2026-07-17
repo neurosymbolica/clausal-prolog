@@ -518,3 +518,14 @@ class TestPrologAstConversion:
         source = '-private([Choose(X, Y)])'
         pmod = clausal_source_to_prolog_ast(source)
         assert len(pmod.items) == 0
+
+
+class TestEvalBuiltinExport:
+    """eval_/2 (eager arithmetic) exports as Prolog is/2."""
+
+    def test_eval_exports_as_is(self):
+        # nv
+        from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+        out = clausal_source_to_prolog("AddOne(X, Y) <- eval_(X + 1, Y)\n")
+        assert "Y is X + 1" in out, out
+        assert "eval_" not in out, out

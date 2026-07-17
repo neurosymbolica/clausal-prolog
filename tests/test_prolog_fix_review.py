@@ -76,7 +76,7 @@ class TestF022VarRenameInjective:
 class TestF025EvaluableConstants:
     def test_pi_maps_to_math(self):
         out = prolog_to_clausal("f(X) :- X is pi.")
-        assert "X := math.pi" in out
+        assert "eval_(math.pi, X)" in out
         assert "-import_module(math)" in out
 
     def test_e_inf_nan_map_to_math(self):
@@ -142,12 +142,12 @@ class TestF026BagofWitness:
     def test_arith_caret_maps_to_python_pow(self):
         # In arithmetic context (^)/2 is ISO exponentiation → Python **.
         out = prolog_to_clausal("f(X) :- X is 2 ^ 3.")
-        assert "X := 2 ** 3" in out
+        assert "eval_(2 ** 3, X)" in out
 
     def test_arith_caret_right_associative(self):
         # ISO ^ is xfy: 2^3^2 = 2^(3^2); Python ** is also right-assoc.
         out = prolog_to_clausal("f(X) :- X is 2 ^ 3 ^ 2.")
-        assert "X := 2 ** 3 ** 2" in out
+        assert "eval_(2 ** 3 ** 2, X)" in out
 
 
 class TestF026StandardOrderRejected:

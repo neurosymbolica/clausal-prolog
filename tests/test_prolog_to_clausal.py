@@ -88,7 +88,7 @@ class TestEmitTerm:
     def test_arithmetic_is(self):
         # nv
         result = emit_clausal_term(PCompound("is", (PVar("Y"), PCompound("+", (PVar("X"), PNumber(1))))))
-        assert result == "Y := X + 1"
+        assert result == "eval_(X + 1, Y)"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -169,7 +169,7 @@ reach(X, Y) :- edge(X, Z), reach(Z, Y).
         # nv
         src = "double(X, Y) :- Y is X * 2."
         result = prolog_to_clausal(src)
-        assert "Y := X * 2" in result
+        assert "eval_(X * 2, Y)" in result
 
     def test_negation(self):
         # nv
@@ -412,3 +412,14 @@ def test_golden_pl_translates(pl_path: Path):
     source = pl_path.read_text()
     result = prolog_to_clausal(source)
     assert len(result.strip()) > 0
+
+
+class TestIsImportsAsEval:
+    """Prolog is/2 imports as the eval_/2 builtin (not the deprecated :=)."""
+
+    def test_is_imports_as_eval(self):
+        # nv
+        from clausal.tools.prolog_to_clausal import prolog_to_clausal
+        out = prolog_to_clausal("add_one(X, Y) :- Y is X + 1.\n")
+        assert "eval_(X + 1, Y)" in out, out
+        assert ":=" not in out, out

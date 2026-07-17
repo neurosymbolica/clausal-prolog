@@ -737,6 +737,13 @@ class _ClausalToProlog:
                     "Rewrite using once/1, dif/2 guards, or reified "
                     "conditionals. See: docs/for_prolog_programmers.md"
                 )
+            if node.func.id == "eval_" and len(node.args) == 2 \
+                    and not node.keywords:
+                # eval_(EXPR, RESULT) — eager arithmetic evaluate-and-bind —
+                # is Prolog's is/2: RESULT is EXPR.
+                expr = self._convert_expr(node.args[0])
+                result = self._convert_expr(node.args[1])
+                return PCompound("is", (result, expr))
             functor = resolve_name(node.func.id, self.dialect)
         elif isinstance(node.func, python_ast.Attribute):
             # Check for qualified operator calls (e.g. prolog.TruncDiv)
