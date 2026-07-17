@@ -34,7 +34,7 @@ Test("reduced planck constant magnitude") <- (
 )  # nv
 
 Test("hbar equals h over two pi") <- (
-    HBAR_COMPUTED := PlanckConstant / (2 * Pi),
+    eval_(PlanckConstant / (2 * Pi), HBAR_COMPUTED),
     ReducedPlanckConstant == HBAR_COMPUTED
 )  # nv
 
@@ -86,7 +86,7 @@ Test("electron mass magnitude") <- (
 Test("proton mass units") <- has_units(ProtonMass, Kilogram)  # nv
 
 Test("proton heavier than electron") <- (
-    RATIO := ProtonMass / ElectronMass,
+    eval_(ProtonMass / ElectronMass, RATIO),
     RATIO > 1836
 )  # nv
 

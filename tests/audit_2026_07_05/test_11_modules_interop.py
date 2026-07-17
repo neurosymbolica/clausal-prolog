@@ -591,7 +591,7 @@ def test_F030_pow_grouping_preserved():
 def test_F031_floordiv_export_semantics():
     # A11-F031 (fixed): // exported as floored div.
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
-    out = clausal_source_to_prolog("P(X, A, B) <- (X := A // B)\n")
+    out = clausal_source_to_prolog("P(X, A, B) <- eval_(A // B, X)\n")
     assert " A // B" not in out  # must be div / floored equivalent
 
 
@@ -662,7 +662,7 @@ def test_guard_contract_mappings():
 def test_guard_pow_emit_parse_fixpoint_c2p():
     """clausal_to_prolog gets ** grouping right (contrast A11-F030)."""
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
-    out = clausal_source_to_prolog("P(X) <- (X := (2 ** 3) ** 2)\n")
+    out = clausal_source_to_prolog("P(X) <- eval_((2 ** 3) ** 2, X)\n")
     assert "(2 ** 3) ** 2" in out
 
 
@@ -833,10 +833,10 @@ def test_F047_negative_unit_literal_in_is(tmp_path):
 
 
 def test_F047_guard_negative_unit_literal_in_assign(tmp_path):
-    """The := position of the same literal works (the documented example)."""
+    """The eval_ position of the same literal works (the documented example)."""
     mod = _load(tmp_path, '''
         -import_from(py.units, [Second, strip_units])
-        T(V) <- (Q := -3(Second), strip_units(Q, V))
+        T(V) <- (eval_(-3(Second), Q), strip_units(Q, V))
     ''', "f047g")
     v = Var()
     assert [deref(v) for _ in call("T", v, module=_logic(mod))] == [-3]
@@ -865,7 +865,7 @@ def test_F056_guard_imperial_in_unit_parens_works(tmp_path):
     mod = _load(tmp_path, '''
         -import_from(py.imperial, [inch])
         -import_from(py.units, [strip_units])
-        T(V) <- (Q := 5(inch), strip_units(Q, V))
+        T(V) <- (eval_(5(inch), Q), strip_units(Q, V))
     ''', "f056")
     v = Var()
     (got,) = [deref(v) for _ in call("T", v, module=_logic(mod))]
@@ -906,7 +906,7 @@ def test_guard_units_mismatch_catchable(tmp_path):
     mod = _load(tmp_path, '''
         -private([caught])
         -import_from(py.units, [Metre, Second])
-        T(R) <- catch((Q := 3(Metre) + 2(Second)), UnitsMismatch(_), (R is caught))
+        T(R) <- catch(eval_(3(Metre) + 2(Second), Q), UnitsMismatch(_), (R is caught))
     ''', "unitsm")
     r = Var()
     out = [str(deref(r)) for _ in call("T", r, module=_logic(mod))]

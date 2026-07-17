@@ -14,11 +14,11 @@ safe_from(Queen, [], Distance).
 
 safe_from(Queen, [Head|Tail], Distance) :-
     Queen \== Head,
-    Difference1 is Queen - Head,
-    Difference2 is Head - Queen,
+    Difference1 =:= Queen - Head,
+    Difference2 =:= Head - Queen,
     Difference1 \== Distance,
     Difference2 \== Distance,
-    Next_distance is Distance + 1,
+    Next_distance =:= Distance + 1,
     safe_from(Queen, Tail, Next_distance).
 
 test("queens 1") :-

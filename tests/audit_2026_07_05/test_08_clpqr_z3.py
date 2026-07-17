@@ -455,7 +455,7 @@ class TestZ3StoreSync:
 
     @pytest.mark.xfail(strict=False,
                        reason="A08-F013: label_z3 ignores Clausal-side bindings "
-                              "— B enumerates 1..10 after A==B, A:=3")
+                              "— B enumerates 1..10 after A==B, A=3")
     def test_label_respects_bindings(self):
         from clausal.logic.clpz3 import in_z3, z3_eq, label_z3
         t = Trail()

@@ -139,7 +139,7 @@ def test_F003_guard_plain_dcg_sequence(tmp_path):
 def test_F003_guard_edcg_accumulator_with_plain_call(tmp_path):
     """A single plain-DCG call between accumulator pushes threads correctly."""
     m = _load(tmp_path, """
-        -edcg_acc(cnt, V_, In_, Out_, {Out_ := In_ + V_})
+        -edcg_acc(cnt, V_, In_, Out_, {Out_ == In_ + V_})
         w >> (["w"])
         -edcg_pred(q, 0, [cnt, dcg])
         q >> ([1] // cnt, w, [2] // cnt)

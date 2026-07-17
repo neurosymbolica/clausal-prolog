@@ -147,7 +147,7 @@ class TestCachedCorrectness:
         # nv
         src = tmp_path / "rules_cached.clausal"
         src.write_text(textwrap.dedent("""\
-            double(_x, _y) <- (_y := _x * 2)
+            double(_x, _y) <- (_y == _x * 2)
         """))
         mod_name = "_pycache_rules_test"
         try:

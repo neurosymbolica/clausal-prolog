@@ -320,8 +320,8 @@ class TestFibonacci:
         r1 = Var()
         db.assertz(Clause(head=Compound("fib", (1, r1)), body=[Is(left=r1, right=1)]))
 
-        # fib(N, R) :- N > 1, N1 := N-1, N2 := N-2,
-        #              fib(N1, R1), fib(N2, R2), R := R1+R2.
+        # fib(N, R) :- N > 1, eval_(N-1, N1), eval_(N-2, N2),
+        #              fib(N1, R1), fib(N2, R2), eval_(R1+R2, R).
         n, r, n1, n2, ra, rb = Var(), Var(), Var(), Var(), Var(), Var()
         db.assertz(Clause(
             head=Compound("fib", (n, r)),

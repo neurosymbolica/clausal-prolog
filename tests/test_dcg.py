@@ -552,7 +552,7 @@ class TestStateThreading:
             '-module(inc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2), inc(_s0, _s)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
-            'inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'inc >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))\n'
         )
         mod = _load("inc1", src, tmp_path)
         n = Var()
@@ -566,7 +566,7 @@ class TestStateThreading:
             '-module(c3, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2), inc(_s0, _s), count3(_s0, _s)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
-            'inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'inc >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))\n'
             'count3 >> (inc, inc, inc)\n'
         )
         mod = _load("c3", src, tmp_path)
@@ -581,7 +581,7 @@ class TestStateThreading:
             '-module(c4, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2), inc(_s0, _s), count3(_s0, _s)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
-            'inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'inc >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))\n'
             'count3 >> (inc, inc, inc)\n'
         )
         mod = _load("c4", src, tmp_path)
@@ -599,7 +599,7 @@ class TestStateThreading:
             ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
-            'count_leaves("leaf") >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'count_leaves("leaf") >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))\n'
             'count_leaves([_l, _r]) >> (count_leaves(_l), count_leaves(_r))\n'
             'num_leaves(_t, _n) <- phrase(count_leaves(_t), [0], [_n])\n'
         )
@@ -616,7 +616,7 @@ class TestStateThreading:
             ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
-            'count_leaves("leaf") >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'count_leaves("leaf") >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))\n'
             'count_leaves([_l, _r]) >> (count_leaves(_l), count_leaves(_r))\n'
             'num_leaves(_t, _n) <- phrase(count_leaves(_t), [0], [_n])\n'
         )
@@ -633,7 +633,7 @@ class TestStateThreading:
             ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
-            'count_leaves("leaf") >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'count_leaves("leaf") >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))\n'
             'count_leaves([_l, _r]) >> (count_leaves(_l), count_leaves(_r))\n'
             'num_leaves(_t, _n) <- phrase(count_leaves(_t), [0], [_n])\n'
         )
@@ -691,7 +691,7 @@ class TestStateThreading:
             ' double(_s0, _s)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
-            'double >> (state(_n0), {_n := _n0 * 2}, state2(_, _n))\n'
+            'double >> (state(_n0), {_n == _n0 * 2}, state2(_, _n))\n'
         )
         mod = _load("so", src, tmp_path)
         n = Var()
@@ -706,8 +706,8 @@ class TestStateThreading:
             ' inc(_s0, _s), double(_s0, _s), inc_then_double(_s0, _s)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
-            'inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
-            'double >> (state(_n0), {_n := _n0 * 2}, state2(_, _n))\n'
+            'inc >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))\n'
+            'double >> (state(_n0), {_n == _n0 * 2}, state2(_, _n))\n'
             'inc_then_double >> (inc, double)\n'
         )
         mod = _load("ch", src, tmp_path)
@@ -742,7 +742,7 @@ class TestStateThreading:
             ' inc(_s0, _s), run_inc(_n0, _n)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
-            'inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'inc >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))\n'
             'run_inc(_n0, _n) <- phrase(inc, [_n0], [_n])\n'
         )
         mod = _load("pt", src, tmp_path)
@@ -758,7 +758,7 @@ class TestStateThreading:
             ' state2(_s0, _s, S0_2, S_2), num_leaves(_t, _n)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
-            'count_leaves("leaf") >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'count_leaves("leaf") >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))\n'
             'count_leaves([_l, _r]) >> (count_leaves(_l), count_leaves(_r))\n'
             'num_leaves(_t, _n) <- phrase(count_leaves(_t), [0], [_n])\n'
         )

@@ -36,7 +36,7 @@ Diff(A * B, X, A*DB + B*DA) <- (
 # Power rule: Diff(e^n)/dVx = n * e^(n-1) * de/dVx
 Diff(E ** N, X, N * E**N1 * DE) <- (
     number(N),
-    N1 := N - 1,
+    N1 == N - 1,
     Diff(E, X, DE)
 )
 

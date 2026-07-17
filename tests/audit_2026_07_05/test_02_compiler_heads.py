@@ -183,7 +183,7 @@ coll("ghi", "g"),
 acc4(0, AZA, AZA),
 acc4(-1, AZB, ["neg1"]),
 acc4(-2, AZC, ["neg2"]),
-acc4(ACN, ACA, ACR) <- (ACN > 0, ACM := ACN - 1, ACB := ACA + 1, acc4(ACM, ACB, ACR))
+acc4(ACN, ACA, ACR) <- (ACN > 0, eval_(ACN - 1, ACM), eval_(ACA + 1, ACB), acc4(ACM, ACB, ACR))
 
 # sgl4: single-plan (str keys at pos0; second column non-charlist lists)
 sgl4("a", ["aye"]),
@@ -196,7 +196,7 @@ mp5(1, "one"),
 mp5(2, "two"),
 mp5(3, "three"),
 mp5(4, "four"),
-mp5(MPN, MPR) <- (MPN > 4, MPM := MPN - 1, mp5(MPM, MPR))
+mp5(MPN, MPR) <- (MPN > 4, eval_(MPN - 1, MPM), mp5(MPM, MPR))
 
 # str5: multi-plan, str keys at pos0
 str5("a", "A"),
@@ -214,7 +214,7 @@ jt3("b", 1, ["jb1"]),
 jt3("b", 2, ["jb2"]),
 jt3("b", 3, ["jb3"]),
 jt3("b", 4, ["jb4"]),
-jt3("go", JNB, JRC) <- (JMD := JNB - 1, jt3("a", JMD, JRC))
+jt3("go", JNB, JRC) <- (eval_(JNB - 1, JMD), jt3("a", JMD, JRC))
 
 # dynamic predicates for runtime-assertz probes (one per test, no coupling)
 -dynamic(dyn_date/2)

@@ -103,12 +103,12 @@ class TestAnalyzeSolveCount:
         assert pattern.recursive_call_style == "tail"
 
     def test_post_match_goals(self, mi_module):
-        """COUNT := SUB_COUNT + 1 is a post-match goal."""
+        """COUNT == SUB_COUNT + 1 is a post-match goal."""
         # nv
         pattern = analyze_mi(mi_module.SolveCount)
         assert len(pattern.post_match_goals) == 1
-        from clausal.pythonic_ast.nodes import Evaluate
-        assert isinstance(pattern.post_match_goals[0], Evaluate)
+        from clausal.pythonic_ast.nodes import ArithEq
+        assert isinstance(pattern.post_match_goals[0], ArithEq)
 
 
 class TestAnalyzeSolveLimit:
@@ -125,13 +125,13 @@ class TestAnalyzeSolveLimit:
         assert pattern.recursive_call_style == "tail"
 
     def test_pre_match_goals(self, mi_module):
-        """MAX > 0 and MAX1 := MAX - 1 are pre-match goals."""
+        """MAX > 0 and MAX1 == MAX - 1 are pre-match goals."""
         # nv
         pattern = analyze_mi(mi_module.SolveLimit)
         assert len(pattern.pre_match_goals) == 2
-        from clausal.pythonic_ast.nodes import Gt, Evaluate
+        from clausal.pythonic_ast.nodes import Gt, ArithEq
         assert isinstance(pattern.pre_match_goals[0], Gt)
-        assert isinstance(pattern.pre_match_goals[1], Evaluate)
+        assert isinstance(pattern.pre_match_goals[1], ArithEq)
 
 
 class TestAnalyzeSolveTree:

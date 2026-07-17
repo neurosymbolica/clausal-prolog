@@ -154,10 +154,10 @@ class TestOperatorGoals:
     def test_arith_goal_stays_raw_operator_node(self):
         from clausal.pythonic_ast.nodes import Unify, Add
 
-        items = reify_source("Next(X, Y) <- (Y := X + 1)\n")
+        items = reify_source("Next(X, Y) <- (Y == X + 1)\n")
         (clause,) = clauses_of(items)
         (goal,) = clause.goals
-        # Evaluate node (':=') — right side is a raw Add over reified leaves.
+        # ArithEq node ('==') — right side is a raw Add over reified leaves.
         assert goal.right == Add(left=Variable("X"), right=1)
 
     def test_comparison_goal_stays_raw(self):

@@ -5,9 +5,9 @@ by multiplying a scalar in a ``++()`` escape::
 
     -import_from(py.imperial, [inch, foot, pound_mass, mph, lbf])
 
-    LEN  := ++(20 * inch)           # Quantity(0.508,   {Metre: 1})
-    MASS := ++(150 * pound_mass)    # Quantity(68.04,   {Kilogram: 1})
-    SPD  := ++(60 * mph)            # Quantity(26.82,   {Metre:1, Second:-1})
+    LEN  is ++(20 * inch)           # Quantity(0.508,   {Metre: 1})
+    MASS is ++(150 * pound_mass)    # Quantity(68.04,   {Kilogram: 1})
+    SPD  is ++(60 * mph)            # Quantity(26.82,   {Metre:1, Second:-1})
 
 Because dimensions are identical to their SI equivalents, ``has_units`` checks
 work without any changes::

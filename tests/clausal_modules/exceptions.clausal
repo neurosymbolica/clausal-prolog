@@ -29,7 +29,7 @@ ThrowIfZero(N) <- (N is not 0)
 # SafeRecip/2 — safe reciprocal with catch
 SafeRecip(N, RESULT) <- (
     catch(
-        (ThrowIfZero(N) and (RESULT := 1 / N)),
+        (ThrowIfZero(N) and eval_(1 / N, RESULT)),
         "division_by_zero",
         RESULT is 0,
     )
@@ -73,7 +73,7 @@ InnerHit(RESULT) <- (
 
 # Risky/2 — fails on 0, succeeds on nonzero
 Risky(0, _) <- throw("zero_error")
-Risky(INPUT, OUTPUT) <- ((INPUT is not 0) and (OUTPUT := INPUT * 10))
+Risky(INPUT, OUTPUT) <- ((INPUT is not 0) and (OUTPUT == INPUT * 10))
 
 # TryRisky/2 — wraps Risky in catch; on error, RESULT stays unbound (fails)
 TryRisky(INPUT, RESULT) <- (

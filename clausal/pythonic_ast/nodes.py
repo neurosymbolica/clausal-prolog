@@ -716,7 +716,7 @@ class DoesNotUnify(CmpOp):
 
 @dataclass
 class Evaluate(CmpOp):
-    """Arithmetic evaluate-and-bind: ``LHS := RHS``. Evaluates RHS as arithmetic, unifies with LHS."""
+    """Arithmetic evaluate-and-bind: ``eval_(RHS, LHS)`` (formerly ``LHS := RHS``, deprecated). Evaluates RHS as arithmetic, unifies with LHS."""
     op: ClassVar = ':='
 
 @dataclass

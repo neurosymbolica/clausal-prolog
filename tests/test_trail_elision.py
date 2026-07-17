@@ -354,7 +354,7 @@ Chain(N, R) <- (Left(N, M), Right(M, R))
         so no indexing, but trail elision doesn't apply either."""
         # nv
         mod = _load_module("""\
-Only(X, Y) <- (Y := X + 1)
+Only(X, Y) <- (Y == X + 1)
 """)
         y = Var()
         results = [deref(y) for _ in call("Only", 5, y, module=mod)]

@@ -128,7 +128,7 @@ class TestClausalTranslation:
         # nv
         from clausal.trealla import Trealla
         with Trealla() as t:
-            t.consult_clausal("Double(X, Y) <- (Y := X * 2)")
+            t.consult_clausal("Double(X, Y) <- (eval_(X * 2, Y))")
             assert t.query_one("double(5, Y).") == {"Y": 10}
 
     def test_consult_clausal_list_patterns(self):

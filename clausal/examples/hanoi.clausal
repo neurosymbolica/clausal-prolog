@@ -5,7 +5,7 @@
 Hanoi(0, _, _, _, []),
 Hanoi(N, FROM, TO, VIA, MOVES) <- (
     N > 0,
-    N1 := N - 1,
+    N1 == N - 1,
     Hanoi(N1, FROM, VIA, TO, MOVES1),
     Hanoi(N1, VIA, TO, FROM, MOVES2),
     append(MOVES1, [[FROM, TO]], MID),

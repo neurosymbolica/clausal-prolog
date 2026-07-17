@@ -1,4 +1,4 @@
-Squares(_numbers, _squares) <- (findall(_square, (in_(X, _numbers), _square := X * X), _squares))
+Squares(_numbers, _squares) <- (findall(_square, (in_(X, _numbers), _square == X * X), _squares))
 
 Positives(_numbers, _positives) <- (findall(X, (in_(X, _numbers), X > 0), _positives))
 

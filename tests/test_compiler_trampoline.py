@@ -571,7 +571,7 @@ class TestTrampolineIntegrationComparisons:
         assert _count_solutions(fn, 7, 8, trail2) == 0
 
     def test_arith_add_one(self):
-        """add_one(X, Y) :- Y := X + 1."""
+        """add_one(X, Y) :- eval_(X + 1, Y)."""
         # nv
         x, y = Var(), Var()
         db = Database()

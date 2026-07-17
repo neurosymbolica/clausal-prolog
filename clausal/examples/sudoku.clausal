@@ -40,7 +40,7 @@ Blocks(
 # ── Constraint posting ──────────────────────────────────────────────────────
 
 Sudoku(ROWS) <- (
-    ROWS := [R1, R2, R3, R4, R5, R6, R7, R8, R9],
+    ROWS is [R1, R2, R3, R4, R5, R6, R7, R8, R9],
     flatten(ROWS, VS),
     in_domain(VS, 1, 9),
     maplist(all_different, ROWS),
@@ -107,7 +107,7 @@ Test("transpose empty rows") <- transpose([[], []], [])
 
 Test("transpose 2x3") <- (
     transpose([[1,2,3],[4,5,6]], RESULT),
-    RESULT := [[1,4],[2,5],[3,6]]
+    RESULT is [[1,4],[2,5],[3,6]]
 )
 
 Test("blocks base case") <- Blocks([], [], [])
@@ -124,7 +124,7 @@ Test("problem 1 has a solution") <- (
 Test("problem 1 full solution") <- (
     Problem(1, ROWS),
     Solve(ROWS),
-    ROWS := [[1,5,6,8,9,4,3,2,7],
+    ROWS is [[1,5,6,8,9,4,3,2,7],
              [9,2,8,7,3,1,4,5,6],
              [4,7,3,2,6,5,9,1,8],
              [3,6,2,4,1,7,8,9,5],

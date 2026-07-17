@@ -4,11 +4,11 @@ fib(1, 1).
 
 fib(N, Result) :-
     N > 1,
-    N1 is N - 1,
-    N2 is N - 2,
+    N1 =:= N - 1,
+    N2 =:= N - 2,
     fib(N1, First),
     fib(N2, Second),
-    Result is First + Second.
+    Result =:= First + Second.
 
 test("fib 0") :-
     fib(0, 0).

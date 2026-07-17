@@ -395,7 +395,7 @@ class PyThunkOp(GoalOp):
 
 @dataclasses.dataclass
 class ListPatternUnify(GoalOp):
-    """Body-side star-list unification (``X := [A, *T, B]`` and friends).
+    """Body-side star-list unification (``X is [A, *T, B]`` and friends).
 
     ``star_side`` is the Python list containing one or more
     :class:`~clausal.pythonic_ast.nodes.StarUnpack` entries; the lowering

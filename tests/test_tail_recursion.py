@@ -295,7 +295,7 @@ class TestDetectTroClause(unittest.TestCase):
         class Acc(metaclass=PredicateMeta):
             _fields = ('n', 'state')
 
-        # Acc(N, State) <- (N > 0, N1 := N-1, Acc(N1, Compound("s", (N, State))))
+        # Acc(N, State) <- (N > 0, eval_(N-1, N1), Acc(N1, Compound("s", (N, State))))
         # N and State are head vars; with prefix goals, allow_head_vars=True.
         cl = Clause(
             head=Acc(n, acc),
@@ -358,7 +358,7 @@ class TestTroCorrectness(unittest.TestCase):
         return results
 
     def test_simple_countdown(self):
-        """N > 0, N1 := N - 1, CountDown(N1) — deterministic prefix."""
+        """N > 0, eval_(N - 1, N1), CountDown(N1) — deterministic prefix."""
         # nv
         class CountDown(metaclass=PredicateMeta):
             _fields = ('n',)
@@ -852,7 +852,7 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
         result = Var()
         new_acc = Var()
 
-        # L([_, *T], ACC, R) <- (NEWACC := ACC + 1, L(T, NEWACC, R))
+        # L([_, *T], ACC, R) <- (eval_(ACC + 1, NEWACC), L(T, NEWACC, R))
         cl = Clause(
             head=L([wild, _SU(value=t)], acc, result),
             body=[

@@ -21,133 +21,133 @@ Test("volt roundtrip") <- strip_units(230(Volt), 230)  # nv
 Test("coulomb roundtrip") <- strip_units(3(Coulomb), 3)  # nv
 
 Test("centimeter roundtrip") <- (
-    D := 200(Centimeter),
+    eval_(200(Centimeter), D),
     strip_units(D, RAW),
-    ERR := ++(abs(RAW - 2.0)),
+    ERR is ++(abs(RAW - 2.0)),
     ERR < 1.0e-9
 )  # nv
 
 # Scaled unit constructors: check stored value via equality with SI unit
 
 Test("kilometer stores as meters") <- (
-    D := 1(Kilometer),
+    eval_(1(Kilometer), D),
     D == 1000.0(Metre)
 )  # nv
 
 Test("gram stores as kilograms") <- (
-    D := 1000(Gram),
+    eval_(1000(Gram), D),
     D == 1.0(Kilogram)
 )  # nv
 
 Test("minute stores as seconds") <- (
-    D := 5(Minute),
+    eval_(5(Minute), D),
     D == 300.0(Second)
 )  # nv
 
 Test("hour stores as seconds") <- (
-    D := 2(Hour),
+    eval_(2(Hour), D),
     D == 7200.0(Second)
 )  # nv
 
 # Arithmetic: check results by unification with n(Unit)
 
 Test("velocity from distance over time") <- (
-    D := 100(Metre),
-    T := 10(Second),
-    V := D / T,
+    eval_(100(Metre), D),
+    eval_(10(Second), T),
+    eval_(D / T, V),
     strip_units(V, 10.0),
     has_units(V, Metre/Second)
 )  # nv
 
 Test("acceleration from velocity over time") <- (
-    D := 20(Metre),
-    T := 2(Second),
-    V := D / T,
-    A := V / T,
+    eval_(20(Metre), D),
+    eval_(2(Second), T),
+    eval_(D / T, V),
+    eval_(V / T, A),
     strip_units(A, 5.0),
     has_units(A, Metre/Second**2)
 )  # nv
 
 Test("force from mass times acceleration") <- (
-    D := 20(Metre),
-    T := 2(Second),
-    V := D / T,
-    A := V / T,
-    M := 3(Kilogram),
-    F := M * A,
+    eval_(20(Metre), D),
+    eval_(2(Second), T),
+    eval_(D / T, V),
+    eval_(V / T, A),
+    eval_(3(Kilogram), M),
+    eval_(M * A, F),
     F == 15.0(Newton)
 )  # nv
 
 Test("area from side squared") <- (
-    SIDE := 4(Metre),
-    AREA := SIDE ** 2,
+    eval_(4(Metre), SIDE),
+    eval_(SIDE ** 2, AREA),
     strip_units(AREA, 16),
     has_units(AREA, Metre**2)
 )  # nv
 
 Test("volume from side cubed") <- (
-    SIDE := 2(Metre),
-    VOL := SIDE ** 3,
+    eval_(2(Metre), SIDE),
+    eval_(SIDE ** 3, VOL),
     strip_units(VOL, 8),
     has_units(VOL, Metre**3)
 )  # nv
 
 Test("add two forces") <- (
-    TOTAL := 3(Newton) + 7(Newton),
+    eval_(3(Newton) + 7(Newton), TOTAL),
     TOTAL == 10(Newton)
 )  # nv
 
 Test("subtract forces") <- (
-    DIFF := 10(Newton) - 4(Newton),
+    eval_(10(Newton) - 4(Newton), DIFF),
     DIFF == 6(Newton)
 )  # nv
 
 Test("scale force by scalar") <- (
-    F2 := 5(Newton) * 3,
+    eval_(5(Newton) * 3, F2),
     F2 == 15(Newton)
 )  # nv
 
 Test("dims cancel in division") <- (
-    RATIO := 50(Metre) / 10(Metre),
+    eval_(50(Metre) / 10(Metre), RATIO),
     RATIO == 5.0()
 )  # nv
 
 Test("ohms law") <- (
-    R := 12(Volt) / 3(Ampere),
+    eval_(12(Volt) / 3(Ampere), R),
     R == 4.0(Ohm)
 )  # nv
 
 Test("power from current squared times resistance") <- (
-    I := 2(Ampere),
-    RES := 5(Ohm),
-    P := I * I * RES,
+    eval_(2(Ampere), I),
+    eval_(5(Ohm), RES),
+    eval_(I * I * RES, P),
     P == 20(Watt)
 )  # nv
 
 Test("watt joule per second") <- (
-    P := 3600(Joule) / 60(Second),
+    eval_(3600(Joule) / 60(Second), P),
     P == 60.0(Watt)
 )  # nv
 
 Test("kinetic energy") <- (
-    M := 4(Kilogram),
-    SPD := 3(Metre) / 1(Second),
-    KE := M * SPD ** 2,
-    HALF := KE / 2,
+    eval_(4(Kilogram), M),
+    eval_(3(Metre) / 1(Second), SPD),
+    eval_(M * SPD ** 2, KE),
+    eval_(KE / 2, HALF),
     ERR is ++(abs(HALF.value - 18.0)),
     ERR < 1.0e-9,
     has_units(HALF, Joule)
 )  # nv
 
 Test("bar stores as pascals") <- (
-    D := 1(Bar),
+    eval_(1(Bar), D),
     ERR is ++(abs(D.value - 100000.0)),
     ERR < 1.0e-6,
     has_units(D, Pascal)
 )  # nv
 
 Test("make dimensioned from dict") <- (
-    DIMS := ++{Kilogram: 1, Metre: 1, Second: -2},
+    DIMS is ++{Kilogram: 1, Metre: 1, Second: -2},
     make_quantity(10, DIMS, D),
     D == 10(Newton)
 )  # nv
@@ -155,14 +155,14 @@ Test("make dimensioned from dict") <- (
 # Physical constants used in expressions via ++
 
 Test("rest energy e=mc2") <- (
-    E := ++(Kilogram(1) * SpeedOfLight ** 2),
+    E is ++(Kilogram(1) * SpeedOfLight ** 2),
     has_units(E, Joule),
     ERR is ++(abs(E.value - 8.987551787368176e+16)),
     ERR < 1.0e6
 )  # nv
 
 Test("weight from standard gravity") <- (
-    W := ++(Kilogram(70) * StandardGravity),
+    W is ++(Kilogram(70) * StandardGravity),
     has_units(W, Newton),
     ERR is ++(abs(W.value - 686.4655)),
     ERR < 1.0e-3
@@ -171,36 +171,36 @@ Test("weight from standard gravity") <- (
 # Dimension type checks via has_units
 
 Test("dimensionless roundtrip") <- (
-    PARTIAL := 5.0(),
+    eval_(5.0(), PARTIAL),
     strip_units(PARTIAL, VALUE),
     VALUE == 5.0,
     PARTIAL == ++(Quantity(5.0, {}))
 )  # nv
 
-Test("islength") <- (Q := 1(Metre), has_units(Q, Metre))  # nv
+Test("islength") <- (eval_(1(Metre), Q), has_units(Q, Metre))  # nv
 
-Test("ismass") <- (Q := 1(Kilogram), has_units(Q, Kilogram))  # nv
+Test("ismass") <- (eval_(1(Kilogram), Q), has_units(Q, Kilogram))  # nv
 
-Test("istime") <- (Q := 1(Second), has_units(Q, Second))  # nv
+Test("istime") <- (eval_(1(Second), Q), has_units(Q, Second))  # nv
 
-Test("isfrequency") <- (Q := 1(Hertz), has_units(Q, Hertz))  # nv
+Test("isfrequency") <- (eval_(1(Hertz), Q), has_units(Q, Hertz))  # nv
 
-Test("isforce") <- (Q := 1(Newton), has_units(Q, Newton))  # nv
+Test("isforce") <- (eval_(1(Newton), Q), has_units(Q, Newton))  # nv
 
-Test("isenergy") <- (Q := 1(Joule), has_units(Q, Joule))  # nv
+Test("isenergy") <- (eval_(1(Joule), Q), has_units(Q, Joule))  # nv
 
-Test("ispower") <- (Q := 1(Watt), has_units(Q, Watt))  # nv
+Test("ispower") <- (eval_(1(Watt), Q), has_units(Q, Watt))  # nv
 
-Test("ispressure") <- (Q := 1(Bar), has_units(Q, Pascal))  # nv
+Test("ispressure") <- (eval_(1(Bar), Q), has_units(Q, Pascal))  # nv
 
-Test("isvoltage") <- (Q := 1(Volt), has_units(Q, Volt))  # nv
+Test("isvoltage") <- (eval_(1(Volt), Q), has_units(Q, Volt))  # nv
 
-Test("isresistance") <- (Q := 1(Ohm), has_units(Q, Ohm))  # nv
+Test("isresistance") <- (eval_(1(Ohm), Q), has_units(Q, Ohm))  # nv
 
-Test("ischarge") <- (Q := 1(Coulomb), has_units(Q, Coulomb))  # nv
+Test("ischarge") <- (eval_(1(Coulomb), Q), has_units(Q, Coulomb))  # nv
 
 Test("valueof and stripdimensions") <- (
-    F := 9.8(Newton),
+    eval_(9.8(Newton), F),
     strip_units(F, 9.8),
     strip_units(F, 9.8)
 )  # nv
@@ -209,8 +209,8 @@ Test("valueof and stripdimensions") <- (
 # has_units(X, Unit) is the explicit goal for dimension checks and constraints.
 
 Test("var construction sugar") <- (
-    N := 9.8,
-    F := N(Newton),
+    eval_(9.8, N),
+    eval_(N(Newton), F),
     has_units(F, Newton),
     strip_units(F, 9.8)
 )  # nv
@@ -230,7 +230,7 @@ Test("constraint propagates through arithmetic") <- (
     has_units(T, Second),
     D is 100(Metre),
     T is 10(Second),
-    V := D / T,
+    eval_(D / T, V),
     has_units(V, Metre/Second)
 )  # nv
 
@@ -238,32 +238,32 @@ Test("constraint propagates through arithmetic") <- (
 # The transformer auto-wraps compound unit args in PyThunk.
 
 Test("area check via compound expr") <- (
-    A := 4(Metre) ** 2,
+    eval_(4(Metre) ** 2, A),
     has_units(A, Metre**2)
 )  # nv
 
 Test("area constraint via compound expr") <- (
     has_units(A, Metre**2),
-    A := 4(Metre) ** 2
+    eval_(4(Metre) ** 2, A)
 )  # nv
 
 Test("velocity check via compound expr") <- (
-    V := 10(Metre) / 1(Second),
+    eval_(10(Metre) / 1(Second), V),
     has_units(V, Metre/Second)
 )  # nv
 
 Test("velocity constraint via compound expr") <- (
     has_units(V, Metre/Second),
-    V := 10(Metre) / 1(Second)
+    eval_(10(Metre) / 1(Second), V)
 )  # nv
 
 Test("acceleration check via compound expr") <- (
-    A := 9.8(Metre) / 1(Second) ** 2,
+    eval_(9.8(Metre) / 1(Second) ** 2, A),
     has_units(A, Metre/Second**2)
 )  # nv
 
 Test("force compound dims check") <- (
-    F := 9.8(Newton),
+    eval_(9.8(Newton), F),
     has_units(F, Kilogram*Metre/Second**2)
 )  # nv
 
@@ -274,46 +274,46 @@ Test("compound dims constraint rejects wrong unit") <- (
 # Dimensionless n() sugar: 42() produces Quantity(42, {})
 
 Test("dimensionless integer sugar") <- (
-    D := 42(),
+    eval_(42(), D),
     has_units(D, Dimensionless),
     strip_units(D, 42)
 )  # nv
 
 Test("dimensionless float sugar") <- (
-    D := 3.14(),
+    eval_(3.14(), D),
     has_units(D, Dimensionless),
-    ERR := ++(abs(D.value - 3.14)),
+    ERR is ++(abs(D.value - 3.14)),
     ERR < 1.0e-12
 )  # nv
 
 Test("dimensionless sugar equals Dimensionless pred") <- (
-    D1 := 7(),
-    D2 := ++(Quantity(7, {})),
+    eval_(7(), D1),
+    D2 is ++(Quantity(7, {})),
     D1 == D2
 )  # nv
 
 Test("dimensionless sugar not a length") <- (
-    D := 5(),
+    eval_(5(), D),
     not has_units(D, Metre)
 )  # nv
 
 Test("dimensionless sugar not a force") <- (
-    D := 9.8(),
+    eval_(9.8(), D),
     not has_units(D, Newton)
 )  # nv
 
-Test("dimensionless via dimensionless check") <- (D := 0(), has_units(D, Dimensionless))  # nv
+Test("dimensionless via dimensionless check") <- (eval_(0(), D), has_units(D, Dimensionless))  # nv
 
 Test("dimensionless arithmetic via escape") <- (
-    S := ++(Quantity(3, {}) + Quantity(2, {})),
+    S is ++(Quantity(3, {}) + Quantity(2, {})),
     has_units(S, Dimensionless),
     strip_units(S, 5)
 )  # nv
 
 Test("dimensionless ratio from division") <- (
-    RATIO := 50(Metre) / 10(Metre),
+    eval_(50(Metre) / 10(Metre), RATIO),
     has_units(RATIO, Dimensionless),
-    D := 5.0(),
+    eval_(5.0(), D),
     RATIO == D
 )  # nv
 

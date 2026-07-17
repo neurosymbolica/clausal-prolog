@@ -2,11 +2,11 @@
 
 # ── Accumulator sum ──────────────────────────────────────────────────────────
 # sum_(List, Accumulator, Result): sum elements of List starting from Accumulator.
-# TRO-eligible: prefix is deterministic (Evaluate), tail call is self-recursive.
+# TRO-eligible: prefix is deterministic (eager `eval_/2`), tail call is self-recursive.
 
 AccSum([], ACC, ACC),
 AccSum([H, *T], ACC, RESULT) <- (
-    NEWACC := ACC + H,
+    eval_(ACC + H, NEWACC),
     AccSum(T, NEWACC, RESULT)
 )
 
@@ -36,7 +36,7 @@ Test("accrev three") <- (AccReverse([1, 2, 3], [], R) and R == [3, 2, 1])  # nv
 CountDown(0, ACC, [0, *ACC]),
 CountDown(N, ACC, RESULT) <- (
     N > 0,
-    N1 := N - 1,
+    eval_(N - 1, N1),
     CountDown(N1, [N, *ACC], RESULT)
 )
 
@@ -47,7 +47,7 @@ Test("countdown three") <- (CountDown(3, [], R) and R == [0, 1, 2, 3])  # nv
 
 AccLength([], N, N),
 AccLength([_, *T], ACC, N) <- (
-    ACC1 := ACC + 1,
+    eval_(ACC + 1, ACC1),
     AccLength(T, ACC1, N)
 )
 
@@ -59,8 +59,8 @@ Test("acclen three") <- (AccLength([1, 2, 3], 0, N) and N == 3)  # nv
 AccFactorial(0, ACC, ACC),
 AccFactorial(N, ACC, RESULT) <- (
     N > 0,
-    NEWACC := ACC * N,
-    N1 := N - 1,
+    eval_(ACC * N, NEWACC),
+    eval_(N - 1, N1),
     AccFactorial(N1, NEWACC, RESULT)
 )
 
@@ -79,6 +79,6 @@ CollectHelpers(0, ACC, ACC),
 CollectHelpers(N, ACC, RESULT) <- (
     N > 0,
     Helper(V),
-    N1 := N - 1,
+    eval_(N - 1, N1),
     CollectHelpers(N1, [V, *ACC], RESULT)
 )

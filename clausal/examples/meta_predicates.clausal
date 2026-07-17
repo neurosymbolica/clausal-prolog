@@ -16,7 +16,7 @@
 Squares(NS, SQUARES) <- (
     findall(
         SQ,
-        (X in NS, (SQ := X * X)),
+        (X in NS, (SQ == X * X)),
         SQUARES,
     )
 )

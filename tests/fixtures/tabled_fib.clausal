@@ -4,11 +4,11 @@ Fib(N=0, RESULT=0),
 Fib(1, 1),
 Fib(N, RESULT) <- (
     N > 1,
-    N1 := N - 1,
-    N2 := N - 2,
+    N1 == N - 1,
+    N2 == N - 2,
     Fib(N1, FIRST),
     Fib(N2, SECOND),
-    RESULT := FIRST + SECOND
+    RESULT == FIRST + SECOND
 )
 
 

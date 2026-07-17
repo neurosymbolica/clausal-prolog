@@ -82,7 +82,7 @@ Test('max_ 3 7 is 7') <- (max_(3, 7, X), X == 7)
 
 Test('min_ 3 7 is 3') <- (min_(3, 7, X), X == 3)
 
-Test('eval binds var: X := 42') <- (X := 42, X == 42)
+Test('eval binds var: X == 42') <- (X == 42, X == 42)
 
 Test('eval check: 3 == 1+2') <- (3 == 1 + 2)
 
@@ -90,7 +90,7 @@ Test('eval check fails: 4 == 1+2') <- (not 4 == 1 + 2)
 
 Test('mixed int/float: 1 + 2.0 == 3.0') <- (1 + 2.0 == 3.0)
 
-Test('large integer: 10^100 + 1') <- (X := 10 ** 100, X + 1 == 10 ** 100 + 1)
+Test('large integer: 10^100 + 1') <- (X == 10 ** 100, X + 1 == 10 ** 100 + 1)
 
 Test('mixed int/float compare: not 1 < 1.0') <- (not 1 < 1.0)
 

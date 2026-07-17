@@ -32,7 +32,7 @@ Test("cpsat sum constraint") <- (
     ortools.cpsat.in_(Y, 0, 10),
     ortools.cpsat(X + Y == 7),
     ortools.cpsat.solve([X, Y]),
-    V := X + Y, V == 7
+    V == X + Y, V == 7
 )  # nv
 
 Test("cpsat difference constraint") <- (
@@ -40,7 +40,7 @@ Test("cpsat difference constraint") <- (
     ortools.cpsat.in_(Y, 0, 10),
     ortools.cpsat(X - Y == 3),
     ortools.cpsat.solve([X, Y]),
-    V := X - Y, V == 3
+    V == X - Y, V == 3
 )  # nv
 
 Test("cpsat product with constant") <- (

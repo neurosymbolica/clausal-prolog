@@ -1,10 +1,10 @@
 # ISO Prolog conformity: arithmetic evaluation and comparison
 #
-# ISO §8.6 — is/2 (:= in clausal)
+# ISO §8.6 — is/2 (== in clausal)
 # ISO §8.7 — arithmetic comparison (<, <=, >, >=)
 #
 # Differences from ISO:
-#   := evaluates (Prolog: is), clausal 'is' = unification
+#   == posts an arithmetic constraint (Prolog: is), clausal 'is' = unification
 #   -7 // 2 = -4 (Python floor), some Prologs = -3 (truncate)
 #   -7 % 2 = 1 (Python floor mod), some Prologs = -1
 
@@ -21,7 +21,7 @@ double(X, Y) <- (Y == X * 2)
 square(X, Y) <- (Y == X * X)
 triangle_number(N, T) <- (T == N * (N + 1) // 2)
 
-# ── := (arithmetic evaluation) ───────────────────────────────────────────────
+# ── == (arithmetic evaluation) ───────────────────────────────────────────────
 
 Test("addition: 1+2=3") <- (1 + 2 == 3)  # nv
 Test("subtraction: 5-3=2") <- (5 - 3 == 2)  # nv
@@ -88,17 +88,17 @@ Test("min_ 3 7 is 3") <- (
     X == 3
 )  # nv
 
-# ── := evaluation modes ──────────────────────────────────────────────────────
+# ── == evaluation modes ──────────────────────────────────────────────────────
 
-Test("eval binds var: X := 42") <- (
-    X := 42,
+Test("eval binds var: X == 42") <- (
+    X == 42,
     X == 42
 )  # nv
 Test("eval check: 3 == 1+2") <- (3 == 1 + 2)  # nv
 Test("eval check fails: 4 == 1+2") <- (not (4 == 1 + 2))  # nv
 Test("mixed int/float: 1 + 2.0 == 3.0") <- (1 + 2.0 == 3.0)  # nv
 Test("large integer: 10^100 + 1") <- (
-    X := 10 ** 100,
+    X == 10 ** 100,
     (X + 1) == (10 ** 100 + 1)
 )  # nv
 Test("mixed int/float compare: not 1 < 1.0") <- (not (1 < 1.0))  # nv

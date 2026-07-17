@@ -21,10 +21,10 @@
 ApplyVal(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
 
 # Arithmetic in lambda body.
-AddOne(X, Y) <- call_goal((V <- (Y := V + 1)), X)
+AddOne(X, Y) <- call_goal((V <- (Y == V + 1)), X)
 
 # Two-argument lambda.
-DoubleVal(X, Y) <- call_goal(((A, B) <- (B := A * 2)), X, Y)
+DoubleVal(X, Y) <- call_goal(((A, B) <- (B == A * 2)), X, Y)
 
 # Zero-argument lambda.
 ZeroArg(RESULT) <- call_goal((() <- (RESULT is 42)))
@@ -32,22 +32,22 @@ ZeroArg(RESULT) <- call_goal((() <- (RESULT is 42)))
 # ── Variable capture ─────────────────────────────────────────────────────────
 
 # Capture one variable from enclosing clause.
-AddZ(Z, X, RESULT) <- call_goal((V <- (RESULT := V + Z)), X)
+AddZ(Z, X, RESULT) <- call_goal((V <- (RESULT == V + Z)), X)
 
 # Capture two variables from enclosing clause.
 CaptureTwo(A, B, X, RESULT) <- (
-    call_goal((V <- (RESULT := V + A + B)), X)
+    call_goal((V <- (RESULT == V + A + B)), X)
 )
 
 # ── Conjunction body ─────────────────────────────────────────────────────────
 
-# Lambda with multi-step conjunction: T := V + 1, R := T * 2
-Transform(X, Y) <- call_goal(((V, R) <- ((T := V + 1) and (R := T * 2))), X, Y)
+# Lambda with multi-step conjunction: T == V + 1, R == T * 2
+Transform(X, Y) <- call_goal(((V, R) <- ((T == V + 1) and (R == T * 2))), X, Y)
 
 # ── Predicate calls from lambdas ─────────────────────────────────────────────
 
 # Helper predicate called from within a lambda.
-Helper(X, Y) <- (Y := X * 10)
+Helper(X, Y) <- (Y == X * 10)
 
 ApplyPred(X, Y) <- call_goal((V <- (Helper(V, Y))), X)
 

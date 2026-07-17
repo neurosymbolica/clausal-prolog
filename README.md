@@ -64,11 +64,11 @@ Fib(0, 0),
 Fib(1, 1),
 Fib(N, RESULT) <- (
     N > 1,
-    N1 := N - 1,
-    N2 := N - 2,
+    N1 == N - 1,
+    N2 == N - 2,
     Fib(N1, A),
     Fib(N2, B),
-    RESULT := A + B
+    RESULT == A + B
 )
 ```
 
@@ -107,9 +107,9 @@ Sendmoney(S, E, N, D, M, O, R, Y) <- (
     S != 0,
     M != 0,
     label([S, E, N, D, M, O, R, Y]),
-    SEND  := S * 1000 + E * 100 + N * 10 + D,
-    MORE  := M * 1000 + O * 100 + R * 10 + E,
-    MONEY := M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
+    SEND  == S * 1000 + E * 100 + N * 10 + D,
+    MORE  == M * 1000 + O * 100 + R * 10 + E,
+    MONEY == M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
     SEND + MORE == MONEY
 )
 ```
@@ -120,7 +120,7 @@ Sendmoney(S, E, N, D, M, O, R, Y) <- (
 Squares(Ns, Squares) <- (
     findall(
         Sq,
-        (in_(X, Ns), Sq := X * X),
+        (in_(X, Ns), Sq == X * X),
         Squares
     )
 )

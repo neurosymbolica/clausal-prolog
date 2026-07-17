@@ -297,7 +297,7 @@ BOOM_SRC = """-table(boom/1)
 boom(1),
 boom(X) <- (
     X is 2,
-    BAD := 1 / 0
+    eval_(1 / 0, BAD)
 )
 """
 
@@ -310,14 +310,14 @@ RTE_SRC = """rte(X) <- (
 DEEP_SRC = """count_down(0),
 count_down(N) <- (
     N > 0,
-    N1 := N - 1,
+    eval_(N - 1, N1),
     count_down(N1)
 )
 
 build(0, []),
 build(N, [N, *T]) <- (
     N > 0,
-    N1 := N - 1,
+    eval_(N - 1, N1),
     build(N1, T)
 )
 """
@@ -362,7 +362,7 @@ ts([1, *T]) <- (T is [2, 3])
 TD_DICT_SRC = """-table(td/1)
 
 td(D) <- (
-    D := ++{"k": X},
+    D is ++{"k": X},
     X is 7
 )
 """

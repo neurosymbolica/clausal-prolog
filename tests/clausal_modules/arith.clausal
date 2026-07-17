@@ -5,9 +5,9 @@
 Factorial(N=0, RESULT=1),
 Factorial(N, RESULT) <- (
     N > 0,
-    N1 := N - 1,
+    N1 == N - 1,
     Factorial(N1, R1),
-    RESULT := N * R1
+    RESULT == N * R1
 )
 
 MaxOf(X, Y, MAX) <- (
@@ -21,9 +21,9 @@ MaxOf(X, Y, MAX) <- (
 
 AbsDiff(X, Y, DIFF) <- (
     X >= Y,
-    DIFF := X - Y
+    DIFF == X - Y
 )
 AbsDiff(X, Y, DIFF) <- (
     Y > X,
-    DIFF := Y - X
+    DIFF == Y - X
 )

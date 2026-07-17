@@ -42,7 +42,7 @@ Test("frozen cdf round-trip") <- (
 # StatsFrozenCdf: consistency check (both ground)
 Test("frozen cdf consistency check succeeds") <- (
     StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
-    P := ++(__import__('scipy.stats', fromlist=['norm']).norm.cdf(1.0)),
+    P is ++(__import__('scipy.stats', fromlist=['norm']).norm.cdf(1.0)),
     StatsFrozenCdf(H, 1.0, P),
     StatsFrozenFree(H))  # nv
 

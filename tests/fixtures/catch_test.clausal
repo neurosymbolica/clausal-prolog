@@ -3,7 +3,7 @@
 # SafeDiv: catches division-by-zero, returns "infinity" instead
 SafeDiv(X, Y, RESULT) <- (
     catch(
-        (RESULT := X // Y),
+        (eval_(X // Y, RESULT)),
         _,
         RESULT is "infinity",
     )

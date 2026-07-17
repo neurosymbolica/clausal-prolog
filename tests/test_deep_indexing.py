@@ -8,7 +8,7 @@ sequence.
 For a predicate like:
 
     MyLen([], 0)
-    MyLen([_, *TAIL], N) <- (MyLen(TAIL, N1), N := N1 + 1)
+    MyLen([_, *TAIL], N) <- (MyLen(TAIL, N1), eval_(N1 + 1, N))
 
 the generated code should look roughly like:
 

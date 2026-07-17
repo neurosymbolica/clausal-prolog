@@ -148,7 +148,7 @@ class TestOperatorPrecedence:
     def test_arithmetic_precedence_clausal_roundtrip(self):
         """a + b * c should not become (a + b) * c."""
         # nv
-        src = "Test(R) <- (R := 1 + 2 * 3)"
+        src = "Test(R) <- eval_(1 + 2 * 3, R)"
         prolog = clausal_source_to_prolog(src)
         # in_ Prolog, * binds tighter than +
         assert "1 + 2 * 3" in prolog or "1 + 2*3" in prolog

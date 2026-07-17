@@ -2,7 +2,7 @@ Fib(0, 0),
 
 Fib(1, 1),
 
-Fib(N, _result) <- (N > 1, _n1 := N - 1, _n2 := N - 2, Fib(_n1, _first), Fib(_n2, _second), _result := _first + _second)
+Fib(N, _result) <- (N > 1, _n1 == N - 1, _n2 == N - 2, Fib(_n1, _first), Fib(_n2, _second), _result == _first + _second)
 
 Test('fib 0') <- (Fib(0, 0))
 

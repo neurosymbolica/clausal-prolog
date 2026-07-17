@@ -205,7 +205,7 @@ class TestCompileLambda:
 
     def test_compile_lambda_produces_funcdef(self):
         """_compile_goal_lambda returns a name and FunctionDef."""
-        # Body: X_ := 1 — use LoadName for param ref
+        # Body: eval_(1, X_) — use LoadName for param ref
         # nv
         lam = self._make_lambda(["X_"], Evaluate(left=LoadName(name="X_"), right=1))
         name, fdef = _compile_goal_lambda(self._mkctx(), lam)
@@ -227,7 +227,7 @@ class TestCompileLambda:
         """Captured vars become closure references, not function args."""
         # nv
         z = Var()  # captured
-        # body: X_ := Z_ + 1 — X_ is LoadName (param), z is Var (captured)
+        # body: eval_(Z_ + 1, X_) — X_ is LoadName (param), z is Var (captured)
         lam = self._make_lambda(
             ["X_"],
             Evaluate(left=LoadName(name="X_"), right=Add(left=z, right=1)),
@@ -362,8 +362,8 @@ class TestCompiledLambdaExecution:
     """End-to-end: compile a predicate with a lambda arg, run it."""
 
     def test_lambda_arithmetic_body(self):
-        """Lambda with := arithmetic body works end-to-end."""
-        # Build: test(X_, Result_) <- call_goal(lambda Y_: Result_ := Y_ + 1, X_)
+        """Lambda with eval_ (Evaluate) arithmetic body works end-to-end."""
+        # Build: test(X_, Result_) <- call_goal(lambda Y_: eval_(Y_ + 1, Result_), X_)
         # nv
         x = Var()
         result = Var()
@@ -390,7 +390,7 @@ class TestCompiledLambdaExecution:
 
     def test_lambda_captures_enclosing_var(self):
         """Lambda captures a variable from the enclosing clause."""
-        # Build: test(Z_, Result_) <- call_goal(lambda X_: Result_ := X_ + Z_, 10)
+        # Build: test(Z_, Result_) <- call_goal(lambda X_: eval_(X_ + Z_, Result_), 10)
         # nv
         z = Var()
         result = Var()
@@ -461,7 +461,7 @@ class TestCompiledLambdaExecution:
 
     def test_lambda_body_conjunction(self):
         """Lambda body with And (conjunction) works."""
-        # test(R_) <- call_goal(lambda X_, Y_: (T_ := X_ + 1 and Y_ := T_ * 2), 5, R_)
+        # test(R_) <- call_goal(lambda X_, Y_: (eval_(X_ + 1, T_) and eval_(T_ * 2, Y_)), 5, R_)
         # nv
         t = Var()
         r = Var()
@@ -623,7 +623,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(lambda_pred_call, [double/2, apply_double/2])\n"
             "\n"
-            "double(_x, _y) <- (_y := _x + _x)\n"
+            "double(_x, _y) <- (_y == _x + _x)\n"
             "\n"
             "apply_double(_val, _result) <- call_goal((_x <- (double(_x, _result))), _val)\n"
         )
@@ -797,13 +797,13 @@ class TestArrowLambdaCompiled:
         pass  # covered by integration tests below
 
     def test_arrow_lambda_arithmetic_in_clausal(self, tmp_path):
-        """Arrow lambda with := arithmetic in .clausal file."""
+        """Arrow lambda with == arithmetic in .clausal file."""
         # nv
         clausal_file = tmp_path / "arrow_arith.clausal"
         clausal_file.write_text(
             "-module(arrow_arith, [apply_inc/2])\n"
             "\n"
-            "apply_inc(_val, _result) <- call_goal((_x <- (_result := _x + 1)), _val)\n"
+            "apply_inc(_val, _result) <- call_goal((_x <- (_result == _x + 1)), _val)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -822,7 +822,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_two, [apply_add/3])\n"
             "\n"
-            "apply_add(_a, _b, _result) <- call_goal(((_x, _y) <- (_result := _x + _y)), _a, _b)\n"
+            "apply_add(_a, _b, _result) <- call_goal(((_x, _y) <- (_result == _x + _y)), _a, _b)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -860,7 +860,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_capture, [add_z/2])\n"
             "\n"
-            "add_z(_z, _result) <- call_goal((_x <- (_result := _x + _z)), 10)\n"
+            "add_z(_z, _result) <- call_goal((_x <- (_result == _x + _z)), 10)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -879,7 +879,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_conj, [transform/2])\n"
             "\n"
-            "transform(_val, _result) <- call_goal(((_x, _y) <- ((_t := _x + 1) and (_y := _t * 2))), _val, _result)\n"
+            "transform(_val, _result) <- call_goal(((_x, _y) <- ((_t == _x + 1) and (_y == _t * 2))), _val, _result)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -898,7 +898,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_pred, [double/2, apply_double/2])\n"
             "\n"
-            "double(_x, _y) <- (_y := _x + _x)\n"
+            "double(_x, _y) <- (_y == _x + _x)\n"
             "\n"
             "apply_double(_val, _result) <- call_goal((_x <- (double(_x, _result))), _val)\n"
         )

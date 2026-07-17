@@ -11,8 +11,8 @@ Named constants are plain ``Quantity`` values importable directly::
 
 Use them in expressions exactly like the constants from ``py.units``::
 
-    C := SpeedOfLight
-    E := ++(ElectronMass * SpeedOfLight ** 2)
+    C is SpeedOfLight
+    E is ++(ElectronMass * SpeedOfLight ** 2)
     has_units(BoltzmannConstant, Joule / Kelvin)
 
 Numeric values come from the installed scipy CODATA release.

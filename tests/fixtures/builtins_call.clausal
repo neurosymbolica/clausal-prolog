@@ -11,7 +11,7 @@ run_goal(GOAL) <- call(GOAL)
 
 # Example: call member via a goal variable
 member_via_call(X, LIST) <- (
-    GOAL := (X) <- (X in LIST),
+    GOAL is ((X) <- (X in LIST)),
     call(GOAL, X)
 )
 

@@ -24,8 +24,8 @@
 # Increment a counter threaded through phrase/3:
 #   phrase(count3, [0], [_n])  →  _n = 3
 
-inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))
-double >> (state(_n0), {_n := _n0 * 2}, state2(_, _n))
+inc >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))
+double >> (state(_n0), {_n == _n0 * 2}, state2(_, _n))
 
 count3 >> (inc, inc, inc)
 inc_then_double >> (inc, double)
@@ -36,7 +36,7 @@ inc_then_double >> (inc, double)
 #   num_leaves(["leaf", "leaf"], _n)  →  _n = 2
 #   num_leaves(["leaf", ["leaf", "leaf"]], _n)  →  _n = 3
 
-count_leaves("leaf") >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))
+count_leaves("leaf") >> (state(_n0), {_n == _n0 + 1}, state2(_, _n))
 count_leaves([_l, _r]) >> (count_leaves(_l), count_leaves(_r))
 
 num_leaves(_t, _n) <- phrase(count_leaves(_t), [0], [_n])

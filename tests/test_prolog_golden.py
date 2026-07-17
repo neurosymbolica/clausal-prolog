@@ -134,7 +134,7 @@ class TestUntranslatable:
     def test_double_uadd_warning(self):
         """++expr emits a warning comment."""
         # nv
-        result = clausal_source_to_prolog("Test() <- (_r := ++len(_l))")
+        result = clausal_source_to_prolog("Test() <- (_r is ++len(_l))")
         assert "WARNING" in result
         assert "untranslatable" in result
         assert "len" in result

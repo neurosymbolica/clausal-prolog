@@ -29,37 +29,37 @@ FIXTURE = '''
 # ── A03-F001: TRO with nondeterministic prefix goals ──────────────────
 # member prefix (MemberIn wrongly classed deterministic)
 trm(0, ACC, ACC),
-trm(N, ACC, OUT) <- (N > 0, X in [1, 2], N1 := N - 1, ACC1 := ACC + X, trm(N1, ACC1, OUT))
+trm(N, ACC, OUT) <- (N > 0, X in [1, 2], eval_(N - 1, N1), eval_(ACC + X, ACC1), trm(N1, ACC1, OUT))
 
 # undetermined If prefix (Branch wrongly classed deterministic)
 tri(0, ACC, ACC),
-tri(N, ACC, OUT) <- (N > 0, If(C is 1, X := 5, X := 7), N1 := N - 1, ACC1 := ACC + X, tri(N1, ACC1, OUT))
+tri(N, ACC, OUT) <- (N > 0, If(C is 1, eval_(5, X), eval_(7, X)), eval_(N - 1, N1), eval_(ACC + X, ACC1), tri(N1, ACC1, OUT))
 
 # atom_concat split-mode prefix (wrongly in _DETERMINISTIC_BUILTINS)
 tac(0, ACC, ACC),
-tac(N, ACC, OUT) <- (N > 0, atom_concat(P, Q, "ab"), N1 := N - 1, ACC1 is [P, *ACC], tac(N1, ACC1, OUT))
+tac(N, ACC, OUT) <- (N > 0, atom_concat(P, Q, "ab"), eval_(N - 1, N1), ACC1 is [P, *ACC], tac(N1, ACC1, OUT))
 
 # shallow twins = differential oracle (ShallowStrategy has no TRO)
 -shallow([strm/3, stri/3, swk5/3, sfee/2])
 strm(0, ACC, ACC),
-strm(N, ACC, OUT) <- (N > 0, X in [1, 2], N1 := N - 1, ACC1 := ACC + X, strm(N1, ACC1, OUT))
+strm(N, ACC, OUT) <- (N > 0, X in [1, 2], eval_(N - 1, N1), eval_(ACC + X, ACC1), strm(N1, ACC1, OUT))
 stri(0, ACC, ACC),
-stri(N, ACC, OUT) <- (N > 0, If(C is 1, X := 5, X := 7), N1 := N - 1, ACC1 := ACC + X, stri(N1, ACC1, OUT))
+stri(N, ACC, OUT) <- (N > 0, If(C is 1, eval_(5, X), eval_(7, X)), eval_(N - 1, N1), eval_(ACC + X, ACC1), stri(N1, ACC1, OUT))
 
 # non-tail controls (Unify after the self-call disables TRO)
 trn(0, ACC, ACC),
-trn(N, ACC, OUT) <- (N > 0, X in [1, 2], N1 := N - 1, ACC1 := ACC + X, trn(N1, ACC1, OUT0), OUT is OUT0)
+trn(N, ACC, OUT) <- (N > 0, X in [1, 2], eval_(N - 1, N1), eval_(ACC + X, ACC1), trn(N1, ACC1, OUT0), OUT is OUT0)
 trin(0, ACC, ACC),
-trin(N, ACC, OUT) <- (N > 0, If(C is 1, X := 5, X := 7), N1 := N - 1, ACC1 := ACC + X, trin(N1, ACC1, OUT0), OUT is OUT0)
+trin(N, ACC, OUT) <- (N > 0, If(C is 1, eval_(5, X), eval_(7, X)), eval_(N - 1, N1), eval_(ACC + X, ACC1), trin(N1, ACC1, OUT0), OUT is OUT0)
 
 # deterministic TRO regression guards
 cnt(0, ACC, ACC),
-cnt(N, ACC, OUT) <- (N > 0, N1 := N - 1, ACC1 := ACC + N, cnt(N1, ACC1, OUT))
+cnt(N, ACC, OUT) <- (N > 0, eval_(N - 1, N1), eval_(ACC + N, ACC1), cnt(N1, ACC1, OUT))
 trob(0, ACC, ACC),
-trob(N, ACC, OUT) <- (N > 0, once(in_(X, [5, 6])), N1 := N - 1, ACC1 := ACC + X, trob(N1, ACC1, OUT))
+trob(N, ACC, OUT) <- (N > 0, once(in_(X, [5, 6])), eval_(N - 1, N1), eval_(ACC + X, ACC1), trob(N1, ACC1, OUT))
 # catch prefix is non-deterministic per the table → TRO off, still correct
 ctp(0, ACC, ACC),
-ctp(N, ACC, OUT) <- (N > 0, catch(X is 1, _, X is 2), N1 := N - 1, ACC1 := ACC + X, ctp(N1, ACC1, OUT))
+ctp(N, ACC, OUT) <- (N > 0, catch(X is 1, _, X is 2), eval_(N - 1, N1), eval_(ACC + X, ACC1), ctp(N1, ACC1, OUT))
 
 # ── A03-F002: destructive reuse behind nondeterministic prefixes ─────
 drm(OUT) <- (SRC is [1, 2], X in [10, 20], append(SRC, [X], OUT))
@@ -74,24 +74,24 @@ drok(OUT) <- (SRC is [1, 2], append(SRC, [3], OUT))
 idx(0, "z0"),
 idx(90, "n90"),
 idx(80, "n80"),
-idx(N, R) <- (N > 0, N < 50, N1 := N - 1, idx(N1, R))
+idx(N, R) <- (N > 0, N < 50, eval_(N - 1, N1), idx(N1, R))
 
 # control: a second var-headed (non-TRO) clause puts a yield in the bucket
 jdx(0, "z0"),
 jdx(90, "n90"),
 jdx(80, "n80"),
 jdx(M, "big") <- (M > 100),
-jdx(N, R) <- (N > 0, N < 50, N1 := N - 1, jdx(N1, R))
+jdx(N, R) <- (N > 0, N < 50, eval_(N - 1, N1), jdx(N1, R))
 
 # TRO + check_indices + indexing, list heads — correct-behaviour guard
 wk5([], ACC, ACC),
 wk5([9], 9, "nine"),
 wk5([8], 8, "eight"),
-wk5([H, *T], ACC, OUT) <- (ACC1 := ACC + H, wk5(T, ACC1, OUT))
+wk5([H, *T], ACC, OUT) <- (eval_(ACC + H, ACC1), wk5(T, ACC1, OUT))
 swk5([], ACC, ACC),
 swk5([9], 9, "nine"),
 swk5([8], 8, "eight"),
-swk5([H, *T], ACC, OUT) <- (ACC1 := ACC + H, swk5(T, ACC1, OUT))
+swk5([H, *T], ACC, OUT) <- (eval_(ACC + H, ACC1), swk5(T, ACC1, OUT))
 
 # ── A03-F004: catch with declared-functor catcher ─────────────────────
 boom(X) <- (X > 0, throw(kab(X)))
@@ -228,7 +228,7 @@ SolveGuard([GOAL, *GOALS], PROGRAM, LIM) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     LIM > 0,
     append(BODY, GOALS, ALL_GOALS),
-    LIM1 := LIM - 1,
+    LIM1 == LIM - 1,
     SolveGuard(ALL_GOALS, PROGRAM, LIM1),
 )
 
@@ -584,7 +584,7 @@ SolveGuard([GOAL, *GOALS], PROGRAM, LIM) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     LIM > 0,
     append(BODY, GOALS, ALL_GOALS),
-    LIM1 := LIM - 1,
+    LIM1 == LIM - 1,
     SolveGuard(ALL_GOALS, PROGRAM, LIM1),
 )
 -specialize(SolveGuard, NatProg, alias=SolveGuardNat)
@@ -670,7 +670,7 @@ class TestF009CpdExtensionChaining:
 
     def test_cpd_limit_matches_non_cpd(self, mod):
         # A03-F009: the pre-match chaining path (SolveLimit's ``MAX > 0`` /
-        # ``MAX1 := MAX - 1``) must telescope one guard+decrement per level, so
+        # ``MAX1 == MAX - 1``) must telescope one guard+decrement per level, so
         # the CPD depth cutoff matches the non-CPD specialization exactly.
         for depth, expected in ((2, False), (3, False), (4, True), (9, True)):
             assert has_sol(mod, mod.LimNatCPD(NAT3, depth)) is expected

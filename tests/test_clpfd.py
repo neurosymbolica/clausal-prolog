@@ -625,7 +625,7 @@ class TestCompilerCLPFD:
         assert sorted(results) == [1, 3]
 
     def test_evaluate_unchanged(self):
-        """:= still does eager arithmetic eval."""
+        """Evaluate (eval_) still does eager arithmetic eval."""
         # nv
         mod = Module("test_mod")
         x = Var()

@@ -56,7 +56,7 @@ class TestSourceLocations:
         src.write_text(
             "# line 1\n"
             "# line 2\n"
-            "DivZero(X) <- (X := ++(1 / 0))\n"
+            "DivZero(X) <- (X is ++(1 / 0))\n"
         )
         mod = _load_module("g_divzero", str(src))
         logic_mod = mod.__dict__["$module"]
@@ -75,7 +75,7 @@ class TestSourceLocations:
         # Body goal is on line 3; expect compiled frame to report line 3.
         assert lineno == 3, (
             f"expected compiled traceback to point at line 3 "
-            f"(the `X := ++(1 / 0)` goal); got {lineno!r}\nframes:\n{diag}"
+            f"(the `X is ++(1 / 0)` goal); got {lineno!r}\nframes:\n{diag}"
         )
 
 
@@ -103,7 +103,7 @@ class TestSourceLocationsG6:
     def test_evaluate_raises(self, tmp_path):
         from clausal.logic.solve import call
 
-        logic_mod, _ = _build(tmp_path, "g_eval", "EvalRaise(X) <- (X := ++([][0]))\n")
+        logic_mod, _ = _build(tmp_path, "g_eval", "EvalRaise(X) <- eval_(++([][0]), X)\n")
         with pytest.raises(IndexError) as exc_info:
             list(call("EvalRaise", None, module=logic_mod))
         _assert_frame_line(exc_info.value, "EvalRaise", 3)
@@ -114,7 +114,7 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_reified_ite",
-            "ReifiedITE(X) <- If(1 == 1, (X := ++(1/0)), X is 0)\n",
+            "ReifiedITE(X) <- If(1 == 1, (X is ++(1/0)), X is 0)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
             list(call("ReifiedITE", None, module=logic_mod))
@@ -141,7 +141,7 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_catch_goal",
-            'CatchGoal(X) <- catch((X := ++(1/0)), "unrelated", X is 0)\n',
+            'CatchGoal(X) <- catch((X is ++(1/0)), "unrelated", X is 0)\n',
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
             list(call("CatchGoal", None, module=logic_mod))
@@ -153,7 +153,7 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_findall",
-            "FindAllRaise(BAG) <- findall(Y, (Y := ++(1/0)), BAG)\n",
+            "FindAllRaise(BAG) <- findall(Y, (Y is ++(1/0)), BAG)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
             list(call("FindAllRaise", None, module=logic_mod))
@@ -169,7 +169,7 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_lambda",
-            "LambdaRaise(X) <- call_goal((V <- (V := ++(1/0))), X)\n",
+            "LambdaRaise(X) <- call_goal((V <- (V is ++(1/0))), X)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
             list(call("LambdaRaise", None, module=logic_mod))
@@ -186,7 +186,7 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_subcall",
-            "Callee(X) <- (X := ++(1/0))\n"
+            "Callee(X) <- (X is ++(1/0))\n"
             "Caller(X) <- Callee(X)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:

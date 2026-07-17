@@ -773,7 +773,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         except BaseException:
             # A04-F007: an abnormal leader exit — GeneratorExit (once() takes
             # the first answer and abandons the solve loop) or a body exception
-            # (e.g. ZeroDivisionError from `:=`) — must not leave a half-filled
+            # (e.g. ZeroDivisionError from `eval_/2`) — must not leave a half-filled
             # "evaluating" entry behind. Later queries would take the consumer
             # path and silently return the partial answer set (and, orphaned at
             # the root, fabricate an unbound answer — A04-F008). Drop the entry

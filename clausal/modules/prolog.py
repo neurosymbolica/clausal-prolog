@@ -7,14 +7,14 @@ translated Prolog code can use them via qualified calls::
 
     -import_module(prolog)
 
-    X := prolog.TruncDiv(7, 2)    # 3  (same as Python here)
-    X := prolog.TruncDiv(-7, 2)   # -3 (ISO: truncate toward zero)
+    eval_(prolog.TruncDiv(7, 2), X)    # 3  (same as Python here)
+    eval_(prolog.TruncDiv(-7, 2), X)   # -3 (ISO: truncate toward zero)
                                    # Python // would give -4
 
-    X := prolog.TruncMod(7, -3)   # -2 (ISO mod: sign follows the divisor)
+    eval_(prolog.TruncMod(7, -3), X)   # -2 (ISO mod: sign follows the divisor)
                                    # sibling of Python % (also floored)
 
-    X := prolog.Rem(-7, 3)        # -1 (ISO remainder: sign follows dividend)
+    eval_(prolog.Rem(-7, 3), X)        # -1 (ISO remainder: sign follows dividend)
 """
 
 

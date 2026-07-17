@@ -30,13 +30,13 @@ Leq([X], [Y]) <- Leq(X, Y)
 PeanoToInt(N=[], I=0),
 PeanoToInt([N], I) <- (
     PeanoToInt(N, I1),
-    I := I1 + 1
+    I == I1 + 1
 )
 
 IntToPeano(I=0, N=[]),
 IntToPeano(I, [N]) <- (
     I > 0,
-    I1 := I - 1,
+    I1 == I - 1,
     IntToPeano(I1, N)
 )
 

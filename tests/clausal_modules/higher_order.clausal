@@ -3,7 +3,7 @@
 # maplist/2, maplist/3, include/3, exclude/3, foldl/4
 
 # Doubles/2 — double each element via maplist/3 + lambda
-Doubles(XS, YS) <- maplist(((X, Y) <- (Y := X * 2)), XS, YS)
+Doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
 
 # AllPositive/1 — check all positive via maplist/2 + lambda
 AllPositive(XS) <- maplist((X <- (X > 0)), XS)
@@ -15,13 +15,13 @@ KeepPositive(XS, PS) <- include((X <- (X > 0)), XS, PS)
 RemoveNegative(XS, RS) <- exclude((X <- (X < 0)), XS, RS)
 
 # SumListFold/2 — sum via foldl/4
-SumListFold(XS, S) <- foldl(((E, A, R) <- (R := A + E)), XS, 0, S)
+SumListFold(XS, S) <- foldl(((E, A, R) <- (R == A + E)), XS, 0, S)
 
 # ProductList/2 — product via foldl/4
-ProductList(XS, P) <- foldl(((E, A, R) <- (R := A * E)), XS, 1, P)
+ProductList(XS, P) <- foldl(((E, A, R) <- (R == A * E)), XS, 1, P)
 
 # Squares/2 — square each element via maplist/3
-Squares(XS, YS) <- maplist(((X, Y) <- (Y := X * X)), XS, YS)
+Squares(XS, YS) <- maplist(((X, Y) <- (Y == X * X)), XS, YS)
 
 # KeepEven/2 — filter even numbers via include
 KeepEven(XS, ES) <- include((X <- (X % 2 == 0)), XS, ES)
@@ -30,10 +30,10 @@ KeepEven(XS, ES) <- include((X <- (X % 2 == 0)), XS, ES)
 RemoveEven(XS, OS) <- exclude((X <- (X % 2 == 0)), XS, OS)
 
 # NegateList/2 — negate each element
-NegateList(XS, YS) <- maplist(((X, Y) <- (Y := 0 - X)), XS, YS)
+NegateList(XS, YS) <- maplist(((X, Y) <- (Y == 0 - X)), XS, YS)
 
 # CountFold/2 — count elements via foldl (ignore element, just increment)
-CountFold(XS, N) <- foldl(((ELEM, A, R) <- (R := A + 1)), XS, 0, N)
+CountFold(XS, N) <- foldl(((ELEM, A, R) <- (R == A + 1)), XS, 0, N)
 
 # MaxFold/3 — find max starting from an initial value
 MaxFold(XS, INIT, M) <- foldl(((E, A, R) <- (

@@ -127,8 +127,8 @@ test("min_ 3 7 is 3") :-
     min(3, 7, X),
     X == 3.
 
-test("eval binds var: X := 42") :-
-    X is 42,
+test("eval binds var: X == 42") :-
+    X == 42,
     X == 42.
 
 test("eval check: 3 == 1+2") :-
@@ -141,7 +141,7 @@ test("mixed int/float: 1 + 2.0 == 3.0") :-
     1 + 2.0 =:= 3.0.
 
 test("large integer: 10^100 + 1") :-
-    X is 10 ** 100,
+    X =:= 10 ** 100,
     X + 1 =:= 10 ** 100 + 1.
 
 test("mixed int/float compare: not 1 < 1.0") :-

@@ -16,7 +16,7 @@ Test("clpfd label as newton") <- (
     in_domain([F_INT], 1, 20),
     label([F_INT]),
     F_INT == 12,
-    F := ++(Newton(F_INT)),
+    F is ++(Newton(F_INT)),
     has_units(F, Newton),
     strip_units(F, 12)
 )  # nv
@@ -27,11 +27,11 @@ Test("clpfd rectangle area") <- (
     in_domain([W, H], 1, 6),
     all_different([W, H]),
     label([W, H]),
-    PROD := W * H,
+    eval_(W * H, PROD),
     PROD == 12,
-    W_M := ++(Metre(W)),
-    H_M := ++(Metre(H)),
-    AREA := W_M * H_M,
+    W_M is ++(Metre(W)),
+    H_M is ++(Metre(H)),
+    eval_(W_M * H_M, AREA),
     has_units(AREA, Metre**2)
 )  # nv
 
@@ -40,12 +40,12 @@ Test("clpfd rectangle area") <- (
 Test("clpfd ohms law integer") <- (
     in_domain([V_INT, I_INT], 1, 20),
     label([V_INT, I_INT]),
-    R_INT := V_INT // I_INT,
+    eval_(V_INT // I_INT, R_INT),
     R_INT == 4,
     V_INT == R_INT * I_INT,
-    VOLTAGE := ++(Volt(V_INT)),
-    CURRENT := ++(Ampere(I_INT)),
-    R := VOLTAGE / CURRENT,
+    VOLTAGE is ++(Volt(V_INT)),
+    CURRENT is ++(Ampere(I_INT)),
+    eval_(VOLTAGE / CURRENT, R),
     has_units(R, Ohm)
 )  # nv
 
@@ -55,14 +55,14 @@ Test("clpfd ohms law integer") <- (
 Test("clpfd kinetic energy") <- (
     in_domain([M_INT, V_INT], 1, 5),
     label([M_INT, V_INT]),
-    TWICE_KE := M_INT * V_INT ** 2,
+    eval_(M_INT * V_INT ** 2, TWICE_KE),
     TWICE_KE == 50,
-    MASS := ++(Kilogram(M_INT)),
-    D := ++(Metre(V_INT)),
-    T := 1(Second),
-    SPD := D / T,
-    KE := MASS * SPD ** 2,
-    HALF := KE / 2,
+    MASS is ++(Kilogram(M_INT)),
+    D is ++(Metre(V_INT)),
+    eval_(1(Second), T),
+    eval_(D / T, SPD),
+    eval_(MASS * SPD ** 2, KE),
+    eval_(KE / 2, HALF),
     has_units(HALF, Joule),
     strip_units(HALF, 25)
 )  # nv
@@ -72,9 +72,9 @@ Test("clpfd kinetic energy") <- (
 Test("clpfd power multiple of 3") <- (
     in_domain([P_INT], 1, 30),
     label([P_INT]),
-    MOD := P_INT % 3,
+    eval_(P_INT % 3, MOD),
     MOD == 0,
-    P := ++(Watt(P_INT)),
+    P is ++(Watt(P_INT)),
     has_units(P, Watt)
 )  # nv
 
@@ -83,9 +83,9 @@ Test("clpfd power multiple of 3") <- (
 Test("clpfd force equals mass times accel") <- (
     in_domain([M_INT, A_INT], 1, 5),
     label([M_INT, A_INT]),
-    F_INT := M_INT * A_INT,
+    eval_(M_INT * A_INT, F_INT),
     F_INT == 20,
-    F := ++(Newton(F_INT)),
+    F is ++(Newton(F_INT)),
     has_units(F, Newton),
     strip_units(F, 20)
 )  # nv
@@ -95,13 +95,13 @@ Test("clpfd force equals mass times accel") <- (
 Test("clpfd power from voltage squared") <- (
     in_domain([V_INT, R_INT], 1, 12),
     label([V_INT, R_INT]),
-    VSQUARED := V_INT ** 2,
-    RATIO := VSQUARED // R_INT,
+    eval_(V_INT ** 2, VSQUARED),
+    eval_(VSQUARED // R_INT, RATIO),
     RATIO == 12,
     VSQUARED == RATIO * R_INT,
-    VOLTAGE := ++(Volt(V_INT)),
-    RESIST := ++(Ohm(R_INT)),
-    P := VOLTAGE * VOLTAGE / RESIST,
+    VOLTAGE is ++(Volt(V_INT)),
+    RESIST is ++(Ohm(R_INT)),
+    eval_(VOLTAGE * VOLTAGE / RESIST, P),
     has_units(P, Watt)
 )  # nv
 
@@ -111,12 +111,12 @@ Test("clpfd power from voltage squared") <- (
 Test("clpfd dimensionless ratio") <- (
     in_domain([NUM, DEN], 1, 10),
     label([NUM, DEN]),
-    PROD := NUM // DEN,
+    eval_(NUM // DEN, PROD),
     PROD == 2,
     NUM == PROD * DEN,
-    D_NUM := ++(Metre(NUM)),
-    D_DEN := ++(Metre(DEN)),
-    RATIO := D_NUM / D_DEN,
+    D_NUM is ++(Metre(NUM)),
+    D_DEN is ++(Metre(DEN)),
+    eval_(D_NUM / D_DEN, RATIO),
     has_units(RATIO, Dimensionless)
 )  # nv
 
@@ -127,7 +127,7 @@ Test("clpfd constraint rejects wrong unit") <- (
     not (
         in_domain([F_INT], 1, 5),
         label([F_INT]),
-        F := ++(Newton(F_INT)),
+        F is ++(Newton(F_INT)),
         has_units(S, Second),
         S is F
     )

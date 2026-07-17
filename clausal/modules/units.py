@@ -8,9 +8,9 @@ Two distinct styles are provided:
 
 **SI unit predicates** — used with the ``n(Unit)`` sugar in ``.clausal`` files::
 
-    D := 5(Metre)          # Quantity(5,   {Metre: 1})
-    F := 9.8(Newton)       # Quantity(9.8, {kg:1, m:1, s:-2})
-    V := 10(m/s)           # Quantity(10,  {Metre:1, Second:-1})
+    eval_(5(Metre), D)          # Quantity(5,   {Metre: 1})
+    eval_(9.8(Newton), F)       # Quantity(9.8, {kg:1, m:1, s:-2})
+    eval_(10(m/s), V)           # Quantity(10,  {Metre:1, Second:-1})
 
 The argument to the parentheses *must* be an SI unit predicate (or a compound
 expression of them).  SI prefix names are plain numbers — they are **not**
@@ -30,9 +30,9 @@ Usage in .clausal files::
 
     -import_from(py.units, [Metre, Newton, Watt, kilo, strip_units])
 
-    D := 5(Metre)                        # SI sugar
-    F := 9.8(Newton)                     # SI sugar
-    BIG := ++(5 * kilo * Newton(1))      # prefix via ++
+    eval_(5(Metre), D)                   # SI sugar
+    eval_(9.8(Newton), F)                # SI sugar
+    BIG is ++(5 * kilo * Newton(1))      # prefix via ++
     strip_units(D, V)                     # extract numeric value
 """
 
@@ -78,7 +78,7 @@ class _UnitsPredicate(ModulePredicate):
     ``Quantity(5, {'kg': 1})`` directly, for use in Python arithmetic
     expressions via the ``++`` escape in .clausal files::
 
-        E := ++(Kilogram(1) * SpeedOfLight ** 2)
+        E is ++(Kilogram(1) * SpeedOfLight ** 2)
     """
 
     __slots__ = ("_dims",)
@@ -146,8 +146,8 @@ def _make_unit_pred(name: str, dims: dict) -> _UnitsPredicate:
     ``Unit(value)`` returns ``Quantity(value, dims)`` directly, for use in
     Python arithmetic expressions via the ``++`` escape::
 
-        D := ++(Metre(5))          # explicit form
-        D := 5(Metre)              # n(Unit) sugar, equivalent
+        D is ++(Metre(5))          # explicit form
+        eval_(5(Metre), D)         # n(Unit) sugar, equivalent
     """
     frozen_dims = {k: v for k, v in dims.items() if v != 0}
     pred = _UnitsPredicate(name)
@@ -419,7 +419,7 @@ SI_Acceleration = Metre(1) / Second(1)**2
 # These are plain Quantity values, not predicates.  Use them in Python
 # expressions via the ++ escape::
 #
-#     E := ++(Kilogram(1) * SpeedOfLight ** 2)
+#     E is ++(Kilogram(1) * SpeedOfLight ** 2)
 
 SpeedOfLight          = 299_792_458       * SI_Velocity
 PlanckConstant        = 6.62607015e-34    * SI_Energy * Second(1)

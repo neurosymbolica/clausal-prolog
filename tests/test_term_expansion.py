@@ -232,7 +232,7 @@ class TestModuleState:
         source = (
             'TermExpansion(_term, _term, ModuleExpansionState(_i, _f, _count), '
             'ModuleExpansionState(_i, _f, _next)) <- '
-            '(_count == 0, _next := _count + 1)\n'
+            '(_count == 0, _next == _count + 1)\n'
             'foo("a"),\n'
         )
         preds, _, md = _parse_and_collect(source)
@@ -252,7 +252,7 @@ class TestModuleState:
         # nv
         source = (
             'TermExpansion(_term, _term, ModuleExpansionState(_i, _f, _count), '
-            'ModuleExpansionState(_i, _f, _next)) <- (_next := _count + 1)\n'
+            'ModuleExpansionState(_i, _f, _next)) <- eval_(_count + 1, _next)\n'
             'foo("a"),\n'
         )
         preds, _, md = _parse_and_collect(source)

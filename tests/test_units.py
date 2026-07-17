@@ -1072,7 +1072,7 @@ class TestUnitsSugar:
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre])\n"
-            "Test <- (D1 := ++(Metre(5)), D2 := 5(Metre), D1 == D2)\n"
+            "Test <- (D1 is ++(Metre(5)), eval_(5(Metre), D2), D1 == D2)\n"
         )
         p = tmp_path / "sugar_basic.clausal"
         p.write_text(src)
@@ -1086,7 +1086,7 @@ class TestUnitsSugar:
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Newton])\n"
-            "Test <- (D1 := ++(Newton(9.8)), D2 := 9.8(Newton), D1 == D2)\n"
+            "Test <- (D1 is ++(Newton(9.8)), eval_(9.8(Newton), D2), D1 == D2)\n"
         )
         p = tmp_path / "sugar_float.clausal"
         p.write_text(src)
@@ -1100,7 +1100,7 @@ class TestUnitsSugar:
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre])\n"
-            "Test <- (D := -5(Metre), V := ++(D.value), V == -5)\n"
+            "Test <- (eval_(-5(Metre), D), V is ++(D.value), V == -5)\n"
         )
         p = tmp_path / "sugar_neg.clausal"
         p.write_text(src)
@@ -1114,7 +1114,7 @@ class TestUnitsSugar:
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre])\n"
-            "Test <- (S := 5(Metre) + 3(Metre), S == 8(Metre))\n"
+            "Test <- (eval_(5(Metre) + 3(Metre), S), S == 8(Metre))\n"
         )
         p = tmp_path / "sugar_add.clausal"
         p.write_text(src)
@@ -1130,7 +1130,7 @@ class TestUnitsSugar:
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre])\n"
-            "Test <- (N := 5, D := N(Metre), D == 5(Metre))\n"
+            "Test <- (N == 5, eval_(N(Metre), D), D == 5(Metre))\n"
         )
         p = tmp_path / "var_sugar_construct.clausal"
         p.write_text(src)
@@ -1144,7 +1144,7 @@ class TestUnitsSugar:
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- (N := 10, V := N(Metre/Second), has_units(V, Metre/Second))\n"
+            "Test <- (N == 10, eval_(N(Metre/Second), V), has_units(V, Metre/Second))\n"
         )
         p = tmp_path / "var_sugar_compound.clausal"
         p.write_text(src)
@@ -1158,7 +1158,7 @@ class TestUnitsSugar:
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre])\n"
-            "Test <- (D := 5(Metre), has_units(D, Metre))\n"
+            "Test <- (eval_(5(Metre), D), has_units(D, Metre))\n"
         )
         p = tmp_path / "has_units_match.clausal"
         p.write_text(src)
@@ -1172,7 +1172,7 @@ class TestUnitsSugar:
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- (D := 5(Second), has_units(D, Metre))\n"
+            "Test <- (eval_(5(Second), D), has_units(D, Metre))\n"
         )
         p = tmp_path / "has_units_fail.clausal"
         p.write_text(src)
@@ -1228,7 +1228,7 @@ class TestUnitMismatchErrors:
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "mismatch_add",
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- (D := ++(Metre(3) + Second(2)))\n")
+            "Test <- (D is ++(Metre(3) + Second(2)))\n")
         with pytest.raises(UnitsMismatch):
             list(call("Test", module=mod))
 
@@ -1238,7 +1238,7 @@ class TestUnitMismatchErrors:
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "mismatch_sub",
             "-import_from(py.units, [Metre, Kilogram])\n"
-            "Test <- (D := ++(Metre(5) - Kilogram(1)))\n")
+            "Test <- (D is ++(Metre(5) - Kilogram(1)))\n")
         with pytest.raises(UnitsMismatch):
             list(call("Test", module=mod))
 
@@ -1258,7 +1258,7 @@ class TestUnitMismatchErrors:
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "mismatch_plain",
             "-import_from(py.units, [Metre])\n"
-            "Test <- (D := ++(Metre(5) + 3))\n")
+            "Test <- (D is ++(Metre(5) + 3))\n")
         with pytest.raises(UnitsMismatch):
             list(call("Test", module=mod))
 
@@ -1268,7 +1268,7 @@ class TestUnitMismatchErrors:
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "mismatch_ok",
             "-import_from(py.units, [Metre])\n"
-            "Test <- (D := ++(Metre(3) + Metre(2)), D == 5(Metre))\n")
+            "Test <- (D is ++(Metre(3) + Metre(2)), D == 5(Metre))\n")
         assert any(True for _ in call("Test", module=mod))
 
 
@@ -1291,7 +1291,7 @@ class TestDimensionlessSugar:
         # nv
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_int",
-            "Test <- (D := 42(), ++(D.dims == {}), ++(D.value == 42))\n")
+            "Test <- (eval_(42(), D), ++(D.dims == {}), ++(D.value == 42))\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_float_dimensionless(self, tmp_path):
@@ -1299,7 +1299,7 @@ class TestDimensionlessSugar:
         # nv
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_float",
-            "Test <- (D := 3.14(), ++(D.dims == {}), ++(D.value == 3.14))\n")
+            "Test <- (eval_(3.14(), D), ++(D.dims == {}), ++(D.value == 3.14))\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_dimensionless_equals_dimensionless_pred(self, tmp_path):
@@ -1308,7 +1308,7 @@ class TestDimensionlessSugar:
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_eq",
             "-import_from(py.units, [Dimensionless])\n"
-            "Test <- (D1 := 42(), D2 := ++(Dimensionless(42)), D1 == D2)\n")
+            "Test <- (eval_(42(), D1), D2 is ++(Dimensionless(42)), D1 == D2)\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_dimensionless_arithmetic(self, tmp_path):
@@ -1316,7 +1316,7 @@ class TestDimensionlessSugar:
         # nv
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_arith",
-            "Test <- (S := ++(Quantity(3, {}) + Quantity(2, {})), S == 5())\n")
+            "Test <- (S is ++(Quantity(3, {}) + Quantity(2, {})), S == 5())\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_dimensionless_is_dimensionless(self, tmp_path):
@@ -1325,7 +1325,7 @@ class TestDimensionlessSugar:
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_is",
             "-import_from(py.units, [Dimensionless])\n"
-            "Test <- (D := 7(), has_units(D, Dimensionless))\n")
+            "Test <- (eval_(7(), D), has_units(D, Dimensionless))\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_dimensionless_is_dimensionless_not_length(self, tmp_path):
@@ -1334,7 +1334,7 @@ class TestDimensionlessSugar:
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_not_len",
             "-import_from(py.units, [Metre])\n"
-            "Test <- (D := 7(), has_units(D, Metre))\n")
+            "Test <- (eval_(7(), D), has_units(D, Metre))\n")
         assert not any(True for _ in call("Test", module=mod))
 
 

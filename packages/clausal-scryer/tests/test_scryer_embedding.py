@@ -161,7 +161,7 @@ class TestClausalTranslation:
         # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
-            s.consult_clausal("Double(X, Y) <- (Y := X * 2)")
+            s.consult_clausal("Double(X, Y) <- (eval_(X * 2, Y))")
             assert s.query_one("double(5, Y).") == {"Y": 10}
 
     def test_consult_clausal_list_patterns(self):

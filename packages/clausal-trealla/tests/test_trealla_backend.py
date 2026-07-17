@@ -184,7 +184,7 @@ class TestTreallaExecution:
         """Translate a rule and query it."""
         # nv
         prolog = clausal_source_to_prolog(
-            "Double(X, Y) <- (Y := X * 2)",
+            "Double(X, Y) <- (eval_(X * 2, Y))",
             dialect=_TREALLA,
         )
         result = _run_trealla(
@@ -228,18 +228,18 @@ class TestTreallaExecution:
         assert "[1,2,3,4]" in result.stdout
 
     def test_arithmetic_evaluation(self):
-        """Arithmetic := translates to 'is' and evaluates in Trealla."""
+        """eval_(translates to 'is' and evaluates in Trealla., Arithmetic)"""
         # nv
         src = textwrap.dedent("""\
             Fib(0, 0),
             Fib(1, 1),
             Fib(N, R) <- (
                 N > 1,
-                N1 := N - 1,
-                N2 := N - 2,
+                eval_(N - 1, N1),
+                eval_(N - 2, N2),
                 Fib(N1, A),
                 Fib(N2, B),
-                R := A + B
+                eval_(A + B, R)
             )
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
@@ -256,7 +256,7 @@ class TestTreallaExecution:
         # nv
         src = textwrap.dedent("""\
             Even(0),
-            Even(N) <- (N > 0, N1 := N - 2, Even(N1))
+            Even(N) <- (N > 0, eval_(N - 2, N1), Even(N1))
             Odd(N) <- (not Even(N))
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
@@ -458,7 +458,7 @@ class TestISOEdgeCases:
     def test_operator_precedence_iso(self):
         """ISO operator precedence is preserved in translation."""
         # nv
-        src = "Test(R) <- (R := 2 + 3 * 4)"
+        src = "Test(R) <- (eval_(2 + 3 * 4, R))"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(prolog, "test(R), write(R), nl, halt")
         assert result.returncode == 0
@@ -507,8 +507,8 @@ class TestISOEdgeCases:
         """Nested compound terms translate correctly."""
         # nv
         src = textwrap.dedent("""\
-            Eval(add(X, Y), R) <- (R := X + Y)
-            Eval(mul(X, Y), R) <- (R := X * Y)
+            Eval(add(X, Y), R) <- (eval_(X + Y, R))
+            Eval(mul(X, Y), R) <- (eval_(X * Y, R))
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(prolog, "eval(add(2,3), R), write(R), nl, halt")

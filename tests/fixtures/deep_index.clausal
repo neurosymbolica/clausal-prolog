@@ -12,7 +12,7 @@
 # Base case on [], recursive on [_|TAIL]. Index target: arg0.
 
 MyLen([], 0),
-MyLen([_, *TAIL], N) <- (MyLen(TAIL, N1), N := N1 + 1)
+MyLen([_, *TAIL], N) <- (MyLen(TAIL, N1), eval_(N1 + 1, N))
 
 Test("mylen empty") <- (MyLen([], N) and N == 0)  # nv
 Test("mylen one element") <- (MyLen([42], N) and N == 1)  # nv
@@ -64,7 +64,7 @@ Test("mylast five elements") <- (MyLast([1, 2, 3, 4, 5], X) and X == 5)  # nv
 # Same nil/cons structure as MySumList but multiplies. Index target: arg0.
 
 MyProduct([], 1),
-MyProduct([HEAD, *TAIL], P) <- (MyProduct(TAIL, P1), P := P1 * HEAD)
+MyProduct([HEAD, *TAIL], P) <- (MyProduct(TAIL, P1), eval_(P1 * HEAD, P))
 
 Test("myproduct empty") <- (MyProduct([], P) and P == 1)  # nv
 Test("myproduct singleton") <- (MyProduct([5], P) and P == 5)  # nv
@@ -76,7 +76,7 @@ Test("myproduct five values") <- (MyProduct([1, 2, 3, 4, 5], P) and P == 120)  #
 # Index target: arg0 ([] vs [HEAD|TAIL]).
 
 MySumList([], 0),
-MySumList([HEAD, *TAIL], S) <- (MySumList(TAIL, S1), S := S1 + HEAD)
+MySumList([HEAD, *TAIL], S) <- (MySumList(TAIL, S1), eval_(S1 + HEAD, S))
 
 Test("mysumlist empty") <- (MySumList([], S) and S == 0)  # nv
 Test("mysumlist singleton") <- (MySumList([7], S) and S == 7)  # nv
@@ -105,7 +105,7 @@ Test("mymax all equal") <- (MyMax([2, 2, 2], M) and M == 2)  # nv
 # ensuring multiple-position structural indexing does not break things.
 
 MyNthOf(0, [HEAD, *_], HEAD),
-MyNthOf(N, [_, *TAIL], ELEM) <- (N > 0, N1 := N - 1, MyNthOf(N1, TAIL, ELEM))
+MyNthOf(N, [_, *TAIL], ELEM) <- (N > 0, eval_(N - 1, N1), MyNthOf(N1, TAIL, ELEM))
 
 Test("mynthof first") <- (MyNthOf(0, [10, 20, 30], E) and E == 10)  # nv
 Test("mynthof second") <- (MyNthOf(1, [10, 20, 30], E) and E == 20)  # nv

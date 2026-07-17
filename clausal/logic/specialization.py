@@ -911,7 +911,7 @@ def _make_residual_clause(
     # Build body.
     new_body = []
 
-    # Pre-match goals (e.g. MAX > 0, MAX1 := MAX - 1 for SolveLimit).
+    # Pre-match goals (e.g. MAX > 0, MAX1 == MAX - 1 for SolveLimit).
     for goal in pattern.pre_match_goals:
         new_body.append(_subst(goal, mi_var_map))
 
@@ -935,7 +935,7 @@ def _make_residual_clause(
     )
     new_body.append(rec_extra_call)
 
-    # Post-match goals (e.g. COUNT := SUB_COUNT + 1 for SolveCount).
+    # Post-match goals (e.g. COUNT == SUB_COUNT + 1 for SolveCount).
     for goal in pattern.post_match_goals:
         new_body.append(_subst(goal, mi_var_map))
 

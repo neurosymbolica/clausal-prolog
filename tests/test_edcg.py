@@ -49,7 +49,7 @@ class TestDirectiveParsing:
         # nv
         src = (
             '-module(t1, [])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
         )
         mod = _load("t1", src, tmp_path)
         assert mod is not None
@@ -69,7 +69,7 @@ class TestDirectiveParsing:
         # nv
         src = (
             '-module(t3, [])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(inc, 0, [counter])\n'
         )
         mod = _load("t3", src, tmp_path)
@@ -80,7 +80,7 @@ class TestDirectiveParsing:
         # nv
         src = (
             '-module(t4, [])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(counted_token, 1, [counter, dcg])\n'
         )
         mod = _load("t4", src, tmp_path)
@@ -102,7 +102,7 @@ class TestDirectiveParsing:
         # nv
         src = (
             '-module(t6, [])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_acc(items, _item, _in, _out, {_out is [_item, *_in]})\n'
             '-edcg_pred(process, 1, [counter, items])\n'
         )
@@ -129,7 +129,7 @@ class TestDirectiveErrors:
         # nv
         src = (
             '-module(e3, [])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(foo, "one", [counter])\n'
         )
         with pytest.raises(SyntaxError, match="integer"):
@@ -147,7 +147,7 @@ class TestSingleAccumulator:
         # nv
         src = (
             '-module(sc1, [count3(_counter0, _counter)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(inc, 0, [counter])\n'
             '-edcg_pred(count3, 0, [counter])\n'
             'inc >> ([1] // counter)\n'
@@ -164,7 +164,7 @@ class TestSingleAccumulator:
         # nv
         src = (
             '-module(sc2, [count3(_counter0, _counter)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(inc, 0, [counter])\n'
             '-edcg_pred(count3, 0, [counter])\n'
             'inc >> ([1] // counter)\n'
@@ -199,7 +199,7 @@ class TestSingleAccumulator:
         # nv
         src = (
             '-module(ar1, [get_and_inc(_v, _counter0, _counter)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(get_and_inc, 1, [counter])\n'
             'get_and_inc(_v) >> (counter / _v, [1] // counter)\n'
         )
@@ -216,7 +216,7 @@ class TestSingleAccumulator:
         # nv
         src = (
             '-module(cp1, [mul_all(_xs, _prod0, _prod)])\n'
-            '-edcg_acc(product, _x, _in, _out, {_out := _in * _x})\n'
+            '-edcg_acc(product, _x, _in, _out, {_out == _in * _x})\n'
             '-edcg_pred(mul, 1, [product])\n'
             '-edcg_pred(mul_all, 1, [product])\n'
             'mul(_x) >> ([_x] // product)\n'
@@ -241,7 +241,7 @@ class TestMultipleAccumulators:
         # nv
         src = (
             '-module(ma1, [process_all(_xs, _cnt0, _cnt, _items0, _items)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_acc(items, _item, _in, _out, {_out is [_item, *_in]})\n'
             '-edcg_pred(process, 1, [counter, items])\n'
             '-edcg_pred(process_all, 1, [counter, items])\n'
@@ -265,7 +265,7 @@ class TestMultipleAccumulators:
         # nv
         src = (
             '-module(po1, [do_both(_x, _cnt0, _cnt, _items0, _items)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_acc(items, _item, _in, _out, {_out is [_item, *_in]})\n'
             '-edcg_pred(inc_only, 0, [counter])\n'
             '-edcg_pred(do_both, 1, [counter, items])\n'
@@ -312,7 +312,7 @@ class TestPassedArguments:
         # nv
         src = (
             '-module(pac1, [scaled_inc(_cnt0, _cnt, _scale)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pass(scale)\n'
             '-edcg_pred(scaled_inc, 0, [counter, scale])\n'
             'scaled_inc >> (scale / _s, [_s] // counter)\n'
@@ -335,7 +335,7 @@ class TestMixedEdcgDcg:
         # nv
         src = (
             '-module(cp1, [parse(_cnt0, _cnt, _tokens, _rest)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(token, 1, [counter, dcg])\n'
             '-edcg_pred(parse, 0, [counter, dcg])\n'
             'token(_t) >> ([_t], [1] // counter)\n'
@@ -363,7 +363,7 @@ class TestEdcgControlFlow:
         # nv
         src = (
             '-module(dj1, [inc_or_double(_cnt0, _cnt)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(inc_or_double, 0, [counter])\n'
             'inc_or_double >> ([1] // counter or [2] // counter)\n'
         )
@@ -381,7 +381,7 @@ class TestEdcgControlFlow:
         # nv
         src = (
             '-module(ig1, [inc_if_positive(_cnt0, _cnt)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(inc_if_positive, 0, [counter])\n'
             'inc_if_positive >> (counter / _n, {_n >= 0}, [1] // counter)\n'
         )
@@ -403,7 +403,7 @@ class TestEdcgPatterns:
         # nv
         src = (
             '-module(len1, [my_len(_list, _n)])\n'
-            '-edcg_acc(adder, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(adder, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(count_elem, 0, [adder, dcg])\n'
             '-edcg_pred(count_list, 0, [adder, dcg])\n'
             'count_elem >> ([_], [1] // adder)\n'
@@ -423,7 +423,7 @@ class TestEdcgPatterns:
         src = (
             '-module(comp1, [compile_all(_code0, _code, _ops0, _ops, _toks, _rest)])\n'
             '-edcg_acc(code, _instr, _in, _out, {_out is [_instr, *_in]})\n'
-            '-edcg_acc(ops, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(ops, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(emit, 1, [code, ops])\n'
             '-edcg_pred(compile_one, 0, [code, ops, dcg])\n'
             '-edcg_pred(compile_all, 0, [code, ops, dcg])\n'
@@ -490,7 +490,7 @@ class TestEdcgEdgeCases:
         # nv
         src = (
             '-module(eb1, [noop(_cnt0, _cnt)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(noop, 0, [counter])\n'
             'noop >> ([])\n'
         )
@@ -505,7 +505,7 @@ class TestEdcgEdgeCases:
         # nv
         src = (
             '-module(rc1, [my_length(_l, _n)])\n'
-            '-edcg_acc(len, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(len, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(count_elems, 1, [len])\n'
             'count_elems([]) >> ([])\n'
             'count_elems([_, *_xs]) >> ([1] // len, count_elems(_xs))\n'
@@ -522,7 +522,7 @@ class TestEdcgEdgeCases:
         # nv
         src = (
             '-module(mp1, [add_three(_cnt0, _cnt)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(add_three, 0, [counter])\n'
             'add_three >> ([1] // counter, [1] // counter, [1] // counter)\n'
         )
@@ -537,7 +537,7 @@ class TestEdcgEdgeCases:
         # nv
         src = (
             '-module(ti1, [run(_cnt0, _cnt, _items0, _items)])\n'
-            '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_acc(items, _item, _in, _out, {_out is [_item, *_in]})\n'
             '-edcg_pred(inc_only, 0, [counter])\n'
             '-edcg_pred(collect_only, 1, [items])\n'

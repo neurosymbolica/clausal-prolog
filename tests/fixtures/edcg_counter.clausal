@@ -4,7 +4,7 @@
 
 -module(edcg_counter, [run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS)])
 
--edcg_acc(counter, _x, _in, _out, {_out := _in + _x})
+-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})
 -edcg_acc(items, _item, _in, _out, {_out is [_item, *_in]})
 -edcg_pass(scale)
 

@@ -1,5 +1,5 @@
 squares(Numbers, Squares) :-
-    findall(Square, (in(X, Numbers), Square is X * X), Squares).
+    findall(Square, (in(X, Numbers), Square =:= X * X), Squares).
 
 positives(Numbers, Positives) :-
     findall(X, (in(X, Numbers), X > 0), Positives).
