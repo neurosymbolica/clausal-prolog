@@ -704,6 +704,17 @@ class _ClausalToProlog:
         """Convert a Python name to PVar or PAtom."""
         if name == "_":
             return PVar("_")
+        # ``Unknown`` — the Kleene (K3) third truth value builtin — maps OUTBOUND
+        # to the plain Prolog atom ``unknown`` (decision 4,
+        # todo/kleene-unknown-builtin-and-stdlib.md).  This mapping is DELIBERATELY
+        # asymmetric: ``prolog_to_clausal`` is left unchanged, so an inbound atom
+        # ``unknown`` stays a plain atom rather than being rewritten to the
+        # builtin — auto-rewriting would silently change the identity semantics of
+        # existing Prolog imports.  (``pascal_to_snake`` would also yield
+        # ``unknown`` here, but this explicit case documents the intent and pins
+        # it against future name-resolution changes.)
+        if name == "Unknown":
+            return PAtom("unknown")
         if _is_logic_var_name(name):
             return PVar(self._prolog_var_name(name))
         # Atoms: lowercase or PascalCase predicate name

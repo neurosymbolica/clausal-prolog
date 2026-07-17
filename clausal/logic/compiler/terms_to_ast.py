@@ -26,6 +26,7 @@ from clausal.terms import (
     Negate,
     Call, LoadName, LoadAttr, LoadSubscript,
     DictTerm, SetTerm, KWTerm, PyThunk,
+    Unknown,
 )
 from clausal.pythonic_ast.nodes import (
     StarUnpack, TupleLiteral, DictLiteral, SetLiteral,
@@ -201,6 +202,13 @@ def term_to_ast_expr(
     term = literal_value(term)
     if term is None or isinstance(term, bool):
         return ast.Constant(value=term)
+
+    # The Kleene ``Unknown`` builtin singleton: emit a bare ``Name`` reference
+    # (like a zero-arity PredicateMeta atom below), since ``Unknown`` is an
+    # injected builtin present in every compiled predicate's globals.  This
+    # keeps its process-wide identity through query/clause compilation.
+    if term is Unknown:
+        return _name("Unknown")
 
     if isinstance(term, (int, float, str, bytes, complex)):
         return ast.Constant(value=term)

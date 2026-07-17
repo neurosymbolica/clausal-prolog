@@ -2038,6 +2038,66 @@ def cons_to_list(term: object) -> list:
     return result
 
 
+# ── Kleene truth value: Unknown ───────────────────────────────────────────────
+
+class _UnknownType:
+    """The third strong-Kleene (K3) truth value, sitting beside ``True``/``False``.
+
+    A process-wide singleton (module-level name :data:`Unknown`), injected into
+    every predicate module by ``clausal.import_hook`` — so ``.clausal`` code can
+    reference ``Unknown`` with no declaration, import, or export, exactly as it
+    references ``True``/``False``.  It is an ordinary ground constant: unification
+    treats it by identity (there is only ever one instance), and it is hashable
+    (default identity hash) so it can key clause indexes.
+
+    ``bool(Unknown)`` raises ``TypeError`` deliberately — ``Unknown`` has no
+    Python truth value, so an accidental ``if Unknown:`` / ``while Unknown:`` is
+    caught loudly rather than silently treated as truthy.  (Contrast ``None``,
+    which means "no value / absent"; ``Unknown`` means "truth value unknown" —
+    the two are deliberately distinct and never unify.)
+
+    Copy/deepcopy/pickle all round-trip back to the same singleton via
+    ``__reduce__`` so trailing, ``copy_term``, or serialisation can never mint a
+    second instance and break identity-based unification.
+    """
+
+    __slots__ = ()
+
+    def __new__(cls):
+        # Return the existing singleton if it is already built, so that even a
+        # direct ``_UnknownType()`` call (or an unpickle that bypasses
+        # ``__reduce__``) yields the one instance.
+        existing = globals().get("Unknown")
+        if existing is not None:
+            return existing
+        return super().__new__(cls)
+
+    def __repr__(self) -> str:
+        return "Unknown"
+
+    __str__ = __repr__
+
+    def __bool__(self):
+        raise TypeError(
+            "Unknown has no Python truth value (it is the third strong-Kleene "
+            "truth value). Compare it explicitly (e.g. `T is Unknown`) instead "
+            "of using it in a Python if/while."
+        )
+
+    def __reduce__(self):
+        # Pickle/copy/deepcopy resolve to the module-level ``Unknown`` name,
+        # preserving the singleton across process/serialisation boundaries.
+        return (_get_unknown, ())
+
+
+def _get_unknown() -> "_UnknownType":
+    """Module-level factory used by ``_UnknownType.__reduce__`` (picklable)."""
+    return Unknown
+
+
+Unknown = _UnknownType()
+
+
 # ── Deferred Python expression thunk ──────────────────────────────────────────
 
 class PyThunk:
@@ -2531,6 +2591,8 @@ __all__ = [
     # Units
     "Quantity",
     "UnitsMismatch",
+    # Kleene (K3) third truth value
+    "Unknown",
     # Partial-term error (catchable by callers of partial Seg* ops)
     "PartialTermError",
     # Rendering style

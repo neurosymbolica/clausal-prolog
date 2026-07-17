@@ -1,17 +1,17 @@
 # Strong-Kleene n-ary connectives (K3) — stdlib module
 #
-# Truth values: True, False, and the module-scoped atom `unknown` (exported
-# below so importers/tests unify on the SAME object). The `Unknown` builtin
-# constant from the parent todo (kleene-unknown-builtin-and-stdlib.md) has NOT
-# landed yet; when it does, this module migrates to it. Until then callers must
-# reach for `kleene.unknown` rather than minting a fresh atom.
+# Truth values: True, False, and the `Unknown` builtin constant — a process-wide
+# singleton injected into every module by the import hook (like True/False), so
+# callers reference `Unknown` directly with no import or export. It carries
+# process-wide identity, so importers/tests unify on the SAME object without the
+# module-scoped-atom dance the earlier `unknown` atom required.
 #
 # Naming convention: the numeral is the TOTAL ARITY, result last.
 #   and3(A, B, R)     — R = A ∧ B          (binary connective)
 #   and4(A, B, C, R)  — R = A ∧ B ∧ C
 #   ... up to and9/9 / or9/9 (8 operands).
 # This is strong-Kleene three-valued logic, NOT Belnap four-valued logic: the
-# value set stays {True, False, unknown}; only the operand count grows.
+# value set stays {True, False, Unknown}; only the operand count grows.
 #
 # Semantics notes:
 # - Fully relational: any argument may be unbound; backward queries enumerate.
@@ -28,13 +28,12 @@
 # - List folds (and3_list / or3_list): the empty chain is the unit — True for
 #   and, False for or.
 
-# Export list: `unknown` is a bare atom (module-scoped, zero-arity). Every
-# predicate is exported in the `pred(ARGS...)` Call form so the functor class is
-# pre-registered with the correct arity; the arg names are placeholders (the
-# real head-var names come from the clauses). Bare `pred` names would be minted
-# as zero-arity atoms and collide with the multi-arg clauses.
+# Export list: every predicate is exported in the `pred(ARGS...)` Call form so
+# the functor class is pre-registered with the correct arity; the arg names are
+# placeholders (the real head-var names come from the clauses). Bare `pred`
+# names would be minted as zero-arity atoms and collide with the multi-arg
+# clauses. `Unknown` is a builtin (not module-scoped), so it is NOT exported.
 -module(kleene, [
-    unknown,
     not3(A, R),
     and3(A, B, R), and4(A, B, C, R), and5(A, B, C, D, R),
     and6(A, B, C, D, E, R), and7(A, B, C, D, E, F, R),
@@ -48,29 +47,29 @@
 # ── Negation (3 rows) ───────────────────────────────────────────────────────
 not3(True, False),
 not3(False, True),
-not3(unknown, unknown),
+not3(Unknown, Unknown),
 
 # ── Conjunction: binary ground truth table (9 rows, disjoint) ───────────────
 and3(True,    True,    True),
 and3(True,    False,   False),
-and3(True,    unknown, unknown),
+and3(True,    Unknown, Unknown),
 and3(False,   True,    False),
 and3(False,   False,   False),
-and3(False,   unknown, False),
-and3(unknown, True,    unknown),
-and3(unknown, False,   False),
-and3(unknown, unknown, unknown),
+and3(False,   Unknown, False),
+and3(Unknown, True,    Unknown),
+and3(Unknown, False,   False),
+and3(Unknown, Unknown, Unknown),
 
 # ── Disjunction: binary ground truth table (9 rows, disjoint) ───────────────
 or3(True,    True,    True),
 or3(True,    False,   True),
-or3(True,    unknown, True),
+or3(True,    Unknown, True),
 or3(False,   True,    True),
 or3(False,   False,   False),
-or3(False,   unknown, unknown),
-or3(unknown, True,    True),
-or3(unknown, False,   unknown),
-or3(unknown, unknown, unknown),
+or3(False,   Unknown, Unknown),
+or3(Unknown, True,    True),
+or3(Unknown, False,   Unknown),
+or3(Unknown, Unknown, Unknown),
 
 # ── Fixed arities 4..9: fold binary connective left-to-right ────────────────
 and4(_a, _b, _c, _r) <- (

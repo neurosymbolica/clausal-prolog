@@ -237,10 +237,15 @@ predicate_builtins["Trail"] = Trail
 predicate_builtins["$unify"] = unify
 predicate_builtins["$deref"] = deref
 predicate_builtins["$walk"] = walk
-from clausal.terms import PyThunk, FStringThunk, Quantity
+from clausal.terms import PyThunk, FStringThunk, Quantity, Unknown
 predicate_builtins["PyThunk"] = PyThunk
 predicate_builtins["FStringThunk"] = FStringThunk  # alias for PyThunk
 predicate_builtins["Quantity"] = Quantity
+# The Kleene (K3) third truth value, sitting beside the Python True/False that
+# ``simple_ast.__all__`` already provides.  Injected as a real binding (not a
+# minted atom) so it resolves in every module — including ``-strict_atoms`` ones
+# — with no declaration, import, or export, and carries process-wide identity.
+predicate_builtins["Unknown"] = Unknown
 from clausal.logic.clpb import BoolEq, BoolImpl
 predicate_builtins["BoolEq"] = BoolEq
 predicate_builtins["BoolImpl"] = BoolImpl
@@ -719,6 +724,7 @@ _simple_ast_builtins["PyThunk"] = PyThunk
 _simple_ast_builtins["FStringThunk"] = FStringThunk  # alias
 _simple_ast_builtins["BoolEq"] = BoolEq
 _simple_ast_builtins["BoolImpl"] = BoolImpl
+_simple_ast_builtins["Unknown"] = Unknown  # Kleene K3 third truth value
 # in_ IPython there is no per-session logic module, so '$assert_fact' collects
 # facts in a shared list.  For module-backed predicate files, exec_module
 # overrides this with a module-specific closure.

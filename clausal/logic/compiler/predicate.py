@@ -27,6 +27,7 @@ from clausal.terms import (
     SegString,
     SegBytes,
     _seglist_unify_gen,
+    Unknown,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.database import Clause, Database
@@ -70,7 +71,7 @@ from ._ast_helpers import (
 )
 from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
-from .terms_to_goalop import BareGoalVariableError
+from .terms_to_goalop import BareGoalVariableError, BareGoalUnknownError
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup,
     _findall_copy_row, _disp_key,
@@ -696,6 +697,13 @@ def compile_predicate_trampoline(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
+        # Kleene ``Unknown`` builtin: a process-wide singleton, emitted by
+        # term_to_ast_expr as a bare ``Unknown`` Name, so it must resolve from
+        # the compiled predicate's globals (like True/False, but those are AST
+        # Constants and need no globals entry).  Baked in unconditionally so it
+        # resolves even in the query path, whose globals derive only from the
+        # module dict (which may not carry the injected builtins).
+        "Unknown": Unknown,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn
@@ -1122,6 +1130,12 @@ def compile_predicate_trampoline(
                 exc.var, predicate=f"{functor}/{arity}"
             ) from None
         raise
+    except BareGoalUnknownError as exc:
+        # Bare ``Unknown`` in goal position — locate the clause by predicate
+        # name (mirrors the BareGoalVariableError handling above).
+        if exc.predicate is None:
+            raise BareGoalUnknownError(predicate=f"{functor}/{arity}") from None
+        raise
     finally:
         pass
 
@@ -1429,6 +1443,7 @@ def compile_predicate_shallow(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
+        "Unknown": Unknown,  # Kleene builtin — see the trampoline path above.
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn_s
@@ -1642,6 +1657,10 @@ def compile_predicate_shallow(
             raise BareGoalVariableError(
                 exc.var, predicate=f"{functor}/{arity}"
             ) from None
+        raise
+    except BareGoalUnknownError as exc:
+        if exc.predicate is None:
+            raise BareGoalUnknownError(predicate=f"{functor}/{arity}") from None
         raise
     finally:
         _CURRENT_SHALLOW_BASE_GLOBALS = _saved_shallow_globals

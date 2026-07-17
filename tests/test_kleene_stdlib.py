@@ -8,17 +8,17 @@ Covers the acceptance criteria of todo/kleene-nary-connectives-and4-or4.md:
 - no leftover choicepoints on ground queries (proxied by len(results) == 1,
   the established pattern in TestMemberdT).
 
-The module is loaded ONCE per test class and reused. Bare atoms (`unknown`)
-are module-scoped: the loaded module's `.unknown` is the object the clauses
-unify against, so every query that mentions `unknown` must use `mod.unknown`
-rather than minting a fresh atom.
+The module is loaded ONCE per test class and reused. Truth values are the
+Python ``True``/``False`` and the ``Unknown`` builtin singleton (from
+``clausal.terms``); ``Unknown`` carries process-wide identity, so queries just
+reference the imported singleton — no module-scoped-atom dance.
 """
 
 import os
 
 import pytest
 
-from clausal.terms import Var
+from clausal.terms import Var, Unknown
 
 
 def _load_stdlib_kleene():
@@ -35,9 +35,9 @@ class _KleeneBase:
     """Shared loader + query helpers.
 
     Loads the module a single time (class attribute) so repeated tests reuse
-    the same module-scoped `unknown` atom rather than re-loading and minting a
-    duplicate (loading a .clausal twice in one process duplicates its
-    module-scoped atoms).
+    one loaded module (loading a .clausal twice in one process duplicates its
+    module-scoped atoms; the truth values here are process-wide, but the reuse
+    keeps the load cost down and matches the established pattern).
     """
 
     _mod = None
@@ -50,7 +50,9 @@ class _KleeneBase:
 
     @classmethod
     def _unknown(cls):
-        return cls._module().unknown
+        # The Unknown builtin is a process-wide singleton (clausal.terms.Unknown);
+        # the clauses in kleene.clausal unify against this same object.
+        return Unknown
 
     @classmethod
     def _solve(cls, name, args):
@@ -248,12 +250,16 @@ class TestListFolds(_KleeneBase):
 class TestExports(_KleeneBase):
     """Module export surface."""
 
-    def test_unknown_is_module_scoped_atom(self):
-        from clausal.logic.predicate import PredicateMeta
+    def test_unknown_is_builtin_singleton(self):
+        # `Unknown` is now the process-wide builtin singleton, not a
+        # module-scoped atom: it is NOT an attribute of the loaded module, and
+        # the imported `Unknown` is the object the clauses unify against.
+        from clausal.terms import Unknown as _Unknown
         U = self._unknown()
-        assert isinstance(U, PredicateMeta)
-        # Reusing the loader must return the same atom object.
-        assert self._module().unknown is U
+        assert U is _Unknown
+        assert not hasattr(self._module(), "unknown")
+        # Ground query confirms the clauses carry the same singleton.
+        assert self._results_of("not3", [_Unknown, _OUT]) == [_Unknown]
 
     def test_predicates_exported(self):
         mod = self._module()
