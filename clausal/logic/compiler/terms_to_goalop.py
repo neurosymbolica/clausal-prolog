@@ -9,7 +9,7 @@ harness can fall back to the legacy path cleanly.
 Subset covered:
 
 - ``nodes.Unify`` / ``nodes.DoesNotUnify`` → :class:`Unify` / :class:`Dif`
-- ``nodes.Evaluate`` (``LHS := RHS``) → :class:`ArithEval`
+- ``nodes.Evaluate`` (``eval_(RHS, LHS)``; formerly ``LHS := RHS``) → :class:`ArithEval`
 - ``nodes.Lt`` / ``LtE`` / ``Gt`` / ``GtE`` / ``ArithEq`` / ``ArithNeq``
   → :class:`FDCompare`
 - ``nodes.StructuralEq`` / ``StructuralNeq`` → :class:`StructuralEq`
@@ -362,6 +362,12 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
                         args=[cond, action], kwargs=[]):
             return MetaCall(kind="forall",
                             args={"cond": cond, "action": action})
+        case nodes.Call(func=nodes.LoadName(name="eval_"),
+                        args=[expr_arg, target_arg], kwargs=[]):
+            # eval_(EXPR, RESULT) — eager arithmetic evaluate-and-bind
+            # (Prolog is/2).  Successor of the deprecated ':=' operator;
+            # same backend (ArithEval), Python evaluation semantics.
+            return ArithEval(target=target_arg, expr=expr_arg)
 
         # ``Call(LoadName | LoadAttr)`` → ``SubCall``.  Meta-predicate
         # names not captured by the explicit arms above (wrong arity,
@@ -401,7 +407,7 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
             return SubCall(fname=fname, arity=arity, args=ordered_args)
 
         case nodes.Unify(left=l, right=r):
-            # Star-list unification (e.g. ``X := [*T, Last]``) routes
+            # Star-list unification (e.g. ``X is [*T, Last]``) routes
             # through ``_compile_star_is`` in the legacy path.  Mirror
             # the legacy preference for putting the star side first:
             # when both sides carry stars the left side wins (legacy
