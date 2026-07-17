@@ -1,0 +1,167 @@
+# Strong-Kleene n-ary connectives (K3) — stdlib module
+#
+# Truth values: True, False, and the module-scoped atom `unknown` (exported
+# below so importers/tests unify on the SAME object). The `Unknown` builtin
+# constant from the parent todo (kleene-unknown-builtin-and-stdlib.md) has NOT
+# landed yet; when it does, this module migrates to it. Until then callers must
+# reach for `kleene.unknown` rather than minting a fresh atom.
+#
+# Naming convention: the numeral is the TOTAL ARITY, result last.
+#   and3(A, B, R)     — R = A ∧ B          (binary connective)
+#   and4(A, B, C, R)  — R = A ∧ B ∧ C
+#   ... up to and9/9 / or9/9 (8 operands).
+# This is strong-Kleene three-valued logic, NOT Belnap four-valued logic: the
+# value set stays {True, False, unknown}; only the operand count grows.
+#
+# Semantics notes:
+# - Fully relational: any argument may be unbound; backward queries enumerate.
+#   The binary tables are full 9-row, pairwise-disjoint, first-argument-indexed.
+#   There are deliberately NO wildcard short-circuit rows (e.g. and3(False, _, R)):
+#   overlapping clauses would break disjointness and make ground queries
+#   nondeterministic (leftover choicepoints).
+# - Because the tables are disjoint, partially-bound absorption does NOT
+#   short-circuit: and4(False, B, C, R) yields R = False in every solution but
+#   still enumerates the 9 B/C bindings. A non-binding short-circuit variant is
+#   a parked design question in the parent todo — not built here.
+# - Fixed arities 4..9 fold the binary table left-to-right through fresh
+#   intermediates; Kleene ∧/∨ are associative, so this is semantically exact.
+# - List folds (and3_list / or3_list): the empty chain is the unit — True for
+#   and, False for or.
+
+# Export list: `unknown` is a bare atom (module-scoped, zero-arity). Every
+# predicate is exported in the `pred(ARGS...)` Call form so the functor class is
+# pre-registered with the correct arity; the arg names are placeholders (the
+# real head-var names come from the clauses). Bare `pred` names would be minted
+# as zero-arity atoms and collide with the multi-arg clauses.
+-module(kleene, [
+    unknown,
+    not3(A, R),
+    and3(A, B, R), and4(A, B, C, R), and5(A, B, C, D, R),
+    and6(A, B, C, D, E, R), and7(A, B, C, D, E, F, R),
+    and8(A, B, C, D, E, F, G, R), and9(A, B, C, D, E, F, G, H, R),
+    or3(A, B, R), or4(A, B, C, R), or5(A, B, C, D, R),
+    or6(A, B, C, D, E, R), or7(A, B, C, D, E, F, R),
+    or8(A, B, C, D, E, F, G, R), or9(A, B, C, D, E, F, G, H, R),
+    and3_list(LIST, R), or3_list(LIST, R)
+])
+
+# ── Negation (3 rows) ───────────────────────────────────────────────────────
+not3(True, False),
+not3(False, True),
+not3(unknown, unknown),
+
+# ── Conjunction: binary ground truth table (9 rows, disjoint) ───────────────
+and3(True,    True,    True),
+and3(True,    False,   False),
+and3(True,    unknown, unknown),
+and3(False,   True,    False),
+and3(False,   False,   False),
+and3(False,   unknown, False),
+and3(unknown, True,    unknown),
+and3(unknown, False,   False),
+and3(unknown, unknown, unknown),
+
+# ── Disjunction: binary ground truth table (9 rows, disjoint) ───────────────
+or3(True,    True,    True),
+or3(True,    False,   True),
+or3(True,    unknown, True),
+or3(False,   True,    True),
+or3(False,   False,   False),
+or3(False,   unknown, unknown),
+or3(unknown, True,    True),
+or3(unknown, False,   unknown),
+or3(unknown, unknown, unknown),
+
+# ── Fixed arities 4..9: fold binary connective left-to-right ────────────────
+and4(_a, _b, _c, _r) <- (
+    and3(_a, _b, _ab),
+    and3(_ab, _c, _r)
+)
+and5(_a, _b, _c, _d, _r) <- (
+    and3(_a, _b, _ab),
+    and3(_ab, _c, _abc),
+    and3(_abc, _d, _r)
+)
+and6(_a, _b, _c, _d, _e, _r) <- (
+    and3(_a, _b, _ab),
+    and3(_ab, _c, _abc),
+    and3(_abc, _d, _abcd),
+    and3(_abcd, _e, _r)
+)
+and7(_a, _b, _c, _d, _e, _f, _r) <- (
+    and3(_a, _b, _ab),
+    and3(_ab, _c, _abc),
+    and3(_abc, _d, _abcd),
+    and3(_abcd, _e, _abcde),
+    and3(_abcde, _f, _r)
+)
+and8(_a, _b, _c, _d, _e, _f, _g, _r) <- (
+    and3(_a, _b, _ab),
+    and3(_ab, _c, _abc),
+    and3(_abc, _d, _abcd),
+    and3(_abcd, _e, _abcde),
+    and3(_abcde, _f, _abcdef),
+    and3(_abcdef, _g, _r)
+)
+and9(_a, _b, _c, _d, _e, _f, _g, _h, _r) <- (
+    and3(_a, _b, _ab),
+    and3(_ab, _c, _abc),
+    and3(_abc, _d, _abcd),
+    and3(_abcd, _e, _abcde),
+    and3(_abcde, _f, _abcdef),
+    and3(_abcdef, _g, _abcdefg),
+    and3(_abcdefg, _h, _r)
+)
+
+or4(_a, _b, _c, _r) <- (
+    or3(_a, _b, _ab),
+    or3(_ab, _c, _r)
+)
+or5(_a, _b, _c, _d, _r) <- (
+    or3(_a, _b, _ab),
+    or3(_ab, _c, _abc),
+    or3(_abc, _d, _r)
+)
+or6(_a, _b, _c, _d, _e, _r) <- (
+    or3(_a, _b, _ab),
+    or3(_ab, _c, _abc),
+    or3(_abc, _d, _abcd),
+    or3(_abcd, _e, _r)
+)
+or7(_a, _b, _c, _d, _e, _f, _r) <- (
+    or3(_a, _b, _ab),
+    or3(_ab, _c, _abc),
+    or3(_abc, _d, _abcd),
+    or3(_abcd, _e, _abcde),
+    or3(_abcde, _f, _r)
+)
+or8(_a, _b, _c, _d, _e, _f, _g, _r) <- (
+    or3(_a, _b, _ab),
+    or3(_ab, _c, _abc),
+    or3(_abc, _d, _abcd),
+    or3(_abcd, _e, _abcde),
+    or3(_abcde, _f, _abcdef),
+    or3(_abcdef, _g, _r)
+)
+or9(_a, _b, _c, _d, _e, _f, _g, _h, _r) <- (
+    or3(_a, _b, _ab),
+    or3(_ab, _c, _abc),
+    or3(_abc, _d, _abcd),
+    or3(_abcd, _e, _abcde),
+    or3(_abcde, _f, _abcdef),
+    or3(_abcdef, _g, _abcdefg),
+    or3(_abcdefg, _h, _r)
+)
+
+# ── List folds: arbitrary-length chains. Empty = unit. ──────────────────────
+and3_list([], True),
+and3_list([_x, *_xs], _r) <- (
+    and3_list(_xs, _r1),
+    and3(_x, _r1, _r)
+)
+
+or3_list([], False),
+or3_list([_x, *_xs], _r) <- (
+    or3_list(_xs, _r1),
+    or3(_x, _r1, _r)
+)
