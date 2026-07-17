@@ -8,8 +8,12 @@ position is a compile-time `BareGoalUnknownError` naming the predicate; `clausal
 emits atom `unknown` (inbound untouched). `kleene.clausal` migrated off the module-scoped atom
 (dropped from exports); `tri_get/3` builtin added (absent key → `Unknown`, mirrors `get/3`).
 Tests: `tests/test_unknown_builtin.py` (23) + `tests/test_kleene_stdlib.py` (19) pass; full
-suite 9360 passed / 2 skipped / 44 xfailed (was 9337, delta = the 23 new tests). Corpus
-migration (ai_act, MAR) remains out of scope (different repo).
+suite 9360 passed / 2 skipped / 44 xfailed (was 9337, delta = the 23 new tests).
+CORPUS MIGRATION DONE 2026-07-17 (clausify-domains 257093c + 5569262): ai_act
+prohibited_practices and MAR market_manipulation now import clausal.stdlib.kleene
+(and4/and5 collapse the chains), read elements via tri_get/3 → Unknown, and keep the
+public limb-status atom axis unchanged. Verified: 51/51 + 25/25 interface tests,
+187/187 + 8939/8939 vs oracles, 10/10 + 6/6 mutants killed.
 **Child todo:** [kleene-nary-connectives-and4-or4.md](kleene-nary-connectives-and4-or4.md) —
 DONE 2026-07-17 (commit 093a18d2): `clausal/stdlib/kleene.clausal` with n-ary
 `and4/or4 ... and9/or9` + list folds; settles the naming question as lowercase snake_case
