@@ -1654,6 +1654,20 @@ def _is_dcg_passthrough(node):
     return False
 
 
+def _dcg_set_goals(node, source):
+    """Return the embedded goal(s) of a ``{...}`` DCG body element (a Set node).
+
+    A single-element set ``{g}`` yields ``g``; a multi-element set ``{g1, g2}``
+    yields a conjunction ``And(g1, g2, ...)`` (Prolog's ``{A, B}``). Python's AST
+    preserves the source order of set-display elements, so ordering is
+    deterministic (the set is never materialised). Empty ``{}`` is a Dict, never
+    a Set, so it never reaches here.
+    """
+    if len(node.elts) == 1:
+        return node.elts[0]
+    return replace(BoolOp(op=And(), values=list(node.elts)), source)
+
+
 def _rewrite_dcg_body(node, s_in, s_out, counter, source):
     """Rewrite a single DCG body element into ordinary clause body AST.
 
@@ -1707,6 +1721,17 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
         case Set(elts=[goal]):
             # Inline goal {goal}: no state consumed.
             return goal, counter
+
+        case Set(elts=goals) if len(goals) >= 2:
+            # Multi-goal inline block {g1, g2, ...}: a conjunction of embedded
+            # goals, matching Prolog's ``{A, B}``. Python's AST preserves the
+            # source order of set-display elements, so the order is deterministic
+            # here (the set is never materialised). No state is consumed.
+            return replace(BoolOp(op=And(), values=list(goals)), source), counter
+
+        case Dict(keys=[], values=[]):
+            # Empty ``{}`` parses as an empty dict display, not a set.
+            raise SyntaxError("empty {} block in DCG body")
 
         case Name(id=name) if _is_logic_var_name(name):
             # Variable non-terminal (call//1): a bare logic variable as a body
@@ -1786,7 +1811,10 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
             result = UnaryOp(op=Not(), operand=inner_r)
             return replace(result, source), counter
 
-    raise SyntaxError(f"Unsupported DCG body element: {dump(node)}")
+    raise SyntaxError(
+        f"Unsupported DCG body element: {dump(node)}. To embed a goal in a DCG "
+        "body, wrap it in braces: {...} (e.g. {_d > 0})."
+    )
 
 
 def _rewrite_dcg_sequence(elements, s_in, s_out, counter, source):
@@ -1808,7 +1836,7 @@ def _rewrite_dcg_sequence(elements, s_in, s_out, counter, source):
         parts = []
         for elem in elements:
             if isinstance(elem, Set):
-                parts.append(elem.elts[0])
+                parts.append(_dcg_set_goals(elem, source))
             elif isinstance(elem, UnaryOp) and isinstance(elem.op, Not):
                 fresh = f"_dcg{counter}_"
                 counter += 1
@@ -1833,7 +1861,7 @@ def _rewrite_dcg_sequence(elements, s_in, s_out, counter, source):
 
     for i, elem in enumerate(elements):
         if isinstance(elem, Set):
-            rewritten_parts.append(elem.elts[0])
+            rewritten_parts.append(_dcg_set_goals(elem, source))
         elif isinstance(elem, List) and len(elem.elts) == 0:
             pass  # empty terminal — nothing to emit
         elif isinstance(elem, UnaryOp) and isinstance(elem.op, Not):
@@ -2054,6 +2082,17 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             # Inline goal {goal}: no accumulator threading.
             return goal, acc_states, counter
 
+        case Set(elts=goals) if len(goals) >= 2:
+            # Multi-goal inline block {g1, g2, ...}: a conjunction of embedded
+            # goals (Prolog's ``{A, B}``). Source order preserved by Python's
+            # AST; no accumulator threading.
+            result = replace(BoolOp(op=And(), values=list(goals)), source)
+            return result, acc_states, counter
+
+        case Dict(keys=[], values=[]):
+            # Empty ``{}`` parses as an empty dict display, not a set.
+            raise SyntaxError("empty {} block in EDCG body")
+
         case Name(id=name) if name in edcg_preds:
             # EDCG non-terminal, 0 visible args.
             return _rewrite_edcg_subcall(
@@ -2209,7 +2248,10 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             )
             return replace(result, source), acc_states, counter
 
-    raise SyntaxError(f"Unsupported EDCG body element: {dump(node)}")
+    raise SyntaxError(
+        f"Unsupported EDCG body element: {dump(node)}. To embed a goal in an "
+        "EDCG body, wrap it in braces: {...} (e.g. {_d > 0})."
+    )
 
 
 def _rewrite_edcg_subcall(callee_name, args, kwargs, acc_states, pass_states,
@@ -2281,8 +2323,9 @@ def _rewrite_edcg_sequence(elements, acc_states, pass_states,
 
     for i, elem in enumerate(elements):
         if isinstance(elem, Set):
-            # Inline goal: no threading.
-            rewritten_parts.append(elem.elts[0])
+            # Inline goal(s): no threading. Single ``{g}`` or multi-goal
+            # ``{g1, g2}`` conjunction.
+            rewritten_parts.append(_dcg_set_goals(elem, source))
             continue
 
         is_last = (i == len(elements) - 1)

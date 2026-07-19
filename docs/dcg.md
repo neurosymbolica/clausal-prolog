@@ -71,6 +71,16 @@ digit(D) >> ([D], {D >= 0}, {D <= 9})
 
 The goals `D >= 0` and `D <= 9` are [CLP(ℤ)](constraints.md) constraints checked without consuming tokens.
 
+A single brace pair may hold **several goals**, separated by commas — this is a conjunction of embedded goals, exactly like Prolog's `{A, B}`. All goals must succeed; the source order is preserved:
+
+```clausal
+digit(D) >> ([D], {D >= 0, D <= 9})
+```
+
+This is equivalent to the two-block form `([D], {D >= 0}, {D <= 9})` above. A multi-goal block may also stand alone as a whole body (`r(D) >> ({D >= 0, D <= 9})`), consuming no input. An empty `{}` block is an error.
+
+> **Braces claim DCG *body* position only.** In a rule body, `{...}` always means "embedded goal(s)", so a bare set literal there has no data meaning. Set literals still work as ordinary data everywhere data belongs — inside terminals (`tok >> ([{1, 2}])` consumes a set token) and in non-terminal arguments — because those positions are not body position.
+
 ### Conjunction and Disjunction
 
 Multiple items in a rule are joined with `,` (conjunction):

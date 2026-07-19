@@ -1,6 +1,17 @@
 # DCG `{...}` embedded goals: multi-goal silent drop + broken Prolog import
 
-## STATUS: TODO (filed 2026-07-19; empirically probed, root causes located)
+## STATUS: DONE (2026-07-19)
+Fixed all three bugs. Multi-element `{g1, g2}` sets in DCG/EDCG body position now
+lower to a conjunction (`And(g1, g2, ...)`, source order preserved by Python's AST)
+at all four sites (`_rewrite_dcg_body`, both `_rewrite_dcg_sequence` fast paths via
+a new `_dcg_set_goals` helper, `_rewrite_edcg_body`, `_rewrite_edcg_sequence`). Empty
+`{}` (a Dict) now raises "empty {} block in DCG/EDCG body"; bare goals in body
+position get a "wrap it in braces: {...}" hint. `prolog_to_clausal._emit_dcg_goal`
+emits `{Goal}` / `{(A, B, ...)}` so imports round-trip (`bounded` rejects 12). Added
+6 tests to tests/test_dcg.py (75 pass, was 69); documented multi-goal blocks + the
+body-vs-data position rule in docs/dcg.md. Golden updated:
+tests/fixtures/prolog_golden/dcg_grammar.clausal now pins the braced emission (the
+old golden encoded the unbraced bug). Full suite: no new failures.
 
 ## Verdict on the design question first
 KEEP `{}` as the embedded-goal syntax. Do NOT switch to `()`:

@@ -472,9 +472,17 @@ class _PrologToClausal:
         # Terminal list: [a, b, c]
         if isinstance(goal, PList):
             return self._emit_term(goal)
-        # Inline goal: {Goal}
+        # Inline goal: {Goal}. Braces mark DCG *body* position in Clausal;
+        # emit them explicitly so the goal is not rewritten as a non-terminal.
+        # A single goal → ``{Goal}``; a conjunction ``{A, B, C}`` → ``{(A, B, C)}``
+        # (the parenthesised-conjunction form, which loads on both the old and
+        # the multi-goal-aware engine).
         if isinstance(goal, PCurly):
-            return self._emit_goal(goal.body)
+            inner_goals = self._flatten_conjunction(goal.body)
+            if len(inner_goals) == 1:
+                return "{" + self._emit_goal(inner_goals[0]) + "}"
+            parts = ", ".join(self._emit_goal(g) for g in inner_goals)
+            return "{(" + parts + ")}"
         # Pushback: comma([T], ...) — handled as regular term
         # Negation in DCG
         if isinstance(goal, PCompound) and goal.functor == "\\+" and len(goal.args) == 1:

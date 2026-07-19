@@ -10,7 +10,7 @@ VerbPhrase() >> ((['chases'] or (['sees'] or ['likes'])))
 
 Sentence() >> (noun_phrase, verb_phrase, noun_phrase)
 
-Digit(_digit) >> ([_digit], _digit >= 0, _digit <= 9)
+Digit(_digit) >> ([_digit], {_digit >= 0}, {_digit <= 9})
 
 Ab() >> (['a'], ab)
 
@@ -24,7 +24,7 @@ NotA() >> (not ['a'], [X])
 
 ValidSentence(_sentence) <- (phrase(sentence, _sentence))
 
-ExprDcg(_expression) >> ([_expression], _expression is _expression + 0)
+ExprDcg(_expression) >> ([_expression], {_expression is _expression + 0})
 
 Test('valid sentence') <- (ValidSentence(['the', 'dog', 'chases', 'the', 'cat']))
 

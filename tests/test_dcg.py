@@ -226,6 +226,58 @@ class TestInlineGoals:
             results2.append(deref(v2))
         assert results2 == []
 
+    def test_multi_goal_block_in_sequence(self, tmp_path):
+        """A single ``{g1, g2}`` block is a conjunction: BOTH goals enforced.
+
+        Regression: the sequence rewriters used to take only ``elts[0]`` from a
+        multi-element set, silently dropping every goal after the first — so
+        ``[50]`` was wrongly accepted.
+        """
+        # nv
+        src = 'bounded(_d) >> ([_d], {_d > 0, _d < 10})\n'
+        mod = _load("igb", src, tmp_path)
+        cls = mod.module_dict["bounded"]
+        # In range: accepted.
+        v = Var()
+        results = [deref(v) for _ in call("phrase", cls(v), [5], module=mod)]
+        assert results == [5]
+        # The second goal (_d < 10) MUST reject [50].
+        v2 = Var()
+        results2 = [deref(v2) for _ in call("phrase", cls(v2), [50], module=mod)]
+        assert results2 == []
+        # The first goal (_d > 0) still rejects [-1].
+        v3 = Var()
+        results3 = [deref(v3) for _ in call("phrase", cls(v3), [-1], module=mod)]
+        assert results3 == []
+
+    def test_whole_body_multi_goal_block(self, tmp_path):
+        """A whole-body ``{g1, g2}`` block must not raise SyntaxError.
+
+        Regression: a bare multi-element-set body hit the ``case Set(elts=[goal])``
+        miss and raised ``Unsupported DCG body element`` instead of behaving as a
+        conjunction of embedded goals (consuming no input).
+        """
+        # nv
+        src = 'ranged(_d) >> ({_d > 0, _d < 10})\n'
+        mod = _load("igw", src, tmp_path)
+        cls = mod.module_dict["ranged"]
+        # No input consumed: succeeds on [] when both goals hold.
+        assert _succeeds("phrase", cls(5), [], module=mod)
+        assert not _succeeds("phrase", cls(50), [], module=mod)
+        assert not _succeeds("phrase", cls(0), [], module=mod)
+
+    def test_empty_brace_block_error(self, tmp_path):
+        """An empty ``{}`` DCG body gives a real error message, not an AST dump."""
+        # nv
+        with pytest.raises(SyntaxError, match=r"empty \{\} block in DCG body"):
+            _load("ige", "e >> ({})\n", tmp_path)
+
+    def test_bare_goal_body_hint(self, tmp_path):
+        """A bare goal in body position errors with a wrap-in-braces hint."""
+        # nv
+        with pytest.raises(SyntaxError, match=r"wrap it in braces"):
+            _load("igh", "bare(_d) >> ([_d], _d > 0)\n", tmp_path)
+
 
 # ── Conjunction ──────────────────────────────────────────────────────────────
 
@@ -1001,3 +1053,52 @@ class TestCallNonterminal:
         greeting = mod.module_dict["greeting"]
         assert _succeeds("phrase", run(greeting), ["hello"], module=mod)
         assert not _succeeds("phrase", run(greeting), ["bye"], module=mod)
+
+
+# ── Prolog import round-trip of {..} embedded goals ──────────────────────────
+
+
+class TestPrologImportInlineGoals:
+    """End-to-end: Prolog DCG rules with ``{Goal}`` bodies import + run.
+
+    Regression: ``prolog_to_clausal`` emitted the inline goal WITHOUT braces, so
+    a single goal was lowered as a non-terminal (silent corruption) and a
+    conjunction body failed to load (``Unsupported DCG body element``). The
+    translator now emits ``{Goal}`` / ``{(A, B, ...)}``.
+    """
+
+    def _translate_and_load(self, name, prolog_src, tmp_path):
+        from clausal.tools.prolog_to_clausal import prolog_to_clausal
+
+        clausal_src = prolog_to_clausal(prolog_src)
+        # Translator Titlecases predicate names, so the nonterminals become
+        # ``Count`` / ``Bounded`` in the loaded module.
+        return _load(name, clausal_src + "\n", tmp_path), clausal_src
+
+    def test_single_goal_body_roundtrip(self, tmp_path):
+        # nv
+        mod, src = self._translate_and_load(
+            "rt_count", "count(N) --> [x], {N is 1}.\n", tmp_path
+        )
+        # A single {Goal} must be emitted braced, not as a bare non-terminal.
+        assert "{eval_(1, N)}" in src
+        cls = mod.module_dict["Count"]
+        # [x] is an ATOM terminal; query with the module's interned ``x`` atom.
+        xatom = mod.module_dict["x"]
+        n = Var()
+        results = [deref(n) for _ in call("phrase", cls(n), [xatom], module=mod)]
+        assert results == [1]
+
+    def test_conjunction_body_roundtrip(self, tmp_path):
+        # nv
+        mod, src = self._translate_and_load(
+            "rt_bounded", "bounded(D) --> [D], {D >= 0, D =< 9}.\n", tmp_path
+        )
+        # A conjunction body is emitted as the parenthesised form ``{(A, B)}``.
+        assert "{(D >= 0, D <= 9)}" in src
+        cls = mod.module_dict["Bounded"]
+        # In range: accepted.
+        assert _succeeds("phrase", cls(Var()), [5], module=mod)
+        # BOTH guards enforced: [12] rejected (the >= 0 / <= 9 pair).
+        assert not _succeeds("phrase", cls(Var()), [12], module=mod)
+        assert not _succeeds("phrase", cls(Var()), [-1], module=mod)
