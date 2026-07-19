@@ -1,5 +1,22 @@
 # P2: silent unify failure between same-named module-local atoms — add a diagnosability aid
 
+STATUS: DONE (2026-07-19). Diagnosability aid only — atom identity/interning
+unchanged (Non-goal respected). Opt-in via env var `CLAUSAL_WARN_ATOM_IDENTITY=1`.
+When set, `PredicateMeta.__new__` installs a diagnostic `__unify__` on zero-field
+(atom) classes only; when unset, no hook is installed and the unify hot path is
+byte-for-byte unchanged (zero-cost when off). New warning
+`ClausalAtomIdentityMismatchWarning` subclasses the existing
+`ClausalAtomShadowingWarning` family (`compiler_v2.py`); it fires one-shot per
+(name, ownerA, ownerB) naming both owning modules, and unify still returns False.
+`_process_declarations` now stamps declared atoms' `__module__` with the owning
+clausal module for accurate attribution. Coverage: the compare-site hook fires
+whenever the C `do_unify` reaches an atom on either side (the atom's `__unify__`
+is consulted symmetrically) — i.e. all constant-atom-vs-atom compares. Docs +
+remedy (`-import_from`) added to `docs/import.md` and
+`GLOBAL_ATOMS_DEFAULT.md`. Tests in `tests/test_atom_identity_warning.py`
+(unit compare-site + subprocess two-module package repro; warns once under flag,
+silent without).
+
 ## Mechanism (intended design, confirmed — not a bug)
 Name resolution is lexical/load-time against the DEFINING module (`clausal/logic/compiler_v2.py:498-566`
 `_process_bare_atom_refs`; dispatch `globals_=module_dict` at `:180-191`; `docs/import.md:209-270`). A declared

@@ -123,6 +123,51 @@ class TestPycacheInvalidation:
         clauses2 = lm2.db.clauses_for("greet", 1)
         assert len(clauses2) == 3
 
+    def test_same_size_same_second_edit_recompiles(self, tmp_path):
+        """A same-size edit within the same integer second must recompile.
+
+        Truncating mtime to whole seconds (``int(st.st_mtime)``) let the stale
+        .pyc be served for this window — the mutation-testing false-green bug.
+        With nanosecond mtime the cache is correctly invalidated. Both source
+        versions have identical byte length (``val(1)`` / ``val(2)``) so size —
+        which is also in the cache key — cannot mask the difference; the mtimes
+        are pinned so both loads fall in the same integer second.
+        """
+        # nv
+        src = tmp_path / "same_size.clausal"
+        mod_name = "_pycache_same_size_test"
+        pycache = tmp_path / "__pycache__"
+        try:
+            # First version + first load (creates .pyc).
+            src.write_text("val(1),\n")
+            base_ns = 1_600_000_000_000_000_000  # arbitrary fixed nanosecond time
+            os.utime(src, ns=(base_ns, base_ns))
+            mod1 = _load_module(mod_name, str(src))
+            lm1 = mod1.__dict__["$module"]
+            v1 = Var()
+            r1 = [deref(v1) for _ in call("val", v1, module=lm1)]
+            assert r1 == [1]
+
+            # Edit to a same-size source within the SAME integer second
+            # (advance only nanoseconds, keeping whole-second value identical).
+            src.write_text("val(2),\n")
+            edit_ns = base_ns + 250_000_000  # +0.25s → same integer second
+            assert int(edit_ns / 1e9) == int(base_ns / 1e9)
+            os.utime(src, ns=(edit_ns, edit_ns))
+            assert src.stat().st_size == len("val(1),\n")  # sizes equal
+
+            # Second load must recompile and see the new fact.
+            sys.modules.pop(mod_name, None)
+            mod2 = _load_module(mod_name, str(src))
+            lm2 = mod2.__dict__["$module"]
+            v2 = Var()
+            r2 = [deref(v2) for _ in call("val", v2, module=lm2)]
+            assert r2 == [2], "stale .pyc served for same-size same-second edit"
+        finally:
+            sys.modules.pop(mod_name, None)
+            if pycache.exists():
+                shutil.rmtree(pycache)
+
 
 class TestCachedCorrectness:
     """Predicates work identically from cache vs fresh."""

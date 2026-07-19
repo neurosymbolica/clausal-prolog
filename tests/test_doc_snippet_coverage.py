@@ -45,6 +45,12 @@ _KNOWN_UNCOMPILABLE = {
     # deliberately documents a runtime failure. Neither is standalone-compilable.
     ("import.md", 257),
     ("import.md", 285),
+    # import.md "Same-name declared atoms do not unify across modules": two
+    # more `# caller.clausal` blocks that `-import_from(lib, …)` a fictional
+    # library to illustrate the declared-atom identity mismatch and its
+    # `-import_from` remedy. Neither is standalone-compilable.
+    ("import.md", 340),
+    ("import.md", 356),
     ("index.md", 10),
     ("purity.md", 111),
 }

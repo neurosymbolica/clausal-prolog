@@ -319,7 +319,14 @@ class _ClausalSourceLoader(SourceLoader):
         # CLAUSAL_BYTECODE_TAG invalidates cached bytecode even when the source
         # file's mtime/size are unchanged (consistent per version → cache hits
         # still work within a version).
-        return {"mtime": int(st.st_mtime) ^ CLAUSAL_BYTECODE_TAG,
+        #
+        # Use nanosecond mtime (``st_mtime_ns``) rather than ``int(st.st_mtime)``:
+        # truncating to whole seconds let a same-size edit within the same integer
+        # second serve stale bytecode (the mutation-testing false-green window).
+        # importlib stores/compares this field masked with 0xFFFFFFFF, so any
+        # deterministic int is valid; masking keeps the value in range and the
+        # tag XOR still participates, so a tag bump still invalidates old caches.
+        return {"mtime": (st.st_mtime_ns ^ CLAUSAL_BYTECODE_TAG) & 0xFFFFFFFF,
                 "size": st.st_size}
 
     def set_data(self, path, data):

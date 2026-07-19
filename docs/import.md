@@ -319,6 +319,53 @@ higher-order builtins](higher_order.md) and [lambdas](lambdas.md) rely on.
 > names *in its own file*, never the caller's. Need it to call something the
 > caller owns? Pass that predicate in as a goal argument.
 
+### Same-name declared atoms do not unify across modules
+
+The lexical rule applies to **declared atoms** too, and this is the sharpest
+edge. Listing an atom in `-module(...)` / `-private([...])` gives it a
+**module-local identity** — a distinct class per declaring module. Two modules
+that each *declare* the same atom therefore hold **different** objects, and
+unifying a value carrying one against a value carrying the other **fails
+silently**: no error, just *no solution*. This is intended scoping (it is what
+lets a module own its own atoms), but the failure is easy to misdiagnose as a
+legitimately-unsatisfiable query.
+
+```clausal
+# lib.clausal — declares its own `approved`
+-module(lib, [approved, Check(X)])
+
+Check(approved),
+```
+
+```clausal
+# caller.clausal — RE-declares `approved` (a separate class!)
+-import_from(lib, [Check])
+-private([approved])
+
+Ask() <- Check(approved)          # NO SOLUTION: caller's `approved`
+                                  # ≠ lib's `approved`
+```
+
+`Ask()` yields nothing: `Check`'s clause head carries **lib's** `approved`,
+while the goal `Check(approved)` passes **caller's** `approved`. They have the
+same name but different identity, so unification fails.
+
+**Remedy — import the atom instead of re-declaring it.** Share one definition so
+both modules refer to the *same* class:
+
+```clausal
+# caller.clausal — import `approved`, do NOT re-declare it
+-import_from(lib, [Check, approved])
+
+Ask() <- Check(approved)          # succeeds: same `approved` as lib
+```
+
+**Diagnosing it.** Set `CLAUSAL_WARN_ATOM_IDENTITY=1` to make unification emit a
+one-shot `ClausalAtomIdentityMismatchWarning` (a `ClausalAtomShadowingWarning`
+subclass) naming both owning modules whenever two same-named atoms of different
+identity are compared. The flag is opt-in and off by default — with it off the
+comparison hook is not installed at all, so the unify hot path is unaffected.
+
 ---
 
 ## Builtin injection

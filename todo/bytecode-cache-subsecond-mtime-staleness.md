@@ -1,5 +1,17 @@
 # P2: bytecode cache serves stale .pyc for same-size edits within one second
 
+STATUS: DONE (2026-07-19). Minimal fix landed: `SourceLoader.path_stats`
+(`clausal/import_hook.py:316`) now reports
+`(st.st_mtime_ns ^ CLAUSAL_BYTECODE_TAG) & 0xFFFFFFFF` instead of truncating to
+`int(st.st_mtime)`, closing the same-size/same-second stale window. The tag XOR
+still participates, so a tag bump still invalidates old caches. New test
+`test_same_size_same_second_edit_recompiles` in `tests/test_pycache.py` (mtimes
+pinned via `os.utime(ns=...)`, `val(1)`→`val(2)` same size); existing cache-hit
+and A10-F018 tag-fold tests updated to the ns formula and still pass. NOTE:
+landing this changes the reported mtime for every cached module, so it
+invalidates every existing `.pyc` once (expected, harmless — recompiles on next
+load). Did NOT implement the PEP-552 source-hash variant.
+
 ## Mechanism
 `clausal/import_hook.py:327-334` — `SourceLoader.path_stats` returns
 `{"mtime": int(st.st_mtime) ^ CLAUSAL_BYTECODE_TAG, "size": st.st_size}`. `int(st.st_mtime)` truncates to whole

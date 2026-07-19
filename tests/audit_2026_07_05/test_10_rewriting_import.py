@@ -762,14 +762,24 @@ def test_guard_ternary_rejected(tmp_path):
 def test_F018_path_stats_folds_bytecode_tag(tmp_path):
     """A10-F018: the transformer-version tag is folded into the reported mtime
     so bumping it invalidates cached bytecode even when the source is
-    unchanged. Consistent per version, so cache hits still work."""
+    unchanged. Consistent per version, so cache hits still work.
+
+    The reported mtime uses *nanosecond* precision
+    (``(st_mtime_ns ^ TAG) & 0xFFFFFFFF``) so a same-size edit within the same
+    integer second still invalidates (see tests/test_pycache.py); the tag XOR
+    still participates, so a tag bump still invalidates old caches."""
     import os
     from clausal.import_hook import _ClausalSourceLoader, CLAUSAL_BYTECODE_TAG
     src = tmp_path / "a10f018.clausal"
     src.write_text("fact(1),\n")
     loader = _ClausalSourceLoader("a10f018", str(src))
     stats = loader.path_stats(str(src))
-    raw_mtime = int(os.stat(str(src)).st_mtime)
-    assert stats["mtime"] == raw_mtime ^ CLAUSAL_BYTECODE_TAG
+    raw_ns = os.stat(str(src)).st_mtime_ns
+    assert stats["mtime"] == (raw_ns ^ CLAUSAL_BYTECODE_TAG) & 0xFFFFFFFF
     # Idempotent within a version.
     assert loader.path_stats(str(src))["mtime"] == stats["mtime"]
+    # Tag still participates: a different tag yields a different reported mtime
+    # (so a tag bump invalidates cached bytecode), confirmed by recomputing
+    # with a hypothetical bumped tag.
+    bumped = (raw_ns ^ (CLAUSAL_BYTECODE_TAG + 1)) & 0xFFFFFFFF
+    assert bumped != stats["mtime"]

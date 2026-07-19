@@ -68,6 +68,27 @@ class ClausalUnusedOverwritesWarning(UserWarning):
     """
 
 
+class ClausalAtomIdentityMismatchWarning(ClausalAtomShadowingWarning):
+    """Two *declared* atoms with the same name but distinct module-local
+    identity were compared during unification (diagnostic aid, opt-in).
+
+    Name resolution for declared atoms is lexical against the *defining*
+    module (see ``docs/import.md`` and ``GLOBAL_ATOMS_DEFAULT.md``): two
+    modules that each ``-module``/``-private``-declare the same atom hold
+    **distinct** classes, so unifying one against the other silently fails —
+    no error, no solution.  This is intended scoping, but the failure is
+    indistinguishable from a legitimately-unsatisfiable query.
+
+    When ``CLAUSAL_WARN_ATOM_IDENTITY=1`` is set, unification emits this
+    (one-shot per name pair) warning naming both owning modules so the
+    mismatch is diagnosable.  Remedy: share one definition via
+    ``-import_from(defining_module, [Atom])`` instead of re-declaring.
+
+    Subclasses ``ClausalAtomShadowingWarning`` so existing ``-overwrites``
+    /warning-filter machinery that targets the family also covers it.
+    """
+
+
 def compile_module(
     predicate_nodes: list,
     module_items: list,
@@ -652,6 +673,15 @@ def _process_declarations(module_items: list, module_dict: dict) -> None:
                     or (existing is global_cls and global_cls is not None)
                 ):
                     cls = make_predicate(name, field_names)
+                    # Attribute the declared class to its *owning* clausal
+                    # module (make_predicate() otherwise stamps __module__ with
+                    # clausal.logic.predicate, its defining frame).  Correct
+                    # attribution powers the CLAUSAL_WARN_ATOM_IDENTITY
+                    # diagnostic, which names both owning modules on a
+                    # cross-module same-name atom compare.
+                    owner = module_dict.get("__name__")
+                    if owner:
+                        cls.__module__ = owner
                     module_dict[name] = cls
 
     _check_atom_shadowing(module_items, module_dict)

@@ -18,10 +18,74 @@ Usage:
 from __future__ import annotations
 
 import dataclasses
+import os
 from typing import Any, Callable
 
 
 _MISSING = object()  # sentinel for "field not provided"
+
+
+def _warn_atom_identity_enabled() -> bool:
+    """True when the opt-in atom-identity diagnostic is on.
+
+    Gated on ``CLAUSAL_WARN_ATOM_IDENTITY`` (``1``/``true``/``yes``/``on``).
+    Read live at *class-creation* time only — never on the unify hot path —
+    so the diagnostic ``__unify__`` is installed on an atom class only when
+    the flag was set as that class was minted.  When off, zero-field atom
+    classes carry no ``__unify__`` at all and the hot path is unchanged.
+    """
+    return os.environ.get("CLAUSAL_WARN_ATOM_IDENTITY", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+# One-shot dedup of (name, owner_a, owner_b) triples already warned about.
+_atom_identity_warned: set = set()
+
+
+def _make_atom_identity_unify(cls):
+    """Build a diagnostic ``__unify__`` for a zero-field (atom) class.
+
+    Installed only when ``CLAUSAL_WARN_ATOM_IDENTITY`` is set.  Semantics are
+    identity-preserving — it never changes *whether* unification succeeds:
+
+      * ``other is cls`` → succeed (same behaviour as the default identity
+        comparison the C unifier would otherwise apply to atoms).
+      * ``other`` is a *different* zero-field atom class with the *same*
+        ``__name__`` → emit a one-shot ``ClausalAtomIdentityMismatchWarning``
+        naming both owning modules, then fail (unchanged behaviour, now
+        diagnosable).
+      * anything else → ``NotImplemented`` so the C unifier's normal fallback
+        (symmetric ``__unify__`` / identity compare) decides.
+    """
+    def __unify__(other, trail):  # noqa: N807 — invoked as cls.__unify__(t2, trail)
+        if other is cls:
+            return True
+        if isinstance(other, PredicateMeta) and not other._fields \
+                and other.__name__ == cls.__name__ and other is not cls:
+            owner_a = getattr(cls, "__module__", "<unknown>")
+            owner_b = getattr(other, "__module__", "<unknown>")
+            key = (cls.__name__, owner_a, owner_b) if owner_a <= owner_b \
+                else (cls.__name__, owner_b, owner_a)
+            if key not in _atom_identity_warned:
+                _atom_identity_warned.add(key)
+                import warnings  # noqa: PLC0415
+                from clausal.logic.compiler_v2 import (  # noqa: PLC0415
+                    ClausalAtomIdentityMismatchWarning,
+                )
+                warnings.warn(
+                    f"atom `{cls.__name__}` compared across modules with "
+                    f"distinct module-local identity: `{owner_a}` vs "
+                    f"`{owner_b}`.  These are separate classes and do not "
+                    f"unify (query will have no solution).  Share one "
+                    f"definition via -import_from(defining_module, "
+                    f"[{cls.__name__}]) instead of re-declaring it.",
+                    ClausalAtomIdentityMismatchWarning,
+                    stacklevel=2,
+                )
+            return False
+        return NotImplemented
+    return __unify__
 
 
 
@@ -145,6 +209,13 @@ class PredicateMeta(type):
         # class IS the value, so identity comparison (C line 886: t1 == t2) and
         # the fallback PyObject_RichCompareBool handle unification correctly,
         # and an atom can never contain a Var.
+        elif _warn_atom_identity_enabled():
+            # Opt-in diagnostic only (CLAUSAL_WARN_ATOM_IDENTITY): install a
+            # __unify__ that warns when this atom is compared against a
+            # same-named atom of a different owning module.  Identity-preserving
+            # (see _make_atom_identity_unify).  Guarded so the flag-off hot path
+            # installs nothing and is byte-for-byte the original behaviour.
+            cls.__unify__ = _make_atom_identity_unify(cls)
 
         return cls
 

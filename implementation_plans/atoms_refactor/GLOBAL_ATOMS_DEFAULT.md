@@ -182,6 +182,39 @@ name when a module-local declaration or an import shadows the global default.
 `other_module`'s namespace, exactly as it does today. This is the way to reach
 a module's local atom without importing it. No spec change.
 
+### Diagnosing cross-module identity mismatch (`CLAUSAL_WARN_ATOM_IDENTITY`)
+
+The module-local identity model means two modules that each *declare* the same
+atom hold **distinct** classes, so a value carrying one will not unify with a
+value carrying the other — the query silently has *no solution*. This is the
+intended scoping (see rule 3 above), but the failure looks identical to a
+legitimately-unsatisfiable query.
+
+Set the opt-in env var `CLAUSAL_WARN_ATOM_IDENTITY=1` to make unification emit a
+one-shot `ClausalAtomIdentityMismatchWarning` (a `ClausalAtomShadowingWarning`
+subclass, so it lives in the same warning family) naming *both* owning modules
+whenever two same-named atoms of different identity are compared. Example:
+
+```clausal
+# lib.clausal
+-module(lib, [approved, Check(X)])
+Check(approved),
+```
+```clausal
+# caller.clausal — re-declares `approved`, so Check(approved) has no solution
+-import_from(lib, [Check])
+-private([approved])
+Ask() <- Check(approved)
+```
+
+**Remedy:** import the atom instead of re-declaring it —
+`-import_from(lib, [Check, approved])` — so both modules share one class.
+
+The flag is off by default and the check is **only** installed on atom classes
+minted while it is set, so the unify hot path is untouched when the flag is off.
+This is a *diagnosability aid only*: it does not change whether unification
+succeeds (module-local identity is deliberate; see the Non-goal below).
+
 ## Changes to existing directives
 
 - **`-module(name, [...])`**: unchanged syntax. Items in the export list now
