@@ -216,39 +216,28 @@ predicate_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__a
 # cannot accidentally shadow them.  Do not remove the '$' prefix.
 # Note: $define_predicate and $assert_fact are set per-module in exec_module
 # (they need closures over the per-module LogicModule and module_dict).
-# '$ast' gives generated code access to the stdlib ast module without risking a
-# name collision with user-defined variables named 'ast'.
-predicate_builtins["$ast"] = ast
-# Runtime types needed by functor class generation (_make_functor_class_ast uses
-# Var()) and by compiled predicate bodies.  These are injected so that user code
-# in predicate modules can use them without explicit imports.
-predicate_builtins["PredicateMeta"] = PredicateMeta
-predicate_builtins["Var"] = Var
-predicate_builtins["Compound"] = Compound
-predicate_builtins["DictTerm"] = DictTerm
-predicate_builtins["SetTerm"] = SetTerm
-predicate_builtins["Trail"] = Trail
-# A12-F004 / A12-D002: the engine helpers walk/deref/unify are pure internals
-# used only by generated predicate bodies (which reference them under the
-# reserved ``$``-prefix). Injecting them under their PUBLIC names reserved
-# those names — a user predicate ``walk/2``/``deref/2``/``unify/2`` failed at
-# load with a cryptic TypeError. Inject them ``$``-prefixed only, freeing the
-# public names for user code.
-predicate_builtins["$unify"] = unify
-predicate_builtins["$deref"] = deref
-predicate_builtins["$walk"] = walk
-from clausal.terms import PyThunk, FStringThunk, Quantity, Unknown
-predicate_builtins["PyThunk"] = PyThunk
-predicate_builtins["FStringThunk"] = FStringThunk  # alias for PyThunk
-predicate_builtins["Quantity"] = Quantity
-# The Kleene (K3) third truth value, sitting beside the Python True/False that
-# ``simple_ast.__all__`` already provides.  Injected as a real binding (not a
-# minted atom) so it resolves in every module — including ``-strict_atoms`` ones
-# — with no declaration, import, or export, and carries process-wide identity.
-predicate_builtins["Unknown"] = Unknown
-from clausal.logic.clpb import BoolEq, BoolImpl
-predicate_builtins["BoolEq"] = BoolEq
-predicate_builtins["BoolImpl"] = BoolImpl
+#
+# The runtime *value* bindings injected into every predicate module —
+# ``$ast``, ``PredicateMeta``, ``Var``, ``Compound``, ``DictTerm``, ``SetTerm``,
+# ``Trail``, ``PyThunk``, ``FStringThunk``, ``Quantity``, ``Unknown``,
+# ``BoolEq``/``BoolImpl``, and the ``$``-prefixed engine helpers
+# ``$walk``/``$deref``/``$unify`` — live in a SINGLE source of truth,
+# ``INJECTED_RUNTIME_BUILTINS`` in clausal/logic/compiler/predicate.py.  The
+# compiler seeds every predicate's base_globals from the same dict so a name
+# term_to_ast_expr can emit resolves on the bare-query path too (whose globals
+# derive only from the module dict).  Layering it here keeps module load and
+# query compilation in lockstep — a new injected binding cannot regress either.
+#
+# ``$ast`` gives generated code access to the stdlib ast module without a name
+# collision with a user variable named ``ast``.  A12-F004 / A12-D002: the engine
+# helpers walk/deref/unify are pure internals referenced under the ``$``-prefix;
+# injecting them under their PUBLIC names reserved those names — a user predicate
+# ``walk/2``/``deref/2``/``unify/2`` failed at load — so they are ``$``-prefixed
+# only, freeing the public names for user code.  ``Unknown`` is the Kleene (K3)
+# third truth value, a real binding (not a minted atom) so it resolves in every
+# module including ``-strict_atoms`` ones with process-wide identity.
+from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
+predicate_builtins.update(INJECTED_RUNTIME_BUILTINS)
 
 
 def _preseed_py_submodules(module_items) -> None:
@@ -709,22 +698,12 @@ sys.meta_path[:] = [PredicateFinder(), PrologFinder(), ModulesFinder(), *sys.met
 _simple_ast_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all__}
 # '$'-prefixed names cannot be typed as normal Python identifiers, so user code
 # cannot accidentally shadow them.  Do not remove the '$' prefix.
-_simple_ast_builtins["$ast"] = ast
-# Inject runtime types so that functor class code (which calls Var()) works in
-# IPython cells.
-_simple_ast_builtins["PredicateMeta"] = PredicateMeta
-_simple_ast_builtins["Var"] = Var
-_simple_ast_builtins["Compound"] = Compound
-_simple_ast_builtins["Trail"] = Trail
-# A12-F004: see predicate_builtins above — engine helpers are $-prefixed only.
-_simple_ast_builtins["$unify"] = unify
-_simple_ast_builtins["$deref"] = deref
-_simple_ast_builtins["$walk"] = walk
-_simple_ast_builtins["PyThunk"] = PyThunk
-_simple_ast_builtins["FStringThunk"] = FStringThunk  # alias
-_simple_ast_builtins["BoolEq"] = BoolEq
-_simple_ast_builtins["BoolImpl"] = BoolImpl
-_simple_ast_builtins["Unknown"] = Unknown  # Kleene K3 third truth value
+# Inject the runtime types so that functor class code (which calls Var()) and
+# compiled goals work in IPython cells.  Same single source of truth as
+# ``predicate_builtins`` above (INJECTED_RUNTIME_BUILTINS): $ast, PredicateMeta,
+# Var/Compound/DictTerm/SetTerm, Trail, PyThunk/FStringThunk, Quantity, Unknown,
+# BoolEq/BoolImpl, and the $-prefixed engine helpers ($walk/$deref/$unify).
+_simple_ast_builtins.update(INJECTED_RUNTIME_BUILTINS)
 # in_ IPython there is no per-session logic module, so '$assert_fact' collects
 # facts in a shared list.  For module-backed predicate files, exec_module
 # overrides this with a module-specific closure.

@@ -1,6 +1,22 @@
 # Bare-query compilation globals miss injected builtins (latent NameError)
 
-## STATUS: TODO (filed 2026-07-19; found during the Unknown-builtin work, 2026-07-17)
+## STATUS: DONE (2026-07-19)
+Generic fix: added `INJECTED_RUNTIME_BUILTINS` (single source of truth) in
+clausal/logic/compiler/predicate.py — the manually-injected runtime *value*
+bindings the compiler can emit as bare Names (Var/Compound/DictTerm/SetTerm/
+KWTerm, Unknown, Quantity, PyThunk/FStringThunk, BoolEq/BoolImpl, PredicateMeta,
+Trail, plus $-prefixed $walk/$deref/$unify/$ast). Both base_globals dicts seed
+from it (globals_/module dict still layered on top → module names win); dropped
+the point-fix `Unknown` bakes. import_hook builds `predicate_builtins` and the
+IPython `_simple_ast_builtins` from the same dict. Criterion excludes the full
+`simple_ast.__all__` public-name flood (Call/Module/If/assertz…) to avoid the
+A12-F004 shadowing class of bug; walk/deref/unify stay $-prefixed only. Tests:
++2 regressions in tests/test_unknown_builtin.py (bare query w/ empty module_dict
+resolves Unknown as singleton; all public injected names present+identical in
+query globals). Full tests/ suite: 9362 passed, 2 skipped, 44 xfailed (baseline
+9360 + 2 new), no new failures.
+
+## Original report (filed 2026-07-19; found during the Unknown-builtin work, 2026-07-17)
 
 ## What was found
 `predicate_builtins` (clausal/import_hook.py, "Builtins injected into every predicate

@@ -144,6 +144,61 @@ class TestUnknownGoalPosition:
         assert "Unknown" in str(exc.value)
 
 
+# ── Bare-query globals carry injected builtins (query-globals gap) ────────────
+#
+# Regression for todo/query-globals-injected-builtins-gap.md: the bare-query
+# compilation path derives its compiled globals only from ``module.module_dict``,
+# which need not carry the ``predicate_builtins`` injections.  A name that
+# ``term_to_ast_expr`` emits as a bare ``Name`` (Var/Compound/DictTerm/SetTerm/
+# KWTerm/Unknown, plus the $-prefixed engine helpers) must therefore resolve from
+# the compiler-seeded base_globals, not the module dict.  The generic fix seeds
+# every predicate's base_globals from ``INJECTED_RUNTIME_BUILTINS`` (single source
+# of truth shared with import_hook.predicate_builtins).
+
+
+class TestQueryGlobalsInjectedBuiltins:
+    def test_unknown_resolves_in_bare_query_with_empty_module_dict(self):
+        # The exact gap: a Module whose module_dict lacks the injections.  Before
+        # the generic fix this raised NameError('Unknown') during query compile.
+        from clausal.pythonic_ast.nodes import Unify
+        mod = Module("_qg_empty", module_dict={})
+        v = Var()
+        t = Trail()
+        bound = []
+        for _ in solve(Unify(left=v, right=Unknown), mod, t):
+            # Read the binding inside the loop — backtracking unwinds the trail
+            # once the generator is exhausted.
+            bound.append(deref(v))
+        assert len(bound) == 1
+        # Process-wide identity is preserved through query compilation.
+        assert bound[0] is Unknown
+
+    def test_all_injected_public_builtins_present_in_query_globals(self):
+        # Generic guard: every public (non-$-prefixed) injected runtime binding
+        # must land in a compiled bare-query's globals, so a *future* injection
+        # cannot silently regress the query path (which is what happened with
+        # Unknown).  $-prefixed engine internals are intentionally excluded (they
+        # are referenced only under the $ name; see A12-F004).
+        from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
+        from clausal.logic.solve import _compile_as_query
+        from clausal.terms import Compound
+
+        mod = Module("_qg_globals", module_dict={})
+        # A trivial always-true goal is enough to force query compilation.
+        goal = Compound("=", (Var(), Var()))
+        # _compile_as_query returns (dispatch_fn, param_pairs); the dispatch fn's
+        # __globals__ are the seeded base_globals (+ module dict, empty here).
+        dispatch_fn, _ = _compile_as_query(goal, mod)
+        g = dispatch_fn.__globals__
+        public = {n: v for n, v in INJECTED_RUNTIME_BUILTINS.items()
+                  if not n.startswith("$")}
+        missing = [n for n in public if n not in g]
+        assert not missing, f"injected builtins missing from query globals: {missing}"
+        # The bindings are the SAME objects (identity), not shadowed copies.
+        assert g["Unknown"] is Unknown
+        assert all(g[n] is public[n] for n in public)
+
+
 # ── Outbound Prolog mapping (step 5) ──────────────────────────────────────────
 
 

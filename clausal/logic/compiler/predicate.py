@@ -225,6 +225,69 @@ from .tro import (  # noqa: E402,F401
 )
 
 
+# ── Injected runtime builtins (name-referenceable in compiled bodies) ────────
+#
+# ``term_to_ast_expr`` can emit a *bare Name* for a runtime value (not just a
+# module-declared predicate): the term-constructor helpers ``Var``/``Compound``/
+# ``DictTerm``/``SetTerm``/``KWTerm``, the Kleene ``Unknown`` singleton, and any
+# ``is_term_instance`` runtime type referenced as ``Cls(...)`` — e.g. ``Quantity``,
+# a ``PyThunk``/``FStringThunk`` wrapper, or a CLP(B) ``BoolEq``/``BoolImpl``.
+# Inside a *module clause* these names resolve because the module namespace has
+# been seeded with ``predicate_builtins`` (see clausal/import_hook.py).  A *bare
+# query*, however, derives its compiled globals only from ``module.module_dict``
+# (clausal/logic/solve.py::_compile_as_query), which need not carry those
+# injections — so a name that compiles fine in a module clause could raise a
+# ``NameError`` in a query.  Commit 999ed1cb papered over the one case that had
+# surfaced (``Unknown``) by baking ``"Unknown": Unknown`` into both base_globals
+# dicts; this dict is the generic fix — every base_globals below is seeded from
+# it, so a future injected runtime binding cannot silently regress the query
+# path.
+#
+# CRITERION — what belongs here (and why NOT the full ``predicate_builtins``):
+# ``predicate_builtins`` also maps ALL of ``simple_ast.__all__`` (``Call``,
+# ``Module``, ``If``, ``For``, ``Lt`` … plus ``assertz``/``dump``/``simplify`` …)
+# under their PUBLIC names.  Seeding those into base_globals would *reserve* them,
+# so a user predicate ``call/1`` or ``module/2`` etc. would be shadowed — the
+# exact A12-F004 class of bug (see the walk/deref/unify note in import_hook.py),
+# which is why base_globals is a curated dict rather than a union.  This dict is
+# therefore restricted to the manually-injected runtime *value* bindings that the
+# compiler can emit under a public name; the engine internals walk/deref/unify are
+# injected ``$``-prefixed ONLY (below) so those public names stay free for users.
+# ``globals_`` (the module/query dict) is still layered on top of base_globals at
+# the call sites, so a module-declared name always wins on collision.
+from clausal.logic.variables import Trail as _Trail, walk as _walk_fn  # noqa: E402
+from clausal.terms import (  # noqa: E402
+    Quantity as _Quantity,
+    FStringThunk as _FStringThunk,
+)
+from clausal.logic.clpb import BoolEq as _BoolEq, BoolImpl as _BoolImpl  # noqa: E402
+
+INJECTED_RUNTIME_BUILTINS: dict = {
+    # Term-constructor helpers and runtime types emitted as bare Names by
+    # term_to_ast_expr.  ``$``-prefixed engine internals below can never be
+    # shadowed by user identifiers (``$`` is not a legal identifier char).
+    "PredicateMeta": PredicateMeta,
+    "Var": Var,
+    "Compound": Compound,
+    "DictTerm": _DictTerm,
+    "SetTerm": _SetTerm,
+    "KWTerm": _KWTerm,
+    "Trail": _Trail,
+    "PyThunk": _PyThunk,
+    "FStringThunk": _FStringThunk,
+    "Quantity": _Quantity,
+    "Unknown": Unknown,
+    "BoolEq": _BoolEq,
+    "BoolImpl": _BoolImpl,
+    # Engine internals — public names walk/deref/unify are deliberately NOT
+    # bound (A12-F004); generated code references them ``$``-prefixed.
+    "$walk": _walk_fn,
+    "$deref": deref,
+    "$unify": unify,
+    "$ast": ast,
+}
+
+
 def _sweep_tro_eligible(
     clauses: list,
     functor: str,
@@ -642,18 +705,19 @@ def compile_predicate_trampoline(
         return fn
 
     base_globals: dict = {
-        "Compound": Compound,
-        "KWTerm": _KWTerm_t,
-        "DictTerm": _DictTerm_t,
-        "SetTerm": _SetTerm_t,
-        "Var": Var,
+        # Seed with the injected runtime builtins so every name term_to_ast_expr
+        # can emit (Var/Compound/DictTerm/SetTerm/KWTerm, Unknown, Quantity,
+        # PyThunk/FStringThunk, BoolEq/BoolImpl, plus $-prefixed engine helpers)
+        # resolves even on the bare-query path — whose globals derive only from
+        # the module dict, which need not carry the injections.  See
+        # INJECTED_RUNTIME_BUILTINS above for the criterion.  ``globals_`` is
+        # layered on top below, so a module-declared name still wins.
+        **INJECTED_RUNTIME_BUILTINS,
         # A12-F004: generated bodies reference the engine helpers under the
         # reserved ``$``-prefix so a user predicate named unify/2 or deref/2
         # (which lands in the module dict and is merged in below) cannot shadow
         # them. The bare "unify"/"deref" keys are kept for backward compat with
         # any older cached bytecode but are not emitted by current codegen.
-        "$unify": unify,
-        "$deref": deref,
         "unify": unify,
         "deref": deref,
         "is_var": is_var,
@@ -697,13 +761,6 @@ def compile_predicate_trampoline(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
-        # Kleene ``Unknown`` builtin: a process-wide singleton, emitted by
-        # term_to_ast_expr as a bare ``Unknown`` Name, so it must resolve from
-        # the compiled predicate's globals (like True/False, but those are AST
-        # Constants and need no globals entry).  Baked in unconditionally so it
-        # resolves even in the query path, whose globals derive only from the
-        # module dict (which may not carry the injected builtins).
-        "Unknown": Unknown,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn
@@ -1395,15 +1452,12 @@ def compile_predicate_shallow(
         return fn
 
     base_globals: dict = {
-        "Compound": Compound,
-        "KWTerm": _KWTerm,
-        "DictTerm": _DictTerm_s,
-        "SetTerm": _SetTerm_s,
-        "Var": Var,
+        # See the trampoline base_globals above / INJECTED_RUNTIME_BUILTINS for
+        # why these are seeded (name-referenceable injected runtime bindings that
+        # must resolve on the bare-query path too).
+        **INJECTED_RUNTIME_BUILTINS,
         # A12-F004: $-prefixed engine helpers for the shallow path (see the
         # trampoline base_globals above).
-        "$unify": unify,
-        "$deref": deref,
         "unify": unify,
         "deref": deref,
         "is_var": is_var,
@@ -1443,7 +1497,6 @@ def compile_predicate_shallow(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
-        "Unknown": Unknown,  # Kleene builtin — see the trampoline path above.
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn_s
