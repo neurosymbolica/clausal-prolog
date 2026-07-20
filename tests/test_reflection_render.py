@@ -9,7 +9,11 @@ import os
 import pytest
 
 from clausal.reflection import (
+    Atom,
     Clause,
+    Escape,
+    FormatString,
+    Goal,
     ReifyError,
     RenderError,
     reify_source,
@@ -237,3 +241,61 @@ def test_corpus_clause_round_trips(path):
         assert strip_positions(reparsed[0]) == strip_positions(clause), (
             f"{path}: round-trip mismatch\n  rendered: {rendered!r}"
         )
+
+
+# ── Corruption / contract guards (Fable review findings) ─────────────────────
+# The renderer must NEVER emit text that re-reifies to a different structure, and
+# must raise RenderError (not a raw SyntaxError / silent corruption) for anything
+# it cannot faithfully render. These cover surface shapes and mutated terms that
+# the corpus sweep does not reach.
+
+
+class TestCorruptionGuards:
+    def test_lambda_in_clause_head_round_trips(self):
+        # C1: a lambda arrow-as-term in HEAD position must not leak the sentinel.
+        assert_round_trips("Holds((X <- p(X))) <- Check(1)\n")
+
+    def test_nested_unary_plus_not_confused_with_escape(self):
+        # C2: `+(+X)` must not silently collapse to the `++X` escape surface.
+        # It either round-trips faithfully or raises RenderError — never corrupts.
+        clause = only_clause("Calc(X, Y) <- (Y is +(+X))\n")
+        try:
+            rendered = render_source(clause)
+        except RenderError:
+            return  # contract-honouring: refused rather than corrupt
+        reparsed = only_clause(rendered + "\n")
+        assert strip_positions(reparsed) == strip_positions(clause), (
+            f"+(+X) silently corrupted to: {rendered!r}"
+        )
+
+    def test_render_source_of_standalone_lambda_term(self):
+        # I1: rendering a lambda sub-term directly (the auditor's use case) must
+        # not leak the sentinel marker.
+        clause = only_clause("Ho(F) <- run((X <- base(X)), F)\n")
+        lambda_term = clause.goals[0].args[0]
+        rendered = render_source(lambda_term)
+        assert "__clausal_lambda_arrow__" not in rendered, (
+            f"sentinel leaked in standalone lambda render: {rendered!r}"
+        )
+        # And it must re-parse to the same lambda structure.
+        reparsed = only_clause(f"Wrap(G) <- run({rendered}, G)\n")
+        assert strip_positions(reparsed.goals[0].args[0]) == strip_positions(lambda_term)
+
+    def test_escape_with_invalid_code_raises_render_error(self):
+        # I3: a mutated Escape whose code is not valid Python must raise
+        # RenderError, not a raw SyntaxError.
+        with pytest.raises(RenderError):
+            render_source(Escape("X +", [], None))
+
+    def test_format_string_with_invalid_code_raises_render_error(self):
+        # I3: same contract for FormatString.
+        with pytest.raises(RenderError):
+            render_source(FormatString("f'{", [], None))
+
+    def test_non_identifier_atom_raises_render_error(self):
+        # I2/M1: a mutated Atom/Goal name that is not a valid identifier (or is
+        # the reserved sentinel) must raise RenderError, not emit malformed text.
+        with pytest.raises(RenderError):
+            render_source(Goal("Weird", [Atom("has space")], []))
+        with pytest.raises(RenderError):
+            render_source(Atom("__clausal_lambda_arrow__"))
