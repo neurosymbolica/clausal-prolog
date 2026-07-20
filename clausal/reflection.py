@@ -365,6 +365,26 @@ class _ClauseReifier:
         return Clause(head, goals, self._position_of(kwargs))
 
 
+# simple_ast operator class name → Python ast operator, for rendering.
+_RENDER_BINOP_OPS = {
+    "Add": ast.Add, "Sub": ast.Sub, "Mult": ast.Mult, "Div": ast.Div,
+    "FloorDiv": ast.FloorDiv, "Mod": ast.Mod, "Pow": ast.Pow,
+    "MatMult": ast.MatMult, "LShift": ast.LShift, "RShift": ast.RShift,
+    "BitOr": ast.BitOr, "BitXor": ast.BitXor, "BitAnd": ast.BitAnd,
+}
+_RENDER_CMP_OPS = {
+    "Lt": ast.Lt, "LtE": ast.LtE, "Gt": ast.Gt, "GtE": ast.GtE,
+    "ArithEq": ast.Eq, "ArithNeq": ast.NotEq,
+    "Unify": ast.Is, "DoesNotUnify": ast.IsNot,
+    "in_": ast.In, "NotIn": ast.NotIn,
+}
+_RENDER_BOOL_OPS = {"And": ast.And, "Or": ast.Or}
+_RENDER_UNARY_OPS = {
+    "Not": ast.Not, "Negate": ast.USub, "UnaryPlus": ast.UAdd,
+    "Invert": ast.Invert,
+}
+
+
 class _ClauseRenderer:
     """Render a reified term back to a Python surface ``ast`` node — the
     inverse of :class:`_ClauseReifier`.  Building fresh nodes; positions are
@@ -432,7 +452,50 @@ class _ClauseRenderer:
                 f"cannot render {type(value).__name__} — only clause bodies "
                 "are in scope for the renderer"
             )
+        if isinstance(value, list):
+            return ast.List(
+                elts=[self.term(item) for item in value], ctx=ast.Load()
+            )
+        if isinstance(value, tuple):
+            return ast.Tuple(
+                elts=[self.term(item) for item in value], ctx=ast.Load()
+            )
+        if isinstance(value, dict):
+            return ast.Dict(
+                keys=[self.term(key) for key in value],
+                values=[self.term(val) for val in value.values()],
+            )
+        if dataclasses.is_dataclass(value) and not isinstance(value, type):
+            return self._operator_ast(value)
         raise RenderError(f"cannot render term: {value!r}")
+
+    def _operator_ast(self, node):
+        """Raw ``simple_ast`` operator node → Python ``ast`` operator expr."""
+        name = type(node).__name__
+        if name in _RENDER_BINOP_OPS:
+            return ast.BinOp(
+                left=self.term(node.left),
+                op=_RENDER_BINOP_OPS[name](),
+                right=self.term(node.right),
+            )
+        if name in _RENDER_CMP_OPS:
+            return ast.Compare(
+                left=self.term(node.left),
+                ops=[_RENDER_CMP_OPS[name]()],
+                comparators=[self.term(node.right)],
+            )
+        if name in _RENDER_BOOL_OPS:
+            return ast.BoolOp(
+                op=_RENDER_BOOL_OPS[name](),
+                values=[self.term(node.left), self.term(node.right)],
+            )
+        if name in _RENDER_UNARY_OPS:
+            return ast.UnaryOp(
+                op=_RENDER_UNARY_OPS[name](), operand=self.term(node.operand)
+            )
+        if name == "StarUnpack":
+            return ast.Starred(value=self.term(node.value), ctx=ast.Load())
+        raise RenderError(f"cannot render operator node: {name}")
 
     def _goal_ast(self, goal):
         """``Goal(name, args, kwargs)`` → ``ast.Call``."""

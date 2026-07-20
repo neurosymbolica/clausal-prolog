@@ -78,3 +78,25 @@ class TestRules:
     ])
     def test_rule_round_trips(self, src):
         assert_round_trips(src)
+
+
+class TestOperators:
+    @pytest.mark.parametrize("src", [
+        "Positive(N) <- (N > 0)\n",
+        "AtLeast(N) <- (N >= 10)\n",
+        "Eq(N) <- (N == 0)\n",
+        "Neq(N) <- (N != 0)\n",
+        "Sum(X, Y, Z) <- (Z is X + Y)\n",
+        "Prod(X, Y, Z) <- (Z is X * Y)\n",
+        "Diff(X, Y, Z) <- (Z is X - Y)\n",
+        "Unify2(X, Y) <- (X is Y)\n",
+        "Dif2(X, Y) <- (X is not Y)\n",
+        "Free(A) <- (not Busy(A))\n",
+        "Either(A) <- (Pa(A) or Qa(A))\n",
+        "Both(A) <- (Pa(A) and Qa(A))\n",
+        "Neg(X, Y) <- (Y is -X)\n",
+        "ConsTail(T) <- Head([a, b | T])\n",
+        "StarTail(T) <- Head([a, b, *T])\n",
+    ])
+    def test_operator_round_trips(self, src):
+        assert_round_trips(src)
