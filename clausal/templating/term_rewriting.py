@@ -2551,6 +2551,54 @@ class EmbedTransformer(NodeTransformer):
         statements.append(define_stmt)
         return statements if len(statements) > 1 else statements[0]
 
+    def _guard_bare_call(transformer, functor_name, expr_stmt):
+        """Wrap an UNDECLARED bare ``functor(...)`` / ``functor`` statement.
+
+        Emits::
+
+            try:
+                functor              # resolve the functor NAME only
+            except NameError:
+                $unterminated_fact_error('functor', lineno, src)
+            else:
+                <original statement>  # the real call; arg errors surface here
+
+        So an undefined functor becomes a 'missing comma' diagnostic, while a
+        legitimate call (imported macro, builtin) runs normally and its own
+        argument errors are reported honestly.
+        """
+        src_text = ""
+        if transformer._source_lines is not None:
+            idx = expr_stmt.lineno - 1
+            if 0 <= idx < len(transformer._source_lines):
+                src_text = transformer._source_lines[idx].strip()
+
+        orig_stmt = transformer.generic_visit(expr_stmt)
+
+        guard = Try(
+            body=[Expr(value=Name(id=functor_name, ctx=load))],
+            handlers=[
+                ExceptHandler(
+                    type=Name(id="NameError", ctx=load),
+                    name=None,
+                    body=[
+                        Expr(value=Call(
+                            func=Name(id="$unterminated_fact_error", ctx=load),
+                            args=[
+                                Constant(value=functor_name),
+                                Constant(value=expr_stmt.lineno),
+                                Constant(value=src_text),
+                            ],
+                            keywords=[],
+                        ))
+                    ],
+                )
+            ],
+            orelse=[orig_stmt],
+            finalbody=[],
+        )
+        return replace(guard, expr_stmt)
+
     def visit_Module(transformer, module):
         """Visit the module body, then emit a final ``BareAtomRefs`` item
         carrying every bare reference the per-clause transformers saw.
@@ -2880,24 +2928,25 @@ class EmbedTransformer(NodeTransformer):
                 return expr_stmt
             case Call(func=Name(id=functor_name)) if (
                 transformer._scope_depth == 0
-                and functor_name in transformer._seen_functors
             ):
-                # Comma-optional bodyless fact for a DECLARED predicate:
-                # ``p(_, 1)`` with no trailing comma, where p is known
-                # (-module export, -dynamic/-private, or a prior clause).
-                src = expr_stmt.value
-                return transformer._build_fact_statements(
-                    functor_name, src.args, src.keywords, src.func, src, expr_stmt,
-                )
+                if functor_name in transformer._seen_functors:
+                    # Comma-optional bodyless fact for a DECLARED predicate.
+                    src = expr_stmt.value
+                    return transformer._build_fact_statements(
+                        functor_name, src.args, src.keywords, src.func, src,
+                        expr_stmt,
+                    )
+                # Undeclared: guard so an undefined functor yields a comma hint.
+                return transformer._guard_bare_call(functor_name, expr_stmt)
             case Name(id=functor_name) if (
                 transformer._scope_depth == 0
                 and not _is_logic_var_name(functor_name)
-                and functor_name in transformer._seen_functors
             ):
-                # Zero-arity comma-optional fact: bare ``flag`` for declared flag/0.
-                return transformer._build_zero_arity_fact_statements(
-                    functor_name, expr_stmt.value, expr_stmt,
-                )
+                if functor_name in transformer._seen_functors:
+                    return transformer._build_zero_arity_fact_statements(
+                        functor_name, expr_stmt.value, expr_stmt,
+                    )
+                return transformer._guard_bare_call(functor_name, expr_stmt)
         return transformer.generic_visit(expr_stmt)
 
     def _handle_directive(transformer, name, args, expr_stmt):

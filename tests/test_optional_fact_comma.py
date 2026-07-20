@@ -67,3 +67,31 @@ class TestCommaOptionalWhenDeclared:
         src = "foo(9)\nfoo(1),\n"
         with pytest.raises(NameError):
             load_src(tmp_path, "t2_later", src)
+
+
+class TestUndeclaredDiagnostic:
+    def test_undeclared_bare_fact_hints_comma(self, tmp_path):
+        # p undeclared, no -module: functor name is undefined.
+        src = "-strict_atoms\np(_ATOM, 1)\n"
+        with pytest.raises(NameError) as ei:
+            load_src(tmp_path, "t3_undecl", src)
+        msg = str(ei.value)
+        assert "bodyless fact" in msg
+        assert "trailing" in msg
+        assert "p" in msg
+
+    def test_legit_undeclared_call_still_runs(self, tmp_path):
+        # `print` resolves (a real callable), so the else-branch runs it: no error.
+        src = 'print("clausal-ok")\n'
+        mod = load_src(tmp_path, "t3_legit", src)  # must not raise
+        assert mod is not None
+
+    def test_functor_resolves_but_arg_typo_is_honest(self, tmp_path):
+        # `print` resolves; the undefined ARG error must NOT be reported as a
+        # missing-comma fact.
+        src = "print(nope_undefined_arg)\n"
+        with pytest.raises(NameError) as ei:
+            load_src(tmp_path, "t3_argtypo", src)
+        msg = str(ei.value)
+        assert "nope_undefined_arg" in msg
+        assert "bodyless fact" not in msg
