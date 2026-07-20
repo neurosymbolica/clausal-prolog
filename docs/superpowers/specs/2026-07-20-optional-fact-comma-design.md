@@ -156,7 +156,12 @@ Properties: only undeclared bare `Call`/`Name` statements are wrapped (a small
 set); valid code elsewhere is never touched; the diagnostic fires **only** when
 the functor name itself is unresolved; no traceback introspection; works
 identically on the fresh and `.pyc`-cache paths because the guard is baked into
-the compiled bytecode.
+the compiled bytecode. Note that functor resolution can succeed spuriously if an
+undeclared functor collides with a process-wide-minted `predicate_builtins` name
+from another loaded module (load-order-dependent), causing the guard's try-branch
+to resolve and the `else` to run the original call silently — the diagnostic is
+therefore best-effort, strictly no worse than the prior behavior (which provided
+no diagnostic at all).
 
 ## Test plan (TDD — tests first, each must fail before the fix)
 

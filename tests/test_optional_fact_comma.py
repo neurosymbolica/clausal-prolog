@@ -85,11 +85,24 @@ class TestUndeclaredDiagnostic:
         assert "trailing" in msg
         assert "p" in msg
 
-    def test_legit_undeclared_call_still_runs(self, tmp_path):
+    def test_legit_undeclared_call_still_runs(self, tmp_path, capsys):
         # `print` resolves (a real callable), so the else-branch runs it: no error.
         src = 'print("clausal-ok")\n'
         mod = load_src(tmp_path, "t3_legit", src)  # must not raise
         assert mod is not None
+        assert "clausal-ok" in capsys.readouterr().out
+
+    def test_zero_arity_undeclared_bare_name_hints_comma(self, tmp_path):
+        # A bare undeclared zero-arity Name (not a logic var) must also produce
+        # the bodyless-fact diagnostic, not a raw NameError.
+        # Name must not start with '_' (single-leading-underscore → logic var)
+        # and must not be ALL-CAPS (those are logic vars too).
+        src = "xyzzy_zero_undecl\n"
+        with pytest.raises(NameError) as ei:
+            load_src(tmp_path, "t3_zero_undecl", src)
+        msg = str(ei.value)
+        assert "bodyless fact" in msg
+        assert "xyzzy_zero_undecl" in msg
 
     def test_functor_resolves_but_arg_typo_is_honest(self, tmp_path):
         # `print` resolves; the undefined ARG error must NOT be reported as a
@@ -100,3 +113,26 @@ class TestUndeclaredDiagnostic:
         msg = str(ei.value)
         assert "nope_undefined_arg" in msg
         assert "bodyless fact" not in msg
+
+
+class TestReplModeUnaffected:
+    """A fresh EmbedTransformer with no source_lines (the IPython/console REPL
+    path via _FreshEmbedTransformer) must NOT wrap bare calls/names — otherwise
+    the trailing node stops being an ast.Expr and result echo breaks."""
+
+    def _last_node_kind(self, src):
+        import ast
+        from clausal.templating.term_rewriting import EmbedTransformer
+        tree = ast.parse(src)
+        out = EmbedTransformer().visit(tree)   # no source_lines => REPL mode
+        ast.fix_missing_locations(out)
+        return type(out.body[-1]).__name__
+
+    def test_bare_call_stays_expr_in_repl(self):
+        assert self._last_node_kind("len([1, 2, 3])") == "Expr"
+
+    def test_bare_name_stays_expr_in_repl(self):
+        assert self._last_node_kind("result") == "Expr"
+
+    def test_functor_call_stays_expr_in_repl(self):
+        assert self._last_node_kind("edge(1, 2)") == "Expr"

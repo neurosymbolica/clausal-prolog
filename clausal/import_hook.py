@@ -62,7 +62,7 @@ def _unterminated_fact_error(name, lineno, src):
         f"name {name!r} is not defined — {where} looks like a bodyless fact "
         f"missing its trailing ','; add a comma to make it a fact, or declare "
         f"the predicate (-module/-dynamic)."
-    )
+    ) from None
 
 
 def _make_intern_atom(module_dict, module_items, module_name):
@@ -304,7 +304,7 @@ def _preseed_py_submodules(module_items) -> None:
 # bytecode live until the source file itself changes. Fold this tag into the
 # reported mtime so a clausal upgrade invalidates every cached .clausal/.pl
 # .pyc. BUMP THIS whenever EmbedTransformer / the codegen output changes.
-CLAUSAL_BYTECODE_TAG = 2
+CLAUSAL_BYTECODE_TAG = 3
 
 
 class _ClausalSourceLoader(SourceLoader):

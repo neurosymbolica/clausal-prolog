@@ -2551,6 +2551,14 @@ class EmbedTransformer(NodeTransformer):
         statements.append(define_stmt)
         return statements if len(statements) > 1 else statements[0]
 
+    def _is_module_compile(transformer):
+        """True when compiling a .clausal MODULE (source_lines were supplied),
+        False for REPL cells transformed by _FreshEmbedTransformer via a bare
+        EmbedTransformer().  The comma-optional fact rewrite and the bare-call
+        guard apply only to modules; a REPL cell's trailing bare Call/Name must
+        stay an ast.Expr so the interactive display hook still echoes it."""
+        return transformer._source_lines is not None
+
     def _guard_bare_call(transformer, functor_name, expr_stmt):
         """Wrap an UNDECLARED bare ``functor(...)`` / ``functor`` statement.
 
@@ -2928,6 +2936,7 @@ class EmbedTransformer(NodeTransformer):
                 return expr_stmt
             case Call(func=Name(id=functor_name)) if (
                 transformer._scope_depth == 0
+                and transformer._is_module_compile()
             ):
                 if functor_name in transformer._seen_functors:
                     # Comma-optional bodyless fact for a DECLARED predicate.
@@ -2941,6 +2950,7 @@ class EmbedTransformer(NodeTransformer):
             case Name(id=functor_name) if (
                 transformer._scope_depth == 0
                 and not _is_logic_var_name(functor_name)
+                and transformer._is_module_compile()
             ):
                 if functor_name in transformer._seen_functors:
                     return transformer._build_zero_arity_fact_statements(
