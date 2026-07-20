@@ -400,6 +400,33 @@ RENDER_OP_CLASS_NAMES = frozenset(
 )
 
 
+def _deref_field(value):
+    """Deref a *name/structural field* that bypasses
+    :meth:`_ClauseRenderer.term` — ``Goal.name``/``args``/``kwargs``,
+    ``Clause.goals``, ``Escape.code``, dict keys, …
+
+    A bound logic ``Var`` yields its value; an unbound one raises
+    :class:`RenderError`, so the renderer never leaks a
+    ``TypeError``/``AttributeError`` past its documented contract when such a
+    field holds a var (e.g. an ``op_node``/matcher-built ``Goal`` whose name or
+    args are bound late)."""
+    value = deref(value)
+    if is_var(value):
+        raise RenderError(f"cannot render unbound variable: {value!r}")
+    return value
+
+
+def _deref_seq_field(value, what):
+    """:func:`_deref_field` for a field that must be a concrete sequence — a
+    goal/arg/param list, dict keys/values.  A var *or* a non-list/tuple raises
+    :class:`RenderError` rather than leaking a ``TypeError`` from ``len``/
+    iteration, so the renderer honours its contract on malformed terms too."""
+    value = _deref_field(value)
+    if not isinstance(value, (list, tuple)):
+        raise RenderError(f"cannot render {what}: expected a sequence, got {value!r}")
+    return value
+
+
 class _ClauseRenderer:
     """Render a reified term back to a Python surface ``ast`` node — the
     inverse of :class:`_ClauseReifier`.  Building fresh nodes; positions are
@@ -417,13 +444,14 @@ class _ClauseRenderer:
         renders as the ``Compare(head, [Lt], [USub(body)])`` shape that surface
         ``HEAD <- BODY`` parses to and that ``_unparse_clause`` repairs."""
         head = self.term(term.head)
-        if not term.goals:
+        goals = _deref_seq_field(term.goals, "clause goals")
+        if not goals:
             return ast.Expr(value=ast.Tuple(elts=[head], ctx=ast.Load()))
-        if len(term.goals) == 1:
-            body = self.goal(term.goals[0])
+        if len(goals) == 1:
+            body = self.goal(goals[0])
         else:
             body = ast.Tuple(
-                elts=[self.goal(goal) for goal in term.goals], ctx=ast.Load()
+                elts=[self.goal(goal) for goal in goals], ctx=ast.Load()
             )
         arrow = ast.Compare(
             left=head, ops=[ast.Lt()],
@@ -444,6 +472,7 @@ class _ClauseRenderer:
         does not validate ``Name.id``, so a mutated term carrying a name like
         ``"has space"`` or the reserved lambda sentinel would otherwise emit
         malformed text that re-reifies wrongly.  Refuse instead."""
+        dotted = _deref_field(dotted)
         if not isinstance(dotted, str):
             raise RenderError(f"cannot render non-string name: {dotted!r}")
         parts = dotted.split(".")
@@ -461,6 +490,9 @@ class _ClauseRenderer:
         From reification the code is always ``ast.unparse`` output (valid), but a
         mutated term may carry invalid source — raise :class:`RenderError` rather
         than leak a raw ``SyntaxError`` past the documented contract."""
+        code = _deref_field(code)
+        if not isinstance(code, str):
+            raise RenderError(f"{kind} code must be a string: {code!r}")
         try:
             return ast.parse(code, mode="eval").body
         except SyntaxError as exc:
@@ -482,8 +514,11 @@ class _ClauseRenderer:
             # Anonymous vars reify to non-identifier names (#anon1, …); render
             # each as `_`.  Per-clause anon numbering is deterministic by
             # encounter order, so `_` re-reifies to the same #anonN.
-            name = "_" if value.name.startswith("#") else value.name
-            return ast.Name(id=name, ctx=ast.Load())
+            name = _deref_field(value.name)
+            if not isinstance(name, str):
+                raise RenderError(f"cannot render non-string variable name: {name!r}")
+            display = "_" if name.startswith("#") else name
+            return ast.Name(id=display, ctx=ast.Load())
         if isinstance(value, Atom):
             return self._name_ast(value.name)
         if isinstance(value, Goal):
@@ -508,8 +543,18 @@ class _ClauseRenderer:
                 elts=[self.term(item) for item in value], ctx=ast.Load()
             )
         if isinstance(value, dict):
+            key_nodes, seen = [], set()
+            for key in value:
+                key_node = self.term(key)
+                # re-reification is textual, so keys that *unparse* the same
+                # collide and would silently drop a key — refuse instead.
+                surface = ast.unparse(key_node)
+                if surface in seen:
+                    raise RenderError(f"duplicate dict key after deref: {surface!r}")
+                seen.add(surface)
+                key_nodes.append(key_node)
             return ast.Dict(
-                keys=[self.term(key) for key in value],
+                keys=key_nodes,
                 values=[self.term(val) for val in value.values()],
             )
         if isinstance(value, IfThenElse):
@@ -602,7 +647,14 @@ class _ClauseRenderer:
         ``_LAMBDA_ARROW_MARKER(BODY)`` so :func:`_tighten_nested_arrows` can
         locate exactly the rendered lambda arrows (never a real ``<``), tighten
         the gap, and strip the wrapper."""
-        param_names = [p.name for p in node.params.params]
+        params_container = _deref_field(node.params)
+        param_items = _deref_seq_field(params_container.params, "lambda params")
+        param_names = []
+        for param in param_items:
+            name = _deref_field(_deref_field(param).name)
+            if not isinstance(name, str) or not name.isidentifier():
+                raise RenderError(f"cannot render non-identifier lambda param: {name!r}")
+            param_names.append(name)
         params_tuple = ast.Tuple(
             elts=[ast.Name(id=n, ctx=ast.Load()) for n in param_names],
             ctx=ast.Load(),
@@ -624,32 +676,47 @@ class _ClauseRenderer:
         A key of ``None`` is a ``**splat`` (``{**value}``); an atom key
         reifies wrapped in ``$intern_atom(<name>)`` and renders back to a bare
         ``Name`` so the surface ``{name: value}`` re-interns it identically."""
+        node_keys = _deref_seq_field(node.keys, "dict-literal keys")
+        node_values = _deref_seq_field(node.values, "dict-literal values")
         keys, values = [], []
-        for key, value in zip(node.keys, node.values):
+        for key, value in zip(node_keys, node_values):
+            key = None if key is None else deref(key)
             keys.append(None if key is None else self._dict_key_ast(key))
             values.append(self.term(value))
         return ast.Dict(keys=keys, values=values)
 
     def _dict_key_ast(self, key):
         """A DictLiteral key: ``$intern_atom(<name>)`` → the bare name node."""
-        if (
-            isinstance(key, Goal)
-            and key.name == "$intern_atom"
-            and len(key.args) == 1
-            and isinstance(key.args[0], str)
-        ):
-            return self._name_ast(key.args[0])
+        key = _deref_field(key)
+        if isinstance(key, Goal) and _deref_field(key.name) == "$intern_atom":
+            args = _deref_seq_field(key.args, "$intern_atom key args")
+            if len(args) == 1 and isinstance(_deref_field(args[0]), str):
+                return self._name_ast(args[0])
         return self.term(key)
 
     def _goal_ast(self, goal):
-        """``Goal(name, args, kwargs)`` → ``ast.Call``."""
+        """``Goal(name, args, kwargs)`` → ``ast.Call``.
+
+        ``name``/``args``/``kwargs``, each kwarg *entry* and its name may be
+        bound logic vars (or garbage) on a matcher-built goal — deref/guard them
+        so the call renders or raises ``RenderError``, never leaking a
+        ``TypeError`` on the raw var."""
+        args = _deref_seq_field(goal.args, "goal args")
+        kwargs = _deref_seq_field(goal.kwargs, "goal kwargs")
+        keywords = []
+        for entry in kwargs:
+            try:
+                name, value = _deref_field(entry)
+            except (TypeError, ValueError):
+                raise RenderError(f"cannot render keyword entry: {entry!r}")
+            name = _deref_field(name)
+            if not isinstance(name, str):
+                raise RenderError(f"cannot render non-string keyword name: {name!r}")
+            keywords.append(ast.keyword(arg=name, value=self.term(value)))
         return ast.Call(
             func=self._name_ast(goal.name),
-            args=[self.term(arg) for arg in goal.args],
-            keywords=[
-                ast.keyword(arg=name, value=self.term(value))
-                for name, value in goal.kwargs
-            ],
+            args=[self.term(arg) for arg in args],
+            keywords=keywords,
         )
 
 
@@ -952,6 +1019,7 @@ def render_ast(term):
     A ``Clause`` renders to an ``ast.Expr`` statement; any other reified term
     renders to an expression node.  Raises :class:`RenderError` for any node
     kind the renderer does not handle (never emits malformed source)."""
+    term = deref(term)  # a top-level var bound to a Clause must take the clause path
     renderer = _ClauseRenderer()
     if isinstance(term, Clause):
         node = renderer.clause(term)

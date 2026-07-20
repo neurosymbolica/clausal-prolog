@@ -264,6 +264,116 @@ class TestBoundLogicVars:
             render_source(node)
 
 
+def _bound(value):
+    """A fresh logic Var bound to *value* (binding persists past the Trail)."""
+    from clausal.logic.variables import Var, Trail, unify
+
+    x = Var()
+    unify(x, value, Trail())
+    return x
+
+
+class TestBoundLogicVarsInFields:
+    """Bound logic Vars in *name/structural field* positions that bypass
+    ``term()`` — ``Goal.name``/``args``/``kwargs``, ``Clause.goals``,
+    ``Variable.name``, ``Escape.code``, dict keys.  Each must render the bound
+    value; an unbound var (or a post-deref duplicate dict key) must raise
+    ``RenderError``, never ``TypeError``/``AttributeError``.  Mirrors
+    ``TestBoundLogicVars``; see the renderer-deref name/structural-fields todo."""
+
+    def test_goal_name_bound_var_renders(self):
+        assert render_source(Goal(_bound("foo"), [1], [])) == "foo(1)"
+
+    def test_goal_args_list_bound_var_renders(self):
+        assert render_source(Goal("f", _bound([1, 2]), [])) == "f(1, 2)"
+
+    def test_goal_kwargs_list_bound_var_renders(self):
+        assert render_source(Goal("f", [], _bound([("k", 1)]))) == "f(k=1)"
+
+    def test_clause_goals_bound_var_renders(self):
+        clause = Clause(Goal("H", [], []), _bound([Goal("g", [], [])]), None)
+        assert render_source(clause) == "H() <- (g())"
+
+    def test_variable_name_bound_var_renders(self):
+        from clausal.reflection import Variable
+
+        assert render_source(Variable(_bound("X"))) == "X"
+
+    def test_escape_code_bound_var_renders(self):
+        assert render_source(Escape(_bound("len(L)"), None, None)) == "++len(L)"
+
+    def test_render_ast_top_level_var_bound_to_clause_renders(self):
+        clause = Clause(Goal("H", [], []), [Goal("g", [], [])], None)
+        assert render_source(_bound(clause)) == "H() <- (g())"
+
+    def test_dict_literal_intern_atom_key_bound_var_renders(self):
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        key = Goal("$intern_atom", ["foo"], [])
+        node = simple_ast.DictLiteral(keys=[_bound(key)], values=[1])
+        assert render_source(node) == "{foo: 1}"
+
+    def test_goal_kwarg_entry_bound_var_renders(self):
+        # the whole (name, value) pair is a bound var, not just its name
+        assert render_source(Goal("f", [], [_bound(("k", 1))])) == "f(k=1)"
+
+    def test_goal_kwarg_name_bound_var_renders(self):
+        assert render_source(Goal("f", [], [(_bound("k"), 1)])) == "f(k=1)"
+
+    def test_dict_literal_key_container_bound_var_renders(self):
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        key = Goal("$intern_atom", ["foo"], [])
+        node = simple_ast.DictLiteral(keys=_bound([key]), values=[1])
+        assert render_source(node) == "{foo: 1}"
+
+    def test_dict_literal_intern_atom_args_bound_var_renders(self):
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        key = Goal("$intern_atom", _bound(["foo"]), [])
+        node = simple_ast.DictLiteral(keys=[key], values=[1])
+        assert render_source(node) == "{foo: 1}"
+
+    def test_lambda_param_name_bound_var_renders(self):
+        import ast as _ast
+        import dataclasses
+        from clausal.reflection import reify_ast
+
+        lam = reify_ast(_ast.parse("((X, Y) <- foo(X, Y))", mode="eval").body)
+        ground = render_source(lam)
+        p0 = dataclasses.replace(lam.params.params[0], name=_bound("X"))
+        params = dataclasses.replace(lam.params, params=[p0, lam.params.params[1]])
+        assert render_source(dataclasses.replace(lam, params=params)) == ground
+
+    def test_duplicate_keys_differing_ast_but_equal_surface_raise(self):
+        # bound(-1) and bound(Negate(1)) dump-differ but both unparse to "-1";
+        # the collision key must be the surface text, or a key silently drops.
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        term = {_bound(-1): "a", _bound(simple_ast.Negate(operand=1)): "b"}
+        with pytest.raises(RenderError):
+            render_source(term)
+
+    @pytest.mark.parametrize("term_factory", [
+        lambda V: Goal(V(), [1], []),                 # Goal.name
+        lambda V: Goal("f", V(), []),                 # Goal.args container
+        lambda V: Goal("f", [], V()),                 # Goal.kwargs container
+        lambda V: Goal("f", [], [V()]),               # kwarg entry
+    ])
+    def test_unbound_var_in_field_position_raises_render_error(self, term_factory):
+        from clausal.logic.variables import Var
+
+        with pytest.raises(RenderError):
+            render_source(term_factory(Var))
+
+    def test_duplicate_dict_keys_after_deref_raise(self):
+        # two distinct key vars, both bound to 5 -> collide after deref; a silent
+        # drop would break round-trip fidelity, so refuse.
+        term = {_bound(5): "a", _bound(5): "b"}
+        with pytest.raises(RenderError):
+            render_source(term)
+
+
 CORPUS_DIR = "/workspace/clausify-domains"
 
 
