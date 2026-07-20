@@ -53,6 +53,18 @@ def _fact_to_predicate_node(term):
     return simple_ast.Predicate(head=term, body=simple_ast.BoolLiteral(value=True))
 
 
+def _unterminated_fact_error(name, lineno, src):
+    """Raised when a bare, comma-less clause's functor is undefined — almost
+    always a bodyless fact missing its trailing ',' (see the comma-optional
+    fact rule in EmbedTransformer).  Emitted from generated guard code."""
+    where = f"{src!r} (line {lineno})" if src else f"line {lineno}"
+    raise NameError(
+        f"name {name!r} is not defined — {where} looks like a bodyless fact "
+        f"missing its trailing ','; add a comma to make it a fact, or declare "
+        f"the predicate (-module/-dynamic)."
+    )
+
+
 def _make_intern_atom(module_dict, module_items, module_name):
     """Build the ``$intern_atom`` helper for a module load.
 
@@ -238,6 +250,7 @@ predicate_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__a
 # module including ``-strict_atoms`` ones with process-wide identity.
 from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
 predicate_builtins.update(INJECTED_RUNTIME_BUILTINS)
+predicate_builtins["$unterminated_fact_error"] = _unterminated_fact_error
 
 
 def _preseed_py_submodules(module_items) -> None:
@@ -711,6 +724,7 @@ _simple_ast_builtins = {name: getattr(simple_ast, name) for name in simple_ast._
 # Var/Compound/DictTerm/SetTerm, Trail, PyThunk/FStringThunk, Quantity, Unknown,
 # BoolEq/BoolImpl, and the $-prefixed engine helpers ($walk/$deref/$unify).
 _simple_ast_builtins.update(INJECTED_RUNTIME_BUILTINS)
+_simple_ast_builtins["$unterminated_fact_error"] = _unterminated_fact_error
 # in_ IPython there is no per-session logic module, so '$assert_fact' collects
 # facts in a shared list.  For module-backed predicate files, exec_module
 # overrides this with a module-specific closure.

@@ -1551,6 +1551,28 @@ def _make_functor_class_ast(functor_name, field_names, source):
     return copy_location(tree.body[0], source)
 
 
+def _make_define_stmt(predicate_ast, expr_stmt):
+    """Wrap a Predicate node in a ``$define_predicate(pred, $module)`` stmt."""
+    return replace(
+        Expr(
+            value=replace(
+                Call(
+                    func=replace(
+                        Name(id="$define_predicate", ctx=load), expr_stmt.value
+                    ),
+                    args=[
+                        predicate_ast,
+                        replace(Name(id="$module", ctx=load), expr_stmt.value),
+                    ],
+                    keywords=[],
+                ),
+                expr_stmt.value,
+            )
+        ),
+        expr_stmt,
+    )
+
+
 # ─── Python AST expression builder ───────────────────────────────────────────
 
 
@@ -2448,6 +2470,135 @@ class EmbedTransformer(NodeTransformer):
             bare_atom_refs=transformer._bare_atom_refs,
         )
 
+    def _build_fact_statements(transformer, functor_name, orig_pos_args,
+                               orig_kw_args, anchor, src_node, expr_stmt):
+        """Build AST for a bodyless fact ``functor(args)`` (arity >= 0 via args).
+
+        Shared by the trailing-comma fact case and the comma-optional
+        declared-predicate case. Returns ``[functor_class_def?, define_stmt]``
+        (a single statement when no class needs emitting).
+        """
+        arg_field_names = _derive_field_names(orig_pos_args)
+        kwarg_field_names = [kw.arg for kw in orig_kw_args]
+        all_field_names = arg_field_names + kwarg_field_names
+
+        transformer._unseat_directive_minted(functor_name)
+        prev_fields = transformer._seen_functors.get(functor_name)
+        if prev_fields is not None:
+            for i in range(len(arg_field_names)):
+                if i < len(prev_fields):
+                    arg_field_names[i] = prev_fields[i]
+            all_field_names = arg_field_names + kwarg_field_names
+
+        term_transformer = transformer._make_term_transformer()
+        transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
+        transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
+
+        head_keywords = [
+            make_keyword_node(fname, term, orig)
+            for fname, term, orig in zip(arg_field_names, transformed_pos, orig_pos_args)
+        ] + [
+            make_keyword_node(fname, term, orig)
+            for fname, term, orig in zip(kwarg_field_names, transformed_kw, orig_kw_args)
+        ]
+        head_ast = replace(
+            Call(
+                func=replace(Name(id=functor_name, ctx=load), anchor),
+                args=[],
+                keywords=head_keywords,
+            ),
+            src_node,
+        )
+        predicate_ast = node_ast(
+            "Predicate", expr_stmt.value,
+            head=head_ast,
+            body=replace(Constant(value=True), expr_stmt.value),
+        )
+        define_stmt = _make_define_stmt(predicate_ast, expr_stmt)
+
+        statements = []
+        if functor_name not in transformer._seen_functors:
+            transformer._seen_functors[functor_name] = all_field_names
+            statements.append(
+                _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
+            )
+        statements.append(define_stmt)
+        return statements if len(statements) > 1 else statements[0]
+
+    def _build_zero_arity_fact_statements(transformer, functor_name, name_node,
+                                          expr_stmt):
+        """Build AST for a zero-arity bodyless fact ``flag`` / ``flag,``."""
+        head_ast = replace(
+            Call(
+                func=replace(Name(id=functor_name, ctx=load), name_node),
+                args=[],
+                keywords=[],
+            ),
+            name_node,
+        )
+        predicate_ast = node_ast(
+            "Predicate", expr_stmt.value,
+            head=head_ast,
+            body=replace(Constant(value=True), expr_stmt.value),
+        )
+        define_stmt = _make_define_stmt(predicate_ast, expr_stmt)
+        statements = []
+        if functor_name not in transformer._seen_functors:
+            transformer._seen_functors[functor_name] = []
+            statements.append(
+                _make_functor_class_ast(functor_name, [], expr_stmt)
+            )
+        statements.append(define_stmt)
+        return statements if len(statements) > 1 else statements[0]
+
+    def _guard_bare_call(transformer, functor_name, expr_stmt):
+        """Wrap an UNDECLARED bare ``functor(...)`` / ``functor`` statement.
+
+        Emits::
+
+            try:
+                functor              # resolve the functor NAME only
+            except NameError:
+                $unterminated_fact_error('functor', lineno, src)
+            else:
+                <original statement>  # the real call; arg errors surface here
+
+        So an undefined functor becomes a 'missing comma' diagnostic, while a
+        legitimate call (imported macro, builtin) runs normally and its own
+        argument errors are reported honestly.
+        """
+        src_text = ""
+        if transformer._source_lines is not None:
+            idx = expr_stmt.lineno - 1
+            if 0 <= idx < len(transformer._source_lines):
+                src_text = transformer._source_lines[idx].strip()
+
+        orig_stmt = transformer.generic_visit(expr_stmt)
+
+        guard = Try(
+            body=[Expr(value=Name(id=functor_name, ctx=load))],
+            handlers=[
+                ExceptHandler(
+                    type=Name(id="NameError", ctx=load),
+                    name=None,
+                    body=[
+                        Expr(value=Call(
+                            func=Name(id="$unterminated_fact_error", ctx=load),
+                            args=[
+                                Constant(value=functor_name),
+                                Constant(value=expr_stmt.lineno),
+                                Constant(value=src_text),
+                            ],
+                            keywords=[],
+                        ))
+                    ],
+                )
+            ],
+            orelse=[orig_stmt],
+            finalbody=[],
+        )
+        return replace(guard, expr_stmt)
+
     def visit_Module(transformer, module):
         """Visit the module body, then emit a final ``BareAtomRefs`` item
         carrying every bare reference the per-clause transformers saw.
@@ -2582,130 +2733,23 @@ class EmbedTransformer(NodeTransformer):
                 and isinstance(single_element.func, Name)
                 and transformer._scope_depth == 0
             ):
-                # Trailing-comma fact: ``edge(1, 2),`` — treated as a predicate
-                # definition with body=True, generating a functor dataclass if
-                # this is the first clause for this functor.
-                functor_name = single_element.func.id
-                orig_pos_args = single_element.args
-                orig_kw_args = single_element.keywords
-
-                arg_field_names = _derive_field_names(orig_pos_args)
-                kwarg_field_names = [kw.arg for kw in orig_kw_args]
-                all_field_names = arg_field_names + kwarg_field_names
-
-                # If the functor was already seen, remap positional arg field
-                # names to the established signature by position — unless the
-                # entry is a -dynamic placeholder (A12-F005): the first REAL
-                # clause's derived head-var names win.
-                transformer._unseat_directive_minted(functor_name)
-                prev_fields = transformer._seen_functors.get(functor_name)
-                if prev_fields is not None:
-                    for i in range(len(arg_field_names)):
-                        if i < len(prev_fields):
-                            arg_field_names[i] = prev_fields[i]
-                    all_field_names = arg_field_names + kwarg_field_names
-
-                term_transformer = transformer._make_term_transformer()
-                transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
-                transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
-
-                anchor = single_element.func
-                head_keywords = [
-                    make_keyword_node(fname, term, orig)
-                    for fname, term, orig in zip(arg_field_names, transformed_pos, orig_pos_args)
-                ] + [
-                    make_keyword_node(fname, term, orig)
-                    for fname, term, orig in zip(kwarg_field_names, transformed_kw, orig_kw_args)
-                ]
-                head_ast = replace(
-                    Call(
-                        func=replace(Name(id=functor_name, ctx=load), anchor),
-                        args=[],
-                        keywords=head_keywords,
-                    ),
+                # Trailing-comma fact: ``edge(1, 2),`` — build via shared helper.
+                return transformer._build_fact_statements(
+                    single_element.func.id,
+                    single_element.args,
+                    single_element.keywords,
+                    single_element.func,
                     single_element,
-                )
-
-                predicate_ast = node_ast(
-                    "Predicate", expr_stmt.value,
-                    head=head_ast,
-                    body=replace(Constant(value=True), expr_stmt.value),
-                )
-                define_stmt = replace(
-                    Expr(
-                        value=replace(
-                            Call(
-                                func=replace(
-                                    Name(id="$define_predicate", ctx=load), expr_stmt.value
-                                ),
-                                args=[
-                                    predicate_ast,
-                                    replace(Name(id="$module", ctx=load), expr_stmt.value),
-                                ],
-                                keywords=[],
-                            ),
-                            expr_stmt.value,
-                        )
-                    ),
                     expr_stmt,
                 )
-
-                statements = []
-                if functor_name not in transformer._seen_functors:
-                    transformer._seen_functors[functor_name] = all_field_names
-                    statements.append(
-                        _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
-                    )
-                statements.append(define_stmt)
-                return statements if len(statements) > 1 else statements[0]
             case Tuple(elts=[Name(id=functor_name) as name_node], ctx=Load()) if (
                 transformer._scope_depth == 0
                 and not _is_logic_var_name(functor_name)
             ):
-                # A10-F011: zero-arity trailing-comma fact ``flag,`` — define
-                # flag/0, symmetric with ``flag <- True`` and with the
-                # ``edge(1,2),`` Call case above. Previously the 1-tuple of a
-                # bare (non-logic-var) Name fell through and was silently
-                # evaluated and discarded — no clause, no diagnostic.
-                head_ast = replace(
-                    Call(
-                        func=replace(Name(id=functor_name, ctx=load), name_node),
-                        args=[],
-                        keywords=[],
-                    ),
-                    name_node,
+                # A10-F011: zero-arity trailing-comma fact ``flag,`` — shared helper.
+                return transformer._build_zero_arity_fact_statements(
+                    functor_name, name_node, expr_stmt,
                 )
-                predicate_ast = node_ast(
-                    "Predicate", expr_stmt.value,
-                    head=head_ast,
-                    body=replace(Constant(value=True), expr_stmt.value),
-                )
-                define_stmt = replace(
-                    Expr(
-                        value=replace(
-                            Call(
-                                func=replace(
-                                    Name(id="$define_predicate", ctx=load), expr_stmt.value
-                                ),
-                                args=[
-                                    predicate_ast,
-                                    replace(Name(id="$module", ctx=load), expr_stmt.value),
-                                ],
-                                keywords=[],
-                            ),
-                            expr_stmt.value,
-                        )
-                    ),
-                    expr_stmt,
-                )
-                statements = []
-                if functor_name not in transformer._seen_functors:
-                    transformer._seen_functors[functor_name] = []
-                    statements.append(
-                        _make_functor_class_ast(functor_name, [], expr_stmt)
-                    )
-                statements.append(define_stmt)
-                return statements if len(statements) > 1 else statements[0]
             case BinOp(left=lhs, op=RShift(), right=rhs) if (
                 transformer._scope_depth == 0
             ):
@@ -2882,6 +2926,27 @@ class EmbedTransformer(NodeTransformer):
                 # rewrites it for Python ≥ 3.14 compatibility.  Same treatment
                 # as Starred(): leave untouched for _StarQueryTransformer.
                 return expr_stmt
+            case Call(func=Name(id=functor_name)) if (
+                transformer._scope_depth == 0
+            ):
+                if functor_name in transformer._seen_functors:
+                    # Comma-optional bodyless fact for a DECLARED predicate.
+                    src = expr_stmt.value
+                    return transformer._build_fact_statements(
+                        functor_name, src.args, src.keywords, src.func, src,
+                        expr_stmt,
+                    )
+                # Undeclared: guard so an undefined functor yields a comma hint.
+                return transformer._guard_bare_call(functor_name, expr_stmt)
+            case Name(id=functor_name) if (
+                transformer._scope_depth == 0
+                and not _is_logic_var_name(functor_name)
+            ):
+                if functor_name in transformer._seen_functors:
+                    return transformer._build_zero_arity_fact_statements(
+                        functor_name, expr_stmt.value, expr_stmt,
+                    )
+                return transformer._guard_bare_call(functor_name, expr_stmt)
         return transformer.generic_visit(expr_stmt)
 
     def _handle_directive(transformer, name, args, expr_stmt):
