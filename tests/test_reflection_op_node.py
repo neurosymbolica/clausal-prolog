@@ -86,6 +86,10 @@ BuildNode(NEW, NAME, ARGS) <- op_node(NEW, NAME, ARGS)
 # construct with an operand bound *before* op_node runs -> shallow-deref stores
 # the value, so the built node renders
 BuildBound(NEW, V) <- (V is 5, op_node(NEW, "Negate", [V]))
+
+# construct with an operand bound *after* op_node runs -> the renderer follows
+# the binding (renderer-deref fix), so this also renders
+BuildLate(NEW) <- (op_node(NEW, "Gt", [X, 1]), X is 5)
 """
 
 
@@ -227,6 +231,15 @@ class TestConstruct:
         for _ in call("BuildBound", new, v, module=matchers):
             rendered.append(R.render_source(deref(new)))
         assert rendered == ["-5"]
+
+    def test_operand_bound_after_construct_renders(self, matchers):
+        # X is unbound when op_node builds Gt([X, 1]), then bound to 5; the
+        # renderer dereferences it (see the renderer-deref follow-up).
+        new = Var()
+        rendered = []
+        for _ in call("BuildLate", new, module=matchers):
+            rendered.append(R.render_source(deref(new)))
+        assert rendered == ["5 > 1"]
 
     def test_boolean_operator_round_trips_python_side(self):
         """``And`` (BoolOp kin) is in the registry; not easily produced from

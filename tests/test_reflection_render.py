@@ -214,6 +214,56 @@ class TestOutOfScope:
             render_source(pycode)
 
 
+class TestBoundLogicVars:
+    """A reified term may hold a *logic* ``Var`` (not a reified ``Variable``) —
+    e.g. an operator node built by ``op_node/3`` over an operand that is later
+    bound.  The renderer must follow the binding; an unbound var stays a loud
+    ``RenderError`` (no surface form)."""
+
+    def test_bound_var_operand_renders_its_value(self):
+        from clausal.logic.variables import Var, Trail, unify
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        trail = Trail()
+        x = Var()
+        unify(x, 5, trail)
+        node = simple_ast.Gt(left=x, right=1)
+        assert render_source(node) == "5 > 1"
+        # and it re-reifies to a Gt over the dereferenced operands
+        back = reify_source("H <- (5 > 1)\n")[0].goals[0]
+        rebuilt = reify_source(f"H <- ({render_source(node)})\n")[0].goals[0]
+        assert strip_positions(rebuilt) == strip_positions(back)
+
+    def test_bound_var_nested_deeper_in_term_renders(self):
+        from clausal.logic.variables import Var, Trail, unify
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        trail = Trail()
+        x = Var()
+        unify(x, 7, trail)
+        # var buried inside a list operand of a Goal, not at the top level
+        node = Goal("f", [simple_ast.Add(left=x, right=1)], [])
+        assert render_source(node) == "f(7 + 1)"
+
+    def test_bound_var_holding_a_reified_compound_renders(self):
+        from clausal.logic.variables import Var, Trail, unify
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        trail = Trail()
+        x = Var()
+        unify(x, Goal("f", [1, 2], []), trail)  # var bound to a compound, not a scalar
+        node = simple_ast.Gt(left=x, right=1)
+        assert render_source(node) == "f(1, 2) > 1"
+
+    def test_unbound_var_still_raises(self):
+        from clausal.logic.variables import Var
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        node = simple_ast.Gt(left=Var(), right=1)
+        with pytest.raises(RenderError):
+            render_source(node)
+
+
 CORPUS_DIR = "/workspace/clausify-domains"
 
 

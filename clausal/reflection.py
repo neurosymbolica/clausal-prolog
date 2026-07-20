@@ -50,6 +50,7 @@ import dataclasses
 import warnings
 
 from clausal.logic.predicate import make_predicate
+from clausal.logic.variables import deref, is_var
 from clausal.pythonic_ast import nodes as simple_ast
 
 
@@ -470,6 +471,13 @@ class _ClauseRenderer:
     # -- terms ----------------------------------------------------------------
 
     def term(self, value):
+        # A term may hold a bound *logic* Var (e.g. an operator node built by
+        # op_node/3 over an operand bound after construction); follow the
+        # binding so its value renders.  Deref is a no-op on everything else,
+        # including reified `Variable` vocab terms (not logic vars).
+        value = deref(value)
+        if is_var(value):
+            raise RenderError(f"cannot render unbound variable: {value!r}")
         if isinstance(value, Variable):
             # Anonymous vars reify to non-identifier names (#anon1, …); render
             # each as `_`.  Per-clause anon numbering is deterministic by
