@@ -63,15 +63,22 @@ __all__ = [
     "ModuleDirective",
     "PythonCode",
     "ReifyError",
+    "RenderError",
     "Variable",
     "reify_ast",
     "reify_file",
     "reify_source",
+    "render_ast",
+    "render_source",
 ]
 
 
 class ReifyError(SyntaxError):
     """Raised when ``.clausal`` source cannot be reified."""
+
+
+class RenderError(Exception):
+    """Raised when a reified term cannot be rendered back to ``.clausal`` source."""
 
 
 # ── Reified vocabulary ───────────────────────────────────────────────────────
@@ -358,6 +365,87 @@ class _ClauseReifier:
         return Clause(head, goals, self._position_of(kwargs))
 
 
+class _ClauseRenderer:
+    """Render a reified term back to a Python surface ``ast`` node — the
+    inverse of :class:`_ClauseReifier`.  Building fresh nodes; positions are
+    filled by :func:`ast.fix_missing_locations` before unparse."""
+
+    # -- clause entry ---------------------------------------------------------
+
+    def clause(self, term):
+        """``Clause(head, goals, position)`` → an ``ast.Expr`` statement.
+
+        A fact renders as a single-element tuple ``(HEAD,)`` so re-reification
+        sees a clause, not embedded Python.  A rule renders as the
+        ``Compare(head, [Lt], [USub(body)])`` shape that surface ``HEAD <- BODY``
+        parses to and that ``_unparse_clause`` repairs."""
+        head = self.term(term.head)
+        if not term.goals:
+            return ast.Expr(value=ast.Tuple(elts=[head], ctx=ast.Load()))
+        if len(term.goals) == 1:
+            body = self.goal(term.goals[0])
+        else:
+            body = ast.Tuple(
+                elts=[self.goal(goal) for goal in term.goals], ctx=ast.Load()
+            )
+        arrow = ast.Compare(
+            left=head, ops=[ast.Lt()],
+            comparators=[ast.UnaryOp(op=ast.USub(), operand=body)],
+        )
+        return ast.Expr(value=arrow)
+
+    def goal(self, node):
+        """Goals render identically to terms (both are ``ast`` expressions)."""
+        return self.term(node)
+
+    # -- names ----------------------------------------------------------------
+
+    def _name_ast(self, dotted):
+        """``"a"`` → ``Name(a)``; ``"a.b.c"`` → nested ``Attribute`` chain."""
+        parts = dotted.split(".")
+        node = ast.Name(id=parts[0], ctx=ast.Load())
+        for part in parts[1:]:
+            node = ast.Attribute(value=node, attr=part, ctx=ast.Load())
+        return node
+
+    # -- terms ----------------------------------------------------------------
+
+    def term(self, value):
+        if isinstance(value, Variable):
+            # Anonymous vars reify to non-identifier names (#anon1, …); render
+            # each as `_`.  Per-clause anon numbering is deterministic by
+            # encounter order, so `_` re-reifies to the same #anonN.
+            name = "_" if value.name.startswith("#") else value.name
+            return ast.Name(id=name, ctx=ast.Load())
+        if isinstance(value, Atom):
+            return self._name_ast(value.name)
+        if isinstance(value, Goal):
+            return self._goal_ast(value)
+        if isinstance(value, bool):
+            return ast.Constant(value)
+        if isinstance(value, (int, float, complex)):
+            return ast.Constant(value)
+        if isinstance(value, str):
+            return ast.Constant(value)
+        if isinstance(value, (ModuleDirective, PythonCode)):
+            raise RenderError(
+                f"cannot render {type(value).__name__} — only clause bodies "
+                "are in scope for the renderer"
+            )
+        raise RenderError(f"cannot render term: {value!r}")
+
+    def _goal_ast(self, goal):
+        """``Goal(name, args, kwargs)`` → ``ast.Call``."""
+        return ast.Call(
+            func=self._name_ast(goal.name),
+            args=[self.term(arg) for arg in goal.args],
+            keywords=[
+                ast.keyword(arg=name, value=self.term(value))
+                for name, value in goal.kwargs
+            ],
+        )
+
+
 # ── Module directives ────────────────────────────────────────────────────────
 
 # Module-item class name → directive name.  Items not listed reify with a
@@ -567,3 +655,27 @@ def reify_ast(node, source=None):
 
     ctor = TermTransformer().visit(node)
     return _ClauseReifier().term(ctor)
+
+
+def render_ast(term):
+    """Render a reified term back to a Python surface ``ast`` node — the
+    inverse of :func:`reify_ast`.
+
+    A ``Clause`` renders to an ``ast.Expr`` statement; any other reified term
+    renders to an expression node.  Raises :class:`RenderError` for any node
+    kind the renderer does not handle (never emits malformed source)."""
+    renderer = _ClauseRenderer()
+    if isinstance(term, Clause):
+        node = renderer.clause(term)
+    else:
+        node = renderer.term(term)
+    return ast.fix_missing_locations(node)
+
+
+def render_source(term):
+    """Render a reified term to ``.clausal`` source text — :func:`render_ast`
+    followed by ``ast.unparse`` with the ``<-`` arrow repair."""
+    node = render_ast(term)
+    if isinstance(node, ast.Expr):
+        return _unparse_clause(node)
+    return ast.unparse(node)
