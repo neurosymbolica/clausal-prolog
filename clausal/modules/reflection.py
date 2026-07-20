@@ -51,6 +51,7 @@ from clausal.logic.trampoline import DONE
 from clausal.logic.variables import deref, is_var, unify
 from clausal.modules.py import ModulePredicate, simple_to_trampoline
 from clausal.pythonic_ast import nodes as simple_ast
+from clausal.terms import Compound, KWTerm
 from clausal.reflection import (
     Atom,
     Clause,
@@ -267,6 +268,97 @@ def _op_node_3(node, class_name, args, trail, k):
         trail.undo(mark)
 
 
+# ── Single-site structural rewrite ───────────────────────────────────────────
+
+
+def _rewrites(term, old, new, trail):
+    """Yield each single-site rewrite of ``term`` where one subterm unifying
+    ``old`` is replaced by ``new`` — depth-first, pre-order.
+
+    Occurrence order matches ``reified_subterm/2``'s ``_subterms`` walk on the
+    reified domain it targets (vocab / ``simple_ast`` nodes / lists / dicts —
+    what reified ``goals``/``args`` hold).  For raw ``Compound``/``KWTerm`` the
+    two diverge: this walk descends args/values position-preservingly (needed to
+    rewrite ordinary compounds), whereas ``_subterms`` exposes their raw
+    fields — so don't rely on cross-walk agreement off the reified domain.
+
+    Only the spine from the root to the rewritten position is rebuilt; every
+    off-path subterm is reused *by reference*, so structure and variable
+    identity are preserved everywhere except the one rewritten occurrence.  The
+    bindings from the occurrence match are live at yield time (so ``new`` is
+    instantiated through them) and are undone on backtracking, so distinct
+    occurrences don't leak bindings into one another.  ``_position`` metadata is
+    carried on every rebuilt node.  Vars, scalars, atoms, segmented strings and
+    native dict/list term objects (``DictTerm``/``ListTerm``) are leaves."""
+    term = deref(term)
+    # pre-order: replace this whole occurrence if it unifies OLD.  An unbound
+    # var subterm is an opaque leaf, never a match site (so a bare TERM var is
+    # preserved, not "matched" and bound).  Matching OLD against a ground-rooted
+    # subterm uses full unification: OLD's own pattern vars bind, and — only for
+    # a *non-ground* TERM — a var nested inside the matched subterm may bind too
+    # (undone on backtracking).  The intended input is a ground reified term (a
+    # clause), for which identity of unaffected positions is preserved exactly.
+    if not is_var(term):
+        mark = trail.mark()
+        if unify(term, old, trail):
+            yield new
+        trail.undo(mark)
+    # then descend, rebuilding only the path to each rewritten child
+    if isinstance(term, list):
+        for i, elem in enumerate(term):
+            for rewritten in _rewrites(elem, old, new, trail):
+                yield term[:i] + [rewritten] + term[i + 1:]
+    elif isinstance(term, tuple):
+        for i, elem in enumerate(term):
+            for rewritten in _rewrites(elem, old, new, trail):
+                yield term[:i] + (rewritten,) + term[i + 1:]
+    elif isinstance(term, Compound):
+        args = term.args
+        for i, arg in enumerate(args):
+            for rewritten in _rewrites(arg, old, new, trail):
+                yield Compound(term.functor,
+                               args[:i] + (rewritten,) + args[i + 1:],
+                               _position=term._position)
+    elif isinstance(term, KWTerm):
+        items = list(term.items())
+        for key, value in items:
+            for rewritten in _rewrites(value, old, new, trail):
+                kw = dict(items)
+                kw[key] = rewritten
+                yield KWTerm(term.functor, _position=term._position, **kw)
+    elif isinstance(term, dict):
+        for key, value in term.items():
+            for rewritten in _rewrites(value, old, new, trail):
+                rebuilt = dict(term)
+                rebuilt[key] = rewritten
+                yield rebuilt
+    elif is_term_instance(term):
+        fields = term_field_names(term)
+        for fname in fields:
+            if fname == "position":
+                continue  # non-semantic source location — skip like _subterms
+            for rewritten in _rewrites(getattr(term, fname), old, new, trail):
+                kwargs = {f: getattr(term, f) for f in fields}
+                kwargs[fname] = rewritten
+                yield type(term)(**kwargs)
+    # else: leaf (Var, scalar, atom class, Seg*) — nothing to descend into
+
+
+def _replace_subterm_4(this_generator, _proceed, _fail, _catcher,
+                       term, old, new, result, trail):
+    """``replace_subterm(TERM, OLD, NEW, RESULT)`` — RESULT is TERM with ONE
+    occurrence of a subterm unifying OLD replaced by NEW; nondeterministic over
+    occurrences in depth-first order.  Zero occurrences → no solutions."""
+    old = deref(old)
+    new = deref(new)
+    for rebuilt in _rewrites(deref(term), old, new, trail):
+        mark = trail.mark()
+        if unify(result, rebuilt, trail):
+            yield (_proceed, None)
+        trail.undo(mark)
+    yield (_fail, DONE)
+
+
 # ── Registration ─────────────────────────────────────────────────────────────
 
 
@@ -293,3 +385,6 @@ goal_functor._register(3, simple_to_trampoline(_goal_functor_3))
 
 op_node = ModulePredicate("op_node", module="reflection")
 op_node._register(3, simple_to_trampoline(_op_node_3))
+
+replace_subterm = ModulePredicate("replace_subterm", module="reflection")
+replace_subterm._register(4, _replace_subterm_4)
