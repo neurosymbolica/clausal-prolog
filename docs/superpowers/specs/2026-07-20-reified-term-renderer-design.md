@@ -38,7 +38,7 @@ inverts the forward reifier and `TermTransformer`'s surface conventions:
 | `Variable(name)` | `ast.Name(name)` | `#anon…` names → `ast.Name("_")` (anonymous). Named vars are ALL-CAPS / `_`-led, so they re-reify as variables. |
 | `Atom(name)` | `ast.Name(name)`, or dotted → `ast.Attribute` chain | lowercase names re-reify as atoms by the surface naming convention. |
 | raw `simple_ast` operator nodes | dispatch table keyed on class → `BinOp` / `Compare` / `UnaryOp` / `BoolOp` | `Add`→`+`, `Sub`→`-`, `Mult`→`*`, … ; `Lt`→`<`, `GtE`→`>=`, `ArithEq`→`==`, `ArithNeq`→`!=` ; `Unify`→`is`, `DoesNotUnify`→`is not`, `in_`→`in`, `NotIn`→`not in` ; `And`→`and`, `Or`→`or` ; **`BitOr`→`\|`** (this is the list cons-tail — see below) ; `Not`→`not`, `Negate`→ unary `-`, `UnaryPlus`→ unary `+`, `Invert`→`~`. `StarUnpack`→`ast.Starred`. All BinOp/CmpOp use `.left`/`.right`; UnaryOp use `.operand`. |
-| `IfThenElse(c, t, e)` / `simple_ast.IfExpr` | `ast.IfExp(test, body, orelse)` | |
+| `IfThenElse(c, t, e)` / `simple_ast.IfExpr` | `ast.Call(func=Name("If"), args=[cond, then, otherwise])` | Clausal's parser rejects Python ternary syntax (`a if b else c`); the surface form is `If(cond, then, otherwise)` — an `ast.Call` to the `If` name. Using `ast.IfExp` would break the round-trip. |
 | `Escape(code, vars, pos)` | `++(<code>)` | `code` is unparsed Python text; parse it back to an expr and wrap so unparse emits a re-parseable adjacent-`++`. |
 | `FormatString(code, …)` | the f-string surface | same parse-back-and-wrap approach. |
 | plain list `[a, b]` | `ast.List` of rendered elements | — |
