@@ -82,7 +82,7 @@ terms' own `==`/unification.
    in the first draft of this very spec), so it does NOT by itself certify the
    renderer.
 2. **Corpus round-trip — the real completeness gate.** A parametrized test walking
-   every `.clausal` file under `/workspace/clausify-domains` (569 files),
+   every `.clausal` file under `/workspace/clausify-domains` (571 files),
    **filtering to `Clause` items only** (`reified_clause`, or
    `type(item).__name__ == "Clause"`) — every file opens with `-module`/
    `-import_from`, which reify to `ModuleDirective`/`PythonCode`, the node kinds the

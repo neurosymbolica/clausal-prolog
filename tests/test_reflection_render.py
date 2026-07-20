@@ -170,6 +170,15 @@ class TestArrowLambda:
         assert_round_trips(src)
 
 
+class TestFormatString:
+    @pytest.mark.parametrize("src", [
+        'Greet(Name, M) <- (M is f"hi {Name}")\n',
+        'Msg(X, S) <- (S is f"val={X}")\n',
+    ])
+    def test_format_string_round_trips(self, src):
+        assert_round_trips(src)
+
+
 class TestOutOfScope:
     def test_module_directive_raises(self):
         items = reify_source("-module(m)\n")
