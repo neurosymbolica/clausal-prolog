@@ -93,47 +93,70 @@ private, and prior clauses) enable the optional comma. `-table`,
 a bare fact under one of those without a prior clause keeps requiring the comma.
 This is acceptable (rare) and explicitly out of scope; note it in tests.
 
-### Part B — diagnostic for the undeclared case (load time)
+### Part B — diagnostic for the undeclared case (transform time, per statement)
 
 After Part A, the only bare `Call`/`Name` statements left unconverted have
-**undeclared** functors. Among these, legitimate imported macros (`bottom_up_`)
-execute successfully; genuine forgotten-comma facts raise `NameError` (on the
-functor, or on an unbound arg like `_`). So catch at the point of failure:
+**undeclared** functors. Two kinds are indistinguishable at transform time: a
+legitimate imported callable (`bottom_up_`, `print`) versus a forgotten-comma
+fact for an undeclared predicate (`p(_ATOM, 1)`). The distinguisher is a
+**runtime resolution check of the functor name**, isolated from evaluating the
+call.
 
-In the loader — `_run_v2_pipeline` (V2) and `_exec_module_v1` (V1) — wrap
-`exec(code, module_dict)`:
+A whole-module `try/except NameError` around `exec` was rejected: `exec` runs
+the entire module, so a genuine `NameError` from valid code (e.g. a typo'd
+argument in a rule body) whose source line happens to look call-like would be
+misattributed to a "missing comma". The catch must be per-statement and must
+separate functor resolution from evaluation.
+
+For each undeclared bare `Call(func=Name(id=f))` / bare `Name(id=f)` statement,
+`visit_Expr` emits a guarded `Try`:
 
 ```
 try:
-    exec(code, module_dict)
-except NameError as e:
-    lineno = _last_module_frame_lineno(e.__traceback__, filename)
-    line = _read_source_line(filename, lineno)
-    if lineno and _looks_like_unterminated_fact(line):
-        raise NameError(
-            f"{e.args[0]}\n"
-            f"  hint: {filename}:{lineno}  {line.strip()!r} looks like a "
-            f"bodyless fact missing its trailing ','. Add a comma to make it a "
-            f"fact, or declare the predicate (-module/-dynamic)."
-        ).with_traceback(e.__traceback__) from e
-    raise
+    f                         # Load the functor name ONLY — no call, no args.
+except NameError:
+    $unterminated_fact_error('f', <lineno>, "f(_ATOM, 1)")   # raises the hinted error
+else:
+    f(_ATOM, 1)               # the original statement, normally transformed;
+                              # its own NameErrors (bad arg, etc.) propagate untouched
 ```
 
-Helpers (module-private, in `import_hook.py`):
-- `_last_module_frame_lineno(tb, filename)` — walk the traceback to the deepest
-  frame whose `co_filename == filename`; return its `lineno` (or `None`).
-- `_read_source_line(filename, lineno)` — read one line from source; `""` on
-  failure.
-- `_looks_like_unterminated_fact(line)` — cheap check on the single line: strip
-  trailing comment; it is non-empty, does **not** end with `,`, is **not** a
-  directive (does not start with `-`), contains no `<-`/`>>`/`:-`, and parses as
-  a bare `Call` with a `Name` func or a bare `Name`. A per-line `ast.parse` in a
-  `try/except` is sufficient and only runs on the error path.
+- **Functor undefined** → the `try` body raises `NameError`; the handler calls
+  `$unterminated_fact_error`, which raises a `NameError` reading e.g.
+  ``name 'p' is not defined — `p(_ATOM, 1)` (line 3) looks like a bodyless fact
+  missing its trailing ','; add a comma to make it a fact, or declare the
+  predicate (-module/-dynamic).`` This is the forgotten-comma-fact signal.
+- **Functor defined** → the `else` branch runs the original (generic-visited)
+  statement, so legitimate macro calls behave exactly as today and any
+  `NameError` from their arguments is reported honestly, never rewritten.
 
-Properties: additive (original `NameError` message preserved), fires only on an
-actual failure (successful macro calls untouched), and works on both the fresh
-and `.pyc`-cache load paths because it re-reads source by line number rather
-than relying on transformer state.
+Construction detail: the `else` body is the statement produced by
+`transformer.generic_visit(expr_stmt)` (the current behavior), so term rewriting
+of the call's arguments is unchanged. The `try` body is a bare `Load` of
+`Name(id=f)`. For a zero-arity bare `Name`, `try: f` already evaluates it, so the
+`else` may repeat the same `Name` load (harmless) or be omitted — implementer's
+choice; keep it uniform with the `Call` form.
+
+Runtime helper (added to `predicate_builtins` in `import_hook.py`, alongside the
+existing `$assert_fact` seed — no per-module state needed):
+
+```
+def _unterminated_fact_error(name, lineno, src):
+    raise NameError(
+        f"name {name!r} is not defined — {src!r} (line {lineno}) looks like a "
+        f"bodyless fact missing its trailing ','; add a comma to make it a fact, "
+        f"or declare the predicate (-module/-dynamic)."
+    )
+```
+
+Injected under a `$`-prefixed key (`$unterminated_fact_error`) so user source
+cannot shadow it, mirroring `$assert_fact`/`$define_predicate`.
+
+Properties: only undeclared bare `Call`/`Name` statements are wrapped (a small
+set); valid code elsewhere is never touched; the diagnostic fires **only** when
+the functor name itself is unresolved; no traceback introspection; works
+identically on the fresh and `.pyc`-cache paths because the guard is baked into
+the compiled bytecode.
 
 ## Test plan (TDD — tests first, each must fail before the fix)
 
@@ -158,7 +181,10 @@ New fixtures under `tests/fixtures/` + a `tests/test_*` driver:
 - Undeclared bare fact (`p(_ATOM, 1)`, no `-module`) → load error message
   contains the terminator hint and the offending line text; still a `NameError`
   subtype/`<load>` failure.
-- Legit undeclared call that succeeds is not rewritten and raises nothing.
+- Legit undeclared call (`print(...)` / an imported macro) is guard-wrapped but
+  behaves identically — the `else` branch runs, no error, same result as today.
+- Functor resolves but an **argument** is a genuine typo → the honest arg
+  `NameError` surfaces (the `else` branch), **not** the fact hint.
 
 **Corpus regression:**
 - Full suite (`tests/`, `packages/*/tests/`) green. Specifically reconcile any
@@ -171,10 +197,11 @@ New fixtures under `tests/fixtures/` + a `tests/test_*` driver:
 - **Newly-landing facts shift counts.** The ≥9 fixtures gain their dropped final
   fact. Tests asserting exact counts may need updating — the corpus run surfaces
   them; each change is intentional and noted.
-- **Traceback line number accuracy (Part B).** Compiled AST preserves source
-  locations; the deepest module-frame lineno is the failing statement. If a line
-  cannot be resolved, the diagnostic is skipped and the original error stands
-  (never worse than today).
+- **Guard wraps legit macro calls (Part B).** Every undeclared bare `Call`/`Name`
+  now compiles to a `Try`. Overhead is negligible (a name load + branch) and
+  behavior is unchanged when the functor resolves. The `else` must carry the
+  *generic-visited* statement so argument term-rewriting is preserved — verify
+  against the `bottom_up_` provenance fixtures.
 - **Refactor scope (Part A).** Extracting `_build_fact_statements` touches the
   hot trailing-comma path. The existing fact tests must stay green with no
   behavioral change on the comma'd path.
@@ -182,7 +209,9 @@ New fixtures under `tests/fixtures/` + a `tests/test_*` driver:
 ## Files touched
 
 - `clausal/templating/term_rewriting.py` — `visit_Expr`: extract
-  `_build_fact_statements`, add the two bare-fact cases.
-- `clausal/import_hook.py` — loader `exec` wrapping + three private helpers.
+  `_build_fact_statements`; add the declared bare-fact cases (Part A) and the
+  undeclared guarded-`Try` emission (Part B).
+- `clausal/import_hook.py` — add `_unterminated_fact_error` and inject it into
+  `predicate_builtins` as `$unterminated_fact_error`.
 - `tests/fixtures/*.clausal` and `tests/test_*.py` — new coverage; reconcile
   count-sensitive corpus fixtures.
