@@ -10,3 +10,6 @@ build/
 clausal.egg-info/
 site/
 **/*.egg-info/
+
+# Superpowers SDD scratch (ledgers, briefs, review packages)
+.superpowers/
