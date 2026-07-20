@@ -63,6 +63,9 @@ from clausal.reflection import (
     Variable,
     reify_file,
     reify_source,
+    # The operator classes op_node names/builds are exactly those the renderer
+    # round-trips, so the two stay bijective (see _OP_NODE_CLASSES).
+    RENDER_OP_CLASS_NAMES,
 )
 
 
@@ -189,6 +192,81 @@ def _goal_functor_3(goal, name, arity, trail, k):
         trail.undo(mark)
 
 
+# ── Operator-node decompose/construct ────────────────────────────────────────
+
+# The operator classes ``op_node`` names and builds are exactly those the
+# renderer round-trips (``clausal.reflection.RENDER_OP_CLASS_NAMES``), keeping
+# the two bijective: any node ``op_node`` constructs re-reifies from the source
+# the renderer emits (modulo renderer escape-ambiguity edges such as a nested
+# unary ``+``).  Non-renderable operator kinds (``StructuralEq``, ``Evaluate``,
+# ``CompareChain``, …) are deliberately excluded — decompose fails cleanly on
+# them rather than promise a round-trip the renderer can't honour.
+_OP_NODE_CLASSES = {
+    name: getattr(simple_ast, name) for name in RENDER_OP_CLASS_NAMES
+}
+
+
+def _op_operand_fields(cls):
+    """Operand field names of an operator class in dataclass field order, minus
+    the non-semantic ``position`` field — ``[left, right]`` for a binary
+    operator, ``[operand]`` for a unary one.  ``op`` is a ``ClassVar``, so it is
+    not a field and never appears."""
+    return [
+        field.name for field in dataclasses.fields(cls)
+        if field.name != "position"
+    ]
+
+
+def _op_node_3(node, class_name, args, trail, k):
+    """``op_node(NODE, CLASS_NAME, ARGS)`` — the ``functor``/``unpack`` analogue
+    for ``simple_ast`` operator nodes.
+
+    - **decompose** (NODE bound to an operator node): unify CLASS_NAME with its
+      ``simple_ast`` class name (a string) and ARGS with its operand list.
+    - **construct** (NODE unbound, CLASS_NAME + ARGS bound): build the named
+      operator node from the operands and unify it with NODE.
+
+    A bound NODE that is not a renderable operator node, or an unknown/unbound
+    CLASS_NAME in construct mode, fails cleanly (no solution).  Both NODE and
+    CLASS_NAME unbound also fails cleanly (nothing to build from) — matching the
+    sibling ``goal_functor/3`` rather than raising ``instantiation_error``.
+
+    In construct mode the operands are stored as given (shallow-deref'd), so an
+    operand that is *still unbound* when the built node is later rendered will
+    trip the renderer — bind operands before rendering, or (the usual flow)
+    reconstruct from a decomposed node whose operands are already ground."""
+    node = deref(node)
+    if is_var(node):
+        # construct mode: class name + operands -> a fresh operator node
+        name = deref(class_name)
+        cls = _OP_NODE_CLASSES.get(name) if isinstance(name, str) else None
+        if cls is None:
+            return  # unbound or unknown class name -> fail cleanly
+        operands = deref(args)
+        if not isinstance(operands, list):
+            return  # need a proper operand list to build
+        fields = _op_operand_fields(cls)
+        if len(operands) != len(fields):
+            return
+        built = cls(**{f: deref(o) for f, o in zip(fields, operands)})
+        if unify(node, built, trail):
+            yield None
+        return
+    # decompose mode: operator node -> class name + operand list.  Match by
+    # *class identity*, not name — a foreign object that merely shares an
+    # operator's name (e.g. CPython ``ast.Gt``) must fail cleanly, not crash in
+    # ``_op_operand_fields`` or false-match.
+    cls = _OP_NODE_CLASSES.get(type(node).__name__)
+    if cls is None or type(node) is not cls:
+        return  # not a renderable operator node -> fail cleanly
+    operands = [getattr(node, field) for field in _op_operand_fields(cls)]
+    mark = trail.mark()
+    if unify(class_name, cls.__name__, trail) and unify(args, operands, trail):
+        yield None
+    else:
+        trail.undo(mark)
+
+
 # ── Registration ─────────────────────────────────────────────────────────────
 
 
@@ -212,3 +290,6 @@ clause_body._register(2, simple_to_trampoline(_clause_body_2))
 
 goal_functor = ModulePredicate("goal_functor", module="reflection")
 goal_functor._register(3, simple_to_trampoline(_goal_functor_3))
+
+op_node = ModulePredicate("op_node", module="reflection")
+op_node._register(3, simple_to_trampoline(_op_node_3))

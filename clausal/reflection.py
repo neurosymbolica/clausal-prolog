@@ -389,6 +389,15 @@ _RENDER_UNARY_OPS = {
     "Invert": ast.Invert,
 }
 
+#: Names of the ``simple_ast`` operator classes the renderer can round-trip —
+#: the union of the four ``_RENDER_*_OPS`` dispatch tables above.  Public so
+#: :mod:`clausal.modules.reflection` (``op_node/3``) can name/build exactly this
+#: set and stay bijective with :func:`render_source` without importing the
+#: private tables.  Keep this derived from the tables, not hand-listed.
+RENDER_OP_CLASS_NAMES = frozenset(
+    (*_RENDER_BINOP_OPS, *_RENDER_CMP_OPS, *_RENDER_BOOL_OPS, *_RENDER_UNARY_OPS)
+)
+
 
 class _ClauseRenderer:
     """Render a reified term back to a Python surface ``ast`` node — the
