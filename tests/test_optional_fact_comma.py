@@ -57,10 +57,13 @@ class TestCommaOptionalWhenDeclared:
         mod = load_src(tmp_path, "t2_zero", src)
         assert clause_count(mod, "flag", 0) == 1
 
-    def test_declared_later_still_requires_comma(self, tmp_path):
-        # Single-pass boundary: `foo(9)` before any declaration is NOT a fact.
-        # foo(9) is ground, so it does not raise; it is silently a no-op call
-        # and no clause is asserted (documents the ordering limitation).
+    def test_declared_later_does_not_apply(self, tmp_path):
+        # Single-pass boundary: `foo(9)` appears BEFORE any declaration of foo,
+        # so it is NOT recognized as a fact (comma-optional requires a prior
+        # declaration). foo is unbound at that point (an undeclared functor is
+        # not a bound PredicateMeta), so the load errors rather than silently
+        # succeeding — documents that a declaration must precede a comma-less
+        # fact.
         src = "foo(9)\nfoo(1),\n"
-        mod = load_src(tmp_path, "t2_later", src)
-        assert clause_count(mod, "foo", 1) == 1
+        with pytest.raises(NameError):
+            load_src(tmp_path, "t2_later", src)
