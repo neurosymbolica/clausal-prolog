@@ -400,10 +400,12 @@ class _ClauseRenderer:
     def clause(self, term):
         """``Clause(head, goals, position)`` → an ``ast.Expr`` statement.
 
-        A fact renders as a single-element tuple ``(HEAD,)`` so re-reification
-        sees a clause, not embedded Python.  A rule renders as the
-        ``Compare(head, [Lt], [USub(body)])`` shape that surface ``HEAD <- BODY``
-        parses to and that ``_unparse_clause`` repairs."""
+        A fact renders as an ``Expr`` wrapping a single-element ``ast.Tuple``
+        ``(HEAD,)`` so re-reification sees a clause, not embedded Python;
+        :func:`_unparse_clause` unparses it to the canonical fact *surface*
+        ``HEAD,`` (bare head + trailing comma, no wrapping parens).  A rule
+        renders as the ``Compare(head, [Lt], [USub(body)])`` shape that surface
+        ``HEAD <- BODY`` parses to and that ``_unparse_clause`` repairs."""
         head = self.term(term.head)
         if not term.goals:
             return ast.Expr(value=ast.Tuple(elts=[head], ctx=ast.Load()))
@@ -819,6 +821,15 @@ def _unparse_clause(node):
         head = _tighten_nested_arrows(ast.unparse(inner.left))
         body = _tighten_nested_arrows(ast.unparse(inner.comparators[0].operand))
         return f"{head} <- ({body})"
+    if isinstance(inner, ast.Tuple) and len(inner.elts) == 1:
+        # Fact: ``_ClauseRenderer.clause`` wraps the head in a 1-tuple so this
+        # ``Expr`` re-reifies as a Clause (a bare head reifies as embedded
+        # Python).  ``ast.unparse`` would emit the Python tuple literal
+        # ``(head,)``; the canonical clausal fact surface is ``head,`` (bare head
+        # + trailing comma, no wrapping parens).  Emit that so a rendered fact
+        # matches the corpus surface the mutation auditor splices back into a file.
+        head = _tighten_nested_arrows(ast.unparse(inner.elts[0]))
+        return f"{head},"
     return _tighten_nested_arrows(ast.unparse(node))
 
 

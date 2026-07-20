@@ -74,6 +74,23 @@ class TestFacts:
     def test_fact_round_trips(self, src):
         assert_round_trips(src)
 
+    @pytest.mark.parametrize("src,expected", [
+        ("Edge(1, 2),\n", "Edge(1, 2),"),
+        ("Status(ok, 1),\n", "Status(ok, 1),"),
+        ("per_se(a, b),\n", "per_se(a, b),"),
+    ])
+    def test_fact_surface_is_bare_head_comma(self, src, expected):
+        # A fact must render to the canonical clausal surface ``head,`` (bare head
+        # + trailing comma), NOT the Python 1-tuple literal ``(head,)``. Both
+        # re-reify to the same Clause (the structural round-trip is blind to this),
+        # but the parenthesized form is non-idiomatic surface that the mutation
+        # auditor would splice into a ``.clausal`` file. Guard the surface itself.
+        rendered = render_source(only_clause(src))
+        assert rendered == expected, f"fact surface not canonical: {rendered!r}"
+        assert not rendered.startswith("("), (
+            f"fact rendered as a parenthesized tuple: {rendered!r}"
+        )
+
 
 class TestRules:
     @pytest.mark.parametrize("src", [
