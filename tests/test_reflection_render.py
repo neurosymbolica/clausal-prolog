@@ -119,3 +119,12 @@ class TestIfThenElse:
     ])
     def test_ite_round_trips(self, src):
         assert_round_trips(src)
+
+
+class TestEscapes:
+    @pytest.mark.parametrize("src", [
+        "Calc(X, Y) <- (Y is ++(X + 1))\n",
+        "Calc2(X, Y, Z) <- (Z is ++(X * Y + 1))\n",
+    ])
+    def test_escape_round_trips(self, src):
+        assert_round_trips(src)

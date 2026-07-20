@@ -475,6 +475,17 @@ class _ClauseRenderer:
                 ],
                 keywords=[],
             )
+        if isinstance(value, Escape):
+            # `++(<code>)`: the escaped expression text re-parsed and wrapped in
+            # two adjacent unary `+` — ast.unparse emits `++(code)`, which the
+            # reifier re-detects as an escape and re-collects the captured vars.
+            inner = ast.parse(value.code, mode="eval").body
+            return ast.UnaryOp(
+                op=ast.UAdd(),
+                operand=ast.UnaryOp(op=ast.UAdd(), operand=inner),
+            )
+        if isinstance(value, FormatString):
+            return ast.parse(value.code, mode="eval").body
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
             return self._operator_ast(value)
         raise RenderError(f"cannot render term: {value!r}")
