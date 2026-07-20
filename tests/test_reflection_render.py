@@ -100,3 +100,14 @@ class TestOperators:
     ])
     def test_operator_round_trips(self, src):
         assert_round_trips(src)
+
+
+class TestCompoundAndKwargs:
+    @pytest.mark.parametrize("src", [
+        "Holds(State(A)) <- Check(A)\n",
+        "Deep(Pp(Qq(Rr(X)))) <- Base(X)\n",
+        "WithList(Pp([1, 2, 3])),\n",
+        "Nested([Pp(X), Qq(Y)]),\n",
+    ])
+    def test_compound_round_trips(self, src):
+        assert_round_trips(src)
