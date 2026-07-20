@@ -128,3 +128,17 @@ class TestEscapes:
     ])
     def test_escape_round_trips(self, src):
         assert_round_trips(src)
+
+
+class TestOutOfScope:
+    def test_module_directive_raises(self):
+        items = reify_source("-module(m)\n")
+        directive = next(i for i in items if type(i).__name__ == "ModuleDirective")
+        with pytest.raises(RenderError):
+            render_source(directive)
+
+    def test_python_code_raises(self):
+        items = reify_source("def helper():\n    return 1\n")
+        pycode = next(i for i in items if type(i).__name__ == "PythonCode")
+        with pytest.raises(RenderError):
+            render_source(pycode)
