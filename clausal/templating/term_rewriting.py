@@ -2878,6 +2878,26 @@ class EmbedTransformer(NodeTransformer):
                 # rewrites it for Python ≥ 3.14 compatibility.  Same treatment
                 # as Starred(): leave untouched for _StarQueryTransformer.
                 return expr_stmt
+            case Call(func=Name(id=functor_name)) if (
+                transformer._scope_depth == 0
+                and functor_name in transformer._seen_functors
+            ):
+                # Comma-optional bodyless fact for a DECLARED predicate:
+                # ``p(_, 1)`` with no trailing comma, where p is known
+                # (-module export, -dynamic/-private, or a prior clause).
+                src = expr_stmt.value
+                return transformer._build_fact_statements(
+                    functor_name, src.args, src.keywords, src.func, src, expr_stmt,
+                )
+            case Name(id=functor_name) if (
+                transformer._scope_depth == 0
+                and not _is_logic_var_name(functor_name)
+                and functor_name in transformer._seen_functors
+            ):
+                # Zero-arity comma-optional fact: bare ``flag`` for declared flag/0.
+                return transformer._build_zero_arity_fact_statements(
+                    functor_name, expr_stmt.value, expr_stmt,
+                )
         return transformer.generic_visit(expr_stmt)
 
     def _handle_directive(transformer, name, args, expr_stmt):
