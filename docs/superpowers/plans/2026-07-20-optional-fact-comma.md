@@ -276,19 +276,23 @@ class TestCommaOptionalWhenDeclared:
         mod = load_src(tmp_path, "t2_zero", src)
         assert clause_count(mod, "flag", 0) == 1
 
-    def test_declared_later_still_requires_comma(self, tmp_path):
-        # Single-pass boundary: `foo(9)` before any declaration is NOT a fact.
-        # foo(9) is ground, so it does not raise; it is silently a no-op call
-        # and no clause is asserted (documents the ordering limitation).
+    def test_declared_later_does_not_apply(self, tmp_path):
+        # Single-pass boundary: `foo(9)` appears BEFORE any declaration of foo,
+        # so it is NOT recognized as a fact (comma-optional requires a prior
+        # declaration). foo is unbound at that point (an undeclared functor is
+        # not a bound PredicateMeta), so the load errors rather than silently
+        # succeeding — documents that a declaration must precede a comma-less
+        # fact. (After Task 3 the error carries the missing-comma hint; it is a
+        # NameError in both states.)
         src = "foo(9)\nfoo(1),\n"
-        mod = load_src(tmp_path, "t2_later", src)
-        assert clause_count(mod, "foo", 1) == 1
+        with pytest.raises(NameError):
+            load_src(tmp_path, "t2_later", src)
 ```
 
 - [ ] **Step 2: Run to verify failure**
 
 Run: `PYENV_VERSION=3.13.3 PYTHONPATH=/workspace/clausal-bug-fix python3 -m pytest tests/test_optional_fact_comma.py::TestCommaOptionalWhenDeclared -v`
-Expected: `test_canonical_repro_module_declared` FAILS with `name '_' is not defined`; `test_block_last_fact_no_comma_lands` FAILS (count 2, not 3); `test_zero_arity_declared_bare_fact` FAILS (count 0). `test_prior_clause_declares_functor` FAILS (count 1). `test_declared_later_still_requires_comma` passes already.
+Expected: `test_canonical_repro_module_declared` FAILS with `name '_' is not defined`; `test_block_last_fact_no_comma_lands` FAILS (count 2, not 3); `test_zero_arity_declared_bare_fact` FAILS (count 0). `test_prior_clause_declares_functor` FAILS (count 1). `test_declared_later_does_not_apply` passes in both states (the load raises NameError before and after — comma-optional never applies to a not-yet-declared functor).
 
 - [ ] **Step 3: Add the declared-fact cases**
 
@@ -551,7 +555,7 @@ git commit -m "test(corpus): reconcile counts for now-landing final facts"
 - Silent-drop regression (block last fact) → Task 2 `test_block_last_fact_no_comma_lands`; Task 4 corpus. ✓
 - Legit macro untouched (`bottom_up_`/`print`) → Task 3 `test_legit_undeclared_call_still_runs`; Task 4 provenance run. ✓
 - Honest arg error (not misattributed) → Task 3 `test_functor_resolves_but_arg_typo_is_honest`. ✓
-- Single-pass boundary (declared later) → Task 2 `test_declared_later_still_requires_comma`. ✓
+- Single-pass boundary (declared later) → Task 2 `test_declared_later_does_not_apply` (load raises NameError). ✓
 - Zero-arity declared fact → Task 2 `test_zero_arity_declared_bare_fact`. ✓
 - `-table`/`-discontiguous`/`-shallow` don't enable optional comma → out of scope, covered implicitly by the `_seen_functors` gate (they don't register there).
 

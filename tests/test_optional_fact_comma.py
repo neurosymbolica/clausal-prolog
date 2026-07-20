@@ -58,13 +58,18 @@ class TestCommaOptionalWhenDeclared:
         assert clause_count(mod, "flag", 0) == 1
 
     def test_declared_later_does_not_apply(self, tmp_path):
-        # Single-pass boundary: `foo(9)` appears BEFORE any declaration of foo,
-        # so it is NOT recognized as a fact (comma-optional requires a prior
-        # declaration). foo is unbound at that point (an undeclared functor is
-        # not a bound PredicateMeta), so the load errors rather than silently
-        # succeeding — documents that a declaration must precede a comma-less
-        # fact.
-        src = "foo(9)\nfoo(1),\n"
+        # Single-pass boundary: `_t2_later_pred_(9)` appears BEFORE any
+        # declaration of that functor, so it is NOT recognized as a fact
+        # (comma-optional requires a prior declaration).  The functor is unbound
+        # at that point (an undeclared functor is not a bound PredicateMeta),
+        # so the load errors rather than silently succeeding — documents that a
+        # declaration must precede a comma-less fact.
+        #
+        # The functor name is deliberately obscure to avoid colliding with
+        # globally-registered predicates from other test modules (the process-
+        # wide predicate_builtins dict would otherwise supply the name, causing
+        # the guard's try-branch to resolve and skip the NameError).
+        src = "_t2_later_pred_(9)\n_t2_later_pred_(1),\n"
         with pytest.raises(NameError):
             load_src(tmp_path, "t2_later", src)
 
