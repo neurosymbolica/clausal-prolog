@@ -426,12 +426,35 @@ class _ClauseRenderer:
     # -- names ----------------------------------------------------------------
 
     def _name_ast(self, dotted):
-        """``"a"`` → ``Name(a)``; ``"a.b.c"`` → nested ``Attribute`` chain."""
+        """``"a"`` → ``Name(a)``; ``"a.b.c"`` → nested ``Attribute`` chain.
+
+        Every dotted segment must be a valid Python identifier — ``ast.unparse``
+        does not validate ``Name.id``, so a mutated term carrying a name like
+        ``"has space"`` or the reserved lambda sentinel would otherwise emit
+        malformed text that re-reifies wrongly.  Refuse instead."""
+        if not isinstance(dotted, str):
+            raise RenderError(f"cannot render non-string name: {dotted!r}")
         parts = dotted.split(".")
+        for part in parts:
+            if not part.isidentifier() or part == _LAMBDA_ARROW_MARKER:
+                raise RenderError(f"cannot render non-identifier name: {dotted!r}")
         node = ast.Name(id=parts[0], ctx=ast.Load())
         for part in parts[1:]:
             node = ast.Attribute(value=node, attr=part, ctx=ast.Load())
         return node
+
+    def _parse_code(self, code, kind):
+        """Re-parse an ``Escape``/``FormatString`` code string to an expression.
+
+        From reification the code is always ``ast.unparse`` output (valid), but a
+        mutated term may carry invalid source — raise :class:`RenderError` rather
+        than leak a raw ``SyntaxError`` past the documented contract."""
+        try:
+            return ast.parse(code, mode="eval").body
+        except SyntaxError as exc:
+            raise RenderError(
+                f"{kind} code is not a valid expression: {code!r}"
+            ) from exc
 
     # -- terms ----------------------------------------------------------------
 
@@ -484,13 +507,13 @@ class _ClauseRenderer:
             # `++(<code>)`: the escaped expression text re-parsed and wrapped in
             # two adjacent unary `+` — ast.unparse emits `++(code)`, which the
             # reifier re-detects as an escape and re-collects the captured vars.
-            inner = ast.parse(value.code, mode="eval").body
+            inner = self._parse_code(value.code, "Escape")
             return ast.UnaryOp(
                 op=ast.UAdd(),
                 operand=ast.UnaryOp(op=ast.UAdd(), operand=inner),
             )
         if isinstance(value, FormatString):
-            return ast.parse(value.code, mode="eval").body
+            return self._parse_code(value.code, "FormatString")
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
             return self._operator_ast(value)
         raise RenderError(f"cannot render term: {value!r}")
@@ -516,9 +539,19 @@ class _ClauseRenderer:
                 values=[self.term(node.left), self.term(node.right)],
             )
         if name in _RENDER_UNARY_OPS:
-            return ast.UnaryOp(
-                op=_RENDER_UNARY_OPS[name](), operand=self.term(node.operand)
-            )
+            operand = self.term(node.operand)
+            if (name == "UnaryPlus"
+                    and isinstance(operand, ast.UnaryOp)
+                    and isinstance(operand.op, ast.UAdd)):
+                # `+(+X)` / `+(++X)`: ast.unparse drops the column gap the
+                # reifier uses to tell nested unary-plus from the `++` escape,
+                # so the text would silently re-reify as an Escape.  Refuse.
+                raise RenderError(
+                    "cannot render UnaryPlus over a '+'-prefixed operand: "
+                    "ast.unparse would emit adjacent '++', which re-reifies "
+                    "as a Python escape"
+                )
+            return ast.UnaryOp(op=_RENDER_UNARY_OPS[name](), operand=operand)
         if name == "StarUnpack":
             return ast.Starred(value=self.term(node.value), ctx=ast.Load())
         if name == "LoadSubscript":
@@ -783,7 +816,7 @@ def _unparse_clause(node):
             and len(inner.ops) == 1 and isinstance(inner.ops[0], ast.Lt)
             and isinstance(inner.comparators[0], ast.UnaryOp)
             and isinstance(inner.comparators[0].op, ast.USub)):
-        head = ast.unparse(inner.left)
+        head = _tighten_nested_arrows(ast.unparse(inner.left))
         body = _tighten_nested_arrows(ast.unparse(inner.comparators[0].operand))
         return f"{head} <- ({body})"
     return _tighten_nested_arrows(ast.unparse(node))
@@ -807,7 +840,10 @@ def _tighten_nested_arrows(text):
     try:
         tree = ast.parse(text, mode="eval")
     except SyntaxError:
-        return text
+        # Cannot locate the markers to strip; fall through to the post-condition
+        # below, which raises rather than emit sentinel-bearing text.
+        tree = None
+    edits = []
     lines = text.splitlines(keepends=True)
     line_starts, running = [], 0
     for line in lines:
@@ -818,8 +854,7 @@ def _tighten_nested_arrows(text):
         return line_starts[lineno - 1] + col
 
     # Each edit: (start, end, replacement) over the ORIGINAL text; applied R→L.
-    edits = []
-    for sub in ast.walk(tree):
+    for sub in ast.walk(tree) if tree is not None else ():
         if not (isinstance(sub, ast.Compare)
                 and len(sub.ops) == 1 and isinstance(sub.ops[0], ast.Lt)
                 and isinstance(sub.comparators[0], ast.UnaryOp)
@@ -848,6 +883,14 @@ def _tighten_nested_arrows(text):
         edits.append((call_start, arg_start, "("))
     for start, end, repl in sorted(edits, reverse=True):
         text = text[:start] + repl + text[end:]
+    if _LAMBDA_ARROW_MARKER in text:
+        # Post-condition: every rendered lambda arrow must have been located and
+        # its sentinel stripped.  A surviving marker means the lambda sat in a
+        # position this pass could not reach (or the text did not re-parse) —
+        # emitting it would silently corrupt, so fail loudly instead.
+        raise RenderError(
+            f"lambda-arrow sentinel survived rendering: {text!r}"
+        )
     return text
 
 
@@ -895,4 +938,4 @@ def render_source(term):
     node = render_ast(term)
     if isinstance(node, ast.Expr):
         return _unparse_clause(node)
-    return ast.unparse(node)
+    return _tighten_nested_arrows(ast.unparse(node))
