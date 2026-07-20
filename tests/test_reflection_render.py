@@ -67,3 +67,14 @@ class TestFacts:
     ])
     def test_fact_round_trips(self, src):
         assert_round_trips(src)
+
+
+class TestRules:
+    @pytest.mark.parametrize("src", [
+        "Connected(X, Y) <- Edge(X, Y)\n",
+        "Grandparent(X, Z) <- (Parent(X, Y), Parent(Y, Z))\n",
+        "Reachable(X) <- Edge(_, _)\n",
+        "Three(A) <- (Pa(A), Qa(A), Ra(A))\n",
+    ])
+    def test_rule_round_trips(self, src):
+        assert_round_trips(src)
