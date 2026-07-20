@@ -1,6 +1,9 @@
 # Reified-term → AST/source renderer (the inverse of `reify_ast`)
 
-STATUS: OPEN (filed 2026-07-20). **Critical prerequisite** for the Clausal-AST
+STATUS: DONE (2026-07-20).
+RESULT: `render_ast`/`render_source` landed in `clausal/reflection.py`; corpus round-trip gate green over 571 files / 4171 reifiable clauses; 126 files deferred to pre-existing reifier bug (`todo/reify-source-dict-literal-atom-key-unhashable.md`).
+
+**Critical prerequisite** for the Clausal-AST
 mutation auditor (design in `clausify/docs/superpowers/factoring/` — Approach B:
 match+replace in Clausal, then the rewritten term must be turned back into
 something runnable so a generated mutant can be scored).

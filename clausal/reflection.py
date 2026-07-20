@@ -53,6 +53,11 @@ from clausal.logic.predicate import make_predicate
 from clausal.pythonic_ast import nodes as simple_ast
 
 
+# Sentinel wrapping a rendered lambda body so nested clause arrows can be
+# re-tightened (``< -`` → ``<-``) without touching a genuine ``X < -1``.
+_LAMBDA_ARROW_MARKER = "__clausal_lambda_arrow__"
+
+
 __all__ = [
     "Atom",
     "Clause",
@@ -63,15 +68,22 @@ __all__ = [
     "ModuleDirective",
     "PythonCode",
     "ReifyError",
+    "RenderError",
     "Variable",
     "reify_ast",
     "reify_file",
     "reify_source",
+    "render_ast",
+    "render_source",
 ]
 
 
 class ReifyError(SyntaxError):
     """Raised when ``.clausal`` source cannot be reified."""
+
+
+class RenderError(Exception):
+    """Raised when a reified term cannot be rendered back to ``.clausal`` source."""
 
 
 # ── Reified vocabulary ───────────────────────────────────────────────────────
@@ -358,6 +370,237 @@ class _ClauseReifier:
         return Clause(head, goals, self._position_of(kwargs))
 
 
+# simple_ast operator class name → Python ast operator, for rendering.
+_RENDER_BINOP_OPS = {
+    "Add": ast.Add, "Sub": ast.Sub, "Mult": ast.Mult, "Div": ast.Div,
+    "FloorDiv": ast.FloorDiv, "Mod": ast.Mod, "Pow": ast.Pow,
+    "MatMult": ast.MatMult, "LShift": ast.LShift, "RShift": ast.RShift,
+    "BitOr": ast.BitOr, "BitXor": ast.BitXor, "BitAnd": ast.BitAnd,
+}
+_RENDER_CMP_OPS = {
+    "Lt": ast.Lt, "LtE": ast.LtE, "Gt": ast.Gt, "GtE": ast.GtE,
+    "ArithEq": ast.Eq, "ArithNeq": ast.NotEq,
+    "Unify": ast.Is, "DoesNotUnify": ast.IsNot,
+    "in_": ast.In, "NotIn": ast.NotIn,
+}
+_RENDER_BOOL_OPS = {"And": ast.And, "Or": ast.Or}
+_RENDER_UNARY_OPS = {
+    "Not": ast.Not, "Negate": ast.USub, "UnaryPlus": ast.UAdd,
+    "Invert": ast.Invert,
+}
+
+
+class _ClauseRenderer:
+    """Render a reified term back to a Python surface ``ast`` node — the
+    inverse of :class:`_ClauseReifier`.  Building fresh nodes; positions are
+    filled by :func:`ast.fix_missing_locations` before unparse."""
+
+    # -- clause entry ---------------------------------------------------------
+
+    def clause(self, term):
+        """``Clause(head, goals, position)`` → an ``ast.Expr`` statement.
+
+        A fact renders as a single-element tuple ``(HEAD,)`` so re-reification
+        sees a clause, not embedded Python.  A rule renders as the
+        ``Compare(head, [Lt], [USub(body)])`` shape that surface ``HEAD <- BODY``
+        parses to and that ``_unparse_clause`` repairs."""
+        head = self.term(term.head)
+        if not term.goals:
+            return ast.Expr(value=ast.Tuple(elts=[head], ctx=ast.Load()))
+        if len(term.goals) == 1:
+            body = self.goal(term.goals[0])
+        else:
+            body = ast.Tuple(
+                elts=[self.goal(goal) for goal in term.goals], ctx=ast.Load()
+            )
+        arrow = ast.Compare(
+            left=head, ops=[ast.Lt()],
+            comparators=[ast.UnaryOp(op=ast.USub(), operand=body)],
+        )
+        return ast.Expr(value=arrow)
+
+    def goal(self, node):
+        """Goals render identically to terms (both are ``ast`` expressions)."""
+        return self.term(node)
+
+    # -- names ----------------------------------------------------------------
+
+    def _name_ast(self, dotted):
+        """``"a"`` → ``Name(a)``; ``"a.b.c"`` → nested ``Attribute`` chain."""
+        parts = dotted.split(".")
+        node = ast.Name(id=parts[0], ctx=ast.Load())
+        for part in parts[1:]:
+            node = ast.Attribute(value=node, attr=part, ctx=ast.Load())
+        return node
+
+    # -- terms ----------------------------------------------------------------
+
+    def term(self, value):
+        if isinstance(value, Variable):
+            # Anonymous vars reify to non-identifier names (#anon1, …); render
+            # each as `_`.  Per-clause anon numbering is deterministic by
+            # encounter order, so `_` re-reifies to the same #anonN.
+            name = "_" if value.name.startswith("#") else value.name
+            return ast.Name(id=name, ctx=ast.Load())
+        if isinstance(value, Atom):
+            return self._name_ast(value.name)
+        if isinstance(value, Goal):
+            return self._goal_ast(value)
+        if isinstance(value, bool):
+            return ast.Constant(value)
+        if isinstance(value, (int, float, complex)):
+            return ast.Constant(value)
+        if isinstance(value, str):
+            return ast.Constant(value)
+        if isinstance(value, (ModuleDirective, PythonCode)):
+            raise RenderError(
+                f"cannot render {type(value).__name__} — only clause bodies "
+                "are in scope for the renderer"
+            )
+        if isinstance(value, list):
+            return ast.List(
+                elts=[self.term(item) for item in value], ctx=ast.Load()
+            )
+        if isinstance(value, tuple):
+            return ast.Tuple(
+                elts=[self.term(item) for item in value], ctx=ast.Load()
+            )
+        if isinstance(value, dict):
+            return ast.Dict(
+                keys=[self.term(key) for key in value],
+                values=[self.term(val) for val in value.values()],
+            )
+        if isinstance(value, IfThenElse):
+            return ast.Call(
+                func=ast.Name(id="If", ctx=ast.Load()),
+                args=[
+                    self.term(value.condition),
+                    self.term(value.then),
+                    self.term(value.otherwise),
+                ],
+                keywords=[],
+            )
+        if isinstance(value, Escape):
+            # `++(<code>)`: the escaped expression text re-parsed and wrapped in
+            # two adjacent unary `+` — ast.unparse emits `++(code)`, which the
+            # reifier re-detects as an escape and re-collects the captured vars.
+            inner = ast.parse(value.code, mode="eval").body
+            return ast.UnaryOp(
+                op=ast.UAdd(),
+                operand=ast.UnaryOp(op=ast.UAdd(), operand=inner),
+            )
+        if isinstance(value, FormatString):
+            return ast.parse(value.code, mode="eval").body
+        if dataclasses.is_dataclass(value) and not isinstance(value, type):
+            return self._operator_ast(value)
+        raise RenderError(f"cannot render term: {value!r}")
+
+    def _operator_ast(self, node):
+        """Raw ``simple_ast`` operator node → Python ``ast`` operator expr."""
+        name = type(node).__name__
+        if name in _RENDER_BINOP_OPS:
+            return ast.BinOp(
+                left=self.term(node.left),
+                op=_RENDER_BINOP_OPS[name](),
+                right=self.term(node.right),
+            )
+        if name in _RENDER_CMP_OPS:
+            return ast.Compare(
+                left=self.term(node.left),
+                ops=[_RENDER_CMP_OPS[name]()],
+                comparators=[self.term(node.right)],
+            )
+        if name in _RENDER_BOOL_OPS:
+            return ast.BoolOp(
+                op=_RENDER_BOOL_OPS[name](),
+                values=[self.term(node.left), self.term(node.right)],
+            )
+        if name in _RENDER_UNARY_OPS:
+            return ast.UnaryOp(
+                op=_RENDER_UNARY_OPS[name](), operand=self.term(node.operand)
+            )
+        if name == "StarUnpack":
+            return ast.Starred(value=self.term(node.value), ctx=ast.Load())
+        if name == "LoadSubscript":
+            # ``object[index]`` — index is a term (often a dotted atom).
+            return ast.Subscript(
+                value=self.term(node.object),
+                slice=self.term(node.index),
+                ctx=ast.Load(),
+            )
+        if name == "Lambda":
+            return self._lambda_ast(node)
+        if name == "DictLiteral":
+            return self._dict_literal_ast(node)
+        raise RenderError(f"cannot render operator node: {name}")
+
+    def _lambda_ast(self, node):
+        """``Lambda(params, body)`` → the ``(P1, …, Pn) <- BODY`` term surface.
+
+        In term position the reifier parses a parenthesised clause arrow into a
+        ``Lambda`` node whose params are plain names and whose body is a goal.
+        Rebuild the ``Compare(Tuple(params), [Lt], [USub(body)])`` shape that
+        surface re-parses to.  Params reify to ``Atom`` when referenced in the
+        body, so render each param name straight from ``node.params``.
+
+        ``ast.unparse`` renders the arrow's ``<`` and ``-`` with a space
+        (``(P) < -BODY``), which defeats the reifier's source-adjacency arrow
+        detection — and a spaced ``X < -1`` is a *genuine* comparison, so the
+        gap cannot be blindly collapsed.  Wrap the body in the sentinel call
+        ``_LAMBDA_ARROW_MARKER(BODY)`` so :func:`_tighten_nested_arrows` can
+        locate exactly the rendered lambda arrows (never a real ``<``), tighten
+        the gap, and strip the wrapper."""
+        param_names = [p.name for p in node.params.params]
+        params_tuple = ast.Tuple(
+            elts=[ast.Name(id=n, ctx=ast.Load()) for n in param_names],
+            ctx=ast.Load(),
+        )
+        marked_body = ast.Call(
+            func=ast.Name(id=_LAMBDA_ARROW_MARKER, ctx=ast.Load()),
+            args=[self.term(node.body)],
+            keywords=[],
+        )
+        return ast.Compare(
+            left=params_tuple,
+            ops=[ast.Lt()],
+            comparators=[ast.UnaryOp(op=ast.USub(), operand=marked_body)],
+        )
+
+    def _dict_literal_ast(self, node):
+        """``DictLiteral(keys, values)`` → an ``ast.Dict`` term surface.
+
+        A key of ``None`` is a ``**splat`` (``{**value}``); an atom key
+        reifies wrapped in ``$intern_atom(<name>)`` and renders back to a bare
+        ``Name`` so the surface ``{name: value}`` re-interns it identically."""
+        keys, values = [], []
+        for key, value in zip(node.keys, node.values):
+            keys.append(None if key is None else self._dict_key_ast(key))
+            values.append(self.term(value))
+        return ast.Dict(keys=keys, values=values)
+
+    def _dict_key_ast(self, key):
+        """A DictLiteral key: ``$intern_atom(<name>)`` → the bare name node."""
+        if (
+            isinstance(key, Goal)
+            and key.name == "$intern_atom"
+            and len(key.args) == 1
+            and isinstance(key.args[0], str)
+        ):
+            return self._name_ast(key.args[0])
+        return self.term(key)
+
+    def _goal_ast(self, goal):
+        """``Goal(name, args, kwargs)`` → ``ast.Call``."""
+        return ast.Call(
+            func=self._name_ast(goal.name),
+            args=[self.term(arg) for arg in goal.args],
+            keywords=[
+                ast.keyword(arg=name, value=self.term(value))
+                for name, value in goal.kwargs
+            ],
+        )
+
+
 # ── Module directives ────────────────────────────────────────────────────────
 
 # Module-item class name → directive name.  Items not listed reify with a
@@ -541,9 +784,71 @@ def _unparse_clause(node):
             and isinstance(inner.comparators[0], ast.UnaryOp)
             and isinstance(inner.comparators[0].op, ast.USub)):
         head = ast.unparse(inner.left)
-        body = ast.unparse(inner.comparators[0].operand)
+        body = _tighten_nested_arrows(ast.unparse(inner.comparators[0].operand))
         return f"{head} <- ({body})"
-    return ast.unparse(node)
+    return _tighten_nested_arrows(ast.unparse(node))
+
+
+def _tighten_nested_arrows(text):
+    """Re-tighten ``ast.unparse``'s ``head < -body`` back to ``head <- body``
+    for nested lambda arrows, and strip the lambda-body sentinel.
+
+    ``ast.unparse`` always separates a clause arrow's ``<`` and ``-`` with a
+    space, which defeats the reifier's source-adjacency arrow detection; the
+    same spaced ``X < -1`` is a *genuine* comparison, so the gap cannot be
+    blindly collapsed.  :meth:`_ClauseRenderer._lambda_ast` therefore wraps
+    each rendered lambda body in a ``_LAMBDA_ARROW_MARKER(BODY)`` sentinel call.
+    Locate exactly those ``Compare(Lt, [USub(Call(marker, [body]))])`` nodes via
+    a re-parse (never a real ``<``), tighten the ``< -`` to ``<-``, and remove
+    the wrapper — leaving ``(P) <- BODY``.  A genuine ``X < -1`` carries no
+    marker and is left untouched (F012)."""
+    if _LAMBDA_ARROW_MARKER not in text:
+        return text
+    try:
+        tree = ast.parse(text, mode="eval")
+    except SyntaxError:
+        return text
+    lines = text.splitlines(keepends=True)
+    line_starts, running = [], 0
+    for line in lines:
+        line_starts.append(running)
+        running += len(line)
+
+    def abs_offset(lineno, col):
+        return line_starts[lineno - 1] + col
+
+    # Each edit: (start, end, replacement) over the ORIGINAL text; applied R→L.
+    edits = []
+    for sub in ast.walk(tree):
+        if not (isinstance(sub, ast.Compare)
+                and len(sub.ops) == 1 and isinstance(sub.ops[0], ast.Lt)
+                and isinstance(sub.comparators[0], ast.UnaryOp)
+                and isinstance(sub.comparators[0].op, ast.USub)):
+            continue
+        usub = sub.comparators[0]
+        call = usub.operand
+        if not (isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == _LAMBDA_ARROW_MARKER
+                and len(call.args) == 1):
+            continue
+        # Collapse the '< -' gap: the '-' is at the USub's column.
+        minus_off = abs_offset(usub.lineno, usub.col_offset)
+        lt_off = text.rfind("<", 0, minus_off)
+        if lt_off != -1:
+            edits.append((lt_off, minus_off + 1, "<-"))
+        # Strip the sentinel wrapper but KEEP parentheses around the body:
+        # the reifier requires a non-call/non-name arrow body to be
+        # parenthesized, and unparse's ``marker(BODY)`` parens are the only
+        # ones present.  Rewrite ``marker(`` → ``(`` and leave the closing
+        # ``)`` so ``(P) <- (BODY)`` survives.
+        call_start = abs_offset(call.lineno, call.col_offset)
+        arg = call.args[0]
+        arg_start = abs_offset(arg.lineno, arg.col_offset)
+        edits.append((call_start, arg_start, "("))
+    for start, end, repl in sorted(edits, reverse=True):
+        text = text[:start] + repl + text[end:]
+    return text
 
 
 def reify_ast(node, source=None):
@@ -567,3 +872,27 @@ def reify_ast(node, source=None):
 
     ctor = TermTransformer().visit(node)
     return _ClauseReifier().term(ctor)
+
+
+def render_ast(term):
+    """Render a reified term back to a Python surface ``ast`` node — the
+    inverse of :func:`reify_ast`.
+
+    A ``Clause`` renders to an ``ast.Expr`` statement; any other reified term
+    renders to an expression node.  Raises :class:`RenderError` for any node
+    kind the renderer does not handle (never emits malformed source)."""
+    renderer = _ClauseRenderer()
+    if isinstance(term, Clause):
+        node = renderer.clause(term)
+    else:
+        node = renderer.term(term)
+    return ast.fix_missing_locations(node)
+
+
+def render_source(term):
+    """Render a reified term to ``.clausal`` source text — :func:`render_ast`
+    followed by ``ast.unparse`` with the ``<-`` arrow repair."""
+    node = render_ast(term)
+    if isinstance(node, ast.Expr):
+        return _unparse_clause(node)
+    return ast.unparse(node)

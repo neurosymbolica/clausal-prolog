@@ -15,6 +15,7 @@
 - The renderer NEVER emits malformed text: any unhandled node kind raises `RenderError`.
 - Reuse `ast.unparse` + `_unparse_clause` (reflection.py:529) — do NOT hand-emit text.
 - Keep the renderer in `clausal/reflection.py`, next to the reifier, so vocabulary changes keep both halves in sync.
+- **Fixture naming rule:** a single-uppercase name (`P`, `Q`, `A`, `B`) is a *logic variable*, so `P(A)` reifies to an `Escape` (unit-`Quantity` metacall), NOT a `Goal`. Predicate/functor names in fixtures MUST be mixed-case (`Pa`, `Busy`, `Head`, `State`) to reify as `Goal`s. Variables in fixtures should be single-caps (`X`, `N`, `A`).
 - Verified surface facts (do not re-derive): a fact renders as a **single-element tuple** `(HEAD,)` (a bare `HEAD` reifies as embedded Python, not a clause); a rule renders as `ast.Compare(left=head, ops=[ast.Lt()], comparators=[ast.UnaryOp(ast.USub(), body)])`; a **list cons-tail `[a, b | T]` reifies as a `BitOr` node** (`BinOp(left, ast.BitOr(), right)` in ast), NOT `Starred`; a `*tail` list uses `StarUnpack` → `ast.Starred`; `==`→`ArithEq`→`ast.Eq`, `is`→`Unify`→`ast.Is`; an `Escape` renders as `ast.UnaryOp(ast.UAdd(), ast.UnaryOp(ast.UAdd(), <parsed code>))` which unparses to adjacent `++(code)`.
 
 ---
@@ -326,8 +327,8 @@ class TestOperators:
         "Unify2(X, Y) <- (X is Y)\n",
         "Dif2(X, Y) <- (X is not Y)\n",
         "Free(A) <- (not Busy(A))\n",
-        "Either(A) <- (P(A) or Q(A))\n",
-        "Both(A) <- (P(A) and Q(A))\n",
+        "Either(A) <- (Pa(A) or Qa(A))\n",
+        "Both(A) <- (Pa(A) and Qa(A))\n",
         "Neg(X, Y) <- (Y is -X)\n",
         "ConsTail(T) <- Head([a, b | T])\n",
         "StarTail(T) <- Head([a, b, *T])\n",
@@ -450,9 +451,9 @@ Append to `tests/test_reflection_render.py`:
 class TestCompoundAndKwargs:
     @pytest.mark.parametrize("src", [
         "Holds(State(A)) <- Check(A)\n",
-        "Deep(P(Q(R(X)))) <- Base(X)\n",
-        "WithList(P([1, 2, 3])),\n",
-        "Nested([P(X), Q(Y)]),\n",
+        "Deep(Pp(Qq(Rr(X)))) <- Base(X)\n",
+        "WithList(Pp([1, 2, 3])),\n",
+        "Nested([Pp(X), Qq(Y)]),\n",
     ])
     def test_compound_round_trips(self, src):
         assert_round_trips(src)
