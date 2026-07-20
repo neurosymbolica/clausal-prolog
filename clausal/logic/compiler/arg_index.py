@@ -235,6 +235,66 @@ def _joint_bucket_key(fname: str, pos_i: int, pos_j: int,
     return f"{fname}.bucket(pos=({pos_i},{pos_j}), ({ki!r},{kj!r}))"
 
 
+def _drive_tro_bucket(gen, tro_state, arity, pending):
+    """Yield from a signal-mode bucket generator while snapshotting a pending
+    TRO tail-call signal into *pending* the instant it appears.
+
+    A signal-mode TRO clause sets ``tro_state[0] = True`` and falls through
+    (it does not yield); a LATER match arm in the same bucket may then yield a
+    solution while the flag is still pending, suspending this generator.  Any
+    re-entry into the same predicate during that suspension (a sibling goal, a
+    nested self-call) resets the shared ``tro_state[0]`` at its own dispatch
+    entry, which would silently drop the pending tail call — the enclosing
+    dispatch loop would then read ``False`` and lose every remaining solution.
+    See todo/tro-signal-flag-clobbered-by-later-match-arms.md.
+
+    Capturing the signal into the per-activation *pending* list before each
+    downstream ``yield`` makes the dispatch loop immune to that clobber: it
+    re-dispatches from *pending*, not from the shared (re-entrant) cell.
+
+    *pending* is a list of length ``arity + 1``: ``pending[0]`` is the
+    tail-pending flag, ``pending[1:]`` the snapshotted tail-call args.  On a
+    later signal the snapshot is overwritten (last-write-wins), matching the
+    pre-fix semantics where the after-arms check read the final ``tro_state``.
+
+    This is a full delegating generator (PEP-380 ``yield from`` semantics):
+    it forwards ``send``/``throw``/``close`` to *gen* so the trampoline Step
+    protocol — which resumes buckets via ``.send(value)`` and unwinds via
+    ``.throw()`` for catch/3 — keeps working.  A plain ``for``-loop wrapper
+    would swallow sent values and break it.
+    """
+    def _snapshot():
+        if tro_state[0]:
+            pending[0] = True
+            for _i in range(arity):
+                pending[_i + 1] = tro_state[_i + 1]
+
+    try:
+        _y = next(gen)
+    except StopIteration:
+        _snapshot()
+        return
+    while True:
+        _snapshot()  # capture BEFORE yielding — before any re-entry can clobber
+        try:
+            _sent = yield _y
+        except GeneratorExit:
+            gen.close()
+            raise
+        except BaseException as _exc:
+            try:
+                _y = gen.throw(_exc)
+            except StopIteration:
+                _snapshot()
+                return
+        else:
+            try:
+                _y = gen.send(_sent)
+            except StopIteration:
+                _snapshot()
+                return
+
+
 def _make_call_site_bucket_trampoline(bucket_fn, dispatch_fn, done,
                                       tro_state=None, arity=0):
     """Wrap a SIGNAL-mode bucket for direct call-site use (Phase 10 /
@@ -262,11 +322,13 @@ def _make_call_site_bucket_trampoline(bucket_fn, dispatch_fn, done,
         def call_site_fn(*args):
             _fail = args[2]
             tro_state[0] = False
-            yield from bucket_fn(*args)
-            if tro_state[0]:
+            _pending = [False] + [None] * arity
+            yield from _drive_tro_bucket(
+                bucket_fn(*args), tro_state, arity, _pending)
+            if _pending[0]:
                 args_list = list(args)
                 for _i in range(arity):
-                    args_list[_i + 4] = tro_state[_i + 1]
+                    args_list[_i + 4] = _pending[_i + 1]
                 # dispatch_fn loops on any further tail calls and emits
                 # its own terminal ``(fail, done)``.
                 yield from dispatch_fn(*args_list)
@@ -583,9 +645,9 @@ def _make_joint_dispatch_trampoline(
             args_list = list(args)
             while True:
                 tro_state[0] = False
-                # The fallback path owns its own TRO loop, so we must break
-                # out of this outer loop when it fires.  Inline the body
-                # here to detect that case via which branch was taken.
+                # Select the route, then drive it through _drive_tro_bucket so
+                # a tail call signalled from a non-last arm survives re-entrant
+                # clobbering of the shared tro_state (see _drive_tro_bucket).
                 _ai = deref(args_list[offset_i])
                 _aj = deref(args_list[offset_j])
                 if not is_var(_ai) and not is_var(_aj):
@@ -595,38 +657,36 @@ def _make_joint_dispatch_trampoline(
                     # key can't be formed — degrade exactly like the non-TRO
                     # body (_joint_dispatch_body): both uncomputable → full
                     # scan; one uncomputable → single-position dispatch on
-                    # the OTHER (computable) component. Every route falls
-                    # through to the tro_state check below: the fallback is
-                    # compiled in SIGNAL mode (like the buckets), and the
-                    # single dispatches either own a TRO loop (they exit
-                    # with tro_state[0] False) or ARE the fallback.
+                    # the OTHER (computable) component. Every route is compiled
+                    # in SIGNAL mode (buckets/fallback) or owns its own TRO
+                    # loop (single dispatches), so re-dispatch is uniform.
                     if _ki is _INDEX_VAR and _kj is _INDEX_VAR:
-                        yield from fallback_fn(*args_list)
+                        _bfn = fallback_fn
                     elif _ki is _INDEX_VAR:
-                        yield from single_j_dispatch(*args_list)
+                        _bfn = single_j_dispatch
                     elif _kj is _INDEX_VAR:
-                        yield from single_i_dispatch(*args_list)
+                        _bfn = single_i_dispatch
                     else:
                         _jk = (_ki, _kj)
                         try:
                             _bfn = joint_dict.get(_jk)
                         except TypeError:
                             _bfn = None
-                        if _bfn is not None:
-                            yield from _bfn(*args_list)
-                        else:
-                            yield from joint_default_fn(*args_list)
+                        if _bfn is None:
+                            _bfn = joint_default_fn
                 elif not is_var(_ai):
-                    yield from single_i_dispatch(*args_list)
+                    _bfn = single_i_dispatch
                 elif not is_var(_aj):
-                    yield from single_j_dispatch(*args_list)
+                    _bfn = single_j_dispatch
                 else:
-                    # A02-F001: neither arg ground — full scan; signal-mode
-                    # fallback falls through to the tro_state check.
-                    yield from fallback_fn(*args_list)
-                if tro_state[0]:
+                    # A02-F001: neither arg ground — full scan (signal-mode).
+                    _bfn = fallback_fn
+                _pending = [False] + [None] * arity
+                yield from _drive_tro_bucket(
+                    _bfn(*args_list), tro_state, arity, _pending)
+                if _pending[0]:
                     for _i in range(arity):
-                        args_list[_i + 4] = tro_state[_i + 1]
+                        args_list[_i + 4] = _pending[_i + 1]
                     continue
                 break
             yield (_fail, done)
@@ -781,12 +841,14 @@ def _make_secondary_dispatch_impl(
             while True:
                 tro_state[0] = False
                 _current = args_list if args_list is not None else args
-                yield from _route(_current)
-                if tro_state[0]:
+                _pending = [False] + [None] * arity
+                yield from _drive_tro_bucket(
+                    _route(_current), tro_state, arity, _pending)
+                if _pending[0]:
                     if args_list is None:
                         args_list = list(args)
                     for _i in range(arity):
-                        args_list[_i + arg_offset] = tro_state[_i + 1]
+                        args_list[_i + arg_offset] = _pending[_i + 1]
                     continue
                 break
             if tail_yield is not None:
@@ -1047,12 +1109,14 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                                 _bfn = fallback_fn
                             if _bfn is None:
                                 _bfn = dflt_fn
-                    yield from _bfn(*_current)
-                    if tro_state[0]:
+                    _pending = [False] + [None] * arity
+                    yield from _drive_tro_bucket(
+                        _bfn(*_current), tro_state, arity, _pending)
+                    if _pending[0]:
                         if args_list is None:
                             args_list = list(args)
                         for _i in range(arity):
-                            args_list[_i + 4] = tro_state[_i + 1]
+                            args_list[_i + 4] = _pending[_i + 1]
                         continue
                     break
                 yield (_fail, done)
@@ -1074,7 +1138,7 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
             while True:
                 tro_state[0] = False
                 _current = args_list if args_list is not None else args
-                _dispatched = False
+                _bfn = None
                 for _pos, _idx_dict, _dflt_fn in plans:
                     _a = deref(_current[_pos + 4])
                     if not is_var(_a):
@@ -1086,27 +1150,24 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                             # non-TRO _groundness_dispatch_body_multi.
                             continue
                         try:
-                            _bfn = _idx_dict.get(_k)
+                            _cand = _idx_dict.get(_k)
                         except TypeError:
                             continue
-                        if _bfn is not None:
-                            yield from _bfn(*_current)
-                        else:
-                            yield from _dflt_fn(*_current)
-                        _dispatched = True
+                        _bfn = _cand if _cand is not None else _dflt_fn
                         break
-                if not _dispatched:
+                if _bfn is None:
                     # A02-F001: no plan had a ground arg with a computable
                     # key — full scan. The fallback is compiled in SIGNAL
-                    # mode (like the buckets), so fall through to the
-                    # tro_state check: a tail call signalled from its TRO
-                    # clause must re-dispatch, not be dropped.
-                    yield from fallback_fn(*_current)
-                if tro_state[0]:
+                    # mode (like the buckets), so its tail call re-dispatches.
+                    _bfn = fallback_fn
+                _pending = [False] + [None] * arity
+                yield from _drive_tro_bucket(
+                    _bfn(*_current), tro_state, arity, _pending)
+                if _pending[0]:
                     if args_list is None:
                         args_list = list(args)
                     for _i in range(arity):
-                        args_list[_i + 4] = tro_state[_i + 1]
+                        args_list[_i + 4] = _pending[_i + 1]
                     continue
                 break
             yield (_fail, done)
