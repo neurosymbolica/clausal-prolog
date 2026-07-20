@@ -465,6 +465,16 @@ class _ClauseRenderer:
                 keys=[self.term(key) for key in value],
                 values=[self.term(val) for val in value.values()],
             )
+        if isinstance(value, IfThenElse):
+            return ast.Call(
+                func=ast.Name(id="If", ctx=ast.Load()),
+                args=[
+                    self.term(value.condition),
+                    self.term(value.then),
+                    self.term(value.otherwise),
+                ],
+                keywords=[],
+            )
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
             return self._operator_ast(value)
         raise RenderError(f"cannot render term: {value!r}")

@@ -111,3 +111,11 @@ class TestCompoundAndKwargs:
     ])
     def test_compound_round_trips(self, src):
         assert_round_trips(src)
+
+
+class TestIfThenElse:
+    @pytest.mark.parametrize("src", [
+        "Pick(X, Y) <- (Y is If(X > 0, 1, 2))\n",
+    ])
+    def test_ite_round_trips(self, src):
+        assert_round_trips(src)
