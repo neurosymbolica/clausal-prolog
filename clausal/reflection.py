@@ -53,6 +53,11 @@ from clausal.logic.predicate import make_predicate
 from clausal.pythonic_ast import nodes as simple_ast
 
 
+# Sentinel wrapping a rendered lambda body so nested clause arrows can be
+# re-tightened (``< -`` → ``<-``) without touching a genuine ``X < -1``.
+_LAMBDA_ARROW_MARKER = "__clausal_lambda_arrow__"
+
+
 __all__ = [
     "Atom",
     "Clause",
@@ -516,7 +521,73 @@ class _ClauseRenderer:
             )
         if name == "StarUnpack":
             return ast.Starred(value=self.term(node.value), ctx=ast.Load())
+        if name == "LoadSubscript":
+            # ``object[index]`` — index is a term (often a dotted atom).
+            return ast.Subscript(
+                value=self.term(node.object),
+                slice=self.term(node.index),
+                ctx=ast.Load(),
+            )
+        if name == "Lambda":
+            return self._lambda_ast(node)
+        if name == "DictLiteral":
+            return self._dict_literal_ast(node)
         raise RenderError(f"cannot render operator node: {name}")
+
+    def _lambda_ast(self, node):
+        """``Lambda(params, body)`` → the ``(P1, …, Pn) <- BODY`` term surface.
+
+        In term position the reifier parses a parenthesised clause arrow into a
+        ``Lambda`` node whose params are plain names and whose body is a goal.
+        Rebuild the ``Compare(Tuple(params), [Lt], [USub(body)])`` shape that
+        surface re-parses to.  Params reify to ``Atom`` when referenced in the
+        body, so render each param name straight from ``node.params``.
+
+        ``ast.unparse`` renders the arrow's ``<`` and ``-`` with a space
+        (``(P) < -BODY``), which defeats the reifier's source-adjacency arrow
+        detection — and a spaced ``X < -1`` is a *genuine* comparison, so the
+        gap cannot be blindly collapsed.  Wrap the body in the sentinel call
+        ``_LAMBDA_ARROW_MARKER(BODY)`` so :func:`_tighten_nested_arrows` can
+        locate exactly the rendered lambda arrows (never a real ``<``), tighten
+        the gap, and strip the wrapper."""
+        param_names = [p.name for p in node.params.params]
+        params_tuple = ast.Tuple(
+            elts=[ast.Name(id=n, ctx=ast.Load()) for n in param_names],
+            ctx=ast.Load(),
+        )
+        marked_body = ast.Call(
+            func=ast.Name(id=_LAMBDA_ARROW_MARKER, ctx=ast.Load()),
+            args=[self.term(node.body)],
+            keywords=[],
+        )
+        return ast.Compare(
+            left=params_tuple,
+            ops=[ast.Lt()],
+            comparators=[ast.UnaryOp(op=ast.USub(), operand=marked_body)],
+        )
+
+    def _dict_literal_ast(self, node):
+        """``DictLiteral(keys, values)`` → an ``ast.Dict`` term surface.
+
+        A key of ``None`` is a ``**splat`` (``{**value}``); an atom key
+        reifies wrapped in ``$intern_atom(<name>)`` and renders back to a bare
+        ``Name`` so the surface ``{name: value}`` re-interns it identically."""
+        keys, values = [], []
+        for key, value in zip(node.keys, node.values):
+            keys.append(None if key is None else self._dict_key_ast(key))
+            values.append(self.term(value))
+        return ast.Dict(keys=keys, values=values)
+
+    def _dict_key_ast(self, key):
+        """A DictLiteral key: ``$intern_atom(<name>)`` → the bare name node."""
+        if (
+            isinstance(key, Goal)
+            and key.name == "$intern_atom"
+            and len(key.args) == 1
+            and isinstance(key.args[0], str)
+        ):
+            return self._name_ast(key.args[0])
+        return self.term(key)
 
     def _goal_ast(self, goal):
         """``Goal(name, args, kwargs)`` → ``ast.Call``."""
@@ -713,9 +784,71 @@ def _unparse_clause(node):
             and isinstance(inner.comparators[0], ast.UnaryOp)
             and isinstance(inner.comparators[0].op, ast.USub)):
         head = ast.unparse(inner.left)
-        body = ast.unparse(inner.comparators[0].operand)
+        body = _tighten_nested_arrows(ast.unparse(inner.comparators[0].operand))
         return f"{head} <- ({body})"
-    return ast.unparse(node)
+    return _tighten_nested_arrows(ast.unparse(node))
+
+
+def _tighten_nested_arrows(text):
+    """Re-tighten ``ast.unparse``'s ``head < -body`` back to ``head <- body``
+    for nested lambda arrows, and strip the lambda-body sentinel.
+
+    ``ast.unparse`` always separates a clause arrow's ``<`` and ``-`` with a
+    space, which defeats the reifier's source-adjacency arrow detection; the
+    same spaced ``X < -1`` is a *genuine* comparison, so the gap cannot be
+    blindly collapsed.  :meth:`_ClauseRenderer._lambda_ast` therefore wraps
+    each rendered lambda body in a ``_LAMBDA_ARROW_MARKER(BODY)`` sentinel call.
+    Locate exactly those ``Compare(Lt, [USub(Call(marker, [body]))])`` nodes via
+    a re-parse (never a real ``<``), tighten the ``< -`` to ``<-``, and remove
+    the wrapper — leaving ``(P) <- BODY``.  A genuine ``X < -1`` carries no
+    marker and is left untouched (F012)."""
+    if _LAMBDA_ARROW_MARKER not in text:
+        return text
+    try:
+        tree = ast.parse(text, mode="eval")
+    except SyntaxError:
+        return text
+    lines = text.splitlines(keepends=True)
+    line_starts, running = [], 0
+    for line in lines:
+        line_starts.append(running)
+        running += len(line)
+
+    def abs_offset(lineno, col):
+        return line_starts[lineno - 1] + col
+
+    # Each edit: (start, end, replacement) over the ORIGINAL text; applied R→L.
+    edits = []
+    for sub in ast.walk(tree):
+        if not (isinstance(sub, ast.Compare)
+                and len(sub.ops) == 1 and isinstance(sub.ops[0], ast.Lt)
+                and isinstance(sub.comparators[0], ast.UnaryOp)
+                and isinstance(sub.comparators[0].op, ast.USub)):
+            continue
+        usub = sub.comparators[0]
+        call = usub.operand
+        if not (isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == _LAMBDA_ARROW_MARKER
+                and len(call.args) == 1):
+            continue
+        # Collapse the '< -' gap: the '-' is at the USub's column.
+        minus_off = abs_offset(usub.lineno, usub.col_offset)
+        lt_off = text.rfind("<", 0, minus_off)
+        if lt_off != -1:
+            edits.append((lt_off, minus_off + 1, "<-"))
+        # Strip the sentinel wrapper but KEEP parentheses around the body:
+        # the reifier requires a non-call/non-name arrow body to be
+        # parenthesized, and unparse's ``marker(BODY)`` parens are the only
+        # ones present.  Rewrite ``marker(`` → ``(`` and leave the closing
+        # ``)`` so ``(P) <- (BODY)`` survives.
+        call_start = abs_offset(call.lineno, call.col_offset)
+        arg = call.args[0]
+        arg_start = abs_offset(arg.lineno, arg.col_offset)
+        edits.append((call_start, arg_start, "("))
+    for start, end, repl in sorted(edits, reverse=True):
+        text = text[:start] + repl + text[end:]
+    return text
 
 
 def reify_ast(node, source=None):

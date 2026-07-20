@@ -3,6 +3,8 @@ inverse of reify_ast. Invariant: reify(render_source(clause)) is structurally
 identical to clause (positions ignored)."""
 
 import dataclasses
+import glob
+import os
 
 import pytest
 
@@ -130,6 +132,44 @@ class TestEscapes:
         assert_round_trips(src)
 
 
+class TestSubscript:
+    @pytest.mark.parametrize("src", [
+        "Get(P, I) <- (I is P[flags])\n",
+        "GetDotted(P, I) <- (I is P[a.b.c])\n",
+    ])
+    def test_subscript_round_trips(self, src):
+        assert_round_trips(src)
+
+
+class TestDictLiteral:
+    @pytest.mark.parametrize("src", [
+        "Merge(A, B) <- (A is {**B, foo: B})\n",
+        "Merge2(A, B, C) <- (A is {**B, foo: C, bar: B})\n",
+    ])
+    def test_dict_literal_round_trips(self, src):
+        assert_round_trips(src)
+
+
+class TestArrowLambda:
+    @pytest.mark.parametrize("src", [
+        "Run0(C) <- run(( () <- base()), C)\n",
+        "Run1(C) <- run((X <- base(X)), C)\n",
+        "RunN(C) <- run(((ID, PR) <- req(ID, PR)), C)\n",
+        "RunBody(C) <- run((X <- (Y is X + 1)), C)\n",
+        "RunTwo(C) <- run((X <- p(X)), (Y <- q(Y)), C)\n",
+    ])
+    def test_arrow_lambda_round_trips(self, src):
+        assert_round_trips(src)
+
+    @pytest.mark.parametrize("src", [
+        # A genuine `X < -N` comparison must NOT be tightened into a lambda arrow.
+        "Cmp(X) <- (X < -1)\n",
+        "CmpVar(X, Y) <- (X < -Y)\n",
+    ])
+    def test_spaced_comparison_not_arrow(self, src):
+        assert_round_trips(src)
+
+
 class TestOutOfScope:
     def test_module_directive_raises(self):
         items = reify_source("-module(m)\n")
@@ -142,3 +182,49 @@ class TestOutOfScope:
         pycode = next(i for i in items if type(i).__name__ == "PythonCode")
         with pytest.raises(RenderError):
             render_source(pycode)
+
+
+CORPUS_DIR = "/workspace/clausify-domains"
+
+
+def _corpus_files():
+    if not os.path.isdir(CORPUS_DIR):
+        return []
+    return sorted(glob.glob(os.path.join(CORPUS_DIR, "**", "*.clausal"), recursive=True))
+
+
+@pytest.mark.skipif(not _corpus_files(), reason=f"corpus {CORPUS_DIR} absent")
+@pytest.mark.parametrize("path", _corpus_files())
+def test_corpus_clause_round_trips(path):
+    """Every Clause in every corpus file renders and re-reifies identically.
+
+    Only Clause items are exercised: every file opens with -module/-import_from
+    which reify to ModuleDirective/PythonCode — node kinds the renderer
+    deliberately raises on. A RenderError on a real clause is a hard failure
+    (a silently-corrupt mutant would falsely 'survive' in the auditor)."""
+    try:
+        items = reify_source(open(path, encoding="utf-8").read(), filename=path)
+    except ReifyError as exc:
+        pytest.skip(f"source not reifiable ({exc})")
+    except TypeError as exc:
+        # Pre-existing REIFIER defect (not a renderer bug): a non-splat dict
+        # literal ``{atom: V}`` in term position is rewritten to
+        # ``DictTerm({$intern_atom('atom'): V})``; the reifier's ast.Dict
+        # handler reifies the ``$intern_atom(...)`` key into a Goal and then
+        # tries to use it as a dict key -> "unhashable type: 'Goal'".  This
+        # raises before any clause reaches the renderer, so it is out of scope
+        # for the render completeness gate.  Filed as a reifier todo; skip so
+        # the gate still asserts every *reifiable* clause round-trips.
+        if "unhashable type: 'Goal'" not in str(exc):
+            raise
+        pytest.skip(f"reifier defect (dict-literal atom key unhashable): {exc}")
+    clauses = [i for i in items if isinstance(i, Clause)]
+    if not clauses:
+        pytest.skip("no clauses in file")
+    for clause in clauses:
+        rendered = render_source(clause)              # must not raise RenderError
+        reparsed = [i for i in reify_source(rendered + "\n") if isinstance(i, Clause)]
+        assert len(reparsed) == 1, f"{path}: render produced {len(reparsed)} clauses:\n{rendered}"
+        assert strip_positions(reparsed[0]) == strip_positions(clause), (
+            f"{path}: round-trip mismatch\n  rendered: {rendered!r}"
+        )
