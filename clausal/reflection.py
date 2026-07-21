@@ -146,6 +146,18 @@ def _dotted_name(node):
     raise ReifyError(f"cannot extract functor name from {ast.unparse(node)}")
 
 
+def _is_intern_atom_key(key):
+    """True for a ``$intern_atom("name")`` key node — the compiler's rewrite of a
+    bare-atom dict key (see ``EmbedTransformer._visit_dict_key``).  Such a key
+    reifies to an unhashable ``Goal``, so a dict carrying one cannot be a raw
+    Python dict."""
+    return (
+        isinstance(key, ast.Call)
+        and isinstance(key.func, ast.Name)
+        and key.func.id == "$intern_atom"
+    )
+
+
 class _ClauseReifier:
     """Reify one clause's constructor expression.  Fresh per clause so that
     walrus-bound variable names and anonymous-variable numbering are scoped
@@ -222,6 +234,19 @@ class _ClauseReifier:
         if isinstance(node, ast.Tuple):
             return tuple(self.term(elt) for elt in node.elts)
         if isinstance(node, ast.Dict):
+            # A bare-atom key (`{foo: V}`) is rewritten to `$intern_atom('foo')`,
+            # which reifies to an unhashable Goal and so cannot key a raw Python
+            # dict.  When any key is a bare atom, represent the whole literal as
+            # the same DictLiteral node the splat path yields (keys stay in a
+            # list, never used as a Python dict key) — one representation for
+            # both dict-literal paths, round-tripped by _dict_literal_ast.  A
+            # dict with only hashable (string/int) keys still reifies to a raw
+            # dict: "dicts appear as themselves" (F013).
+            if any(_is_intern_atom_key(key) for key in node.keys):
+                return simple_ast.DictLiteral(
+                    keys=[self.term(key) for key in node.keys],
+                    values=[self.term(value) for value in node.values],
+                )
             return {
                 self.term(key): self.term(value)
                 for key, value in zip(node.keys, node.values)

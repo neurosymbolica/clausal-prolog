@@ -170,6 +170,29 @@ class TestDictLiteral:
     def test_dict_literal_round_trips(self, src):
         assert_round_trips(src)
 
+    @pytest.mark.parametrize("src", [
+        # Non-splat dict with a bare-atom key: `{foo: V}` is rewritten to
+        # DictTerm({$intern_atom('foo'): V}); the atom key reifies to an
+        # unhashable Goal, so it must NOT key a raw Python dict. Must round-trip.
+        "K(B) <- (X is {foo: B})\n",
+        "K2(B) <- (X is {foo: B, bar: 2})\n",
+        # Mixed atom + string/int keys in one literal.
+        "K3(B) <- (X is {foo: B, 'baz': 3})\n",
+    ])
+    def test_atom_key_dict_round_trips(self, src):
+        assert_round_trips(src)
+
+    def test_atom_key_dict_shares_splat_representation(self):
+        # An atom key must reify to the SAME shape whether or not the literal
+        # also splats — one DictLiteral representation for the auditor.
+        splat = only_clause("A(B) <- (X is {**B, foo: B})\n").goals[0]
+        plain = only_clause("A(B) <- (X is {foo: B})\n").goals[0]
+        splat_key = strip_positions(splat).right.keys[-1]
+        plain_key = strip_positions(plain).right.keys[-1]
+        assert splat_key == plain_key, (
+            f"atom key differs by splat: {plain_key!r} vs {splat_key!r}"
+        )
+
 
 class TestArrowLambda:
     @pytest.mark.parametrize("src", [
@@ -396,18 +419,6 @@ def test_corpus_clause_round_trips(path):
         items = reify_source(open(path, encoding="utf-8").read(), filename=path)
     except ReifyError as exc:
         pytest.skip(f"source not reifiable ({exc})")
-    except TypeError as exc:
-        # Pre-existing REIFIER defect (not a renderer bug): a non-splat dict
-        # literal ``{atom: V}`` in term position is rewritten to
-        # ``DictTerm({$intern_atom('atom'): V})``; the reifier's ast.Dict
-        # handler reifies the ``$intern_atom(...)`` key into a Goal and then
-        # tries to use it as a dict key -> "unhashable type: 'Goal'".  This
-        # raises before any clause reaches the renderer, so it is out of scope
-        # for the render completeness gate.  Filed as a reifier todo; skip so
-        # the gate still asserts every *reifiable* clause round-trips.
-        if "unhashable type: 'Goal'" not in str(exc):
-            raise
-        pytest.skip(f"reifier defect (dict-literal atom key unhashable): {exc}")
     clauses = [i for i in items if isinstance(i, Clause)]
     if not clauses:
         pytest.skip("no clauses in file")
