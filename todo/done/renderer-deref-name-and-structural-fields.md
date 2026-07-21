@@ -1,6 +1,21 @@
 # renderer — deref bound logic vars in name/structural field positions
 
-STATUS: OPEN (filed 2026-07-20, from the renderer-deref Fable review).
+STATUS: DONE (2026-07-20). A `_deref_field` (and sequence-aware `_deref_seq_field`)
+helper now derefs every name/structural field that bypasses `_ClauseRenderer.term`
+— `Goal.name`/`args`/`kwargs` (incl. each kwarg *entry* and name), `Clause.goals`,
+`Variable.name`, `Escape.code`/`FormatString.code`, `_dict_literal_ast` keys/values,
+`_dict_key_ast`'s intern-atom guard, `_lambda_ast` param chain, and `render_ast`'s
+top-level split. Bound vars render their value; unbound vars (and non-sequence
+garbage in a list position) raise `RenderError`, so render_ast/render_source now
+raise **only** `RenderError`. Duplicate post-deref dict keys raise (collision key
+is the unparsed *surface*, so AST-distinct-but-textually-equal keys are caught).
+A Fable review drove a second pass that closed sibling leaks it found (kwarg-entry
+var, `_dict_literal_ast`/`_dict_key_ast`/`_lambda_ast` positions) and the
+dump→unparse collision-key fix. `tests/test_reflection_render.py::TestBoundLogicVarsInFields`
+(19 tests, incl. parametrized unbound-var contract checks); full suite green
+(9836 passed). Original notes follow.
+
+(filed 2026-07-20, from the renderer-deref Fable review.)
 
 ## The gap
 `todo/done/renderer-deref-bound-var-operands.md` made `_ClauseRenderer.term()`
