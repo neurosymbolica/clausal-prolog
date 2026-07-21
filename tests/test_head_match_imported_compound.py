@@ -275,6 +275,39 @@ def test_rule_matches_fact_in_output_mode():
     assert type(rule_got[0]).__name__ == type(fact_got[0]).__name__ == "Wrap"
 
 
+def test_indexed_imported_compound_at_second_position_enumerates_all_rows():
+    """arg0 UNBOUND + arg1 = an imported compound must route onto the arg1
+    index and enumerate every row for that functor.
+
+    Regression: with >=4 fact clauses the indexer engages; the Phase-8 lift
+    put an unresolved ``Call(LoadName Wrap)`` into the bucket head whose
+    bucket globals lacked the imported class, so ``head_to_match_pattern``
+    emitted ``MatchClass(Call)`` and the Wrap/Item buckets returned nothing."""
+    mod = _load_importer()
+    Wrap = getattr(mod, "Wrap")
+    Item = getattr(mod, "Item")
+    wrap_rows = _bind_first(mod, "Tagged", Wrap(Var()))
+    assert sorted(wrap_rows) == ["r1", "r3"], (
+        f"arg1-indexed Wrap bucket dropped rows. Got {wrap_rows!r}, "
+        f"expected ['r1', 'r3']."
+    )
+    item_rows = _bind_first(mod, "Tagged", Item(Var(), Var(), Var()))
+    assert sorted(item_rows) == ["r2", "r4"], (
+        f"arg1-indexed Item bucket dropped rows. Got {item_rows!r}, "
+        f"expected ['r2', 'r4']."
+    )
+
+
+def test_indexed_imported_compound_at_second_position_fully_unbound_arg():
+    """Control: fully-unbound arg1 (no functor to index on) already works —
+    every row must enumerate regardless of the indexing bug."""
+    mod = _load_importer()
+    all_rows = _bind_first(mod, "Tagged", Var())
+    assert sorted(all_rows) == ["r1", "r2", "r3", "r4"], (
+        f"Fully-unbound arg1 dropped rows. Got {all_rows!r}."
+    )
+
+
 def test_nested_compound_head_binds_unbound_caller():
     """CheckNested(Item(REQ_ID, Met(SUB), _), RESULT) <- RESULT is REQ_ID:
     output mode must construct AND correctly shape the nested term. There are

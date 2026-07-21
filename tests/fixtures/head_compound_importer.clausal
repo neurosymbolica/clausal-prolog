@@ -10,7 +10,8 @@
                                  CheckMixed(ITEM, RESULT),
                                  CheckNested(ITEM, RESULT),
                                  CheckIndexed(ITEM, RESULT),
-                                 CheckNestedFact(ITEM, RESULT)])
+                                 CheckNestedFact(ITEM, RESULT),
+                                 Tagged(KEY, SHAPE)])
 
 # Rule form — head contains the imported Wrap compound.
 # Should ONLY fire when ITEM is a Wrap(_) term.
@@ -45,6 +46,19 @@ CheckIndexed(Wrap(SUB), R) <- (R is "second")
 CheckIndexed(Item(REQ, S, D), R) <- (R is "item")
 CheckIndexed(Item(REQ, Met(_), D), R) <- (R is "item-met")
 CheckIndexed(ANY, "fallback"),
+
+# Second-position imported-compound index.  The distinguishing key is
+# arg0 (a plain string); the imported compound sits at arg1.  >= 4 fact
+# clauses engage the first-argument indexer, and a query with arg0
+# UNBOUND + arg1 bound to an imported compound routes dispatch onto the
+# arg1 index.  The Phase-8 lift used to put an unresolved Call(LoadName
+# Wrap) into the bucket head whose bucket globals lacked the class, so
+# head_to_match_pattern emitted MatchClass(Call) and the bucket returned
+# nothing.  A correct compiler enumerates every row for the queried functor.
+Tagged("r1", Wrap(direct)),
+Tagged("r2", Item(direct, direct, direct)),
+Tagged("r3", Wrap(direct)),
+Tagged("r4", Item(direct, direct, direct)),
 
 # Nested-compound parity baseline.  The fact form already routes
 # correctly today via runtime body-Unify resolution; pairing it with

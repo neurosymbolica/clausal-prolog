@@ -133,6 +133,24 @@ def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
     if isinstance(lift_term, (LoadName, LoadAttr)):
         return clause
 
+    # Skip the lift when the lifted term is an unresolved compound reference
+    # built from an imported/qualified functor (``Call(LoadName('mod.Wrap'),
+    # …)`` / ``Call(LoadAttr(...))``) — the one-level-up analogue of the bare
+    # ``LoadName``/``LoadAttr`` case above.  In the indexed bucket path the
+    # imported functor class is NOT in the bucket's globals:
+    # ``_collect_globals_info`` ran on the pre-lift clauses, where the functor
+    # lived in a body ``Unify`` and was recorded as a call *target*, not as a
+    # head term *class*.  ``head_to_match_pattern`` therefore cannot resolve the
+    # ``LoadName`` and falls back to ``MatchClass(Call, …)`` — a pattern no
+    # runtime term instance matches, so the bucket yields nothing.  Leaving the
+    # body ``Unify`` in place lets the runtime resolve the imported functor and
+    # unify it, exactly as the non-indexed fallback path already does; bucket
+    # SELECTION still keys the clause correctly via ``arg_index._arg_to_index_key``.
+    if isinstance(lift_term, Call) and isinstance(
+        lift_term.func, (LoadName, LoadAttr)
+    ):
+        return clause
+
     # Rebuild head with lift_term at pos
     if isinstance(head, Compound):
         new_args = list(head.args)
