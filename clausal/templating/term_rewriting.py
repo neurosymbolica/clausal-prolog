@@ -137,6 +137,12 @@ _ARROW_BODY_ERROR = (
     "write  head <- (body)  or  head <- goal(X)"
 )
 
+_MULTI_GOAL_STMT_ERROR = (
+    "multiple comma-separated goals at statement level need a rule head and "
+    "parentheses: write  head <- (goal1, goal2)  for a rule, or  pred(args),  "
+    "(note the trailing comma) for a single fact"
+)
+
 
 def _leftmost_usub(node):
     """Walk the leftmost spine of *node* looking for a USub from ``<-``.
@@ -2707,6 +2713,14 @@ class EmbedTransformer(NodeTransformer):
                         # ``head <- g1, g2`` — the comma split an unparenthesised
                         # multi-goal body into tuple elements.
                         raise SyntaxError(_ARROW_BODY_ERROR)
+                elif len(value.elts) > 1 and isinstance(value.elts[0], Call):
+                    # ``g1, g2`` with no ``<-`` arrow and no head — a bare,
+                    # comma-separated sequence of predicate-call-shaped goals at
+                    # statement level.  This is never a valid clause: it parses as
+                    # a plain tuple that would be evaluated and discarded (no clause
+                    # asserted, no goal run).  The author almost certainly meant a
+                    # rule body ``head <- (g1, g2)`` or a trailing-comma fact.
+                    raise SyntaxError(_MULTI_GOAL_STMT_ERROR)
         match expr_stmt.value:
             # -directive(...) at module level: unary minus applied to a call.
             # Currently only -module(name, [exports]) is recognised.
