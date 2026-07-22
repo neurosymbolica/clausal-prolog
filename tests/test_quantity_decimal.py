@@ -57,3 +57,27 @@ class TestDecimalArithmeticCoercion:
         b = Quantity(0.25, {Metre: 1})  # float-valued, same dims
         r = a + b
         assert r.value == Decimal("1.75")
+
+
+class TestNoRegressionFloatQuantities:
+    def test_float_quantity_arithmetic_unchanged(self):
+        from clausal.modules.py.units import Metre, Second
+        d = Quantity(20.0, {Metre: 1})
+        t = Quantity(2.0, {Second: 1})
+        v = d / t
+        assert v.value == 10.0
+        assert v.dims == {Metre: 1, Second: -1}
+
+    def test_dimension_mismatch_still_raises(self):
+        from clausal.terms import UnitsMismatch
+        from clausal.modules.py.units import Metre, Second
+        import pytest
+        with pytest.raises(UnitsMismatch):
+            _ = Quantity(1.0, {Metre: 1}) + Quantity(1.0, {Second: 1})
+
+    def test_dimensioned_plus_plain_number_still_raises(self):
+        from clausal.terms import UnitsMismatch
+        from clausal.modules.py.units import Metre
+        import pytest
+        with pytest.raises(UnitsMismatch):
+            _ = Quantity(1.0, {Metre: 1}) + 5
