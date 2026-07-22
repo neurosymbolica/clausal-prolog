@@ -1,0 +1,13 @@
+# Intermediate module that imports `flip/2` from the kit AND lists it in its
+# own -module export list to RE-EXPORT it downstream.  Listing an imported
+# functor in -module must SHARE identity with the import, not re-mint a fresh
+# (empty) class.  See todo/module-reexport-imported-functor-shadows.md.
+-import_from(tests.fixtures.functor_reexport_kit, [flip, combine])
+-module(functor_reexport_queries, [
+    flip(EDIT, DECISION),
+    my_query(RESULT)
+])
+
+my_query(RESULT) <- (
+    flip(_, RESULT)
+)
