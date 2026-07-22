@@ -1768,6 +1768,25 @@ class UnitsMismatch(Exception):
     """Raised when dimensioned quantities with incompatible units are combined."""
 
 
+class CurrencyPrecisionError(Exception):
+    """Raised when a currency amount is constructed with more decimal places
+    than the currency's scale allows (e.g. 7.891 for a 2-dp euro)."""
+
+
+def _check_currency_precision(value, currency) -> None:
+    """Raise CurrencyPrecisionError if `value` carries digits below `currency`'s
+    scale. Trailing zeros are allowed (7.890 == 7.89). `value` is already Decimal."""
+    scale = currency.scale
+    if value != value.quantize(Decimal(1).scaleb(-scale)):
+        raise CurrencyPrecisionError(
+            f"{value} has more decimal places than {currency._name} supports "
+            f"(scale {scale}). Combine per-currency literals "
+            f"(e.g. 0.1(euro) + 0.2(euro)), round explicitly with "
+            f"money_round(V, Mode, Out), or use money_precise for deliberate "
+            f"sub-scale amounts."
+        )
+
+
 def _dim_name(k) -> str:
     """Return a short display name for a dimension key (predicate or string)."""
     return k._name if hasattr(k, "_name") else str(k)
@@ -1860,6 +1879,10 @@ class Quantity:
                 if getattr(_k, "is_currency", False):
                     self._value = _to_decimal(self._value)
                     break
+        # Precision check only when TAGGING a raw number as a currency (dims is a
+        # currency predicate). Arithmetic results pass a dims dict and are exempt.
+        if getattr(dims, "is_currency", False):
+            _check_currency_precision(self._value, dims)
 
     def __call__(self, value):
         """Scale this quantity by *value* — ``Byte(4)`` is ``4 * Byte`` (F048).
