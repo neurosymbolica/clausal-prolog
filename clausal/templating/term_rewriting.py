@@ -351,6 +351,8 @@ def _is_unit_expr(node) -> bool:
     """
     if isinstance(node, Name):
         return True
+    if isinstance(node, Attribute):
+        return _is_unit_expr(node.value)
     if isinstance(node, Constant) and isinstance(node.value, (int, float)):
         return True
     if isinstance(node, UnaryOp) and isinstance(node.op, USub):

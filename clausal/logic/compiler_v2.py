@@ -308,6 +308,12 @@ _MODULE_ALIASES: dict[str, str] = {
     "prolog": "prolog",
     "provenance": "provenance",
     "units": "units",
+    # Country/currency modules
+    "bahrain": "countries.bahrain",
+    "european_union": "countries.european_union",
+    "japan": "countries.japan",
+    "united_kingdom": "countries.united_kingdom",
+    "united_states": "countries.united_states",
 }
 
 
