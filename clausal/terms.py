@@ -1785,6 +1785,26 @@ def _dims_str(dims: dict) -> str:
     return "·".join(parts)
 
 
+def _to_decimal(x):
+    """Coerce a numeric magnitude to Decimal for a currency amount.
+
+    Uses Decimal(str(f)) for floats — never Decimal(f), which would expose the
+    binary expansion. Rejects bool (an int subclass) rather than treating it as
+    a number.
+    """
+    if isinstance(x, Decimal):
+        return x
+    if isinstance(x, bool):
+        raise TypeError(f"cannot use {x!r} as a currency amount")
+    if isinstance(x, int):
+        return Decimal(x)
+    if isinstance(x, float):
+        return Decimal(str(x))
+    if isinstance(x, str):
+        return Decimal(x)
+    raise TypeError(f"cannot coerce {x!r} to a Decimal currency amount")
+
+
 class Quantity:
     """A number with physical dimensions for dimensional analysis.
 
@@ -1835,6 +1855,11 @@ class Quantity:
             )
         self._value = value
         self._dims = MappingProxyType({k: v for k, v in actual_dims.items() if v != 0})
+        if not isinstance(self._value, Decimal):
+            for _k in self._dims:
+                if getattr(_k, "is_currency", False):
+                    self._value = _to_decimal(self._value)
+                    break
 
     def __call__(self, value):
         """Scale this quantity by *value* — ``Byte(4)`` is ``4 * Byte`` (F048).
