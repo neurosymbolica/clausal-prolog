@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re as _re
 from dataclasses import dataclass, field
+from decimal import Decimal
 from types import MappingProxyType
 from typing import Any, Optional
 
@@ -2243,6 +2244,8 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
         return "..."
     if isinstance(t, bool):
         return str(t)
+    if isinstance(t, Decimal):
+        return _c(str(t), 'number', style)
     if isinstance(t, (int, float, complex)):
         return _c(repr(t), 'number', style)
     if isinstance(t, str):
@@ -2491,6 +2494,8 @@ def term_html(t: Any, _bd: int = 0) -> str:
         return "..."
     if isinstance(t, bool):
         return esc(str(t))
+    if isinstance(t, Decimal):
+        return _html_c(esc(str(t)), 'number')
     if isinstance(t, (int, float, complex)):
         return _html_c(esc(repr(t)), 'number')
     if isinstance(t, str):
