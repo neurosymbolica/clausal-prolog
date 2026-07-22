@@ -1459,11 +1459,11 @@ _IMPORT_ALIASES: dict[str, str] = {
     "provenance": "provenance",
     "reflection": "reflection",
     "units": "units",
-    "european_union": "countries.european_union",
-    "united_states": "countries.united_states",
-    "united_kingdom": "countries.united_kingdom",
-    "japan": "countries.japan",
     "bahrain": "countries.bahrain",
+    "european_union": "countries.european_union",
+    "japan": "countries.japan",
+    "united_kingdom": "countries.united_kingdom",
+    "united_states": "countries.united_states",
 }
 
 

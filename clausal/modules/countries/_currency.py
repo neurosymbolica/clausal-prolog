@@ -22,6 +22,9 @@ class _CurrencyPredicate(_UnitsPredicate):
         self.scale = None
         self.symbol = None
 
+    def __repr__(self) -> str:
+        return f"<currency {self._name} ({self.iso_code})>"
+
 
 def _make_currency(name: str, iso_code: str, scale: int, symbol: str) -> _CurrencyPredicate:
     """Create a self-keyed currency base dimension with display metadata."""

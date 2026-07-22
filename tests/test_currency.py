@@ -136,3 +136,11 @@ class TestCurrencyClausalIntegration:
             "-import_module(european_union)\n"
             "Test <- (eval_(7.89(euro), A), has_units(A, european_union.euro))\n")
         assert _succeeds(mod)
+
+    def test_bare_and_qualified_currency_are_same_object(self):
+        mod = _load("cur_identity",
+            "-import_from(european_union, [euro])\n"
+            "-import_module(european_union)\n"
+            "Test <- (eval_(1.10(euro), A), eval_(2.20(european_union.euro), B), "
+            "eval_(A + B, C), eval_(3.30(euro), D), C == D)\n")
+        assert _succeeds(mod)
