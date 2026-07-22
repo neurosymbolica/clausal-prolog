@@ -6,13 +6,10 @@ exact constructors, explicit-mode rounding/formatting, and metadata accessors.
 """
 from __future__ import annotations
 
-from decimal import (
-    Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN, ROUND_HALF_DOWN,
-    ROUND_UP, ROUND_DOWN, ROUND_CEILING, ROUND_FLOOR,
-)
+from decimal import Decimal
 from typing import Callable
 
-from clausal.terms import Quantity
+from clausal.terms import Quantity, _quantize_to_scale, _format_money
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
@@ -27,17 +24,6 @@ def _simple_to_trampoline(simple_fn: Callable) -> Callable:
     return trampoline_fn
 
 
-_MODES = {
-    "half_up": ROUND_HALF_UP,
-    "half_even": ROUND_HALF_EVEN,
-    "half_down": ROUND_HALF_DOWN,
-    "up": ROUND_UP,
-    "down": ROUND_DOWN,
-    "ceiling": ROUND_CEILING,
-    "floor": ROUND_FLOOR,
-}
-
-
 def _currency_of(amount):
     """Return the currency predicate of a currency Quantity, or None."""
     if not isinstance(amount, Quantity) or len(amount.dims) != 1:
@@ -50,11 +36,7 @@ def _currency_of(amount):
 
 def _quantize(amount, currency, mode_str):
     """Return the amount's value quantized to the currency's scale using mode_str."""
-    rounding = _MODES.get(mode_str)
-    if rounding is None:
-        raise ValueError(f"unknown rounding mode {mode_str!r}; expected one of "
-                         f"{sorted(_MODES)}")
-    return amount.value.quantize(Decimal(1).scaleb(-currency.scale), rounding=rounding)
+    return _quantize_to_scale(amount.value, currency.scale, mode_str)
 
 
 # ── constructors ──────────────────────────────────────────────────────────────
@@ -118,17 +100,7 @@ def _money_round_impl(amount, mode, out, trail):
 
 
 def _format_value(a, c, mode_str, style):
-    v = _quantize(a, c, mode_str)
-    if style == "symbol":
-        return f"{c.symbol}{v}"
-    if style == "code":
-        return f"{v} {c.iso_code}"
-    if style == "name":
-        return f"{v} {c._name}"
-    if style == "plain":
-        return f"{v}"
-    raise ValueError(f"unknown money style {style!r}; expected "
-                     f"symbol/code/name/plain")
+    return _format_money(a.value, c, style, mode_str)
 
 
 def _money_str_impl(amount, mode, out, trail):

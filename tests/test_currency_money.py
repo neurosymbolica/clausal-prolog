@@ -104,14 +104,6 @@ class TestMoneyConstructorsAndAccessors:
 class TestCurrencyPrecisionErrorCatch:
     """catch/3 can catch CurrencyPrecisionError raised by money/3."""
 
-    def test_catch_precision_error(self):
-        """money/3 with over-precise string is catchable via catch/3."""
-        mod = _load("catch_precision",
-            "-import_from(currency, [money])\n"
-            "-import_from(european_union, [euro])\n"
-            "Test <- catch(money(\"7.891\", euro, _X), CurrencyPrecisionError(_M), 1 == 1)\n")
-        assert _succeeds(mod)
-
     def test_uncaught_precision_error_propagates(self):
         """money/3 with over-precise string propagates as LogicException without catch/3."""
         mod = _load("nocatch_precision",

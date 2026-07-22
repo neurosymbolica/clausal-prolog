@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import re as _re
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import (
+    Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN, ROUND_HALF_DOWN,
+    ROUND_UP, ROUND_DOWN, ROUND_CEILING, ROUND_FLOOR,
+)
 from types import MappingProxyType
 from typing import Any, Optional
 
@@ -1787,6 +1790,36 @@ def _check_currency_precision(value, currency) -> None:
         )
 
 
+_MONEY_ROUNDING = {
+    "half_up": ROUND_HALF_UP, "half_even": ROUND_HALF_EVEN,
+    "half_down": ROUND_HALF_DOWN, "up": ROUND_UP, "down": ROUND_DOWN,
+    "ceiling": ROUND_CEILING, "floor": ROUND_FLOOR,
+}
+
+
+def _quantize_to_scale(value, scale, mode_str):
+    """Quantize a Decimal to `scale` decimal places using a mode string."""
+    rounding = _MONEY_ROUNDING.get(mode_str)
+    if rounding is None:
+        raise ValueError(f"unknown rounding mode {mode_str!r}; expected one of "
+                         f"{sorted(_MONEY_ROUNDING)}")
+    return value.quantize(Decimal(1).scaleb(-scale), rounding=rounding)
+
+
+def _format_money(value, currency, style, mode_str):
+    """Format a Decimal currency value: style in symbol/code/name/plain."""
+    v = _quantize_to_scale(value, currency.scale, mode_str)
+    if style == "symbol":
+        return f"{currency.symbol}{v}"
+    if style == "code":
+        return f"{v} {currency.iso_code}"
+    if style == "name":
+        return f"{v} {currency._name}"
+    if style == "plain":
+        return f"{v}"
+    raise ValueError(f"unknown money style {style!r}; expected symbol/code/name/plain")
+
+
 def _dim_name(k) -> str:
     """Return a short display name for a dimension key (predicate or string)."""
     return k._name if hasattr(k, "_name") else str(k)
@@ -2080,26 +2113,7 @@ class Quantity:
             return format(str(self), spec)
         # currency spec: "<style>" or "<style>,<mode>"; default style code, mode half_even
         style, _, mode = spec.partition(",")
-        style = style or "code"
-        mode = mode or "half_even"
-        from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, ROUND_HALF_DOWN, \
-            ROUND_UP, ROUND_DOWN, ROUND_CEILING, ROUND_FLOOR
-        modes = {"half_even": ROUND_HALF_EVEN, "half_up": ROUND_HALF_UP,
-                 "half_down": ROUND_HALF_DOWN, "up": ROUND_UP, "down": ROUND_DOWN,
-                 "ceiling": ROUND_CEILING, "floor": ROUND_FLOOR}
-        rounding = modes.get(mode)
-        if rounding is None:
-            raise ValueError(f"unknown money format mode {mode!r}")
-        v = self._value.quantize(Decimal(1).scaleb(-cur.scale), rounding=rounding)
-        if style == "symbol":
-            return f"{cur.symbol}{v}"
-        if style == "code":
-            return f"{v} {cur.iso_code}"
-        if style == "name":
-            return f"{v} {cur._name}"
-        if style == "plain":
-            return f"{v}"
-        raise ValueError(f"unknown money format style {style!r}")
+        return _format_money(self._value, cur, style or "code", mode or "half_even")
 
     # ── Clausal unification protocol ─────────────────────────────────────────
 
