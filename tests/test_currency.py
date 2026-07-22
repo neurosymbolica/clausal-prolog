@@ -1,6 +1,12 @@
+import os
+import tempfile
 from decimal import Decimal
 
 import pytest
+
+from clausal.import_hook import _load_module
+from clausal.logic.solve import call
+from clausal.terms import UnitsMismatch
 
 
 class TestCurrencyVocabulary:
@@ -84,13 +90,6 @@ class TestCurrencyDecimalConstruction:
         assert r.value == Decimal("2.5")
 
 
-import os
-import tempfile
-
-from clausal.import_hook import _load_module
-from clausal.logic.solve import call
-
-
 def _load(name, src):
     d = tempfile.mkdtemp()
     p = os.path.join(d, f"{name}.clausal")
@@ -100,11 +99,7 @@ def _load(name, src):
 
 
 def _succeeds(mod, pred="Test"):
-    from clausal.terms import UnitsMismatch
-    try:
-        return any(True for _ in call(pred, module=mod))
-    except UnitsMismatch:
-        return False
+    return any(True for _ in call(pred, module=mod))
 
 
 class TestCurrencyClausalIntegration:
@@ -126,12 +121,13 @@ class TestCurrencyClausalIntegration:
         assert _succeeds(mod)
 
     def test_cross_currency_addition_fails_in_clausal(self):
-        # euro + dollar must NOT succeed (dimension safety end-to-end).
+        # euro + dollar must raise UnitsMismatch (dimension safety end-to-end).
         mod = _load("cur_mismatch",
             "-import_from(european_union, [euro])\n"
             "-import_from(united_states, [dollar])\n"
             "Test <- (eval_(1.00(euro), A), eval_(1.00(dollar), B), eval_(A + B, C))\n")
-        assert not _succeeds(mod)
+        with pytest.raises(UnitsMismatch):
+            list(call("Test", module=mod))
 
     def test_has_units_with_qualified_currency(self):
         mod = _load("cur_has_units",
