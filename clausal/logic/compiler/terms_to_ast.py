@@ -288,10 +288,18 @@ def term_to_ast_expr(
 
 
     if isinstance(term, DictTerm):
+        # A logic-variable key ({K: V}) must be dereferenced at construction
+        # time, exactly as in the DictLiteral lowering below: emitted bare, the
+        # frame var keys the rebuilt dict as the Var object and every later
+        # get(OUT, <value>, _) misses silently.  $dict_key derefs (and raises a
+        # catchable instantiation_error on a never-bound key).
+        def _dictterm_key(k):
+            expr = term_to_ast_expr(k, var_context, eval_arith=eval_arith)
+            return _call(_name("$dict_key"), expr) if is_var(k) else expr
         return _call(
             _name("DictTerm"),
             ast.Dict(
-                keys=[term_to_ast_expr(k, var_context, eval_arith=eval_arith) for k in term.keys()],
+                keys=[_dictterm_key(k) for k in term.keys()],
                 values=[term_to_ast_expr(v, var_context, eval_arith=eval_arith) for v in term.values()],
             ),
         )

@@ -1,5 +1,28 @@
 # Non-splat dict literal with a variable key `{K: V}` is mis-folded to an eager constant
 
+**DONE 2026-07-21 — and the "eager fold" theory below was WRONG.** Instrumentation
+(a spy on `term_to_ast_expr` during module load) showed the non-splat literal is
+already rebuilt per call: `{K: 20}` lowers to `DictTerm({_v1: 20})` with the frame
+var from `var_context` (K enters `var_context` via its other occurrences, e.g.
+`K is "age"`). There is no constant hoist and `_collect_vars` was never the operative
+gap. The actual defect: the `DictTerm` branch of `terms_to_ast.term_to_ast_expr`
+emitted Var keys BARE — the `$dict_key` wrap from `140388c1` existed only in the
+`DictLiteral` branch. So the per-call dict was keyed by the (bound) Var OBJECT, not
+its value. The first attempt failed because it wrapped keys in `term_rewriting`
+(module-exec layer, where the template var is genuinely unbound → load crash), one
+layer too early.
+
+Fix: `$dict_key`-wrap `is_var` keys in the `DictTerm` lowering (mirrors the
+`DictLiteral` branch). A key var that occurs ONLY as a dict key is uncollected by
+`_collect_vars` (DictTerm branch skips keys) and lowers to a fresh `Var()` —
+`$dict_key` turns that into the correct catchable `instantiation_error` at call
+time, so the skip is benign (evidence: the `nonsplat_unbound_key` fixture case).
+
+All DoD items verified: 4-case repro 4/4; never-bound key raises catchable
+`LogicException` (instantiation) at call time, module load unaffected; regression
+test `tests/test_dict_nonsplat_var_key.py` (+ fixture, 5 cases incl. var-value and
+unbound-key) mirrors the splat test; full suite 10014 passed, 0 failed.
+
 **Filed:** 2026-07-21 (query-taxonomy coverage sweep). **Sibling of the FIXED splat
 case** `140388c1` (`fix(compiler): deref a variable splat-dict key at construction time`).
 **Deep-dive merged** 2026-07-21 from the orchestrator's `DICT-VAR-KEY-FINDINGS.md`
