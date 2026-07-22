@@ -84,3 +84,22 @@ def _splat_data(source: Any) -> dict:
     if is_var(source):
         raise LogicException(instantiation_error(_SPLAT_CTX))
     raise LogicException(type_error("dict", source, _SPLAT_CTX))
+
+
+_DICT_KEY_CTX = "{key}/1"
+
+
+def _dict_key(key: Any) -> Any:
+    """Dereference a computed dict-literal key.
+
+    A key written as a logic variable (``{K: V}`` or ``{**OLD, K: V}`` with
+    ``K`` bound in the SAME clause frame as the literal) reaches dict
+    construction as the Var/AttVar object, not its value — so the built dict
+    is keyed by the variable and every later ``get(D, <value>, _)`` misses.
+    Dereferencing here makes the key its bound value. An unbound key is an
+    instantiation error (mirrors ``_splat_data`` on an unbound source).
+    """
+    key = deref(key)
+    if is_var(key):
+        raise LogicException(instantiation_error(_DICT_KEY_CTX))
+    return key

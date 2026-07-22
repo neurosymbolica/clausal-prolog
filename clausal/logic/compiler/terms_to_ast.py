@@ -317,11 +317,20 @@ def term_to_ast_expr(
 
     if isinstance(term, DictLiteral):
         _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
+        # A computed key that is a logic VARIABLE must be dereferenced at
+        # runtime: a key bound in the same clause frame as the literal
+        # (``{K: V}`` / ``{**OLD, K: V}``) otherwise reaches dict construction
+        # as the Var object, keying the dict by the variable rather than its
+        # value.  $dict_key derefs (and errors on an unbound key).  Literal
+        # keys are already ground, so they are emitted unwrapped.
+        _key = lambda k: (
+            _call(_name("$dict_key"), _rec(k)) if is_var(k) else _rec(k)
+        )
         has_splat = any(k is None for k in term.keys)
         if not has_splat:
             # No splats: plain dict used as DictTerm constructor argument.
             return ast.Dict(
-                keys=[_rec(k) for k in term.keys],
+                keys=[_key(k) for k in term.keys],
                 values=[_rec(v) for v in term.values],
             )
         # Splat dict sugar: {**OLD, k: v} → DictTerm({**deref(OLD).data, k: v})
@@ -337,7 +346,7 @@ def term_to_ast_expr(
                 # than a raw AttributeError on ``.data``.
                 py_vals.append(_call(_name("$splat_data"), _rec(v)))
             else:
-                py_keys.append(_rec(k))
+                py_keys.append(_key(k))
                 py_vals.append(_rec(v))
         return _call(
             _name("DictTerm"),
