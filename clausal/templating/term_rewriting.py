@@ -1453,6 +1453,7 @@ _IMPORT_ALIASES: dict[str, str] = {
     "opencv_video": "py.opencv_video",
     "sklearn": "py.sklearn",
     # Clausal-domain modules (not third-party wrappers — no py/ subdirectory)
+    "currency": "currency",
     "graphs": "graphs",
     "imperial": "imperial",
     "prolog": "prolog",

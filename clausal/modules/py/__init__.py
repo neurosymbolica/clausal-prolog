@@ -117,12 +117,18 @@ def _catchable_dispatch(dispatch_fn):
     is routed through the catcher chain. Convert every other exception to a
     ``LogicException`` carrying ``python_error_term(exc)`` so catch/3 catches
     module-predicate errors the same way it catches ``throw/1`` (F004).
+
+    ``CurrencyPrecisionError`` is also re-raised unwrapped: it is a
+    programming-error sentinel (wrong number of decimal places passed to a
+    currency constructor), not a runtime logic failure, and callers that
+    deliberately test for over-precision should receive the raw exception.
     """
     def wrapped(this_generator, _proceed, _fail, _catcher, *args):
         from clausal.logic.exceptions import LogicException, python_error_term
+        from clausal.terms import CurrencyPrecisionError
         try:
             yield from dispatch_fn(this_generator, _proceed, _fail, _catcher, *args)
-        except LogicException:
+        except (LogicException, CurrencyPrecisionError):
             raise
         except Exception as exc:  # noqa: BLE001 — deliberate boundary conversion
             raise LogicException(python_error_term(exc)) from exc
