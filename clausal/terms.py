@@ -1879,48 +1879,72 @@ class Quantity:
                 result.pop(k, None)
         return result
 
+    @staticmethod
+    def _num_pair(a, b):
+        """Return (a, b) with a plain float coerced to Decimal when the other
+        operand is a Decimal, so Decimal arithmetic never raises TypeError and
+        stays exact. Uses Decimal(str(f)) — never Decimal(f) — and leaves ints
+        alone (Decimal op int is already exact)."""
+        if isinstance(a, Decimal) and isinstance(b, float) and not isinstance(b, bool):
+            return a, Decimal(str(b))
+        if isinstance(b, Decimal) and isinstance(a, float) and not isinstance(a, bool):
+            return Decimal(str(a)), b
+        return a, b
+
     # ── Arithmetic ──────────────────────────────────────────────────────────
 
     def __add__(self, other):
         if isinstance(other, (int, float)) and not self._dims:
-            return Quantity(self._value + other, {})
+            a, b = self._num_pair(self._value, other)
+            return Quantity(a + b, {})
         self._require_same_dims(other, "add")
-        return Quantity(self._value + other._value, self._dims)
+        a, b = self._num_pair(self._value, other._value)
+        return Quantity(a + b, self._dims)
 
     def __radd__(self, other):
         if isinstance(other, (int, float)) and not self._dims:
-            return Quantity(other + self._value, {})
+            a, b = self._num_pair(other, self._value)
+            return Quantity(a + b, {})
         return NotImplemented
 
     def __sub__(self, other):
         if isinstance(other, (int, float)) and not self._dims:
-            return Quantity(self._value - other, {})
+            a, b = self._num_pair(self._value, other)
+            return Quantity(a - b, {})
         self._require_same_dims(other, "subtract")
-        return Quantity(self._value - other._value, self._dims)
+        a, b = self._num_pair(self._value, other._value)
+        return Quantity(a - b, self._dims)
 
     def __rsub__(self, other):
         if isinstance(other, (int, float)) and not self._dims:
-            return Quantity(other - self._value, {})
+            a, b = self._num_pair(other, self._value)
+            return Quantity(a - b, {})
         return NotImplemented
 
     def __mul__(self, other):
         if isinstance(other, Quantity):
             new_dims = self._merge_dims(self._dims, other._dims, +1)
-            return Quantity(self._value * other._value, new_dims)
-        return Quantity(self._value * other, self._dims)
+            a, b = self._num_pair(self._value, other._value)
+            return Quantity(a * b, new_dims)
+        a, b = self._num_pair(self._value, other)
+        return Quantity(a * b, self._dims)
 
     def __rmul__(self, other):
-        return Quantity(other * self._value, self._dims)
+        a, b = self._num_pair(other, self._value)
+        return Quantity(a * b, self._dims)
 
     def __truediv__(self, other):
         if isinstance(other, Quantity):
             new_dims = self._merge_dims(self._dims, other._dims, -1)
-            return Quantity(self._value / other._value, new_dims)
-        return Quantity(self._value / other, self._dims)
+            a, b = self._num_pair(self._value, other._value)
+            return Quantity(a / b, new_dims)
+        a, b = self._num_pair(self._value, other)
+        return Quantity(a / b, self._dims)
 
     def __rtruediv__(self, other):
         new_dims = {k: -v for k, v in self._dims.items()}
-        return Quantity(other / self._value, new_dims)
+        a, b = self._num_pair(other, self._value)
+        return Quantity(a / b, new_dims)
 
     def __pow__(self, exp):
         if isinstance(exp, Quantity):

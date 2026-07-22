@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from clausal.terms import term_str, Compound
+from clausal.terms import term_str, Compound, Quantity
 
 
 class TestDecimalRendering:
@@ -15,3 +15,45 @@ class TestDecimalRendering:
         s = term_str(Compound("price", (Decimal("1.50"),)))
         assert "1.50" in s
         assert "Decimal(" not in s
+
+
+class TestDecimalArithmeticCoercion:
+    def test_decimal_quantity_times_float_scalar(self):
+        # Decimal * float would raise TypeError without coercion.
+        q = Quantity(Decimal("100.00"), {})  # dimensionless
+        r = q * 0.2
+        assert isinstance(r.value, Decimal)
+        assert r.value == Decimal("20.000")
+
+    def test_float_scalar_times_decimal_quantity(self):
+        q = Quantity(Decimal("100.00"), {})
+        r = 0.2 * q
+        assert r.value == Decimal("20.000")
+
+    def test_decimal_quantity_divided_by_float(self):
+        q = Quantity(Decimal("10.00"), {})
+        r = q / 4.0
+        assert r.value == Decimal("2.5")
+
+    def test_decimal_quantity_divided_by_int_still_exact(self):
+        q = Quantity(Decimal("10.00"), {})
+        r = q / 4
+        assert r.value == Decimal("2.5")
+
+    def test_dimensionless_decimal_plus_float(self):
+        q = Quantity(Decimal("1.50"), {})
+        r = q + 0.25
+        assert r.value == Decimal("1.75")
+
+    def test_coercion_uses_str_not_binary_expansion(self):
+        # The load-bearing rule: Decimal(str(0.2)) == 0.2, NOT Decimal(0.2).
+        q = Quantity(Decimal("1"), {})
+        r = q * 0.2
+        assert r.value == Decimal("0.2")
+
+    def test_mixed_value_quantities_same_dims_add(self):
+        from clausal.modules.py.units import Metre
+        a = Quantity(Decimal("1.5"), {Metre: 1})
+        b = Quantity(0.25, {Metre: 1})  # float-valued, same dims
+        r = a + b
+        assert r.value == Decimal("1.75")
