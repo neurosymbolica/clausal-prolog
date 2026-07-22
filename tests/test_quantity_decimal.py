@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+import pytest
+
 from clausal.terms import term_str, Compound, Quantity
 
 
@@ -71,13 +73,11 @@ class TestNoRegressionFloatQuantities:
     def test_dimension_mismatch_still_raises(self):
         from clausal.terms import UnitsMismatch
         from clausal.modules.py.units import Metre, Second
-        import pytest
         with pytest.raises(UnitsMismatch):
             _ = Quantity(1.0, {Metre: 1}) + Quantity(1.0, {Second: 1})
 
     def test_dimensioned_plus_plain_number_still_raises(self):
         from clausal.terms import UnitsMismatch
         from clausal.modules.py.units import Metre
-        import pytest
         with pytest.raises(UnitsMismatch):
             _ = Quantity(1.0, {Metre: 1}) + 5
