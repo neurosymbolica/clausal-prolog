@@ -1,5 +1,15 @@
 # Reifier crashes on a var-keyed non-splat dict literal — `TypeError: unhashable type: 'Variable'`
 
+**DONE 2026-07-21.** Fixed per the fix direction below: `_is_intern_atom_key` replaced
+with a conservative `_is_const_key` whitelist (Constant / negated number / tuple of
+those); any dict with a non-constant key now routes to the `DictLiteral`
+representation. F013 verified preserved (string/int-only dicts still reify to a raw
+dict). New `TestDictLiteral` cases: var-key round-trip, mixed var+string and var+atom
+keys, var-key-shares-splat-representation. Red-green verified; full suite 10009
+passed, 0 failed. The `if key is not None` splat-marker note below was left as-is:
+splat literals provably do not reach the raw-dict branch (splat round-trip tests
+pass), so the guard is inert; not worth churning.
+
 **Filed:** 2026-07-21, split out of `dict-nonsplat-var-key-eager-fold.md` while triaging
 the orchestrator's `DICT-VAR-KEY-FINDINGS.md` (it asked "check for interaction with
 `a1cb0230`" — this is that interaction, verified by probe).

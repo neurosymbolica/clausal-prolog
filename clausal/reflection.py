@@ -146,15 +146,21 @@ def _dotted_name(node):
     raise ReifyError(f"cannot extract functor name from {ast.unparse(node)}")
 
 
-def _is_intern_atom_key(key):
-    """True for a ``$intern_atom("name")`` key node — the compiler's rewrite of a
-    bare-atom dict key (see ``EmbedTransformer._visit_dict_key``).  Such a key
-    reifies to an unhashable ``Goal``, so a dict carrying one cannot be a raw
-    Python dict."""
+def _is_const_key(key):
+    """True for a dict key that reifies to a hashable constant (string/int/float,
+    or a tuple of those) and so may key a raw Python dict.  Anything else reifies
+    unhashable — a bare-atom ``$intern_atom(...)`` call (the compiler's rewrite of
+    ``{foo: V}``, see ``EmbedTransformer._visit_dict_key``) becomes a ``Goal``, a
+    variable or walrus-bound name becomes a ``Variable``/``Atom``/term — so the
+    literal must be represented as a ``DictLiteral`` instead."""
+    if isinstance(key, ast.Constant):
+        return True
+    if isinstance(key, ast.Tuple):
+        return all(_is_const_key(elt) for elt in key.elts)
     return (
-        isinstance(key, ast.Call)
-        and isinstance(key.func, ast.Name)
-        and key.func.id == "$intern_atom"
+        isinstance(key, ast.UnaryOp)
+        and isinstance(key.op, ast.USub)
+        and isinstance(key.operand, ast.Constant)
     )
 
 
@@ -234,15 +240,16 @@ class _ClauseReifier:
         if isinstance(node, ast.Tuple):
             return tuple(self.term(elt) for elt in node.elts)
         if isinstance(node, ast.Dict):
-            # A bare-atom key (`{foo: V}`) is rewritten to `$intern_atom('foo')`,
-            # which reifies to an unhashable Goal and so cannot key a raw Python
-            # dict.  When any key is a bare atom, represent the whole literal as
+            # A non-constant key reifies unhashable — a bare-atom key (`{foo: V}`,
+            # rewritten to `$intern_atom('foo')`) becomes a Goal, a variable key
+            # (`{K: V}`) becomes a Variable — and so cannot key a raw Python
+            # dict.  When any key is non-constant, represent the whole literal as
             # the same DictLiteral node the splat path yields (keys stay in a
             # list, never used as a Python dict key) — one representation for
             # both dict-literal paths, round-tripped by _dict_literal_ast.  A
             # dict with only hashable (string/int) keys still reifies to a raw
             # dict: "dicts appear as themselves" (F013).
-            if any(_is_intern_atom_key(key) for key in node.keys):
+            if any(key is not None and not _is_const_key(key) for key in node.keys):
                 return simple_ast.DictLiteral(
                     keys=[self.term(key) for key in node.keys],
                     values=[self.term(value) for value in node.values],

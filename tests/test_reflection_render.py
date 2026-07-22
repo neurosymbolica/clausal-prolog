@@ -182,6 +182,29 @@ class TestDictLiteral:
     def test_atom_key_dict_round_trips(self, src):
         assert_round_trips(src)
 
+    @pytest.mark.parametrize("src", [
+        # Non-splat dict with a logic-VAR key: `{K: V}` reifies the key to a
+        # Variable, which is unhashable, so it must NOT key a raw Python dict.
+        # Must round-trip (same DictLiteral route as atom keys).
+        "F(O) <- (K is 'a', O is {K: 20})\n",
+        # Mixed var + string/int keys, and var + atom keys, in one literal.
+        "F2(K, O) <- (O is {K: 20, 'baz': 3})\n",
+        "F3(K, B, O) <- (O is {foo: B, K: 20})\n",
+    ])
+    def test_var_key_dict_round_trips(self, src):
+        assert_round_trips(src)
+
+    def test_var_key_dict_shares_splat_representation(self):
+        # A var key must reify to the SAME shape whether or not the literal
+        # also splats — one DictLiteral representation for the auditor.
+        splat = only_clause("A(K, B) <- (X is {**B, K: 2})\n").goals[0]
+        plain = only_clause("A(K, B) <- (X is {K: 2})\n").goals[0]
+        splat_key = strip_positions(splat).right.keys[-1]
+        plain_key = strip_positions(plain).right.keys[-1]
+        assert splat_key == plain_key, (
+            f"var key differs by splat: {plain_key!r} vs {splat_key!r}"
+        )
+
     def test_atom_key_dict_shares_splat_representation(self):
         # An atom key must reify to the SAME shape whether or not the literal
         # also splats — one DictLiteral representation for the auditor.

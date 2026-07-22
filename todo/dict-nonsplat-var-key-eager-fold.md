@@ -5,8 +5,8 @@ case** `140388c1` (`fix(compiler): deref a variable splat-dict key at constructi
 **Deep-dive merged** 2026-07-21 from the orchestrator's `DICT-VAR-KEY-FINDINGS.md`
 (file absorbed here and deleted). **Re-verified live on HEAD `a1cb0230`** — the
 bare-atom reification fix does not interact with construction; the compiler bug stands.
-The same literal ALSO crashes the reifier — that is a separate, smaller fix:
-`dict-var-key-reify-unhashable.md`.
+The same literal ALSO crashed the reifier — FIXED 2026-07-21, see
+`done/dict-var-key-reify-unhashable.md` (reflection now round-trips `{K: V}`).
 
 ## Symptom
 A NON-splat dict literal whose KEY is a logic variable bound in the same clause frame
@@ -80,6 +80,6 @@ defers, the `$dict_key` machinery already in place makes it correct.
 ## Impact / priority
 LOW-MEDIUM: corpus domains use the splat form (`{**PROFILE, KEY: VALUE}`) for what_if, which is
 fixed. The bare-var-key non-splat form is rare. But it is a SILENT-wrong (no error), so worth
-fixing or at least making loud. Coordinate with `dict-var-key-reify-unhashable.md` (same
-trigger literal, reflection layer) — fixing reflection first gives the auditor engine a loud
-error instead of a crash while this deeper compiler fix is pending.
+fixing or at least making loud. The reflection-layer facet (same trigger literal) is
+already fixed — `done/dict-var-key-reify-unhashable.md` — so the auditor engine reifies
+these literals fine; only this runtime/compiler mis-fold remains.
