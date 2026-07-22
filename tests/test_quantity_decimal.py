@@ -81,3 +81,33 @@ class TestNoRegressionFloatQuantities:
         from clausal.modules.py.units import Metre
         with pytest.raises(UnitsMismatch):
             _ = Quantity(1.0, {Metre: 1}) + 5
+
+
+class TestDecimalScalarConsistency:
+    def test_dimensionless_decimal_plus_bare_decimal(self):
+        q = Quantity(Decimal("1.50"), {})
+        assert (q + Decimal("0.25")).value == Decimal("1.75")
+
+    def test_bare_decimal_plus_dimensionless_via_radd(self):
+        q = Quantity(Decimal("1.50"), {})
+        assert (Decimal("0.25") + q).value == Decimal("1.75")
+
+    def test_dimensionless_decimal_minus_bare_decimal(self):
+        q = Quantity(Decimal("1.50"), {})
+        assert (q - Decimal("0.25")).value == Decimal("1.25")
+
+    def test_bare_decimal_minus_dimensionless_via_rsub(self):
+        q = Quantity(Decimal("0.50"), {})
+        assert (Decimal("2.00") - q).value == Decimal("1.50")
+
+    def test_dimensioned_plus_bare_decimal_still_raises(self):
+        from clausal.terms import UnitsMismatch
+        from clausal.modules.py.units import Metre
+        with pytest.raises(UnitsMismatch):
+            _ = Quantity(Decimal("1"), {Metre: 1}) + Decimal("1")
+
+    def test_constructor_scaled_unit_with_decimal_magnitude(self):
+        from clausal.modules.py.units import Centimeter, Metre
+        q = Quantity(Decimal("5"), Centimeter)  # Centimeter == Quantity(1e-2, {Metre:1})
+        assert q.value == Decimal("0.05")
+        assert q.dims == {Metre: 1}

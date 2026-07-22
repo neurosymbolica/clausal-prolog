@@ -1816,7 +1816,8 @@ class Quantity:
         if isinstance(dims, Quantity):
             # dims is a Quantity constant (e.g. Kilometer) — multiply:
             # Quantity(5, Kilometer) → Quantity(5 * 1000, {Metre: 1})
-            self._value = value * dims._value
+            a, b = self._num_pair(value, dims._value)
+            self._value = a * b
             self._dims = dims._dims
             return
         if hasattr(dims, '_dims'):
@@ -1894,7 +1895,7 @@ class Quantity:
     # ── Arithmetic ──────────────────────────────────────────────────────────
 
     def __add__(self, other):
-        if isinstance(other, (int, float)) and not self._dims:
+        if isinstance(other, (int, float, Decimal)) and not self._dims:
             a, b = self._num_pair(self._value, other)
             return Quantity(a + b, {})
         self._require_same_dims(other, "add")
@@ -1902,13 +1903,13 @@ class Quantity:
         return Quantity(a + b, self._dims)
 
     def __radd__(self, other):
-        if isinstance(other, (int, float)) and not self._dims:
+        if isinstance(other, (int, float, Decimal)) and not self._dims:
             a, b = self._num_pair(other, self._value)
             return Quantity(a + b, {})
         return NotImplemented
 
     def __sub__(self, other):
-        if isinstance(other, (int, float)) and not self._dims:
+        if isinstance(other, (int, float, Decimal)) and not self._dims:
             a, b = self._num_pair(self._value, other)
             return Quantity(a - b, {})
         self._require_same_dims(other, "subtract")
@@ -1916,7 +1917,7 @@ class Quantity:
         return Quantity(a - b, self._dims)
 
     def __rsub__(self, other):
-        if isinstance(other, (int, float)) and not self._dims:
+        if isinstance(other, (int, float, Decimal)) and not self._dims:
             a, b = self._num_pair(other, self._value)
             return Quantity(a - b, {})
         return NotImplemented
