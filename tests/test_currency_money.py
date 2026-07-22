@@ -182,3 +182,31 @@ class TestMoneyRoundingAndDisplay:
         assert f("code") == "3.34 EUR"
         assert f("name") == "3.34 euro"
         assert f("plain") == "3.34"
+
+
+class TestCurrencyFormat:
+    def _euro(self, v):
+        from clausal.modules.currency import money_precise
+        return _run(money_precise, v, euro, "OUT")[0]["OUT"]
+
+    def test_default_spec_is_code(self):
+        assert f"{self._euro('3.33')}" == "3.33 EUR"
+
+    def test_symbol_spec(self):
+        assert format(self._euro("3.33"), "symbol") == "€3.33"
+
+    def test_name_and_plain(self):
+        assert format(self._euro("3.33"), "name") == "3.33 euro"
+        assert format(self._euro("3.33"), "plain") == "3.33"
+
+    def test_spec_with_mode_quantizes(self):
+        # 3.335 with half_up -> 3.34; default (half_even) -> 3.34 as well here, so use a
+        # value that distinguishes: 3.345 half_even -> 3.34, half_up -> 3.35.
+        amt = self._euro("3.345")
+        assert format(amt, "plain,half_even") == "3.34"
+        assert format(amt, "plain,half_up") == "3.35"
+
+    def test_non_currency_quantity_unchanged(self):
+        from clausal.modules.py.units import Metre
+        q = Quantity(5.0, {Metre: 1})
+        assert format(q, "") == str(q)

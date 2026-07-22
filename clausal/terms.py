@@ -2071,7 +2071,35 @@ class Quantity:
         return f"{self._value} {_dims_str(self._dims)}"
 
     def __format__(self, spec: str) -> str:
-        return format(str(self), spec)
+        cur = None
+        if len(self._dims) == 1:
+            (key, exp), = self._dims.items()
+            if exp == 1 and getattr(key, "is_currency", False):
+                cur = key
+        if cur is None:
+            return format(str(self), spec)
+        # currency spec: "<style>" or "<style>,<mode>"; default style code, mode half_even
+        style, _, mode = spec.partition(",")
+        style = style or "code"
+        mode = mode or "half_even"
+        from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, ROUND_HALF_DOWN, \
+            ROUND_UP, ROUND_DOWN, ROUND_CEILING, ROUND_FLOOR
+        modes = {"half_even": ROUND_HALF_EVEN, "half_up": ROUND_HALF_UP,
+                 "half_down": ROUND_HALF_DOWN, "up": ROUND_UP, "down": ROUND_DOWN,
+                 "ceiling": ROUND_CEILING, "floor": ROUND_FLOOR}
+        rounding = modes.get(mode)
+        if rounding is None:
+            raise ValueError(f"unknown money format mode {mode!r}")
+        v = self._value.quantize(Decimal(1).scaleb(-cur.scale), rounding=rounding)
+        if style == "symbol":
+            return f"{cur.symbol}{v}"
+        if style == "code":
+            return f"{v} {cur.iso_code}"
+        if style == "name":
+            return f"{v} {cur._name}"
+        if style == "plain":
+            return f"{v}"
+        raise ValueError(f"unknown money format style {style!r}")
 
     # ── Clausal unification protocol ─────────────────────────────────────────
 
