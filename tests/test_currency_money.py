@@ -138,3 +138,47 @@ class TestMoneyPrecisionCatchable:
             "-import_from(european_union, [euro])\n"
             "Test <- money(\"7.89\", euro, X)\n")
         assert _succeeds(mod)
+
+
+class TestMoneyRoundingAndDisplay:
+    def _euro(self, v):
+        from clausal.modules.currency import money_precise
+        return _run(money_precise, v, euro, "OUT")[0]["OUT"]
+
+    def test_money_round_half_up_classic_trap(self):
+        from clausal.modules.currency import money_round
+        amt = self._euro("2.675")                    # exact Decimal, sub-scale
+        out = _run(money_round, amt, "half_up", "OUT")[0]["OUT"]
+        assert out.value == Decimal("2.68")          # not 2.67
+        assert out.dims == {euro: 1}
+
+    def test_money_round_half_even(self):
+        from clausal.modules.currency import money_round
+        amt = self._euro("2.665")
+        out = _run(money_round, amt, "half_even", "OUT")[0]["OUT"]
+        assert out.value == Decimal("2.66")
+
+    def test_money_round_division_result(self):
+        from clausal.modules.currency import money_round
+        amt = Quantity(Decimal("10.00"), euro) / 3   # 3.333...
+        out = _run(money_round, amt, "half_up", "OUT")[0]["OUT"]
+        assert out.value == Decimal("3.33")
+
+    def test_money_round_unknown_mode_raises(self):
+        from clausal.modules.currency import money_round
+        with pytest.raises(LogicException):
+            _run(money_round, self._euro("1.00"), "sideways", "OUT")
+
+    def test_money_str_default(self):
+        from clausal.modules.currency import money_str
+        s = _run(money_str, self._euro("3.335"), "half_up", "OUT")[0]["OUT"]
+        assert s == "3.34 EUR"
+
+    def test_money_format_styles(self):
+        from clausal.modules.currency import money_format
+        amt = self._euro("3.335")
+        f = lambda style: _run(money_format, amt, style, "half_up", "OUT")[0]["OUT"]
+        assert f("symbol") == "€3.34"
+        assert f("code") == "3.34 EUR"
+        assert f("name") == "3.34 euro"
+        assert f("plain") == "3.34"

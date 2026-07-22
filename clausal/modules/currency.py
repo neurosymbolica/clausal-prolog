@@ -103,3 +103,57 @@ currency_code._register(2, _simple_to_trampoline(_accessor("iso_code")))
 
 currency_symbol = ModulePredicate("currency_symbol")
 currency_symbol._register(2, _simple_to_trampoline(_accessor("symbol")))
+
+
+# ── rounding & display ────────────────────────────────────────────────────────
+
+def _money_round_impl(amount, mode, out, trail):
+    a, m = deref(amount), deref(mode)
+    c = _currency_of(a)
+    if c is None or is_var(m):
+        return
+    q = Quantity(_quantize(a, c, str(m)), dict(a.dims))   # UNCHECKED raw dict
+    if unify(deref(out), q, trail):
+        yield None
+
+
+def _format_value(a, c, mode_str, style):
+    v = _quantize(a, c, mode_str)
+    if style == "symbol":
+        return f"{c.symbol}{v}"
+    if style == "code":
+        return f"{v} {c.iso_code}"
+    if style == "name":
+        return f"{v} {c._name}"
+    if style == "plain":
+        return f"{v}"
+    raise ValueError(f"unknown money style {style!r}; expected "
+                     f"symbol/code/name/plain")
+
+
+def _money_str_impl(amount, mode, out, trail):
+    a, m = deref(amount), deref(mode)
+    c = _currency_of(a)
+    if c is None or is_var(m):
+        return
+    if unify(deref(out), _format_value(a, c, str(m), "code"), trail):
+        yield None
+
+
+def _money_format_impl(amount, style, mode, out, trail):
+    a, sty, m = deref(amount), deref(style), deref(mode)
+    c = _currency_of(a)
+    if c is None or is_var(sty) or is_var(m):
+        return
+    if unify(deref(out), _format_value(a, c, str(m), str(sty)), trail):
+        yield None
+
+
+money_round = ModulePredicate("money_round")
+money_round._register(3, _simple_to_trampoline(_money_round_impl))
+
+money_str = ModulePredicate("money_str")
+money_str._register(3, _simple_to_trampoline(_money_str_impl))
+
+money_format = ModulePredicate("money_format")
+money_format._register(4, _simple_to_trampoline(_money_format_impl))
