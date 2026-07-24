@@ -34,7 +34,8 @@ ISO_SCALE3 = {"BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"}
 
 # Homes that are not a single country (code[:2] is not an ISO-3166 country).
 REGIONAL = {"XOF": "west_african_cfa", "XAF": "central_african_cfa",
-            "XPF": "cfp_franc", "XCD": "east_caribbean"}
+            "XPF": "cfp_franc", "XCD": "east_caribbean",
+            "XCG": "dutch_caribbean"}  # Caribbean guilder (Curaçao + Sint Maarten)
 SPECIAL_HOME = {"EUR": "european_union"}
 
 # Canonical overrides (name/symbol) to match the documented starter set.
