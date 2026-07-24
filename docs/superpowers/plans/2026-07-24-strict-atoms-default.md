@@ -608,6 +608,7 @@ Now that every in-repo file is armed, invert the resolution default: neither dir
 
 **Files:**
 - Modify: `clausal/logic/compiler_v2.py` (warning class + guard near line 40; `_process_bare_atom_refs` loop ~line 577-603)
+- Modify: `conftest.py` (`DocMdFile.collect` — compile doc example blocks in implicit mode by default)
 - Modify: `docs/directives.md` (`-strict_atoms` subsection ~line 86)
 - Test: `tests/test_strict_atoms_default.py` (append)
 
@@ -730,10 +731,44 @@ Leave the `undeclared` collection and the closing `raise NameError(...)` (lines 
 Run: `PYTHONPATH=/workspace/clausal-bug-fix ~/.pyenv/versions/3.13.3/bin/python -m pytest tests/test_strict_atoms_default.py -v`
 Expected: PASS (all tests in the file).
 
+- [ ] **Step 5b: Compile doc example blocks in implicit mode**
+
+`conftest.py` compiles every non-`# skip`, non-`--8<--` ` ```clausal ` block in `docs/*.md` via `load_clausal_module`. The Task 3 codemod armed `.clausal` *files* but not these embedded blocks, so the flip breaks 18 of them (measured: doc `[compile error]` count goes 30 → 48). **Decision (user-approved):** doc example blocks are illustrative snippets, the same category as REPL cells, so they compile in implicit (loose) mode by default — no per-doc edits, and the rendered markdown is unchanged. A block that states its own `-strict_atoms`/`-implicit_atoms` is respected as-is.
+
+In `conftest.py`, add a module-level helper near the other block helpers (after `_is_snippet_block`, ~line 128):
+
+```python
+_ATOM_MODE_RE = re.compile(r"^\s*-\s*(strict_atoms|implicit_atoms)\b", re.M)
+
+
+def _with_doc_atom_mode(content: str) -> str:
+    """Doc example blocks compile in implicit (loose) atom mode by default,
+    like the REPL — they are illustrative snippets, not authored files. A
+    block that declares its own -strict_atoms/-implicit_atoms is left as-is.
+    Only the temp compile buffer is affected; the rendered markdown is not."""
+    if _ATOM_MODE_RE.search(content):
+        return content
+    return "-implicit_atoms\n" + content
+```
+
+Then, in `DocMdFile.collect`, in the compile branch, change the temp-file write from:
+
+```python
+                f.write(content)
+```
+
+to:
+
+```python
+                f.write(_with_doc_atom_mode(content))
+```
+
+(`re` is already imported in `conftest.py` for `_CLAUSAL_FENCE_RE`.) Leave the `_should_skip` and `_is_snippet_block` early-return branches untouched — only the compiled branch gets the prepend.
+
 - [ ] **Step 6: Run the full suite**
 
 Run: `PYTHONPATH=/workspace/clausal-bug-fix ~/.pyenv/versions/3.13.3/bin/python -m pytest -q`
-Expected: PASS — every in-repo file was armed in Task 3, so nothing regresses. If a test that constructs `.clausal` source inline (not via a fixture file) now fails with a strict `NameError`, that test relied on the old loose default; add `-implicit_atoms` to its inline source. List any such tests in the commit message.
+Expected: PASS except the 2 known pre-existing failures. Two verifications: (a) `pytest docs/ --collect-only -q 2>/dev/null | grep -c "\[compile error\]"` stays at **30** (not 48), confirming the doc-block fix; (b) if a test that constructs `.clausal` source inline (not a fixture file) now fails with a strict `NameError`, it relied on the old loose default — add `-implicit_atoms` to that test's inline source. List any such tests in the commit message.
 
 - [ ] **Step 7: Update the `-strict_atoms` docs**
 
@@ -752,7 +787,7 @@ In `docs/directives.md`, at the top of the `-strict_atoms` subsection (line 86),
 - [ ] **Step 8: Commit**
 
 ```bash
-git add clausal/logic/compiler_v2.py docs/directives.md tests/test_strict_atoms_default.py
+git add clausal/logic/compiler_v2.py conftest.py docs/directives.md tests/test_strict_atoms_default.py
 git commit -m "feat(atoms)!: strict atoms are the default; deprecate -strict_atoms
 
 BREAKING CHANGE: undeclared bare atoms now raise NameError unless the file
