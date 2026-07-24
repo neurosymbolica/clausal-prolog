@@ -856,7 +856,7 @@ class _FreshEmbedTransformer(ast.NodeTransformer):
 
     def visit(self, tree):
         try:
-            tree = EmbedTransformer().visit(tree)
+            tree = EmbedTransformer(implicit_atoms_default=True).visit(tree)
             tree = _StarQueryTransformer().visit(tree)
             ast.fix_missing_locations(tree)
             return tree

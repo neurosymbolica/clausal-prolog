@@ -76,3 +76,40 @@ def test_strict_and_implicit_mutually_exclusive():
         _load_inline_clausal("_sad_both", source)
     msg = str(exc_info.value)
     assert "mutually exclusive" in msg
+
+
+import ast
+
+from clausal.templating.term_rewriting import EmbedTransformer
+from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
+
+
+def test_repl_transformer_injects_implicit_atoms():
+    """A transformer in REPL mode seeds an ImplicitAtomsDeclaration so
+    interactive cells auto-mint even under the strict file default."""
+    tree = ast.parse("Color(sad_repl_undeclared),\n")
+    t = EmbedTransformer(implicit_atoms_default=True)
+    t.visit(tree)
+    assert any(
+        isinstance(it, ImplicitAtomsDeclaration) for it in t._module_items
+    )
+
+
+def test_file_transformer_does_not_inject_implicit_atoms():
+    """The default (file) transformer does NOT seed implicit mode."""
+    tree = ast.parse("Color(sad_file_undeclared),\n")
+    t = EmbedTransformer()
+    t.visit(tree)
+    assert not any(
+        isinstance(it, ImplicitAtomsDeclaration) for it in t._module_items
+    )
+
+
+def test_repl_transformer_respects_explicit_strict():
+    """REPL mode must not override an explicit -strict_atoms in the cell."""
+    tree = ast.parse("-strict_atoms\nColor(sad_repl_strict),\n")
+    t = EmbedTransformer(implicit_atoms_default=True)
+    t.visit(tree)
+    assert not any(
+        isinstance(it, ImplicitAtomsDeclaration) for it in t._module_items
+    )

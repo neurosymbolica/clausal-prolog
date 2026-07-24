@@ -2445,7 +2445,7 @@ class EmbedTransformer(NodeTransformer):
       _name       In outer Python code, rewrites to _name.value (unbox logic var).
     """
 
-    def __init__(transformer, source_lines=None):
+    def __init__(transformer, source_lines=None, implicit_atoms_default=False):
         transformer._scope_depth = 0
         transformer._seen_functors: dict[str, list[str]] = {}
         # Functors whose _seen_functors entry was minted by a -dynamic
@@ -2457,6 +2457,10 @@ class EmbedTransformer(NodeTransformer):
         transformer._import_remap: dict[str, str] = {}
         transformer._module_items: list = []
         transformer._source_lines = source_lines
+        # When True (set by the REPL/IPython transform site), the file
+        # defaults to loose auto-mint: visit_Module seeds an
+        # ImplicitAtomsDeclaration unless the cell states its own mode.
+        transformer._implicit_atoms_default = implicit_atoms_default
         # Shared bare-atom collection sink — every per-clause TermTransformer
         # writes into this single set so the union is naturally accumulated.
         # ``visit_Module`` emits a final ``BareAtomRefs`` module item that
@@ -2647,6 +2651,11 @@ class EmbedTransformer(NodeTransformer):
             transformer._module_items.append(
                 BareAtomRefsItem(names=frozenset(transformer._bare_atom_refs))
             )
+        if transformer._implicit_atoms_default and not any(
+            isinstance(it, (StrictAtomsItem, ImplicitAtomsItem))
+            for it in transformer._module_items
+        ):
+            transformer._module_items.append(ImplicitAtomsItem())
         return result
 
     def visit_FunctionDef(transformer, node):
