@@ -19,7 +19,7 @@ The export list may mix predicates with arity (e.g. `Pred1(A, B)`) and bare atom
 ```
 
 !!! info "Per-module atom identity"
-    Listing an atom here opts that atom into **module-local public** identity — importers see `traffic.red` as a distinct `PredicateMeta` class from any other `red`. Bare atom references that are **not** listed in `-module` or `-private` resolve to the process-wide **global** atom of the same name instead. See [Atoms § Global by default](syntax.md#atoms) and the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
+    Listing an atom here opts that atom into **module-local public** identity — importers see `traffic.red` as a distinct `PredicateMeta` class from any other `red`. Bare atom references that are **not** listed in `-module`, `-private`, or an import raise a compile-time `NameError` by default (strict is the default). In files that carry [`-implicit_atoms`](#-implicit_atoms), unlisted bare atoms resolve to the process-wide **global** atom of the same name instead. See [Atoms § Strict by default](syntax.md#atoms) and the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
 
 ### -private
 
@@ -36,7 +36,7 @@ The list may also contain bare atoms:
 ```
 
 !!! info "When you actually need `-private` for an atom"
-    Listing an atom in `-private` only matters when the module wants identity **distinct from the global default** — e.g. when `draft` here must not unify with `other_module.draft` or with the global `draft`. If you only need the spelling, leave the listing out; the global default already gives the same class to every bare `draft` across modules. See the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
+    Listing an atom in `-private` has two effects: it gives the atom **module-local-distinct** identity (so `draft` here does not unify with `other_module.draft` or with the global `draft`), and it satisfies the strict-by-default resolver so the bare name compiles without error. In files that carry [`-implicit_atoms`](#-implicit_atoms) you can omit the listing and rely on auto-minting, but in the default strict mode every bare atom must be declared somewhere. See the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
 
 An atom may not appear in both `-module` and `-private` (mutually exclusive points on the same axis); the compiler rejects this with a hard error.
 
@@ -81,7 +81,7 @@ See [Import System](import.md) for full details. For importing Prolog `.pl` file
 
 ## Atom-Identity Directives
 
-These directives control the new global-by-default atom identity rules introduced by the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md). The short version: bare atom references default to a process-wide global class; `-strict_atoms` opts a file out of that default, and `-overwrites` silences the shadowing warning emitted when an import collides with a local declaration.
+These directives control atom identity resolution as specified by the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md). The short version: strict resolution is the default — an undeclared bare atom reference is a compile-time `NameError`; `-implicit_atoms` opts a file out of strict and restores Prolog-style auto-minting; `-overwrites` silences the shadowing warning emitted when an import collides with a local declaration.
 
 ### -strict_atoms
 
@@ -91,12 +91,11 @@ These directives control the new global-by-default atom identity rules introduce
 > `ClausalStrictAtomsDeprecationWarning`. To opt a file *out* of strict, use
 > [`-implicit_atoms`](#-implicit_atoms).
 
-**Problem**: Most files want the Prolog-style ergonomic default — `red` in two
-modules is the same atom, no ceremony required. But for files where a typo
-quietly changes the meaning of the program (regulatory rules, clinical
-decision support, legal compliance, financial compliance), the silent
-auto-mint is the wrong default: a misspelled `peding` simply mints a new
-global atom instead of failing fast.
+**Historical context**: Before strict became the default, files could use
+`-strict_atoms` to opt in to compile-time `NameError` on undeclared bare atoms.
+That protection now applies everywhere by default, making this directive
+redundant. Use [`-implicit_atoms`](#-implicit_atoms) to opt a file *out* of
+strict when Prolog-style ceremony-free tag atoms are desired.
 
 ```clausal
 --8<-- "tests/fixtures/docs/directives_sigs.txt:strict_atoms"

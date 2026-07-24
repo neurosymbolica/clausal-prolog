@@ -83,25 +83,34 @@ Atoms that conflict with Python keywords or builtins are written as strings: `'n
 
 Every atom is reified at compile time as a zero-arity `PredicateMeta` class — atoms are first-class values you can pass around, store in dicts, and compare with `is`. Unification on atoms is class identity.
 
-!!! info "Global by default"
-    A bare atom reference such as `red` resolves to the **same** `PredicateMeta` class across every module that mentions it — atoms are global by default, matching Prolog's convention.
+!!! info "Strict by default; global identity when resolved"
+    An undeclared bare atom reference is a compile-time `NameError` by default —
+    matching Python's treatment of undefined names. A bare `red` that has not been
+    declared (via `-module`, `-private`, or `-import_from`) or reached via
+    `global_atom/2` will not compile.
+
+    Files that want Prolog-style ceremony-free tag atoms opt out with
+    [`-implicit_atoms`](directives.md#-implicit_atoms).
+
+    Once an atom **is** resolved — declared in `-module([...])` (public),
+    `-private([...])` (private), imported, or reached via `global_atom/2` —
+    it has **process-wide global identity**: every module that resolves the same
+    name to the global atom gets the identical `PredicateMeta` class, matching
+    Prolog's convention.
 
     ```clausal
     --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms_global_default"
     ```
 
-    A module opts an atom into **module-local** identity (a class distinct from the global one) by listing it in `-module([...])` (public) or `-private([...])` (private):
+    A module opts an atom into **module-local** identity (a class distinct from
+    the global one) by listing it in `-module([...])` (public) or `-private([...])`
+    (private):
 
     ```clausal
     --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms_module_local"
     ```
 
     Resolution order for a bare reference inside a module: `-private` → `-module` → `-import_from` → global fallthrough.
-
-    Atoms resolve strictly by default: an undeclared bare atom is a compile-time
-    `NameError`, matching Python's treatment of undefined names. Files that want
-    Prolog-style ceremony-free tag atoms opt out with
-    [`-implicit_atoms`](directives.md#-implicit_atoms).
 
     The full design is in the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
 

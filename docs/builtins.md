@@ -539,7 +539,7 @@ Generate a unique atom by appending a monotonically increasing counter to `Prefi
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:global_atom_2"
 ```
-Reflect on the process-wide global atom dict — the registry that backs the [global-by-default atom resolution rule](syntax.md#atoms). Four modes:
+Reflect on the process-wide global atom dict — the registry that backs global atom identity (see [Atoms](syntax.md#atoms)). Four modes:
 
 - **`(+Name, -Atom)` — mint on demand.** Look `Name` up in the global dict; if absent, create a fresh `make_predicate(Name, [])` and install it. Idempotent: a second call with the same `Name` unifies `Atom` with the same class object. This is the only sanctioned way to **reach** the global class for a name from a module that has shadowed it via `-import_from` or a local declaration.
 - **`(+Name, +Atom)` — guard.** Succeeds iff `Atom` is the global class registered under `Name` (Python identity). Useful for asserting in a clause body that a given `PredicateMeta` came from the global dict and not a module-local namesake.
