@@ -588,4 +588,4 @@ See each module's documentation for details.
 
 ---
 
-*See also: [Arithmetic](arithmetic.md) — numeric operations in Clausal · [Python Interop](python_integration.md) — `++()` escape for direct Pint operations.*
+*See also: [Currency](currency.md) — exact-decimal money built on this units machinery · [Arithmetic](arithmetic.md) — numeric operations in Clausal · [Python Interop](python_integration.md) — `++()` escape for direct Pint operations.*

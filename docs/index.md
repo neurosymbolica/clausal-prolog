@@ -118,6 +118,7 @@ for the full feature set.
 | [IPython / Jupyter REPL](ipython.md) | Interactive queries, `*(goals)` syntax, solution browsing |
 | **Standard Library Modules** | |
 | [Physical Units](units.md) | `n(Unit)` sugar, dimensional arithmetic, AttVar constraints |
+| [Currency](currency.md) | Exact-decimal money as units base dimensions; rounding/display; precision checks |
 | [Regex](regex.md) | Pattern matching, group extraction, auto-binding |
 | [Symbolic Math](sympy.md) | SymPy integration — calculus, algebra, number theory |
 | [YAML](yaml.md) | YAML parsing and generation |
