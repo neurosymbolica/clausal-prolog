@@ -86,6 +86,13 @@ currency_code._register(2, _simple_to_trampoline(_accessor("iso_code")))
 currency_symbol = ModulePredicate("currency_symbol")
 currency_symbol._register(2, _simple_to_trampoline(_accessor("symbol")))
 
+# in-service date range (ISO date string, or None for open-ended/unknown)
+currency_start = ModulePredicate("currency_start")
+currency_start._register(2, _simple_to_trampoline(_accessor("start")))
+
+currency_end = ModulePredicate("currency_end")
+currency_end._register(2, _simple_to_trampoline(_accessor("end")))
+
 
 # ── rounding & display ────────────────────────────────────────────────────────
 

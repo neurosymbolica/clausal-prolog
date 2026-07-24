@@ -90,6 +90,29 @@ The full table is generated data — see
 (so `won`/`yen` are 0, the Gulf dinars are 3); symbols are a common glyph where one exists,
 otherwise the ISO code (the `symbol` display style then shows the code, e.g. `"THB19.99"`).
 
+### Historical (and future) currencies
+
+Withdrawn currencies ship too, so a rulebase can reason about obligations denominated in a
+currency no longer in use (a pre-euro Deutsche Mark contract, an old Zimbabwe-dollar
+judgment). Every currency carries its **in-service date range** — `start` and `end` (ISO date
+strings; `end` is `None` while still current; a future `start` denotes a scheduled currency
+not yet in use), queryable via `currency_start`/`currency_end`.
+
+Where a country reused a currency word across successive currencies, the names are
+discriminated: the **current** one keeps the plain word, and older ones take the
+distinguishing term from their official name, or a date range when only the date differs:
+
+```clausal
+-import_from(germany, [mark])            # Deutsche Mark (1948–2002), historical
+-import_from(zimbabwe, [gold, dollar_1980_2008, dollar_2009_2024])
+-import_from(angola,  [kwanza, new_kwanza, readjusted_kwanza])
+-import_from(venezuela, [bolivar, bolivar_1871_2008, bolivar_2008_2018])
+```
+
+Historical amounts behave exactly like current ones — exact `Decimal`, dimension-safe, the
+same `money_*` predicates. `19.99(mark) + 0.01(mark)` is `20.00(mark)`; `mark + euro` raises
+`UnitsMismatch` (a Deutsche Mark is not a euro — conversion is explicit and out of scope).
+
 ---
 
 ## Writing amounts
@@ -213,10 +236,13 @@ f"{amt:plain,half_up}"# "3.35"
 Query a currency's metadata (the argument is the currency, e.g. `euro`):
 
 ```clausal
--import_from(currency, [currency_scale, currency_code, currency_symbol])
+-import_from(currency, [currency_scale, currency_code, currency_symbol,
+                        currency_start, currency_end])
 currency_scale(euro, N)     # N = 2
 currency_code(euro, C)      # C = "EUR"   (a string)
 currency_symbol(euro, S)    # S = "€"     (a string)
+currency_start(mark, S)     # S = "1948-06-20"   (ISO date string)
+currency_end(mark, E)       # E = "2002-05-15";  euro's end is None (still current)
 ```
 
 ---

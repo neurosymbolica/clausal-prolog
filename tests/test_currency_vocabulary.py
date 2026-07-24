@@ -35,15 +35,73 @@ class TestFullVocabulary:
                 problems.append(("metadata", r))
         assert not problems, problems[:5]
 
-    def test_scales_match_iso_4217(self):
+    def test_current_scales_match_iso_4217(self):
+        # Only current currencies use ISO minor units; historical default to 2.
         wrong = [(r["code"], r["scale"], _iso_scale(r["code"]))
-                 for r in CURRENCIES if r["scale"] != _iso_scale(r["code"])]
+                 for r in CURRENCIES
+                 if not r["historical"] and r["scale"] != _iso_scale(r["code"])]
         assert not wrong, wrong
 
-    def test_jurisdictions_unique_and_one_currency_each(self):
-        js = [r["jurisdiction"] for r in CURRENCIES]
-        assert len(js) == len(set(js))
-        assert set(js) == set(JURISDICTIONS)
+    def test_no_jurisdiction_name_collisions(self):
+        keys = [(r["jurisdiction"], r["name"]) for r in CURRENCIES]
+        assert len(keys) == len(set(keys)), "duplicate (jurisdiction, name)"
+        assert {r["jurisdiction"] for r in CURRENCIES} == set(JURISDICTIONS)
+
+    def test_historical_currencies_flagged_with_dates(self):
+        import importlib
+        # a euro predecessor: readable base word (no collision), dated, historical
+        mark = importlib.import_module("clausal.modules.countries.germany").mark
+        assert mark.historical is True and mark.iso_code == "DEM"
+        assert mark.end is not None and mark.start is not None
+        # current currencies are not historical and are open-ended
+        from clausal.modules.countries.european_union import euro
+        assert euro.historical is False and euro.end is None
+
+    def test_same_country_currencies_discriminated(self):
+        import importlib
+        # collisions resolved: current keeps the word, older ones get a
+        # distinguishing term or a date range — all distinct, none code-named.
+        z = importlib.import_module("clausal.modules.countries.zimbabwe")
+        assert not z.gold.historical
+        assert {n for n in dir(z) if not n.startswith("_")} >= {
+            "gold", "dollar_1980_2008", "dollar_2008_2009", "dollar_2009_2024"}
+        a = importlib.import_module("clausal.modules.countries.angola")
+        assert hasattr(a, "new_kwanza") and hasattr(a, "readjusted_kwanza")
+
+    def test_date_accessors(self):
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        from clausal.logic.variables import Var, deref
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "dates.clausal")
+        with open(p, "w") as f:
+            f.write("-import_from(germany, [mark])\n"
+                    "-import_from(currency, [currency_end])\n"
+                    "Test(E) <- currency_end(mark, E)\n")
+        mod = _load_module("dates", p).__dict__["$module"]
+        v = Var()
+        got = None
+        for _ in call("Test", v, module=mod):
+            got = deref(v); break
+        assert got == "2002-05-15"
+
+    def test_historical_currency_usable_end_to_end(self):
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        from clausal.logic.variables import Var, deref
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "hist.clausal")
+        with open(p, "w") as f:
+            f.write("-import_from(germany, [mark])\n"
+                    "-import_from(currency, [money_str])\n"
+                    "Test(S) <- (eval_(19.99(mark), A), eval_(0.01(mark), B), "
+                    "eval_(A + B, C), money_str(C, half_up, S))\n")
+        mod = _load_module("hist", p).__dict__["$module"]
+        v = Var()
+        got = None
+        for _ in call("Test", v, module=mod):
+            got = deref(v); break
+        assert got == "20.00 DEM"
 
     def test_spot_check_known_currencies(self):
         # (jurisdiction, name, code, scale)
