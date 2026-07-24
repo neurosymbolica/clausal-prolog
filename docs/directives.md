@@ -112,6 +112,21 @@ A bare reference that satisfies none of the above raises a compile-time `NameErr
 
 **Recommended use**: turn on for any file whose clauses encode authoritative rules (regulatory, legal, clinical, compliance). Leave off for general code, library code, and prototypes.
 
+### -implicit_atoms
+
+**Problem**: Strict atom resolution is the default (a typo in a bare atom is a
+compile-time `NameError`). Some files — prototypes, exploratory scripts, and
+code that deliberately relies on Prolog-style ceremony-free tag atoms — want the
+looser behavior back.
+
+`-implicit_atoms` is a **file-level opt-in marker** that takes no arguments (bare
+`-implicit_atoms` or `-implicit_atoms()`). With it present, an undeclared bare
+atom reference is auto-minted into the process-wide global atom dict instead of
+raising. It is the exact inverse of [`-strict_atoms`](#-strict_atoms); a file may
+not carry both (doing so is a compile error).
+
+The REPL uses this mode implicitly so interactive queries keep auto-minting.
+
 ### -overwrites
 
 **Problem**: When a module both `-import_from`s an atom *and* declares the same name in its own `-module` / `-private`, the two declarations describe **distinct** `PredicateMeta` classes. This is almost always unintentional (a typo, a forgotten cleanup after a refactor) and triggers `ClausalAtomShadowingWarning`. But occasionally it is deliberate — the module needs both the imported class and a separate local one with the same spelling.

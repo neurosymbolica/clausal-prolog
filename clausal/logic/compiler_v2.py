@@ -33,6 +33,7 @@ from clausal.pythonic_ast.nodes import (
     OverwritesDeclaration as OverwritesDeclItem,
     PrivateDeclaration as PrivateDeclItem,
     SpecializeDirective as SpecializeItem,
+    ImplicitAtomsDeclaration as ImplicitAtomsItem,
     StrictAtomsDeclaration as StrictAtomsItem,
 )
 
@@ -577,6 +578,14 @@ def _process_bare_atom_refs(
     strict_mode = any(
         isinstance(item, StrictAtomsItem) for item in module_items
     )
+    implicit_mode = any(
+        isinstance(item, ImplicitAtomsItem) for item in module_items
+    )
+    if strict_mode and implicit_mode:
+        raise SyntaxError(
+            f"{module_name}: -strict_atoms and -implicit_atoms are mutually "
+            f"exclusive; a file may carry at most one"
+        )
     undeclared: list[str] = []
 
     for item in module_items:

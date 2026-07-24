@@ -17,6 +17,7 @@ from clausal.pythonic_ast.nodes import (
     PrivateDeclaration as PrivateDeclItem,
     Predicate as PredicateItem,
     SpecializeDirective as SpecializeItem,
+    ImplicitAtomsDeclaration as ImplicitAtomsItem,
     StrictAtomsDeclaration as StrictAtomsItem,
     TranslationsDirective as TranslationsItem,
 )
@@ -2757,9 +2758,9 @@ class EmbedTransformer(NodeTransformer):
                 return transformer._handle_directive(
                     directive_name, directive_args, expr_stmt
                 )
-            # Bare -directive at module level (no parens, no args).  Currently
-            # only ``-strict_atoms`` uses this form; other directives all take
-            # arguments and therefore parse as the Call form above.
+            # Bare -directive at module level (no parens, no args).
+            # ``-strict_atoms`` and ``-implicit_atoms`` use this form; other
+            # directives all take arguments and parse as the Call form above.
             case UnaryOp(
                 op=USub(),
                 operand=Name(id=directive_name),
@@ -3054,6 +3055,8 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_translations_directive(args, expr_stmt)
         if name == "strict_atoms":
             return transformer._handle_strict_atoms_directive(args, expr_stmt)
+        if name == "implicit_atoms":
+            return transformer._handle_implicit_atoms_directive(args, expr_stmt)
         if name == "overwrites":
             return transformer._handle_overwrites_directive(args, expr_stmt)
         raise SyntaxError(
@@ -3061,7 +3064,7 @@ class EmbedTransformer(NodeTransformer):
             f"(known directives: -module, -private, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
-            f"-strict_atoms, -overwrites)"
+            f"-strict_atoms, -implicit_atoms, -overwrites)"
         )
 
     def _handle_module_directive(transformer, args, expr_stmt):
@@ -3195,6 +3198,22 @@ class EmbedTransformer(NodeTransformer):
                 "or `-strict_atoms()`"
             )
         transformer._module_items.append(StrictAtomsItem())
+        return replace(Pass(), expr_stmt)
+
+    def _handle_implicit_atoms_directive(transformer, args, expr_stmt):
+        """Process ``-implicit_atoms`` directive.
+
+        Marker directive — no arguments.  Accepts the bare form
+        ``-implicit_atoms`` and the parenthesised ``-implicit_atoms()``.
+        Emits an ``ImplicitAtomsItem`` module item that opts the file into
+        loose (auto-mint) atom resolution — the inverse of ``-strict_atoms``.
+        """
+        if args:
+            raise SyntaxError(
+                "-implicit_atoms takes no arguments: use bare "
+                "`-implicit_atoms` or `-implicit_atoms()`"
+            )
+        transformer._module_items.append(ImplicitAtomsItem())
         return replace(Pass(), expr_stmt)
 
     def _handle_overwrites_directive(transformer, args, expr_stmt):

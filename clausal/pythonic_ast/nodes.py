@@ -87,7 +87,8 @@ __all__ = [
     # Module-level items (pipeline split)
     "Directive", "ImportFromDirective", "ImportModuleDirective",
     "ModuleDeclaration", "PrivateDeclaration", "TranslationsDirective",
-    "BareAtomRefs", "StrictAtomsDeclaration", "OverwritesDeclaration",
+    "BareAtomRefs", "StrictAtomsDeclaration", "ImplicitAtomsDeclaration",
+    "OverwritesDeclaration",
     # A10-F016: these were defined but absent from __all__.
     "SpecializeDirective", "EdcgAccDecl", "EdcgPassDecl", "EdcgPredDecl",
     # Imports
@@ -1103,6 +1104,25 @@ class StrictAtomsDeclaration(Node):
 
     The directive takes no arguments — its mere presence is the signal.
     See Phase 3 of ``implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md``.
+    """
+    pass
+
+
+@node_class
+class ImplicitAtomsDeclaration(Node):
+    """Module item: ``-implicit_atoms`` directive marker.
+
+    Presence in ``module_items`` opts the file into the *loose* atom
+    default: undeclared bare atom references auto-mint into the
+    process-wide global dict instead of raising ``NameError``.  It is the
+    inverse of ``-strict_atoms`` and the escape hatch that survives the
+    strict-by-default flip — the REPL injects it so interactive sessions
+    keep auto-minting.
+
+    Takes no arguments — its mere presence is the signal.  A file may not
+    carry both ``-implicit_atoms`` and ``-strict_atoms``;
+    ``compiler_v2._process_bare_atom_refs`` rejects that with a
+    ``SyntaxError``.
     """
     pass
 
