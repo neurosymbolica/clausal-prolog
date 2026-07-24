@@ -1,0 +1,4 @@
+"""Vanuatu — vatu."""
+from clausal.modules.countries._currency import _make_currency
+
+vatu = _make_currency("vatu", iso_code="VUV", scale=0, symbol="VUV")

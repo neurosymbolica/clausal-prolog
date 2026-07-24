@@ -1460,21 +1460,34 @@ _IMPORT_ALIASES: dict[str, str] = {
     "provenance": "provenance",
     "reflection": "reflection",
     "units": "units",
-    "bahrain": "countries.bahrain",
-    "european_union": "countries.european_union",
-    "japan": "countries.japan",
-    "united_kingdom": "countries.united_kingdom",
-    "united_states": "countries.united_states",
 }
+
+_CURRENCY_JURISDICTIONS: frozenset | None = None
+
+
+def _currency_jurisdictions() -> frozenset:
+    """Lazily load the generated currency jurisdiction names (cached).
+
+    Imported on first use (compile time), never at module load, so the core
+    import resolver carries no startup dependency on the currency vocabulary.
+    """
+    global _CURRENCY_JURISDICTIONS
+    if _CURRENCY_JURISDICTIONS is None:
+        from clausal.modules.countries._data import JURISDICTIONS
+        _CURRENCY_JURISDICTIONS = frozenset(JURISDICTIONS)
+    return _CURRENCY_JURISDICTIONS
 
 
 def _resolve_import_path(module_path: str) -> str:
     """Rewrite aliased import paths to avoid stdlib collisions.
 
-    Only names in ``_IMPORT_ALIASES`` are rewritten to their qualified
+    Names in ``_IMPORT_ALIASES`` (and any currency jurisdiction, e.g.
+    ``thailand`` -> ``countries.thailand``) are rewritten to their qualified
     ``clausal.modules.*`` form.  All other paths are returned unchanged.
     """
     mapped = _IMPORT_ALIASES.get(module_path)
+    if mapped is None and module_path in _currency_jurisdictions():
+        mapped = f"countries.{module_path}"
     if mapped is not None:
         return f"clausal.modules.{mapped}"
     return module_path

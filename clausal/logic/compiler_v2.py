@@ -309,18 +309,27 @@ _MODULE_ALIASES: dict[str, str] = {
     "prolog": "prolog",
     "provenance": "provenance",
     "units": "units",
-    # Country/currency modules
-    "bahrain": "countries.bahrain",
-    "european_union": "countries.european_union",
-    "japan": "countries.japan",
-    "united_kingdom": "countries.united_kingdom",
-    "united_states": "countries.united_states",
 }
+
+_CURRENCY_JURISDICTIONS = None
+
+
+def _currency_jurisdictions():
+    """Lazily load the generated currency jurisdiction names (cached)."""
+    global _CURRENCY_JURISDICTIONS
+    if _CURRENCY_JURISDICTIONS is None:
+        from clausal.modules.countries._data import JURISDICTIONS
+        _CURRENCY_JURISDICTIONS = frozenset(JURISDICTIONS)
+    return _CURRENCY_JURISDICTIONS
 
 
 def _resolve_module(module_path: str):
     """Import a module, trying clausal.modules first (with alias mapping)."""
-    mapped = _MODULE_ALIASES.get(module_path, module_path)
+    mapped = _MODULE_ALIASES.get(module_path)
+    if mapped is None and module_path in _currency_jurisdictions():
+        mapped = f"countries.{module_path}"
+    if mapped is None:
+        mapped = module_path
     try:
         return importlib.import_module(f"clausal.modules.{mapped}")
     except (ModuleNotFoundError, ImportError):

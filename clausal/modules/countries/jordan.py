@@ -1,0 +1,4 @@
+"""Jordan — dinar."""
+from clausal.modules.countries._currency import _make_currency
+
+dinar = _make_currency("dinar", iso_code="JOD", scale=3, symbol="JOD")

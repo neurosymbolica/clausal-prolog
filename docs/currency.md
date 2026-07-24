@@ -60,7 +60,11 @@ Two references to the **same** currency (bare-imported or module-qualified) are 
 dimension and add freely. Two **different** currencies are distinct dimensions and never
 add — `euro + dollar` raises [`UnitsMismatch`](#errors-and-catch3).
 
-### Starter set
+### The vocabulary
+
+The **full ISO 4217 set (all ~150 active currencies)** ships, one per home jurisdiction,
+generated from ISO 4217 minor units. Import any by its jurisdiction module — the bare
+currency name is the everyday word (`baht`, `rupee`, `won`, `franc`, `peso`, `dinar`, …):
 
 | Import | Currency | ISO | Minor units (scale) | Symbol |
 |--------|----------|-----|---------------------|--------|
@@ -69,11 +73,22 @@ add — `euro + dollar` raises [`UnitsMismatch`](#errors-and-catch3).
 | `united_kingdom` | `sterling` | GBP | 2 | £ |
 | `japan` | `yen` | JPY | 0 | ¥ |
 | `bahrain` | `dinar` | BHD | 3 | BD |
+| `thailand` | `baht` | THB | 2 | THB |
+| `south_korea` | `won` | KRW | 0 | ₩ |
+| `kuwait` | `dinar` | KWD | 3 | KWD |
 
-Only these five ship today. A currency used by several jurisdictions (the euro; a shared
-regional currency) lives in one home module and is referenced there — e.g. an Ecuadorian
-rulebase, whose legal tender is the US dollar, imports `dollar` from `united_states`.
-Adding more currencies is pure data (see [Extending the vocabulary](#extending-the-vocabulary)).
+(examples — the same-named `dinar` in `bahrain`/`kuwait`/`jordan`/… are **distinct**
+currencies, kept apart by their jurisdiction module.) The home jurisdiction is the
+currency's issuer, so a country using another's currency references the issuer — an
+Ecuadorian rulebase (legal tender: US dollar) imports `dollar` from `united_states`. Shared
+regional currencies live in a regional module: `european_union.euro`,
+`west_african_cfa.franc` (XOF), `central_african_cfa.franc` (XAF), `cfp_franc.franc` (XPF),
+`east_caribbean.dollar` (XCD).
+
+The full table is generated data — see
+[`clausal/modules/countries/_data.py`](#extending-the-vocabulary). Scales come from ISO 4217
+(so `won`/`yen` are 0, the Gulf dinars are 3); symbols are a common glyph where one exists,
+otherwise the ISO code (the `symbol` display style then shows the code, e.g. `"THB19.99"`).
 
 ---
 
@@ -253,8 +268,9 @@ currencies.
 - A bare number that was *implicitly* an amount in a given currency becomes `N(currency)`.
 - Anything that only *named* a currency (metadata, a “currency of this contract” slot) uses
   the currency object itself (`euro`), and its code/symbol via the accessors.
-- If a currency you need isn't in the [starter set](#starter-set), add it first
-  ([below](#extending-the-vocabulary)) — do not fall back to a bare atom code.
+- Every active ISO 4217 currency already ships (see [The vocabulary](#the-vocabulary)) —
+  find the right jurisdiction module and import the bare name. Only truly missing/new
+  currencies need [adding](#extending-the-vocabulary); never fall back to a bare atom code.
 
 **4. Common patterns.**
 
@@ -291,17 +307,30 @@ rejects generic alignment specs like `f"{amt:>10}"`. None affect ordinary legal 
 
 ## Extending the vocabulary
 
-To add a currency, create (or extend) its jurisdiction module under
-`clausal/modules/countries/` and register the module in **both** alias tables:
+The vocabulary is **generated** by `scripts/gen_currencies.py` (ISO 4217 minor units +
+babel names/symbols) into `clausal/modules/countries/`: the authoritative table `_data.py`
+and one self-contained module per jurisdiction. Jurisdictions are registered
+**automatically** — the import resolvers fall back to any name in `_data.JURISDICTIONS`
+(so no manual alias edits, unlike earlier versions).
+
+To add or correct a currency, edit the generator (its scale-exception sets, `REGIONAL`,
+`OVERRIDE_NAME`/`OVERRIDE_SYMBOL`) and rerun it:
+
+```bash
+python scripts/gen_currencies.py   # rewrites _data.py + the jurisdiction modules
+```
+
+For a one-off currency not covered by the generator, hand-add a module and append its name
+to `JURISDICTIONS` in `_data.py`:
 
 ```python
 # clausal/modules/countries/switzerland.py
 from clausal.modules.countries._currency import _make_currency
 franc = _make_currency("franc", iso_code="CHF", scale=2, symbol="Fr")
 ```
-Then add `"switzerland": "countries.switzerland"` to `_IMPORT_ALIASES`
-(`clausal/templating/term_rewriting.py`) **and** `_MODULE_ALIASES`
-(`clausal/logic/compiler_v2.py`). Both are required or `-import_from(switzerland, …)` fails.
+
+Scales must be the ISO 4217 minor unit (not babel/CLDR display precision, which differs for
+some currencies).
 
 ---
 
