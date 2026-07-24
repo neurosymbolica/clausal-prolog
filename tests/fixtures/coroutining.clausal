@@ -1,7 +1,6 @@
 # Phase 1: Coroutining & Resource Control integration tests
 
 # call_nth: get the 3rd member of a list
--implicit_atoms
 Test("call_nth basic") <- (
     call_nth(in_(X, [10, 20, 30, 40, 50]), 3),
     X is 30

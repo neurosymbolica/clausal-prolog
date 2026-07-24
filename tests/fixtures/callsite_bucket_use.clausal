@@ -1,7 +1,6 @@
 # Importing module for the call-site direct-bucket regression: every ground
 # call below targets an imported (locked, indexed) predicate from inside a
 # compiled clause, so it compiles to a direct bucket reference.
--implicit_atoms
 -import_from(tests.fixtures.callsite_bucket_lib, [BucketCat, BucketSteps])
 
 GroundFirst() <- BucketCat(1, "a")

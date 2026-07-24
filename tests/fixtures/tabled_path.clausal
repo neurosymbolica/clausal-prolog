@@ -1,4 +1,3 @@
--implicit_atoms
 -table(Path/2)
 
 Edge(1, 2),

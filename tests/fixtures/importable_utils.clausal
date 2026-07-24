@@ -1,4 +1,3 @@
--implicit_atoms
 -module(importable_utils, [Double(X, R), Helper(X, Y)])
 
 Double(0, 0),

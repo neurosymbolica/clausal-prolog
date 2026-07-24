@@ -2,7 +2,6 @@
 
 # ── take/3 ───────────────────────────────────────────────────────────────────
 
--implicit_atoms
 Test("take basic") <- (take(2, [1, 2, 3, 4], RESULT), RESULT == [1, 2])  # nv
 Test("take zero") <- (take(0, [1, 2, 3], RESULT), RESULT == [])  # nv
 Test("take more than length") <- (take(10, [1, 2], RESULT), RESULT == [1, 2])  # nv

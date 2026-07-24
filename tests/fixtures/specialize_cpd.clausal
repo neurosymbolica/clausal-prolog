@@ -3,7 +3,6 @@
 # Uses -specialize with cpd=True to produce deforested specialized predicates.
 # Verifies that CPD produces correct results for natnum, graph, and counting.
 
--implicit_atoms
 -import_from(clausal.examples.metainterpreters, [Solve, SolveCount, SolveLimit])
 
 # ── Object Programs ──────────────────────────────────────────────────────────

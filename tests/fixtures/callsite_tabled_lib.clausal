@@ -5,7 +5,6 @@
 # ground call site.  The two "a" clauses both succeed for P == 1, so the
 # table's answer dedup is observable: 1 solution tabled, 2 if the call
 # site bypasses the tabling wrapper.
--implicit_atoms
 -module(callsite_tabled_lib, [TCat(P, C)])
 -table(TCat/2)
 

@@ -1,7 +1,7 @@
--implicit_atoms
 -module(symbolic_diff, [
     Diff(EXPR, VAR, DERIV)
 ])
+-private([Vx, Vy])
 
 # Symbolic differentiation.
 # Arithmetic operators (+, *, **) are structural terms in clause heads and

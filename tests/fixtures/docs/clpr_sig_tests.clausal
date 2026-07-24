@@ -1,6 +1,5 @@
 # Companion tests for docs/clpr.md signature blocks.
 
--implicit_atoms
 Test("clpr real equality") <- (
     clpr.real(X == 3.0),
     clpr.label([X])

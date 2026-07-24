@@ -11,7 +11,6 @@
 # Padding clauses at key positions "p".."s" push the clause count over the
 # index threshold so signal-mode groundness dispatch (not loop-mode) is used
 # for the "k"/"w" buckets.
--implicit_atoms
 -module(tro_nonlast_arm_clobber, [Prc(K, N, X), Drv(X)])
 
 Prc("k", N, X) <- (N > 0, M is N - 1, Prc("k", M, X))

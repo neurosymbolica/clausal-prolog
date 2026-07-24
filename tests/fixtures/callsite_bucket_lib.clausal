@@ -2,7 +2,6 @@
 # (todo/call-site-imported-ground-arg-4plus-clauses-runtime-error.md).
 # BucketCat: >= _INDEX_THRESHOLD clauses with head constants at pos 1, so the
 # importing module's ground call sites compile to direct bucket refs.
--implicit_atoms
 -module(callsite_bucket_lib, [BucketCat(P, C), BucketSteps(N, R)])
 
 BucketCat(P, "a") <- (P == 1)

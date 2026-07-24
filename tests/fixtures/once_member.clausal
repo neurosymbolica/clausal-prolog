@@ -1,6 +1,5 @@
 # FirstMember/2: like member but only returns the first match via once()
 
--implicit_atoms
 FirstMember(X, LIST) <- once(X in LIST)
 
 

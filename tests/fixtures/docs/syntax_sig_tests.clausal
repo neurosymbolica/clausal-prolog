@@ -1,7 +1,6 @@
 # Companion tests for docs/syntax.md signature blocks.
 # Validates core syntax constructs exist and work.
 
--implicit_atoms
 Test("clause with body") <- (1 == 1)  # nv
 
 Test("list pattern") <- (

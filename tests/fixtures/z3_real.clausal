@@ -3,7 +3,6 @@
 
 # ── Basic real constraints ──────────────────────────────────────────────────
 
--implicit_atoms
 Bounded(X) <- (
     z3.real((
         0 <= X <= 10,

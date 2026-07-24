@@ -1,6 +1,5 @@
 # Companion tests for docs/constraints.md signature blocks.
 
--implicit_atoms
 Test("dif exists") <- dif(1, 2)  # nv
 
 Test("in_domain/label exist") <- (

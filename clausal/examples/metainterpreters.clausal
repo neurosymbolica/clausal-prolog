@@ -9,7 +9,6 @@
 # A clause is [Head, BodyGoals] where BodyGoals is a list of goals.
 # A program is a list of clauses.
 
--implicit_atoms
 -module(metainterpreters, [
     Solve(GOALS, PROGRAM),
     SolveCount(GOALS, PROGRAM, COUNT),

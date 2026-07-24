@@ -98,7 +98,10 @@ Every atom is reified at compile time as a zero-arity `PredicateMeta` class — 
 
     Resolution order for a bare reference inside a module: `-private` → `-module` → `-import_from` → global fallthrough.
 
-    Files where atom-typo correctness is load-bearing (regulatory rules, clinical decision support, financial compliance) can opt out of the silent global auto-mint with the [`-strict_atoms`](directives.md#-strict_atoms) directive, which turns undeclared bare references into compile-time errors.
+    Atoms resolve strictly by default: an undeclared bare atom is a compile-time
+    `NameError`, matching Python's treatment of undefined names. Files that want
+    Prolog-style ceremony-free tag atoms opt out with
+    [`-implicit_atoms`](directives.md#-implicit_atoms).
 
     The full design is in the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
 

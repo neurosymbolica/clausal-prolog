@@ -2,7 +2,6 @@
 
 # --8<-- [start:supported_conditions]
 # equivalent to freeze(X, Goal)
--implicit_atoms
 Test("when isbound") <- (
     when(nonvar(X), Y is X),
     X is 42,

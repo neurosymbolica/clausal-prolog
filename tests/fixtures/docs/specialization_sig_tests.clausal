@@ -1,6 +1,5 @@
 # Companion tests for docs/specialization.md signature blocks.
 
--implicit_atoms
 -import_from(clausal.examples.metainterpreters, [SolveCount])
 
 NatnumProgram(PROGRAM) <- (

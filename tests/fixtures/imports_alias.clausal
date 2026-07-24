@@ -1,4 +1,3 @@
--implicit_atoms
 -import_from(tests.fixtures.importable_utils, [alias(Helper, Hlp)])
 
 UseAlias(X, Y) <- Hlp(X, Y)

@@ -3,7 +3,6 @@
 
 # ── Basic BV constraints ────────────────────────────────────────────────────
 
--implicit_atoms
 SmallBV(X) <- (
     z3.bitvector(4, X < 3),
     z3.label([X]),

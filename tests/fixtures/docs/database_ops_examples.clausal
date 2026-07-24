@@ -1,7 +1,6 @@
 # Doc snippet fixtures for docs/database_ops.md
 
 # --8<-- [start:quick_example]
--implicit_atoms
 -dynamic(Color/1)
 
 Color("red"),

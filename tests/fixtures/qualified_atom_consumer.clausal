@@ -1,9 +1,9 @@
+-private([ok])
 # Consumes qualified_atom_vocab both ways:
 #   -import_from  → bare `euro` (the real atom), used to build the Stored fact
 #   -import_module → qualified `qualified_atom_vocab.euro` in TERM position
 # The qualified form in a term must resolve to the SAME atom as the imported bare
 # one, so the query below unifies against the fact.
--implicit_atoms
 -import_from(qualified_atom_vocab, [euro])
 -import_module(qualified_atom_vocab)
 

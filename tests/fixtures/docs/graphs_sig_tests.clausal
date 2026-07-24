@@ -1,6 +1,5 @@
 # Companion tests for docs/graphs.md display snippets.
 
--implicit_atoms
 -import_from(graphs, [
     vertices, neighbors, degree, has_edge,
     is_connected, breadth_first_nodes, depth_first_nodes,

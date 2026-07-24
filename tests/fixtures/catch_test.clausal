@@ -1,7 +1,6 @@
 # V2-14: catch/throw integration test fixture
 
 # SafeDiv: catches division-by-zero, returns "infinity" instead
--implicit_atoms
 SafeDiv(X, Y, RESULT) <- (
     catch(
         (eval_(X // Y, RESULT)),

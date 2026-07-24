@@ -1,7 +1,6 @@
 # Doc snippet fixtures for docs/lists.md
 
 # --8<-- [start:partition_example]
--implicit_atoms
 Partition([], _, [], []) <- True
 Partition([X, *XS], PRED, [X, *YES], NO) <- (
     call(PRED, X),

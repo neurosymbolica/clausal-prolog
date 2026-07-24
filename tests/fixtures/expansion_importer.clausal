@@ -1,6 +1,5 @@
 # Imports TermExpansion rules from expansion_provider.
 # The imported TE rule duplicates each item.
--implicit_atoms
 -import_from(expansion_provider, [TermExpansion])
 
 color("red"),

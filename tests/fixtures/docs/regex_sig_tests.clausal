@@ -1,6 +1,5 @@
 # Companion tests for docs/regex.md display snippets.
 
--implicit_atoms
 -import_from(regex, [match, search, replace, split])
 
 Test("match exists") <- match(r"\d+", "123")  # nv

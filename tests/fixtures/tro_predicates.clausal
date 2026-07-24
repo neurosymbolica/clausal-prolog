@@ -4,7 +4,6 @@
 # sum_(List, Accumulator, Result): sum elements of List starting from Accumulator.
 # TRO-eligible: prefix is deterministic (eager `eval_/2`), tail call is self-recursive.
 
--implicit_atoms
 AccSum([], ACC, ACC),
 AccSum([H, *T], ACC, RESULT) <- (
     eval_(ACC + H, NEWACC),

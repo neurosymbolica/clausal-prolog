@@ -1,6 +1,5 @@
 # Companion tests for docs/term_inspection.md display snippets.
 
--implicit_atoms
 Test("gensym generates unique") <- (
     gensym("test_doc_", A1),
     gensym("test_doc_", A2),

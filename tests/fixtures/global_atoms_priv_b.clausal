@@ -1,5 +1,5 @@
+-implicit_atoms
 # Phase 2 fixture: bare reference auto-mints the global atom (companion to
 # global_atoms_priv_a.clausal).
 
--implicit_atoms
 ColorPrivB(phase2priv_orange),

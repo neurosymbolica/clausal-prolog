@@ -1,7 +1,6 @@
 # Regression: a compound nested in a head LIST must couple its inner var with a
 # body goal that binds it (structural head-arg normalization recurses into lists).
 # See todo/head-list-compound-bodybound-var.md.
--implicit_atoms
 -private([item2(S), pair(A, B), c(X), d(Y)])
 
 prov(K, V) <- (K is "x", V is "met")

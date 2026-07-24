@@ -1,4 +1,3 @@
--implicit_atoms
 -import_from(py.units, [
     Metre, Kilogram, Second, Ampere, Kelvin,
     Kilometer, Centimeter, Gram, Minute, Hour,

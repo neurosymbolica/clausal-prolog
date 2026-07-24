@@ -1,7 +1,6 @@
 # Companion tests for docs/term_expansion.md display snippets.
 
 # Identity expansion: items pass through unchanged
--implicit_atoms
 TermExpansion(ITEM, ITEM, STATE, STATE) <- True
 
 color("red"),

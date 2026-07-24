@@ -2,7 +2,6 @@
 # Module A privately owns phase2priv_orange; module B (companion fixture)
 # auto-mints the global one.
 
--implicit_atoms
 -private([phase2priv_orange])
 
 ColorPrivA(phase2priv_orange),

@@ -2,7 +2,6 @@
 # Each wrapper exercises a single builtin so Python tests can call it by name.
 
 # in_/2, in_check/2
--implicit_atoms
 HasMember(ELEMENT, LIST) <- in_(ELEMENT, LIST)
 HasMemberCheck(ELEMENT, LIST) <- in_check(ELEMENT, LIST)
 

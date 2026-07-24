@@ -3,7 +3,6 @@
 
 # ── Soft constraints ────────────────────────────────────────────────────────
 
--implicit_atoms
 Test("soft higher weight wins") <- (
     z3.integer((0 <= X <= 10)),
     z3.soft(X <= 3, 2),

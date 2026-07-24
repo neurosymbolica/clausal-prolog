@@ -3,7 +3,6 @@
 # Ground queries are deterministic (no leftover choicepoints).
 # Partial queries explore both branches with correct constraints.
 
--implicit_atoms
 Memberd(X, [ELEMENT, *REST]) <- (
     If(X is not ELEMENT, Memberd(X, REST), True)
 )

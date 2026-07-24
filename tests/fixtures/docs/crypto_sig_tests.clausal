@@ -1,7 +1,6 @@
 # Companion tests for docs/crypto.md display snippets.
 # Validates that documented predicates exist and work as shown.
 
--implicit_atoms
 -import_from(py.hash, [hash, hash_bytes])
 -import_from(py.hmac, [sign, verify])
 -import_from(py.pbkdf2, [derive])

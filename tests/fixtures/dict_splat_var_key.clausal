@@ -3,7 +3,6 @@
 # as the literal.  Before the fix K reached dict construction as the Var
 # object, so the built dict was keyed by the variable and get(OUT, <value>)
 # missed.  $dict_key now derefs the computed key at construction time.
--implicit_atoms
 -module(dict_splat_var_key, [splat_var_key(GOT), splat_literal_key(GOT),
                              splat_headarg_key(KEY, VAL, GOT)])
 

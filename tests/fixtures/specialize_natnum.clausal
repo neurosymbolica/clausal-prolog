@@ -3,7 +3,6 @@
 # Uses -specialize directive to produce SolveCountNatnum — a specialized
 # counting MI with MI overhead removed.  The MI pattern is auto-detected.
 
--implicit_atoms
 -import_from(clausal.examples.metainterpreters, [SolveCount])
 
 # ── Object Program ────────────────────────────────────────────────────────────

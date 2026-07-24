@@ -4,7 +4,6 @@
 # clausal unification, so they can live in .clausal.  Tests that observe
 # stdout side-effects remain in tests/test_io.py.
 
--implicit_atoms
 -module(io_to_string, [Test(DESC)])
 
 # ── write_to_string/2 ─────────────────────────────────────────────────────

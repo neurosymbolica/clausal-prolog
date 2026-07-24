@@ -1,4 +1,3 @@
--implicit_atoms
 -import_from(py.re, [match, search, replace, split, findall])
 
 # Regex predicates — basic tests: match, search, replace, split, findall.

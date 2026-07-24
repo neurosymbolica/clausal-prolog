@@ -2,7 +2,6 @@
 # Declares a compound functor Wrap/1 and an atom 'direct' that an
 # importer module can use in rule and fact head positions.
 
--implicit_atoms
 -module(head_compound_owner, [Wrap(SUB),
                               Item(REQ_ID, STATUS, DETAIL),
                               Met(SUB),

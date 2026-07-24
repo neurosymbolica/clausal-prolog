@@ -1,6 +1,5 @@
 # Companion tests for docs/sqlite.md display snippets.
 
--implicit_atoms
 -import_from(sqlite, [connect, disconnect, current_connection,
                       exec, query, row_count,
                       table, column])

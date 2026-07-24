@@ -9,7 +9,6 @@
 # The underlying predicates are (re)declared inline here so the file is
 # self-contained and test runs don't depend on module-import plumbing.
 
--implicit_atoms
 -module(list_patterns_edge_cases, [Test(DESC)])
 
 -private([

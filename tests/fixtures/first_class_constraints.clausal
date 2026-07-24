@@ -4,7 +4,6 @@
 
 # ── Z3 integer ─────────────────────────────────────────────────────────────
 
--implicit_atoms
 Test("z3 first-class single constraint") <- (
     C is (1 <= X <= 10),
     z3.integer(C),

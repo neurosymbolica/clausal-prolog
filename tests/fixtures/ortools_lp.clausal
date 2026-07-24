@@ -1,6 +1,5 @@
 # OR-Tools LP integration tests (GLOP only — one LP solver per trail)
 
--implicit_atoms
 Test("glop simple feasible") <- (
     ortools.lp.var(X, 0.0, 100.0),
     ortools.glop(X <= 50),

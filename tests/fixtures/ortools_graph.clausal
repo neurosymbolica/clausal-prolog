@@ -4,7 +4,6 @@
 
 # ── Max flow ──────────────────────────────────────────────────────────────
 
--implicit_atoms
 Test("max flow single arc") <- (
     ortools.graph.max_flow([[0, 1, 42]], 0, 1, FLOW),
     FLOW == 42

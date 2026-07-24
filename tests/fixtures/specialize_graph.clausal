@@ -3,7 +3,6 @@
 # Uses -specialize directive to produce SolveGraph — a specialized vanilla
 # MI with MI overhead removed.
 
--implicit_atoms
 -import_from(clausal.examples.metainterpreters, [Solve])
 
 # ── Object Program ────────────────────────────────────────────────────────────

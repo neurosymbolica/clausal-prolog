@@ -1,6 +1,5 @@
 # Companion tests for docs/meta_predicates.md display snippets.
 
--implicit_atoms
 Test("filter_map exists") <- (
     filter_map(((X, Y) <- (X > 0, Y == X * 2)), [3, -1, 5], RS),
     RS == [6, 10]

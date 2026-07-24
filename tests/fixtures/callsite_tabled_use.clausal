@@ -1,7 +1,6 @@
 # Importing module for the call-site tabling-bypass regression: the ground
 # call below targets an imported TABLED predicate and must route through the
 # tabling wrapper (answer dedup), never a direct bucket ref.
--implicit_atoms
 -import_from(tests.fixtures.callsite_tabled_lib, [TCat])
 
 TabledGround() <- TCat(1, "a")

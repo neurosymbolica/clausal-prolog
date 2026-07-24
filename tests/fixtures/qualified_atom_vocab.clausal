@@ -1,3 +1,2 @@
 # Vocabulary module exporting value atoms (module-local identity).
--implicit_atoms
 -module(qualified_atom_vocab, [euro, us_dollar])

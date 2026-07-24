@@ -1,7 +1,6 @@
 # Uses ONLY -import_module (no -import_from of the atom), so the atom's bare
 # name is NOT in this module's globals. Exercises querying a clausal predicate
 # from Python with a foreign (cross-module) atom argument.
--implicit_atoms
 -import_module(qualified_atom_vocab)
 
 KnownCurrency(qualified_atom_vocab.euro),

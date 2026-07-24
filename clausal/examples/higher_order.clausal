@@ -1,4 +1,3 @@
--implicit_atoms
 -module(higher_order, [
     Doubles(XS, YS),
     AllPositive(XS),

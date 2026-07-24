@@ -2,7 +2,6 @@
 
 # ── Table constraint ────────────────────────────────────────────────────────
 
--implicit_atoms
 TableSolve(X, Y) <- (
     z3.integer((
         0 <= X <= 10,

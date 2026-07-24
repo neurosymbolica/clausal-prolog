@@ -2,7 +2,6 @@
 #
 # Demonstrates: counter accumulator, list accumulator, passed scale factor
 
--implicit_atoms
 -module(edcg_counter, [run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS)])
 
 -edcg_acc(counter, _x, _in, _out, {_out == _in + _x})

@@ -1,6 +1,6 @@
--implicit_atoms
 -module(dynamic_pred, [Color(X, Y)])
 -dynamic(Color/2)
+-private([sky, blue, grass, green])
 
 Color(sky, blue),
 Color(grass, green),

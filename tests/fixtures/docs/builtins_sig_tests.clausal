@@ -3,7 +3,6 @@
 
 # ── Control Flow ─────────────────────────────────────────────────────────────
 
--implicit_atoms
 Test("once exists") <- once(1 == 1)  # nv
 
 Test("not exists") <- (not (1 == 2))  # nv

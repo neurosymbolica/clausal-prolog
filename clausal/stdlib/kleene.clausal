@@ -33,7 +33,6 @@
 # placeholders (the real head-var names come from the clauses). Bare `pred`
 # names would be minted as zero-arity atoms and collide with the multi-arg
 # clauses. `Unknown` is a builtin (not module-scoped), so it is NOT exported.
--implicit_atoms
 -module(kleene, [
     not3(A, R),
     and3(A, B, R), and4(A, B, C, R), and5(A, B, C, D, R),

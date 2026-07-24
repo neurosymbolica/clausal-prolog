@@ -1,7 +1,6 @@
 # Tests for constraint predicates: dif/2, eq/3, dif_t/3
 
 # dif/2 — disequality constraint
--implicit_atoms
 not_equal(X, Y) <- dif(X, Y)
 
 # Use dif inside a rule: pick an element different from a given value

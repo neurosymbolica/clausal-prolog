@@ -1,7 +1,6 @@
 # CLP(Q) doc examples — each predicate matches a code block in docs/clpq.md.
 
 # --- Two-variable linear system ---
--implicit_atoms
 TwoVar(X, Y) <- (
     in_q([X, Y], 0, 10),
     X + Y == 10,

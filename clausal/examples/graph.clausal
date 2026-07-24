@@ -1,4 +1,3 @@
--implicit_atoms
 -module(graph, [
     Path(X, Y, PATH),
     Reachable(X, Y),

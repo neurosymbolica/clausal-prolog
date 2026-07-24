@@ -1,4 +1,3 @@
--implicit_atoms
 -import_from(py.units, [Metre, Second, Newton])
 
 # [1,2,3](Metre) - list with unit annotation

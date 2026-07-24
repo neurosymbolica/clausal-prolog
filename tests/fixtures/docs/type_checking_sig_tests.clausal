@@ -1,6 +1,5 @@
 # Companion tests for docs/type_checking.md display snippets.
 
--implicit_atoms
 Test("var check") <- var(_)  # nv
 Test("integer check") <- integer(42)  # nv
 Test("is_str check") <- is_str("hello")  # nv

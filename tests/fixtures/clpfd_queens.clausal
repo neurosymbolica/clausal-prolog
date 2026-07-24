@@ -1,4 +1,3 @@
--implicit_atoms
 SafeQueens(N, QUEENS) <- (
     in_domain(QUEENS, 1, N),
     all_different(QUEENS),

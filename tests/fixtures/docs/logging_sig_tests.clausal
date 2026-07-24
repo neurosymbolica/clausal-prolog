@@ -1,6 +1,5 @@
 # Companion tests for docs/logging.md display snippets.
 
--implicit_atoms
 -import_from(py.logging, [
     get_logger, debug, info, warning, error, critical,
     set_level, get_level, is_enabled_for, log,

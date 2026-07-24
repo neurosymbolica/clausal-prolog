@@ -1,7 +1,6 @@
 # Companion tests for docs/tcp.md display snippets.
 # TCP predicates require network I/O — test via loopback echo.
 
--implicit_atoms
 -import_from(py.tcp, [connect, listen, accept, send, receive, close, set_timeout])
 
 Test("listen on ephemeral port") <- (

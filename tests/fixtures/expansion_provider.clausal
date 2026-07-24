@@ -1,4 +1,3 @@
 # Module that provides TermExpansion rules for import.
 # Duplicates each item (one-to-many expansion).
--implicit_atoms
 TermExpansion(TERM, [TERM, TERM], STATE, STATE) <- True

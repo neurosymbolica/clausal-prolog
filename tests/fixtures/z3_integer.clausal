@@ -4,7 +4,6 @@
 
 # ── Basic constraint posting and labeling ───────────────────────────────────
 
--implicit_atoms
 Solve(X, Y) <- (
     z3.integer((
         1 <= X <= 3,
