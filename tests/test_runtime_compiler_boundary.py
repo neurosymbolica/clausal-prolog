@@ -121,10 +121,17 @@ def test_runtime_package_is_importable_standalone():
     import sys
 
     # Drop any already-loaded compiler modules so we can observe a clean import.
-    before = {k for k in sys.modules if k.startswith("clausal.logic.compiler")}
-    for key in list(sys.modules):
-        if key.startswith("clausal.logic.compiler"):
-            del sys.modules[key]
+    # Save the module objects so we can restore them (not just re-import): a
+    # re-import would create new module objects and break module-identity checks
+    # in tests that run later in the same process (e.g. tests that hold a
+    # reference to ClausalStrictAtomsDeprecationWarning or compiler_v2 globals).
+    saved = {
+        k: sys.modules[k]
+        for k in list(sys.modules)
+        if k.startswith("clausal.logic.compiler")
+    }
+    for key in saved:
+        del sys.modules[key]
     try:
         import clausal.logic.runtime  # noqa: F401
         import clausal.logic.runtime.list_unify  # noqa: F401
@@ -132,15 +139,16 @@ def test_runtime_package_is_importable_standalone():
         import clausal.logic.runtime.tramp_call  # noqa: F401
         loaded_compiler_modules = {
             k for k in sys.modules if k.startswith("clausal.logic.compiler")
-        } - before
+        }
         assert not loaded_compiler_modules, (
             "Importing clausal.logic.runtime.* should not have loaded any "
             f"clausal.logic.compiler.* modules, but loaded: "
             f"{sorted(loaded_compiler_modules)}"
         )
     finally:
-        # Don't leave the module table scrubbed for other tests.
-        import clausal.logic.compiler  # noqa: F401
+        # Restore the original module objects so later tests see the same
+        # module identity (class objects, module-level globals, etc.).
+        sys.modules.update(saved)
 
 
 # ── Test-the-test: verify _imports_matching detects what it should ─────────

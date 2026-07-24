@@ -92,7 +92,8 @@ class TestFullVocabulary:
         d = tempfile.mkdtemp()
         p = os.path.join(d, "hist.clausal")
         with open(p, "w") as f:
-            f.write("-import_from(germany, [mark])\n"
+            f.write("-implicit_atoms\n"  # half_up is a bare atom, not declared
+                    "-import_from(germany, [mark])\n"
                     "-import_from(currency, [money_str])\n"
                     "Test(S) <- (eval_(19.99(mark), A), eval_(0.01(mark), B), "
                     "eval_(A + B, C), money_str(C, half_up, S))\n")
@@ -123,7 +124,8 @@ class TestFullVocabulary:
         d = tempfile.mkdtemp()
         p = os.path.join(d, "vocab.clausal")
         with open(p, "w") as f:
-            f.write("-import_from(thailand, [baht])\n"
+            f.write("-implicit_atoms\n"  # half_up is a bare atom, not declared
+                    "-import_from(thailand, [baht])\n"
                     "-import_from(currency, [money_str])\n"
                     "Test(S) <- (eval_(19.99(baht), A), eval_(0.01(baht), B), "
                     "eval_(A + B, C), money_str(C, half_up, S))\n")

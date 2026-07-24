@@ -67,6 +67,7 @@ def test_parenthesized_rule_body_still_works(tmp_path):
     """``head <- (g1, g2)`` — an explicit parenthesised conjunction — is fine."""
     mod = _load(
         tmp_path,
+        "-implicit_atoms\n"  # 'a' is a bare atom argument, not declared
         "-module(mgd_d, [ q(R), fact(R), other(R) ])\n"
         "fact(a),\n"
         "other(a),\n"

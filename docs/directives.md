@@ -85,6 +85,12 @@ These directives control the new global-by-default atom identity rules introduce
 
 ### -strict_atoms
 
+> **Deprecated (still supported).** Strict atom resolution is now the default,
+> so this directive is redundant and can be deleted. It still forces strict mode
+> where present; loading a file that uses it emits a one-per-process
+> `ClausalStrictAtomsDeprecationWarning`. To opt a file *out* of strict, use
+> [`-implicit_atoms`](#-implicit_atoms).
+
 **Problem**: Most files want the Prolog-style ergonomic default — `red` in two
 modules is the same atom, no ceremony required. But for files where a typo
 quietly changes the meaning of the program (regulatory rules, clinical

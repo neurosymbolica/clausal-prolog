@@ -581,7 +581,8 @@ def test_guard_strict_atoms(tmp_path):
 
 
 def test_guard_bare_atom_automint(tmp_path):
-    m = _load(tmp_path, "v(X) <- (X is a10_minted_atom)")
+    # -implicit_atoms: this test verifies the auto-mint behaviour itself
+    m = _load(tmp_path, "-implicit_atoms\nv(X) <- (X is a10_minted_atom)")
     x = Var()
     assert [str(v) for v in _values(m.v(x), x)] == ["a10_minted_atom"]
 
