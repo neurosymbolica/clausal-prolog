@@ -1,5 +1,6 @@
 # OR-Tools routing integration tests
 
+-implicit_atoms
 Test("tsp 4 cities optimal tour") <- (
     ortools.routing.tsp(
         [[0, 10, 15, 20],

@@ -1,5 +1,6 @@
 # Test fixture: specialize SolveLimit with natnum program.
 
+-implicit_atoms
 -import_from(clausal.examples.metainterpreters, [SolveLimit])
 
 NatnumProgram(PROGRAM) <- (

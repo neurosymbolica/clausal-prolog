@@ -1,5 +1,6 @@
 # Companion tests for docs/lambdas.md display snippets.
 
+-implicit_atoms
 Test("call_goal single arg") <- call_goal((X <- (X > 0)), 5)  # nv
 
 Test("call_goal two args") <- (

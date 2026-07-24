@@ -4,6 +4,7 @@
 # Quantity arithmetic cases stay in tests/test_phase5_builtins.py because
 # Quantity literals can't be constructed at clausal surface.
 
+-implicit_atoms
 -module(phase5_builtins, [Test(DESC)])
 
 # ── lcm/3 ─────────────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(hanoi, [
     Hanoi(N, From, To, Via, Moves)
 ])

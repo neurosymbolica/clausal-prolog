@@ -9,6 +9,7 @@
 # never-indexed position, guarded by evaluated ==) and passes K/J through, so
 # an unbound-K call routes to the SIGNAL-mode fallback and the signalled tail
 # call must be re-dispatched by the secondary dispatch.
+-implicit_atoms
 -module(secondary_dispatch_tro, [Hop(K, J, N, OUT), Hop2(K, J, N, OUT)])
 
 Hop("a", 1, N, OUT) <- (N == 0, OUT is ["a1"])

@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(map_coloring, [
     Colorable(COLORING)
 ])

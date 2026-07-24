@@ -1,5 +1,6 @@
 # Companion tests for docs/exceptions.md signature blocks.
 
+-implicit_atoms
 Test("throw/catch exist") <- (
     catch(
         throw("test_error"),

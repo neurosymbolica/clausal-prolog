@@ -1,3 +1,4 @@
+-implicit_atoms
 -import_from(py.units, [
     Metre, Kilogram, Second,
     Newton, Joule, Watt,

@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(fibonacci, [
     Fib(N, F)
 ])

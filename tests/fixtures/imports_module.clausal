@@ -1,3 +1,4 @@
+-implicit_atoms
 -import_module(tests.fixtures.importable_utils)
 
 UseImported(X, Y) <- tests.fixtures.importable_utils.Double(X, Y)

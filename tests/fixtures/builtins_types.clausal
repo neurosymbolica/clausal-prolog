@@ -4,6 +4,7 @@
 # float_/1 is now registered as float_/1
 
 # var/1, nonvar/1
+-implicit_atoms
 CheckVar(X) <- var(X)
 CheckNonvar(X) <- nonvar(X)
 

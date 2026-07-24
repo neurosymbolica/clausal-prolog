@@ -2,6 +2,7 @@
 
 # --- pure_predicates ---
 
+-implicit_atoms
 append([], YS, YS),
 append([H, *XS], YS, [H, *ZS]) <- append(XS, YS, ZS)
 

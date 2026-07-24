@@ -3,6 +3,7 @@
 # bare-references the same name must NOT see the local class — it must mint
 # the global atom independently.
 
+-implicit_atoms
 -module(global_atoms_decl_only_a, [phase2declonly_green])
 
 ColorDeclA(phase2declonly_green),

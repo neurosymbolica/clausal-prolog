@@ -4,6 +4,7 @@
 # add) that are not part of the object program.  The specializer adds a
 # catch-all clause that dispatches unknown goals through _SolveGoal.
 
+-implicit_atoms
 -import_from(clausal.examples.metainterpreters, [Solve, SolveCount, SolveLimit])
 
 # ── Object Program: factorial ────────────────────────────────────────────────

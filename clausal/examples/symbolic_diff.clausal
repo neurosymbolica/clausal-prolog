@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(symbolic_diff, [
     Diff(EXPR, VAR, DERIV)
 ])

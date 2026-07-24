@@ -4,6 +4,7 @@
 # Verifies that deep unfolding produces correct results identical
 # to shallow specialization.
 
+-implicit_atoms
 -import_from(clausal.examples.metainterpreters, [Solve, SolveCount])
 
 # ── Object Program ────────────────────────────────────────────────────────────

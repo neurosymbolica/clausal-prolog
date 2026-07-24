@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(sorting, [
     NaiveSort(LIST, SORTED),
     Qsort(LIST, SORTED)

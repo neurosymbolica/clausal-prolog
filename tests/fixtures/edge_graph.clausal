@@ -1,4 +1,5 @@
 # Edge facts
+-implicit_atoms
 Edge(1, 2),
 Edge(2, 3),
 Edge(1, 3),

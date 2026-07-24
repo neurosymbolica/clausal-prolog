@@ -1,3 +1,4 @@
+-implicit_atoms
 -import_from(tests.fixtures.callsite_throw_lib, [ThrowCat])
 
 Mid(R) <- (ThrowCat(2, "b"), R is "no_throw")

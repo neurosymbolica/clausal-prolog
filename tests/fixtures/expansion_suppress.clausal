@@ -1,4 +1,5 @@
 # Term expansion: suppress all items
+-implicit_atoms
 TermExpansion(TERM, "none", M0, M0),
 
 foo("a"),

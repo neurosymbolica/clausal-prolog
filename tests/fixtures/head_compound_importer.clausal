@@ -4,6 +4,7 @@
 # clause.  A correct compiler should only fire the Wrap-headed clause
 # when the caller passes an actual Wrap-shaped term.
 
+-implicit_atoms
 -import_from(tests.fixtures.head_compound_owner, [Wrap, Item, Met, direct])
 -module(head_compound_importer, [Check(ITEM, RESULT),
                                  CheckFact(ITEM, RESULT),

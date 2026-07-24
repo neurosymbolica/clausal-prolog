@@ -3,6 +3,7 @@
 # body goals, so the throwing call must sit in an intermediate predicate of
 # the importing module — a call nested inside catch(...) is never
 # specialised.
+-implicit_atoms
 -module(callsite_throw_lib, [ThrowCat(P, C)])
 
 ThrowCat(P, "a") <- (P == 1)

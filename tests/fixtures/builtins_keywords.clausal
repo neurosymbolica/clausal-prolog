@@ -3,6 +3,7 @@
 # vary/3 — copy a term with field overrides
 # (Uses Python dict as overrides; requires a predicate with known fields.)
 # Example: copy a point with its x replaced
+-implicit_atoms
 update_x(POINT, NEW_X, UPDATED) <- vary({"x": NEW_X}, POINT, UPDATED)
 
 # unbound_keys/2 — find which fields are still unbound vars

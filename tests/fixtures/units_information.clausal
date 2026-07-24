@@ -1,3 +1,4 @@
+-implicit_atoms
 -import_from(py.units, [
     Bit, Byte,
     Kilobyte, Megabyte, Gigabyte, Terabyte,

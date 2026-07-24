@@ -2,4 +2,5 @@
 # NOTE: CLP(Q) is known not to work; replacement in progress.
 # This test just validates the file is loadable.
 
+-implicit_atoms
 Test("clpq placeholder") <- (1 == 1)  # nv

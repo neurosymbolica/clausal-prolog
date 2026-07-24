@@ -4,6 +4,7 @@
 # FullAdder: built from two half adders
 # PigeonHole: 3 pigeons, 2 holes — unsatisfiable
 
+-implicit_atoms
 HalfAdder(X, Y, SUM, CARRY) <- (
     sat(BoolEq(SUM, X ^ Y)),
     sat(BoolEq(CARRY, X & Y))

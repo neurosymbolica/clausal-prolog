@@ -1,5 +1,6 @@
 # Companion tests for docs/dicts_sets.md signature blocks.
 
+-implicit_atoms
 Test("dict operations") <- (
     is_dict({"a": 1}),
     dict_get("a", {"a": 1}, 1),

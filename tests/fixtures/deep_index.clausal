@@ -11,6 +11,7 @@
 # ── MyLen/2: list length ──────────────────────────────────────────────────────
 # Base case on [], recursive on [_|TAIL]. Index target: arg0.
 
+-implicit_atoms
 MyLen([], 0),
 MyLen([_, *TAIL], N) <- (MyLen(TAIL, N1), eval_(N1 + 1, N))
 

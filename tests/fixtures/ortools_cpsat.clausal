@@ -2,6 +2,7 @@
 
 # ── Domain declaration & basic labeling ────────────────────────────────────
 
+-implicit_atoms
 Test("cpsat in_ contiguous domain") <- (
     ortools.cpsat.in_(X, 1, 5),
     ortools.cpsat.solve([X]),

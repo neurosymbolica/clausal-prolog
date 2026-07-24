@@ -1,6 +1,7 @@
 # Doc snippet fixtures for docs/strings_as_lists.md
 
 # --8<-- [start:unification]
+-implicit_atoms
 Test("string = char list") <- ("abc" is ["a", "b", "c"])  # nv
 Test("with vars") <- ("abc" is [X, Y, Z], X == "a", Y == "b", Z == "c")  # nv
 Test("partial") <- ("hello" is ["h", "e", X, Y, "o"], X == "l", Y == "l")  # nv

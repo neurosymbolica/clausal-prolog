@@ -2,6 +2,7 @@
 
 # ── Basic real constraints ──────────────────────────────────────────────────
 
+-implicit_atoms
 Test("clpr real equality") <- (
     clpr.real(X == 3.0),
     clpr.label([X]),

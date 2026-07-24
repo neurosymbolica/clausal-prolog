@@ -2,6 +2,7 @@
 
 # --- color_query_modes ---
 
+-implicit_atoms
 color("red",    "warm"),
 color("blue",   "cool"),
 color("green",  "cool"),

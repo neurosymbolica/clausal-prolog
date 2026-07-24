@@ -2,6 +2,7 @@
 # plus min_list/max_list on dates and catchability of an incomparable
 # comparison. Companion to tests/test_date_time_ordering.py.
 
+-implicit_atoms
 -import_from(date_time, [date, datetime, time])
 
 Test("date lt") <- (date(2020,1,1,A), date(2021,1,1,B), A < B)  # nv

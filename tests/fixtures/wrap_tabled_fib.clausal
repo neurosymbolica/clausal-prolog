@@ -1,3 +1,4 @@
+-implicit_atoms
 -table(Fib/2)
 
 Fib(N=0, R=0),

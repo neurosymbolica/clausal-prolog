@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(lambdas, [
     ApplyVal(RESULT, VAL),
     AddOne(X, Y),

@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(peano, [
     Nat(N),
     PeanoAdd(X, Y, Z),

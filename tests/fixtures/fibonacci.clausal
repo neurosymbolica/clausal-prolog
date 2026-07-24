@@ -9,6 +9,7 @@
 # names; subsequent clauses can use positional args mapped to those names.
 
 
+-implicit_atoms
 Fib(N=0, RESULT=0),
 Fib(1, 1),
 Fib(N, RESULT) <- (

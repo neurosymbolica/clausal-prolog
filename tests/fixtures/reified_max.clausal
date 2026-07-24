@@ -1,5 +1,6 @@
 # Classify/2: Classify(X, LABEL)
 # Ground ITE: X >= 0 → 'positive', else 'negative'
+-implicit_atoms
 Classify(X, LABEL) <- If(X >= 0, LABEL is "positive", LABEL is "negative")
 
 

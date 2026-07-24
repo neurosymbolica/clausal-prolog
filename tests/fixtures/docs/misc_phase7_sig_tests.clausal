@@ -2,6 +2,7 @@
 
 # ── wfs ──────────────────────────────────────────────────────────────────────
 
+-implicit_atoms
 Test("tabling exists") <- (
     findall(X, in_(X, [1, 2, 3]), BAG),
     length(BAG, 3)

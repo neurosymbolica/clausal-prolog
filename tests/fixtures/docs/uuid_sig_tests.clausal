@@ -1,6 +1,7 @@
 # Companion tests for docs/uuid.md display snippets.
 # Validates that documented predicates exist and work as shown.
 
+-implicit_atoms
 -import_from(py.uuid, [uuid_v4, uuid_v3, uuid_v5, uuid_str, uuid_hex, uuid_version, is_uuid])
 
 # ── Generation ───────────────────────────────────────────────────────────────

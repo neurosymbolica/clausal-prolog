@@ -6,6 +6,7 @@
 #
 # See also: metalevel.at/prolog/dcg
 
+-implicit_atoms
 -module(dcg_state, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2), inc(_s0, _s), double(_s0, _s), count3(_s0, _s), inc_then_double(_s0, _s), count_leaves(_t, _s0, _s), num_leaves(_t, _n), push(_x, _s0, _s), push_all(_xs, _s0, _s), collect_items(_xs, _r)])
 
 # ── State helpers ──────────────────────────────────────────────────────────

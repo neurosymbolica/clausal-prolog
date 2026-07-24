@@ -1,6 +1,7 @@
 # Companion tests for docs/http.md display snippets.
 # HTTP predicates need network access — test URL utilities only.
 
+-implicit_atoms
 -import_from(py.url, [encode, decode, parse, join])
 
 Test("url encode") <- (

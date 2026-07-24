@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(shallow_pred, [Color(Name, Hue)])
 -shallow([Color/2])
 

@@ -1,5 +1,6 @@
 # Tests for runtime database predicates: assertz/1, asserta/1, retract/1
 
+-implicit_atoms
 -dynamic(colour/1)
 
 colour("red"), # Todo: all these colours should be atoms. 

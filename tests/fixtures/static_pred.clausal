@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(static_pred, [Fact(X, Y)])
 
 Fact(a, 1),

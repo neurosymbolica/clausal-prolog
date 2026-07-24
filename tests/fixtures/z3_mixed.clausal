@@ -3,6 +3,7 @@
 
 # ── Integer + all_different (N-Queens style) ────────────────────────────────
 
+-implicit_atoms
 FourQueens(Q1, Q2, Q3, Q4) <- (
     z3.integer((
         1 <= Q1 <= 4,

@@ -3,6 +3,7 @@
 
 # ── Basic constraint blocks ─────────────────────────────────────────────────
 
+-implicit_atoms
 XorSolve(X, Y) <- (
     pysat.cadical(X ^ Y),
     pysat.solve([X, Y]),

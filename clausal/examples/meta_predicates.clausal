@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(meta_predicates, [
     Squares(NS, SQUARES),
     Positives(NS, POS),

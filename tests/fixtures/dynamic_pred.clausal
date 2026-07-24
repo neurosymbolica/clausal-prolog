@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(dynamic_pred, [Color(X, Y)])
 -dynamic(Color/2)
 

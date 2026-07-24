@@ -1,6 +1,7 @@
 # Doc snippet fixtures for docs/keyword_preds.md
 
 # Shared fact for keyword predicate examples
+-implicit_atoms
 point(x=1, y=2, z=3),
 
 # --8<-- [start:quick_example]

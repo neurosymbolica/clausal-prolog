@@ -1,6 +1,7 @@
 # Downstream consumer that imports the re-exported `flip/2` from the
 # intermediate module.  It must resolve to the kit's class and see the kit's
 # facts (not an empty local class).
+-implicit_atoms
 -import_from(tests.fixtures.functor_reexport_queries, [flip])
 
 check(A, B) <- (

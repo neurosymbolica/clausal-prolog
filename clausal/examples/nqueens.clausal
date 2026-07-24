@@ -1,3 +1,4 @@
+-implicit_atoms
 -module(nqueens, [
     Queens(N, QS)
 ])

@@ -1,4 +1,5 @@
 # Phase 2 fixture: bare reference to undeclared atom (companion to
 # global_atoms_a.clausal).
 
+-implicit_atoms
 ColorB(phase2red),

@@ -1,5 +1,6 @@
 # Test passing builtin predicates as arguments to meta-predicates.
 
+-implicit_atoms
 KeepNumbers(XS, NS) <- (
     include(number, XS, NS)
 )

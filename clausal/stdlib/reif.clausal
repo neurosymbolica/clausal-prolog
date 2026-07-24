@@ -6,6 +6,7 @@
 #   Ground queries are deterministic (no leftover choicepoints).
 #   Uses eq/3 (reified equality) and If (reified branching).
 
+-implicit_atoms
 MemberdT(_x, _es, _t) <- LMemberdT(_es, _x, _t)
 
 LMemberdT([], _, False),

@@ -1,5 +1,6 @@
 # Companion tests for docs/clpb.md signature blocks.
 
+-implicit_atoms
 Test("sat exists") <- sat(X | ~X)  # nv
 
 Test("taut exists") <- taut(X | ~X, T)  # nv

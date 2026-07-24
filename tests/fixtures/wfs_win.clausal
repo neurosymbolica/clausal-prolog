@@ -1,3 +1,4 @@
+-implicit_atoms
 -table(Win/1)
 
 Move(1, 2),

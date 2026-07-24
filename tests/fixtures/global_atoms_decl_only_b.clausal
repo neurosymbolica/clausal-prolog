@@ -1,4 +1,5 @@
 # Phase 2 fixture: bare reference to phase2declonly_green without importing
 # from global_atoms_decl_only_a.  Must auto-mint the global atom.
 
+-implicit_atoms
 ColorDeclB(phase2declonly_green),

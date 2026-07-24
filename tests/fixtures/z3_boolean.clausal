@@ -3,6 +3,7 @@
 
 # ── Basic boolean constraints ───────────────────────────────────────────────
 
+-implicit_atoms
 OrSolve(A, B) <- (
     z3.boolean(A | B),
     z3.label([A, B]),

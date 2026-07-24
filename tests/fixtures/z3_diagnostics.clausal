@@ -3,6 +3,7 @@
 
 # ── Named constraints and unsat core ────────────────────────────────────────
 
+-implicit_atoms
 Test("unsat core finds conflict") <- (
     z3.integer((1 <= X <= 10)),
     z3.named(X > 8, "x_high"),

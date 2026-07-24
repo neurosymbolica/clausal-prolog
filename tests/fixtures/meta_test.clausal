@@ -1,3 +1,4 @@
+-implicit_atoms
 Squares(NUMBERS, SQUARES) <- (
     findall(
         SQUARE,

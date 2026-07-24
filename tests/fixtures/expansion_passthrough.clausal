@@ -1,5 +1,6 @@
 # Term expansion: identity pass-through
 # TermExpansion that passes all items through unchanged.
+-implicit_atoms
 TermExpansion(TERM, TERM, STATE, STATE) <- True
 
 foo("a"),

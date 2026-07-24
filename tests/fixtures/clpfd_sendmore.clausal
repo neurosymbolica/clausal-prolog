@@ -1,3 +1,4 @@
+-implicit_atoms
 Sendmoney(S, E, N, D, M, O, R, Y) <- (
     in_domain([S, E, N, D, M, O, R, Y], 0, 9),
     all_different([S, E, N, D, M, O, R, Y]),

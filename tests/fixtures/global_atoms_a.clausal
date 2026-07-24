@@ -3,4 +3,5 @@
 # without declaring it.  Under the global-atoms-default rule, both files'
 # `phase2red` must resolve to the same global PredicateMeta class.
 
+-implicit_atoms
 ColorA(phase2red),

@@ -1,3 +1,4 @@
+-implicit_atoms
 -import_from(tests.fixtures.importable_utils, [Helper, Double])
 
 UseHelper(X, Y) <- Helper(X, Y)

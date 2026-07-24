@@ -1,3 +1,4 @@
+-implicit_atoms
 -table(ReachA/2)
 -table(ReachB/2)
 

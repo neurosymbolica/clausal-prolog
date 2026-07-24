@@ -1,3 +1,4 @@
+-implicit_atoms
 -import_from(py.re, [match, search, findall])
 
 # Regex auto-binding — ALLCAPS group names auto-bind to clause variables.

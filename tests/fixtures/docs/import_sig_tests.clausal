@@ -1,6 +1,7 @@
 # Companion tests for docs/import.md signature blocks.
 
 # --- import_from_directive ---
+-implicit_atoms
 -import_from(tests.fixtures.importable_utils, [Helper])
 
 UseImported(X, Y) <- Helper(X, Y)
