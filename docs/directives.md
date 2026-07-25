@@ -83,6 +83,8 @@ See [Import System](import.md) for full details. For importing Prolog `.pl` file
 
 These directives control atom identity resolution as specified by the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md). The short version: strict resolution is the default — an undeclared bare atom reference is a compile-time `NameError`; `-implicit_atoms` opts a file out of strict and restores Prolog-style auto-minting; `-overwrites` silences the shadowing warning emitted when an import collides with a local declaration.
 
+Upgrading an existing codebase from the old auto-mint default? See the [strict-atoms migration guide](strict-atoms-migration.md).
+
 ### -strict_atoms
 
 > **Deprecated (still supported).** Strict atom resolution is now the default,
