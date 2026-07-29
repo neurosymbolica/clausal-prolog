@@ -6,6 +6,54 @@
 
 ---
 
+## STATUS: FIXED at the parse site (2026-07-29)
+
+Implemented in `clausal/syntax_diagnostics.py`, hooked into both parses of a
+`.clausal` source in `clausal/import_hook.py` (`_parse_clausal_source` and the
+cache-hit `_extract_module_items`), and into `reify_source` in
+`clausal/reflection.py` so `reify_file` reports the same thing.
+Tests: `tests/test_syntax_error_diagnostic.py` (24). Docs: `docs/syntax.md`,
+"When the syntax is wrong".
+
+The reproduction below now prints:
+
+```
+  test_load.clausal :: <load> — invalid syntax (m.clausal, line 6)
+    3 | f(X) <- (
+    4 |     X > 1,
+    5 |     Y is
+      |         ^ `is` has no right-hand side
+    6 | )
+      | ^ parse gave up here
+  -> complete the expression, or delete the goal — a Clausal goal cannot end
+     on an operator.
+```
+
+Decisions, and why:
+
+* **A window, not just the reported line.** Priority 1 was the offending source
+  and caret; rendering only line 6 would have shown correct code and left the
+  author no better off. Three preceding lines is the smallest window covering
+  the observed defect-to-give-up distance (one or two goals), and it is
+  bounded, so a long body cannot become a wall. The enclosing clause head is
+  added when it falls outside the window — one row, with `...N lines omitted` —
+  so the author always knows which clause is broken.
+* **The reported line is labelled `parse gave up here`,** not blamed, whenever
+  an earlier culprit was identified. The off-by-some-lines behaviour is now
+  stated rather than left for the author to discover.
+* **Constructs are named only when confident** (priority 2): a dangling
+  operator with no RHS, an unparenthesised `<-` body, a goal missing its `,`
+  (CPython finds this one; it is restated in Clausal's terms), an unclosed
+  bracket, an unterminated string, and the two Prolog habits `:-` and `).`.
+  With no confident guess the source and caret are still rendered and no guess
+  is offered — a wrong construct name would cost more than none.
+* **Nothing is swallowed.** `msg`, `lineno`, `offset`, `text`, `filename` and
+  the exception class are all preserved; the report is added via `str` and a
+  PEP 678 note. Genuine `.py` files, and `.pl` files (whose line numbers refer
+  to the *translated* Clausal text), are left to CPython.
+
+---
+
 ## Symptom
 
 The complete engine output for a syntax error is two lines:

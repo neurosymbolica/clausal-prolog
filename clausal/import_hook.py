@@ -35,6 +35,7 @@ import warnings
 
 from .pythonic_ast import nodes as simple_ast
 from .import_diagnostics import exec_with_import_diagnostics
+from .syntax_diagnostics import clausal_syntax_diagnostics
 from .templating.term_rewriting import EmbedTransformer, TermTransformer
 from .logic.database import Module as LogicModule, head_key
 from .logic.compiler import compile_predicate_trampoline, compile_predicate_shallow
@@ -371,7 +372,12 @@ def _parse_clausal_source(source, filename):
     Returns ``(code_object, transformer)`` — the transformer carries
     ``_module_items`` needed by the V2 pipeline.
     """
-    with warnings.catch_warnings():
+    # A malformed clause surfaces here as CPython's stock one-liner, whose
+    # reported line is where the parse gave up rather than where the mistake
+    # is; clausal_syntax_diagnostics attaches the source and a caret so the
+    # author can see that for themselves.  See clausal/syntax_diagnostics.py.
+    with warnings.catch_warnings(), \
+            clausal_syntax_diagnostics(source, filename):
         warnings.filterwarnings(
             "ignore", message="'str' object is not callable",
             category=SyntaxWarning,
@@ -388,7 +394,8 @@ def _parse_clausal_source(source, filename):
 
 def _extract_module_items(source, filename):
     """Re-parse .clausal source text just to recover module_items (cache-hit path)."""
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(), \
+            clausal_syntax_diagnostics(source, filename):
         warnings.filterwarnings(
             "ignore", message="'str' object is not callable",
             category=SyntaxWarning,
