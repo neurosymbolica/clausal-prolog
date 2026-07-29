@@ -16,6 +16,7 @@ star_segments ↔ terms_to_ast import cycle.
 from __future__ import annotations
 
 import ast
+from contextlib import contextmanager
 from fractions import Fraction
 from typing import Any
 
@@ -35,6 +36,7 @@ from clausal.pythonic_ast.nodes import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, is_term_instance, term_field_names,
+    register_atom_identity,
 )
 
 from ._ast_helpers import _name, _call
@@ -85,6 +87,96 @@ def _is_opaque_head_literal(term: Any) -> bool:
     if isinstance(term, (tuple, set, frozenset)):
         return all(not is_var(deref(e)) for e in term)
     return True
+
+
+class PredicateAsTermError(Exception):
+    """A predicate (arity ≥ 1) was used where a term value was expected.
+
+    Overwhelmingly this is the atom/predicate name clash: a bare name in
+    *data* position — most often a dict key, ``{query_date: 5}`` — that is
+    also the name of a predicate in the same module resolves to the
+    **predicate class**, which is not a term value.
+
+    A predicate object is neither identical nor equal to the same-named atom,
+    so accepting it here would replace a load-time crash with a dict whose key
+    can never be read back — exactly the silent-mismatch class of bug this
+    module's ``atom_identity_expr`` exists to prevent.  It stays an error;
+    only the diagnostic is improved.
+    """
+
+    def __init__(self, pred: Any) -> None:
+        self.pred = pred
+        name = getattr(pred, "__name__", repr(pred))
+        arity = len(getattr(pred, "_fields", ()) or ())
+        super().__init__(
+            f"{name}/{arity} is a predicate, not a term value: the bare name "
+            f"'{name}' in data position resolves to the predicate defined in "
+            f"this module, not to a same-named atom. If an atom was meant "
+            f"(e.g. as a dict key), name it unambiguously: use the qualified "
+            f"form of the module that owns it (owner.{name}), or use a string "
+            f"key (\"{name}\"), or rename one of the two. A predicate object "
+            f"is not equal to the atom of the same name, so it cannot be used "
+            f"as a key."
+        )
+
+
+# Depth counter for ``atom_identity_lowering()`` (a plain int is enough — the
+# compiler is single-threaded and reentrancy is handled by the counter).
+_ATOM_IDENTITY_DEPTH = 0
+
+
+@contextmanager
+def atom_identity_lowering():
+    """Lower 0-arity atoms BY IDENTITY inside this block.
+
+    An atom is a class, so the natural lowering is a bare ``Name`` resolved, at
+    run time, in the compiled function's globals.  For a clause compiled from a
+    module's own source that is right (and one ``LOAD_GLOBAL`` rather than a
+    call): the atom came from that very namespace, so the name is guaranteed to
+    resolve back to the same object.
+
+    It is *wrong* for a term the compiler received as a live OBJECT from
+    somewhere else.  The query compiler bakes the arguments of
+    ``solve(m.pred(profile, …))`` into a query template whose globals are the
+    **callee's** module namespace.  A ``DictTerm`` key that is an atom was then
+    re-looked-up there by name — and under the snake_case convention that name
+    is very often bound to a same-named *predicate*, so the template silently
+    substituted that other object as the key and every read missed: ``get/3``
+    failed, ``get/4`` returned the default, ``P[key]`` raised a bogus
+    ``existence_error``.  Where the name was simply unbound it was a raw
+    ``NameError`` inside ``<template>``.
+
+    Inside this block such atoms lower to ``$atom(<token>)`` instead, which
+    resolves the registered object itself — giving atom keys the same immunity
+    string keys have always had from lowering to ``ast.Constant``.
+
+    See ``todo/query-template-rebinds-atom-dict-keys.md`` and
+    ``implementation_plans/dict-atom-keys-vs-predicates.md`` (option 2).
+    """
+    global _ATOM_IDENTITY_DEPTH
+    _ATOM_IDENTITY_DEPTH += 1
+    try:
+        yield
+    finally:
+        _ATOM_IDENTITY_DEPTH -= 1
+
+
+def atom_identity_expr(term: Any) -> ast.expr | None:
+    """Return the by-identity lowering of *term*, or None to lower normally.
+
+    None means either "not an atom" or "not inside
+    :func:`atom_identity_lowering`" — both fall back to the bare-Name lowering.
+    """
+    if (
+        _ATOM_IDENTITY_DEPTH
+        and isinstance(term, PredicateMeta)
+        and not term._fields
+    ):
+        return _call(
+            _name("$atom"),
+            ast.Constant(value=register_atom_identity(term)),
+        )
+    return None
 
 
 def _is_star_list(term: Any) -> bool:
@@ -293,6 +385,12 @@ def term_to_ast_expr(
         # frame var keys the rebuilt dict as the Var object and every later
         # get(OUT, <value>, _) misses silently.  $dict_key derefs (and raises a
         # catchable instantiation_error on a never-bound key).
+        #
+        # Atom keys/values need no special handling here: under
+        # ``atom_identity_lowering()`` — which the query compiler holds open
+        # while lowering caller-supplied terms — the recursive call below emits
+        # an atom by identity, so a key atom cannot be re-resolved onto a
+        # same-named binding of the namespace the generated code runs in.
         def _dictterm_key(k):
             expr = term_to_ast_expr(k, var_context, eval_arith=eval_arith)
             return _call(_name("$dict_key"), expr) if is_var(k) else expr
@@ -412,9 +510,11 @@ def term_to_ast_expr(
         )
 
     # Zero-arity PredicateMeta class: the class IS the atom value.
-    # Emit a bare Name reference so the compiled code loads the class directly.
+    # Emit a bare Name reference so the compiled code loads the class directly
+    # — except under ``atom_identity_lowering()`` (query templates), where the
+    # name would be re-resolved in a foreign namespace.  See that helper.
     if isinstance(term, PredicateMeta) and not term._fields:
-        return _name(term.__name__)
+        return atom_identity_expr(term) or _name(term.__name__)
 
     if is_term_instance(term):
         cls_name = type(term).__name__
@@ -479,6 +579,11 @@ def term_to_ast_expr(
         raise NotImplementedError(
             "Lambdas are currently only supported as predicate call arguments"
         )
+
+    # A predicate CLASS (arity ≥ 1 — the zero-arity/atom case returned above)
+    # in term position.  Almost always the atom/predicate name clash.
+    if isinstance(term, PredicateMeta):
+        raise PredicateAsTermError(term)
 
     raise NotImplementedError(
         f"term_to_ast_expr: unsupported term type {type(term).__name__}: {term!r}"
