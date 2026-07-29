@@ -202,6 +202,49 @@ mismatch will surface just as opaquely.
 > **Superseded 2026-07-29.** It does reproduce on the newer tree — see STATUS.
 > The original non-repro was presumably a different module ordering, not a fix.
 
+### Original reproduction package and command (preserved from the source report)
+
+The **underlying codegen defect is still open** (only the diagnostic was fixed),
+so the original reproduction is kept here verbatim — it is the starting point
+for whoever fixes the real bug.
+
+A reproducing package is preserved at `repro-arg1-scratch/` in the repo root.
+**It is untracked** — 29 files, a copy of the `eu/aml/amlr_bo_chain` domain. Do
+not clean it up without first confirming a minimal repro exists, or the
+reproduction is lost.
+
+```
+CLAUSAL_ROOT=/workspace/clausal python3 -c "
+from pathlib import Path
+from auto import runclausal          # from /workspace/clausify-executor-train
+p = Path('/workspace/clausal-bug-fix/repro-arg1-scratch/eu/aml/amlr_bo_chain/tests/test_load.clausal')
+print(runclausal.run_clausal(p)[1])"
+```
+
+→ `test_load.clausal::<load> — __init__() got an unexpected keyword argument 'arg_1'`
+
+### Original narrowing (hypothesis, NOT confirmed by the diagnostic work)
+
+- **Not an arity mismatch.** `schema.clausal` declares
+  `amlr_bo_chain_verdict(STATUS, CITATIONS)` and every use across the package is
+  arity 2. The conflict is in FIELD NAMES.
+- **Suspected source** — `term_rewriting.py` around line 1671:
+  ```python
+  base = arg.id.lstrip("_").lower() or f"arg_{i}"
+  ```
+  An anonymous `_` argument strips to the empty string and falls back to
+  `arg_{i}`. The failing package contains exactly that shape:
+  `decide_amlr_bo_chain(PROFILE, amlr_bo_chain_verdict(STATUS, _))` — which
+  would derive `(status, arg_1)` where the declaration derives
+  `(status, citations)`.
+  **Note:** the 2026-07-29 tracing attributed the failure to the
+  declaration-vs-`-import_from` binding order instead (see *Root cause* above).
+  These two explanations have NOT been reconciled; both may contribute.
+- **A single-module minimal case does NOT trigger it.** Declaring
+  `verdict(STATUS, CITATIONS)` and using `verdict(V, _)` in the same file loads
+  fine, so the unseating logic handles the simple case. Cross-module use is
+  therefore likely required; a minimal cross-module repro was not isolated.
+
 ## Requested fix
 
 Attach Clausal-level context wherever a term class is constructed, so the message
