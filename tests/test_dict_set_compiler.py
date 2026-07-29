@@ -365,6 +365,75 @@ class TestDictSetFixture:
         # nv
         assert self._query_test(mod, logic_mod, "atom key distinct from string")
 
+    # ── dot attribute-access sugar: P.key ≡ P[key] ──
+
+    @pytest.mark.parametrize("name", [
+        "dot atom key",
+        "dot equals bracket",
+        "dot variable key",
+        "dot chained",
+        "dot chained equals bracket",
+        "dot in argument position",
+        "dot in comparison",
+        "dot under not",
+        "dot value var aliases",
+        "dot missing key throws",
+        "dot nondict throws",
+        "dot unbound base throws",
+        "bracket unbound base throws",
+        "dot has no dot functor",
+        "dot does not unify with a dot compound",
+    ])
+    def test_dot_attribute_access(self, mod, logic_mod, name):
+        # nv
+        assert self._query_test(mod, logic_mod, name)
+
+
+# ── Dot attribute-access sugar: load-time behaviour ──────────────────────────
+
+class TestDotAttributeAccessLoad:
+    """``P.key`` is sugar for ``P[key]`` — same resolution, same load errors.
+
+    See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+    """
+
+    def _load_src(self, tmp_path, src, name):
+        path = tmp_path / f"{name}.clausal"
+        path.write_text(src)
+        return _load_module(name, str(path))
+
+    def test_undeclared_key_is_load_time_name_error(self, tmp_path):
+        """Strict atoms: an undeclared bare key fails at load, not at run."""
+        # nv
+        src = (
+            "-private([declared])\n"
+            "chk(PROF) <- (V is PROF.undeclared_key, V is 1)\n"
+        )
+        with pytest.raises(NameError, match="undeclared atom"):
+            self._load_src(tmp_path, src, "dotstrict_undeclared")
+
+    def test_declared_key_loads(self, tmp_path):
+        """The same clause with the key declared loads and runs."""
+        # nv
+        src = (
+            "-private([declared])\n"
+            "chk(PROF) <- (V is PROF.declared, V is 1)\n"
+        )
+        mod = self._load_src(tmp_path, src, "dotstrict_declared")
+        logic_mod = mod.__dict__["$module"]
+        declared = mod.__dict__["declared"]
+        assert list(call("chk", DictTerm({declared: 1}), module=logic_mod))
+
+    def test_method_call_form_still_rejected(self, tmp_path):
+        """``P.foo(A)`` stays a SyntaxError — the shape is reserved."""
+        # nv
+        src = (
+            "-private([foo])\n"
+            "chk(PROF, X) <- PROF.foo(X)\n"
+        )
+        with pytest.raises(SyntaxError, match="[Mm]ethod-call"):
+            self._load_src(tmp_path, src, "dotcall_rejected")
+
 
 # ── Subscript read: direct runtime behaviour ─────────────────────────────────
 
@@ -425,6 +494,18 @@ class TestDictSubscriptRead:
         with pytest.raises(LogicException) as exc:
             list(call("subscript_get", DictTerm({"a": 1}), Var(), v,
                       module=logic_mod))
+        term = exc.value.term
+        assert term.functor == "error"
+        assert term.args[0] == "instantiation_error"
+
+    def test_unbound_object_raises_instantiation_error(self, mod, logic_mod):
+        """An unbound base is under-instantiated, not wrong-typed — it used to
+        report ``type_error(dict, _)``."""
+        # nv
+        from clausal.logic.exceptions import LogicException
+        v = Var()
+        with pytest.raises(LogicException) as exc:
+            list(call("subscript_get", Var(), "a", v, module=logic_mod))
         term = exc.value.term
         assert term.functor == "error"
         assert term.args[0] == "instantiation_error"

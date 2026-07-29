@@ -343,6 +343,35 @@ def _is_logic_var_name(identifier: str) -> bool:
     return identifier.isupper()
 
 
+def _dotted_attr_chain(attr_node):
+    """Split a dotted expression into ``(base Name node, [attr names])``.
+
+    ``P.a.b`` → ``(Name('P'), ['a', 'b'])`` — attribute names in source order,
+    outermost last.  Returns ``None`` when the chain does not bottom out in a
+    plain ``Name`` (e.g. ``f(x).a``, ``{...}.a``).
+    """
+    parts = []
+    node = attr_node
+    while isinstance(node, Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, Name):
+        return None
+    parts.reverse()
+    return node, parts
+
+
+def _is_dict_attr_access(node) -> bool:
+    """True for ``VAR.key`` dict attribute-access sugar (a logic-variable base).
+
+    See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+    """
+    if not isinstance(node, Attribute):
+        return False
+    chain = _dotted_attr_chain(node)
+    return chain is not None and _is_logic_var_name(chain[0].id)
+
+
 def _is_unit_expr(node) -> bool:
     """True for AST nodes that form a valid unit-type expression.
 
@@ -551,7 +580,22 @@ class TermTransformer(NodeTransformer):
         references — but they should NOT auto-mint as 0-arity global atoms.
         They resolve via the runtime predicate-resolution path instead, so
         ``visit_Name`` skips its bare-atom-set add when this guard is active.
+
+        Also rejects the method-call form ``P.foo(A)``.  ``P.foo`` on a logic
+        variable is dict attribute-access sugar — it *reads a value*, which is
+        not callable — so the shape is reserved rather than silently compiled
+        into a call on a dict entry.
         """
+        if _is_dict_attr_access(func_expr):
+            base_name, key_names = _dotted_attr_chain(func_expr)
+            dotted = ".".join([base_name.id] + key_names)
+            raise SyntaxError(
+                f"Method-call form '{dotted}(...)' is not supported "
+                f"(line {func_expr.lineno}): '.' on the logic variable "
+                f"'{base_name.id}' is dict attribute access, which reads a "
+                f"value and cannot be called.  Read the value into a variable "
+                f"first, or use a qualified predicate name (mod.pred(...))."
+            )
         prev = transformer._suppress_bare_atom_collection
         transformer._suppress_bare_atom_collection = True
         try:
@@ -1007,12 +1051,39 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_Attribute(transformer, attr_node):
-        """Compile ``mod.Pred`` qualified calls to ``LoadAttr`` simple_ast nodes.
+        """Compile dotted expressions — two distinct constructs share the syntax.
 
-        Only supports dotted chains of non-variable names (e.g. ``utils.Helper``).
-        Raises ``SyntaxError`` if any part of the chain is a logic variable or
-        the expression isn't a simple dotted name.
+        * **Logic-variable base** (``P.key``): dict attribute-access sugar.  It
+          lowers to the subscript read ``P[key]`` (a ``LoadSubscript`` node), so
+          ``.`` is *not* a term — there is no ``./2`` functor, nothing a program
+          can inspect or unify against.  Key resolution goes through the same
+          path a bare ``Name`` takes, so ``P.status`` loads iff ``P[status]``
+          does (including the strict-atoms declaration requirement).  Chains
+          nest: ``P.a.b`` → ``P[a][b]``.  A logic-variable attribute is a
+          *variable key*: ``P.KEY`` → ``P[KEY]``.
+          See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+        * **Non-variable base** (``mod.Pred``, ``currency.euro``): a qualified
+          name, compiled to a ``LoadAttr`` simple_ast node.  Only dotted chains
+          of non-variable names are supported; a logic variable anywhere in such
+          a chain is a ``SyntaxError``.
+
+        The method-call form ``P.foo(A)`` is rejected in ``_visit_call_func``.
         """
+        if _is_dict_attr_access(attr_node):
+            base_name, key_names = _dotted_attr_chain(attr_node)
+            result = transformer.visit(base_name)
+            for key_name in key_names:
+                # Route the key through visit_Name so resolution is byte-for-byte
+                # what ``P[key]`` gets: declared atom, imported name, logic
+                # variable, or bare-atom reference registered for the mint /
+                # strict-atoms passes.  Never intern the attribute name directly.
+                index = transformer.visit(
+                    replace(Name(id=key_name, ctx=load), attr_node)
+                )
+                result = node_ast(
+                    "LoadSubscript", attr_node, object=result, index=index,
+                )
+            return result
         # Collect the full dotted chain and validate each part.
         parts = []
         node = attr_node

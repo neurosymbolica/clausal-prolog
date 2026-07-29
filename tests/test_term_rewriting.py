@@ -497,6 +497,63 @@ def test_subscript():
     assert isinstance(node.index,  sa.LoadName)
 
 
+# ── Dot attribute-access sugar: VAR.key ≡ VAR[key] ───────────────────────────
+
+def test_dot_on_logic_var_lowers_to_subscript():
+    """``P.k`` is sugar for ``P[k]`` — same LoadSubscript node."""
+    # nv
+    node = term_eval("P.k", sa.LoadSubscript)
+    assert isinstance(node.index, sa.LoadName)
+    assert node.index.name == "k"
+
+
+def test_dot_atom_key_matches_bracket_form():
+    """``P.k`` and ``P[k]`` produce structurally identical nodes."""
+    # nv
+    dotted = term_eval("P.k", sa.LoadSubscript)
+    bracket = term_eval("P[k]", sa.LoadSubscript)
+    assert type(dotted.index) is type(bracket.index)
+    assert dotted.index.name == bracket.index.name
+
+
+def test_dot_variable_key_lowers_to_subscript():
+    """``P.KEY`` reads the key named by the logic variable ``KEY``."""
+    # nv
+    node = term_eval("P.KEY", sa.LoadSubscript)
+    # A logic-variable key is a Var, not a LoadName atom reference.
+    assert not isinstance(node.index, sa.LoadName)
+
+
+def test_dot_chain_lowers_to_nested_subscripts():
+    """``P.a.b`` is ``P[a][b]`` — outermost attribute is the outer index."""
+    # nv
+    node = term_eval("P.a.b", sa.LoadSubscript)
+    assert node.index.name == "b"
+    assert isinstance(node.object, sa.LoadSubscript)
+    assert node.object.index.name == "a"
+
+
+def test_dot_on_non_variable_base_still_loadattr():
+    """``mod.pred`` keeps the qualified-name behaviour."""
+    # nv
+    node = term_eval("mod.pred", sa.LoadAttr)
+    assert node.attr == "pred"
+
+
+def test_dot_method_call_on_logic_var_rejected():
+    """``P.foo(A)`` — the method-call form stays a SyntaxError."""
+    # nv
+    with pytest.raises(SyntaxError, match="[Mm]ethod-call"):
+        term_eval("P.foo(A)", sa.LoadSubscript)
+
+
+def test_dot_logic_var_attr_on_module_base_still_rejected():
+    """``mod.X`` — a logic variable cannot name a qualified predicate."""
+    # nv
+    with pytest.raises(SyntaxError, match="Logic variable"):
+        term_eval("mod.X", sa.LoadAttr)
+
+
 def test_starred():
     # *a in a list context — result is a plain Python list
     # nv
