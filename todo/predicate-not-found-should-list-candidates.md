@@ -5,6 +5,41 @@
 
 ---
 
+## STATUS: FIXED at the raise site (2026-07-29)
+
+Implemented in `clausal/predicate_diagnostics.py`, raised from the single
+lookup-failure seam in `clausal/logic/compiler/globals_env.py`
+(`_DbDispatchAdapter._get_dispatch`).  Near-miss scoring is imported from
+`clausal/import_diagnostics.py`, not reimplemented, so the two messages agree
+on what counts as a suggestion.
+
+The message now distinguishes, in this order: the name defined **here at
+another arity**; the name as a **builtin** at another arity (`atom_length/3`
+used to be told to define `atom_length/3` — a worse diagnosis than the bare
+line); the name in a module this file **imports** or in an un-imported
+**sibling file**; and finally a plain statement of absence plus a near-miss on
+the name.  It always names what this module *does* define, and says "defines no
+predicates of its own" rather than printing an empty list.
+
+The exception is now `PredicateNotFoundError`, a `KeyError` subclass whose
+`__str__` returns its message verbatim — `str(KeyError(m))` is `repr(m)`, which
+would have escaped every newline in the candidate list.  Existing
+`except KeyError` handlers are unaffected.
+
+Two limits are deliberate and are stated in the message rather than hidden:
+an un-imported sibling is read only for its `-module(...)` export list (nothing
+is executed to improve an error message), and the sibling scan is capped at 60
+files with the message reporting the cap when it bites.
+
+**Still open:** the *other* arity-mismatch path.  When the name IS bound in the
+caller's namespace at a different arity, dispatch fails earlier with
+`TypeError: citation__3() missing 1 required positional argument: 'trail'` and
+never reaches this diagnostic.  That is the more common in-module shape and its
+message is worse than the one fixed here — see
+`todo/arity-mismatch-reports-a-missing-trail-argument.md`.
+
+---
+
 ## Symptom
 
 With goal-level test diagnostics now in place, a failing assertion reports:
