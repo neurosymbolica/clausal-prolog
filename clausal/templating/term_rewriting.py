@@ -432,27 +432,26 @@ def _is_plain_term(node) -> bool:
     return True
 
 
-def _lowerable_goal_parts(goal):
-    """Return the term-position children of *goal*, or ``None``.
+def _is_lowerable_goal(goal) -> bool:
+    """True when reads may be extracted out of *goal* to just before it.
 
-    ``None`` means "leave this goal alone" — either it is not a shape we
-    lower (a control construct, a meta-call, a Python escape) or one of its
-    arguments is not a plain term.
+    False means "leave this goal alone" — it is not a shape we lower (a
+    control construct, a meta-call, a Python escape) or one of its arguments
+    is not a plain term.  Refusing only costs sharing: the reads inside stay
+    inline, exactly as they compile today.
     """
     if isinstance(goal, Call):
         if isinstance(goal.func, Name):
             if _is_logic_var_name(goal.func.id):
-                return None          # meta-call on a variable goal
+                return False         # meta-call on a variable goal
         elif not isinstance(goal.func, Attribute) or _is_dict_attr_access(goal.func):
-            return None
+            return False
         parts = list(goal.args) + [kw.value for kw in goal.keywords]
     elif isinstance(goal, Compare):
         parts = [goal.left] + list(goal.comparators)
     else:
-        return None
-    if not all(_is_plain_term(part) for part in parts):
-        return None
-    return parts
+        return False
+    return all(_is_plain_term(part) for part in parts)
 
 
 def _dict_read_key_tag(key_node):
@@ -617,7 +616,7 @@ def _lower_dict_reads_in_goal(goal, mint, shared):
             shared[cache_key] = var_name
             return [goal]
 
-    if _lowerable_goal_parts(goal) is None:
+    if not _is_lowerable_goal(goal):
         return [goal]
     reads = []
     extractor = _DictReadExtractor(mint, shared, reads)
