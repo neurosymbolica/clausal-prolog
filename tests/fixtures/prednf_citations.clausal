@@ -1,0 +1,12 @@
+# clausal: no-collect
+# Vocabulary module for the predicate-not-found candidate diagnostic
+# (todo/predicate-not-found-should-list-candidates.md).  Reproduces the shape
+# of the reported `…eumr_jurisdiction_turnover.citations` module: it defines
+# `citation/3`, and the sibling that calls `citation/2` cannot see it.
+-module(prednf_citations, [citation(REF, TEXT, NOTE), cite(REF)])
+
+-private([art_1_2, meta])
+
+citation(art_1_2, "EUMR Article 1(2)", meta),
+
+cite(art_1_2),

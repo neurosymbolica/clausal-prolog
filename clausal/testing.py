@@ -148,7 +148,13 @@ class GoalDiagnostic:
             if self.source:
                 out.extend(_wrap_goal(self.source, indent + "  "))
             if self.raised:
-                out.append(f"{indent}  {self.raised}")
+                # An exception message may be several lines — a lookup failure
+                # carries its candidate list this way.  Indent the
+                # continuations so the block stays visibly attached to the
+                # goal it belongs to instead of falling back to column 0.
+                first, *rest = self.raised.splitlines() or [""]
+                out.append(f"{indent}  {first}")
+                out.extend(f"{indent}  {line}" for line in rest)
         if self.bindings:
             rendered = ", ".join(f"{n} = {v}" for n, v in self.bindings)
             out.append(f"{indent}bindings at failure: {rendered}")
@@ -948,12 +954,31 @@ def _wrap_goal(text: str, indent: str, width: int = 96) -> list[str]:
 def _failure_lines(rel: str, result: TestResult) -> list[str]:
     location = f"{rel}:{result.line}" if result.line else rel
     header = f"  {location} :: {result.name}"
-    if result.error is not None:
-        header += f" — {result.error}"
     lines = [header]
+    if result.error is None:
+        detail, rest = "", []
+    else:
+        detail, *rest = str(result.error).splitlines() or [""]
+    if result.error is not None:
+        header = lines[0] = f"{header} — {detail}"
+    # A multi-line message (a lookup failure lists its candidates) belongs in
+    # the report exactly once.  The goal block below already reproduces it in
+    # full and under the goal it came from, so print the remainder here only
+    # when there is no goal block to carry it.
+    if rest and not _diagnostic_repeats(result, rest):
+        lines.extend(f"    {line}" for line in rest)
     if result.diagnostic is not None:
         lines.extend(result.diagnostic.lines())
     return lines
+
+
+def _diagnostic_repeats(result: TestResult, rest: list[str]) -> bool:
+    """True when the goal diagnostic already prints these message lines."""
+    raised = getattr(result.diagnostic, "raised", None)
+    if not raised:
+        return False
+    raised_lines = raised.splitlines()
+    return rest and rest[-1] in raised_lines
 
 
 def discover_clausal_files(roots: list[str | Path]) -> Iterator[Path]:

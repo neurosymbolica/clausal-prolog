@@ -1,0 +1,8 @@
+# clausal: no-collect
+# Imports the citations module as a whole, then calls `citation` UNQUALIFIED
+# and at the wrong arity — the reported failure.  The name is not in this
+# file's namespace at all, so the call falls through to the database and
+# raises `Predicate citation/2 not found`.
+-import_module(tests.fixtures.prednf_citations)
+
+uses(REF, META) <- citation(REF, META)

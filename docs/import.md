@@ -292,7 +292,10 @@ Hook(42),                          # defined HERE, in the caller
 TestDynamic(X) <- (RunCheck(X))    # asks the library to call Hook
 ```
 
-Querying `TestDynamic(X)` raises `KeyError: Predicate Hook/1 not found`.
+Querying `TestDynamic(X)` raises `Predicate Hook/1 not found` (a
+`PredicateNotFoundError`, which is a `KeyError`). The message goes on to name
+the namespace it searched and list what `lib` *does* define — which is the
+point: the list is `RunCheck/1`, and `Hook` is not on it.
 `RunCheck` was compiled in `lib`'s namespace, where `Hook` does not exist — and
 Clausal never consults the caller's namespace to find it. A Prolog programmer
 coming from the flat, module-less style expects this to find the caller's

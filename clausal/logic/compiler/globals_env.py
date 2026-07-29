@@ -121,9 +121,15 @@ class _DbDispatchAdapter:
     def _get_dispatch(self):
         fn = self._db.get_dispatch(self._functor, self._arity)
         if fn is None:
-            raise KeyError(
-                f"Predicate {self._functor}/{self._arity} not found"
+            # The candidate search runs HERE and nowhere else.  A successful
+            # lookup returns above without touching the diagnostics module, so
+            # the hunt for what the author could have called instead — which
+            # reads and parses sibling source files — costs nothing on the
+            # call path.  See todo/predicate-not-found-should-list-candidates.
+            from clausal.predicate_diagnostics import (  # noqa: PLC0415
+                predicate_not_found,
             )
+            raise predicate_not_found(self._functor, self._arity, db=self._db)
         return fn
 
     def __call__(self, *args, **kwargs):
