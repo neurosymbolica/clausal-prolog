@@ -83,6 +83,29 @@ compiled-in Python local — is what makes this sound under backtracking. In
 `member(P, [D1, D2]), foo(P.k)` the read sits after `member/2`, so redo re-executes it against the
 new binding of `P`. A cache hoisted to clause entry would go stale; this cannot.
 
+**The same lowering applies to `P[key]`**, so the two spellings remain exactly equivalent and `[]`
+gains the same single-evaluation guarantee. This is a change to existing `[]` behaviour (today each
+occurrence inlines its own `$subscript` call) and needs its own regression pass.
+
+### Scoping the read to its control construct
+
+The read is inserted **immediately before the goal that uses it, inside the innermost enclosing
+control construct** — never lifted out of a disjunction arm, `not`, or if-then-else branch:
+
+```clausal
+( a(P) or b(P.k) )
+
+# means
+( a(P) or ( <read P[k] into P_K>, b(P_K) ) )
+```
+
+Lifting the read ahead of the disjunction would make it throw on a missing key even when `a(P)`
+succeeds — turning a successful determination into an error. Scoping it per arm avoids that.
+
+The consequence is deliberate and accepted: **sharing does not cross an arm boundary.** A later
+`P.k` outside the disjunction reads again. Re-reading is cheap (measured noise), and the alternative
+— reasoning about which arm bound the implicit variable — is not worth it.
+
 In `clausal/templating/term_rewriting.py`, `visit_Attribute` currently raises when the base of a
 dotted name is a logic variable. That rejection becomes the rewrite above, for:
 
@@ -176,6 +199,34 @@ its own test.
 
 Keeping keys `-private` to the type module removes the import that triggers it.
 
+### A predicate name is *not* usable as a key (verified)
+
+A key atom must be declared; the same-named predicate will not serve. In a module that defines
+`query_date/2`, a bare `query_date` in key position binds to the **predicate class**, and the
+compiler dies:
+
+```
+NotImplementedError: term_to_ast_expr: unsupported term type PredicateMeta:
+  <Predicate query_date/2, 1 clause(s), compiled>
+```
+
+This is loud and at load time, so it is a diagnostics problem rather than a correctness one — but it
+should be a named Clausal error suggesting the qualified form or an import.
+
+The correctness problem is next door, and it is severe. See
+`todo/query-template-rebinds-atom-dict-keys.md`: when such a dict crosses the Python→`solve()`
+boundary into a module where the key name is bound to *anything else*, the query template silently
+rebinds the key to that other object. Verified end to end — a profile with `query_date: 5` returns
+**zero** solutions from a rule that should succeed, with no error, even though the rule reads the key
+in fully qualified form. Strict reads surface it as a bogus `existence_error`; `get/3` fails
+silently; `get/4` silently returns the default.
+
+This is the strongest argument for the convention. Keys that never leave their type module, read by
+methods defined in that module, cannot hit either failure — the name is bound to the atom exactly
+where it is used. It is also an argument for fixing the underlying compiler behaviour (option 2 of
+`dict-atom-keys-vs-predicates.md`: compile atom keys by identity, not by name), since the convention
+protects only its adopters.
+
 ### Why this is the right shape
 
 Requiring a key to be *declared* buys typo protection on the name but says nothing about whether an
@@ -258,9 +309,12 @@ the majority of the 909 sites may well stay as they are. Sequence:
 - Parser/compiler: `P.k` ≡ `P[k]` for atom keys, variable keys, chains; `mod.pred` unaffected;
   `X.foo(A)` still rejected; undeclared key still a load-time `NameError`; no `./2` term is
   observable (`=..`, `functor/3`, unification against `'.'(_, _)` all see through the sugar).
-- Lowering: repeated `P.k` in one body reads once; the read re-executes on redo under
-  `member(P, [D1, D2]), foo(P.k)`; the hoist stays inside each disjunction arm, `not`, and
-  if-then-else arm (open question 1) — one test per construct.
+- Lowering: repeated `P.k` in one body reads once; likewise repeated `P[k]`; the read re-executes on
+  redo under `member(P, [D1, D2]), foo(P.k)`; the read stays inside each disjunction arm, `not`, and
+  if-then-else arm — one test per construct, including the `( a(P) or b(P.k) )` case where a missing
+  key must **not** prevent `a(P)` from succeeding.
+- Key/predicate collision: a bare key naming a locally-defined predicate is a named Clausal error,
+  not `NotImplementedError: unsupported term type PredicateMeta`.
 - Runtime: missing key throws `existence_error`; non-dict throws `type_error`; unbound base throws
   `instantiation_error` (new); `Var`-valued key aliases; correct behaviour in argument position,
   comparisons, and under `not`.
@@ -270,19 +324,16 @@ the majority of the 909 sites may well stay as they are. Sequence:
 
 ## Open questions
 
-1. **Scope of the read-once hoist.** Inserting the read at the first occurrence is unambiguous in a
-   straight-line conjunction. It is not, when the first occurrence sits inside a control construct:
-   in `( a(P) or b(P.k) )`, hoisting the read ahead of the disjunction makes it throw even on the
-   branch that succeeds via `a(P)`. The hoist must therefore be scoped to the innermost enclosing
-   control construct (disjunction arm, `not`, if-then-else arm), with substitution confined to that
-   same scope. Needs pinning down precisely, with tests per construct.
-2. **Does the hoist apply to `P[key]` as well?** If it does, the two spellings stay exactly
-   equivalent and `[]` gets the same single-evaluation guarantee. If it applies only to `.`, the two
-   differ in evaluation count (observable if a key read ever has a cost worth counting). Preference
-   is to apply it to both, but it is a larger change to existing behaviour.
-3. Renderer round-trip: preserve `.` or flatten to `[k]`?
-4. Does the SMT projection see source or post-lowering IR?
-5. Should Phenomenon A get its own engine fix (arity-aware call resolution — option 3 in
+1. Renderer round-trip: preserve `.` or flatten to `[k]`?
+2. Does the SMT projection see source or post-lowering IR?
+3. Should Phenomenon A get its own engine fix (arity-aware call resolution — option 3 in
    `implementation_plans/dict-atom-keys-vs-predicates.md`), independent of this convention? It would
    fix `get/3` and `[]` sites too, not only those adopting the new shape. Given that snake_case makes
    the collision structural, this looks more like a standing debt than a corner case.
+
+## Dependency
+
+`todo/query-template-rebinds-atom-dict-keys.md` is not caused by this design, but it silently
+corrupts atom dict keys crossing the Python boundary and this feature inherits it unchanged. The
+pilot domain should not be read as evidence for the convention until that is fixed or the domain is
+confirmed unaffected.
