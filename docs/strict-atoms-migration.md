@@ -42,12 +42,17 @@ still works but is **deprecated** and emits a one-per-process
 - Strings (`"red"`) — a distinct data type, never affected by atom strictness.
 - `True` / `False` — parsed as Python constants, not bare atoms, so truth-table
   files need no declarations.
-- **Dict-literal keys** — an undeclared bare atom used as a dict key *still*
-  auto-mints (a deliberately scoped-out asymmetry; see
-  [`todo/dict-key-atom-strict-asymmetry.md`](../todo/dict-key-atom-strict-asymmetry.md)).
 - The **REPL** and **doc/markdown ```clausal example blocks** compile in
   implicit mode automatically — interactive and illustrative snippets keep
   auto-minting with no directive needed.
+
+Note on **dict-literal keys**: a bare atom used as a *source* dict-literal key
+(`{sky: 1}`) is treated exactly like any other bare atom — it **raises** under
+the strict default and must be declared or reached via `-implicit_atoms`. The
+only residual permissiveness is the *runtime* atom-intern path (a
+dynamically-constructed key name), which still auto-mints; that narrow gap is
+tracked in [`todo/dict-key-atom-strict-asymmetry.md`](../todo/dict-key-atom-strict-asymmetry.md)
+and does not affect ordinary source files.
 
 ## Do I need to migrate?
 
