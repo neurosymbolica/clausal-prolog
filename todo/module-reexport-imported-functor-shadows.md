@@ -43,6 +43,45 @@ functors (believing it should match the atom-shadowing behaviour),
 
 ---
 
+## SUPERSEDED — the reconciliation below was WRONG (corrected 2026-07-29, same day)
+
+> **Do not act on the section that follows.** It is kept only so the reasoning
+> trail is visible.
+>
+> It hypothesised that the field-name mismatch was explained by a *bare-name
+> re-export* versus an *args-bearing declaration*. A subsequent investigation
+> ran the preserved reproduction and found the real cause is neither: it is a
+> **declaration/clause ARITY disagreement**, reproducible in a **single module
+> with no imports at all**:
+>
+> ```clausal
+> -module(m, [f(A)])
+> f(1, 2),
+> ```
+>
+> The axis is arity, not field names, and re-export is not involved. Both
+> explanations previously on record were refuted, with regression tests:
+> the anonymous-`_` → `arg_N` fallback is **unreachable** (`_is_logic_var_name`
+> rejects all-underscore spellings before it, and body goals are emitted
+> positionally so their spellings cannot mismatch), and the import-ordering
+> defect is real but is a **different bug** that the reproduction does not hit.
+>
+> **This file's NON-BUG verdict stands and was never in question** — the tension
+> was an artefact of my wrong hypothesis, not of the 2026-07-22 investigation.
+> `tests/test_functor_reexport.py` still passes.
+>
+> Current state of the arity bug: fixed as a compile-time load error naming both
+> the declaration and the conflicting clause. See
+> `todo/functor-field-name-mismatch-diagnostic.md`.
+>
+> The import-ordering defect (a) remains **open and deliberately unfixed** — the
+> corpus uses the declare-and-import idiom in *both* textual orderings in
+> working domains, so no winner can be imposed and neither ordering can be made
+> an error. Details in that same todo.
+
+<details>
+<summary>Original (wrong) reconciliation, 2026-07-29 — retained for the trail</summary>
+
 ## READ THIS IF YOU ARE FIXING THE FUNCTOR FIELD-NAME MISMATCH (added 2026-07-29)
 
 `todo/functor-field-name-mismatch-diagnostic.md` records a root cause traced on
@@ -101,3 +140,5 @@ proof.** Confirm it before relying on it. Specifically:
 3. The two findings live in different layers (`compiler_v2` vs
    `templating/term_rewriting.py`). A fix in one should not silently alter the
    other; if it does, say so explicitly.
+
+</details>
