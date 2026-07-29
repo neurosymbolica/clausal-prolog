@@ -2802,6 +2802,10 @@ class EmbedTransformer(NodeTransformer):
         transformer._functor_decl_site: dict[str, tuple[int, str]] = {}
         transformer._atoms: set[str] = set()
         transformer._import_remap: dict[str, str] = {}
+        # Local names bound by an -import_from seen SO FAR in this file. A
+        # clause head for one of these binds by position rather than by field
+        # name — see _emit_head_positionally.
+        transformer._imported_functors: set[str] = set()
         transformer._module_items: list = []
         transformer._source_lines = source_lines
         # When True (set by the REPL/IPython transform site), the file
@@ -2902,6 +2906,67 @@ class EmbedTransformer(NodeTransformer):
             f"Use those names, or change the declaration to match."
         )
 
+    def _emit_head_positionally(transformer, functor_name, prev_fields):
+        """True when this clause head must bind by POSITION, not by field name.
+
+        Field names are a module-local *labelling of slots*; **arity** is the
+        functor's cross-module contract.  When a file both fixes a local
+        signature for *functor_name* and ``-import_from``s the same name, the
+        guarded class block is emitted at the declaration's source position and
+        the import then rebinds the module global to the FOREIGN class at
+        *its* position — while ``_seen_functors`` still holds the LOCAL field
+        names.  A keyword head then names local fields against the foreign
+        class and raises ``__init__() got an unexpected keyword argument``
+        (``todo/functor-field-name-mismatch-diagnostic.md``).
+
+        A positional head binds against whatever class the import supplied, so
+        a module-local labelling can no longer contradict a foreign class.  A
+        genuine disagreement is an ARITY disagreement, which still raises —
+        with full attribution — from ``PredicateMeta.__call__``.
+
+        Deliberately narrow on two axes:
+
+        * ``prev_fields is not None`` means no guarded class block is emitted
+          at this head.  When one *is* emitted (the functor's first clause) it
+          re-mints the class to exactly the derived fields unless they already
+          match, so the bound class is known here and keyword emission is
+          precise.  That is the shape ``au/firb/computation.clausal`` and
+          ``us/sara_irc_tax/computation.clausal`` rely on: import a 0-arity
+          vocabulary atom, then define a same-named predicate whose first
+          clause re-mints over the import.
+        * the import must have been seen *earlier in the file*.  Before it, the
+          binding is provably local, so keyword emission is both correct and a
+          better error message.
+        """
+        return (
+            prev_fields is not None
+            and functor_name in transformer._imported_functors
+        )
+
+    def _build_head_arguments(transformer, positional, arg_field_names,
+                              transformed_pos, orig_pos_args,
+                              kwarg_field_names, transformed_kw, orig_kw_args):
+        """Return ``(args, keywords)`` for a clause head's ``Call``.
+
+        Explicitly-written keyword arguments name a field on purpose, so they
+        stay keywords either way; only the positional arguments — whose field
+        names the rewriter *derived* — are affected by *positional*.
+        """
+        keywords = [
+            make_keyword_node(fname, term, orig)
+            for fname, term, orig in zip(
+                kwarg_field_names, transformed_kw, orig_kw_args
+            )
+        ]
+        if positional:
+            return list(transformed_pos), keywords
+        return [], [
+            make_keyword_node(fname, term, orig)
+            for fname, term, orig in zip(
+                arg_field_names, transformed_pos, orig_pos_args
+            )
+        ] + keywords
+
     def _unseat_directive_minted(transformer, functor_name):
         """Drop a -dynamic-minted placeholder registration for *functor_name*.
 
@@ -2958,17 +3023,15 @@ class EmbedTransformer(NodeTransformer):
         transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
         transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
 
-        head_keywords = [
-            make_keyword_node(fname, term, orig)
-            for fname, term, orig in zip(arg_field_names, transformed_pos, orig_pos_args)
-        ] + [
-            make_keyword_node(fname, term, orig)
-            for fname, term, orig in zip(kwarg_field_names, transformed_kw, orig_kw_args)
-        ]
+        head_args, head_keywords = transformer._build_head_arguments(
+            transformer._emit_head_positionally(functor_name, prev_fields),
+            arg_field_names, transformed_pos, orig_pos_args,
+            kwarg_field_names, transformed_kw, orig_kw_args,
+        )
         head_ast = replace(
             Call(
                 func=replace(Name(id=functor_name, ctx=load), anchor),
-                args=[],
+                args=head_args,
                 keywords=head_keywords,
             ),
             src_node,
@@ -3362,17 +3425,16 @@ class EmbedTransformer(NodeTransformer):
                 # Build head call: functor(field=term, ...) as a plain Python Call,
                 # not a simple_ast.Call constructor.
                 anchor = left.func if isinstance(left, Call) else left
-                head_keywords = [
-                    make_keyword_node(fname, term, orig)
-                    for fname, term, orig in zip(arg_field_names, transformed_pos, orig_pos_args)
-                ] + [
-                    make_keyword_node(fname, term, orig)
-                    for fname, term, orig in zip(kwarg_field_names, transformed_kw, orig_kw_args)
-                ]
+                head_args, head_keywords = transformer._build_head_arguments(
+                    transformer._emit_head_positionally(
+                        functor_name, prev_fields),
+                    arg_field_names, transformed_pos, orig_pos_args,
+                    kwarg_field_names, transformed_kw, orig_kw_args,
+                )
                 head_ast = replace(
                     Call(
                         func=replace(Name(id=functor_name, ctx=load), anchor),
-                        args=[],
+                        args=head_args,
                         keywords=head_keywords,
                     ),
                     left,
@@ -3779,6 +3841,7 @@ class EmbedTransformer(NodeTransformer):
                 local_name = item.id
                 dotted_key = f"{module_path}.{local_name}"
                 transformer._import_remap[local_name] = dotted_key
+                transformer._imported_functors.add(local_name)
                 aliases.append(alias(name=item.id))
             elif (
                 isinstance(item, Call)
@@ -3801,6 +3864,9 @@ class EmbedTransformer(NodeTransformer):
                     )
                 dotted_key = f"{module_path}.{orig_name}"
                 transformer._import_remap[local_name] = dotted_key
+                # The ALIAS is what this file binds; the original spelling
+                # stays free for a purely local declaration.
+                transformer._imported_functors.add(local_name)
                 aliases.append(alias(name=orig_name, asname=local_name))
             else:
                 raise SyntaxError(
@@ -4354,21 +4420,15 @@ class EmbedTransformer(NodeTransformer):
         body_ast = term_transformer.visit(body_expr_raw)
 
         anchor = lhs.func if isinstance(lhs, Call) else lhs
-        head_keywords = [
-            make_keyword_node(fname, term, orig)
-            for fname, term, orig in zip(
-                arg_field_names, transformed_pos, orig_pos_args
-            )
-        ] + [
-            make_keyword_node(fname, term, orig)
-            for fname, term, orig in zip(
-                kwarg_field_names, transformed_kw, orig_kw_args
-            )
-        ]
+        head_args, head_keywords = transformer._build_head_arguments(
+            transformer._emit_head_positionally(functor_name, prev_fields),
+            arg_field_names, transformed_pos, orig_pos_args,
+            kwarg_field_names, transformed_kw, orig_kw_args,
+        )
         head_ast = replace(
             Call(
                 func=replace(Name(id=functor_name, ctx=load), anchor),
-                args=[],
+                args=head_args,
                 keywords=head_keywords,
             ),
             lhs,

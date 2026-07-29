@@ -1,0 +1,10 @@
+# Declare-then-import where the head is a bodyless FACT
+# (_build_fact_statements, the path the original bug report hit).  The local
+# declaration spells the fields (STATUS, CITATIONS); the import rebinds
+# impord_fverdict to a class whose fields are (OUTCOME, CITES).  Emitted
+# positionally, `maybe` lands in slot 0 and `pending` in slot 1.
+-private([maybe, pending])
+-module(impord_declare_then_import_fact, [impord_fverdict(STATUS, CITATIONS)])
+-import_from(tests.fixtures.impord_fact_vocab, [impord_fverdict])
+
+impord_fverdict(maybe, pending)

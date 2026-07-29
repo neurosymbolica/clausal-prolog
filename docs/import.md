@@ -396,6 +396,29 @@ subclass) naming both owning modules whenever two same-named atoms of different
 identity are compared. The flag is opt-in and off by default — with it off the
 comparison hook is not installed at all, so the unify hot path is unaffected.
 
+### Field names are local; arity is the contract
+
+A functor's argument *names* are a module-local labelling of its slots. Two
+modules may spell the same functor's fields differently — one
+`verdict(STATUS, CITATIONS)`, the other `verdict(OUTCOME, CITES)` — and both
+spellings are valid views of the same two slots. Its **arity** is not local:
+a functor name has exactly one arity across the whole program.
+
+The rewriter follows that rule. A clause head is normally emitted with the
+field names derived from the head variables, but when the same file also
+`-import_from`s that functor, the head binds by **position** instead. The
+import rebinds the name to the exporting module's class, and a positional head
+fits that class whatever it calls its slots — so declaring a functor locally
+and importing the same name (the re-export idiom) is safe in either textual
+order.
+
+A genuine disagreement is therefore always an arity disagreement, and it still
+raises: a head with more arguments than the bound class has fields raises
+`ClausalTermConstructionError`, naming the functor, both arities, where the
+class was registered and where the term was constructed. Two arities for one
+functor name cannot be reconciled — give every declaration and clause head the
+same number of arguments, or rename one of them.
+
 ---
 
 ## Builtin injection

@@ -1,0 +1,2 @@
+# Vocabulary module exporting impord_qd as a bare 0-arity ATOM (a dict key).
+-module(impord_atomvocab, [impord_qd])

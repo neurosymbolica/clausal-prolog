@@ -74,10 +74,12 @@ functors (believing it should match the atom-shadowing behaviour),
 > the declaration and the conflicting clause. See
 > `todo/functor-field-name-mismatch-diagnostic.md`.
 >
-> The import-ordering defect (a) remains **open and deliberately unfixed** — the
-> corpus uses the declare-and-import idiom in *both* textual orderings in
-> working domains, so no winner can be imposed and neither ordering can be made
-> an error. Details in that same todo.
+> The import-ordering defect (a) is now **fixed** (third pass, same day): no
+> winner is imposed between the local declaration and the import — instead a
+> clause head for a functor the same file imports is emitted **positionally**,
+> which removes the field-name axis from the head entirely. Both textual
+> orderings keep working; `tests/test_functor_reexport.py` still passes
+> untouched. Details in that same todo.
 
 <details>
 <summary>Original (wrong) reconciliation, 2026-07-29 — retained for the trail</summary>

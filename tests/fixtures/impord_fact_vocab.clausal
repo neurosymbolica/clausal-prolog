@@ -1,0 +1,6 @@
+# Owner of impord_fverdict/2, with no clauses of its own — a downstream
+# fixture supplies the only fact, so the pre-existing "a local clause for an
+# imported functor replaces its clause list" behaviour (unchanged by the
+# positional-head fix; verified identical on main) cannot confuse the
+# assertion.
+-module(impord_fact_vocab, [impord_fverdict(OUTCOME, CITES)])

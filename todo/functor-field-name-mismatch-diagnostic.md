@@ -6,10 +6,86 @@ LLM repair loop cannot act on it and burns its entire attempt budget.
 
 ---
 
+## STATUS (2026-07-29, third pass — the import-ordering defect is FIXED)
+
+**All three parts now closed: the reported diagnostic, the arity-conflict bug,
+and the import-ordering hazard (a).**
+
+### The fix
+
+`EmbedTransformer` emits a clause head **positionally** when the functor is
+`-import_from`'d earlier in the same file *and* the head does not itself emit a
+guarded class block (`_emit_head_positionally`). Field names are a module-local
+labelling of slots; arity is the cross-module contract, so a positional head
+binds against whatever class the import supplied and a local labelling can no
+longer contradict a foreign class. Explicitly-written keyword arguments in a
+head still bind by name — they name a field on purpose.
+
+The second condition is what keeps **Phenomenon A** working: when a head *does*
+emit a class block (a functor's first clause), that block re-mints the class to
+exactly the derived fields unless they already match, so the bound class is
+known at that point and keyword emission is precise. `au/firb/computation.clausal`
+and `us/sara_irc_tax/computation.clausal` import a 0-arity vocabulary atom and
+then define a same-named predicate, relying on exactly that re-mint.
+
+`_check_head_signature` is deliberately left running for imported functors: the
+local declaration's arity is still an in-file contract, and no corpus file
+disagrees with it.
+
+### What it costs
+
+* `tests/fixtures/fnmismatch_use.clausal` now **loads**, so
+  `TestDirectiveMintedPlaceholderMismatch` asserts that (identity shared with
+  the exporter) instead of the raise.
+* `tests/fixtures/atomshadow_use.clausal` still raises, but through the
+  positional-overflow check rather than the keyword path: "constructed with 2
+  positional argument(s) / registered with 0 field(s) ()". Attribution and the
+  Phenomenon-A hint are unchanged; the only loss is that
+  `_construction_hint` can no longer see logic-variable-shaped supplied names,
+  so it says "likely" where it used to say "almost certainly".
+* `CLAUSAL_BYTECODE_TAG` 5 → 6.
+
+### Evidence
+
+* Suite: `1 failed, 10406 passed, 136 skipped, 44 xfailed` before →
+  `1 failed, 10419 passed, 136 skipped, 44 xfailed` after (+13 in
+  `tests/test_functor_import_ordering.py`; 7 of those 13 fail on the parent
+  commit). The one failure is the pre-existing `test_doc_snippet_coverage.py`.
+* `tests/test_functor_reexport.py` (the re-export identity tripwire) and
+  `tests/test_functor_arity_conflict.py` pass untouched.
+* Corpus codegen differential over all 767 `.clausal` files in
+  `/workspace/clausify-domains` (sha256 of `ast.unparse`): **exactly 2 files
+  change**, `au/firb/computation.clausal` and
+  `us/sara_irc_tax/computation.clausal`, **one line each** — the *second*
+  clause of the predicate that shadows an imported 0-arity atom
+  (`query_date(p=…, query_date=…)` → `query_date(…, …)`,
+  `dependents_count(case=…, n=…)` → `dependents_count(…, …)`). The first clause,
+  which mints the class, is unchanged. No re-export module changes, because a
+  re-exported functor has no local clause head.
+* Load sweep of all 767 files: identical OK/ERR outcome on both trees (704 OK,
+  63 pre-existing environmental failures), including both changed files.
+* All 210 domain test files under `/workspace/clausify-domains/*/tests/` run
+  through `python -m clausal.testing`: byte-identical results on both trees
+  (189 PASSED; the 21 failures are pre-existing and environmental).
+
+### Adjacent hazard found, NOT introduced here and NOT fixed
+
+A module that defines a clause for a functor it imported **replaces** that
+functor's clause list rather than extending it: after loading such a module the
+exporter's own facts are gone from the shared class. Verified identical on the
+parent commit (it was simply unreachable before whenever the field spellings
+differed, because the keyword head raised first). Worth its own todo.
+
+---
+
 ## STATUS (2026-07-29, second pass — the actual defect)
 
 **Reported bug: FIXED. Positional-overflow sibling bug: FIXED.
 Import-ordering hazard (explanation (a)): open by decision, argued below.**
+
+> **Superseded by the third pass above — (a) is now fixed.** The reasoning in
+> this section is still correct about *why no winner can be imposed*; the fix
+> imposes no winner, it removes the field-name axis from the head instead.
 
 ### The two competing explanations, reconciled
 
