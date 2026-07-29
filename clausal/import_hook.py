@@ -79,23 +79,24 @@ def _make_intern_atom(module_dict, module_items, module_name):
     Strict atom resolution is the default: an undeclared bare atom must NOT be
     silently minted (that would pollute ``predicate_builtins`` and defeat the
     strict check), so the helper refuses to mint a name that is not already
-    available, mirroring the mint pass's own strict check.  Files that carry
-    ``-implicit_atoms`` disable strict mode and allow auto-minting.  (Atom keys
-    whose atom is declared post-exec via ``-module``/``-private`` are a known
-    limitation in strict files — declarations are processed after ``exec`` — so
-    strict files should use string keys or a declared/imported atom; non-strict
-    files, including the profile surface, are unaffected.)
-
-    **Known asymmetry**: dict-key atom interning currently still auto-mints
-    undeclared keys even in strict files when the key name is not yet in
-    ``module_dict`` but ``predicate_builtins`` already holds an entry (i.e. the
-    global atom was minted elsewhere).  Full dict-key strictness is tracked in
-    ``todo/dict-key-atom-strict-asymmetry.md``.
+    available, mirroring ``compiler_v2._process_bare_atom_refs``' own
+    ``effective_strict = not implicit_mode`` rule.  Only files carrying
+    ``-implicit_atoms`` disable strict mode and allow auto-minting, so a
+    dict-key atom and a value-position atom now resolve under the *same*
+    default.  (Atom keys whose atom is declared post-exec via
+    ``-module``/``-private`` are a known limitation in strict files —
+    declarations are processed after ``exec`` — so strict files should use
+    string keys or a declared/imported atom; non-strict files, including the
+    profile surface, are unaffected.)
     """
     from clausal.logic.predicate import make_predicate
-    from clausal.pythonic_ast.nodes import StrictAtomsDeclaration
+    from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
 
-    strict = any(isinstance(it, StrictAtomsDeclaration) for it in module_items)
+    # Strict is the default; only ``-implicit_atoms`` re-enables auto-minting.
+    # Mirrors ``compiler_v2._process_bare_atom_refs``' ``effective_strict``.
+    strict = not any(
+        isinstance(it, ImplicitAtomsDeclaration) for it in module_items
+    )
 
     def _intern_atom(name):
         existing = module_dict.get(name)

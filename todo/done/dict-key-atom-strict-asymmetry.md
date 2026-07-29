@@ -39,3 +39,6 @@ corrected — see the closed
 
 Related code: `clausal/import_hook.py` `_make_intern_atom`,
 `clausal/logic/compiler_v2.py` `_process_bare_atom_refs`.
+
+---
+**RESOLVED 2026-07-29 (converged):** `import_hook._make_intern_atom` now computes `strict = not any(ImplicitAtomsDeclaration ...)` — the runtime dict-key intern path honors the strict default, matching the compile-time path. Both paths raise on an undeclared key and neither pollutes `predicate_builtins`. Covered by `tests/test_strict_atoms_default.py::test_runtime_dict_key_intern_strict_by_default_no_pollution`.

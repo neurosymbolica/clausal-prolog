@@ -148,3 +148,34 @@ def test_strict_atoms_deprecation_warns_once_per_process():
         if issubclass(w.category, ClausalStrictAtomsDeprecationWarning)
     ]
     assert len(dep) == 1
+
+
+def test_runtime_dict_key_intern_strict_by_default_no_pollution():
+    """A neither-directive file (strict default) with an undeclared bare-atom
+    dict key must fail WITHOUT the eager runtime key-intern minting the atom.
+
+    The runtime ``$intern_atom`` helper builds dict literals during exec,
+    before the compile-time strict pass runs. Under the strict default it must
+    refuse to mint an undeclared key (matching the value-position default),
+    rather than auto-minting and leaving the compile-time pass to raise after
+    the atom already leaked into ``predicate_builtins``.
+    """
+    assert "sad_rtkey_indigo" not in predicate_builtins
+    source = (
+        "with_key(V) <- (V is {sad_rtkey_indigo: 1}[sad_rtkey_indigo]),\n"
+    )
+    with pytest.raises(NameError):
+        _load_inline_clausal("_sad_rtkey_default", source)
+    # Strict by default: the eager key-intern must not have leaked the atom.
+    assert "sad_rtkey_indigo" not in predicate_builtins
+
+
+def test_runtime_dict_key_intern_implicit_still_mints():
+    """`-implicit_atoms` keeps the loose runtime key-intern behaviour."""
+    assert "sad_rtkey_amber" not in predicate_builtins
+    source = (
+        "-implicit_atoms\n"
+        "read_key(V) <- (V is {sad_rtkey_amber: 7}[sad_rtkey_amber]),\n"
+    )
+    mod = _load_inline_clausal("_sad_rtkey_implicit", source)
+    assert mod.sad_rtkey_amber is predicate_builtins["sad_rtkey_amber"]
