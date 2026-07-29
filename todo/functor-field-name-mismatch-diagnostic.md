@@ -74,7 +74,9 @@ A module that defines a clause for a functor it imported **replaces** that
 functor's clause list rather than extending it: after loading such a module the
 exporter's own facts are gone from the shared class. Verified identical on the
 parent commit (it was simply unreachable before whenever the field spellings
-differed, because the keyword head raised first). Worth its own todo.
+differed, because the keyword head raised first). Worth its own todo — now filed as
+`todo/imported-functor-clause-list-replaced-not-extended.md`, with a verified
+reproduction and the extend-vs-refuse design question.
 
 ---
 
