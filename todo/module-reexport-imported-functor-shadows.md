@@ -40,3 +40,64 @@ root cause and the fix (statement-level arrow-less multi-goal tuples now raise a
 If someone ever changes the narrowed shadowing trigger to re-mint predicate
 functors (believing it should match the atom-shadowing behaviour),
 `tests/test_functor_reexport.py` fails loudly.
+
+---
+
+## READ THIS IF YOU ARE FIXING THE FUNCTOR FIELD-NAME MISMATCH (added 2026-07-29)
+
+`todo/functor-field-name-mismatch-diagnostic.md` records a root cause traced on
+2026-07-29 that **sounds like** it contradicts this file's NON-BUG verdict. It
+probably does not, but the distinction is subtle and easy to get wrong, so it is
+written out here rather than left to be rediscovered.
+
+### The apparent contradiction
+
+- **This file (2026-07-22)** concluded: a module that imports a functor and
+  lists it in its own `-module` exports keeps **shared class identity**. Not a
+  bug.
+- **The 2026-07-29 trace** concluded: a module that declares a functor locally
+  *and* imports the same name gets the local class block emitted at the
+  declaration position, then `-import_from` rebinds the global to the **foreign**
+  class at *its* source position — while `EmbedTransformer._seen_functors` still
+  holds the **local** field names. Later construction sites are emitted with
+  local keyword names against the foreign class, producing the bare `TypeError`.
+
+### Why they are most likely both right — the declaration shape differs
+
+The two reports are about **different `-module` entries**:
+
+| | this file (2026-07-22) | field-mismatch (2026-07-29) |
+|---|---|---|
+| `-module` entry | **bare name** — `-module(m, [verdict])` | **with field names** — `-module(m, [verdict(STATUS, CITATIONS)])` |
+| meaning | *re-export* an existing functor | *declare* a functor, minting a class with those fields |
+| layer | `compiler_v2._process_declarations` (identity preservation) | `EmbedTransformer` in `templating/term_rewriting.py` (codegen emission order) |
+| outcome | identity preserved — correct | local fields vs foreign class — the bug |
+
+A bare re-export mints nothing, so there are no local field names to disagree
+with the import. An args-bearing declaration mints a class *and* records field
+names, which is what the import can then contradict.
+
+### Evidence, verified on `main` @ `4377eed1`
+
+- `tests/test_functor_reexport.py` — **4 passed** on the current tree, so this
+  file's conclusion still holds after the 2026-07-29 diagnostic work.
+- The field-mismatch fixture `tests/fixtures/fnmismatch_use.clausal:9` uses the
+  args-bearing shape:
+  `-module(fnmismatch_use, [fnm_verdict(STATUS, CITATIONS), fnm_chk(RESULT)])`.
+
+### What this means for the fix — and the trap
+
+This reconciliation is a **hypothesis supported by two observations, not a
+proof.** Confirm it before relying on it. Specifically:
+
+1. Establish whether the bug reproduces with a **bare-name** re-export. If it
+   does, this file's NON-BUG verdict is too broad and its Status line must be
+   corrected — do not leave a stale RESOLVED banner in place.
+2. `tests/test_functor_reexport.py` is a deliberate tripwire (see *Guard against
+   regression* above). If your fix makes it fail, that is the guard doing its
+   job: it means you have changed re-export identity semantics, which is a
+   different and larger decision than fixing field-name disagreement. Do not
+   "fix" the test to make it pass without arguing the semantics change.
+3. The two findings live in different layers (`compiler_v2` vs
+   `templating/term_rewriting.py`). A fix in one should not silently alter the
+   other; if it does, say so explicitly.
