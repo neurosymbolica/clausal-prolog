@@ -1932,7 +1932,15 @@ def _make_functor_class_ast(functor_name, field_names, source):
         f"        _fields = {fields_tuple}",
     ]
     tree = parse("\n".join(lines))
-    return copy_location(tree.body[0], source)
+    block = tree.body[0]
+    # Position the WHOLE block, not just the try: the nodes come from parsing a
+    # fresh snippet, so without this the inner ``class`` statement keeps the
+    # snippet's own line 7 and any traceback through it (notably the
+    # field-name mismatch diagnostic's "registered by:") points at a line that
+    # has nothing to do with the declaration.
+    for node in walk(block):
+        copy_location(node, source)
+    return block
 
 
 def _make_define_stmt(predicate_ast, expr_stmt):

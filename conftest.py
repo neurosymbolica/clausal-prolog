@@ -44,8 +44,27 @@ def _clear_pycache_before_tests():
     clear_pycache()
 
 
+# Marker a fixture can carry to opt out of automatic .clausal collection —
+# for files that are *meant* to fail at load (diagnostic regression fixtures).
+_NO_COLLECT_MARKER = "# clausal: no-collect"
+
+
+def _opts_out_of_collection(path: Path) -> bool:
+    """True if a .clausal file carries the ``# clausal: no-collect`` marker."""
+    try:
+        with path.open(encoding="utf-8") as fh:
+            for _, line in zip(range(30), fh):
+                if line.strip() == _NO_COLLECT_MARKER:
+                    return True
+    except OSError:  # pragma: no cover — unreadable file, let collection try
+        return False
+    return False
+
+
 def pytest_collect_file(parent, file_path: Path):
     if file_path.suffix == ".clausal":
+        if _opts_out_of_collection(file_path):
+            return None
         return ClausalFile.from_parent(parent, path=file_path)
     if file_path.suffix == ".md":
         try:
