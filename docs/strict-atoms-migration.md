@@ -46,13 +46,12 @@ still works but is **deprecated** and emits a one-per-process
   implicit mode automatically — interactive and illustrative snippets keep
   auto-minting with no directive needed.
 
-Note on **dict-literal keys**: a bare atom used as a *source* dict-literal key
-(`{sky: 1}`) is treated exactly like any other bare atom — it **raises** under
-the strict default and must be declared or reached via `-implicit_atoms`. The
-only residual permissiveness is the *runtime* atom-intern path (a
-dynamically-constructed key name), which still auto-mints; that narrow gap is
-tracked in [`todo/dict-key-atom-strict-asymmetry.md`](../todo/dict-key-atom-strict-asymmetry.md)
-and does not affect ordinary source files.
+Note on **dict-literal keys**: a bare atom used as a dict key (`{sky: 1}`) is
+treated exactly like any other bare atom — it **raises** under the strict
+default and must be declared or reached via `-implicit_atoms`. This holds for
+both the compile-time source path and the runtime atom-intern path (they share
+the strict-by-default rule), so a dict-key atom and a value-position atom behave
+identically.
 
 ## Do I need to migrate?
 
