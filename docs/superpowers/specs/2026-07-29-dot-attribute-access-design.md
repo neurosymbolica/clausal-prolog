@@ -325,7 +325,22 @@ the majority of the 909 sites may well stay as they are. Sequence:
 ## Open questions
 
 1. Renderer round-trip: preserve `.` or flatten to `[k]`?
-2. Does the SMT projection see source or post-lowering IR?
+   **Answered in implementation:** flattens to `[k]`. Clauses that needed read-once lowering also
+   render their extracted `_read_N` goals. Accepted trade; it does change audit/reified output.
+2. ~~Does the SMT projection see source or post-lowering IR?~~ **Answered 2026-07-29 — SOURCE.**
+   The prover has its own front end: `clausify/auto/formal/ir.py:354` does `ast.parse(text)` on the
+   `.clausal` source, entirely independent of the engine's pipeline. Two consequences, both the
+   opposite of what was assumed:
+   - **`.` is invisible to the prover and MUST be taught before any domain adopts it.** The prover
+     never sees the engine's `P.k → P[k]` rewrite; it sees an `ast.Attribute` node it does not
+     handle. Migration step 3 is therefore a **hard blocker** on the pilot, not a nice-to-have.
+     (`ir.py:156`'s `ast.Attribute` case is a node-walking helper for the arrow-adjacency check, not
+     a read projection.)
+   - **The read-once lowering does not affect the prover at all**, since the prover never sees
+     lowered goals. The feared `_read_0 is P[k]` shape never reaches it.
+   Note the target form already exists: `translate.py:724` projects `V is P[key]` (a `bind_is` goal
+   with a `Subscript` RHS) via `axioms.subscript_read`. Teaching the prover `.` is plausibly just
+   normalizing `Attribute` → `Subscript` in its front end before that check.
 3. Should Phenomenon A get its own engine fix (arity-aware call resolution — option 3 in
    `implementation_plans/dict-atom-keys-vs-predicates.md`), independent of this convention? It would
    fix `get/3` and `[]` sites too, not only those adopting the new shape. Given that snake_case makes
