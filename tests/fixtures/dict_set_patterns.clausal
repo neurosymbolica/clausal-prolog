@@ -1,5 +1,6 @@
 # tests/fixtures/dict_set_patterns.clausal
 # Phase 2: DictTerm and SetTerm pattern matching in clause heads and bodies.
+-private([foo, bar])
 
 # ── DictTerm in clause heads ──
 

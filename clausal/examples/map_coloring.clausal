@@ -5,7 +5,10 @@
 -private([
     Color(C),
     Adjacent(X, Y),
-    ColorOf(REGION, C, COLORING)
+    ColorOf(REGION, C, COLORING),
+    Red, Green, Blue, Yellow,
+    WesternAustralia, NorthernTerritory, SouthAustralia,
+    Queensland, NewSouthWales, Victoria, Tasmania
 ])
 
 # Four-color map coloring for Australia.

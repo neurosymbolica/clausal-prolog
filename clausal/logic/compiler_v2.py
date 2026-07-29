@@ -33,6 +33,7 @@ from clausal.pythonic_ast.nodes import (
     OverwritesDeclaration as OverwritesDeclItem,
     PrivateDeclaration as PrivateDeclItem,
     SpecializeDirective as SpecializeItem,
+    ImplicitAtomsDeclaration as ImplicitAtomsItem,
     StrictAtomsDeclaration as StrictAtomsItem,
 )
 
@@ -66,6 +67,32 @@ class ClausalUnusedOverwritesWarning(UserWarning):
     in ``-overwrites`` also count as unused: the warning never would have
     fired for a predicate functor, so the entry suppresses nothing.
     """
+
+
+_strict_atoms_deprecation_emitted = False
+
+
+class ClausalStrictAtomsDeprecationWarning(DeprecationWarning):
+    """``-strict_atoms`` is redundant now that strict resolution is the
+    default. The directive still works but can be deleted."""
+
+
+def _warn_strict_atoms_deprecated() -> None:
+    """Emit the ``-strict_atoms`` deprecation notice at most once per
+    process. Guarded by a module global rather than the warnings-filter
+    dedup so it is exactly-once regardless of the consumer's filters."""
+    global _strict_atoms_deprecation_emitted
+    if _strict_atoms_deprecation_emitted:
+        return
+    _strict_atoms_deprecation_emitted = True
+    import warnings
+    warnings.warn(
+        "-strict_atoms is redundant: strict atom resolution is now the "
+        "default. The directive still works but can be deleted. "
+        "(Shown once per process.)",
+        ClausalStrictAtomsDeprecationWarning,
+        stacklevel=2,
+    )
 
 
 class ClausalAtomIdentityMismatchWarning(ClausalAtomShadowingWarning):
@@ -577,6 +604,20 @@ def _process_bare_atom_refs(
     strict_mode = any(
         isinstance(item, StrictAtomsItem) for item in module_items
     )
+    implicit_mode = any(
+        isinstance(item, ImplicitAtomsItem) for item in module_items
+    )
+    if strict_mode and implicit_mode:
+        raise SyntaxError(
+            f"{module_name}: -strict_atoms and -implicit_atoms are mutually "
+            f"exclusive; a file may carry at most one"
+        )
+    # ── NEW in this task ──────────────────────────────────────────────
+    # Strict is the default (Python-style): undeclared bare atoms raise
+    # unless the file opts into loose auto-mint via -implicit_atoms.
+    effective_strict = not implicit_mode
+    if strict_mode:
+        _warn_strict_atoms_deprecated()
     undeclared: list[str] = []
 
     for item in module_items:
@@ -589,7 +630,7 @@ def _process_bare_atom_refs(
             if name in builtin_names:
                 # Builtin under any arity — resolved by get_builtin_predicate.
                 continue
-            if strict_mode:
+            if effective_strict:
                 undeclared.append(name)
                 continue
             cls = predicate_builtins.setdefault(

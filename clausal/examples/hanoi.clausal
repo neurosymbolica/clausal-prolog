@@ -1,6 +1,7 @@
 -module(hanoi, [
     Hanoi(N, From, To, Via, Moves)
 ])
+-private([Center, Left, Right])
 
 Hanoi(0, _, _, _, []),
 Hanoi(N, FROM, TO, VIA, MOVES) <- (

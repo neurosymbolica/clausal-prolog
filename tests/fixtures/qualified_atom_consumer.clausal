@@ -1,3 +1,4 @@
+-private([ok])
 # Consumes qualified_atom_vocab both ways:
 #   -import_from  → bare `euro` (the real atom), used to build the Stored fact
 #   -import_module → qualified `qualified_atom_vocab.euro` in TERM position

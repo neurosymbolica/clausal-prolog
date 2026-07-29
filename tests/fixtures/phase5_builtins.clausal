@@ -5,6 +5,7 @@
 # Quantity literals can't be constructed at clausal surface.
 
 -module(phase5_builtins, [Test(DESC)])
+-private([a, b, c])
 
 # ── lcm/3 ─────────────────────────────────────────────────────────────────
 

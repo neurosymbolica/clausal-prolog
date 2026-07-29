@@ -199,6 +199,7 @@ def test_non_strict_atom_dict_key_interns():
     so ``{k: 1}[k]`` reads back."""
     assert "phase_atomkey_teal" not in predicate_builtins
     source = (
+        "-implicit_atoms\n"  # test verifies implicit (loose) atom mint behaviour
         "read_key(V) <- (V is {phase_atomkey_teal: 7}[phase_atomkey_teal]),\n"
     )
     mod = _load_inline_clausal("_atomkey_intern_test", source)

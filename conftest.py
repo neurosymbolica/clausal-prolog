@@ -129,6 +129,19 @@ def _is_snippet_block(content: str) -> bool:
     return bool(lines) and all(line.startswith("--8<--") for line in lines)
 
 
+_ATOM_MODE_RE = re.compile(r"^\s*-\s*(strict_atoms|implicit_atoms)\b", re.M)
+
+
+def _with_doc_atom_mode(content: str) -> str:
+    """Doc example blocks compile in implicit (loose) atom mode by default,
+    like the REPL — they are illustrative snippets, not authored files. A
+    block that declares its own -strict_atoms/-implicit_atoms is left as-is.
+    Only the temp compile buffer is affected; the rendered markdown is not."""
+    if _ATOM_MODE_RE.search(content):
+        return content
+    return "-implicit_atoms\n" + content
+
+
 class DocMdFile(pytest.File):
     def collect(self):
         blocks = _extract_clausal_blocks(self.path)
@@ -161,7 +174,7 @@ class DocMdFile(pytest.File):
                 mode="w",
                 delete=False,
             ) as f:
-                f.write(content)
+                f.write(_with_doc_atom_mode(content))
                 tmp_path = Path(f.name)
 
             try:

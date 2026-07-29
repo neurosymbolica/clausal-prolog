@@ -76,14 +76,21 @@ def _make_intern_atom(module_dict, module_items, module_name):
     mint pass would produce, so an atom key and any value-position use of the
     atom are the identical object (``{foo: 1}[foo]`` matches).
 
-    Under ``-strict_atoms`` an undeclared atom must NOT be silently minted (that
-    would pollute ``predicate_builtins`` and defeat the directive), so the helper
-    refuses to mint a name that is not already available, mirroring the mint
-    pass's own strict check.  (Atom keys whose atom is declared post-exec via
-    ``-module``/``-private`` are a known limitation in strict files — declarations
-    are processed after ``exec`` — so strict files should use string keys or a
-    declared/imported atom; non-strict files, including the profile surface, are
-    unaffected.)
+    Strict atom resolution is the default: an undeclared bare atom must NOT be
+    silently minted (that would pollute ``predicate_builtins`` and defeat the
+    strict check), so the helper refuses to mint a name that is not already
+    available, mirroring the mint pass's own strict check.  Files that carry
+    ``-implicit_atoms`` disable strict mode and allow auto-minting.  (Atom keys
+    whose atom is declared post-exec via ``-module``/``-private`` are a known
+    limitation in strict files — declarations are processed after ``exec`` — so
+    strict files should use string keys or a declared/imported atom; non-strict
+    files, including the profile surface, are unaffected.)
+
+    **Known asymmetry**: dict-key atom interning currently still auto-mints
+    undeclared keys even in strict files when the key name is not yet in
+    ``module_dict`` but ``predicate_builtins`` already holds an entry (i.e. the
+    global atom was minted elsewhere).  Full dict-key strictness is tracked in
+    ``todo/dict-key-atom-strict-asymmetry.md``.
     """
     from clausal.logic.predicate import make_predicate
     from clausal.pythonic_ast.nodes import StrictAtomsDeclaration
@@ -856,7 +863,7 @@ class _FreshEmbedTransformer(ast.NodeTransformer):
 
     def visit(self, tree):
         try:
-            tree = EmbedTransformer().visit(tree)
+            tree = EmbedTransformer(implicit_atoms_default=True).visit(tree)
             tree = _StarQueryTransformer().visit(tree)
             ast.fix_missing_locations(tree)
             return tree
