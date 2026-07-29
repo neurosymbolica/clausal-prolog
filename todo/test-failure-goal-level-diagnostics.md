@@ -96,6 +96,15 @@ time has no source.  It covers scalars, lists, tuples, dicts, atoms
 and raises on anything else rather than emitting text that does not mean what
 it says.
 
+### Corpus check on the source-rendering path
+
+The risk in step 2/4 is a *silent* fallback (goal printed as a Python repr, or
+bindings reported as "unavailable").  Measured over all 312 `Test/1` clauses in
+`tests/clausal_modules/` + `clausal/examples/`: 312 reified, 312 rendered,
+312 lockstep variable pairings — no fallbacks and no render errors.
+Separately, `diagnose_failure` was driven over all 105 `tests/clausal_modules`
+test descriptions with zero hard failures.
+
 ### Bounds and degradation
 
 * Wall-clock budget per failing test, default 10s, `$CLAUSAL_TEST_DIAG_BUDGET`
@@ -134,6 +143,17 @@ database, so this cannot be fully avoided.  Mitigations applied:
   has side effects` rather than silently absorbed.
 * Diagnostics are **opt-in** (`run_test(..., diagnose=True)`).  `conftest.py`'s
   pytest integration calls `run_test/2` and is unaffected.
+
+### Suite
+
+`pytest tests/ -q` before: `1 failed, 10314 passed, 136 skipped, 44 xfailed`.
+After: `1 failed, 10333 passed, 136 skipped, 44 xfailed` — +19, exactly the new
+tests, same single pre-existing failure
+(`tests/test_doc_snippet_coverage.py::test_no_raw_untested_blocks`, unrelated
+and failing on `main` too).
+(`tests/audit_2026_05_25/…::test_F026_multi_star_splits_bounded_for_moderate_input`
+is a wall-clock assertion — 3.04s against a 3.0s ceiling — that fails only when
+the machine is loaded; it passes on both trees when run alone.)
 
 ### Not done / open
 

@@ -778,7 +778,6 @@ def _render_nearest(goal, reified_goal, kind, index, value) -> str:
     ``.clausal`` surface syntax.  Without a reified twin we fall back to naming
     the argument and its value.
     """
-    rendered_value = _render_value(value)
     from clausal.reflection import Goal, render_source
 
     if isinstance(reified_goal, Goal):
@@ -803,7 +802,7 @@ def _render_nearest(goal, reified_goal, kind, index, value) -> str:
         except Exception:  # noqa: BLE001
             pass
     label = f"argument {index + 1}" if kind == "arg" else "keyword argument"
-    return f"({label} was actually: {rendered_value})"
+    return f"({label} was actually: {_render_value(value)})"
 
 
 def _bound_reified(goal, reified_goal) -> dict[str, object]:
