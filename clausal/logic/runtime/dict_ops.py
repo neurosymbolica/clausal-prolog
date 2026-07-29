@@ -32,6 +32,9 @@ def _subscript(obj: Any, key: Any) -> Any:
     side (``X is {"a": V}["a"]`` aliases ``X`` and ``V``).
 
     Errors (all raised as catchable ``LogicException``s):
+      * unbound *obj*         → ``instantiation_error`` (an under-instantiated
+        read, not a wrong-typed one — an unbound variable is not "not a dict",
+        it is a dict not yet known);
       * non-ground *key*      → ``instantiation_error`` (Python hashable-key
         rule / prover ground-key constraint);
       * *obj* not a dict      → ``type_error(dict, obj)``;
@@ -41,6 +44,8 @@ def _subscript(obj: Any, key: Any) -> Any:
     """
     obj = deref(obj)
     key = deref(key)
+    if is_var(obj):
+        raise LogicException(instantiation_error(_SUBSCRIPT_CTX))
     if is_var(key):
         raise LogicException(instantiation_error(_SUBSCRIPT_CTX))
     if isinstance(obj, DictTerm):

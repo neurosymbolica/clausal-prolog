@@ -1,6 +1,6 @@
 # tests/fixtures/dict_set_patterns.clausal
 # Phase 2: DictTerm and SetTerm pattern matching in clause heads and bodies.
--private([foo, bar])
+-private([foo, bar, num, inner])
 
 # ── DictTerm in clause heads ──
 
@@ -218,4 +218,116 @@ Test("atom key distinct from string") <- (
     D is {foo: 1},
     not get(D, "foo", _),
     get(D, foo, V), V is 1,
+)  # nv
+
+# ── Dot attribute-access sugar: P.key ≡ P[key] ──
+# See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+# `.` on a logic variable is pure source sugar for the strict subscript read.
+# There is no `./2` term: nothing a program can inspect, unify, or unpack.
+
+chk_one(1),
+
+# --- Test: atom key ---
+Test("dot atom key") <- (P is {foo: 1, bar: 2}, V is P.foo, V is 1)  # nv
+
+# --- Test: the two spellings agree ---
+Test("dot equals bracket") <- (
+    P is {foo: 1, bar: 2},
+    V is P.bar,
+    W is P[bar],
+    V is W,
+    V is 2,
+)  # nv
+
+# --- Test: variable key ---
+Test("dot variable key") <- (
+    P is {foo: 1, bar: 2},
+    KEYV is bar,
+    V is P.KEYV,
+    V is 2,
+)  # nv
+
+# --- Test: chained read P.a.b ≡ P[a][b] ---
+Test("dot chained") <- (P is {foo: {bar: 5}}, V is P.foo.bar, V is 5)  # nv
+Test("dot chained equals bracket") <- (
+    P is {inner: {num: 9}},
+    V is P.inner.num,
+    W is P[inner][num],
+    V is W,
+)  # nv
+
+# --- Test: argument position ---
+Test("dot in argument position") <- (P is {foo: 1}, chk_one(P.foo))  # nv
+
+# --- Test: comparison position ---
+Test("dot in comparison") <- (P is {num: 7}, P.num > 3)  # nv
+
+# --- Test: under negation ---
+Test("dot under not") <- (P is {foo: 1}, not (P.foo is 2))  # nv
+
+# --- Test: a Var-valued key aliases through the read ---
+Test("dot value var aliases") <- (
+    P is {foo: V},
+    X is P.foo,
+    V is 7,
+    X is 7,
+)  # nv
+
+# --- Test: missing key throws existence_error carrying the key ---
+Test("dot missing key throws") <- (
+    P is {foo: 1},
+    catch(
+        (_ is P.bar),
+        error(existence_error(_, KEY), _),
+        KEY is bar,
+    ),
+)  # nv
+
+# --- Test: non-dict base throws type_error(dict, _) ---
+Test("dot nondict throws") <- (
+    P is 5,
+    catch(
+        (_ is P.foo),
+        error(type_error(TY, _), _),
+        TY is "dict",
+    ),
+)  # nv
+
+# --- Test: unbound base throws instantiation_error (both spellings) ---
+Test("dot unbound base throws") <- (
+    catch(
+        (_ is P.foo),
+        error(ETYPE, _),
+        ETYPE is "instantiation_error",
+    )
+)  # nv
+Test("bracket unbound base throws") <- (
+    catch(
+        (_ is P[foo]),
+        error(ETYPE, _),
+        ETYPE is "instantiation_error",
+    )
+)  # nv
+
+# --- Test: no `./2` term is observable — functor/3 and unpack/2 see the value ---
+Test("dot has no dot functor") <- (
+    P is {foo: 1},
+    V is P.foo,
+    functor(V, F, A), F is 1, A is 0,
+    unpack(V, L), L is [1],
+)  # nv
+Test("dot does not unify with a dot compound") <- (
+    P is {foo: 1},
+    functor(DOTTERM, ".", 2),
+    not (DOTTERM is P.foo),
+)  # nv
+
+# --- Test: a read inside a meta-call's goal stays in that goal's scope ---
+# `findall`'s goal binds ROW itself, so the read must not be lifted ahead of
+# the findall (ROW would be unbound → instantiation_error).
+dict_row({foo: 1}),
+dict_row({foo: 2}),
+Test("dot inside findall") <- (
+    findall(V, (dict_row(ROW), V is ROW.foo), L),
+    L is [1, 2],
 )  # nv

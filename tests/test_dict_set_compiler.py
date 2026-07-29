@@ -365,6 +365,227 @@ class TestDictSetFixture:
         # nv
         assert self._query_test(mod, logic_mod, "atom key distinct from string")
 
+    # ── dot attribute-access sugar: P.key ≡ P[key] ──
+
+    @pytest.mark.parametrize("name", [
+        "dot atom key",
+        "dot equals bracket",
+        "dot variable key",
+        "dot chained",
+        "dot chained equals bracket",
+        "dot in argument position",
+        "dot in comparison",
+        "dot under not",
+        "dot value var aliases",
+        "dot missing key throws",
+        "dot nondict throws",
+        "dot unbound base throws",
+        "bracket unbound base throws",
+        "dot has no dot functor",
+        "dot does not unify with a dot compound",
+        "dot inside findall",
+    ])
+    def test_dot_attribute_access(self, mod, logic_mod, name):
+        # nv
+        assert self._query_test(mod, logic_mod, name)
+
+
+# ── Dot attribute-access sugar: load-time behaviour ──────────────────────────
+
+class TestDotAttributeAccessLoad:
+    """``P.key`` is sugar for ``P[key]`` — same resolution, same load errors.
+
+    See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+    """
+
+    def _load_src(self, tmp_path, src, name):
+        path = tmp_path / f"{name}.clausal"
+        path.write_text(src)
+        return _load_module(name, str(path))
+
+    def test_undeclared_key_is_load_time_name_error(self, tmp_path):
+        """Strict atoms: an undeclared bare key fails at load, not at run."""
+        # nv
+        src = (
+            "-private([declared])\n"
+            "chk(PROF) <- (V is PROF.undeclared_key, V is 1)\n"
+        )
+        with pytest.raises(NameError, match="undeclared atom"):
+            self._load_src(tmp_path, src, "dotstrict_undeclared")
+
+    def test_declared_key_loads(self, tmp_path):
+        """The same clause with the key declared loads and runs."""
+        # nv
+        src = (
+            "-private([declared])\n"
+            "chk(PROF) <- (V is PROF.declared, V is 1)\n"
+        )
+        mod = self._load_src(tmp_path, src, "dotstrict_declared")
+        logic_mod = mod.__dict__["$module"]
+        declared = mod.__dict__["declared"]
+        assert list(call("chk", DictTerm({declared: 1}), module=logic_mod))
+
+    def test_method_call_form_still_rejected(self, tmp_path):
+        """``P.foo(A)`` stays a SyntaxError — the shape is reserved."""
+        # nv
+        src = (
+            "-private([foo])\n"
+            "chk(PROF, X) <- PROF.foo(X)\n"
+        )
+        with pytest.raises(SyntaxError, match="[Mm]ethod-call"):
+            self._load_src(tmp_path, src, "dotcall_rejected")
+
+
+# ── Read-once lowering ───────────────────────────────────────────────────────
+
+class TestDictReadOnceLowering:
+    """A dict read is a goal at its first-occurrence position, read once.
+
+    Repeated ``P.k`` / ``P[k]`` in one scope share one read; the read
+    re-executes on redo; and it is never lifted out of a disjunction arm, a
+    negation, or an if-then-else branch.  See
+    docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+    """
+
+    def _load_counting(self, tmp_path, monkeypatch, src, name):
+        """Load *src*, counting every ``$subscript`` the compiled code runs."""
+        from clausal.logic.runtime import dict_ops
+        reads = []
+
+        def counting_subscript(obj, key):
+            reads.append(key)
+            return dict_ops._subscript(obj, key)
+
+        monkeypatch.setattr(
+            "clausal.logic.compiler.predicate._subscript", counting_subscript)
+        path = tmp_path / f"{name}.clausal"
+        path.write_text(src)
+        mod = _load_module(name, str(path))
+        return mod, mod.__dict__["$module"], reads
+
+    def test_repeated_dot_reads_once(self, tmp_path, monkeypatch):
+        """``bar(P.k), baz(P.k, 1)`` performs one read, not two."""
+        # nv
+        src = (
+            "-private([kee])\n"
+            "bar(1),\n"
+            "baz(1, 1),\n"
+            "chk(PROF) <- (bar(PROF.kee), baz(PROF.kee, 1))\n"
+        )
+        mod, logic_mod, reads = self._load_counting(
+            tmp_path, monkeypatch, src, "readonce_dot")
+        kee = mod.__dict__["kee"]
+        assert list(call("chk", DictTerm({kee: 1}), module=logic_mod))
+        assert len(reads) == 1
+
+    def test_repeated_bracket_reads_once(self, tmp_path, monkeypatch):
+        """``P[k]`` gets the same single-evaluation guarantee as ``P.k``."""
+        # nv
+        src = (
+            "-private([kee])\n"
+            "bar(1),\n"
+            "baz(1, 1),\n"
+            "chk(PROF) <- (bar(PROF[kee]), baz(PROF[kee], 1))\n"
+        )
+        mod, logic_mod, reads = self._load_counting(
+            tmp_path, monkeypatch, src, "readonce_bracket")
+        kee = mod.__dict__["kee"]
+        assert list(call("chk", DictTerm({kee: 1}), module=logic_mod))
+        assert len(reads) == 1
+
+    def test_read_re_executes_on_redo(self, tmp_path, monkeypatch):
+        """The read is a goal at the first-occurrence position, not a cache.
+
+        It sits *after* ``prc/1``, so redo re-executes it against the new
+        binding of ``PROF``.  Hoisted to clause entry it would read an unbound
+        ``PROF`` (instantiation_error); cached in a Python local it would go
+        stale and report the first dict's value twice.
+        """
+        # nv
+        src = (
+            "-private([kee])\n"
+            "prc({kee: 1}),\n"
+            "prc({kee: 2}),\n"
+            "seen(1),\n"
+            "seen(2),\n"
+            "pick(V) <- (prc(PROF), seen(PROF.kee), V is PROF.kee)\n"
+        )
+        mod, logic_mod, reads = self._load_counting(
+            tmp_path, monkeypatch, src, "readonce_redo")
+        out = Var()
+        got = [deref(out) for _ in call("pick", out, module=logic_mod)]
+        assert got == [1, 2]
+        assert len(reads) == 2
+
+    def test_read_stays_inside_disjunction_arm(self, tmp_path, monkeypatch):
+        """A missing key in one arm must not sink a succeeding other arm."""
+        # nv
+        src = (
+            "-private([kee, absent])\n"
+            "yes(1),\n"
+            "chk(PROF) <- (yes(PROF.kee) or yes(PROF.absent))\n"
+        )
+        mod, logic_mod, reads = self._load_counting(
+            tmp_path, monkeypatch, src, "readonce_or")
+        kee = mod.__dict__["kee"]
+        # The first arm succeeds; a read lifted ahead of the disjunction would
+        # throw existence_error(dict_key, absent) before it ever ran.
+        solutions = call("chk", DictTerm({kee: 1}), module=logic_mod)
+        assert next(iter(solutions), "no solution") != "no solution"
+        assert len(reads) == 1
+
+    def test_read_stays_inside_negation(self, tmp_path, monkeypatch):
+        """The read sits inside ``not (...)``, and happens once."""
+        # nv
+        src = (
+            "-private([kee])\n"
+            "chk(PROF) <- (not (PROF.kee is 2), PROF.kee is 1)\n"
+        )
+        mod, logic_mod, reads = self._load_counting(
+            tmp_path, monkeypatch, src, "readonce_not")
+        kee = mod.__dict__["kee"]
+        assert list(call("chk", DictTerm({kee: 1}), module=logic_mod))
+        # One read inside the negation's scope, one in the outer scope —
+        # sharing deliberately does not cross the construct boundary.
+        assert len(reads) == 2
+
+    def test_read_stays_inside_if_then_else_branch(self, tmp_path, monkeypatch):
+        """An untaken branch's read never runs, so a missing key cannot throw."""
+        # nv
+        src = (
+            "-private([kee])\n"
+            "yes({kee: 1}),\n"
+            "prc(PROF, R) <- If(yes(PROF), R is PROF.kee, R is 0)\n"
+        )
+        mod, logic_mod, reads = self._load_counting(
+            tmp_path, monkeypatch, src, "readonce_ite")
+        out = Var()
+        # The dict has no `kee`, so the condition fails and the else-branch
+        # runs; a read hoisted ahead of the If would throw instead.
+        got = [deref(out) for _ in
+               call("prc", DictTerm({}), out, module=logic_mod)]
+        assert got == [0]
+        assert reads == []
+
+    def test_sharing_does_not_cross_an_arm_boundary(self, tmp_path, monkeypatch):
+        """A later occurrence outside the construct reads again — by design."""
+        # nv
+        src = (
+            "-private([kee])\n"
+            "yes(1),\n"
+            "nope(0),\n"
+            "chk(PROF) <- ((yes(PROF.kee) or nope(PROF.kee)), yes(PROF.kee))\n"
+        )
+        mod, logic_mod, reads = self._load_counting(
+            tmp_path, monkeypatch, src, "readonce_arm_boundary")
+        kee = mod.__dict__["kee"]
+        # First solution only, so the second arm never runs: one read inside
+        # the taken arm, one for the occurrence after the disjunction.  A read
+        # shared out of the arm would show 1.
+        solutions = call("chk", DictTerm({kee: 1}), module=logic_mod)
+        assert next(iter(solutions), "no solution") != "no solution"
+        assert len(reads) == 2
+
 
 # ── Subscript read: direct runtime behaviour ─────────────────────────────────
 
@@ -425,6 +646,18 @@ class TestDictSubscriptRead:
         with pytest.raises(LogicException) as exc:
             list(call("subscript_get", DictTerm({"a": 1}), Var(), v,
                       module=logic_mod))
+        term = exc.value.term
+        assert term.functor == "error"
+        assert term.args[0] == "instantiation_error"
+
+    def test_unbound_object_raises_instantiation_error(self, mod, logic_mod):
+        """An unbound base is under-instantiated, not wrong-typed — it used to
+        report ``type_error(dict, _)``."""
+        # nv
+        from clausal.logic.exceptions import LogicException
+        v = Var()
+        with pytest.raises(LogicException) as exc:
+            list(call("subscript_get", Var(), "a", v, module=logic_mod))
         term = exc.value.term
         assert term.functor == "error"
         assert term.args[0] == "instantiation_error"
