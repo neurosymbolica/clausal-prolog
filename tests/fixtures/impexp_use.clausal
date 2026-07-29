@@ -1,0 +1,6 @@
+# clausal: no-collect
+# Sibling that imports a STALE name: `within_limit` was renamed to
+# `exceeds_limit` in impexp_schema.clausal and this side was never updated.
+-import_from(tests.fixtures.impexp_schema, [within_limit])
+
+impexp_chk(X) <- within_limit(X)

@@ -1,0 +1,7 @@
+# clausal: no-collect
+# A Clausal module with NO -module(...) directive: it still binds importable
+# names, so the diagnostic must say the export list is absent rather than
+# printing an empty one.
+impexp_nm_alpha(1),
+
+impexp_nm_beta(X, Y) <- (impexp_nm_alpha(X), Y == X)

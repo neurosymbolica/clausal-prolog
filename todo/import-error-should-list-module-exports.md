@@ -6,6 +6,85 @@ machine authors, by a factor of four over the next one.
 
 ---
 
+## STATUS: FIXED at the raise site (2026-07-29)
+
+Implemented in `clausal/import_diagnostics.py`, hooked in at the module-exec
+seam in `clausal/import_hook.py` (both the V2 and the legacy V1 pipeline).
+Tests: `tests/test_import_export_diagnostic.py` (21), fixtures
+`tests/fixtures/impexp_*`.
+
+### Before
+
+```
+FAILURES:
+  test_load.clausal :: <load> — cannot import name 'within_limit' from 'schema' (/tmp/impdemo/schema.clausal)
+
+1 tests: 0 passed, 1 failed [FAILED]
+```
+
+### After
+
+```
+FAILURES:
+  test_load.clausal :: <load> — cannot import name 'within_limit' from 'schema' (/tmp/impdemo/schema.clausal)
+  schema exports: verdict/2, beneficial_owner, not_beneficial_owner, holdings,
+                  person, entity, overall, as_of_date, exceeds_limit
+  did you mean: exceeds_limit ?
+  -> either add `within_limit` to that -module(...) list and define it there,
+     or stop importing it and remove every use.
+
+1 tests: 0 passed, 1 failed [FAILED]
+```
+
+### The three cases, kept apart
+
+* **Clausal module, name not exported** — the `-module(...)` list, predicates
+  with arity (`verdict/2`) and bare atoms without, exactly as declared.
+* **Module does not exist** — says so and says there is *no* export list.  An
+  empty list is never printed; it would read as "exports nothing", which is a
+  different and wrong diagnosis.  The offending directive and the importing
+  file are named.  Covers `-import_module` too.
+* **Not a Clausal module** — Python's message, byte-for-byte untouched.  A
+  Clausal file importing `re`/`numpy` gets Python's diagnosis; inventing a
+  Clausal-flavoured export list for it would be misdirection.  Tested both for
+  a missing name in a Python library and for an `ImportError` raised inside a
+  Python module body.
+
+Two further honest-reporting rules:
+
+* a module with **no** `-module(...)` list is told so, then shown the names it
+  really binds (they *are* importable — `from M import f` is a `getattr`), and
+  an explicitly **empty** list is distinguished from an absent one;
+* if the target's source cannot be re-read, the message says that rather than
+  reporting an absence it never established.
+
+### Near-miss
+
+Plain `difflib` scores `within_limit` vs `exceeds_limit` at 0.48 and would miss
+the very rename this report is about, so similarity blends character ratio with
+shared snake_case tokens (`…_limit`).  When more than three candidates tie at
+the top score — a whole family like `wide_export_00 … _59` — no suggestion is
+offered at all; three of sixty is a coin toss dressed up as advice.
+
+### Cap
+
+40 names (~5 wrapped lines at 78 columns), which covers real vocabulary
+modules.  A longer list is truncated **and says so**, with the true total and
+the file path.  Near-misses are always computed over the full list, never the
+truncated one.
+
+### Consequence for the harness mitigation
+
+`clausify`'s `auto/gates.py::_missing_import_context` is now **redundant**, not
+conflicting: its `_MISSING_IMPORT` regex still matches (the loader's first line
+is still CPython's verbatim), so it will append a *second*, weaker copy of the
+same information — no arities, only two candidate paths searched, and it prints
+`(nothing)` when it finds no `-module(...)`, which is exactly the "reads as
+exports nothing" failure this todo warns about.  Recommend deleting it there
+once this lands.  Not touched from this side.
+
+---
+
 ## Symptom
 
 ```

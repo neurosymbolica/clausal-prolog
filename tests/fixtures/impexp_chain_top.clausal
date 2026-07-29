@@ -1,0 +1,4 @@
+# clausal: no-collect
+-import_from(tests.fixtures.impexp_chain_mid, [impexp_chain_mid_chk])
+
+impexp_chain_top_chk(X) <- impexp_chain_mid_chk(X)

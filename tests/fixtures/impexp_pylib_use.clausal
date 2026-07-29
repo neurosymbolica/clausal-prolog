@@ -1,0 +1,6 @@
+# clausal: no-collect
+# A genuine Python library import that fails: the message must be Python's own,
+# untouched — no Clausal export list.
+-import_from(py.re, [impexp_no_such_regex_helper])
+
+impexp_py_use(X) <- impexp_no_such_regex_helper(X)

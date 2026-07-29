@@ -204,6 +204,36 @@ Same strategy as Python — partial module objects. The deferred compilation mod
 - Bad directive syntax (non-dotted path, missing list) → `SyntaxError`
 - Logic variable in qualified name → `SyntaxError`
 
+#### The import error tells you what the target *does* export
+
+`cannot import name X from M` on its own only says what is missing. Since the
+loader knows what `M` declares, it appends it (`clausal/import_diagnostics.py`,
+called from the module-exec seam in `clausal/import_hook.py`):
+
+```text
+cannot import name 'within_limit' from 'eu.aml.amlr_bo_chain.schema' (/…/schema.clausal)
+  schema exports: verdict/2, beneficial_owner, not_beneficial_owner, holdings,
+                  person, entity, overall, as_of_date, exceeds_limit
+  did you mean: exceeds_limit ?
+  -> either add `within_limit` to that -module(...) list and define it there,
+     or stop importing it and remove every use.
+```
+
+Predicates carry their arity, bare atoms do not — the same spelling
+`-module(...)` uses. Three situations are reported differently, because they
+need different repairs:
+
+| situation | what you get |
+|---|---|
+| module exists, is Clausal, lacks the name | the `-module(...)` export list, plus a near-miss suggestion |
+| module does not exist at all | "names a module that does not exist … no export list to show" — never an empty list, which would read as "exports nothing" |
+| module exists but is not a Clausal module | Python's own message, untouched — a Clausal file importing `re` or `numpy` gets Python's diagnosis, not a Clausal one |
+
+A module with no `-module(...)` list is told so, and then shown the names it
+actually binds. Export lists longer than 40 names are truncated, and the
+message says so and gives the file path — a silently cut list would read as
+authoritative.
+
 ---
 
 ## Name resolution is lexical (Pythonic), not dynamic (Prolog)

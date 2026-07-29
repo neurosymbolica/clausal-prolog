@@ -1,0 +1,5 @@
+# clausal: no-collect
+# The module named here does not exist at all.
+-import_from(tests.fixtures.impexp_no_such_schema, [within_limit])
+
+impexp_mm_use(X) <- within_limit(X)

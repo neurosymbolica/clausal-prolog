@@ -1,0 +1,20 @@
+# clausal: no-collect
+# Exporter for the import-error export-list diagnostic
+# (todo/import-error-should-list-module-exports.md).
+#
+# Reproduces the shape of the real `eu.aml.amlr_bo_chain.schema` module: a
+# vocabulary module whose -module(...) list is the authoritative answer to
+# "what may I import from here?".
+-module(impexp_schema, [
+    verdict(STATUS, CITATIONS),
+    beneficial_owner,
+    not_beneficial_owner,
+    holdings,
+    person,
+    entity,
+    overall,
+    as_of_date,
+    exceeds_limit,
+])
+
+verdict(beneficial_owner, [])

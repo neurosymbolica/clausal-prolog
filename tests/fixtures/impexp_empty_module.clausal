@@ -1,0 +1,5 @@
+# clausal: no-collect
+# An explicitly empty export list — different from having no -module at all.
+-module(impexp_empty_module, [])
+
+impexp_em_helper(1),

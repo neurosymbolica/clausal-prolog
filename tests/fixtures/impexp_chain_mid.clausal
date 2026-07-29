@@ -1,0 +1,4 @@
+# clausal: no-collect
+-import_from(tests.fixtures.impexp_schema, [within_limit])
+
+impexp_chain_mid_chk(X) <- within_limit(X)
