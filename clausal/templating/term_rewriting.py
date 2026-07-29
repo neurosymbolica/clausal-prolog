@@ -3,6 +3,7 @@ from copy import deepcopy
 
 from .parser import is_template_func
 from .compiler import compile_template_func
+from .desugar import desugar_surface, dotted_attr_chain, is_dict_attr_access
 
 # Module-level item types for the pipeline-split ModuleAST.
 from clausal.pythonic_ast.nodes import (
@@ -344,33 +345,11 @@ def _is_logic_var_name(identifier: str) -> bool:
     return identifier.isupper()
 
 
-def _dotted_attr_chain(attr_node):
-    """Split a dotted expression into ``(base Name node, [attr names])``.
-
-    ``P.a.b`` → ``(Name('P'), ['a', 'b'])`` — attribute names in source order,
-    outermost last.  Returns ``None`` when the chain does not bottom out in a
-    plain ``Name`` (e.g. ``f(x).a``, ``{...}.a``).
-    """
-    parts = []
-    node = attr_node
-    while isinstance(node, Attribute):
-        parts.append(node.attr)
-        node = node.value
-    if not isinstance(node, Name):
-        return None
-    parts.reverse()
-    return node, parts
-
-
-def _is_dict_attr_access(node) -> bool:
-    """True for ``VAR.key`` dict attribute-access sugar (a logic-variable base).
-
-    See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
-    """
-    if not isinstance(node, Attribute):
-        return False
-    chain = _dotted_attr_chain(node)
-    return chain is not None and _is_logic_var_name(chain[0].id)
+# ``P.key`` sugar recognition and expansion live in ``.desugar`` — the single,
+# syntax-only implementation the SMT prover shares.  Re-exported under the
+# module-private names this file has always used.
+_dotted_attr_chain = dotted_attr_chain
+_is_dict_attr_access = is_dict_attr_access
 
 
 # ─── Read-once lowering for dict reads (``P.key`` / ``P[key]``) ──────────────
@@ -513,16 +492,9 @@ class _DictReadExtractor(NodeTransformer):
         self._shared[cache_key] = var_name
         return var_name
 
-    def visit_Attribute(self, node):
-        self.generic_visit(node)
-        if not (isinstance(node.value, Name)
-                and _is_logic_var_name(node.value.id)):
-            return node          # mod.pred / currency.euro — a qualified name
-        key_node = replace(Name(id=node.attr, ctx=load), node)
-        var_name = self._read(node.value.id, key_node, node)
-        if var_name is None:
-            return node
-        return replace(Name(id=var_name, ctx=load), node)
+    # There is no ``visit_Attribute``: ``_lower_dict_reads`` runs the shared
+    # ``desugar_surface`` pass first, so ``P.k`` has already become ``P[k]``
+    # by the time this extractor sees the body.  One spelling, one rule.
 
     def visit_Subscript(self, node):
         self.generic_visit(node)
@@ -538,7 +510,8 @@ class _DictReadExtractor(NodeTransformer):
 def _explicit_read_binding(goal):
     """``(var name, sharing key)`` if *goal* is ``VAR is BASE[key]``, else None.
 
-    Also matches the ``VAR is BASE.key`` spelling.
+    The ``VAR is BASE.key`` spelling arrives here already expanded — the
+    caller runs the shared ``desugar_surface`` pass first.
     """
     if not (isinstance(goal, Compare) and len(goal.ops) == 1
             and isinstance(goal.ops[0], Is)
@@ -546,9 +519,7 @@ def _explicit_read_binding(goal):
             and _is_logic_var_name(goal.left.id)):
         return None
     rhs = goal.comparators[0]
-    if isinstance(rhs, Attribute):
-        base, key_node = rhs.value, Name(id=rhs.attr, ctx=load)
-    elif isinstance(rhs, Subscript):
+    if isinstance(rhs, Subscript):
         base, key_node = rhs.value, rhs.slice
     else:
         return None
@@ -635,9 +606,15 @@ def _lower_dict_reads(head_ast, body_ast):
     """Read-once lowering over a whole clause body.  Returns the new body.
 
     The body is copied first: the pass rewrites in place, and the caller's AST
-    is shared with the module tree.
+    is shared with the module tree.  The copy is then run through the shared
+    surface-desugar pass, so this pass only ever sees the ``P[key]`` spelling
+    — ``P.key`` is expanded once, in one place, by ``desugar_surface``.
+
+    Note that hoisting itself is NOT shared with the SMT prover: minting
+    implicit variables and reordering goals is an evaluation strategy, not a
+    spelling.  See ``clausal/templating/desugar.py``.
     """
-    body_ast = deepcopy(body_ast)
+    body_ast = desugar_surface(deepcopy(body_ast))
     taken = {node.id for node in walk(body_ast) if isinstance(node, Name)}
     taken.update(node.id for node in walk(head_ast) if isinstance(node, Name))
     counter = [0]
@@ -1355,20 +1332,15 @@ class TermTransformer(NodeTransformer):
         The method-call form ``P.foo(A)`` is rejected in ``_visit_call_func``.
         """
         if _is_dict_attr_access(attr_node):
-            base_name, key_names = _dotted_attr_chain(attr_node)
-            result = transformer.visit(base_name)
-            for key_name in key_names:
-                # Route the key through visit_Name so resolution is byte-for-byte
-                # what ``P[key]`` gets: declared atom, imported name, logic
-                # variable, or bare-atom reference registered for the mint /
-                # strict-atoms passes.  Never intern the attribute name directly.
-                index = transformer.visit(
-                    replace(Name(id=key_name, ctx=load), attr_node)
-                )
-                result = node_ast(
-                    "LoadSubscript", attr_node, object=result, index=index,
-                )
-            return result
+            # Expand the sugar with the SHARED, syntax-only pass (the SMT
+            # prover runs the very same function on its own parse), then
+            # compile the resulting ``P[key]`` through ``visit_Subscript`` —
+            # so the key is routed through ``visit_Name`` exactly as a
+            # hand-written subscript's index is: declared atom, imported
+            # name, logic variable, or bare-atom reference registered for
+            # the mint / strict-atoms passes.  Never intern the attribute
+            # name directly.
+            return transformer.visit(desugar_surface(deepcopy(attr_node)))
         # Collect the full dotted chain and validate each part.
         parts = []
         node = attr_node

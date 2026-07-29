@@ -279,8 +279,8 @@ That is closed-world dispatch, not open extension. The convention must not promi
 
 - **SMT prover** (`clausify` `auto/formal`): profile reads are projected onto `has_k`/`val_k` Z3
   consts only for *recognized* read forms. A new form the projection does not know degrades
-  provability silently rather than erroring. The projection must learn `.` — or, if `.` is flattened
-  to `[k]` before the prover sees it, confirm that flattening happens upstream of projection.
+  provability silently rather than erroring. **Resolved 2026-07-29** by a shared desugaring seam
+  rather than a second implementation — see "The shared desugar seam" below.
 - **Reifier / renderer / auditor**: see the round-trip decision above.
 - **Corpus lint** (`clausify-domains/_tools/check_corpus_conventions.py`, R8 + `R8_STRINGKEY_ALLOWLIST`):
   needs rules for the new convention, and R8 should be re-examined once keys stop crossing modules.
@@ -291,6 +291,29 @@ That is closed-world dispatch, not open extension. The convention must not promi
   need the dynamic `P[KEY]` form and are unaffected.
 - **Back-compat**: none at risk. `X.attr` is currently a `SyntaxError`, so no existing code relies on
   any behaviour here.
+
+## The shared desugar seam
+
+`clausal/templating/desugar.py` holds `desugar_surface(tree) -> tree`, the ONE implementation of
+`P.key → P[key]`. Both front ends run it: `TermTransformer.visit_Attribute` calls it, and the
+prover calls it immediately after its own `ast.parse` (`clausify` `auto/formal/ir.py`). A future
+sugar is added there once, and both sides learn it together.
+
+The boundary is deliberate and narrow — **syntax only**:
+
+- The pass is pure `ast → ast`, imports nothing but `ast`, preserves source positions, and returns
+  anything it does not recognise untouched (so an unmodelled shape still reaches each consumer's
+  own "unsupported" path — the prover degrades, it never invents a proof).
+- Semantics are **not** shared. The prover re-implements engine behaviour on purpose so it is an
+  independent cross-check; if it consumed the engine's Terms IR or analysis, an engine bug would
+  become invisible to it. Sugar carries no semantics, so sharing it costs nothing.
+- The read-once hoisting pass (`_lower_dict_reads`) stays engine-only. Minting implicit variables
+  and reordering goals is an evaluation strategy, not a spelling; the prover models the inline
+  `P[key]` read directly and wants neither.
+- Two shapes are explicitly NOT rewritten: a dotted module path (`mod.pred`) and the reserved
+  method-call form `P.foo(A)` — the latter would otherwise change shape under the engine's
+  `SyntaxError` and the prover's `Unsupported`. The `++(...)` Python escape is not descended into
+  at all: its payload is real Python, where `D.value` is genuine attribute access.
 
 ## Migration
 
@@ -341,6 +364,8 @@ the majority of the 909 sites may well stay as they are. Sequence:
    Note the target form already exists: `translate.py:724` projects `V is P[key]` (a `bind_is` goal
    with a `Subscript` RHS) via `axioms.subscript_read`. Teaching the prover `.` is plausibly just
    normalizing `Attribute` → `Subscript` in its front end before that check.
+   **Done 2026-07-29** — and done *once*, as a shared syntax-only pass rather than a second copy of
+   the rule. See "The shared desugar seam" above.
 3. Should Phenomenon A get its own engine fix (arity-aware call resolution — option 3 in
    `implementation_plans/dict-atom-keys-vs-predicates.md`), independent of this convention? It would
    fix `get/3` and `[]` sites too, not only those adopting the new shape. Given that snake_case makes
