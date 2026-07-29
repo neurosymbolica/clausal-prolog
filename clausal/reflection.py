@@ -869,7 +869,14 @@ def reify_source(text, filename="<reflected>"):
                 source_lines=source_lines, filename=filename)
             transformed = transformer.visit(tree)
     except SyntaxError as exc:
-        raise ReifyError(str(exc)) from exc
+        # Same treatment as the loader gives a broken .clausal file: the source
+        # line and a caret, because the reported line is where the parse gave
+        # up rather than where the mistake is.  ``reify_file`` passes a real
+        # path, so this fires there; a bare string keeps CPython's one-liner.
+        from clausal.syntax_diagnostics import enrich_syntax_error
+
+        better = enrich_syntax_error(exc, text, filename)
+        raise ReifyError(str(better if better is not None else exc)) from exc
 
     items = []
     for module_item in transformer._module_items:
