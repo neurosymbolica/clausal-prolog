@@ -3090,13 +3090,16 @@ class EmbedTransformer(NodeTransformer):
         # parts (every other directive raises on bad args).
         if len(args) < 1 or len(args) > 2 or not isinstance(args[0], Name):
             raise SyntaxError(
-                "-module requires a name and an export list: "
-                "-module(name, [ ... ])")
+                "-module requires a bare name and an export list: "
+                "-module(name, [ ... ]); got -module("
+                f"{', '.join(unparse(a) for a in args)}) — a dotted "
+                "package path is not a valid module name")
         module_name = args[0].id
         if len(args) == 2 and not isinstance(args[1], List):
             raise SyntaxError(
                 "-module requires a name and an export list: "
-                "-module(name, [ ... ])")
+                f"-module(name, [ ... ]); got -module({module_name}, "
+                f"{unparse(args[1])}) — second argument must be a list")
         # args[1] should be the export list: ast.List of Call / Name nodes.
         if len(args) == 2:
             for export in args[1].elts:
