@@ -1,0 +1,14 @@
+# clausal: no-collect
+# Sibling module that declares the SAME functor and also imports it.
+#
+# The -module export list registers fnm_verdict/2 with field names
+# (STATUS, CITATIONS) and emits its guarded class block; the -import_from that
+# follows rebinds the name to the exporter's directive-minted class, whose
+# fields are ('arg_0', 'arg_1').  The fact below is then constructed with the
+# LOCAL field names against the FOREIGN class and raises.
+-module(fnmismatch_use, [fnm_verdict(STATUS, CITATIONS), fnm_chk(RESULT)])
+-import_from(tests.fixtures.fnmismatch_schema, [fnm_verdict])
+
+fnm_verdict("ok", [])
+
+fnm_chk(R) <- fnm_verdict(R, C)

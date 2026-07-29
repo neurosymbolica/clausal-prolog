@@ -466,23 +466,54 @@ class TestCompilerDottedName:
 
 
 class TestVisitAttributeValidation:
-    """Ensure visit_Attribute rejects logic variables and unsupported patterns."""
+    """Ensure visit_Attribute rejects logic variables and unsupported patterns.
 
-    def test_logic_var_in_attr_raises_syntax_error(self):
-        """X_.attr is rejected because X_ is a logic variable."""
+    ``_x.foo`` on a logic variable is no longer an error — it is dict
+    attribute-access sugar for ``_x[foo]`` (see
+    docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md).  The
+    *method-call* form ``_x.foo(_x)`` is still rejected, and a logic variable
+    used as the attribute of a module-qualified name still is too.
+    """
+
+    def test_logic_var_method_call_raises_syntax_error(self):
+        """X_.attr(...) is rejected: a dict read is a value, not a callable."""
         # nv
         import tempfile
         src = (
             '-import_module(tests.fixtures.importable_utils)\n'
+            '-private([foo])\n'
             'Bad(_x) <- _x.foo(_x)\n'
         )
         with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
                                          delete=False) as f:
             f.write(src)
             f.flush()
-            with pytest.raises(SyntaxError, match="Logic variable"):
+            with pytest.raises(SyntaxError, match="[Mm]ethod-call"):
                 _load_module("_test_var_attr", f.name)
         os.unlink(f.name)
+
+    def test_logic_var_base_attr_read_is_dict_sugar(self):
+        """X_.attr (no call) now compiles to the subscript read X_[attr]."""
+        # nv
+        import tempfile
+        src = (
+            '-private([foo])\n'
+            'Bad(_x, _v) <- (_v is _x.foo)\n'
+        )
+        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+                                         delete=False) as f:
+            f.write(src)
+            f.flush()
+            mod = _load_module("_test_var_attr_read", f.name)
+        os.unlink(f.name)
+        from clausal.terms import DictTerm
+        from clausal.logic.variables import Var, deref
+        logic_mod = mod.__dict__["$module"]
+        foo = mod.__dict__["foo"]
+        out = Var()
+        got = [deref(out) for _ in
+               call("Bad", DictTerm({foo: 42}), out, module=logic_mod)]
+        assert got == [42]
 
     def test_logic_var_as_attr_name_raises_syntax_error(self):
         """mod.X_ is rejected because X_ is a logic variable."""

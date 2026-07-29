@@ -161,6 +161,28 @@ class TestSubscript:
     def test_subscript_round_trips(self, src):
         assert_round_trips(src)
 
+    def test_dot_sugar_flattens_to_subscript(self):
+        """``P.k`` is source sugar: it reifies (and renders) as ``P[k]``.
+
+        The renderer does not preserve the ``.`` spelling — flattening is the
+        accepted trade in
+        docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+        """
+        # nv
+        dotted = only_clause("GetDot(P, I) <- (I is P.flags)\n")
+        bracket = only_clause("GetDot(P, I) <- (I is P[flags])\n")
+        assert strip_positions(dotted) == strip_positions(bracket)
+
+    def test_read_once_lowering_is_idempotent(self):
+        """Rendering a lowered clause and re-reifying must not re-lower it."""
+        # nv
+        original = only_clause("Twice(P, I) <- (Chk(P.k), I is P.k)\n")
+        once = render_source(original)
+        twice = render_source(only_clause(once + "\n"))
+        assert once == twice
+        assert strip_positions(only_clause(once + "\n")) == \
+            strip_positions(original)
+
 
 class TestDictLiteral:
     @pytest.mark.parametrize("src", [

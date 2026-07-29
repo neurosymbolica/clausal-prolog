@@ -1,7 +1,9 @@
 from ast import *
+from copy import deepcopy
 
 from .parser import is_template_func
 from .compiler import compile_template_func
+from .desugar import desugar_surface, dotted_attr_chain, is_dict_attr_access
 
 # Module-level item types for the pipeline-split ModuleAST.
 from clausal.pythonic_ast.nodes import (
@@ -343,6 +345,291 @@ def _is_logic_var_name(identifier: str) -> bool:
     return identifier.isupper()
 
 
+# ``P.key`` sugar recognition and expansion live in ``.desugar`` — the single,
+# syntax-only implementation the SMT prover shares.  Re-exported under the
+# module-private names this file has always used.
+_dotted_attr_chain = dotted_attr_chain
+_is_dict_attr_access = is_dict_attr_access
+
+
+# ─── Read-once lowering for dict reads (``P.key`` / ``P[key]``) ──────────────
+#
+# A dict read means: read ONCE into an implicit variable, then substitute.  For
+# a clause body the compiler mints a fresh implicit variable, inserts the read
+# as a *goal* at the position of the first occurrence, and substitutes that
+# variable at every remaining occurrence in the same scope:
+#
+#     foo(P) <- ( bar(P.k), baz(P.k, 1) )
+#     # means
+#     foo(P) <- ( _read_0 is P[k], bar(_read_0), baz(_read_0, 1) )
+#
+# Inserting a *goal* — rather than caching the value in a compiled-in Python
+# local — is what makes this sound under backtracking: in
+# ``member(P, [D1, D2]), foo(P.k)`` the read sits after ``member/2``, so redo
+# re-executes it against the new binding of ``P``.
+#
+# The read is scoped to the innermost enclosing control construct and is never
+# lifted out of a disjunction arm, a negation, or an if-then-else branch —
+# ``( a(P) or b(P.k) )`` must not throw on a missing key when ``a(P)``
+# succeeds.  The deliberate consequence is that sharing does not cross an arm
+# boundary: a later occurrence outside the construct reads again.
+#
+# See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+
+
+def _flatten_conjunction(goal):
+    """Flatten a goal-position tuple into its conjunct goals."""
+    if isinstance(goal, Tuple) and isinstance(goal.ctx, Load):
+        conjuncts = []
+        for element in goal.elts:
+            conjuncts.extend(_flatten_conjunction(element))
+        return conjuncts
+    return [goal]
+
+
+def _is_plain_term(node) -> bool:
+    """True when *node* is a term with no goal-position sub-expression.
+
+    The rule that matters is **no nested ``Call``**.  Every construct that
+    takes a goal as an argument — ``findall``, ``forall``, ``catch``, ``once``,
+    ``call``, … — spells that goal as a call (or as a control construct, also
+    excluded here), so refusing to reach inside a nested call is exactly what
+    keeps a read from being hoisted out of a nested goal's scope.  It needs no
+    table of meta-predicate names, which would rot.
+
+    Everything else unrecognised is refused too (``++(...)`` Python escapes,
+    f-strings, lambdas, comprehensions, ``:=``, slices, …).  A refusal only
+    costs sharing: those reads stay inline, exactly as they compile today.
+    """
+    for child in walk(node):
+        if isinstance(child, (Load, Name, Constant, Attribute, Subscript,
+                              Tuple, List, Dict, Set, Starred, keyword)):
+            continue
+        if isinstance(child, BinOp) or isinstance(child, operator):
+            continue
+        return False
+    return True
+
+
+def _is_lowerable_goal(goal) -> bool:
+    """True when reads may be extracted out of *goal* to just before it.
+
+    False means "leave this goal alone" — it is not a shape we lower (a
+    control construct, a meta-call, a Python escape) or one of its arguments
+    is not a plain term.  Refusing only costs sharing: the reads inside stay
+    inline, exactly as they compile today.
+    """
+    if isinstance(goal, Call):
+        if isinstance(goal.func, Name):
+            if _is_logic_var_name(goal.func.id):
+                return False         # meta-call on a variable goal
+        elif not isinstance(goal.func, Attribute) or _is_dict_attr_access(goal.func):
+            return False
+        parts = list(goal.args) + [kw.value for kw in goal.keywords]
+    elif isinstance(goal, Compare):
+        parts = [goal.left] + list(goal.comparators)
+    else:
+        return False
+    return all(_is_plain_term(part) for part in parts)
+
+
+def _dict_read_key_tag(key_node):
+    """Sharing identity for a subscript key, or ``None`` if not shareable.
+
+    A ``Name`` key (an atom, or a logic variable naming the key) and a literal
+    ``Constant`` key are shareable; a computed key is left inline.
+    """
+    if isinstance(key_node, Name):
+        return ("name", key_node.id)
+    if isinstance(key_node, Constant):
+        return ("const", type(key_node.value).__name__, key_node.value)
+    return None
+
+
+class _DictReadExtractor(NodeTransformer):
+    """Replace dict reads in a term by implicit variables, collecting the reads.
+
+    Children are rewritten first, so chains fold left to right: ``P.a.b``
+    mints ``_read_0 is P[a]`` and then ``_read_1 is _read_0[b]``.  The minted
+    names are logic variables (leading underscore), so a minted base is itself
+    recognised as a readable base.
+    """
+
+    def __init__(self, mint, shared, reads):
+        self._mint = mint
+        self._shared = shared      # (base name, key tag) -> implicit var name
+        self._reads = reads        # read goals to emit before the using goal
+
+    def _read(self, base_name, key_node, source):
+        tag = _dict_read_key_tag(key_node)
+        if tag is None:
+            return None
+        cache_key = (base_name, tag)
+        existing = self._shared.get(cache_key)
+        if existing is not None:
+            return existing
+        var_name = self._mint()
+        self._reads.append(
+            replace(
+                Compare(
+                    left=replace(Name(id=var_name, ctx=load), source),
+                    ops=[Is()],
+                    comparators=[
+                        replace(
+                            Subscript(
+                                value=replace(Name(id=base_name, ctx=load),
+                                              source),
+                                slice=key_node,
+                                ctx=load,
+                            ),
+                            source,
+                        )
+                    ],
+                ),
+                source,
+            )
+        )
+        self._shared[cache_key] = var_name
+        return var_name
+
+    # There is no ``visit_Attribute``: ``_lower_dict_reads`` runs the shared
+    # ``desugar_surface`` pass first, so ``P.k`` has already become ``P[k]``
+    # by the time this extractor sees the body.  One spelling, one rule.
+
+    def visit_Subscript(self, node):
+        self.generic_visit(node)
+        if not (isinstance(node.value, Name)
+                and _is_logic_var_name(node.value.id)):
+            return node
+        var_name = self._read(node.value.id, node.slice, node)
+        if var_name is None:
+            return node
+        return replace(Name(id=var_name, ctx=load), node)
+
+
+def _explicit_read_binding(goal):
+    """``(var name, sharing key)`` if *goal* is ``VAR is BASE[key]``, else None.
+
+    The ``VAR is BASE.key`` spelling arrives here already expanded — the
+    caller runs the shared ``desugar_surface`` pass first.
+    """
+    if not (isinstance(goal, Compare) and len(goal.ops) == 1
+            and isinstance(goal.ops[0], Is)
+            and isinstance(goal.left, Name)
+            and _is_logic_var_name(goal.left.id)):
+        return None
+    rhs = goal.comparators[0]
+    if isinstance(rhs, Subscript):
+        base, key_node = rhs.value, rhs.slice
+    else:
+        return None
+    if not (isinstance(base, Name) and _is_logic_var_name(base.id)):
+        return None
+    tag = _dict_read_key_tag(key_node)
+    if tag is None:
+        return None
+    return goal.left.id, (base.id, tag)
+
+
+def _lower_dict_reads_in_scope(goal, mint):
+    """Lower every dict read in one control-construct scope.
+
+    Returns a goal AST for the scope.  Reads minted here do not escape it.
+    """
+    lowered = []
+    shared = {}
+    for conjunct in _flatten_conjunction(goal):
+        lowered.extend(_lower_dict_reads_in_goal(conjunct, mint, shared))
+    if len(lowered) == 1:
+        return lowered[0]
+    return replace(Tuple(elts=lowered, ctx=load), goal)
+
+
+def _lower_dict_reads_in_goal(goal, mint, shared):
+    """Lower one goal; returns the read goals plus the rewritten goal."""
+    # Control constructs: each arm is its own scope, so a read is never lifted
+    # out of it.  `( a(P) or b(P.k) )` must still succeed via `a(P)` when the
+    # key is missing.
+    if isinstance(goal, BoolOp):
+        return [replace(
+            BoolOp(op=goal.op,
+                   values=[_lower_dict_reads_in_scope(value, mint)
+                           for value in goal.values]),
+            goal,
+        )]
+    if isinstance(goal, UnaryOp) and isinstance(goal.op, Not):
+        return [replace(
+            UnaryOp(op=goal.op,
+                    operand=_lower_dict_reads_in_scope(goal.operand, mint)),
+            goal,
+        )]
+    if (isinstance(goal, Call) and isinstance(goal.func, Name)
+            and goal.func.id == "If" and len(goal.args) == 3
+            and not goal.keywords):
+        return [replace(
+            Call(func=goal.func,
+                 args=[_lower_dict_reads_in_scope(arm, mint)
+                       for arm in goal.args],
+                 keywords=[]),
+            goal,
+        )]
+
+    # ``X is P[k]`` / ``X is P.k`` already *is* a read into a named variable.
+    # Leave it alone and register X as the implicit variable for that read, so
+    # later occurrences in the scope reuse it.  This keeps the lowering
+    # idempotent — the read goals it emits have exactly this shape, so
+    # re-running the pass over a rendered clause (the reifier round-trip) is a
+    # no-op — and leaves the common hand-written idiom untouched.
+    binding = _explicit_read_binding(goal)
+    if binding is not None:
+        var_name, cache_key = binding
+        if cache_key not in shared:
+            shared[cache_key] = var_name
+            return [goal]
+
+    if not _is_lowerable_goal(goal):
+        return [goal]
+    reads = []
+    extractor = _DictReadExtractor(mint, shared, reads)
+    if isinstance(goal, Call):
+        goal.args = [extractor.visit(arg) for arg in goal.args]
+        for kw in goal.keywords:
+            kw.value = extractor.visit(kw.value)
+    else:                                   # Compare
+        goal.left = extractor.visit(goal.left)
+        goal.comparators = [extractor.visit(comparator)
+                            for comparator in goal.comparators]
+    return reads + [goal]
+
+
+def _lower_dict_reads(head_ast, body_ast):
+    """Read-once lowering over a whole clause body.  Returns the new body.
+
+    The body is copied first: the pass rewrites in place, and the caller's AST
+    is shared with the module tree.  The copy is then run through the shared
+    surface-desugar pass, so this pass only ever sees the ``P[key]`` spelling
+    — ``P.key`` is expanded once, in one place, by ``desugar_surface``.
+
+    Note that hoisting itself is NOT shared with the SMT prover: minting
+    implicit variables and reordering goals is an evaluation strategy, not a
+    spelling.  See ``clausal/templating/desugar.py``.
+    """
+    body_ast = desugar_surface(deepcopy(body_ast))
+    taken = {node.id for node in walk(body_ast) if isinstance(node, Name)}
+    taken.update(node.id for node in walk(head_ast) if isinstance(node, Name))
+    counter = [0]
+
+    def mint():
+        while True:
+            name = f"_read_{counter[0]}"
+            counter[0] += 1
+            if name not in taken:
+                taken.add(name)
+                return name
+
+    return _lower_dict_reads_in_scope(body_ast, mint)
+
+
 def _is_unit_expr(node) -> bool:
     """True for AST nodes that form a valid unit-type expression.
 
@@ -551,7 +838,22 @@ class TermTransformer(NodeTransformer):
         references — but they should NOT auto-mint as 0-arity global atoms.
         They resolve via the runtime predicate-resolution path instead, so
         ``visit_Name`` skips its bare-atom-set add when this guard is active.
+
+        Also rejects the method-call form ``P.foo(A)``.  ``P.foo`` on a logic
+        variable is dict attribute-access sugar — it *reads a value*, which is
+        not callable — so the shape is reserved rather than silently compiled
+        into a call on a dict entry.
         """
+        if _is_dict_attr_access(func_expr):
+            base_name, key_names = _dotted_attr_chain(func_expr)
+            dotted = ".".join([base_name.id] + key_names)
+            raise SyntaxError(
+                f"Method-call form '{dotted}(...)' is not supported "
+                f"(line {func_expr.lineno}): '.' on the logic variable "
+                f"'{base_name.id}' is dict attribute access, which reads a "
+                f"value and cannot be called.  Read the value into a variable "
+                f"first, or use a qualified predicate name (mod.pred(...))."
+            )
         prev = transformer._suppress_bare_atom_collection
         transformer._suppress_bare_atom_collection = True
         try:
@@ -691,11 +993,15 @@ class TermTransformer(NodeTransformer):
                 return transformer._build_arrow_lambda(
                     lambda_params, body_ast, compare,
                 )
+            # Read-once lowering: dict reads (``P.key`` / ``P[key]``) become an
+            # explicit read goal at their first-occurrence position, scoped to
+            # the innermost control construct.  Head first — its variables are
+            # in scope for the implicit-variable name choice.
             return node_ast(
                 "Predicate",
                 compare,
                 head=transformer.visit(head_ast),
-                body=transformer.visit(body_ast),
+                body=transformer.visit(_lower_dict_reads(head_ast, body_ast)),
             )
 
 
@@ -1007,12 +1313,34 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_Attribute(transformer, attr_node):
-        """Compile ``mod.Pred`` qualified calls to ``LoadAttr`` simple_ast nodes.
+        """Compile dotted expressions — two distinct constructs share the syntax.
 
-        Only supports dotted chains of non-variable names (e.g. ``utils.Helper``).
-        Raises ``SyntaxError`` if any part of the chain is a logic variable or
-        the expression isn't a simple dotted name.
+        * **Logic-variable base** (``P.key``): dict attribute-access sugar.  It
+          lowers to the subscript read ``P[key]`` (a ``LoadSubscript`` node), so
+          ``.`` is *not* a term — there is no ``./2`` functor, nothing a program
+          can inspect or unify against.  Key resolution goes through the same
+          path a bare ``Name`` takes, so ``P.status`` loads iff ``P[status]``
+          does (including the strict-atoms declaration requirement).  Chains
+          nest: ``P.a.b`` → ``P[a][b]``.  A logic-variable attribute is a
+          *variable key*: ``P.KEY`` → ``P[KEY]``.
+          See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
+        * **Non-variable base** (``mod.Pred``, ``currency.euro``): a qualified
+          name, compiled to a ``LoadAttr`` simple_ast node.  Only dotted chains
+          of non-variable names are supported; a logic variable anywhere in such
+          a chain is a ``SyntaxError``.
+
+        The method-call form ``P.foo(A)`` is rejected in ``_visit_call_func``.
         """
+        if _is_dict_attr_access(attr_node):
+            # Expand the sugar with the SHARED, syntax-only pass (the SMT
+            # prover runs the very same function on its own parse), then
+            # compile the resulting ``P[key]`` through ``visit_Subscript`` —
+            # so the key is routed through ``visit_Name`` exactly as a
+            # hand-written subscript's index is: declared atom, imported
+            # name, logic variable, or bare-atom reference registered for
+            # the mint / strict-atoms passes.  Never intern the attribute
+            # name directly.
+            return transformer.visit(desugar_surface(deepcopy(attr_node)))
         # Collect the full dotted chain and validate each part.
         parts = []
         node = attr_node
@@ -1576,7 +1904,15 @@ def _make_functor_class_ast(functor_name, field_names, source):
         f"        _fields = {fields_tuple}",
     ]
     tree = parse("\n".join(lines))
-    return copy_location(tree.body[0], source)
+    block = tree.body[0]
+    # Position the WHOLE block, not just the try: the nodes come from parsing a
+    # fresh snippet, so without this the inner ``class`` statement keeps the
+    # snippet's own line 7 and any traceback through it (notably the
+    # field-name mismatch diagnostic's "registered by:") points at a line that
+    # has nothing to do with the declaration.
+    for node in walk(block):
+        copy_location(node, source)
+    return block
 
 
 def _make_define_stmt(predicate_ast, expr_stmt):
@@ -2916,7 +3252,12 @@ class EmbedTransformer(NodeTransformer):
                 term_transformer = transformer._make_term_transformer()
                 transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
                 transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
-                body_ast = term_transformer.visit(body_expr)
+                # Read-once lowering: dict reads (``P.key`` / ``P[key]``) become
+                # explicit read goals at their first-occurrence position, scoped
+                # to the innermost enclosing control construct.
+                body_ast = term_transformer.visit(
+                    _lower_dict_reads(left, body_expr)
+                )
 
                 # Build head call: functor(field=term, ...) as a plain Python Call,
                 # not a simple_ast.Call constructor.

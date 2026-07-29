@@ -1,0 +1,9 @@
+# clausal: no-collect
+# Phenomenon A: this module EXPORTS the predicate ash_query_key/2 and also
+# IMPORTS the same-named 0-arity atom.  The import binds last, so the clause
+# head below constructs the ATOM with keyword arguments named after the
+# declared logic variables.
+-module(atomshadow_use, [ash_query_key(PROFILE, VALUE)])
+-import_from(tests.fixtures.atomshadow_schema, [ash_query_key])
+
+ash_query_key(P, V) <- get(P, ash_query_key, V)

@@ -19,10 +19,206 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import re
+import sys
+import textwrap
 from typing import Any, Callable
 
 
 _MISSING = object()  # sentinel for "field not provided"
+
+
+# ── Attributable term-construction errors ────────────────────────────────────
+#
+# Constructing a term whose keyword names do not match the bound class's
+# ``_fields`` used to surface as a bare, context-free
+#
+#     TypeError: __init__() got an unexpected keyword argument 'arg_1'
+#
+# with no functor, no field names and no source location.  See
+# ``todo/functor-field-name-mismatch-diagnostic.md``.  Two distinct authoring
+# mistakes produce that identical message, and the error below names which one
+# it is, because that is what lets an author pick a *different* fix instead of
+# re-rolling the same one.
+
+# ``arg_0`` .. ``arg_N`` — the placeholder field names a directive-minted class
+# carries until a real clause unseats it (see ``_unseat_directive_minted`` in
+# clausal/templating/term_rewriting.py).
+_PLACEHOLDER_FIELD_RE = re.compile(r"\Aarg_\d+\Z")
+
+# Directory of the ``clausal`` package, used to skip engine frames when
+# attributing a source site to user code.
+_CLAUSAL_PKG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# How far to walk the stack looking for a user frame before giving up.
+_SITE_SEARCH_DEPTH = 12
+
+
+def _looks_like_logic_var(name: str) -> bool:
+    """True for a Clausal logic-variable spelling (``_x`` or ``ALLCAPS``).
+
+    Mirrors ``clausal.templating.term_rewriting._is_logic_var_name``; kept
+    local so this module stays free of a templating import.
+    """
+    if name == "_" or name.startswith("__"):
+        return False
+    if name.startswith("_"):
+        return True
+    return name.isupper()
+
+
+def _all_placeholders(names: tuple[str, ...]) -> bool:
+    """True if *names* is non-empty and entirely ``arg_N`` placeholders."""
+    return bool(names) and all(_PLACEHOLDER_FIELD_RE.match(n) for n in names)
+
+
+def _source_site(depth: int) -> tuple[str, int] | None:
+    """Return ``(filename, lineno)`` of the nearest user frame above *depth*.
+
+    A ``.clausal`` frame is preferred; otherwise the first frame outside the
+    ``clausal`` package wins, so a term built from Python is attributed to the
+    Python caller rather than to engine internals.  Returns ``None`` when the
+    stack yields nothing useful.
+    """
+    try:
+        frame = sys._getframe(depth)  # noqa: SLF001
+    except ValueError:  # pragma: no cover — stack shallower than expected
+        return None
+    for _ in range(_SITE_SEARCH_DEPTH):
+        if frame is None:
+            return None
+        filename = frame.f_code.co_filename
+        if filename.endswith(".clausal") or not filename.startswith(
+            _CLAUSAL_PKG_DIR
+        ):
+            return (filename, frame.f_lineno)
+        frame = frame.f_back
+    return None
+
+
+def _format_site(site: tuple[str, int] | None) -> str:
+    return f"{site[0]}:{site[1]}" if site else "<unknown>"
+
+
+def _format_fields(names: tuple[str, ...]) -> str:
+    return f"({', '.join(names)})"
+
+
+def _camel_case(name: str) -> str:
+    """``ash_query_key`` → ``AshQueryKey`` — a legal -import_from alias."""
+    return "".join(part.title() for part in name.split("_") if part) or "Alias"
+
+
+class ClausalTermConstructionError(TypeError):
+    """A term was built with field names its bound class does not have.
+
+    A ``TypeError`` subclass so existing ``except TypeError`` handlers keep
+    working.  Carries the functor, both field-name tuples, and both source
+    locations as attributes for programmatic consumers.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        functor: str,
+        arity: int,
+        supplied_fields: tuple[str, ...],
+        registered_fields: tuple[str, ...],
+        registered_at: tuple[str, int] | None,
+        constructed_at: tuple[str, int] | None,
+    ) -> None:
+        super().__init__(message)
+        self.functor = functor
+        self.arity = arity
+        self.supplied_fields = supplied_fields
+        self.registered_fields = registered_fields
+        self.registered_at = registered_at
+        self.constructed_at = constructed_at
+
+
+def _construction_hint(
+    functor: str,
+    supplied: tuple[str, ...],
+    registered: tuple[str, ...],
+) -> str:
+    """Name the *class* of authoring mistake behind a field-name mismatch."""
+    if not registered:
+        # The bound class is a 0-arity ATOM but arguments were supplied.  Under
+        # the snake_case convention a vocabulary atom and a predicate routinely
+        # share a spelling; the import binds last and wins.  See "Phenomenon A"
+        # in implementation_plans/dict-atom-keys-vs-predicates.md.
+        confidence = (
+            "almost certainly"
+            if all(_looks_like_logic_var(n) for n in supplied)
+            else "likely"
+        )
+        n = len(supplied)
+        body = (
+            f"{functor} resolved to a 0-arity atom, but it was called with "
+            f"{n} argument(s) — {confidence} an imported atom is shadowing a "
+            f"same-named predicate. A module that both exports the predicate "
+            f"{functor}/{n} and imports the atom {functor} binds the atom "
+            f"last, so every call constructs the atom. Fix: un-export "
+            f"{functor}/{n}, or import the atom under an alias — "
+            f"-import_from(vocab, [alias({functor}, {_camel_case(functor)})]) "
+            f"— or keep the key a string."
+        )
+    elif _all_placeholders(supplied) or _all_placeholders(registered):
+        body = (
+            "a functor minted by a directive keeps placeholder arg_N names "
+            "until a real clause unseats it — -dynamic(f/N) with no clause in "
+            "that file leaves the class named (arg_0, ..). Check whether both "
+            "modules declare the same functor, and whether an -import_from "
+            "rebinds this name after the local declaration: the import wins, "
+            "so later constructions use the local field names against the "
+            "foreign class. Fix: declare the functor in exactly one module "
+            "and import it."
+        )
+    else:
+        body = (
+            "the two declarations of this functor disagree on argument names. "
+            "Check whether both modules declare it — an -import_from rebinds "
+            "the name after a local -module/-private declaration, so later "
+            "constructions use the local field names against the foreign "
+            "class. Fix: declare the functor in exactly one module and "
+            "import it."
+        )
+    return textwrap.fill(
+        f"({body})",
+        width=79,
+        initial_indent="  ",
+        subsequent_indent="   ",
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+
+
+def _term_construction_error(
+    cls: Any, kwargs: dict, constructed_at: tuple[str, int] | None
+) -> ClausalTermConstructionError:
+    """Build the attributable error for a field-name mismatch on *cls*."""
+    functor = cls.__name__
+    registered = tuple(cls._fields)
+    supplied = tuple(kwargs)
+    registered_at = getattr(cls, "_registered_at", None)
+    message = (
+        f"functor {functor}/{len(registered)} was constructed with field names "
+        f"{_format_fields(supplied)}\n"
+        f"but its class was registered with {_format_fields(registered)}\n"
+        f"  registered by: {_format_site(registered_at)}\n"
+        f"  constructed at: {_format_site(constructed_at)}\n"
+        f"{_construction_hint(functor, supplied, registered)}"
+    )
+    return ClausalTermConstructionError(
+        message,
+        functor=functor,
+        arity=len(registered),
+        supplied_fields=supplied,
+        registered_fields=registered,
+        registered_at=registered_at,
+        constructed_at=constructed_at,
+    )
 
 
 def _warn_atom_identity_enabled() -> bool:
@@ -217,6 +413,14 @@ class PredicateMeta(type):
             # installs nothing and is byte-for-byte the original behaviour.
             cls.__unify__ = _make_atom_identity_unify(cls)
 
+        # Where this class was registered, for the field-name mismatch
+        # diagnostic.  Frame 1 is the .clausal module body running the
+        # generated ``class <functor>(metaclass=PredicateMeta)`` block (or the
+        # Python caller of ``make_predicate``).  Skipped when a field of that
+        # name exists, since __slots__ would have made it a descriptor.
+        if "_registered_at" not in fields:
+            cls._registered_at = _source_site(1)
+
         return cls
 
     def __init__(cls, name: str, bases: tuple, namespace: dict, **kwargs: Any) -> None:
@@ -251,7 +455,19 @@ class PredicateMeta(type):
                     kwargs[fields[i]] = val
 
         instance = cls.__new__(cls)
-        cls.__init__(instance, **kwargs)
+        try:
+            cls.__init__(instance, **kwargs)
+        except TypeError:
+            # A bare "unexpected keyword argument" here names neither the
+            # functor nor either field-name tuple nor any source location, so
+            # nothing in it identifies a target to repair.  Re-raise with all
+            # of that attached — but only when the kwargs really are unknown
+            # fields; any other TypeError from __init__ is passed through.
+            if all(k in fields for k in kwargs):
+                raise
+            raise _term_construction_error(
+                cls, kwargs, _source_site(1)
+            ) from None
 
         # Replace _MISSING with fresh Var()
         from clausal.logic.variables import Var  # noqa: PLC0415
@@ -398,6 +614,42 @@ except ImportError:
     pass
 
 
+# ── By-identity atom references from generated code ──────────────────────────
+#
+# An atom is a class, so the natural way for generated code to name one is a
+# bare ``Name`` resolved in the compiled function's globals.  That is wrong for
+# an atom the compiler received as a live OBJECT (a ``DictTerm`` key/value built
+# in Python or in another module and then baked into a query template): the
+# template's globals are the *callee's* namespace, where the same spelling is
+# very often bound to something else — under the snake_case convention, a
+# same-named predicate.  The lookup then silently substitutes that other object.
+# See ``todo/query-template-rebinds-atom-dict-keys.md``.
+#
+# ``register_atom_identity`` (compile time) + ``atom_by_id`` (run time, injected
+# into every compiled predicate's globals as ``$atom``) pin such an atom by
+# identity instead.  The table's strong reference is deliberate: it keeps the
+# atom — and therefore its ``id`` — alive for the life of the process, so a
+# token embedded in generated code can never be recycled onto another object.
+# It is bounded by the number of distinct atoms ever lowered this way, and
+# atoms are module-level classes that outlive compilation regardless.
+_ATOM_IDENTITY_TABLE: dict[int, Any] = {}
+
+
+def register_atom_identity(atom: Any) -> int:
+    """Register *atom* for by-identity reference; return its token.
+
+    Idempotent — the same atom always yields the same token.
+    """
+    token = id(atom)
+    _ATOM_IDENTITY_TABLE[token] = atom
+    return token
+
+
+def atom_by_id(token: int) -> Any:
+    """Return the atom registered under *token* (generated code: ``$atom``)."""
+    return _ATOM_IDENTITY_TABLE[token]
+
+
 def make_predicate(name: str, fields: list[str]) -> "PredicateMeta":
     """Dynamically create a PredicateMeta class.
 
@@ -424,4 +676,5 @@ def make_atom(name: str) -> "PredicateMeta":
 
 
 __all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "is_atom",
-           "term_field_names", "make_predicate", "make_atom"]
+           "term_field_names", "make_predicate", "make_atom",
+           "register_atom_identity", "atom_by_id"]
