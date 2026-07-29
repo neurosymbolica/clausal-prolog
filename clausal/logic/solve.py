@@ -317,6 +317,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     from clausal.logic.compiler.goal_trampoline import compile_body_trampoline
     from clausal.logic.compiler._vars import _collect_vars, _var_python_name
     from clausal.logic.compiler.globals_env import _collect_types_from_term
+    from clausal.logic.compiler.terms_to_ast import atom_identity_lowering
 
     vars_in_goal = _collect_vars(goal)
 
@@ -349,7 +350,15 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         # and term_to_ast_expr references them by name (→ global) rather than
         # emitting a walrus that creates a new Var().
         var_context.update(pre_var_context)
-        return compile_body_trampoline(clause.body, db, var_context, "trail")
+        # The goal's arguments are live TERM OBJECTS handed in by the caller,
+        # but this template's globals are the CALLEE's module namespace.  Any
+        # atom in those terms (a DictTerm key/value, a list element, …) must
+        # therefore be embedded by identity, not re-resolved by name in a
+        # namespace that very likely binds the same spelling to a same-named
+        # predicate — see ``atom_identity_lowering`` and
+        # ``todo/query-template-rebinds-atom-dict-keys.md``.
+        with atom_identity_lowering():
+            return compile_body_trampoline(clause.body, db, var_context, "trail")
 
     dummy_head = Compound("_query", ())
     clause = Clause(head=dummy_head, body=[goal])

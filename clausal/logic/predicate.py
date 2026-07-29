@@ -398,6 +398,42 @@ except ImportError:
     pass
 
 
+# ── By-identity atom references from generated code ──────────────────────────
+#
+# An atom is a class, so the natural way for generated code to name one is a
+# bare ``Name`` resolved in the compiled function's globals.  That is wrong for
+# an atom the compiler received as a live OBJECT (a ``DictTerm`` key/value built
+# in Python or in another module and then baked into a query template): the
+# template's globals are the *callee's* namespace, where the same spelling is
+# very often bound to something else — under the snake_case convention, a
+# same-named predicate.  The lookup then silently substitutes that other object.
+# See ``todo/query-template-rebinds-atom-dict-keys.md``.
+#
+# ``register_atom_identity`` (compile time) + ``atom_by_id`` (run time, injected
+# into every compiled predicate's globals as ``$atom``) pin such an atom by
+# identity instead.  The table's strong reference is deliberate: it keeps the
+# atom — and therefore its ``id`` — alive for the life of the process, so a
+# token embedded in generated code can never be recycled onto another object.
+# It is bounded by the number of distinct atoms ever lowered this way, and
+# atoms are module-level classes that outlive compilation regardless.
+_ATOM_IDENTITY_TABLE: dict[int, Any] = {}
+
+
+def register_atom_identity(atom: Any) -> int:
+    """Register *atom* for by-identity reference; return its token.
+
+    Idempotent — the same atom always yields the same token.
+    """
+    token = id(atom)
+    _ATOM_IDENTITY_TABLE[token] = atom
+    return token
+
+
+def atom_by_id(token: int) -> Any:
+    """Return the atom registered under *token* (generated code: ``$atom``)."""
+    return _ATOM_IDENTITY_TABLE[token]
+
+
 def make_predicate(name: str, fields: list[str]) -> "PredicateMeta":
     """Dynamically create a PredicateMeta class.
 
@@ -424,4 +460,5 @@ def make_atom(name: str) -> "PredicateMeta":
 
 
 __all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "is_atom",
-           "term_field_names", "make_predicate", "make_atom"]
+           "term_field_names", "make_predicate", "make_atom",
+           "register_atom_identity", "atom_by_id"]
