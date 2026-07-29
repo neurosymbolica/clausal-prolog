@@ -1,0 +1,4 @@
+# clausal: no-collect
+-import_from(tests.fixtures.impexp_pyraiser, [helper])
+
+impexp_pyraiser_use(X) <- helper(X)

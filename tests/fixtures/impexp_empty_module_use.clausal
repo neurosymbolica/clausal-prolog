@@ -1,0 +1,4 @@
+# clausal: no-collect
+-import_from(tests.fixtures.impexp_empty_module, [impexp_em_missing])
+
+impexp_em_use(X) <- impexp_em_missing(X)

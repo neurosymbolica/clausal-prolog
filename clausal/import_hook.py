@@ -34,6 +34,7 @@ import os
 import warnings
 
 from .pythonic_ast import nodes as simple_ast
+from .import_diagnostics import exec_with_import_diagnostics
 from .templating.term_rewriting import EmbedTransformer, TermTransformer
 from .logic.database import Module as LogicModule, head_key
 from .logic.compiler import compile_predicate_trampoline, compile_predicate_shallow
@@ -156,7 +157,10 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
                                                     module.__name__)
 
     _preseed_py_submodules(module_items)
-    exec(code, module_dict)
+    # A failed `-import_from` surfaces here as CPython's stock ImportError,
+    # which names the file but not its vocabulary.  This is the raise site at
+    # which the Clausal context is known, so enrich it here.
+    exec_with_import_diagnostics(code, module_dict, module_items, filename)
 
     logic_module = compile_module(
         predicate_nodes, module_items, module_dict, module.__name__,
@@ -438,7 +442,11 @@ class PredicateLoader(_ClausalSourceLoader):
                 term, logic_module, module_dict, pending)
         )
         code = self.get_code(module.__name__)
-        exec(code, module_dict)
+        transformer = getattr(self, '_last_transformer', None)
+        module_items = (transformer._module_items if transformer is not None
+                        else self._recover_module_items(self._path))
+        exec_with_import_diagnostics(code, module_dict, module_items,
+                                     self._path)
         _compile_all_pending(pending, logic_module.db, module_dict)
         for obj in module_dict.values():
             if isinstance(obj, PredicateMeta) and hasattr(obj, '_fields'):

@@ -1,0 +1,4 @@
+# clausal: no-collect
+-import_from(tests.fixtures.impexp_schema, [alias(within_limit, WithinLimit)])
+
+impexp_alias_chk(X) <- WithinLimit(X)

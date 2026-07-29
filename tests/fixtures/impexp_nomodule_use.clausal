@@ -1,0 +1,4 @@
+# clausal: no-collect
+-import_from(tests.fixtures.impexp_nomodule, [impexp_nm_gamma])
+
+impexp_nm_use(X) <- impexp_nm_gamma(X)

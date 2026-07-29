@@ -1,0 +1,4 @@
+# clausal: no-collect
+-import_module(tests.fixtures.impexp_no_such_module_either)
+
+impexp_mim_use(X) <- (X == 1)

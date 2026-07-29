@@ -1,0 +1,4 @@
+# clausal: no-collect
+-import_from(tests.fixtures.impexp_wide, [wide_export_99])
+
+impexp_wide_use(X) <- wide_export_99(X)
