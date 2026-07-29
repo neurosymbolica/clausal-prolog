@@ -1,0 +1,10 @@
+# Import-then-declare: the blessed re-export idiom in the other textual
+# ordering (as in us/irc_s121/eligibility.clausal).  The import binds first and
+# the -module entry re-exports it with shared class identity.
+-import_from(tests.fixtures.impord_vocab, [impord_verdict])
+-module(impord_import_then_declare, [
+    impord_verdict(STATUS, CITATIONS),
+    impord_itd_check(STATUS)
+])
+
+impord_itd_check(S) <- impord_verdict(S, C)

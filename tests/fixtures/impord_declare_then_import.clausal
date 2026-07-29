@@ -1,0 +1,12 @@
+# Declare-then-import: the -module export list fixes LOCAL field names
+# (STATUS, CITATIONS) and emits the guarded class block; the -import_from that
+# follows rebinds impord_verdict to impord_vocab's class, whose fields are
+# (OUTCOME, CITES).  Heads for an imported functor are emitted POSITIONALLY,
+# so the local labelling cannot contradict the foreign class.
+-module(impord_declare_then_import, [
+    impord_verdict(STATUS, CITATIONS),
+    impord_dti_check(STATUS)
+])
+-import_from(tests.fixtures.impord_vocab, [impord_verdict])
+
+impord_dti_check(S) <- impord_verdict(S, C)

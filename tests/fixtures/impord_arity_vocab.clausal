@@ -1,0 +1,7 @@
+# Owner of impord_narrow/1.  A downstream fixture declares impord_narrow/2 and
+# imports this one — a genuine ARITY disagreement, which no emission strategy
+# can reconcile.
+-private([solo])
+-module(impord_arity_vocab, [impord_narrow(ONLY)])
+
+impord_narrow(solo),

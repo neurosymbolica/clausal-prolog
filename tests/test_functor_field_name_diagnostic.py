@@ -106,35 +106,30 @@ class TestConstructionErrorShape:
 
 class TestDirectiveMintedPlaceholderMismatch:
     """A ``-dynamic``-minted class keeps ``arg_N`` names until a clause unseats
-    it; a sibling module that declares the same functor and imports it
-    constructs the foreign class with its own field names."""
+    it, so a sibling module that declares the same functor and imports it used
+    to construct the foreign class with its own field names.
 
-    def test_loading_the_pair_raises_the_attributable_error(self):
-        _load_module(
+    That no longer raises: a head for a functor the same file imports is
+    emitted POSITIONALLY, because field names are a module-local labelling of
+    slots while arity is the cross-module contract
+    (``tests/test_functor_import_ordering.py``).  The unit-level tests above
+    still cover the message, which stays reachable through genuine arity
+    conflicts — see ``TestAtomShadowsPredicate`` for one end to end.
+    """
+
+    def test_loading_the_pair_now_succeeds(self):
+        schema = _load_module(
             "tests.fixtures.fnmismatch_schema",
             os.path.join(FIXTURES, "fnmismatch_schema.clausal"),
         )
-        with pytest.raises(ClausalTermConstructionError) as exc_info:
-            _load_module(
-                "tests.fixtures.fnmismatch_use",
-                os.path.join(FIXTURES, "fnmismatch_use.clausal"),
-            )
-        msg = str(exc_info.value)
-        # what
-        assert "fnm_verdict/2" in msg
-        # expected vs supplied
-        assert "(STATUS, CITATIONS)" in msg
-        assert "(arg_0, arg_1)" in msg
-        # where — both ends
-        assert "fnmismatch_schema.clausal:" in msg
-        assert "fnmismatch_use.clausal:" in msg
-        assert "registered by:" in msg
-        assert "constructed at:" in msg
-        # which class of mistake
-        assert "arg_N" in msg
-        assert "-dynamic" in msg
-        # and it is NOT diagnosed as the atom-shadowing case
-        assert "0-arity atom" not in msg
+        use = _load_module(
+            "tests.fixtures.fnmismatch_use",
+            os.path.join(FIXTURES, "fnmismatch_use.clausal"),
+        )
+        # The import wins the binding, and the local field spellings no longer
+        # contradict it.
+        assert use.fnm_verdict is schema.fnm_verdict
+        assert use.fnm_verdict._fields == ("arg_0", "arg_1")
 
 
 # ── Cause 2 (Phenomenon A): imported atom shadows a same-named predicate ───
@@ -142,7 +137,13 @@ class TestDirectiveMintedPlaceholderMismatch:
 
 class TestAtomShadowsPredicate:
     """``-module(m, [key(A, B)])`` + ``-import_from(v, [key])`` binds the atom
-    last, so ``key(A, B)`` constructs the 0-arity atom with kwargs."""
+    last, so ``key(A, B)`` constructs the 0-arity atom.
+
+    Since heads for an imported functor are emitted positionally, this arrives
+    through the positional-overflow check rather than the keyword path — an
+    ARITY disagreement, which is exactly what a genuine cross-module conflict
+    reduces to.  The attribution and the Phenomenon-A hint are unchanged.
+    """
 
     def test_loading_the_pair_names_the_atom_shadowing_cause(self):
         _load_module(
@@ -156,8 +157,8 @@ class TestAtomShadowsPredicate:
             )
         msg = str(exc_info.value)
         assert "ash_query_key/0" in msg
-        assert "(PROFILE, VALUE)" in msg
-        assert "()" in msg
+        assert "2 positional argument(s)" in msg
+        assert "0 field(s) ()" in msg
         assert "atomshadow_schema.clausal:" in msg
         assert "atomshadow_use.clausal:" in msg
         # which class of mistake — named explicitly, with a remedy

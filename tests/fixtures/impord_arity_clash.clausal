@@ -1,0 +1,8 @@
+# clausal: no-collect
+# Declares impord_narrow/2 locally and imports impord_narrow/1.  Field names
+# are a module-local labelling of slots, so they can be reconciled by emitting
+# the head positionally — ARITY cannot.  This must still raise, attributably.
+-module(impord_arity_clash, [impord_narrow(STATUS, CITATIONS)])
+-import_from(tests.fixtures.impord_arity_vocab, [impord_narrow])
+
+impord_narrow(ok, [])
