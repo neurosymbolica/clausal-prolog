@@ -2781,14 +2781,25 @@ class EmbedTransformer(NodeTransformer):
       _name       In outer Python code, rewrites to _name.value (unbox logic var).
     """
 
-    def __init__(transformer, source_lines=None, implicit_atoms_default=False):
+    def __init__(transformer, source_lines=None, implicit_atoms_default=False,
+                 filename=None):
         transformer._scope_depth = 0
+        # Source file being rewritten, used only to attribute compile-time
+        # errors.  A load failure surfaces through the *importing* file, so a
+        # message that does not name its own file reads as an error in every
+        # test that imports the package — the same trap the -module directive
+        # error hit.
+        transformer._filename = filename
         transformer._seen_functors: dict[str, list[str]] = {}
         # Functors whose _seen_functors entry was minted by a -dynamic
         # directive with PLACEHOLDER arg_i field names (A12-F005). The first
         # real clause for such a functor unseats the placeholder so its
         # derived head-var names win — see _unseat_directive_minted.
         transformer._directive_minted_functors: set[str] = set()
+        # functor name → (lineno, human description) of whatever first fixed
+        # its signature in this file, so a later clause head that disagrees
+        # can name the declaration it disagrees with.
+        transformer._functor_decl_site: dict[str, tuple[int, str]] = {}
         transformer._atoms: set[str] = set()
         transformer._import_remap: dict[str, str] = {}
         transformer._module_items: list = []
@@ -2807,6 +2818,89 @@ class EmbedTransformer(NodeTransformer):
         transformer._edcg_accs: dict[str, dict] = {}   # name → {val, in_, out, joiner_ast}
         transformer._edcg_passes: set[str] = set()      # set of pass names
         transformer._edcg_preds: dict[str, tuple[int, list[str]]] = {}  # pred → (visible_arity, [acc/pass names])
+
+    def _register_functor(transformer, functor_name, field_names, node, kind):
+        """Record *functor_name*'s signature and where it was fixed.
+
+        Every site that writes ``_seen_functors`` goes through here so the
+        arity-conflict error can attribute the *first* declaration.
+        """
+        transformer._seen_functors[functor_name] = field_names
+        transformer._functor_decl_site[functor_name] = (
+            getattr(node, "lineno", 0), kind,
+        )
+
+    def _site(transformer, lineno):
+        """``file.clausal:12`` when the filename is known, else ``line 12``."""
+        if transformer._filename:
+            return f"{transformer._filename}:{lineno}"
+        return f"line {lineno}"
+
+    def _source_snippet(transformer, lineno):
+        """The source text of *lineno*, stripped — ``''`` when unavailable."""
+        lines = transformer._source_lines
+        if not lines or not lineno or lineno > len(lines):
+            return ""
+        return lines[lineno - 1].strip()
+
+    def _check_head_signature(transformer, functor_name, all_field_names,
+                              prev_fields, node):
+        """Reject a clause head that cannot be built against the bound class.
+
+        ``_seen_functors[functor_name]`` is exactly the tuple the guarded
+        class block was minted with, so any head field name outside it would
+        be emitted as a keyword the class does not have — the bare
+        ``__init__() got an unexpected keyword argument 'arg_1'`` failure of
+        ``todo/functor-field-name-mismatch-diagnostic.md``.
+
+        The overwhelmingly common shape is an *arity* disagreement: a
+        ``-module``/``-private`` declaration (or an earlier clause) fixes
+        arity N and a later clause head supplies N+k arguments, whose surplus
+        positions fall back to ``arg_N`` placeholder names.  A functor name
+        has exactly one arity in Clausal, so that is a source error, not
+        something to resolve.  Supplying *fewer* arguments than declared is
+        left alone: it builds a partial head whose trailing fields become
+        fresh ``Var()``s, which is a documented ``PredicateMeta.__call__``
+        behaviour.
+        """
+        unknown = [n for n in all_field_names if n not in prev_fields]
+        if not unknown:
+            return
+        lineno = getattr(node, "lineno", 0)
+        decl_lineno, decl_kind = transformer._functor_decl_site.get(
+            functor_name, (0, "an earlier declaration"),
+        )
+        decl_src = transformer._source_snippet(decl_lineno)
+        head_src = transformer._source_snippet(lineno)
+        where_decl = transformer._site(decl_lineno)
+        where_head = transformer._site(lineno)
+        where = (
+            f"  declared: {where_decl} ({decl_kind})"
+            + (f" — {decl_src}" if decl_src else "")
+            + f"\n  clause:   {where_head}"
+            + (f" — {head_src}" if head_src else "")
+        )
+        declared = f"({', '.join(prev_fields)})"
+        if len(all_field_names) > len(prev_fields):
+            raise SyntaxError(
+                f"functor {functor_name}/{len(all_field_names)} conflicts "
+                f"with the declaration of {functor_name}/{len(prev_fields)} "
+                f"in the same file\n{where}\n"
+                f"{functor_name}'s class is minted with "
+                f"{len(prev_fields)} field(s) {declared}, so a "
+                f"{len(all_field_names)}-argument head cannot be built "
+                f"against it. A functor name has exactly one arity in "
+                f"Clausal: give the declaration and every clause head of "
+                f"{functor_name} the same number of arguments, or rename one "
+                f"of them."
+            )
+        raise SyntaxError(
+            f"clause head for {functor_name}/{len(all_field_names)} names "
+            f"field(s) {', '.join(unknown)} that {functor_name} does not "
+            f"have\n{where}\n"
+            f"{functor_name}'s class is minted with fields {declared}. "
+            f"Use those names, or change the declaration to match."
+        )
 
     def _unseat_directive_minted(transformer, functor_name):
         """Drop a -dynamic-minted placeholder registration for *functor_name*.
@@ -2857,6 +2951,8 @@ class EmbedTransformer(NodeTransformer):
                 if i < len(prev_fields):
                     arg_field_names[i] = prev_fields[i]
             all_field_names = arg_field_names + kwarg_field_names
+            transformer._check_head_signature(
+                functor_name, all_field_names, prev_fields, expr_stmt)
 
         term_transformer = transformer._make_term_transformer()
         transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
@@ -2886,7 +2982,8 @@ class EmbedTransformer(NodeTransformer):
 
         statements = []
         if functor_name not in transformer._seen_functors:
-            transformer._seen_functors[functor_name] = all_field_names
+            transformer._register_functor(
+                functor_name, all_field_names, expr_stmt, "first clause")
             statements.append(
                 _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
             )
@@ -2912,7 +3009,8 @@ class EmbedTransformer(NodeTransformer):
         define_stmt = _make_define_stmt(predicate_ast, expr_stmt)
         statements = []
         if functor_name not in transformer._seen_functors:
-            transformer._seen_functors[functor_name] = []
+            transformer._register_functor(
+                functor_name, [], expr_stmt, "first clause")
             statements.append(
                 _make_functor_class_ast(functor_name, [], expr_stmt)
             )
@@ -3246,6 +3344,8 @@ class EmbedTransformer(NodeTransformer):
                         if i < len(prev_fields):
                             arg_field_names[i] = prev_fields[i]
                     all_field_names = arg_field_names + kwarg_field_names
+                    transformer._check_head_signature(
+                        functor_name, all_field_names, prev_fields, expr_stmt)
 
                 # Transform terms. One shared transformer keeps variable bindings
                 # (walrus operator) consistent across head and body.
@@ -3302,7 +3402,9 @@ class EmbedTransformer(NodeTransformer):
 
                 statements = []
                 if functor_name not in transformer._seen_functors:
-                    transformer._seen_functors[functor_name] = all_field_names
+                    transformer._register_functor(
+                        functor_name, all_field_names, expr_stmt,
+                        "first clause")
                     statements.append(
                         _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
                     )
@@ -3363,7 +3465,9 @@ class EmbedTransformer(NodeTransformer):
             for functor, arity in specs:
                 if functor not in transformer._seen_functors:
                     field_names = [f"arg_{i}" for i in range(arity)]
-                    transformer._seen_functors[functor] = field_names
+                    transformer._register_functor(
+                        functor, field_names, expr_stmt,
+                        "-dynamic directive")
                     # Placeholder names: a later real clause unseats this
                     # registration so its derived head-var names win
                     # (A12-F005 — see _unseat_directive_minted).
@@ -3449,7 +3553,8 @@ class EmbedTransformer(NodeTransformer):
                     transformer._atoms.add(export.id)
                     exports_info.append(export.id)
                     if export.id not in transformer._seen_functors:
-                        transformer._seen_functors[export.id] = []
+                        transformer._register_functor(
+                            export.id, [], export, "-module export list")
                         statements.append(
                             _make_functor_class_ast(export.id, [], expr_stmt)
                         )
@@ -3464,7 +3569,9 @@ class EmbedTransformer(NodeTransformer):
                     field_names += [kw.arg for kw in export.keywords]
                     exports_info.append((functor_name, field_names))
                     if functor_name not in transformer._seen_functors:
-                        transformer._seen_functors[functor_name] = field_names
+                        transformer._register_functor(
+                            functor_name, field_names, export,
+                            "-module export list")
                         statements.append(
                             _make_functor_class_ast(
                                 functor_name, field_names, expr_stmt
@@ -3505,7 +3612,8 @@ class EmbedTransformer(NodeTransformer):
                 transformer._atoms.add(item.id)
                 private_info.append(item.id)
                 if item.id not in transformer._seen_functors:
-                    transformer._seen_functors[item.id] = []
+                    transformer._register_functor(
+                        item.id, [], item, "-private declaration")
                     statements.append(
                         _make_functor_class_ast(item.id, [], expr_stmt)
                     )
@@ -3518,7 +3626,9 @@ class EmbedTransformer(NodeTransformer):
                 field_names += [kw.arg for kw in item.keywords]
                 private_info.append((functor_name, field_names))
                 if functor_name not in transformer._seen_functors:
-                    transformer._seen_functors[functor_name] = field_names
+                    transformer._register_functor(
+                        functor_name, field_names, item,
+                        "-private declaration")
                     statements.append(
                         _make_functor_class_ast(
                             functor_name, field_names, expr_stmt
@@ -3975,7 +4085,8 @@ class EmbedTransformer(NodeTransformer):
 
         # Emit the functor class definition if not already seen.
         if pred_name not in transformer._seen_functors:
-            transformer._seen_functors[pred_name] = field_names
+            transformer._register_functor(
+                pred_name, field_names, expr_stmt, "-edcg_pred directive")
             return _make_functor_class_ast(pred_name, field_names, expr_stmt)
         return replace(Pass(), expr_stmt)
 
@@ -4287,7 +4398,8 @@ class EmbedTransformer(NodeTransformer):
 
         statements = []
         if functor_name not in transformer._seen_functors:
-            transformer._seen_functors[functor_name] = all_field_names
+            transformer._register_functor(
+                functor_name, all_field_names, expr_stmt, "first clause")
             statements.append(
                 _make_functor_class_ast(
                     functor_name, all_field_names, expr_stmt

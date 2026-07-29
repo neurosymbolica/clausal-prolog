@@ -316,7 +316,7 @@ def _preseed_py_submodules(module_items) -> None:
 # bytecode live until the source file itself changes. Fold this tag into the
 # reported mtime so a clausal upgrade invalidates every cached .clausal/.pl
 # .pyc. BUMP THIS whenever EmbedTransformer / the codegen output changes.
-CLAUSAL_BYTECODE_TAG = 4
+CLAUSAL_BYTECODE_TAG = 5
 
 
 class _ClausalSourceLoader(SourceLoader):
@@ -378,7 +378,8 @@ def _parse_clausal_source(source, filename):
         )
         tree = ast.parse(source, filename=filename)
         source_lines = source.splitlines(keepends=True)
-        transformer = EmbedTransformer(source_lines=source_lines)
+        transformer = EmbedTransformer(
+            source_lines=source_lines, filename=filename)
         tree = transformer.visit(tree)
         ast.fix_missing_locations(tree)
         code = compile(tree, filename=filename, mode="exec")
@@ -394,7 +395,8 @@ def _extract_module_items(source, filename):
         )
         tree = ast.parse(source, filename=filename)
         source_lines = source.splitlines(keepends=True)
-        transformer = EmbedTransformer(source_lines=source_lines)
+        transformer = EmbedTransformer(
+            source_lines=source_lines, filename=filename)
         transformer.visit(tree)
         return transformer._module_items
 

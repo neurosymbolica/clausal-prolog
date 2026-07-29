@@ -6,7 +6,157 @@ LLM repair loop cannot act on it and burns its entire attempt budget.
 
 ---
 
-## STATUS (updated 2026-07-29)
+## STATUS (2026-07-29, second pass — the actual defect)
+
+**Reported bug: FIXED. Positional-overflow sibling bug: FIXED.
+Import-ordering hazard (explanation (a)): open by decision, argued below.**
+
+### The two competing explanations, reconciled
+
+Neither was the cause of the reported failure.
+
+* **(b) — the anonymous-`_` placeholder — is WRONG, twice over.**
+  `_derive_field_names`' `base = arg.id.lstrip("_").lower() or f"arg_{i}"`
+  fallback is unreachable: `_is_logic_var_name` rejects `_`, `__*` and every
+  all-underscore spelling *before* that branch, so `lstrip("_")` can never be
+  empty there. And the shape from the report,
+  `decide_amlr_bo_chain(PROFILE, amlr_bo_chain_verdict(STATUS, _))`, is a
+  **body goal**: body goals are emitted positionally
+  (`Call(func=LoadName('f'), args=[…])`), never as keywords, so their argument
+  spellings cannot mismatch anything. A `_` in a *head* does derive `arg_i`,
+  but the declared signature overlays it by position. Regression-tested.
+* **(a) — the declaration-vs-`-import_from` ordering — is REAL but is not this
+  bug.** It reproduces exactly as traced (the two fixtures still demonstrate
+  it), and it is genuinely order-dependent. It is not what the reproduction
+  package hits. See *Decision on (a)* below.
+* **The actual cause is a third thing, present in a SINGLE module:** a functor
+  whose declaration and whose clause disagree on **arity**.
+
+### Minimal repro (one file — the earlier "needs cross-module" note was wrong)
+
+```
+-module(m, [
+    f(A)
+])
+
+f(1, 2),
+
+Test("x") <- ( f(A, B), A == 1 )
+```
+→ `__init__() got an unexpected keyword argument 'arg_1'`
+
+Mechanism: `-module` mints `f` with `_fields=('A',)`. The clause head derives
+`['arg_0','arg_1']`, and the overlay loop
+
+```python
+for i in range(len(arg_field_names)):
+    if i < len(prev_fields):
+        arg_field_names[i] = prev_fields[i]
+```
+
+only renames the positions that *fit*; position 1 keeps `arg_1`, and the head
+is emitted as `f(A=1, arg_1=2)` against a one-field class. Two clauses of the
+same functor with different arity (no directive at all) do the same thing.
+
+In `repro-arg1-scratch/` the offender is `constants.clausal`: the `-module`
+export list declares `amlr_bo_chain_threshold_bps(THRESHOLD_BPS)` (arity 1)
+while the fact — and every use in the package — is arity 2.
+
+### What was fixed
+
+1. **`clausal/templating/term_rewriting.py` — compile-time signature check.**
+   `EmbedTransformer._check_head_signature` rejects a clause head that names a
+   field the bound class does not have. In practice that is an arity overflow;
+   a functor name has exactly one arity in Clausal, so it is a source error,
+   not something to resolve. Supplying *fewer* arguments than declared is still
+   allowed (it builds a partial head whose trailing fields become fresh
+   `Var()`s — a documented `PredicateMeta.__call__` behaviour). The error names
+   the functor, both arities, both source lines *in its own file* and both
+   source texts. `EmbedTransformer` now takes a `filename` so the message does
+   not read as an error in whichever file imported it.
+2. **`clausal/logic/predicate.py` — positional overflow raises.**
+   `PredicateMeta.__call__` used to *drop* positional arguments past
+   `len(_fields)`, so `some_atom(A, B)` on a zero-arity class returned a bogus
+   term with no error at all — worse than the keyword path, which at least
+   raised. It now raises the same `ClausalTermConstructionError`, with the same
+   attribution, plus a new arity-specific hint. The former per-argument
+   `if i < len(fields)` test is replaced by one length check, so the hot path
+   is if anything marginally cheaper (measured: no regression; 4-ary
+   construction ~1.00 µs → ~0.95 µs, within noise).
+3. `CLAUSAL_BYTECODE_TAG` 4 → 5, so a stale `.pyc` for an already-broken module
+   cannot skip the new compile-time check.
+
+### Decision on (a): the import-ordering hazard is NOT changed
+
+The brief asked which should win when a module both declares a functor locally
+and imports the same name. Corpus evidence says **neither winner can be imposed
+and neither ordering can be made an error**:
+
+* 7 corpus modules declare a functor in `-module`/`-private` *and* import the
+  same name. That is the blessed re-export idiom
+  (`tests/test_functor_reexport.py`,
+  `todo/module-reexport-imported-functor-shadows.md`). Both textual orderings
+  occur in working domains: `eu/gdpr/lawfulness.clausal` and
+  `eu/labour/posted_workers_long_term_trigger/__init__.clausal` declare first
+  and import later; `us/irc_s121/eligibility.clausal` imports first.
+* 2 corpus modules (`au/firb/computation.clausal`,
+  `us/sara_irc_tax/computation.clausal`) import a 0-arity vocabulary atom and
+  then define a same-named *predicate*, relying on the clause-head class block
+  re-minting over the import. That is Phenomenon A
+  (`implementation_plans/dict-atom-keys-vs-predicates.md`), tracked separately.
+
+So: forcing "import wins" breaks the second group; forcing "declaration wins"
+splits class identity silently — the worst failure mode in this engine, since a
+same-named-but-distinct class simply yields 0 solutions. Making either ordering
+a load-time error breaks the first group.
+
+The one change that *would* fix (a) cleanly is to **emit clause heads
+positionally rather than by keyword** whenever the functor is imported in the
+same file. Field names are a module-local labelling of slots; arity is the
+cross-module contract. Positional heads bind against whatever class the import
+supplied, and any real disagreement (arity) is then caught by fix 2 above with
+full attribution. That is the recommended next step — but it makes
+`tests/fixtures/fnmismatch_use.clausal` load successfully, which retires
+`tests/test_functor_field_name_diagnostic.py::TestDirectiveMintedPlaceholderMismatch`.
+Not done here because that pass required those 11 tests to keep passing.
+
+### Evidence
+
+* Suite: `1 failed, 10366 passed, 136 skipped, 44 xfailed` before →
+  `1 failed, 10385 passed, 136 skipped, 44 xfailed` after (+19 new tests in
+  `tests/test_functor_arity_conflict.py`); the one failure is
+  the pre-existing, unrelated `test_doc_snippet_coverage.py`.
+* All 11 tests of `tests/test_functor_field_name_diagnostic.py` still pass and
+  their messages are unchanged.
+* Corpus: the generated Python for all 757 loadable `.clausal` files in
+  `/workspace/clausify-domains` is **byte-identical** before and after
+  (sha256 of `ast.unparse` per file), so the compile-time fix has provably zero
+  corpus effect. No corpus file contains a declaration/clause arity conflict.
+* The runtime fix's only internal caller at risk is
+  `clausal/logic/builtins/_registry.py::_MultiArityBuiltin.__call__`, which
+  falls back to the max-arity class when an unregistered arity is requested.
+  For `arity > max` that fallback silently dropped arguments; it now raises.
+  Nothing in the suite relied on it.
+* Not done: the 62 differential harnesses in `/workspace/clausify-domains`
+  could not be run here — they need `formalize_lib`, which ships with the
+  clausify harness and is not present in this environment.
+
+### New message
+
+```
+functor amlr_bo_chain_threshold_bps/2 conflicts with the declaration of
+amlr_bo_chain_threshold_bps/1 in the same file
+  declared: …/constants.clausal:8 (-module export list) — amlr_bo_chain_threshold_bps(THRESHOLD_BPS)
+  clause:   …/constants.clausal:22 — amlr_bo_chain_threshold_bps(2500, cite(eu_reg_2024_1624_art_52_1)),
+amlr_bo_chain_threshold_bps's class is minted with 1 field(s) (THRESHOLD_BPS),
+so a 2-argument head cannot be built against it. A functor name has exactly one
+arity in Clausal: give the declaration and every clause head of
+amlr_bo_chain_threshold_bps the same number of arguments, or rename one of them.
+```
+
+---
+
+## STATUS (2026-07-29, first pass — diagnostics)
 
 **Diagnostic: DONE. Underlying codegen defect: OPEN (deliberately).**
 
@@ -136,6 +286,7 @@ but its class was registered with ()
    *positional* arguments beyond `len(_fields)` without complaint —
    `some_atom(A, B)` on a 0-arity class returns a bogus instance with no error.
    Only the keyword path is diagnosed here. Worth a separate arity check.
+   *(Fixed in the second pass — see the STATUS block above.)*
 
 ---
 

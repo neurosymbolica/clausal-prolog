@@ -865,7 +865,8 @@ def reify_source(text, filename="<reflected>"):
                 category=SyntaxWarning,
             )
             tree = ast.parse(text, filename=filename)
-            transformer = EmbedTransformer(source_lines=source_lines)
+            transformer = EmbedTransformer(
+                source_lines=source_lines, filename=filename)
             transformed = transformer.visit(tree)
     except SyntaxError as exc:
         raise ReifyError(str(exc)) from exc

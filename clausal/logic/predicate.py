@@ -164,6 +164,19 @@ def _construction_hint(
             f"-import_from(vocab, [alias({functor}, {_camel_case(functor)})]) "
             f"— or keep the key a string."
         )
+    elif len(supplied) > len(registered):
+        # More arguments than the class has fields.  Arity — unlike field
+        # names — is the functor's cross-module contract, so this is never a
+        # cosmetic disagreement: some declaration of this name is wrong.
+        body = (
+            f"{functor} takes {len(registered)} argument(s) but "
+            f"{len(supplied)} were supplied. A functor name has exactly one "
+            f"arity in Clausal, so a second declaration of {functor} with a "
+            f"different arity — or an imported {functor} of another arity "
+            f"shadowing this one — cannot be reconciled. Fix: give every "
+            f"declaration and clause head of {functor} the same number of "
+            f"arguments, or rename one of them."
+        )
     elif _all_placeholders(supplied) or _all_placeholders(registered):
         body = (
             "a functor minted by a directive keeps placeholder arg_N names "
@@ -206,6 +219,56 @@ def _term_construction_error(
         f"functor {functor}/{len(registered)} was constructed with field names "
         f"{_format_fields(supplied)}\n"
         f"but its class was registered with {_format_fields(registered)}\n"
+        f"  registered by: {_format_site(registered_at)}\n"
+        f"  constructed at: {_format_site(constructed_at)}\n"
+        f"{_construction_hint(functor, supplied, registered)}"
+    )
+    return ClausalTermConstructionError(
+        message,
+        functor=functor,
+        arity=len(registered),
+        supplied_fields=supplied,
+        registered_fields=registered,
+        registered_at=registered_at,
+        constructed_at=constructed_at,
+    )
+
+
+def _overflow_supplied_fields(
+    registered: tuple[str, ...], n_args: int
+) -> tuple[str, ...]:
+    """Field names *n_args* positional arguments would have been given.
+
+    The positions that fit take the class's own names; the surplus take the
+    ``arg_N`` placeholders the rewriter would have derived for them, so an
+    arity overflow reads the same way as the keyword-path mismatch.
+    """
+    return tuple(registered[:n_args]) + tuple(
+        f"arg_{i}" for i in range(len(registered), n_args)
+    )
+
+
+def _term_arity_error(
+    cls: Any, n_args: int, kwargs: dict, constructed_at: tuple[str, int] | None
+) -> ClausalTermConstructionError:
+    """Build the attributable error for positional overflow on *cls*.
+
+    ``PredicateMeta.__call__`` used to *drop* positional arguments past
+    ``len(_fields)``, so ``some_atom(A, B)`` on a zero-arity class returned a
+    silently wrong term.  That is worse than the keyword path's bare
+    ``TypeError``: there is no exception at all to repair against.
+    """
+    functor = cls.__name__
+    registered = tuple(cls._fields)
+    supplied = _overflow_supplied_fields(registered, n_args) + tuple(
+        k for k in kwargs if k not in registered[:n_args]
+    )
+    registered_at = getattr(cls, "_registered_at", None)
+    message = (
+        f"functor {functor}/{len(registered)} was constructed with {n_args} "
+        f"positional argument(s)\n"
+        f"but its class was registered with {len(registered)} field(s) "
+        f"{_format_fields(registered)}\n"
         f"  registered by: {_format_site(registered_at)}\n"
         f"  constructed at: {_format_site(constructed_at)}\n"
         f"{_construction_hint(functor, supplied, registered)}"
@@ -450,9 +513,18 @@ class PredicateMeta(type):
         fields = cls._fields
 
         if args:
+            # Positional overflow used to be DROPPED here (``if i <
+            # len(fields)``), so a call with too many arguments returned a
+            # wrong term instead of raising — strictly worse than the keyword
+            # path's TypeError, because there was nothing to repair against.
+            # One length check replaces the former per-argument comparison, so
+            # the hot path is if anything marginally cheaper.
+            if len(args) > len(fields):
+                raise _term_arity_error(
+                    cls, len(args), kwargs, _source_site(1)
+                )
             for i, val in enumerate(args):
-                if i < len(fields):
-                    kwargs[fields[i]] = val
+                kwargs[fields[i]] = val
 
         instance = cls.__new__(cls)
         try:
