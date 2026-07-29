@@ -321,3 +321,13 @@ Test("dot does not unify with a dot compound") <- (
     functor(DOTTERM, ".", 2),
     not (DOTTERM is P.foo),
 )  # nv
+
+# --- Test: a read inside a meta-call's goal stays in that goal's scope ---
+# `findall`'s goal binds ROW itself, so the read must not be lifted ahead of
+# the findall (ROW would be unbound → instantiation_error).
+dict_row({foo: 1}),
+dict_row({foo: 2}),
+Test("dot inside findall") <- (
+    findall(V, (dict_row(ROW), V is ROW.foo), L),
+    L is [1, 2],
+)  # nv
