@@ -896,4 +896,44 @@ The escape mechanisms (`--`, `++`) cover all cases where interop is genuinely ne
 
 ---
 
+## When the syntax is wrong
+
+`.clausal` is Python surface syntax, so a malformed clause is reported by
+CPython's parser — and a parser reports where it *gave up*, not where the
+mistake is. For a rule body that is almost always the closing `)`, one or more
+lines below the defect. The loader therefore prints the source itself
+(`clausal/syntax_diagnostics.py`, hooked into the parse in
+`clausal/import_hook.py`):
+
+```text
+invalid syntax (m.clausal, line 6)
+    3 | f(X) <- (
+    4 |     X > 1,
+    5 |     Y is
+      |         ^ `is` has no right-hand side
+    6 | )
+      | ^ parse gave up here
+  -> complete the expression, or delete the goal — a Clausal goal cannot end
+     on an operator.
+```
+
+Read it bottom-up: line 6 is where the parser stopped and is marked as such;
+line 5 is the line to edit. Up to three preceding lines are shown, plus the
+enclosing clause head when it falls outside that window (with `...N lines
+omitted`), so a long body cannot bury the diagnosis.
+
+The construct is named where it can be inferred with confidence — a dangling
+operator (`is`, `+`, `>`, `=`) with no right-hand side, a `<-` whose
+multi-goal body is not parenthesised, a goal not followed by `,`, an unclosed
+`(`, an unterminated string, and the two Prolog habits `head :- body` and a
+trailing `).`. When nothing can be inferred the source and caret are still
+shown and no guess is offered.
+
+Everything CPython set is preserved: the message's first line is its own, and
+`msg`, `lineno`, `offset`, `text` and the exception class (`SyntaxError`,
+`IndentationError`, `TabError`) are unchanged. Genuine `.py` files are not
+touched — their errors are Python's to report.
+
+---
+
 *See also: [Tutorial](tutorial.md) — hands-on introduction to Clausal · [Predicates & Rules](predicates.md) — clause forms, dispatch, and guards · [Builtins](builtins.md) — full predicate reference.*
