@@ -195,13 +195,17 @@ def _goal_functor_3(goal, name, arity, trail, k):
 
 # ── Operator-node decompose/construct ────────────────────────────────────────
 
-# The operator classes ``op_node`` names and builds are exactly those the
-# renderer round-trips (``clausal.reflection.RENDER_OP_CLASS_NAMES``), keeping
-# the two bijective: any node ``op_node`` constructs re-reifies from the source
-# the renderer emits (modulo renderer escape-ambiguity edges such as a nested
-# unary ``+``).  Non-renderable operator kinds (``StructuralEq``, ``Evaluate``,
-# ``CompareChain``, …) are deliberately excluded — decompose fails cleanly on
-# them rather than promise a round-trip the renderer can't honour.
+# The operator classes ``op_node`` names and builds are exactly those in
+# ``clausal.reflection.RENDER_OP_CLASS_NAMES``, so any node ``op_node``
+# constructs re-reifies from the source the renderer emits (modulo renderer
+# escape-ambiguity edges such as a nested unary ``+``).  That is the renderer's
+# *operator* set, not everything it renders: node kinds whose operands are not a
+# ``left``/``right`` or ``operand`` field — ``CompareChain`` (a list of links),
+# ``SetLiteral``, ``DictLiteral``, ``Lambda``, … — do not fit ``op_node/3``'s
+# decompose/construct shape and are excluded even though the renderer handles
+# them; ``StructuralEq``/``Evaluate`` are excluded because they are unreachable
+# surface.  Decompose fails cleanly on all of them rather than promise a
+# round-trip it can't honour.
 _OP_NODE_CLASSES = {
     name: getattr(simple_ast, name) for name in RENDER_OP_CLASS_NAMES
 }
