@@ -133,3 +133,23 @@ def test_passing_test_is_not_rerun(tmp_path):
     out = run_plugin(tmp_path, PASSING_SRC)
     assert "1 passed" in out
     assert "goal" not in out
+
+
+def test_passing_test_computes_no_diagnostic_at_all(tmp_path):
+    """Pin the guard itself, not just the absence of output.
+
+    The test above only shows a green run *prints* no diagnosis — which it
+    would do even if the re-run had happened and been discarded.  What costs
+    time and replays side effects is the re-run, so assert on the thing that
+    proves it did not happen: ``run_test`` leaves ``diagnostic`` unset for a
+    passing test even when ``diagnose=True`` (``clausal/testing.py:262``).
+    """
+    from clausal.import_hook import _load_module
+    from clausal.testing import run_test
+
+    src = tmp_path / "green.clausal"
+    src.write_text(PASSING_SRC)
+    mod = _load_module("_diag_guard_probe", str(src))
+    result = run_test(mod, "passes", path=str(src), diagnose=True)
+    assert result.passed
+    assert result.diagnostic is None
