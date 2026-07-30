@@ -555,11 +555,19 @@ class _ClauseRenderer:
             return self._name_ast(value.name)
         if isinstance(value, Goal):
             return self._goal_ast(value)
+        if value is None or value is Ellipsis:
+            # The reifier yields an `ast.Constant`'s payload as itself, so
+            # `X is None` / `X is ...` arrive as Python's None/Ellipsis rather
+            # than as nodes.  With these two, `term` is total over the seven
+            # payload types `ast.Constant` can carry (None, Ellipsis, bool, int,
+            # float, complex, str, bytes) — the reifier accepts them all, so the
+            # renderer must invert them all.
+            return ast.Constant(value)
         if isinstance(value, bool):
             return ast.Constant(value)
         if isinstance(value, (int, float, complex)):
             return ast.Constant(value)
-        if isinstance(value, str):
+        if isinstance(value, (str, bytes)):
             return ast.Constant(value)
         if isinstance(value, (ModuleDirective, PythonCode)):
             raise RenderError(
@@ -648,20 +656,171 @@ class _ClauseRenderer:
                     "as a Python escape"
                 )
             return ast.UnaryOp(op=_RENDER_UNARY_OPS[name](), operand=operand)
-        if name == "StarUnpack":
-            return ast.Starred(value=self.term(node.value), ctx=ast.Load())
-        if name == "LoadSubscript":
-            # ``object[index]`` — index is a term (often a dotted atom).
-            return ast.Subscript(
-                value=self.term(node.object),
-                slice=self.term(node.index),
-                ctx=ast.Load(),
-            )
-        if name == "Lambda":
-            return self._lambda_ast(node)
-        if name == "DictLiteral":
-            return self._dict_literal_ast(node)
+        handler = _RENDER_STRUCTURAL_NODES.get(name)
+        if handler is not None:
+            return handler(self, node)
         raise RenderError(f"cannot render operator node: {name}")
+
+    # -- structural (non-operator) node kinds ----------------------------------
+
+    def _starred_ast(self, node):
+        return ast.Starred(value=self.term(node.value), ctx=ast.Load())
+
+    def _subscript_ast(self, node):
+        """``object[index]`` — index is a term (often a dotted atom)."""
+        return ast.Subscript(
+            value=self.term(node.object),
+            slice=self.term(node.index),
+            ctx=ast.Load(),
+        )
+
+    def _compare_chain_ast(self, node):
+        """``CompareChain(comparisons)`` → one ``ast.Compare`` with N ops.
+
+        ``0 < X < 10`` reifies to *pairwise* comparisons that share their middle
+        operands (``Lt(0, X)``, ``Lt(X, 10)``), because the chain's semantics are
+        "each intermediate operand is evaluated once".  Python's chain surface
+        writes each operand exactly once, so the shared operands must genuinely
+        agree — a mutated chain like ``Lt(0, X), Lt(Y, 10)`` has no chain surface
+        at all, and emitting ``0 < X < 10`` for it would silently drop ``Y``.
+        Re-reification is textual, so the join is checked on the rendered
+        surface, the same criterion the duplicate-dict-key guard uses.
+
+        A one-link chain is refused too: ``0 < X`` re-reifies to a bare ``Lt``
+        node, not a ``CompareChain``, so there is no faithful surface for it (the
+        front end never builds one — a single comparison becomes the bare node)."""
+        comparisons = [
+            _deref_field(link)
+            for link in _deref_seq_field(node.comparisons, "compare-chain links")
+        ]
+        if len(comparisons) < 2:
+            raise RenderError(
+                f"cannot render CompareChain of {len(comparisons)} link(s): a "
+                "chain surface needs at least two, and a single comparison "
+                "re-reifies as a bare operator node, not a chain"
+            )
+        ops, links = [], []
+        for link in comparisons:
+            link_name = type(link).__name__
+            if link_name not in _RENDER_CMP_OPS:
+                raise RenderError(
+                    f"cannot render compare-chain link: {link_name} is not a "
+                    "renderable comparison operator"
+                )
+            ops.append(_RENDER_CMP_OPS[link_name]())
+            links.append((self.term(link.left), self.term(link.right)))
+        for index in range(1, len(links)):
+            joined, previous = ast.unparse(links[index][0]), ast.unparse(
+                links[index - 1][1])
+            if joined != previous:
+                raise RenderError(
+                    "cannot render CompareChain whose adjacent links disagree "
+                    f"on their shared operand: {previous!r} then {joined!r} — "
+                    "a chain surface writes that operand once"
+                )
+        return ast.Compare(
+            left=links[0][0], ops=ops, comparators=[right for _, right in links]
+        )
+
+    def _set_literal_ast(self, node):
+        """``SetLiteral(elements)`` → an ``ast.Set`` (``{a, b}``) term surface.
+
+        ``elements`` is an ordered list on the node (the written order), so the
+        surface order is recoverable; the runtime's unordered ``SetTerm`` is a
+        different, non-reified representation.  An *empty* SetLiteral has no
+        surface: ``{}`` is a dict, and ``ast.unparse`` spells an empty
+        ``ast.Set`` as ``{*()}``, which re-reifies as a one-element set holding
+        a splatted empty tuple.  Refuse rather than corrupt."""
+        elements = _deref_seq_field(node.elements, "set-literal elements")
+        if not elements:
+            raise RenderError(
+                "cannot render an empty SetLiteral: `{}` is the dict surface and "
+                "an empty set unparses to `{*()}`, which re-reifies differently"
+            )
+        return ast.Set(elts=[self.term(element) for element in elements])
+
+    def _comprehension_clauses(self, node):
+        """The ``for T in IT if C …`` chain shared by all four comprehensions.
+
+        A comprehension in a clause body is an inert *term* structure, like
+        ``await``/``yield``: nothing iterates it, so its loop variable is an
+        ordinary declared atom and the whole shape survives into the reified
+        clause.  Reachable surface, therefore renderable.
+
+        Targets reify to whatever the target expression reifies to — ``Atom``
+        for a declared name, ``Variable`` for ``X`` or ``_``, a list for
+        ``[a, b]`` — and all of those write and re-read as themselves.  A
+        *tuple* target is the exception: the reifier cannot build one (``for
+        x, y in L`` is refused before a term exists), so it arrives only on a
+        mutated term, and ``ast.unparse`` writes it bare — ``for x, y in L`` —
+        which the reifier then refuses in turn.  Refuse it here instead of
+        emitting text that cannot be read back.
+        """
+        clauses = _deref_seq_field(node.clauses, "comprehension clauses")
+        if not clauses:
+            raise RenderError(
+                "cannot render a comprehension with no for-clause: the surface "
+                "of `[E]` is a list literal, which re-reifies differently"
+            )
+        generators = []
+        for clause in clauses:
+            clause = _deref_field(clause)
+            kind = type(clause).__name__
+            if kind != "ForClause":
+                raise RenderError(
+                    f"cannot render comprehension clause: {kind} is not a "
+                    "ForClause"
+                )
+            # ctx is irrelevant to ast.unparse, the only consumer of this tree.
+            target = self.term(clause.target)
+            if isinstance(target, ast.Tuple):
+                raise RenderError(
+                    "cannot render a tuple comprehension target: it unparses "
+                    "bare (`for x, y in L`), which does not re-reify"
+                )
+            generators.append(ast.comprehension(
+                target=target,
+                iter=self.term(clause.iterable),
+                ifs=[self.term(f) for f in _deref_seq_field(
+                    clause.filters, "comprehension filters")],
+                is_async=1 if _deref_field(clause.is_async) else 0,
+            ))
+        return generators
+
+    def _list_comp_ast(self, node):
+        return ast.ListComp(elt=self.term(node.element),
+                            generators=self._comprehension_clauses(node))
+
+    def _set_comp_ast(self, node):
+        return ast.SetComp(elt=self.term(node.element),
+                           generators=self._comprehension_clauses(node))
+
+    def _generator_expr_ast(self, node):
+        """``(E for T in IT)`` — ``ast.unparse`` always parenthesises a
+        GeneratorExp, which is what the reifier needs to see one."""
+        return ast.GeneratorExp(elt=self.term(node.element),
+                                generators=self._comprehension_clauses(node))
+
+    def _dict_comp_ast(self, node):
+        return ast.DictComp(key=self.term(node.key), value=self.term(node.value),
+                            generators=self._comprehension_clauses(node))
+
+    def _await_ast(self, node):
+        return ast.Await(value=self.term(node.value))
+
+    def _yield_ast(self, node):
+        """``Yield(value)`` → ``yield`` / ``yield VALUE``.
+
+        A bare ``yield`` reifies with ``value=None``; render it back bare rather
+        than as ``yield None`` (both re-reify to ``Yield(value=None)``, but the
+        bare form is the surface that was written)."""
+        value = deref(node.value)
+        if value is None:
+            return ast.Yield(value=None)
+        return ast.Yield(value=self.term(value))
+
+    def _yield_from_ast(self, node):
+        return ast.YieldFrom(value=self.term(node.value))
 
     def _lambda_ast(self, node):
         """``Lambda(params, body)`` → the ``(P1, …, Pn) <- BODY`` term surface.
@@ -750,6 +909,37 @@ class _ClauseRenderer:
             args=[self.term(arg) for arg in args],
             keywords=keywords,
         )
+
+
+#: ``simple_ast`` node class name → the :class:`_ClauseRenderer` method that
+#: builds its Python surface.  These are the node kinds that are *not* plain
+#: operators (so not in the four ``_RENDER_*_OPS`` tables) but still reachable
+#: inside a reified clause body.
+_RENDER_STRUCTURAL_NODES = {
+    "StarUnpack": _ClauseRenderer._starred_ast,
+    "LoadSubscript": _ClauseRenderer._subscript_ast,
+    "Lambda": _ClauseRenderer._lambda_ast,
+    "DictLiteral": _ClauseRenderer._dict_literal_ast,
+    "CompareChain": _ClauseRenderer._compare_chain_ast,
+    "SetLiteral": _ClauseRenderer._set_literal_ast,
+    # `await`/`yield` in a clause body compile to inert *term* structures, not
+    # coroutines — reachable surface, so renderable.
+    "Await": _ClauseRenderer._await_ast,
+    "Yield": _ClauseRenderer._yield_ast,
+    "YieldFrom": _ClauseRenderer._yield_from_ast,
+    # Comprehensions are inert term structures too — nothing iterates them, so
+    # the loop variable is a declared atom and the shape reaches the renderer.
+    "ListComp": _ClauseRenderer._list_comp_ast,
+    "SetComp": _ClauseRenderer._set_comp_ast,
+    "DictComp": _ClauseRenderer._dict_comp_ast,
+    "GeneratorExpr": _ClauseRenderer._generator_expr_ast,
+}
+
+#: Every ``simple_ast`` node class :func:`render_ast` can turn back into source
+#: — the operator tables plus the structural dispatch above.  Derived, never
+#: hand-listed, so ``tests/test_reflection_render.py``'s completeness sweep
+#: (emittable node kinds vs renderable ones) cannot go stale silently.
+RENDER_NODE_CLASS_NAMES = RENDER_OP_CLASS_NAMES | frozenset(_RENDER_STRUCTURAL_NODES)
 
 
 # ── Module directives ────────────────────────────────────────────────────────

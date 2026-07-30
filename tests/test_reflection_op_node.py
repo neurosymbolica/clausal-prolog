@@ -159,7 +159,9 @@ class TestDecompose:
         assert [n for (n,) in sols] == ["Unify", "Negate"]
 
     def test_compare_chain_excluded_but_its_inner_nodes_named(self, matchers):
-        # `1 < X < 10` reifies as a CompareChain (not renderable, excluded) whose
+        # `1 < X < 10` reifies as a CompareChain, which the renderer handles but
+        # `op_node/3` excludes — its operands are a list of links, not a
+        # left/right pair, so it has no decompose/construct shape here. Its
         # inner Lt nodes ARE operator nodes.
         name = Var()
         sols = _solutions("OpName", "Mid(X) <- (1 < X < 10)\n", name, module=matchers)

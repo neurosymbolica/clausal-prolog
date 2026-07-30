@@ -268,6 +268,129 @@ class TestFormatString:
         assert_round_trips(src)
 
 
+class TestCompareChain:
+    @pytest.mark.parametrize("src", [
+        "Range(X) <- (0 < X < 10)\n",
+        "Range2(X) <- (0 <= X <= 10)\n",
+        "Mixed(X) <- (0 < X <= 10)\n",
+        "Four(X, Y) <- (0 < X < Y < 100)\n",
+        "Eqs(X, Y) <- (X == Y == 3)\n",
+        "Chained(X, Y) <- (X is Y is 3)\n",
+        "Member(X, L) <- (0 < X in L)\n",
+        # An operand that is itself an expression, and a negated operand — the
+        # rendered `<` must stay a comparison, never tighten into a `<-` arrow.
+        "Expr(X, Y) <- (0 < X + 1 < Y)\n",
+        "NegOperand(X) <- (-5 < X < 5)\n",
+    ])
+    def test_compare_chain_round_trips(self, src):
+        assert_round_trips(src)
+
+    def test_chain_surface_is_a_single_chain(self):
+        # Hand-written from the language's own syntax: a chain renders as ONE
+        # Python comparison chain, not a conjunction of two comparisons.
+        rendered = render_source(only_clause("Range(X) <- (0 < X < 10)\n"))
+        assert rendered == "Range(X) <- (0 < X < 10)", rendered
+
+    def test_unlinked_chain_raises(self):
+        # A mutated chain whose adjacent operands no longer agree
+        # (`0 < X` then `Y < 10`) cannot be written as a Python chain at all —
+        # emitting `0 < X < 10` would silently drop Y. Refuse.
+        from clausal.pythonic_ast.nodes import CompareChain, Lt
+        from clausal.reflection import Variable
+
+        chain = CompareChain(comparisons=[
+            Lt(left=0, right=Variable("X")),
+            Lt(left=Variable("Y"), right=10),
+        ])
+        with pytest.raises(RenderError):
+            render_source(chain)
+
+    def test_single_comparison_chain_raises(self):
+        # A one-comparison CompareChain has no chain surface: `0 < X` re-reifies
+        # to a bare Lt node, not a CompareChain. Refuse rather than corrupt.
+        from clausal.pythonic_ast.nodes import CompareChain, Lt
+        from clausal.reflection import Variable
+
+        with pytest.raises(RenderError):
+            render_source(CompareChain(comparisons=[Lt(left=0, right=Variable("X"))]))
+
+    def test_chain_of_unrenderable_op_raises(self):
+        from clausal.pythonic_ast.nodes import Add, CompareChain
+
+        with pytest.raises(RenderError):
+            render_source(CompareChain(comparisons=[
+                Add(left=1, right=2), Add(left=2, right=3),
+            ]))
+
+
+class TestSetLiteral:
+    @pytest.mark.parametrize("src", [
+        "Has(S) <- (S is {a})\n",
+        "Has3(S) <- (S is {a, b, c})\n",
+        "HasInts(S) <- (S is {1, 2, 3})\n",
+        "HasMixed(S, X) <- (S is {1, 'two', X})\n",
+        "HasSplat(S, T) <- (S is {a, *T})\n",
+        "HasNested(S, X) <- (S is {Pp(X), b})\n",
+    ])
+    def test_set_literal_round_trips(self, src):
+        assert_round_trips(src)
+
+    def test_set_surface_is_braces(self):
+        # Hand-written surface: a set literal is `{...}`, not `set([...])`.
+        rendered = render_source(only_clause("HasInts(S) <- (S is {1, 2})\n"))
+        assert rendered == "HasInts(S) <- (S is {1, 2})", rendered
+
+    def test_empty_set_literal_raises(self):
+        # There is no empty-set surface: `{}` is a dict, and ast.unparse emits
+        # `{*()}` for an empty ast.Set, which re-reifies as a one-element set
+        # holding a splatted empty tuple. Refuse rather than corrupt.
+        from clausal.pythonic_ast.nodes import SetLiteral
+
+        with pytest.raises(RenderError):
+            render_source(SetLiteral(elements=[]))
+
+
+class TestPlainConstants:
+    @pytest.mark.parametrize("src", [
+        # `ast.Constant` payloads the reifier yields as themselves. bool/int/
+        # float/complex/str were already covered; None and bytes were not.
+        "Nil(X) <- (X is None)\n",
+        "NilArg(X) <- Chk(X, None)\n",
+        "Bytes(X) <- (X is b'ab')\n",
+        "BytesArg(X) <- Chk(X, b'\\x00')\n",
+        # `...` reifies but does not *compile* (the goal compiler rejects it), so
+        # it is not live surface — still, render inverts reify, so it must
+        # round-trip rather than raise.
+        "Dots(X) <- (X is ...)\n",
+    ])
+    def test_constant_round_trips(self, src):
+        assert_round_trips(src)
+
+    @pytest.mark.parametrize("src,expected", [
+        ("Nil(X) <- (X is None)\n", "Nil(X) <- (X is None)"),
+        ("Bytes(X) <- (X is b'ab')\n", "Bytes(X) <- (X is b'ab')"),
+        ("Dots(X) <- (X is ...)\n", "Dots(X) <- (X is ...)"),
+    ])
+    def test_constant_surface(self, src, expected):
+        assert render_source(only_clause(src)) == expected
+
+
+class TestInertPythonExprNodes:
+    """``await``/``yield`` in a clause body compile to inert *term* structures
+    (``Await(value=…)`` / ``Yield(value=…)``) — no coroutine involved. They are
+    reachable surface, so the renderer must round-trip them."""
+
+    @pytest.mark.parametrize("src", [
+        "Aw(L, M) <- (M is await L)\n",
+        "AwExpr(L, M) <- (M is await Pp(L))\n",
+        "Yi(M) <- (M is (yield))\n",
+        "YiVal(X, M) <- (M is (yield X))\n",
+        "YiFrom(X, M) <- (M is (yield from X))\n",
+    ])
+    def test_inert_node_round_trips(self, src):
+        assert_round_trips(src)
+
+
 class TestOutOfScope:
     def test_module_directive_raises(self):
         items = reify_source("-module(m)\n")
@@ -440,6 +563,185 @@ class TestBoundLogicVarsInFields:
         term = {_bound(5): "a", _bound(5): "b"}
         with pytest.raises(RenderError):
             render_source(term)
+
+
+# ── Comprehensions ───────────────────────────────────────────────────────────
+# A comprehension in a clause body is an inert *term* structure, like
+# await/yield: nothing iterates it, so the loop variable is a bare name that has
+# to resolve like any other.  An undeclared one is a strict-atoms NameError and a
+# logic variable is a plain NameError — which is why these were once written off
+# as "does not compile", and as node kinds no legal source produces.  Declare the
+# name and the comprehension compiles, runs, and its clause reifies with a
+# ListComp in it, so it does reach the renderer.
+
+
+class TestComprehensions:
+
+    DECLARED_LOOP_VAR = "-private([x])\n\nSq(L, M) <- (M is [x * x for x in L])\n"
+
+    def test_a_declared_loop_var_compiles_runs_and_reifies_a_ListComp(self, tmp_path):
+        """The reachability the exclusion list used to deny.
+
+        `x` is a declared atom, so nothing is undefined: the module imports, the
+        predicate yields a solution, and M is bound to the ListComp term itself
+        (a comprehension is not evaluated in a clause body — it is structure)."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.variables import Var, deref
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        path = tmp_path / "comp.clausal"
+        path.write_text(self.DECLARED_LOOP_VAR)
+        module = _load_module("_test_render_comprehension", str(path))
+
+        result = Var()
+        bindings = []
+        for _ in module.Sq([1, 2, 3], result):
+            bindings.append(deref(result))
+
+        assert len(bindings) == 1, "the clause must yield exactly one solution"
+        assert isinstance(bindings[0], simple_ast.ListComp)
+
+        clause = only_clause(self.DECLARED_LOOP_VAR)
+        assert isinstance(clause.goals[0].right, simple_ast.ListComp)
+
+    def test_the_reachable_clause_round_trips(self):
+        """It raised `RenderError: cannot render operator node: ListComp`."""
+        assert_round_trips("Sq(L, M) <- (M is [x * x for x in L]),\n")
+
+    @pytest.mark.parametrize("src", [
+        "L1(L, M) <- (M is [x * x for x in L]),\n",
+        "S1(L, M) <- (M is {x for x in L}),\n",
+        "D1(L, M) <- (M is {x: x for x in L}),\n",
+        "G1(L, M) <- (M is (x for x in L)),\n",
+        "F1(L, M) <- (M is [x for x in L if x]),\n",
+        "F2(L, M) <- (M is [x for x in L if x if y]),\n",
+        "N1(L, K, M) <- (M is [x for x in L for y in K]),\n",
+        "N2(L, M) <- (M is [[x for x in y] for y in L]),\n",
+        "V1(L, M) <- (M is [x for X in L]),\n",       # logic-variable target
+        "V2(L, M) <- (M is [x for _ in L]),\n",       # anonymous target
+        "V3(L, M) <- (M is [x for [a, b] in L]),\n",  # list target
+        "V4(L, M) <- (M is [x for a.b in L]),\n",     # dotted-atom target
+        "A1(L, M) <- (M is [x async for x in L]),\n",
+        "K1(L, M, Z) <- (M is [Z * x for x in L]),\n",
+    ])
+    def test_every_comprehension_surface_round_trips(self, src):
+        assert_round_trips(src)
+
+    def test_a_comprehension_with_no_for_clause_is_refused(self):
+        """`[E]` with no clauses is the list-literal surface, not a ListComp."""
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        with pytest.raises(RenderError, match="no for-clause"):
+            render_source(simple_ast.ListComp(element=1, clauses=[]))
+
+    def test_a_tuple_target_is_refused_rather_than_written_bare(self):
+        """`for x, y in L` is refused by the reifier, so no reified term carries
+        a tuple target — only a mutated one can, and `ast.unparse` would write it
+        bare, which does not read back."""
+        from clausal.pythonic_ast import nodes as simple_ast
+        from clausal.reflection import Variable
+
+        node = simple_ast.ListComp(
+            element=Atom("x"),
+            clauses=[simple_ast.ForClause(
+                target=(Atom("x"), Atom("y")), iterable=Variable("L"))],
+        )
+        with pytest.raises(RenderError, match="tuple comprehension target"):
+            render_source(node)
+
+    def test_a_non_ForClause_clause_is_refused(self):
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        node = simple_ast.ListComp(element=1, clauses=[Atom("x")])
+        with pytest.raises(RenderError, match="not a ForClause"):
+            render_source(node)
+
+
+# ── Mechanical completeness sweep ────────────────────────────────────────────
+# The set of simple_ast node classes a reified clause body can contain is closed:
+# EmbedTransformer builds bodies by calling node_ast("<ClassName>", …), either
+# with a literal name or with a name looked up in one of its BINOP_CLS /
+# UNARYOP_CLS / BOOLOP_CLS / CMPOP_CLS tables.  Enumerate that set from the
+# source and require every member to be either renderable or *explicitly*
+# excluded with a reason — so a newly emittable node kind cannot be added
+# without a rendering decision being recorded here.
+
+#: Emittable node kinds the renderer deliberately does not have an
+#: ``_operator_ast`` branch for, each with the reason.
+RENDER_EXCLUSIONS = {
+    # Consumed by the reifier itself: these never survive into a reified term,
+    # they are translated to reified vocabulary (Goal / Atom / tuple / …).
+    "Predicate": "reified as Clause",
+    "Call": "reified as Goal",
+    "Keyword": "reified into Goal.kwargs",
+    "LoadName": "reified as Atom",
+    "LoadAttr": "reified as a dotted Atom",
+    "IfExpr": "reified as IfThenElse",
+    "TupleLiteral": "reified as a Python tuple",
+    # Not a term on its own: a ForClause is rendered by the comprehension that
+    # owns it, so reaching _operator_ast with a bare one means the term was
+    # mutated — refused loudly, by design.  The four comprehension kinds were
+    # once excluded here too, on the claim that they "do not compile (NameError
+    # on the loop var)" and that no legal source produces them.  Both were
+    # false: the NameError is what an *undeclared* loop variable gets, and
+    # declaring it (`-private([x])`) makes the comprehension compile, run and
+    # reach the renderer.  They are rendered now — see TestComprehensions.
+    "ForClause": "rendered by its owning comprehension, never a term on its own",
+}
+
+
+def _emittable_node_class_names():
+    """Node class names EmbedTransformer can emit into a clause body."""
+    import ast as _ast
+
+    from clausal.templating import term_rewriting
+
+    source = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(term_rewriting.__file__))),
+        "templating", "term_rewriting.py",
+    )
+    names = set()
+    for node in _ast.walk(_ast.parse(open(source, encoding="utf-8").read())):
+        if (
+            isinstance(node, _ast.Call)
+            and isinstance(node.func, _ast.Name)
+            and node.func.id == "node_ast"
+            and node.args
+            and isinstance(node.args[0], _ast.Constant)
+        ):
+            names.add(node.args[0].value)
+    for table_name in ("BINOP_CLS", "UNARYOP_CLS", "BOOLOP_CLS", "CMPOP_CLS"):
+        names.update(getattr(term_rewriting, table_name).values())
+    return names
+
+
+def test_emittable_node_kinds_are_all_decided():
+    """No emittable node kind may be silently unrenderable."""
+    from clausal.reflection import RENDER_NODE_CLASS_NAMES
+
+    emittable = _emittable_node_class_names()
+    assert emittable, "node_ast sweep found nothing — the extraction broke"
+    undecided = sorted(emittable - RENDER_NODE_CLASS_NAMES - set(RENDER_EXCLUSIONS))
+    assert not undecided, (
+        "clause bodies can contain node kinds the renderer neither handles nor "
+        f"documents an exclusion for: {undecided}"
+    )
+
+
+def test_render_exclusions_are_not_stale():
+    """Every documented exclusion must still be emittable and still unhandled —
+    otherwise the list is lying about the renderer's coverage."""
+    from clausal.reflection import RENDER_NODE_CLASS_NAMES
+
+    emittable = _emittable_node_class_names()
+    assert not (set(RENDER_EXCLUSIONS) - emittable), (
+        "excluded node kinds are no longer emittable: "
+        f"{sorted(set(RENDER_EXCLUSIONS) - emittable)}"
+    )
+    assert not (set(RENDER_EXCLUSIONS) & RENDER_NODE_CLASS_NAMES), (
+        "node kinds listed as excluded are in fact handled: "
+        f"{sorted(set(RENDER_EXCLUSIONS) & RENDER_NODE_CLASS_NAMES)}"
+    )
 
 
 CORPUS_DIR = "/workspace/clausify-domains"
