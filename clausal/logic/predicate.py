@@ -389,13 +389,72 @@ def _make_eq(fields: tuple[str, ...]):
     return __eq__
 
 
-def _make_unify(fields: tuple[str, ...]):
+# ── The class-as-value calling convention ────────────────────────────────────
+#
+# The C engine reaches every Python term type the same way: a plain
+# ``PyObject_GetAttrString(t, "__unify__")`` followed by ``hook(other, trail)``
+# (``clausal/logic/variables/_variables.c``).  That lookup means two different
+# things depending on what ``t`` is, and PredicateMeta puts *both* kinds of
+# ``t`` into terms:
+#
+#   * ``t`` is an **instance** (``cite(art_6_1)``).  The lookup binds, so the
+#     call lines up with the written ``(self, other, trail)``.
+#   * ``t`` is the **class itself**.  A bare functor name is a legal term value
+#     in Clausal — ``FUNCTOR_NAME is cite`` puts the class on a unification
+#     side — and attribute lookup on a class hands back the *unbound* function.
+#     The same two-argument call then lands ``other`` in ``self`` and leaves
+#     ``trail`` unfilled.
+#
+# That second case is
+# ``todo/internal-unify-typeerror-reaches-the-user-as-error-text.md``.  The
+# author of a legal-looking goal saw
+#
+#     TypeError: _make_unify.<locals>.__unify__() missing 1 required
+#                positional argument: 'trail'
+#
+# — a closure inside the engine and a parameter they have never written, in
+# place of their goal simply failing.  Measured cost in the formalization
+# corpus: 10 repair attempts across two runs, neither recovering, because a
+# message about ``trail`` offers nothing to edit.
+#
+# Arity-0 atoms were always immune, not by luck but by decision: PredicateMeta
+# installs no hooks on them at all, because "the class IS the value" and
+# identity comparison is the whole of unification for them.  The sentinel
+# default below extends that decision to functor classes of every arity.
+#
+# A descriptor that hands each caller its own signature is the tidier way to
+# say this and was written first, then thrown away: it puts a Python frame on
+# *every* instance-side hook lookup, which took `t.__unify__` from 35ns to
+# 103ns and showed up end-to-end on term head matching — the hottest path
+# through the unifier.  An ``is`` against a module-level object costs one
+# pointer compare on that path instead.  It is not a heuristic: only a
+# two-argument call can leave the default in place, and a two-argument call is
+# by construction the class-side one.
+_CLASS_CALL = object()
+
+
+def _make_unify(fields: tuple[str, ...], owner: type):
     """Generate a ``__unify__`` that recursively unifies corresponding fields.
 
     Called by the C ``do_unify`` when two PredicateMeta instances of the
     same type appear on both sides of a unification.
+
+    *owner* is the class this hook is installed on.  It is required rather than
+    defaulted because the class-side branch answers ``self is owner``, and an
+    ``owner`` that quietly defaulted to ``None`` would make ``unify(cls, None)``
+    say yes.
     """
-    def __unify__(self, other, trail):
+    def __unify__(self, other, trail=_CLASS_CALL):
+        if trail is _CLASS_CALL:
+            # Class-side call: ``self``/``other`` are really ``other``/``trail``
+            # and the term is *owner* itself.  A bare class carries no
+            # arguments, so identity is the only way it can unify; anything
+            # else defers with ``NotImplemented`` rather than answering
+            # ``False``, leaving the C unifier's own fallback — the symmetric
+            # hook, then rich compare — free to decide exactly as it does for
+            # an arity-0 atom.  This branch therefore cannot change *whether*
+            # any two terms unify, only stop the engine crashing on the ask.
+            return True if self is owner else NotImplemented
         if type(self) is not type(other):
             return NotImplemented
         from clausal.logic.variables import unify  # noqa: PLC0415
@@ -412,8 +471,18 @@ def _make_occurs_check(fields: tuple[str, ...]):
     Called by the C ``do_occurs_check`` for PredicateMeta instances. Without
     it, occurs-check falls through to ``return 0`` and unify_with_occurs_check
     would build a cyclic term through a predicate term (A01-F001).
+
+    Carries the same class-as-value sentinel as ``_make_unify``: the C side
+    calls ``hook(var)`` after a bare ``getattr``, so on a class-valued term it
+    loses an argument in exactly the same way.
     """
-    def __occurs_check__(self, var):
+    def __occurs_check__(self, var=_CLASS_CALL):
+        if var is _CLASS_CALL:
+            # Class-side call: ``self`` is really the variable, and the term is
+            # the bare class, which holds no field values — so nothing can
+            # occur in it.  Same reasoning PredicateMeta applies to arity-0
+            # atoms, which get no hook at all.
+            return False
         from clausal.logic.variables import occurs_check  # noqa: PLC0415
         return any(occurs_check(var, getattr(self, f)) for f in fields)
     return __occurs_check__
@@ -498,12 +567,15 @@ class PredicateMeta(type):
         cls.__hash__ = None  # mutable terms shouldn't be hashable
         cls.__iter__ = _term_iter
         if fields:
-            cls.__unify__ = _make_unify(fields)
+            cls.__unify__ = _make_unify(fields, cls)
             cls.__occurs_check__ = _make_occurs_check(fields)
         # For zero-field classes (atoms), skip __unify__/__occurs_check__: the
         # class IS the value, so identity comparison (C line 886: t1 == t2) and
         # the fallback PyObject_RichCompareBool handle unification correctly,
-        # and an atom can never contain a Var.
+        # and an atom can never contain a Var.  A with-fields class used *as a
+        # value* — a bare functor name — reaches the same answer through the
+        # ``_CLASS_CALL`` branch of the hooks above rather than by having no
+        # hook, since it still needs the instance form for its instances.
         elif _warn_atom_identity_enabled():
             # Opt-in diagnostic only (CLAUSAL_WARN_ATOM_IDENTITY): install a
             # __unify__ that warns when this atom is compared against a
