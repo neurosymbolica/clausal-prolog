@@ -13,7 +13,12 @@ from typing import Any, Callable
 
 from clausal.terms import And, Call, Compound, KWTerm, LoadName
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
-from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
+from clausal.logic.predicate import (
+    PredicateMeta,
+    describe_term_identity_mismatch,
+    is_term_instance,
+    term_field_names,
+)
 
 
 # ── Clause ─────────────────────────────────────────────────────────────────────
@@ -515,6 +520,7 @@ def head_key(head: Any) -> tuple[str, int]:
     raise TypeError(
         f"Cannot extract (functor, arity) from head term: {head!r}\n"
         "Expected Compound, Call(LoadName(...), ...), or a functor dataclass instance."
+        + describe_term_identity_mismatch(head)
     )
 
 
