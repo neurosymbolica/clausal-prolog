@@ -34,7 +34,7 @@ merge order: lowest blast radius first, compiled-output changes last.
 |---|---|---|---|---|
 | 1 | `fix/var-shaped-predicate-name` | `d5b9abf3` | `P(a,1)` + a body mentioning `P` crashed at load with `TypeError: 'AttVar' object is not callable`; now a load-time `SyntaxError` naming both lines | reproduced both sides; red-green 9/14; blast radius **0 hits** across suite + 767 corpus files + 346 repo files (measured by logging instead of raising) |
 | 2 | `fix/package-segment-nonidentifier-diagnostic` | **`0de17d7e`** | a dotted import failing on a non-identifier directory (`eu/state-aid` for `eu.state_aid`) produced **no diagnostic at all**; now names the segment, the directory and the rename | reproduced both sides; red-green 12/14; Fable-reviewed → merge-with-fixes; **FIX 1 already applied** in `0de17d7e` (was `4eb45974`) |
-| 3 | `fix/renderer-completeness-comparechain-setliteral` | `76ed9a40` | renderer refused CompareChain, SetLiteral, Await/Yield, None/bytes/Ellipsis | red-green 32 fail on revert; Fable-reviewed → merge-with-fixes; **FIX 2 MAY STILL BE IN FLIGHT — see §5** |
+| 3 | `fix/renderer-completeness-comparechain-setliteral` | **`fea842b2`** | renderer refused CompareChain, SetLiteral, Await/Yield, None/bytes/Ellipsis — and, after FIX 2, also renders ListComp/SetComp/DictComp/GeneratorExpr | red-green 32 fail on revert, then 19/19 for FIX 2; Fable-reviewed → merge-with-fixes; **FIX 2 applied** in `fea842b2` (was `76ed9a40`) |
 | 4 | `fix/tabling-wrapper-survives-recompile` | `0a0341c7` | **correctness bug**: an `assertz` into a tabled predicate replaced `tabled_dispatch` with the raw fn, turning a terminating left-recursive query into an infinite hang | hang reproduced independently on `main` (exit 124) and shown fixed; red-green 7/12 |
 | 5 | `perf/const-list-membership-frozenset` | `47e3f58d` | `X in [c1, c2, …]` compiles to a set — 8.9× at 4 atoms, 302× at 64, flat in list length | semantics compared main-vs-branch byte-identical for order, duplicates, `1 in [1.0,1]`; corpus green |
 
@@ -89,23 +89,42 @@ The clone's own venv lacks pytest.
 
 ## 5. Loose ends
 
-**A fix-up agent was running when the session ended** (id `aedd8c6af0fe8dbf3`),
-applying two Fable-review findings:
+**Both Fable-review fixes are applied.** (Agent `aedd8c6af0fe8dbf3`, which was
+still running when the first draft of this handoff was written — the table in §2
+now carries the final shas.)
 
-- **FIX 1 — done**, in `0de17d7e`. `_misnamed_path_entry` documented that a
+- **FIX 1 — `0de17d7e`.** `_misnamed_path_entry` documented that a
   correctly-spelled entry anywhere on the search path aborts the scan, but
   checked per-directory, so a misnamed entry in an earlier `sys.path` dir beat a
   correct one in a later dir — producing *wrong rename advice*, the exact failure
-  the branch exists to prevent. Asked for a two-pass scan.
-- **FIX 2 — verify whether it landed.** `git -C <renderer worktree> log --oneline -3`.
-  If the branch is still at `76ed9a40`, it did not. The finding:
-  `RENDER_EXCLUSIONS` in `tests/test_reflection_render.py` (~line 592) justifies
-  the comprehension entries as "does not compile (NameError on the loop var)",
-  which is **false when the loop variable collides with a declared atom** —
-  `-private([x])` with `Sq(L, M) <- (M is [x * x for x in L])` imports, runs,
-  yields a solution, then hits `RenderError: cannot render operator node:
-  ListComp`. The exclusion is still right (loud refusal, not corruption); the
-  recorded reason is wrong. Correct it and pin the reachable case with a test.
+  the branch exists to prevent. Now two passes over one set of listings: sweep
+  the whole path for a correct spelling first. Also softened `_prefix_target`'s
+  overclaiming sentence to "the segment 'b' did not resolve, so neither can
+  'a.b.c'" — the segment is a fact from the exception and the rest an
+  entailment, so it is true whoever raised. Same 78-column single line, so the
+  `_KNOWN_UNCOMPILABLE` fence numbers do not shift.
+- **FIX 2 — `fea842b2`.** The `RENDER_EXCLUSIONS` justification for the
+  comprehension entries ("does not compile — NameError on the loop var") was
+  **false when the loop variable collides with a declared atom**: `-private([x])`
+  with `Sq(L, M) <- (M is [x * x for x in L])` imports, runs and yields a
+  solution. Rather than just correct the reason, the agent **implemented
+  rendering** for ListComp/SetComp/DictComp/GeneratorExpr and dropped those four
+  exclusions, having checked that every reachable surface round-trips (filters,
+  multiple for-clauses, nesting, `async for`, and atom/dotted-atom/logic-var/`_`
+  targets). Two refusals kept on house precedent: empty `clauses`, and a tuple
+  target (unparses bare, which `EmbedTransformer` rejects). `ForClause` stays
+  excluded with a corrected reason. The false reason was corrected in all three
+  places it had been recorded.
+
+Still open from FIX 2's neighbourhood, recorded in the slice/ellipsis todo: the
+tuple-target `AssertionError`, and the missing diagnostic for a logic variable
+used as a comprehension loop variable.
+
+One count note, since it looks like a discrepancy and is not: FIX 1's run
+reports `1 failed, 10536 passed` against a `10533` reference. The reference run
+had **two** failures — the doc-snippet one *and* the F026 flake. Here F026
+passed, so +1 from that and +2 from FIX 1's new tests. FIX 2's `10575` is
+`10556 + 19` exactly.
 
 **`fix/imported-functor-clause-destruction` (`ec6bf7bf`) — do NOT merge.** Open
 user decision, and a defect: see
