@@ -221,14 +221,16 @@ def _compile_all_pending(pending, db, module_dict):
                                          globals_=module_dict, pred_cls=pred_cls)
 
     # Wrap tabled predicates AFTER all compilation (so cross-predicate
-    # references are resolved before wrapping).
+    # references are resolved before wrapping).  Idempotent: the compile above
+    # already installed the wrapper via ``compiler._install``.
     for (functor, arity), pred_cls in pending.items():
         if db.is_tabled(functor, arity):
-            from clausal.logic.tabling import make_tabled_wrapper_trampoline
+            from clausal.logic.tabling import ensure_tabled_wrapper
             original_fn = (pred_cls._get_dispatch() if pred_cls is not None
                            else db.get_dispatch(functor, arity))
-            wrapped = make_tabled_wrapper_trampoline(
-                original_fn, functor, arity, db.table_store)
+            wrapped = ensure_tabled_wrapper(db, functor, arity, original_fn)
+            if wrapped is original_fn:
+                continue
             if pred_cls is not None:
                 pred_cls._dispatch_fn = wrapped
             db.set_dispatch(functor, arity, wrapped)

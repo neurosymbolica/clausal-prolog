@@ -661,7 +661,16 @@ class PredicateMeta(type):
             cls._refuse_call_at(arity)
         if cls._dispatch_fn is None:
             if cls._lazy_recompile is not None:
-                cls._dispatch_fn = cls._lazy_recompile()
+                fn = cls._lazy_recompile()
+                # A recompile installs through ``compiler._install``, which is
+                # where a ``-table``d predicate gets its SLG wrapper back and a
+                # ``-shallow`` one gets its trampoline adapter.  Whatever
+                # ``_install`` put on the class therefore outranks the function
+                # the recompile happened to hand back: assigning the return
+                # value blind is how an ``assertz`` used to leave a tabled
+                # predicate dispatching raw.
+                if cls._dispatch_fn is None:
+                    cls._dispatch_fn = fn
             else:
                 raise NotImplementedError(
                     f"Predicate {cls.__name__}/{cls._arity} has no compiled "

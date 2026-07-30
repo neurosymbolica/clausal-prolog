@@ -825,7 +825,28 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                         cl.scc_deps.add(dep)
         yield (_fail, DONE)
 
+    tabled_dispatch._tabled_for = (functor, arity)
     return tabled_dispatch
+
+
+def ensure_tabled_wrapper(db, functor, arity, fn):
+    """Return *fn* wrapped for tabling, or *fn* itself if it needs no wrapper.
+
+    The one place that decides whether a dispatch function has to be the SLG
+    wrapper.  Idempotent: ``make_tabled_wrapper_trampoline`` stamps its result
+    with ``_tabled_for``, so handing an already-wrapped function back through
+    here does not stack a second table lookup on top of the first.
+
+    Being idempotent is what lets *both* the load-time wrap (import_hook /
+    compiler_v2 step 6) and the compile-time wrap in ``_install`` — which is
+    what makes the wrapper survive an ``assertz``-driven recompile — call it
+    without either having to know whether the other already ran.
+    """
+    if db is None or not db.is_tabled(functor, arity):
+        return fn
+    if getattr(fn, "_tabled_for", None) == (functor, arity):
+        return fn
+    return make_tabled_wrapper_trampoline(fn, functor, arity, db.table_store)
 
 
 # ── Simple-mode adapter for trampoline-mode tabled wrapper ──────────────
