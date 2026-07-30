@@ -25,6 +25,16 @@ Nothing here runs unless a lookup has already failed, so re-reading source
 files to recover a sibling's ``-module(...)`` list costs nothing in the normal
 case.  ``describe_missing_predicate`` is the entry point.
 
+A second, near-identical fault lives here too: the name resolved, but at
+another arity.  That is *not* case 1 — case 1 is reached only when the name is
+absent from the caller's namespace, and the common in-module call resolves the
+class directly and used to fail as a bare Python ``TypeError`` about a missing
+``trail``.  See ``describe_arity_mismatch`` and
+``todo/done/arity-mismatch-reports-a-missing-trail-argument.md``.  It gets its
+own message rather than being folded into case 1, because ``Predicate
+citation/2 not found`` states an absence that is not the fault when
+``citation`` is right there in the file.
+
 The near-miss scoring is deliberately *not* reimplemented: it is imported from
 :mod:`clausal.import_diagnostics` so the two messages agree on what counts as
 a suggestion (plain ``difflib`` scores ``within_limit`` vs ``exceeds_limit`` at
@@ -89,6 +99,78 @@ def predicate_not_found(functor, arity, db=None, module_globals=None):
     return PredicateNotFoundError(
         describe_missing_predicate(functor, arity, db, module_globals)
     )
+
+
+class PredicateArityMismatchError(TypeError):
+    """The call named a predicate that exists, at an arity it does not have.
+
+    A ``TypeError`` because that is what the raw failure already was — the
+    generated dispatch function ran out of positional arguments — so any
+    ``except TypeError`` around a goal keeps catching it.  What changes is the
+    message: see :func:`describe_arity_mismatch`.
+    """
+
+
+def predicate_arity_mismatch(functor, called_arity, defined_arity, site=None):
+    """Build the exception for a call to *functor* at the wrong arity."""
+    return PredicateArityMismatchError(
+        describe_arity_mismatch(functor, called_arity, defined_arity, site)
+    )
+
+
+def describe_arity_mismatch(functor, called_arity, defined_arity, site=None):
+    """The message for calling *functor* at *called_arity* when it takes another.
+
+    Unlike :func:`describe_missing_predicate` this is not a search: the name
+    resolved, to a predicate we are holding.  So the message states the fault
+    outright rather than reporting an absence and leaving the reader to infer
+    it — ``Predicate citation/2 not found`` is true, but it is the wrong
+    sentence when ``citation`` is right there in the file.
+
+    *site* is the ``(file, line)`` the predicate was registered at, or ``None``.
+
+    Never raises: a diagnostic that fails must degrade to a plain statement of
+    the two arities, not replace one failure with a different one.
+    """
+    if not isinstance(defined_arity, int):
+        return f"{functor} does not accept {_arguments(called_arity)}"
+    head = (f"{functor} takes {_arguments(defined_arity)}, "
+            f"but this call passes {called_arity}")
+    try:
+        return "\n".join(_describe_mismatch(head, functor, called_arity,
+                                            defined_arity, site))
+    except Exception:  # noqa: BLE001 - see docstring
+        return head
+
+
+def _arguments(n):
+    return f"{n} argument" + ("" if n == 1 else "s")
+
+
+def _describe_mismatch(head, functor, called_arity, defined_arity, site):
+    """The site line and the remedy line under *head*.
+
+    The remedy does not say "define ``functor/called_arity`` as a predicate of
+    its own", which was the first wording and is advice the implementation
+    refuses to take: a second head of the same name at another arity in the same
+    file is padded with a wildcard and absorbed into the existing predicate
+    (``todo/same-name-two-arities-silently-merge.md``), so a reader who followed
+    it wrote the clause, watched it vanish, and got this same message again.
+    Renaming is the only remedy that works today, and the sentence says why so
+    the reader does not have to try the other one — see ``docs/predicates.md``.
+    """
+    lines = [head]
+    if isinstance(site, tuple) and len(site) == 2:
+        lines.extend(_sentence(
+            f"{functor}/{defined_arity} is defined at {site[0]}:{site[1]}."))
+    lines.extend(_arrow([
+        f"pass {_arguments(defined_arity)} to {functor}, or give the "
+        f"{called_arity}-argument predicate a different name: a second "
+        f"{functor} head with {_arguments(called_arity)} in the same file does "
+        f"not define {functor}/{called_arity} — it is padded with a wildcard "
+        f"and absorbed into {functor}/{defined_arity}."
+    ]))
+    return lines
 
 
 # ── namespace introspection ──────────────────────────────────────────────────

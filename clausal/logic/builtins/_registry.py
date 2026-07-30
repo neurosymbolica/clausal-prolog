@@ -12,6 +12,7 @@ from typing import Any, Callable
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.predicate import (
     PredicateMeta, is_term_instance, term_field_names, make_predicate,
+    _dispatch_at,
 )
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.terms import Compound, DictTerm, SetTerm, KWTerm
@@ -92,15 +93,24 @@ def _trampoline_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | N
     return decorator
 
 
-def _ensure_trampoline_dispatch(goal_val):
+def _ensure_trampoline_dispatch(goal_val, arity: int | None = None):
     """Return a trampoline-protocol dispatch function for *goal_val*.
 
     Handles:
     - PredicateMeta / BuiltinPredicate with ``_get_dispatch()`` → returns that
     - Simple-mode callable ``fn(*args, trail, k)`` → wraps to trampoline
+
+    *arity* is how many arguments the caller will supply.  Passing it lets a
+    ``PredicateMeta`` callee refuse a goal it has no clause for, so
+    ``call(citation, REF, META)`` reports the arity the way writing
+    ``citation(REF, META)`` in a clause body does.  Callers that do not know
+    the count (or whose count is not the callee's) omit it, and ``None`` is
+    also what a foreign single-argument implementor gets — see ``_dispatch_at``.
     """
     if hasattr(goal_val, '_get_dispatch'):
-        return goal_val._get_dispatch()
+        if arity is None:
+            return goal_val._get_dispatch()
+        return _dispatch_at(goal_val, arity)
     # A Pythonic AST node (Predicate, Lambda, Compound-as-term, …) is
     # ``callable`` — every node gets a field-replacement ``__call__`` from
     # @node_class — but it is NOT a goal dispatch function.  This is reached
@@ -371,7 +381,10 @@ class MultiArityBuiltin:
         return cls(*args, **kwargs)
 
     def _get_dispatch(self) -> Callable:
-        """Return an arity-dispatching function for the trampoline."""
+        """Return an arity-dispatching function for the trampoline.
+
+        The returned function keys on the real argument count at call time.
+        """
         fns = self._arity_dispatch_fns
 
         def _dispatch(this_generator, _proceed, _fail, _catcher, *args):

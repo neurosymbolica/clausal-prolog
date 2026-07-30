@@ -428,6 +428,42 @@ def _make_repr(fields: tuple[str, ...]):
     return __repr__
 
 
+def _head_arity(head: Any) -> int | None:
+    """How many arguments the clause head *head* has, or ``None`` if unreadable.
+
+    Three head shapes reach here and the third one used to crash:
+
+    - a ``Compound``-style head with an ``args`` sequence;
+    - a term instance, whose arity is its field count;
+    - the **class itself**, which is how a 0-arity fact atom (``myflag,``)
+      stores its head — ``red() is red``, so the class IS the value.  That one
+      reached ``term_field_names`` and raised ``TypeError: must be called with
+      a dataclass type or instance``, which is nonsense in the mouth of an
+      arity diagnostic.  ``_fields`` answers it directly.
+
+    ``None`` means *unknown*, never *zero*: a head shape nobody anticipated
+    must make the predicate's arity unknown — and so unrefusable — rather than
+    let a diagnostic replace one failure with a stranger one.
+
+    ``database.head_key`` reads the same shapes and knows two more (``KWTerm``,
+    ``Call``), but it is not what this wants: it lives downstream of this module
+    so reaching it means a per-call local import, it *raises* on anything else,
+    and it rejects ``Compound(functor_var, args)`` — whose functor is unknown but
+    whose arity is right there — because it needs a str functor and this needs
+    only a count.
+    """
+    fields = getattr(head, "_fields", None) if isinstance(head, PredicateMeta) else None
+    if fields is not None:
+        return len(fields)
+    try:
+        args = getattr(head, "args", None)
+        if args is not None:
+            return len(args)
+        return len(term_field_names(head))
+    except Exception:  # noqa: BLE001 - see docstring
+        return None
+
+
 class PredicateMeta(type):
     """Metaclass that turns a class with ``_fields`` into a predicate.
 
@@ -600,12 +636,29 @@ class PredicateMeta(type):
 
     # ── Dispatch ──────────────────────────────────────────────────────────
 
-    def _get_dispatch(cls) -> Callable:
+    def _get_dispatch(cls, arity: int | None = None) -> Callable:
         """Return the compiled dispatch function.
 
         If dispatch_fn was cleared by assertz/retract and a lazy recompile
         callback is registered, recompiles on demand.
+
+        *arity* is the call site's argument count.  This is the one place where
+        a name becomes a dispatch function, so it is the one place that can
+        notice the caller and the callee disagree about how many arguments there
+        are — see ``_refuse_call_at``.  Omitted (``None``) by callers that
+        already know the arity is right, and by the many places that just want
+        the function.
+
+        This is the ONLY ``_get_dispatch`` in the system that takes an *arity*,
+        and callers that do not know they hold a ``PredicateMeta`` must go
+        through ``_dispatch_at`` rather than passing one blind — the protocol at
+        large is single-argument and stays that way.  See ``_dispatch_at``.
         """
+        # ``len(cls._fields)`` rather than ``cls._arity``: identical by
+        # definition, but skips a property descriptor on a path taken once per
+        # goal invocation.
+        if arity is not None and arity != len(cls._fields):
+            cls._refuse_call_at(arity)
         if cls._dispatch_fn is None:
             if cls._lazy_recompile is not None:
                 cls._dispatch_fn = cls._lazy_recompile()
@@ -615,6 +668,83 @@ class PredicateMeta(type):
                     "dispatch function. The compiler must be run first."
                 )
         return cls._dispatch_fn
+
+    def _clause_arity(cls, accept: int | None = None) -> int | None:
+        """The one arity every clause head of *cls* has, or ``None``.
+
+        ``_arity`` is the cheap answer and is right almost always, but it can
+        be stale: a module that imports a 0-arity vocabulary atom and then
+        defines a same-named predicate re-mints its clauses onto the imported
+        class without moving ``_arity`` (``tests/fixtures/
+        impord_atom_then_pred.clausal``).  Clause heads cannot be stale, and
+        they are also exactly what a refusal would be claiming — *no clause of
+        this predicate can match a call of that shape*.
+
+        ``None`` when there are no clauses (a bare functor, a forward
+        declaration, a ``-dynamic`` predicate not yet asserted into), when they
+        disagree, or when a head's shape cannot be read: in all of those cases
+        nothing is known well enough to refuse.
+
+        *accept* is an arity the caller will not refuse whatever the answer, and
+        is what keeps this off the hot path.  If the **first** head already has
+        it, there is nothing left to learn — either every head has it, or the
+        heads disagree, and both answers decline — so the remaining heads are
+        not read and ``None`` comes back after one head.  That matters because
+        the stale-``_arity`` predicates above take this path on *every* call
+        (``0 != 2`` forever), and a 2000-fact one measured 108 µs per call
+        walking heads it could not learn anything from, against 0.10 µs for an
+        honest ``_arity``.  It is deliberately a re-derivation rather than a
+        memo: ``_clauses`` is mutated in place by ``assertz``/``retract`` and by
+        three load-time paths that replace it wholesale
+        (``import_hook``, ``compiler_v2``), and a cached arity that outlived one
+        of those would either suppress a real refusal or refuse a call that had
+        become correct.  Reading one head cannot go stale.
+        """
+        clauses = cls._clauses
+        if not clauses:
+            return None
+        first = _head_arity(clauses[0].head)
+        if first is None or first == accept:
+            return None
+        for clause in clauses[1:]:
+            if _head_arity(clause.head) != first:
+                return None
+        return first
+
+    def _refuse_call_at(cls, arity: int) -> None:
+        """Raise if no clause of *cls* could match a call of *arity* arguments.
+
+        Only reached when the call site's arity differs from ``_arity``, so the
+        clause read here is off the dispatch path for an agreeing call — and is
+        one head, not the whole list, whenever the heads say the call is fine
+        (see ``_clause_arity``).
+
+        Raises ``PredicateArityMismatchError`` or nothing at all.  A diagnostic
+        that can itself fail is worse than no diagnostic: whatever shape the
+        clause list or the registration site turns out to be, this either states
+        the arity fault or declines quietly.
+        """
+        try:
+            defined = cls._clause_arity(accept=arity)
+        except Exception:  # noqa: BLE001 - see docstring
+            return
+        if defined is None:
+            return
+        from clausal.predicate_diagnostics import (  # noqa: PLC0415
+            PredicateArityMismatchError,
+            predicate_arity_mismatch,
+        )
+        try:
+            err = predicate_arity_mismatch(
+                cls.__name__, arity, defined,
+                site=getattr(cls, "_registered_at", None),
+            )
+        except Exception:  # noqa: BLE001 - the fault is still real; state it
+            err = PredicateArityMismatchError(
+                f"{cls.__name__} takes {defined} arguments, "
+                f"but this call passes {arity}"
+            )
+        raise err
 
     # ── Locking ───────────────────────────────────────────────────────────
 
@@ -636,6 +766,40 @@ class PredicateMeta(type):
             f"<Predicate {cls.__name__}/{cls._arity}, "
             f"{n} clause(s), {compiled}{locked}>"
         )
+
+
+# ── Arity-aware dispatch resolution ──────────────────────────────────────────
+
+
+def _dispatch_at(obj: Any, arity: int) -> Callable:
+    """Resolve *obj*'s dispatch function for a call of *arity* arguments.
+
+    ``_get_dispatch()`` is a duck-typed protocol, and it is deliberately and
+    permanently **single-argument**.  Roughly two dozen implementors live
+    outside this tree — ``packages/clausal-scipy``'s ``_LookupPredicate``,
+    ``packages/clausal-spacy``'s ``_SpacyPredicate``,
+    ``packages/clausal-provenance``'s ``_RegistrationGoal`` and friends — and
+    most of them inherit from nothing at all: they are plain classes whose whole
+    contract is ``def _get_dispatch(self)``.  Widening the protocol to take the
+    call site's arity broke every one of them at their *correct* arity, which is
+    not a trade a diagnostic gets to make.
+
+    So the arity stops here.  Exactly one implementor is arity-aware —
+    ``PredicateMeta``, which is where clause heads live and therefore the only
+    place that can tell a wrong-arity call from a right one — and predicates are
+    *instances* of that metaclass while foreign implementors are instances of
+    plain classes, so ``isinstance`` separates them exactly.  Everyone else is
+    called the way they were always called.  Do not add an ``arity`` parameter to
+    another ``_get_dispatch``; add the case here.
+
+    Off the hot path by construction: locked predicates (the default) have their
+    dispatch function pre-cached in ``base_globals`` under ``$disp_<name>_<n>``
+    and the goal emitters reference that name directly, so only unlocked
+    (``-dynamic``) callees and the runtime meta-call funnels arrive here.
+    """
+    if isinstance(obj, PredicateMeta):
+        return obj._get_dispatch(arity)
+    return obj._get_dispatch()
 
 
 # ── Python reference implementations (kept as fallbacks) ─────────────────────

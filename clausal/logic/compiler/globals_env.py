@@ -493,10 +493,18 @@ def _inject_resolved_targets(
     """
 
     def _maybe_cache_dispatch(obj: Any, name: str, arity: int) -> None:
-        """Phase 7: if obj is a locked, compiled PredicateMeta, cache its dispatch."""
+        """Phase 7: if obj is a locked, compiled PredicateMeta, cache its dispatch.
+
+        Not when *arity* disagrees with the predicate's own: caching there
+        would bind ``$disp_citation_2`` to ``citation/3``'s dispatch function
+        and the call site would jump straight into it, past the arity check
+        ``_get_dispatch`` exists to make.  Leaving the key unset costs that one
+        call site the fast path and gains it a message that names the fault.
+        """
         if (
             arity >= 0
             and isinstance(obj, PredicateMeta)
+            and arity == obj._arity
             and getattr(obj, "_locked", False)
             and obj._dispatch_fn is not None
         ):

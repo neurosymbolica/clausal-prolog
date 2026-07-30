@@ -1,0 +1,7 @@
+# clausal: no-collect
+# The name IS in scope — -import_from binds the exporter's class directly — so
+# the wrong-arity call never reaches the database lookup that would have
+# reported it.  See todo/arity-mismatch-reports-a-missing-trail-argument.md.
+-import_from(tests.fixtures.arimp_lib, [arimp_pair])
+
+arimp_uses(KEY) <- arimp_pair(KEY)

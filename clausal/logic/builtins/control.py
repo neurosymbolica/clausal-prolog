@@ -14,7 +14,9 @@ import time as _time
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE, StepGenerator
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import (
+    is_term_instance, term_field_names, _dispatch_at,
+)
 
 from clausal.logic.builtins._registry import (
     _BUILTIN_FIELDS, _builtin,
@@ -39,9 +41,14 @@ def _goal_dispatch_and_args(goal_val):
     - callable (Python function / lambda) → no extra args
     - object with _get_dispatch() (PredicateMeta class, BuiltinPredicate) → no extra args
     - PredicateMeta instance with compiled dispatch → dispatch from type, args from fields
+
+    Both branches already know how many arguments they are about to supply — a
+    bare name gets none, an instance gets one per field — so both pass that count
+    down, and ``time_goal(citation)`` against ``citation/3`` names the arity
+    instead of reporting three missing positional arguments.
     """
     if callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
-        return _ensure_trampoline_dispatch(goal_val), ()
+        return _ensure_trampoline_dispatch(goal_val, 0), ()
     if is_term_instance(goal_val):
         cls = type(goal_val)
         # Only dispatch if the class has a compiled dispatch function.
@@ -49,7 +56,7 @@ def _goal_dispatch_and_args(goal_val):
         # are PredicateMeta instances but do not have a compiled predicate body.
         if getattr(cls, '_dispatch_fn', None) is not None:
             args = tuple(getattr(goal_val, f) for f in term_field_names(goal_val))
-            return cls._get_dispatch(), args
+            return _dispatch_at(cls, len(args)), args
     return None, None
 
 

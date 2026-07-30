@@ -206,6 +206,39 @@ distance(X1, X2, D) <- (D == abs(X2 - X1))
 
 The **arity** is the number of fields. `point/2` means "point with 2 arguments." Different arities define different predicates: `foo/1` and `foo/2` are unrelated.
 
+Unrelated, but not both definable **in one file**: there a name has exactly one
+arity, and writing `foo(a, b),` and `foo(a),` together does not give you `foo/2`
+and `foo/1`.
+
+- Shorter head first (`foo(a),` then `foo(a, b),`) fails at load: *functor
+  foo/2 conflicts with the declaration of foo/1 in the same file*, naming both
+  sites and telling you to rename one of them.
+- Longer head first (`foo(a, b),` then `foo(a),`) is **merged silently**: the
+  short head is padded to `foo(a, _)` and absorbed into `foo/2`, where it
+  matches `foo(a, ANYTHING)`. No `foo/1` is created, and nothing is reported.
+
+The padding is a defect, not a feature — it is the partial-term rule
+(`citation(REF)` in argument position builds a term with a fresh variable)
+reaching a clause head, where it rewrites the program instead of describing a
+term. Do not write the second arity expecting it to survive: rename it. Two
+arities of one name are kept genuinely separate only in separate modules.
+
+Calling a predicate at an arity it does not have is an error, and it is reported
+as one:
+
+```
+citation takes 3 arguments, but this call passes 2
+  citation/3 is defined at eumr.clausal:14.
+  -> pass 3 arguments to citation, or give the 2-argument predicate a
+     different name: a second citation head with 2 arguments in the same file
+     does not define citation/2 — it is padded with a wildcard and absorbed
+     into citation/3.
+```
+
+This is a `PredicateArityMismatchError`, which is a `TypeError`. If the name is
+not in scope at *any* arity, the failure is a `PredicateNotFoundError` instead
+and the message lists what is reachable — see [Importing](import.md).
+
 ---
 
 ## Defining Predicates in `.clausal` Files

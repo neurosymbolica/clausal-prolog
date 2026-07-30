@@ -69,7 +69,7 @@ def _dispatch_call_iter(
     arity: int,
     arg_exprs: list[ast.expr],
 ) -> ast.expr:
-    """Generate: _tramp_call(fname._get_dispatch(), (arg0, …, argN), trail)
+    """Generate: _tramp_call($dispatch_at(fname, N), (arg0, …, argN), trail)
 
     Bridges simple-mode callers to trampoline-mode dispatch functions.
     ``fname`` is resolved from the compiled function's globals, where it
@@ -77,16 +77,22 @@ def _dispatch_call_iter(
 
     Phase 7: if the predicate is locked (its dispatch fn pre-cached in
     ``base_globals`` under ``_disp_Foo_N``), emits that direct name
-    reference instead of the slower ``fname._get_dispatch()`` call.
+    reference instead of the slower ``$dispatch_at(fname, N)`` call.
     Locked keys live on ``ctx.locked_dispatch_keys``.
     """
     dk = _disp_key(fname, arity)
     if dk in ctx.locked_dispatch_keys:
         dispatch_expr: ast.expr = _name(dk)
     else:
+        # The arity is the call site's, not the callee's: passing it is what
+        # lets a PredicateMeta refuse a call no clause could match, instead of
+        # handing back a dispatch function that runs out of arguments and
+        # blames `trail`.  It goes through $dispatch_at rather than straight
+        # into ``fname._get_dispatch(N)`` because ``fname`` may be a foreign
+        # single-argument implementor — see _dispatch_at in logic/predicate.py.
         dispatch_expr = ast.Call(
-            func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
-            args=[],
+            func=_name("$dispatch_at"),
+            args=[_name(fname), ast.Constant(value=arity)],
             keywords=[],
         )
     args_tuple = ast.Tuple(elts=arg_exprs, ctx=ast.Load())

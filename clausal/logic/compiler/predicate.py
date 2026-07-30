@@ -31,7 +31,9 @@ from clausal.terms import (
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.database import Clause, Database
-from clausal.logic.predicate import PredicateMeta, atom_by_id as _atom_by_id
+from clausal.logic.predicate import (
+    PredicateMeta, atom_by_id as _atom_by_id, _dispatch_at,
+)
 from clausal.codegen import functiondef_to_function
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
 from clausal.logic.builtins import (  # noqa: F401
@@ -747,6 +749,7 @@ def compile_predicate_trampoline(
         "$build_star_list": _build_star_list,
         "$build_multi_star_list": _build_multi_star_list,
         "$tramp_call": _tramp_call,
+        "$dispatch_at": _dispatch_at,
         "$deref_walk": _deref_walk_fn,
         "$findall_copy": _findall_copy_row,
         "$set_of_dedup": _set_of_dedup,
@@ -1484,6 +1487,7 @@ def compile_predicate_shallow(
         "$build_star_list": _build_star_list,
         "$build_multi_star_list": _build_multi_star_list,
         "$tramp_call": _tramp_call,
+        "$dispatch_at": _dispatch_at,
         "$deref_walk": _deref_walk_fn,
         "$findall_copy": _findall_copy_row,
         "$set_of_dedup": _set_of_dedup,

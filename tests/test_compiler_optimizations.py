@@ -669,9 +669,19 @@ class TestLockedDispatchCaching:
         assert "get_dispatch" not in bytecode, (
             "Compiled code should NOT call _get_dispatch() for locked predicate"
         )
+        assert "$dispatch_at" not in bytecode, (
+            "A locked predicate must bypass the runtime dispatch resolver too — "
+            "$disp_Bar_1 is the whole point of the locked fast path"
+        )
 
-    def test_unlocked_predicate_still_uses_get_dispatch(self):
-        """An unlocked (dynamic) predicate still emits fname._get_dispatch()."""
+    def test_unlocked_predicate_still_resolves_dispatch_at_runtime(self):
+        """An unlocked (dynamic) predicate still resolves its dispatch per call.
+
+        It goes through the ``$dispatch_at`` runtime helper rather than emitting
+        ``Baz._get_dispatch(1)`` inline: the callee may be a foreign
+        single-argument ``_get_dispatch`` implementor, and only the helper knows
+        which of the two protocols to use.  See ``_dispatch_at``.
+        """
         # nv
         import dis, io
         from clausal.logic.compiler import compile_predicate_trampoline
@@ -690,8 +700,11 @@ class TestLockedDispatchCaching:
         out = io.StringIO()
         dis.dis(fn, file=out)
         bytecode = out.getvalue()
-        assert "get_dispatch" in bytecode, (
-            "Unlocked predicate should still use _get_dispatch() at runtime"
+        assert "$dispatch_at" in bytecode, (
+            "Unlocked predicate should still resolve its dispatch at runtime"
+        )
+        assert "$dispatch_at" in fn.__globals__, (
+            "the emitted name has to be reachable from the compiled globals"
         )
         assert "$disp_Baz_1" not in fn.__globals__, (
             "$disp_Baz_1 should NOT be cached for unlocked predicate"
