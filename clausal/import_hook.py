@@ -34,6 +34,7 @@ import os
 import warnings
 
 from .pythonic_ast import nodes as simple_ast
+from .atom_diagnostics import truth_literal_hint_lines
 from .import_diagnostics import exec_with_import_diagnostics
 from .syntax_diagnostics import clausal_syntax_diagnostics
 from .templating.term_rewriting import EmbedTransformer, TermTransformer
@@ -105,10 +106,15 @@ def _make_intern_atom(module_dict, module_items, module_name):
         if existing is not None:
             return existing
         if strict:
-            raise NameError(
+            message = (
                 f"strict_atoms: undeclared atom {name!r} used as a dict key in "
                 f"{module_name}; declare it (-module/-private/-import_from) or "
                 f"use a string key"
+            )
+            # `{true: ...}` reaches this site rather than the bare-atom
+            # diagnostic, and wants the same steer at the real literal.
+            raise NameError(
+                "\n".join([message, *truth_literal_hint_lines([name])])
             )
         return predicate_builtins.setdefault(name, make_predicate(name, []))
 

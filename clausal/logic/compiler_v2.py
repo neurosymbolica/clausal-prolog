@@ -18,6 +18,7 @@ import importlib
 import warnings
 from typing import Any
 
+from clausal.atom_diagnostics import truth_literal_hint_lines
 from clausal.logic.database import Module as LogicModule, Clause, head_key
 from clausal.logic.compiler import (
     compile_predicate_trampoline,
@@ -752,6 +753,10 @@ def _build_strict_atoms_diagnostic(names: list[str], module_name: str) -> str:
         )
     lines = [
         header,
+        # For `true`/`false`/`null` none of the five remedies below is the
+        # right answer, so name the literal first.  Empty for ordinary atoms,
+        # which keeps every other diagnostic worded exactly as before.
+        *truth_literal_hint_lines(unique_names),
         "  bare atom references must be one of:",
         f"    - listed in -module({module_name}, [atom, ...])",
         "    - listed in -private([atom, ...])",
