@@ -103,6 +103,23 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
             if result is None:
                 return
             yield trail
+    except NameError as exc:
+        # Failure-only seam, and the only one solve time needs: this is the
+        # outermost driver, so a NameError arriving here has already escaped
+        # every catch/3 below it and is on its way to the author.  The hunt it
+        # triggers reads sibling ``-module(...)`` lists off disk, which is why
+        # it sits in an ``except`` and not on the loop — a solution costs
+        # nothing, a raise pays once.
+        from clausal.predicate_diagnostics import (  # noqa: PLC0415
+            enrich_undefined_name,
+        )
+        better = enrich_undefined_name(exc)
+        if better is None:
+            raise
+        # Re-raise on the ORIGINAL traceback so the frame still points at the
+        # clause that used the name, and suppress the chained duplicate — the
+        # replacement carries the same args.
+        raise better.with_traceback(exc.__traceback__) from None
     finally:
         # A04-F007: close the root generator on ANY exit — normal, caller
         # abandonment (GeneratorExit), or a body exception that propagated past
