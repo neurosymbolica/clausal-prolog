@@ -209,6 +209,7 @@ def _construct_named(name_val, args, who: str):
         # ``name_val(*args)`` the wrong number of arguments.
         if len(name_val._fields) == len(args):
             return name_val(*args)
+        # Arity disagrees → not this class; fall through to a generic Compound.
         functor_str = name_val.__name__
     elif isinstance(name_val, str):
         functor_str = name_val

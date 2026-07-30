@@ -154,3 +154,29 @@ def test_unpack_arity_mismatch_falls_through_to_compound(cite):
     built = built_by(_univ__2, [cite, 1, 2, 3])
     assert isinstance(built, Compound)
     assert built.functor == "tfcdt_cite"
+
+
+# ── the shared error arm ───────────────────────────────────────────────────
+#
+# Both sites used to raise this inline.  Consolidating it into
+# ``_construct_named`` means the culprit name is threaded in as ``who``, so
+# nothing but a test keeps the two sites reporting themselves correctly.
+
+
+@pytest.mark.parametrize(
+    "builtin,args,who",
+    [
+        (_functor__3, (3, 1), "functor/3"),
+        (_univ__2, ([3, 1, 2],), "unpack/2"),
+    ],
+)
+def test_non_atom_name_raises_type_error_naming_its_own_site(builtin, args, who):
+    """A09-F027: a non-atom functor is ``type_error(atom, Name)``, not a bogus
+    term — ``unpack(T, [3, 1, 2])`` once built ``Compound("3", (1, 2))``.  Each
+    site must name *itself* as the culprit."""
+    from clausal.logic.exceptions import LogicException
+
+    with pytest.raises(LogicException) as exc_info:
+        built_by(builtin, *args)
+    assert who in str(exc_info.value)
+    assert "atom" in str(exc_info.value)
