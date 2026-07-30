@@ -416,14 +416,21 @@ def _loaded_module_for(path):
     return None
 
 
-def _declared_arity(path, functor):
-    """Arity *functor* is exported at by the ``-module(...)`` line in *path*.
+def _declared_export_entry(path, functor):
+    """The ``-module(...)`` entry for *functor* in *path*, as declared.
 
-    ``False`` means the file was read and does not export the name; ``None``
-    means the question could not be answered (unreadable, unparseable, or
-    exported without an arity).  For an un-imported sibling this is all that
-    can be established without executing it, and executing a module to improve
-    an error message is not a trade this makes.
+    ``'cite/1'`` for ``-module(m, [cite(KEY)])`` and ``'art_9'`` for a bare atom
+    export; ``False`` means the file was read and does not export the name;
+    ``None`` means the question could not be answered (unreadable or
+    unparseable).  For an un-imported sibling this is all that can be
+    established without executing it, and executing a module to improve an
+    error message is not a trade this makes.
+
+    Split out of :func:`_declared_arity` so the undefined-name diagnostic can
+    ask the weaker question the todo specifies — *is the bare name in that
+    export list at all* — without having to re-derive "exported, but at an
+    arity I could not read" from a ``None`` that also means "I could not read
+    the file".
     """
     from clausal.import_hook import _extract_module_items
 
@@ -440,9 +447,22 @@ def _declared_arity(path, functor):
         return None
     for bare, rendered in entries:
         if bare == functor:
-            _, _, arity = rendered.partition("/")
-            return int(arity) if arity.isdigit() else None
+            return rendered
     return False
+
+
+def _declared_arity(path, functor):
+    """Arity *functor* is exported at by the ``-module(...)`` line in *path*.
+
+    ``False`` means the file was read and does not export the name; ``None``
+    means the question could not be answered (unreadable, unparseable, or
+    exported without an arity).
+    """
+    rendered = _declared_export_entry(path, functor)
+    if rendered is False or rendered is None:
+        return rendered
+    _, _, arity = rendered.partition("/")
+    return int(arity) if arity.isdigit() else None
 
 
 def _sibling_hits(functor, siblings, already):
@@ -628,3 +648,303 @@ def _describe(head, functor, arity, db, module_globals):
     lines.extend(_suggestion_line(functor, arity, here, builtin, hits, pool))
     lines.extend(_arrow(_remedy(functor, arity, label, here, builtin, hits)))
     return lines
+
+
+# ── an undefined bare name a sibling module exports ──────────────────────────
+#
+# The third fault this file answers, and the one with the worst measured
+# recovery rate.  A module in a decomposed-DAG package uses a predicate a
+# sibling exports and forgets to import it; the name is simply absent from the
+# compiled code's globals, so what the author sees is CPython's stock line::
+#
+#     NameError: name 'cite' is not defined
+#
+# The owner is fully decidable — it is in the sibling's ``-module(...)`` list,
+# in the same directory — and the message said nothing about it.  In a 24-run
+# local-model formalization study that message burned 16 attempts across 3 runs
+# and never recovered once, every retry byte-identical, because there was
+# nothing in it to act on.  Contrast the strict-atoms message for the exactly
+# analogous mistake on an *atom*, which lists all five declaration routes.
+# See ``todo/done/nameerror-does-not-name-the-sibling-that-exports-it.md``.
+#
+# The scan is the one already written above — ``_sibling_source_files`` plus
+# ``_declared_export_entry`` — and it runs only from an ``except NameError``.
+#
+# It stays silent unless a sibling *genuinely* declares the name.  A NameError
+# has many other causes (real Python code, a typo, a missing builtin, an
+# undeclared atom) and the todo is explicit that the no-sibling case is
+# undecidable and must keep today's message.
+
+
+class _Export:
+    """One sibling file's ``-module(...)`` entry for the missing name."""
+
+    __slots__ = ("module", "rendered", "path")
+
+    def __init__(self, module, rendered, path):
+        self.module = module      # dotted path to write in -import_from
+        self.rendered = rendered  # 'cite/1', or 'art_9' for a bare atom
+        self.path = path          # the sibling source file
+
+
+def _sibling_dotted(sibling, modname):
+    """The dotted path *sibling* is importable under, best-effort.
+
+    An already-loaded sibling knows its own ``__name__``, which is the only
+    fully reliable answer.  Otherwise the file stem is qualified with the
+    failing module's own package, because a decomposed-DAG package is exactly
+    the case where that holds: ``eu.mar.constants`` next to ``citations.clausal``
+    means ``eu.mar.citations``.
+    """
+    mod = _loaded_module_for(sibling)
+    loaded = getattr(mod, "__name__", None) if mod is not None else None
+    if isinstance(loaded, str) and loaded:
+        return loaded
+    stem = os.path.basename(sibling)
+    for suffix in _SOURCE_SUFFIXES:
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+    package = modname.rpartition(".")[0] if isinstance(modname, str) else ""
+    return f"{package}.{stem}" if package else stem
+
+
+def _exporting_sibling(name, path, modname):
+    """The sibling whose ``-module(...)`` list holds *name*, or ``None``.
+
+    Matching is on the bare name, per the todo: the arity is wanted for the
+    text (``cite(KEY)`` → ``cite/1``) but a name declared at all is enough to
+    decide that there is something to say.
+
+    **The cap is a deliberate silent decline here**, unlike the
+    predicate-not-found path, which reports ``total`` so the reader knows the
+    scan was bounded.  Past ``_MAX_SIBLING_FILES`` this returns ``None`` and the
+    stock ``NameError`` stands with nothing added.  The alternative — saying
+    "no exporter found, but only 60 of N siblings were scanned" — would have to
+    be attached to a *plain* ``NameError``, i.e. to every typo'd Python name in
+    a package that large, which buys a rare true positive at the cost of noise
+    on the common case.  The asymmetry is that the other diagnostic is already
+    being printed, so its cap note is free, while this one would have to
+    manufacture a message to carry it.  Recorded in
+    ``todo/done/nameerror-does-not-name-the-sibling-that-exports-it.md``.
+    """
+    siblings, _total = _sibling_source_files(path)
+    for sibling in siblings:
+        rendered = _declared_export_entry(sibling, name)
+        if rendered is False or rendered is None:
+            continue
+        dotted = _sibling_dotted(sibling, modname)
+        if dotted == modname:
+            continue  # the failing module itself, reached by another path
+        return _Export(dotted, rendered, sibling)
+    return None
+
+
+def _module_label(modname, path):
+    """What to call the module that used the name.
+
+    A dotted name is the author's own vocabulary for the file and is worth
+    printing.  An undotted one is not: modules loaded from a loose file get a
+    synthetic top-level name (``clausal.testing`` mints ``_clausal_test_<stem>``)
+    that appears nowhere in the source, so the file's own basename is both truer
+    and the thing the reader is looking at.
+    """
+    if isinstance(modname, str) and "." in modname:
+        return modname
+    return os.path.basename(path)
+
+
+def _rendered_import_names(entries):
+    """The import list as the author wrote it, or ``None`` if it cannot be.
+
+    ``None`` rather than a filtered list, because the remedy below reprints this
+    list as the line to *replace* the directive with: quietly dropping an entry
+    it could not render would tell the author to delete an import they need.
+    Aliases are spelled the way ``import_diagnostics._import_targets`` spells
+    them, so the two messages quote the same syntax back.
+    """
+    out = []
+    for entry in entries or ():
+        if isinstance(entry, str):
+            out.append(entry)
+        elif isinstance(entry, (tuple, list)) and len(entry) == 2:
+            out.append(f"alias({entry[0]}, {entry[1]})")
+        else:
+            return None
+    return out
+
+
+def _import_from_directives(path):
+    """``[(declared, resolved, [names])]`` for each ``-import_from`` in *path*.
+
+    Re-parses the source for the same reason the rest of this file does: the
+    directives are the author's own statement of what this file can see, and
+    they are not retained at runtime.
+    """
+    from clausal.import_hook import _extract_module_items
+    from clausal.pythonic_ast.nodes import ImportFromDirective
+    from clausal.templating.term_rewriting import _resolve_import_path
+
+    try:
+        with open(path, encoding="utf-8") as handle:
+            items = _extract_module_items(handle.read(), path)
+    except Exception:  # noqa: BLE001 - source may be gone or unparseable
+        return []
+
+    out = []
+    for item in items or ():
+        if not isinstance(item, ImportFromDirective):
+            continue
+        try:
+            resolved = _resolve_import_path(item.module)
+        except Exception:  # noqa: BLE001
+            resolved = item.module
+        names = _rendered_import_names(item.names)
+        if names is None:
+            continue
+        out.append((item.module, resolved, names))
+    return out
+
+
+def _import_remedy(name, export, path, label):
+    """The ``->`` block: extend the existing import, or write a new one.
+
+    Which of the two it is matters.  The reported failure had
+    ``-import_from(…citations, [mar_art_9])`` already in the file, so "add
+    ``-import_from(…citations, [cite])``" would have told the author to write a
+    second directive for a module they were already importing from.  Quoting
+    their own list back with one name added is unambiguous.
+    """
+    for declared, resolved, names in _import_from_directives(path):
+        if export.module not in (declared, resolved):
+            continue
+        if name in names:
+            # Already imported from the very module that exports it, and still
+            # undefined — so whatever went wrong, it is not a missing import.
+            # Falling through to the "write a new directive" form below would
+            # advise a duplicate of a directive the file already has.  Say
+            # nothing: the sentence above still names the exporter, which is
+            # the decidable part.
+            return []
+        extended = ", ".join([*names, name])
+        return _arrow([f"add `{name}` to this file's existing import:"]) + [
+            f"{_INDENT}    -import_from({declared}, [{extended}])"
+        ]
+    return _arrow([f"add the import to {label}:"]) + [
+        f"{_INDENT}    -import_from({export.module}, [{name}])"
+    ]
+
+
+def _undefined_name_lines(name, modname, path):
+    """The hint block for an undefined *name*, or ``[]`` when there is none.
+
+    ``[]`` is the whole no-misattribution rule: unless a sibling in the same
+    directory declares the name in its ``-module(...)`` list, this says nothing
+    and the stock message stands.
+    """
+    if not name or not isinstance(path, str) or not path.endswith(_SOURCE_SUFFIXES):
+        return []
+    export = _exporting_sibling(name, path, modname)
+    if export is None:
+        return []
+    label = _module_label(modname, path)
+    lines = _sentence(f"`{name}` is neither defined nor imported in {label}.")
+    lines.extend(_sentence(f"{export.rendered} IS exported by a sibling module "
+                           f"in the same package:"))
+    lines.append(f"{_INDENT}    {export.module}")
+    lines.extend(_import_remedy(name, export, path, label))
+    return lines
+
+
+class UndefinedNameError(NameError):
+    """``NameError`` that also names the sibling module exporting the name.
+
+    ``args`` is CPython's own, byte for byte, and the hint is rendered in
+    ``__str__`` alone — the same discipline as the ``is``/``==`` note in
+    ``clausal.logic.exceptions``.  A ``catch/3`` that swallows this converts it
+    with ``python_error_term``, which reads ``str(exc)``… so the guarantee that
+    matters here is the weaker, sufficient one: ``args`` and ``repr`` stay
+    clean, and the class stays inside ``NameError`` so every existing handler
+    keeps working.
+
+    The hint lines are computed once, by the caller that decided this class was
+    warranted, and handed in.  ``enrich_undefined_name`` has to compute them
+    anyway to decide whether there is anything worth saying, so recomputing
+    here would scan the package directory a second time — and again on every
+    later render, of which there is at least one more whenever ``catch/3``
+    converts the exception through ``python_error_term``.  ``__str__`` still
+    computes them when it was handed none, so an instance built directly is not
+    silently hintless.
+    """
+
+    def __init__(self, *args, name=None, module_name=None, module_file=None,
+                 hint_lines=None):
+        super().__init__(*args, name=name)
+        self.module_name = module_name
+        self.module_file = module_file
+        self.hint_lines = hint_lines
+
+    def __str__(self):  # noqa: D105
+        message = super().__str__()
+        extra = self.hint_lines
+        if extra is None:
+            try:
+                extra = _undefined_name_lines(self.name, self.module_name,
+                                              self.module_file)
+            except Exception:  # noqa: BLE001 - a hint may not out-fail its error
+                return message
+        return "\n".join([message, *extra]) if extra else message
+
+
+def _clausal_frame_of(exc):
+    """``(module name, file)`` of the innermost Clausal frame in *exc*'s
+    traceback, or ``(None, None)``.
+
+    Compiled predicates carry their defining module's ``__name__`` and
+    ``__file__`` in their globals, so the frame that raised is enough to say
+    *which* module used the name — no caller has to pass it in, which is what
+    lets one helper serve both the load-time and the solve-time seam.
+
+    Innermost first, and only a ``.clausal``/``.pl`` frame counts: a NameError
+    from ordinary Python code sitting in the same package must not be
+    attributed to a Clausal module further up the stack.
+    """
+    frames = []
+    tb = exc.__traceback__
+    while tb is not None:
+        frames.append(tb.tb_frame)
+        tb = tb.tb_next
+    for frame in reversed(frames):
+        try:
+            namespace = frame.f_globals
+            path = namespace.get("__file__")
+            modname = namespace.get("__name__")
+        except Exception:  # noqa: BLE001
+            continue
+        if isinstance(path, str) and path.endswith(_SOURCE_SUFFIXES):
+            return (modname if isinstance(modname, str) else None), path
+    return None, None
+
+
+def enrich_undefined_name(exc):
+    """A replacement for *exc* that names the exporting sibling, or ``None``.
+
+    ``None`` means "there is nothing decidable to add" and the seam re-raises
+    the original untouched.  Never raises: a diagnostic that fails must not
+    replace one failure with a different one.
+    """
+    if isinstance(exc, UndefinedNameError):
+        return None
+    try:
+        name = getattr(exc, "name", None)
+        if not isinstance(name, str) or not name:
+            return None
+        modname, path = _clausal_frame_of(exc)
+        if path is None:
+            return None
+        lines = _undefined_name_lines(name, modname, path)
+        if not lines:
+            return None
+        return UndefinedNameError(*exc.args, name=name, module_name=modname,
+                                  module_file=path, hint_lines=lines)
+    except Exception:  # noqa: BLE001 - see docstring
+        return None

@@ -133,10 +133,17 @@ class _DbDispatchAdapter:
         return fn
 
     def __call__(self, *args, **kwargs):
+        # ``name=`` is what lets the undefined-name diagnostic reach this.  One
+        # mistake — a sibling's predicate used without importing it — arrives as
+        # this sentence when the compiler saw the name as a call target and as
+        # CPython's bare ``name 'cite' is not defined`` when it did not, and
+        # both should name the module that exports it.  ``enrich_undefined_name``
+        # keys on ``exc.name``, which CPython sets only for its own raises.
         raise NameError(
             f"Predicate '{self._functor}/{self._arity}' is not in scope as a term class.\n"
             f"To construct a '{self._functor}' goal term, import it first, e.g.:\n"
-            f"  from your_module import {self._functor}"
+            f"  from your_module import {self._functor}",
+            name=self._functor,
         )
 
 

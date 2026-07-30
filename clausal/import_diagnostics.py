@@ -616,9 +616,26 @@ def enrich_import_error(exc, module_items, importer_file=None):
 
 def exec_with_import_diagnostics(code, module_dict, module_items,
                                  importer_file=None):
-    """``exec(code, module_dict)`` with import failures made actionable."""
+    """``exec(code, module_dict)`` with import failures made actionable.
+
+    Also the load-time half of the undefined-name diagnostic.  A name a sibling
+    exports and this file forgot to import surfaces here when the module body
+    itself evaluates it (``REF = cite(art_9)`` at module scope), and at
+    :func:`clausal.logic.solve._drive_trampoline` when a goal does — two seams,
+    because the module body and the compiled predicates are executed at
+    different times, and one helper, because both recover the module from the
+    raising frame rather than from their caller.
+    """
     try:
         exec(code, module_dict)
+    except NameError as exc:
+        from clausal.predicate_diagnostics import (  # noqa: PLC0415
+            enrich_undefined_name,
+        )
+        better = enrich_undefined_name(exc)
+        if better is None:
+            raise
+        raise better.with_traceback(exc.__traceback__) from None
     except ImportError as exc:
         better = enrich_import_error(exc, module_items, importer_file)
         if better is None:
