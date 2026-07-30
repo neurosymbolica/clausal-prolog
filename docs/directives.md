@@ -196,6 +196,20 @@ Without `-table`, `path/2` would loop forever on the cycle `1→2→3→1`. With
 tabling, it terminates and returns all reachable pairs. Also required for
 [Well-Founded Semantics](wfs.md).
 
+**`-table` only tables predicates the declaring module compiles.** Tabling is a
+property of the dispatch function, and that function belongs to the module the
+clauses live in. So a `-table` this module cannot honour is a load error rather
+than a directive that quietly does nothing: writing `-table(path/2)` in a module
+that merely `-import_from`s `path/2` fails at load and tells you to move the
+directive into the defining module, and so does `-table` on a `-specialize`
+alias, which is compiled against a database of its own. A clause-less target
+fails too, with one exception: a `-dynamic` predicate, which this module does
+compile and whose clauses arrive later.
+
+Tabling survives runtime clause changes. `assertz`/`asserta`/`retract` on a
+tabled `-dynamic` predicate recompile it *and* re-establish tabling, discarding
+the cached answers the old clause set produced.
+
 See [Tabling](tabling.md) for details.
 
 ### -discontiguous

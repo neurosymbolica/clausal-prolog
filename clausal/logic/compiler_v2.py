@@ -239,16 +239,20 @@ def compile_module(
             )
 
     # ── Step 6: Wrap tabled predicates ───────────────────────────────────
+    #    Step 5 already installed the wrapper (``compiler._install`` is the
+    #    choke point that also survives an assertz-driven recompile), so this
+    #    pass is idempotent belt-and-braces for any compile path that installs
+    #    a dispatch some other way.
     for (functor, arity), pred_cls in pending.items():
         if db.is_tabled(functor, arity):
-            from clausal.logic.tabling import make_tabled_wrapper_trampoline
+            from clausal.logic.tabling import ensure_tabled_wrapper
             original_fn = (
                 pred_cls._get_dispatch() if pred_cls is not None
                 else db.get_dispatch(functor, arity)
             )
-            wrapped = make_tabled_wrapper_trampoline(
-                original_fn, functor, arity, db.table_store,
-            )
+            wrapped = ensure_tabled_wrapper(db, functor, arity, original_fn)
+            if wrapped is original_fn:
+                continue
             if pred_cls is not None:
                 pred_cls._dispatch_fn = wrapped
             db.set_dispatch(functor, arity, wrapped)
@@ -403,13 +407,36 @@ def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) 
     forward declaration stays legal. ``-dynamic`` is exempt — it mints its own
     empty predicate (A12-F005) and a clause-less dynamic predicate is legit
     ISO. A target that is a defined PredicateMeta class (e.g. an imported or
-    -private-declared predicate) also counts as defined."""
+    -private-declared predicate) also counts as defined.
+
+    ``-table`` is held to a stricter standard than its two siblings, because
+    unlike them it is not a property of *this* module's view of the predicate
+    but of the dispatch function the predicate's own module compiled.  Step 6
+    wraps the predicates this module compiled; a target this module did not
+    compile is marked tabled in this module's database and then never wrapped
+    anywhere — the author asked for memoisation and termination and got neither,
+    with no diagnostic at all.  So a ``-table`` target must be a predicate this
+    module compiles: one with clauses here, or a ``-dynamic`` one that will get
+    them.  See ``todo/done/
+    tabling-lifecycle-gaps-rewrap-and-cross-module-table.md`` for why wrapping
+    the foreign class from here instead was rejected (it is a shared object: the
+    defining module and every other importer would get tabling they did not ask
+    for, keyed into this module's table store)."""
     _checked = ("table", "discontiguous", "shallow")
+    _specialize_aliases = {
+        item.new_name for item in module_items
+        if isinstance(item, SpecializeItem)
+    }
     for item in module_items:
         if not isinstance(item, DirectiveItem) or item.name not in _checked:
             continue
         for functor, arity in item.specs:
             if db.clauses_for(functor, arity):
+                continue
+            if item.name == "table":
+                _refuse_untablable_target(
+                    functor, arity, db, module_dict, _specialize_aliases,
+                )
                 continue
             cls = module_dict.get(functor)
             if isinstance(cls, PredicateMeta) and len(cls._fields) == arity:
@@ -421,6 +448,63 @@ def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) 
                 f"-{item.name}({functor}/{arity}): target predicate "
                 f"{functor}/{arity} is not defined in this module{hint}"
             )
+
+
+def _refuse_untablable_target(
+    functor: str,
+    arity: int,
+    db: Any,
+    module_dict: dict,
+    specialize_aliases: set,
+) -> None:
+    """Raise unless ``-table(functor/arity)`` can actually be honoured.
+
+    Reached only for a target with no clauses in this module's database.  A
+    ``-dynamic`` target is fine — it compiles here (to the always-fail
+    trampoline if nothing is asserted yet) and gets wrapped like any other.
+    Everything else is a directive this pipeline cannot honour, and the three
+    shapes it comes in want three different remedies, so name the shape."""
+    if db.is_dynamic(functor, arity):
+        return
+
+    cls = module_dict.get(functor)
+    is_pred = isinstance(cls, PredicateMeta) and len(cls._fields) == arity
+
+    if functor in specialize_aliases:
+        raise SyntaxError(
+            f"-table({functor}/{arity}): {functor} is a -specialize alias, and "
+            f"-specialize compiles it against a database of its own that no "
+            f"-table directive reaches — the directive would have no effect.  "
+            f"Table the meta-interpreter or the object predicate instead, or "
+            f"drop the directive."
+        )
+
+    if is_pred and cls._clauses:
+        origin = getattr(cls, "__module__", None)
+        where = f" (defined in {origin})" if origin else ""
+        raise SyntaxError(
+            f"-table({functor}/{arity}): {functor}/{arity} is defined in "
+            f"another module{where}, and -table only tables the dispatch "
+            f"function compiled by the module that declares it — the directive "
+            f"would have no effect here.  Move -table({functor}/{arity}) into "
+            f"the module that defines {functor}/{arity}."
+        )
+
+    if is_pred:
+        raise SyntaxError(
+            f"-table({functor}/{arity}): {functor}/{arity} is declared but has "
+            f"no clauses in this module, so there is nothing to table.  Give it "
+            f"clauses here, or declare -dynamic({functor}/{arity}) if the "
+            f"clauses arrive at runtime."
+        )
+
+    near = sorted({a for (f, a) in db._clauses if f == functor})
+    hint = (f"; predicate {functor} is defined at arity/arities {near}"
+            if near else f"; predicate {functor} is never defined")
+    raise SyntaxError(
+        f"-table({functor}/{arity}): target predicate {functor}/{arity} is "
+        f"not defined in this module{hint}"
+    )
 
 
 def _process_directives(module_items: list, db: Any) -> None:

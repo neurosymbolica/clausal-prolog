@@ -708,8 +708,7 @@ def compile_predicate_trampoline(
 
     if not clauses:
         fn = _compile_always_fail_trampoline(functor, arity)
-        _install(db, functor, arity, fn, pred_cls=pred_cls)
-        return fn
+        return _install(db, functor, arity, fn, pred_cls=pred_cls)
 
     base_globals: dict = {
         # Seed with the injected runtime builtins so every name term_to_ast_expr
@@ -1215,8 +1214,13 @@ def compile_predicate_trampoline(
             body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
         )
 
-    _install(db, functor, arity, fn, lazy_recompile=_recompile_trampoline, pred_cls=pred_cls)
-    return fn
+    # The installed function, not ``fn``: for a tabled predicate ``_install``
+    # returns the SLG wrapper, and ``_recompile_trampoline``'s return value is
+    # what ``_get_dispatch``/``db.get_dispatch`` put back on the class.
+    return _install(
+        db, functor, arity, fn,
+        lazy_recompile=_recompile_trampoline, pred_cls=pred_cls,
+    )
 
 
 def compile_predicate_trampoline_ast(
@@ -1827,7 +1831,7 @@ def _install(
     fn: Callable,
     lazy_recompile: Callable | None = None,
     pred_cls: PredicateMeta | None = None,
-) -> None:
+) -> Callable:
     """Install fn as the compiled dispatch function.
 
     If ``db`` is provided, stores the dispatch fn via ``db.set_dispatch()``
@@ -1835,11 +1839,42 @@ def _install(
 
     If ``pred_cls`` is a PredicateMeta class, installs fn and lazy_recompile
     directly on the class so that ``pred_cls._get_dispatch()`` works.
+
+    A ``-table``d predicate is installed *wrapped*, never raw.  This is the
+    single choke point every recompile funnels through —
+    ``assertz``/``asserta``/``retract`` in ``builtins/database_ops.py``, and the
+    lazy recompile that ``_get_dispatch``/``db.get_dispatch`` trigger after
+    those cleared the dispatch — and before this wrap lived here, each of them
+    replaced the SLG wrapper with the raw compiled function.  A tabled
+    predicate then lost answer dedup, and a *left-recursive* one lost
+    termination outright: a program that answered before an ``assertz`` looped
+    forever after it.  Load-time wrapping (import_hook / compiler_v2 step 6)
+    still happens and is now a no-op, because ``ensure_tabled_wrapper`` is
+    idempotent.
+
+    ``fn`` is returned so that callers whose own return value feeds
+    ``_dispatch_fn`` (the ``_recompile_*`` closures) propagate the wrapper
+    rather than the raw function they compiled.
     """
+    from clausal.logic.tabling import ensure_tabled_wrapper  # noqa: PLC0415
+    wrapped = ensure_tabled_wrapper(db, functor, arity, fn)
+    if wrapped is not fn:
+        # Installing a freshly compiled dispatch for a tabled predicate means
+        # the clause set its cached answers were derived from is gone, so the
+        # table is stale by construction.  ``Database.assertz``/``retract``
+        # abolish it themselves, but the ``retract/1`` builtin deletes straight
+        # out of ``db._clauses`` and never calls them, and
+        # ``PredicateMeta._assertz``/``_retract`` only clear the dispatch — both
+        # then recompile through here.  Before the wrapper survived a recompile
+        # this went unnoticed: the raw dispatch consulted no table, so a stale
+        # entry could not be read back.
+        db.abolish_table(functor, arity)
+        fn = wrapped
     if db is not None:
         db.set_dispatch(functor, arity, fn, lazy_recompile=lazy_recompile)
     if pred_cls is not None and isinstance(pred_cls, PredicateMeta):
         pred_cls._dispatch_fn = fn
         if lazy_recompile is not None:
             pred_cls._lazy_recompile = lazy_recompile
+    return fn
 

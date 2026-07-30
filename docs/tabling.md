@@ -208,14 +208,13 @@ The builtins `abolish_table/2` and `abolish_all_tables/0` are also available fro
 
 The `-table(pred/arity)` directive is parsed by the [import hook](import.md) alongside `-dynamic` and `-discontiguous`. It calls `db.mark_tabled(functor, arity)`, which records the predicate in `Database._tabled`.
 
+The target must be a predicate the declaring module compiles — one with clauses there, or a `-dynamic` one that will get them. `-table` on an imported predicate, on a `-specialize` alias, or on a clause-less declaration is refused at load by `compiler_v2._refuse_untablable_target`, because marking `Database._tabled` in a module that never compiles the predicate wraps nothing at all.
+
 ### Compilation pipeline
 
-Tabling wrapping happens in `_compile_all_pending` (the deferred compilation entry point):
+Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` in `compiler._install` — the one place a compiled dispatch function is installed, reached by module load and by every runtime recompile alike. `ensure_tabled_wrapper` makes it idempotent, so the load-time second pass (`compiler_v2` step 6 / `_compile_all_pending`) does not stack a second wrapper on the first.
 
-1. All predicates are compiled first (in trampoline mode).
-2. In a second pass, tabled predicates are wrapped with `make_tabled_wrapper_trampoline`.
-
-The two-pass approach ensures all cross-predicate references resolve before wrapping. This is important because the tabling wrapper captures the original dispatch function — if predicate `A` calls predicate `B`, `B`'s dispatch must be installed before `A`'s wrapper captures it.
+Installing there is what makes tabling survive `assertz`/`asserta`/`retract`: those recompile the predicate, and a recompile that installed the raw dispatch would silently drop memoisation — and, for a left-recursive predicate, termination with it.
 
 ### Table store
 
@@ -229,6 +228,8 @@ when `assertz`, `asserta`, or `retract` modify a tabled predicate's clauses, the
 if self.is_tabled(functor, arity):
     self.abolish_table(functor, arity)
 ```
+
+`compiler._install` abolishes as well, when it re-establishes the wrapper on a recompile. That covers the mutation paths that never call `Database.assertz`/`retract` — the `retract/1` builtin deletes straight out of `db._clauses`, and `PredicateMeta._assertz`/`_retract` only clear the dispatch — all of which recompile through `_install`.
 
 ---
 

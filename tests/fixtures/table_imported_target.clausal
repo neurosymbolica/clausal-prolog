@@ -1,0 +1,9 @@
+# clausal: no-collect
+# This file is SUPPOSED to fail at load — the collector must not try.
+# -table naming an IMPORTED predicate.  The importer cannot table a dispatch
+# function another module compiled, so this must be refused at load rather than
+# marked tabled and silently left unwrapped.
+-import_from(tests.fixtures.importable_utils, [Double])
+-table(Double/2)
+
+UsesDouble(X, Y) <- Double(X, Y)

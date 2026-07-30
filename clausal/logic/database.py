@@ -208,7 +208,15 @@ class Database:
             lazy = self._lazy_recompile.get(key)
             if lazy is not None:
                 fn = lazy()
-                self._dispatch[key] = fn
+                # The recompile installs through ``compiler._install``, which is
+                # where a ``-table``d predicate is re-wrapped in its SLG
+                # wrapper.  Prefer what it stored over the function it returned
+                # — see ``PredicateMeta._get_dispatch`` for the same reason.
+                installed = self._dispatch.get(key)
+                if installed is not None:
+                    fn = installed
+                else:
+                    self._dispatch[key] = fn
         if fn is not None:
             return fn
         from clausal.logic.builtins import get_builtin_dispatch  # noqa: PLC0415
