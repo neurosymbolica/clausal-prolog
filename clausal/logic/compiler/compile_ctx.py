@@ -90,7 +90,7 @@ if TYPE_CHECKING:
 
 
 _ALL_OPTIMISATIONS: frozenset[str] = frozenset(
-    {"tro", "destructive_reuse", "call_site", "continuation_tco"}
+    {"tro", "destructive_reuse", "call_site", "continuation_tco", "const_set"}
 )
 
 
@@ -98,10 +98,9 @@ def _default_enabled_optimisations() -> frozenset[str]:
     """Default enabled-optimisations set for new ``CompilationContext``s.
 
     Honours the ``CLAUSAL_DISABLE_OPT`` env var (comma-separated subset
-    of {``tro``, ``destructive_reuse``, ``call_site``}) so the
-    per-optimisation test sweep can run the full suite under each
-    individual disable without per-test plumbing.  Unknown names are
-    silently ignored.
+    of :data:`_ALL_OPTIMISATIONS`) so the per-optimisation test sweep can
+    run the full suite under each individual disable without per-test
+    plumbing.  Unknown names are silently ignored.
     """
     import os
     raw = os.environ.get("CLAUSAL_DISABLE_OPT", "")

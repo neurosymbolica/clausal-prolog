@@ -23,7 +23,7 @@ def test_default_enabled_optimisations_all_three(monkeypatch):
     from clausal.logic.compiler.compile_ctx import CompilationContext
     ctx = CompilationContext(db=None, var_context={}, trail_name="trail")
     assert ctx.enabled_optimisations == frozenset(
-        {"tro", "destructive_reuse", "call_site", "continuation_tco"}
+        {"tro", "destructive_reuse", "call_site", "continuation_tco", "const_set"}
     )
 
 
