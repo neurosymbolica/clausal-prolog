@@ -17,7 +17,76 @@ from __future__ import annotations
 
 from typing import Any
 
-from clausal.terms import Compound
+from clausal.terms import Add, Compound, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub
+
+# ── The is/== hint ────────────────────────────────────────────────────────────
+#
+# `is/2` unifies, so ``R is 10000 // 4`` binds R to the *term* ``FloorDiv(10000,
+# 4)``; ``==`` is the operator that evaluates.  That is deliberate, but `is` is
+# spelled like Prolog's arithmetic-evaluation operator, so the term is written
+# by accident and only surfaces later, where a number was required — as
+# ``type_error(number, FloorDiv(...))``.  The culprit is in hand there, so say
+# what it is.
+
+#: The nodes ``==`` evaluates and ``is`` does not.  ``UnaryPlus`` is absent on
+#: purpose: ``++X`` is this language's Python-interop marker, not arithmetic
+#: (``DAYS is ++DELTA.days`` in clausify's deadline_lib is correct code).
+ARITH_OPERATOR_TERMS = (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)
+
+#: Expected-types that mean "a number was required here".  ``evaluable`` is
+#: excluded because its two raise sites in clpfd let arithmetic terms through
+#: by construction, so it can never carry one as its culprit.
+_NUMERIC_EXPECTATIONS = frozenset({"number", "integer"})
+
+#: The half-sentence that turns the fact into an actionable one.  It states what
+#: the two operators do — true whoever built the term, which matters because the
+#: culprit need not have come from an `is` at all.
+IS_VS_EQ_HINT = (
+    "`is` unifies without evaluating: `X is <expr>` binds X to the term, "
+    "`X == <expr>` binds X to its value"
+)
+
+
+def is_arith_operator_term(value: Any) -> bool:
+    """True when *value* is an arithmetic operator term rather than a number."""
+    return isinstance(value, ARITH_OPERATOR_TERMS)
+
+
+def render_arith_operator_term(value: Any) -> str:
+    """*value* in surface syntax (``10000 // 4``), or its repr if that fails.
+
+    ``BinOp.__str__`` already spells the operator; the fallback exists because a
+    diagnostic must not be able to raise on top of the error it is explaining.
+    """
+    try:
+        return str(value)
+    except Exception:  # noqa: BLE001 - a hint may not out-fail its own error
+        return repr(value)
+
+
+def arith_in_numeric_position_hint(term: Any) -> str | None:
+    """The is/== note for ``error(type_error(number, <arith term>), _)``, else None.
+
+    Reads only the term already carried by the exception — there is no record of
+    which goal built the culprit, and none is needed: that it is an unevaluated
+    operator term where a number was required is a structural fact.
+    """
+    if not (isinstance(term, Compound) and term.functor == "error"
+            and len(term.args) == 2):
+        return None
+    inner = term.args[0]
+    if not (isinstance(inner, Compound) and inner.functor == "type_error"
+            and len(inner.args) == 2):
+        return None
+    expected, culprit = inner.args
+    # ``expected`` is a str at every raise site, but an unhashable one thrown
+    # from .clausal would make the set membership itself raise.
+    if not isinstance(expected, str) or expected not in _NUMERIC_EXPECTATIONS:
+        return None
+    if not is_arith_operator_term(culprit):
+        return None
+    return (f"`{render_arith_operator_term(culprit)}` is an unevaluated "
+            f"arithmetic term, not a number. {IS_VS_EQ_HINT}")
 
 
 class LogicException(Exception):
@@ -26,6 +95,26 @@ class LogicException(Exception):
     def __init__(self, term: Any) -> None:
         self.term = term
         super().__init__(f"Uncaught logic exception: {term!r}")
+
+    def __str__(self) -> str:
+        """The stored message, plus the is/== note when the term earns it.
+
+        Computed here rather than in ``__init__`` so that a LogicException a
+        ``catch/3`` swallows — the common case, since these terms are control
+        flow — pays nothing for a note nobody reads.  ``args[0]`` is left alone
+        so the note cannot leak into a caught term via ``python_error_term``
+        (``catch/3`` reads ``.term`` for a LogicException and only falls back to
+        ``python_error_term`` for a stray Python exception).
+
+        A ``__str__`` that can raise loses every traceback that touches it, so
+        the hint is contained: no note is strictly better than no message.
+        """
+        message = super().__str__()
+        try:
+            note = arith_in_numeric_position_hint(self.term)
+        except Exception:  # noqa: BLE001 - see the docstring
+            return message
+        return f"{message}\nnote: {note}" if note else message
 
 
 def python_error_term(exc: Exception) -> Compound:
