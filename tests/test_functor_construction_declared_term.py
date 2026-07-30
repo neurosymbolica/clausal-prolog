@@ -29,7 +29,7 @@ does today.
 import pytest
 
 from clausal.logic.builtins.inspection import _functor__3, _univ__2
-from clausal.logic.predicate import make_predicate
+from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import Compound
 
@@ -112,6 +112,20 @@ def test_arity_zero_still_yields_the_name_itself():
     round-trip property for atomic constants."""
     atom = make_predicate("tfcdt_zed", [])
     assert built_by(_functor__3, atom, 0) is atom
+
+
+def test_metaclass_minted_class_also_rebuilds():
+    """The fixtures above use ``make_predicate``, but an in-file predicate is
+    minted as a generated ``class <functor>(metaclass=PredicateMeta)`` block
+    (``_make_functor_class_ast``) — the route real ``.clausal`` source takes.
+    The gate reads ``_fields``, which both origins carry, so cover the one the
+    corpus actually uses."""
+    class tfcdt_minted(metaclass=PredicateMeta):
+        _fields = ("key",)
+
+    built = built_by(_functor__3, tfcdt_minted, 1)
+    assert isinstance(built, tfcdt_minted)
+    assert unify(built, tfcdt_minted(Var()), Trail())
 
 
 # ── the round trip ─────────────────────────────────────────────────────────

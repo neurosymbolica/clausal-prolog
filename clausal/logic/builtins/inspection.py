@@ -202,11 +202,13 @@ def _construct_named(name_val, args, who: str):
     kit's ``functor(PROBE, KEY, 1)`` over an arity-0 schema atom working.
     """
     if isinstance(name_val, PredicateMeta):
-        # ``_fields`` is the constructor's arity by construction: every
-        # PredicateMeta comes from ``make_predicate`` (the sole factory), whose
-        # generated ``__init__`` rejects a mismatched count with
-        # ClausalTermConstructionError.  Gating on it therefore cannot hand
-        # ``name_val(*args)`` the wrong number of arguments.
+        # ``_fields`` is the field list whatever minted the class — a generated
+        # ``class <functor>(metaclass=PredicateMeta)`` block (the usual route
+        # for an in-file predicate, see ``_make_functor_class_ast``) or
+        # ``make_predicate``.  ``PredicateMeta.__call__`` fills missing trailing
+        # fields with fresh Vars and rejects only *overflow*, so it is this
+        # exact-match gate, not the constructor, that makes ``name_val(*args)``
+        # bind every field positionally with nothing left over.
         if len(name_val._fields) == len(args):
             return name_val(*args)
         # Arity disagrees → not this class; fall through to a generic Compound.
