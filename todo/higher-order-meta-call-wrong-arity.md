@@ -28,20 +28,36 @@ mention of arity.  `maplist(citation, L)` calls `citation` with one argument;
 
 ## Why the sibling fix does not cover it
 
-The fix routes every wrong-arity call through
-`PredicateMeta._get_dispatch(arity)`, which needs the caller to say how many
+The fix routes every wrong-arity call through `_dispatch_at(callee, arity)` (and
+so `PredicateMeta._get_dispatch(arity)`), which needs the caller to say how many
 arguments it will supply.  The compiled call sites pass it (the emitters know),
 and `call/N` passes it (`_make_call_goal_trampoline` knows `extra_n`).  The rest
 of the higher-order family calls the shared funnel
 `_registry._ensure_trampoline_dispatch(goal_val)` with no arity, so the check is
 skipped and the goal runs on into the old `TypeError`.
 
+## What is *not* left (this note used to be wrong)
+
+The first version of this todo said the remaining sites were "all in
+`clausal/logic/builtins/higher_order.py`".  They were not.  Two other runtime
+funnels resolved a goal without an arity, and unlike the higher-order family
+both knew theirs exactly, so both were fixed rather than filed:
+
+- `builtins/control.py::_goal_dispatch_and_args` (`time_goal/1,2`) — a bare name
+  is called with no arguments at all (arity 0); a term instance with one per
+  field.
+- `builtins/dcg.py` (`phrase/2`, `phrase/3`) — `len(user_args) + 2`, because
+  `phrase` supplies the difference-list pair itself, so a nonterminal's called
+  arity is never the arity written in the source.  See `_DCG_ARITY_NOTE` there
+  for why `len(fields)` is not the same expression.
+
 ## Requested fix
 
 `_ensure_trampoline_dispatch` already takes an optional `arity`.  There are
-17 remaining call sites, all in `clausal/logic/builtins/higher_order.py`, each
-of which knows its own effective arity — but not uniformly, which is why this
-was left out of the sibling fix rather than swept:
+16 remaining call sites (`grep -c '_ensure_trampoline_dispatch(' ` reports 17 in
+that file, one of which is `call/N` and already passes `extra_n`), each of which
+knows its own effective arity — but not uniformly, which is why this was left
+out of the sibling fix rather than swept:
 
 - `maplist/2..5` call the goal at `len(lists)`, i.e. arity − 1;
 - `foldl/4..6` at `len(lists) + 2` (element(s), accumulator in, accumulator out);

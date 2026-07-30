@@ -118,9 +118,7 @@ class _DbDispatchAdapter:
         self._functor = functor
         self._arity = arity
 
-    def _get_dispatch(self, arity: int | None = None):
-        # *arity* is accepted and ignored — this adapter was constructed for
-        # one call site and already holds that site's arity.
+    def _get_dispatch(self):
         fn = self._db.get_dispatch(self._functor, self._arity)
         if fn is None:
             # The candidate search runs HERE and nowhere else.  A successful

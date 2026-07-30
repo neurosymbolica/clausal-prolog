@@ -3,11 +3,29 @@
 from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var, unify
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import (
+    is_term_instance, term_field_names, _dispatch_at,
+)
 from clausal.logic.trampoline import DONE, StepGenerator
 
 from clausal.logic.builtins._registry import _trampoline_builtin
 from clausal.logic.runtime._seg_helpers import normalize_seg_input
+
+
+# ── _DCG_ARITY_NOTE ──────────────────────────────────────────────────────────
+#
+# ``phrase`` supplies the difference-list pair itself, so the arity it calls a
+# nonterminal at is never the arity written in the source: ``greeting//0``
+# translates to ``greeting/2`` and ``digit//1`` to ``digit/3``.  Both branches
+# below therefore pass ``len(user_args) + 2``, which is literally the number of
+# arguments the ``StepGenerator`` on the next line receives.
+#
+# ``len(fields)`` would look equivalent and is not: ``fields[:-2]`` truncates to
+# empty for a class of arity 0 or 1, so a ``phrase(foo, L)`` naming an untranslated
+# ``foo/1`` still supplies 2 arguments while ``len(fields)`` says 1.  Counting the
+# args actually built keeps the refusal's claim true in that case, which is the
+# case worth catching — it is exactly the "you named a plain predicate, not a
+# nonterminal" mistake.
 
 
 @_trampoline_builtin("phrase", 2)
@@ -30,14 +48,16 @@ def _phrase__2(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, t
 
     if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):
         # Class reference (0 extra args): phrase(greeting, [hello, world])
-        dispatch = rule_val._get_dispatch()
+        # A nonterminal's translated arity is its written arity plus S0 and S,
+        # so a bare name here is called at 2 — see _DCG_ARITY_NOTE.
+        dispatch = _dispatch_at(rule_val, 2)
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, list_val, [], trail)
     elif is_term_instance(rule_val):
         # Instance with args: phrase(digit(D_), [3, plus, 4])
         cls = type(rule_val)
-        dispatch = cls._get_dispatch()
         fields = term_field_names(rule_val)
         user_args = [deref(getattr(rule_val, f)) for f in fields[:-2]]
+        dispatch = _dispatch_at(cls, len(user_args) + 2)
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *user_args, list_val, [], trail)
     else:
         yield (_fail, DONE)
@@ -71,13 +91,13 @@ def _phrase__3(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, r
     rest_val = deref(rest_arg)
 
     if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):
-        dispatch = rule_val._get_dispatch()
+        dispatch = _dispatch_at(rule_val, 2)  # see _DCG_ARITY_NOTE
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, list_val, rest_val, trail)
     elif is_term_instance(rule_val):
         cls = type(rule_val)
-        dispatch = cls._get_dispatch()
         fields = term_field_names(rule_val)
         user_args = [deref(getattr(rule_val, f)) for f in fields[:-2]]
+        dispatch = _dispatch_at(cls, len(user_args) + 2)
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *user_args, list_val, rest_val, trail)
     else:
         yield (_fail, DONE)

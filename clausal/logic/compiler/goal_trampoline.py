@@ -393,7 +393,7 @@ def _dispatch_call_trampoline(
     direct_joint_bucket_ref: str | None = None,
     tail_position: bool = False,
 ) -> ast.expr:
-    """Generate: ``StepGenerator(fname._get_dispatch(), <proceed>, <fail>,
+    """Generate: ``StepGenerator($dispatch_at(fname, N), <proceed>, <fail>,
     <catcher>, arg0, …, trail)``.
 
     ``fname`` is resolved from the compiled function's globals.  Non-TCO
@@ -408,7 +408,7 @@ def _dispatch_call_trampoline(
 
     Phase 7: if the predicate is locked, emits ``_disp_fname_N`` (a
     pre-captured dispatch function in base_globals) instead of
-    ``fname._get_dispatch()``.
+    ``$dispatch_at(fname, N)``.
 
     Phase 10: if a statically-known argument matches an indexed
     position of the callee, emits a direct bucket-function reference
@@ -471,12 +471,14 @@ def _dispatch_call_trampoline(
     if dk in locked_keys:
         dispatch_expr: ast.expr = _name(dk)
     else:
-        # The arity is the call site's, not the callee's — see
-        # PredicateMeta._get_dispatch and
+        # The arity is the call site's, not the callee's — and it goes through
+        # $dispatch_at because ``fname`` may be a foreign single-argument
+        # ``_get_dispatch`` implementor.  See _dispatch_at in
+        # logic/predicate.py and
         # todo/arity-mismatch-reports-a-missing-trail-argument.md.
         dispatch_expr = ast.Call(
-            func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
-            args=[ast.Constant(value=arity)],
+            func=_name("$dispatch_at"),
+            args=[_name(fname), ast.Constant(value=arity)],
             keywords=[],
         )
     return _sg(dispatch_expr)

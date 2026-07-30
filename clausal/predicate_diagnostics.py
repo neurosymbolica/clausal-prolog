@@ -148,13 +148,27 @@ def _arguments(n):
 
 
 def _describe_mismatch(head, functor, called_arity, defined_arity, site):
+    """The site line and the remedy line under *head*.
+
+    The remedy does not say "define ``functor/called_arity`` as a predicate of
+    its own", which was the first wording and is advice the implementation
+    refuses to take: a second head of the same name at another arity in the same
+    file is padded with a wildcard and absorbed into the existing predicate
+    (``todo/same-name-two-arities-silently-merge.md``), so a reader who followed
+    it wrote the clause, watched it vanish, and got this same message again.
+    Renaming is the only remedy that works today, and the sentence says why so
+    the reader does not have to try the other one — see ``docs/predicates.md``.
+    """
     lines = [head]
     if isinstance(site, tuple) and len(site) == 2:
         lines.extend(_sentence(
             f"{functor}/{defined_arity} is defined at {site[0]}:{site[1]}."))
     lines.extend(_arrow([
-        f"pass {_arguments(defined_arity)} to {functor}, or define "
-        f"{functor}/{called_arity} as a predicate of its own."
+        f"pass {_arguments(defined_arity)} to {functor}, or give the "
+        f"{called_arity}-argument predicate a different name: a second "
+        f"{functor} head with {_arguments(called_arity)} in the same file does "
+        f"not define {functor}/{called_arity} — it is padded with a wildcard "
+        f"and absorbed into {functor}/{defined_arity}."
     ]))
     return lines
 

@@ -1,0 +1,8 @@
+# clausal: no-collect
+# Calls a foreign single-argument `_get_dispatch` implementor at its correct
+# arity.  The instance is not a PredicateMeta, so it is never locked and the
+# goal emitter always takes the runtime-resolve branch — the branch that the
+# arity-mismatch diagnostic passes an arity through.
+-import_from(tests.fixtures.foreign_dispatch_impl, [foreign_pair])
+
+fordisp_lookup(KEY, VALUE) <- foreign_pair(KEY, VALUE)

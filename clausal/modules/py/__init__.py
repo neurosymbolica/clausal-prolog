@@ -71,8 +71,7 @@ class ModulePredicate:
     def _register(self, arity: int, fn: Callable) -> None:
         self._dispatch_fns[arity] = fn
 
-    def _get_dispatch(self, arity: int | None = None) -> Callable:
-        # *arity* is accepted and ignored: _multi_dispatch already checks it.
+    def _get_dispatch(self) -> Callable:
         # Always route through the arity-checking dispatcher so wrong-arity is
         # a consistent, catchable error (F005) and stdlib exceptions raised by
         # the implementation are converted to catchable terms (F004). Compiled
