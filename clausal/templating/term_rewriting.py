@@ -345,6 +345,25 @@ def _is_logic_var_name(identifier: str) -> bool:
     return identifier.isupper()
 
 
+def _suggest_non_var_name(identifier: str) -> str:
+    """A spelling of *identifier* that ``_is_logic_var_name`` rejects.
+
+    Only used inside error messages, so "plausible" beats "canonical":
+    ``FOO`` -> ``Foo``, ``_foo`` -> ``foo``, ``F`` -> ``Fx`` (a single letter
+    title-cased is still all-caps).
+    """
+    stripped = identifier.lstrip("_")
+    if not stripped:
+        return "foo"
+    if identifier.startswith("_"):
+        candidate = stripped
+    else:
+        candidate = stripped[0] + stripped[1:].lower()
+    if _is_logic_var_name(candidate):
+        candidate = candidate + "x"
+    return candidate
+
+
 # ``P.key`` sugar recognition and expansion live in ``.desugar`` — the single,
 # syntax-only implementation the SMT prover shares.  Re-exported under the
 # module-private names this file has always used.
@@ -750,6 +769,14 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
 
     var_ref_asts = []
     for name in var_names:
+        # A thunk's captured free names are logic variables by the same rule
+        # ``visit_Name`` applies, but they never pass through it — the unit
+        # sugar ``FOO(Unit)`` and the f-string / ``++()`` paths mint their
+        # ``Var()``s here.  Record them in the same sink so that
+        # ``_check_var_shaped_predicate_names`` sees them: a body goal
+        # ``FOO(X)`` for a declared ``FOO/1`` lands in exactly this branch,
+        # silently reinterpreted as ``Quantity(FOO, X)``.
+        transformer._logic_var_refs.setdefault(name, getattr(node, "lineno", 0))
         if name not in transformer.seen_vars:
             transformer.seen_vars.add(name)
             var_ref_asts.append(replace(
@@ -788,8 +815,11 @@ class TermTransformer(NodeTransformer):
     """Transform a Python expression AST into Python AST that constructs simple_ast nodes."""
 
     def __init__(transformer, atoms=frozenset(), import_remap=None,
-                 source_lines=None, bare_atom_refs=None):
+                 source_lines=None, bare_atom_refs=None,
+                 logic_var_refs=None):
         transformer.seen_vars = set()
+        transformer._logic_var_refs = (
+            logic_var_refs if logic_var_refs is not None else {})
         transformer.atoms = atoms
         transformer._import_remap = import_remap or {}
         transformer._source_lines = source_lines
@@ -1165,6 +1195,7 @@ class TermTransformer(NodeTransformer):
             import_remap=transformer._import_remap,
             source_lines=transformer._source_lines,
             bare_atom_refs=transformer._bare_atom_refs,
+            logic_var_refs=transformer._logic_var_refs,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
 
@@ -1261,6 +1292,8 @@ class TermTransformer(NodeTransformer):
         # Examples (all-caps):   X, FOO, HEAD, TAIL, N1, MAX_OF.
         # Excluded: __, __init__ (dunder-style), MixedCase, lowercase.
         if _is_logic_var_name(identifier):
+            transformer._logic_var_refs.setdefault(
+                identifier, getattr(name, "lineno", 0))
             # Lambda param or outer-lambda param: generate LoadName term node
             # so the compiler maps it to a function arg (no Var allocation).
             if identifier in getattr(transformer, '_load_names', ()):
@@ -2818,6 +2851,9 @@ class EmbedTransformer(NodeTransformer):
         # ``compiler_v2._process_bare_atom_refs`` consumes for auto-minting
         # (Phase 2 of GLOBAL_ATOMS_DEFAULT.md).
         transformer._bare_atom_refs: set[str] = set()
+        # name -> lineno of the first place a TermTransformer read that name as
+        # a logic variable.  See _check_var_shaped_predicate_names.
+        transformer._logic_var_refs: dict[str, int] = {}
         # EDCG declarations: populated by -edcg_acc, -edcg_pass, -edcg_pred directives.
         transformer._edcg_accs: dict[str, dict] = {}   # name → {val, in_, out, joiner_ast}
         transformer._edcg_passes: set[str] = set()      # set of pass names
@@ -2906,6 +2942,72 @@ class EmbedTransformer(NodeTransformer):
             f"Use those names, or change the declaration to match."
         )
 
+    def _check_var_shaped_predicate_names(transformer):
+        """Reject a predicate whose name this file also reads as a variable.
+
+        ALL-CAPS and leading-underscore identifiers are logic VARIABLES in
+        Clausal (``_is_logic_var_name``).  Nothing stops such a name from also
+        being a clause-head functor — the head's functor position is not
+        routed through ``visit_Name`` — so ``P/2`` mints a class named ``P``
+        quite happily.  Every *other* position disagrees:
+
+            P(N, X) <- (N > 0, M is N - 1, P(M, X))
+            P(N, X) <- (X is N)
+
+        The body's ``P(M, X)`` is not a call to ``P/2``; ``visit_Name`` reads
+        ``P`` as a fresh logic variable, so the clause lowers to a meta-call on
+        an unbound ``Var`` AND the module-level walrus rebinds the global ``P``
+        from the class to that ``Var``.  The guarded class block of
+        ``_make_functor_class_ast`` deliberately leaves a non-``PredicateMeta``
+        binding alone, so the SECOND clause head then calls the variable:
+
+            TypeError: 'clausal.logic.variables.AttVar' object is not callable
+
+        — a message that names neither ``P`` nor the naming convention that
+        caused it.  Reverse the two clauses and there is no crash at all, just
+        a body goal that silently means something else.  See
+        ``todo/done/predicate-name-collides-with-unit-quantity-parser.md``.
+
+        The check is deliberately the INTERSECTION, not "no var-shaped functor
+        names".  Var-shaped heads that are never read as a variable in their
+        own file work today and are used as shorthand throughout this repo's
+        test snippets (``A(X) <- B(X)``, ``LP(X, Y, OBJ) <- …``); rejecting
+        those would be a rename campaign for no defect.  It also leaves the
+        ``VAR(Unit)`` quantity sugar (``eval_(N(Metre), D)``) untouched: ``N``
+        there is a variable, not a clause head, so the sets do not meet.
+        """
+        clashes = sorted(
+            set(transformer._seen_functors) & set(transformer._logic_var_refs)
+        )
+        if not clashes:
+            return
+        name = clashes[0]
+        head_lineno = transformer._functor_decl_site.get(name, (0, ""))[0]
+        var_lineno = transformer._logic_var_refs[name]
+        why = (
+            "a leading underscore marks a logic variable"
+            if name.startswith("_")
+            else "an ALL-CAPS name is a logic variable"
+        )
+        where = ""
+        for label, lineno in (("predicate:", head_lineno),
+                              ("read as a variable:", var_lineno)):
+            if not lineno:
+                continue
+            snippet = transformer._source_snippet(lineno)
+            where += (f"\n  {label} {transformer._site(lineno)}"
+                      + (f" — {snippet}" if snippet else ""))
+        raise SyntaxError(
+            f"predicate name {name!r} is also read as a logic variable in this "
+            f"file{where}\n"
+            f"In Clausal {why}, so {name!r} outside a clause head is a fresh "
+            f"Var, never a call to {name}. That makes {name}'s own clauses "
+            f"unable to refer to it and overwrites the module binding, which "
+            f"surfaces later as \"'AttVar' object is not callable\". Rename "
+            f"the predicate to a non-variable name "
+            f"(e.g. {_suggest_non_var_name(name)})."
+        )
+
     def _emit_head_positionally(transformer, functor_name, prev_fields):
         """True when this clause head must bind by POSITION, not by field name.
 
@@ -2984,7 +3086,7 @@ class EmbedTransformer(NodeTransformer):
 
     def _make_term_transformer(transformer, atoms=None):
         """Build a TermTransformer sharing this EmbedTransformer's
-        bare-atom collection sink and import-remap table.
+        bare-atom and logic-variable collection sinks and import-remap table.
 
         Centralised so every per-clause TermTransformer participates in the
         same Phase 2 (auto-mint) collection without each call site having
@@ -2995,6 +3097,7 @@ class EmbedTransformer(NodeTransformer):
             import_remap=transformer._import_remap,
             source_lines=transformer._source_lines,
             bare_atom_refs=transformer._bare_atom_refs,
+            logic_var_refs=transformer._logic_var_refs,
         )
 
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
@@ -3142,8 +3245,13 @@ class EmbedTransformer(NodeTransformer):
 
         The auto-mint pass in ``compiler_v2._process_bare_atom_refs`` reads
         this item and decides per-name whether to install the global atom.
+
+        This is also the first point at which the file's clause-head functors
+        and its logic-variable reads are both complete, so it is where
+        ``_check_var_shaped_predicate_names`` can compare them.
         """
         result = transformer.generic_visit(module)
+        transformer._check_var_shaped_predicate_names()
         if transformer._bare_atom_refs:
             transformer._module_items.append(
                 BareAtomRefsItem(names=frozenset(transformer._bare_atom_refs))
@@ -3839,6 +3947,22 @@ class EmbedTransformer(NodeTransformer):
             if isinstance(item, Name):
                 # Map local name → "module.path.Name" for dotted globals key
                 local_name = item.id
+                # Same unreachability as the ``alias(…)`` form below: a
+                # var-shaped local binding is read as a logic variable by
+                # ``visit_Name`` before the remap is ever consulted, so the
+                # import can never be called.  Unlike a var-shaped *local*
+                # clause head (which at least works head-only — see
+                # ``_check_var_shaped_predicate_names``), an imported name
+                # exists only to be called, so there is nothing to preserve.
+                if _is_logic_var_name(local_name):
+                    raise SyntaxError(
+                        f"-import_from name {local_name!r} is a logic-variable "
+                        f"name; a call to it is read as a variable, never as "
+                        f"{module_path}.{local_name}. Import it under a "
+                        f"non-variable alias: "
+                        f"alias({local_name}, "
+                        f"{_suggest_non_var_name(local_name)})"
+                    )
                 dotted_key = f"{module_path}.{local_name}"
                 transformer._import_remap[local_name] = dotted_key
                 transformer._imported_functors.add(local_name)
