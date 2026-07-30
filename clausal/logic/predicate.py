@@ -847,6 +847,33 @@ is_term_instance = _is_term_instance_py
 is_atom = _is_atom_py
 term_field_names = _term_field_names_py
 
+# Which ``PredicateMeta`` currently owns the accelerator's registration slot.
+#
+# ``_register_predicate_meta`` stores its argument in a single C ``static
+# PyObject *``, and ``is_term_instance`` answers ``isinstance(type(obj), <that
+# class>)``.  The slot is process-global and the extension uses single-phase
+# init, so its static state outlives ``del sys.modules["clausal..."]`` — a
+# second import of the package builds a second ``PredicateMeta`` and, if it
+# re-registers, silently steals the slot.  Terms already minted by the FIRST
+# copy then stop being terms: their metaclass is no longer the registered one,
+# so ``is_term_instance`` returns False for objects its own Python fallback
+# still accepts, and every caller mistakes a live functor instance for a
+# non-term.  That surfaced as ``head_key`` refusing a clause head it was
+# holding; see ``tests/test_second_package_copy_term_identity.py``.
+#
+# So the slot is claimed once and never stolen: first copy keeps the fast path,
+# later copies use the pure-Python implementations above, which close over
+# *their own* ``PredicateMeta`` and are therefore self-consistent.  Both copies
+# end up internally correct; only the later ones pay interpreter speed, which is
+# the right way round because the first copy is the one already holding live
+# terms.
+#
+# The record lives on ``sys`` because that is the only namespace guaranteed to
+# survive the ``sys.modules`` surgery that creates the second copy in the first
+# place.  It is not an extra leak: the C slot already holds a strong reference
+# to the same class.
+_C_SLOT_OWNER_ATTR = "_clausal_c_predicate_meta_owner"
+
 try:
     from clausal.logic.variables._variables import (
         _register_predicate_meta,
@@ -854,9 +881,89 @@ try:
         term_field_names,
         is_atom,
     )
-    _register_predicate_meta(PredicateMeta)
 except ImportError:
     pass
+else:
+    if getattr(sys, _C_SLOT_OWNER_ATTR, None) is None:
+        _register_predicate_meta(PredicateMeta)
+        setattr(sys, _C_SLOT_OWNER_ATTR, PredicateMeta)
+    else:
+        # Another copy of this package owns the slot. Keep the reference
+        # implementations rather than invalidating that copy's live terms.
+        is_term_instance = _is_term_instance_py
+        is_atom = _is_atom_py
+        term_field_names = _term_field_names_py
+
+
+def _class_origin(cls: type) -> str:
+    """Best-effort ``file:line`` for where *cls*'s methods were compiled.
+
+    Deliberately reads ``__code__`` off the class's own methods instead of
+    consulting ``sys.modules`` or ``cls.__module__``: the situation this exists
+    to describe is one where ``sys.modules`` has had its ``clausal`` entries
+    deleted, so the usual introspection resolves to the wrong copy or to nothing
+    at all.
+    """
+    for attr in ("__new__", "__init__"):
+        fn = cls.__dict__.get(attr)
+        fn = getattr(fn, "__func__", fn)
+        code = getattr(fn, "__code__", None)
+        if code is not None:
+            return f"{code.co_filename}:{code.co_firstlineno}"
+    return "<unknown source>"
+
+
+def describe_term_identity_mismatch(obj: Any) -> str:
+    """Explain a *foreign* functor instance, or return ``""``.
+
+    ``is_term_instance`` is nominal: it asks whether ``type(obj)`` is an
+    instance of *this* module's ``PredicateMeta``.  When two copies of the
+    ``clausal`` package are live in one process there are two unrelated
+    ``PredicateMeta`` classes, and a term minted by one copy is simply not a
+    term to the other — the object walks and quacks like a functor instance and
+    still fails every check.
+
+    Callers that are about to reject a term should append this to their error.
+    Without it the message is actively misleading: it says "expected a functor
+    dataclass instance" while holding one.  Returns ``""`` when *obj* is not a
+    functor instance at all, so the caller's own wording stands unaltered.
+
+    Never raises.  It runs on the way into someone else's ``raise``, where an
+    exception of its own would replace a usable error with a confusing one, and
+    it introspects objects minted by a *foreign* copy of the package whose
+    invariants this one cannot assume.
+    """
+    try:
+        return _describe_term_identity_mismatch(obj)
+    except Exception:  # noqa: BLE001 — a diagnostic must not upstage the fault
+        return ""
+
+
+def _describe_term_identity_mismatch(obj: Any) -> str:
+    cls = type(obj)
+    if isinstance(cls, PredicateMeta):
+        return ""  # recognised; nothing to explain
+    if not isinstance(getattr(cls, "_fields", None), tuple):
+        return ""  # not a functor class at all
+    foreign = type(cls)
+    mine = PredicateMeta
+    return (
+        f"\nThis head IS a functor instance, but of a class this copy of clausal "
+        f"does not recognise:\n"
+        f"  head class:     {cls.__name__}/{len(cls._fields)} "
+        f"declared in module {cls.__module__!r}\n"
+        f"  its metaclass:  {foreign.__module__}.{foreign.__qualname__} "
+        f"id=0x{id(foreign):x} defined at {_class_origin(foreign)}\n"
+        f"  this copy uses: {mine.__module__}.{mine.__qualname__} "
+        f"id=0x{id(mine):x} defined at {_class_origin(mine)}\n"
+        "Two distinct PredicateMeta class objects means two copies of the clausal "
+        "package are live in this process (note the source paths: identical paths "
+        "still mean two copies of the same file), and terms cannot cross between "
+        "them. The usual cause is deleting 'clausal*' from sys.modules and "
+        "re-importing, which leaves already-imported holders bound to the first "
+        "copy while new imports build a second. Fix the import surgery, not the "
+        "term: one clausal package per process.\n"
+    )
 
 
 # ── By-identity atom references from generated code ──────────────────────────
