@@ -145,3 +145,49 @@ class TestSymbolicDiffExampleEndToEnd:
         failed = [(r.name, str(r.error)) for r in results.results if not r.passed]
         assert failed == []
         assert len(results.results) == 10
+
+
+# ── the invariant the field filter rests on ──────────────────────────────────
+
+
+def test_no_term_type_hides_a_semantic_field_behind_compare_false():
+    """``compare=False`` must stay a synonym for "cosmetic metadata".
+
+    ``_matched_field_names`` drops ``compare=False`` fields from a head pattern
+    because runtime ``unify`` ignores them -- the custom ``__unify__`` methods
+    consult only comparable fields, and everything else falls back to the
+    dataclass ``==``, which is derived from them.  That equivalence is what
+    keeps the argument-indexed head-match path agreeing with the hoisted
+    ``Unify`` path.
+
+    It is an invariant, not a mechanism: a term type that shipped a
+    ``compare=False`` field its own ``__unify__`` *did* consult would be
+    silently dropped from the pattern, and the indexed path would then
+    over-match relative to ``unify`` -- wrong solutions, no error.  There are
+    ten ``__unify__`` implementations, so a comment on each would rot; this
+    fails instead, and points here.
+
+    If you are adding a genuinely cosmetic field, add its name below.  If you
+    are adding a semantic one, do not make it ``compare=False``.
+    """
+    import dataclasses
+
+    import clausal.pythonic_ast.nodes as nodes
+    import clausal.terms as terms
+
+    cosmetic = {"position", "_position"}
+    offenders = {}
+    for module in (terms, nodes):
+        for cls_name, obj in vars(module).items():
+            if not (isinstance(obj, type) and dataclasses.is_dataclass(obj)):
+                continue
+            for field in dataclasses.fields(obj):
+                if not field.compare and field.name not in cosmetic:
+                    offenders.setdefault(field.name, []).append(
+                        f"{module.__name__}.{cls_name}")
+
+    assert offenders == {}, (
+        "a term type carries a compare=False field that is not known-cosmetic; "
+        "if unify consults it, head_match._matched_field_names will drop it "
+        f"from the head pattern and the indexed path will over-match: {offenders}"
+    )
