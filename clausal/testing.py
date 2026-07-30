@@ -20,10 +20,12 @@ to collect and run .clausal tests as individual pytest items.
 Failure diagnostics
 -------------------
 A bare "test X failed" is close to no signal for an automated repair loop, so
-``run_file`` re-runs a *failing* test's clause body in a diagnostic mode (see
-:func:`diagnose_failure`) and reports which conjunct failed, its source text,
-the bindings established before it and — when the goal is a satisfiable
-predicate call that merely did not unify — the solution it *did* have.
+both runners — ``run_file`` for the CLI and the conftest plugin's
+``ClausalItem`` for pytest — re-run a *failing* test's clause body in a
+diagnostic mode (see :func:`diagnose_failure`) and report which conjunct
+failed, its source text, the bindings established before it and — when the
+goal is a satisfiable predicate call that merely did not unify — the solution
+it *did* have.
 
 Two invariants govern that re-run:
 
@@ -238,9 +240,10 @@ def run_test(
 ) -> TestResult:
     """Run a single test/1 clause by description. Returns a TestResult.
 
-    ``diagnose`` is opt-in (``run_file`` enables it; the pytest plugin does
-    not) so that the diagnostic re-run — which re-executes body goals and any
-    side effects they carry — never happens on a path that did not ask for it.
+    ``diagnose`` is opt-in — both runners (``run_file`` and the pytest
+    plugin's ``ClausalItem``) enable it, but an embedder calling ``run_test``
+    directly gets no diagnostic re-run, which re-executes body goals and any
+    side effects they carry, unless it asks for one.
     """
     from clausal.logic.solve import call
 

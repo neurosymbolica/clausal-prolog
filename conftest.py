@@ -93,6 +93,21 @@ class ClausalFile(pytest.File):
             yield ClausalItem.from_parent(self, name=desc, mod=mod)
 
 
+def _with_diagnosis(message: str, result) -> str:
+    """Attach a goal-level diagnosis under a plugin failure *message*.
+
+    Appended, never substituted: the headline is what names the test in a CI
+    log and in ``-q`` summary lines, so it has to survive verbatim; the
+    diagnosis is detail underneath it, indented the same way the CLI report
+    indents it (``clausal.testing._failure_lines``) so both readers see one
+    format.  A diagnostic that could attribute nothing renders no lines at
+    all, and an empty block under a headline reads as a broken report — so in
+    that case the message is left exactly as it was.
+    """
+    lines = result.diagnostic.lines() if result.diagnostic is not None else []
+    return "\n".join([message, *lines]) if lines else message
+
+
 class ClausalItem(pytest.Item):
     def __init__(self, name, parent, mod, load_error=None):
         super().__init__(name, parent)
@@ -104,13 +119,25 @@ class ClausalItem(pytest.Item):
             raise ClausalTestFailure(
                 f"Failed to load {self.path}: {self._load_error}"
             ) from self._load_error
-        result = run_test(self._mod, self.name)
+        # ``diagnose=True``: a bare "no solutions" is close to no signal, and
+        # pytest is where CI and most day-to-day runs read failures — the
+        # detail must not be a privilege of the CLI runner.  ``path`` is what
+        # lets the diagnosis quote the goal in its own source syntax and name
+        # its variables (clausal.testing._reified_goals).  Cost is bounded to
+        # the failure path: run_test only diagnoses a test that already failed.
+        result = run_test(self._mod, self.name, path=self.path, diagnose=True)
         if not result.passed:
             if result.error:
                 raise ClausalTestFailure(
-                    f"test({self.name!r}) raised: {result.error}"
+                    _with_diagnosis(
+                        f"test({self.name!r}) raised: {result.error}", result
+                    )
                 ) from result.error
-            raise ClausalTestFailure(f"test({self.name!r}) failed (no solutions)")
+            raise ClausalTestFailure(
+                _with_diagnosis(
+                    f"test({self.name!r}) failed (no solutions)", result
+                )
+            )
 
     def repr_failure(self, excinfo):
         return str(excinfo.value)
