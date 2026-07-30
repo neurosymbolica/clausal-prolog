@@ -69,3 +69,50 @@ change and should not be done opportunistically.
 
 Not urgent: nothing crashes, and the failure mode is a clean goal failure with
 the offending binding printed.
+
+## Resolution — 2026-07-30
+
+**None of the three options. The question was mis-framed, and measuring it said so.**
+
+The asymmetry above is real but harmless. What was actually broken sat one step
+later: **construction never rebuilt a declared term at all.** With arity > 0,
+both `functor/3` and `unpack/2` reduced a `PredicateMeta` name to
+`name.__name__` and built a generic `Compound` — discarding the class even when
+the caller handed it over directly. Since a Compound never unifies with a
+declared term-class instance of the same name and arity, decompose-then-
+reconstruct could not round-trip, and neither could `functor(T, cite, 1)`.
+
+Two pieces of evidence redirected the fix:
+
+- The kit had already hit this and written it down as settled behaviour rather
+  than a defect — `/workspace/clausify/kit/planner_lib.clausal`, "ATTR-LIST
+  BRANCH — VERIFIED SEMANTICS (2026-07-19 interpreter probe)", including the
+  consequence that "after a kit `world_set` on an attr-list world the entry is
+  a generic Compound — the domain's class-constructor read will NOT see it".
+- The corpus sweep's headline risk was backwards. `key_string/2` was read as
+  depending on decomposition yielding the *class*; its own docstring says the
+  opposite — "atom-shaped KEY -> its functor-name string, via a build-then-
+  decompose roundtrip". It needs the **string** arm. Option 3 would have broken
+  the kit; option 2 would have broken 3 ISO golden tests and contradicted the
+  recorded A09-F027 round-trip principle.
+
+**Fixed** in `clausal/logic/builtins/inspection.py::_construct_named`, shared by
+both construction sites: a `PredicateMeta` name whose field count matches the
+requested arity now builds that class's instance. Everything else is untouched —
+a `str` name still builds a Compound and is deliberately not resolved back to a
+class (which module's `cite` a bare string names is ambiguous under module-local
+atom identity), and an arity that disagrees with the class falls through to the
+Compound rather than raising, which is what keeps the kit's
+`functor(PROBE, KEY, 1)` over an arity-0 schema atom working.
+
+Decomposition is unchanged, so the type asymmetry this todo was named for still
+stands — deliberately. It is documented rather than removed.
+
+Verified: 11 new tests in `tests/test_functor_construction_declared_term.py`;
+full suite 10771 passed; `au/firb` 123 tests, `us/sara_irc_tax` 41, and the kit's
+own `planner_tests.clausal` 49 + demos + gap-wave2 all green against the branch.
+
+The diagnosability half — a generic Compound *renders identically* to the
+declared term it will not unify with, so the failure reads as a contradiction —
+is split out to
+[[a-generic-compound-renders-identically-to-a-declared-term]].

@@ -1,0 +1,147 @@
+"""``functor/3`` and ``unpack/2`` construction must rebuild a *declared* term.
+
+Both construction sites reduced a ``PredicateMeta`` name to ``name.__name__``
+and built a generic :class:`~clausal.terms.Compound` from the string, throwing
+the class away even when the caller handed it over directly.  So
+decompose-then-reconstruct never round-tripped for a declared with-fields term:
+
+    T is cite(art), functor(T, N, A), functor(T2, N, A)   # T2 does not unify with T
+
+and neither did handing construction the class itself, ``functor(T2, cite, 1)``.
+The rebuilt Compound *renders identically* to the real term — a failing goal
+reported ``T2 = cite(_)`` against a goal ``T2 is cite(_)`` — so the mismatch was
+invisible at the surface.  See
+``todo/done/functor-3-names-an-atom-as-a-class-but-a-compound-as-a-string.md``.
+
+The kit had already hit this and documented a workaround rather than a fix
+(``/workspace/clausify/kit/planner_lib.clausal``, "ATTR-LIST BRANCH — VERIFIED
+SEMANTICS"): its note that a constructed entry "does NOT unify with a declared
+term-class instance of the same name/arity" is this defect, measured from the
+outside.
+
+Only the **class** arm changes.  A ``str`` name still builds a ``Compound``,
+with no attempt to resolve the string back to a class: which module's ``cite``
+a bare string names is genuinely ambiguous under module-local atom identity,
+and the kit's ``key_string/2`` depends on the string arm behaving exactly as it
+does today.
+"""
+
+import pytest
+
+from clausal.logic.builtins.inspection import _functor__3, _univ__2
+from clausal.logic.predicate import make_predicate
+from clausal.logic.variables import Var, Trail, deref, unify
+from clausal.terms import Compound
+
+
+def built_by(builtin, *args):
+    """Return what *builtin* constructs into its first argument.
+
+    The builtins undo their trail mark on resumption, so the binding only
+    exists *during* a yield — ``list(...)`` would hand back a bare Var.  A
+    goal-level harness is not usable here either: a ``PredicateMeta`` passed
+    as a literal goal argument is rejected up front by the compiler
+    (``PredicateAsTermError``), and handing over the class is precisely the
+    case under test.
+    """
+    term = Var()
+    trail = Trail()
+    gen = builtin(term, *args, trail, None)
+    try:
+        next(gen)
+    except StopIteration:
+        return None
+    return deref(term)
+
+
+@pytest.fixture
+def cite():
+    """A declared functor of arity 1 — the shape from the field report."""
+    return make_predicate("tfcdt_cite", ["key"])
+
+
+# ── functor/3 construction ─────────────────────────────────────────────────
+
+
+def test_class_name_builds_the_declared_term(cite):
+    """The case that motivated this: hand construction the class itself."""
+    built = built_by(_functor__3, cite, 1)
+    assert isinstance(built, cite), (
+        f"built {type(built).__name__}, not a {cite.__name__} instance"
+    )
+
+
+def test_constructed_term_unifies_with_the_real_thing(cite):
+    """The property that was broken, stated as unification rather than type:
+    what construction builds must unify with a term written out longhand."""
+    assert unify(built_by(_functor__3, cite, 1), cite(Var()), Trail())
+
+
+def test_string_name_still_builds_a_compound(cite):
+    """The string arm is deliberately untouched.  Resolving ``"tfcdt_cite"``
+    back to a class would have to pick a module, and the kit's ``key_string/2``
+    relies on this arm building a Compound it can decompose to a string."""
+    built = built_by(_functor__3, "tfcdt_cite", 1)
+    assert isinstance(built, Compound)
+    assert not isinstance(built, cite)
+
+
+def test_arity_mismatch_falls_through_to_compound(cite):
+    """A declared arity-1 class asked for at arity 2 is not that term, so the
+    generic Compound remains the honest answer — as today, and not an error."""
+    assert isinstance(built_by(_functor__3, cite, 2), Compound)
+
+
+def test_arity_zero_atom_asked_at_arity_one_is_unchanged():
+    """The kit's own pattern: ``functor(PROBE, KEY, 1)`` over an arity-0 schema
+    atom must keep building a Compound, because ``key_string/2`` then decomposes
+    it to get the name string.  Pinned so this fix cannot break the kit."""
+    schema_atom = make_predicate("tfcdt_applicant_age", [])
+    assert isinstance(built_by(_functor__3, schema_atom, 1), Compound)
+
+
+def test_arity_zero_still_yields_the_name_itself():
+    """``functor(T, Name, 0)`` binds T to Name unchanged — the A09-F027
+    round-trip property for atomic constants."""
+    atom = make_predicate("tfcdt_zed", [])
+    assert built_by(_functor__3, atom, 0) is atom
+
+
+# ── the round trip ─────────────────────────────────────────────────────────
+
+
+def test_decompose_then_reconstruct_round_trips(cite):
+    """Decomposition still yields a *string* name, so rebuilding from that
+    string yields a Compound — but rebuilding from the class round-trips."""
+    original = cite(Var())
+    N, A, trail = Var(), Var(), Trail()
+    gen = _functor__3(original, N, A, trail, None)
+    next(gen)
+    assert deref(N) == "tfcdt_cite"  # unchanged: decomposition still strings
+    assert deref(A) == 1
+
+    assert unify(built_by(_functor__3, cite, 1), original, Trail())
+
+
+# ── unpack/2 construction (the sibling site) ───────────────────────────────
+
+
+def test_unpack_class_name_builds_the_declared_term(cite):
+    """``unpack/2`` shares the defect and must move with ``functor/3``."""
+    built = built_by(_univ__2, [cite, 42])
+    assert isinstance(built, cite), (
+        f"built {type(built).__name__}, not a {cite.__name__} instance"
+    )
+
+
+def test_unpack_carries_the_argument_values(cite):
+    """Unlike functor/3's fresh Vars, unpack supplies real arguments."""
+    assert unify(built_by(_univ__2, [cite, 42]), cite(42), Trail())
+
+
+def test_unpack_string_name_still_builds_a_compound(cite):
+    assert isinstance(built_by(_univ__2, ["tfcdt_cite", 42]), Compound)
+
+
+def test_unpack_arity_mismatch_falls_through_to_compound(cite):
+    assert isinstance(built_by(_univ__2, [cite, 1, 2, 3]), Compound)
