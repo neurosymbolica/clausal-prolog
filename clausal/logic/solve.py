@@ -497,7 +497,10 @@ def call(
     if module is not None and module.module_dict is not None:
         pred_cls = module.module_dict.get(functor)
         if pred_cls is not None and hasattr(pred_cls, '_get_dispatch'):
-            dispatch_fn = pred_cls._get_dispatch()
+            # Pass the arity: call("citation", A, B) against citation/3 is the
+            # same fault as writing it in a clause body, and gets the same
+            # message rather than a TypeError about a missing `trail`.
+            dispatch_fn = pred_cls._get_dispatch(arity)
 
     # Phase 6: try builtins before Database fallback.
     if dispatch_fn is None and module is not None:

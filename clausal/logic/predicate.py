@@ -600,12 +600,24 @@ class PredicateMeta(type):
 
     # ── Dispatch ──────────────────────────────────────────────────────────
 
-    def _get_dispatch(cls) -> Callable:
+    def _get_dispatch(cls, arity: int | None = None) -> Callable:
         """Return the compiled dispatch function.
 
         If dispatch_fn was cleared by assertz/retract and a lazy recompile
         callback is registered, recompiles on demand.
+
+        *arity* is the call site's argument count, passed by the goal-call
+        emitters.  This is the one place where a name becomes a dispatch
+        function, so it is the one place that can notice the caller and the
+        callee disagree about how many arguments there are — see
+        ``_refuse_call_at``.  Omitted (``None``) by callers that already know
+        the arity is right, and by the many places that just want the function.
         """
+        # ``len(cls._fields)`` rather than ``cls._arity``: identical by
+        # definition, but skips a property descriptor on a path taken once per
+        # goal invocation.
+        if arity is not None and arity != len(cls._fields):
+            cls._refuse_call_at(arity)
         if cls._dispatch_fn is None:
             if cls._lazy_recompile is not None:
                 cls._dispatch_fn = cls._lazy_recompile()
@@ -615,6 +627,52 @@ class PredicateMeta(type):
                     "dispatch function. The compiler must be run first."
                 )
         return cls._dispatch_fn
+
+    def _clause_arity(cls) -> int | None:
+        """The one arity every clause head of *cls* has, or ``None``.
+
+        ``_arity`` is the cheap answer and is right almost always, but it can
+        be stale: a module that imports a 0-arity vocabulary atom and then
+        defines a same-named predicate re-mints its clauses onto the imported
+        class without moving ``_arity`` (``tests/fixtures/
+        impord_atom_then_pred.clausal``).  Clause heads cannot be stale, and
+        they are also exactly what a refusal would be claiming — *no clause of
+        this predicate can match a call of that shape*.
+
+        ``None`` when there are no clauses (a bare functor, a forward
+        declaration, a ``-dynamic`` predicate not yet asserted into) or when
+        they disagree: in both cases nothing is known well enough to refuse.
+        """
+        clauses = cls._clauses
+        if not clauses:
+            return None
+        arities = set()
+        for clause in clauses:
+            head = clause.head
+            args = getattr(head, "args", None)
+            arities.add(len(args) if args is not None
+                        else len(term_field_names(head)))
+        if len(arities) != 1:
+            return None
+        return arities.pop()
+
+    def _refuse_call_at(cls, arity: int) -> None:
+        """Raise if no clause of *cls* could match a call of *arity* arguments.
+
+        Only reached when the call site's arity differs from ``_arity``, so the
+        clause walk here is off the dispatch path: an agreeing call pays one
+        integer comparison in ``_get_dispatch`` and nothing else.
+        """
+        defined = cls._clause_arity()
+        if defined is None or defined == arity:
+            return
+        from clausal.predicate_diagnostics import (  # noqa: PLC0415
+            predicate_arity_mismatch,
+        )
+        raise predicate_arity_mismatch(
+            cls.__name__, arity, defined,
+            site=getattr(cls, "_registered_at", None),
+        )
 
     # ── Locking ───────────────────────────────────────────────────────────
 

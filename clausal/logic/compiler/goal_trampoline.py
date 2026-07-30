@@ -471,9 +471,12 @@ def _dispatch_call_trampoline(
     if dk in locked_keys:
         dispatch_expr: ast.expr = _name(dk)
     else:
+        # The arity is the call site's, not the callee's — see
+        # PredicateMeta._get_dispatch and
+        # todo/arity-mismatch-reports-a-missing-trail-argument.md.
         dispatch_expr = ast.Call(
             func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
-            args=[],
+            args=[ast.Constant(value=arity)],
             keywords=[],
         )
     return _sg(dispatch_expr)

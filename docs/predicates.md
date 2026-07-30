@@ -206,6 +206,19 @@ distance(X1, X2, D) <- (D == abs(X2 - X1))
 
 The **arity** is the number of fields. `point/2` means "point with 2 arguments." Different arities define different predicates: `foo/1` and `foo/2` are unrelated.
 
+Because they are unrelated, calling one at the other's arity is an error, and
+it is reported as one:
+
+```
+citation takes 3 arguments, but this call passes 2
+  citation/3 is defined at eumr.clausal:14.
+  -> pass 3 arguments to citation, or define citation/2 as a predicate of its own.
+```
+
+This is a `PredicateArityMismatchError`, which is a `TypeError`. If the name is
+not in scope at *any* arity, the failure is a `PredicateNotFoundError` instead
+and the message lists what is reachable — see [Importing](import.md).
+
 ---
 
 ## Defining Predicates in `.clausal` Files

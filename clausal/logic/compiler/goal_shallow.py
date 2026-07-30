@@ -84,9 +84,13 @@ def _dispatch_call_iter(
     if dk in ctx.locked_dispatch_keys:
         dispatch_expr: ast.expr = _name(dk)
     else:
+        # The arity is the call site's, not the callee's: passing it is what
+        # lets _get_dispatch refuse a call no clause could match, instead of
+        # handing back a dispatch function that runs out of arguments and
+        # blames `trail`.  See PredicateMeta._get_dispatch.
         dispatch_expr = ast.Call(
             func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
-            args=[],
+            args=[ast.Constant(value=arity)],
             keywords=[],
         )
     args_tuple = ast.Tuple(elts=arg_exprs, ctx=ast.Load())

@@ -24,7 +24,8 @@ def _make_call_goal_trampoline(extra_n: int):
         # args = (goal, extra1, ..., extraN, trail)
         goal_val = deref(args[0])
         if callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
-            dispatch = _ensure_trampoline_dispatch(goal_val)
+            # extra_n is exactly what the goal will be called with.
+            dispatch = _ensure_trampoline_dispatch(goal_val, extra_n)
             derefed = [deref(a) for a in args[1:extra_n + 1]]
             trail = args[extra_n + 1]
             sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *derefed, trail)
