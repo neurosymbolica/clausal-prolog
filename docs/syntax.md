@@ -79,7 +79,7 @@ Inside a logical term:
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms"
 ```
 
-Atoms that conflict with Python keywords or builtins are written as strings: `'not'`, `'is'`, `'max'`.
+An identifier that collides with a Python keyword or builtin (`not`, `is`, `max`) cannot be written as a bare atom. Quoting it — `'not'` — yields a **string**, not a declared atom (see [Atoms vs strings](#atoms-vs-strings-there-are-no-string-atoms)): it works as a symbolic *value*, but `atom/1` will not match it. If you need a true `PredicateMeta` atom, pick a non-colliding identifier (e.g. `not_`) or mint one dynamically with `make_atom("not")`.
 
 Every atom is reified at compile time as a zero-arity `PredicateMeta` class — atoms are first-class values you can pass around, store in dicts, and compare with `is`. Unification on atoms is class identity.
 
@@ -357,13 +357,63 @@ See [Dicts & Sets](dicts_sets.md) for details.
 
 ## Strings
 
-Strings prefixed with `u""` are [lists of character atoms](strings_as_lists.md):
+Every string literal — `"…"`, `'…'`, or `u"…"` — is a Python `str`, and a `str`
+behaves as a **list of character atoms** under unification (the classical Prolog *chars*
+model). See [strings as lists](strings_as_lists.md):
 
 ```clausal
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:strings"
 ```
 
-All list operations apply to strings. Plain string literals (without `u`) are atoms.
+All list operations apply to strings. A string is **not** a declared (`PredicateMeta`)
+atom — `atom/1` rejects it, `is_str/1` accepts it. The analogous `b"…"` byte literal is a
+[list of integer codes](bytes_as_lists.md) (`0–255`); `str` and `bytes` are distinct
+domains and never cross-unify.
+
+!!! note "Quote style, and the `u"…"` prefix, carry no meaning"
+    Single vs double quotes are indistinguishable — Python's parser erases the quote
+    character before Clausal sees the term. The `u` prefix is likewise inert: `u"abc"`,
+    `"abc"`, and `'abc'` all produce the same `str`. Clausal keys on the value's *type*
+    (`str` vs `bytes`), never on how it was written.
+
+---
+
+## Atoms vs strings: there are no "string atoms"
+
+Clausal deliberately keeps two disjoint kinds where Prolog blurs them behind quoting:
+
+| | **Symbol** | **Text / data** |
+|---|---|---|
+| written as | identifier — `red`, `café`, `δικαίωμα` | string — `"hello world"`, `'Reg (EU) 2016/679'` |
+| reifies as | interned zero-arity `PredicateMeta` class | Python `str` (a list of character atoms) |
+| identity | global class identity; `is` works | value equality; also unifies as a char-list |
+| typo-safe? | yes, under [`-strict_atoms`](directives.md#-strict_atoms) | no (it's data) |
+| `atom/1` | matches | does **not** match (use `is_str/1`) |
+
+Unlike Prolog, a **quoted string never denotes an atom** — it is always text. This is a
+conscious choice, not a missing feature. Prolog's quoted atoms (`'hello world'`) exist for
+exactly one reason: to give a *symbol* a human-readable name with spaces or punctuation
+that a bare token can't carry. Clausal covers that need two other ways, so the construct
+earns nothing:
+
+- **Any-language names, unquoted.** Identifiers accept the full Unicode *is-letter* set
+  (they ride Python's identifier rules), so `café`, `größe`, `δικαίωμα`, and CJK names are
+  ordinary atoms — no quoting required. Only spaces, punctuation, and leading digits remain
+  out of reach, and those belong to *display text*, not symbol identity.
+- **Human-readable display lives in the translation layer.** Verbatim, punctuated,
+  multilingual text (e.g. a citation `Regulation (EU) 2016/679, Art 6`) is held in the
+  translation lexicon keyed by an identifier atom — so the logic depends on the typo-safe
+  symbol while presentation stays free-form.
+
+Adding string atoms would also actively *harm* the model: because a `str` already unifies
+as a list of characters, a quoted "atom" could not simultaneously be a distinct symbol and
+a char-list without new disambiguating syntax — reintroducing precisely the `str`-vs-symbol
+confusion this split removes.
+
+**If you genuinely need an atom whose name isn't a valid identifier** (e.g. interning
+symbols imported from an external system), mint it at runtime with `make_atom("any name")`
+rather than quoting a literal. Prefer the identifier-plus-lexicon pattern for everything
+else.
 
 ---
 
