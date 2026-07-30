@@ -88,8 +88,15 @@ def test_string_name_still_builds_a_compound(cite):
 
 def test_arity_mismatch_falls_through_to_compound(cite):
     """A declared arity-1 class asked for at arity 2 is not that term, so the
-    generic Compound remains the honest answer — as today, and not an error."""
-    assert isinstance(built_by(_functor__3, cite, 2), Compound)
+    generic Compound remains the honest answer — as today, and not an error.
+
+    The functor string is pinned too: A09-F027 exists because a fall-through
+    that stringified the name the wrong way once built a bogus functor like
+    ``"f(1)"``, and a type-only assertion would not notice that.
+    """
+    built = built_by(_functor__3, cite, 2)
+    assert isinstance(built, Compound)
+    assert built.functor == "tfcdt_cite"
 
 
 def test_arity_zero_atom_asked_at_arity_one_is_unchanged():
@@ -144,4 +151,6 @@ def test_unpack_string_name_still_builds_a_compound(cite):
 
 
 def test_unpack_arity_mismatch_falls_through_to_compound(cite):
-    assert isinstance(built_by(_univ__2, [cite, 1, 2, 3]), Compound)
+    built = built_by(_univ__2, [cite, 1, 2, 3])
+    assert isinstance(built, Compound)
+    assert built.functor == "tfcdt_cite"
