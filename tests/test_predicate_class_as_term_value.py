@@ -1,6 +1,6 @@
 """A predicate *class* used as a term value must unify, not raise TypeError.
 
-``todo/internal-unify-typeerror-reaches-the-user-as-error-text.md`` — observed
+``todo/done/internal-unify-typeerror-reaches-the-user-as-error-text.md`` — observed
 in the field as::
 
     test_load.clausal:57 :: cite term constructs correctly

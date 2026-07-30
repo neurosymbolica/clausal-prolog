@@ -185,3 +185,13 @@ crash. Changing it would move `functor/3`, `unpack/2` and ISO conformance
 together, so it is filed separately as
 [[functor-3-names-an-atom-as-a-class-but-a-compound-as-a-string]] rather than
 guessed at here.
+
+### Second sighting
+
+[[done/arity-mismatch-reports-a-missing-trail-argument]] (fixed 2026-07-29) was
+the same sentence — `citation__3() missing 1 required positional argument:
+'trail'` — from a completely different seam: a wrong-arity *call* rather than a
+class-valued *term*. Two independent engine faults have now surfaced as "a
+missing `trail`". Worth treating any user-visible Python `TypeError` that names
+`trail` as an engine fault by default, since `trail` is not a word the surface
+language has.

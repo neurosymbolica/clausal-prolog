@@ -406,7 +406,7 @@ def _make_eq(fields: tuple[str, ...]):
 #     ``trail`` unfilled.
 #
 # That second case is
-# ``todo/internal-unify-typeerror-reaches-the-user-as-error-text.md``.  The
+# ``todo/done/internal-unify-typeerror-reaches-the-user-as-error-text.md``.  The
 # author of a legal-looking goal saw
 #
 #     TypeError: _make_unify.<locals>.__unify__() missing 1 required
@@ -415,7 +415,11 @@ def _make_eq(fields: tuple[str, ...]):
 # — a closure inside the engine and a parameter they have never written, in
 # place of their goal simply failing.  Measured cost in the formalization
 # corpus: 10 repair attempts across two runs, neither recovering, because a
-# message about ``trail`` offers nothing to edit.
+# message about ``trail`` offers nothing to edit.  This is the second time a
+# lost ``trail`` argument has escaped as the whole of a user-facing error —
+# ``todo/done/arity-mismatch-reports-a-missing-trail-argument.md`` was the
+# first, from a different seam — which is a standing hint that any Python
+# ``TypeError`` naming ``trail`` is an engine fault wearing a user's clothes.
 #
 # Arity-0 atoms were always immune, not by luck but by decision: PredicateMeta
 # installs no hooks on them at all, because "the class IS the value" and
