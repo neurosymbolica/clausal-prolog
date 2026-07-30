@@ -60,6 +60,7 @@ from clausal.logic.runtime.body_star_unify import (  # noqa: F401
 )
 from clausal.logic.runtime.tramp_call import _tramp_call  # noqa: F401
 from clausal.logic.runtime.dict_ops import _subscript, _splat_data, _dict_key  # noqa: F401
+from clausal.logic.runtime.const_set import _const_set, _CONST_SET_TYPES  # noqa: F401
 
 from ._ast_helpers import (
     _name, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -756,6 +757,8 @@ def compile_predicate_trampoline(
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn,
         "$in_iter": _in_iter,
+        "$const_set": _const_set,
+        "$CSET_TYPES": _CONST_SET_TYPES,
         "$subscript": _subscript,
         "$splat_data": _splat_data,
         "$dict_key": _dict_key,
@@ -1499,6 +1502,8 @@ def compile_predicate_shallow(
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn_s,
         "$in_iter": _in_iter,
+        "$const_set": _const_set,
+        "$CSET_TYPES": _CONST_SET_TYPES,
         "$subscript": _subscript,
         "$splat_data": _splat_data,
         "$dict_key": _dict_key,
