@@ -39,10 +39,16 @@ interpreter, which cannot be undone inside the test process (prior art:
 
 from __future__ import annotations
 
+import collections
 import os
 import subprocess
 import sys
 import textwrap
+
+import pytest
+
+from clausal.logic.database import head_key
+from clausal.logic.predicate import PredicateMeta
 
 # Source tree root (parent of the ``clausal`` package dir).
 _SRC_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -224,3 +230,57 @@ def test_term_crossing_between_copies_is_refused_with_a_precise_message(tmp_path
     # functor instance while holding one.
     assert "two copies of the clausal package" in msg, msg
     assert "sys.modules" in msg, msg
+
+
+# ── the diagnostic declines when it has nothing to say ───────────────────────
+#
+# The two-copy case above needs a subprocess, which makes it slow and coarse.
+# These pin the guards in-process, because the failure mode they prevent is a
+# diagnostic that fires confidently on something else entirely.
+
+
+def test_a_recognised_term_gets_no_explanation():
+    """Nothing foreign about it, so the caller's own wording stands."""
+    from clausal.logic.predicate import describe_term_identity_mismatch
+
+    class Thing(metaclass=PredicateMeta):
+        _fields = ("a",)
+
+    assert describe_term_identity_mismatch(Thing) == ""
+
+
+def test_a_plain_object_gets_no_explanation():
+    from clausal.logic.predicate import describe_term_identity_mismatch
+
+    assert describe_term_identity_mismatch(object()) == ""
+    assert describe_term_identity_mismatch(42) == ""
+
+
+def test_a_namedtuple_is_not_reported_as_a_second_package_copy():
+    """A stdlib namedtuple carries ``_fields``, and that used to be the whole
+    test — so passing one as a head produced a confident, entirely wrong
+    account of two live clausal copies and advice to fix import surgery that
+    never happened.  Its metaclass is plain ``type``, which is the tell.
+    """
+    from clausal.logic.predicate import describe_term_identity_mismatch
+
+    Point = collections.namedtuple("Point", "x y")
+    assert describe_term_identity_mismatch(Point(1, 2)) == ""
+
+    # ...and the error a caller actually raises stays its own.
+    with pytest.raises(TypeError) as excinfo:
+        head_key(Point(1, 2))
+    assert "two copies" not in str(excinfo.value)
+    assert "Cannot extract (functor, arity)" in str(excinfo.value)
+
+
+def test_the_diagnostic_never_raises():
+    """It runs on the way into someone else's ``raise``."""
+    from clausal.logic.predicate import describe_term_identity_mismatch
+
+    class Exploding:
+        @property
+        def _fields(self):  # pragma: no cover - accessed via type, not instance
+            raise RuntimeError("boom")
+
+    assert describe_term_identity_mismatch(Exploding()) == ""

@@ -946,6 +946,16 @@ def _describe_term_identity_mismatch(obj: Any) -> str:
     if not isinstance(getattr(cls, "_fields", None), tuple):
         return ""  # not a functor class at all
     foreign = type(cls)
+    # ``_fields`` alone is not enough: a stdlib ``namedtuple`` has one too, and
+    # its metaclass is plain ``type``.  Without this the message below would
+    # tell someone who passed a namedtuple as a head that two copies of the
+    # clausal package are live and that they should fix their import surgery —
+    # confident, specific and entirely wrong.  A genuinely foreign functor
+    # class is minted by the *other copy's* ``PredicateMeta``, which is the
+    # same source file and therefore the same class name; a metaclass that is
+    # not one leaves the caller's own wording to stand.
+    if foreign is type or foreign.__name__ != PredicateMeta.__name__:
+        return ""
     mine = PredicateMeta
     return (
         f"\nThis head IS a functor instance, but of a class this copy of clausal "
