@@ -27,7 +27,7 @@ The export list may mix predicates with arity (e.g. `Pred1(A, B)`) and bare atom
 -private([Helper(X, Y), Edge(A, B)])
 ```
 
-Declares predicates that are internal to the module. Private predicates get proper `PredicateMeta` classes but are not exposed for import.
+Declares predicates and atoms that are internal to the module. They get proper `PredicateMeta` classes, exactly as `-module` exports do.
 
 The list may also contain bare atoms:
 
@@ -35,10 +35,23 @@ The list may also contain bare atoms:
 --8<-- "tests/fixtures/docs/directives_sigs.txt:private_with_atoms"
 ```
 
-!!! info "When you actually need `-private` for an atom"
-    Listing an atom in `-private` has two effects: it gives the atom **module-local-distinct** identity (so `draft` here does not unify with `other_module.draft` or with the global `draft`), and it satisfies the strict-by-default resolver so the bare name compiles without error. In files that carry [`-implicit_atoms`](#-implicit_atoms) you can omit the listing and rely on auto-minting, but in the default strict mode every bare atom must be declared somewhere. See the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
+!!! warning "`-private` is a marker, not a barrier"
+    **`-private` means "not part of my documented surface" — Python's leading underscore, not C++ `private`.** It does *not* make a name unreachable. `-import_from(owner, [draft])` reaches a `-private` atom or predicate just as readily as an exported one, and binds the **owner's** class, so both modules share one identity. Clausal has no access control at all: `-import_from` lowers to a Python `from M import name` and consults nothing about `M`'s declarations — not its `-private` list, not its `-module` export list (see [Why not Prolog-style modules](import.md#why-not-prolog-style-modules) — "No export lists. Everything is public").
 
-An atom may not appear in both `-module` and `-private` (mutually exclusive points on the same axis); the compiler rejects this with a hard error.
+    This is deliberate and [pinned by a test](https://gitlab.com/MikeAmy/clausal/-/blob/main/tests/test_global_atoms_default.py). It is also load-bearing: under strict atoms, a fixture or generated module with no `-module(...)` export list has importing from its `-private` list as its identity-preserving route across a file boundary.
+
+!!! info "What `-private` actually buys"
+    Listing a name in `-private` has four real effects and one advisory one:
+
+    1. **Module-local identity** — the atom gets a class distinct from the process-wide global atom of the same name, and from any other module's declaration of it (so `draft` here does not unify with `other_module.draft` or with the global `draft`).
+    2. **Strict-atom resolution** — the bare name compiles instead of raising the strict-by-default `NameError`. In files that carry [`-implicit_atoms`](#-implicit_atoms) you can omit the listing and rely on auto-minting.
+    3. **Shadowing** — inside this module the private class wins over `-module`, over imports, and over the global.
+    4. **Signature pre-registration** — for `P(A, B)` entries, arity and field names are fixed before the first clause rather than inferred from it.
+    5. **Intent** — it tells a reader the name is internal. Advisory only, per the warning above.
+
+    The only thing that distinguishes `-private` from `-module` is which of those a reader is told. See the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md) § "Visibility is advisory".
+
+An atom may appear in both `-module` and `-private`. The first listing processed wins and the second is a no-op, so the name still gets exactly one module-local class.
 
 ---
 

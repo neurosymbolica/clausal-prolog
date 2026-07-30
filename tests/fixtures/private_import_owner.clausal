@@ -1,0 +1,10 @@
+# Pinning fixture for the `-private` visibility decision (see
+# todo/done/private-atoms-are-importable-contra-spec.md).  Everything this
+# module owns is declared `-private`: a bare atom and a predicate.  Neither is
+# listed in a `-module(...)` export list — this module has no export list at
+# all.  The sibling `private_import_consumer` imports both by name; that import
+# is expected to succeed and to bind THESE classes.
+
+-private([privimp_tag, PrivImpHelper(X)])
+
+PrivImpHelper(privimp_tag),

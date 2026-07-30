@@ -172,22 +172,25 @@ For [list](lists.md) relations, the base clause typically holds for the empty li
 
 ## Private Predicates
 
-The `-private` directive marks predicates as internal to the module — they are not exposed for import:
+The `-private` directive marks predicates as internal to the module — not part of the surface other modules are meant to build on:
 
 ```clausal
 -private([Helper(X, Y)])
 
-# Public: can be imported by other modules
+# Documented surface: other modules are meant to call this
 Compute(X, R) <- (
     Helper(X, TEMP),
     R == TEMP * 2
 )
 
-# Private: only accessible within this module
+# Internal: an implementation detail of Compute/2
 Helper(X, Y) <- (Y == X + 1)
 ```
 
-Use `-private` when a predicate is an implementation detail that other modules should not depend on. This prevents accidental coupling between modules.
+Use `-private` when a predicate is an implementation detail that other modules should not depend on.
+
+!!! warning "`-private` is advisory, not enforced"
+    A `-private` predicate is **still importable**. `-import_from(this_module, [Helper])` succeeds and binds this module's `Helper` class. Clausal has no access control — the marker discourages coupling, it does not prevent it, exactly like a leading underscore in Python. See [Directives § `-private`](directives.md#-private) for the full meaning of the directive.
 
 ---
 

@@ -39,19 +39,23 @@ import relationship.
 
 ## The new model
 
-Atoms have two orthogonal properties: **identity scope** (global vs. module-local)
-and **visibility** (importable vs. private).
+Atoms have two properties: **identity scope** (global vs. module-local) and
+**declared surface** (public vs. private). Only the first is enforced; the
+second is advisory — see [Visibility is advisory](#visibility-is-advisory).
 
-| Declaration site | Identity | Importable |
+| Declaration site | Identity | Declared surface |
 |---|---|---|
-| listed in `-module([atom])` | module-local | yes |
-| listed in `-private([atom])` | module-local | no |
+| listed in `-module([atom])` | module-local | public — advertised export |
+| listed in `-private([atom])` | module-local | private — internal by convention |
 | unmentioned (bare reference only) | **global** (auto-minted) | n/a — already shared |
 
 The two axes line up: *local-vs-global* corresponds to *mentioned-vs-unmentioned*,
-and *public-vs-private* corresponds to *which list*. An atom may not appear in
-both `-module` and `-private` (mutually exclusive points on the same axis); the
-compiler rejects this with a hard error.
+and *public-vs-private* corresponds to *which list*. An atom may appear in
+both `-module` and `-private`; the first listing processed wins and the second
+is a no-op, so the name still gets exactly one module-local class. (Earlier
+drafts of this spec said the compiler rejects the overlap with a hard error. It
+does not, and shipped consumer code — `clausify/kit/formalize_lib.clausal`
+lists eight names in both — relies on it not doing so.)
 
 Predicates with arity ≥ 1 remain Prolog-aligned and are not affected by the
 global default — see [Predicates](#predicates-with-arity) below.
@@ -101,7 +105,10 @@ suppresses the warning when the shadowing is deliberate.
 If module A declares `-private([red])`, bare `red` in A's source is A's private
 class — *not* the global class. Other modules' bare `red` continues to resolve
 to the global class via rule 4. Privacy means "shadow the world inside my
-walls."
+walls" — it fixes what `red` means *inside A*. It does not wall the name off:
+`-import_from(a, [red])` still reaches A's private class and binds it, exactly
+as it would for a `-module`-listed atom. See
+[Visibility is advisory](#visibility-is-advisory).
 
 Symmetric rule for `-module`: a `red` listed in `-module([red])` shadows the
 global `red` within the declaring module's source. Other modules that
@@ -111,10 +118,11 @@ above). Other modules that don't import still see the global `red`.
 ### 4. `-import_from` of an atom
 
 Importing an atom from a module that owns a local version (because the source
-module listed it in `-module([...])`) binds the imported class into the local
-namespace and shadows the global default for that name in the importing
-module. Importing an atom that the source module does *not* list in
-`-module([...])` is a no-op — the atom is already global, so there is nothing
+module listed it in `-module([...])` **or** in `-private([...])` — either
+listing mints the local class, and neither is checked at import time) binds
+the imported class into the local namespace and shadows the global default for
+that name in the importing module. Importing an atom that the source module
+lists in *neither* is a no-op — the atom is already global, so there is nothing
 distinct to import. The compiler treats such an import as a documentation hint
 rather than an error, so mixed atom/predicate imports from the same module
 work without partial rejection.
@@ -132,11 +140,11 @@ and a distinct local declaration of the same name.
 Predicates with arity ≥ 1 do not participate in the global default. The rules
 for them:
 
-| Declaration site | Identity | Importable |
+| Declaration site | Identity | Declared surface |
 |---|---|---|
-| listed in `-module([P(X)])` | module-local | yes |
-| listed in `-private([P(X)])` | module-local | no |
-| **unmentioned** | **module-local, implicitly private** | no |
+| listed in `-module([P(X)])` | module-local | public — advertised export |
+| listed in `-private([P(X)])` | module-local | private — internal by convention |
+| **unmentioned** | **module-local** | undocumented |
 
 This preserves Prolog's "exports must be declared" norm and the cross-module
 tabling/dispatch guarantees that depend on per-module predicate identity.
@@ -145,9 +153,59 @@ is principled: Prolog itself treats atoms as global and predicates as
 module-scoped, so the divergence in default reflects a real semantic
 distinction, not an inconsistency.
 
+As with atoms, the surface column is advisory: `-import_from(M, [P])` reaches
+a private or undeclared predicate of `M` just as readily as an exported one.
+
 A `-common([P(X)])`-style directive for sharing predicate identity across
 modules is **out of scope** for this proposal and should remain unimplemented.
 Cross-module predicate sharing is what `-import_from` is for.
+
+## Visibility is advisory
+
+**Decided 2026-07-30** (`todo/done/private-atoms-are-importable-contra-spec.md`).
+
+Clausal has no access control. `-import_from(M, [name])` lowers to a Python
+`from M import name` and consults *nothing* about `M`'s declarations — not its
+`-private` list, not its `-module` export list. Every name a module binds is
+reachable from any module that names it:
+
+- an atom or predicate listed in `-private([...])` imports fine, and the import
+  binds the **owner's** class, so the two modules share one identity;
+- a predicate that appears in *neither* list — the "implicitly private" row of
+  the table above — is equally importable and equally identity-preserving.
+
+So `-private` does not mean "unreachable". It means "not part of my documented
+surface" — Python's leading underscore, not C++ `private`. This is consistent
+with what `docs/import.md` already advertises as an advantage over Prolog's
+module system: *"No export lists. Everything is public."*
+
+What `-private` **does** buy, all of it real:
+
+1. **Module-local identity.** The listed name gets a fresh `PredicateMeta` in
+   the declaring module, distinct from the process-wide global atom of the same
+   name and from any other module's declaration of it.
+2. **Strict-atom resolution.** A bare reference to the name compiles instead of
+   raising the strict-atoms `NameError`.
+3. **Shadowing.** Inside the declaring module the private class is the first
+   resolution step (rule 1), ahead of `-module`, imports and the global.
+4. **Signature pre-registration.** For `P(A, B)` entries, arity and field names
+   are fixed before the first clause rather than inferred from it.
+5. **Intent.** It tells a reader the name is internal. That is the whole of its
+   visibility meaning.
+
+Enforcing the private row — rejecting `-import_from(M, [a])` when `M` lists
+`a` in `-private` — was considered and rejected. It would police one row
+of a three-row table whose other rows are equally unenforced, so it could not
+deliver encapsulation anyway (an undeclared name stays importable); and it
+breaks working code — in-repo, `tests/test_functor_reexport.py` and its two
+fixtures; downstream, the `clausify` kit's `query_combinators` re-export of
+`delta`, `sara_irc_tax`'s citation atoms, and the `test_gate_test_profiles`
+fixtures. A warning was rejected for the same reason: it would fire on
+deliberate, correct code, including the anonymous-fixture pattern that has no
+alternative to flag.
+
+`tests/test_global_atoms_default.py::test_private_names_are_importable_and_share_identity`
+pins this so it cannot drift back silently.
 
 ## Escape hatches
 
@@ -220,13 +278,15 @@ succeeds (module-local identity is deliberate; see the Non-goal below).
 - **`-module(name, [...])`**: unchanged syntax. Items in the export list now
   carry "module-local, public" semantics rather than the current "module-local,
   public, and the only way to use this name in this module" semantics.
-- **`-private([...])`**: unchanged syntax. Items carry "module-local,
-  private." Listing an atom here only matters when the module wants identity
-  distinct from the global default; otherwise the listing is unnecessary.
+- **`-private([...])`**: unchanged syntax. Items carry "module-local, and not
+  part of my documented surface" — an advisory marker, not a barrier; see
+  [Visibility is advisory](#visibility-is-advisory). Listing an atom here only
+  matters when the module wants identity distinct from the global default;
+  otherwise the listing is unnecessary.
 - **`-import_from(M, [...])`**: unchanged for predicates. For atoms, becomes
   semantically meaningful only when M owns a local version (atom listed in
-  M's `-module([...])`). Importing a name that is global in M is a no-op
-  documentation hint.
+  M's `-module([...])` **or** its `-private([...])`). Importing a name that is
+  global in M is a no-op documentation hint.
 
 ## New directive: `-strict_atoms`
 

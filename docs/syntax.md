@@ -103,8 +103,9 @@ Every atom is reified at compile time as a zero-arity `PredicateMeta` class — 
     ```
 
     A module opts an atom into **module-local** identity (a class distinct from
-    the global one) by listing it in `-module([...])` (public) or `-private([...])`
-    (private):
+    the global one) by listing it in `-module([...])` or [`-private([...])`](directives.md#-private).
+    The two lists differ only in whether the name is advertised as part of the
+    module's surface — a `-private` atom is still importable:
 
     ```clausal
     --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms_module_local"
