@@ -59,23 +59,42 @@ def truth_literal_hint_lines(names, indent: str = "  ") -> list[str]:
     keeps its wording byte-for-byte and the passing path costs one dict lookup
     per undeclared name.
 
-    Names are reported in first-seen order, de-duplicated, one block each.
+    The three-value explanation is stated once however many names matched, but
+    every matching name gets its own arrow.  Collapsing instead on the
+    *literal* would leave a second synonym unmentioned — with `null` and `nil`
+    both undeclared, the author would fix `null`, re-run, and meet `nil` on the
+    next pass.
+
+    Names are reported in first-seen order, de-duplicated.
     """
-    lines: list[str] = []
+    matched: list[tuple[str, str]] = []
     seen: set[str] = set()
     for name in names:
         literal = _TRUTH_LITERALS.get(name.lower())
         if literal is None or name in seen:
             continue
         seen.add(name)
+        matched.append((name, literal))
+
+    if not matched:
+        return []
+
+    subject = ", ".join(f"`{name}`" for name, _ in matched)
+    verb = "is not a literal" if len(matched) == 1 else "are not literals"
+    lines = [
+        f"{indent}{subject} {verb} in Clausal — the boolean literals are "
+        f"`True`",
+        f"{indent}and `False`, and the third truth value under well-founded "
+        f"semantics",
+        f"{indent}is `Unknown`.",
+    ]
+    # One bad name is the overwhelmingly common case; leave its arrow bare
+    # rather than qualifying a name the reader just saw in the sentence above.
+    if len(matched) == 1:
+        lines.append(f"{indent}-> did you mean `{matched[0][1]}`?")
+    else:
         lines.extend(
-            [
-                f"{indent}`{name}` is not a literal in Clausal — the boolean "
-                f"literals are `True`",
-                f"{indent}and `False`, and the third truth value under "
-                f"well-founded semantics",
-                f"{indent}is `Unknown`.",
-                f"{indent}-> did you mean `{literal}`?",
-            ]
+            f"{indent}-> `{name}`: did you mean `{literal}`?"
+            for name, literal in matched
         )
     return lines

@@ -56,12 +56,26 @@ message stay byte-identical. Lookup is on `name.lower()`; the working spellings
 `True` / `False` / `Unknown` are already bound and never reach a raise site, so
 case-insensitivity cannot shadow a name that works.
 
-Per matching name, in first-seen order:
+For a single matching name — the overwhelmingly common case:
 
 ```
-  `true` is not a literal in Clausal — the boolean literals are `True` and
-  `False`, and the third truth value under well-founded semantics is `Unknown`.
+  `true` is not a literal in Clausal — the boolean literals are `True`
+  and `False`, and the third truth value under well-founded semantics
+  is `Unknown`.
   -> did you mean `True`?
+```
+
+When several names match, the three-value explanation is stated once and each
+name gets its own arrow. Collapsing instead on the *literal* would leave a second
+synonym unmentioned, so an author with both `null` and `nil` undeclared would fix
+`null`, re-run, and meet `nil` on the next pass:
+
+```
+  `null`, `nil` are not literals in Clausal — the boolean literals are `True`
+  and `False`, and the third truth value under well-founded semantics
+  is `Unknown`.
+  -> `null`: did you mean `Unknown`?
+  -> `nil`: did you mean `Unknown`?
 ```
 
 The corpus carries no bare `nil` / `none` / `maybe` / `undefined` outside comments, so

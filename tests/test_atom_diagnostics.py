@@ -77,6 +77,34 @@ def test_hint_names_all_three_truth_values():
     assert "`Unknown`" in joined
 
 
+def test_explanation_appears_once_but_every_name_gets_an_arrow():
+    """Two synonyms of the same literal must not repeat the whole three-value
+    paragraph.  They must still get an arrow each: collapsing on the literal
+    would leave `nil` unmentioned, so the author would fix `null`, re-run, and
+    hit `nil` on the next pass."""
+    joined = "\n".join(truth_literal_hint_lines(["null", "nil"]))
+    assert joined.count("well-founded semantics") == 1
+    assert joined.count("the boolean literals are") == 1
+    assert joined.count("did you mean") == 2
+    assert "`null`" in joined
+    assert "`nil`" in joined
+
+
+def test_distinct_literals_each_get_an_arrow():
+    """`true` and `null` want different answers, so both must be named."""
+    joined = "\n".join(truth_literal_hint_lines(["true", "null"]))
+    assert joined.count("well-founded semantics") == 1
+    assert "did you mean `True`" in joined
+    assert "did you mean `Unknown`" in joined
+
+
+def test_single_name_arrow_stays_unqualified():
+    """The overwhelmingly common case is one bad name.  Its arrow must stay
+    the bare `-> did you mean \\`True\\`?` — no per-name qualifier noise."""
+    lines = truth_literal_hint_lines(["true"])
+    assert lines[-1].strip() == "-> did you mean `True`?"
+
+
 def test_only_matching_names_are_hinted():
     """Given a mix, the helper hints the boolean spellings and says nothing
     about the rest — the caller still appends its own remedy list."""
@@ -137,8 +165,13 @@ def test_mixed_undeclared_keeps_both_hint_and_remedies():
     assert "did you mean `True`?" in msg
     assert "truthlit_mixed_beta" in msg
     assert "bare atom references must be one of:" in msg
-    assert "-import_from" in msg
-    assert "global_atom" in msg
+    # All five remedies, not a sample: the author still has to fix the
+    # non-boolean name, and a regression that dropped one should fail here.
+    assert "- listed in -module(" in msg
+    assert "- listed in -private([atom, ...])" in msg
+    assert "- imported via -import_from(from_module, [atom])" in msg
+    assert "- qualified (e.g. other_module.atom)" in msg
+    assert '- obtained via global_atom("atom", Atom)' in msg
 
 
 def test_ordinary_undeclared_atom_message_is_unchanged():
