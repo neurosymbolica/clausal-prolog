@@ -350,8 +350,14 @@ def test_private_names_are_importable_and_share_identity():
     # smell.  A `ClausalPrivateAtomImportWarning`-style diagnostic would
     # fire on the legitimate anonymous-fixture pattern, so it is
     # deliberately absent.
+    # Case-insensitive on purpose: the fixture's names are ``privimp_tag``
+    # but also ``PrivImpHelper``/``PrivImpUse``, and a warning that named only
+    # the *predicate* would not contain the lowercase spelling — so a
+    # case-sensitive filter would let an Option-3 build slip through the pin
+    # for the predicate case.  Matching every warning is not the alternative:
+    # loading a fixture can legitimately emit unrelated ones.
     private_warnings = [
-        w for w in caught if "privimp" in str(w.message)
+        w for w in caught if "privimp" in str(w.message).lower()
     ]
     assert private_warnings == [], (
         f"importing a -private name must not warn; got {private_warnings}"
