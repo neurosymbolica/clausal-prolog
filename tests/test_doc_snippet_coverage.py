@@ -41,16 +41,20 @@ _KNOWN_UNCOMPILABLE = {
     ("for_python_programmers.md", 272),
     ("for_python_programmers.md", 291),
     # import.md: two `# caller.clausal` blocks that `-import_from(lib, …)` a
-    # fictional library and illustrate cross-module name scoping; L287
+    # fictional library and illustrate cross-module name scoping; the first
     # deliberately documents a runtime failure. Neither is standalone-compilable.
-    ("import.md", 287),
-    ("import.md", 315),
+    #
+    # These are keyed by fence line, so prose inserted ABOVE them shifts every
+    # one. The "A path segment is a directory name, literally" section pushed
+    # them down 36 lines, and the numbers below are shifted to match.
+    ("import.md", 323),
+    ("import.md", 351),
     # import.md "Same-name declared atoms do not unify across modules": two
     # more `# caller.clausal` blocks that `-import_from(lib, …)` a fictional
     # library to illustrate the declared-atom identity mismatch and its
     # `-import_from` remedy. Neither is standalone-compilable.
-    ("import.md", 370),
-    ("import.md", 386),
+    ("import.md", 406),
+    ("import.md", 422),
     ("index.md", 10),
     ("purity.md", 111),
 }

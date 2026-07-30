@@ -228,11 +228,47 @@ need different repairs:
 | module exists, is Clausal, lacks the name | the `-module(...)` export list, plus a near-miss suggestion |
 | module does not exist at all | "names a module that does not exist … no export list to show" — never an empty list, which would read as "exports nothing" |
 | module exists but is not a Clausal module | Python's own message, untouched — a Clausal file importing `re` or `numpy` gets Python's diagnosis, not a Clausal one |
+| a segment's directory is on disk but misnamed | the directory, the identifier rule, and the rename — see below |
 
 A module with no `-module(...)` list is told so, and then shown the names it
 actually binds. Export lists longer than 40 names are truncated, and the
 message says so and gives the file path — a silently cut list would read as
 authoritative.
+
+### A path segment is a directory name, literally
+
+Every segment of a dotted import is a **valid Python identifier**, and a package
+directory is importable only under its own name. So `eu/state-aid/` can never be
+the `state_aid` of `-import_from(eu.state_aid.gber, …)`: `state-aid` is not an
+identifier, and `state_aid` is a different segment, not a spelling of it. The
+same goes for a file — `state-aid.clausal` is not the module `state_aid`.
+
+Reported as "no module named 'eu.state_aid'" this reads as a missing file, and
+sends you looking for a typo (or creating a second copy of a package you already
+have). So when the failing segment is explained by a misnamed directory or file
+sitting on the search path, the message names it:
+
+```text
+ModuleNotFoundError: No module named 'eu.state_aid'
+  -import_from(eu.state_aid.gber, [G])
+    in deep.clausal
+  resolution of 'eu.state_aid.gber' stops at the segment 'state_aid'.
+  eu/state-aid is there, but 'state-aid' is not a valid Python identifier, so
+    no dotted import can name it — 'state_aid' is a different segment, not a
+    spelling of it. There is therefore no export list to show.
+  -> rename the directory 'state-aid' to 'state_aid'. Renaming is the only
+     repair: a package directory is importable only under its own name, so the
+     import cannot be adjusted to meet it.
+```
+
+Renaming really is the only repair: there is no way to write the import that
+matches a non-identifier name. A **digit-leading** name (`42usc423_ssdi`) is
+rejected earlier still — you cannot even write the directive, so you get a
+syntax error with a caret on the digit rather than an import error.
+
+If nothing on the search path resembles the segment, the older "does not exist"
+wording stands: claiming a naming fault with no misnamed entry to point at would
+be an invention.
 
 ---
 

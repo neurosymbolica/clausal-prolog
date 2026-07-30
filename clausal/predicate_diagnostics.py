@@ -54,6 +54,7 @@ from clausal.import_diagnostics import (
     _arrow,
     _declared_exports,
     _name_list_lines,
+    _sentence,
     _suggestions,
 )
 
@@ -468,15 +469,6 @@ def _sibling_hits(functor, siblings, already):
 
 
 # ── message assembly ─────────────────────────────────────────────────────────
-
-
-def _sentence(text):
-    """A ``  …`` block wrapped at the shared width, continuations hanging."""
-    return textwrap.wrap(
-        text, width=_WIDTH, initial_indent=_INDENT,
-        subsequent_indent=_INDENT + "  ",
-        break_long_words=False, break_on_hyphens=False,
-    ) or [_INDENT + text]
 
 
 def _hit_line(functor, hit):

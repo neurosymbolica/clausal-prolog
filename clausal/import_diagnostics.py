@@ -25,6 +25,15 @@ different words:
    inventing a Clausal-flavoured export list for ``re`` or ``numpy`` would be
    noise at best and misdirection at worst.
 
+Case 2 has a sub-case worth its own words.  A package directory's name IS its
+import segment, so ``eu/state-aid/`` can never be the ``state_aid`` of a dotted
+import — ``state-aid`` is not a Python identifier.  Saying "no module of that
+name is on the import path" to someone looking straight at the directory sends
+them hunting for a typo, or worse, creating a second copy of a package they
+already have; the hierarchical-namespace migration lost real time to exactly
+that.  So when the miss is explained by a misnamed entry sitting on the search
+path, say which entry and say the rule (see ``_misnamed_path_entry``).
+
 Everything here runs on the error path only, so re-parsing the target module's
 source to recover its declarations costs nothing in the normal case.
 """
@@ -32,9 +41,11 @@ source to recover its declarations costs nothing in the normal case.
 from __future__ import annotations
 
 import difflib
+import os
 import re
 import sys
 import textwrap
+from typing import NamedTuple
 
 # Display cap for the export list.
 #
@@ -233,6 +244,15 @@ def _wrap(label: str, body: str) -> list[str]:
     ) or [lead.rstrip()]
 
 
+def _sentence(text: str) -> list[str]:
+    """A ``  …`` block wrapped at the shared width, continuations hanging."""
+    return textwrap.wrap(
+        text, width=_WIDTH, initial_indent=_INDENT,
+        subsequent_indent=_INDENT + "  ",
+        break_long_words=False, break_on_hyphens=False,
+    ) or [_INDENT + text]
+
+
 def _arrow(lines: list[str]) -> list[str]:
     out = []
     for i, line in enumerate(lines):
@@ -319,16 +339,133 @@ def _describe_missing_name(exc, missing, dotted, mod, loader):
     return "\n".join(lines)
 
 
-def _describe_missing_module(exc, dotted, directive, importer_file):
-    """Case 2 — the module named by the directive does not exist."""
+#: Extensions an entry on the search path can be imported under.
+_SOURCE_SUFFIXES = (".clausal", ".pl", ".py")
+
+
+class _MisnamedEntry(NamedTuple):
+    """A search-path entry that would BE the wanted segment but for its name."""
+    path: str    # /…/eu/state-aid
+    entry: str   # state-aid          (as it appears in the directory)
+    stem: str    # state-aid          (entry minus any source suffix)
+    kind: str    # 'directory' | 'file'
+
+
+def _search_dirs_for(failed: str) -> list[str]:
+    """The directories the import machinery looked in for *failed*.
+
+    For ``eu.state_aid`` that is ``eu.__path__`` — ``eu`` must have imported,
+    or the failure would have been reported against ``eu`` instead.  For a
+    bare top-level name it is ``sys.path``.  If the parent is not in
+    ``sys.modules`` there is no search path to scan, and guessing at
+    ``sys.path`` would look in the wrong place, so decline.
+    """
+    parent, _, _segment = failed.rpartition(".")
+    if not parent:
+        return [p for p in sys.path if isinstance(p, str)]
+    search = getattr(sys.modules.get(parent), "__path__", None)
+    try:
+        return [p for p in search if isinstance(p, str)]
+    except TypeError:
+        return []
+
+
+def _misnamed_path_entry(failed: str) -> _MisnamedEntry | None:
+    """The entry whose *name* is why *failed* did not resolve, or ``None``.
+
+    A directory or source file counts only when its name is not a Python
+    identifier *and* replacing the characters an identifier cannot hold with
+    ``_`` yields exactly the wanted segment.  Under that test the report is a
+    tautology rather than a guess: ``state-aid`` cannot be ``state_aid``, and
+    the reader is told which of the two they have.
+
+    Two things keep it from firing where the old sentence was right.  A
+    correctly-spelled entry anywhere on the search path aborts the scan — the
+    import then failed for some other reason (a directory with no
+    ``__init__``, an unreadable file, a stale cache) and the neighbouring
+    hyphen is not the story.  And an entry that is neither a directory nor a
+    recognised source file is skipped, so ``state-aid.txt`` is not offered as
+    a package.
+    """
+    segment = failed.rpartition(".")[2]
+    if not segment:
+        return None
+    for dir_entry in _search_dirs_for(failed):
+        try:
+            names = os.listdir(dir_entry)
+        except OSError:
+            continue
+        if {segment, *(segment + s for s in _SOURCE_SUFFIXES)} & set(names):
+            return None
+        for name in sorted(names):
+            full = os.path.join(dir_entry, name)
+            if os.path.isdir(full):
+                stem, kind = name, "directory"
+            elif name.endswith(_SOURCE_SUFFIXES) and os.path.isfile(full):
+                stem, kind = name.rsplit(".", 1)[0], "file"
+            else:
+                continue
+            if stem.isidentifier() or re.sub(r"\W", "_", stem) != segment:
+                continue
+            return _MisnamedEntry(full, name, stem, kind)
+    return None
+
+
+def _rename_remedy(near: _MisnamedEntry, segment: str) -> str:
+    """The one repair there is: the directory or file has to change its name.
+
+    It says so outright, because the repair a reader reaches for first is to
+    adjust the import — and there is no spelling of the import that works.  The
+    rule is stated here rather than repeated from the evidence line above.
+    """
+    if near.kind == "file":
+        want = near.entry.replace(near.stem, segment, 1)
+        what = "a module file"
+    else:
+        want = segment
+        what = "a package directory"
+    return (f"rename the {near.kind} '{near.entry}' to '{want}'. Renaming is "
+            f"the only repair: {what} is importable only under its own name, "
+            f"so the import cannot be adjusted to meet it.")
+
+
+def _describe_missing_module(exc, dotted, failed, directive, importer_file):
+    """Case 2 — the module named by the directive does not exist.
+
+    *dotted* is the path the directive asks for; *failed* is the dotted prefix
+    at which resolution actually stopped, which is *dotted* itself unless an
+    intermediate package is the missing one.
+    """
+    segment = failed.rpartition(".")[2]
     lines = [str(exc), f"{_INDENT}{directive}"]
     if importer_file:
         lines.append(f"{_INDENT}  in {importer_file}")
+    if failed != dotted:
+        # Naming only the whole path would leave the reader checking segments
+        # that resolved perfectly well.
+        lines.extend(_sentence(
+            f"resolution of '{dotted}' stops at the segment '{segment}'."))
+
+    near = _misnamed_path_entry(failed)
+    if near is not None:
+        lines.extend(_sentence(
+            f"{near.path} is there, but '{near.stem}' is not a valid Python "
+            f"identifier, so no dotted import can name it — '{segment}' is a "
+            f"different segment, not a spelling of it. There is therefore no "
+            f"export list to show."))
+        lines.extend(_arrow([_rename_remedy(near, segment)]))
+        return "\n".join(lines)
+
+    if failed != dotted:
+        claim = (f"No .clausal file, .pl file or Python module called "
+                 f"'{failed}' is on the import path")
+    else:
+        claim = (f"names a module that does not exist: no .clausal file, .pl "
+                 f"file or Python module called '{dotted}' is on the import "
+                 f"path")
     lines.extend(textwrap.wrap(
-        f"names a module that does not exist: no .clausal file, .pl file or "
-        f"Python module called '{dotted}' is on the import path. There is "
-        f"therefore no export list to show — this is a MISSING module, not a "
-        f"module that exports nothing.",
+        f"{claim}. There is therefore no export list to show — this is a "
+        f"MISSING module, not a module that exports nothing.",
         width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
         break_long_words=False, break_on_hyphens=False,
     ))
@@ -377,6 +514,27 @@ def _import_targets(module_items):
     return targets
 
 
+def _prefix_target(failed, targets):
+    """``(declared, directive)`` for the directive whose path stops at *failed*.
+
+    ``-import_from(eu.state_aid.gber, …)`` against a hyphenated
+    ``eu/state-aid/`` raises with ``name='eu.state_aid'`` — a strict prefix of
+    the declared path, so the exact-key lookup above misses it and CPython's
+    bare one-liner escaped for a directive we can see.
+
+    Only a prefix of the *declared text* counts.  A name the author never wrote
+    (an alias rewrite such as ``date_time`` → ``clausal.modules.py.date_time``,
+    which fails at ``clausal.modules.py`` when the install is broken) cannot be
+    quoted back at them as "the segment that stopped resolution", so those keep
+    Python's own message.
+    """
+    prefix = failed + "."
+    for declared, directive in targets.values():
+        if declared.startswith(prefix):
+            return declared, directive
+    return None
+
+
 def enrich_import_error(exc, module_items, importer_file=None):
     """Return a replacement ``ImportError``, or ``None`` to re-raise ``exc``.
 
@@ -389,16 +547,24 @@ def enrich_import_error(exc, module_items, importer_file=None):
 
     targets = _import_targets(module_items)
     dotted = getattr(exc, "name", None)
-    if not dotted or dotted not in targets:
+    if not dotted:
         return None
-    declared, directive = targets[dotted]
-
     missing = getattr(exc, "name_from", None)
+    if dotted in targets:
+        declared, directive = targets[dotted]
+    elif missing is None and isinstance(exc, ModuleNotFoundError):
+        hit = _prefix_target(dotted, targets)
+        if hit is None:
+            return None
+        declared, directive = hit
+    else:
+        return None
+
     if missing is None:
         # ``from M import …`` where M itself could not be found.
         if not isinstance(exc, ModuleNotFoundError):
             return None
-        message = _describe_missing_module(exc, declared, directive,
+        message = _describe_missing_module(exc, declared, dotted, directive,
                                            importer_file)
     else:
         mod = sys.modules.get(dotted)
