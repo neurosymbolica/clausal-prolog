@@ -179,6 +179,51 @@ except ImportError:
 _copy_term = _copy_term_impl
 
 
+def _construct_named(name_val, args, who: str):
+    """Build a term with functor *name_val* over *args*, for ``functor/3``/``unpack/2``.
+
+    A ``PredicateMeta`` handed in as the name used to be reduced to
+    ``name_val.__name__`` and rebuilt as a generic :class:`Compound`, throwing
+    away the very class the caller supplied.  Since a Compound never unifies
+    with a declared term-class instance of the same name and arity, that made
+    decompose-then-reconstruct fail for every declared with-fields term, and
+    the two rendered identically so the mismatch was invisible.  The kit
+    documented the symptom as settled behaviour rather than a defect (see
+    ``planner_lib.clausal``, "ATTR-LIST BRANCH — VERIFIED SEMANTICS").  See
+    ``todo/done/functor-3-names-an-atom-as-a-class-but-a-compound-as-a-string.md``.
+
+    Only the class arm resolves.  A ``str`` name still builds a Compound and is
+    deliberately *not* resolved back to a class: which module's ``cite`` a bare
+    string names is ambiguous under module-local atom identity, and the kit's
+    ``key_string/2`` depends on the string arm behaving exactly as it does.
+
+    An arity that disagrees with the class's field count is not that term, so
+    it falls through to the Compound rather than raising — which keeps the
+    kit's ``functor(PROBE, KEY, 1)`` over an arity-0 schema atom working.
+    """
+    if isinstance(name_val, PredicateMeta):
+        # ``_fields`` is the field list whatever minted the class — a generated
+        # ``class <functor>(metaclass=PredicateMeta)`` block (the usual route
+        # for an in-file predicate, see ``_make_functor_class_ast``) or
+        # ``make_predicate``.  ``PredicateMeta.__call__`` fills missing trailing
+        # fields with fresh Vars and rejects only *overflow*, so it is this
+        # exact-match gate, not the constructor, that makes ``name_val(*args)``
+        # bind every field positionally with nothing left over.
+        if len(name_val._fields) == len(args):
+            return name_val(*args)
+        # Arity disagrees → not this class; fall through to a generic Compound.
+        functor_str = name_val.__name__
+    elif isinstance(name_val, str):
+        functor_str = name_val
+    else:
+        # A09-F027: the functor of a compound must be atom-shaped (ISO:
+        # type_error(atom, Name)), else unpack(T, [3, 1, 2]) built
+        # Compound("3", (1, 2)) and functor/3 built a bogus functor "f(1)".
+        from clausal.logic.exceptions import LogicException, type_error
+        raise LogicException(type_error("atom", name_val, who))
+    return Compound(functor_str, tuple(args))
+
+
 @_builtin("functor", 3)
 def _functor__3(term, name, arity, trail, k):
     """functor(Term, Name, Arity) — decompose or compose a term.
@@ -200,18 +245,8 @@ def _functor__3(term, name, arity, trail, k):
         if arity_val == 0:
             constructed = name_val
         else:
-            # A09-F027: with arity > 0 the name must be atom-shaped (a str or
-            # a PredicateMeta). ISO raises type_error(atom, Name) otherwise —
-            # str(name_val) previously built a bogus functor like "f(1)".
-            if isinstance(name_val, PredicateMeta):
-                functor_str = name_val.__name__
-            elif isinstance(name_val, str):
-                functor_str = name_val
-            else:
-                from clausal.logic.exceptions import LogicException, type_error
-                raise LogicException(type_error("atom", name_val, "functor/3"))
             args = tuple(Var() for _ in range(arity_val))
-            constructed = Compound(functor_str, args)
+            constructed = _construct_named(name_val, args, "functor/3")
         mark = trail.mark()
         if unify(term, constructed, trail):
             yield None
@@ -300,17 +335,7 @@ def _univ__2(term, lst, trail, k):
         if len(args_vals) == 0:
             constructed: Any = f_val  # atom
         else:
-            # A09-F027: the functor of a compound must be atom-shaped (ISO:
-            # type_error(atom, Name)). unpack(T, [3, 1, 2]) previously built
-            # Compound("3", (1, 2)) instead of raising.
-            if isinstance(f_val, PredicateMeta):
-                functor_str = f_val.__name__
-            elif isinstance(f_val, str):
-                functor_str = f_val
-            else:
-                from clausal.logic.exceptions import LogicException, type_error
-                raise LogicException(type_error("atom", f_val, "unpack/2"))
-            constructed = Compound(functor_str, tuple(args_vals))
+            constructed = _construct_named(f_val, args_vals, "unpack/2")
         mark = trail.mark()
         if unify(term, constructed, trail):
             yield None
