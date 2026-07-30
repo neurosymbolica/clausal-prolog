@@ -7,6 +7,57 @@ of it is about verification that *looks* green and isn't.
 
 ---
 
+## 0. Done — 2026-07-30
+
+All five merged to `main` in the recommended order and synced. **The handoff is
+closed; §§1–7 below are the record of how, not work outstanding.**
+
+| # | merge commit | branch |
+|---|---|---|
+| 1 | `20e95b46` | `fix/var-shaped-predicate-name` |
+| 2 | `fe2aa7a1` | `fix/package-segment-nonidentifier-diagnostic` |
+| 3 | `3f3cc6c5` | `fix/renderer-completeness-comparechain-setliteral` |
+| 4 | `f501f223` | `fix/tabling-wrapper-survives-recompile` |
+| 5 | `a05020d9` | `perf/const-list-membership-frozenset` |
+
+- **Clone suite green after every merge**, one at a time: `10520 → 10534 →
+  10550 → 10605 → 10617 → 10664` passed, with only the pre-existing
+  doc-snippet failure standing. 145 new tests (14+16+55+12+48), all passing;
+  the `F026` flake failed in the last full run and passed alone (3.02s against
+  a 3.0s threshold), which is the whole of the `+144`-vs-`+145` gap.
+- **One interaction, found by the per-merge gate**, not by the branches:
+  merge #2's intermediate-segment test imported `[G]`, and merge #1's new
+  refusal rejects an ALL-CAPS `-import_from` name at load time, preempting the
+  import failure the test asserts. #1's refusal is right; the name was
+  incidental and is `[Gber]` now, folded into `fe2aa7a1` so `main` is green at
+  every commit. Merging in the other order would have hidden it until later.
+- **Doc-snippet violations: 28, same 28**, only line numbers moved
+  (`directives.md:314→328`, `import.md:318/373/389 → 354/409/425`).
+- **Domain suites green against the merged tree**, and against the *merged*
+  tree specifically — the §6 `PYTHONPATH` trap was avoided with throwaway
+  `*_branch.sh` copies kept in the firb dir (since removed) and confirmed by
+  `print(c.__file__)` plus the presence of `const_set` and `_install ->
+  Callable`. `au/firb` 46+27+32+18 with 4/4 controls load-bearing, ALL GREEN;
+  `us/sara_irc_tax` 41/41.
+- **`/workspace/clausal` fast-forwarded to `a05020d9`**, working tree now
+  identical to the clone. Failure *set* diffed, not the count: **142 before,
+  the same 142 after**, `10308 → 10453` passed. `--ignore=tests/test_clportools.py`
+  is required or collection aborts and *no tests run at all* — the first
+  attempt captured one `ERROR` line and nothing else.
+- **§6 gets a new entry: under pytest, cwd beats `PYTHONPATH`.** Running the
+  clone's `tests/test_tabling_lifecycle.py` with `PYTHONPATH=/workspace/clausal`
+  reported 12/12 green — from the *clone's* `clausal`, because pytest prepends
+  its rootdir. A red-green gate built that way passes both halves and means
+  nothing. Copying the test into the canonical tree and running it there gave
+  the real answer: **7 of 12 fail** without the fix, matching §2's 7/12. That
+  run also dumped a 512MB `core`, so on pre-fix code the lost-tabling
+  left-recursion does not merely hang, it can take the interpreter down.
+- Five merged branches and the five dead `worktree-agent-*` branches deleted
+  with their worktrees. `fix/imported-functor-clause-destruction` and its
+  worktree are **kept, unmerged**, per §5.
+
+---
+
 ## 1. What already landed and is synced
 
 Three merges went to `main` in `/workspace/clausal-bug-fix` and were
