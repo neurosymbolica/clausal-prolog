@@ -169,3 +169,67 @@ def test_number_vs_number_near_miss_says_nothing(capsys, tmp_path):
     out = capsys.readouterr().out
     assert "did not unify" in out
     assert IS_VS_EQ not in out
+
+
+# ── the branches the two sites do not otherwise reach ────────────────────────
+
+
+def test_site1_fires_for_an_integer_expectation_too():
+    """``_NUMERIC_EXPECTATIONS`` holds `integer` as well as `number`.
+
+    Only `number` is exercised above, so the `integer` half of the set was
+    asserted nowhere and could have been dropped silently.
+    """
+    exc = LogicException(
+        type_error("integer", FloorDiv(left=10000, right=4), "nth0/3"))
+    msg = str(exc)
+    assert "unevaluated arithmetic term" in msg
+    assert IS_VS_EQ in msg
+
+
+KEYWORD_SRC = """
+eff(R=RESULT) <- (
+    RESULT is 2500 + 0
+),
+
+Test("keyword argument") <- (
+    eff(R=2500)
+),
+"""
+
+
+def test_nearest_solution_note_fires_on_a_keyword_argument(capsys, tmp_path):
+    """``_report_nearest`` reads `kwargs[i].value` on the kw path.
+
+    That is a distinct branch from the positional one, and a wrong index there
+    would compare the wrong pair — silently, since a missing note looks the
+    same as a note declining.
+    """
+    p = write(tmp_path, "kwarg.clausal", KEYWORD_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "did not unify" in out
+    assert IS_VS_EQ in out
+    # It really is the kw branch: the label names the keyword, so this cannot
+    # start passing via the positional path without the assertion noticing.
+    assert "keyword argument 'R' differs" in out
+    assert "keyword argument 'R' pairs an unevaluated" in out
+
+
+def test_a_boolean_opposite_an_arith_term_does_not_fire():
+    """``_is_number`` excludes `bool`: `True` is not 1 for this note.
+
+    Pairing a boolean with an operator term is not the is/== confusion, and a
+    note there would be claiming something false about the author's intent.
+    """
+    from clausal.testing import _arith_vs_number_note
+
+    assert _arith_vs_number_note(
+        "argument 1", Add(left=1, right=1), True) is None
+    assert _arith_vs_number_note(
+        "argument 1", True, Add(left=1, right=1)) is None
+    # ...while a real number on either side still does fire.
+    assert _arith_vs_number_note(
+        "argument 1", Add(left=1, right=1), 2) is not None
+    assert _arith_vs_number_note(
+        "argument 1", 2, Add(left=1, right=1)) is not None
