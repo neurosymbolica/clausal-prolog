@@ -252,7 +252,7 @@ sitting on the search path, the message names it:
 ModuleNotFoundError: No module named 'eu.state_aid'
   -import_from(eu.state_aid.gber, [G])
     in deep.clausal
-  resolution of 'eu.state_aid.gber' stops at the segment 'state_aid'.
+  the segment 'state_aid' did not resolve, so neither can 'eu.state_aid.gber'.
   eu/state-aid is there, but 'state-aid' is not a valid Python identifier, so
     no dotted import can name it — 'state_aid' is a different segment, not a
     spelling of it. There is therefore no export list to show.

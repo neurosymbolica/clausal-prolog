@@ -386,17 +386,29 @@ def _misnamed_path_entry(failed: str) -> _MisnamedEntry | None:
     hyphen is not the story.  And an entry that is neither a directory nor a
     recognised source file is skipped, so ``state-aid.txt`` is not offered as
     a package.
+
+    "Anywhere" is why the scan takes two passes over the same listings.  Asking
+    both questions of one directory at a time makes the answer depend on which
+    directory came first: a hyphen in an early ``sys.path`` entry would be
+    reported while ``state_aid`` sat correctly spelled in a later one, and the
+    reader would be told to rename a directory that is not the reason for
+    anything.  So the whole path is swept for a correct spelling before any
+    misnamed candidate is considered.
     """
     segment = failed.rpartition(".")[2]
     if not segment:
         return None
+    correct = {segment, *(segment + s for s in _SOURCE_SUFFIXES)}
+    listings = []
     for dir_entry in _search_dirs_for(failed):
         try:
             names = os.listdir(dir_entry)
         except OSError:
             continue
-        if {segment, *(segment + s for s in _SOURCE_SUFFIXES)} & set(names):
+        if correct & set(names):
             return None
+        listings.append((dir_entry, names))
+    for dir_entry, names in listings:
         for name in sorted(names):
             full = os.path.join(dir_entry, name)
             if os.path.isdir(full):
@@ -442,9 +454,13 @@ def _describe_missing_module(exc, dotted, failed, directive, importer_file):
         lines.append(f"{_INDENT}  in {importer_file}")
     if failed != dotted:
         # Naming only the whole path would leave the reader checking segments
-        # that resolved perfectly well.
+        # that resolved perfectly well.  The sentence claims the segment and
+        # the entailment, not the route: *this* directive need not be the
+        # import that raised (see _prefix_target), so "resolution of the
+        # declared path stops here" would assert a path possibly not taken.
         lines.extend(_sentence(
-            f"resolution of '{dotted}' stops at the segment '{segment}'."))
+            f"the segment '{segment}' did not resolve, so neither can "
+            f"'{dotted}'."))
 
     near = _misnamed_path_entry(failed)
     if near is not None:
@@ -525,8 +541,16 @@ def _prefix_target(failed, targets):
     Only a prefix of the *declared text* counts.  A name the author never wrote
     (an alias rewrite such as ``date_time`` → ``clausal.modules.py.date_time``,
     which fails at ``clausal.modules.py`` when the install is broken) cannot be
-    quoted back at them as "the segment that stopped resolution", so those keep
+    quoted back at them as "the segment that did not resolve", so those keep
     Python's own message.
+
+    The match is on the name, not on the route: a transitive ``import a.b``
+    failing deep inside some unrelated module is indistinguishable here from
+    this file's own ``-import_from(a.b.c, …)``, and gets attributed to that
+    directive.  Harmless, because ``a.b`` is unreachable either way and so the
+    named directive would fail identically (Python's traceback still shows who
+    actually raised) — but it is why the message speaks of the segment and what
+    follows from it, never of the resolution having been attempted.
     """
     prefix = failed + "."
     for declared, directive in targets.values():
