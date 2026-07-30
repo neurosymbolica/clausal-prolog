@@ -3,12 +3,38 @@ from importlib.abc import MetaPathFinder
 import importlib.util
 import os
 import sys
+import threading
 
 
 class _LazyHookFinder(MetaPathFinder):
     """Sits on sys.meta_path; replaces itself with the real finders on first hit."""
 
     _installing = False
+
+    # Names whose Condition-2 probe is currently in flight on this thread.
+    #
+    # ``importlib.util.find_spec("clausal.modules.<name>")`` imports the parent
+    # packages of that dotted name in order to read their ``__path__``.  When
+    # ``clausal`` itself is absent from ``sys.modules`` — e.g. a test cleared it,
+    # or an ``import clausal`` failed after this stub was installed — that parent
+    # import comes straight back through ``sys.meta_path`` as the *bare* name
+    # ``clausal``, which re-enters Condition 2 and probes
+    # ``clausal.modules.clausal``, which imports ``clausal`` again … until
+    # ``RecursionError`` takes the whole process down.  Declining a name we are
+    # already probing breaks the cycle: returning None only says "not mine", so
+    # the remaining finders still resolve it (or raise the normal
+    # ``ModuleNotFoundError``).
+    #
+    # Mirrors ``ModulesFinder._resolving`` in clausal/import_hook.py, but kept
+    # per-thread so a concurrent importer of the same name is not wrongly
+    # declined a spec it is entitled to.
+    _probing = threading.local()
+
+    def _in_flight(self) -> set[str]:
+        names = getattr(self._probing, "names", None)
+        if names is None:
+            names = self._probing.names = set()
+        return names
 
     def find_spec(self, fullname, path, target=None):
         if self._installing:
@@ -20,12 +46,19 @@ class _LazyHookFinder(MetaPathFinder):
 
         # Condition 2: bare top-level name that might be in clausal.modules
         if "." not in fullname:
+            in_flight = self._in_flight()
+            if fullname in in_flight:
+                return None
             qualified = f"clausal.modules.{fullname}"
+            in_flight.add(fullname)
             try:
-                if importlib.util.find_spec(qualified) is not None:
-                    return self._activate_and_retry(fullname, path, target)
+                found = importlib.util.find_spec(qualified) is not None
             except (ModuleNotFoundError, ValueError):
-                pass
+                found = False
+            finally:
+                in_flight.discard(fullname)
+            if found:
+                return self._activate_and_retry(fullname, path, target)
 
         # Condition 3: .clausal or .pl file on sys.path
         tail = fullname.rsplit(".", 1)[-1]
