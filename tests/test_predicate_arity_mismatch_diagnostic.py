@@ -654,6 +654,34 @@ class TestZeroArityFactAtomHead:
         assert "dataclass" not in str(exc.value)
 
 
+class TestCompoundHead:
+    """A head with an ``args`` sequence, which is read from ``args``.
+
+    Pinned because reading the class's ``_fields`` first — the fix for the
+    0-arity fact atom — put a second branch in front of this one, and because a
+    ``Compound`` whose functor is a ``Var`` still has a countable arity even
+    though ``database.head_key`` refuses to name it.
+    """
+
+    def test_str_functor(self):
+        from clausal.terms import Compound
+        pred = make_atom("arcm_compound")
+        pred._clauses.append(Clause(head=Compound("arcm_compound", (1, 2)),
+                                    body=[]))
+        assert pred._clause_arity() == 2
+        with pytest.raises(PredicateArityMismatchError) as exc:
+            pred._refuse_call_at(1)
+        assert "takes 2 arguments, but this call passes 1" in str(exc.value)
+
+    def test_var_functor(self):
+        from clausal.logic.variables import Var
+        from clausal.terms import Compound
+        pred = make_atom("arcm_compound_var")
+        pred._clauses.append(Clause(head=Compound(Var(), (1, 2, 3)), body=[]))
+        assert pred._clause_arity() == 3
+        pred._refuse_call_at(3)          # agrees: nothing refused
+
+
 class TestAHeadShapeNobodyAnticipated:
     """Unknown arity means *nothing is refused*, never *something is raised*."""
 

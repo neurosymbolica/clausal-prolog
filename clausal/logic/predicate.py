@@ -444,6 +444,13 @@ def _head_arity(head: Any) -> int | None:
     ``None`` means *unknown*, never *zero*: a head shape nobody anticipated
     must make the predicate's arity unknown — and so unrefusable — rather than
     let a diagnostic replace one failure with a stranger one.
+
+    ``database.head_key`` reads the same shapes and knows two more (``KWTerm``,
+    ``Call``), but it is not what this wants: it lives downstream of this module
+    so reaching it means a per-call local import, it *raises* on anything else,
+    and it rejects ``Compound(functor_var, args)`` — whose functor is unknown but
+    whose arity is right there — because it needs a str functor and this needs
+    only a count.
     """
     fields = getattr(head, "_fields", None) if isinstance(head, PredicateMeta) else None
     if fields is not None:
