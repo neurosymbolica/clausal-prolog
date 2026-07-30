@@ -53,16 +53,31 @@ the todo named two:
 | `SetLiteral` | fixed (in todo) |
 | `Await` | fixed — todo missed it |
 | `Yield`, `YieldFrom` | fixed — todo missed them |
-| `ListComp`, `SetComp`, `DictComp`, `GeneratorExpr`, `ForClause` | excluded: emittable but do not compile |
+| `ListComp`, `SetComp`, `DictComp`, `GeneratorExpr` | first excluded, wrongly — see the correction below; rendered in a follow-up |
+| `ForClause` | excluded: rendered by its owning comprehension, never a term on its own |
 
 `await`/`yield` in a clause body are *not* coroutine surface — they compile to
 inert term structures (`Go(L, M) <- (M is await L)` binds `M` to
 `Await(value=[1, 2])`), so they are reachable and now render.
 
-Comprehensions are emittable but every form fails at import with `NameError:
-name 'Y' is not defined` — the loop variable is emitted as a bare reference that
-nothing binds. Same disposition as `Slice`: no legal surface, so no rendering.
-Recorded as an explicit exclusion, not a silent hole (see below).
+**Correction (follow-up commit).** The four comprehension kinds were excluded on
+the claim that "every form fails at import with `NameError: name 'Y' is not
+defined`", the loop variable being a bare reference nothing binds — and so, like
+`Slice`, having no legal surface to render. That was wrong. The `NameError` is
+what an *unbound* loop variable gets; declare the name and the comprehension is
+ordinary legal surface:
+
+```clausal
+-private([x])
+
+Sq(L, M) <- (M is [x * x for x in L])
+```
+
+imports, runs, and yields one solution with `M` bound to the `ListComp` term —
+the same "inert term structure, not control flow" reading that `await`/`yield`
+got two paragraphs up, missed here because the probe used `Y` (a logic variable)
+rather than a declared atom. All four now render and round-trip; only `ForClause`
+stays excluded, since it is never a term on its own.
 
 Beyond the node classes, `_ClauseRenderer.term` was missing three of the seven
 payload types `ast.Constant` can carry, all of which the reifier yields as
@@ -105,7 +120,7 @@ lies to find.
 
 ### Refusals, i.e. where a faithful rendering does not exist
 
-Both keep the contract rather than invent text:
+Each keeps the contract rather than invent text:
 
 - **A `CompareChain` whose adjacent links disagree on their shared operand.**
   `0 < X < 10` reifies to *pairwise* links that share the middle operand
@@ -119,6 +134,11 @@ Both keep the contract rather than invent text:
   empty `ast.Set` as `{*()}`, which re-reifies as a one-element set holding a
   splatted empty tuple. Neither is constructible by the front end; both are
   reachable by mutation, so both raise.
+- **A comprehension with no for-clause, and a tuple comprehension target**
+  (follow-up). `[E]` with an empty `clauses` list is the list-literal surface,
+  which re-reifies as a list; a tuple target unparses bare (`for x, y in L`),
+  which `EmbedTransformer` refuses in turn, so writing it would emit text that
+  cannot be read back. Neither is constructible by the front end either.
 
 ### Verification
 

@@ -565,6 +565,98 @@ class TestBoundLogicVarsInFields:
             render_source(term)
 
 
+# ── Comprehensions ───────────────────────────────────────────────────────────
+# A comprehension in a clause body is an inert *term* structure, like
+# await/yield: nothing iterates it, so the loop variable is a bare name that has
+# to resolve like any other.  An undeclared one is a strict-atoms NameError and a
+# logic variable is a plain NameError — which is why these were once written off
+# as "does not compile", and as node kinds no legal source produces.  Declare the
+# name and the comprehension compiles, runs, and its clause reifies with a
+# ListComp in it, so it does reach the renderer.
+
+
+class TestComprehensions:
+
+    DECLARED_LOOP_VAR = "-private([x])\n\nSq(L, M) <- (M is [x * x for x in L])\n"
+
+    def test_a_declared_loop_var_compiles_runs_and_reifies_a_ListComp(self, tmp_path):
+        """The reachability the exclusion list used to deny.
+
+        `x` is a declared atom, so nothing is undefined: the module imports, the
+        predicate yields a solution, and M is bound to the ListComp term itself
+        (a comprehension is not evaluated in a clause body — it is structure)."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.variables import Var, deref
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        path = tmp_path / "comp.clausal"
+        path.write_text(self.DECLARED_LOOP_VAR)
+        module = _load_module("_test_render_comprehension", str(path))
+
+        result = Var()
+        bindings = []
+        for _ in module.Sq([1, 2, 3], result):
+            bindings.append(deref(result))
+
+        assert len(bindings) == 1, "the clause must yield exactly one solution"
+        assert isinstance(bindings[0], simple_ast.ListComp)
+
+        clause = only_clause(self.DECLARED_LOOP_VAR)
+        assert isinstance(clause.goals[0].right, simple_ast.ListComp)
+
+    def test_the_reachable_clause_round_trips(self):
+        """It raised `RenderError: cannot render operator node: ListComp`."""
+        assert_round_trips("Sq(L, M) <- (M is [x * x for x in L]),\n")
+
+    @pytest.mark.parametrize("src", [
+        "L1(L, M) <- (M is [x * x for x in L]),\n",
+        "S1(L, M) <- (M is {x for x in L}),\n",
+        "D1(L, M) <- (M is {x: x for x in L}),\n",
+        "G1(L, M) <- (M is (x for x in L)),\n",
+        "F1(L, M) <- (M is [x for x in L if x]),\n",
+        "F2(L, M) <- (M is [x for x in L if x if y]),\n",
+        "N1(L, K, M) <- (M is [x for x in L for y in K]),\n",
+        "N2(L, M) <- (M is [[x for x in y] for y in L]),\n",
+        "V1(L, M) <- (M is [x for X in L]),\n",       # logic-variable target
+        "V2(L, M) <- (M is [x for _ in L]),\n",       # anonymous target
+        "V3(L, M) <- (M is [x for [a, b] in L]),\n",  # list target
+        "V4(L, M) <- (M is [x for a.b in L]),\n",     # dotted-atom target
+        "A1(L, M) <- (M is [x async for x in L]),\n",
+        "K1(L, M, Z) <- (M is [Z * x for x in L]),\n",
+    ])
+    def test_every_comprehension_surface_round_trips(self, src):
+        assert_round_trips(src)
+
+    def test_a_comprehension_with_no_for_clause_is_refused(self):
+        """`[E]` with no clauses is the list-literal surface, not a ListComp."""
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        with pytest.raises(RenderError, match="no for-clause"):
+            render_source(simple_ast.ListComp(element=1, clauses=[]))
+
+    def test_a_tuple_target_is_refused_rather_than_written_bare(self):
+        """`for x, y in L` is refused by the reifier, so no reified term carries
+        a tuple target — only a mutated one can, and `ast.unparse` would write it
+        bare, which does not read back."""
+        from clausal.pythonic_ast import nodes as simple_ast
+        from clausal.reflection import Variable
+
+        node = simple_ast.ListComp(
+            element=Atom("x"),
+            clauses=[simple_ast.ForClause(
+                target=(Atom("x"), Atom("y")), iterable=Variable("L"))],
+        )
+        with pytest.raises(RenderError, match="tuple comprehension target"):
+            render_source(node)
+
+    def test_a_non_ForClause_clause_is_refused(self):
+        from clausal.pythonic_ast import nodes as simple_ast
+
+        node = simple_ast.ListComp(element=1, clauses=[Atom("x")])
+        with pytest.raises(RenderError, match="not a ForClause"):
+            render_source(node)
+
+
 # ── Mechanical completeness sweep ────────────────────────────────────────────
 # The set of simple_ast node classes a reified clause body can contain is closed:
 # EmbedTransformer builds bodies by calling node_ast("<ClassName>", …), either
@@ -586,14 +678,15 @@ RENDER_EXCLUSIONS = {
     "LoadAttr": "reified as a dotted Atom",
     "IfExpr": "reified as IfThenElse",
     "TupleLiteral": "reified as a Python tuple",
-    # Emittable by EmbedTransformer but rejected downstream by the goal
-    # compiler, so no legal .clausal source produces them.  See
-    # todo/done/render-completeness-comparechain-slice-evaluate.md.
-    "ListComp": "comprehension: does not compile (NameError on the loop var)",
-    "SetComp": "comprehension: does not compile (NameError on the loop var)",
-    "DictComp": "comprehension: does not compile (NameError on the loop var)",
-    "GeneratorExpr": "comprehension: does not compile (NameError on the loop var)",
-    "ForClause": "comprehension sub-node; comprehensions do not compile",
+    # Not a term on its own: a ForClause is rendered by the comprehension that
+    # owns it, so reaching _operator_ast with a bare one means the term was
+    # mutated — refused loudly, by design.  The four comprehension kinds were
+    # once excluded here too, on the claim that they "do not compile (NameError
+    # on the loop var)" and that no legal source produces them.  Both were
+    # false: the NameError is what an *undeclared* loop variable gets, and
+    # declaring it (`-private([x])`) makes the comprehension compile, run and
+    # reach the renderer.  They are rendered now — see TestComprehensions.
+    "ForClause": "rendered by its owning comprehension, never a term on its own",
 }
 
 

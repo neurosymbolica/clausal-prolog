@@ -739,6 +739,72 @@ class _ClauseRenderer:
             )
         return ast.Set(elts=[self.term(element) for element in elements])
 
+    def _comprehension_clauses(self, node):
+        """The ``for T in IT if C …`` chain shared by all four comprehensions.
+
+        A comprehension in a clause body is an inert *term* structure, like
+        ``await``/``yield``: nothing iterates it, so its loop variable is an
+        ordinary declared atom and the whole shape survives into the reified
+        clause.  Reachable surface, therefore renderable.
+
+        Targets reify to whatever the target expression reifies to — ``Atom``
+        for a declared name, ``Variable`` for ``X`` or ``_``, a list for
+        ``[a, b]`` — and all of those write and re-read as themselves.  A
+        *tuple* target is the exception: the reifier cannot build one (``for
+        x, y in L`` is refused before a term exists), so it arrives only on a
+        mutated term, and ``ast.unparse`` writes it bare — ``for x, y in L`` —
+        which the reifier then refuses in turn.  Refuse it here instead of
+        emitting text that cannot be read back.
+        """
+        clauses = _deref_seq_field(node.clauses, "comprehension clauses")
+        if not clauses:
+            raise RenderError(
+                "cannot render a comprehension with no for-clause: the surface "
+                "of `[E]` is a list literal, which re-reifies differently"
+            )
+        generators = []
+        for clause in clauses:
+            clause = _deref_field(clause)
+            kind = type(clause).__name__
+            if kind != "ForClause":
+                raise RenderError(
+                    f"cannot render comprehension clause: {kind} is not a "
+                    "ForClause"
+                )
+            # ctx is irrelevant to ast.unparse, the only consumer of this tree.
+            target = self.term(clause.target)
+            if isinstance(target, ast.Tuple):
+                raise RenderError(
+                    "cannot render a tuple comprehension target: it unparses "
+                    "bare (`for x, y in L`), which does not re-reify"
+                )
+            generators.append(ast.comprehension(
+                target=target,
+                iter=self.term(clause.iterable),
+                ifs=[self.term(f) for f in _deref_seq_field(
+                    clause.filters, "comprehension filters")],
+                is_async=1 if _deref_field(clause.is_async) else 0,
+            ))
+        return generators
+
+    def _list_comp_ast(self, node):
+        return ast.ListComp(elt=self.term(node.element),
+                            generators=self._comprehension_clauses(node))
+
+    def _set_comp_ast(self, node):
+        return ast.SetComp(elt=self.term(node.element),
+                           generators=self._comprehension_clauses(node))
+
+    def _generator_expr_ast(self, node):
+        """``(E for T in IT)`` — ``ast.unparse`` always parenthesises a
+        GeneratorExp, which is what the reifier needs to see one."""
+        return ast.GeneratorExp(elt=self.term(node.element),
+                                generators=self._comprehension_clauses(node))
+
+    def _dict_comp_ast(self, node):
+        return ast.DictComp(key=self.term(node.key), value=self.term(node.value),
+                            generators=self._comprehension_clauses(node))
+
     def _await_ast(self, node):
         return ast.Await(value=self.term(node.value))
 
@@ -861,6 +927,12 @@ _RENDER_STRUCTURAL_NODES = {
     "Await": _ClauseRenderer._await_ast,
     "Yield": _ClauseRenderer._yield_ast,
     "YieldFrom": _ClauseRenderer._yield_from_ast,
+    # Comprehensions are inert term structures too — nothing iterates them, so
+    # the loop variable is a declared atom and the shape reaches the renderer.
+    "ListComp": _ClauseRenderer._list_comp_ast,
+    "SetComp": _ClauseRenderer._set_comp_ast,
+    "DictComp": _ClauseRenderer._dict_comp_ast,
+    "GeneratorExpr": _ClauseRenderer._generator_expr_ast,
 }
 
 #: Every ``simple_ast`` node class :func:`render_ast` can turn back into source
