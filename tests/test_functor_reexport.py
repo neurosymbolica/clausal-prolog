@@ -3,7 +3,7 @@ by listing it in the importer's own ``-module`` export list.
 
 Background
 ----------
-``todo/module-reexport-imported-functor-shadows.md`` reported that a module
+``todo/done/module-reexport-imported-functor-shadows.md`` reported that a module
 which BOTH imports a functor and lists it in its ``-module`` export gets a
 fresh, distinct predicate class — silently shadowing the import so a
 downstream ``-import_from`` of the "re-exported" functor finds nothing.

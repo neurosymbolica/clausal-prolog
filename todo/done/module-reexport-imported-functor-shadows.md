@@ -3,7 +3,7 @@
 **Status:** RESOLVED — investigation showed the engine already does the right
 thing. Closed with regression tests, no code change. Kept as a note because
 both `tests/test_functor_reexport.py` and
-`todo/statement-context-tuple-goals-silently-discarded.md` reference it.
+`todo/done/statement-context-tuple-goals-silently-discarded.md` reference it.
 
 ## Original report
 A module that BOTH `-import_from`'s a functor and lists it in its own `-module`
@@ -32,7 +32,7 @@ clause body written at statement level** — `fact(R), other(R)` parses as a bar
 Python tuple that is evaluated and silently discarded, so the intended goals
 never became a clause. That footgun is filed and fixed separately:
 
-→ **See `todo/statement-context-tuple-goals-silently-discarded.md`** for the
+→ **See `todo/done/statement-context-tuple-goals-silently-discarded.md`** for the
 root cause and the fix (statement-level arrow-less multi-goal tuples now raise a
 `SyntaxError` instead of silently no-op'ing).
 
@@ -72,7 +72,7 @@ functors (believing it should match the atom-shadowing behaviour),
 >
 > Current state of the arity bug: fixed as a compile-time load error naming both
 > the declaration and the conflicting clause. See
-> `todo/functor-field-name-mismatch-diagnostic.md`.
+> `todo/done/functor-field-name-mismatch-diagnostic.md`.
 >
 > The import-ordering defect (a) is now **fixed** (third pass, same day): no
 > winner is imposed between the local declaration and the import — instead a
@@ -86,7 +86,7 @@ functors (believing it should match the atom-shadowing behaviour),
 
 ## READ THIS IF YOU ARE FIXING THE FUNCTOR FIELD-NAME MISMATCH (added 2026-07-29)
 
-`todo/functor-field-name-mismatch-diagnostic.md` records a root cause traced on
+`todo/done/functor-field-name-mismatch-diagnostic.md` records a root cause traced on
 2026-07-29 that **sounds like** it contradicts this file's NON-BUG verdict. It
 probably does not, but the distinction is subtle and easy to get wrong, so it is
 written out here rather than left to be rediscovered.

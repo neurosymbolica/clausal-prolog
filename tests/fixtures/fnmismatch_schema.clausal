@@ -1,5 +1,5 @@
 # Exporter for the functor field-name mismatch diagnostic
-# (todo/functor-field-name-mismatch-diagnostic.md).
+# (todo/done/functor-field-name-mismatch-diagnostic.md).
 #
 # -dynamic mints the term class with PLACEHOLDER arg_0/arg_1 field names, and
 # no real clause ever unseats it, so `fnm_verdict` is exported as a class whose

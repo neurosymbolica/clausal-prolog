@@ -1,4 +1,4 @@
 # Vocabulary module: ash_query_key is a bare 0-arity ATOM, used downstream as
-# a dict key.  See todo/functor-field-name-mismatch-diagnostic.md ("Phenomenon
+# a dict key.  See todo/done/functor-field-name-mismatch-diagnostic.md ("Phenomenon
 # A" in implementation_plans/dict-atom-keys-vs-predicates.md).
 -module(atomshadow_schema, [ash_query_key])

@@ -1,7 +1,7 @@
 # Reified-term → source renderer (`render_ast` / `render_source`)
 
 Date: 2026-07-20
-Todo: `todo/reified-term-to-source-renderer.md`
+Todo: `todo/done/reified-term-to-source-renderer.md`
 
 ## Purpose
 

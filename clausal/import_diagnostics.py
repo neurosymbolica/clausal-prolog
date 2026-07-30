@@ -7,7 +7,7 @@ stale name surfaces as CPython's stock message::
     (/…/schema.clausal)
 
 which names the file but never the vocabulary — the one thing a repair needs.
-See ``todo/import-error-should-list-module-exports.md``: this was the dominant
+See ``todo/done/import-error-should-list-module-exports.md``: this was the dominant
 failure mode for machine authors (hit by 22/22 runs, 85 repair attempts burned,
 84% of attempts failing to escape it), because the correct names were sitting
 in the very file the message points at, invisible.

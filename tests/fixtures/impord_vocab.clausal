@@ -2,7 +2,7 @@
 #
 # Downstream fixtures declare the same functor with DIFFERENT field names and
 # also -import_from it, in both textual orderings — see
-# todo/functor-field-name-mismatch-diagnostic.md.
+# todo/done/functor-field-name-mismatch-diagnostic.md.
 -private([ok, no, cited, uncited])
 -module(impord_vocab, [impord_verdict(OUTCOME, CITES)])
 

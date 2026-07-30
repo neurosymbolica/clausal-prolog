@@ -1,6 +1,6 @@
 """Clause heads bind by POSITION when the functor is imported in the same file.
 
-``todo/functor-field-name-mismatch-diagnostic.md`` — a module that both declares
+``todo/done/functor-field-name-mismatch-diagnostic.md`` — a module that both declares
 a functor locally and ``-import_from``s the same name used to emit its clause
 heads with the LOCAL field names against the FOREIGN class the import rebound:
 

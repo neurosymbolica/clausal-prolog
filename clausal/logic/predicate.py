@@ -36,7 +36,7 @@ _MISSING = object()  # sentinel for "field not provided"
 #     TypeError: __init__() got an unexpected keyword argument 'arg_1'
 #
 # with no functor, no field names and no source location.  See
-# ``todo/functor-field-name-mismatch-diagnostic.md``.  Two distinct authoring
+# ``todo/done/functor-field-name-mismatch-diagnostic.md``.  Two distinct authoring
 # mistakes produce that identical message, and the error below names which one
 # it is, because that is what lets an author pick a *different* fix instead of
 # re-rolling the same one.

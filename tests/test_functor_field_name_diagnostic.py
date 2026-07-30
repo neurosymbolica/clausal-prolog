@@ -1,6 +1,6 @@
 """Attributable diagnostics for functor field-name mismatches.
 
-``todo/functor-field-name-mismatch-diagnostic.md`` — constructing a term whose
+``todo/done/functor-field-name-mismatch-diagnostic.md`` — constructing a term whose
 keyword-argument names do not match the bound class's ``_fields`` used to raise
 a bare, context-free::
 

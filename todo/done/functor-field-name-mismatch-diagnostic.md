@@ -173,7 +173,7 @@ and neither ordering can be made an error**:
 * 7 corpus modules declare a functor in `-module`/`-private` *and* import the
   same name. That is the blessed re-export idiom
   (`tests/test_functor_reexport.py`,
-  `todo/module-reexport-imported-functor-shadows.md`). Both textual orderings
+  `todo/done/module-reexport-imported-functor-shadows.md`). Both textual orderings
   occur in working domains: `eu/gdpr/lawfulness.clausal` and
   `eu/labour/posted_workers_long_term_trigger/__init__.clausal` declare first
   and import later; `us/irc_s121/eligibility.clausal` imports first.
@@ -504,7 +504,7 @@ the same one.
   it in the authoring prompt as of this date.
 - `implementation_plans/dict-atom-keys-vs-predicates.md` — Phenomenon A, the
   second cause of the identical bare `TypeError`.
-- `todo/module-reexport-imported-functor-shadows.md` — class *identity* across a
+- `todo/done/module-reexport-imported-functor-shadows.md` — class *identity* across a
   re-export chain is preserved; this bug is about *field names*, which are not.
 - `todo/done/atom-identity-cross-module-mismatch-diagnosability.md` — same family
   of "make a cross-module name collision legible" work.

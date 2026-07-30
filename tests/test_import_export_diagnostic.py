@@ -1,6 +1,6 @@
 """`cannot import name X from M` must say what M *does* export.
 
-See ``todo/import-error-should-list-module-exports.md``.  The stock Python
+See ``todo/done/import-error-should-list-module-exports.md``.  The stock Python
 message names the file but never the vocabulary, which is the one piece of
 information a repair needs.  The loader knows it exactly, so it appends it at
 the raise site — and distinguishes the three cases the author cannot:

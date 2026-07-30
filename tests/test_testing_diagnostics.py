@@ -1,7 +1,7 @@
 """Goal-level failure diagnostics for ``python -m clausal.testing``.
 
 A failing test used to report only its name — no goal, no expected, no actual,
-no line number.  See ``todo/test-failure-goal-level-diagnostics.md``.
+no line number.  See ``todo/done/test-failure-goal-level-diagnostics.md``.
 
 The consumer is an automated repair loop, so these assertions are about the
 *content* of the failure report, not its cosmetics.

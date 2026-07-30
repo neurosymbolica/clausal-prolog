@@ -1,6 +1,6 @@
 """`Predicate name/N not found` must say which predicates *are* reachable.
 
-See ``todo/predicate-not-found-should-list-candidates.md``.  The goal-level
+See ``todo/done/predicate-not-found-should-list-candidates.md``.  The goal-level
 report already names the goal and its index; what it never said is what the
 author could have called instead, so the three situations that need three
 different fixes were indistinguishable:

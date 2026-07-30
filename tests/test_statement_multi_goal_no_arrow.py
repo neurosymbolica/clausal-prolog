@@ -11,7 +11,7 @@ case, survived as a runtime expression, and was evaluated then discarded — no
 clause asserted, no goal run, no error.  The author almost certainly meant a
 rule body ``head <- (goal1, goal2)``.
 
-See ``todo/statement-context-tuple-goals-silently-discarded.md``.  This was the
+See ``todo/done/statement-context-tuple-goals-silently-discarded.md``.  This was the
 real footgun behind the "re-exported functor finds 0 solutions" report: a
 multi-goal body written without a head or parentheses.
 """

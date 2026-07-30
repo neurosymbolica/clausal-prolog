@@ -1,7 +1,7 @@
 # Bug: defining a clause for an IMPORTED functor destroys the exporter's clauses
 
 **Reported:** 2026-07-29, found while fixing the functor import-ordering defect
-(`todo/functor-field-name-mismatch-diagnostic.md`).
+(`todo/done/functor-field-name-mismatch-diagnostic.md`).
 **Severity: high — silent wrong answers, at a distance.**
 **Pre-existing.** Confirmed on `/workspace/clausal` @ `b1af4889`, i.e. before the
 positional-heads fix. That fix did not cause this; it *exposed* it, because the
@@ -63,7 +63,7 @@ Observed:
 | shared class identity | `True` |
 
 Note the class identity is *correct* and intended — see
-`todo/module-reexport-imported-functor-shadows.md`, which established that
+`todo/done/module-reexport-imported-functor-shadows.md`, which established that
 sharing identity is the right behaviour. The bug is that the clause list on that
 shared class is **assigned** rather than **appended to**.
 

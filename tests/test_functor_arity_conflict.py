@@ -1,6 +1,6 @@
 """Arity conflicts between a functor's declaration and its clause heads.
 
-``todo/functor-field-name-mismatch-diagnostic.md`` — the reported
+``todo/done/functor-field-name-mismatch-diagnostic.md`` — the reported
 ``__init__() got an unexpected keyword argument 'arg_1'`` failure.
 
 Two independent defects are covered here:

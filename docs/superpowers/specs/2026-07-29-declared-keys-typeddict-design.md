@@ -33,7 +33,7 @@ Both failures are documented and reproduced:
   that object. Verified: a profile with `query_date: 5` returns **0** solutions from a rule that
   should succeed, no error, even with a fully qualified key read.
 
-Under the snake_case predicate convention (`todo/module-predicates-snake-case-rename.md`) keys and
+Under the snake_case predicate convention (`todo/done/module-predicates-snake-case-rename.md`) keys and
 predicates are spelled identically — both name the same domain noun — so these are the common case,
 not corner cases.
 

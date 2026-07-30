@@ -2891,7 +2891,7 @@ class EmbedTransformer(NodeTransformer):
         class block was minted with, so any head field name outside it would
         be emitted as a keyword the class does not have — the bare
         ``__init__() got an unexpected keyword argument 'arg_1'`` failure of
-        ``todo/functor-field-name-mismatch-diagnostic.md``.
+        ``todo/done/functor-field-name-mismatch-diagnostic.md``.
 
         The overwhelmingly common shape is an *arity* disagreement: a
         ``-module``/``-private`` declaration (or an earlier clause) fixes
@@ -3019,7 +3019,7 @@ class EmbedTransformer(NodeTransformer):
         *its* position — while ``_seen_functors`` still holds the LOCAL field
         names.  A keyword head then names local fields against the foreign
         class and raises ``__init__() got an unexpected keyword argument``
-        (``todo/functor-field-name-mismatch-diagnostic.md``).
+        (``todo/done/functor-field-name-mismatch-diagnostic.md``).
 
         A positional head binds against whatever class the import supplied, so
         a module-local labelling can no longer contradict a foreign class.  A

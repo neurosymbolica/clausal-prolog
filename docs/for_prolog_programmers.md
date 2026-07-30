@@ -46,7 +46,7 @@ out of the box, but some Prolog conventions must change.
 | `X =:= Y` | `X == Y` | Arithmetic / CLP(ℤ) equality |
 | `X =\= Y` | `X != Y` | Arithmetic / CLP(ℤ) disequality |
 | `X #= Y` | `X #= Y` | CLP(ℤ) — same |
-| `append/3` | `append/3` | Builtins are PascalCase |
+| `append/3` | `append/3` | Same — builtins are `snake_case` |
 | `member/2` | `in_/2` | Uses Python's `in` semantics |
 | `msort/2` | `msort/2` | Full names, not abbreviations |
 | `phrase(NT, Ls)` | `phrase(nt, LS)` | DCGs use `>>` instead of `-->` |

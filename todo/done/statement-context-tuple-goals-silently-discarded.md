@@ -7,7 +7,7 @@ next-line-stray-goal form (§"Related form") was left out of scope (each line is
 independently a valid fact — needs a separate lint). Tests:
 `tests/test_statement_multi_goal_no_arrow.py`.
 
-**Filed:** 2026-07-22 (root cause behind `todo/module-reexport-imported-functor-shadows.md` —
+**Filed:** 2026-07-22 (root cause behind `todo/done/module-reexport-imported-functor-shadows.md` —
 the "silent 0 solutions" there was actually an unparenthesised multi-goal body, not import
 shadowing).
 
@@ -32,7 +32,7 @@ author almost certainly meant `q(R) <- (fact(R), other(R))` (a conjunction) or a
 and got a silent no-op instead.
 
 This is the real footgun that produced the "re-exported functor finds 0 solutions" report in
-`todo/module-reexport-imported-functor-shadows.md`: a multi-goal body written without
+`todo/done/module-reexport-imported-functor-shadows.md`: a multi-goal body written without
 parentheses, so goals silently dropped out of the clause.
 
 ## Related form (also silent) — for scope consideration

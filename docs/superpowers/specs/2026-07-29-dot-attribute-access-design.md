@@ -161,7 +161,7 @@ Non-variable bases (`mod.pred`, `currency.euro`) keep today's `LoadAttr` behavio
 ### Shape
 
 Predicates are `snake_case` per the standing convention
-(`todo/module-predicates-snake-case-rename.md`): un-enforced, chosen because the local student
+(`todo/done/module-predicates-snake-case-rename.md`): un-enforced, chosen because the local student
 models generate it far more reliably than TitleCase, and because it matches Python's stdlib and
 SWI-Prolog.
 

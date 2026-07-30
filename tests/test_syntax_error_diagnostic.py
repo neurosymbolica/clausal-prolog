@@ -1,6 +1,6 @@
 """A ``.clausal`` syntax error must show the source line, a caret and a reason.
 
-See ``todo/syntax-error-shows-no-source-line.md``.  The stock message is
+See ``todo/done/syntax-error-shows-no-source-line.md``.  The stock message is
 
     invalid syntax (m.clausal, line 6)
 

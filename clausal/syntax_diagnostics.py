@@ -6,7 +6,7 @@ as CPython's stock one-liner::
     invalid syntax (m.clausal, line 6)
 
 and nothing else.  Two things are wrong with that, and the second is what makes
-it expensive (see ``todo/syntax-error-shows-no-source-line.md``: 18 repair
+it expensive (see ``todo/done/syntax-error-shows-no-source-line.md``: 18 repair
 attempts across four runs, 80% never escaping):
 
 1. **No source text.**  The ``SyntaxError`` carries ``text`` and ``offset`` and

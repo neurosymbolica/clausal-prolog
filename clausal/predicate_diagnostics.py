@@ -6,7 +6,7 @@ raise the bare::
     KeyError: 'Predicate citation/2 not found'
 
 which states an absence and nothing else.  See
-``todo/predicate-not-found-should-list-candidates.md``: with goal-level test
+``todo/done/predicate-not-found-should-list-candidates.md``: with goal-level test
 diagnostics already in place — the goal index and the full goal term are both
 printed — this was the last failure mode in the census with a 0% recovery
 rate, precisely *because* everything around it was good.  The missing piece is
