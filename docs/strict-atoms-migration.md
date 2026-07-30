@@ -107,6 +107,30 @@ Iterate file-by-file until the file loads clean. Keep `-implicit_atoms` on
 files where loose behavior is genuinely wanted — prototypes, data-heavy
 fixtures, or code that deliberately relies on ceremony-free tag atoms.
 
+#### Do not reach for `-private` when two files must agree
+
+This is the one migration step that can leave you *worse off than the error
+did*. Auto-minting put every undeclared `red` in one global class, so two files
+that both said `red` were talking about the same atom. `-private([red])` in each
+of them mints **two** classes, and atoms unify by identity — so the load error
+goes away and is replaced by a query that silently has no solution. The compiler
+cannot warn about this: two modules each declaring their own private atom is
+exactly what `-private` is for.
+
+The rule of thumb: **declare an atom where it is owned, and import it
+everywhere else.** If the atom crosses a module boundary — a status tag a caller
+compares against, a profile key one file writes and another reads, a verdict
+vocabulary two predicates draw from — give it a home in the owning module's
+`-module(owner, [..., red])` and use `-import_from(owner, [red])` in the rest.
+Reserve `-private` for atoms that genuinely never leave their file, and for
+atoms that are *deliberately* distinct from a similarly-spelled one elsewhere.
+
+Symptom to watch for while migrating: a file that now loads, in a suite that now
+fails an assertion it used to pass. Loading was never the goal; the atoms have
+to be the *same* atoms. If you are unsure whether a name crosses a boundary,
+`global_atom("red", R)` in both places is a safe intermediate — it is the same
+process-wide class the old auto-mint gave you.
+
 ## Migrating clausify-domains
 
 clausify-domains is expected to be *mostly* strict-clean already (rule files

@@ -122,4 +122,6 @@ Parked as [[term-identity-cannot-cross-two-package-copies]].
   strict-atoms-by-default now rejects. They fail identically against canonical
   `/workspace/clausal` and *in isolation*, so this todo's "order matters and
   isolation passes" note is stale — it predates the strict-atoms default landing.
-  Filed as [[strict-atoms-default-broke-downstream-bare-atom-fixtures]].
+  Filed as [[done/strict-atoms-default-broke-downstream-bare-atom-fixtures]]
+  and fixed there on 2026-07-30, along with five more `.clausal` files and two
+  further embedded fixture groups that the consumer sweep turned up.
