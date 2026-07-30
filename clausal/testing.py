@@ -726,6 +726,10 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline) -> None:
             f"({label} differs):"
         )
         diag.nearest = _render_nearest(goal, reified_goal, kind, i, value)
+        wanted = args[i] if kind == "arg" else kwargs[i].value
+        note = _arith_vs_number_note(label, wanted, value)
+        if note:
+            diag.notes.append(note)
         return
 
     # No single argument explains it — is the predicate satisfiable at all?
@@ -754,6 +758,43 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline) -> None:
 
 
 _NO_SOLUTION = object()
+
+
+def _arith_vs_number_note(label: str, wanted, actual) -> str | None:
+    """The is/== note when this argument pairs an arith term with a number.
+
+    Both sides are already in hand here — *wanted* is the over-constrained
+    argument of the live goal, *actual* what the predicate computed for it — so
+    the check is two isinstance tests on a path only a failing test reaches.
+
+    Requiring a *number* opposite the operator term is what keeps the note off
+    legitimate code: a clause that builds ``DA + DB`` to unify against another
+    operator term of the same shape (``BinOp.__unify__`` supports exactly that)
+    never has a number on the other side, so it is never named here.  Either
+    direction fires: the term may be what the predicate returned, or what the
+    caller wrote into the goal.
+    """
+    from clausal.logic.exceptions import (
+        IS_VS_EQ_HINT,
+        is_arith_operator_term,
+        render_arith_operator_term,
+    )
+    from clausal.logic.variables import deref
+
+    wanted, actual = deref(wanted), deref(actual)
+    for term, number in ((wanted, actual), (actual, wanted)):
+        if is_arith_operator_term(term) and _is_number(number):
+            return (f"{label} pairs an unevaluated arithmetic term "
+                    f"(`{render_arith_operator_term(term)}`) with a number. "
+                    f"{IS_VS_EQ_HINT}")
+    return None
+
+
+def _is_number(value) -> bool:
+    """A number for is/== purposes.  ``bool`` is excluded: ``True`` is not 1 here."""
+    import numbers
+
+    return isinstance(value, numbers.Number) and not isinstance(value, bool)
 
 
 def _first_binding(probe, hole, logic_module):
