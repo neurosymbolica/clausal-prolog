@@ -120,3 +120,29 @@ weaker question — is the bare name in that export list at all.
 
 `todo/catch3-does-not-catch-an-exception-from-a-trampolined-subgoal.md` — found while
 checking that the new seam could not steal an exception `catch/3` wanted.
+
+## Review findings, applied 2026-07-30
+
+An independent review of the branch raised three, all Low, all applied before
+merge:
+
+1. **The sibling scan ran at least twice per failure** — once as a discarded
+   gate inside `enrich_undefined_name`, then again in `__str__`, and again on
+   every later render (`catch/3`'s `python_error_term` conversion reads
+   `str(exc)`). The gate's result is now handed to the exception and reused;
+   `__str__` still computes when handed none, so a directly-built instance is
+   not silently hintless.
+2. **`_import_remedy` advised a duplicate directive.** When the file already
+   imported the name from the exporting module, the loop fell through to the
+   "write a new `-import_from`" form. It now declines: whatever went wrong in
+   that state, it is not a missing import, and the sentence naming the exporter
+   still stands.
+3. **The 60-file cap declines silently**, which the predicate-not-found path
+   deliberately does not do (it reports `total`). Kept as-is and documented in
+   `_exporting_sibling` rather than changed. Reporting the cap would mean
+   attaching "no exporter found, but only 60 of N were scanned" to a *plain*
+   `NameError` — i.e. to every typo'd Python name in a large package. The other
+   diagnostic is already being printed so its cap note is free; this one would
+   have to manufacture a message to carry it. **Known gap:** in a package with
+   more than 60 sibling sources, an exporter sorting past the cap yields no
+   hint and no indication that a scan was bounded.

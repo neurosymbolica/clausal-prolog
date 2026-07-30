@@ -286,18 +286,41 @@ class TestTheExceptionObject:
         exc = _raised(pkg, SOLVE_TIME_SRC)
         assert str(exc).splitlines()[0] == "name 'cite' is not defined"
 
-    def test_a_broken_scan_degrades_to_the_stock_message(self, pkg,
-                                                         monkeypatch):
-        """A diagnostic that fails must not replace one failure with another."""
-        exc = _raised(pkg, SOLVE_TIME_SRC)
-        assert isinstance(exc, UndefinedNameError)
+    def test_a_broken_scan_leaves_the_original_error_alone(self, pkg,
+                                                           monkeypatch):
+        """A diagnostic that fails must not replace one failure with another.
 
+        The scan runs once, in ``enrich_undefined_name``, whose result is
+        handed to the exception — so this is where an exploding scan has to be
+        survivable.  It must decline (leaving a stock ``NameError`` to
+        propagate) rather than let its own RuntimeError escape.
+        """
         import clausal.predicate_diagnostics as pd
 
         def _boom(*a, **k):
             raise RuntimeError("scan exploded")
 
         monkeypatch.setattr(pd, "_undefined_name_lines", _boom)
+        exc = _raised(pkg, SOLVE_TIME_SRC)
+        assert type(exc) is NameError
+        assert str(exc) == "name 'cite' is not defined"
+
+    def test_a_broken_scan_degrades_to_the_stock_message(self, monkeypatch):
+        """The same guarantee on ``__str__``'s own fallback.
+
+        An instance built directly carries no precomputed lines, so rendering
+        it does scan — and that scan may not out-fail the error it explains.
+        """
+        import clausal.predicate_diagnostics as pd
+
+        def _boom(*a, **k):
+            raise RuntimeError("scan exploded")
+
+        monkeypatch.setattr(pd, "_undefined_name_lines", _boom)
+        exc = UndefinedNameError("name 'cite' is not defined", name="cite",
+                                 module_name="pkg.constants",
+                                 module_file="/nonexistent/constants.clausal")
+        assert exc.hint_lines is None
         assert str(exc) == "name 'cite' is not defined"
 
 
@@ -335,3 +358,53 @@ def test_message_shape(pkg):
     assert re.search(r"cite/1 IS exported by", text)
     assert re.search(r"^\s+undefsib_citations\s*$", text, re.M)
     assert "->" in text
+
+
+def test_the_scan_runs_once_per_failure(pkg, monkeypatch):
+    """The directory scan is computed once and carried, not recomputed.
+
+    ``enrich_undefined_name`` has to run it to decide whether there is anything
+    to say; rendering must reuse that result.  Rendering twice matters because
+    ``catch/3``'s ``python_error_term`` conversion reads ``str(exc)`` on top of
+    whatever printed it first.
+    """
+    import clausal.predicate_diagnostics as pd
+
+    calls = []
+    real = pd._undefined_name_lines
+
+    def _counted(*a, **k):
+        calls.append(a)
+        return real(*a, **k)
+
+    monkeypatch.setattr(pd, "_undefined_name_lines", _counted)
+    exc = _raised(pkg, SOLVE_TIME_SRC)
+    assert len(calls) == 1
+
+    str(exc)
+    str(exc)
+    assert len(calls) == 1, "rendering re-scanned the package directory"
+
+
+def test_no_duplicate_import_advice_when_the_name_is_already_imported(
+        monkeypatch):
+    """Already importing the name from the exporter is not an import miss.
+
+    The remedy block declines rather than falling through to "write a new
+    -import_from", which would advise a second directive for a module the file
+    already imports from.
+    """
+    import clausal.predicate_diagnostics as pd
+
+    export = pd._Export("pkg.citations", "cite/1", "/pkg/citations.clausal")
+    directives = [("pkg.citations", "pkg.citations", ["cite"])]
+    monkeypatch.setattr(pd, "_import_from_directives", lambda path: directives)
+
+    assert pd._import_remedy("cite", export, "/pkg/constants.clausal",
+                             "pkg.constants") == []
+
+    # ...but a name genuinely absent from that directive still gets advice.
+    directives[0] = ("pkg.citations", "pkg.citations", ["art_9"])
+    remedy = pd._import_remedy("cite", export, "/pkg/constants.clausal",
+                               "pkg.constants")
+    assert any("art_9, cite" in line for line in remedy)

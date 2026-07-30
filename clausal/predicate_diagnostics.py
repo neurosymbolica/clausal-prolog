@@ -714,6 +714,18 @@ def _exporting_sibling(name, path, modname):
     Matching is on the bare name, per the todo: the arity is wanted for the
     text (``cite(KEY)`` → ``cite/1``) but a name declared at all is enough to
     decide that there is something to say.
+
+    **The cap is a deliberate silent decline here**, unlike the
+    predicate-not-found path, which reports ``total`` so the reader knows the
+    scan was bounded.  Past ``_MAX_SIBLING_FILES`` this returns ``None`` and the
+    stock ``NameError`` stands with nothing added.  The alternative — saying
+    "no exporter found, but only 60 of N siblings were scanned" — would have to
+    be attached to a *plain* ``NameError``, i.e. to every typo'd Python name in
+    a package that large, which buys a rare true positive at the cost of noise
+    on the common case.  The asymmetry is that the other diagnostic is already
+    being printed, so its cap note is free, while this one would have to
+    manufacture a message to carry it.  Recorded in
+    ``todo/done/nameerror-does-not-name-the-sibling-that-exports-it.md``.
     """
     siblings, _total = _sibling_source_files(path)
     for sibling in siblings:
@@ -806,7 +818,13 @@ def _import_remedy(name, export, path, label):
         if export.module not in (declared, resolved):
             continue
         if name in names:
-            continue  # already imported; the miss is not an import miss
+            # Already imported from the very module that exports it, and still
+            # undefined — so whatever went wrong, it is not a missing import.
+            # Falling through to the "write a new directive" form below would
+            # advise a duplicate of a directive the file already has.  Say
+            # nothing: the sentence above still names the exporter, which is
+            # the decidable part.
+            return []
         extended = ", ".join([*names, name])
         return _arrow([f"add `{name}` to this file's existing import:"]) + [
             f"{_INDENT}    -import_from({declared}, [{extended}])"
@@ -845,22 +863,35 @@ class UndefinedNameError(NameError):
     ``clausal.logic.exceptions``.  A ``catch/3`` that swallows this converts it
     with ``python_error_term``, which reads ``str(exc)``… so the guarantee that
     matters here is the weaker, sufficient one: ``args`` and ``repr`` stay
-    clean, nothing is computed unless somebody renders the message, and the
-    class stays inside ``NameError`` so every existing handler keeps working.
+    clean, and the class stays inside ``NameError`` so every existing handler
+    keeps working.
+
+    The hint lines are computed once, by the caller that decided this class was
+    warranted, and handed in.  ``enrich_undefined_name`` has to compute them
+    anyway to decide whether there is anything worth saying, so recomputing
+    here would scan the package directory a second time — and again on every
+    later render, of which there is at least one more whenever ``catch/3``
+    converts the exception through ``python_error_term``.  ``__str__`` still
+    computes them when it was handed none, so an instance built directly is not
+    silently hintless.
     """
 
-    def __init__(self, *args, name=None, module_name=None, module_file=None):
+    def __init__(self, *args, name=None, module_name=None, module_file=None,
+                 hint_lines=None):
         super().__init__(*args, name=name)
         self.module_name = module_name
         self.module_file = module_file
+        self.hint_lines = hint_lines
 
     def __str__(self):  # noqa: D105
         message = super().__str__()
-        try:
-            extra = _undefined_name_lines(self.name, self.module_name,
-                                          self.module_file)
-        except Exception:  # noqa: BLE001 - a hint may not out-fail its error
-            return message
+        extra = self.hint_lines
+        if extra is None:
+            try:
+                extra = _undefined_name_lines(self.name, self.module_name,
+                                              self.module_file)
+            except Exception:  # noqa: BLE001 - a hint may not out-fail its error
+                return message
         return "\n".join([message, *extra]) if extra else message
 
 
@@ -910,9 +941,10 @@ def enrich_undefined_name(exc):
         modname, path = _clausal_frame_of(exc)
         if path is None:
             return None
-        if not _undefined_name_lines(name, modname, path):
+        lines = _undefined_name_lines(name, modname, path)
+        if not lines:
             return None
         return UndefinedNameError(*exc.args, name=name, module_name=modname,
-                                  module_file=path)
+                                  module_file=path, hint_lines=lines)
     except Exception:  # noqa: BLE001 - see docstring
         return None
