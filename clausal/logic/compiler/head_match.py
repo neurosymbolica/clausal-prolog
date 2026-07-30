@@ -19,6 +19,7 @@ so head_match never reaches back into goal compilation.
 from __future__ import annotations
 
 import ast
+import dataclasses
 from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
@@ -63,6 +64,40 @@ _SetLiteral = SetLiteral
 # atom classes, Compound terms, dataclass instances, etc. are NOT in this
 # set — they must be lowered via ``term_to_ast_expr`` instead.
 _AST_CONST_TYPES = (type(None), bool, int, float, str, bytes, complex)
+
+
+def _matched_field_names(term: Any) -> tuple[str, ...]:
+    """The fields of a term instance that a head pattern may test.
+
+    A head pattern must test exactly the fields that runtime unification tests,
+    otherwise the two head-matching routes for the same clause disagree: a
+    structural head arg is normally hoisted to a body ``Unify`` (decided by
+    ``unify``), but the argument-index bucket path lifts it back into the head
+    (decided by this pattern).
+
+    ``unify`` ignores a dataclass field declared ``compare=False`` — either
+    explicitly (``BinOp.__unify__`` / ``Compound.__unify__`` skip the source
+    ``position``) or via the ``==`` fallback, which dataclasses derive from the
+    comparable fields only.  So a pattern must skip those fields too.  Today
+    that means the cosmetic source ``position`` carried by every
+    ``clausal.pythonic_ast`` node, which is what makes an operator head arg
+    (``Diff(A + B, ...)``) matchable at all.  ``term_to_ast_expr`` already drops
+    the same fields when *constructing* a term; this is the matching half of
+    that rule.
+
+    ``PredicateMeta`` terms keep ``_fields`` verbatim — every declared argument
+    of a user predicate is semantic.  Note this is deliberately not used by
+    ``_head_arg_patterns``: there the field list is the predicate's own argument
+    list and must stay aligned with the head's arity.
+    """
+    names = term_field_names(term)
+    if isinstance(type(term), PredicateMeta):
+        return names
+    if dataclasses.is_dataclass(term):
+        skipped = {f.name for f in dataclasses.fields(term) if not f.compare}
+        if skipped:
+            return tuple(n for n in names if n not in skipped)
+    return names
 
 
 def _wrap_yields_with_output_guards(
@@ -601,10 +636,13 @@ def head_to_match_pattern(
     #
     # Structural head args are hoisted to Var + Unify at assert time
     # (_normalize_structural_head_args), so this MatchClass only ever sees a
-    # ground (input-mode) caller; output-mode binding is handled by the Unify.
+    # ground (input-mode) caller; output-mode binding is handled by the Unify —
+    # except in an argument-index bucket, where _lift_clause_at_pos lifts that
+    # Unify back into the head.  Fields unification ignores are excluded, so the
+    # lifted pattern decides the match the same way the Unify would have.
     if is_term_instance(term):
         cls_name = type(term).__name__
-        fields = term_field_names(term)
+        fields = _matched_field_names(term)
         return ast.MatchClass(
             cls=_name(cls_name),
             patterns=[],
