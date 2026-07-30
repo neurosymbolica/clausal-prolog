@@ -189,7 +189,7 @@ Prolog's module system is widely regarded as one of the language's weakest point
 | **Meta-predicate "context module" confusion** — the #1 complaint | Predicates are `PredicateMeta` classes carrying their own `_get_dispatch()`. No context module resolution needed. |
 | **Flat namespace** | Python packages give hierarchical dotted paths for free. |
 | **Operator scoping** | No user-defined operators. Non-issue. |
-| **Export list maintenance** | No export lists. Everything is public (Python convention: `_` prefix = private). |
+| **Export list maintenance** | No export lists. Everything is public — `-module`/[`-private`](directives.md#-private) declare a module's *documented surface*, not an access barrier, and `-import_from` reaches a private name just as readily (Python convention: `_` prefix = private). |
 | **`assert`/`retract` module context confusion** | Each `pred_cls` owns its `_clauses`. `assertz` on an imported class modifies *that class* directly. |
 | **ISO standard fragmentation** | We use Python's `importlib` — one standard, universally implemented. |
 

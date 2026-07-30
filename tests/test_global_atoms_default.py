@@ -24,10 +24,12 @@ from __future__ import annotations
 
 import os
 import tempfile
+import warnings
 
 import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
+from clausal import Var
 from clausal.import_hook import _load_module, predicate_builtins
 from clausal.logic.predicate import PredicateMeta
 
@@ -300,3 +302,63 @@ def test_strict_atoms_multiple_undeclared_reported_together():
     # Neither name should have been minted as a side effect.
     for name in ("phase3strict_multi_alpha", "phase3strict_multi_beta"):
         assert name not in predicate_builtins
+
+
+# ── Visibility: `-private` is a surface marker, not an access control ───────
+
+
+def test_private_names_are_importable_and_share_identity():
+    """`-private` does NOT make a name unreachable from another module.
+
+    Pins the decision recorded in
+    ``todo/done/private-atoms-are-importable-contra-spec.md``: `-private`
+    means "not part of my public surface", not "unreachable" — closer to
+    Python's leading underscore than to C++ ``private``.  An
+    ``-import_from`` of a private name succeeds, binds the *owner's* class
+    (so the two modules share one identity), and emits no warning.
+
+    This is load-bearing downstream: under strict atoms, a fixture module
+    with no ``-module(...)`` export list has importing from its ``-private``
+    list as its identity-preserving route across a file boundary.  If a
+    future change starts rejecting or warning on this, it breaks that
+    pattern — so the behaviour is pinned here rather than left to drift.
+    """
+    owner = _load_fixture(
+        "private_import_owner.clausal",
+        "tests.fixtures.private_import_owner",
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        consumer = _load_fixture(
+            "private_import_consumer.clausal",
+            "tests.fixtures.private_import_consumer",
+        )
+
+    # The private *atom* crossed the boundary, and it is the same class.
+    assert isinstance(owner.privimp_tag, PredicateMeta)
+    assert consumer.privimp_tag is owner.privimp_tag
+    # ...and it is module-local, not the process-wide global atom.
+    assert owner.privimp_tag is not predicate_builtins.get("privimp_tag")
+
+    # The private *predicate* crossed the boundary too.
+    assert consumer.PrivImpHelper is owner.PrivImpHelper
+
+    # Shared identity is the point: the query actually solves.
+    assert list(consumer.PrivImpUse(Var())) != []
+
+    # No warning: importing a private name is a supported pattern, not a
+    # smell.  A `ClausalPrivateAtomImportWarning`-style diagnostic would
+    # fire on the legitimate anonymous-fixture pattern, so it is
+    # deliberately absent.
+    # Case-insensitive on purpose: the fixture's names are ``privimp_tag``
+    # but also ``PrivImpHelper``/``PrivImpUse``, and a warning that named only
+    # the *predicate* would not contain the lowercase spelling — so a
+    # case-sensitive filter would let an Option-3 build slip through the pin
+    # for the predicate case.  Matching every warning is not the alternative:
+    # loading a fixture can legitimately emit unrelated ones.
+    private_warnings = [
+        w for w in caught if "privimp" in str(w.message).lower()
+    ]
+    assert private_warnings == [], (
+        f"importing a -private name must not warn; got {private_warnings}"
+    )

@@ -125,6 +125,15 @@ vocabulary two predicates draw from — give it a home in the owning module's
 Reserve `-private` for atoms that genuinely never leave their file, and for
 atoms that are *deliberately* distinct from a similarly-spelled one elsewhere.
 
+If the owning file has no `-module(...)` export list — a generated or `tmp_path`
+fixture, say — you do not need to invent one: `-import_from(owner, [red])`
+reaches a `-private` atom too, and binds the owner's class, so identity is
+preserved either way. `-private` marks a name as internal; it does not make it
+unreachable (see [Directives § `-private`](directives.md#-private)). Prefer
+`-module` when the name really is part of the file's surface, because that is
+what the listing tells a reader — but reach for the import, not a second
+`-private`, whenever two files must agree.
+
 Symptom to watch for while migrating: a file that now loads, in a suite that now
 fails an assertion it used to pass. Loading was never the goal; the atoms have
 to be the *same* atoms. If you are unsure whether a name crosses a boundary,
