@@ -763,6 +763,23 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
         + [("kw", i) for i in range(len(kwargs))]
     )
 
+    def render_rung1(kind, i, value) -> str:
+        label = (
+            f"argument {i + 1}" if kind == "arg"
+            else f"keyword argument {kwargs[i].name!r}"
+        )
+        diag.nearest_note = (
+            f"the predicate DID have a solution, which did not unify "
+            f"({label} differs):"
+        )
+        diag.nearest = _render_nearest(goal, reified_goal, kind, i, value)
+        wanted = args[i] if kind == "arg" else kwargs[i].value
+        note = _arith_vs_number_note(label, wanted, value)
+        if note:
+            diag.notes.append(note)
+        return label
+
+    degenerate: tuple[str, int, object] | None = None
     for kind, i in slots:
         if time.monotonic() > deadline:
             raise _DiagBudgetExceeded()
@@ -780,19 +797,29 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
         value = _first_binding(probe, hole, logic_module)
         if value is _NO_SOLUTION:
             continue
-        label = (
-            f"argument {i + 1}" if kind == "arg"
-            else f"keyword argument {kwargs[i].name!r}"
-        )
-        diag.nearest_note = (
-            f"the predicate DID have a solution, which did not unify "
-            f"({label} differs):"
-        )
-        diag.nearest = _render_nearest(goal, reified_goal, kind, i, value)
-        wanted = args[i] if kind == "arg" else kwargs[i].value
-        note = _arith_vs_number_note(label, wanted, value)
-        if note:
-            diag.notes.append(note)
+        if not _value_is_concrete(value):
+            # The probe only matched a clause-head pattern or a deferred
+            # constraint: the freed argument came back with unbound holes in
+            # it, so this near-miss says nothing about why the concrete
+            # argument was rejected (todo D).  Keep scanning for a slot with
+            # a concrete near-miss; descend below if none turns up.
+            if degenerate is None:
+                degenerate = (kind, i, value)
+            continue
+        render_rung1(kind, i, value)
+        return
+
+    if degenerate is not None:
+        # Every solvable slot solved only with its hole left (partly) unbound.
+        # Render the weak rung-1 line first — it survives a budget blow inside
+        # the descent — then let descent findings replace it.
+        kind, i, value = degenerate
+        label = render_rung1(kind, i, value)
+        if _report_descent(
+                diag, goal, logic_module, deadline, path,
+                intro=(f"the predicate has solutions with {label} freed, but "
+                       f"none binds {label} to a concrete value")):
+            diag.nearest = None
         return
 
     # No single argument explains it — is the predicate satisfiable at all?
@@ -800,6 +827,7 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
     kw_holes = [Keyword(name=k.name, value=Var()) for k in kwargs]
     probe = Call(func=goal.func, args=holes, kwargs=kw_holes)
     examples: list[str] = []
+    any_concrete = False
     trail = Trail()
     gen = None
     try:
@@ -807,6 +835,9 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
         for _ in range(3):
             if next(gen, None) is None:
                 break
+            if not any_concrete and _value_is_concrete(
+                    [*holes, *(k.value for k in kw_holes)]):
+                any_concrete = True
             rendered = _render_probe_solution(goal, reified_goal, holes, kw_holes)
             if rendered not in examples:
                 examples.append(rendered)
@@ -830,6 +861,16 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
             "this goal — two or more arguments differ; it does have:"
         )
         diag.nearest_examples = examples
+        if not any_concrete:
+            # Every example left holes unbound (e.g. a var-coupled fact
+            # matching the bare-holes probe) — as anonymised renders they say
+            # nothing (todo D).  The weak rendering above survives a budget
+            # blow inside the descent; findings replace it.
+            if _report_descent(
+                    diag, goal, logic_module, deadline, path,
+                    intro=("the predicate has solutions, but none binds "
+                           "every argument to a concrete value")):
+                diag.nearest_examples = []
     else:
         diag.nearest_note = (
             "the predicate has no solution for ANY arguments at this point "
@@ -839,6 +880,21 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
 
 
 _NO_SOLUTION = object()
+
+
+def _value_is_concrete(value) -> bool:
+    """No unbound holes anywhere in *value* — the probe solution carries a value.
+
+    Groundness via the canonical helper; any doubt (an exotic node it cannot
+    walk, an error) counts as concrete, keeping the pre-existing rung-1/2
+    rendering.
+    """
+    try:
+        from clausal.logic.builtins._helpers import _is_ground
+
+        return bool(_is_ground(value))
+    except Exception:  # noqa: BLE001 - doubt → keep today's rendering
+        return True
 
 
 def _arith_vs_number_note(label: str, wanted, actual) -> str | None:
@@ -1057,12 +1113,22 @@ def _reify_value(value, depth: int = 0):
 # ── Stage 4: descent into the failing predicate ──────────────────────────────
 
 
-def _report_descent(diag, goal, logic_module, deadline, path) -> None:
-    """Rung-3 refinement: walk the failing predicate's own clause bodies.
+_DESCENT_DEFAULT_INTRO = (
+    "the predicate has no solution for ANY arguments at this point"
+)
 
-    Only called after the all-holes probe proved the predicate unsatisfiable.
-    On any leaf findings, upgrades ``nearest_note`` and fills ``descent``;
-    otherwise leaves the rung-3 sentence exactly as it was.
+
+def _report_descent(diag, goal, logic_module, deadline, path,
+                    intro=_DESCENT_DEFAULT_INTRO) -> bool:
+    """Walk the failing predicate's own clause bodies against the live goal.
+
+    Called at rung 3 (the all-holes probe proved the predicate unsatisfiable)
+    and, since todo D, at rung 1/2 when the probe solutions are degenerate —
+    they left the freed argument(s) unbound, so the near-miss carried no
+    value.  *intro* is the truthful headline prefix for the calling rung; the
+    descent itself only ever states facts about the CONCRETE arguments, which
+    hold at every rung.  On findings, sets ``nearest_note``/``descent`` and
+    returns True; otherwise leaves the diagnostic untouched and returns False.
     """
     notes: list[str] = []
     leaves, kind = _descend(goal, logic_module, path, deadline, 1, frozenset(), notes)
@@ -1071,10 +1137,7 @@ def _report_descent(diag, goal, logic_module, deadline, path) -> None:
         # lines).  The cap counts FINDINGS (groups) across the whole descent
         # including fan-out, so a finding and its binding sub-lines are shown or
         # dropped as a unit — never split — and whole groups are trimmed.
-        diag.nearest_note = (
-            "the predicate has no solution for ANY arguments at this point; "
-            "no clause body survives:"
-        )
+        diag.nearest_note = f"{intro}; no clause body survives:"
         if len(leaves) > DIAG_MAX_DESCENT_LEAVES:
             notes.append(
                 f"only the first {DIAG_MAX_DESCENT_LEAVES} of {len(leaves)} "
@@ -1083,6 +1146,7 @@ def _report_descent(diag, goal, logic_module, deadline, path) -> None:
             leaves = leaves[:DIAG_MAX_DESCENT_LEAVES]
         diag.descent = [line for group in leaves for line in group]
         diag.notes.extend(notes)
+        return True
     elif kind == "head_listing" and leaves:
         # If the clause cap tripped for this descent, only the first N clause
         # heads were examined, so the headline must not claim ALL heads
@@ -1094,19 +1158,19 @@ def _report_descent(diag, goal, logic_module, deadline, path) -> None:
         truncated = any(n.startswith(cap_prefix) for n in notes)
         if truncated:
             diag.nearest_note = (
-                "the predicate has no solution for ANY arguments at this "
-                "point; no clause head among the first "
+                f"{intro}; no clause head among the first "
                 f"{DIAG_MAX_DESCENT_CLAUSES} unifies with these arguments "
                 "— the heads are:"
             )
         else:
             diag.nearest_note = (
-                "the predicate has no solution for ANY arguments at this "
-                "point; no clause head unifies with these arguments — the "
+                f"{intro}; no clause head unifies with these arguments — the "
                 "heads are:"
             )
         diag.descent = leaves[:DIAG_MAX_DESCENT_LEAVES]
         diag.notes.extend(notes)
+        return True
+    return False
 
 
 def _resolve_predicate(goal, logic_module, caller_path):

@@ -42,3 +42,45 @@ input was rejected.
 Whether "degenerate solution" (unbound over-constrained arg, or trivial base-case-only
 match) should be a trigger to *also* descend, and how to detect degeneracy cheaply
 without regressing the rung-1 cases where the near-miss genuinely carries a value.
+
+## Landed (2026-07-31)
+
+**Decision: degeneracy = non-groundness of the probe solution, checked with the
+canonical `_is_ground`** (`clausal.logic.builtins._helpers`; verified it walks
+operator nodes such as the `BitOr` cons-head near-miss). Two triggers, both in
+`_report_nearest` (`clausal/testing.py`):
+
+- **Rung 1:** a slot whose near-miss value contains unbound holes is recorded but
+  skipped; scanning continues for a slot with a *concrete* near-miss (which is
+  reported exactly as before). If only degenerate slots solved, the weak rung-1
+  line is rendered first (it survives a budget blow), then `_report_descent` runs
+  with the honest intro "the predicate has solutions with argument N freed, but
+  none binds argument N to a concrete value"; findings replace the near-miss,
+  `"none"` leaves the old rendering as the fallback.
+- **Rung 2:** if none of the all-holes examples binds every hole (e.g. a
+  var-coupled fact matching the bare-holes probe as `pairq(_, _, _, _)`), same
+  pattern with intro "…none binds every argument to a concrete value"; findings
+  clear the anonymised examples.
+
+`_report_descent` gained an `intro` parameter (rung-3 default reproduces the old
+strings byte-for-byte) and a bool return. The descent itself only states facts
+about the concrete arguments, so its findings are truthful at every rung.
+
+**Verified against the evidence shapes:** the pinned `wt_qualifying_totals`
+study-13 shape now yields the head listing with the source-faithful
+`[WORKED_MINUTES, STATUS] | REST_WEEKS` head instead of
+`BitOr(None, [2880, _], [])`; lone one-sided constraint bounds
+(`X < 10, X < 0` — previously satisfiable-with-X-unbound, which forced the
+descent fixtures to use contradictory pairs) now descend to the failing conjunct
+with its concrete binding (`X < 0`, `X = 5`).
+
+**Deliberate boundary:** a GROUND near-miss keeps rung 1 even when it is only a
+trivial base-case match (`wt_qualifying_totals([], TOTAL, N)` with outputs
+free) — every cheap "trivial match" discriminator considered regresses fact-table
+predicates, where a ground near-miss is exactly the right diagnosis. Pinned by
+`test_ground_base_case_near_miss_keeps_rung_1` /
+`test_ground_fact_near_miss_keeps_rung_1`.
+
+Tests: 6 new in `tests/test_testing_descent.py` (§ "degenerate rung-1/2
+solutions descend"). Full clone suite 10823 passed, only the standing
+doc-snippet failure.

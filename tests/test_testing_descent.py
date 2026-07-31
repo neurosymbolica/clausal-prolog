@@ -370,3 +370,150 @@ def test_capped_head_listing_softens_headline_and_notes_cap(capsys, tmp_path):
     assert "sixhead(a, N)" in out
     assert "sixhead(d, N)" in out
     assert "sixhead(e, N)" not in out
+
+
+# ── degenerate rung-1/2 solutions descend (todo D) ───────────────────────────
+
+# A rung-1 near-miss that leaves the freed argument NON-GROUND (unbound holes
+# in it) carries no value: it shows a clause-head pattern, not a counter-value.
+# Study 13's `wt_qualifying_totals` shape — a `[H|T]`-as-BitOr head plus a
+# base-case fact — was intercepted at rung 1 with exactly such a near-miss
+# (`BitOr(None, [2880, _], [])`), and the head listing that names the real bug
+# never fired.  See `todo/D-rung2-unbound-arg-solutions-weaken-diagnosis.md`.
+CONS_PINNED_SRC = """
+-private([work])
+
+wtq_totals([], 0, 0),
+wtq_totals([WORKED_MINUTES, STATUS] | REST_WEEKS, TOTAL, N) <- (
+    wtq_totals(REST_WEEKS, T0, N0),
+    TOTAL == T0 + WORKED_MINUTES,
+    N == N0 + 1
+),
+
+Test("totals over one week, pinned") <- (
+    wtq_totals([[2880, work]], 2880, 1)
+),
+"""
+
+
+def test_unbound_near_miss_descends_to_head_listing(capsys, tmp_path):
+    p = write(tmp_path, "wtq.clausal", CONS_PINNED_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "none binds argument 1 to a concrete value" in out
+    assert "no clause head unifies" in out
+    assert "| REST_WEEKS" in out          # the money line: the BitOr head
+    assert "BitOr(" not in out            # the unbound near-miss is dropped
+    assert "DID have a solution" not in out
+
+
+# A lone one-sided bound (`X < 0`) is deferred by the constraint solver and
+# stays satisfiable with X unbound, so the rung-1 probe finds a solution whose
+# freed argument is a bare hole (`classify(_, _K)`), and descent never used to
+# run — the fixtures above had to force rung 3 with contradictory pairs.  The
+# degenerate near-miss now descends instead and names the failing conjunct
+# with its concrete binding.
+LONE_BOUND_SRC = """
+classify(X, "small") <- (X < 10, X < 0),
+classify(X, "big") <- (X > 10, X < 0),
+
+Test("lone one-sided bounds") <- (
+    classify(5, _KIND)
+),
+"""
+
+
+def test_unbound_near_miss_descends_to_clause_leaves(capsys, tmp_path):
+    p = write(tmp_path, "lone.clausal", LONE_BOUND_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "none binds argument 1 to a concrete value" in out
+    assert "no clause body survives" in out
+    assert "X < 0" in out     # clause 1's first failing conjunct (5 < 10 passed)
+    assert "X > 10" in out    # clause 2's
+    assert "X = 5" in out
+    assert "DID have a solution" not in out
+
+
+# A GROUND near-miss genuinely carries a value and must stay at rung 1 — even
+# when it is only a trivial base-case match.  Deliberate design boundary
+# (todo D): any cheap "trivial match" discriminator regresses fact-table
+# predicates, where a ground near-miss is exactly the right diagnosis.
+CONS_OUTPUT_SRC = """
+-private([work])
+
+wto_totals([], 0, 0),
+wto_totals([WORKED_MINUTES, STATUS] | REST_WEEKS, TOTAL, N) <- (
+    wto_totals(REST_WEEKS, T0, N0),
+    TOTAL == T0 + WORKED_MINUTES,
+    N == N0 + 1
+),
+
+Test("totals over one week, outputs free") <- (
+    wto_totals([[2880, work]], TOTAL, N),
+    TOTAL == 2880
+),
+"""
+
+
+def test_ground_base_case_near_miss_keeps_rung_1(capsys, tmp_path):
+    p = write(tmp_path, "wto.clausal", CONS_OUTPUT_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "argument 1 differs" in out
+    assert "wto_totals([], TOTAL, N)" in out   # the ground [] base-case match
+    assert "no clause head unifies" not in out
+
+
+def test_ground_fact_near_miss_keeps_rung_1(capsys, tmp_path):
+    p = write(tmp_path, "gpair.clausal", """
+        gpair("a", 1),
+        gpair("b", 2),
+
+        Test("one argument differs") <- (
+            gpair("c", 1)
+        ),
+    """)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "argument 1 differs" in out
+    assert "gpair('a', 1)" in out
+    assert "no clause head unifies" not in out
+
+
+# Rung 2's all-holes examples can be degenerate the same way: a var-coupled
+# fact satisfies the probe with every hole left unbound (`pairq(_, _, _, _)`),
+# which says nothing.  When NO example binds every argument, descend; the head
+# listing shows the coupling that the anonymous-hole render hid.
+COUPLED_FACT_SRC = """
+pairq(A, B, A, B),
+
+Test("both couplings differ") <- (
+    pairq(1, 2, 3, 4)
+),
+"""
+
+
+def test_degenerate_rung2_examples_descend(capsys, tmp_path):
+    p = write(tmp_path, "pairq.clausal", COUPLED_FACT_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "none binds every argument to a concrete value" in out
+    assert "no clause head unifies" in out
+    assert "pairq(A, B, A, B)" in out
+    assert "pairq(_, _, _, _)" not in out    # the degenerate example is dropped
+    assert "it does have:" not in out
+
+
+def test_degenerate_near_miss_falls_back_when_descent_finds_nothing(
+        capsys, tmp_path, monkeypatch):
+    # If the descent has nothing to say (unresolvable predicate, every clause
+    # skipped), the weak rung-1 rendering is still better than silence.
+    import clausal.testing as _t
+    monkeypatch.setattr(_t, "_descend", lambda *a, **k: ([], "none"))
+    p = write(tmp_path, "fallback.clausal", LONE_BOUND_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "DID have a solution" in out
+    assert "argument 1 differs" in out
+    assert "no clause body survives" not in out
