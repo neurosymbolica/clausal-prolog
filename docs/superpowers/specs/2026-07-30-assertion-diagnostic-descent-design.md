@@ -31,6 +31,7 @@ predicts:
 |---|---|---|
 | vat | `pro_rata_deduction_decision_resolvable(PROFILE)` | `computation.clausal:77`, `RAW_PCT > 100` with `RAW_PCT = 50` — the contradictory guard, two levels down |
 | schengen | `days_used([], [2024,1,1], 0)` | `computation.clausal:58`, `window_days_used(HISTORY, REFERENCE_DATE_OBJ, WINDOW_SIZE, DAYS_USED)` with `REFERENCE_DATE_OBJ = date(2024,1,1)` — the wrong-type argument, one level down |
+| working_time | `wt_qualifying_totals([[2880, work], …], 2880, 1)` | **every clause head fails to unify** — the recursive heads are `[WORKED_MINUTES, STATUS] \| REST_WEEKS` (cons written with `\|`, parsed as `BitOr`), which never matches a list. The descent must report the head mismatch, not skip silently (see below). |
 
 ## Output shape
 
@@ -85,11 +86,32 @@ args from `head.args` or `term_field_names(head)`. Arity mismatch, or a keyword 
 is not a head field, skips the clause. Goal args are passed through as terms, exactly as
 the existing rung-1 and rung-2 probes do.
 
-**Run the head prefix alone first.** If it fails, this clause was never a route — skip it
-silently. If it *raises*, that is a probe artifact, not a finding: skip the clause and
-never report the exception as the cause. This is not hypothetical — the schengen depth-2
-probe raises `NotImplementedError: term_to_ast_expr: unsupported term type date` purely
-because a live `datetime.date` gets compiled into a query.
+**Run the head prefix alone first.** If it fails, this clause was never a route — skip it.
+If it *raises*, that is a probe artifact, not a finding: skip the clause and never report
+the exception as the cause. This is not hypothetical — the schengen depth-2 probe raises
+`NotImplementedError: term_to_ast_expr: unsupported term type date` purely because a live
+`datetime.date` gets compiled into a query.
+
+**If every clause was skipped by a failing head prefix**, that is itself the finding: no
+clause head unifies with these arguments. Emit one leaf listing the clause heads,
+rendered from source (the reified clause's `head` matched by position through the same
+cache `_reified_goals` uses, `term_str(runtime head)` as fallback), bounded by the clause
+cap:
+
+```
+computation.clausal:82  wt_qualifying_totals(WEEKS, TOTAL_MINS, QUALIFYING_WEEKS)
+    WEEKS = [[2880, work]]
+    no clause head unifies with these arguments; the heads are:
+      computation.clausal:56  wt_qualifying_totals([], 0, 0)
+      computation.clausal:58  wt_qualifying_totals([WORKED_MINUTES, STATUS] | REST_WEEKS, TOTAL_MINS, QUALIFYING_WEEKS)
+      computation.clausal:65  wt_qualifying_totals([WORKED_MINUTES, STATUS] | REST_WEEKS, TOTAL_MINS, QUALIFYING_WEEKS)
+```
+
+This is the working_time case: the concrete list argument sits directly above the
+`[…] | REST_WEEKS` head that can never match it. Verified that `render_source` reproduces
+the `|` head faithfully. Skipping these clauses silently would instead produce zero
+leaves and fall back to today's message — the exact failure mode this change exists to
+remove.
 
 **Walk the body** with `_first_failing`. If the failing conjunct is a `Call` and depth
 remains, recurse into it; if the recursion returns leaves, use them, otherwise this
@@ -171,12 +193,24 @@ fixtures into `tmp_path`, run through `main`, assert on report content.
 7. Depth cap — a three-level chain stops at two.
 8. Clause cap — six clauses yield four leaves plus the truncation note.
 9. Rung 2 — the rendered solutions appear.
+10. No-head-match — a goal none of whose clause heads unify yields the head listing.
 
 End-to-end verification against the three archived trees under
 `/workspace/clausify-executor-train/_reruns/study13/`
 (`study_schengen_max_stay_r1`, `study_vat_pro_rata_deduction_r2`,
 `study_working_time_average_r1`): run `python -m clausal.testing` on each and assert the
-printed conjunct names the known cause. No model, no GPU.
+printed conjunct names the known cause. No model, no GPU. Per-case expectations:
+
+* schengen (`days_used` tests) — leaf names `window_days_used(…)` with the `date` object
+  visible.
+* vat (`decision_resolvable` test) — leaves name `TOTAL_CENTS <= 0` and `RAW_PCT > 100`
+  with their values.
+* working_time direct tests (`wt_qualifying_totals …`, `wt_compliance …`) — the
+  no-head-match listing shows the `[…] | REST_WEEKS` heads. The *facade* tests
+  (`…_assess`, `…_decision_resolvable`) bottom out at depth 2 on
+  `wt_compliance(WEEKS, _)` with `WEEKS` bound — a value-carrying pointer into the right
+  file, though not the cons bug itself; that is the accepted depth-2 trade-off, and the
+  direct tests in the same file carry the rest.
 
 Regression gate: the full suite's failure *set* must not grow. Baseline on clone `main` is
 one standing failure, `tests/test_doc_snippet_coverage.py::test_no_raw_untested_blocks`.
