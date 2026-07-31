@@ -139,6 +139,7 @@ class GoalDiagnostic:
     bindings_note: str | None = None
     nearest: str | None = None
     nearest_note: str | None = None
+    nearest_examples: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
     def lines(self, indent: str = "    ") -> list[str]:
@@ -166,6 +167,8 @@ class GoalDiagnostic:
             out.append(f"{indent}{self.nearest_note}")
         if self.nearest:
             out.extend(_wrap_goal(self.nearest, indent + "  "))
+        for example in self.nearest_examples:
+            out.extend(_wrap_goal(example, indent + "  "))
         for note in self.notes:
             out.append(f"{indent}note: {note}")
         return out
@@ -754,20 +757,31 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline) -> None:
     holes = [Var() for _ in args]
     kw_holes = [Keyword(name=k.name, value=Var()) for k in kwargs]
     probe = Call(func=goal.func, args=holes, kwargs=kw_holes)
+    examples: list[str] = []
     trail = Trail()
+    gen = None
     try:
-        satisfiable = _has_solution(probe, logic_module, trail)
+        gen = _solutions(probe, logic_module, trail)
+        for _ in range(3):
+            if next(gen, None) is None:
+                break
+            rendered = _render_probe_solution(goal, reified_goal, holes, kw_holes)
+            if rendered not in examples:
+                examples.append(rendered)
     except (_DiagBudgetExceeded, RecursionError, *_FATAL):
         raise
-    except BaseException:  # noqa: BLE001
-        satisfiable = False
+    except BaseException:  # noqa: BLE001 - a probe that errors is just no answer
+        pass
     finally:
+        if gen is not None:
+            gen.close()
         _undo(trail)
-    if satisfiable:
+    if examples:
         diag.nearest_note = (
             "the predicate has solutions, but none within one argument of "
-            "this goal — two or more arguments differ"
+            "this goal — two or more arguments differ; it does have:"
         )
+        diag.nearest_examples = examples
     else:
         diag.nearest_note = (
             "the predicate has no solution for ANY arguments at this point "
@@ -833,6 +847,29 @@ def _first_binding(probe, hole, logic_module):
     finally:
         gen.close()
         _undo(trail)
+
+
+def _render_probe_solution(goal, reified_goal, holes, kw_holes) -> str:
+    """One all-holes solution as surface text, holes replaced by their values."""
+    from clausal.logic.solve import _deref_walk_py
+    from clausal.reflection import Goal, render_source
+
+    values = [_deref_walk_py(h) for h in holes]
+    kw_values = [(str(k.name), _deref_walk_py(k.value)) for k in kw_holes]
+    if isinstance(reified_goal, Goal):
+        try:
+            return render_source(Goal(
+                name=reified_goal.name,
+                args=[_reify_value(v) for v in values],
+                kwargs=[[n, _reify_value(v)] for n, v in kw_values],
+            ))
+        except Exception:  # noqa: BLE001
+            pass
+    func = getattr(goal, "func", None)
+    name = str(func.name) if hasattr(func, "name") else "the predicate"
+    parts = [_render_value(v) for v in values]
+    parts += [f"{n}={_render_value(v)}" for n, v in kw_values]
+    return f"{name}({', '.join(parts)})"
 
 
 def _render_nearest(goal, reified_goal, kind, index, value) -> str:
