@@ -763,23 +763,30 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
         + [("kw", i) for i in range(len(kwargs))]
     )
 
-    def render_rung1(kind, i, value) -> str:
-        label = (
+    def slot_label(kind, i) -> str:
+        return (
             f"argument {i + 1}" if kind == "arg"
             else f"keyword argument {kwargs[i].name!r}"
         )
+
+    def render_rung1(kind, i, value) -> str | None:
+        """Set the rung-1 note and near-miss; RETURN the arith note unappended.
+
+        The caller appends it only once this rendering is known to be final —
+        a degenerate rendering may be replaced by a later concrete slot or by
+        descent findings, and the note must not outlive the near-miss it
+        describes.
+        """
+        label = slot_label(kind, i)
         diag.nearest_note = (
             f"the predicate DID have a solution, which did not unify "
             f"({label} differs):"
         )
         diag.nearest = _render_nearest(goal, reified_goal, kind, i, value)
         wanted = args[i] if kind == "arg" else kwargs[i].value
-        note = _arith_vs_number_note(label, wanted, value)
-        if note:
-            diag.notes.append(note)
-        return label
+        return _arith_vs_number_note(label, wanted, value)
 
-    degenerate: tuple[str, int, object] | None = None
+    degenerate: tuple[str, int, str | None] | None = None
     for kind, i in slots:
         if time.monotonic() > deadline:
             raise _DiagBudgetExceeded()
@@ -801,25 +808,32 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
             # The probe only matched a clause-head pattern or a deferred
             # constraint: the freed argument came back with unbound holes in
             # it, so this near-miss says nothing about why the concrete
-            # argument was rejected (todo D).  Keep scanning for a slot with
-            # a concrete near-miss; descend below if none turns up.
+            # argument was rejected (todo D).  Render it NOW — a budget blow
+            # in a later probe or in the descent below must still leave a
+            # near-miss in the report — then keep scanning for a slot with a
+            # concrete near-miss, which overwrites this rendering.
             if degenerate is None:
-                degenerate = (kind, i, value)
+                held_note = render_rung1(kind, i, value)
+                degenerate = (kind, i, held_note)
             continue
-        render_rung1(kind, i, value)
+        note = render_rung1(kind, i, value)
+        if note:
+            diag.notes.append(note)
         return
 
     if degenerate is not None:
         # Every solvable slot solved only with its hole left (partly) unbound.
-        # Render the weak rung-1 line first — it survives a budget blow inside
-        # the descent — then let descent findings replace it.
-        kind, i, value = degenerate
-        label = render_rung1(kind, i, value)
+        # The weak rung-1 line is already rendered; descent findings replace
+        # it, and its held-back arith note only lands if they don't.
+        kind, i, held_note = degenerate
+        label = slot_label(kind, i)
         if _report_descent(
                 diag, goal, logic_module, deadline, path,
                 intro=(f"the predicate has solutions with {label} freed, but "
                        f"none binds {label} to a concrete value")):
             diag.nearest = None
+        elif held_note:
+            diag.notes.append(held_note)
         return
 
     # No single argument explains it — is the predicate satisfiable at all?

@@ -517,3 +517,63 @@ def test_degenerate_near_miss_falls_back_when_descent_finds_nothing(
     assert "DID have a solution" in out
     assert "argument 1 differs" in out
     assert "no clause body survives" not in out
+
+
+# The scan continues PAST a degenerate slot: freeing argument 1 matches the
+# BitOr-headed fact with the hole left non-ground, but freeing argument 2
+# finds the concrete `8` — a genuine counter-value, reported exactly as
+# before.  The degenerate hit must neither win nor leave its (never-final)
+# rendering behind.
+MIXED_SLOTS_SRC = """
+mixf(A | B, 7),
+mixf([1, 2], 8),
+
+Test("later concrete slot wins") <- (
+    mixf([1, 2], 7)
+),
+"""
+
+
+def test_concrete_near_miss_in_a_later_slot_wins_over_degenerate(
+        capsys, tmp_path):
+    p = write(tmp_path, "mixf.clausal", MIXED_SLOTS_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "argument 2 differs" in out
+    assert "mixf([1, 2], 8)" in out
+    assert "no clause head unifies" not in out
+    assert "none binds" not in out
+
+
+# The keyword-argument slot path builds its own label; the degenerate intro
+# must carry it through to the descent headline.
+KWARG_DEG_SRC = """
+kdeg(R=A | B),
+
+Test("kwarg degenerate") <- (
+    kdeg(R=[1, 2])
+),
+"""
+
+
+def test_degenerate_keyword_argument_descends_with_kw_label(capsys, tmp_path):
+    p = write(tmp_path, "kdeg.clausal", KWARG_DEG_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert ("solutions with keyword argument 'R' freed, but none binds "
+            "keyword argument 'R' to a concrete value") in out
+    assert "no clause head unifies" in out
+
+
+def test_degenerate_rung2_falls_back_when_descent_finds_nothing(
+        capsys, tmp_path, monkeypatch):
+    # Rung-2 analogue of the rung-1 fallback: the anonymised examples are
+    # weak, but they must survive when the descent has nothing better.
+    import clausal.testing as _t
+    monkeypatch.setattr(_t, "_descend", lambda *a, **k: ([], "none"))
+    p = write(tmp_path, "pairq_fb.clausal", COUPLED_FACT_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "it does have:" in out
+    assert "pairq(_, _, _, _)" in out
+    assert "no clause head unifies" not in out
