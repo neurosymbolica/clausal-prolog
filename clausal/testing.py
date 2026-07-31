@@ -390,24 +390,11 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
 
     # 1. Which conjunct is the culprit?  Cumulative prefixes, first one that
     #    yields nothing (or raises) is it.
-    failing = None
-    for k in range(1, len(walked) + 1):
-        if time.monotonic() > deadline:
-            raise _DiagBudgetExceeded()
-        trail = Trail()
-        try:
-            ok = _has_solution(_conjunction(walked[:k]), logic_module, trail)
-        except (_DiagBudgetExceeded, RecursionError, *_FATAL):
-            raise
-        except BaseException as exc:  # noqa: BLE001
-            diag.index, diag.raised = k, f"{type(exc).__name__}: {exc}"
-            diag.source = sources[k - 1]
-            return
-        finally:
-            _undo(trail)
-        if not ok:
-            failing = k
-            break
+    failing, raised = _first_failing(walked, logic_module, deadline)
+    if raised is not None:
+        diag.index, diag.raised = failing, raised
+        diag.source = sources[failing - 1]
+        return
 
     if failing is None:
         # The re-run disagrees with the verdict.  Report that honestly rather
@@ -562,6 +549,34 @@ def _has_solution(goal, logic_module, trail) -> bool:
         return next(gen, None) is not None
     finally:
         gen.close()
+
+
+def _first_failing(goals, logic_module, deadline, prefix=()):
+    """1-based index of the first conjunct whose cumulative prefix yields no
+    solution, paired with ``None`` — or with the rendered exception if that
+    prefix raised instead.  ``(None, None)`` when every prefix is satisfiable.
+
+    *prefix* goals are prepended to every probe but never blamed: indices are
+    relative to *goals*.
+    """
+    from clausal.logic.variables import Trail
+
+    pre = list(prefix)
+    for k in range(1, len(goals) + 1):
+        if time.monotonic() > deadline:
+            raise _DiagBudgetExceeded()
+        trail = Trail()
+        try:
+            ok = _has_solution(_conjunction(pre + goals[:k]), logic_module, trail)
+        except (_DiagBudgetExceeded, RecursionError, *_FATAL):
+            raise
+        except BaseException as exc:  # noqa: BLE001
+            return k, f"{type(exc).__name__}: {exc}"
+        finally:
+            _undo(trail)
+        if not ok:
+            return k, None
+    return None, None
 
 
 def _undo(trail) -> None:
