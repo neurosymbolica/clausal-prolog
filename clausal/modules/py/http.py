@@ -17,6 +17,7 @@ from clausal.modules.py import (
     note_mismatch,
     note_rejected_call,
     simple_to_trampoline,
+    value_is_ground,
 )
 _urllib_request = _import_stdlib("urllib.request")
 _urllib_error = _import_stdlib("urllib.error")
@@ -95,6 +96,9 @@ def _get_3(url, headers, body, trail, k):
     headers_d = deref(headers)
     if not expect_type(url_d, str, "get/3", arg=1):
         return
+    # Note-only — see post/3: headers still degrade to {} as before.
+    if not is_var(headers_d):
+        expect_type(headers_d, DictTerm, "get/3", expected="dict", arg=2)
     hdrs = _dict_term_to_headers(headers_d) if not is_var(headers_d) else {}
     result = _do_request(url_d, headers=hdrs)
     if result is None:
@@ -114,6 +118,10 @@ def _post_3(url, data, body, trail, k):
         return
     if is_var(data_d):
         return
+    # Note-only: _do_request has always sent a body-less POST for non-str/
+    # bytes data, and changing that success into a failure is outside this
+    # diagnostic's blast radius — record the mismatch, behave as before.
+    expect_type(data_d, (str, bytes), "post/3", expected="str or bytes", arg=2)
     result = _do_request(url_d, method="POST", data=data_d)
     if result is None:
         return
@@ -133,6 +141,11 @@ def _post_4(url, data, headers, body, trail, k):
         return
     if is_var(data_d):
         return
+    # Note-only guards — see post/3: behaviour (body-less POST, headers
+    # degrading to {}) is deliberately unchanged.
+    expect_type(data_d, (str, bytes), "post/4", expected="str or bytes", arg=2)
+    if not is_var(headers_d):
+        expect_type(headers_d, DictTerm, "post/4", expected="dict", arg=3)
     hdrs = _dict_term_to_headers(headers_d) if not is_var(headers_d) else {}
     result = _do_request(url_d, method="POST", data=data_d, headers=hdrs)
     if result is None:
@@ -213,7 +226,10 @@ def _json_post_3(url, term_in, term_out, trail, k):
     try:
         json_str = _json_mod.dumps(_clausal_to_python(term_d))
     except (ValueError, TypeError) as exc:
-        note_rejected_call("json_post/3", exc)
+        # Ground terms only — a nested unbound Var is a mode signal, and
+        # its exception text leaks internal type names.
+        if value_is_ground(term_d):
+            note_rejected_call("json_post/3", exc)
         return
     result = _do_request(
         url_d, method="POST", data=json_str,

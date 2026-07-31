@@ -1077,6 +1077,12 @@ class TermTransformer(NodeTransformer):
                 return transformer._build_arrow_lambda(
                     lambda_params, body_ast, compare,
                 )
+            # An assertz'd rule head has the same silently-never-matches
+            # cons failure mode as a module-level one — lint the raw head
+            # before it is transformed.
+            if isinstance(head_ast, Call):
+                _warn_cons_bar_head(head_ast.args, head_ast.keywords,
+                                    compare, transformer._source_lines)
             # Read-once lowering: dict reads (``P.key`` / ``P[key]``) become an
             # explicit read goal at their first-occurrence position, scoped to
             # the innermost control construct.  Head first — its variables are
@@ -4571,7 +4577,8 @@ class EmbedTransformer(NodeTransformer):
         and $define_predicate call.
         """
         # orig_pos_args already carries the appended _dcg0_/_dcg1_ state
-        # Names — harmless to the cons lint, which only fires on lists.
+        # args (bare Name nodes) — harmless to the cons lint, which only
+        # fires on lists.
         _warn_cons_bar_head(orig_pos_args, orig_kw_args, expr_stmt,
                             transformer._source_lines)
         arg_field_names = _derive_field_names(orig_pos_args)

@@ -334,8 +334,14 @@ def diagnose_failure(
     # Error path only: the py-interop package is heavy to import, and most
     # failing tests never touch it — but its guards are the only place that
     # knows WHY an interop goal failed (int where timedelta is required, …),
-    # so collect their rejection notes for the whole re-run.
-    from clausal.modules.py import collect_type_mismatch_notes
+    # so collect their rejection notes for the whole re-run.  A failed
+    # import degrades to no collection: this function promises never to
+    # raise, and the notes are an enrichment, not the diagnosis.
+    try:
+        from clausal.modules.py import collect_type_mismatch_notes
+    except Exception:  # noqa: BLE001 - never-raise contract
+        def collect_type_mismatch_notes():
+            return contextlib.nullcontext([])
 
     diag = GoalDiagnostic()
     logic_module = mod.__dict__.get("$module") if hasattr(mod, "__dict__") else None

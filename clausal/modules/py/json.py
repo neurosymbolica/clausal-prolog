@@ -30,6 +30,7 @@ from clausal.modules.py import (
     expect_type,
     note_rejected_call,
     simple_to_trampoline,
+    value_is_ground,
 )
 _json = _import_stdlib("json")
 
@@ -98,7 +99,8 @@ def _generate_2(term, string, trail, k):
         obj = _clausal_to_python(term)
         result = _json.dumps(obj, ensure_ascii=False)
     except (TypeError, ValueError) as exc:
-        note_rejected_call("generate/2", exc)
+        if value_is_ground(term):
+            note_rejected_call("generate/2", exc)
         return
     if unify(string, result, trail):
         yield None
@@ -113,7 +115,8 @@ def _pretty_generate_2(term, string, trail, k):
         obj = _clausal_to_python(term)
         result = _json.dumps(obj, indent=2, ensure_ascii=False)
     except (TypeError, ValueError) as exc:
-        note_rejected_call("pretty_generate/2", exc)
+        if value_is_ground(term):
+            note_rejected_call("pretty_generate/2", exc)
         return
     if unify(string, result, trail):
         yield None
@@ -171,7 +174,8 @@ def _write_file_2(path, term, trail, k):
         with open(path, "w", encoding="utf-8") as f:
             _json.dump(obj, f, ensure_ascii=False, indent=2)
     except (TypeError, ValueError) as exc:
-        note_rejected_call("write_file/2", exc)
+        if value_is_ground(term):
+            note_rejected_call("write_file/2", exc)
         return
     except OSError:
         return

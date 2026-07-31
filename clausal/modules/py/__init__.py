@@ -244,6 +244,23 @@ def note_mismatch(pred, detail: str) -> None:
     _record_note(f"{pred} {detail}")
 
 
+def value_is_ground(value) -> bool:
+    """Conservative groundness check for gating rejection notes.
+
+    A term whose top level is bound can still hold a nested unbound Var; a
+    serializer choking on that Var is a mode/instantiation situation, not
+    an ill-typed call, and its exception text leaks internal type names
+    ("Object of type Var is not JSON serializable") — the same rule as the
+    datetime constructors' fully-bound-only notes.  True on any doubt: a
+    wrongly-recorded note is better than a wrongly-suppressed one.
+    """
+    try:
+        from clausal.logic.builtins._helpers import _is_ground
+        return bool(_is_ground(value))
+    except Exception:  # noqa: BLE001 - gate must never break the guard
+        return True
+
+
 def note_rejected_call(pred, exc) -> None:
     """Record that *pred*'s underlying Python call rejected its arguments.
 

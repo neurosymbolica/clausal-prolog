@@ -62,6 +62,37 @@ def test_warning_names_the_line(tmp_path):
     assert "line 3" in str(ws[0].message)
 
 
+def test_warns_on_cons_in_dcg_head(tmp_path):
+    ws = _lint_warnings(tmp_path, "cons_dcg",
+                        'takes([H | T]) >> (["x"])\n')
+    assert len(ws) == 1
+    assert "[H, *T]" in str(ws[0].message)
+
+
+def test_no_warn_on_clean_dcg_head(tmp_path):
+    # The DCG path appends the synthetic _dcg0_/_dcg1_ state args to the
+    # head before the lint runs — bare Names must not trip it.
+    ws = _lint_warnings(tmp_path, "ok_dcg",
+                        'takes([H, *T]) >> (["x"])\n')
+    assert ws == []
+
+
+def test_warns_on_cons_in_asserted_rule_head(tmp_path):
+    # assertz'd rules go through the expression-level `<-` path, not the
+    # module-level one — same silently-never-matches failure mode.
+    ws = _lint_warnings(
+        tmp_path, "cons_assertz",
+        "grow(X) <- (assertz(tmp_pred([H | T]) <- (H is not T)), X is 1)\n")
+    assert len(ws) == 1
+
+
+def test_no_warn_on_clean_asserted_rule_head(tmp_path):
+    ws = _lint_warnings(
+        tmp_path, "ok_assertz",
+        "grow(X) <- (assertz(tmp_pred([H, *T]) <- (H is not T)), X is 1)\n")
+    assert ws == []
+
+
 def test_no_warn_on_star_spread_head(tmp_path):
     # The correct spelling must stay silent.
     ws = _lint_warnings(tmp_path, "ok_star",

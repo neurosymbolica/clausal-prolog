@@ -505,6 +505,12 @@ def _timestamp_2(dt_obj, stamp, trail, k):
             yield None
     elif not is_var(dt_obj):
         expect_type(dt_obj, _dt.datetime, "timestamp/2", arg=1)
+    elif isinstance(stamp, bool):
+        # bool passes isinstance(int), so expect_type below would pass it
+        # silently — but the binding branch above excludes it on purpose.
+        note_mismatch("timestamp/2",
+                      "was called with bool where int or float is required "
+                      "(argument 2)")
     else:
         expect_type(stamp, (int, float), "timestamp/2",
                     expected="int or float", arg=2)

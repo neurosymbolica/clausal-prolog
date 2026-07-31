@@ -106,7 +106,80 @@ def test_note_rejected_call_records_exception():
             dt.date(2024, 13, 1)
         except ValueError as exc:
             note_rejected_call("date/4", exc)
-    assert notes == ["date/4 rejected its arguments — ValueError: month must be in 1..12"]
+    # Stdlib exception wording is not a stable API — assert the stable
+    # prefix and the load-bearing word only.
+    assert len(notes) == 1
+    assert notes[0].startswith("date/4 rejected its arguments — ValueError:")
+    assert "month" in notes[0]
+
+
+def test_bool_timestamp_records_note():
+    # bool subclasses int, so a plain isinstance guard would wave it
+    # through — but timestamp/2's binding branch excludes it on purpose.
+    from clausal.logic.variables import Trail, Var
+    from clausal.modules.py.datetime import _timestamp_2
+    with collect_type_mismatch_notes() as notes:
+        list(_timestamp_2(Var(), True, Trail(), None))
+    assert notes == [
+        "timestamp/2 was called with bool where int or float is required "
+        "(argument 2)"
+    ]
+
+
+def test_json_generate_nested_var_records_nothing():
+    # A term that is bound at the top but holds a nested unbound Var is a
+    # mode/instantiation situation — no note (and no leaked "Var" text).
+    from clausal.logic.variables import Trail, Var
+    from clausal.modules.py.json import _generate_2
+    with collect_type_mismatch_notes() as notes:
+        list(_generate_2([1, Var()], Var(), Trail(), None))
+    assert notes == []
+
+
+def test_json_generate_ground_unserializable_records_note():
+    from clausal.logic.variables import Trail, Var
+    from clausal.modules.py.json import _generate_2
+    with collect_type_mismatch_notes() as notes:
+        list(_generate_2([1, b"raw-bytes"], Var(), Trail(), None))
+    assert len(notes) == 1
+    assert notes[0].startswith("generate/2 rejected its arguments")
+
+
+def test_http_post_wrong_typed_data_notes_but_behaves_as_before(monkeypatch):
+    # The body-less POST for non-str/bytes data is pre-existing behaviour;
+    # the guard is note-only.
+    import clausal.modules.py.http as http_mod
+    from clausal.logic.variables import Trail, Var
+    calls = []
+    monkeypatch.setattr(http_mod, "_do_request",
+                        lambda *a, **kw: calls.append((a, kw)) or (200, "ok"))
+    body = Var()
+    with collect_type_mismatch_notes() as notes:
+        results = list(http_mod._post_3("http://x.test/", 42, body, Trail(), None))
+    assert notes == [
+        "post/3 was called with int where str or bytes is required (argument 2)"
+    ]
+    assert len(results) == 1 and len(calls) == 1  # request still made
+
+
+def test_diagnose_failure_survives_broken_interop_import(
+        capsys, tmp_path, monkeypatch):
+    # diagnose_failure promises never to raise; a broken py-interop package
+    # must degrade to no notes, not crash the harness.
+    import sys
+    import types
+    monkeypatch.setitem(sys.modules, "clausal.modules.py",
+                        types.ModuleType("clausal.modules.py"))
+    p = write(tmp_path, "plain.clausal", """
+    prc("alpha", 10),
+
+    Test("fails plainly") <- (
+        prc("beta", _N)
+    ),
+    """)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "goal 1 of 1 failed" in out
 
 
 # ── end-to-end: the note reaches the failure report ───────────────────────────
