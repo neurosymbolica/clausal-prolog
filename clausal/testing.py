@@ -64,6 +64,14 @@ DEFAULT_DIAG_BUDGET = 10.0
 DIAG_MAX_GOALS = 64
 #: Maximum term depth reproduced when rendering a computed value.
 DIAG_MAX_DEPTH = 40
+#: Rung-3 descent: how many predicate-call levels below the failing goal.
+DIAG_MAX_DESCENT_DEPTH = 2
+#: ...how many clauses per descended predicate.
+DIAG_MAX_DESCENT_CLAUSES = 4
+#: ...how many leaf findings in total.
+DIAG_MAX_DESCENT_LEAVES = 6
+#: ...how many bindings per leaf.
+DIAG_MAX_DESCENT_BINDINGS = 4
 
 
 def _diag_budget() -> float:
@@ -140,6 +148,7 @@ class GoalDiagnostic:
     nearest: str | None = None
     nearest_note: str | None = None
     nearest_examples: list[str] = field(default_factory=list)
+    descent: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
     def lines(self, indent: str = "    ") -> list[str]:
@@ -169,6 +178,8 @@ class GoalDiagnostic:
             out.extend(_wrap_goal(self.nearest, indent + "  "))
         for example in self.nearest_examples:
             out.extend(_wrap_goal(example, indent + "  "))
+        for line in self.descent:
+            out.append(f"{indent}  {line}")
         for note in self.notes:
             out.append(f"{indent}note: {note}")
         return out
@@ -439,12 +450,12 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
                     _collect_named(prefix, reified and reified[:failing - 1]),
                     failing,
                 )
-                _report_nearest(diag, goal, reified_goal, logic_module, deadline)
+                _report_nearest(diag, goal, reified_goal, logic_module, deadline, path)
             finally:
                 gen.close()
         else:
             diag.bindings_note = "(none — goal 1 is the first goal)"
-            _report_nearest(diag, goal, reified_goal, logic_module, deadline)
+            _report_nearest(diag, goal, reified_goal, logic_module, deadline, path)
     finally:
         _undo(trail)
 
@@ -473,13 +484,9 @@ _REIFY_CACHE: dict[str, object] = {}
 _REIFY_CACHE_MAX = 16
 
 
-def _reified_goals(path, clause, arity):
-    """The reified (source-faithful) conjuncts of *clause*, or ``None``.
-
-    Matching is by source position, so a mis-association is impossible; a
-    conjunct-count mismatch (a body shape whose runtime form does not
-    correspond 1:1 with its source conjuncts) declines rather than guesses.
-    """
+def _reified_clause(path, clause):
+    """The reified ``Clause(head, goals, position)`` matching *clause*'s
+    position, or ``None``.  Cache shared with :func:`_reified_goals`."""
     if path is None or not clause.position:
         return None
     try:
@@ -498,11 +505,27 @@ def _reified_goals(path, clause, arity):
                 continue
             pos = getattr(item, "position", None)
             if pos is not None and tuple(pos) == want:
-                goals = list(item.goals or ())
-                return goals if len(goals) == arity else None
+                return item
     except Exception:  # noqa: BLE001 - source text is a nicety, never fatal
         return None
     return None
+
+
+def _reified_goals(path, clause, arity):
+    """The reified (source-faithful) conjuncts of *clause*, or ``None``.
+
+    Matching is by source position, so a mis-association is impossible; a
+    conjunct-count mismatch (a body shape whose runtime form does not
+    correspond 1:1 with its source conjuncts) declines rather than guesses.
+    """
+    item = _reified_clause(path, clause)
+    if item is None:
+        return None
+    try:
+        goals = list(item.goals or ())
+    except Exception:  # noqa: BLE001
+        return None
+    return goals if len(goals) == arity else None
 
 
 def _goal_sources(body, reified) -> list[str]:
@@ -688,7 +711,7 @@ def _pair_vars(runtime, reified, out) -> bool:
 # ── Stage 3: nearest solution ────────────────────────────────────────────────
 
 
-def _report_nearest(diag, goal, reified_goal, logic_module, deadline) -> None:
+def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> None:
     """Show the solution the failing predicate DID have, if it had one.
 
     Re-runs the goal with one over-constrained argument replaced by a fresh
@@ -787,6 +810,7 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline) -> None:
             "the predicate has no solution for ANY arguments at this point "
             "(check the goals that produced its inputs, or its own clauses)"
         )
+        _report_descent(diag, goal, logic_module, deadline, path)
 
 
 _NO_SOLUTION = object()
@@ -1003,6 +1027,264 @@ def _reify_value(value, depth: int = 0):
     if isinstance(value, dict):
         return {k: _reify_value(v, depth + 1) for k, v in value.items()}
     raise _Unrenderable(f"no surface form for {type(value).__name__}")
+
+
+# ── Stage 4: descent into the failing predicate ──────────────────────────────
+
+
+def _report_descent(diag, goal, logic_module, deadline, path) -> None:
+    """Rung-3 refinement: walk the failing predicate's own clause bodies.
+
+    Only called after the all-holes probe proved the predicate unsatisfiable.
+    On any leaf findings, upgrades ``nearest_note`` and fills ``descent``;
+    otherwise leaves the rung-3 sentence exactly as it was.
+    """
+    notes: list[str] = []
+    leaves, kind = _descend(goal, logic_module, path, deadline, 1, frozenset(), notes)
+    if kind == "leaves" and leaves:
+        diag.nearest_note = (
+            "the predicate has no solution for ANY arguments at this point; "
+            "no clause body survives:"
+        )
+        if len(leaves) > DIAG_MAX_DESCENT_LEAVES:
+            notes.append(
+                f"only the first {DIAG_MAX_DESCENT_LEAVES} of {len(leaves)} "
+                f"descent findings are shown"
+            )
+            leaves = leaves[:DIAG_MAX_DESCENT_LEAVES]
+        diag.descent = leaves
+        diag.notes.extend(notes)
+
+
+def _resolve_predicate(goal, logic_module, caller_path):
+    """``goal.func``'s name → ``(PredicateMeta, defining module, source path)``.
+
+    Resolution order: the caller's module dict under the exact (possibly
+    dotted) name; the attribute on the imported Python module for a dotted
+    name; the bare last segment in the caller's module dict (imports land
+    there).  A clause body's own names resolve in the module that DEFINED the
+    clause, so the defining module — not the caller's — is returned alongside.
+
+    A predicate defined in the caller's own module keeps *caller_path*:
+    ``load_clausal_module`` pops the test module from ``sys.modules`` after
+    loading, so the ``sys.modules`` route is a dead end exactly there.
+    """
+    from clausal.logic.predicate import PredicateMeta
+    from clausal.terms import LoadName
+
+    func = getattr(goal, "func", None)
+    if not isinstance(func, LoadName):
+        return None
+    name = str(func.name)
+    md = getattr(logic_module, "module_dict", None) or {}
+    candidates = [md.get(name)]
+    if "." in name:
+        prefix, last = name.rsplit(".", 1)
+        candidates.append(getattr(sys.modules.get(prefix), last, None))
+        candidates.append(md.get(last))
+    for cls in candidates:
+        if isinstance(cls, PredicateMeta) and cls._clauses:
+            if cls.__module__ == getattr(logic_module, "name", None):
+                return cls, logic_module, caller_path
+            defining = sys.modules.get(cls.__module__)
+            def_lm = getattr(defining, "__dict__", {}).get("$module") if defining else None
+            src = getattr(defining, "__file__", None) if defining else None
+            return cls, (def_lm or logic_module), src
+    return None
+
+
+def _head_prefix(head, goal):
+    """``Unify(head_arg, goal_arg)`` goals matching *goal* onto *head*, or
+    ``None`` when the shapes cannot correspond (arity or keyword mismatch)."""
+    from clausal.logic.predicate import term_field_names
+    from clausal.pythonic_ast.nodes import Unify
+
+    args = list(goal.args or ())
+    kwargs = list(goal.kwargs or ())
+    if hasattr(head, "args"):
+        hargs, names = list(head.args), None
+    else:
+        names = list(term_field_names(head))
+        hargs = [getattr(head, n) for n in names]
+    if len(args) + len(kwargs) != len(hargs):
+        return None
+    pre = [Unify(left=h, right=g) for h, g in zip(hargs, args)]
+    if kwargs:
+        if names is None:
+            return None
+        positional = set(names[:len(args)])
+        for kw in kwargs:
+            kw_name = str(kw.name)
+            if kw_name not in names or kw_name in positional:
+                return None
+            pre.append(Unify(left=hargs[names.index(kw_name)], right=kw.value))
+    return pre
+
+
+def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
+    """Leaf report lines for *goal*'s predicate, with a kind tag.
+
+    Returns ``(lines, kind)``; kind is ``"leaves"`` (per-route failing
+    conjuncts), ``"head_listing"`` (every clause head failed to unify —
+    Task 5), or ``"none"`` (could not resolve / nothing to say, caller keeps
+    its own rendering).
+    """
+    resolved = _resolve_predicate(goal, logic_module, caller_path)
+    if resolved is None:
+        return [], "none"
+    cls, sub_lm, sub_path = resolved
+    key = (cls.__module__, cls.__name__)
+    if key in seen:
+        return [], "none"
+    seen = seen | {key}
+    clauses = list(cls._clauses)
+    total = len(clauses)
+    if total > DIAG_MAX_DESCENT_CLAUSES:
+        notes.append(
+            f"descent walked only the first {DIAG_MAX_DESCENT_CLAUSES} of "
+            f"{total} clauses of {cls.__name__}"
+        )
+        clauses = clauses[:DIAG_MAX_DESCENT_CLAUSES]
+    leaves: list[str] = []
+    mismatches = 0
+    for clause in clauses:
+        if time.monotonic() > deadline:
+            raise _DiagBudgetExceeded()
+        try:
+            clause_lines, state = _clause_leaves(
+                clause, goal, sub_lm, sub_path, deadline, depth, seen, notes)
+        except (_DiagBudgetExceeded, RecursionError, *_FATAL):
+            raise
+        except BaseException:  # noqa: BLE001 - a broken probe is not a finding
+            continue
+        if state == "head_mismatch":
+            mismatches += 1
+        elif state == "leaves":
+            leaves.extend(clause_lines)
+    if mismatches == len(clauses) and clauses:
+        # Task 5 turns this into the head listing; until then, nothing to say.
+        return [], "none"
+    return (leaves, "leaves") if leaves else ([], "none")
+
+
+def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, notes):
+    """Report lines for one clause route: ``(lines, state)`` where state is
+    ``"leaves"``, ``"head_mismatch"`` (head or hoisted structural arg failed to
+    unify — this clause was never a route) or ``"skip"`` (probe artifact or
+    re-run disagreement — say nothing)."""
+    from clausal.logic.variables import Trail
+    from clausal.pythonic_ast.nodes import Unify
+
+    pre = _head_prefix(clause.head, goal)
+    if pre is None:
+        return [], "head_mismatch"
+    body = list(clause.body or ())[:DIAG_MAX_GOALS]
+
+    # Tail-align source conjuncts: _normalize_structural_head_args PREPENDS
+    # Unify goals for structural head args, so the runtime body may be longer
+    # than its source.  k is that prepended count.
+    reified = _reified_clause(path, clause)
+    rgoals = list(reified.goals or ()) if reified is not None else None
+    k = 0
+    if rgoals is not None:
+        k = len(body) - len(rgoals)
+        if k < 0 or not all(isinstance(g, Unify) for g in body[:k]):
+            rgoals, k = None, 0
+
+    goals_list = pre + body
+    failing, raised = _first_failing(goals_list, logic_module, deadline)
+    if raised is not None:
+        return [], "skip"          # probe artifact, never reported as cause
+    if failing is None:
+        notes.append(
+            f"a clause of {type(clause.head).__name__} re-ran satisfiable "
+            f"during descent — non-determinism, or state changed by the run"
+        )
+        return [], "skip"
+    if failing <= len(pre) + k:
+        return [], "head_mismatch"  # failed while matching head arguments
+
+    idx = failing - 1               # into goals_list
+    leaf = goals_list[idx]
+    src_idx = idx - len(pre) - k    # into rgoals
+    reified_leaf = (
+        rgoals[src_idx]
+        if rgoals is not None and 0 <= src_idx < len(rgoals) else None
+    )
+
+    trail = Trail()
+    gen = None
+    try:
+        prefix_goals = goals_list[:idx]
+        if prefix_goals:
+            gen = _solutions(_conjunction(prefix_goals), logic_module, trail)
+            if next(gen, None) is None:
+                return [], "skip"
+        # (Task 4 inserts the recursion here.)
+        lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
+        for name, value in _leaf_bindings(leaf, reified_leaf):
+            lines.append(f"    {name} = {value}")
+        return lines, "leaves"
+    except (_DiagBudgetExceeded, RecursionError, *_FATAL):
+        raise
+    except BaseException:  # noqa: BLE001
+        return [], "skip"
+    finally:
+        if gen is not None:
+            gen.close()
+        _undo(trail)
+
+
+def _descent_leaf_line(leaf, reified_leaf, clause, path) -> str:
+    """``file:line  <source text>`` for one leaf conjunct."""
+    text = None
+    if reified_leaf is not None:
+        try:
+            from clausal.reflection import render_source
+
+            text = render_source(reified_leaf)
+        except Exception:  # noqa: BLE001
+            text = None
+    if text is None:
+        from clausal.terms import term_str
+
+        try:
+            text = term_str(leaf)
+        except Exception:  # noqa: BLE001
+            text = repr(leaf)
+    line = None
+    pos = getattr(leaf, "position", None)
+    if isinstance(pos, (tuple, list)) and pos:
+        line = pos[0]
+    if line is None and clause.position:
+        line = clause.position[0]
+    label = os.path.basename(str(path)) if path else "?"
+    return f"{label}:{line}  {text}" if line is not None else f"{label}  {text}"
+
+
+def _leaf_bindings(leaf, reified_leaf) -> list[tuple[str, str]]:
+    """Up to DIAG_MAX_DESCENT_BINDINGS named, bound variables of the leaf."""
+    from clausal.logic.variables import deref, is_var
+
+    if reified_leaf is None:
+        return []
+    named = _collect_named([leaf], [reified_leaf]) or []
+    out: list[tuple[str, str]] = []
+    seen_ids: set[int] = set()
+    for name, var in named:
+        if id(var) in seen_ids:
+            continue
+        seen_ids.add(id(var))
+        value = deref(var)
+        if is_var(value):
+            continue
+        try:
+            out.append((name, _render_value(value)))
+        except Exception:  # noqa: BLE001
+            continue
+        if len(out) >= DIAG_MAX_DESCENT_BINDINGS:
+            break
+    return out
 
 
 # ── Report formatting ────────────────────────────────────────────────────────
