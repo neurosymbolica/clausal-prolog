@@ -1054,6 +1054,13 @@ def _report_descent(diag, goal, logic_module, deadline, path) -> None:
             leaves = leaves[:DIAG_MAX_DESCENT_LEAVES]
         diag.descent = leaves
         diag.notes.extend(notes)
+    elif kind == "head_listing" and leaves:
+        diag.nearest_note = (
+            "the predicate has no solution for ANY arguments at this point; "
+            "no clause head unifies with these arguments — the heads are:"
+        )
+        diag.descent = leaves[:DIAG_MAX_DESCENT_LEAVES]
+        diag.notes.extend(notes)
 
 
 def _resolve_predicate(goal, logic_module, caller_path):
@@ -1162,8 +1169,7 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
         elif state == "leaves":
             leaves.extend(clause_lines)
     if mismatches == len(clauses) and clauses:
-        # Task 5 turns this into the head listing; until then, nothing to say.
-        return [], "none"
+        return _head_listing(cls, clauses, path=sub_path), "head_listing"
     return (leaves, "leaves") if leaves else ([], "none")
 
 
@@ -1227,7 +1233,14 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
                 leaf, logic_module, path, deadline, depth + 1, seen, notes)
             if deeper_kind == "leaves" and deeper:
                 return deeper, "leaves"
-            # "head_listing" is attached beneath this leaf in Task 5;
+            if deeper_kind == "head_listing" and deeper:
+                lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
+                for name, value in _leaf_bindings(leaf, reified_leaf):
+                    lines.append(f"    {name} = {value}")
+                lines.append("    no clause head unifies with these arguments; "
+                             "the heads are:")
+                lines.extend(f"      {line}" for line in deeper)
+                return lines, "leaves"
             # "none" falls through to render this conjunct as the leaf.
         lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
         for name, value in _leaf_bindings(leaf, reified_leaf):
@@ -1241,6 +1254,33 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
         if gen is not None:
             gen.close()
         _undo(trail)
+
+
+def _head_listing(cls, clauses, path) -> list[str]:
+    """One ``file:line  <head source>`` line per clause, source-faithful."""
+    lines = []
+    label = os.path.basename(str(path)) if path else cls.__module__
+    for clause in clauses:
+        text = None
+        reified = _reified_clause(path, clause)
+        if reified is not None:
+            try:
+                from clausal.reflection import render_source
+
+                text = render_source(reified.head)
+            except Exception:  # noqa: BLE001
+                text = None
+        if text is None:
+            from clausal.terms import term_str
+
+            try:
+                text = term_str(clause.head)
+            except Exception:  # noqa: BLE001
+                text = repr(clause.head)
+        line = clause.position[0] if clause.position else None
+        lines.append(f"{label}:{line}  {text}" if line is not None
+                     else f"{label}  {text}")
+    return lines
 
 
 def _descent_leaf_line(leaf, reified_leaf, clause, path) -> str:

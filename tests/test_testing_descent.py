@@ -181,3 +181,77 @@ def test_depth_cap_stops_at_two_levels(capsys, tmp_path):
     out = capsys.readouterr().out
     assert "lvl3(" in out          # depth-2 leaf is the lvl3 CALL...
     assert "N > 100" not in out    # ...not lvl3's body — depth cap held
+
+
+# ── no clause head matches ───────────────────────────────────────────────────
+
+# The head listing fires only once descent runs, and descent runs only after the
+# all-holes probe (rung 2) proves the predicate unsatisfiable with every argument
+# free.  The brief's cons fixtures assumed the base case `wk_totals([], 0)` would
+# leave the probe unsatisfiable — but on the live engine a hole (a Var) unifies
+# with `[]`, so the base case satisfies the all-holes probe and rung 2 intercepts
+# before descent (verified against the engine during this task).  Worse, a
+# genuinely recursive body over the `[H|T]`-as-BitOr head recurses forever when
+# the first argument is a hole, hanging the probe.  Minimal adaptation, keeping
+# every stated assertion: each clause keeps its exact head source (`[]` and the
+# BitOr `[MINS, STATUS] | REST`, both rendered source-faithfully) but is given a
+# body that FAILS with holes and does not recurse — so the all-holes probe fails
+# cleanly, descent runs, and every clause head still mismatches the concrete
+# non-empty-list goal, yielding the head listing.
+CONS_SRC = """
+-private([work])
+
+wk_totals([], 0) <- (1 > 2),
+wk_totals([MINS, STATUS] | REST, TOTAL) <- (
+    TOTAL == MINS,
+    1 > 2
+),
+
+Test("cons head never matches") <- (
+    wk_totals([[2880, work]], 2880)
+),
+"""
+
+
+def test_all_heads_fail_lists_the_heads(capsys, tmp_path):
+    p = write(tmp_path, "cons.clausal", CONS_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "no clause head unifies" in out
+    assert "| REST" in out               # the BitOr head, source-faithful
+    assert "wk_totals([], 0)" in out     # the base case is listed too
+
+
+# Same adaptation as CONS_SRC (see the note above): the base case + recursive
+# BitOr body would otherwise leave the OUTER `wkn_check` all-holes probe
+# satisfiable (or hang it), so rung 3 would never descend into `wkn_totals`.  The
+# non-recursive failing bodies make the outer probe fail cleanly; descent then
+# reaches the `wkn_totals(WEEKS, _TOTAL)` leaf, where every clause head mismatches
+# the concrete WEEKS and the head listing attaches beneath the leaf.
+CONS_NESTED_SRC = """
+-private([work])
+
+wkn_totals([], 0) <- (1 > 2),
+wkn_totals([MINS, STATUS] | REST, TOTAL) <- (
+    TOTAL == MINS,
+    1 > 2
+),
+
+wkn_check(WEEKS) <- (
+    wkn_totals(WEEKS, _TOTAL)
+),
+
+Test("nested cons head") <- (
+    wkn_check([[2880, work]])
+),
+"""
+
+
+def test_head_listing_attaches_beneath_parent_leaf(capsys, tmp_path):
+    p = write(tmp_path, "consn.clausal", CONS_NESTED_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "wkn_totals(WEEKS, _TOTAL)" in out   # the parent leaf conjunct
+    assert "no clause head unifies" in out
+    assert "| REST" in out
+    assert "WEEKS = [[2880, work]]" in out
