@@ -10,7 +10,14 @@ Wraps Python's ``hmac`` and ``hashlib`` modules. Default algorithm is SHA-256.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline, to_bytes
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    note_rejected_call,
+    simple_to_trampoline,
+    to_bytes,
+)
 _hmac = _import_stdlib("hmac")
 _hashlib = _import_stdlib("hashlib")
 
@@ -32,20 +39,25 @@ def _sign_4(algorithm, key, data, hex_out, trail, k):
     algo = deref(algorithm)
     key_d = deref(key)
     data_d = deref(data)
-    if is_var(algo) or not isinstance(algo, str):
+    if not expect_type(algo, str, "sign/4", arg=1):
         return
     if is_var(key_d) or is_var(data_d):
         return
     key_b = to_bytes(key_d)
     data_b = to_bytes(data_d)
     if key_b is None or data_b is None:
+        expect_type(key_d, (str, bytes), "sign/4", arg=2)
+        expect_type(data_d, (str, bytes), "sign/4", arg=3)
         return
     digest_mod = _resolve_algo(algo)
     if digest_mod is None:
         return
     try:
         h = _hmac.new(key_b, data_b, digest_mod)
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError) as exc:
+        # Both are argument-shaped: ValueError for an unsupported hash
+        # name, AttributeError for a digestmod without the hash protocol.
+        note_rejected_call("sign/4", exc)
         return
     if unify(hex_out, h.hexdigest(), trail):
         yield None
@@ -64,18 +76,24 @@ def _verify_4(algorithm, key, data, hex_in, trail, k):
     hex_d = deref(hex_in)
     if any(is_var(x) for x in (algo, key_d, data_d, hex_d)):
         return
-    if not isinstance(algo, str) or not isinstance(hex_d, str):
+    if (not expect_type(algo, str, "verify/4", arg=1)
+            or not expect_type(hex_d, str, "verify/4", arg=4)):
         return
     key_b = to_bytes(key_d)
     data_b = to_bytes(data_d)
     if key_b is None or data_b is None:
+        expect_type(key_d, (str, bytes), "verify/4", arg=2)
+        expect_type(data_d, (str, bytes), "verify/4", arg=3)
         return
     digest_mod = _resolve_algo(algo)
     if digest_mod is None:
         return
     try:
         h = _hmac.new(key_b, data_b, digest_mod)
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError) as exc:
+        # Both are argument-shaped: ValueError for an unsupported hash
+        # name, AttributeError for a digestmod without the hash protocol.
+        note_rejected_call("verify/4", exc)
         return
     if _hmac.compare_digest(h.hexdigest(), hex_d):
         yield None

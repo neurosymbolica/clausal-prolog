@@ -13,7 +13,12 @@ Or via module import::
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    simple_to_trampoline,
+)
 _subprocess = _import_stdlib("subprocess")
 _time = _import_stdlib("time")
 
@@ -27,7 +32,7 @@ from clausal.terms import DictTerm
 def _shell_1(command, trail, k):
     """shell/1: run shell command. Succeeds if exit code is 0."""
     command = deref(command)
-    if is_var(command) or not isinstance(command, str):
+    if not expect_type(command, str, "shell/1", arg=1):
         return
     try:
         result = _subprocess.run(command, shell=True)
@@ -40,7 +45,7 @@ def _shell_1(command, trail, k):
 def _shell_2(command, exit_code, trail, k):
     """shell/2: run shell command, unify ExitCode with the exit code."""
     command = deref(command)
-    if is_var(command) or not isinstance(command, str):
+    if not expect_type(command, str, "shell/2", arg=1):
         return
     try:
         result = _subprocess.run(command, shell=True)
@@ -53,7 +58,7 @@ def _shell_2(command, exit_code, trail, k):
 def _shell_output_2(command, output, trail, k):
     """shell_output/2: run shell command, capture stdout. Fails on non-zero exit."""
     command = deref(command)
-    if is_var(command) or not isinstance(command, str):
+    if not expect_type(command, str, "shell_output/2", arg=1):
         return
     try:
         result = _subprocess.run(
@@ -70,7 +75,7 @@ def _shell_output_2(command, output, trail, k):
 def _shell_output_3(command, output, error, trail, k):
     """shell_output/3: run shell command, capture stdout and stderr. Fails on non-zero exit."""
     command = deref(command)
-    if is_var(command) or not isinstance(command, str):
+    if not expect_type(command, str, "shell_output/3", arg=1):
         return
     try:
         result = _subprocess.run(
@@ -88,9 +93,9 @@ def _process_create_3(program, args, result_var, trail, k):
     """process_create/3: run a program with argument list (no shell)."""
     program = deref(program)
     args = deref(args)
-    if is_var(program) or not isinstance(program, str):
+    if not expect_type(program, str, "process_create/3", arg=1):
         return
-    if is_var(args) or not isinstance(args, list):
+    if not expect_type(args, list, "process_create/3", arg=2):
         return
     cmd = [program] + [str(deref(a)) for a in args]
     try:
@@ -111,9 +116,9 @@ def _process_create_4(program, args, options, result_var, trail, k):
     program = deref(program)
     args = deref(args)
     options = deref(options)
-    if is_var(program) or not isinstance(program, str):
+    if not expect_type(program, str, "process_create/4", arg=1):
         return
-    if is_var(args) or not isinstance(args, list):
+    if not expect_type(args, list, "process_create/4", arg=2):
         return
     if is_var(options):
         return
@@ -127,6 +132,8 @@ def _process_create_4(program, args, options, result_var, trail, k):
     elif isinstance(options, dict):
         opts_data = options
     else:
+        expect_type(options, (DictTerm, dict), "process_create/4",
+                    expected="dict", arg=3)
         return
 
     if "cwd" in opts_data:
@@ -179,7 +186,8 @@ def _sleep_1(seconds, trail, k):
     seconds = deref(seconds)
     if is_var(seconds):
         return
-    if not isinstance(seconds, (int, float)):
+    if not expect_type(seconds, (int, float), "sleep/1",
+                       expected="int or float", arg=1):
         return
     _time.sleep(float(seconds))
     yield None

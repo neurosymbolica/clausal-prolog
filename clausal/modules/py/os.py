@@ -13,7 +13,12 @@ Or via module import::
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    simple_to_trampoline,
+)
 _os = _import_stdlib("os")
 _sys = _import_stdlib("sys")
 
@@ -37,7 +42,7 @@ def _environment_variable_2(name, value, trail, k):
                 yield None
             trail.undo(mark)
     else:
-        if not isinstance(name, str):
+        if not expect_type(name, str, "environment_variable/2", arg=1):
             return
         env_value = _os.environ.get(name)
         if env_value is None:
@@ -51,7 +56,9 @@ def _set_environment_variable_2(name, value, trail, k):
     name, value = deref(name), deref(value)
     if is_var(name) or is_var(value):
         return
-    if not isinstance(name, str) or not isinstance(value, str):
+    if not expect_type(name, str, "set_environment_variable/2", arg=1):
+        return
+    if not expect_type(value, str, "set_environment_variable/2", arg=2):
         return
     _os.environ[name] = value
     yield None
@@ -60,7 +67,7 @@ def _set_environment_variable_2(name, value, trail, k):
 def _unset_environment_variable_1(name, trail, k):
     """unset_environment_variable/1: remove an environment variable."""
     name = deref(name)
-    if is_var(name) or not isinstance(name, str):
+    if not expect_type(name, str, "unset_environment_variable/1", arg=1):
         return
     if name not in _os.environ:
         return
@@ -78,7 +85,7 @@ def _working_directory_1(path, trail, k):
 def _change_directory_1(path, trail, k):
     """change_directory/1: change the current working directory."""
     path = deref(path)
-    if is_var(path) or not isinstance(path, str):
+    if not expect_type(path, str, "change_directory/1", arg=1):
         return
     try:
         _os.chdir(path)

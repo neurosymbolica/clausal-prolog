@@ -16,7 +16,14 @@ Wraps Python's ``hashlib`` module. Supported algorithms include
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline, to_bytes
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    note_rejected_call,
+    simple_to_trampoline,
+    to_bytes,
+)
 _hashlib = _import_stdlib("hashlib")
 
 from clausal.logic.variables import deref, is_var, unify
@@ -29,21 +36,24 @@ def _hash_3(algorithm, data, hex_out, trail, k):
     """hash/3: hash(Algorithm, Data, Hex) — compute hex digest."""
     algo = deref(algorithm)
     data_d = deref(data)
-    if is_var(algo) or not isinstance(algo, str):
+    if not expect_type(algo, str, "hash/3", arg=1):
         return
     if is_var(data_d):
         return
     data_bytes = to_bytes(data_d)
     if data_bytes is None:
+        expect_type(data_d, (str, bytes), "hash/3", arg=2)
         return
     try:
         h = _hashlib.new(algo)
-    except ValueError:
-        return  # unknown algorithm
+    except ValueError as exc:  # unknown algorithm
+        note_rejected_call("hash/3", exc)
+        return
     h.update(data_bytes)
     try:
         digest = h.hexdigest()  # TypeError: shake_* needs a length (F019)
-    except TypeError:
+    except TypeError as exc:
+        note_rejected_call("hash/3", exc)
         return
     if unify(hex_out, digest, trail):
         yield None
@@ -53,21 +63,24 @@ def _hash_bytes_3(algorithm, data, bytes_out, trail, k):
     """hash_bytes/3: hash_bytes(Algorithm, Data, Bytes) — compute raw digest bytes."""
     algo = deref(algorithm)
     data_d = deref(data)
-    if is_var(algo) or not isinstance(algo, str):
+    if not expect_type(algo, str, "hash_bytes/3", arg=1):
         return
     if is_var(data_d):
         return
     data_bytes = to_bytes(data_d)
     if data_bytes is None:
+        expect_type(data_d, (str, bytes), "hash_bytes/3", arg=2)
         return
     try:
         h = _hashlib.new(algo)
-    except ValueError:
+    except ValueError as exc:  # unknown algorithm
+        note_rejected_call("hash_bytes/3", exc)
         return
     h.update(data_bytes)
     try:
         digest = h.digest()  # TypeError: shake_* needs a length (F019)
-    except TypeError:
+    except TypeError as exc:
+        note_rejected_call("hash_bytes/3", exc)
         return
     if unify(bytes_out, digest, trail):
         yield None

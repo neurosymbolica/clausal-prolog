@@ -10,7 +10,14 @@ Primary backend: ``urllib.request`` (stdlib, zero deps).
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    note_mismatch,
+    note_rejected_call,
+    simple_to_trampoline,
+)
 _urllib_request = _import_stdlib("urllib.request")
 _urllib_error = _import_stdlib("urllib.error")
 _urllib_parse = _import_stdlib("urllib.parse")
@@ -70,7 +77,7 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30):
 def _get_2(url, body, trail, k):
     """get/2: get(Url, Body) — GET request, body as string."""
     url_d = deref(url)
-    if is_var(url_d) or not isinstance(url_d, str):
+    if not expect_type(url_d, str, "get/2", arg=1):
         return
     result = _do_request(url_d)
     if result is None:
@@ -86,7 +93,7 @@ def _get_3(url, headers, body, trail, k):
     """get/3: get(Url, Headers, Body) — GET with custom headers."""
     url_d = deref(url)
     headers_d = deref(headers)
-    if is_var(url_d) or not isinstance(url_d, str):
+    if not expect_type(url_d, str, "get/3", arg=1):
         return
     hdrs = _dict_term_to_headers(headers_d) if not is_var(headers_d) else {}
     result = _do_request(url_d, headers=hdrs)
@@ -103,7 +110,7 @@ def _post_3(url, data, body, trail, k):
     """post/3: post(Url, Data, Body) — POST string data."""
     url_d = deref(url)
     data_d = deref(data)
-    if is_var(url_d) or not isinstance(url_d, str):
+    if not expect_type(url_d, str, "post/3", arg=1):
         return
     if is_var(data_d):
         return
@@ -122,7 +129,7 @@ def _post_4(url, data, headers, body, trail, k):
     url_d = deref(url)
     data_d = deref(data)
     headers_d = deref(headers)
-    if is_var(url_d) or not isinstance(url_d, str):
+    if not expect_type(url_d, str, "post/4", arg=1):
         return
     if is_var(data_d):
         return
@@ -140,10 +147,17 @@ def _post_4(url, data, headers, body, trail, k):
 def _request_3(options, status_out, body_out, trail, k):
     """request/3: general request. Options is DictTerm with url, method, headers, data, timeout."""
     opts = deref(options)
-    if is_var(opts) or not isinstance(opts, DictTerm):
+    if not expect_type(opts, DictTerm, "request/3", expected="dict", arg=1):
         return
     url = deref(opts.data.get("url"))
     if url is None or is_var(url) or not isinstance(url, str):
+        if url is None:
+            note_mismatch("request/3",
+                          "was called with an options dict that lacks a url key")
+        elif not is_var(url):
+            note_mismatch("request/3",
+                          f"was called with an options dict whose url is "
+                          f"{type(url).__name__} where str is required")
         return
     method = deref(opts.data.get("method", "GET"))
     if is_var(method):
@@ -171,7 +185,7 @@ def _request_3(options, status_out, body_out, trail, k):
 def _json_get_2(url, term_out, trail, k):
     """json_get/2: GET + parse JSON response into DictTerm/list."""
     url_d = deref(url)
-    if is_var(url_d) or not isinstance(url_d, str):
+    if not expect_type(url_d, str, "json_get/2", arg=1):
         return
     result = _do_request(url_d, headers={"Accept": "application/json"})
     if result is None:
@@ -192,13 +206,14 @@ def _json_post_3(url, term_in, term_out, trail, k):
     """json_post/3: POST JSON body + parse JSON response."""
     url_d = deref(url)
     term_d = deref(term_in)
-    if is_var(url_d) or not isinstance(url_d, str):
+    if not expect_type(url_d, str, "json_post/3", arg=1):
         return
     if is_var(term_d):
         return
     try:
         json_str = _json_mod.dumps(_clausal_to_python(term_d))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as exc:
+        note_rejected_call("json_post/3", exc)
         return
     result = _do_request(
         url_d, method="POST", data=json_str,

@@ -21,7 +21,14 @@ Use ``++int(X)`` or ``number_chars`` for conversion if needed.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    note_mismatch,
+    note_rejected_call,
+    simple_to_trampoline,
+)
 _csv = _import_stdlib("csv")
 
 import io
@@ -50,7 +57,7 @@ def _deref_row(row):
 def _parse_row_2(string, row, trail, k):
     """parse_row/2: parse a single CSV line into a list of strings."""
     string = deref(string)
-    if is_var(string) or not isinstance(string, str):
+    if not expect_type(string, str, "parse_row/2", arg=1):
         return
     reader = _csv.reader(io.StringIO(string))
     try:
@@ -64,7 +71,7 @@ def _parse_row_2(string, row, trail, k):
 def _parse_2(string, rows, trail, k):
     """parse/2: parse a multi-line CSV string into a list of rows."""
     string = deref(string)
-    if is_var(string) or not isinstance(string, str):
+    if not expect_type(string, str, "parse/2", arg=1):
         return
     reader = _csv.reader(io.StringIO(string))
     result = [row for row in reader]
@@ -75,7 +82,7 @@ def _parse_2(string, rows, trail, k):
 def _parse_records_3(string, headers, records, trail, k):
     """parse_records/3: parse CSV with headers → list of DictTerms."""
     string = deref(string)
-    if is_var(string) or not isinstance(string, str):
+    if not expect_type(string, str, "parse_records/3", arg=1):
         return
     reader = _csv.DictReader(io.StringIO(string))
     header_list = reader.fieldnames
@@ -92,7 +99,7 @@ def _parse_records_3(string, headers, records, trail, k):
 def _generate_2(rows, string, trail, k):
     """generate/2: serialize a list of rows to CSV string."""
     rows = deref(rows)
-    if is_var(rows) or not isinstance(rows, list):
+    if not expect_type(rows, list, "generate/2", arg=1):
         return
     try:
         buf = io.StringIO()
@@ -100,10 +107,16 @@ def _generate_2(rows, string, trail, k):
         for row in rows:
             row = deref(row)
             if not isinstance(row, list):
+                note_mismatch(
+                    "generate/2",
+                    f"was called with a list containing {type(row).__name__} "
+                    "where a list of row lists is required (argument 1)",
+                )
                 return
             writer.writerow(_deref_row(row))
         result = buf.getvalue()
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("generate/2", exc)
         return
     if unify(string, result, trail):
         yield None
@@ -112,9 +125,9 @@ def _generate_2(rows, string, trail, k):
 def _generate_records_3(headers, records, string, trail, k):
     """generate_records/3: serialize DictTerm records with header row."""
     headers, records = deref(headers), deref(records)
-    if is_var(headers) or not isinstance(headers, list):
+    if not expect_type(headers, list, "generate_records/3", arg=1):
         return
-    if is_var(records) or not isinstance(records, list):
+    if not expect_type(records, list, "generate_records/3", arg=2):
         return
     try:
         header_strs = [str(deref(h)) for h in headers]
@@ -124,11 +137,17 @@ def _generate_records_3(headers, records, string, trail, k):
         for record in records:
             record = deref(record)
             if not isinstance(record, DictTerm):
+                note_mismatch(
+                    "generate_records/3",
+                    f"was called with a list containing {type(record).__name__} "
+                    "where a list of DictTerm records is required (argument 2)",
+                )
                 return
             row_dict = {k: str(deref(v)) for k, v in record.data.items()}
             writer.writerow(row_dict)
         result = buf.getvalue()
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("generate_records/3", exc)
         return
     if unify(string, result, trail):
         yield None
@@ -137,7 +156,7 @@ def _generate_records_3(headers, records, string, trail, k):
 def _read_file_2(path, rows, trail, k):
     """read_file/2: read and parse a CSV file into list of rows."""
     path = deref(path)
-    if is_var(path) or not isinstance(path, str):
+    if not expect_type(path, str, "read_file/2", arg=1):
         return
     try:
         with open(path, "r", encoding="utf-8", newline="") as f:
@@ -152,7 +171,7 @@ def _read_file_2(path, rows, trail, k):
 def _read_records_2(path, records, trail, k):
     """read_records/2: read CSV file with headers → list of DictTerms."""
     path = deref(path)
-    if is_var(path) or not isinstance(path, str):
+    if not expect_type(path, str, "read_records/2", arg=1):
         return
     try:
         with open(path, "r", encoding="utf-8", newline="") as f:
@@ -167,9 +186,9 @@ def _read_records_2(path, records, trail, k):
 def _write_file_2(path, rows, trail, k):
     """write_file/2: serialize rows and write to CSV file."""
     path, rows = deref(path), deref(rows)
-    if is_var(path) or not isinstance(path, str):
+    if not expect_type(path, str, "write_file/2", arg=1):
         return
-    if is_var(rows) or not isinstance(rows, list):
+    if not expect_type(rows, list, "write_file/2", arg=2):
         return
     try:
         with open(path, "w", encoding="utf-8", newline="") as f:
@@ -177,9 +196,17 @@ def _write_file_2(path, rows, trail, k):
             for row in rows:
                 row = deref(row)
                 if not isinstance(row, list):
+                    note_mismatch(
+                        "write_file/2",
+                        f"was called with a list containing {type(row).__name__} "
+                        "where a list of row lists is required (argument 2)",
+                    )
                     return
                 writer.writerow(_deref_row(row))
-    except (TypeError, ValueError, OSError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("write_file/2", exc)
+        return
+    except OSError:
         return
     yield None
 

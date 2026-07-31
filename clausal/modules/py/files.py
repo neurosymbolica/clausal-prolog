@@ -15,7 +15,12 @@ Or via module import::
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    simple_to_trampoline,
+)
 _os = _import_stdlib("os")
 _shutil = _import_stdlib("shutil")
 _tempfile = _import_stdlib("tempfile")
@@ -28,12 +33,15 @@ from clausal.logic.variables import Var, deref, is_var, unify
 # ── Helper ──────────────────────────────────────────────────────────────
 
 
-def _require_ground_str(val, label="argument"):
-    """Deref and validate a ground string argument. Returns str or None."""
+def _require_ground_str(val, pred, arg):
+    """Deref and validate a ground string argument. Returns str or None.
+
+    *pred* is the registered predicate name/arity (e.g. ``"file_exists/1"``)
+    and *arg* the 1-based argument position, used to record a type-mismatch
+    note when the value is bound but not a str.
+    """
     val = deref(val)
-    if is_var(val) or not isinstance(val, str):
-        return None
-    return val
+    return val if expect_type(val, str, pred, arg=arg) else None
 
 
 # ── Existence predicates ────────────────────────────────────────────────
@@ -41,7 +49,7 @@ def _require_ground_str(val, label="argument"):
 
 def _file_exists_1(path, trail, k):
     """file_exists/1: succeeds if Path is a regular file."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "file_exists/1", 1)
     if path is None:
         return
     if pathlib.Path(path).is_file():
@@ -50,7 +58,7 @@ def _file_exists_1(path, trail, k):
 
 def _directory_exists_1(path, trail, k):
     """directory_exists/1: succeeds if Path is a directory."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "directory_exists/1", 1)
     if path is None:
         return
     if pathlib.Path(path).is_dir():
@@ -59,7 +67,7 @@ def _directory_exists_1(path, trail, k):
 
 def _path_exists_1(path, trail, k):
     """path_exists/1: succeeds if Path exists (file, directory, or other)."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "path_exists/1", 1)
     if path is None:
         return
     if pathlib.Path(path).exists():
@@ -71,7 +79,7 @@ def _path_exists_1(path, trail, k):
 
 def _directory_files_2(dir_path, files, trail, k):
     """directory_files/2: unify Files with list of filenames in Dir."""
-    dir_path = _require_ground_str(dir_path)
+    dir_path = _require_ground_str(dir_path, "directory_files/2", 1)
     if dir_path is None:
         return
     p = pathlib.Path(dir_path)
@@ -87,7 +95,7 @@ def _directory_files_2(dir_path, files, trail, k):
 
 def _directory_entries_2(dir_path, entry, trail, k):
     """directory_entries/2: enumerate directory entries via backtracking."""
-    dir_path = _require_ground_str(dir_path)
+    dir_path = _require_ground_str(dir_path, "directory_entries/2", 1)
     if dir_path is None:
         return
     p = pathlib.Path(dir_path)
@@ -109,7 +117,7 @@ def _directory_entries_2(dir_path, entry, trail, k):
 
 def _file_size_2(path, size, trail, k):
     """file_size/2: unify Size with file size in bytes."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "file_size/2", 1)
     if path is None:
         return
     try:
@@ -122,7 +130,7 @@ def _file_size_2(path, size, trail, k):
 
 def _file_modification_time_2(path, time, trail, k):
     """file_modification_time/2: unify Time with modification timestamp."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "file_modification_time/2", 1)
     if path is None:
         return
     try:
@@ -138,7 +146,7 @@ def _file_modification_time_2(path, time, trail, k):
 
 def _delete_file_1(path, trail, k):
     """delete_file/1: delete a file."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "delete_file/1", 1)
     if path is None:
         return
     try:
@@ -150,7 +158,7 @@ def _delete_file_1(path, trail, k):
 
 def _delete_directory_1(path, trail, k):
     """delete_directory/1: delete an empty directory."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "delete_directory/1", 1)
     if path is None:
         return
     try:
@@ -162,8 +170,8 @@ def _delete_directory_1(path, trail, k):
 
 def _rename_file_2(old, new, trail, k):
     """rename_file/2: rename/move a file or directory."""
-    old = _require_ground_str(old)
-    new = _require_ground_str(new)
+    old = _require_ground_str(old, "rename_file/2", 1)
+    new = _require_ground_str(new, "rename_file/2", 2)
     if old is None or new is None:
         return
     try:
@@ -175,8 +183,8 @@ def _rename_file_2(old, new, trail, k):
 
 def _copy_file_2(source, destination, trail, k):
     """copy_file/2: copy a file (not directory)."""
-    source = _require_ground_str(source)
-    destination = _require_ground_str(destination)
+    source = _require_ground_str(source, "copy_file/2", 1)
+    destination = _require_ground_str(destination, "copy_file/2", 2)
     if source is None or destination is None:
         return
     try:
@@ -191,7 +199,7 @@ def _copy_file_2(source, destination, trail, k):
 
 def _make_directory_1(path, trail, k):
     """make_directory/1: create a directory. Fails if it already exists."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "make_directory/1", 1)
     if path is None:
         return
     try:
@@ -203,7 +211,7 @@ def _make_directory_1(path, trail, k):
 
 def _make_directory_path_1(path, trail, k):
     """make_directory_path/1: create a directory and all parents (mkdir -p)."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "make_directory_path/1", 1)
     if path is None:
         return
     try:
@@ -218,7 +226,7 @@ def _make_directory_path_1(path, trail, k):
 
 def _read_file_to_string_2(path, contents, trail, k):
     """read_file_to_string/2: read entire file as a string."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "read_file_to_string/2", 1)
     if path is None:
         return
     try:
@@ -231,11 +239,11 @@ def _read_file_to_string_2(path, contents, trail, k):
 
 def _write_string_to_file_2(path, contents, trail, k):
     """write_string_to_file/2: write a string to a file (overwrite)."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "write_string_to_file/2", 1)
     if path is None:
         return
     contents = deref(contents)
-    if is_var(contents) or not isinstance(contents, str):
+    if not expect_type(contents, str, "write_string_to_file/2", arg=2):
         return
     try:
         pathlib.Path(path).write_text(contents, encoding="utf-8")
@@ -246,11 +254,11 @@ def _write_string_to_file_2(path, contents, trail, k):
 
 def _append_string_to_file_2(path, contents, trail, k):
     """append_string_to_file/2: append a string to a file."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "append_string_to_file/2", 1)
     if path is None:
         return
     contents = deref(contents)
-    if is_var(contents) or not isinstance(contents, str):
+    if not expect_type(contents, str, "append_string_to_file/2", arg=2):
         return
     try:
         with open(path, "a", encoding="utf-8") as f:
@@ -265,7 +273,7 @@ def _append_string_to_file_2(path, contents, trail, k):
 
 def _absolute_path_2(relative, absolute, trail, k):
     """absolute_path/2: resolve relative path to absolute."""
-    relative = _require_ground_str(relative)
+    relative = _require_ground_str(relative, "absolute_path/2", 1)
     if relative is None:
         return
     resolved = str(pathlib.Path(relative).resolve())
@@ -275,8 +283,8 @@ def _absolute_path_2(relative, absolute, trail, k):
 
 def _join_path_3(base, relative, joined, trail, k):
     """join_path/3: join two path components."""
-    base = _require_ground_str(base)
-    relative = _require_ground_str(relative)
+    base = _require_ground_str(base, "join_path/3", 1)
+    relative = _require_ground_str(relative, "join_path/3", 2)
     if base is None or relative is None:
         return
     result = str(pathlib.Path(base) / relative)
@@ -286,7 +294,7 @@ def _join_path_3(base, relative, joined, trail, k):
 
 def _split_path_3(path, directory, filename, trail, k):
     """split_path/3: split path into directory and filename."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "split_path/3", 1)
     if path is None:
         return
     p = pathlib.Path(path)
@@ -298,7 +306,7 @@ def _split_path_3(path, directory, filename, trail, k):
 
 def _file_extension_2(path, extension, trail, k):
     """file_extension/2: unify Extension with the file extension (including dot)."""
-    path = _require_ground_str(path)
+    path = _require_ground_str(path, "file_extension/2", 1)
     if path is None:
         return
     ext = pathlib.Path(path).suffix

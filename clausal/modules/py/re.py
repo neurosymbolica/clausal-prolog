@@ -24,7 +24,12 @@ time; the predicates here just do the runtime work.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    note_mismatch,
+    simple_to_trampoline,
+)
 _re = _import_stdlib("re")
 
 from typing import Any
@@ -41,7 +46,7 @@ from clausal.logic.runtime._seg_helpers import maybe_promote_to_str
 _NO_SUBJECT = object()
 
 
-def _coerce_subject(string: Any) -> Any:
+def _coerce_subject(string: Any, pred: str, arg: int) -> Any:
     """Resolve a match/search/replace/split subject to a ``str``.
 
     Never ``str()``-coerces an arbitrary term (F002): an unbound Var used to
@@ -53,7 +58,10 @@ def _coerce_subject(string: Any) -> Any:
     - a ``SegString``/``SegList`` that walks to a ``str`` → that ``str``;
     - a list/tuple of 1-char strings → joined ``str`` (strings-as-lists
       Liskov, docs/strings_as_lists.md); empty list → "";
-    - anything else (int, non-char list, …) → ``_NO_SUBJECT``.
+    - anything else (int, non-char list, …) → ``_NO_SUBJECT``, recording a
+      type-mismatch note (the value was bound, so this is an ill-typed
+      call, not a mode signal).  *pred* is the registered predicate
+      name/arity and *arg* the 1-based argument position for the note.
     """
     s = deref(string)
     if is_var(s):
@@ -69,6 +77,9 @@ def _coerce_subject(string: Any) -> Any:
         promoted = maybe_promote_to_str([deref(e) for e in s])
         if isinstance(promoted, str):
             return promoted
+    note_mismatch(pred,
+                  f"was called with {type(s).__name__} where str or a list "
+                  f"of single-character strings is required (argument {arg})")
     return _NO_SUBJECT
 
 
@@ -107,7 +118,7 @@ def _groups_dict(m: "_re.Match") -> dict | tuple:
 def _match_2(pat, string, trail, k):
     """match/2: boolean test — re.match(pattern, string)."""
     pat = deref(pat)
-    string = _coerce_subject(string)
+    string = _coerce_subject(string, "match/2", 2)
     if string is _NO_SUBJECT:
         return
     compiled = _compile_pattern(pat)
@@ -119,7 +130,7 @@ def _match_2(pat, string, trail, k):
 def _match_3(pat, string, groups, trail, k):
     """match/3: explicit group extraction — re.match(pattern, string) → groups dict."""
     pat = deref(pat)
-    string = _coerce_subject(string)
+    string = _coerce_subject(string, "match/3", 2)
     if string is _NO_SUBJECT:
         return
     compiled = _compile_pattern(pat)
@@ -136,7 +147,7 @@ def _match_3(pat, string, groups, trail, k):
 def _search_2(pat, string, trail, k):
     """search/2: boolean test — re.search(pattern, string)."""
     pat = deref(pat)
-    string = _coerce_subject(string)
+    string = _coerce_subject(string, "search/2", 2)
     if string is _NO_SUBJECT:
         return
     compiled = _compile_pattern(pat)
@@ -148,7 +159,7 @@ def _search_2(pat, string, trail, k):
 def _search_3(pat, string, groups, trail, k):
     """search/3: explicit group extraction — re.search(pattern, string) → groups dict."""
     pat = deref(pat)
-    string = _coerce_subject(string)
+    string = _coerce_subject(string, "search/3", 2)
     if string is _NO_SUBJECT:
         return
     compiled = _compile_pattern(pat)
@@ -165,10 +176,10 @@ def _search_3(pat, string, groups, trail, k):
 def _replace_4(pat, repl, string, result, trail, k):
     """replace/4: re.sub(pattern, replacement, string) → result."""
     pat = deref(pat)
-    repl = _coerce_subject(repl)
+    repl = _coerce_subject(repl, "replace/4", 2)
     if repl is _NO_SUBJECT:
         return  # unbound / non-string replacement — fail cleanly (F004)
-    string = _coerce_subject(string)
+    string = _coerce_subject(string, "replace/4", 3)
     if string is _NO_SUBJECT:
         return
     compiled = _compile_pattern(pat)
@@ -183,7 +194,7 @@ def _replace_4(pat, repl, string, result, trail, k):
 def _split_3(pat, string, parts, trail, k):
     """split/3: re.split(pattern, string) → parts list."""
     pat = deref(pat)
-    string = _coerce_subject(string)
+    string = _coerce_subject(string, "split/3", 2)
     if string is _NO_SUBJECT:
         return
     compiled = _compile_pattern(pat)
@@ -204,7 +215,7 @@ def _findall_3(this_generator, _proceed, _fail, _catcher, pat, string, match_var
     - two or more groups → each match is a tuple of group strings.
     """
     pat = deref(pat)
-    string = _coerce_subject(string)
+    string = _coerce_subject(string, "findall/3", 2)
     if string is _NO_SUBJECT:
         yield (_fail, DONE)
         return

@@ -10,7 +10,12 @@ Wraps Python's ``socket`` module. Socket handles are opaque Python objects.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    simple_to_trampoline,
+)
 _socket = _import_stdlib("socket")
 
 from clausal.logic.variables import deref, is_var, unify
@@ -23,9 +28,9 @@ def _connect_3(host, port, sock_out, trail, k):
     """connect/3: connect(Host, Port, Socket) — connect to TCP server."""
     host_d = deref(host)
     port_d = deref(port)
-    if is_var(host_d) or not isinstance(host_d, str):
+    if not expect_type(host_d, str, "connect/3", arg=1):
         return
-    if is_var(port_d) or not isinstance(port_d, int):
+    if not expect_type(port_d, int, "connect/3", arg=2):
         return
     try:
         s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
@@ -40,9 +45,9 @@ def _listen_3(host, port, server_out, trail, k):
     """listen/3: listen(Host, Port, ServerSocket) — create listening socket."""
     host_d = deref(host)
     port_d = deref(port)
-    if is_var(host_d) or not isinstance(host_d, str):
+    if not expect_type(host_d, str, "listen/3", arg=1):
         return
-    if is_var(port_d) or not isinstance(port_d, int):
+    if not expect_type(port_d, int, "listen/3", arg=2):
         return
     try:
         s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
@@ -58,7 +63,7 @@ def _listen_3(host, port, server_out, trail, k):
 def _accept_2(server_sock, client_out, trail, k):
     """accept/2: accept(ServerSocket, ClientSocket) — accept incoming connection."""
     server_d = deref(server_sock)
-    if is_var(server_d) or not isinstance(server_d, _socket.socket):
+    if not expect_type(server_d, _socket.socket, "accept/2", arg=1):
         return
     try:
         client, addr = server_d.accept()
@@ -72,7 +77,7 @@ def _send_2(sock, data, trail, k):
     """send/2: send(Socket, Data) — send string (UTF-8) or bytes via sendall."""
     sock_d = deref(sock)
     data_d = deref(data)
-    if is_var(sock_d) or not isinstance(sock_d, _socket.socket):
+    if not expect_type(sock_d, _socket.socket, "send/2", arg=1):
         return
     if is_var(data_d):
         return
@@ -81,6 +86,8 @@ def _send_2(sock, data, trail, k):
     elif isinstance(data_d, bytes):
         data_bytes = data_d
     else:
+        expect_type(data_d, (str, bytes), "send/2",
+                    expected="str or bytes", arg=2)
         return
     try:
         sock_d.sendall(data_bytes)
@@ -93,9 +100,9 @@ def _receive_3(sock, bufsize, data_out, trail, k):
     """receive/3: receive(Socket, BufferSize, Data) — receive with custom buffer."""
     sock_d = deref(sock)
     bufsize_d = deref(bufsize)
-    if is_var(sock_d) or not isinstance(sock_d, _socket.socket):
+    if not expect_type(sock_d, _socket.socket, "receive/3", arg=1):
         return
-    if is_var(bufsize_d) or not isinstance(bufsize_d, int):
+    if not expect_type(bufsize_d, int, "receive/3", arg=2):
         return
     try:
         raw = sock_d.recv(bufsize_d)
@@ -121,7 +128,7 @@ def _receive_2(sock, data_out, trail, k):
 def _close_1(sock, trail, k):
     """close/1: close(Socket) — close socket. Always succeeds."""
     sock_d = deref(sock)
-    if is_var(sock_d) or not isinstance(sock_d, _socket.socket):
+    if not expect_type(sock_d, _socket.socket, "close/1", arg=1):
         return
     try:
         sock_d.close()
@@ -134,7 +141,7 @@ def _set_timeout_2(sock, seconds, trail, k):
     """set_timeout/2: set_timeout(Socket, Seconds) — set socket timeout."""
     sock_d = deref(sock)
     sec_d = deref(seconds)
-    if is_var(sock_d) or not isinstance(sock_d, _socket.socket):
+    if not expect_type(sock_d, _socket.socket, "set_timeout/2", arg=1):
         return
     if is_var(sec_d):
         return

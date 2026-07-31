@@ -155,6 +155,108 @@ def to_bytes(val):
     return None
 
 
+# ── Type-mismatch diagnostic notes ──────────────────────────────────────────
+#
+# A py-interop predicate that bails on a type guard produces a bare "no" —
+# indistinguishable from a goal that genuinely has no solution (see
+# todo/C1-ill-typed-interop-calls-are-silent-failures.md).  Raising type_error
+# instead would change semantics for every existing caller, so the guards
+# stay guards; but while a collector is active (the failure-diagnostic re-run
+# in clausal.testing) each rejection records what it rejected.
+
+# The active note sink, or None outside a diagnostic re-run.  A plain module
+# global, not a contextvar: the engine solves single-threaded and the
+# diagnostic re-run is synchronous.
+_mismatch_notes: list | None = None
+_mismatch_seen: set | None = None
+
+
+class _NoteCollection:
+    """Context manager handed out by :func:`collect_type_mismatch_notes`."""
+
+    def __enter__(self):
+        global _mismatch_notes, _mismatch_seen
+        self._prev = (_mismatch_notes, _mismatch_seen)
+        _mismatch_notes = []
+        _mismatch_seen = set()
+        return _mismatch_notes
+
+    def __exit__(self, *exc_info):
+        global _mismatch_notes, _mismatch_seen
+        _mismatch_notes, _mismatch_seen = self._prev
+        return False
+
+
+def collect_type_mismatch_notes():
+    """Collect py-interop type-rejection notes for the ``with`` block.
+
+    Yields the (deduplicated, in rejection order) list of note strings; it is
+    filled in place as guards fire, so it can be read after the block.
+    """
+    return _NoteCollection()
+
+
+def _record_note(message: str) -> None:
+    if _mismatch_notes is None or message in _mismatch_seen:
+        return
+    _mismatch_seen.add(message)
+    _mismatch_notes.append(message)
+
+
+def expect_type(value, types, pred, *, expected=None, arg=None) -> bool:
+    """Type guard for a py-interop argument: True iff *value* may be used.
+
+    ``isinstance``-check plus rejection note.  An unbound Var fails silently
+    — that is a mode signal, and the diagnostic's rung-2 analysis already
+    reports unbound arguments; only a BOUND value of the wrong type records
+    "*pred* was called with <actual> where <expected> is required".
+
+    *expected* overrides the type-derived wording (e.g. "date or datetime");
+    *arg* is the 1-based argument position for the "(argument N)" suffix.
+    """
+    if isinstance(value, types):
+        return True
+    # Import on the failure path only — the success path above is hot
+    # (every well-typed interop call passes through it).
+    from clausal.logic.variables import is_var
+    if not is_var(value):
+        if expected is None:
+            if isinstance(types, tuple):
+                expected = " or ".join(t.__name__ for t in types)
+            else:
+                expected = types.__name__
+        where = f" (argument {arg})" if arg is not None else ""
+        _record_note(
+            f"{pred} was called with {type(value).__name__} "
+            f"where {expected} is required{where}"
+        )
+    return False
+
+
+def note_mismatch(pred, detail: str) -> None:
+    """Record a rejection the ``isinstance`` helper cannot phrase.
+
+    For guards where the mismatch is not "wrong class" — e.g. ``date`` mixed
+    with ``datetime`` (not comparable), or a ``datetime`` where a plain
+    ``date`` is required (a subclass, so ``isinstance`` passes).  *detail*
+    completes the sentence: ``f"{pred} {detail}"``.
+    """
+    _record_note(f"{pred} {detail}")
+
+
+def note_rejected_call(pred, exc) -> None:
+    """Record that *pred*'s underlying Python call rejected its arguments.
+
+    For the try/except twin of the isinstance guard: constructors like
+    ``datetime.date`` reject bad values (month=13) or bad types with an
+    exception whose message says exactly what was wrong — worth surfacing
+    for the same reason as the guard note.
+    """
+    _record_note(
+        f"{pred} rejected its arguments — {type(exc).__name__}: {exc}"
+    )
+
+
 # ── Stdlib import helper ─────────────────────────────────────────────────────
 
 

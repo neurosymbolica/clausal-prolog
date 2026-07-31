@@ -24,7 +24,13 @@ The conversion is recursive: nested objects produce nested DictTerms.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    note_rejected_call,
+    simple_to_trampoline,
+)
 _json = _import_stdlib("json")
 
 from typing import Any
@@ -71,11 +77,12 @@ def _clausal_to_python(term: Any) -> Any:
 def _parse_2(string, term, trail, k):
     """parse/2: parse JSON string into Clausal terms."""
     string = deref(string)
-    if is_var(string) or not isinstance(string, str):
+    if not expect_type(string, str, "parse/2", arg=1):
         return
     try:
         obj = _json.loads(string)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as exc:
+        note_rejected_call("parse/2", exc)
         return
     result = _python_to_clausal(obj)
     if unify(term, result, trail):
@@ -90,7 +97,8 @@ def _generate_2(term, string, trail, k):
     try:
         obj = _clausal_to_python(term)
         result = _json.dumps(obj, ensure_ascii=False)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("generate/2", exc)
         return
     if unify(string, result, trail):
         yield None
@@ -104,7 +112,8 @@ def _pretty_generate_2(term, string, trail, k):
     try:
         obj = _clausal_to_python(term)
         result = _json.dumps(obj, indent=2, ensure_ascii=False)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("pretty_generate/2", exc)
         return
     if unify(string, result, trail):
         yield None
@@ -117,7 +126,7 @@ def _get_3(term, key, value, trail, k):
     If Key is unbound: enumerate all key-value pairs.
     """
     term = deref(term)
-    if not isinstance(term, DictTerm):
+    if not expect_type(term, DictTerm, "get/3", arg=1):
         return
     key = deref(key)
     if is_var(key):
@@ -138,7 +147,7 @@ def _get_3(term, key, value, trail, k):
 def _read_file_2(path, term, trail, k):
     """read_file/2: read and parse a JSON file."""
     path = deref(path)
-    if is_var(path) or not isinstance(path, str):
+    if not expect_type(path, str, "read_file/2", arg=1):
         return
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -153,7 +162,7 @@ def _read_file_2(path, term, trail, k):
 def _write_file_2(path, term, trail, k):
     """write_file/2: serialize and write a JSON file."""
     path, term = deref(path), deref(term)
-    if is_var(path) or not isinstance(path, str):
+    if not expect_type(path, str, "write_file/2", arg=1):
         return
     if is_var(term):
         return
@@ -161,7 +170,10 @@ def _write_file_2(path, term, trail, k):
         obj = _clausal_to_python(term)
         with open(path, "w", encoding="utf-8") as f:
             _json.dump(obj, f, ensure_ascii=False, indent=2)
-    except (TypeError, ValueError, OSError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("write_file/2", exc)
+        return
+    except OSError:
         return
     yield None
 

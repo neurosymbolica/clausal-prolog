@@ -18,7 +18,13 @@ global PRNG state.  ``set_seed/1`` seeds this local instance.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    note_rejected_call,
+    simple_to_trampoline,
+)
 _random = _import_stdlib("random")
 
 from clausal.logic.variables import Var, deref, is_var, unify
@@ -45,7 +51,8 @@ def _random_float_3(low, high, x, trail, k):
         return
     try:
         low_f, high_f = float(low), float(high)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("float_between/3", exc)
         return
     if low_f >= high_f:
         return
@@ -60,7 +67,8 @@ def _random_integer_3(low, high, x, trail, k):
         return
     try:
         low_i, high_i = int(low), int(high)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("integer_between/3", exc)
         return
     if low_i > high_i:
         return
@@ -71,7 +79,10 @@ def _random_integer_3(low, high, x, trail, k):
 def _random_member_2(lst, x, trail, k):
     """choice/2: bind X to a randomly chosen element of List."""
     lst = deref(lst)
-    if is_var(lst) or not isinstance(lst, list) or len(lst) == 0:
+    if not expect_type(lst, list, "choice/2", arg=1):
+        return
+    if len(lst) == 0:
+        # An empty list is a legitimate "no solution", not a mismatch.
         return
     chosen = _rng.choice(lst)
     if unify(x, chosen, trail):
@@ -81,7 +92,7 @@ def _random_member_2(lst, x, trail, k):
 def _random_permutation_2(lst, shuffled, trail, k):
     """permutation/2: bind Shuffled to a random permutation of List."""
     lst = deref(lst)
-    if is_var(lst) or not isinstance(lst, list):
+    if not expect_type(lst, list, "permutation/2", arg=1):
         return
     perm = list(lst)
     _rng.shuffle(perm)
@@ -92,13 +103,14 @@ def _random_permutation_2(lst, shuffled, trail, k):
 def _random_sample_3(lst, size, sample, trail, k_cont):
     """sample/3: bind Sample to Size randomly chosen elements (no replacement)."""
     lst, size_val = deref(lst), deref(size)
-    if is_var(lst) or not isinstance(lst, list):
+    if not expect_type(lst, list, "sample/3", arg=1):
         return
     if is_var(size_val):
         return
     try:
         size_int = int(size_val)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("sample/3", exc)
         return
     if size_int < 0 or size_int > len(lst):
         return
@@ -129,7 +141,8 @@ def _maybe_1(p, trail, k):
         return
     try:
         p_f = float(p)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("maybe/1", exc)
         return
     if _rng.random() < p_f:
         yield None

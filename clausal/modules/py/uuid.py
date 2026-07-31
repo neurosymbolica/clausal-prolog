@@ -19,7 +19,14 @@ resulting values.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    note_mismatch,
+    note_rejected_call,
+    simple_to_trampoline,
+)
 _uuid = _import_stdlib("uuid")
 
 from typing import Any
@@ -70,12 +77,19 @@ def _uuid3_3(ns, name, u, trail, k):
     ns, name = deref(ns), deref(name)
     namespace = _resolve_namespace(ns)
     if namespace is None:
+        if not is_var(ns):
+            note_mismatch(
+                "uuid_v3/3",
+                f"was called with {ns!r} where a uuid.UUID or a namespace "
+                'alias "dns", "url", "oid" or "x500" is required (argument 1)',
+            )
         return
     if is_var(name):
         return
     try:
         result = _uuid.uuid3(namespace, str(name))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("uuid_v3/3", exc)
         return
     if unify(u, result, trail):
         yield None
@@ -86,12 +100,19 @@ def _uuid5_3(ns, name, u, trail, k):
     ns, name = deref(ns), deref(name)
     namespace = _resolve_namespace(ns)
     if namespace is None:
+        if not is_var(ns):
+            note_mismatch(
+                "uuid_v5/3",
+                f"was called with {ns!r} where a uuid.UUID or a namespace "
+                'alias "dns", "url", "oid" or "x500" is required (argument 1)',
+            )
         return
     if is_var(name):
         return
     try:
         result = _uuid.uuid5(namespace, str(name))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        note_rejected_call("uuid_v5/3", exc)
         return
     if unify(u, result, trail):
         yield None
@@ -113,10 +134,15 @@ def _uuid_str_2(u, s, trail, k):
     elif isinstance(s, str) and not is_var(s):
         try:
             val = _uuid.UUID(s)
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError) as exc:
+            note_rejected_call("uuid_str/2", exc)
             return
         if unify(u, val, trail):
             yield None
+    elif not is_var(u):
+        expect_type(u, _uuid.UUID, "uuid_str/2", arg=1)
+    else:
+        expect_type(s, str, "uuid_str/2", arg=2)
 
 
 def _uuid_hex_2(u, h, trail, k):
@@ -132,10 +158,15 @@ def _uuid_hex_2(u, h, trail, k):
     elif isinstance(h, str) and not is_var(h):
         try:
             val = _uuid.UUID(hex=h)
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError) as exc:
+            note_rejected_call("uuid_hex/2", exc)
             return
         if unify(u, val, trail):
             yield None
+    elif not is_var(u):
+        expect_type(u, _uuid.UUID, "uuid_hex/2", arg=1)
+    else:
+        expect_type(h, str, "uuid_hex/2", arg=2)
 
 
 def _uuid_urn_2(u, urn, trail, k):
@@ -151,10 +182,15 @@ def _uuid_urn_2(u, urn, trail, k):
     elif isinstance(urn, str) and not is_var(urn):
         try:
             val = _uuid.UUID(urn)
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError) as exc:
+            note_rejected_call("uuid_urn/2", exc)
             return
         if unify(u, val, trail):
             yield None
+    elif not is_var(u):
+        expect_type(u, _uuid.UUID, "uuid_urn/2", arg=1)
+    else:
+        expect_type(urn, str, "uuid_urn/2", arg=2)
 
 
 def _uuid_bytes_2(u, b, trail, k):
@@ -170,10 +206,15 @@ def _uuid_bytes_2(u, b, trail, k):
     elif isinstance(b, bytes) and not is_var(b):
         try:
             val = _uuid.UUID(bytes=b)
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError) as exc:
+            note_rejected_call("uuid_bytes/2", exc)
             return
         if unify(u, val, trail):
             yield None
+    elif not is_var(u):
+        expect_type(u, _uuid.UUID, "uuid_bytes/2", arg=1)
+    else:
+        expect_type(b, bytes, "uuid_bytes/2", arg=2)
 
 
 def _uuid_int_2(u, n, trail, k):
@@ -189,10 +230,15 @@ def _uuid_int_2(u, n, trail, k):
     elif isinstance(n, int) and not is_var(n):
         try:
             val = _uuid.UUID(int=n)
-        except (ValueError, OverflowError):
+        except (ValueError, OverflowError) as exc:
+            note_rejected_call("uuid_int/2", exc)
             return
         if unify(u, val, trail):
             yield None
+    elif not is_var(u):
+        expect_type(u, _uuid.UUID, "uuid_int/2", arg=1)
+    else:
+        expect_type(n, int, "uuid_int/2", arg=2)
 
 
 # ── Inspection predicates ────────────────────────────────────────────────
@@ -201,7 +247,7 @@ def _uuid_int_2(u, n, trail, k):
 def _uuid_version_2(u, v, trail, k):
     """uuid_version/2: uuid_version(UUID, Version) — extract version number."""
     u = deref(u)
-    if not isinstance(u, _uuid.UUID):
+    if not expect_type(u, _uuid.UUID, "uuid_version/2", arg=1):
         return
     if unify(v, u.version, trail):
         yield None
@@ -213,7 +259,7 @@ def _uuid_fields_7(u, tl, tm, th, csh, csl, node, trail, k):
     uuid_fields(UUID, TimeLow, TimeMid, TimeHiVersion, ClkSeqHi, ClkSeqLo, Node).
     """
     u = deref(u)
-    if not isinstance(u, _uuid.UUID):
+    if not expect_type(u, _uuid.UUID, "uuid_fields/7", arg=1):
         return
     fields = u.fields  # (time_low, time_mid, time_hi_version, clock_seq_hi, clock_seq_lo, node)
     mark = trail.mark()

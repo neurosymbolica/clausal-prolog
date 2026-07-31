@@ -10,7 +10,13 @@ Wraps Python's ``urllib.parse`` module.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    note_rejected_call,
+    simple_to_trampoline,
+)
 _urllib_parse = _import_stdlib("urllib.parse")
 
 from clausal.logic.variables import deref, is_var, unify
@@ -23,7 +29,7 @@ from clausal.terms import DictTerm
 def _encode_2(string, encoded, trail, k):
     """encode/2: encode(String, Encoded) — URL-encode."""
     s = deref(string)
-    if is_var(s) or not isinstance(s, str):
+    if not expect_type(s, str, "encode/2", arg=1):
         return
     result = _urllib_parse.quote(s, safe="")
     if unify(encoded, result, trail):
@@ -33,7 +39,7 @@ def _encode_2(string, encoded, trail, k):
 def _decode_2(encoded, string, trail, k):
     """decode/2: decode(Encoded, String) — URL-decode."""
     e = deref(encoded)
-    if is_var(e) or not isinstance(e, str):
+    if not expect_type(e, str, "decode/2", arg=1):
         return
     result = _urllib_parse.unquote(e)
     if unify(string, result, trail):
@@ -43,7 +49,7 @@ def _decode_2(encoded, string, trail, k):
 def _parse_2(url, parts, trail, k):
     """parse/2: parse(Url, Parts) — parse URL into DictTerm."""
     u = deref(url)
-    if is_var(u) or not isinstance(u, str):
+    if not expect_type(u, str, "parse/2", arg=1):
         return
     try:
         # urlparse itself raises ValueError on e.g. an unclosed IPv6 bracket
@@ -51,7 +57,8 @@ def _parse_2(url, parts, trail, k):
         # malformed input and fail cleanly (F017).
         parsed = _urllib_parse.urlparse(u)
         port = parsed.port  # int or None
-    except ValueError:
+    except ValueError as exc:
+        note_rejected_call("parse/2", exc)
         return
     result = DictTerm({
         "scheme": parsed.scheme,
@@ -68,7 +75,7 @@ def _parse_2(url, parts, trail, k):
 def _join_2(parts, url, trail, k):
     """join/2: join(Parts, Url) — assemble URL from DictTerm parts."""
     p = deref(parts)
-    if is_var(p) or not isinstance(p, DictTerm):
+    if not expect_type(p, DictTerm, "join/2", arg=1):
         return
     d = p.data
     scheme = str(deref(d.get("scheme", "")))

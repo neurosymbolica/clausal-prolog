@@ -10,7 +10,14 @@ Wraps Python's ``hashlib.pbkdf2_hmac``.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline, to_bytes
+from clausal.modules.py import (
+    ModulePredicate,
+    _import_stdlib,
+    expect_type,
+    note_mismatch,
+    simple_to_trampoline,
+    to_bytes,
+)
 _hashlib = _import_stdlib("hashlib")
 
 from clausal.logic.variables import deref, is_var, unify
@@ -30,10 +37,18 @@ def _derive_5(password, salt, iterations, key_length, derived_key, trail, k):
     pw_b = to_bytes(pw)
     sa_b = to_bytes(sa)
     if pw_b is None or sa_b is None:
+        expect_type(pw, (str, bytes), "derive/5", arg=1)
+        expect_type(sa, (str, bytes), "derive/5", arg=2)
         return
-    if not isinstance(it, int) or it <= 0:
+    if not expect_type(it, int, "derive/5", arg=3):
         return
-    if not isinstance(kl, int) or kl <= 0:
+    if it <= 0:
+        note_mismatch("derive/5", "was called with iterations <= 0 (argument 3)")
+        return
+    if not expect_type(kl, int, "derive/5", arg=4):
+        return
+    if kl <= 0:
+        note_mismatch("derive/5", "was called with key length <= 0 (argument 4)")
         return
     dk = _hashlib.pbkdf2_hmac("sha256", pw_b, sa_b, it, dklen=kl)
     if unify(derived_key, dk.hex(), trail):
