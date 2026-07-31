@@ -31,7 +31,7 @@ predicts:
 |---|---|---|
 | vat | `pro_rata_deduction_decision_resolvable(PROFILE)` | `computation.clausal:77`, `RAW_PCT > 100` with `RAW_PCT = 50` — the contradictory guard, two levels down |
 | schengen | `days_used([], [2024,1,1], 0)` | `computation.clausal:58`, `window_days_used(HISTORY, REFERENCE_DATE_OBJ, WINDOW_SIZE, DAYS_USED)` with `REFERENCE_DATE_OBJ = date(2024,1,1)` — the wrong-type argument, one level down |
-| working_time | `wt_qualifying_totals([[2880, work], …], 2880, 1)` | **every clause head fails to unify** — the recursive heads are `[WORKED_MINUTES, STATUS] \| REST_WEEKS` (cons written with `\|`, parsed as `BitOr`), which never matches a list. The descent must report the head mismatch, not skip silently (see below). |
+| working_time | `wt_qualifying_totals([[2880, work], …], 2880, 1)` | *(amended per e2e verification, 2026-07-30)* The direct tests are **intercepted at rung 1**, not descended: freeing the single list argument lets a fresh `Var` unify with the recursive `[…] \| REST_WEEKS` (`BitOr`) head — or with the `wt_qualifying_totals([], 0, 0)` base fact — so a value-carrying near-miss `BitOr(None, [2880, work], [])` is reported (which itself exposes the cons artifact). The no-head-match head listing — the `[WORKED_MINUTES, STATUS] \| REST_WEEKS` heads that never match a list — is the correct mechanism and is exercised by unit fixtures (`tests/test_testing_descent.py`) and by any goal whose head cannot absorb a freed argument; it just does not fire for *these* particular direct tests. See below. |
 
 ## Output shape
 
@@ -205,12 +205,19 @@ printed conjunct names the known cause. No model, no GPU. Per-case expectations:
   visible.
 * vat (`decision_resolvable` test) — leaves name `TOTAL_CENTS <= 0` and `RAW_PCT > 100`
   with their values.
-* working_time direct tests (`wt_qualifying_totals …`, `wt_compliance …`) — the
-  no-head-match listing shows the `[…] | REST_WEEKS` heads. The *facade* tests
+* working_time direct tests (`wt_qualifying_totals …`, `wt_compliance …`) — *(amended
+  per e2e verification, 2026-07-30)* these are intercepted at rung 1 and report a
+  value-carrying near-miss `BitOr(None, …)` (e.g. `BitOr(None, [2880, work], [])`), which
+  exposes the cons artifact directly rather than via the head listing. The *facade* tests
   (`…_assess`, `…_decision_resolvable`) bottom out at depth 2 on
   `wt_compliance(WEEKS, _)` with `WEEKS` bound — a value-carrying pointer into the right
   file, though not the cons bug itself; that is the accepted depth-2 trade-off, and the
-  direct tests in the same file carry the rest.
+  direct tests in the same file carry the rest. The rung-1 interception on the direct
+  tests was discovered during verification: the spec originally predicted the no-head-match
+  listing here, but rung 1 (which the plan holds untouched) fires first because a freed
+  argument unifies with the cons head / base fact. The ladder question this raises — that
+  a rung-2/rung-1 unbound-argument solution can weaken the diagnosis — is filed as
+  `todo/D-rung2-unbound-arg-solutions-weaken-diagnosis.md` (2026-07-30).
 
 Regression gate: the full suite's failure *set* must not grow. Baseline on clone `main` is
 one standing failure, `tests/test_doc_snippet_coverage.py::test_no_raw_untested_blocks`.
