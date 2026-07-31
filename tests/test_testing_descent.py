@@ -105,3 +105,79 @@ def test_zero_clause_predicate_keeps_old_message(capsys, tmp_path):
     out = capsys.readouterr().out
     assert "no solution for ANY arguments" in out
     assert "no clause body survives" not in out
+
+
+# ── recursion ────────────────────────────────────────────────────────────────
+
+# inner_rule's body must be UNSATISFIABLE with N free, or the outer predicate
+# is satisfiable and _report_nearest stops at rung 1 ("argument 1 differs")
+# before descent ever runs (see the constraint-solver note on TWO_ROUTES_SRC).
+# The contradictory pair `N > 100, N < 0` forces descent; N = 5 still fails at
+# the first conjunct, `N > 100`.
+NESTED_SRC = """
+inner_rule(N) <- (N > 100, N < 0),
+outer_rule(N) <- (inner_rule(N)),
+
+Test("nested failure") <- (
+    outer_rule(5)
+),
+"""
+
+
+def test_descends_through_intermediate_predicate(capsys, tmp_path):
+    p = write(tmp_path, "nested.clausal", NESTED_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "N > 100" in out   # the inner predicate's conjunct, not inner_rule(N)
+    assert "N = 5" in out
+
+
+def test_cross_module_descent(capsys, tmp_path, monkeypatch):
+    import sys as _sys
+    monkeypatch.syspath_prepend(str(tmp_path))
+    _sys.modules.pop("descent_lib", None)
+    write(tmp_path, "descent_lib.clausal", """
+        -module(descent_lib, [lib_check(N)])
+
+        lib_check(N) <- (N > 100, N < 0)
+    """)
+    p = write(tmp_path, "use.clausal", """
+        -import_from(descent_lib, [lib_check])
+
+        Test("cross-module") <- (
+            lib_check(5)
+        ),
+    """)
+    try:
+        assert main([str(p)]) == 1
+        out = capsys.readouterr().out
+        assert "no clause body survives" in out
+        assert "N > 100" in out
+        assert "N = 5" in out
+        assert "descent_lib.clausal:" in out   # leaf names the DEFINING file
+    finally:
+        _sys.modules.pop("descent_lib", None)
+
+
+# Same unsatisfiability requirement as NESTED_SRC (contradictory `N > 100,
+# N < 0`), so the chain lvl1->lvl2->lvl3 reaches descent instead of rung 1.
+# Descent caps at depth 2: lvl1's leaf lvl2(N) recurses to lvl2, whose leaf
+# lvl3(N) is a Call at depth 2 and is rendered as-is — lvl3's body is never
+# entered, so `N > 100` never surfaces.
+DEEP_SRC = """
+lvl3(N) <- (N > 100, N < 0),
+lvl2(N) <- (lvl3(N)),
+lvl1(N) <- (lvl2(N)),
+
+Test("three levels") <- (
+    lvl1(5)
+),
+"""
+
+
+def test_depth_cap_stops_at_two_levels(capsys, tmp_path):
+    p = write(tmp_path, "deep.clausal", DEEP_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "lvl3(" in out          # depth-2 leaf is the lvl3 CALL...
+    assert "N > 100" not in out    # ...not lvl3's body — depth cap held

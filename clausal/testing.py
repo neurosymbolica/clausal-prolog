@@ -1220,7 +1220,15 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
             gen = _solutions(_conjunction(prefix_goals), logic_module, trail)
             if next(gen, None) is None:
                 return [], "skip"
-        # (Task 4 inserts the recursion here.)
+        from clausal.terms import Call
+
+        if depth < DIAG_MAX_DESCENT_DEPTH and isinstance(leaf, Call):
+            deeper, deeper_kind = _descend(
+                leaf, logic_module, path, deadline, depth + 1, seen, notes)
+            if deeper_kind == "leaves" and deeper:
+                return deeper, "leaves"
+            # "head_listing" is attached beneath this leaf in Task 5;
+            # "none" falls through to render this conjunct as the leaf.
         lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
         for name, value in _leaf_bindings(leaf, reified_leaf):
             lines.append(f"    {name} = {value}")
