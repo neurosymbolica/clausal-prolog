@@ -1042,9 +1042,10 @@ def _report_descent(diag, goal, logic_module, deadline, path) -> None:
     notes: list[str] = []
     leaves, kind = _descend(goal, logic_module, path, deadline, 1, frozenset(), notes)
     if kind == "leaves" and leaves:
-        # ``leaves`` is a list of route-groups (each a list of rendered lines).
-        # The cap counts routes, not lines, so a route and its binding
-        # sub-lines are shown or dropped as a unit — never split.
+        # ``leaves`` is a list of finding-groups (each a list of rendered
+        # lines).  The cap counts FINDINGS (groups) across the whole descent
+        # including fan-out, so a finding and its binding sub-lines are shown or
+        # dropped as a unit — never split — and whole groups are trimmed.
         diag.nearest_note = (
             "the predicate has no solution for ANY arguments at this point; "
             "no clause body survives:"
@@ -1132,12 +1133,20 @@ def _head_prefix(head, goal):
 
 
 def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
-    """Leaf report lines for *goal*'s predicate, with a kind tag.
+    """Descent findings for *goal*'s predicate, with a kind tag.
 
-    Returns ``(lines, kind)``; kind is ``"leaves"`` (per-route failing
-    conjuncts), ``"head_listing"`` (every clause head failed to unify —
-    Task 5), or ``"none"`` (could not resolve / nothing to say, caller keeps
-    its own rendering).
+    Return shape is polymorphic by kind:
+
+    - ``("leaves", groups)`` where ``groups`` is ``list[list[str]]`` — one
+      GROUP per finding (a group is a leaf line plus its binding sub-lines).
+      A single clause route can fan out into several findings when it recurses
+      into a deeper predicate, so the number of groups can exceed the clause
+      count; each group is capped/dropped as a unit so a finding is never split
+      from its bindings.  (Returned as ``(groups, "leaves")``.)
+    - ``(lines, "head_listing")`` where ``lines`` is ``list[str]`` — one line
+      per clause head (Task 5), a single finding rendered flat.
+    - ``([], "none")`` — could not resolve / nothing to say; caller keeps its
+      own rendering.
     """
     resolved = _resolve_predicate(goal, logic_module, caller_path)
     if resolved is None:
@@ -1155,17 +1164,20 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
             f"{total} clauses of {cls.__name__}"
         )
         clauses = clauses[:DIAG_MAX_DESCENT_CLAUSES]
-    # One group per clause route (leaf line + its bindings).  The
-    # DIAG_MAX_DESCENT_LEAVES cap counts routes, not rendered lines — a leaf is
-    # "one entry per clause route" (design §Flat leaves), so a route and its
-    # binding sub-lines must never be split apart or miscounted.
+    # One group per FINDING (a leaf line + its bindings).  A single clause
+    # route can fan out into several findings when it recurses into a deeper
+    # predicate, so ``_clause_leaves`` returns a LIST of groups and we extend.
+    # The DIAG_MAX_DESCENT_LEAVES cap (applied by _report_descent) counts
+    # groups, i.e. findings across the whole descent including fan-out — a
+    # finding and its binding sub-lines are shown or dropped as a unit, never
+    # split apart or miscounted (design §Flat leaves).
     groups: list[list[str]] = []
     mismatches = 0
     for clause in clauses:
         if time.monotonic() > deadline:
             raise _DiagBudgetExceeded()
         try:
-            clause_lines, state = _clause_leaves(
+            clause_groups, state = _clause_leaves(
                 clause, goal, sub_lm, sub_path, deadline, depth, seen, notes)
         except (_DiagBudgetExceeded, RecursionError, *_FATAL):
             raise
@@ -1174,17 +1186,23 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
         if state == "head_mismatch":
             mismatches += 1
         elif state == "leaves":
-            groups.append(clause_lines)
+            groups.extend(clause_groups)
     if mismatches == len(clauses) and clauses:
         return _head_listing(cls, clauses, path=sub_path), "head_listing"
     return (groups, "leaves") if groups else ([], "none")
 
 
 def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, notes):
-    """Report lines for one clause route: ``(lines, state)`` where state is
-    ``"leaves"``, ``"head_mismatch"`` (head or hoisted structural arg failed to
-    unify — this clause was never a route) or ``"skip"`` (probe artifact or
-    re-run disagreement — say nothing)."""
+    """Findings for one clause route: ``(groups, state)``.
+
+    ``groups`` is ``list[list[str]]`` — one group per finding (a leaf line plus
+    its binding sub-lines).  A route usually yields ONE group, but when it
+    recurses into a deeper predicate the deeper findings fan out and this route
+    returns several groups (so the total-finding cap sees every fan-out
+    finding).  ``state`` is ``"leaves"``, ``"head_mismatch"`` (head or hoisted
+    structural arg failed to unify — this clause was never a route) or
+    ``"skip"`` (probe artifact or re-run disagreement — say nothing); for the
+    non-``"leaves"`` states ``groups`` is empty."""
     from clausal.logic.variables import Trail
     from clausal.pythonic_ast.nodes import Unify
 
@@ -1239,22 +1257,25 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
             deeper, deeper_kind = _descend(
                 leaf, logic_module, path, deadline, depth + 1, seen, notes)
             if deeper_kind == "leaves" and deeper:
-                # deeper is a list of route-groups; this clause is one route, so
-                # flatten the deeper routes into this clause's single group.
-                return [ln for group in deeper for ln in group], "leaves"
+                # deeper is a list of finding-groups; return them AS-IS so each
+                # deeper finding stays its own group and is counted by the
+                # total-finding cap — never merged into a single parent group.
+                return deeper, "leaves"
             if deeper_kind == "head_listing" and deeper:
+                # A head listing beneath this parent leaf is ONE finding: the
+                # parent conjunct, its bindings, and the heads, all one group.
                 lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
                 for name, value in _leaf_bindings(leaf, reified_leaf):
                     lines.append(f"    {name} = {value}")
                 lines.append("    no clause head unifies with these arguments; "
                              "the heads are:")
                 lines.extend(f"      {line}" for line in deeper)
-                return lines, "leaves"
+                return [lines], "leaves"
             # "none" falls through to render this conjunct as the leaf.
         lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
         for name, value in _leaf_bindings(leaf, reified_leaf):
             lines.append(f"    {name} = {value}")
-        return lines, "leaves"
+        return [lines], "leaves"
     except (_DiagBudgetExceeded, RecursionError, *_FATAL):
         raise
     except BaseException:  # noqa: BLE001

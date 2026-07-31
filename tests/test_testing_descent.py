@@ -289,3 +289,45 @@ def test_clause_cap_is_applied_and_noted(capsys, tmp_path):
     out = capsys.readouterr().out
     assert out.count("N > 100") == 4          # DIAG_MAX_DESCENT_CLAUSES leaves
     assert "first 4 of 6 clauses" in out      # the truncation is stated
+
+
+# The DIAG_MAX_DESCENT_LEAVES cap bounds TOTAL findings across the whole
+# descent, INCLUDING fan-out: one clause route that recurses into a deeper
+# predicate can produce several findings (design §Flat leaves: "one clause
+# route can fan out into several leaves — the flat list is leaves, not
+# routes").  Here 4 outer clauses each recurse into ``inner`` (2 failing
+# routes), so descent produces 4 x 2 = 8 findings — over the cap of 6.  Neither
+# the outer (4 clauses) nor the inner (2 clauses) predicate trips the
+# per-predicate clause cap (DIAG_MAX_DESCENT_CLAUSES=4), so this exercises the
+# leaves cap in isolation.  Same unsatisfiability requirement as the other
+# rung-3 fixtures (contradictory pairs, see the note on TWO_ROUTES_SRC): each
+# inner route pairs a one-sided lower bound with ``N < 0`` so the all-holes
+# probe fails and rung 3 descends; at N = 5, ``N > 100`` / ``N > 200`` is the
+# FIRST failing conjunct of its route, so it is the leaf rendered.  Verified
+# against the live engine: 8 findings, capped to 6 (3x each conjunct).
+FANOUT_SRC = """
+-private([a, b, c, d])
+
+inner(N) <- (N > 100, N < 0),
+inner(N) <- (N > 200, N < 0),
+
+fanout(N, a) <- (inner(N)),
+fanout(N, b) <- (inner(N)),
+fanout(N, c) <- (inner(N)),
+fanout(N, d) <- (inner(N)),
+
+Test("fan out") <- (
+    fanout(5, _R)
+),
+"""
+
+
+def test_leaves_cap_bounds_total_findings_across_fanout(capsys, tmp_path):
+    p = write(tmp_path, "fanout.clausal", FANOUT_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    # 8 findings fan out; exactly DIAG_MAX_DESCENT_LEAVES=6 are rendered.
+    findings = out.count("N > 100") + out.count("N > 200")
+    assert findings == 6
+    # ...and the truncation is stated, counting findings not routes/clauses.
+    assert "only the first 6 of 8 descent findings are shown" in out
