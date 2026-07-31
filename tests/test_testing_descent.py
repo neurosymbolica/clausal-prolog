@@ -255,3 +255,37 @@ def test_head_listing_attaches_beneath_parent_leaf(capsys, tmp_path):
     assert "no clause head unifies" in out
     assert "| REST" in out
     assert "WEEKS = [[2880, work]]" in out
+
+
+# ── caps are noted, never silent ─────────────────────────────────────────────
+
+# Same unsatisfiability requirement as the other rung-3 fixtures (see the
+# constraint-solver note on TWO_ROUTES_SRC): a lone one-sided bound `N > 100`
+# is deferred by the solver and stays satisfiable with N free, so the all-holes
+# probe (rung 2) intercepts before descent runs.  Each clause body is given the
+# contradictory pair `(N > 100, N < 0)` to force rung 3; at N = 5, `N > 100` is
+# still the FIRST failing conjunct of every clause, so it is the leaf rendered
+# for each of the 4 walked clauses -> `out.count("N > 100") == 4` holds (the
+# other two clauses are truncated by the cap and never walked).
+SIX_SRC = """
+-private([r1, r2, r3, r4, r5, r6])
+
+sixway(N, r1) <- (N > 100, N < 0),
+sixway(N, r2) <- (N > 100, N < 0),
+sixway(N, r3) <- (N > 100, N < 0),
+sixway(N, r4) <- (N > 100, N < 0),
+sixway(N, r5) <- (N > 100, N < 0),
+sixway(N, r6) <- (N > 100, N < 0),
+
+Test("six clauses") <- (
+    sixway(5, _R)
+),
+"""
+
+
+def test_clause_cap_is_applied_and_noted(capsys, tmp_path):
+    p = write(tmp_path, "six.clausal", SIX_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert out.count("N > 100") == 4          # DIAG_MAX_DESCENT_CLAUSES leaves
+    assert "first 4 of 6 clauses" in out      # the truncation is stated

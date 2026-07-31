@@ -1042,6 +1042,9 @@ def _report_descent(diag, goal, logic_module, deadline, path) -> None:
     notes: list[str] = []
     leaves, kind = _descend(goal, logic_module, path, deadline, 1, frozenset(), notes)
     if kind == "leaves" and leaves:
+        # ``leaves`` is a list of route-groups (each a list of rendered lines).
+        # The cap counts routes, not lines, so a route and its binding
+        # sub-lines are shown or dropped as a unit — never split.
         diag.nearest_note = (
             "the predicate has no solution for ANY arguments at this point; "
             "no clause body survives:"
@@ -1052,7 +1055,7 @@ def _report_descent(diag, goal, logic_module, deadline, path) -> None:
                 f"descent findings are shown"
             )
             leaves = leaves[:DIAG_MAX_DESCENT_LEAVES]
-        diag.descent = leaves
+        diag.descent = [line for group in leaves for line in group]
         diag.notes.extend(notes)
     elif kind == "head_listing" and leaves:
         diag.nearest_note = (
@@ -1152,7 +1155,11 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
             f"{total} clauses of {cls.__name__}"
         )
         clauses = clauses[:DIAG_MAX_DESCENT_CLAUSES]
-    leaves: list[str] = []
+    # One group per clause route (leaf line + its bindings).  The
+    # DIAG_MAX_DESCENT_LEAVES cap counts routes, not rendered lines — a leaf is
+    # "one entry per clause route" (design §Flat leaves), so a route and its
+    # binding sub-lines must never be split apart or miscounted.
+    groups: list[list[str]] = []
     mismatches = 0
     for clause in clauses:
         if time.monotonic() > deadline:
@@ -1167,10 +1174,10 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
         if state == "head_mismatch":
             mismatches += 1
         elif state == "leaves":
-            leaves.extend(clause_lines)
+            groups.append(clause_lines)
     if mismatches == len(clauses) and clauses:
         return _head_listing(cls, clauses, path=sub_path), "head_listing"
-    return (leaves, "leaves") if leaves else ([], "none")
+    return (groups, "leaves") if groups else ([], "none")
 
 
 def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, notes):
@@ -1232,7 +1239,9 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
             deeper, deeper_kind = _descend(
                 leaf, logic_module, path, deadline, depth + 1, seen, notes)
             if deeper_kind == "leaves" and deeper:
-                return deeper, "leaves"
+                # deeper is a list of route-groups; this clause is one route, so
+                # flatten the deeper routes into this clause's single group.
+                return [ln for group in deeper for ln in group], "leaves"
             if deeper_kind == "head_listing" and deeper:
                 lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
                 for name, value in _leaf_bindings(leaf, reified_leaf):
