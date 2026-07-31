@@ -331,3 +331,42 @@ def test_leaves_cap_bounds_total_findings_across_fanout(capsys, tmp_path):
     assert findings == 6
     # ...and the truncation is stated, counting findings not routes/clauses.
     assert "only the first 6 of 8 descent findings are shown" in out
+
+
+# When the head listing itself is truncated by the clause cap, the headline must
+# not claim ALL heads mismatch — only the first DIAG_MAX_DESCENT_CLAUSES (=4)
+# were examined.  Same rung-3 requirement as the other head-listing fixtures:
+# each head carries a DISTINCT atom literal so no head unifies with the concrete
+# goal atom ``zzz``, and each body is a non-recursive ``1 > 2`` so the all-holes
+# probe fails cleanly (rung 2 does not intercept) and descent runs.  Verified
+# against the live engine: softened headline + cap note, only 4 heads listed.
+SIX_HEADS_SRC = """
+-private([a, b, c, d, e, f, zzz])
+
+sixhead(a, N) <- (1 > 2),
+sixhead(b, N) <- (1 > 2),
+sixhead(c, N) <- (1 > 2),
+sixhead(d, N) <- (1 > 2),
+sixhead(e, N) <- (1 > 2),
+sixhead(f, N) <- (1 > 2),
+
+Test("six clause heads all mismatch") <- (
+    sixhead(zzz, 5)
+),
+"""
+
+
+def test_capped_head_listing_softens_headline_and_notes_cap(capsys, tmp_path):
+    p = write(tmp_path, "sixhead.clausal", SIX_HEADS_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    # Softened headline bounds the claim to the first N heads examined.
+    assert "no clause head among the first 4 unifies" in out
+    # ...and the unsoftened "ALL heads mismatch" wording is NOT used here.
+    assert "no clause head unifies with these arguments" not in out
+    # The truncation is stated as a note.
+    assert "first 4 of 6 clauses" in out
+    # Only the first 4 heads are listed (5th/6th were never examined).
+    assert "sixhead(a, N)" in out
+    assert "sixhead(d, N)" in out
+    assert "sixhead(e, N)" not in out

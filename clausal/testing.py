@@ -794,6 +794,12 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
     except (_DiagBudgetExceeded, RecursionError, *_FATAL):
         raise
     except BaseException:  # noqa: BLE001 - a probe that errors is just no answer
+        # A raise here keeps whatever solutions were already collected: if some
+        # examples exist the predicate demonstrably HAS solutions, so rung-2
+        # ("has solutions, but none within one argument") stays the truthful
+        # classification; a raise before the first solution leaves examples
+        # empty — equivalent to the old satisfiable=False (fall through to the
+        # rung-3 descent below).
         pass
     finally:
         if gen is not None:
@@ -1059,10 +1065,27 @@ def _report_descent(diag, goal, logic_module, deadline, path) -> None:
         diag.descent = [line for group in leaves for line in group]
         diag.notes.extend(notes)
     elif kind == "head_listing" and leaves:
-        diag.nearest_note = (
-            "the predicate has no solution for ANY arguments at this point; "
-            "no clause head unifies with these arguments — the heads are:"
+        # If the clause cap tripped for this descent, only the first N clause
+        # heads were examined, so the headline must not claim ALL heads
+        # mismatch — soften it to state the bound.  The cap note carries a
+        # distinctive prefix (see _descend); its presence means truncation.
+        cap_prefix = (
+            f"descent walked only the first {DIAG_MAX_DESCENT_CLAUSES} of "
         )
+        truncated = any(n.startswith(cap_prefix) for n in notes)
+        if truncated:
+            diag.nearest_note = (
+                "the predicate has no solution for ANY arguments at this "
+                "point; no clause head among the first "
+                f"{DIAG_MAX_DESCENT_CLAUSES} unifies with these arguments "
+                "— the heads are:"
+            )
+        else:
+            diag.nearest_note = (
+                "the predicate has no solution for ANY arguments at this "
+                "point; no clause head unifies with these arguments — the "
+                "heads are:"
+            )
         diag.descent = leaves[:DIAG_MAX_DESCENT_LEAVES]
         diag.notes.extend(notes)
 
@@ -1227,8 +1250,11 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
     if raised is not None:
         return [], "skip"          # probe artifact, never reported as cause
     if failing is None:
+        head_name = str(
+            getattr(clause.head, "functor", None) or type(clause.head).__name__
+        )
         notes.append(
-            f"a clause of {type(clause.head).__name__} re-ran satisfiable "
+            f"a clause of {head_name} re-ran satisfiable "
             f"during descent — non-determinism, or state changed by the run"
         )
         return [], "skip"
