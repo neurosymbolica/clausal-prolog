@@ -742,6 +742,60 @@ def _warn_isnot_partial_pattern(rhs, node, source_lines) -> None:
     )
 
 
+def _find_cons_bar_in_head(arg_nodes) -> "BinOp | None":
+    """The first ``A | B`` in a head argument that reads as Prolog cons, or None.
+
+    Two shapes qualify, both from study 13 (see
+    ``todo/C1-ill-typed-interop-calls-are-silent-failures.md``):
+
+    * ``[H | T]`` — a BitOr as a direct element of a list display; Python
+      parses the Prolog cons brackets as a one-element list of ``H | T``;
+    * ``[W, S] | REST`` — a BitOr with a list literal as an operand.
+
+    A BitOr over bare names (``holds(A | B)``) is left alone: that is a
+    plausible structural pattern over BitOr terms (clpb et al.), and nothing
+    marks it as list intent.
+    """
+    for arg_node in arg_nodes:
+        for node in walk(arg_node):
+            if (isinstance(node, BinOp) and isinstance(node.op, BitOr)
+                    and (isinstance(node.left, List)
+                         or isinstance(node.right, List))):
+                return node
+            if isinstance(node, List):
+                for element in node.elts:
+                    if (isinstance(element, BinOp)
+                            and isinstance(element.op, BitOr)):
+                        return element
+    return None
+
+
+def _warn_cons_bar_head(pos_args, kw_args, node, source_lines) -> None:
+    """Warn when a clause head spells list cons the Prolog way.
+
+    The head still compiles — to a pattern over a BitOr *term* — so every
+    clause silently never matches a real list.  Same load-time lint channel
+    as ``_warn_isnot_partial_pattern``.
+    """
+    bar = _find_cons_bar_in_head(
+        list(pos_args) + [kw.value for kw in kw_args])
+    if bar is None:
+        return
+    import warnings  # noqa: PLC0415
+    lineno = getattr(bar, "lineno", None) or getattr(node, "lineno", None)
+    snippet = ""
+    if source_lines and lineno and 1 <= lineno <= len(source_lines):
+        snippet = " — " + source_lines[lineno - 1].strip()
+    where = f" (line {lineno})" if lineno else ""
+    warnings.warn(
+        f"`A | B` in a clause head{where}{snippet}: this builds a bitwise-or "
+        "term, not a list, so the clause can never match a real list — "
+        "did you mean `[H, *T]`? (Clausal's spelling of Prolog `[H|T]`)",
+        ClausalLintWarning,
+        stacklevel=2,
+    )
+
+
 def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyThunk"):
     """Build a ``PyThunk(lambda V1, ...: expr, [V1_var, ...])`` AST node.
 
@@ -3108,6 +3162,8 @@ class EmbedTransformer(NodeTransformer):
         declared-predicate case. Returns ``[functor_class_def?, define_stmt]``
         (a single statement when no class needs emitting).
         """
+        _warn_cons_bar_head(orig_pos_args, orig_kw_args, src_node,
+                            transformer._source_lines)
         arg_field_names = _derive_field_names(orig_pos_args)
         kwarg_field_names = [kw.arg for kw in orig_kw_args]
         all_field_names = arg_field_names + kwarg_field_names
@@ -3500,6 +3556,8 @@ class EmbedTransformer(NodeTransformer):
                 else:
                     return transformer.generic_visit(expr_stmt)
 
+                _warn_cons_bar_head(orig_pos_args, orig_kw_args, expr_stmt,
+                                    transformer._source_lines)
                 arg_field_names = _derive_field_names(orig_pos_args)
                 kwarg_field_names = [kw.arg for kw in orig_kw_args]
                 all_field_names = arg_field_names + kwarg_field_names
@@ -4512,6 +4570,10 @@ class EmbedTransformer(NodeTransformer):
         Takes the rewritten body AST and emits the functor class definition
         and $define_predicate call.
         """
+        # orig_pos_args already carries the appended _dcg0_/_dcg1_ state
+        # Names — harmless to the cons lint, which only fires on lists.
+        _warn_cons_bar_head(orig_pos_args, orig_kw_args, expr_stmt,
+                            transformer._source_lines)
         arg_field_names = _derive_field_names(orig_pos_args)
         kwarg_field_names = [kw.arg for kw in orig_kw_args]
         all_field_names = arg_field_names + kwarg_field_names
