@@ -206,6 +206,27 @@ class TestVarVsNonNumericOperand:
             fd_lt(Var(), Decimal("2.5"), Trail())
         _assert_orderable_error(ei, "(<)/2")
 
+    def test_real_attr_var_lt_str(self):
+        # A var already carrying a CLP(R) attribute triggers the real
+        # dispatch on its own; the guard must fire BEFORE that dispatch, or
+        # real_lt posts RealLtConstraint(X, "banana") unchecked (roborev
+        # job 266 on 4bbc85d8: the Python path guarded after dispatch and
+        # diverged from the C wrappers).
+        trail = Trail()
+        x = Var()
+        assert fd_lt(x, 2.5, trail)  # gives x a REAL attribute
+        with pytest.raises(LogicException) as ei:
+            fd_lt(x, "banana", trail)
+        _assert_orderable_error(ei, "(<)/2")
+
+    def test_rational_attr_var_le_str(self):
+        trail = Trail()
+        x = Var()
+        assert fd_le(x, Fraction(5, 2), trail)  # gives x a CLP(Q) attribute
+        with pytest.raises(LogicException) as ei:
+            fd_le(x, "banana", trail)
+        _assert_orderable_error(ei, "(=<)/2")
+
     # ── controls: everything numeric/residual stays legal ────────────────
 
     def test_var_lt_int_still_narrows(self):

@@ -1634,9 +1634,11 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     shape of :func:`_incomparable_order_error` (rather than ``evaluable`` as
     ``==`` does) so one handler catches every ill-typed order comparison;
     here *culprit* is the offending ground operand, whichever side it
-    appears on.  Call-order independent, so the C-accelerated wrappers can
-    run it BEFORE delegating (ahead of the CLP dispatch), like the ``==``
-    guard."""
+    appears on.  Call-order independent, and deliberately run BEFORE the
+    CLP(Q)/CLP(R) dispatch in both the Python comparators and the
+    C-accelerated wrappers: a var carrying a rational/real attribute
+    triggers the dispatch on its own, and q_lt/real_lt would otherwise post
+    against the ground non-numeric operand unchecked."""
     dl, dr = deref(l), deref(r)
     if is_var(dl) == is_var(dr):
         return  # both Vars, or both ground/expr — not the broken case
@@ -1761,6 +1763,11 @@ def fd_lt(l, r, trail: Trail) -> bool:
     if not is_var(r):
         r = _resolve(r)
     _check_no_mixed_rational_real(l, r)
+    # BEFORE the CLP(Q)/CLP(R) dispatch, not after: a var carrying a
+    # rational/real attribute triggers the dispatch on its own, and q_lt /
+    # real_lt would post against the ground non-numeric operand unchecked —
+    # diverging from the C-accelerated wrapper, which guards first.
+    _reject_nonnumeric_order(l, r, "(<)/2")
     try:
         if _any_rational(l, r):
             from clausal.logic.clpq import q_lt  # noqa: PLC0415
@@ -1776,7 +1783,6 @@ def fd_lt(l, r, trail: Trail) -> bool:
         if _any_rational(l, r) and _any_real(l, r):
             raise
         raise _incomparable_order_error(r, "(<)/2")
-    _reject_nonnumeric_order(l, r, "(<)/2")
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
@@ -1798,6 +1804,8 @@ def fd_le(l, r, trail: Trail) -> bool:
     if not is_var(r):
         r = _resolve(r)
     _check_no_mixed_rational_real(l, r)
+    # Guard before the dispatch, matching fd_lt and the C wrapper.
+    _reject_nonnumeric_order(l, r, "(=<)/2")
     try:
         if _any_rational(l, r):
             from clausal.logic.clpq import q_le  # noqa: PLC0415
@@ -1813,7 +1821,6 @@ def fd_le(l, r, trail: Trail) -> bool:
         if _any_rational(l, r) and _any_real(l, r):
             raise
         raise _incomparable_order_error(r, "(=<)/2")
-    _reject_nonnumeric_order(l, r, "(=<)/2")
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
