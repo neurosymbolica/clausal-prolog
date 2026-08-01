@@ -26,6 +26,7 @@ is restored on backtrack.  Never mutate in place.
 from __future__ import annotations
 
 import math
+import numbers
 from collections import deque
 from fractions import Fraction
 from typing import Any
@@ -1616,6 +1617,40 @@ def _incomparable_order_error(culprit, context: str) -> "LogicException":
     return LogicException(type_error("orderable", culprit, context))
 
 
+def _reject_nonnumeric_order(l, r, context: str) -> None:
+    """Ordering-comparator sibling of :func:`_reject_nonnumeric_eq`: raise a
+    catchable ``type_error(orderable, Culprit, Context)`` when a ground
+    NON-NUMERIC operand is ordered against an unbound var.  Posting the FD
+    Lt/Le constraint instead made the same broken var as A12-F002 — the
+    unification hook then rejected EVERY later binding, so ``X < "banana",
+    X is "apple"`` had 0 solutions with no diagnostic.  Like the ``==``
+    guard, only the exactly-one-Var case is checked: both-ground ordering
+    falls back to Python ``<``/``<=`` (which handles strings, dates, … fine),
+    and Var-vs-Var / Var-vs-expr-tree stay legal residual constraints.  The
+    ground side must be ``numbers.Real`` — int posts CLP(FD), float
+    dispatches to CLP(R), Fraction to CLP(Q); everything else (str, date,
+    Quantity, Decimal, atom class, compound, …) is rejected.  Non-ground
+    arithmetic expression trees also pass.  Reuses the ``orderable`` error
+    shape of :func:`_incomparable_order_error` (rather than ``evaluable`` as
+    ``==`` does) so one handler catches every ill-typed order comparison;
+    here *culprit* is the offending ground operand, whichever side it
+    appears on.  Call-order independent, so the C-accelerated wrappers can
+    run it BEFORE delegating (ahead of the CLP dispatch), like the ``==``
+    guard."""
+    dl, dr = deref(l), deref(r)
+    if is_var(dl) == is_var(dr):
+        return  # both Vars, or both ground/expr — not the broken case
+    ground = dr if is_var(dl) else dl
+    if isinstance(ground, numbers.Real):
+        return
+    if _Add is None:
+        _ensure_term_imports()
+    if isinstance(ground, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow,
+                           _Negate)):
+        return
+    raise _incomparable_order_error(ground, context)
+
+
 def fd_eq(l, r, trail: Trail) -> bool:
     """Post X == Y.
 
@@ -1741,6 +1776,7 @@ def fd_lt(l, r, trail: Trail) -> bool:
         if _any_rational(l, r) and _any_real(l, r):
             raise
         raise _incomparable_order_error(r, "(<)/2")
+    _reject_nonnumeric_order(l, r, "(<)/2")
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
@@ -1777,6 +1813,7 @@ def fd_le(l, r, trail: Trail) -> bool:
         if _any_rational(l, r) and _any_real(l, r):
             raise
         raise _incomparable_order_error(r, "(=<)/2")
+    _reject_nonnumeric_order(l, r, "(=<)/2")
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
@@ -2961,6 +2998,9 @@ if _USE_C_PROPAGATE:
         # comparison escapes as a raw Python TypeError. Convert those to a
         # catchable type_error, while preserving the legitimate mixed
         # CLP(Q)/CLP(R) TypeError and any error involving an unbound operand.
+        # A var vs a ground non-numeric would post a broken constraint, so
+        # guard before delegating (like fd_eq above).
+        _reject_nonnumeric_order(l, r, "(<)/2")
         try:
             return _c_impl(l, r, trail)
         except TypeError:
@@ -2972,6 +3012,7 @@ if _USE_C_PROPAGATE:
             raise _incomparable_order_error(dr, "(<)/2")
 
     def fd_le(l, r, trail, _c_impl=_c_fd_le):
+        _reject_nonnumeric_order(l, r, "(=<)/2")
         try:
             return _c_impl(l, r, trail)
         except TypeError:

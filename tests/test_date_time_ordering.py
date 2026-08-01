@@ -144,6 +144,119 @@ class TestIncomparableRaises:
         assert ei.value.term.args[0].args[1] == target
 
 
+class TestVarVsNonNumericOperand:
+    """A ground non-numeric operand ordered against an unbound var used to
+    succeed by posting an FD ordering constraint whose unification hook then
+    rejected EVERY later binding — including ones satisfying the comparison
+    (``X < "banana", X is "apple"`` had 0 solutions).  Same broken-var shape
+    as A12-F002 for ``==``; the ordering comparators must raise the same
+    catchable type_error(orderable, ...) the ground incomparable path uses.
+    Filed: todo/nonnumeric-comparison-on-unbound-var-rejects-all-later-bindings.md
+    """
+
+    def test_var_lt_str(self):
+        with pytest.raises(LogicException) as ei:
+            fd_lt(Var(), "banana", Trail())
+        _assert_orderable_error(ei, "(<)/2")
+        assert ei.value.term.args[0].args[1] == "banana"
+
+    def test_str_lt_var(self):
+        # the offending ground side may also be the LEFT operand
+        with pytest.raises(LogicException) as ei:
+            fd_lt("apple", Var(), Trail())
+        _assert_orderable_error(ei, "(<)/2")
+        assert ei.value.term.args[0].args[1] == "apple"
+
+    def test_var_le_str(self):
+        with pytest.raises(LogicException) as ei:
+            fd_le(Var(), "banana", Trail())
+        _assert_orderable_error(ei, "(=<)/2")
+
+    def test_var_gt_str_surfaces_lt_context(self):
+        # fd_gt delegates to fd_lt with swapped args, like the ground path
+        with pytest.raises(LogicException) as ei:
+            fd_gt(Var(), "banana", Trail())
+        _assert_orderable_error(ei, "(<)/2")
+
+    def test_var_ge_str_surfaces_le_context(self):
+        with pytest.raises(LogicException) as ei:
+            fd_ge(Var(), "banana", Trail())
+        _assert_orderable_error(ei, "(=<)/2")
+
+    def test_var_lt_date(self):
+        with pytest.raises(LogicException) as ei:
+            fd_lt(Var(), dt.date(2026, 6, 1), Trail())
+        _assert_orderable_error(ei, "(<)/2")
+
+    def test_var_lt_datetime(self):
+        with pytest.raises(LogicException) as ei:
+            fd_lt(Var(), dt.datetime(2026, 6, 1, 12, 0), Trail())
+        _assert_orderable_error(ei, "(<)/2")
+
+    def test_var_lt_quantity(self):
+        from clausal.terms import Quantity
+        from clausal.modules.units import Metre
+        with pytest.raises(LogicException) as ei:
+            fd_lt(Var(), Quantity(5, {Metre: 1}), Trail())
+        _assert_orderable_error(ei, "(<)/2")
+
+    def test_var_lt_decimal(self):
+        from decimal import Decimal
+        with pytest.raises(LogicException) as ei:
+            fd_lt(Var(), Decimal("2.5"), Trail())
+        _assert_orderable_error(ei, "(<)/2")
+
+    # ── controls: everything numeric/residual stays legal ────────────────
+
+    def test_var_lt_int_still_narrows(self):
+        from clausal.logic.clpfd import FD_KEY, domain_max
+        from clausal.logic.variables import get_attr
+        trail = Trail()
+        x = Var()
+        assert fd_lt(x, 4, trail)
+        state = get_attr(x, FD_KEY)
+        assert state is not None and domain_max(state.domain) <= 3
+
+    def test_var_lt_var_still_legal(self):
+        assert fd_lt(Var(), Var(), Trail())
+
+    def test_var_lt_float_still_dispatches_clpr(self):
+        trail = Trail()
+        x = Var()
+        assert fd_lt(x, 2.5, trail)
+
+    def test_var_lt_fraction_still_dispatches_clpq(self):
+        trail = Trail()
+        x = Var()
+        assert fd_lt(x, Fraction(5, 2), trail)
+
+    def test_var_lt_expr_tree_still_legal(self):
+        from clausal.terms import Add
+        trail = Trail()
+        x, y = Var(), Var()
+        assert fd_lt(x, Add(y, 1), trail)
+
+    def test_ground_str_lt_still_python_compare(self):
+        trail = Trail()
+        assert fd_lt("apple", "banana", trail)
+        assert not fd_lt("banana", "apple", trail)
+
+    def test_engine_repro_raises_instead_of_losing_solutions(self, tmp_path):
+        # The reported repro: 0 solutions for a satisfiable query, silently.
+        # It must now surface a catchable LogicException at the comparison.
+        import os
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import solve
+        src = 'strlt_ok(X) <- ( X < "banana", X is "apple" )\n'
+        path = os.path.join(str(tmp_path), "strcmp_repro.clausal")
+        with open(path, "w") as f:
+            f.write(src)
+        mod = _load_module("strcmp_repro", path)
+        with pytest.raises(LogicException) as ei:
+            list(solve(mod.strlt_ok(Var()), mod.__dict__["$module"]))
+        _assert_orderable_error(ei, "(<)/2")
+
+
 class TestLegitimateTypeErrorPreserved:
     def test_mixed_rational_real_not_swallowed(self):
         # This must stay a plain TypeError with its "cannot mix" message,
