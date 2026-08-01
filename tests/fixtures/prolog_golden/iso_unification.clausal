@@ -64,7 +64,7 @@ Test('two fresh vars: X == Y (CLP(FD) posts)') <- (X == Y)
 
 Test('same var: X == X') <- (X == X)
 
-Test('var != atom') <- (X != a)
+Test('var != atom raises catchable type_error') <- (catch_error((X != a, False), _, True))
 
 Test('two fresh vars: X != Y') <- (X != Y)
 

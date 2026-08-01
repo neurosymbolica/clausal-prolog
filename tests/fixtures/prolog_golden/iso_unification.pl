@@ -108,8 +108,8 @@ test("two fresh vars: X == Y (CLP(FD) posts)") :-
 test("same var: X == X") :-
     X == X.
 
-test("var != atom") :-
-    X \== a.
+test("var != atom raises catchable type_error") :-
+    catch((X \== a, false), _, true).
 
 test("two fresh vars: X != Y") :-
     X \== Y.

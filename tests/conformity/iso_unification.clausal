@@ -110,8 +110,14 @@ Test("two fresh vars: X == Y (CLP(FD) posts)") <- (X == Y)  # nv
 Test("same var: X == X") <- (X == X)  # nv
 
 # ── != (arithmetic inequality) ─────────────────────────────────────────────
+# A non-numeric ground operand against an unbound var is a catchable
+# type_error (A12-F002 family): the old vacuous success posted a constraint
+# that then rejected EVERY later binding of X, atom b included. The
+# structural residual form is `X is not a` (dif), pinned above.
 
-Test("var != atom") <- (X != a)  # nv
+Test("var != atom raises catchable type_error") <- (
+    catch((X != a, False), _, True)
+)  # nv
 Test("two fresh vars: X != Y") <- (X != Y)  # nv
 
 # ── structural_eq/2 (Prolog ==/2) ──────────────────────────────────────────

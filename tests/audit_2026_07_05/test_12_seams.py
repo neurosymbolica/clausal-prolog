@@ -34,7 +34,7 @@ from clausal.logic.variables import (
     get_attr,
 )
 from clausal.logic.constraints import dif, DIF_KEY
-from clausal.logic.clpfd import in_domain, label, fd_eq, FD_KEY
+from clausal.logic.clpfd import in_domain, label, fd_eq, fd_ne, FD_KEY
 
 
 # ── Fixture loader ────────────────────────────────────────────────────────────
@@ -337,6 +337,110 @@ class TestF002EqNonRealOperand:
         tr = Trail()
         assert fd_eq(Quantity(5, {Metre: 1}), Quantity(5, {Metre: 1}), tr) is True
         assert fd_eq(Quantity(5, {Metre: 1}), Quantity(3, {Metre: 1}), tr) is False
+
+
+class TestF002NeNonRealOperand:
+    """Third member of the A12-F002 defect family: ``!=`` (arithmetic
+    disequality, ``nodes.ArithNeq`` → ``fd_ne``) never got any guard, so
+    ``X != "banana"`` posted a NeConstraint whose unification hook accepts
+    integers only — every later non-integer binding of X was rejected and
+    ``X != "banana", X is "apple"`` silently lost its solution.  Same
+    exactly-one-var + ``numbers.Real`` allowlist as ``==``/the ordering
+    comparators, with the ``evaluable`` kind (``!=`` is ``==``'s arithmetic
+    sibling; ``dif/2`` remains the structural disequality) and context
+    ``"(!=)/2"`` (the clausal surface operator, matching ``"(==)/2"``).
+    Fixed: todo/arith-disequality-on-unbound-var-rejects-all-later-bindings.md
+    """
+
+    def _assert_evaluable_error(self, exc_info, culprit):
+        term = exc_info.value.term
+        assert term.functor == "error"
+        inner = term.args[0]
+        assert inner.functor == "type_error"
+        assert inner.args[0] == "evaluable"
+        assert inner.args[1] == culprit
+        assert term.args[1] == "(!=)/2"
+
+    def test_ne_str_operand_raises_catchable_type_error(self):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            fd_ne(Var(), "banana", Trail())
+        self._assert_evaluable_error(ei, "banana")
+
+    def test_ne_ground_side_may_be_left_operand(self):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            fd_ne("banana", Var(), Trail())
+        self._assert_evaluable_error(ei, "banana")
+
+    def test_ne_date_operand_raises_catchable_type_error(self):
+        import datetime as dt
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_ne(Var(), dt.date(2026, 6, 1), Trail())
+
+    def test_ne_quantity_operand_raises_catchable_type_error(self):
+        from clausal.logic.exceptions import LogicException
+        from clausal.terms import Quantity
+        from clausal.modules.units import Metre
+        with pytest.raises(LogicException):
+            fd_ne(Var(), Quantity(5, {Metre: 1}), Trail())
+
+    def test_ne_compiled_repro_raises_instead_of_losing_solution(self, load):
+        # The silent-loss shape: X != "banana", X is "apple" had 0 solutions.
+        from clausal.logic.exceptions import LogicException
+        m = load("f002_ne", """\
+badne(X) <- ( X != "banana", X is "apple" )
+""")
+        with pytest.raises(LogicException):
+            list(solve(m.badne(Var())))
+
+    # ── controls: numeric, residual and both-ground != unchanged ─────────
+
+    def test_ne_int_residual_still_works(self):
+        tr = Trail()
+        x = Var()
+        assert fd_ne(x, 5, tr) is True
+        assert unify(x, 4, tr) is True
+
+    def test_ne_int_residual_still_excludes_operand(self):
+        tr = Trail()
+        x = Var()
+        assert fd_ne(x, 5, tr) is True
+        assert unify(x, 5, tr) is False
+
+    def test_ne_float_still_dispatches_clpr(self):
+        tr = Trail()
+        x = Var()
+        assert fd_ne(x, 2.5, tr) is True
+
+    def test_ne_fraction_still_dispatches_clpq(self):
+        from fractions import Fraction
+        tr = Trail()
+        x = Var()
+        assert fd_ne(x, Fraction(1, 2), tr) is True
+
+    def test_ne_var_var_still_legal(self):
+        assert fd_ne(Var(), Var(), Trail()) is True
+
+    def test_ne_expr_tree_still_legal(self):
+        from clausal.terms import Add
+        tr = Trail()
+        x, y = Var(), Var()
+        assert fd_ne(x, Add(left=y, right=1), tr) is True
+
+    def test_ne_both_ground_mixed_types_still_python_ne(self):
+        # Python != between mismatched types falls back to identity and
+        # never raises — no TypeError conversion needed on the ground path.
+        tr = Trail()
+        assert fd_ne("a", 5, tr) is True
+        import datetime as dt
+        assert fd_ne(dt.date(2026, 1, 1), "x", tr) is True
+
+    def test_ne_both_ground_strings_still_python_ne(self):
+        tr = Trail()
+        assert fd_ne("a", "b", tr) is True
+        assert fd_ne("a", "a", tr) is False
 
 
 # ══════════════════════════════════════════════════════════════════════════════

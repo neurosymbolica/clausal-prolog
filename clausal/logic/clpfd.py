@@ -1572,8 +1572,10 @@ def _both_ground(l, r) -> bool:
     return True
 
 
-def _reject_nonnumeric_eq(l, r) -> None:
+def _reject_nonnumeric_eq(l, r, context: str = "(==)/2") -> None:
     """A12-F002: raise a catchable type_error when a Var is compared with ``==``
+    (or ``!=``, which passes ``context="(!=)/2"`` — arithmetic disequality is
+    the same defect family, while ``dif/2`` stays the structural form)
     against a GROUND operand that is not a number.  Posting the EqConstraint
     instead made a broken FD var — its unification hook accepts integers
     only, so the var rejected anything EXCEPT ints, including a later
@@ -1601,7 +1603,7 @@ def _reject_nonnumeric_eq(l, r) -> None:
                            _Negate)):
         return
     from clausal.logic.exceptions import LogicException, type_error
-    raise LogicException(type_error("evaluable", ground, "(==)/2"))
+    raise LogicException(type_error("evaluable", ground, context))
 
 
 def _incomparable_order_error(culprit, context: str) -> "LogicException":
@@ -1733,6 +1735,11 @@ def fd_ne(l, r, trail: Trail) -> bool:
     if not is_var(r):
         r = _resolve(r)
     _check_no_mixed_rational_real(l, r)
+    # A ground non-numeric operand against a Var made the same broken var as
+    # == (A12-F002 family): the NeConstraint's hook rejects every non-integer
+    # binding, so X != "banana" excluded "apple" too. Guard before the
+    # CLP(Q)/CLP(R) dispatch, like ==/</=<.
+    _reject_nonnumeric_eq(l, r, "(!=)/2")
     if _any_rational(l, r):
         from clausal.logic.clpq import q_ne  # noqa: PLC0415
         return q_ne(l, r, trail)
@@ -2997,7 +3004,10 @@ if _USE_C_PROPAGATE:
         _reject_nonnumeric_eq(l, r)
         return _c_impl(l, r, trail)
 
-    fd_ne = _c_fd_ne
+    def fd_ne(l, r, trail, _c_impl=_c_fd_ne):
+        # Same broken-var guard as fd_eq above; the C impl posts unchecked.
+        _reject_nonnumeric_eq(l, r, "(!=)/2")
+        return _c_impl(l, r, trail)
 
     def fd_lt(l, r, trail, _c_impl=_c_fd_lt):
         # The C fd_lt does no clean type-checking: an incomparable ground
