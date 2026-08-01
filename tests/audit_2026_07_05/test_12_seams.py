@@ -233,6 +233,112 @@ oklin(LX, LY) <- (LX == LY * 2, LY == 3)
         assert deref(z) == 8
 
 
+class TestF002EqNonRealOperand:
+    """Extension of the A12-F002 guard: its original blocklist (atoms,
+    strings, collections, ground compounds) let dates, Quantities, Decimals,
+    None, … through — and the posted EqConstraint's unification hook accepts
+    integers only, so the var then rejected EVERY later binding including the
+    equal one (``fd_eq(X, date(...)); unify(X, same_date)`` → False).  The
+    guard is now the same exactly-one-var + ``numbers.Real`` allowlist the
+    ordering comparators use, keeping the ``evaluable`` error shape.
+    Fixed: todo/eq-comparison-with-date-or-quantity-operand-posts-broken-var.md
+    """
+
+    def _assert_evaluable_error(self, exc_info, culprit):
+        term = exc_info.value.term
+        assert term.functor == "error"
+        inner = term.args[0]
+        assert inner.functor == "type_error"
+        assert inner.args[0] == "evaluable"
+        assert inner.args[1] == culprit
+        assert term.args[1] == "(==)/2"
+
+    def test_eq_date_operand_raises_catchable_type_error(self):
+        import datetime as dt
+        from clausal.logic.exceptions import LogicException
+        target = dt.date(2026, 6, 1)
+        with pytest.raises(LogicException) as ei:
+            fd_eq(Var(), target, Trail())
+        self._assert_evaluable_error(ei, target)
+
+    def test_eq_datetime_operand_raises_catchable_type_error(self):
+        import datetime as dt
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_eq(Var(), dt.datetime(2026, 6, 1, 12, 0), Trail())
+
+    def test_eq_quantity_operand_raises_catchable_type_error(self):
+        from clausal.logic.exceptions import LogicException
+        from clausal.terms import Quantity
+        from clausal.modules.units import Metre
+        with pytest.raises(LogicException) as ei:
+            fd_eq(Var(), Quantity(5, {Metre: 1}), Trail())
+        self._assert_evaluable_error(ei, Quantity(5, {Metre: 1}))
+
+    def test_eq_decimal_operand_raises_catchable_type_error(self):
+        from decimal import Decimal
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_eq(Var(), Decimal("2.5"), Trail())
+
+    def test_eq_none_operand_raises_catchable_type_error(self):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_eq(Var(), None, Trail())
+
+    def test_eq_ground_side_may_be_left_operand(self):
+        import datetime as dt
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_eq(dt.date(2026, 6, 1), Var(), Trail())
+
+    # ── controls: numeric and both-ground == unchanged ───────────────────
+
+    def test_eq_int_still_posts_and_binds(self):
+        tr = Trail()
+        x = Var()
+        assert fd_eq(x, 5, tr) is True
+        assert deref(x) == 5
+
+    def test_eq_float_still_dispatches_and_binds(self):
+        tr = Trail()
+        x = Var()
+        assert fd_eq(x, 2.5, tr) is True
+        assert deref(x) == 2.5
+
+    def test_eq_fraction_still_dispatches(self):
+        from fractions import Fraction
+        tr = Trail()
+        x = Var()
+        assert fd_eq(x, Fraction(1, 2), tr) is True
+
+    def test_eq_real_attr_var_vs_str_raises_not_posts(self):
+        # A var already carrying a CLP(R) attribute triggers the real
+        # dispatch on its own; the guard must fire before that dispatch in
+        # the Python build too (same divergence roborev job 266 found in the
+        # ordering comparators).
+        from clausal.logic.exceptions import LogicException
+        tr = Trail()
+        x = Var()
+        from clausal.logic.clpr import real_le
+        assert real_le(x, 9.5, tr)  # gives x a REAL attribute
+        with pytest.raises(LogicException):
+            fd_eq(x, "somestr", tr)
+
+    def test_eq_both_ground_dates_still_python_equality(self):
+        import datetime as dt
+        tr = Trail()
+        assert fd_eq(dt.date(2026, 6, 1), dt.date(2026, 6, 1), tr) is True
+        assert fd_eq(dt.date(2026, 6, 1), dt.date(2026, 6, 2), tr) is False
+
+    def test_eq_both_ground_quantities_still_python_equality(self):
+        from clausal.terms import Quantity
+        from clausal.modules.units import Metre
+        tr = Trail()
+        assert fd_eq(Quantity(5, {Metre: 1}), Quantity(5, {Metre: 1}), tr) is True
+        assert fd_eq(Quantity(5, {Metre: 1}), Quantity(3, {Metre: 1}), tr) is False
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # A12-F003 — directive targets are not validated: -table naming an undefined
 # predicate, or a defined predicate with the wrong arity, is silently accepted

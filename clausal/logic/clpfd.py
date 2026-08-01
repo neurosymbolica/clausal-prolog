@@ -1574,35 +1574,34 @@ def _both_ground(l, r) -> bool:
 
 def _reject_nonnumeric_eq(l, r) -> None:
     """A12-F002: raise a catchable type_error when a Var is compared with ``==``
-    against a GROUND operand that is clearly not a number — an atom (a
-    zero-arity PredicateMeta *class*), a string, a collection, or a ground
-    compound DATA term (a PredicateMeta term *instance* or a runtime
-    :class:`~clausal.terms.Compound`). Those cases posted a broken FD var
-    (equals anything EXCEPT the operand). Only the exactly-one-Var case is
-    checked: both-ground ``==`` falls back to Python equality, and Var==Var /
-    Var==<arith-expr> stay legal. Numbers, Quantities, rationals/reals and
-    arithmetic expr nodes all pass — the expr nodes (Add/…/Pow/Negate) are
-    plain ``pythonic_ast`` dataclasses, explicitly excluded below so that
-    non-linear/Pow trees falling through to EqConstraint are not rejected."""
+    against a GROUND operand that is not a number.  Posting the EqConstraint
+    instead made a broken FD var — its unification hook accepts integers
+    only, so the var rejected anything EXCEPT ints, including a later
+    binding to the very operand it was equated with (an atom, a string, a
+    collection, a ground compound, and — the gap the original blocklist
+    left open — a date, a Quantity, a Decimal, None, …).  Only the
+    exactly-one-Var case is checked: both-ground ``==`` falls back to Python
+    equality, and Var==Var / Var==<arith-expr> stay legal.  The ground side
+    must be ``numbers.Real`` — the same allowlist as
+    :func:`_reject_nonnumeric_order` — so int posts CLP(FD), float
+    dispatches to CLP(R) and Fraction to CLP(Q); arithmetic expr nodes
+    (Add/…/Pow/Negate, plain ``pythonic_ast`` dataclasses) also pass so that
+    non-linear/Pow trees falling through to EqConstraint are not rejected.
+    Like the ordering guard, run BEFORE the CLP(Q)/CLP(R) dispatch in both
+    the Python ``fd_eq`` and the C-accelerated wrapper, so an attr-carrying
+    var cannot smuggle a non-numeric operand into q_eq/real_eq."""
     dl, dr = deref(l), deref(r)
     if is_var(dl) == is_var(dr):
         return  # both Vars, or both ground — not the broken case
     ground = dr if is_var(dl) else dl
-    if isinstance(ground, (str, bytes, list, tuple, dict, set)) or \
-            isinstance(ground, type):
-        from clausal.logic.exceptions import LogicException, type_error
-        raise LogicException(type_error("evaluable", ground, "(==)/2"))
-    # Ground compound data terms (point4(1,2), Compound("pt", …)) are not
-    # evaluable either — but arithmetic expression nodes must pass.
+    if isinstance(ground, numbers.Real):
+        return
     _ensure_term_imports()
     if isinstance(ground, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow,
                            _Negate)):
         return
-    from clausal.logic.predicate import is_term_instance  # noqa: PLC0415
-    from clausal.terms import Compound as _Compound  # noqa: PLC0415
-    if is_term_instance(ground) or isinstance(ground, _Compound):
-        from clausal.logic.exceptions import LogicException, type_error
-        raise LogicException(type_error("evaluable", ground, "(==)/2"))
+    from clausal.logic.exceptions import LogicException, type_error
+    raise LogicException(type_error("evaluable", ground, "(==)/2"))
 
 
 def _incomparable_order_error(culprit, context: str) -> "LogicException":
@@ -1676,6 +1675,11 @@ def fd_eq(l, r, trail: Trail) -> bool:
     if not is_var(r):
         r = _resolve(r)
     _check_no_mixed_rational_real(l, r)
+    # A12-F002: a ground non-numeric operand against a Var made a broken FD
+    # var (one that equals anything EXCEPT the operand). Reject it as a
+    # catchable type error (A09-D002) — BEFORE the CLP(Q)/CLP(R) dispatch,
+    # so an attr-carrying var cannot route it into q_eq/real_eq unchecked.
+    _reject_nonnumeric_eq(l, r)
     if _any_rational(l, r):
         from clausal.logic.clpq import q_eq  # noqa: PLC0415
         return q_eq(l, r, trail)
@@ -1707,11 +1711,6 @@ def fd_eq(l, r, trail: Trail) -> bool:
         # Non-linear: fall through to EqConstraint
     if _both_ground(l, r):
         return l == r
-    # A12-F002: at least one operand is a Var here. A ground NON-numeric
-    # operand (atom, str, list, …) is a type error for arithmetic ==: posting
-    # an FD eq against it made a broken var (one that equals anything EXCEPT
-    # the operand). Reject it as a catchable type error (A09-D002).
-    _reject_nonnumeric_eq(l, r)
     # At least one Var — use CLP(FD)
     if is_var(l):
         _ensure_fd(l, trail)
