@@ -1957,7 +1957,8 @@ def _make_functor_class_ast(functor_name, field_names, source):
     Generated code (example for ``fib`` with fields ``n``, ``f``):
 
         try:
-            fib
+            if 'fib' not in globals():
+                raise NameError
             if isinstance(fib, PredicateMeta) and getattr(
                 fib, '_fields', None) != ('n', 'f'):
                 raise NameError
@@ -1984,11 +1985,20 @@ def _make_functor_class_ast(functor_name, field_names, source):
     silently destroy user code; failing loudly later (when the clause body
     tries to use ``Foo`` as a predicate) preserves the pre-Phase-2 behavior
     for that edge case.
+
+    "Bound" means bound in the MODULE dict, probed via ``globals()``
+    membership.  A bare-name probe would fall through to ``__builtins__``,
+    so a head named after a Python builtin (``reversed``, ``sorted``, …)
+    read as "already bound", was skipped by the guard above, and the head
+    call then invoked the real builtin — a load-time ``TypeError`` naming
+    neither the predicate nor the cause.  The user never bound those names,
+    so the left-alone rule does not apply to them: they mint normally.
     """
     fields_tuple = repr(tuple(field_names))
     lines = [
         "try:",
-        f"    {functor_name}",
+        f"    if {functor_name!r} not in globals():",
+        "        raise NameError",
         f"    if isinstance({functor_name}, PredicateMeta) and getattr(",
         f"            {functor_name}, '_fields', None) != {fields_tuple}:",
         "        raise NameError",
