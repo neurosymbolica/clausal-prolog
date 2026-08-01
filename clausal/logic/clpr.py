@@ -810,6 +810,19 @@ def _ensure_real_for_expr(expr, trail: Trail) -> None:
             _ensure_real(v, trail)
 
 
+def _is_ground_real_scalar(x) -> bool:
+    """True for a concrete int/float that ``==`` can bind a var to.
+
+    bools are not reals; NaN never equals anything, so it must take the
+    constraint path (which fails it) rather than bind.
+    """
+    if isinstance(x, bool):
+        return False
+    if isinstance(x, int):
+        return True
+    return isinstance(x, float) and not math.isnan(x)
+
+
 def real_eq(l, r, trail: Trail) -> bool:
     """Post lhs == rhs as a real constraint."""
     l = deref(l)
@@ -822,6 +835,14 @@ def real_eq(l, r, trail: Trail) -> bool:
             return float(l) == float(r)
         except (TypeError, ValueError):
             return l == r
+    # One side ground, other a var: bind directly (mirrors q_eq).  The
+    # attr hook checks any existing real domain/constraints on unify.
+    # NaN is excluded — == with NaN has no solution, which the
+    # constraint path establishes via interval wipeout.
+    if is_var(l) and _is_ground_real_scalar(r):
+        return unify(l, float(r), trail)
+    if is_var(r) and _is_ground_real_scalar(l):
+        return unify(r, float(l), trail)
     _ensure_real_for_expr(l, trail)
     _ensure_real_for_expr(r, trail)
     return _post_real_constraint(RealEqConstraint(l, r), trail)

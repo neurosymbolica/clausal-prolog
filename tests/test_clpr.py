@@ -352,18 +352,100 @@ class TestRealVar:
         trail.undo(mark)
 
 
+# ── Ground equality binds ─────────────────────────────────────────────────────
+
+
+class TestGroundEqBinds:
+    """``X == <ground float>`` must bind X, mirroring ``q_eq``'s unify fast path.
+
+    A reified binding is the only channel consumers read (``V.value``);
+    posting an interval constraint for a fully determined value left the
+    variable an unbound AttVar forever, while the int and Fraction paths
+    of ``==`` bind.
+    """
+
+    def test_eq_ground_float_binds_bare_var(self):
+        # nv
+        trail, x = fresh()
+        assert real_eq(x, 3.5, trail)
+        assert not is_var(deref(x))
+        assert deref(x) == 3.5
+
+    def test_eq_ground_float_binds_reversed(self):
+        # nv
+        trail, x = fresh()
+        assert real_eq(1.5, x, trail)
+        assert deref(x) == 1.5
+
+    def test_eq_ground_int_binds_real_var_as_float(self):
+        # nv
+        trail, x = fresh()
+        in_real(x, 0.0, 10.0, trail)
+        assert real_eq(x, 3, trail)
+        bound = deref(x)
+        assert not is_var(bound)
+        assert bound == 3.0 and isinstance(bound, float)
+
+    def test_eq_ground_float_out_of_domain_fails(self):
+        # nv
+        trail, x = fresh()
+        in_real(x, 0.0, 1.0, trail)
+        assert not real_eq(x, 5.0, trail)
+
+    def test_eq_ground_binding_propagates_to_constraints(self):
+        # x + y == 6, then x == 2.0 → x bound, y narrowed to 4
+        # nv
+        trail = Trail()
+        x, y = Var(), Var()
+        in_real(x, 0.0, 10.0, trail)
+        in_real(y, 0.0, 10.0, trail)
+        real_eq(Add(left=x, right=y), 6.0, trail)
+        assert real_eq(x, 2.0, trail)
+        assert deref(x) == 2.0
+        sy = state(y)
+        assert abs(sy.lo - 4.0) < 1e-10 and abs(sy.hi - 4.0) < 1e-10
+
+    def test_fd_eq_dispatch_float_expr_binds(self):
+        # The `==` operator path: X == 1.5 + 2 → X bound to 3.5
+        # nv
+        from clausal.logic.clpfd import fd_eq
+        trail, x = fresh()
+        assert fd_eq(x, Add(left=1.5, right=2), trail)
+        assert deref(x) == 3.5
+
+    def test_fd_eq_dispatch_bare_float_literal_binds(self):
+        # nv
+        from clausal.logic.clpfd import fd_eq
+        trail, x = fresh()
+        assert fd_eq(x, 2.5, trail)
+        assert deref(x) == 2.5
+
+    def test_eq_ground_then_contradiction_fails(self):
+        # nv
+        from clausal.logic.clpfd import fd_eq
+        trail, x = fresh()
+        assert fd_eq(x, 1.5, trail)
+        assert not fd_eq(x, 2.5, trail)
+
+    def test_eq_nan_does_not_bind(self):
+        # NaN keeps the old constraint path (== with NaN has no solution)
+        # nv
+        trail, x = fresh()
+        assert not real_eq(x, math.nan, trail) or is_var(deref(x))
+
+
 # ── Constraint propagation ────────────────────────────────────────────────────
 
 
 class TestLinearConstraints:
     def test_eq_pins_var(self):
+        # A ground eq now pins all the way to a binding, not a point interval
         # nv
         trail = Trail()
         x = Var()
         in_real(x, 0.0, 10.0, trail)
         assert real_eq(x, 3.0, trail)
-        s = state(x)
-        assert s.lo == 3.0 and s.hi == 3.0
+        assert deref(x) == 3.0
 
     def test_eq_narrows_from_both_sides(self):
         # nv
@@ -660,11 +742,10 @@ class TestFDRealDispatch:
         from clausal.logic.clpfd import fd_eq
         trail = Trail()
         x = Var()
-        # x == 3.14 — float triggers real dispatch
+        # x == 3.14 — float triggers real dispatch, which binds the
+        # determined value (the FD path would have rejected the float)
         assert fd_eq(x, 3.14, trail)
-        s = state(x)
-        assert s is not None
-        assert s.lo == 3.14 and s.hi == 3.14
+        assert deref(x) == 3.14
 
     def test_float_le_dispatch(self):
         # nv
@@ -702,14 +783,13 @@ class TestFDRealDispatch:
 
 class TestAutoPromotion:
     def test_float_eq_undeclared_var(self):
-        """X == 2.0 with undeclared X automatically uses CLP(R)."""
+        """X == 2.0 with undeclared X automatically uses CLP(R) and binds."""
         # nv
         from clausal.logic.clpfd import fd_eq
         trail = Trail()
         x = Var()
         assert fd_eq(x, 2.0, trail)
-        s = state(x)
-        assert s is not None
+        assert deref(x) == 2.0
 
     def test_float_in_expression(self):
         """Mult(X, X) == 9.0 uses CLP(R) via float on rhs."""
