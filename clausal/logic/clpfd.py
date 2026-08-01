@@ -1572,6 +1572,25 @@ def _both_ground(l, r) -> bool:
     return True
 
 
+def _expr_tree_has_var(x) -> bool:
+    """True if *x* is an unbound Var, or an arithmetic expression tree with
+    at least one unbound Var leaf (dereferenced).  Used by the non-numeric
+    guards to classify a comparison side as "constrainable": ``X + 1``
+    against a ground non-numeric operand is the same broken-var defect as
+    bare ``X`` against it, one level down.  A fully-ground tree returns
+    False — ``_resolve`` (Python) / the C impls evaluate those to scalars,
+    so ``2 + 3 == "banana"`` must keep its ground fallback (Python ``==`` →
+    False), not become a guard rejection."""
+    x = deref(x)
+    if is_var(x):
+        return True
+    if isinstance(x, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow)):
+        return _expr_tree_has_var(x.left) or _expr_tree_has_var(x.right)
+    if isinstance(x, _Negate):
+        return _expr_tree_has_var(x.operand)
+    return False
+
+
 def _reject_nonnumeric_eq(l, r, context: str = "(==)/2") -> None:
     """A12-F002: raise a catchable type_error when a Var is compared with ``==``
     (or ``!=``, which passes ``context="(!=)/2"`` — arithmetic disequality is
@@ -1581,27 +1600,33 @@ def _reject_nonnumeric_eq(l, r, context: str = "(==)/2") -> None:
     only, so the var rejected anything EXCEPT ints, including a later
     binding to the very operand it was equated with (an atom, a string, a
     collection, a ground compound, and — the gap the original blocklist
-    left open — a date, a Quantity, a Decimal, None, …).  Only the
-    exactly-one-Var case is checked: both-ground ``==`` falls back to Python
-    equality, and Var==Var / Var==<arith-expr> stay legal.  The ground side
-    must be ``numbers.Real`` — the same allowlist as
+    left open — a date, a Quantity, a Decimal, None, …).  A side counts as
+    the "var side" when it is a bare Var OR an expression tree containing
+    one (``X + 1 == "banana"`` is the same defect one level down — the
+    ``_expr_domain`` catch-all treated the string as an unconstrained
+    integer and produced silently WRONG answers); both-ground ``==`` (incl.
+    fully-ground trees, which _resolve/the C impls evaluate to scalars)
+    falls back to Python equality, and Var==Var / Var==<arith-expr> stay
+    legal.  The ground side must be ``numbers.Real`` — the same allowlist as
     :func:`_reject_nonnumeric_order` — so int posts CLP(FD), float
-    dispatches to CLP(R) and Fraction to CLP(Q); arithmetic expr nodes
-    (Add/…/Pow/Negate, plain ``pythonic_ast`` dataclasses) also pass so that
-    non-linear/Pow trees falling through to EqConstraint are not rejected.
+    dispatches to CLP(R) and Fraction to CLP(Q); a fully-ground expr tree
+    (Add/…/Pow/Negate, plain ``pythonic_ast`` dataclasses) also passes.
     Like the ordering guard, run BEFORE the CLP(Q)/CLP(R) dispatch in both
     the Python ``fd_eq`` and the C-accelerated wrapper, so an attr-carrying
     var cannot smuggle a non-numeric operand into q_eq/real_eq."""
     dl, dr = deref(l), deref(r)
-    if is_var(dl) == is_var(dr):
-        return  # both Vars, or both ground — not the broken case
-    ground = dr if is_var(dl) else dl
+    if _Add is None:
+        _ensure_term_imports()
+    varish_l = is_var(dl) or _expr_tree_has_var(dl)
+    varish_r = is_var(dr) or _expr_tree_has_var(dr)
+    if varish_l == varish_r:
+        return  # both constrainable, or both ground — not the broken case
+    ground = dr if varish_l else dl
     if isinstance(ground, numbers.Real):
         return
-    _ensure_term_imports()
     if isinstance(ground, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow,
                            _Negate)):
-        return
+        return  # fully-ground tree: dispatch resolves and compares it
     from clausal.logic.exceptions import LogicException, type_error
     raise LogicException(type_error("evaluable", ground, context))
 
@@ -1625,13 +1650,15 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     Lt/Le constraint instead made the same broken var as A12-F002 — the
     unification hook then rejected EVERY later binding, so ``X < "banana",
     X is "apple"`` had 0 solutions with no diagnostic.  Like the ``==``
-    guard, only the exactly-one-Var case is checked: both-ground ordering
+    guard, a side counts as the "var side" when it is a bare Var OR an
+    expression tree containing one (``X + 1 < "banana"`` is the same defect
+    one level down); both-ground ordering — fully-ground trees included —
     falls back to Python ``<``/``<=`` (which handles strings, dates, … fine),
     and Var-vs-Var / Var-vs-expr-tree stay legal residual constraints.  The
     ground side must be ``numbers.Real`` — int posts CLP(FD), float
     dispatches to CLP(R), Fraction to CLP(Q); everything else (str, date,
-    Quantity, Decimal, atom class, compound, …) is rejected.  Non-ground
-    arithmetic expression trees also pass.  Reuses the ``orderable`` error
+    Quantity, Decimal, atom class, compound, …) is rejected.  A fully-ground
+    arithmetic expression tree also passes.  Reuses the ``orderable`` error
     shape of :func:`_incomparable_order_error` (rather than ``evaluable`` as
     ``==`` does) so one handler catches every ill-typed order comparison;
     here *culprit* is the offending ground operand, whichever side it
@@ -1641,16 +1668,18 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     triggers the dispatch on its own, and q_lt/real_lt would otherwise post
     against the ground non-numeric operand unchecked."""
     dl, dr = deref(l), deref(r)
-    if is_var(dl) == is_var(dr):
-        return  # both Vars, or both ground/expr — not the broken case
-    ground = dr if is_var(dl) else dl
-    if isinstance(ground, numbers.Real):
-        return
     if _Add is None:
         _ensure_term_imports()
+    varish_l = is_var(dl) or _expr_tree_has_var(dl)
+    varish_r = is_var(dr) or _expr_tree_has_var(dr)
+    if varish_l == varish_r:
+        return  # both constrainable, or both ground — not the broken case
+    ground = dr if varish_l else dl
+    if isinstance(ground, numbers.Real):
+        return
     if isinstance(ground, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow,
                            _Negate)):
-        return
+        return  # fully-ground tree: dispatch resolves and compares it
     raise _incomparable_order_error(ground, context)
 
 

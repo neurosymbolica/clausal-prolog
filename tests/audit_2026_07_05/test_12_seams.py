@@ -443,6 +443,93 @@ badne(X) <- ( X != "banana", X is "apple" )
         assert fd_ne("a", "a", tr) is False
 
 
+class TestF002ExprTreeVsNonNumericOperand:
+    """The guards checked only the exactly-one-bare-Var case, so with the var
+    one level down in an arithmetic expression tree both sides deref to
+    non-Vars and the guard returned early: ``X + 1 == "banana"`` posted an
+    EqConstraint whose ``_expr_domain`` catch-all treats the string as an
+    unconstrained integer — it then accepted ``X = 5`` (silently wrong
+    answers, worse than the bare-var case which at least rejected
+    everything).  A tree *containing* a var now counts as the var side; a
+    fully-ground tree still counts as ground (``2 + 3 == "banana"`` keeps
+    falling back to Python ``==`` → False after _resolve).
+    Fixed: todo/nonnumeric-operand-vs-var-inside-expr-tree-unguarded.md
+    """
+
+    def _add(self, l, r):
+        from clausal.terms import Add
+        return Add(left=l, right=r)
+
+    def test_eq_var_tree_vs_str_raises(self):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            fd_eq(self._add(Var(), 1), "banana", Trail())
+        term = ei.value.term
+        assert term.args[0].functor == "type_error"
+        assert term.args[0].args[0] == "evaluable"
+        assert term.args[0].args[1] == "banana"
+        assert term.args[1] == "(==)/2"
+
+    def test_eq_str_vs_var_tree_raises(self):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_eq("banana", self._add(Var(), 1), Trail())
+
+    def test_eq_var_tree_vs_date_raises(self):
+        import datetime as dt
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_eq(self._add(Var(), 1), dt.date(2026, 6, 1), Trail())
+
+    def test_ne_var_tree_vs_str_raises(self):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            fd_ne(self._add(Var(), 1), "banana", Trail())
+        assert ei.value.term.args[1] == "(!=)/2"
+
+    def test_eq_compiled_repro_raises_instead_of_wrong_answer(self, load):
+        # The reported repro: X + 1 == "banana" posted, then accepted X is 4.
+        from clausal.logic.exceptions import LogicException
+        m = load("f002_exprtree", """\
+badexpr(X) <- ( X + 1 == "banana", X is 4 )
+""")
+        with pytest.raises(LogicException):
+            list(solve(m.badexpr(Var())))
+
+    # ── controls ─────────────────────────────────────────────────────────
+
+    def test_eq_var_tree_vs_int_still_propagates(self):
+        tr = Trail()
+        x = Var()
+        assert fd_eq(self._add(x, 1), 5, tr) is True
+        assert deref(x) == 4
+
+    def test_eq_var_tree_vs_var_tree_still_legal(self):
+        tr = Trail()
+        assert fd_eq(self._add(Var(), 1), self._add(Var(), 2), tr) is True
+
+    def test_eq_var_vs_var_tree_still_legal(self):
+        tr = Trail()
+        assert fd_eq(Var(), self._add(Var(), 1), tr) is True
+
+    def test_eq_ground_tree_vs_str_still_python_equality(self):
+        # _resolve (Python) / the C impl evaluate a fully-ground tree to a
+        # scalar, and ground == ground falls back to Python == → False. The
+        # guard must NOT reclassify a ground tree as the var side.
+        tr = Trail()
+        assert fd_eq(self._add(2, 3), "banana", tr) is False
+
+    def test_ne_ground_tree_vs_str_still_python_ne(self):
+        tr = Trail()
+        assert fd_ne(self._add(2, 3), "banana", tr) is True
+
+    def test_eq_var_tree_vs_ground_tree_still_legal(self):
+        tr = Trail()
+        x = Var()
+        assert fd_eq(self._add(x, 1), self._add(2, 3), tr) is True
+        assert deref(x) == 4
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # A12-F003 — directive targets are not validated: -table naming an undefined
 # predicate, or a defined predicate with the wrong arity, is silently accepted

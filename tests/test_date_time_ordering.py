@@ -227,6 +227,43 @@ class TestVarVsNonNumericOperand:
             fd_le(x, "banana", trail)
         _assert_orderable_error(ei, "(=<)/2")
 
+    # ── var inside an expr tree (same defect, one level down) ────────────
+
+    def test_var_tree_lt_str(self):
+        from clausal.terms import Add
+        with pytest.raises(LogicException) as ei:
+            fd_lt(Add(left=Var(), right=1), "banana", Trail())
+        _assert_orderable_error(ei, "(<)/2")
+
+    def test_var_tree_le_date(self):
+        from clausal.terms import Add
+        with pytest.raises(LogicException) as ei:
+            fd_le(Add(left=Var(), right=1), dt.date(2026, 6, 1), Trail())
+        _assert_orderable_error(ei, "(=<)/2")
+
+    def test_var_tree_gt_str_surfaces_lt_context(self):
+        from clausal.terms import Add
+        with pytest.raises(LogicException) as ei:
+            fd_gt(Add(left=Var(), right=1), "banana", Trail())
+        _assert_orderable_error(ei, "(<)/2")
+
+    def test_var_tree_lt_int_still_posts(self):
+        from clausal.terms import Add
+        assert fd_lt(Add(left=Var(), right=1), 10, Trail())
+
+    def test_ground_tree_lt_str_still_incomparable_error(self):
+        # A fully-ground tree resolves to a scalar; 5 < "banana" stays the
+        # ground-incomparable orderable error, not a guard reclassification.
+        from clausal.terms import Add
+        with pytest.raises(LogicException) as ei:
+            fd_lt(Add(left=2, right=3), "banana", Trail())
+        _assert_orderable_error(ei, "(<)/2")
+
+    def test_ground_tree_lt_int_still_python_compare(self):
+        from clausal.terms import Add
+        assert fd_lt(Add(left=2, right=3), 10, Trail())
+        assert not fd_lt(Add(left=2, right=3), 4, Trail())
+
     # ── controls: everything numeric/residual stays legal ────────────────
 
     def test_var_lt_int_still_narrows(self):
