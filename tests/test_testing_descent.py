@@ -852,3 +852,166 @@ def test_forall_over_collapsed_findall_composes_element_first(capsys, tmp_path):
     # ...and no second, interleaved findall-collapse narrative in the block.
     assert "every candidate" not in out
     assert "the value it compares was produced by" not in out
+
+
+# ── the measured `[0]` shape: a ONE-trivial-solution collapse ────────────────
+#
+# The schengen incident's findall did NOT collapse to []: the LENGTH=0 probe
+# succeeds trivially, so the bag is `[0]`, `max_list([0]) = 0`, and the verdict
+# flips.  A collapse gate of "body has no solution" lets that escape — the body
+# HAS a solution, just only the trivial one.  The fix re-walks the body with a
+# `template is not 0` disequality injected after the candidate generator, and
+# names the first NON-trivial failure; when that failing conjunct consumes a
+# second findall's empty bag (the schengen nesting: `length(DS, L)` with
+# `DS = []`), the inner collapse is named beneath it as well.
+TRIVIAL_COLLAPSE_SRC = """
+hit(99),
+
+usable(0),
+usable(L) <- (
+    L > 0,
+    findall(D, (between(1, 3, D), hit(D)), DS),
+    length(DS, L)
+),
+
+maxdays(MAX) <- (
+    findall(L, (between(0, 3, L), usable(L)), LS),
+    max_list(LS, MAX)
+),
+
+Test("maxdays is 3") <- (
+    maxdays(MAX),
+    MAX == 3
+),
+"""
+
+
+def test_one_trivial_solution_collapse_is_named(capsys, tmp_path):
+    p = write(tmp_path, "trivial.clausal", TRIVIAL_COLLAPSE_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "MAX == 3" in out
+    assert "MAX = 0" in out
+    # The [0] shape is stated as such, not mistaken for a healthy findall...
+    assert "silently collapsed to [0]" in out
+    assert "the first non-trivial candidate fails at" in out
+    # ...the first non-trivial candidate's failing conjunct is named with its
+    # binding, and the chain continues into the nested empty-bag collapse.
+    assert "usable(L)" in out
+    assert "L = 1" in out
+    assert "length(DS, L)" in out
+    assert "hit(D)" in out
+
+
+# A dotted / module-qualified atom on the comparison's right side (the measured
+# `STATUS is eu.<package>.eligible` shape) must still reach the wrong-value
+# bridge: the producer is found by Var identity on the LEFT side, so the
+# qualified-atom node shape on the right must not derail the report.
+def test_dotted_atom_comparison_reaches_producer(capsys, tmp_path, monkeypatch):
+    import sys as _sys
+    monkeypatch.syspath_prepend(str(tmp_path))
+    _sys.modules.pop("verdict_lib", None)
+    write(tmp_path, "verdict_lib.clausal", """
+        -module(verdict_lib, [eligible, ineligible, assess(S, V)])
+
+        ok_len(0),
+
+        assess(_S, V) <- (
+            findall(L, (between(0, 3, L), ok_len(L)), LS),
+            max_list(LS, MAX),
+            verdict(MAX, V)
+        ),
+
+        verdict(MAX, eligible) <- (MAX > 0),
+        verdict(MAX, ineligible) <- (MAX <= 0)
+    """)
+    p = write(tmp_path, "dotted.clausal", """
+        -import_from(verdict_lib, [eligible, assess])
+
+        Test("dotted atom comparison") <- (
+            assess("subject", STATUS),
+            STATUS is eligible
+        ),
+    """)
+    try:
+        assert main([str(p)]) == 1
+        out = capsys.readouterr().out
+        assert "STATUS is" in out
+        # The bridge fired despite the non-Call comparison shape...
+        assert "the value it compares was produced by" in out
+        # ...and traced the wrong value to the [0]-collapse inside assess.
+        assert "silently collapsed to [0]" in out
+        assert "ok_len(L)" in out
+        assert "L = 1" in out
+    finally:
+        _sys.modules.pop("verdict_lib", None)
+
+
+# The wrong value rides a chain of SUCCEEDING wrappers before the collapsing
+# findall (assess → decide → stay_eligibility → max_additional_days in the
+# incident).  The collapse scan follows satisfiable calls beyond the 2-level
+# failing-call descent bound — up to DIAG_MAX_COLLAPSE_DEPTH levels.
+DEEP_WRAPPER_SRC = """
+usable2(0),
+
+maxdays2(MAX) <- (
+    findall(L, (between(0, 3, L), usable2(L)), LS),
+    max_list(LS, MAX)
+),
+
+w3(M) <- (maxdays2(M)),
+w2(M) <- (w3(M)),
+w1(M) <- (w2(M)),
+
+Test("deep wrapper chain") <- (
+    w1(MAX),
+    MAX == 3
+),
+"""
+
+
+def test_collapse_scan_descends_past_failing_call_depth_bound(capsys, tmp_path):
+    p = write(tmp_path, "deepwrap.clausal", DEEP_WRAPPER_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    # The findall sits FOUR call levels below the failing comparison's
+    # producer; the old DIAG_MAX_DESCENT_DEPTH=2 scan went silent here.
+    assert "the value it compares was produced by w1(...)" in out
+    assert "silently collapsed to [0]" in out
+    assert "usable2(L)" in out
+
+
+# When the chain is deeper than DIAG_MAX_COLLAPSE_DEPTH, the scan must not go
+# SILENT (the original bug's failure mode): it stops, and says that it stopped.
+OVERDEEP_WRAPPER_SRC = """
+usable3(0),
+
+maxdays3(MAX) <- (
+    findall(L, (between(0, 3, L), usable3(L)), LS),
+    max_list(LS, MAX)
+),
+
+v5(M) <- (maxdays3(M)),
+v4(M) <- (v5(M)),
+v3(M) <- (v4(M)),
+v2(M) <- (v3(M)),
+v1(M) <- (v2(M)),
+
+Test("overdeep wrapper chain") <- (
+    v1(MAX),
+    MAX == 3
+),
+"""
+
+
+def test_collapse_scan_depth_exhaustion_is_noted(capsys, tmp_path):
+    from clausal.testing import DIAG_MAX_COLLAPSE_DEPTH
+
+    p = write(tmp_path, "overdeep.clausal", OVERDEEP_WRAPPER_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    # The findall is one level beyond the bound: no finding is possible...
+    assert "silently collapsed to [0]" not in out
+    # ...but the exhaustion is STATED, never silent.
+    assert (f"stopped at its {DIAG_MAX_COLLAPSE_DEPTH}-level depth bound"
+            in out)

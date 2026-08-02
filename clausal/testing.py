@@ -66,6 +66,13 @@ DIAG_MAX_GOALS = 64
 DIAG_MAX_DEPTH = 40
 #: Rung-3 descent: how many predicate-call levels below the failing goal.
 DIAG_MAX_DESCENT_DEPTH = 2
+#: Wrong-value/collapse scan: how many SATISFIABLE call levels it may follow.
+#: Deliberately deeper than the failing-call descent bound — a wrong value
+#: rides a chain of succeeding wrappers (assess → decide → stay_eligibility →
+#: the collapsed findall in the measured incident), and the scan only ever
+#: recurses into calls that already solved.  When this bound stops the scan it
+#: says so in a note (see _note_depth_stop) instead of going silent.
+DIAG_MAX_COLLAPSE_DEPTH = 5
 #: ...how many clauses per descended predicate.
 DIAG_MAX_DESCENT_CLAUSES = 4
 #: ...how many leaf findings in total.
@@ -1046,6 +1053,12 @@ def _report_wrong_value(diag, goal, prefix, logic_module, deadline, path) -> Non
     leaves, kind = _descend(
         producer, logic_module, path, deadline, 1, frozenset(), notes)
     if kind != "leaves" or not leaves:
+        # Nothing attributable.  But if the scan was cut short by its depth
+        # bound, silence would misread as "nothing deeper to find" — surface
+        # the stop note (and only it), mirroring the budget-exceeded note.
+        diag.notes.extend(
+            n for n in notes
+            if n.startswith("the wrong-value descent stopped"))
         return
     leaves = _cap_leaves(leaves, notes)
     name = _goal_name(producer) or "an earlier goal"
@@ -1387,11 +1400,13 @@ _DESCENT_DEFAULT_INTRO = (
 
 
 def _findall_parts(goal):
-    """``(body_conjuncts, bag)`` for a runtime ``findall/3`` Call, else None.
+    """``(template, body_conjuncts, bag)`` for a runtime ``findall/3`` Call,
+    else None.
 
-    ``body_conjuncts`` is the findall's inner Goal flattened to a conjunct list
-    (a ``TupleLiteral``/``And`` conjunction splits into its parts; a bare goal is
-    a one-element list).  ``bag`` is the result-list argument (arg 3)."""
+    ``template`` is the collected-term argument (arg 1); ``body_conjuncts`` is
+    the findall's inner Goal flattened to a conjunct list (a
+    ``TupleLiteral``/``And`` conjunction splits into its parts; a bare goal is
+    a one-element list); ``bag`` is the result-list argument (arg 3)."""
     from clausal.pythonic_ast.nodes import TupleLiteral
     from clausal.terms import And, Call, LoadName
 
@@ -1402,7 +1417,7 @@ def _findall_parts(goal):
     args = list(goal.args or ())
     if len(args) != 3 or goal.kwargs:
         return None
-    inner, bag = args[1], args[2]
+    template, inner, bag = args
 
     def flatten(node, out):
         if isinstance(node, TupleLiteral):
@@ -1416,7 +1431,17 @@ def _findall_parts(goal):
 
     conjuncts: list = []
     flatten(inner, conjuncts)
-    return (conjuncts, bag) if conjuncts else None
+    return (template, conjuncts, bag) if conjuncts else None
+
+
+def _bag_value(bag):
+    """Deref-walked value of a findall's (live-bound) result bag, or None."""
+    from clausal.logic.solve import _deref_walk_py
+
+    try:
+        return _deref_walk_py(bag)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _findall_collapsed(bag) -> bool:
@@ -1426,12 +1451,7 @@ def _findall_collapsed(bag) -> bool:
     solutions — not a collapse — so leave it to the ordinary walk.  Anything we
     cannot deref to a concrete list is treated as NOT collapsed (no false blame).
     """
-    from clausal.logic.solve import _deref_walk_py
-
-    try:
-        value = _deref_walk_py(bag)
-    except Exception:  # noqa: BLE001
-        return False
+    value = _bag_value(bag)
     if not isinstance(value, list):
         return False
     if not value:
@@ -1442,34 +1462,74 @@ def _findall_collapsed(bag) -> bool:
     return True
 
 
-def _findall_collapse_finding(goal, logic_module, path, deadline):
+def _findall_collapse_finding(goal, logic_module, path, deadline,
+                              depth, seen, notes, bag_value=None):
     """A descent finding-group naming a collapsed findall's failing body goal.
 
     Runs the findall body's conjuncts through ``_first_failing`` (with the outer
     bindings live); when the body has no solution the first-failing conjunct is
     the culprit, rendered as one leaf group (source line + up to
     ``DIAG_MAX_DESCENT_BINDINGS`` bindings), prefixed with the findall it hid
-    behind.  Returns ``None`` when the findall did have a solution (no collapse)
-    or its parts cannot be recovered."""
+    behind.
+
+    A body that DOES have a solution is not automatically healthy: the measured
+    ``[0]`` shape collapses to one TRIVIAL solution (the LENGTH=0 probe) while
+    every non-trivial candidate fails — ``max_list([0]) = 0`` then flips the
+    verdict upstream.  For a non-empty all-zeros bag the walk re-runs with a
+    ``template is not 0`` disequality injected just after the conjunct that
+    introduces the template variable, so the first NON-trivial failure is the
+    one named (see :func:`_trivial_collapse_probe`).
+
+    When the named body conjunct is itself a predicate call, its own failing
+    route is followed (bounded by ``DIAG_MAX_COLLAPSE_DEPTH``) and rendered
+    indented beneath it — the measured chain continues two levels below the
+    findall.  Returns ``None`` when nothing can be honestly attributed.
+
+    *bag_value* is the deref-walked result list observed by the CALLER while
+    the findall's bindings were still live — by the time this function runs
+    the re-run trail has been undone, so the bag itself no longer carries the
+    collapsed value."""
     parts = _findall_parts(goal)
     if parts is None:
         return None
-    conjuncts, _bag = parts
+    template, conjuncts, _bag = parts
     failing, raised = _first_failing(conjuncts, logic_module, deadline)
-    if raised is not None or failing is None:
-        # Body solved for some candidate (or raised) — not a swallowed failure.
+    if raised is not None:
         return None
-    leaf = conjuncts[failing - 1]
-    reified_leaf = _reified_findall_body_goal(goal, path, failing - 1)
+    headline = ("a findall whose body failed for every candidate — "
+                "it silently collapsed to an empty result:")
+    probe_goals = conjuncts
+    leaf_index = None if failing is None else failing - 1
+    if failing is None:
+        # Body solved — either genuinely healthy, or the [0]-shape trivial
+        # collapse.  Only a non-empty ALL-ZEROS bag re-walks with the
+        # disequality; anything else is left alone (no false blame).
+        probe = _trivial_collapse_probe(template, conjuncts, bag_value)
+        if probe is None:
+            return None
+        probe_goals, inject_pos, rendered_bag = probe
+        failing, raised = _first_failing(probe_goals, logic_module, deadline)
+        if raised is not None or failing is None or failing <= inject_pos:
+            # Cannot honestly attribute: the body found a non-trivial solution
+            # on re-run (non-determinism), or the injected disequality itself
+            # is the first failure (the candidate generator only ever produces
+            # the trivial value — nothing downstream to blame).
+            return None
+        headline = ("a findall whose body succeeds only for the trivial "
+                    f"value 0 — it silently collapsed to {rendered_bag}; "
+                    "the first non-trivial candidate fails at:")
+        leaf_index = failing - 2   # probe has one injected goal before it
+    leaf = probe_goals[failing - 1]
+    reified_leaf = _reified_findall_body_goal(goal, path, leaf_index)
 
     from clausal.logic.variables import Trail
+    from clausal.terms import Call
 
     trail = Trail()
     gen = None
-    lines = ["a findall whose body failed for every candidate — "
-             "it silently collapsed to an empty result:"]
+    lines = [headline]
     try:
-        prefix = conjuncts[:failing - 1]
+        prefix = probe_goals[:failing - 1]
         if prefix:
             gen = _solutions(_conjunction(prefix), logic_module, trail)
             if next(gen, None) is None:
@@ -1479,6 +1539,19 @@ def _findall_collapse_finding(goal, logic_module, path, deadline):
         lines.append(f"  {_descent_leaf_line(leaf, reified_leaf, _NO_CLAUSE, path)}")
         for name, value in _leaf_bindings(leaf, reified_leaf):
             lines.append(f"    {name} = {value}")
+        # The failing body conjunct may be a call whose own failing route lies
+        # deeper (the measured chain: stay_is_valid_for_length → its inner
+        # collapsed findall → window_days_used).  Follow it while the depth
+        # bound allows; when the bound stops us, say so.
+        if isinstance(leaf, Call):
+            if depth < DIAG_MAX_COLLAPSE_DEPTH:
+                deeper, kind = _descend(
+                    leaf, logic_module, path, deadline, depth + 1, seen, notes)
+                if kind == "leaves" and deeper:
+                    for group in deeper:
+                        lines.extend(f"    {line}" for line in group)
+            else:
+                _note_depth_stop(notes, leaf)
     except (_DiagBudgetExceeded, RecursionError, *_FATAL):
         raise
     except BaseException:  # noqa: BLE001 - a broken probe is not a finding
@@ -1488,6 +1561,53 @@ def _findall_collapse_finding(goal, logic_module, path, deadline):
             gen.close()
         _undo(trail)
     return lines
+
+
+def _trivial_collapse_probe(template, conjuncts, value):
+    """Disequality-injected body walk for the ``[0]``-shape collapse, or None.
+
+    Applies only when *value* (the collapsed bag, deref-walked while its
+    bindings were live) is a NON-EMPTY all-zeros list — the measured signature
+    of a findall whose body succeeds only via its trivial zero-valued
+    candidate.  Returns ``(probe_goals, inject_pos, rendered_bag)`` where
+    *probe_goals* is *conjuncts* with ``template is not 0`` inserted right
+    after the first conjunct that mentions the template variable (by raw Var
+    identity — the generator, e.g. ``between(0, 90, LENGTH)``), and
+    *inject_pos* is the 1-based position of the injected goal.  ``None`` when
+    the bag is not that shape or the template's variable(s) never appear in
+    the body (nothing to constrain)."""
+    from clausal.pythonic_ast.nodes import DoesNotUnify
+
+    if not (isinstance(value, list) and value
+            and all(item == 0 for item in value)):
+        return None
+    wanted: set[int] = set()
+    _collect_var_ids(template, wanted)
+    if not wanted:
+        return None
+    for j, conjunct in enumerate(conjuncts):
+        here: set[int] = set()
+        _collect_var_ids(conjunct, here)
+        if here & wanted:
+            probe = (conjuncts[:j + 1]
+                     + [DoesNotUnify(left=template, right=0)]
+                     + conjuncts[j + 1:])
+            return probe, j + 2, _render_value(value)
+    return None
+
+
+def _note_depth_stop(notes, conjunct) -> None:
+    """Record — once — that the collapse scan hit its depth bound.
+
+    Silent exhaustion would imply there is nothing deeper to find; the note
+    keeps the ladder honest without unbounding the walk."""
+    if any(n.startswith("the wrong-value descent stopped") for n in notes):
+        return
+    name = _goal_name(conjunct) or "a deeper call"
+    notes.append(
+        f"the wrong-value descent stopped at its {DIAG_MAX_COLLAPSE_DEPTH}-"
+        f"level depth bound (before {name}); paths beyond it were not examined"
+    )
 
 
 def _scan_body_for_findall_collapse(pre, body, goals_list, logic_module, path,
@@ -1500,13 +1620,16 @@ def _scan_body_for_findall_collapse(pre, body, goals_list, logic_module, path,
     * a ``findall`` whose result bag looks like a swallowed failure (``[]`` or
       all-zeros) yields the finding-group naming its body's own failing conjunct;
     * any OTHER predicate ``Call`` — the clause is satisfiable, so this conjunct
-      succeeded — is recursed into (bounded by ``DIAG_MAX_DESCENT_DEPTH``): a
-      wrapper predicate that merely forwards to a findall-bearing one is exactly
-      how the collapse hides a level deeper.  The recursion's findings are
-      usually a nested collapse, but can also be an ordinary failing clause
-      route inside the (overall satisfiable) callee — e.g. a non-fallback
-      clause that SHOULD have produced the value; either is a truthful
-      "failing route" for the wrong value, so leaves are surfaced as-is."""
+      succeeded — is recursed into (bounded by ``DIAG_MAX_COLLAPSE_DEPTH``,
+      with a note when that bound stops the walk): a wrapper predicate that
+      merely forwards to a findall-bearing one is exactly how the collapse
+      hides a level deeper.  The recursion's findings are usually a nested
+      collapse, but can also be an ordinary failing clause route inside the
+      (overall satisfiable) callee — e.g. a non-fallback clause that SHOULD
+      have produced the value; either is a truthful "failing route" for the
+      wrong value, so leaves are surfaced as-is.  "Re-ran satisfiable" notes
+      from the recursion are dropped: satisfiable callees are the EXPECTED
+      state on this path, not the anomaly that note reports."""
     from clausal.logic.variables import Trail
     from clausal.terms import Call, LoadName
 
@@ -1530,8 +1653,10 @@ def _scan_body_for_findall_collapse(pre, body, goals_list, logic_module, path,
                 if next(gen, None) is None:
                     continue
             if parts is not None:
-                _conjuncts, bag = parts
-                # The findall must actually run to bind its bag; re-run just it.
+                _template, _conjuncts, bag = parts
+                # The findall must actually run to bind its bag; re-run just
+                # it.  Read the collapsed value BEFORE the trail is undone —
+                # the finding needs it and the bag unbinds with the trail.
                 run = Trail()
                 run_gen = _solutions(conjunct, logic_module, run)
                 try:
@@ -1539,19 +1664,27 @@ def _scan_body_for_findall_collapse(pre, body, goals_list, logic_module, path,
                         continue
                     if not _findall_collapsed(bag):
                         continue
+                    bag_value = _bag_value(bag)
                 finally:
                     run_gen.close()
                     _undo(run)
                 finding = _findall_collapse_finding(
-                    conjunct, logic_module, path, deadline)
+                    conjunct, logic_module, path, deadline, depth, seen, notes,
+                    bag_value=bag_value)
                 if finding is not None:
                     return finding
-            elif depth < DIAG_MAX_DESCENT_DEPTH:
+            elif depth < DIAG_MAX_COLLAPSE_DEPTH:
+                scratch: list[str] = []
                 deeper, kind = _descend(
                     conjunct, logic_module, path, deadline,
-                    depth + 1, seen, notes)
+                    depth + 1, seen, scratch)
+                notes.extend(
+                    n for n in scratch
+                    if "re-ran satisfiable during descent" not in n)
                 if kind == "leaves" and deeper:
                     return deeper[0]
+            else:
+                _note_depth_stop(notes, conjunct)
         except (_DiagBudgetExceeded, RecursionError, *_FATAL):
             raise
         except BaseException:  # noqa: BLE001 - a broken probe is not a finding
@@ -1581,7 +1714,7 @@ def _reified_findall_body_goal(goal, path, index):
     if not path or not isinstance(pos, (tuple, list)) or not pos:
         return None
     try:
-        from clausal.reflection import Goal, reify_file
+        from clausal.reflection import Clause as ReifiedClause, Goal, reify_file
 
         key = str(path)
         items = _REIFY_CACHE.get(key)
@@ -1605,7 +1738,30 @@ def _reified_findall_body_goal(goal, path, index):
                     return hit
             return None
 
+        # Reified Goals carry no position, but their owning Clauses do — and a
+        # file can hold several findalls (the measured incident nests one two
+        # clauses below another).  Search the clause whose source position most
+        # closely precedes the runtime findall's own line FIRST, so the twin
+        # comes from the right clause instead of whichever findall the file
+        # happens to open with; fall back to the whole-file walk only when no
+        # clause can be placed.
+        goal_line = pos[0]
+        owner = None
         for item in items:
+            if not isinstance(item, ReifiedClause):
+                continue
+            cpos = getattr(item, "position", None)
+            if (isinstance(cpos, (tuple, list)) and cpos
+                    and cpos[0] <= goal_line
+                    and (owner is None or cpos[0] > owner.position[0])):
+                owner = item
+        if owner is not None:
+            hit = find(owner)
+            if hit is not None:
+                return hit
+        for item in items:
+            if item is owner:
+                continue
             hit = find(item)
             if hit is not None:
                 return hit
@@ -1910,6 +2066,15 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
         lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
         for name, value in _leaf_bindings(leaf, reified_leaf):
             lines.append(f"    {name} = {value}")
+        # A failing leaf that CONSUMES a collapsed findall's bag (`length(
+        # VALID_DAYS, LENGTH)` with `VALID_DAYS = []`) is only the symptom;
+        # the swallowed failure inside the findall is the cause.  Name it
+        # beneath the leaf when the bag demonstrably feeds it.
+        feeding = _collapsed_findall_feeding(
+            leaf, body[:idx - len(pre)], logic_module, path, deadline,
+            depth, seen, notes)
+        if feeding:
+            lines.extend(f"    {line}" for line in feeding)
         return [lines], "leaves"
     except (_DiagBudgetExceeded, RecursionError, *_FATAL):
         raise
@@ -1919,6 +2084,45 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
         if gen is not None:
             gen.close()
         _undo(trail)
+
+
+def _collapsed_findall_feeding(leaf, earlier, logic_module, path, deadline,
+                               depth, seen, notes):
+    """Collapse finding for a findall (before *leaf* in the same body) whose
+    result bag the failing *leaf* consumes, or None.
+
+    Runs with the caller's prefix bindings live, so the findall has already
+    executed and its bag is bound.  The bag→leaf raw-Var-identity gate keeps
+    unrelated (legitimately empty) findalls in the same body unblamed: only a
+    bag the failing conjunct actually reads can be the reason it failed."""
+    leaf_ids: set[int] = set()
+    _collect_var_ids(leaf, leaf_ids)
+    if not leaf_ids:
+        return None
+    for conjunct in earlier:
+        if time.monotonic() > deadline:
+            raise _DiagBudgetExceeded()
+        parts = _findall_parts(conjunct)
+        if parts is None:
+            continue
+        _template, _conjuncts, bag = parts
+        bag_ids: set[int] = set()
+        _collect_var_ids(bag, bag_ids)
+        if not (bag_ids & leaf_ids):
+            continue
+        if not _findall_collapsed(bag):
+            continue
+        try:
+            finding = _findall_collapse_finding(
+                conjunct, logic_module, path, deadline, depth, seen, notes,
+                bag_value=_bag_value(bag))
+        except (_DiagBudgetExceeded, RecursionError, *_FATAL):
+            raise
+        except BaseException:  # noqa: BLE001 - a broken probe is not a finding
+            continue
+        if finding is not None:
+            return finding
+    return None
 
 
 def _head_listing(cls, clauses, path) -> list[str]:
