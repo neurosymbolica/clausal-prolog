@@ -121,10 +121,11 @@ failure came from element coupling or non-determinism, not one element), it retu
 `False` and the generic ladder runs unchanged — the verdict is never touched, matching
 the module's observation-only invariant.
 
-**Tests.** Five new cases in `tests/test_testing_descent.py` (section "forall(X in
+**Tests.** Four new cases in `tests/test_testing_descent.py` (section "forall(X in
 LIST, Body): name the failing element(s)"): single failing element named; several named
-within the bound; the bound + truncation note on a 10-element all-fail list; conjunction
-body. Written test-first (all red before the change, green after).
+within the bound; the bound + truncation note on a 10-element all-fail list; inline
+conjunction body (the measured incident's `forall(SUBJECT in LIST, (...))` shape).
+Written test-first (all red before the change, green after).
 
 **Suite.** `10875 passed, 2 failed` — the two failures are exactly the documented
 standing baseline (`test_F026_multi_star_splits_bounded_for_moderate_input` load-marginal

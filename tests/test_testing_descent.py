@@ -652,18 +652,21 @@ def test_forall_bounds_the_number_of_named_elements(capsys, tmp_path):
     out = capsys.readouterr().out
     # All ten elements fail, but only the first N are named...
     assert out.count("N = ") == DIAG_MAX_DESCENT_LEAVES
-    assert "failed for at least 6 of 10 elements" in out
+    assert (
+        f"failed for at least {DIAG_MAX_DESCENT_LEAVES} of 10 elements" in out
+    )
     # ...and the truncation is stated rather than silently dropped.
-    assert "more than 6 of the 10 elements failed" in out
+    assert (
+        f"more than {DIAG_MAX_DESCENT_LEAVES} of the 10 elements failed" in out
+    )
 
 
-# The failing element is named even when Body is a conjunction; the headline
+# The failing element is named even when Body is an inline conjunction (the
+# measured incident's shape: ``forall(SUBJECT in LIST, (...))``); the headline
 # still identifies the culprit element rather than the whole list.
 FORALL_CONJ_SRC = """
-in_range(X) <- (X >= 0, X <= 3),
-
 Test("all in range") <- (
-    forall(V in [0, 1, 7, 2], in_range(V))
+    forall(V in [0, 1, 7, 2], (V >= 0, V <= 3))
 ),
 """
 
