@@ -470,6 +470,8 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
                     failing,
                 )
                 _report_nearest(diag, goal, reified_goal, logic_module, deadline, path)
+                _report_wrong_value(
+                    diag, goal, prefix, logic_module, deadline, path)
             finally:
                 gen.close()
         else:
@@ -893,6 +895,122 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
         _report_descent(diag, goal, logic_module, deadline, path)
 
 
+def _report_wrong_value(diag, goal, prefix, logic_module, deadline, path) -> None:
+    """Blame a wrong VALUE feeding a failing comparison/unification conjunct.
+
+    ``_report_nearest`` only descends when the failing conjunct is itself a
+    predicate ``Call``.  The measured incident class fails at a downstream
+    comparison (``MAX == 90``) whose operand was produced — with the wrong value
+    — by an EARLIER prefix conjunct that succeeded.  When that producer is a
+    predicate call, descend into it (reusing the ordinary clause-body descent,
+    which now includes the findall-collapse sentinel) so the real defect a level
+    or two down is named instead of just the top-level mismatch.
+
+    Runs only when ``goal`` is not a ``Call`` and the ordinary descent added
+    nothing; on findings it appends to ``diag.descent`` under a headline, leaving
+    the already-rendered comparison note in place."""
+    from clausal.terms import Call
+
+    if isinstance(goal, Call):
+        return
+    if diag.descent or diag.nearest_examples:
+        return  # ordinary descent already spoke; don't pile on
+    producer = _wrong_value_producer(goal, prefix)
+    if producer is None:
+        return
+    notes: list[str] = []
+    leaves, kind = _descend(
+        producer, logic_module, path, deadline, 1, frozenset(), notes)
+    if kind != "leaves" or not leaves:
+        return
+    leaves = _cap_leaves(leaves, notes)
+    name = _goal_name(producer) or "an earlier goal"
+    diag.descent = [
+        f"the value it compares was produced by {name}, which succeeded with a "
+        "wrong value; that producer's failing route:"
+    ]
+    diag.descent += [line for group in leaves for line in group]
+    diag.notes.extend(notes)
+
+
+def _wrong_value_producer(goal, prefix):
+    """The earliest prefix ``Call`` sharing a runtime Var with *goal*, or None.
+
+    The comparison ``MAX == 90`` and the producer ``max_additional_days(MAX)``
+    share the SAME runtime ``Var`` object for ``MAX`` (clause-body variables are
+    shared), so matching by identity ties the mismatch to the goal that computed
+    it — no name reconstruction needed."""
+    from clausal.terms import Call
+
+    wanted = set()
+    _collect_var_ids(goal, wanted)
+    if not wanted:
+        return None
+    for conjunct in prefix:
+        if not isinstance(conjunct, Call):
+            continue
+        here: set[int] = set()
+        _collect_var_ids(conjunct, here)
+        if here & wanted:
+            return conjunct
+    return None
+
+
+def _collect_var_ids(term, out: set[int]) -> None:
+    """``id()`` of every runtime ``Var`` object reachable in *term*.
+
+    Deliberately does NOT deref: by the time the wrong-value bridge runs the
+    prefix has been re-established, so the shared clause-body Var may already
+    carry the (wrong) value.  Its OBJECT IDENTITY still ties the comparison to
+    the producer that computed it — the whole point of the match — so we key on
+    the raw ``Var`` instance, bound or not."""
+    from clausal.logic.variables import Var
+
+    if isinstance(term, Var):
+        out.add(id(term))
+        return
+    args = getattr(term, "args", None)
+    if args:
+        for a in args:
+            _collect_var_ids(a, out)
+    kwargs = getattr(term, "kwargs", None)
+    if kwargs:
+        for kw in kwargs:
+            _collect_var_ids(getattr(kw, "value", kw), out)
+    fields = getattr(type(term), "__dataclass_fields__", None)
+    if fields is not None and args is None:
+        for f in fields:
+            if f != "position":
+                _collect_var_ids(getattr(term, f, None), out)
+    if isinstance(term, (list, tuple)):
+        for e in term:
+            _collect_var_ids(e, out)
+
+
+def _goal_name(goal) -> str | None:
+    from clausal.terms import LoadName
+
+    func = getattr(goal, "func", None)
+    if isinstance(func, LoadName):
+        return f"{func.name}(...)"
+    return None
+
+
+def _cap_leaves(leaves, notes):
+    """Trim descent finding-GROUPS to ``DIAG_MAX_DESCENT_LEAVES``, noting the cut.
+
+    The cap counts findings (groups) across the whole descent including fan-out,
+    so a finding and its binding sub-lines are shown or dropped as a unit — never
+    split.  Shared by the rung-3 descent and the wrong-value bridge."""
+    if len(leaves) > DIAG_MAX_DESCENT_LEAVES:
+        notes.append(
+            f"only the first {DIAG_MAX_DESCENT_LEAVES} of {len(leaves)} "
+            f"descent findings are shown"
+        )
+        leaves = leaves[:DIAG_MAX_DESCENT_LEAVES]
+    return leaves
+
+
 _NO_SOLUTION = object()
 
 
@@ -1132,6 +1250,270 @@ _DESCENT_DEFAULT_INTRO = (
 )
 
 
+# ── findall collapse sentinel ────────────────────────────────────────────────
+#
+# ``findall(Tmpl, Goal, List)`` ALWAYS succeeds: if ``Goal`` has no solution for
+# any generated candidate, ``List`` binds to ``[]`` and the conjunct passes.  A
+# downstream ``max_list``/``sum``/``==`` then works on the empty (or degenerate)
+# list and the whole predicate succeeds with the WRONG value — so the ordinary
+# cumulative-prefix walk never blames anything inside the findall.  This sentinel
+# runs ``Goal``'s own conjuncts through ``_first_failing`` (the same walker the
+# rest of the descent uses); when the body fails for EVERY candidate it names the
+# first failing body conjunct, which is the real defect.
+
+
+def _findall_parts(goal):
+    """``(body_conjuncts, bag)`` for a runtime ``findall/3`` Call, else None.
+
+    ``body_conjuncts`` is the findall's inner Goal flattened to a conjunct list
+    (a ``TupleLiteral``/``And`` conjunction splits into its parts; a bare goal is
+    a one-element list).  ``bag`` is the result-list argument (arg 3)."""
+    from clausal.pythonic_ast.nodes import TupleLiteral
+    from clausal.terms import And, Call, LoadName
+
+    if not isinstance(goal, Call) or not isinstance(goal.func, LoadName):
+        return None
+    if str(goal.func.name) != "findall":
+        return None
+    args = list(goal.args or ())
+    if len(args) != 3 or goal.kwargs:
+        return None
+    inner, bag = args[1], args[2]
+
+    def flatten(node, out):
+        if isinstance(node, TupleLiteral):
+            for e in node.elements or ():
+                flatten(e, out)
+        elif isinstance(node, And):
+            flatten(node.left, out)
+            flatten(node.right, out)
+        else:
+            out.append(node)
+
+    conjuncts: list = []
+    flatten(inner, conjuncts)
+    return (conjuncts, bag) if conjuncts else None
+
+
+def _findall_collapsed(bag) -> bool:
+    """The findall result *bag* looks like a swallowed failure: ``[]`` or all-0.
+
+    A non-empty list with a non-zero element means the body did produce useful
+    solutions — not a collapse — so leave it to the ordinary walk.  Anything we
+    cannot deref to a concrete list is treated as NOT collapsed (no false blame).
+    """
+    from clausal.logic.solve import _deref_walk_py
+
+    try:
+        value = _deref_walk_py(bag)
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(value, list):
+        return False
+    if not value:
+        return True
+    for item in value:
+        if item != 0:
+            return False
+    return True
+
+
+def _findall_collapse_finding(goal, logic_module, path, deadline):
+    """A descent finding-group naming a collapsed findall's failing body goal.
+
+    Runs the findall body's conjuncts through ``_first_failing`` (with the outer
+    bindings live); when the body has no solution the first-failing conjunct is
+    the culprit, rendered as one leaf group (source line + up to
+    ``DIAG_MAX_DESCENT_BINDINGS`` bindings), prefixed with the findall it hid
+    behind.  Returns ``None`` when the findall did have a solution (no collapse)
+    or its parts cannot be recovered."""
+    parts = _findall_parts(goal)
+    if parts is None:
+        return None
+    conjuncts, _bag = parts
+    failing, raised = _first_failing(conjuncts, logic_module, deadline)
+    if raised is not None or failing is None:
+        # Body solved for some candidate (or raised) — not a swallowed failure.
+        return None
+    leaf = conjuncts[failing - 1]
+    reified_leaf = _reified_findall_body_goal(goal, path, failing - 1)
+
+    from clausal.logic.variables import Trail
+
+    trail = Trail()
+    gen = None
+    lines = ["a findall whose body failed for every candidate — "
+             "it silently collapsed to an empty result:"]
+    try:
+        prefix = conjuncts[:failing - 1]
+        if prefix:
+            gen = _solutions(_conjunction(prefix), logic_module, trail)
+            if next(gen, None) is None:
+                # Prefix unsatisfiable on the isolated re-run — still name the
+                # body goal, just without live bindings.
+                reified_leaf = None
+        lines.append(f"  {_descent_leaf_line(leaf, reified_leaf, _NO_CLAUSE, path)}")
+        for name, value in _leaf_bindings(leaf, reified_leaf):
+            lines.append(f"    {name} = {value}")
+    except (_DiagBudgetExceeded, RecursionError, *_FATAL):
+        raise
+    except BaseException:  # noqa: BLE001 - a broken probe is not a finding
+        return None
+    finally:
+        if gen is not None:
+            gen.close()
+        _undo(trail)
+    return lines
+
+
+def _scan_body_for_findall_collapse(pre, body, goals_list, logic_module, path,
+                                    deadline, depth, seen, notes):
+    """First collapsed-findall finding reachable from *body*'s conjuncts, or None.
+
+    For each body conjunct, with the goals BEFORE it re-run to establish live
+    bindings:
+
+    * a ``findall`` whose result bag looks like a swallowed failure (``[]`` or
+      all-zeros) yields the finding-group naming its body's own failing conjunct;
+    * any OTHER predicate ``Call`` — the clause is satisfiable, so this conjunct
+      succeeded — is recursed into (bounded by ``DIAG_MAX_DESCENT_DEPTH``): a
+      wrapper predicate that merely forwards to a findall-bearing one is exactly
+      how the collapse hides a level deeper.  Because the parent clause is
+      satisfiable, any leaves the recursion returns can only be a nested collapse,
+      so they are surfaced as-is."""
+    from clausal.logic.variables import Trail
+    from clausal.terms import Call, LoadName
+
+    for offset, conjunct in enumerate(body):
+        if time.monotonic() > deadline:
+            raise _DiagBudgetExceeded()
+        parts = _findall_parts(conjunct)
+        is_plain_call = (
+            parts is None
+            and isinstance(conjunct, Call)
+            and isinstance(getattr(conjunct, "func", None), LoadName)
+        )
+        if parts is None and not is_plain_call:
+            continue
+        prefix = goals_list[:len(pre) + offset]
+        trail = Trail()
+        gen = None
+        try:
+            if prefix:
+                gen = _solutions(_conjunction(prefix), logic_module, trail)
+                if next(gen, None) is None:
+                    continue
+            if parts is not None:
+                _conjuncts, bag = parts
+                # The findall must actually run to bind its bag; re-run just it.
+                run = Trail()
+                run_gen = _solutions(conjunct, logic_module, run)
+                try:
+                    if next(run_gen, None) is None:
+                        continue
+                    if not _findall_collapsed(bag):
+                        continue
+                finally:
+                    run_gen.close()
+                    _undo(run)
+                finding = _findall_collapse_finding(
+                    conjunct, logic_module, path, deadline)
+                if finding is not None:
+                    return finding
+            elif depth < DIAG_MAX_DESCENT_DEPTH:
+                deeper, kind = _descend(
+                    conjunct, logic_module, path, deadline,
+                    depth + 1, seen, notes)
+                if kind == "leaves" and deeper:
+                    return deeper[0]
+        except (_DiagBudgetExceeded, RecursionError, *_FATAL):
+            raise
+        except BaseException:  # noqa: BLE001 - a broken probe is not a finding
+            continue
+        finally:
+            if gen is not None:
+                gen.close()
+            _undo(trail)
+    return None
+
+
+class _NoClause:
+    """Sentinel clause for a findall body leaf (no owning clause position)."""
+    position = None
+
+
+_NO_CLAUSE = _NoClause()
+
+
+def _reified_findall_body_goal(goal, path, index):
+    """The reified body conjunct at *index* of a reified ``findall`` goal, or None.
+
+    Matches by the runtime findall's clause position is unavailable here, so this
+    reifies from the goal's own position when present; on any mismatch it
+    declines, and the leaf renders from the runtime term (variables as ``_``)."""
+    pos = getattr(goal, "position", None)
+    if not path or not isinstance(pos, (tuple, list)) or not pos:
+        return None
+    try:
+        from clausal.reflection import Goal, reify_file
+
+        key = str(path)
+        items = _REIFY_CACHE.get(key)
+        if items is None:
+            items = list(reify_file(key))
+            if len(_REIFY_CACHE) >= _REIFY_CACHE_MAX:
+                _REIFY_CACHE.pop(next(iter(_REIFY_CACHE)), None)
+            _REIFY_CACHE[key] = items
+
+        def find(node):
+            if (isinstance(node, Goal) and str(node.name) == "findall"
+                    and len(node.args or ()) == 3):
+                inner = node.args[1]
+                flat: list = []
+                _flatten_reified(inner, flat)
+                if 0 <= index < len(flat):
+                    return flat[index]
+            for child in _reified_children(node):
+                hit = find(child)
+                if hit is not None:
+                    return hit
+            return None
+
+        for item in items:
+            hit = find(item)
+            if hit is not None:
+                return hit
+    except Exception:  # noqa: BLE001 - source text is a nicety, never fatal
+        return None
+    return None
+
+
+def _flatten_reified(node, out):
+    # A parenthesised findall body reifies its comma-conjunction to a Python
+    # tuple (verified against the reflection layer); a single-goal body reifies
+    # to a bare Goal.  Anything else is left as one opaque leaf, which degrades
+    # to unreified rendering rather than misattributing.
+    if isinstance(node, tuple):
+        for e in node:
+            _flatten_reified(e, out)
+    else:
+        out.append(node)
+
+
+def _reified_children(node):
+    """Immediate reified sub-nodes worth recursing into for the findall search."""
+    from clausal.reflection import Clause, Goal
+
+    if isinstance(node, Clause):
+        yield from (node.goals or ())
+    elif isinstance(node, Goal):
+        yield from (node.args or ())
+        for kw in (node.kwargs or ()):
+            yield kw[1]
+    elif isinstance(node, (list, tuple)):
+        yield from node
+
+
 def _report_descent(diag, goal, logic_module, deadline, path,
                     intro=_DESCENT_DEFAULT_INTRO) -> bool:
     """Walk the failing predicate's own clause bodies against the live goal.
@@ -1152,12 +1534,7 @@ def _report_descent(diag, goal, logic_module, deadline, path,
         # including fan-out, so a finding and its binding sub-lines are shown or
         # dropped as a unit — never split — and whole groups are trimmed.
         diag.nearest_note = f"{intro}; no clause body survives:"
-        if len(leaves) > DIAG_MAX_DESCENT_LEAVES:
-            notes.append(
-                f"only the first {DIAG_MAX_DESCENT_LEAVES} of {len(leaves)} "
-                f"descent findings are shown"
-            )
-            leaves = leaves[:DIAG_MAX_DESCENT_LEAVES]
+        leaves = _cap_leaves(leaves, notes)
         diag.descent = [line for group in leaves for line in group]
         diag.notes.extend(notes)
         return True
@@ -1347,6 +1724,15 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
     if raised is not None:
         return [], "skip"          # probe artifact, never reported as cause
     if failing is None:
+        # The clause re-ran satisfiable — but a ``findall`` that collapsed to []
+        # is EXACTLY what makes a wrong-value clause "succeed", so before we
+        # write this off as non-determinism, look for a swallowed failure inside
+        # any of the clause's findall conjuncts.
+        collapse = _scan_body_for_findall_collapse(
+            pre, body, goals_list, logic_module, path, deadline,
+            depth, seen, notes)
+        if collapse is not None:
+            return [collapse], "leaves"
         head_name = str(
             getattr(clause.head, "functor", None) or type(clause.head).__name__
         )
