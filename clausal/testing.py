@@ -730,6 +730,122 @@ def _pair_vars(runtime, reified, out) -> bool:
 # ── Stage 3: nearest solution ────────────────────────────────────────────────
 
 
+def _forall_shape(goal):
+    """``(loop_var, elements, body)`` if *goal* is ``forall(V in LIST, Body)``.
+
+    Matches the exact runtime shape a ``forall/2`` over a list literal lowers
+    to: ``Call(forall, [in_(left=Var, right=[...]), Body])`` where LIST is a
+    ground Python list.  Returns ``None`` for any other ``forall`` (a generated
+    generator, a non-list right side, a bound loop variable), so those keep the
+    generic ladder.
+    """
+    from clausal.logic.variables import deref, is_var
+    from clausal.pythonic_ast.nodes import in_
+    from clausal.terms import Call, LoadName
+
+    if not isinstance(goal, Call):
+        return None
+    func = goal.func
+    if not (isinstance(func, LoadName) and str(func.name) == "forall"):
+        return None
+    args = list(goal.args or ())
+    if len(args) != 2 or goal.kwargs:
+        return None
+    cond, body = args
+    if not isinstance(cond, in_):
+        return None
+    loop_var = cond.left
+    if not is_var(loop_var):
+        return None
+    elements = deref(cond.right)
+    if not isinstance(elements, list):
+        return None
+    return loop_var, elements, body
+
+
+def _forall_var_name(reified_goal) -> str | None:
+    """Source name of the loop variable, from the reified ``forall`` twin."""
+    from clausal.pythonic_ast.nodes import in_
+    from clausal.reflection import Goal, Variable
+
+    if not isinstance(reified_goal, Goal) or str(reified_goal.name) != "forall":
+        return None
+    rargs = list(reified_goal.args or ())
+    if not rargs or not isinstance(rargs[0], in_):
+        return None
+    left = rargs[0].left
+    return str(left.name) if isinstance(left, Variable) else None
+
+
+def _report_forall(diag, goal, reified_goal, logic_module, deadline) -> bool:
+    """Name the LIST element(s) for which a ``forall`` body has no solution.
+
+    Candidate 1 of ``todo/forall-failure-names-no-failing-binding``: a
+    diagnostic-only re-run.  For each element of LIST (bounded the same way the
+    descent is — ``DIAG_MAX_DESCENT_LEAVES`` findings, ``$CLAUSAL_TEST_DIAG_BUDGET``
+    deadline), bind the loop variable to the element and test whether Body has a
+    solution; report the elements for which it does not, by name.  Does not
+    touch ``forall``'s semantics or the verdict.  Returns True once it has set a
+    report (so the caller stops), False to fall through to the generic ladder.
+    """
+    from clausal.logic.variables import Trail
+    from clausal.pythonic_ast.nodes import Unify
+
+    shape = _forall_shape(goal)
+    if shape is None:
+        return False
+    loop_var, elements, body = shape
+    if not elements:
+        return False
+    name = _forall_var_name(reified_goal) or "the loop variable"
+
+    total = len(elements)
+    failing: list[str] = []
+    truncated = False
+    for element in elements:
+        if time.monotonic() > deadline:
+            raise _DiagBudgetExceeded()
+        if len(failing) >= DIAG_MAX_DESCENT_LEAVES:
+            # A later element might also fail; we no longer need its identity,
+            # only to know the count is not exhaustive.  Stop probing (each
+            # probe re-solves Body) and note the bound.
+            truncated = True
+            break
+        trail = Trail()
+        try:
+            probe = _conjunction([Unify(left=loop_var, right=element), body])
+            has = _has_solution(probe, logic_module, trail)
+        except (_DiagBudgetExceeded, RecursionError, *_FATAL):
+            raise
+        except BaseException:  # noqa: BLE001 - a probe that errors is just no answer
+            has = False
+        finally:
+            _undo(trail)
+        if not has:
+            failing.append(f"{name} = {_render_value(element)}")
+
+    if not failing:
+        # The re-run found a solution for every element — the failure is not
+        # attributable to a single element (non-determinism, or a body that
+        # couples elements).  Fall through rather than invent a culprit.
+        return False
+
+    shown = len(failing)
+    if truncated:
+        diag.nearest_note = (
+            f"failed for at least {shown} of {total} elements "
+            f"(first {DIAG_MAX_DESCENT_LEAVES} shown):"
+        )
+        diag.notes.append(
+            f"more than {DIAG_MAX_DESCENT_LEAVES} of the {total} elements "
+            "failed; only the first are named"
+        )
+    else:
+        diag.nearest_note = f"failed for {shown} of {total} elements:"
+    diag.descent = failing
+    return True
+
+
 def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> None:
     """Show the solution the failing predicate DID have, if it had one.
 
@@ -750,6 +866,14 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
             "no solution (this conjunct is not a predicate call, so there is "
             "no nearest solution to show)"
         )
+        return
+
+    # ``forall(X in LIST, Body)`` reaches here as a Call to a "predicate"
+    # named ``forall`` that has no clauses: the generic slot/all-holes/descent
+    # ladder below can only report the bare rung-3 non-answer, because it does
+    # not know LIST's elements are the thing to blame.  Intercept and name the
+    # element(s) for which Body has no solution instead.
+    if _report_forall(diag, goal, reified_goal, logic_module, deadline):
         return
 
     args = list(goal.args or ())
