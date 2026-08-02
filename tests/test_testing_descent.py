@@ -577,3 +577,103 @@ def test_degenerate_rung2_falls_back_when_descent_finds_nothing(
     assert "it does have:" in out
     assert "pairq(_, _, _, _)" in out
     assert "no clause head unifies" not in out
+
+
+# ── forall(X in LIST, Body): name the failing element(s) ─────────────────────
+#
+# A ``forall(X in LIST, Body)`` reaches ``_report_nearest`` as an ordinary
+# ``Call(forall, ...)`` whose "predicate" has no clauses, so it used to fall
+# straight through to the bare rung-3 "no solution for ANY arguments" line and
+# never name WHICH element of LIST broke Body.  Candidate 1 (see
+# ``todo/done/forall-failure-names-no-failing-binding-2026-08-02.md``): on
+# failure, re-run Body per element (bounded) and report the elements for which
+# Body has no solution, by name.
+FORALL_ONE_SRC = """
+positivep(1),
+positivep(2),
+positivep(4),
+positivep(5),
+
+Test("all positive") <- (
+    forall(SUBJECT in [1, 2, 3, 4, 5], positivep(SUBJECT))
+),
+"""
+
+
+def test_forall_names_the_single_failing_element(capsys, tmp_path):
+    p = write(tmp_path, "fa_one.clausal", FORALL_ONE_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    # The headline states how many of how many failed, and by which name.
+    assert "failed for 1 of 5 elements" in out
+    assert "SUBJECT = 3" in out           # the one element with no solution
+    # The bare rung-3 non-answer must NOT be what the reader sees.
+    assert "no solution for ANY arguments" not in out
+
+
+FORALL_MANY_SRC = """
+positivem(2),
+positivem(4),
+
+Test("all positive, several fail") <- (
+    forall(SUBJECT in [1, 2, 3, 4, 5], positivem(SUBJECT))
+),
+"""
+
+
+def test_forall_names_every_failing_element_within_the_bound(capsys, tmp_path):
+    p = write(tmp_path, "fa_many.clausal", FORALL_MANY_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "failed for 3 of 5 elements" in out
+    assert "SUBJECT = 1" in out
+    assert "SUBJECT = 3" in out
+    assert "SUBJECT = 5" in out
+
+
+# The per-element re-run is bounded the same way descent is (reusing
+# $CLAUSAL_TEST_DIAG_BUDGET) — a long LIST reports only the first
+# DIAG_MAX_DESCENT_LEAVES failing elements and states the truncation, rather
+# than walking (and re-solving Body over) an unbounded list.
+FORALL_LONG_SRC = """
+noneofthem(_X) <- (1 > 2),
+
+Test("long list, all fail") <- (
+    forall(N in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], noneofthem(N))
+),
+"""
+
+
+def test_forall_bounds_the_number_of_named_elements(capsys, tmp_path):
+    from clausal.testing import DIAG_MAX_DESCENT_LEAVES
+
+    p = write(tmp_path, "fa_long.clausal", FORALL_LONG_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    # All ten elements fail, but only the first N are named...
+    assert out.count("N = ") == DIAG_MAX_DESCENT_LEAVES
+    assert (
+        f"failed for at least {DIAG_MAX_DESCENT_LEAVES} of 10 elements" in out
+    )
+    # ...and the truncation is stated rather than silently dropped.
+    assert (
+        f"more than {DIAG_MAX_DESCENT_LEAVES} of the 10 elements failed" in out
+    )
+
+
+# The failing element is named even when Body is an inline conjunction (the
+# measured incident's shape: ``forall(SUBJECT in LIST, (...))``); the headline
+# still identifies the culprit element rather than the whole list.
+FORALL_CONJ_SRC = """
+Test("all in range") <- (
+    forall(V in [0, 1, 7, 2], (V >= 0, V <= 3))
+),
+"""
+
+
+def test_forall_names_element_with_conjunction_body(capsys, tmp_path):
+    p = write(tmp_path, "fa_conj.clausal", FORALL_CONJ_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "failed for 1 of 4 elements" in out
+    assert "V = 7" in out
