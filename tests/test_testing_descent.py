@@ -816,3 +816,39 @@ def test_healthy_findall_is_not_blamed(capsys, tmp_path):
     assert "MAX == 90" in out
     assert "MAX = 20" in out
     assert "every candidate" not in out
+
+
+# ── composition: forall over a body that hides a collapsed findall ───────────
+#
+# When BOTH new diagnostics could speak — the outer goal is a
+# forall(X in LIST, ...) AND its body hides a findall that collapsed to [] —
+# the forall interception runs first and OWNS the report: the failure is
+# attributed per element ("failed for N of M elements:"), and the
+# findall-collapse sentinel does not interleave a second narrative into the
+# same failure block.  Outermost first: the element identity is the fact the
+# repair loop needs at this level, and a repair that binds the element and
+# re-runs will meet the collapse sentinel one level down.
+FORALL_COLLAPSED_FINDALL_SRC = """
+cand(9),
+big(X) <- (X > 10),
+
+Test("forall over collapsed findall") <- (
+    forall(K in [1, 2], (
+        findall(A, (cand(A), big(A)), XS),
+        XS == [K]
+    ))
+),
+"""
+
+
+def test_forall_over_collapsed_findall_composes_element_first(capsys, tmp_path):
+    p = write(tmp_path, "fa_findall.clausal", FORALL_COLLAPSED_FINDALL_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    # One coherent forall report: every element named...
+    assert "failed for 2 of 2 elements" in out
+    assert "K = 1" in out
+    assert "K = 2" in out
+    # ...and no second, interleaved findall-collapse narrative in the block.
+    assert "every candidate" not in out
+    assert "the value it compares was produced by" not in out
