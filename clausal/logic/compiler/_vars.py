@@ -32,7 +32,8 @@ def _var_python_name(var: Var) -> str:
     return f"_v{var._id}"
 
 
-def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
+def _collect_vars(term: Any, seen: set[int] | None = None,
+                  include_bound: bool = False) -> list[Var]:
     """Recursively collect all Var objects reachable from term, in order.
 
     Used to pre-scan body goals left-to-right so that body-only Vars are
@@ -40,10 +41,17 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
     Without this pre-pass, body-only Vars are walrus-assigned in the innermost
     (last) goal's argument list but referenced in earlier (outer) goal arguments,
     causing UnboundLocalError at runtime.
+
+    With ``include_bound=True``, a Var that is already BOUND is collected as
+    well (and its value walked for further vars).  The query compiler uses this
+    so a live bound Var can be referenced by name from the compiled code when
+    its value has no literal lowering (e.g. a ``datetime.date``) — see the
+    bound-Var fallback at the tail of ``term_to_ast_expr``.
     """
     if seen is None:
         seen = set()
 
+    raw = term
     term = deref(term)
 
     if is_var(term):
@@ -52,78 +60,87 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
             return [term]
         return []
 
+    pre: list[Var] = []
+    # NB ``isinstance``, not ``is_var`` — is_var() derefs, so it is False for
+    # exactly the bound Vars this branch exists to collect.
+    if include_bound and isinstance(raw, Var) and raw._id not in seen:
+        # *raw* was bound (deref moved past it): register the Var object
+        # itself, then continue into its value below.
+        seen.add(raw._id)
+        pre = [raw]
+
     term = literal_value(term)
     if term is None or isinstance(term, (bool, int, float, str, bytes, complex)):
-        return []
+        return pre
 
     if isinstance(term, Lambda):
         # Lambda body vars are in a separate scope — don't collect them.
-        return []
+        return pre
 
     if isinstance(term, StarUnpack):
-        return _collect_vars(term.value, seen)
+        return pre + _collect_vars(term.value, seen, include_bound)
 
     if isinstance(term, list):
-        result: list[Var] = []
+        result: list[Var] = pre
         for e in term:
-            result.extend(_collect_vars(e, seen))
+            result.extend(_collect_vars(e, seen, include_bound))
         return result
 
     if isinstance(term, dict):
-        result = []
+        result = pre
         for k, v in term.items():
-            result.extend(_collect_vars(k, seen))
-            result.extend(_collect_vars(v, seen))
+            result.extend(_collect_vars(k, seen, include_bound))
+            result.extend(_collect_vars(v, seen, include_bound))
         return result
 
     # DictTerm: recurse into values (keys are ground)
     if isinstance(term, DictTerm):
-        result = []
+        result = pre
         for v in term.values():
-            result.extend(_collect_vars(v, seen))
+            result.extend(_collect_vars(v, seen, include_bound))
         return result
 
     # SetTerm: elements must be ground, no vars to collect
     if isinstance(term, SetTerm):
-        return []
+        return pre
 
     # SetLiteral (AST node): elements may contain vars
     if isinstance(term, _SL):
-        result = []
+        result = pre
         for e in term.elements:
-            result.extend(_collect_vars(e, seen))
+            result.extend(_collect_vars(e, seen, include_bound))
         return result
 
     # KWTerm: recurse into field values
     if isinstance(term, KWTerm):
-        result = []
+        result = pre
         for v in term.values():
-            result.extend(_collect_vars(v, seen))
+            result.extend(_collect_vars(v, seen, include_bound))
         return result
 
     if isinstance(term, Compound):
-        result = _collect_vars(term.functor, seen)
+        result = pre + _collect_vars(term.functor, seen, include_bound)
         for a in term.args:
-            result.extend(_collect_vars(a, seen))
+            result.extend(_collect_vars(a, seen, include_bound))
         return result
 
     if is_term_instance(term):
-        result = []
+        result = pre
         for name in term_field_names(term):
-            result.extend(_collect_vars(getattr(term, name), seen))
+            result.extend(_collect_vars(getattr(term, name), seen, include_bound))
         return result
 
     # term is an operator/goal node — recurse into its fields
     try:
         fields = dataclasses.fields(term)
-        result = []
+        result = pre
         for f in fields:
             val = getattr(term, f.name)
             if val is not None:
-                result.extend(_collect_vars(val, seen))
+                result.extend(_collect_vars(val, seen, include_bound))
         return result
     except TypeError:
-        return []
+        return pre
 
 
 def _collect_var_ids(term: Any, ids: set[int]) -> None:

@@ -338,7 +338,11 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     from clausal.logic.compiler.globals_env import _collect_types_from_term
     from clausal.logic.compiler.terms_to_ast import atom_identity_lowering
 
-    vars_in_goal = _collect_vars(goal)
+    # include_bound: a Var already bound to a value with no literal lowering
+    # (e.g. a datetime.date from an earlier goal, common in the test harness's
+    # diagnostic re-runs) must be referenceable BY NAME from the compiled code
+    # — term_to_ast_expr falls back to that reference instead of raising.
+    vars_in_goal = _collect_vars(goal, include_bound=True)
 
     if cache_key is not None and cache_key in _query_cache:
         cached_fn, cached_code, cached_var_names = _query_cache[cache_key]

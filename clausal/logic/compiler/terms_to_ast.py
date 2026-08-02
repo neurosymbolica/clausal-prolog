@@ -245,6 +245,7 @@ def term_to_ast_expr(
 
     Supports: Var, Python scalars, list, Compound, functor dataclasses.
     """
+    raw = term
     term = deref(term)
 
     if is_var(term):
@@ -584,6 +585,17 @@ def term_to_ast_expr(
     # in term position.  Almost always the atom/predicate name clash.
     if isinstance(term, PredicateMeta):
         raise PredicateAsTermError(term)
+
+    # A live BOUND Var whose value has no literal lowering (e.g. a
+    # ``datetime.date`` produced by an earlier goal): reference the Var itself
+    # so runtime deref yields the value.  ``isinstance``, not ``is_var`` —
+    # is_var() derefs and is False for bound Vars.  Only possible when the Var
+    # was registered up front (the query compiler collects bound Vars with
+    # ``_collect_vars(goal, include_bound=True)``); an unregistered one keeps
+    # the honest NotImplementedError below rather than fabricating a fresh
+    # (unbound!) Var, which would silently change goal semantics.
+    if isinstance(raw, Var) and raw._id in var_context:
+        return _name(var_context[raw._id])
 
     raise NotImplementedError(
         f"term_to_ast_expr: unsupported term type {type(term).__name__}: {term!r}"
