@@ -407,3 +407,64 @@ class TestThrowInFindAll:
         ], kwargs=[])
         results = bindings(goal, result)
         assert results == ["fa_err"]
+
+
+# ── Raising well-formedness guards for library code ──────────────────────────
+#
+# A .clausal library predicate can RAISE on malformed input instead of failing
+# logically and collapsing silently inside a findall.  This is the pattern kit
+# authors reach for so a bad argument (wrong shape / unbound / wrong type)
+# lands on the loud RAISED diagnostic channel rather than turning a findall
+# into an indistinguishable empty result.  The mechanism is just throw/1 with a
+# structured error term; nothing new is needed.  These tests pin that the raise
+# actually propagates out of a findall to the test runner's RAISED path, which
+# nothing previously covered end-to-end at the .clausal surface.
+#
+# See docs/exceptions.md ("Raising well-formedness guards in library code") and
+# the fixture tests/fixtures/raising_guard_lib.clausal.
+
+
+class TestRaisingGuardThroughFindAll:
+    _GUARD_FIXTURE = os.path.join(_FIXTURE_DIR, "raising_guard_lib.clausal")
+
+    def _run(self, description):
+        from clausal.testing import load_clausal_module, run_test
+        mod = load_clausal_module(self._GUARD_FIXTURE)
+        return run_test(mod, description, path=self._GUARD_FIXTURE, diagnose=True)
+
+    def test_guard_raise_propagates_out_of_findall(self):
+        """A throw in a guard called inside findall reaches the RAISED path.
+
+        Not swallowed as a logical failure that collapses the findall to []:
+        the test runner records the exception on the result and the diagnostic
+        walks to the *raising* conjunct (the findall), rendering it on the
+        "raised" branch — the same loud channel as a Python-side exception.
+        """
+        result = self._run("guard raises through findall on malformed REF_YMD")
+        assert not result.passed
+        # The raise reached run_test's handler rather than being converted to a
+        # silent empty findall (which would make the test *fail* with no error).
+        assert isinstance(result.error, LogicException)
+        # The thrown term carries the message and the offending culprit term.
+        # A functor declared in ``-private`` throws as a term-class *instance*
+        # (fields, not positional Compound args) under the strict-atoms default.
+        from clausal.logic.predicate import term_field_names
+        term = result.error.term
+        assert type(term).__name__ == "wf_bad_shape"
+        fields = term_field_names(term)
+        vals = [getattr(term, n) for n in fields]
+        assert vals == ["window_days_used: REF_YMD must be [Y,M,D]", "2020-01-01"]
+        # The RAISED diagnostic path is taken (verb == "raised"), and it names
+        # the findall goal the throw escaped from.
+        diag = result.diagnostic
+        assert diag is not None and diag.raised is not None
+        report = "\n".join(diag.lines())
+        assert "raised:" in report
+        assert "findall(" in report
+        assert "wf_bad_shape" in report
+
+    def test_wellformed_input_does_not_raise(self):
+        """The control: well-formed input flows through findall with no raise."""
+        result = self._run("wellformed REF_YMD does not raise")
+        assert result.passed
+        assert result.error is None

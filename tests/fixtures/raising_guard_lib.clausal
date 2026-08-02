@@ -1,0 +1,46 @@
+# clausal: no-collect
+#
+# Library-author pattern: a well-formedness guard that RAISES (loud failure)
+# on malformed input instead of failing logically and collapsing silently
+# inside a findall.  See docs/exceptions.md ("Raising well-formedness guards
+# in library code") and todo/done/no-raising-assertion-primitive-for-library-
+# guards-2026-08-02.md.
+#
+# Carries `# clausal: no-collect` because the "raises" Test below is *meant*
+# to raise — it is driven from tests/test_exceptions.py, which asserts the
+# raise reaches the RAISED diagnostic path.  Auto-collection would report it
+# as a spurious failure.
+
+-private([is_ymd_triple(REF), wf_bad_shape(MSG, CULPRIT)])
+
+# A [Y,M,D] triple of integers is well formed; anything else is not.
+is_ymd_triple([Y, M, D]) <- (integer(Y), integer(M), integer(D))
+
+# The raising guard.  The first clause fires only for a MALFORMED argument
+# (a date object, an unbound var, the wrong shape) and throws a structured
+# error term carrying both a human-readable message and the offending term.
+# The functor `wf_bad_shape` is declared in -private above so it constructs a
+# term under the strict-atoms default rather than tripping the undeclared-atom
+# guard.
+window_days_used(REF_YMD, _DAYS) <- (
+    not is_ymd_triple(REF_YMD),
+    throw(wf_bad_shape("window_days_used: REF_YMD must be [Y,M,D]", REF_YMD))
+)
+# Well-formed input: return a real answer (a stand-in for the real count).
+window_days_used([_Y, _M, _D], 7),
+
+# A malformed REF_YMD (a string standing in for a date OBJECT — not a triple)
+# passed through a findall.  Without the guard this findall would collapse to
+# [] and MAX would silently default; with the guard the throw propagates out
+# of the findall and this Test lands on the RAISED path.
+Test("guard raises through findall on malformed REF_YMD") <- (
+    findall(D, window_days_used("2020-01-01", D), DAYS),
+    max_list(DAYS, MAX),
+    MAX == 90
+)
+
+# Control: a well-formed REF_YMD does not raise; the findall collects normally.
+Test("wellformed REF_YMD does not raise") <- (
+    findall(D, window_days_used([2020, 1, 1], D), DAYS),
+    DAYS == [7]
+),

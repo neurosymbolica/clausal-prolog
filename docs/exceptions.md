@@ -118,6 +118,81 @@ The context field is typically a string identifying where the error occurred.
 
 ---
 
+## Raising well-formedness guards in library code
+
+Shared library predicates (a harness's `kit/` modules, for example) often want to
+**raise** on malformed input — a non-ground term, the wrong shape, the wrong type —
+rather than *fail logically*. Logical failure inside a `findall` is indistinguishable
+from a legitimate empty result: the `findall` collapses to `[]`, a downstream
+aggregation (`max_list`, etc.) returns its default, and a wrong verdict propagates
+silently with nothing to locate. A raised exception, by contrast, travels out of the
+`findall` and lands on the loud, well-diagnosed **RAISED** channel — the same channel a
+Python-side exception reaches.
+
+No special primitive is needed: `throw/1` **already** does this, and an exception thrown
+inside a `findall` body propagates out of it rather than being swallowed as a logical
+failure. Write the guard as an ordinary Clausal clause that `throw`s when the input is
+malformed. Declare the error functor in `-private([...])` so it constructs a term under
+the [strict-atoms default](strict-atoms-migration.md) instead of tripping the
+undeclared-atom guard:
+
+```clausal
+-private([is_ymd_triple(REF), wf_bad_shape(MSG, CULPRIT)])
+
+is_ymd_triple([Y, M, D]) <- (integer(Y), integer(M), integer(D))
+
+window_days_used(REF_YMD, _DAYS) <- (
+    not is_ymd_triple(REF_YMD),
+    throw(wf_bad_shape("window_days_used: REF_YMD must be [Y,M,D]", REF_YMD))
+)
+window_days_used([_Y, _M, _D], 7),
+
+Test("malformed input raises, not a silent empty findall") <- (
+    catch(
+        findall(D, window_days_used("2020-01-01", D), _DAYS),
+        wf_bad_shape(_MSG, CULPRIT),
+        CULPRIT == "2020-01-01"
+    )
+)  # nv
+```
+
+The thrown term carries both a human-readable message and the offending term, so a test
+report (or an outer `catch/3`) names the bad argument, not just the predicate. Uncaught,
+it surfaces on the `raised:` line of the failure diagnostic, naming the `findall` the
+throw escaped from.
+
+To use the ISO `error(...)` taxonomy above instead of your own functor, import the
+constructor from `clausal.logic.exceptions` — the helper builds the nested `error(...)`
+term for you, so no functor declaration is needed:
+
+```clausal
+from clausal.logic.exceptions import type_error
+
+-private([is_ymd_triple(REF)])
+
+is_ymd_triple([Y, M, D]) <- (integer(Y), integer(M), integer(D))
+
+window_days_used(REF_YMD, _DAYS) <- (
+    not is_ymd_triple(REF_YMD),
+    throw(type_error("[Y,M,D]", REF_YMD))
+)
+window_days_used([_Y, _M, _D], 7),
+
+Test("iso type_error term raises from a guard") <- (
+    catch(
+        findall(D, window_days_used("2020-01-01", D), _DAYS),
+        error(type_error(_T, CULPRIT), _CTX),
+        CULPRIT == "2020-01-01"
+    )
+)  # nv
+```
+
+Regression coverage for the propagation-through-`findall` behaviour lives in
+`tests/test_exceptions.py::TestRaisingGuardThroughFindAll` (with the fixture
+`tests/fixtures/raising_guard_lib.clausal`).
+
+---
+
 ## LogicException
 
 `LogicException` is a Python exception class that wraps a thrown logic term:
