@@ -1378,9 +1378,11 @@ def _scan_body_for_findall_collapse(pre, body, goals_list, logic_module, path,
     * any OTHER predicate ``Call`` — the clause is satisfiable, so this conjunct
       succeeded — is recursed into (bounded by ``DIAG_MAX_DESCENT_DEPTH``): a
       wrapper predicate that merely forwards to a findall-bearing one is exactly
-      how the collapse hides a level deeper.  Because the parent clause is
-      satisfiable, any leaves the recursion returns can only be a nested collapse,
-      so they are surfaced as-is."""
+      how the collapse hides a level deeper.  The recursion's findings are
+      usually a nested collapse, but can also be an ordinary failing clause
+      route inside the (overall satisfiable) callee — e.g. a non-fallback
+      clause that SHOULD have produced the value; either is a truthful
+      "failing route" for the wrong value, so leaves are surfaced as-is."""
     from clausal.logic.variables import Trail
     from clausal.terms import Call, LoadName
 
