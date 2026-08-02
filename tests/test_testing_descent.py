@@ -677,3 +677,142 @@ def test_forall_names_element_with_conjunction_body(capsys, tmp_path):
     out = capsys.readouterr().out
     assert "failed for 1 of 4 elements" in out
     assert "V = 7" in out
+
+
+# ── wrong-value / findall-collapse descent ───────────────────────────────────
+#
+# The measured incident class (schengen_max_stay_r1): a goal SUCCEEDS with the
+# WRONG value because a `findall` inside it silently collapsed to [] — every
+# candidate's body failed on a wrong-type / unbound argument — and `max_list`
+# then returned 0.  The top-level report only saw the downstream `MAX == 90`
+# comparison fail; the failing conjunct is not a predicate call, so the pre-
+# existing rung-3 descent never fired and nothing named the findall's body.
+#
+# The fix: when the failing conjunct is not a Call (a comparison / unify) but
+# its variables were bound by an EARLIER successful predicate call, descend into
+# that producer, and inside the descent name a `findall` whose body never had a
+# solution — reusing the same _first_failing / leaf-line / leaf-binding
+# machinery the ordinary descent already uses.
+
+SCHENGEN_SHAPE_SRC = """
+-private([bad_atom])
+
+# window_days_used wants its first argument as a list [Y, M, D]; the caller
+# hands it a bare atom, so the head never matches and the body FAILS for every
+# candidate.  findall still SUCCEEDS, collapsing to [], and max_list_or_zero
+# returns 0.
+window_days_used([Y, M, D], DAYS) <- (
+    DAYS == Y
+),
+
+candidate(10),
+candidate(20),
+
+max_additional_days(MAX) <- (
+    findall(D, (candidate(_C), window_days_used(bad_atom, D)), DAYS),
+    max_list_or_zero(DAYS, MAX)
+),
+
+max_list_or_zero([], 0),
+max_list_or_zero([H, *T], M) <- (
+    max_list([H, *T], M)
+),
+
+Test("max additional days is 90") <- (
+    max_additional_days(MAX),
+    MAX == 90
+),
+"""
+
+
+def test_findall_collapse_behind_wrong_value_is_named(capsys, tmp_path):
+    p = write(tmp_path, "schengen.clausal", SCHENGEN_SHAPE_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    # The downstream comparison is still the failing conjunct...
+    assert "MAX == 90" in out
+    assert "MAX = 0" in out
+    # ...but now the report also blames the producer's collapsed findall and
+    # names the body goal that failed for every candidate, with its binding.
+    assert "findall" in out
+    assert "window_days_used(bad_atom, D)" in out
+
+
+# The producer's collapsed findall is reached by descending into the earlier
+# SUCCESSFUL call that bound the wrong value.  Here the producer is a WRAPPER
+# (`score`) that itself calls the findall-bearing predicate (`inner_score`), so
+# the descent must go one level deeper than the direct case above to reach the
+# findall — exercising the recursive `_descend` step, not just the top clause.
+NESTED_PRODUCER_SRC = """
+-private([bad_atom])
+
+window_days_used([Y, M, D], DAYS) <- (
+    DAYS == Y
+),
+
+candidate(10),
+
+inner_score(MAX) <- (
+    findall(D, (candidate(_C), window_days_used(bad_atom, D)), DAYS),
+    max_list_or_zero(DAYS, MAX)
+),
+
+score(MAX) <- (
+    inner_score(MAX)
+),
+
+max_list_or_zero([], 0),
+max_list_or_zero([H, *T], M) <- (
+    max_list([H, *T], M)
+),
+
+Test("score is 90") <- (
+    score(MAX),
+    MAX == 90
+),
+"""
+
+
+def test_findall_collapse_via_nested_producer(capsys, tmp_path):
+    p = write(tmp_path, "score.clausal", NESTED_PRODUCER_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "MAX == 90" in out
+    # Descent went through the wrapper `score` into `inner_score`'s findall.
+    assert "window_days_used(bad_atom, D)" in out
+
+
+# A findall whose body DOES solve for at least one candidate is not blamed:
+# the collapse sentinel is specific to a body that failed for EVERY candidate.
+HEALTHY_FINDALL_SRC = """
+candidate(10),
+candidate(20),
+
+widen(X, DAYS) <- (DAYS == X),
+
+good_max(MAX) <- (
+    findall(D, (candidate(C), widen(C, D)), DAYS),
+    max_list_or_zero(DAYS, MAX)
+),
+
+max_list_or_zero([], 0),
+max_list_or_zero([H, *T], M) <- (
+    max_list([H, *T], M)
+),
+
+Test("good max is 90") <- (
+    good_max(MAX),
+    MAX == 90
+),
+"""
+
+
+def test_healthy_findall_is_not_blamed(capsys, tmp_path):
+    p = write(tmp_path, "good.clausal", HEALTHY_FINDALL_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    # findall produced [10, 20]; max is 20, not 90.  The findall did its job —
+    # the sentinel must NOT fabricate a collapse finding.
+    assert "MAX == 90" in out
+    assert "MAX = 20" in out
+    assert "every candidate" not in out
