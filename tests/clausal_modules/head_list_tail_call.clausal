@@ -1,0 +1,27 @@
+# Fixture for: a bare LIST in a clause head, built from locally-declared atoms,
+# succeeds but never binds the caller's Var when the body ends in a dispatched
+# call (tail position). Continuation-TCO routed solutions past the frame before
+# the deferred _head_list_unify_output guard could run.
+# See todo/head-list-of-local-atoms-never-binds.md.
+-private([a, b])
+
+helper(P) <- (P == P)
+
+# THE BUG: tail-position SubCall + ground bare-list head
+tail2(P, [a, b]) <- (helper(P))
+
+tail1(P, [a]) <- (helper(P))
+
+# multi-goal body whose LAST goal is a dispatched call — same tail marking
+multi(P, [a, b]) <- (P == P, helper(P))
+
+# list with a body-bound var element + tail call — deferred output too
+bindv(X, [a, X]) <- (helper_bind(X))
+helper_bind(X) <- (X is 7)
+
+# CONTROL: inline last goal (no SubCall in tail position) — always worked
+inline(P, [a, b]) <- (P == P)
+
+# CONTROL: star-list head + tail call — _head_has_deferred_pattern already
+# caught StarUnpack, so TCO was skipped and binding worked
+star(P, [a, *T]) <- (helper(P), T is [b])

@@ -2,7 +2,7 @@
 # module, succeeds but never binds the caller's variable.
 #
 # Run: cd /workspace/clausal-bug-fix \
-#      && python -m clausal.testing todo/head_list_local_atoms_repro.clausal
+#      && python -m clausal.testing todo/done/head_list_local_atoms_repro.clausal
 #
 # Expected (the bug): the four "local atoms" list tests FAIL; every control passes.
 #

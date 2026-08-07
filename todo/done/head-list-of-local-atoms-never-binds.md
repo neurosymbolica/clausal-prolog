@@ -4,6 +4,39 @@
 clausify corpus (determination-slices refactor). The refactor did not fail — it **hung the
 domain**. Bisected to the case below and reproduced independently before filing.
 
+**RESOLVED 2026-08-08.** Root cause: continuation-TCO, not the head-match pattern path
+hypothesised below. A bare-list head arg compiles to the two-phase list-guard machinery
+(`_head_list_unify_input` before the body; deferred `_head_list_unify_output` wrapped around
+each solution yield — the deferral is what binds an unbound caller arg). Continuation-TCO
+(`clausal/logic/compiler/optimisations/continuation_tco.py`) marks the body's tail-position
+`SubCall` and passes the caller's own `_proceed` to the child's `StepGenerator`, so solutions
+bypass the clause frame — the deferred output guard never runs: the query SUCCEEDS through the
+child's continuation but the caller's var is never bound. The TCO gate
+(`_head_has_deferred_pattern`, `clausal/logic/compiler/goal_shallow.py`) was built for exactly
+this hazard but only recognised star-lists (`[H, *T]` / SegList); star-free bare lists defer
+output-mode unification all the same. Fix: any list head field now counts as deferred, so TCO
+is skipped for such clauses (one extra frame-hop; semantics unchanged).
+
+Why the narrowing table pointed at `get/3`: the true discriminator is whether the LAST body
+goal is a dispatched call (SubCall in tail position). `get(P,rr,True)` and the helper are
+tail SubCalls → TCO fired; `get(P,rr,V), V is True`, `P == P`, and the plain fact end in
+inline goals → the solution yield stayed in-frame and the guard ran. The local/imported
+asymmetry: imported atoms reach the head as unresolved `LoadName`s, so
+`_normalize_structural_head_args` hoists the whole list to `Var` + body `Unify` (which
+handles output mode); locally-declared atoms are already `PredicateMeta` objects, so the
+list stays in the head and takes the list-guard path. TRO is not affected — its own gate
+(`_head_has_unifying_list_pattern`, tro.py) already rejects constant-bearing list heads, and
+the all-var-list TRO shape was probed and binds correctly.
+
+Regression test: `tests/test_head_list_tail_call.py` (fixture
+`tests/clausal_modules/head_list_tail_call.clausal`); red-green verified (5 fail on pristine
+main, 9/9 with the fix). The repro below passes 10/10. Full suite: failure set identical to
+pristine main (198 environmental failures in the pyenv env on both sides, zero introduced).
+
+Of the fixes-in-order-of-value below: (1) is done; (2) is moot for this instance (the head
+now binds; no known compile shape yields a cannot-bind list guard); (3) — the `ground` check
+at `eval_requirements/4`'s entry — remains a clausify-side hardening item, still open there.
+
 Same family as `todo/done/numeric-head-literal-unification-bug.md` (RESOLVED 2026-06-23),
 `todo/done/head-list-compound-bodybound-var.md` and
 `todo/quantity-head-literal-compiles-to-a-pythunk-that-never-matches.md` — but distinct from
@@ -36,11 +69,11 @@ solve(m.q(DictTerm({m.rr: True}), B))   ->  1 solution, B = [a, b]
 
 ## Repro
 
-`todo/head_list_local_atoms_repro.clausal`
+`todo/done/head_list_local_atoms_repro.clausal`
 
 ```
 cd /workspace/clausal-bug-fix
-python -m clausal.testing todo/head_list_local_atoms_repro.clausal
+python -m clausal.testing todo/done/head_list_local_atoms_repro.clausal
   ->  10 tests: 6 passed, 4 failed [FAILED]
 ```
 

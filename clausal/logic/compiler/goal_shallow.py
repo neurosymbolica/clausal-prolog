@@ -230,18 +230,27 @@ def _compile_predicate_call_impl(
 
 
 def _head_has_deferred_pattern(head) -> bool:
-    """True when the clause head contains a star-list pattern that will
+    """True when the clause head contains a list pattern that will
     compile to deferred output-mode unification.
 
-    Head args that are :class:`~clausal.terms.SegList`\\s (or
-    :class:`~clausal.terms.Compound`\\s nesting a SegList) trigger
+    Head args that are list patterns — bare lists (star-free or
+    ``[H, *T]``-style) and :class:`~clausal.terms.SegList`\\s — compile
+    to the two-phase list-guard machinery: ``_head_list_unify_input``
+    returns ``None`` for an unbound caller arg (output mode) and
     :func:`clausal.logic.compiler.head_match._wrap_yields_with_output_guards`
-    to wrap every leaf yield with a per-solution
+    wraps every leaf yield with a per-solution
     ``_head_list_unify_output(...)`` check.  That check is essential —
     it's what binds the caller's output-position vars — and it must run
     on our side of each solution.  Continuation-TCO routes solutions
     past us, so it's unsafe in these clauses.  See
     ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
+
+    Star-free ground lists defer exactly like star-lists (the caller arg
+    may still be an unbound Var at match time), so ANY list head field
+    counts.  Missing that case let TCO skip the deferred output guard:
+    the query succeeded through the callee's ``_proceed`` but handed the
+    caller back an unbound Var.  See
+    ``todo/head-list-of-local-atoms-never-binds.md``.
     """
     if head is None:
         return False
@@ -251,13 +260,14 @@ def _head_has_deferred_pattern(head) -> bool:
         from clausal.logic.predicate import term_field_names, is_term_instance
     except ImportError:  # pragma: no cover — defensive
         return False
-    # Walk the head's fields.  Detect SegList or a plain list containing
-    # a StarUnpack — both forms represent ``[H, *T]``-style patterns that
-    # get deferred output-mode unification.
+    # Walk the head's fields.  Any list (or SegList / StarUnpack) is a
+    # list pattern that gets deferred output-mode unification.
     def _walk(val) -> bool:
         if isinstance(val, SegList) or isinstance(val, StarUnpack):
             return True
-        if isinstance(val, (list, tuple)):
+        if isinstance(val, list):
+            return True
+        if isinstance(val, tuple):
             return any(_walk(x) for x in val)
         if isinstance(val, Compound):
             return any(_walk(x) for x in val.args)
