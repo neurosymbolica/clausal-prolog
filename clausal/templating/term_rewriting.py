@@ -140,6 +140,32 @@ _ARROW_BODY_ERROR = (
     "write  head <- (body)  or  head <- goal(X)"
 )
 
+def _arrow_body_error(node=None, source_lines=None, filename=None):
+    """`_ARROW_BODY_ERROR` as a LOCATED SyntaxError.
+
+    Raised bare, this error names the rule but not the clause. That is affordable for a
+    human reading a short file and expensive for anything else: a 20-clause module whose
+    legal nested `<-` forms look exactly like what the message warns about gives the
+    reader nothing to bisect on. Measured 2026-08-08 (clausify study 25, eumr_turnover):
+    four authoring attempts spent guessing the line, then the run was abandoned.
+
+    Every raise site holds an AST node, so the coordinates are already in hand. Setting
+    them also fixes the message for free — `str(SyntaxError)` renders as
+    `msg (file, line N)` once filename/lineno are set — so consumers that only print the
+    exception gain the location without changing. Located parser errors are already the
+    norm here; this raise was the outlier.
+    """
+    lineno = getattr(node, "lineno", None)
+    col = getattr(node, "col_offset", None)
+    text = None
+    if source_lines and lineno and 1 <= lineno <= len(source_lines):
+        text = source_lines[lineno - 1]
+    if lineno is None:
+        return SyntaxError(_ARROW_BODY_ERROR)
+    return SyntaxError(_ARROW_BODY_ERROR,
+                       (filename, lineno, (col + 1) if col is not None else None, text))
+
+
 _MULTI_GOAL_STMT_ERROR = (
     "multiple comma-separated goals at statement level need a rule head and "
     "parentheses: write  head <- (goal1, goal2)  for a rule, or  pred(args),  "
@@ -269,7 +295,7 @@ def _detect_arrow(left, operators, comparators, source_lines=None):
     # If len(operators) > 1 the body contains comparison operators that
     # Python absorbed into a chained comparison.  Both cases are rejected.
     if depth > 0 or len(operators) > 1:
-        raise SyntaxError(_ARROW_BODY_ERROR)
+        raise _arrow_body_error(usub_node, source_lines)
 
     return left, usub_node.operand
 
@@ -315,7 +341,7 @@ def _check_hidden_arrow(node, source_lines=None):
     first_comp = inner.comparators[0]
     usub_node, _ = _leftmost_usub(first_comp)
     if usub_node is not None and _is_arrow_adjacent(inner.left, usub_node, source_lines):
-        raise SyntaxError(_ARROW_BODY_ERROR)
+        raise _arrow_body_error(usub_node, source_lines)
 
 
 # ─── Logic variable name helper ───────────────────────────────────────────────
@@ -3420,7 +3446,9 @@ class EmbedTransformer(NodeTransformer):
                     ) is not None:
                         # ``head <- g1, g2`` — the comma split an unparenthesised
                         # multi-goal body into tuple elements.
-                        raise SyntaxError(_ARROW_BODY_ERROR)
+                        raise _arrow_body_error(
+                            head, transformer._source_lines,
+                            transformer._filename)
                 elif len(value.elts) > 1 and isinstance(value.elts[0], Call):
                     # ``g1, g2`` with no ``<-`` arrow and no head — a bare,
                     # comma-separated sequence of predicate-call-shaped goals at
