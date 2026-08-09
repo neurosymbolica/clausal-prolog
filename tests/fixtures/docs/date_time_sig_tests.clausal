@@ -102,7 +102,7 @@ Test("days between") <- (
     N == 7
 )  # nnv
 
-# Schengen-style "parse ISO → date → diff" with no ++ Python escapes.
+# Rolling-window-style "parse ISO → date → diff" with no ++ Python escapes.
 Test("parse iso to date diff no escapes") <- (
     datetime_string(DT_A, "2026-03-23", "%Y-%m-%d"),
     datetime_string(DT_B, "2026-03-16", "%Y-%m-%d"),
