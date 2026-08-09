@@ -5,9 +5,9 @@ whatever its name, and for ``true`` / ``false`` / ``null`` not one of the five
 remedies is the right answer — the right answer is ``True`` / ``False`` /
 ``Unknown``.  See
 ``todo/lowercase-true-false-null-should-name-the-True-False-Unknown-literals.md``:
-in study 11, those three names are 63 of the 241 undeclared-atom mentions (26%),
-a quarter of the incidents being a model writing the Python/JSON spelling of a
-value the language already has.
+in a measured authoring study, those three names were roughly a quarter of the
+undeclared-atom mentions — a model writing the Python/JSON spelling of a value
+the language already has.
 
 The hint names ``Unknown`` even when the misspelling is ``true`` or ``false``,
 because titlecase is the part a reader is least likely to guess — every other

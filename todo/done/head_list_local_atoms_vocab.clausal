@@ -1,0 +1,5 @@
+# Sibling vocabulary module for head_list_local_atoms_repro.clausal's CONTROL 1
+# ("list of IMPORTED atoms") — just declares the two atoms so they can be
+# imported instead of locally declared.
+
+-module(head_list_local_atoms_vocab, [met, unmet])

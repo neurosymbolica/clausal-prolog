@@ -1,6 +1,5 @@
-# "Phenomenon A" as the corpus actually uses it (au/firb/computation.clausal,
-# us/sara_irc_tax/computation.clausal): import a 0-arity vocabulary atom, then
-# define a same-named PREDICATE.  The first clause's guarded class block
+# "Phenomenon A": import a 0-arity vocabulary atom, then define a same-named
+# PREDICATE.  The first clause's guarded class block
 # re-mints impord_qd over the import, and every later clause must bind against
 # that re-minted class.
 -private([a, b])

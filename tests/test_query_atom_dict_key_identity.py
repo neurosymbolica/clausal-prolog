@@ -139,7 +139,7 @@ def test_reported_repro_eligible_yields_one_solution(mods):
 
 
 def test_python_built_dictterm_atom_key_survives(mods):
-    """The clausify-harness shape: build the DictTerm in Python from the
+    """The downstream-harness shape: build the DictTerm in Python from the
     owning module's atom, then query a predicate in another module."""
     atoms, reader = mods
     profile = DictTerm({atoms.query_date: 5})

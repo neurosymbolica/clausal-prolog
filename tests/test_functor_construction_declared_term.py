@@ -13,17 +13,16 @@ reported ``T2 = cite(_)`` against a goal ``T2 is cite(_)`` — so the mismatch w
 invisible at the surface.  See
 ``todo/done/functor-3-names-an-atom-as-a-class-but-a-compound-as-a-string.md``.
 
-The kit had already hit this and documented a workaround rather than a fix
-(``/workspace/clausify/kit/planner_lib.clausal``, "ATTR-LIST BRANCH — VERIFIED
-SEMANTICS"): its note that a constructed entry "does NOT unify with a declared
-term-class instance of the same name/arity" is this defect, measured from the
-outside.
+A downstream helper library had already hit this and documented a workaround
+rather than a fix ("ATTR-LIST BRANCH — VERIFIED SEMANTICS"): its note that a
+constructed entry "does NOT unify with a declared term-class instance of the
+same name/arity" is this defect, measured from the outside.
 
 Only the **class** arm changes.  A ``str`` name still builds a ``Compound``,
 with no attempt to resolve the string back to a class: which module's ``cite``
 a bare string names is genuinely ambiguous under module-local atom identity,
-and the kit's ``key_string/2`` depends on the string arm behaving exactly as it
-does today.
+and that library's ``key_string/2`` depends on the string arm behaving exactly
+as it does today.
 """
 
 import pytest
@@ -79,8 +78,9 @@ def test_constructed_term_unifies_with_the_real_thing(cite):
 
 def test_string_name_still_builds_a_compound(cite):
     """The string arm is deliberately untouched.  Resolving ``"tfcdt_cite"``
-    back to a class would have to pick a module, and the kit's ``key_string/2``
-    relies on this arm building a Compound it can decompose to a string."""
+    back to a class would have to pick a module, and a downstream helper
+    library's ``key_string/2`` relies on this arm building a Compound it can
+    decompose to a string."""
     built = built_by(_functor__3, "tfcdt_cite", 1)
     assert isinstance(built, Compound)
     assert not isinstance(built, cite)
@@ -100,9 +100,10 @@ def test_arity_mismatch_falls_through_to_compound(cite):
 
 
 def test_arity_zero_atom_asked_at_arity_one_is_unchanged():
-    """The kit's own pattern: ``functor(PROBE, KEY, 1)`` over an arity-0 schema
-    atom must keep building a Compound, because ``key_string/2`` then decomposes
-    it to get the name string.  Pinned so this fix cannot break the kit."""
+    """A downstream helper library's own pattern: ``functor(PROBE, KEY, 1)``
+    over an arity-0 schema atom must keep building a Compound, because
+    ``key_string/2`` then decomposes it to get the name string.  Pinned so
+    this fix cannot break that library."""
     schema_atom = make_predicate("tfcdt_applicant_age", [])
     assert isinstance(built_by(_functor__3, schema_atom, 1), Compound)
 

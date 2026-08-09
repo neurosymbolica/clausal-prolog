@@ -1,8 +1,8 @@
 # Repro for: a bare LIST in a clause head, built from atoms declared in the SAME
 # module, succeeds but never binds the caller's variable.
 #
-# Run: cd /workspace/clausal-bug-fix \
-#      && python -m clausal.testing todo/done/head_list_local_atoms_repro.clausal
+# Run: python -m clausal.testing todo/done/head_list_local_atoms_repro.clausal
+#      (from the repo root)
 #
 # Expected (the bug): the four "local atoms" list tests FAIL; every control passes.
 #
@@ -12,7 +12,7 @@
 # `is` would BIND the unbound variable and mask the defect.
 
 -module(head_list_local_atoms_repro, [a, b, rr, kk, f, unk(A0)])
--import_from(formalize_lib, [met, unmet])
+-import_from(todo.done.head_list_local_atoms_vocab, [met, unmet])
 
 # --- THE BUG: top-level head list of LOCALLY-DECLARED atoms, proved via get/3 ---
 local2(P, [a, b]) <- (get(P, rr, True))

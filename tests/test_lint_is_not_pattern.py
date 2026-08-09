@@ -3,7 +3,7 @@
 `is not` is dif/2 (disequality). Against a partial term (a compound/list with a
 fresh variable or `_`) it compares with a fresh variable and so ALWAYS succeeds
 — silently turning a guard into an always-true goal. This is a high-cost footgun
-(it caused a 3^N solution blow-up in the clausify kit). Warn at load time; stay
+(it caused a 3^N solution blow-up in a downstream helper library). Warn at load time; stay
 silent for the correct ground/scalar uses. See todo/lint-is-not-wildcard-pattern.md.
 """
 

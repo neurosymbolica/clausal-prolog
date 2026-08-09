@@ -744,24 +744,26 @@ def test_render_exclusions_are_not_stale():
     )
 
 
-CORPUS_DIR = "/workspace/clausify-domains"
+CORPUS_DIR = os.environ.get("CLAUSAL_CORPUS_DIR", "")
 
 
 def _corpus_files():
-    if not os.path.isdir(CORPUS_DIR):
+    if not CORPUS_DIR or not os.path.isdir(CORPUS_DIR):
         return []
     return sorted(glob.glob(os.path.join(CORPUS_DIR, "**", "*.clausal"), recursive=True))
 
 
-@pytest.mark.skipif(not _corpus_files(), reason=f"corpus {CORPUS_DIR} absent")
+@pytest.mark.skipif(not _corpus_files(), reason="CLAUSAL_CORPUS_DIR not set or absent")
 @pytest.mark.parametrize("path", _corpus_files())
 def test_corpus_clause_round_trips(path):
-    """Every Clause in every corpus file renders and re-reifies identically.
+    """Every Clause in every file of an external corpus, if one is configured
+    (via ``CLAUSAL_CORPUS_DIR``), renders and re-reifies identically.
 
     Only Clause items are exercised: every file opens with -module/-import_from
     which reify to ModuleDirective/PythonCode — node kinds the renderer
     deliberately raises on. A RenderError on a real clause is a hard failure
-    (a silently-corrupt mutant would falsely 'survive' in the auditor)."""
+    (a silently-corrupt mutant would falsely 'survive' in a source-rewriting
+    tool)."""
     try:
         items = reify_source(open(path, encoding="utf-8").read(), filename=path)
     except ReifyError as exc:

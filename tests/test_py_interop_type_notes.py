@@ -1,11 +1,11 @@
 """Type-mismatch notes for py-interop predicates in the failure diagnostic.
 
 A py-interop builtin that bails on an ``isinstance`` guard is a bare "no" —
-indistinguishable from a goal that genuinely has no solution.  Study 13's
-``study_schengen_max_stay_r1`` stalled for 7 attempts on ``date_add/3`` called
-with an int where a timedelta is required.  During the diagnostic re-run the
-guard now records what it rejected, and the note lands in the failure report.
-See ``todo/C1-ill-typed-interop-calls-are-silent-failures.md``.
+indistinguishable from a goal that genuinely has no solution.  A measured
+authoring study stalled for 7 attempts on ``date_add/3`` called with an int
+where a timedelta is required.  During the diagnostic re-run the guard now
+records what it rejected, and the note lands in the failure report.
+See ``todo/done/C1-ill-typed-interop-calls-are-silent-failures.md``.
 
 Normal (non-diagnostic) runs are unchanged: the goal still just fails.
 """

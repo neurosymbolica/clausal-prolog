@@ -3,9 +3,9 @@
 A clause head containing ``BitOr`` over list literals is almost certainly
 Prolog cons syntax (``[H|T]``) written by someone who does not know this DSL
 spells it ``[H, *T]``.  The head compiles to a BitOr *term* that never unifies
-with a real list, so every clause silently never matches — study 13's
-``study_working_time_average_r1`` died on exactly this.  Warn at load time.
-See ``todo/C1-ill-typed-interop-calls-are-silent-failures.md``.
+with a real list, so every clause silently never matches — a measured
+authoring study died on exactly this.  Warn at load time.
+See ``todo/done/C1-ill-typed-interop-calls-are-silent-failures.md``.
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ def test_warns_on_bracketed_cons_in_rule_head(tmp_path):
 
 
 def test_warns_on_list_literal_bitor_operand(tmp_path):
-    # Study 13's exact shape: head([W, S] | REST, ...) — a list literal as a
-    # BitOr operand, outside any brackets.
+    # The measured authoring study's exact shape: head([W, S] | REST, ...) —
+    # a list literal as a BitOr operand, outside any brackets.
     ws = _lint_warnings(
         tmp_path, "cons_study",
         "totals([W, S] | REST, N) <- (totals(REST, M), N == M + W)\n")

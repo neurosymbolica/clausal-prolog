@@ -66,7 +66,7 @@ class TestFunctorReExport:
     identity), rather than shadowing the import with a fresh empty class."""
 
     def test_intermediate_shares_identity_with_kit(self):
-        kit = _load_fixture("functor_reexport_kit")
+        kit = _load_fixture("functor_reexport_vocab")
         queries = _load_fixture("functor_reexport_queries")
 
         assert isinstance(kit.flip, PredicateMeta)
@@ -76,7 +76,7 @@ class TestFunctorReExport:
         assert len(queries.flip._clauses) == 2
 
     def test_downstream_import_resolves_to_kit_class(self):
-        kit = _load_fixture("functor_reexport_kit")
+        kit = _load_fixture("functor_reexport_vocab")
         _queries = _load_fixture("functor_reexport_queries")
         downstream = _load_fixture("functor_reexport_downstream")
 
@@ -85,7 +85,7 @@ class TestFunctorReExport:
         assert downstream.flip is kit.flip
 
     def test_downstream_query_sees_kit_facts(self):
-        _kit = _load_fixture("functor_reexport_kit")
+        _kit = _load_fixture("functor_reexport_vocab")
         _queries = _load_fixture("functor_reexport_queries")
         downstream = _load_fixture("functor_reexport_downstream")
 
@@ -94,7 +94,7 @@ class TestFunctorReExport:
         assert _solutions(downstream.check, 2) == [("a", "x"), ("b", "y")]
 
     def test_intermediate_clause_uses_reexported_functor(self):
-        _kit = _load_fixture("functor_reexport_kit")
+        _kit = _load_fixture("functor_reexport_vocab")
         queries = _load_fixture("functor_reexport_queries")
 
         # A clause in the intermediate module that uses the imported functor

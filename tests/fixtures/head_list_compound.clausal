@@ -15,7 +15,8 @@ ev_plain([item2(S)]) <- (prov("x", S))
 Test("list head compound, plain body-bound inner var ground") <- (
     ev_plain([item2(S)]), ground(S), S == "met")
 
-# list-nested multi-arg compound, one var body-bound (assess/6 shape).
+# list-nested multi-arg compound, one var body-bound (multi-arg compound in a
+# list-nested head).
 mkpair([pair(A, B)]) <- (A is "k", call_goal(((K, V) <- prov(K, V)), "x", B))
 Test("list multi-arg compound, body-bound inner var ground") <- (
     mkpair([pair(A, B)]), ground(B), B == "met")

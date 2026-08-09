@@ -1,7 +1,7 @@
 """Stage-4 descent diagnostics + rung-2 examples for ``python -m clausal.testing``.
 
 Rung 3 ("no solution for ANY arguments") used to carry no value — measured
-0/29 recovery in study 13.  See
+0/29 recovery in a measured authoring study.  See
 ``docs/superpowers/specs/2026-07-30-assertion-diagnostic-descent-design.md``.
 """
 
@@ -376,10 +376,11 @@ def test_capped_head_listing_softens_headline_and_notes_cap(capsys, tmp_path):
 
 # A rung-1 near-miss that leaves the freed argument NON-GROUND (unbound holes
 # in it) carries no value: it shows a clause-head pattern, not a counter-value.
-# Study 13's `wt_qualifying_totals` shape — a `[H|T]`-as-BitOr head plus a
+# A measured authoring study's shape — a `[H|T]`-as-BitOr head plus a
 # base-case fact — was intercepted at rung 1 with exactly such a near-miss
 # (`BitOr(None, [2880, _], [])`), and the head listing that names the real bug
-# never fired.  See `todo/D-rung2-unbound-arg-solutions-weaken-diagnosis.md`.
+# never fired.  See
+# `todo/done/D-rung2-unbound-arg-solutions-weaken-diagnosis.md`.
 CONS_PINNED_SRC = """
 -private([work])
 
@@ -681,10 +682,10 @@ def test_forall_names_element_with_conjunction_body(capsys, tmp_path):
 
 # ── wrong-value / findall-collapse descent ───────────────────────────────────
 #
-# The measured incident class (schengen_max_stay_r1): a goal SUCCEEDS with the
-# WRONG value because a `findall` inside it silently collapsed to [] — every
-# candidate's body failed on a wrong-type / unbound argument — and `max_list`
-# then returned 0.  The top-level report only saw the downstream `MAX == 90`
+# The measured incident class: a goal SUCCEEDS with the WRONG value because a
+# `findall` inside it silently collapsed to [] — every candidate's body failed
+# on a wrong-type / unbound argument — and `max_list` then returned 0.  The
+# top-level report only saw the downstream `MAX == 90`
 # comparison fail; the failing conjunct is not a predicate call, so the pre-
 # existing rung-3 descent never fired and nothing named the findall's body.
 #
@@ -694,7 +695,7 @@ def test_forall_names_element_with_conjunction_body(capsys, tmp_path):
 # solution — reusing the same _first_failing / leaf-line / leaf-binding
 # machinery the ordinary descent already uses.
 
-SCHENGEN_SHAPE_SRC = """
+WINDOW_SHAPE_SRC = """
 -private([bad_atom])
 
 # window_days_used wants its first argument as a list [Y, M, D]; the caller
@@ -726,7 +727,7 @@ Test("max additional days is 90") <- (
 
 
 def test_findall_collapse_behind_wrong_value_is_named(capsys, tmp_path):
-    p = write(tmp_path, "schengen.clausal", SCHENGEN_SHAPE_SRC)
+    p = write(tmp_path, "window_rule.clausal", WINDOW_SHAPE_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # The downstream comparison is still the failing conjunct...
@@ -856,13 +857,13 @@ def test_forall_over_collapsed_findall_composes_element_first(capsys, tmp_path):
 
 # ── the measured `[0]` shape: a ONE-trivial-solution collapse ────────────────
 #
-# The schengen incident's findall did NOT collapse to []: the LENGTH=0 probe
+# The measured incident's findall did NOT collapse to []: the LENGTH=0 probe
 # succeeds trivially, so the bag is `[0]`, `max_list([0]) = 0`, and the verdict
 # flips.  A collapse gate of "body has no solution" lets that escape — the body
 # HAS a solution, just only the trivial one.  The fix re-walks the body with a
 # `template is not 0` disequality injected after the candidate generator, and
 # names the first NON-trivial failure; when that failing conjunct consumes a
-# second findall's empty bag (the schengen nesting: `length(DS, L)` with
+# second findall's empty bag (the same nesting pattern: `length(DS, L)` with
 # `DS = []`), the inner collapse is named beneath it as well.
 TRIVIAL_COLLAPSE_SRC = """
 hit(99),

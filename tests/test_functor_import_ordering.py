@@ -19,8 +19,8 @@ The narrowing matters: heads are emitted positionally only where the file does
 NOT emit a guarded class block at the head itself.  Where it does (the first
 clause of a functor), the block re-mints the class to exactly the derived
 fields, so keyword emission is precise and is left alone — that is the shape
-``au/firb/computation.clausal`` relies on (import a 0-arity vocabulary atom,
-then define a same-named predicate).
+``tests/fixtures/impord_atom_then_pred.clausal`` pins (import a 0-arity
+vocabulary atom, then define a same-named predicate).
 """
 
 from __future__ import annotations
@@ -113,8 +113,9 @@ class TestHeadEmission:
         assert "a=" in out and "b=" in out
 
     def test_second_clause_after_a_local_mint_is_positional(self):
-        """au/firb shape: the first clause re-mints over the imported atom and
-        the second binds positionally against that re-minted class."""
+        """import-then-declare shape: the first clause re-mints over the
+        imported atom and the second binds positionally against that
+        re-minted class."""
         out = _unparse(
             "-module(m, [])\n"
             "-import_from(other, [f])\n"
@@ -180,7 +181,8 @@ class TestDeclareThenImport:
 
 
 class TestImportThenDeclare:
-    """The other textual ordering (``us/irc_s121/eligibility.clausal``)."""
+    """The other textual ordering: import binds first, then the -module
+    entry re-exports it with shared class identity."""
 
     def test_identity_and_solutions_are_preserved(self):
         vocab = _load_fixture("impord_vocab")
@@ -190,9 +192,9 @@ class TestImportThenDeclare:
 
 
 class TestZeroArityAtomThenPredicate:
-    """``au/firb/computation.clausal`` / ``us/sara_irc_tax/computation.clausal``
-    import a 0-arity vocabulary atom and then define a same-named predicate,
-    relying on the clause-head class block re-minting over the import."""
+    """The shape ``tests/fixtures/impord_atom_then_pred.clausal`` pins: import
+    a 0-arity vocabulary atom and then define a same-named predicate, relying
+    on the clause-head class block re-minting over the import."""
 
     def test_the_predicate_still_re_mints_over_the_imported_atom(self):
         vocab = _load_fixture("impord_atomvocab")

@@ -6,7 +6,7 @@ one-argument SyntaxError from all three of its sites in
 and `text` set to None. Every one of those sites is holding an AST node with
 `.lineno` when it raises.
 
-Measured cost (clausify study 25, 2026-08-08): an LLM producer authoring a
+Measured cost (a measured authoring study, 2026-08-08): an LLM producer authoring a
 20-clause module — six of whose clauses contain LEGAL nested `<-` forms that look
 exactly like what the error warns about — burned four attempts guessing which clause
 was meant and the run was abandoned. It never had the rule wrong; it could not find
@@ -69,7 +69,7 @@ def test_unparenthesised_operator_body_reports_its_line(tmp_path):
 
 
 def test_the_location_reaches_str_so_existing_printers_gain_it(tmp_path):
-    """What the clausify gate actually surfaces is `str(e)`. No consumer change needed."""
+    """What the downstream loader actually surfaces is `str(e)`. No consumer change needed."""
     src = _PRELUDE.format(mod="abl_c") + "bad_clause(X) <- thing(X), other(X),\n"
     with pytest.raises(SyntaxError) as ei:
         _load(tmp_path, src, "abl_c")

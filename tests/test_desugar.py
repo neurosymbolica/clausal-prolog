@@ -1,8 +1,9 @@
 """Tests for the shared surface-desugar seam (clausal/templating/desugar.py).
 
-This pass is a CONTRACT, not an internal detail: the SMT prover in the
-``clausify`` repo runs the very same function on its own ``ast.parse`` so a
-surface sugar is expanded once rather than once per front end.  The tests
+This pass is a CONTRACT, not an internal detail: an independent SMT-based
+checker maintained by a downstream consumer runs the very same function on
+its own ``ast.parse`` so a surface sugar is expanded once rather than once
+per front end.  The tests
 below pin the three things a second consumer depends on:
 
 * the rewrite itself (``P.key`` → ``P[key]``, chains, variable keys),

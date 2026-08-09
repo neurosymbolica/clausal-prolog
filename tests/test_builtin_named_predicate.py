@@ -13,8 +13,6 @@ earlier clauses) count as existing.  The documented rule that an in-module
 non-``PredicateMeta`` binding is left alone (fail loudly rather than clobber
 user code) is unchanged — see the guard's docstring in
 ``clausal/templating/term_rewriting.py``.
-
-Filed: clausify-executor-train/todo/clausal-comparison-residual-and-name-shadowing.md
 """
 
 import os

@@ -517,11 +517,11 @@ class _CountingClause:
 
 
 def _stale_predicate(name, n_clauses):
-    """A predicate shaped the way the corpus's are: ``_arity`` 0, heads at /2.
+    """A predicate shaped the way a downstream rulebase's are: ``_arity`` 0,
+    heads at /2.
 
-    ``au/firb/computation.clausal`` and ``us/sara_irc_tax/computation.clausal``
-    get here by importing a 0-arity vocabulary atom and then defining a
-    same-named predicate;
+    Real code gets here by importing a 0-arity vocabulary atom and then
+    defining a same-named predicate;
     ``TestTermConstructionUnaffected.test_atom_vocabulary_then_predicate`` pins
     that ``tests/fixtures/impord_atom_then_pred.clausal`` really is that shape.
     Built by hand here so the clause count can be a fact table's, and so no
