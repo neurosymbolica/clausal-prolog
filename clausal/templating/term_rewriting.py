@@ -2979,6 +2979,62 @@ class EmbedTransformer(NodeTransformer):
             return ""
         return lines[lineno - 1].strip()
 
+    def _arity_conflict_remedy(transformer, functor_name, all_field_names,
+                               prev_fields, decl_kind, decl_lineno):
+        """The copyable template-form edit for an arity conflict.
+
+        A Clausal declaration prefers the TEMPLATE form
+        ``predicate_name(ARGUMENT_1, ..., ARGUMENT_N)`` over Prolog's ``name/N``
+        notation, which leaves the argument positions to be guessed — so a
+        message that says only "give them the same number of arguments" states
+        the fault without showing the edit.  The offending head is in hand at
+        the raise site (it is already printed on the ``clause:`` line), so
+        print the declaration to paste.
+
+        Argument-name synthesis is deliberately dumb: the head's own variable
+        names uppercased, ``ARG_N`` for the positions that have none (a literal
+        argument, an ``_``).  The value is the template form itself, not clever
+        naming.  A field name that already reads as a logic variable is left
+        exactly as it is — uppercasing ``_edcg_cnt_in_`` would produce a name
+        the compiler does not mint.
+
+        The *where* half is tailored to the recorded ``decl_kind`` so the
+        remedy never sends a reader to edit a ``-private`` list their file does
+        not have, and never calls an earlier clause a declaration.  Directive
+        kinds whose own syntax is not the template form (``-dynamic``,
+        ``-edcg_pred``) take the neutral wording rather than a made-up
+        rewrite of the directive.
+        """
+        def _template(fields):
+            names = [n if _is_logic_var_name(n) else n.upper() for n in fields]
+            return f"{functor_name}({', '.join(names)})"
+
+        template = _template(all_field_names)
+        surplus = len(all_field_names) - len(prev_fields)
+        args = "argument" if surplus == 1 else "arguments"
+        if prev_fields:
+            drop = (f"drop the surplus {args} from every clause head of "
+                    f"{functor_name} to match {_template(prev_fields)}")
+        else:
+            # A 0-arity declaration: the usual shape is a bare vocabulary atom
+            # that a later clause head gave an argument to.
+            drop = (f"drop the {args} from every clause head of "
+                    f"{functor_name} if a bare value atom was intended")
+        decl_site = {
+            "-private declaration": "the -private([...]) list",
+            "-module export list": "the -module(..., [...]) export list",
+        }.get(decl_kind)
+        if decl_site:
+            return (f"  remedy: declare it as `{template}` in {decl_site} "
+                    f"(an entry MAY carry arguments), or {drop}.")
+        if decl_kind == "first clause":
+            return (f"  remedy: the arity was fixed by an earlier clause at "
+                    f"{transformer._site(decl_lineno)}, not by a declaration "
+                    f"— write that head as `{template}` too, or {drop}.")
+        return (f"  remedy: write every clause head as `{template}` and give "
+                f"the declaration at {transformer._site(decl_lineno)} "
+                f"({decl_kind}) the same arity, or {drop}.")
+
     def _check_head_signature(transformer, functor_name, all_field_names,
                               prev_fields, node):
         """Reject a clause head that cannot be built against the bound class.
@@ -3028,7 +3084,11 @@ class EmbedTransformer(NodeTransformer):
                 f"against it. A functor name has exactly one arity in "
                 f"Clausal: give the declaration and every clause head of "
                 f"{functor_name} the same number of arguments, or rename one "
-                f"of them."
+                f"of them.\n"
+                + transformer._arity_conflict_remedy(
+                    functor_name, all_field_names, prev_fields,
+                    decl_kind, decl_lineno,
+                )
             )
         raise SyntaxError(
             f"clause head for {functor_name}/{len(all_field_names)} names "

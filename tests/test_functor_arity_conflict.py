@@ -264,3 +264,154 @@ class TestDeclarationClauseArityConflict:
                 f(A=1, C=2),
             """)
         assert "C" in str(exc_info.value)
+
+
+class TestTheRemedyPrintsTheTemplateEdit:
+    """The message shows the edit, not just the arity disagreement.
+
+    A Clausal declaration prefers the TEMPLATE form
+    ``predicate_name(ARGUMENT_1, ...)`` over Prolog's ``name/N`` notation, which
+    leaves the argument positions to be guessed.  The old message spoke pure
+    arity: it said WHAT was wrong ("give them the same number of arguments")
+    without showing the declaration to write, which is the whole content of the
+    repair.  The clause head is in hand at the raise site — it is already
+    printed on the ``clause:`` line — so the template is printed too.
+
+    Argument-name synthesis is deliberately dumb (``ARG_N``, or the head's own
+    variable names uppercased); the value is the template form itself.
+    """
+
+    def _msg(self, tmp_path, name, text):
+        with pytest.raises(SyntaxError) as exc_info:
+            _load(tmp_path, name, text)
+        return str(exc_info.value)
+
+    def test_private_declaration_gets_the_private_list_wording(self, tmp_path):
+        msg = self._msg(tmp_path, "remedy_priv", """
+            -private([max_retries])
+
+            max_retries(3),
+        """)
+        assert "remedy:" in msg
+        assert "`max_retries(ARG_0)`" in msg
+        assert "-private([...])" in msg
+        # it must not send the reader to a list this file does not have
+        assert "-module(" not in msg
+        assert "an earlier clause" not in msg
+
+    def test_module_export_list_gets_the_module_wording(self, tmp_path):
+        msg = self._msg(tmp_path, "remedy_mod", """
+            -module(m, [
+                f(A)
+            ])
+
+            f(1, 2),
+        """)
+        assert "remedy:" in msg
+        # the declared name is reused for the position that fits; only the
+        # surplus position falls back to a placeholder
+        assert "`f(A, ARG_1)`" in msg
+        assert "-module(" in msg
+        assert "-private([...])" not in msg
+
+    def test_an_earlier_clause_is_not_called_a_declaration(self, tmp_path):
+        """No declaration exists — the remedy must not invent one to edit."""
+        msg = self._msg(tmp_path, "remedy_clause", """
+            f(1),
+            f(1, 2),
+        """)
+        assert "remedy:" in msg
+        assert "`f(ARG_0, ARG_1)`" in msg
+        assert "an earlier clause" in msg
+        assert "-private([...])" not in msg
+        assert "-module(" not in msg
+
+    def test_the_template_reuses_the_head_variable_names(self, tmp_path):
+        """A head written with real variables gets them back, uppercased."""
+        msg = self._msg(tmp_path, "remedy_vars", """
+            -private([
+                verdict(STATUS)
+            ])
+
+            verdict(S, CITES) <- (S == "ok"),
+        """)
+        assert "`verdict(STATUS, CITES)`" in msg
+
+    @pytest.mark.parametrize("head, template", [
+        ("f(1)", "f(ARG_0)"),
+        ("f(1, 2)", "f(ARG_0, ARG_1)"),
+        ("f(1, 2, 3)", "f(ARG_0, ARG_1, ARG_2)"),
+    ])
+    def test_the_template_is_read_off_the_head_not_hard_coded(
+        self, tmp_path, head, template,
+    ):
+        msg = self._msg(tmp_path, f"remedy_ar{len(template)}", f"""
+            -private([f])
+
+            {head},
+        """)
+        assert f"`{template}`" in msg
+
+    def test_the_alternative_edit_is_offered_too(self, tmp_path):
+        """Declaring at the head's arity is one of two repairs, not the only one."""
+        msg = self._msg(tmp_path, "remedy_alt", """
+            -private([max_retries])
+
+            max_retries(3),
+        """)
+        flat = " ".join(msg.split())
+        assert "drop the argument" in flat
+        assert "every clause head" in flat
+
+    def test_a_directive_with_its_own_syntax_is_not_rewritten(self, tmp_path):
+        """``-edcg_pred`` is written ``-edcg_pred(name, arity, [...])``.
+
+        Its declaration site is NOT a template-form list, so the remedy must
+        not invent ``-edcg_pred(q/2)``; it names the declaration and its arity
+        and leaves the directive's own spelling alone.
+        """
+        msg = self._msg(tmp_path, "remedy_edcg", """
+            -edcg_pred(q, 1, [])
+
+            q(1, 2),
+        """)
+        assert "remedy:" in msg
+        assert "`q(ARG_0, ARG_1)`" in msg
+        assert "-edcg_pred directive" in msg
+        assert "-edcg_pred(q/2)" not in msg
+        assert "-private([...])" not in msg
+
+    def test_a_name_that_is_already_a_logic_variable_is_not_mangled(
+        self, tmp_path,
+    ):
+        """``-edcg_pred`` mints hidden ``_edcg_<acc>_in_`` fields.
+
+        Those already read as logic variables (leading underscore), and the
+        compiler mints them with that exact spelling — uppercasing them would
+        put a name in the template that does not exist.
+        """
+        msg = self._msg(tmp_path, "remedy_hidden", """
+            -edcg_acc(cnt, V_, In_, Out_, {Out_ is In_ + V_})
+            -edcg_pred(r, 1, [cnt])
+
+            r(1, 2, 3, 4),
+        """)
+        assert "`r(ARG_0, _edcg_cnt_in_, _edcg_cnt_out_, ARG_3)`" in msg
+        assert "_EDCG_CNT_IN_" not in msg
+
+
+class TestTheUnknownFieldRaiseIsUntouched:
+    """The sibling raise is out of scope; it must not grow a bogus remedy."""
+
+    def test_no_remedy_block_on_the_field_name_raise(self, tmp_path):
+        with pytest.raises(SyntaxError) as exc_info:
+            _load(tmp_path, "kwremedy", """
+                -module(m, [
+                    f(A, B)
+                ])
+
+                f(A=1, C=2),
+            """)
+        msg = str(exc_info.value)
+        assert "C" in msg                      # still the field-name message
+        assert "remedy:" not in msg
