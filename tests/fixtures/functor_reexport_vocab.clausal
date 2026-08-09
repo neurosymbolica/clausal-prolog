@@ -1,0 +1,12 @@
+# Vocabulary module that publicly exports a functor `flip/2` — a functor
+# declared in BOTH -private and the -module export list, and defined via
+# facts. Importers get this module-local class.
+-private([flip(EDIT, DECISION), a, b, p, q, x, y])
+-module(functor_reexport_vocab, [
+    combine(X, Y),
+    flip(EDIT, DECISION)
+])
+
+flip(a, x),
+flip(b, y),
+combine(p, q),

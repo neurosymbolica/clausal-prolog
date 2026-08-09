@@ -285,9 +285,8 @@ a UK regulation → `sterling` from `united_kingdom`; a eurozone directive → `
 `european_union`. Import the bare name; the prefix only appears when a rule genuinely spans
 currencies.
 
-**3. Migrating from the old `currency.<code>` atoms.** The legacy clausify vocabulary
-(`kit/currency.clausal`) exposed ISO alpha-3 codes as atoms (`currency.eur`, and the hacks
-`all`/`try_`). Replace them:
+**3. Migrating from the old `currency.<code>` atoms.** A common legacy pattern exposes ISO
+alpha-3 codes as atoms (`currency.eur`, plus `all`/`try_` escapes). Replace them:
 - `currency.eur` → `euro` (from `european_union`); `currency.usd` → `dollar`
   (`united_states`); `currency.gbp` → `sterling` (`united_kingdom`); `currency.jpy` → `yen`
   (`japan`); the `try_`/`all` escapes disappear entirely.

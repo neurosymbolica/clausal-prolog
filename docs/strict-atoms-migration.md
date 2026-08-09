@@ -74,7 +74,7 @@ everywhere. Nothing changes semantically; you just become explicit about it.
 Upstream ships the exact codemod it used on its own tree:
 
 ```bash
-# from your clausify checkout, pointed at your repo's source dirs
+# from your own checkout, pointed at your repo's source dirs
 python /path/to/clausal/tools/codemods/add_implicit_atoms.py src rules fixtures
 ```
 
@@ -139,31 +139,6 @@ fails an assertion it used to pass. Loading was never the goal; the atoms have
 to be the *same* atoms. If you are unsure whether a name crosses a boundary,
 `global_atom("red", R)` in both places is a safe intermediate — it is the same
 process-wide class the old auto-mint gave you.
-
-## Migrating clausify-domains
-
-clausify-domains is expected to be *mostly* strict-clean already (rule files
-tend to declare their atoms), so the migration should be light:
-
-1. **Baseline (Path A).** Run the codemod over the domain source dirs and run
-   the domain test suite. Confirm green. This guarantees no regression before
-   you touch anything by hand.
-   ```bash
-   python /path/to/clausal/tools/codemods/add_implicit_atoms.py <domain-source-dirs>
-   ```
-2. **Strictify the rule files (Path B).** Remove `-implicit_atoms` from the
-   authoritative rule files (the ones where a typo would silently change a
-   ruling) and fix each `NameError` by declaring the atom — prefer
-   `-module`/`-private`/`-import_from` over re-adding the escape hatch. Any
-   genuine typo you uncover here is exactly the bug this change exists to catch.
-3. **Drop deprecated `-strict_atoms`.** If any domain file still carries
-   `-strict_atoms`, delete it — strict is now the default and the directive only
-   emits a deprecation warning.
-4. **Leave loose where appropriate.** Keep `-implicit_atoms` on scratch/example
-   domains or any file intentionally using undeclared tags.
-
-Pin clausify-domains to the strict-atoms Clausal release only after step 1 is
-green, so the upgrade and the migration are separable.
 
 ## Reference
 
