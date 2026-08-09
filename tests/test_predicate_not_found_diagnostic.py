@@ -123,7 +123,7 @@ CITATIONS_SRC = """
 
 -private([art_1_2, meta])
 
-citation(art_1_2, "EUMR Article 1(2)", meta),
+citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
 cite(art_1_2),
 """

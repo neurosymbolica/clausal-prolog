@@ -49,7 +49,7 @@ def write(tmp_path, name, src):
 CITATIONS = """
     -private([art_1_2, meta])
 
-    citation(art_1_2, "EUMR Article 1(2)", meta),
+    citation(art_1_2, "Reg-Z Article 1(2)", meta),
     cite(art_1_2),
 
     Test("citation record resolves") <- (
@@ -99,7 +99,7 @@ class TestTheMessage:
         out = _report(tmp_path, f"""
             -private([art_1_2, meta])
 
-            citation(art_1_2, "EUMR Article 1(2)", meta),
+            citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
             Test("both arities") <- citation({call_args}),
         """, name=f"argboth{passes}.clausal")
@@ -146,7 +146,7 @@ class TestForwardReference:
 
             Test("forward") <- citation(REF, META),
 
-            citation(art_1_2, "EUMR Article 1(2)", meta),
+            citation(art_1_2, "Reg-Z Article 1(2)", meta),
         """)
         assert "takes 3 arguments" in out
         assert "positional argument" not in out
@@ -163,7 +163,7 @@ class TestOtherGoalPositions:
         return _report(tmp_path, f"""
             -private([art_1_2, meta])
 
-            citation(art_1_2, "EUMR Article 1(2)", meta),
+            citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
             Test("g") <- {goal},
         """, name=name)
@@ -291,7 +291,7 @@ class TestTermConstructionUnaffected:
         out = _report(tmp_path, """
             -private([art_1_2, meta])
 
-            citation(art_1_2, "EUMR Article 1(2)", meta),
+            citation(art_1_2, "Reg-Z Article 1(2)", meta),
             arcm_shape(REF, N) <- functor(citation(REF), N, _),
 
             Test("partial term") <- (arcm_shape(art_1_2, N), N == "citation"),
@@ -321,7 +321,7 @@ class TestCorrectCallsUnaffected:
         out = _report(tmp_path, """
             -private([art_1_2, meta])
 
-            citation(art_1_2, "EUMR Article 1(2)", meta),
+            citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
             Test("ok") <- citation(REF, LABEL, META),
         """)
@@ -461,7 +461,7 @@ class TestRuntimeFunnels:
         out = _report(tmp_path, """
             -private([art_1_2, meta])
 
-            citation(art_1_2, "EUMR Article 1(2)", meta),
+            citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
             Test("timed") <- time_goal(citation),
         """, "arcmtime.clausal")
@@ -730,7 +730,7 @@ class TestTwoAritiesInOneFile:
         out = _report(tmp_path, """
             -private([art_1_2, meta])
 
-            citation(art_1_2, "EUMR Article 1(2)", meta),
+            citation(art_1_2, "Reg-Z Article 1(2)", meta),
             citation(art_1_2, meta),
 
             Test("citation record resolves") <- citation(REF, METADATA),
@@ -743,6 +743,6 @@ class TestTwoAritiesInOneFile:
             -private([art_1_2, meta])
 
             citation(art_1_2, meta),
-            citation(art_1_2, "EUMR Article 1(2)", meta),
+            citation(art_1_2, "Reg-Z Article 1(2)", meta),
         """, name="argorder.clausal")
         assert "conflicts with the declaration of citation/2" in out
