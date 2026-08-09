@@ -3001,20 +3001,42 @@ class EmbedTransformer(NodeTransformer):
         The *where* half is tailored to the recorded ``decl_kind`` so the
         remedy never sends a reader to edit a ``-private`` list their file does
         not have, and never calls an earlier clause a declaration.  Directive
-        kinds whose own syntax is not the template form (``-dynamic``,
-        ``-edcg_pred``) take the neutral wording rather than a made-up
-        rewrite of the directive.
+        kinds whose own syntax is not the template form (``-dynamic``, a
+        ``-edcg_pred`` with no accumulators) take the neutral wording rather
+        than a made-up rewrite of the directive.
+
+        ``-edcg_pred``-minted ``_edcg_*`` accumulator fields suppress the
+        template half entirely.  Those positions are compiler-minted and a
+        source head never spells them; they appear in ``all_field_names`` only
+        because the declared tuple is overlaid onto the head by POSITION, so
+        the template would print names for arguments the author wrote as
+        something else.  ``-edcg_pred`` also takes a VISIBLE arity, so
+        "give the declaration the same arity" would move the hidden fields
+        somewhere other than where the template shows them.  That case speaks
+        visible arity instead, and both of its halves are edits that load.
         """
         def _template(fields):
             names = [n if _is_logic_var_name(n) else n.upper() for n in fields]
             return f"{functor_name}({', '.join(names)})"
+
+        minted = [n for n in prev_fields if n.startswith("_edcg_")]
+        if minted:
+            visible = [n for n in prev_fields if not n.startswith("_edcg_")]
+            fields = "field" if len(minted) == 1 else "fields"
+            return (f"  remedy: {functor_name} is declared at VISIBLE arity "
+                    f"{len(visible)} plus {len(minted)} compiler-minted "
+                    f"accumulator {fields} that a source head does not write "
+                    f"({', '.join(minted)}) — write every clause head as "
+                    f"`{_template(visible)}`, or raise the visible arity at "
+                    f"{transformer._site(decl_lineno)} to "
+                    f"{len(all_field_names)}.")
 
         template = _template(all_field_names)
         surplus = len(all_field_names) - len(prev_fields)
         args = "argument" if surplus == 1 else "arguments"
         if prev_fields:
             drop = (f"drop the surplus {args} from every clause head of "
-                    f"{functor_name} to match {_template(prev_fields)}")
+                    f"{functor_name} to match `{_template(prev_fields)}`")
         else:
             # A 0-arity declaration: the usual shape is a bare vocabulary atom
             # that a later clause head gave an argument to.

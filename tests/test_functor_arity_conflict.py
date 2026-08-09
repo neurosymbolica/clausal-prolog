@@ -286,6 +286,16 @@ class TestTheRemedyPrintsTheTemplateEdit:
             _load(tmp_path, name, text)
         return str(exc_info.value)
 
+    def _loads(self, tmp_path, name, text):
+        """Assert *text* loads — used to check a printed remedy really works.
+
+        A remedy that cannot be followed is worse than none: this file's
+        sibling diagnostic has ``test_the_remedy_is_advice_that_works``
+        precisely because its first wording sent readers into a second copy of
+        the same error.
+        """
+        return _load(tmp_path, name, text)
+
     def test_private_declaration_gets_the_private_list_wording(self, tmp_path):
         msg = self._msg(tmp_path, "remedy_priv", """
             -private([max_retries])
@@ -363,12 +373,54 @@ class TestTheRemedyPrintsTheTemplateEdit:
         assert "drop the argument" in flat
         assert "every clause head" in flat
 
+    def test_the_drop_alternative_names_the_declared_shape(self, tmp_path):
+        """A non-zero declaration: "drop the surplus" needs a target to hit.
+
+        The 0-arity case says "if a bare value atom was intended", which is not
+        advice when the declaration has fields — there the reader is told which
+        shape to drop *to*, in the same template form.
+        """
+        msg = self._msg(tmp_path, "remedy_drop1", """
+            -module(m, [
+                f(A)
+            ])
+
+            f(1, 2),
+        """)
+        flat = " ".join(msg.split())
+        assert "drop the surplus argument from every clause head of f" in flat
+        assert "to match `f(A)`" in flat
+        assert "bare value atom" not in flat        # the 0-arity wording
+        # and the shape it names loads
+        self._loads(tmp_path, "remedy_drop1_fixed", """
+            -module(m, [
+                f(A)
+            ])
+
+            f(1),
+        """)
+
+    def test_the_drop_alternative_pluralises_on_the_surplus(self, tmp_path):
+        """Two surplus arguments, one declared field: "arguments", "f(A)"."""
+        msg = self._msg(tmp_path, "remedy_drop2", """
+            -private([
+                f(A)
+            ])
+
+            f(1, 2, 3),
+        """)
+        flat = " ".join(msg.split())
+        assert "drop the surplus arguments from every clause head of f" in flat
+        assert "to match `f(A)`" in flat
+
     def test_a_directive_with_its_own_syntax_is_not_rewritten(self, tmp_path):
         """``-edcg_pred`` is written ``-edcg_pred(name, arity, [...])``.
 
         Its declaration site is NOT a template-form list, so the remedy must
         not invent ``-edcg_pred(q/2)``; it names the declaration and its arity
-        and leaves the directive's own spelling alone.
+        and leaves the directive's own spelling alone.  With no accumulators
+        the visible arity IS the whole arity, so the template half is a working
+        edit here — which is checked, not assumed.
         """
         msg = self._msg(tmp_path, "remedy_edcg", """
             -edcg_pred(q, 1, [])
@@ -380,24 +432,91 @@ class TestTheRemedyPrintsTheTemplateEdit:
         assert "-edcg_pred directive" in msg
         assert "-edcg_pred(q/2)" not in msg
         assert "-private([...])" not in msg
+        self._loads(tmp_path, "remedy_edcg_fixed", """
+            -edcg_pred(q, 2, [])
 
-    def test_a_name_that_is_already_a_logic_variable_is_not_mangled(
-        self, tmp_path,
-    ):
-        """``-edcg_pred`` mints hidden ``_edcg_<acc>_in_`` fields.
+            q(1, 2),
+        """)
 
-        Those already read as logic variables (leading underscore), and the
-        compiler mints them with that exact spelling — uppercasing them would
-        put a name in the template that does not exist.
+    def test_minted_accumulator_fields_suppress_the_template(self, tmp_path):
+        """``-edcg_pred(r, 1, [cnt])`` mints hidden ``_edcg_cnt_in_/_out_``.
+
+        Two things make the template form wrong here, and neither is visible
+        without knowing how the check is fed:
+
+        * those positions are compiler-minted and a source head never spells
+          them — they reach ``all_field_names`` only because the declared tuple
+          is overlaid onto the head BY POSITION, so ``r(ARG_0, _edcg_cnt_in_,
+          _edcg_cnt_out_, ARG_3)`` puts declared names on arguments the author
+          wrote as ``2`` and ``3``;
+        * ``-edcg_pred`` takes a VISIBLE arity, so "give the declaration the
+          same arity" as a /4 template would push the hidden fields to
+          positions 4 and 5 — not where the template showed them.
+
+        So this case drops the template and speaks visible arity.  Both halves
+        of what it prints are then applied, and both load.
         """
-        msg = self._msg(tmp_path, "remedy_hidden", """
+        msg = self._msg(tmp_path, "remedy_minted", """
             -edcg_acc(cnt, V_, In_, Out_, {Out_ is In_ + V_})
             -edcg_pred(r, 1, [cnt])
 
             r(1, 2, 3, 4),
         """)
-        assert "`r(ARG_0, _edcg_cnt_in_, _edcg_cnt_out_, ARG_3)`" in msg
-        assert "_EDCG_CNT_IN_" not in msg
+        flat = " ".join(msg.split())
+        assert "remedy:" in flat
+        # the misleading template is gone, in either casing
+        assert "`r(ARG_0, _edcg_cnt_in_, _edcg_cnt_out_, ARG_3)`" not in flat
+        assert "_EDCG_CNT_IN_" not in flat
+        # visible arity, and the minted fields named as the reason
+        assert "VISIBLE arity 1" in flat
+        assert "2 compiler-minted accumulator fields" in flat
+        assert "_edcg_cnt_in_, _edcg_cnt_out_" in flat
+        assert "`r(ARG_0)`" in flat              # the visible-only shape
+        assert "raise the visible arity" in flat
+        assert "to 4." in flat
+
+        # both printed edits are edits that work
+        self._loads(tmp_path, "remedy_minted_head", """
+            -edcg_acc(cnt, V_, In_, Out_, {Out_ is In_ + V_})
+            -edcg_pred(r, 1, [cnt])
+
+            r(1),
+        """)
+        self._loads(tmp_path, "remedy_minted_decl", """
+            -edcg_acc(cnt, V_, In_, Out_, {Out_ is In_ + V_})
+            -edcg_pred(r, 4, [cnt])
+
+            r(1, 2, 3, 4),
+        """)
+
+    def test_a_name_that_is_already_a_logic_variable_is_not_mangled(
+        self, tmp_path,
+    ):
+        """A leading-underscore field name is a logic variable already.
+
+        ``f(1, _x=2)`` names its surplus field ``_x``; uppercasing it to ``_X``
+        would print a declaration that mints a DIFFERENT field, so the paste
+        would load and then quietly not match the head.  Names that already
+        read as logic variables are passed through untouched — and the printed
+        declaration is loaded here to prove it is the right one.
+        """
+        msg = self._msg(tmp_path, "remedy_underscore", """
+            -module(m, [
+                f(A)
+            ])
+
+            f(1, _x=2),
+        """)
+        assert "`f(A, _x)`" in msg
+        assert "_X" not in msg
+        mod = self._loads(tmp_path, "remedy_underscore_fixed", """
+            -module(m, [
+                f(A, _x)
+            ])
+
+            f(1, _x=2),
+        """)
+        assert mod.f._fields == ("A", "_x")
 
 
 class TestTheUnknownFieldRaiseIsUntouched:
