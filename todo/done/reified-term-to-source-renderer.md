@@ -1,7 +1,7 @@
 # Reified-term → AST/source renderer (the inverse of `reify_ast`)
 
 STATUS: DONE (2026-07-20).
-RESULT: `render_ast`/`render_source` landed in `clausal/reflection.py`; corpus round-trip gate green over 571 files / 4171 reifiable clauses; 126 files deferred to pre-existing reifier bug (`todo/reify-source-dict-literal-atom-key-unhashable.md`).
+RESULT: `render_ast`/`render_source` landed in `clausal/reflection.py`; corpus round-trip gate green over hundreds of files / thousands of reifiable clauses; roughly a fifth of files deferred to pre-existing reifier bug (`todo/reify-source-dict-literal-atom-key-unhashable.md`).
 
 **Critical prerequisite** for the Clausal-AST
 mutation auditor (design in a downstream consumer's own docs — Approach B:

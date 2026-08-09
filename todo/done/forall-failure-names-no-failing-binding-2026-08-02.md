@@ -35,7 +35,7 @@ mismatch, not the conjunct that pruned the last candidate.
 
 ## Measured incident (exact report shape)
 
-From `_reruns/resume_vat_r2`, the P2 determinism property failure:
+From the archived rerun of a prorated-rate authoring run, the P2 determinism property failure:
 
 ```
 forall(SUBJECT in SUBJECT_LIST, (...))

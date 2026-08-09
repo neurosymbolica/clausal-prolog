@@ -4,7 +4,7 @@
 
 ## The need
 
-Library authors (the harness's `kit/` shared modules) want well-formedness guards that
+Library authors (the harness's shared library modules) want well-formedness guards that
 RAISE with a message when given malformed input — non-ground terms, wrong shapes, wrong
 type. Silent logical failure inside a `findall` is indistinguishable from a legitimate
 empty result: the `findall` collapses to `[]`, downstream aggregations (e.g. `max_list`)
@@ -12,7 +12,7 @@ return a default, and every verdict downstream flips silently.
 
 ## Measured incident
 
-A rolling date-window authoring run — four full repair budgets could not locate the defect from the
+A rolling date-window authoring run — four full retry allowances could not locate the defect from the
 test report (see `failed-goals-have-no-derivation-trace-2026-08-02.md` in this
 directory for full measurements). The defect: the model passed a date OBJECT where kit
 predicate `window_days_used` expects a `[Y,M,D]` triple (`REF_YMD`). The kit predicate

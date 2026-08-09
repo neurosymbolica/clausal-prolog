@@ -15,7 +15,7 @@ surface. See the RESOLVED design-question section below for why a hashable
 Pinned by `tests/test_reflection_render.py::TestDictLiteral`
 (`test_atom_key_dict_round_trips`, `test_atom_key_dict_shares_splat_representation`).
 The corpus round-trip gate's `TypeError`/"unhashable" skip branch was removed —
-the 126 previously-skipped files (22% of the corpus) now round-trip and are hard
+the previously-skipped files (roughly a fifth of the corpus) now round-trip and are hard
 asserted: `test_corpus_clause_round_trips` = 458 passed (was ~332). Full
 reflection + dict suites green.
 
@@ -72,7 +72,7 @@ it to a hashable `Atom("name")` (mirroring the design decision in
   handled by `_dict_key_ast`). A plain `dict` with `Atom` keys would need the same key handling in
   the renderer's `ast.Dict` branch.
 - Once reifiable, drop the `except TypeError` skip in `test_corpus_clause_round_trips` and confirm
-  the 126 files round-trip through the renderer — a materially stronger completeness gate.
+  those files round-trip through the renderer — a materially stronger completeness gate.
 
 ## Design question — RESOLVED 2026-07-20
 

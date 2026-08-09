@@ -18,7 +18,7 @@ FAILURES:
       NameError: name 'cite' is not defined
 ```
 
-`constants.clausal` had `-import_from(...citations, [mar_art_9])` and used `cite(mar_art_9)`
+`constants.clausal` had `-import_from(...citations, [reg_y_art_9])` and used `cite(reg_y_art_9)`
 in a dict value. `citations.clausal` declares `-module(citations, [cite(KEY), ...])`.
 The owner of the missing name is fully decidable from the package, and the message says
 nothing about it.
@@ -60,14 +60,14 @@ NameError: name 'cite' is not defined
   cite/1 IS exported by a sibling module in the same package:
       rulebase.compliance_screening_rule.citations
   -> add `cite` to this file's existing import:
-      -import_from(rulebase.compliance_screening_rule.citations, [mar_art_9, cite])
+      -import_from(rulebase.compliance_screening_rule.citations, [reg_y_art_9, cite])
 ```
 
 The remedy distinguishes extending an existing `-import_from` for that module from
 writing a new one, because the reported failure already had a directive for the very
 module it needed one more name from — "add `-import_from(citations, [cite])`" would have
 told the author to write a second directive beside the one they had. The list is quoted
-back verbatim, aliases included (`alias(art_9, a9)` stays spelled that way); an entry
+back verbatim, aliases included (`alias(reg_y_art_9, ry9)` stays spelled that way); an entry
 that could not be spelled makes the whole extension form decline rather than reprint a
 list with a name silently dropped.
 
@@ -81,7 +81,7 @@ renders in `UndefinedNameError.__str__` only, the same discipline as the `is`/`=
   arrives there, and a solution never touches it.
 * **load time** — `clausal.import_diagnostics.exec_with_import_diagnostics`, which
   already wrapped the module-body `exec` for `-import_from` failures and is used by both
-  `_load_module` call sites. Covers `REF = cite(art_9)` at module scope.
+  `_load_module` call sites. Covers `REF = cite(reg_y_art_9)` at module scope.
 * **the term-class shape** — `_DbDispatchAdapter.__call__` raises its own NameError
   (`Predicate 'cite/1' is not in scope as a term class`) whenever the compiler saw the
   name as a call target. It now passes `name=`, so the solve-time seam enriches it too:

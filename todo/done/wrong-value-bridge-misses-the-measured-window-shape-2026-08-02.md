@@ -17,7 +17,7 @@ under the merged diagnostics.
                                'tests/test_public_interface.clausal'))
     print(out)"
 
-(The scratch tree is archived under the harness checkout's `_reruns/` directory
+(The scratch tree is archived under the harness checkout's archived-run directory
 if /tmp is gone.)
 
 Observed, with a 60s budget and no budget-exceeded note: all four failing tests still

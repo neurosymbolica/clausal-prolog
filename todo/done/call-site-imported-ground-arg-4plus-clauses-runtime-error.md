@@ -97,7 +97,7 @@ The downstream investment-screening rulebase domain: all input-mode self-tests c
 `notifiable(P, "notifiable")`, `investor_category(P, "not_foreign")`,
 `interest_test(P, 10, _)` etc. (imported predicates with 4+ clauses and
 constant heads) errored; output-mode variants of the same queries passed.
-The domain's `run_tests.sh` / `negative_controls.sh` currently export
+The domain's test runner and negative-control suite currently export
 `CLAUSAL_DISABLE_OPT=call_site` as a documented workaround (see the domain's own
 differential-test notes) — **please drop that workaround once this is
 fixed** (grep for `CLAUSAL_DISABLE_OPT=call_site` under the domain's checkout).
@@ -105,7 +105,7 @@ fixed** (grep for `CLAUSAL_DISABLE_OPT=call_site` under the domain's checkout).
 ## Acceptance for the fix
 
 1. `./repro/repro.sh` → all six rows PASS with no `CLAUSAL_DISABLE_OPT`.
-2. `cd <downstream investment-screening domain checkout> && ./run_tests.sh` still ALL GREEN
+2. Re-running the downstream investment-screening domain's test suite still ALL GREEN
    after deleting the two `export CLAUSAL_DISABLE_OPT=call_site` lines
    (123 tests + 4 negative controls).
 3. A regression test in the engine suite covering: imported predicate, >= 4

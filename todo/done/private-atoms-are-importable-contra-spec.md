@@ -75,7 +75,7 @@ Resolved sweep of `-import_from` in `.clausal` across three downstream repos
 The 6 are a downstream helper library's own tests importing `delta` from a
 second helper module (×2, the kit is vendored into a second downstream repo as
 well), and a tax-credit domain's `test_public_interface` importing four private
-citation atoms (`us_usc_26_1_a/_1_c/_1_d`, `us_usc_26_3301`) from `constants` and
+citation atoms (`us_code_ref_1_a/_1_c/_1_d`, `us_code_ref_3301`) from `constants` and
 `computation`. None of these are workarounds; they are how those libraries are
 written.
 

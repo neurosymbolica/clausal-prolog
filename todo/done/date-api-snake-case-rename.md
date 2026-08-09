@@ -34,8 +34,8 @@ spelling is better — noted in the third column):
 ## Rollout (avoid a flag-day break)
 1. **Add the snake_case names as the canonical spelling**; keep the TitleCase names as
    **deprecated aliases** for one release so existing rulebases keep loading.
-2. Update `docs/clausal-cheatsheet.md` §3 (Dates) + a downstream kit's scaffolding docs
-   to show snake_case (`date(YEAR,MONTH,DAY,OBJ)`, `days_between(A,B,N)`, …).
+2. Update the downstream corpus's authoring-conventions doc §3 (Dates) + a downstream kit's
+   scaffolding docs to show snake_case (`date(YEAR,MONTH,DAY,OBJ)`, `days_between(A,B,N)`, …).
 3. Then sweep the downstream rulebase corpus from the TitleCase names to snake_case (mechanical
    `-import_from(date_time, [...])` + call-site rename; the corpus temporal domains include
    several date-window and data-handling rules).
@@ -43,9 +43,9 @@ spelling is better — noted in the third column):
 
 ## Related
 - `todo/date-max-min-ordinal-apis.md` (clean ordinal/max/min date APIs — do together, all snake_case).
-- Sibling request: spell out + snake_case a downstream helper library's helpers (`prof_get`→`profile_get`,
-  `prof_has`→`profile_has`, `attr`→`attribute`) — see that lib's todo. Same rationale (less for the
-  local models to learn; closer to Prolog).
+- Sibling request: spell out + snake_case a downstream helper library's helpers (a helper predicate
+  → `profile_get`, another helper predicate → `profile_has`, `attr`→`attribute`) — see that lib's
+  todo. Same rationale (less for the local models to learn; closer to Prolog).
 
 ---
 

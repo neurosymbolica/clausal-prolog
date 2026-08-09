@@ -88,7 +88,7 @@ Test("transitive import of a date_time module") <- (days_between(2026,1,1, 2026,
 ## Impact
 
 - Forces multi-file rulebases that need stdlib-backed features (dates, regex, json, …) to either inline the
-  Python via `++(...)` or collapse to a single file. For the SARA formalization the workaround was native
+  Python via `++(...)` or collapse to a single file. For a downstream tax-domain formalization the workaround was native
   `++` over `datetime.date`, which is equivalent — but the limitation is a sharp edge for any modular
   rulebase + separate test-harness layout, which is the normal shape.
 

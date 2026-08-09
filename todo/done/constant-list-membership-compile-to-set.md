@@ -1,7 +1,7 @@
 # Compile constant-list membership `X in [c1, c2, …]` to a Python set
 
 **Requested:** 2026-07-04. Membership tests against a **ground constant list** are common in a
-downstream rulebase corpus (e.g. a compliance-screening domain's `dealing_permitted`:
+downstream rulebase corpus (e.g. a compliance-screening domain's `trade_cleared`:
 `ACTION in ["acquire","dispose","amend","cancel"]`, and a safe-harbour list). Today `X in LIST` / `in_(X, LIST)` is a linear scan, and the same literal
 list is often written several times in one file.
 
@@ -16,9 +16,9 @@ Elements are `PredicateMeta` atoms (hashable, identity-equal), numbers, strings 
 frozenset works. Guard: only apply in the **check** mode (ground X against ground list); keep the
 relational scan when X is unbound or the list is partial.
 
-## Example (compliance-screening domain, dealing_permitted)
+## Example (compliance-screening domain, trade_cleared)
 ```clausal
-dealing_permitted(TRADE, INFO, PERMITTED) <- (
+trade_cleared(TRADE, INFO, PERMITTED) <- (
     ...,
     ACTION in [acquire, dispose, amend, cancel],   # ground list -> compile to `ACTION in {..}`
     ...
@@ -136,7 +136,7 @@ Files: `clausal/logic/runtime/const_set.py` (new),
 of the corpus found only **11** inline constant-list memberships, and both
 gold suites run for this change (the investment-screening and tax-credit domains) contain
 **zero** — every membership there is `X in LIST` against a runtime list variable, which
-correctly declines. The compliance-screening domain's `dealing_permitted` has already been hand-factored
+correctly declines. The compliance-screening domain's `trade_cleared` has already been hand-factored
 into a first-argument-indexed `regulated_action/1` fact set, exactly as this
 todo anticipated. So the optimisation currently fires on a handful of sites.
 

@@ -37,7 +37,7 @@ It is what the author in the originating todo was actually reaching for. Their
 test read
 
 ```clausal
-CITE_TERM is cite(eu_reg_2016_399_art_6_1),
+CITE_TERM is cite(reg_x_2016_art_6_1),
 functor(CITE_TERM, FUNCTOR_NAME, ARITY),
 FUNCTOR_NAME is cite,
 ARITY == 1
@@ -89,7 +89,7 @@ Two pieces of evidence redirected the fix:
   BRANCH — VERIFIED SEMANTICS (2026-07-19 interpreter probe)" note, including the
   consequence that "after a kit `world_set` on an attr-list world the entry is
   a generic Compound — the domain's class-constructor read will NOT see it".
-- The corpus sweep's headline risk was backwards. `key_string/2` was read as
+- The corpus sweep's headline risk was backwards. `entry_key/2` was read as
   depending on decomposition yielding the *class*; its own docstring says the
   opposite — "atom-shaped KEY -> its functor-name string, via a build-then-
   decompose roundtrip". It needs the **string** arm. Option 3 would have broken

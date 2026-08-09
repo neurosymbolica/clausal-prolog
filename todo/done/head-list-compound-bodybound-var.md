@@ -57,6 +57,6 @@ literal, at any depth) would cover this uniformly.
 - All 3 cases in `todo/head_list_compound_repro.clausal` PASS.
 - Regression test covering list-nested AND deeper-nested (e.g. `[c(d(S))]`) head
   compounds with body-bound inner vars, both modes.
-- Re-running the downstream helper library's own `kit/tests/test_assess_engine.clausal` still passes
+- Re-running the downstream helper library's own test suite still passes
   with its body-construction workaround removed (i.e. the workaround becomes
   optional) — a good external regression.

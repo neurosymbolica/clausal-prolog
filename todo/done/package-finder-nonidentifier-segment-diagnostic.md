@@ -4,15 +4,15 @@
 
 ## Motivation
 Surfaced repeatedly during a downstream rulebase corpus's hierarchical-namespace migration (dozens of domains
--> `eu.banking.crr_lcr` etc., using the landed `__init__.clausal` package resolution). Two
+-> `eu.banking.reg_z_ratio` etc., using the landed `__init__.clausal` package resolution). Two
 recurring failure shapes each produced a bare, misleading error that cost real debugging time:
 
-1. **Hyphenated intermediate dir.** `-import_from(eu.state_aid.gber_…, [...])` when the dir on
+1. **Hyphenated intermediate dir.** `-import_from(eu.state_aid.reg_w_scheme_…, [...])` when the dir on
    disk is `eu/state-aid/` (hyphen) fails with `ModuleNotFoundError: No module named 'eu.state_aid'`
    — even though `eu/state-aid/` plainly exists. The operator sees "no module" while staring at
    the directory. (Python package segments must be valid identifiers, so `state-aid` cannot be the
    `state_aid` segment — correct, but the message doesn't say so.)
-2. **Digit-leading segment.** A dir like `42usc423-ssdi-…` -> segment `42usc423_…` is an invalid
+2. **Digit-leading segment.** A dir like `77usc501-abc-…` -> segment `77usc501_…` is an invalid
    Python identifier; the import fails opaquely rather than saying why.
 
 ## Goal
@@ -25,7 +25,7 @@ the bare `ModuleNotFoundError` propagate. E.g.:
     dotted import 'eu.state_aid' not found, but sibling dir 'eu/state-aid/' exists —
     package directories must be valid identifiers; rename 'state-aid' -> 'state_aid'.
 
-    package segment '42usc423_…' begins with a digit — a package dir cannot start with a digit;
+    package segment '77usc501_…' begins with a digit — a package dir cannot start with a digit;
     rename the directory to be letter-led.
 
 ## Where
@@ -82,7 +82,7 @@ already have. The stated remedy is actively harmful here.
 
 **The shape this todo actually reports was not enriched at all.** The motivating
 example is a hyphenated *intermediate* directory —
-`-import_from(eu.state_aid.gber, [...])` — and CPython raises that with
+`-import_from(eu.state_aid.reg_w_scheme, [...])` — and CPython raises that with
 `name='eu.state_aid'`, a strict *prefix* of the declared path.
 `enrich_import_error` keyed on `exc.name in targets` (exact match), so it did not
 recognise the failure as this file's own directive and returned `None`. The
@@ -108,13 +108,13 @@ where it went.
 dropped.** A digit-leading segment cannot be *written*, so it never reaches any
 finder or loader:
 
-    -import_from(42usc423_ssdi, [D])
+    -import_from(77usc501_abc, [D])
 
     File "dig.clausal", line 1
-        -import_from(42usc423_ssdi, [D])
+        -import_from(77usc501_abc, [D])
                       ^
     SyntaxError: invalid decimal literal
-        1 | -import_from(42usc423_ssdi, [D])
+        1 | -import_from(77usc501_abc, [D])
           |               ^
 
 The caret is already on the exact character, from the syntax-error-source-line

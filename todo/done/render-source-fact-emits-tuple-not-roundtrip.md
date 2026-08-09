@@ -41,7 +41,7 @@ items = R.reify_file(
 fact = [it for it in items if type(it).__name__=="Clause" and it.goals==[]][0]
 
 rendered = R.render_source(fact)
-# => '(per_se_ecp_entity_type(eu.compliance.client_categorisation_rule.schema.investment_firm),)'
+# => '(per_se_special_entity_type(eu.compliance.client_categorisation_rule.schema.investment_firm),)'
 #    ^ wrapped in parens + trailing comma = a Python tuple expression
 
 back = R.reify_source(rendered)
@@ -51,7 +51,7 @@ assert back[0] == fact          # FAILS — round-trip broken
 The clean fact surface DOES reify correctly:
 ```python
 type(R.reify_source(
-  'per_se_ecp_entity_type(eu.compliance.client_categorisation_rule.schema.investment_firm),'
+  'per_se_special_entity_type(eu.compliance.client_categorisation_rule.schema.investment_firm),'
 )[0]).__name__            # 'Clause'  (bare head + trailing comma, no wrapping parens)
 ```
 

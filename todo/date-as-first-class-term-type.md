@@ -63,5 +63,5 @@ not a blanket change.
 
 ## Related
 - `todo/date-api-snake-case-rename.md` (date_time API → snake_case) — do the ergonomics together.
-- Corpus convention today (`docs/clausal-cheatsheet.md` "Corpus authoring"): `[Y,M,D]` triples +
-  `Date/4`; update it if/when date-args land.
+- Corpus convention today (the downstream corpus's authoring-conventions doc, "Corpus authoring"):
+  `[Y,M,D]` triples + `Date/4`; update it if/when date-args land.

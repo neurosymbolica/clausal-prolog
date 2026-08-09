@@ -35,14 +35,14 @@ and a body literal never resolves to one. (Verified: the repro module has a `Pre
 ## Repro (behaviour confirmed, not a defect)
 ```clausal
 -module(cite, [ c_undecl(V), c_decl(V), c_ident(V) ])
--private(['Regulation (EU) 2016/679, Art 6', art_6_1_a])
+-private(['Regulation (XX) 2020/123, Art 6', art_6_1_a])
 c_undecl(V) <- (V is 'some undeclared phrase')
-c_decl(V)   <- (V is 'Regulation (EU) 2016/679, Art 6')
+c_decl(V)   <- (V is 'Regulation (XX) 2020/123, Art 6')
 c_ident(V)  <- (V is art_6_1_a)
 ```
 ```
 c_undecl -> ('str', 'some undeclared phrase')
-c_decl   -> ('str', 'Regulation (EU) 2016/679, Art 6')   # str even though declared in -private
+c_decl   -> ('str', 'Regulation (XX) 2020/123, Art 6')   # str even though declared in -private
 c_ident  -> ('PredicateMeta', art_6_1_a)                 # bare identifier is a true atom
 ```
 

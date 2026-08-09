@@ -135,7 +135,7 @@
 > ---
 > *Original report follows.*
 
-**Reported 2026-06-24.** Found scoring the LegalBench diversity calibration. This is the **residual after the
+**Reported 2026-06-24.** Found scoring an external benchmark's diversity calibration. This is the **residual after the
 `_query_cache` fix** — a *different* mechanism: the cache bug returned a wrong *value*; this one **drops or
 duplicates whole solutions**. High severity: it silently corrupts any long-lived multi-query harness (the
 normal test/scoring shape), and it is **non-deterministic** (the affected set varies run to run).
@@ -152,7 +152,7 @@ querying** of one loaded module.
 ## Self-contained repro
 
 `todo/seq-leak-repro/` (no external deps beyond clausal):
-- `diversity_all.clausal` — a real rulebase (cut-free §1332 diversity engine: negation + `is not`/dif +
+- `diversity_all.clausal` — a real rulebase (cut-free §9901 diversity engine: negation + `is not`/dif +
   disjoint defeater clauses) with 1836 case fact-blocks baked in.
 - `query_order.json` — the 1836 `(case_id, expected_verdict)` pairs.
 - `seq_leak_repro.py` — loads the module **once**, queries each case sequentially, reports leaks, then

@@ -29,7 +29,7 @@ arbitrary — the complaint is about the *output*):
 
 ```clausal
 Test("cite term constructs correctly") <- (
-    CITE_TERM is cite(eu_reg_2016_399_art_6_1),
+    CITE_TERM is cite(reg_x_2016_art_6_1),
     functor(CITE_TERM, FUNCTOR_NAME, ARITY),
     FUNCTOR_NAME is cite,
     ...
@@ -166,7 +166,7 @@ After:
   test_load.clausal:57 :: cite term constructs correctly
     goal 3 of 4 failed:
       FUNCTOR_NAME is rulebase.rolling_window_rule.citations.cite
-    bindings at failure: CITE_TERM = cite(eu_reg_2016_399_art_6_1), FUNCTOR_NAME = 'cite', ARITY = 1
+    bindings at failure: CITE_TERM = cite(reg_x_2016_art_6_1), FUNCTOR_NAME = 'cite', ARITY = 1
 ```
 
 The author is now shown `FUNCTOR_NAME = 'cite'` — the string — next to the atom

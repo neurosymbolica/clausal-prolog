@@ -82,7 +82,7 @@ CONTROL fresh-module-per-query: 11 12 15   (correct)
 
 ## Impact
 
-A harness that queries a module more than once can silently report wrong results. In the SARA calibration the
+A harness that queries a module more than once can silently report wrong results. In a downstream tax-domain calibration the
 numeric score **spuriously collapsed to 1/9** until the scorer reloaded a fresh module per query; correct
 score with fresh-per-query is 9/9. Any multi-case oracle/test that reuses a module instance is at risk.
 
