@@ -11,9 +11,9 @@ Two front ends parse Clausal source today:
 
 * the engine's ``TermTransformer`` (``clausal/templating/term_rewriting.py``),
   which lowers the AST to the Terms IR and runs it, and
-* the SMT prover in the ``clausify`` repo (``auto/formal/ir.py`` +
-  ``auto/formal/translate.py``), which builds its OWN clause IR from the raw
-  ``ast`` and translates it to Z3.
+* a second front end — an independent SMT-based checker maintained by a
+  downstream consumer — which builds its OWN clause IR from the raw ``ast``
+  and translates it to Z3.
 
 The prover re-implements the engine's *semantics* on purpose: it exists to be
 an INDEPENDENT cross-check, so if it consumed the engine's analysis an engine

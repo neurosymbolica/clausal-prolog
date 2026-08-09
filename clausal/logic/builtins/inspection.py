@@ -187,9 +187,9 @@ def _construct_named(name_val, args, who: str):
     away the very class the caller supplied.  Since a Compound never unifies
     with a declared term-class instance of the same name and arity, that made
     decompose-then-reconstruct fail for every declared with-fields term, and
-    the two rendered identically so the mismatch was invisible.  The kit
-    documented the symptom as settled behaviour rather than a defect (see
-    ``planner_lib.clausal``, "ATTR-LIST BRANCH — VERIFIED SEMANTICS").  See
+    the two rendered identically so the mismatch was invisible.  Downstream
+    documentation had recorded the symptom as settled behaviour rather than
+    a defect.  See
     ``todo/done/functor-3-names-an-atom-as-a-class-but-a-compound-as-a-string.md``.
 
     Only the class arm resolves.  A ``str`` name still builds a Compound and is

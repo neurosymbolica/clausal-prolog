@@ -1141,7 +1141,7 @@ def _unparse_clause(node):
         # Python).  ``ast.unparse`` would emit the Python tuple literal
         # ``(head,)``; the canonical clausal fact surface is ``head,`` (bare head
         # + trailing comma, no wrapping parens).  Emit that so a rendered fact
-        # matches the corpus surface the mutation auditor splices back into a file.
+        # matches the corpus surface a source-rewriting tool splices back into a file.
         head = _tighten_nested_arrows(ast.unparse(inner.elts[0]))
         return f"{head},"
     return _tighten_nested_arrows(ast.unparse(node))

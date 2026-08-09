@@ -146,7 +146,7 @@ def _arrow_body_error(node=None, source_lines=None, filename=None):
     Raised bare, this error names the rule but not the clause. That is affordable for a
     human reading a short file and expensive for anything else: a 20-clause module whose
     legal nested `<-` forms look exactly like what the message warns about gives the
-    reader nothing to bisect on. Measured 2026-08-08 (clausify study 25, eumr_turnover):
+    reader nothing to bisect on. Measured 2026-08-08 against an LLM authoring loop:
     four authoring attempts spent guessing the line, then the run was abandoned.
 
     Every raise site holds an AST node, so the coordinates are already in hand. Setting
@@ -771,8 +771,8 @@ def _warn_isnot_partial_pattern(rhs, node, source_lines) -> None:
 def _find_cons_bar_in_head(arg_nodes) -> "BinOp | None":
     """The first ``A | B`` in a head argument that reads as Prolog cons, or None.
 
-    Two shapes qualify, both from study 13 (see
-    ``todo/C1-ill-typed-interop-calls-are-silent-failures.md``):
+    Two shapes qualify, both observed in generated code (see
+    ``todo/done/C1-ill-typed-interop-calls-are-silent-failures.md``):
 
     * ``[H | T]`` — a BitOr as a direct element of a list display; Python
       parses the Prolog cons brackets as a one-element list of ``H | T``;
@@ -3210,10 +3210,9 @@ class EmbedTransformer(NodeTransformer):
           at this head.  When one *is* emitted (the functor's first clause) it
           re-mints the class to exactly the derived fields unless they already
           match, so the bound class is known here and keyword emission is
-          precise.  That is the shape ``au/firb/computation.clausal`` and
-          ``us/sara_irc_tax/computation.clausal`` rely on: import a 0-arity
-          vocabulary atom, then define a same-named predicate whose first
-          clause re-mints over the import.
+          precise.  That is the shape ``tests/fixtures/impord_atom_then_pred.clausal``
+          pins: import a 0-arity vocabulary atom, then define a same-named
+          predicate whose first clause re-mints over the import.
         * the import must have been seen *earlier in the file*.  Before it, the
           binding is provably local, so keyword emission is both correct and a
           better error message.

@@ -30,7 +30,8 @@ from clausal.terms import Add, Compound, Div, FloorDiv, Mod, Mult, Negate, Pow, 
 
 #: The nodes ``==`` evaluates and ``is`` does not.  ``UnaryPlus`` is absent on
 #: purpose: ``++X`` is this language's Python-interop marker, not arithmetic
-#: (``DAYS is ++DELTA.days`` in clausify's deadline_lib is correct code).
+#: (``DAYS is ++DELTA.days`` — reading a Python ``timedelta`` attribute — is
+#: correct code).
 ARITH_OPERATOR_TERMS = (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)
 
 #: Expected-types that mean "a number was required here".  ``evaluable`` is
