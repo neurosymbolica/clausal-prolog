@@ -33,10 +33,10 @@ into one bidirectional relation and adds timestamp + ISO-8601 conveniences.
   `docs/date_time.md` (plus incidental mentions in other docs).
 
 **Out of scope (separate TODOs / repos):**
-- The `formalize_lib` helper rename (`prof_get`→`profile_get`, …) — sibling request, its own TODO.
+- A downstream helper-library rename (`prof_get`→`profile_get`, …) — sibling request, its own TODO.
 - `date-max-min-ordinal-apis.md` — new ordinal/max/min date APIs.
-- The `clausify-domains` rulebase sweep and `kit/scaffolding/*` — those live in a **separate
-  repo** not present here, so they are not swept by this change.
+- A downstream rulebase corpus sweep and its scaffolding templates — those live in **separate
+  repos** not present here, so they are not swept by this change.
 
 ## Key decisions
 

@@ -26,8 +26,8 @@ Both failures are documented and reproduced:
 - **Column 2** — Phenomenon A (`implementation_plans/dict-atom-keys-vs-predicates.md`): importing a
   key atom whose name matches a predicate the module *exports* shadows the predicate; calls
   mis-resolve to 0-arity atom construction and die with `TypeError: __init__() got an unexpected
-  keyword argument`. Worked around by un-exporting predicates. `au/firb/profile_keys.yaml` carries
-  the workaround in a header comment.
+  keyword argument`. Worked around by un-exporting predicates. One downstream domain's
+  `profile_keys.yaml` carries the workaround in a header comment.
 - **Column 3** — `todo/query-template-rebinds-atom-dict-keys.md`: an atom-keyed `DictTerm` crossing
   into a module where the key name is bound to something else has its key **silently rebound** to
   that object. Verified: a profile with `query_date: 5` returns **0** solutions from a rule that
@@ -95,12 +95,14 @@ profiles" would be wrong.
 
 ## Cost
 
-- Reverses a completed 54-domain migration and inverts R8 plus `R8_STRINGKEY_ALLOWLIST`. The edit is
-  mechanical, but every domain needs re-proving (`G3 PROVED ≥ baseline`) and its gold suite re-run.
+- Reverses a completed corpus-wide migration and inverts R8 plus its string-key allowlist. The edit
+  is mechanical, but every domain needs re-proving (`G3 PROVED ≥ baseline`) and its gold suite
+  re-run.
 - New directive, new checker, plus the scoping decision above.
 - The SMT prover's profile projection must recognize the new read/key form.
-- `profile_keys.yaml` (40 of 54 domains) becomes redundant or generated — it is the same information,
-  currently sidecar. Folding it in is a benefit, but it is also 40 files of migration.
+- `profile_keys.yaml` (most domains in that corpus) becomes redundant or generated — it is the same
+  information, currently sidecar. Folding it in is a benefit, but it is also many files of
+  migration.
 
 ## Sequencing
 
@@ -128,5 +130,5 @@ question separately.
 - `todo/query-template-rebinds-atom-dict-keys.md` — column 3, with reproduction
 - `implementation_plans/dict-atom-keys-vs-predicates.md` — column 2, with design options
 - `todo/dict-native-profile-api.md` — the dict-native surface and its JSON-mapping goal
-- `clausify-domains/_tools/check_corpus_conventions.py` — R8 and `R8_STRINGKEY_ALLOWLIST`
-- `clausify-domains/*/profile_keys.yaml` — the existing sidecar schema, 40 domains
+- the downstream corpus's own convention checker — R8 and its string-key allowlist
+- the downstream corpus's `profile_keys.yaml` sidecar schema, carried by most of its domains

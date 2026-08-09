@@ -54,13 +54,13 @@ methodology to the whole package.
 
 ### Authoritative semantics reference: the Clausal cheat-sheet
 
-`/workspace/clausify/docs/clausal-cheatsheet.md` (729 lines) is a dense,
-construct-by-construct map of *idiomatic, correct* Clausal, with **runnable**
-examples that were executed against the interpreter in `/workspace/clausal`.
-It is the closest thing to a ground-truth spec of *intended* behavior and is
-the primary reference for rubric class 1 (semantics vs. documentation). Every
-agent MUST read it before auditing and treat it as authoritative for the
-contracts it covers, including:
+An external, executed-against-Clausal cheat-sheet (not in this repo) is a
+dense, construct-by-construct map of *idiomatic, correct* Clausal, with
+**runnable** examples that were executed against the interpreter in
+`/workspace/clausal`. It is the closest thing to a ground-truth spec of
+*intended* behavior and is the primary reference for rubric class 1
+(semantics vs. documentation). Every agent MUST read it before auditing and
+treat it as authoritative for the contracts it covers, including:
 
 - Cut-free by design: **no `!/0`, `(->)/2`, `(*->)/2`** — replaced by disjoint
   guarded clauses, first-arg indexing, reified `If(C,T,E)`, `dif/2`, `once/1`.
@@ -73,13 +73,11 @@ contracts it covers, including:
   0-based `nth0`; there is no `nth1`; SWI `succ` → `succ/2`).
 
 Caveats: sections marked *(unverified)* are documentation-derived, not
-executed — treat as weaker evidence. A live clausify todo
-(`/workspace/clausify/todo/cheatsheet-remove-python-escapes.md`) indicates the
-`++()` / `:=` escape guidance is being revised, so prefer the cheat-sheet's
-verified relational
-idioms over escape-based examples when they conflict. The cheat-sheet lives in
-the sibling **clausify** repo
-(read-only for this audit); do not modify it.
+executed — treat as weaker evidence. A live todo in the cheat-sheet's owning
+repo indicates the `++()` / `:=` escape guidance is being revised, so prefer
+the cheat-sheet's verified relational idioms over escape-based examples when
+they conflict. The cheat-sheet lives in a sibling, external repo (read-only
+for this audit); do not modify it.
 
 ### Other standing constraints (from project memory)
 
@@ -203,8 +201,8 @@ classes:
     on PATH**, so the agent checks availability first and, if the backend can't
     be built/run, logs the divergence class it *would* test as an open item
     rather than skipping silently.
-  This mirrors clausify's differential pattern at
-  `/workspace/clausify/docs/adversarial-verification/fable-oracle-prompts/`.
+  This mirrors an external, executed-against-Clausal differential-verification
+  pattern maintained by a downstream consumer.
 - **C-finding verification toolkit** (audits owning `.c`: 1, 4, 5, 6, 7, 8, 9).
   pytest alone can't confirm a leak or an FT bug. Concrete methods:
   - Refcount/leak: `sys.getrefcount` deltas and `gc.get_objects()` /
@@ -336,7 +334,8 @@ three subsystems. Known cross-cutting work already captured in
   a headless subagent could not do. The implementation plan provides 11
   ready-to-paste prompt blocks — one per session.
 - The prompt opens with required reading, before any code reading:
-  1. `/workspace/clausify/docs/clausal-cheatsheet.md` (intended semantics).
+  1. An external, executed-against-Clausal cheat-sheet (not in this repo) —
+     intended semantics.
   2. The subsystem's own docstrings and `docs/`.
   3. **Prior art for this subsystem** — the relevant slices of
      `todo/cross_cutting_issues.md`, `todo/audit-tests-input-output-mode-

@@ -20,7 +20,7 @@ Deliberately skips in BOTH passes:
 - the audit's own OUTPUT roots (findings.md, per-subsystem test files, todos) —
   created by the audit sessions, so they legitimately don't exist yet;
 - prompt-template tokens still containing `{{...}}`;
-- glob/brace/placeholder shorthand (`*`, `{`, `<`) and absolute clausify refs.
+- glob/brace/placeholder shorthand (`*`, `{`, `<`) and absolute external refs.
 
 The bare-fragment warning pass is restricted to SOURCE extensions
 (`.py`/`.c`/`.h`/`.clausal`) — not `.md` — because prose freely names external

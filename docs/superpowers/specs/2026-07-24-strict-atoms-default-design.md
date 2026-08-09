@@ -45,10 +45,10 @@ default breaks nothing, and strictness is then peeled on file-by-file.
 
 **Scope: the Clausal repository only.** The codemod and the default flip touch
 `clausal/**` and `tests/fixtures/**`. Downstream consumers (`thai_imm_rules`,
-`clausify-domains`, the `ai_act`/MAR rules) migrate on their own schedule — the
-directive is per-file and does not propagate, so a downstream program adds
-`-implicit_atoms` to any loose file before upgrading. `clausify-domains` is
-believed to be largely strict-clean already.
+a downstream rulebase corpus, and the rule sets it hosts) migrate on their own
+schedule — the directive is per-file and does not propagate, so a downstream
+program adds `-implicit_atoms` to any loose file before upgrading. That corpus
+is believed to be largely strict-clean already.
 
 ## End-state runtime model
 

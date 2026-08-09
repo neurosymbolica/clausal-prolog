@@ -7,7 +7,7 @@ todos.
 
 ## Read first, before any code (in order)
 
-1. `/workspace/clausify/docs/clausal-cheatsheet.md` — the executed-against-Clausal
+1. An external, executed-against-Clausal cheat-sheet (not in this repo) — the
    ground-truth of *intended* semantics. Treat verified sections as
    authoritative; sections marked *(unverified)* are weaker evidence.
 2. This subsystem's docstrings and its `docs/` topic pages.

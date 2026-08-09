@@ -337,6 +337,6 @@ error  7.89(euro) + 5(united_states.dollar)  → UnitsMismatch
 
 ## Migration (separate, out of scope here)
 
-Clausify's `kit/currency.clausal` (flat lowercase alpha-3 atoms, with the `all`/`try_`
-collisions) will be migrated to this vocabulary once this feature lands. Todo filed at
-`/workspace/clausify/todo/migrate-currency-to-decimal-vocabulary.md`.
+A downstream helper library's legacy currency vocabulary (flat lowercase alpha-3 atoms,
+with the `all`/`try_` collisions) will be migrated to this vocabulary once this feature
+lands. A todo for that migration is filed in that consumer's own repo.

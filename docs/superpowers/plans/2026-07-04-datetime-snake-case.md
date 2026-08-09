@@ -716,7 +716,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Mark the TODO done.**
 
-Move `todo/date-api-snake-case-rename.md` to `todo/done/date-api-snake-case-rename.md` and append a closing note recording the deltas from the original proposal: flag-day (no aliases), `datetime`/`timedelta` spelled as single words, `weekday` (0-based) instead of `day_of_week`, `FormatDate`+`ParseDate` folded into bidirectional `datetime_string/3`, plus new `timestamp/2` and `datetime_string_iso/2`/`date_string_iso/2`. Note the external `clausify-domains`/`kit` sweep remains outstanding in that repo.
+Move `todo/date-api-snake-case-rename.md` to `todo/done/date-api-snake-case-rename.md` and append a closing note recording the deltas from the original proposal: flag-day (no aliases), `datetime`/`timedelta` spelled as single words, `weekday` (0-based) instead of `day_of_week`, `FormatDate`+`ParseDate` folded into bidirectional `datetime_string/3`, plus new `timestamp/2` and `datetime_string_iso/2`/`date_string_iso/2`. Note a corresponding sweep remains outstanding in downstream consumers' own repos.
 
 - [ ] **Step 2: Commit.**
 
@@ -741,7 +741,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - `datetime_string_iso/2`, `date_string_iso/2` via isoformat/fromisoformat → Task 3. ✓
 - Consumer sweep (test_date_time.py, transitive test, both fixtures, date_time.md + incidental docs) → Task 1 Steps 1,5–9. ✓
 - Docstring update → Task 1 Step 3(d). ✓
-- Out-of-scope (formalize_lib, date-max-min-ordinal, external domains) → not touched; recorded in Task 4 note. ✓
+- Out-of-scope (a downstream helper library, date-max-min-ordinal, external domains) → not touched; recorded in Task 4 note. ✓
 
 **Placeholder scan:** All code steps show complete code; all commands are exact with expected output. No TBD/"add error handling". ✓
 

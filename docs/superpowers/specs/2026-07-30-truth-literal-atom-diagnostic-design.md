@@ -19,14 +19,14 @@ strict_atoms: undeclared atom 'true' in eu.banking.crr_output_floor.decision
 
 Not one of the five is the right answer. The right answer is `True`.
 
-In a 24-run local-model formalization study (study 11), `undeclared atom(s) in module`
-burned 69 attempts across 21 of 24 runs, with 65% never recovering. Of the 241
-undeclared-atom mentions, `true` (38), `false` (18) and `null` (7) account for
-**63 — 26%**. Just over a quarter of every undeclared-atom incident is a model writing
-the Python/JSON spelling of a value the language already has.
+In a measured authoring study, `undeclared atom(s) in module` burned dozens of attempts
+across most runs, with the majority never recovering. Of all undeclared-atom mentions,
+`true`, `false` and `null` together account for **roughly a quarter**. Just over a
+quarter of every undeclared-atom incident is a model writing the Python/JSON spelling
+of a value the language already has.
 
 There is no competing convention to respect: the gold corpus uses bare `True`/`False`
-2003 times and `Unknown` 6 times, and every one of the 47 lowercase `true` occurrences
+and `Unknown` overwhelmingly more often, and every lowercase `true` occurrence found
 is inside a comment. One right spelling exists and the message declines to name it.
 
 `Unknown` being titlecase is the least guessable part — every other atom in the

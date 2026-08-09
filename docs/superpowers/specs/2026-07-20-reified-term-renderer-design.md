@@ -82,17 +82,17 @@ terms' own `==`/unification.
    in the first draft of this very spec), so it does NOT by itself certify the
    renderer.
 2. **Corpus round-trip — the real completeness gate.** A parametrized test walking
-   every `.clausal` file under `/workspace/clausify-domains` (571 files),
+   every `.clausal` file under a large external corpus,
    **filtering to `Clause` items only** (`reified_clause`, or
    `type(item).__name__ == "Clause"`) — every file opens with `-module`/
    `-import_from`, which reify to `ModuleDirective`/`PythonCode`, the node kinds the
    renderer deliberately *raises* on; iterating raw `reified_item` would
    `RenderError` on line 1 of every file. The test may skip (with a clear reason)
    when the corpus dir is absent so the engine suite stays portable — **but it MUST
-   be RUN, and pass with zero `RenderError`s, before the mutation auditor depends on
-   the renderer.** "Green fixtures" ≠ "complete"; this sweep is what closes the gap.
-   Any clause the renderer can't handle must raise `RenderError`, never silently
-   corrupt (a corrupt mutant would falsely "survive" and inflate the auditor's
+   be RUN, and pass with zero `RenderError`s, before a source-rewriting tool depends
+   on the renderer.** "Green fixtures" ≠ "complete"; this sweep is what closes the
+   gap. Any clause the renderer can't handle must raise `RenderError`, never silently
+   corrupt (a corrupt mutant would falsely "survive" and inflate that tool's
    coverage report).
 
 ## Out of scope
@@ -103,8 +103,9 @@ terms' own `==`/unification.
 - Rendering `ModuleDirective` / `PythonCode` — raise instead.
 - **Non-splat dict literals with bare-atom keys** (`{foo: V}`). These crash the reflection
   *reifier* (`reify_source` → `TypeError: unhashable type: 'Goal'`) before any clause reaches the
-  renderer, so they cannot be exercised by the render gate. 126/571 corpus files trip this; the
-  corpus test skips exactly them with reason `reifier defect (dict-literal atom key unhashable)`.
+  renderer, so they cannot be exercised by the render gate. A minority of the corpus's files trip
+  this; the corpus test skips exactly them with reason `reifier defect (dict-literal atom key
+  unhashable)`.
   Filed as `todo/reify-source-dict-literal-atom-key-unhashable.md` (a reifier fix, separate from the
   renderer). The splat form `{**B, foo: V}` reifies fine and IS rendered (`DictLiteral` node).
 

@@ -13,7 +13,7 @@
 - Deliverable is **findings + adversarial tests + queued todos only** — no production-code fixes are applied by any audit.
 - Design contradictions/ambiguities are **first-class**: resolved in-session with the user (after checking `DESIGN-DECISIONS.md`) or logged `open`.
 - Each audit runs as its **own interactive Fable session** — prompts may ask the user; they are not headless subagents.
-- Required reading (every prompt, before code): `/workspace/clausify/docs/clausal-cheatsheet.md`, the subsystem's docstrings + `docs/`, subsystem prior-art, and current `DESIGN-DECISIONS.md`.
+- Required reading (every prompt, before code): an external, executed-against-Clausal cheat-sheet (not in this repo), the subsystem's docstrings + `docs/`, subsystem prior-art, and current `DESIGN-DECISIONS.md`.
 - Standing contracts: `==` is arithmetic eq (not structural); a string **is** a list of 1-char strings; cut-free (no `!`, `->`, `*->`); unification is `is`; bare atoms are strings; builtins are PascalCase full words.
 - pytest is run **per-file** only — `pytest tests/` OOM-SIGKILLs on this box.
 - This box is a **3.13 GIL build**; free-threading claims can only be *executed* on the `.cpython-314t` build, else logged `unconfirmed — needs 3.14t`.
@@ -244,7 +244,7 @@ Deliberately skips:
   those are created by the audit sessions, so they legitimately don't exist yet;
 - prompt-template tokens still containing `{{...}}`;
 - glob/brace/placeholder shorthand (`*`, `{`, `<`), bare fragments (`terms.py`,
-  `optimisations/`), and absolute clausify refs.
+  `optimisations/`), and absolute external refs.
 
 Usage: python scripts/audit_2026_07_05/check_prompt_paths.py <prompt.md>...
 Exit 0 if all paths resolve, 1 otherwise (prints the misses).
@@ -380,7 +380,7 @@ todos.
 
 ## Read first, before any code (in order)
 
-1. `/workspace/clausify/docs/clausal-cheatsheet.md` — the executed-against-Clausal
+1. An external, executed-against-Clausal cheat-sheet (not in this repo) — the
    ground-truth of *intended* semantics. Treat verified sections as
    authoritative; sections marked *(unverified)* are weaker evidence.
 2. This subsystem's docstrings and its `docs/` topic pages.

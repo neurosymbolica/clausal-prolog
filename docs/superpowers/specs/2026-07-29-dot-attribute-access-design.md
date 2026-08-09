@@ -19,10 +19,10 @@ The language change is small and rides on tested machinery. The convention is wh
 
 ## Motivation
 
-Across `clausify` / `clausify-domains` there are **909 `get()` calls in 90 files**. Almost all are
-the shape `get(PROFILE, key, PROFILE_KEY), use(PROFILE_KEY)` — a whole goal and a named variable
-spent on fetching one value. `PROFILE.key` is the same character count as the variable name alone
-and removes the goal.
+Across a large external corpus, `get()` calls of this shape number in the high hundreds, spread
+over most of the corpus's files: `get(PROFILE, key, PROFILE_KEY), use(PROFILE_KEY)` — a whole goal
+and a named variable spent on fetching one value. `PROFILE.key` is the same character count as the
+variable name alone and removes the goal.
 
 More importantly, the current corpus is *asking*, not *telling*. The determination of, say,
 foreign-ness is an inline sequence of goals duplicated at each site. Under the convention it becomes
@@ -188,7 +188,7 @@ Callers import *methods*, not keys.
 predicate. Every call `key(A, B)` then mis-resolves to constructing the 0-arity atom with keyword
 arguments and fails with `TypeError: __init__() got an unexpected keyword argument '<VarName>'`. The
 collision is tied to the **export**, not to mere coexistence — an unexported predicate and an
-imported same-named atom get along fine, which is what `us/sara_irc_tax` relies on.
+imported same-named atom get along fine, which is what at least one downstream domain relies on.
 
 The reason this bites at all is that snake_case predicates and snake_case key atoms occupy the same
 namespace shape. `query_date` the key and `query_date/2` the predicate are spelled identically
@@ -237,13 +237,13 @@ use the keys.
 
 Three concrete payoffs:
 
-1. **It dissolves Phenomenon A** (defined above). `au/firb/profile_keys.yaml` documents the
-   workaround in a comment:
+1. **It dissolves Phenomenon A** (defined above). One downstream domain's `profile_keys.yaml`
+   documents the workaround in a comment:
    *"query_date INCLUDED: its `query_date/2` predicate is NOT exported from computation, so the
    imported `query_date` atom and the predicate coexist."* That un-export dance exists only because
    key atoms must travel to their readers. Under the convention they do not travel.
-2. **It moves an existing schema into the language.** 40 of 54 domains already carry
-   `profile_keys.yaml` with types (`foreign_person: bool`, `interest_percent: value`), self-described
+2. **It moves an existing schema into the language.** Most domains in that corpus already carry
+   a `profile_keys.yaml` with types (`foreign_person: bool`, `interest_percent: value`), self-described
    as "single source of truth … so the interface catalog can machine-derive the profile schema
    (IC-13) and the SMT proof can range over a symbolic profile." It is a sidecar that nothing
    enforces at load time. The type module is that file, where the compiler and strict-atoms checker
@@ -277,18 +277,19 @@ That is closed-world dispatch, not open extension. The convention must not promi
 
 ## Ecosystem impact
 
-- **SMT prover** (`clausify` `auto/formal`): profile reads are projected onto `has_k`/`val_k` Z3
-  consts only for *recognized* read forms. A new form the projection does not know degrades
+- **SMT prover** (an external prover's own front end): profile reads are projected onto `has_k`/`val_k`
+  Z3 consts only for *recognized* read forms. A new form the projection does not know degrades
   provability silently rather than erroring. **Resolved 2026-07-29** by a shared desugaring seam
   rather than a second implementation — see "The shared desugar seam" below.
 - **Reifier / renderer / auditor**: see the round-trip decision above.
-- **Corpus lint** (`clausify-domains/_tools/check_corpus_conventions.py`, R8 + `R8_STRINGKEY_ALLOWLIST`):
-  needs rules for the new convention, and R8 should be re-examined once keys stop crossing modules.
-- **Docs**: `docs/dicts_sets.md`, `docs/directives.md`, the clausify cheat-sheet and scaffolding
+- **Corpus lint** (the downstream corpus's own convention checker, rule R8 + its string-key
+  allowlist): needs rules for the new convention, and R8 should be re-examined once keys stop
+  crossing modules.
+- **Docs**: `docs/dicts_sets.md`, `docs/directives.md`, an external cheat-sheet and scaffolding
   skeletons. Item 1 of `todo/dict-native-profile-api.md` ("Core promotion — remaining") is the
   natural home.
-- **`formalize_lib` wrappers** (`check_gte`, `check_tri`, …) take the key as a *parameter*, so they
-  need the dynamic `P[KEY]` form and are unaffected.
+- **Downstream helper-library wrappers** (`check_gte`, `check_tri`, …) take the key as a
+  *parameter*, so they need the dynamic `P[KEY]` form and are unaffected.
 - **Back-compat**: none at risk. `X.attr` is currently a `SyntaxError`, so no existing code relies on
   any behaviour here.
 
@@ -296,8 +297,9 @@ That is closed-world dispatch, not open extension. The convention must not promi
 
 `clausal/templating/desugar.py` holds `desugar_surface(tree) -> tree`, the ONE implementation of
 `P.key → P[key]`. Both front ends run it: `TermTransformer.visit_Attribute` calls it, and the
-prover calls it immediately after its own `ast.parse` (`clausify` `auto/formal/ir.py`). A future
-sugar is added there once, and both sides learn it together.
+prover — an independent SMT-based checker maintained by a downstream consumer — calls it
+immediately after its own `ast.parse`. A future sugar is added there once, and both sides learn
+it together.
 
 The boundary is deliberate and narrow — **syntax only**:
 
@@ -323,8 +325,8 @@ the majority of the 909 sites may well stay as they are. Sequence:
 1. Land the language change plus the `instantiation_error` fix.
 2. Document `.` and the convention.
 3. Teach the SMT projection the new form.
-4. Pilot the convention on **one** domain (`au/firb` is the natural choice — it carries the
-   Phenomenon A workaround in its own YAML comment) and confirm decision-preservation and
+4. Pilot the convention on **one** domain (the domain that carries the Phenomenon A workaround in
+   its own YAML comment is the natural choice) and confirm decision-preservation and
    `G3 PROVED ≥ baseline` before any corpus-wide pass.
 
 ## Testing
@@ -351,19 +353,19 @@ the majority of the 909 sites may well stay as they are. Sequence:
    **Answered in implementation:** flattens to `[k]`. Clauses that needed read-once lowering also
    render their extracted `_read_N` goals. Accepted trade; it does change audit/reified output.
 2. ~~Does the SMT projection see source or post-lowering IR?~~ **Answered 2026-07-29 — SOURCE.**
-   The prover has its own front end: `clausify/auto/formal/ir.py:354` does `ast.parse(text)` on the
-   `.clausal` source, entirely independent of the engine's pipeline. Two consequences, both the
-   opposite of what was assumed:
+   The prover has its own front end: it does `ast.parse(text)` on the `.clausal` source, entirely
+   independent of the engine's pipeline. Two consequences, both the opposite of what was assumed:
    - **`.` is invisible to the prover and MUST be taught before any domain adopts it.** The prover
      never sees the engine's `P.k → P[k]` rewrite; it sees an `ast.Attribute` node it does not
      handle. Migration step 3 is therefore a **hard blocker** on the pilot, not a nice-to-have.
-     (`ir.py:156`'s `ast.Attribute` case is a node-walking helper for the arrow-adjacency check, not
-     a read projection.)
+     (Its node-walking helper for the arrow-adjacency check already visits `ast.Attribute`, but
+     that is not a read projection.)
    - **The read-once lowering does not affect the prover at all**, since the prover never sees
      lowered goals. The feared `_read_0 is P[k]` shape never reaches it.
-   Note the target form already exists: `translate.py:724` projects `V is P[key]` (a `bind_is` goal
-   with a `Subscript` RHS) via `axioms.subscript_read`. Teaching the prover `.` is plausibly just
-   normalizing `Attribute` → `Subscript` in its front end before that check.
+   Note the target form already exists: the prover's translation layer already projects
+   `V is P[key]` (a `bind_is` goal with a `Subscript` RHS) via its own subscript-read axiom.
+   Teaching the prover `.` is plausibly just normalizing `Attribute` → `Subscript` in its front end
+   before that check.
    **Done 2026-07-29** — and done *once*, as a shared syntax-only pass rather than a second copy of
    the rule. See "The shared desugar seam" above.
 3. Should Phenomenon A get its own engine fix (arity-aware call resolution — option 3 in

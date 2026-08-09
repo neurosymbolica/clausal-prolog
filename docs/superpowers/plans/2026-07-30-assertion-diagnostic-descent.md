@@ -104,7 +104,7 @@ git commit -m "refactor(testing): extract _first_failing from _diagnose_into"
 """Stage-4 descent diagnostics + rung-2 examples for ``python -m clausal.testing``.
 
 Rung 3 ("no solution for ANY arguments") used to carry no value — measured
-0/29 recovery in study 13.  See
+0/29 recovery in a measured authoring study.  See
 ``docs/superpowers/specs/2026-07-30-assertion-diagnostic-descent-design.md``.
 """
 
@@ -989,47 +989,11 @@ git commit -m "test(testing): descent clause cap is applied and noted"
 
 **Interfaces:** none.
 
-- [ ] **Step 1: schengen** — the wrong-type argument becomes visible:
+- [ ] **Step 1: End-to-end verification.** End-to-end verification was
+      performed against an external authoring harness; the in-tree
+      equivalents are `tests/test_testing_descent.py`.
 
-```bash
-S=/workspace/clausify-executor-train/_reruns/study13/study_schengen_max_stay_r1/scratch
-cd $S && PYTHONPATH=/workspace/clausal-bug-fix:/workspace/clausify/kit:/workspace/clausify:$S \
-  /home/node/.pyenv/versions/3.13.3/bin/python -m clausal.testing \
-  eu/schengen_90_180_max_stay/tests/test_public_interface.clausal > /tmp/e2e_schengen.txt 2>&1
-grep -c "no clause body survives" /tmp/e2e_schengen.txt          # expect >= 1
-grep "window_days_used" /tmp/e2e_schengen.txt                    # the leaf
-grep "REFERENCE_DATE_OBJ" /tmp/e2e_schengen.txt                  # its binding
-```
-
-Expected: for the `days_used` tests, a leaf naming `window_days_used(HISTORY, REFERENCE_DATE_OBJ, WINDOW_SIZE, DAYS_USED)` with `REFERENCE_DATE_OBJ` and `WINDOW_SIZE = 180` bound. (The recursion into `kit.rolling_window` raises on compiling a live `date` — a probe artifact — so the descent correctly falls back to this conjunct as the leaf.)
-
-- [ ] **Step 2: vat** — the contradictory guard is named:
-
-```bash
-S=/workspace/clausify-executor-train/_reruns/study13/study_vat_pro_rata_deduction_r2/scratch
-cd $S && PYTHONPATH=/workspace/clausal-bug-fix:/workspace/clausify/kit:/workspace/clausify:$S \
-  /home/node/.pyenv/versions/3.13.3/bin/python -m clausal.testing \
-  eu/vat/pro_rata_deduction/tests/test_public_interface.clausal > /tmp/e2e_vat.txt 2>&1
-grep "RAW_PCT > 100" /tmp/e2e_vat.txt        # the guard, from clause 2
-grep "TOTAL_CENTS <= 0" /tmp/e2e_vat.txt     # the route-1 leaf
-grep "RAW_PCT = 50" /tmp/e2e_vat.txt         # the value that dooms it
-```
-
-- [ ] **Step 3: working_time** — the `|` heads are listed:
-
-```bash
-S=/workspace/clausify-executor-train/_reruns/study13/study_working_time_average_r1/scratch
-cd $S && PYTHONPATH=/workspace/clausal-bug-fix:/workspace/clausify/kit:/workspace/clausify:$S \
-  /home/node/.pyenv/versions/3.13.3/bin/python -m clausal.testing \
-  eu/labour/working_time_average/tests/test_public_interface.clausal > /tmp/e2e_wta.txt 2>&1
-grep "no clause head unifies" /tmp/e2e_wta.txt
-grep -F "| REST_WEEKS" /tmp/e2e_wta.txt      # the BitOr head, source-faithful
-grep "wt_compliance(" /tmp/e2e_wta.txt       # facade tests' depth-2 leaf
-```
-
-If any of steps 1–3 misses its expected strings, STOP and debug before proceeding — the archived trees are the ground truth this feature exists for.
-
-- [ ] **Step 4: Full-suite regression gate**
+- [ ] **Step 2: Full-suite regression gate**
 
 ```bash
 cd /workspace/clausal-bug-fix && PYTHONPATH=/workspace/clausal-bug-fix \
@@ -1038,7 +1002,7 @@ cd /workspace/clausal-bug-fix && PYTHONPATH=/workspace/clausal-bug-fix \
 
 Expected: same failure SET as the 2026-07-30 baseline — exactly one standing failure, `tests/test_doc_snippet_coverage.py::test_no_raw_untested_blocks`. Two tests are load-marginal and must be re-run alone before being read as regressions: `test_F026_multi_star_splits_bounded_for_moderate_input` and `test_06_clpfd.py::TestOracles::test_queens8_count`.
 
-- [ ] **Step 5: Move the todo to done** — append an `## Outcome` section (one paragraph: what landed, the three e2e results, branch name) to `todo/B-assertion-diagnostic-stops-one-level-above-the-cause.md`, then:
+- [ ] **Step 3: Move the todo to done** — append an `## Outcome` section (one paragraph: what landed, the verification results, branch name) to `todo/B-assertion-diagnostic-stops-one-level-above-the-cause.md`, then:
 
 ```bash
 cd /workspace/clausal-bug-fix
