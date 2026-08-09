@@ -194,12 +194,12 @@ def _construct_named(name_val, args, who: str):
 
     Only the class arm resolves.  A ``str`` name still builds a Compound and is
     deliberately *not* resolved back to a class: which module's ``cite`` a bare
-    string names is ambiguous under module-local atom identity, and the kit's
-    ``key_string/2`` depends on the string arm behaving exactly as it does.
+    string names is ambiguous under module-local atom identity, and downstream
+    callers depend on the string arm behaving exactly as it does.
 
     An arity that disagrees with the class's field count is not that term, so
-    it falls through to the Compound rather than raising — which keeps the
-    kit's ``functor(PROBE, KEY, 1)`` over an arity-0 schema atom working.
+    it falls through to the Compound rather than raising — which keeps a
+    downstream ``functor/3`` probe over an arity-0 schema atom working.
     """
     if isinstance(name_val, PredicateMeta):
         # ``_fields`` is the field list whatever minted the class — a generated
