@@ -320,7 +320,7 @@ The boundary is deliberate and narrow — **syntax only**:
 ## Migration
 
 Strictly additive and opt-in. `get/3` is not deprecated — it remains correct for optional keys, and
-the majority of the 909 sites may well stay as they are. Sequence:
+the majority of those sites may well stay as they are. Sequence:
 
 1. Land the language change plus the `instantiation_error` fix.
 2. Document `.` and the convention.
