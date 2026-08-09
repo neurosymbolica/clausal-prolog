@@ -149,4 +149,4 @@ and [`test-failure-goal-level-diagnostics.md`](test-failure-goal-level-diagnosti
 an error that states a fact without the context needed to act on it. The census
 shows the pattern holds across all of them — **every message that named its
 subject was fixed on the following attempt; every message that did not burned the
-author's whole repair budget.**
+author's whole retry allowance.**

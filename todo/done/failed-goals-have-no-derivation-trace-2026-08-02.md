@@ -16,7 +16,7 @@ The actual defect is routinely 2–3 levels down, failing silently inside a `fin
 
 ## Measured incident
 
-A rolling date-window authoring run — FOUR full repair budgets (original + 2 resumes
+A rolling date-window authoring run — FOUR full retry allowances (original + 2 resumes
 and a rewind, 28+ attempts, heavy byte-identical stalling) against one unchanging
 report shape:
 

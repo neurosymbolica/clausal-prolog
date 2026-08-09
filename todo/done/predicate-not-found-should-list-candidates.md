@@ -103,4 +103,4 @@ From the same census, before/after the import-export fix landed:
 | bodyless fact missing trailing comma (already names the construct) | — | 1 attempt, **0% stuck** |
 
 Every message that names its subject gets fixed on the following attempt. Every
-message that states a bare fact burns the author's whole repair budget.
+message that states a bare fact burns the author's whole retry allowance.
