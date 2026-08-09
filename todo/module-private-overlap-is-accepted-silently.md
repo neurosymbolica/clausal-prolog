@@ -31,7 +31,7 @@ claim an error that does not exist — but nobody has decided whether the
 
 ## Who relies on it
 
-`clausify/kit/formalize_lib.clausal` lists eight names in both lists on
+A downstream helper library lists eight names in both lists on
 purpose: `absent`, `assessment`, `attribute`, `item`, `labels`, `unknown`,
 `unmet`, `value`. Its own comment explains why:
 
@@ -39,9 +39,9 @@ purpose: `absent`, `assessment`, `attribute`, `item`, `labels`, `unknown`,
 > public data vocabulary ...). Declaring them here lets this library build them
 > and match works across modules.
 
-Vendored into `clausify-executor-train/kit/` as well, so two copies. Plus
-`query_combinators.clausal` (`flip`) in both repos, and the in-repo fixture
-`tests/fixtures/functor_reexport_kit.clausal` (`flip`). Five files total.
+Vendored into a second downstream repo as well, so two copies. Plus a second
+downstream helper module (`flip`) in both repos, and the in-repo fixture
+`tests/fixtures/functor_reexport_vocab.clausal` (`flip`). Five files total.
 
 ## The question
 
@@ -58,7 +58,7 @@ internal". The compiler cannot resolve that, but it could point at it.
    known files, all of which look like they *meant* the `-module` listing and
    added `-private` to get the signature pre-registered — which suggests the
    real answer might be (3).
-3. **Find out what the authors wanted.** The `formalize_lib` comment implies the
+3. **Find out what the authors wanted.** The downstream helper library's comment implies the
    `-private` listing was added for a reason the author believed was necessary
    ("declaring them here lets this library build them"). If `-module` alone
    already gives signature pre-registration — it should, both lists go through

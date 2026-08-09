@@ -1,16 +1,16 @@
 # Dict-native profile API — `P[k]` / `get` / `in` / `{**P, k:V}` / `delete`
 
 **Status:** design pinned (brainstormed 2026-07-14 w/ Michael); umbrella for the Clausal-interpreter
-capability work. The corpus migration that consumes this is a *separate, dependent* effort in the
-`clausify` / `clausify-domains` repos (do NOT start that until the pieces below are green).
+capability work. The corpus migration that consumes this is a *separate, dependent* effort in a
+downstream rulebase corpus (do NOT start that until the pieces below are green).
 
 ## Why
 
-Clausal legal domains model an eligibility "profile" (a.k.a. case / scenario / features) as a bag of
-key→value facts. Today there are **three incompatible dialects** across 54 domains:
-- generated `profile_find_<key>/2` accessor families (31 rulebases) — codegen boilerplate, ~100 lines/domain;
-- direct `profile_get(P, atom_key, V)` list-scan reads (5 rulebases);
-- legacy string-key `profile_get(P, "key", V)` holdouts (7 rulebases).
+Clausal callers commonly model an eligibility "profile" (a.k.a. case / scenario / features) as a bag
+of key→value facts. In the wild there are **three incompatible dialects**:
+- generated `profile_find_<key>/2` accessor families — codegen boilerplate, ~100 lines per caller;
+- direct `profile_get(P, atom_key, V)` list-scan reads;
+- legacy string-key `profile_get(P, "key", V)` holdouts.
 
 The representation underneath every one of them is `attribute(KEY, VALUE)` — a pair compound in a **flat
 list, looked up by O(n) recursive scan**. We are unifying on ONE representation + ONE surface, chosen for
@@ -73,15 +73,15 @@ Missing / immature (the work below):
 5. ~~**`delete/3`** functional key removal~~ — **DONE 2026-07-14** (`delete(Dict,Key,NewDict)`, throw on
    absent/non-ground/non-dict, immutable). Reserved siblings `discard/3`, `pop/4`, `pop/5` still
    YAGNI-parked. → `dict-delete-builtin.md`.
-6. **SMT prover dict-read projection** (CLAUSIFY repo, `auto/formal`) — separate todo filed there, not here.
+6. **SMT prover dict-read projection** — separate todo filed in the SMT prover's own repo, not here.
 
 ## Sequencing / acceptance — ✅ ALL DONE (2026-07-14)
 Interpreter items 1–5 landed; the ergonomic bare-atom surface works
 (`{filing_status: V}` / `P[filing_status]` / `get(P, filing_status, V)` / `filing_status in P`; atom keys
 distinct from string keys — `dict-atom-key-literal-parser-gap.md` DONE). Item 6 (SMT prover projection)
-landed as clausify `41e617b`. The pilot + **the full 54-domain corpus migration are COMPLETE and green**
-(every domain decision-preserving; all SMT domains re-proved G3 PROVED ≥ baseline). DictTerm read/op
-coverage lives in `tests/test_dict_set_compiler.py` + `tests/fixtures/dict_set_patterns.clausal`.
+landed downstream. The downstream rulebase corpus migration that consumes this is reported complete
+and green (every domain decision-preserving; all SMT domains re-proved G3 PROVED ≥ baseline). DictTerm
+read/op coverage lives in `tests/test_dict_set_compiler.py` + `tests/fixtures/dict_set_patterns.clausal`.
 
 ## Core promotion — STATUS + remaining (2026-07-14)
 The design planned "kit module now, promote to Clausal core later." The implementation **skipped the kit
@@ -91,16 +91,15 @@ effectively already realized at the runtime level:
   (`@_trampoline_builtin("get", 3)` etc.), auto-loaded via `clausal/logic/builtins/__init__.py`.
 - `P[key]` subscript, `key in P` membership, `{**P, k:V}` splat/merge — lowered in the compiler
   (`term_to_ast_expr` / `$subscript` / `$in_iter` / `$splat_data` runtime helpers).
-- **No import required** — the 54-domain corpus uses `get`/`in`/`P[k]` with zero `-import_from`, proving
+- **No import required** — the downstream corpus uses `get`/`in`/`P[k]` with zero `-import_from`, proving
   they are always-available core.
 
 **Remaining to call the promotion formally "done" (finalization, not runtime work):**
-1. **Language-reference docs** — add the dict-profile ops to the canonical Clausal builtins reference / the
-   clausify cheat-sheet + scaffolding skeletons (the clausify-side doc sweep is in progress: `docs(clausal):
-   update cheat-sheet + scaffolding to dict-native`). Ensure `get`/`in`/subscript/`{**}`/`delete` are
-   documented as first-class core, alongside list/set ops.
+1. **Language-reference docs** — add the dict-profile ops to the canonical Clausal builtins reference
+   (a downstream cheat-sheet + scaffolding doc sweep is in progress on the consumer side). Ensure
+   `get`/`in`/subscript/`{**}`/`delete` are documented as first-class core, alongside list/set ops.
 2. **Reserved-name siblings** (from `dict-delete-builtin.md`, still YAGNI) — implement `discard/3` (no-throw
-   remove), `pop/4`/`pop/5` (remove+retrieve) if/when a consumer appears; the corpus currently needs none.
+   remove), `pop/4`/`pop/5` (remove+retrieve) if/when a consumer appears; no known consumer currently needs one.
 3. **Builtins registry / spec entry** — confirm the dict ops appear in whatever canonical builtin catalog
    or language spec Clausal maintains (they are registered for execution; make sure they're *catalogued*
    for discoverability + tooling, same as `in_/2`, `append/3`, etc.).

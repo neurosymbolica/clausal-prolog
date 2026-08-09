@@ -1,6 +1,6 @@
 # Bug: functor field-name mismatch surfaces as a bare, unattributable `TypeError`
 
-**Reported:** 2026-07-29, from the clausify formalizer-training harness
+**Reported:** 2026-07-29, from an external authoring harness
 **Severity:** high — *for machine authors*. The error carries no location, so an
 LLM repair loop cannot act on it and burns its entire attempt budget.
 
@@ -24,9 +24,10 @@ head still bind by name — they name a field on purpose.
 The second condition is what keeps **Phenomenon A** working: when a head *does*
 emit a class block (a functor's first clause), that block re-mints the class to
 exactly the derived fields unless they already match, so the bound class is
-known at that point and keyword emission is precise. `au/firb/computation.clausal`
-and `us/sara_irc_tax/computation.clausal` import a 0-arity vocabulary atom and
-then define a same-named predicate, relying on exactly that re-mint.
+known at that point and keyword emission is precise. Two corpus modules —
+the shape `tests/fixtures/impord_atom_then_pred.clausal` pins — import a
+0-arity vocabulary atom and then define a same-named predicate, relying on
+exactly that re-mint.
 
 `_check_head_signature` is deliberately left running for imported functors: the
 local declaration's arity is still an in-file contract, and no corpus file
@@ -53,20 +54,19 @@ disagrees with it.
   commit). The one failure is the pre-existing `test_doc_snippet_coverage.py`.
 * `tests/test_functor_reexport.py` (the re-export identity tripwire) and
   `tests/test_functor_arity_conflict.py` pass untouched.
-* Corpus codegen differential over all 767 `.clausal` files in
-  `/workspace/clausify-domains` (sha256 of `ast.unparse`): **exactly 2 files
-  change**, `au/firb/computation.clausal` and
-  `us/sara_irc_tax/computation.clausal`, **one line each** — the *second*
-  clause of the predicate that shadows an imported 0-arity atom
+* Corpus codegen differential over a large external rulebase corpus (sha256 of
+  `ast.unparse`): **exactly 2 files change** — the shape
+  `tests/fixtures/impord_atom_then_pred.clausal` pins — **one line each** — the
+  *second* clause of the predicate that shadows an imported 0-arity atom
   (`query_date(p=…, query_date=…)` → `query_date(…, …)`,
   `dependents_count(case=…, n=…)` → `dependents_count(…, …)`). The first clause,
   which mints the class, is unchanged. No re-export module changes, because a
   re-exported functor has no local clause head.
-* Load sweep of all 767 files: identical OK/ERR outcome on both trees (704 OK,
-  63 pre-existing environmental failures), including both changed files.
-* All 210 domain test files under `/workspace/clausify-domains/*/tests/` run
-  through `python -m clausal.testing`: byte-identical results on both trees
-  (189 PASSED; the 21 failures are pre-existing and environmental).
+* Load sweep of the full corpus: identical OK/ERR outcome on both trees (same
+  pre-existing environmental failure count), including both changed files.
+* All domain test files in the corpus run through `python -m clausal.testing`:
+  byte-identical results on both trees (same pass/fail split; the failures
+  are pre-existing and environmental).
 
 ### Adjacent hazard found, NOT introduced here and NOT fixed
 
@@ -98,7 +98,7 @@ Neither was the cause of the reported failure.
   fallback is unreachable: `_is_logic_var_name` rejects `_`, `__*` and every
   all-underscore spelling *before* that branch, so `lstrip("_")` can never be
   empty there. And the shape from the report,
-  `decide_amlr_bo_chain(PROFILE, amlr_bo_chain_verdict(STATUS, _))`, is a
+  `decide_compliance(PROFILE, compliance_verdict(STATUS, _))`, is a
   **body goal**: body goals are emitted positionally
   (`Call(func=LoadName('f'), args=[…])`), never as keywords, so their argument
   spellings cannot mismatch anything. A `_` in a *head* does derive `arg_i`,
@@ -137,7 +137,7 @@ is emitted as `f(A=1, arg_1=2)` against a one-field class. Two clauses of the
 same functor with different arity (no directive at all) do the same thing.
 
 In `repro-arg1-scratch/` the offender is `constants.clausal`: the `-module`
-export list declares `amlr_bo_chain_threshold_bps(THRESHOLD_BPS)` (arity 1)
+export list declares `threshold_bps(THRESHOLD_BPS)` (arity 1)
 while the fact — and every use in the package — is arity 2.
 
 ### What was fixed
@@ -174,13 +174,13 @@ and neither ordering can be made an error**:
   same name. That is the blessed re-export idiom
   (`tests/test_functor_reexport.py`,
   `todo/done/module-reexport-imported-functor-shadows.md`). Both textual orderings
-  occur in working domains: `eu/gdpr/lawfulness.clausal` and
-  `eu/labour/posted_workers_long_term_trigger/__init__.clausal` declare first
-  and import later; `us/irc_s121/eligibility.clausal` imports first.
-* 2 corpus modules (`au/firb/computation.clausal`,
-  `us/sara_irc_tax/computation.clausal`) import a 0-arity vocabulary atom and
-  then define a same-named *predicate*, relying on the clause-head class block
-  re-minting over the import. That is Phenomenon A
+  occur in working domains: `eu/data_handling/lawfulness.clausal` and
+  `eu/labour/trigger_threshold_rule/__init__.clausal` declare first
+  and import later; `us/tax_credit/eligibility.clausal` imports first.
+* 2 corpus modules — the shape `tests/fixtures/impord_atom_then_pred.clausal`
+  pins — import a 0-arity vocabulary atom and then define a same-named
+  *predicate*, relying on the clause-head class block re-minting over the
+  import. That is Phenomenon A
   (`implementation_plans/dict-atom-keys-vs-predicates.md`), tracked separately.
 
 So: forcing "import wins" breaks the second group; forcing "declaration wins"
@@ -206,30 +206,30 @@ Not done here because that pass required those 11 tests to keep passing.
   the pre-existing, unrelated `test_doc_snippet_coverage.py`.
 * All 11 tests of `tests/test_functor_field_name_diagnostic.py` still pass and
   their messages are unchanged.
-* Corpus: the generated Python for all 757 loadable `.clausal` files in
-  `/workspace/clausify-domains` is **byte-identical** before and after
-  (sha256 of `ast.unparse` per file), so the compile-time fix has provably zero
-  corpus effect. No corpus file contains a declaration/clause arity conflict.
+* Corpus: the generated Python for every loadable `.clausal` file in a large
+  external rulebase corpus is **byte-identical** before and after (sha256 of
+  `ast.unparse` per file), so the compile-time fix has provably zero corpus
+  effect. No corpus file contains a declaration/clause arity conflict.
 * The runtime fix's only internal caller at risk is
   `clausal/logic/builtins/_registry.py::_MultiArityBuiltin.__call__`, which
   falls back to the max-arity class when an unregistered arity is requested.
   For `arity > max` that fallback silently dropped arguments; it now raises.
   Nothing in the suite relied on it.
-* Not done: the 62 differential harnesses in `/workspace/clausify-domains`
-  could not be run here — they need `formalize_lib`, which ships with the
-  clausify harness and is not present in this environment.
+* Not done: the differential harnesses in that corpus could not be run here —
+  they need a downstream helper library that ships with the external
+  authoring harness and is not present in this environment.
 
 ### New message
 
 ```
-functor amlr_bo_chain_threshold_bps/2 conflicts with the declaration of
-amlr_bo_chain_threshold_bps/1 in the same file
-  declared: …/constants.clausal:8 (-module export list) — amlr_bo_chain_threshold_bps(THRESHOLD_BPS)
-  clause:   …/constants.clausal:22 — amlr_bo_chain_threshold_bps(2500, cite(eu_reg_2024_1624_art_52_1)),
-amlr_bo_chain_threshold_bps's class is minted with 1 field(s) (THRESHOLD_BPS),
+functor threshold_bps/2 conflicts with the declaration of
+threshold_bps/1 in the same file
+  declared: …/constants.clausal:8 (-module export list) — threshold_bps(THRESHOLD_BPS)
+  clause:   …/constants.clausal:22 — threshold_bps(2500, cite(example_reg_art_52_1)),
+threshold_bps's class is minted with 1 field(s) (THRESHOLD_BPS),
 so a 2-argument head cannot be built against it. A functor name has exactly one
 arity in Clausal: give the declaration and every clause head of
-amlr_bo_chain_threshold_bps the same number of arguments, or rename one of them.
+threshold_bps the same number of arguments, or rename one of them.
 ```
 
 ---
@@ -415,7 +415,7 @@ head variables (or vice versa). Python raises the bare `TypeError`, which propag
 with no Clausal-level context attached.
 
 Not yet isolated to a minimal repro; the trigger involved a multi-module package
-where `schema.clausal` exported a constructor `amlr_bo_chain_verdict(STATUS, CITATIONS)`
+where `schema.clausal` exported a constructor `compliance_verdict(STATUS, CITATIONS)`
 and sibling modules referenced the same functor.
 
 > **Confirmed 2026-07-29.** The mechanism above is exactly right; see STATUS.
@@ -438,16 +438,16 @@ so the original reproduction is kept here verbatim — it is the starting point
 for whoever fixes the real bug.
 
 A reproducing package is preserved at `repro-arg1-scratch/` in the repo root.
-**It is untracked** — 29 files, a copy of the `eu/aml/amlr_bo_chain` domain. Do
+**It is untracked** — 29 files, a copy of the `eu/compliance/compliance_threshold_rule` domain. Do
 not clean it up without first confirming a minimal repro exists, or the
 reproduction is lost.
 
 ```
-CLAUSAL_ROOT=/workspace/clausal python3 -c "
+python3 -c "
 from pathlib import Path
-from auto import runclausal          # from /workspace/clausify-executor-train
-p = Path('/workspace/clausal-bug-fix/repro-arg1-scratch/eu/aml/amlr_bo_chain/tests/test_load.clausal')
-print(runclausal.run_clausal(p)[1])"
+from external_harness import run_clausal   # a downstream authoring harness's runner
+p = Path('repro-arg1-scratch/eu/compliance/compliance_threshold_rule/tests/test_load.clausal')
+print(run_clausal(p)[1])"
 ```
 
 → `test_load.clausal::<load> — __init__() got an unexpected keyword argument 'arg_1'`
@@ -455,7 +455,7 @@ print(runclausal.run_clausal(p)[1])"
 ### Original narrowing (hypothesis, NOT confirmed by the diagnostic work)
 
 - **Not an arity mismatch.** `schema.clausal` declares
-  `amlr_bo_chain_verdict(STATUS, CITATIONS)` and every use across the package is
+  `compliance_verdict(STATUS, CITATIONS)` and every use across the package is
   arity 2. The conflict is in FIELD NAMES.
 - **Suspected source** — `term_rewriting.py` around line 1671:
   ```python
@@ -463,7 +463,7 @@ print(runclausal.run_clausal(p)[1])"
   ```
   An anonymous `_` argument strips to the empty string and falls back to
   `arg_{i}`. The failing package contains exactly that shape:
-  `decide_amlr_bo_chain(PROFILE, amlr_bo_chain_verdict(STATUS, _))` — which
+  `decide_compliance(PROFILE, compliance_verdict(STATUS, _))` — which
   would derive `(status, arg_1)` where the declaration derives
   `(status, citations)`.
   **Note:** the 2026-07-29 tracing attributed the failure to the
@@ -480,10 +480,10 @@ Attach Clausal-level context wherever a term class is constructed, so the messag
 answers "what, where, and what did you expect":
 
 ```
-functor amlr_bo_chain_verdict/2 was constructed with field names (arg_0, arg_1)
+functor compliance_verdict/2 was constructed with field names (arg_0, arg_1)
 but its class was registered with (status, citations)
-  registered by: eu/aml/amlr_bo_chain/schema.clausal:11
-  constructed at: eu/aml/amlr_bo_chain/tests/test_load.clausal:17
+  registered by: eu/compliance/compliance_threshold_rule/schema.clausal:11
+  constructed at: eu/compliance/compliance_threshold_rule/tests/test_load.clausal:17
   (a functor minted by a directive keeps placeholder arg_N names until a real
    clause unseats it — check whether both modules declare the same functor)
 ```
@@ -500,8 +500,8 @@ the same one.
 ## Related
 
 - `-strict_atoms` is now deprecated (strict resolution is the default). The
-  clausify harness stopped emitting it in scaffold templates and stopped teaching
-  it in the authoring prompt as of this date.
+  external authoring harness stopped emitting it in scaffold templates and
+  stopped teaching it in the authoring prompt as of this date.
 - `implementation_plans/dict-atom-keys-vs-predicates.md` — Phenomenon A, the
   second cause of the identical bare `TypeError`.
 - `todo/done/module-reexport-imported-functor-shadows.md` — class *identity* across a

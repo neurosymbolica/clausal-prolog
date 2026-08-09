@@ -1,8 +1,9 @@
 # date_time: clean predicates for max/min/ordinal (the last ++ date escapes)
 
-**Why:** migrating the clausify gold rulebases off `++` date escapes retired every `++DT.date()` /
-`++TD.days` / `++DT.isoformat()` (now `DateOf` / `DaysBetween` / `FormatDate`). Three date `++` escapes
-remain **only because no clean predicate exists** — all in `eu/schengen-90-180/schengen.clausal`:
+**Why:** `date_max`/`date_min`/`day_ordinals` have no clean predicate, so callers still reach
+for `++` escapes even after the rest of the date API was cleaned up elsewhere (`DateOf` /
+`DaysBetween` / `FormatDate` already retired `++DT.date()` / `++TD.days` / `++DT.isoformat()`).
+A representative caller, e.g. a rolling date-window rule:
 
 ```clausal
 date_max(D1, D2, M) <- (M is ++max(D1, D2))     # earlier/later of two dates
@@ -16,13 +17,13 @@ day_ordinals(CS, CE, DAYS) <- (..., A is ++CS.toordinal(), B is ++CE.toordinal()
 - [ ] **`Ordinal/2` — bidirectional** — `Ordinal(Date, N)`: forward, `N = Date.toordinal()`; reverse,
       builds the date from its proleptic-Gregorian ordinal. The reverse mode also cleans up the common
       "enumerate every calendar day in `[CS, CE]`" pattern (`Ordinal(CS,A), Ordinal(CE,B), numlist(A,B,Ns)`,
-      then map back) that schengen uses for exact day-of-presence de-duplication.
+      then map back), which callers doing rolling date-window arithmetic need for exact
+      day-of-presence de-duplication.
 
 ## Done when
-- [ ] `grep -rnE '\+\+' /workspace/clausify-domains/*/*/*.clausal` (excluding comments/tests) is empty —
-      no everyday date `++` escapes anywhere in the golds.
-- [ ] `schengen.clausal` `date_max`/`date_min`/`day_ordinals` use the new predicates; conformance +
-      the 26/26 oracle score unchanged.
+- [ ] No caller needs a `++` escape for date max/min/ordinal conversion.
+- [ ] A representative rolling date-window caller's `date_max`/`date_min`/`day_ordinals` use the
+      new predicates instead of `++`; behaviour unchanged.
 
-Context: gold date-API migration (clausify `5cab886`); the primary date todo `date-clean-apis.md`
-(already done) covered date/days/isoformat.
+Context: the primary date todo `date-clean-apis.md` (already done) covered date/days/isoformat;
+this is the remaining slice.

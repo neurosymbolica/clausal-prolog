@@ -1,8 +1,9 @@
 # A bare LIST in a clause head, built from atoms declared in the SAME module, succeeds but never binds
 
-**Filed:** 2026-08-07, found while re-slicing `eu/customs/customs_valuation_hierarchy` in the
-clausify corpus (determination-slices refactor). The refactor did not fail — it **hung the
-domain**. Bisected to the case below and reproduced independently before filing.
+**Filed:** 2026-08-07, found while re-slicing a `rate_tier_hierarchy` domain in a downstream
+rulebase corpus (a refactor that relocates each domain's value atoms out of a shared module).
+The refactor did not fail — it **hung the domain**. Bisected to the case below and reproduced
+independently before filing.
 
 **RESOLVED 2026-08-08.** Root cause: continuation-TCO, not the head-match pattern path
 hypothesised below. A bare-list head arg compiles to the two-phase list-guard machinery
@@ -35,7 +36,8 @@ pristine main (198 environmental failures in the pyenv env on both sides, zero i
 
 Of the fixes-in-order-of-value below: (1) is done; (2) is moot for this instance (the head
 now binds; no known compile shape yields a cannot-bind list guard); (3) — the `ground` check
-at `eval_requirements/4`'s entry — remains a clausify-side hardening item, still open there.
+at the caller's recursive list walker's entry — remains a downstream hardening item, still
+open there.
 
 Same family as `todo/done/numeric-head-literal-unification-bug.md` (RESOLVED 2026-06-23),
 `todo/done/head-list-compound-bodybound-var.md` and
@@ -104,8 +106,8 @@ is the trigger, not the number of atoms, and not the atoms themselves.
 
 ## Why it hangs rather than merely returning the wrong thing
 
-Downstream, `formalize_lib`'s `eval_requirements/4` recurses on the returned open list
-**forever**. In `customs_valuation_hierarchy` the affected predicate is `valuation_sequence/3`,
+Downstream, a helper library's recursive list walker recurses on the returned open list
+**forever**. In the `rate_tier_hierarchy` domain the affected predicate is `tier_sequence/3`,
 and the symptom at the corpus level was a test battery that never terminated — no error, no
 diagnostic, no timeout.
 
@@ -141,10 +143,10 @@ None is conditioned on **where the atom is declared**, which is the discriminato
 
 ## Why it matters beyond one domain
 
-The clausify determination-slices refactor moves each domain's value atoms out of a shared
+The downstream corpus's refactor moves each domain's value atoms out of a shared
 `schema.clausal` into the slice that spells them — i.e. from the working IMPORTED column to
 the broken LOCAL one. It is a corpus-wide refactor, so any domain with a head list of value
-atoms is exposed. `customs_valuation_hierarchy` had to keep six atoms in its kernel as a
+atoms is exposed. `rate_tier_hierarchy` had to keep six atoms in its kernel as a
 **compiler-forced placement** to work around this, documented in that file's header.
 
 ## Fixes, in order of value
@@ -155,6 +157,6 @@ atoms is exposed. `customs_valuation_hierarchy` had to keep six atoms in its ker
 2. **Fail loudly meanwhile.** A head list that compiles to something which cannot bind should
    be a load error. Every other member of this family errors or returns no solutions; this one
    silently succeeds.
-3. **Guard the recursion in `formalize_lib`.** `eval_requirements/4` recursing on an open list
-   forever converts a wrong answer into an unbounded hang. A ground check at that entry point
-   would make this and any future instance diagnosable.
+3. **Guard the recursion in the downstream helper library.** The caller's recursive list
+   walker recursing on an open list forever converts a wrong answer into an unbounded hang. A
+   ground check at that entry point would make this and any future instance diagnosable.

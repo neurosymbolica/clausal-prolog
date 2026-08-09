@@ -2,6 +2,9 @@
 
 **DONE** 2026-07-30 on `fix/nameerror-names-the-sibling-exporter`.
 
+(Module paths and error transcripts below are paraphrased with invented,
+neutral names — the error class and structure are reproduced exactly.)
+
 ## Symptom
 
 A module in a decomposed-DAG package uses a predicate exported by a sibling module
@@ -11,7 +14,7 @@ but forgets to import it. The engine raises a bare Python `NameError`:
 FAILURES:
   test_load.clausal:64 :: constants legitimate behaviour grounds are defined with citations — name 'cite' is not defined
     goal 1 of 6 raised:
-      eu.market_integrity.mar_insider_dealing.constants.mar_insider_dealing_legitimate_behaviour_grounds(GROUNDS)
+      rulebase.compliance_screening_rule.constants.legitimate_behaviour_grounds(GROUNDS)
       NameError: name 'cite' is not defined
 ```
 
@@ -25,7 +28,7 @@ nothing about it.
 Contrast the `strict_atoms` message for the exactly analogous mistake on an *atom*:
 
 ```
-strict_atoms: undeclared atoms 'acquire', 'amend', ... in eu.market_integrity.mar_insider_dealing.constants
+strict_atoms: undeclared atoms 'acquire', 'amend', ... in rulebase.compliance_screening_rule.constants
       bare atom references must be one of:
         - listed in -module(...)
         - listed in -private([atom, ...])
@@ -37,7 +40,7 @@ strict_atoms: undeclared atoms 'acquire', 'amend', ... in eu.market_integrity.ma
 That one lists remedies, so a reader can act on it. The predicate case gets a raw
 `NameError` with no remedy and no owner.
 
-Measured in a 24-run local-model formalization study (study 11): `NameError: cite`
+Measured in a local-model formalization study: `NameError: cite`
 burned **16 attempts across 3 runs and never recovered** — every retry produced a
 byte-identical response, because there is nothing in the message to act on. It is the
 top unrecovered failure that is not attributable to the harness.
@@ -55,9 +58,9 @@ genuinely undecidable and should stay as-is).
 NameError: name 'cite' is not defined
   `cite` is neither defined nor imported in constants.clausal.
   cite/1 IS exported by a sibling module in the same package:
-      eu.market_integrity.mar_insider_dealing.citations
+      rulebase.compliance_screening_rule.citations
   -> add `cite` to this file's existing import:
-      -import_from(eu.market_integrity.mar_insider_dealing.citations, [mar_art_9, cite])
+      -import_from(rulebase.compliance_screening_rule.citations, [mar_art_9, cite])
 ```
 
 The remedy distinguishes extending an existing `-import_from` for that module from
