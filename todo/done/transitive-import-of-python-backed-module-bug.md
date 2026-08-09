@@ -32,7 +32,7 @@
 >
 > *Original report follows.*
 
-**Reported 2026-06-24** (found while formalizing the SARA IRC tax domain for the Clausify project; the
+**Reported 2026-06-24** (found while formalizing a tax-credit domain for a downstream consumer; the
 rulebase had to avoid `-import_from(date_time, ...)` and use `++` over `datetime` instead so it stayed
 importable by its test harness).
 

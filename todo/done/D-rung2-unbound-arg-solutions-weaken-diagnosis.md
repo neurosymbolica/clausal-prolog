@@ -10,7 +10,7 @@ directly (see Evidence below).
 
 A failing goal whose predicate's all-holes probe finds a solution that leaves the
 over-constrained argument unbound — or is satisfied by a base-case fact via bare holes
-(e.g. `wt_qualifying_totals([], 0, 0)`) — is reported at rung 2 (or rung 1) instead of
+(e.g. `qualifying_totals([], 0, 0)`) — is reported at rung 2 (or rung 1) instead of
 descending, which can be the weaker diagnosis. Should the descent also run when the found
 solutions are degenerate (unbound holes / trivial base-case matches)?
 
@@ -30,10 +30,10 @@ input was rejected.
 
 ## Evidence
 
-- study13 `study_working_time_average_r1`, direct `wt_compliance(...)` and
-  `wt_qualifying_totals(...)` tests: intercepted at rung 1/2 with an unbound-hole
+- the study's hours-threshold authoring run, direct `hours_compliance(...)` and
+  `qualifying_totals(...)` tests: intercepted at rung 1/2 with an unbound-hole
   `BitOr(None, ...)` near-miss; descent (and therefore `no clause head unifies` /
-  `| REST_WEEKS`) never fires. The `wt_qualifying_totals([], 0, 0)` base-case fact
+  `| REST_WEEKS`) never fires. The `qualifying_totals([], 0, 0)` base-case fact
   satisfies the bare-holes probe.
 - Task 3/5 fixture adaptations in `tests/test_testing_descent.py`.
 
@@ -66,8 +66,8 @@ operator nodes such as the `BitOr` cons-head near-miss). Two triggers, both in
 strings byte-for-byte) and a bool return. The descent itself only states facts
 about the concrete arguments, so its findings are truthful at every rung.
 
-**Verified against the evidence shapes:** the pinned `wt_qualifying_totals`
-study-13 shape now yields the head listing with the source-faithful
+**Verified against the evidence shapes:** the pinned `qualifying_totals`
+study shape now yields the head listing with the source-faithful
 `[WORKED_MINUTES, STATUS] | REST_WEEKS` head instead of
 `BitOr(None, [2880, _], [])`; lone one-sided constraint bounds
 (`X < 10, X < 0` — previously satisfiable-with-X-unbound, which forced the
@@ -75,7 +75,7 @@ descent fixtures to use contradictory pairs) now descend to the failing conjunct
 with its concrete binding (`X < 0`, `X = 5`).
 
 **Deliberate boundary:** a GROUND near-miss keeps rung 1 even when it is only a
-trivial base-case match (`wt_qualifying_totals([], TOTAL, N)` with outputs
+trivial base-case match (`qualifying_totals([], TOTAL, N)` with outputs
 free) — every cheap "trivial match" discriminator considered regresses fact-table
 predicates, where a ground near-miss is exactly the right diagnosis. Pinned by
 `test_ground_base_case_near_miss_keeps_rung_1` /

@@ -65,8 +65,8 @@ Care needed on:
   padding is no better at runtime) and check `docs/database_ops.md`.
 - **The atom-vs-predicate collision.** A 0-arity vocabulary atom imported and
   then defined as an /N predicate is exactly this shape and the corpus relies on
-  it (`tests/fixtures/impord_atom_then_pred.clausal`,
-  `au/firb/computation.clausal`, `us/sara_irc_tax/computation.clausal`). Any
+  it — the shape `tests/fixtures/impord_atom_then_pred.clausal` pins; two
+  corpus modules rely on it in production. Any
   refusal must exempt the clause-free class, which is what
   `implementation_plans/dict-atom-keys-vs-predicates.md` calls Phenomenon A.
   `PredicateMeta._clause_arity()` (added by the sibling fix) is the existing

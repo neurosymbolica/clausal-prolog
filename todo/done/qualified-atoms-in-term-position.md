@@ -15,7 +15,7 @@ position.
 ```clausal
 # consumer.clausal
 -module(consumer, [is_euro(P)])
--import_from(formalize_lib, [profile_get, profile_has, attr])
+-import_from(vocab_lib, [profile_get, profile_has, attr])
 -import_module(currency)
 -strict_atoms
 -private([currency_key])

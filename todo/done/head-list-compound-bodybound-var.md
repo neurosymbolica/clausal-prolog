@@ -1,6 +1,7 @@
 # TODO: structural head-arg normalization doesn't recurse into LIST elements
 
-**Opened 2026-06-25** from real-world exercise (clausify formalization kit). Direct
+**Opened 2026-06-25** from real-world exercise (an external authoring harness's
+formalization kit). Direct
 follow-on to `compound-head-literal-output-mode.md` (RESOLVED 2026-06-23): that fix
 binds **top-level** structural head args in output mode, but the normalization does
 not recurse into **list elements**, so a compound nested in a head list whose inner
@@ -9,10 +10,10 @@ variable is bound in the **body** silently keeps a decoupled (non-ground) variab
 ## Symptom
 
 `ground/1` is false (and `==` fails) for a head-list compound's inner var after the
-body binds it. Downstream this is severe: in the clausify kit it caused `assess/6`
-to threadan unbound STATUS into clause-dispatched marks, producing a 3^N solution
-explosion (see clausify `kit/formalize_lib.clausal` history, 2026-06-24, where the
-workaround was to build the term in the body).
+body binds it. Downstream this is severe: in a downstream helper library it caused its
+own 6-arity dispatcher predicate to thread an unbound STATUS into clause-dispatched
+marks, producing a 3^N solution explosion (see that library's own history, 2026-06-24,
+where the workaround was to build the term in the body).
 
 ## Repro
 
@@ -56,6 +57,6 @@ literal, at any depth) would cover this uniformly.
 - All 3 cases in `todo/head_list_compound_repro.clausal` PASS.
 - Regression test covering list-nested AND deeper-nested (e.g. `[c(d(S))]`) head
   compounds with body-bound inner vars, both modes.
-- Re-running the clausify kit's `kit/tests/test_assess_engine.clausal` still passes
+- Re-running the downstream helper library's own `kit/tests/test_assess_engine.clausal` still passes
   with its body-construction workaround removed (i.e. the workaround becomes
   optional) — a good external regression.

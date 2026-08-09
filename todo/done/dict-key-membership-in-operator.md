@@ -28,4 +28,4 @@ This is the profile presence-test (replaces `profile_has/2`). Ground key.
 - list/set `in_` regression tests still pass unchanged.
 - (if enumeration implemented) `K in {a:1, b:2}` yields `K=a` then `K=b`.
 - Prover coordination: the SMT front-end must recognise dict-key `in` as `has_k` — tracked in the
-  clausify-side prover todo, not here.
+  prover's own downstream todo, not here.

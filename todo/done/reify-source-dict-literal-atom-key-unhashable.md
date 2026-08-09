@@ -36,7 +36,7 @@ dict literal with a bare-atom key in term position, e.g.:
 k(B) <- (X is {foo: B, bar: 2})
 ```
 
-126 of 571 corpus files under `/workspace/clausify-domains` trip this (22%). It raises during
+About a fifth of the files in a downstream rulebase corpus trip this. It raises during
 `reify_source` of the whole file — before any clause reaches the renderer — so it is **out of
 scope for the renderer completeness gate**. The Task 8 corpus test
 (`tests/test_reflection_render.py::test_corpus_clause_round_trips`) skips exactly these files with

@@ -26,7 +26,7 @@ silently** — no error, no warning, the query just has no solution. Verified em
 `approved`, caller declares its own: `lib.approved is caller.approved → False`; `check(approved)` from the
 caller → NO SOLUTION; with `-import_from` instead, shared identity, succeeds).
 
-This bit the clausify-domains Wave-B decomposition repeatedly (misdiagnosed there as "bare atoms resolve against
+This bit a downstream rulebase corpus's decomposition work repeatedly (misdiagnosed there as "bare atoms resolve against
 the calling module at solve time" — wrong mechanism, and now corrected in their briefs). Their mitigation is a
 convention ("all shared atoms live in schema.clausal and are imported") plus a corpus lint. The engine-side gap
 is **diagnosability**: the failure mode is indistinguishable from a legitimately-unsatisfiable query.

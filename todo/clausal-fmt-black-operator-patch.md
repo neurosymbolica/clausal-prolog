@@ -36,8 +36,8 @@ packages/clausal-jax/tests/fixtures/jax_transforms_tests.clausal
 is collision-free** — any Python infix op we shim `<-` to (`@`,`|`,`&`,`<<`,`//`,…) can appear
 in embedded Python. The clean fix is to make `<-` a **real, distinct token in Black's grammar**
 so it never aliases another operator. (This was the user's original instinct; the shim was
-chosen on an INCOMPLETE corpus check — only `clausify-domains` was scanned, which happens to be
-code-`@`-free; the engine's own fixtures were missed.)
+chosen on an INCOMPLETE corpus check — only a downstream rulebase corpus was scanned, which
+happens to be code-`@`-free; the engine's own fixtures were missed.)
 
 ## The operator patch (Black 24.10.0 / blib2to3) — spike results
 
@@ -94,7 +94,7 @@ Only the shim mechanism was wrong; these are sound and tested — cherry-pick / 
 ## Behaviour-preservation bar (the acceptance gate — unchanged)
 
 Whitespace + trailing-comma only; idempotent (`fmt(fmt(x))==fmt(x)`); reify structural round-trip
-(`head`+`goals`); corpus dry-run over all `clausify-domains` files = 0 errors; one-domain
+(`head`+`goals`); corpus dry-run over a downstream rulebase corpus = 0 errors; one-domain
 oracle+mutation green (peppol: `refutations=0`, all mutants killed). The shim impl passed ALL of
 these — but only on `@`-free inputs. **The operator-patch impl MUST also test the code-`@`
 fixtures** (`packages/clausal-jax/tests/fixtures/*.clausal`) to prove no corruption.

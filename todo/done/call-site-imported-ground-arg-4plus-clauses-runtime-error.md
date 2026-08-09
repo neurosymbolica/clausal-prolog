@@ -18,14 +18,14 @@
 > `callsite_bucket_lib/use.clausal`) and
 > `TestDirectBucketCallSiteExecution` in
 > `tests/test_callsite_specialization.py`. The standalone repro referenced
-> below lives in `/workspace/clausify-bug-fix/repro/` (all six rows PASS
-> post-fix); the firb `CLAUSAL_DISABLE_OPT=call_site` workaround has been
+> below lives in `the standalone repro directory (`repro/`, alongside this todo)` (all six rows PASS
+> post-fix); the downstream domain's `CLAUSAL_DISABLE_OPT=call_site` workaround has been
 > removed.
 
 **Severity**: high — every input-mode `Test` clause of the shape
 `Test(...) <- (fixture(P), pred(P, "expected"))` against an imported rulebase
 predicate with >= 4 clauses raises instead of solving. Found while integrating
-`/workspace/clausify-domains/au/firb` (30 of its 46 input-mode tests were failing
+a downstream investment-screening rulebase domain (30 of its 46 input-mode tests were failing
 with this error at baseline; nothing wrong with the domain).
 
 **Where**: `/workspace/clausal` (engine), the **`call_site`** compiler optimisation
@@ -93,20 +93,19 @@ masked failure mode named in that audit note.
 
 ## Where it bit in production
 
-`/workspace/clausify-domains/au/firb`: all input-mode self-tests calling
+The downstream investment-screening rulebase domain: all input-mode self-tests calling
 `notifiable(P, "notifiable")`, `investor_category(P, "not_foreign")`,
 `interest_test(P, 10, _)` etc. (imported predicates with 4+ clauses and
 constant heads) errored; output-mode variants of the same queries passed.
 The domain's `run_tests.sh` / `negative_controls.sh` currently export
-`CLAUSAL_DISABLE_OPT=call_site` as a documented workaround (see
-`au/firb/eval/DIFFERENTIAL.md` §6) — **please drop that workaround once this is
-fixed** (grep for `CLAUSAL_DISABLE_OPT=call_site` under
-`/workspace/clausify-domains/au/firb/`).
+`CLAUSAL_DISABLE_OPT=call_site` as a documented workaround (see the domain's own
+differential-test notes) — **please drop that workaround once this is
+fixed** (grep for `CLAUSAL_DISABLE_OPT=call_site` under the domain's checkout).
 
 ## Acceptance for the fix
 
 1. `./repro/repro.sh` → all six rows PASS with no `CLAUSAL_DISABLE_OPT`.
-2. `cd /workspace/clausify-domains/au/firb && ./run_tests.sh` still ALL GREEN
+2. `cd <downstream investment-screening domain checkout> && ./run_tests.sh` still ALL GREEN
    after deleting the two `export CLAUSAL_DISABLE_OPT=call_site` lines
    (123 tests + 4 negative controls).
 3. A regression test in the engine suite covering: imported predicate, >= 4

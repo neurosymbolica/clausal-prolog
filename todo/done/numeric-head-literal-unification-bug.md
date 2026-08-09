@@ -1,7 +1,7 @@
 # BUG: numeric literal in a ruled-clause head is not unified against a query variable
 
-**Reported 2026-06-23** (found while writing a Prolog→Clausal cheat-sheet for the Clausify project;
-every example was executed via `python -m clausal.testing`).
+**Reported 2026-06-23** (found while writing a Prolog→Clausal cheat-sheet for a downstream
+consumer; every example was executed via `python -m clausal.testing`).
 
 **RESOLVED 2026-06-23.** Root cause: in `clausal/logic/compiler/head_match.py`, an int/float/complex
 head literal was compiled to a Python `MatchValue` literal pattern (`case [_v0, 20000]`), which only
@@ -62,7 +62,7 @@ ordinary unification path, which is why they work.
 - Hits a very common rulebase idiom (a clause that returns a fixed numeric output under a guard, e.g. a
   capped fine, a fixed score, a fixed count).
 
-## Workaround (already documented in the Clausify cheat-sheet)
+## Workaround (already documented in the downstream consumer's cheat-sheet)
 
 Bind numeric outputs in the **body**, not the head:
 

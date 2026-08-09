@@ -234,8 +234,8 @@ Commits: `14c38ffb` (trivial), `e0c71ba1` (re), plus the big-three commit.
 - [ ] Docs above updated; no `CamelCase`/`PascalCase` predicate guidance remains.
 
 ## Related / follow-ups (separate repos & todos)
-- **External rulebase sweep** — `clausify-domains` rulebases + `kit/scaffolding/*` reference these
+- **External rulebase sweep** — a downstream rulebase corpus + its `kit/scaffolding/*` reference these
   names and live in another repo. Flag-day rename here means that sweep must be coordinated (same as
   datetime).
-- Sibling `formalize_lib` rename (`prof_get`→`profile_get`, `attr`→`attribute`, …) — same rationale.
+- Sibling helper-library rename (`prof_get`→`profile_get`, `attr`→`attribute`, …) — same rationale.
 - `todo/date-max-min-ordinal-apis.md` — remaining clean date APIs, all snake_case.

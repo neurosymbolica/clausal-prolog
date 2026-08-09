@@ -21,7 +21,8 @@ nested compounds, and strings stay put.
 1. **Document it** in the Clausal style guide (`docs/` — alongside cut-free / ALL_CAPS / `==`-vs-`:=`).
 2. **Ship a formatter** — `clausal fmt` (or a `tools/` script) that applies it engine-side, so it's
    available to every Clausal project, not just this corpus. Reference impl (whitespace-only,
-   idempotent, depth+quote aware): `clausify-domains/_tools/format_one_goal_per_line.py`. A proper
+   idempotent, depth+quote aware): a downstream rulebase corpus's own
+   `_tools/format_one_goal_per_line.py`. A proper
    engine formatter could work off the parsed AST rather than regex, and also normalise clause
    separation (facts end `,`; rules `)` no trailing comma; blank line between clauses).
 3. Optionally a lint (advisory) flagging multi-goal-on-one-line bodies.

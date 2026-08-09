@@ -1,6 +1,6 @@
 # Bug: `cannot import name X from M` never says what M *does* export
 
-**Reported:** 2026-07-29, from the clausify formalizer-training harness
+**Reported:** 2026-07-29, from an external authoring harness
 **Severity:** highest measured — this is the single dominant failure mode for
 machine authors, by a factor of four over the next one.
 
@@ -75,7 +75,7 @@ truncated one.
 
 ### Consequence for the harness mitigation
 
-`clausify`'s `auto/gates.py::_missing_import_context` is now **redundant**, not
+The external authoring harness's own `_missing_import_context` loader hook is now **redundant**, not
 conflicting: its `_MISSING_IMPORT` regex still matches (the loader's first line
 is still CPython's verbatim), so it will append a *second*, weaker copy of the
 same information — no arities, only two candidate paths searched, and it prints
@@ -89,7 +89,7 @@ once this lands.  Not touched from this side.
 
 ```
 test_load.clausal::<load> — cannot import name 'within_limit' from
-'eu.aml.amlr_bo_chain.schema' (/…/schema.clausal)
+'eu.compliance.compliance_threshold_rule.schema' (/…/schema.clausal)
 ```
 
 The message names the file, which is good. It never names **what that module
@@ -133,7 +133,7 @@ invisible.
 Append the target module's export list, and the near-miss if there is one:
 
 ```
-cannot import name 'within_limit' from 'eu.aml.amlr_bo_chain.schema'
+cannot import name 'within_limit' from 'eu.compliance.compliance_threshold_rule.schema'
   (/…/schema.clausal)
   schema exports: verdict/2, beneficial_owner, not_beneficial_owner, holdings,
                   person, entity, overall, as_of_date, exceeds_limit
@@ -151,9 +151,9 @@ and it is the same principle that made the `-module` arity error actionable:
 
 ## Interim mitigation (harness side, already shipped)
 
-`clausify`'s `gate_load` now parses this error, reads the target module's
-`-module(...)` list off disk, and appends it to the repair prompt
-(`auto/gates.py::_missing_import_context`, commit `d3fae4f`). A re-run of the
+The external authoring harness's own loader now parses this error, reads the target
+module's `-module(...)` list off disk, and appends it to the repair prompt
+(its own `_missing_import_context`, commit `d3fae4f`). A re-run of the
 census measures whether that collapses the 84%.
 
 That workaround only helps callers who drive clausal through *this* harness, and

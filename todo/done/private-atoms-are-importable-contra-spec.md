@@ -53,7 +53,7 @@ This is what settles it. Probes:
 - The same atom listed in **both** `-module` and `-private` loads clean with no
   error and no warning, contrary to "the compiler rejects this with a hard
   error". The first listing processed wins; the second is a no-op.
-  `clausify/kit/formalize_lib.clausal` lists eight names in both, deliberately.
+  A downstream helper library lists eight names in both, deliberately.
 
 Enforcing the `-private` row alone would therefore police one row of a
 three-row table whose other rows are equally unenforced, and would still not
@@ -62,8 +62,8 @@ buy the ceremony of access control without the property.
 
 **3. Who relies on it? — 33 sites, 6 of them load-bearing, plus in-repo tests.**
 
-Resolved sweep of `-import_from` in `.clausal` across `/workspace/clausify`,
-`/workspace/clausify-domains`, `/workspace/clausify-executor-train`,
+Resolved sweep of `-import_from` in `.clausal` across three downstream repos
+(a consumer, a rulebase corpus, and an external authoring harness),
 `packages/` and `tests/` (3572 import sites):
 
 | | count |
@@ -72,19 +72,18 @@ Resolved sweep of `-import_from` in `.clausal` across `/workspace/clausify`,
 | ...where the name is declared **only** private (not also exported) | **6** |
 | ...of those, the imported name is a bare **atom** | **2** |
 
-The 6 are `clausify/kit/query_combinators_tests` and `kit/tests/test_what_if`
-importing `delta` from `query_combinators` (×2, the kit is vendored into
-`clausify-executor-train` as well), and `clausify-domains/us/sara_irc_tax`'s
-`test_public_interface` importing four private citation atoms
-(`us_usc_26_1_a/_1_c/_1_d`, `us_usc_26_3301`) from `constants` and
+The 6 are a downstream helper library's own tests importing `delta` from a
+second helper module (×2, the kit is vendored into a second downstream repo as
+well), and a tax-credit domain's `test_public_interface` importing four private
+citation atoms (`us_usc_26_1_a/_1_c/_1_d`, `us_usc_26_3301`) from `constants` and
 `computation`. None of these are workarounds; they are how those libraries are
 written.
 
-Not counted in the 33 because they live in Python string literals:
-`clausify-executor-train/auto/tests/test_gate_test_profiles.py`, whose fixtures
+Not counted in the 33 because they live in Python string literals: an external
+authoring harness's own `auto/tests/test_gate_test_profiles.py`, whose fixtures
 import `requirement`, `req_bool`, `flag`, `count` from a private-only list —
-the fixtures fixed yesterday under
-[[done/strict-atoms-default-broke-downstream-bare-atom-fixtures]].
+the fixtures fixed yesterday under the downstream bare-atom-fixture fix
+(relocated to that harness's own repo).
 
 **4. What breaks in-repo under enforcement? — 8 items.**
 
@@ -124,7 +123,7 @@ items and 6+ downstream call sites for a guarantee it cannot make. Notably
 *not* rejected for the reason the todo expected; point 5 disproves that.
 
 **Option 3, warn.** Rejected because it would fire on deliberate, correct,
-shipped library code — the kit's `delta` re-export and `sara_irc_tax`'s citation
+shipped library code — the kit's `delta` re-export and the tax-credit domain's citation
 atoms are not mistakes. The brief required that a warning "cannot fire on the
 legitimate anonymous-fixture pattern"; since that pattern *is* the `-private`
 import (`test_gate_test_profiles`), the warning has no way to tell the two

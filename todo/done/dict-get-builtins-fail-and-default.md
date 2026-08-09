@@ -31,4 +31,4 @@ Ground `KEY`. `P` is a `DictTerm`.
 - `get({a:1}, a, V)` ⇒ `V=1`; `get({a:1}, z, V)` **fails** (no throw, no binding).
 - `get({a:1}, a, V, 9)` ⇒ `V=1`; `get({a:1}, z, V, 9)` ⇒ `V=9`.
 - value-var unification: `get({a:V}, a, 7)` unifies `V=7`.
-- Prover: `get/3`,`get/4` join the `has_k`/`val_k` name-table recognition — clausify-side prover todo.
+- Prover: `get/3`,`get/4` join the `has_k`/`val_k` name-table recognition — the prover's own downstream todo.

@@ -1,6 +1,6 @@
 # Bug: `invalid syntax (file.clausal, line N)` shows no source line and no reason
 
-**Reported:** 2026-07-29, from the clausify formalizer-training harness
+**Reported:** 2026-07-29, from an external authoring harness
 **Severity:** high for machine authors — third-ranked defect by attempts burned,
 80% unrecovered.
 

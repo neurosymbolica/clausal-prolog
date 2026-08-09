@@ -16,7 +16,7 @@ silently unevaluated term. The failure then surfaces far from its cause:
 ```
 test_public_interface.clausal:69 :: effective_ownership computes correct value
   goal 5 of 5 failed:
-    eu.aml.amlr_bo_chain.effective_ownership(HOLDINGS, PERSON, ENTITY, 2500)
+    eu.compliance.compliance_threshold_rule.effective_ownership(HOLDINGS, PERSON, ENTITY, 2500)
   the predicate DID have a solution, which did not unify (argument 4 differs):
     (argument 4 was actually: (2500 + 0))
 ```
@@ -61,7 +61,7 @@ same trade — the engine already holds the fact, it just is not saying it.
 ## Scope note / non-request
 
 I am NOT asking for `is` to evaluate arithmetic. That would break the term-building
-semantics the corpus depends on (`gold eu/aml/amlr_bo_chain` uses
+semantics the corpus depends on (a gold compliance-threshold domain uses
 `C == PCT * SUB / 10000` deliberately). Only the diagnostic is requested.
 
 Separately and for the record: `=:=` is not accepted (`invalid syntax`). If Prolog
@@ -139,14 +139,14 @@ Both stay true whoever built the term, in the same way as
 
 ### False positives: none in the corpus
 
-Scanned all 769 `.clausal` files in `/workspace/clausify-domains` plus 47 in
-`/workspace/clausify/kit` with `ast.parse` (`.clausal` is Python-parseable — `<-`
+Scanned every `.clausal` file in a downstream rulebase corpus plus its helper
+library's kit with `ast.parse` (`.clausal` is Python-parseable — `<-`
 is `<` then unary minus), counting `Compare` nodes whose op is `Is`/`Eq` and
 whose comparator is an arithmetic `BinOp`:
 
 * `X == <arith>`: **331** occurrences. The idiom.
 * `X is <arith>`: **1**, and it is not arithmetic — `DAYS is ++DELTA.days`
-  (`clausify/kit/deadline_lib.clausal:112`), where `++` is the Python-interop
+  (a downstream helper library, reading a `timedelta` attribute), where `++` is the Python-interop
   marker. Hence `UnaryPlus` is deliberately **not** in the flagged set.
 * Structural use of arithmetic terms — a clause head matching `Add(A, B)`,
   symbolic differentiation, expression simplification, `#=` constraint posting,
@@ -155,7 +155,7 @@ whose comparator is an arithmetic `BinOp`:
 * 10 files fail to parse at all, every one of them
   `_dpo/*.student27b.clausal` — the local-formalizer output this todo came from.
 
-`eu/aml/amlr_bo_chain/computation.clausal:25,31` uses `==`, as the scope note
+`eu/compliance/compliance_threshold_rule/computation.clausal:25,31` uses `==`, as the scope note
 said; its results reach `sum_list` as numbers, so the note cannot fire there.
 
 Site 2's requirement that a *number* sit opposite the operator term is what

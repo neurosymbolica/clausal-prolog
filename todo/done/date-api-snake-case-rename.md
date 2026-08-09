@@ -34,16 +34,16 @@ spelling is better — noted in the third column):
 ## Rollout (avoid a flag-day break)
 1. **Add the snake_case names as the canonical spelling**; keep the TitleCase names as
    **deprecated aliases** for one release so existing rulebases keep loading.
-2. Update `docs/clausal-cheatsheet.md` §3 (Dates) + `kit/scaffolding/temporal-skeleton.md` +
-   `kit/scaffolding/*` to show snake_case (`date(YEAR,MONTH,DAY,OBJ)`, `days_between(A,B,N)`, …).
-3. Then sweep `clausify-domains` rulebases from the TitleCase names to snake_case (mechanical
-   `-import_from(date_time, [...])` + call-site rename; the corpus temporal domains are
-   posted-workers, de-minimis, gdpr-arts33-34, both schengens, temporal-skeleton).
+2. Update `docs/clausal-cheatsheet.md` §3 (Dates) + a downstream kit's scaffolding docs
+   to show snake_case (`date(YEAR,MONTH,DAY,OBJ)`, `days_between(A,B,N)`, …).
+3. Then sweep the downstream rulebase corpus from the TitleCase names to snake_case (mechanical
+   `-import_from(date_time, [...])` + call-site rename; the corpus temporal domains include
+   several date-window and data-handling rules).
 4. Finally drop the TitleCase aliases.
 
 ## Related
 - `todo/date-max-min-ordinal-apis.md` (clean ordinal/max/min date APIs — do together, all snake_case).
-- Sibling request: spell out + snake_case the `formalize_lib` helpers (`prof_get`→`profile_get`,
+- Sibling request: spell out + snake_case a downstream helper library's helpers (`prof_get`→`profile_get`,
   `prof_has`→`profile_has`, `attr`→`attribute`) — see that lib's todo. Same rationale (less for the
   local models to learn; closer to Prolog).
 
@@ -53,7 +53,7 @@ spelling is better — noted in the third column):
 
 Implemented in commits on branch `fix/qualified-atoms-term-position`. Deltas from the original proposal above:
 
-- **Flag-day rename, no deprecated aliases** — only snake_case names exist (external `clausify-domains`/`kit` swept separately in their own repo).
+- **Flag-day rename, no deprecated aliases** — only snake_case names exist (the downstream rulebase corpus/kit swept separately in its own repo).
 - **`datetime` and `timedelta` spelled as single words** (matching Python's class names), not `date_time`/`time_delta`.
 - **`DayOfWeek` → `weekday`** (Python `datetime.weekday()`, 0=Mon..6=Sun), not `day_of_week`.
 - **`FormatDate` + `ParseDate` folded into one bidirectional `datetime_string(DateTime, String, Format)/3`** (format when the datetime is bound, parse when the string is bound).
@@ -61,4 +61,4 @@ Implemented in commits on branch `fix/qualified-atoms-term-position`. Deltas fro
 
 Design + plan: `docs/superpowers/specs/2026-07-04-datetime-snake-case-design.md`, `docs/superpowers/plans/2026-07-04-datetime-snake-case.md`.
 
-Still outstanding (separate TODOs): the external `clausify-domains`/`kit` rulebase sweep; the sibling `formalize_lib` rename; `date-max-min-ordinal-apis.md`.
+Still outstanding (separate TODOs): the downstream rulebase corpus/kit rulebase sweep; the sibling helper-library rename; `date-max-min-ordinal-apis.md`.

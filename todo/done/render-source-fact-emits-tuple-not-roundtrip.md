@@ -37,11 +37,11 @@ equal to `fact`. Rules (`goals != []`) render correctly.
 ```python
 from clausal import reflection as R
 items = R.reify_file(
-    "/workspace/clausify-domains/eu/mifid/client_categorisation/constants.clausal")
+    "eu/compliance/client_categorisation_rule/constants.clausal")
 fact = [it for it in items if type(it).__name__=="Clause" and it.goals==[]][0]
 
 rendered = R.render_source(fact)
-# => '(per_se_ecp_entity_type(eu.mifid.client_categorisation.schema.investment_firm),)'
+# => '(per_se_ecp_entity_type(eu.compliance.client_categorisation_rule.schema.investment_firm),)'
 #    ^ wrapped in parens + trailing comma = a Python tuple expression
 
 back = R.reify_source(rendered)
@@ -51,7 +51,7 @@ assert back[0] == fact          # FAILS — round-trip broken
 The clean fact surface DOES reify correctly:
 ```python
 type(R.reify_source(
-  'per_se_ecp_entity_type(eu.mifid.client_categorisation.schema.investment_firm),'
+  'per_se_ecp_entity_type(eu.compliance.client_categorisation_rule.schema.investment_firm),'
 )[0]).__name__            # 'Clause'  (bare head + trailing comma, no wrapping parens)
 ```
 
@@ -71,8 +71,9 @@ facts don't round-trip — so **the gate is not exercising `goals == []` facts**
 (or its structural comparison is too lenient). This is the "green fixtures ≠
 complete" risk realized on the corpus gate itself. Fix should ADD a fact case to
 both the fixture set AND ensure the corpus sweep asserts
-`reify(render(c)) == c` for every clause **including facts** (26/26 mifid
-`constants.clausal` clauses are facts — a good regression fixture).
+`reify(render(c)) == c` for every clause **including facts** (26/26 of the
+client-categorisation domain's `constants.clausal` clauses are facts — a good
+regression fixture).
 
 ## Impact
 Mutation auditor mutates fact literals (statutory thresholds live in

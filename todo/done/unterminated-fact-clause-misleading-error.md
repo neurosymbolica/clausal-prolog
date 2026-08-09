@@ -14,7 +14,7 @@ bumped CLAUSAL_BYTECODE_TAG. Design: docs/superpowers/specs/2026-07-20-optional-
 
 # Bug: un-terminated bodyless fact clause reports a misleading `name '<x>' is not defined`
 
-**Filed:** 2026-07-20 (from clausify-domains work; run under `PYENV_VERSION=3.13.3`)
+**Filed:** 2026-07-20 (from downstream rulebase corpus work; run under `PYENV_VERSION=3.13.3`)
 **Severity:** DX / error-reporting (no incorrect results — it fails to load, but with a message that points at the wrong thing)
 
 ## Summary
@@ -61,7 +61,7 @@ b(True),        Test("Python True literal")         <- ( b(X), X == True )   # P
 
 ## Why it matters
 
-Facts and rules routinely coexist in one module (e.g. a lookup fact beside its accessor rule). Because rules need no terminator but bodyless facts do, dropping the fact's comma is a natural slip — and the resulting `name '_' is not defined` sends you hunting for an atom-declaration / variable problem that does not exist. This cost multiple debugging cycles in the clausify-domains `resolve.clausal` work (and independently tripped a second author on a `..._profile({...})` fact).
+Facts and rules routinely coexist in one module (e.g. a lookup fact beside its accessor rule). Because rules need no terminator but bodyless facts do, dropping the fact's comma is a natural slip — and the resulting `name '_' is not defined` sends you hunting for an atom-declaration / variable problem that does not exist. This cost multiple debugging cycles in a downstream rulebase corpus's `resolve.clausal` work (and independently tripped a second author on a `..._profile({...})` fact).
 
 ## Suggested fix
 

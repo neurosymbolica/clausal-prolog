@@ -5,7 +5,7 @@
 
 ## Symptom
 
-Running the clausify-executor-train suite dies mid-execution:
+Running an external authoring harness's suite dies mid-execution:
 
 ```
 INTERNALERROR> File "/workspace/clausal/clausal/_lazy_hook.py", line 25, in find_spec
@@ -47,7 +47,7 @@ declines to claim the name.
 ## Reproduction
 
 ```
-cd /workspace/clausify-executor-train
+cd <external authoring harness checkout>
 python3 -m pytest auto/tests -q -p no:randomly
 # -> INTERNALERROR ... RecursionError, at
 #    auto/tests/test_check_certificate.py::test_rederive_rejects_false_guard_from_bindings
@@ -148,11 +148,11 @@ applied, the failure list is byte-identical to the pre-fix run, so none of those
   probe per bare import before it activates and removes itself), but it means
   `sys.meta_path` can accumulate stubs in a process that clears `clausal`
   repeatedly. Wants its own todo if it ever shows up as a cost.
-- One executor-train test, `test_gate_query.py::
+- One external-harness test, `test_gate_query.py::
   test_query_headline_returns_count_and_decisions`, fails only when
   `test_check_certificate.py` runs before it — collateral of *that* test's
   `sys.modules` sweep leaving a second `clausal` module identity behind, not of
   this fix (it fails the same way with the guard removed and the crash avoided).
-  It belongs to clausify-executor-train, not here: the correct shape is for that
+  It belongs to the external authoring harness, not here: the correct shape is for that
   test to restore `sys.modules` afterwards, or to make its assertion in a
   subprocess.

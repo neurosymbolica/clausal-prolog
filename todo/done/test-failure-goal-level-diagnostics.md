@@ -1,6 +1,6 @@
 # Bug: a failing Clausal test reports only its NAME — no goal, no expected, no actual
 
-**Reported:** 2026-07-29, from the clausify formalizer-training harness
+**Reported:** 2026-07-29, from an external authoring harness
 **Severity:** high — this is the single biggest blocker to automated repair.
 
 ---
@@ -21,12 +21,12 @@ the report's shape):
 FAILURES:
   long.clausal:9 :: public interface resolves on the parallel_below_threshold fixture
     goal 2 of 2 failed:
-      amlr_bo_chain_assess('parallel_below_threshold',
-                           amlr_bo_chain_verdict(not_beneficial_owner, _EFFECTIVE_OWNERSHIP_BPS, _CITATIONS))
+      compliance_assess('parallel_below_threshold',
+                           compliance_verdict(not_beneficial_owner, _EFFECTIVE_OWNERSHIP_BPS, _CITATIONS))
     bindings at failure: (none from goal 1)
     the predicate DID have a solution, which did not unify (argument 2 differs):
-      amlr_bo_chain_assess('parallel_below_threshold',
-                           amlr_bo_chain_verdict(beneficial_owner, 2500, [cite(amlr_art52_1)]))
+      compliance_assess('parallel_below_threshold',
+                           compliance_verdict(beneficial_owner, 2500, [cite(example_art52_1)]))
 
 1 tests: 0 passed, 1 failed [FAILED]
 ```
@@ -198,9 +198,9 @@ The test in question asserts two goals:
 
 ```clausal
 Test("public interface resolves on the parallel_below_threshold fixture") <- (
-    amlr_bo_chain_subject("parallel_below_threshold"),
-    amlr_bo_chain_assess("parallel_below_threshold",
-        amlr_bo_chain_verdict(not_beneficial_owner, _EFFECTIVE_OWNERSHIP_BPS, _CITATIONS))
+    compliance_subject("parallel_below_threshold"),
+    compliance_assess("parallel_below_threshold",
+        compliance_verdict(not_beneficial_owner, _EFFECTIVE_OWNERSHIP_BPS, _CITATIONS))
 )
 ```
 
@@ -213,7 +213,7 @@ output *is* the entire repair signal. "Test named X failed" is close to no signa
 the author must guess which conjunct failed and why, with no observation of the
 actual computed verdict.
 
-Measured impact — Qwen3.6-27B authoring `eu/aml/amlr_bo_chain`, phase P3b:
+Measured impact — Qwen3.6-27B authoring `eu/compliance/compliance_threshold_rule`, phase P3b:
 
 | attempt | result |
 |---|---|
@@ -239,12 +239,12 @@ bindings established up to that point:
 FAILURES:
   test_public_interface.clausal:55 :: public interface resolves on the parallel_below_threshold fixture
     goal 2 of 2 failed:
-      amlr_bo_chain_assess("parallel_below_threshold",
-                           amlr_bo_chain_verdict(not_beneficial_owner, _EFFECTIVE_OWNERSHIP_BPS, _CITATIONS))
+      compliance_assess("parallel_below_threshold",
+                           compliance_verdict(not_beneficial_owner, _EFFECTIVE_OWNERSHIP_BPS, _CITATIONS))
     bindings at failure: (none from goal 1)
     the predicate DID have a solution, which did not unify:
-      amlr_bo_chain_assess("parallel_below_threshold",
-                           amlr_bo_chain_verdict(beneficial_owner, 2500, [cite(amlr_art52_1)]))
+      compliance_assess("parallel_below_threshold",
+                           compliance_verdict(beneficial_owner, 2500, [cite(example_art52_1)]))
 ```
 
 Priority order, if it needs to be staged:
@@ -258,8 +258,8 @@ Priority order, if it needs to be staged:
 
 ## Interim mitigation (harness side)
 
-`clausify`'s `gate_load` now echoes the **source of each named failing test** into
-the repair prompt (commit in `clausify-executor-train`, `auto/gates.py`
+The external authoring harness's own loader now echoes the **source of each named
+failing test** into the repair prompt (commit in that harness's own repo, its loader
 `_failing_test_sources`). That tells the author what is being asserted, but still
 not which goal failed or what was actually computed — the information simply does
 not exist in the runner's output. It is a workaround, not a fix.

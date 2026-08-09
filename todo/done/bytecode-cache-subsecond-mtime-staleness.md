@@ -24,8 +24,8 @@ Demonstrated: pinned-mtime demo (first load `val -> [1]`; edit source to `val(2)
 `[1]`; next second → `[2]`). The repo's own invalidation test (`tests/test_pycache.py:104`
 `test_modified_source_recompiles`) appends a fact — different size — so it never covers this window.
 
-Downstream impact: every mutation harness in /workspace/clausify-domains now hand-busts `__pycache__` on patch
-AND restore (e.g. `eu/schengen_90_180/eval/mutation_test.py:16-18` cites this bug); the Wave-B decomposition
+Downstream impact: every mutation harness in a downstream rulebase corpus now hand-busts `__pycache__` on patch
+AND restore (e.g. one domain's `eval/mutation_test.py` cites this bug); a decomposition
 brief hardcodes the workaround. Engine fix removes a whole class of silent false-greens.
 
 ## Fix

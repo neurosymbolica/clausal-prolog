@@ -7,9 +7,10 @@ record.
 The decision recorded there stands and is implemented: the SMT prover keeps its
 own front end deliberately, and the only thing shared with the engine is the
 narrow surface-desugar pass (`clausal/templating/desugar.py`, consumed by the
-engine at `clausal/templating/term_rewriting.py:636` and by the prover at
-`/workspace/clausify/auto/formal/ir.py:380`). Do **not** reopen that as
-"duplicated parsing to be unified" — see the archived file for why.
+engine at `clausal/templating/term_rewriting.py:636` and by the prover's own
+front end, maintained by a downstream consumer, at its `ir.py`). Do **not**
+reopen that as "duplicated parsing to be unified" — see the archived file for
+why.
 
 The consequence the decision accepts is that the two front ends can drift, and
 nothing currently detects drift. The unbuilt idea: a checker that parses the same
@@ -17,7 +18,7 @@ nothing currently detects drift. The unbuilt idea: a checker that parses the sam
 functor/arity, goal count and goal functors — failing on any divergence.
 
 Note what does **not** already cover this:
-`/workspace/clausify/auto/tests/test_translate_differential.py` is a *semantic*
+the downstream consumer's own translate-differential test is a *semantic*
 engine-vs-SMT differential (same answers), not a front-end shape comparison. A
 clause the prover silently fails to parse at all can pass a semantics
 differential by vacuity, which is exactly the failure mode a shape check would

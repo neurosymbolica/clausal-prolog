@@ -3,7 +3,7 @@
 **Found:** 2026-07-29, immediately after the `_lazy_hook` recursion fix.
 **Investigated:** 2026-07-30 on `fix/functor-identity-cross-module`.
 **Status:** original mechanism REFUTED. One real engine defect found and fixed; the
-reported reproduction is a harness fault in `clausify-executor-train` plus three
+reported reproduction is a harness fault in an external authoring harness plus three
 unrelated pre-existing failures. Remaining engine work is a parked design
 question, see [[term-identity-cannot-cross-two-package-copies]].
 
@@ -108,12 +108,12 @@ Parked as [[term-identity-cannot-cross-two-package-copies]].
 
 ## The reported reproduction: accounting for all four failures
 
-    cd /workspace/clausify-executor-train
+    cd <external authoring harness checkout>
     python3 -m pytest auto/tests/test_check_certificate.py auto/tests/test_gate_query.py -q -p no:randomly
 
 * **1 failure** (`test_query_headline_returns_count_and_decisions`) is the
   cross-copy case above. It is a **harness fault**: the fix belongs in
-  `clausify-executor-train`, whose `test_checker_does_not_import_clausal` should
+  the external authoring harness, whose `test_checker_does_not_import_clausal` should
   assert its property in a subprocess instead of mutating the live `sys.modules`
   of a process that other modules are still using. Deselecting that one test
   makes this failure go away. With the diagnostic above it now says so itself.
@@ -122,6 +122,7 @@ Parked as [[term-identity-cannot-cross-two-package-copies]].
   strict-atoms-by-default now rejects. They fail identically against canonical
   `/workspace/clausal` and *in isolation*, so this todo's "order matters and
   isolation passes" note is stale — it predates the strict-atoms default landing.
-  Filed as [[done/strict-atoms-default-broke-downstream-bare-atom-fixtures]]
-  and fixed there on 2026-07-30, along with five more `.clausal` files and two
-  further embedded fixture groups that the consumer sweep turned up.
+  Filed as the downstream bare-atom-fixture fix (relocated to that consumer's
+  own repo) and fixed there on 2026-07-30, along with five more `.clausal`
+  files and two further embedded fixture groups that the consumer sweep
+  turned up.

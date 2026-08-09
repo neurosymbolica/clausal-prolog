@@ -34,8 +34,9 @@ _load_module('_probe_atp_2', f)   # SyntaxError
 `tests/fixtures/impord_atomvocab.clausal` exports `impord_qd` as a **0-arity
 vocabulary atom with no clauses**. The "2 clauses" the message attributes to it
 were put on the shared class by **load 1** — by the Phenomenon A re-mint that
-`au/firb/computation.clausal` and `us/sara_irc_tax/computation.clausal` both
-rely on (import a 0-arity atom, then define a same-named predicate; the clauses
+two corpus modules — the shape `tests/fixtures/impord_atom_then_pred.clausal`
+pins — both rely on (import a 0-arity atom, then define a same-named predicate;
+the clauses
 land on the imported class without `_arity` moving).
 
 So the refusal reads its own earlier work as the exporter's declaration. Two
@@ -49,8 +50,9 @@ consequences:
 
 ## Why the domain suites do not catch it
 
-`au/firb` (123 tests + 4 negative controls) and `us/sara_irc_tax` (41 tests) are
-green against the branch. They load each module once per process, so the second
+The investment-screening domain (123 tests + 4 negative controls) and the
+tax-credit domain (41 tests) are green against the branch. They load each
+module once per process, so the second
 load never happens. Green domain suites are not evidence here.
 
 It does fail the engine suite:

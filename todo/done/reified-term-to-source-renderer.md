@@ -4,7 +4,7 @@ STATUS: DONE (2026-07-20).
 RESULT: `render_ast`/`render_source` landed in `clausal/reflection.py`; corpus round-trip gate green over 571 files / 4171 reifiable clauses; 126 files deferred to pre-existing reifier bug (`todo/reify-source-dict-literal-atom-key-unhashable.md`).
 
 **Critical prerequisite** for the Clausal-AST
-mutation auditor (design in `clausify/docs/superpowers/factoring/` — Approach B:
+mutation auditor (design in a downstream consumer's own docs — Approach B:
 match+replace in Clausal, then the rewritten term must be turned back into
 something runnable so a generated mutant can be scored).
 
@@ -60,8 +60,8 @@ vocabulary to cover (reflection.py:82-90):
   (auditor only rewrites clause bodies), but render or explicitly raise.
 
 ## Acceptance — the corpus round-trip invariant (make this the test)
-For **every clause in every `.clausal` file across `clausify-domains`** (~30
-domains) the following must hold:
+For **every clause in every `.clausal` file across a downstream rulebase corpus**
+(~30 domains) the following must hold:
 
     reify(render_source(clause)) ≡structural≡ clause
 
@@ -74,7 +74,7 @@ covering every node kind: comparisons, arithmetic, `is`, `==`, `not`, lists,
 dict `get`, `kwargs`, nested compounds, if-then-else).
 
 Probe already run (2026-07-20): `reify_file` → `_unparse_clause` →
-`reify_source` round-trips 31/31 items on mifid `computation.clausal`, so the
+`reify_source` round-trips 31/31 items on a client-categorisation domain's `computation.clausal`, so the
 `ast.unparse` path is viable; this task adds the **reified-term → ast** half so
 the round-trip works on *rewritten* terms, not just re-parsed source.
 

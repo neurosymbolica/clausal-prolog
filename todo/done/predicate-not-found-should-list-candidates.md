@@ -1,6 +1,6 @@
 # Bug: `Predicate name/N not found` never says which predicates *are* defined
 
-**Reported:** 2026-07-29, from the clausify formalizer-training harness
+**Reported:** 2026-07-29, from an external authoring harness
 **Severity:** medium-high for machine authors — 8 repair attempts, **0% recovered**.
 
 ---
@@ -46,7 +46,7 @@ With goal-level test diagnostics now in place, a failing assertion reports:
 
 ```
 test_load.clausal:38 :: citation record resolves — 'Predicate citation/2 not found'
-  goal 1 of 3 raised: citation(eu.merger.eumr_jurisdiction_turnover.citations.eumr_art_1_2, METADATA)
+  goal 1 of 3 raised: citation(eu.merger.turnover_threshold_rule.citations.example_art_1_2, METADATA)
   KeyError: 'Predicate citation/2 not found'
 ```
 
@@ -80,8 +80,8 @@ act, which isolates the missing piece to the candidate list.
 
 ```
 'Predicate citation/2 not found'
-  goal 1 of 3 raised: citation(…citations.eumr_art_1_2, METADATA)
-  module eu.merger.eumr_jurisdiction_turnover.citations defines: citation/3, cite/1
+  goal 1 of 3 raised: citation(…citations.example_art_1_2, METADATA)
+  module eu.merger.turnover_threshold_rule.citations defines: citation/3, cite/1
   did you mean: citation/3 ?   (same name, different arity)
 ```
 

@@ -19,10 +19,11 @@ bad(S)  <- (S is not tag(_))        # WRONG: succeeds even for tag("a")
 good(S) <- (not (S is tag(_)))      # RIGHT: fails exactly when S matches tag(_)
 ```
 
-Real impact: this was the second root cause of a 3^N solution explosion in the
-clausify kit's `assess/6` engine (`STATUS is not unmet(_)` double-firing); it cost
-significant debugging time because the symptom (solution blow-up) is far from the
-cause. See clausify `docs/clausal-cheatsheet.md` §2e for the write-up.
+Real impact: this was the second root cause of a 3^N solution explosion in a
+downstream helper library's own 6-arity dispatcher predicate (`STATUS is not unmet(_)`
+double-firing); it cost significant debugging time because the symptom (solution
+blow-up) is far from the cause. See that downstream consumer's own cheat-sheet
+§2e for the write-up.
 
 ## Proposed
 

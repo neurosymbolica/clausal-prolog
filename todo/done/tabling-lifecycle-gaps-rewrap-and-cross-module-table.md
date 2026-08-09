@@ -161,7 +161,7 @@ error, so it cannot be used as a workaround.
 
 ## Corpus
 
-`/workspace/clausify-domains` does not use `-table` anywhere: zero `-table`
+A downstream rulebase corpus does not use `-table` anywhere: zero `-table`
 directives across every `.clausal` file in the corpus. No domain is affected by
 either fault, which is the one piece of good news here — the faults were found
 by audit, not by a domain hitting them.

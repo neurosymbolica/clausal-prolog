@@ -27,7 +27,7 @@ logic — the truth values stay `True`/`False`/`unknown`; only the operand count
 
 ## What to build
 1. **Binary ground truth** — the 9-row `and3/3` and `or3/3` fact tables plus `not3/2`
-   (3 rows), copied from `clausify-domains/eu/ai_act/prohibited_practices/__init__.clausal:122-140`.
+   (3 rows), copied from a downstream rulebase corpus's own three-valued-logic vocabulary module.
    Keep them full 9-row, pairwise-disjoint, first-argument-indexed. Do NOT add wildcard
    short-circuit rows like `and3(False, _, False)` — overlapping clauses break disjointness
    and make ground queries nondeterministic.

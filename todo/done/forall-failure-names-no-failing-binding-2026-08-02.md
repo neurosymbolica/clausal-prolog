@@ -1,10 +1,10 @@
 # forall failure names no failing binding — the repair loop never learns which element broke
 
-**Filed:** 2026-08-02, from the formalizer-training harness team (clausify-executor-train).
+**Filed:** 2026-08-02, from an external authoring harness team.
 
-Measured representative: `vat_pro_rata_deduction_r2` (`_reruns/resume_vat_r2`). The
-domain reached P4 on resume and anchored on a P2 determinism property test. The goal
-form is:
+Measured representative: a prorated-rate authoring run, resumed from an archived
+scratch tree. The domain reached a late authoring phase on resume and anchored on a
+determinism property test. The goal form is:
 
 ```
 forall(SUBJECT in SUBJECT_LIST, (...))

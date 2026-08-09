@@ -1,8 +1,8 @@
 # Compile constant-list membership `X in [c1, c2, …]` to a Python set
 
-**Requested:** 2026-07-04. Membership tests against a **ground constant list** are common in the EU
-corpus (e.g. MAR `dealing_permitted`: `ACTION in ["acquire","dispose","amend","cancel"]`, and the
-Art 9 safe-harbour list). Today `X in LIST` / `in_(X, LIST)` is a linear scan, and the same literal
+**Requested:** 2026-07-04. Membership tests against a **ground constant list** are common in a
+downstream rulebase corpus (e.g. a compliance-screening domain's `dealing_permitted`:
+`ACTION in ["acquire","dispose","amend","cancel"]`, and a safe-harbour list). Today `X in LIST` / `in_(X, LIST)` is a linear scan, and the same literal
 list is often written several times in one file.
 
 ## Idea
@@ -16,7 +16,7 @@ Elements are `PredicateMeta` atoms (hashable, identity-equal), numbers, strings 
 frozenset works. Guard: only apply in the **check** mode (ground X against ground list); keep the
 relational scan when X is unbound or the list is partial.
 
-## Example (MAR insider-dealing, dealing_permitted)
+## Example (compliance-screening domain, dealing_permitted)
 ```clausal
 dealing_permitted(TRADE, INFO, PERMITTED) <- (
     ...,
@@ -52,7 +52,7 @@ so the two numbers are not separated by a machine-state change):
 | membership goal | scan | set | speedup |
 |---|---|---|---|
 | `in` 2 atoms, hit | 1276 ns | 302 ns | 4.2× |
-| `in` 4 atoms, hit (the MAR shape) | 3692 ns | 413 ns | 8.9× |
+| `in` 4 atoms, hit (the compliance-screening shape) | 3692 ns | 413 ns | 8.9× |
 | `in` 8 atoms, hit | 7626 ns | 338 ns | 22.5× |
 | `in` 16 atoms, hit | 15913 ns | 381 ns | 41.8× |
 | `in` 64 atoms, hit | 66980 ns | 221 ns | 302× |
@@ -121,8 +121,8 @@ mutants confirmed the tests are load-bearing: dropping the duplicate check
 (4 failures), dropping the left-operand type guard (5 failures, including all
 three order tests), dropping the element whitelist (2 failures).
 
-Corpus: `au/firb` ALL GREEN (46+27+32+18 = 123 tests, 4/4 negative controls
-load-bearing), `us/sara_irc_tax` 41/41.
+Corpus: the investment-screening domain ALL GREEN (46+27+32+18 = 123 tests, 4/4 negative controls
+load-bearing), the tax-credit domain 41/41.
 
 Files: `clausal/logic/runtime/const_set.py` (new),
 `clausal/logic/compiler/_lower_goalop_shared.py`,
@@ -133,10 +133,10 @@ Files: `clausal/logic/runtime/const_set.py` (new),
 ### Open question, for whoever picks up the corpus side
 
 **How much of the corpus should be rewritten to use the inline form?** A survey
-of all 54 domains found only **11** inline constant-list memberships, and both
-gold suites run for this change (`au/firb`, `us/sara_irc_tax`) contain **zero** —
-every membership there is `X in LIST` against a runtime list variable, which
-correctly declines. MAR's `dealing_permitted` has already been hand-factored
+of the corpus found only **11** inline constant-list memberships, and both
+gold suites run for this change (the investment-screening and tax-credit domains) contain
+**zero** — every membership there is `X in LIST` against a runtime list variable, which
+correctly declines. The compliance-screening domain's `dealing_permitted` has already been hand-factored
 into a first-argument-indexed `regulated_action/1` fact set, exactly as this
 todo anticipated. So the optimisation currently fires on a handful of sites.
 

@@ -84,9 +84,9 @@ reconstruct could not round-trip, and neither could `functor(T, cite, 1)`.
 
 Two pieces of evidence redirected the fix:
 
-- The kit had already hit this and written it down as settled behaviour rather
-  than a defect — `/workspace/clausify/kit/planner_lib.clausal`, "ATTR-LIST
-  BRANCH — VERIFIED SEMANTICS (2026-07-19 interpreter probe)", including the
+- A downstream helper library had already hit this and written it down as settled
+  behaviour rather than a defect — its own "ATTR-LIST
+  BRANCH — VERIFIED SEMANTICS (2026-07-19 interpreter probe)" note, including the
   consequence that "after a kit `world_set` on an attr-list world the entry is
   a generic Compound — the domain's class-constructor read will NOT see it".
 - The corpus sweep's headline risk was backwards. `key_string/2` was read as
@@ -109,8 +109,9 @@ Decomposition is unchanged, so the type asymmetry this todo was named for still
 stands — deliberately. It is documented rather than removed.
 
 Verified: 11 new tests in `tests/test_functor_construction_declared_term.py`;
-full suite 10771 passed; `au/firb` 123 tests, `us/sara_irc_tax` 41, and the kit's
-own `planner_tests.clausal` 49 + demos + gap-wave2 all green against the branch.
+full suite 10771 passed; the investment-screening domain's 123 tests, the tax-credit
+domain's 41, and the downstream helper library's own `planner_tests.clausal` 49 +
+demos + gap-wave2 all green against the branch.
 
 The diagnosability half — a generic Compound *renders identically* to the
 declared term it will not unify with, so the failure reads as a contradiction —

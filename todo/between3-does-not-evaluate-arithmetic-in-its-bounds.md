@@ -1,7 +1,7 @@
 # `between/3` does not evaluate arithmetic in its bounds — and fails silently
 
-**Filed:** 2026-08-03, from the clausify executor-train loop. First measured on
-`schengen_max_stay`, where a producer wrote `between(0, LENGTH - 1, X)` and the goal
+**Filed:** 2026-08-03, from an external authoring harness loop. First measured on
+a rolling date-window rule, where a producer wrote `between(0, LENGTH - 1, X)` and the goal
 yielded nothing at all — no solutions, no error, no diagnostic. The wrong-value bridge
 now at least NAMES the goal, which is how it was finally caught. **Status: OPEN.**
 
@@ -72,7 +72,7 @@ looks like a perfectly ordinary term at every level the author can inspect.
    "bound is a number outside the range". A non-numeric, non-var bound is a type error
    in ISO (`type_error(integer, X)`), not a failure, and `throw/1` is already the
    documented guard idiom here. Even an advisory note naming the unevaluated term would
-   have saved the schengen round-trip.
+   have saved the round-trip.
 
 Option 2 is strictly cheaper and catches the whole class; option 1 additionally removes
 the surprise. They compose — evaluate, then throw on what still isn't an integer.

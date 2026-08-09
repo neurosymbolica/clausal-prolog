@@ -21,9 +21,9 @@ $ python -m clausal.testing attvar_min.clausal
 ```
 
 ## Where it came from (real case)
-A generated schengen rulebase ended a clause with a bare bound variable as its final goal:
+A generated rolling date-window rulebase ended a clause with a bare bound variable as its final goal:
 ```clausal
-decide_schengen(REF_DATE, STAYS) <- (
+decide_window_eligibility(REF_DATE, STAYS) <- (
     ..., REM == LIMIT - USED,
     If(REM >= 0, RESULT is "allowed", RESULT is "not_allowed"),
     RESULT                      % <- bare var in goal position -> AttVar crash at load
@@ -42,10 +42,10 @@ oracle); this one construct blocks the whole public-interface test file from loa
 
 ## Repro artifacts (on the box)
 `/root/clausal-train/data/attvar_repro/`: `attvar_min.clausal` (the 4-line repro) and
-`attvar_artifact.tgz` (the full generated schengen rulebase + tests that triggered it).
+`attvar_artifact.tgz` (the full generated rolling date-window rulebase + tests that triggered it).
 
-Found via the 30B schengen formalization baseline (see clausify `formalization-program-state` /
-`.superpowers/sdd/progress.md`).
+Found via a local-model authoring baseline run in an external authoring harness (see its own
+`formalization-program-state` / `.superpowers/sdd/progress.md`).
 
 ## Resolution — RESOLVED 2026-06-29
 

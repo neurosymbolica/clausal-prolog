@@ -34,7 +34,7 @@ for every undeclared name, with no special case for the boolean spellings.
 
 ## Why it matters
 
-In a 24-run local-model formalization study (study 11), `undeclared atom(s) in module`
+In a measured local-model formalization study, `undeclared atom(s) in module`
 burned **69 attempts across 21 of 24 runs, 65% never recovering**. Breaking the 241
 undeclared-atom mentions down by name:
 

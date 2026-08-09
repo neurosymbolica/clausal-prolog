@@ -1,7 +1,7 @@
 # `clause body must be parenthesized` names no line, and the line is in hand
 
-Found 2026-08-08 by study 25 (`study_eumr_turnover_r1`), which burned four authoring
-attempts and blocked at P3b on this one diagnostic.
+Found 2026-08-08 by a measured authoring study, which burned four authoring
+attempts and blocked on this one diagnostic.
 
 ## What the author sees
 
@@ -68,8 +68,8 @@ Sites 318 and 3423 already receive `source_lines` / `transformer._source_lines`;
 whoever owns the source text.
 
 Do NOT settle for adding the line number to the message string. The structured
-attributes are what `auto/gates.py` and any other reader can key on without parsing
-prose, and the located parser errors above already set the precedent.
+attributes are what a downstream loader and any other reader can key on without
+parsing prose, and the located parser errors above already set the precedent.
 
 ## Why it is worth doing now
 
@@ -80,5 +80,5 @@ Here the diagnostic survives and the LOCATION does not. A weak producer cannot b
 twenty-clause file from a message with no coordinates, so the cost lands as burned
 attempts and a blocked run that reads like a capability wall.
 
-Related: `clausify-executor-train/docs/superpowers/handoffs/2026-08-03-tight-loop-handoff.md`
+Related: a handoff note from the external authoring harness's own docs
 ("when a run stalls on a diagnostic, suspect the diagnostic before the model").

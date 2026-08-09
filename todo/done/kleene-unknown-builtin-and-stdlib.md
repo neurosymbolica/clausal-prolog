@@ -9,8 +9,8 @@ emits atom `unknown` (inbound untouched). `kleene.clausal` migrated off the modu
 (dropped from exports); `tri_get/3` builtin added (absent key → `Unknown`, mirrors `get/3`).
 Tests: `tests/test_unknown_builtin.py` (23) + `tests/test_kleene_stdlib.py` (19) pass; full
 suite 9360 passed / 2 skipped / 44 xfailed (was 9337, delta = the 23 new tests).
-CORPUS MIGRATION DONE 2026-07-17 (clausify-domains 257093c + 5569262): ai_act
-prohibited_practices and MAR market_manipulation now import clausal.stdlib.kleene
+CORPUS MIGRATION DONE 2026-07-17 (downstream rulebase corpus, two commits): a
+prohibited-practices domain and a market-manipulation domain now import clausal.stdlib.kleene
 (and4/and5 collapse the chains), read elements via tri_get/3 → Unknown, and keep the
 public limb-status atom axis unchanged. Verified: 51/51 + 25/25 interface tests,
 187/187 + 8939/8939 vs oracles, 10/10 + 6/6 mutants killed.
@@ -24,16 +24,16 @@ questions below are now SETTLED — see "Implementation plan (piece 1)" for the 
 
 ## Motivation
 Two corpus domains hand-write the same strong-Kleene machinery from scratch:
-- `clausify-domains/eu/ai_act/prohibited_practices/__init__.clausal:122-145` — 9-row `and3/3` +
+- A prohibited-practices domain — 9-row `and3/3` +
   9-row `or3/3` fact tables + `status_from_truth/2`, plus ~20 `tri_<key>/2` reader **pairs**
   (2 clauses each) mapping absent profile keys to the atom `unknown`.
-- `clausify-domains/eu/market_integrity/mar_market_manipulation/__init__.clausal` — same tables again.
+- A market-manipulation domain — same tables again.
 The "three-valued limb logic" pattern is a documented family standard (deontic domains), so
 duplication will grow with the corpus.
 
 Today's truth values are Python `True`/`False` (process-wide identity) plus the bare atom
 `unknown`, which is **module-scoped** and must be exported for tests/oracle to unify on the same
-object (see ai_act export list line 55 — a known module-scoped-atom pitfall).
+object (see the prohibited-practices domain's export list line 55 — a known module-scoped-atom pitfall).
 
 ## Proposal (two independent pieces)
 
@@ -105,7 +105,7 @@ object (see ai_act export list line 55 — a known module-scoped-atom pitfall).
    Register via the `@_builtin` decorator pattern (`clausal/logic/builtins/_registry.py`).
    This replaces the 2-clauses-per-key `tri_<key>` reader boilerplate in the corpus domains.
 
-**Out of scope for piece 1**: migrating the clausify-domains corpus (ai_act, MAR) — different
+**Out of scope for piece 1**: migrating the downstream rulebase corpus's domains — different
 repo, canonical-venv suites; happens after this lands. The reified-ITE internal `None` stays.
 
 ## Acceptance (piece 1)

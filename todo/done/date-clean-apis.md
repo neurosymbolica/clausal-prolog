@@ -32,15 +32,15 @@ so every "parse an ISO date then work in dates" pattern reaches into Python. Pic
 
 ## Tasks
 - [x] Implement the chosen predicate(s) in `site/date_time`.
-- [x] Tests in `tests/test_date_time.py` — round-trip + the schengen-style "parse ISO → date → diff" path,
+- [x] Tests in `tests/test_date_time.py` — round-trip + a rolling-date-window-style "parse ISO → date → diff" path,
       asserting **no `++` needed**.
 - [x] Update `docs/date_time.md`: document the new predicate(s); add a "prefer these over `++X.date()` /
       `++TD.days` / `++X.isoformat()`" note.
 
-**Downstream:** once this lands, the clausify cheat-sheet + primers get swept to use the clean APIs —
-see `/workspace/clausify/todo/cheatsheet-remove-python-escapes.md` (that todo is **gated on this one**).
+**Downstream:** once this lands, a downstream consumer's cheat-sheet + primers get swept to use the
+clean APIs — see that consumer's own todo (gated on this one).
 
-**Adjacent (separate todo, NOT this one):** schengen's current blocker is an engine limit
+**Adjacent (separate todo, NOT this one):** a rolling date-window rule's current blocker is an engine limit
 `terms_to_goalop: goal shape not yet supported (AttVar)` — a `==`/CLP attributed-variable goal shape.
 Unrelated to dates; log separately if not already tracked. *(Resolved — see
 `todo/done/attvar-in-goal-position.md`: a bare variable in goal position is now a clean, located
@@ -61,7 +61,7 @@ convenience):
   - Both registered + exported; module docstring import list and "prefer declarative over `++`" note added.
 - **Tests** — `tests/test_date_time.py`: `TestDateOf` (6) + `TestDaysBetween` (7) covering both modes,
   check modes, and failure modes; adapter-dispatch assertions. `tests/fixtures/docs/date_time_sig_tests.clausal`:
-  DateOf forward/inverse, DaysBetween, and the schengen-style **parse ISO → DateOf → DaysBetween with no
+  DateOf forward/inverse, DaysBetween, and a rolling-date-window-style **parse ISO → DateOf → DaysBetween with no
   `++` escapes** path. 79 Python + 19 clausal tests pass.
 - **Docs** — `docs/date_time.md`: new `DateOf/2` and `DaysBetween/3` sections, import list, and a
   "Prefer the declarative predicates over `++` escapes" table (isoformat→FormatDate, TD.days→TimeDelta,
@@ -71,13 +71,13 @@ convenience):
 The existing API already covered the other two escapes (`++TD.days` via `TimeDelta(N,_,TD)`,
 `++DT.isoformat()` via `FormatDate`) — no code change needed there, just the docs note steering users to them.
 
-**Downstream now unblocked:** `/workspace/clausify/todo/cheatsheet-remove-python-escapes.md` (was gated on
-this) can sweep the clausify cheat-sheet + primers to the clean APIs.
+**Downstream now unblocked:** a downstream consumer's own todo (was gated on this) can sweep its
+cheat-sheet + primers to the clean APIs.
 
 ---
 ## Follow-up note (2026-06-29): the same gap surfaced a third date-access variant
-A later 30B schengen run reached for `TD.days` (no `++`) and got
+A later 30B-model rolling-date-window authoring run reached for `TD.days` (no `++`) and got
 `Logic variable 'TD' cannot appear as the base of a qualified name` — i.e. the model oscillated between
 `++TD.days`, `++X.date()`, and bare `X.days` across runs because there was no clean predicate. The new
-`DaysBetween/3` + `DateOf/2` cover all three; the clausify primer + cheat-sheet now teach them so the
+`DaysBetween/3` + `DateOf/2` cover all three; the downstream consumer's primer + cheat-sheet now teach them so the
 model stops improvising. Good regression-test cases: `DateDiff(A,B,TD), N is ++TD.days` and `... N == TD.days + 1`.

@@ -41,8 +41,8 @@ predicate with no clauses — *nothing is known well enough to refuse*. That is
 deliberate: the fix does not trust `_arity`, because a module that imports a
 0-arity vocabulary atom and then defines a same-named predicate leaves `_arity`
 at 0 on a class whose clauses are at 2, and the corpus relies on that shape
-(`tests/fixtures/impord_atom_then_pred.clausal`, `au/firb/computation.clausal`,
-`us/sara_irc_tax/computation.clausal`). Clause heads cannot be stale; `_fields`
+(`tests/fixtures/impord_atom_then_pred.clausal` pins it; two corpus modules rely
+on it in production). Clause heads cannot be stale; `_fields`
 can. The declined case is the price, and `-dynamic` before the first `assertz`
 is the visible instance of it.
 

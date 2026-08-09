@@ -153,10 +153,10 @@ campaign that fixes no defect. The intersection leaves every one of them alone.
 The intersection rule was instrumented to *log* rather than raise, and run over:
 
 * the full test suite (10520 passing tests, every inline `.clausal` snippet) — **0 clashes**
-* all 767 `.clausal` files in `/workspace/clausify-domains` — **0 clashes**
+* every `.clausal` file in a downstream rulebase corpus — **0 clashes**
 * all 346 `.clausal` files in the repo — **0 clashes**
 
-Also checked directly: `/workspace/clausify-domains` has **no** ALL-CAPS clause
+Also checked directly: the downstream rulebase corpus has **no** ALL-CAPS clause
 heads at all, and no ALL-CAPS atoms (the 4196 `PROFILE` / 782 `STATUS` / 144
 `EUR` hits are all logic variables, comments or string contents), so a currency
 vocabulary spelling `EUR` as an atom would not be affected either.
@@ -175,7 +175,7 @@ and a recursive TitleCase predicate.
   before and after (that is the point of them).
 * Full suite: `1 failed, 10532 passed, 136 skipped, 44 xfailed` — the one
   failure being the expected `test_doc_snippet_coverage.py::test_no_raw_untested_blocks`.
-* Corpus `au/firb`: load check clean, 46/27/32/18 tests `[PASSED]`, 4/4 negative
+* The investment-screening domain: load check clean, 46/27/32/18 tests `[PASSED]`, 4/4 negative
   controls load-bearing — run with this worktree on `PYTHONPATH` ahead of
   `/workspace/clausal`, verified via `clausal.logic.compiler_v2.__file__`.
 

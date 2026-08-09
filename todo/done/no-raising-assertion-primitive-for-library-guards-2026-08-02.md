@@ -1,6 +1,6 @@
 # No raising assertion primitive for library guards — wf-guards fail silently inside findall
 
-**Filed:** 2026-08-02, from the formalizer-training harness team (clausify-executor-train).
+**Filed:** 2026-08-02, from an external authoring harness team.
 
 ## The need
 
@@ -12,7 +12,7 @@ return a default, and every verdict downstream flips silently.
 
 ## Measured incident
 
-`schengen_max_stay_r1` — four full repair budgets could not locate the defect from the
+A rolling date-window authoring run — four full repair budgets could not locate the defect from the
 test report (see `failed-goals-have-no-derivation-trace-2026-08-02.md` in this
 directory for full measurements). The defect: the model passed a date OBJECT where kit
 predicate `window_days_used` expects a `[Y,M,D]` triple (`REF_YMD`). The kit predicate

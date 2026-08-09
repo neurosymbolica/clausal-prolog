@@ -1,6 +1,7 @@
 # C(i) — an ill-typed py-interop call is indistinguishable from a legitimate "no"
 
-**Filed:** 2026-07-30, from a review of study 13 in clausify-executor-train.
+**Filed:** 2026-07-30, from a review of a measured authoring study in an
+external authoring harness.
 **Repo:** clausal. **Independent of todo B**, but feeds the same message pipeline —
 land B first if doing both, so the new notes have somewhere to appear.
 **Needs a study run:** NO.
@@ -15,7 +16,7 @@ solution. There is no way for the caller — human or model — to distinguish
   - "you passed an `int` where a `timedelta` is required".
 
 This is a large share of what *creates* the unsatisfiable-goal situations that todo B is
-about. Study 13's `study_schengen_max_stay_r1` stalled for 7 identical attempts with
+about. The study's rolling date-window authoring run stalled for 7 identical attempts with
 `date_add/3` called with an integer as one of three stacked root causes; the model wrote
 a 120-line debugging monologue into `computation.clausal` as comments, correctly guessing
 *"Perhaps `window_days_used` expects a different format for HISTORY?"*, and had no way to
@@ -33,9 +34,9 @@ Two parts, both cheap:
 
 2. **Load-time lint for `[H|T]`.** A clause head containing `BitOr` over list literals is
    almost certainly Prolog cons syntax written by someone who does not know this DSL
-   spells it `[H, *T]`. Emit *"did you mean `[H, *T]`?"*. Study 13's
-   `study_working_time_average_r1` died on exactly this; the engine even leaked the tell
-   (the near-miss rendering printed `wt_compliance(BitOr(None, [_, work], []), ...)`) and
+   spells it `[H, *T]`. Emit *"did you mean `[H, *T]`?"*. The study's hours-threshold
+   authoring run died on exactly this; the engine even leaked the tell
+   (the near-miss rendering printed `hours_compliance(BitOr(None, [_, work], []), ...)`) and
    the model never decoded it.
 
 ## Deliberately NOT proposed
@@ -48,8 +49,8 @@ its own argument.
 
 ## Verify
 
-`study_working_time_average_r1` and `study_schengen_max_stay_r1` scratch trees under
-`/workspace/clausify-executor-train/_reruns/study13/`. Assert the lint fires on the first
+The hours-threshold and rolling date-window authoring runs' scratch trees, preserved
+in the external authoring harness's own archive. Assert the lint fires on the first
 and the type note appears on the second.
 
 ## Landed (2026-07-31)
@@ -83,15 +84,15 @@ Both parts, as specified.
    quotes the source, and says "did you mean `[H, *T]`?"
    (`ClausalLintWarning`, same channel as the `is not` lint).
 
-Verified against both study-13 trees: the lint fires on
-working_time_average's two cons heads (lines 58/65, source quoted); on
-schengen, `max_additional_days` now diagnoses as descent-leaf
+Verified against both archived trees: the lint fires on
+the hours-threshold rule's two cons heads (lines 58/65, source quoted); on
+the rolling date-window rule, `max_additional_days` now diagnoses as descent-leaf
 `computation.clausal:85/129` (COUNT = 0) **plus** the note "date_add/3 was
 called with int where timedelta is required (argument 2)" — the fact the
-study model spent 7 attempts guessing at. (The schengen scratch tree no
+study model spent 7 attempts guessing at. (The date-window scratch tree no
 longer loads as-is — it froze mid-repair with a missing `within_limit`
 export — so the check ran via a probe test importing its `computation`
-module directly, with `/workspace/clausify` + `/workspace/clausify/kit` on
+module directly, with the external authoring harness's checkout on
 `PYTHONPATH`.)
 
 Tests: `tests/test_py_interop_type_notes.py` (helpers, dedupe, e2e note

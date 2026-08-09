@@ -10,7 +10,7 @@
 ```clausal
 -private([art_1_2, meta])
 
-citation(art_1_2, "EUMR Article 1(2)", meta),
+citation(art_1_2, "Example Reg Article 1(2)", meta),
 cite(art_1_2),
 
 Test("citation record resolves") <- (

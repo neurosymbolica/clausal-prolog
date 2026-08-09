@@ -4,7 +4,7 @@
 
 ## The recurring question
 
-The prover (`/workspace/clausify/auto/formal/`) has its **own** front end:
+The prover, maintained by a downstream consumer, has its **own** front end:
 `ir.py:354` does `ast.parse(text)` and builds `ProgramIR`/`ClauseIR`/`BodyGoal`;
 `translate.py` then walks the raw `ast` nodes. The engine has its own, entirely
 separate pipeline. So every new surface syntax has to be taught twice.

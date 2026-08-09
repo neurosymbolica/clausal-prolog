@@ -3,7 +3,7 @@
 **Priority:** DX / diagnostics (not a correctness bug — resolution behaviour is correct; only the error message is unhelpful).
 
 ## Motivation
-Surfaced repeatedly during the clausify-domains hierarchical-namespace migration (54 domains
+Surfaced repeatedly during a downstream rulebase corpus's hierarchical-namespace migration (dozens of domains
 -> `eu.banking.crr_lcr` etc., using the landed `__init__.clausal` package resolution). Two
 recurring failure shapes each produced a bare, misleading error that cost real debugging time:
 
@@ -46,7 +46,7 @@ the bare `ModuleNotFoundError` propagate. E.g.:
 
 ## Notes
 - Corpus-side mitigations already shipped (not blocking this): the migration tool
-  (`clausify-domains/_tools/migrate_namespace.py`) now underscores all path segments and
+  (the corpus's own migration tool) now underscores all path segments and
   pre-flight-rejects digit-leading segments. This todo is purely to make the LANGUAGE's own error
   helpful for anyone hand-authoring dotted imports.
 

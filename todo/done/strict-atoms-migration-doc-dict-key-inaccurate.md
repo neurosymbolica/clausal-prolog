@@ -1,8 +1,8 @@
 # Migration doc's dict-key carve-out is inaccurate for literal keys
 
 **Status:** open (doc fix + reconcile with dict-key-atom-strict-asymmetry)
-**Raised:** 2026-07-29, during the clausify `strict-atoms-readiness` migration
-(clausify commits `f63802d..8a8035c`).
+**Raised:** 2026-07-29, during a downstream consumer's `strict-atoms-readiness` migration
+(that consumer's own commits `f63802d..8a8035c`).
 
 ## The finding
 

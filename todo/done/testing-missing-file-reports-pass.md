@@ -11,7 +11,7 @@ $ python -m clausal.testing /tmp/does_not_exist_xyz.clausal
 ```
 
 A non-existent path (and likewise a file that defines no `Test(...)`) yields
-`[PASSED]` with exit status success. During the clausify work this repeatedly hid
+`[PASSED]` with exit status success. During downstream authoring work this repeatedly hid
 "ran from the wrong directory" / "module not found" mistakes as green runs.
 
 ## Expected

@@ -1,6 +1,6 @@
 # Failed and wrong-value goals have no derivation trace — RAISED goals do
 
-**Filed:** 2026-08-02, from the formalizer-training harness team (clausify-executor-train).
+**Filed:** 2026-08-02, from an external authoring harness team.
 
 ## The asymmetry
 
@@ -16,9 +16,9 @@ The actual defect is routinely 2–3 levels down, failing silently inside a `fin
 
 ## Measured incident
 
-`schengen_max_stay_r1` — FOUR full repair budgets (original + 2 resumes + a P3b
-rewind, 28+ attempts, heavy byte-identical stalling) against one unchanging report
-shape:
+A rolling date-window authoring run — FOUR full repair budgets (original + 2 resumes
+and a rewind, 28+ attempts, heavy byte-identical stalling) against one unchanging
+report shape:
 
 ```
 max_additional_days ... MAX == 90 / bindings at failure: MAX = 0
@@ -35,7 +35,7 @@ The actual defect chain, reconstructed post-mortem:
   ineligible;
 - from the repair prompt: `MAX = 0`, nothing else, for every attempt.
 
-`posted_workers_long_term_trigger_r1` is stuck in the same class: `triggered` vs
+A separate trigger-threshold authoring run is stuck in the same class: `triggered` vs
 `not_triggered` with 4/7 byte-identical stalls against a `distinct_days_total` shape.
 
 Neither run could locate the defect from the report. The engine's failure trace for

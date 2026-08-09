@@ -40,7 +40,7 @@ literal there. Open questions, none of them answered yet:
 
 ## Worth doing?
 
-The evidence from study 11 is weaker here than for the atom half. Bare
+The evidence from a measured authoring study is weaker here than for the atom half. Bare
 lowercase `true` accounts for 38 of the 241 undeclared-atom mentions; `"true"`
 appears just 4 times in the gold corpus and every one is inside a comment. The
 motivating argument is consistency — "exactly one spelling per truth value

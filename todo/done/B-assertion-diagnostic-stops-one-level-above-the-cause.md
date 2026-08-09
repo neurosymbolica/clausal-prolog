@@ -1,8 +1,10 @@
 # B — the assertion diagnostic stops one level above the cause
 
-**Filed:** 2026-07-30, from a review of study 13 in clausify-executor-train.
-**Repo:** clausal. **Depends on:** clausify-executor-train todo A landing first,
-otherwise the extra detail this produces is elided before the model sees it.
+**Filed:** 2026-07-30, from a review of a measured authoring study in an
+external authoring harness.
+**Repo:** clausal. **Depends on:** the external authoring harness's own todo A
+landing first, otherwise the extra detail this produces is elided before the
+model sees it.
 **Needs a study run:** NO — verifiable against `clausal.testing` directly.
 
 ## The ladder today
@@ -22,7 +24,7 @@ otherwise the extra detail this produces is elided before the model sees it.
 
 ## Why it matters
 
-Measured over study 13's goal-level failures, recovery tracks whether the message carried
+Measured over the study's goal-level failures, recovery tracks whether the message carried
 a **value**, not which phase or domain it was:
 
 | report contains | attempts | phase recovered |
@@ -47,25 +49,26 @@ first failing conjunct per clause with its bindings.
 
 Expected output on the three reproduced cases:
 
-  - schengen: `window_days_used(HISTORY, <date object>, 180, _) has no solution` — the
+  - rolling_window_rule: `window_days_used(HISTORY, <date object>, 180, _) has no solution` — the
     wrong-type argument becomes visible.
-  - vat: `RAW_PCT > 100 failed, RAW_PCT = 50` — names the contradictory guard directly.
+  - prorated_rate_rule: `RAW_PCT > 100 failed, RAW_PCT = 50` — names the contradictory guard directly.
 
 **Rung 2 — print what you already computed.** The satisfiability proof at 744 has a
 solution in hand. Render the first 1–3.
 
 Bound descent at depth 1–2. The existing `$CLAUSAL_TEST_DIAG_BUDGET` deadline machinery
-already threads through here (study 13's `crr_output_floor_r1` reports exceeding it), so
+already threads through here (one of the study's runs reports exceeding it), so
 reuse it rather than adding a second budget.
 
 ## Verify
 
-Reproduce from the archived scratch trees under
-`/workspace/clausify-executor-train/_reruns/study13/`:
+Reproduce from the archived scratch trees preserved in the external authoring
+harness's own archive:
 
-  - `study_schengen_max_stay_r1` — wrong arg type into `kit/rolling_window.clausal:149`
-  - `study_vat_pro_rata_deduction_r2` — contradictory guards in one conjunction
-  - `study_working_time_average_r1` — `[H|T]` cons syntax parsed as `BitOr`
+  - a rolling date-window authoring run — wrong arg type into a downstream helper
+    library module
+  - a prorated-rate authoring run — contradictory guards in one conjunction
+  - an hours-threshold authoring run — `[H|T]` cons syntax parsed as `BitOr`
 
 Run `python -m clausal.testing` on each and assert the printed conjunct names the known
 cause. No model, no GPU.
@@ -85,17 +88,18 @@ no-head-match head listing (source-faithful, including `| REST` cons heads). Des
 bounded (depth 2, 4 clauses, 6 leaves, 4 bindings/leaf, cycle guard, existing
 `$CLAUSAL_TEST_DIAG_BUDGET` deadline) with truncation noted rather than silently dropped.
 All in `clausal/testing.py`, with unit tests in `tests/test_testing_descent.py`. E2e
-verification against study 13's three archived trees: schengen names
-`window_days_used(…)` with the `date` object visible; vat names `TOTAL_CENTS <= 0` and
-`RAW_PCT > 100` with `RAW_PCT = 50`; working_time's facade tests descend to depth 2 on
-`wt_compliance(WEEKS, _)` with `WEEKS` bound, but the direct `wt_qualifying_totals`/
-`wt_compliance` tests are intercepted at rung 1 (a freed list argument unifies with the
-`[…] | REST_WEEKS` cons head or the `[],0,0` base fact), yielding a value-carrying
-near-miss `BitOr(None, [2880, work], [])` rather than the predicted head listing. Because
-the plan holds rung 1 untouched, the spec's two working_time statements were mutually
-unsatisfiable; the human ruled **Option A — amend the spec to match verified reality, no
-code changes** (done in this close-out). The full-suite failure set equals the
-2026-07-30 baseline (only `tests/test_doc_snippet_coverage.py::test_no_raw_untested_blocks`).
+verification against the study's three archived trees: rolling_window_rule names
+`window_days_used(…)` with the `date` object visible; prorated_rate_rule names
+`TOTAL_CENTS <= 0` and `RAW_PCT > 100` with `RAW_PCT = 50`; the hours-threshold rule's
+facade tests descend to depth 2 on `hours_compliance(WEEKS, _)` with `WEEKS` bound, but
+the direct `qualifying_totals`/`hours_compliance` tests are intercepted at rung 1 (a freed
+list argument unifies with the `[…] | REST_WEEKS` cons head or the `[],0,0` base fact),
+yielding a value-carrying near-miss `BitOr(None, [2880, work], [])` rather than the
+predicted head listing. Because the plan holds rung 1 untouched, the spec's two
+hours-threshold statements were mutually unsatisfiable; the human ruled **Option A — amend
+the spec to match verified reality, no code changes** (done in this close-out). The
+full-suite failure set equals the 2026-07-30 baseline (only
+`tests/test_doc_snippet_coverage.py::test_no_raw_untested_blocks`).
 The ladder question the rung-1 interception exposes — a rung-1/rung-2 unbound-argument
 solution weakening the diagnosis — is filed as
 `todo/D-rung2-unbound-arg-solutions-weaken-diagnosis.md` (commit a08d211f).

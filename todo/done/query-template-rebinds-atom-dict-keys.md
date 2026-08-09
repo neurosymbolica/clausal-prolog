@@ -44,7 +44,7 @@ call costs nothing there.
 **Not done / follow-ups**
 
 * **Corpus sweep for live incidence** (the last acceptance bullet) was NOT run — the engine fix is
-  in, but no `clausify-domains` gold suites were re-run to find domains that were silently wrong.
+  in, but no downstream rulebase corpus gold suites were re-run to find domains that were silently wrong.
 * Atoms baked into clauses compiled at *runtime* by `assert`/`asserta` are still lowered by name.
   Same root cause, unfiled, no known reproduction.
 * `head_match.py` emits head DictTerm-pattern keys as `ast.Constant(value=key)` (~line 1182), which
@@ -120,10 +120,11 @@ Failure mode depends on the read, and the common one is the silent one:
 | `get/3` (soft) | **clause fails silently** — a wrong legal determination, no error |
 | `get/4` (defaulted) | **silently returns the default** — arguably worst |
 
-`clausify` harnesses build `DictTerm` profiles in Python and call `solve()`; 40 of 54 domains now use
-atom keys. The mechanism is verified; **corpus incidence is not** — a sweep is needed for domains
-where a profile-key atom name is also bound in the module owning the harness-called predicate.
-`au/firb`'s `profile_keys.yaml` header shows the collision being hand-managed already.
+Downstream authoring harnesses build `DictTerm` profiles in Python and call `solve()`; a large
+fraction of the corpus's domains now use atom keys. The mechanism is verified; **corpus incidence
+is not** — a sweep is needed for domains where a profile-key atom name is also bound in the module
+owning the harness-called predicate. The investment-screening domain's `profile_keys.yaml` header
+shows the collision being hand-managed already.
 
 ## Related sharp edge (same root)
 

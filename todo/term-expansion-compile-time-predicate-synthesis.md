@@ -5,7 +5,7 @@ data decl `profile_key(consent_valid, bool)` into named predicates
 `profile_has_consent_valid/1`, `profile_has_consent_valid_t/2`, `profile_get_consent_valid/2`
 at load time. `TermExpansion/4` (one-to-many, importable) is the right hook, but two gaps
 block computed-name generation. Workaround shipped: a BUILD-TIME codegen script
-(`clausify-domains/_tools/gen_profile_accessors.py`) that emits the clauses into a marked
+(a downstream rulebase corpus's own `_tools/gen_profile_accessors.py`) that emits the clauses into a marked
 region of the rulebase. This todo is the "nicer" compile-time version.
 
 ## Gap 1 — no string -> functor interning

@@ -20,7 +20,8 @@
 > and `::test_lambda_nested_in_compound_term`; the repro (moved to `todo/done/`) passes 3/3.
 > Full suite: 8142 passed.
 
-**Reported 2026-06-26** (found building a generic Clausal **planner** skeleton for Clausify: the engine
+**Reported 2026-06-26** (found building a generic Clausal **planner** skeleton for a downstream
+consumer: the engine
 needs to receive the domain's hooks — goal oracle, action generator, requirement-satisfier — as closures.
 A `Hooks(oracle, actions, satisfiers)` bundle term, and even threading a single closure through a local
 variable, both fail; closures had to be passed as **separate direct literal arguments** to work.)
@@ -82,7 +83,8 @@ its declared arity — standard higher-order Prolog: a goal/closure held in a va
 ## Impact
 
 A generic higher-order library cannot bundle goals into a term or thread a goal through a variable — closures
-must be passed as direct, literal arguments only. Concretely it forced the Clausify planner engine to take
+must be passed as direct, literal arguments only. Concretely it forced the downstream consumer's
+planner engine to take
 its three domain hooks as three separate direct closure args instead of one `Hooks(...)` bundle, and a domain
 must hide that behind a wrapper predicate.
 
