@@ -533,7 +533,7 @@ def _import_targets(module_items):
 def _prefix_target(failed, targets):
     """``(declared, directive)`` for the directive whose path stops at *failed*.
 
-    ``-import_from(eu.state_aid.gber, …)`` against a hyphenated
+    ``-import_from(eu.state_aid.reg_w_scheme, …)`` against a hyphenated
     ``eu/state-aid/`` raises with ``name='eu.state_aid'`` — a strict prefix of
     the declared path, so the exact-key lookup above misses it and CPython's
     bare one-liner escaped for a directive we can see.

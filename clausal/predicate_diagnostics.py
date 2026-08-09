@@ -809,7 +809,7 @@ def _import_remedy(name, export, path, label):
     """The ``->`` block: extend the existing import, or write a new one.
 
     Which of the two it is matters.  The reported failure had
-    ``-import_from(…citations, [mar_art_9])`` already in the file, so "add
+    ``-import_from(…citations, [reg_y_art_9])`` already in the file, so "add
     ``-import_from(…citations, [cite])``" would have told the author to write a
     second directive for a module they were already importing from.  Quoting
     their own list back with one name added is unambiguous.

@@ -239,7 +239,7 @@ authoritative.
 
 Every segment of a dotted import is a **valid Python identifier**, and a package
 directory is importable only under its own name. So `eu/state-aid/` can never be
-the `state_aid` of `-import_from(eu.state_aid.gber, …)`: `state-aid` is not an
+the `state_aid` of `-import_from(eu.state_aid.reg_w_scheme, …)`: `state-aid` is not an
 identifier, and `state_aid` is a different segment, not a spelling of it. The
 same goes for a file — `state-aid.clausal` is not the module `state_aid`.
 
@@ -250,9 +250,9 @@ sitting on the search path, the message names it:
 
 ```text
 ModuleNotFoundError: No module named 'eu.state_aid'
-  -import_from(eu.state_aid.gber, [G])
+  -import_from(eu.state_aid.reg_w_scheme, [G])
     in deep.clausal
-  the segment 'state_aid' did not resolve, so neither can 'eu.state_aid.gber'.
+  the segment 'state_aid' did not resolve, so neither can 'eu.state_aid.reg_w_scheme'.
   eu/state-aid is there, but 'state-aid' is not a valid Python identifier, so
     no dotted import can name it — 'state_aid' is a different segment, not a
     spelling of it. There is therefore no export list to show.
@@ -262,7 +262,7 @@ ModuleNotFoundError: No module named 'eu.state_aid'
 ```
 
 Renaming really is the only repair: there is no way to write the import that
-matches a non-identifier name. A **digit-leading** name (`42usc423_ssdi`) is
+matches a non-identifier name. A **digit-leading** name (`77usc501_abc`) is
 rejected earlier still — you cannot even write the directive, so you get a
 syntax error with a caret on the digit rather than an import error.
 

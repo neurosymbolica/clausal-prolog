@@ -385,7 +385,7 @@ Clausal deliberately keeps two disjoint kinds where Prolog blurs them behind quo
 
 | | **Symbol** | **Text / data** |
 |---|---|---|
-| written as | identifier — `red`, `café`, `δικαίωμα` | string — `"hello world"`, `'Reg (EU) 2016/679'` |
+| written as | identifier — `red`, `café`, `δικαίωμα` | string — `"hello world"`, `'Reg (XX) 2020/123'` |
 | reifies as | interned zero-arity `PredicateMeta` class | Python `str` (a list of character atoms) |
 | identity | global class identity; `is` works | value equality; also unifies as a char-list |
 | typo-safe? | yes, under [`-strict_atoms`](directives.md#-strict_atoms) | no (it's data) |
@@ -402,7 +402,7 @@ earns nothing:
   ordinary atoms — no quoting required. Only spaces, punctuation, and leading digits remain
   out of reach, and those belong to *display text*, not symbol identity.
 - **Human-readable display lives in the translation layer.** Verbatim, punctuated,
-  multilingual text (e.g. a citation `Regulation (EU) 2016/679, Art 6`) is held in the
+  multilingual text (e.g. a citation `Regulation (XX) 2020/123, Art 6`) is held in the
   translation lexicon keyed by an identifier atom — so the logic depends on the typo-safe
   symbol while presentation stays free-form.
 

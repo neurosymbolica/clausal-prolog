@@ -6,7 +6,7 @@ is not a Python identifier.  The finder therefore misses, and the author was
 told ``No module named 'eu.state_aid'`` while looking straight at the
 directory.  Two separate defects made that message wrong:
 
-* the *intermediate*-segment shape (``-import_from(eu.state_aid.gber, …)``
+* the *intermediate*-segment shape (``-import_from(eu.state_aid.reg_w_scheme, …)``
   against a hyphenated ``eu/state-aid/``) raised with ``name='eu.state_aid'``,
   a strict prefix of the declared path, so ``enrich_import_error`` did not
   recognise it as this file's own directive at all and CPython's bare one-liner
@@ -135,21 +135,21 @@ class TestHyphenatedDirectory:
         """The shape from the migration: the hyphen is *not* the last segment,
         so ``exc.name`` is a strict prefix of the declared path."""
         pkg = _pkg(on_path, "eu", "state-aid")
-        (pkg / "gber.clausal").write_text(
-            "-module(gber, [Gber/1])\nGber(1),\n")
+        (pkg / "reg_w_scheme.clausal").write_text(
+            "-module(reg_w_scheme, [RegWScheme/1])\nRegWScheme(1),\n")
 
-        # ``Gber``, not ``G``: an ALL-CAPS imported name is refused at load
+        # ``RegWScheme``, not ``G``: an ALL-CAPS imported name is refused at load
         # time as a logic-variable name (term_rewriting's
         # ``-import_from`` check), which would preempt the import failure this
         # test is about.  The name is incidental here either way.
         msg = _flat(str(_load_error(
-            on_path, "-import_from(eu.state_aid.gber, [Gber])\n")))
+            on_path, "-import_from(eu.state_aid.reg_w_scheme, [RegWScheme])\n")))
 
         # Previously this escaped enrichment entirely: no directive, no file,
         # no directory — just "No module named 'eu.state_aid'".
-        assert "-import_from(eu.state_aid.gber, [Gber])" in msg
+        assert "-import_from(eu.state_aid.reg_w_scheme, [RegWScheme])" in msg
         assert ("the segment 'state_aid' did not resolve, so neither can "
-                "'eu.state_aid.gber'" in msg)
+                "'eu.state_aid.reg_w_scheme'" in msg)
         assert f"{pkg} is there, but 'state-aid' is not a valid Python" in msg
 
     def test_import_module_directive_too(self, on_path):
