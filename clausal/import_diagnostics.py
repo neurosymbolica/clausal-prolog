@@ -3,7 +3,7 @@
 ``-import_from(M, [name])`` lowers to a Python ``from M import name``, so a
 stale name surfaces as CPython's stock message::
 
-    cannot import name 'within_limit' from 'eu.aml.amlr_bo_chain.schema'
+    cannot import name 'within_limit' from 'acme.compliance.schema'
     (/…/schema.clausal)
 
 which names the file but never the vocabulary — the one thing a repair needs.

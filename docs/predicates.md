@@ -231,7 +231,7 @@ as one:
 
 ```
 citation takes 3 arguments, but this call passes 2
-  citation/3 is defined at eumr.clausal:14.
+  citation/3 is defined at citations.clausal:14.
   -> pass 3 arguments to citation, or give the 2-argument predicate a
      different name: a second citation head with 2 arguments in the same file
      does not define citation/2 — it is padded with a wildcard and absorbed

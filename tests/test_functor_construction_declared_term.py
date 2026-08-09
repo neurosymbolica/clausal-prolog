@@ -21,7 +21,7 @@ same name/arity" is this defect, measured from the outside.
 Only the **class** arm changes.  A ``str`` name still builds a ``Compound``,
 with no attempt to resolve the string back to a class: which module's ``cite``
 a bare string names is genuinely ambiguous under module-local atom identity,
-and that library's ``key_string/2`` depends on the string arm behaving exactly
+and that library's ``entry_key/2`` depends on the string arm behaving exactly
 as it does today.
 """
 
@@ -79,7 +79,7 @@ def test_constructed_term_unifies_with_the_real_thing(cite):
 def test_string_name_still_builds_a_compound(cite):
     """The string arm is deliberately untouched.  Resolving ``"tfcdt_cite"``
     back to a class would have to pick a module, and a downstream helper
-    library's ``key_string/2`` relies on this arm building a Compound it can
+    library's ``entry_key/2`` relies on this arm building a Compound it can
     decompose to a string."""
     built = built_by(_functor__3, "tfcdt_cite", 1)
     assert isinstance(built, Compound)
@@ -102,7 +102,7 @@ def test_arity_mismatch_falls_through_to_compound(cite):
 def test_arity_zero_atom_asked_at_arity_one_is_unchanged():
     """A downstream helper library's own pattern: ``functor(PROBE, KEY, 1)``
     over an arity-0 schema atom must keep building a Compound, because
-    ``key_string/2`` then decomposes it to get the name string.  Pinned so
+    ``entry_key/2`` then decomposes it to get the name string.  Pinned so
     this fix cannot break that library."""
     schema_atom = make_predicate("tfcdt_applicant_age", [])
     assert isinstance(built_by(_functor__3, schema_atom, 1), Compound)

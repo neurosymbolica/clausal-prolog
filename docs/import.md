@@ -211,7 +211,7 @@ loader knows what `M` declares, it appends it (`clausal/import_diagnostics.py`,
 called from the module-exec seam in `clausal/import_hook.py`):
 
 ```text
-cannot import name 'within_limit' from 'eu.aml.amlr_bo_chain.schema' (/…/schema.clausal)
+cannot import name 'within_limit' from 'acme.compliance.schema' (/…/schema.clausal)
   schema exports: verdict/2, beneficial_owner, not_beneficial_owner, holdings,
                   person, entity, overall, as_of_date, exceeds_limit
   did you mean: exceeds_limit ?

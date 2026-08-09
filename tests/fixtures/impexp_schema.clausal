@@ -2,9 +2,8 @@
 # Exporter for the import-error export-list diagnostic
 # (todo/done/import-error-should-list-module-exports.md).
 #
-# Reproduces the shape of the real `eu.aml.amlr_bo_chain.schema` module: a
-# vocabulary module whose -module(...) list is the authoritative answer to
-# "what may I import from here?".
+# Reproduces the shape of a vocabulary module whose -module(...) list is the
+# authoritative answer to "what may I import from here?".
 -module(impexp_schema, [
     verdict(STATUS, CITATIONS),
     beneficial_owner,

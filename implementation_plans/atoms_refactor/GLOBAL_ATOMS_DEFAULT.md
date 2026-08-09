@@ -54,7 +54,7 @@ and *public-vs-private* corresponds to *which list*. An atom may appear in
 both `-module` and `-private`; the first listing processed wins and the second
 is a no-op, so the name still gets exactly one module-local class. (Earlier
 drafts of this spec said the compiler rejects the overlap with a hard error. It
-does not, and shipped consumer code — `clausify/kit/formalize_lib.clausal`
+does not, and shipped consumer code — a downstream helper library
 lists eight names in both — relies on it not doing so.)
 
 Predicates with arity ≥ 1 remain Prolog-aligned and are not affected by the
@@ -198,8 +198,8 @@ Enforcing the private row — rejecting `-import_from(M, [a])` when `M` lists
 of a three-row table whose other rows are equally unenforced, so it could not
 deliver encapsulation anyway (an undeclared name stays importable); and it
 breaks working code — in-repo, `tests/test_functor_reexport.py` and its two
-fixtures; downstream, the `clausify` kit's `query_combinators` re-export of
-`delta`, `sara_irc_tax`'s citation atoms, and the `test_gate_test_profiles`
+fixtures; downstream, a helper library's `query_combinators` re-export of
+`delta`, a downstream domain module's citation atoms, and the `test_gate_test_profiles`
 fixtures. A warning was rejected for the same reason: it would fire on
 deliberate, correct code, including the anonymous-fixture pattern that has no
 alternative to flag.
