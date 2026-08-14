@@ -37,6 +37,17 @@ def format_source(source: str, table_and_tree: tuple | None = None) -> str:
         tree, table = CommentTable.capture(source)
     else:
         tree, table = table_and_tree
+    return format_tree(tree, table)
+
+
+def format_tree(tree: ast.Module, table: CommentTable) -> str:
+    """Emit an already-captured (and possibly transformed) tree.
+
+    Attachment positions are derived from the tree in front of the emitter, not
+    from the one that was captured, so nodes a transform built are rendered
+    like any other -- they simply have no comments of their own unless a
+    transform moved some onto them.
+    """
     out = Emitter(table).emit_module(tree)
     table.assert_conserved()
     return out

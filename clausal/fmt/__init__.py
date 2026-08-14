@@ -12,12 +12,15 @@ Three layers share one comment side-table:
 """
 
 from clausal.fmt.comments import CommentLeakError, CommentTable, attachment_nodes
-from clausal.fmt.emit import Emitter, format_source
+from clausal.fmt.emit import Emitter, format_source, format_tree
+from clausal.fmt.transform import ClausalTransformer
 
 __all__ = [
+    "ClausalTransformer",
     "CommentLeakError",
     "CommentTable",
     "Emitter",
     "attachment_nodes",
     "format_source",
+    "format_tree",
 ]
