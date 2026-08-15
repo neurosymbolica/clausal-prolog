@@ -29,6 +29,7 @@ repl = ["ptpython>=3.0"]
 clausal-repl = "clausal.python_repl:main"
 clausal-install-ipython = "clausal._install_ipython:main"
 clausal-fmt = "clausal.fmt.cli:main"
+clausal-rewrite = "clausal.rewrite.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
