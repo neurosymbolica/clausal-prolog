@@ -63,6 +63,33 @@ def comments_only_change(before: str, after: str) -> bool:
         return False
 
 
+def reified_equal(before: str, after: str) -> bool:
+    """Do these two sources hold exactly the same REIFIED term structure?
+
+    The fence for the LLM comment-repair pass (operator requirement,
+    2026-08-15): the parsed reified term structure must match exactly.  This
+    is deliberately STRONGER than :func:`ast_equivalent` — reification runs
+    after the engine's own arrow disambiguation, so a ``<-`` that decayed
+    into ``< -`` (or the reverse) changes the reified terms even though the
+    raw ASTs are identical.  Comments are invisible to it, and so are
+    positions: each item is compared by its canonical rendering, which is
+    derived from structure alone.
+
+    Raises nothing: an unparsable or unrenderable side compares unequal
+    (the caller's gate then fails loudly on its own evidence).
+    """
+    from clausal.reflection import ReifyError, RenderError, reify_source, render_source
+
+    def renderings(source: str) -> list | None:
+        try:
+            return [render_source(item) for item in reify_source(source)]
+        except (SyntaxError, ReifyError, RenderError):
+            return None
+
+    left, right = renderings(before), renderings(after)
+    return left is not None and left == right
+
+
 def unified_diff(before: str, after: str, from_label: str, to_label: str) -> str:
     return "".join(
         difflib.unified_diff(

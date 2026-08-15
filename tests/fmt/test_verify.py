@@ -95,3 +95,33 @@ def test_accept_repair_rejects_a_reformatted_pass():
     reflowed = "# a\np(X) <- (q(X))\n"  # same code, layout no longer canonical
     with pytest.raises(RepairRejected):
         accept_repair(pre, reflowed)
+
+
+class TestReifiedEqual:
+    """The comment-repair fence: reified term structure must match exactly."""
+
+    def test_comment_edits_are_invisible(self):
+        from clausal.fmt.verify import reified_equal
+        a = "# old note\np(X) <- (\n    q(X)  # trailing\n)\n"
+        b = "# reworded note, moved nothing\np(X) <- (\n    q(X)\n)\n"
+        assert reified_equal(a, b)
+
+    def test_any_code_change_is_caught(self):
+        from clausal.fmt.verify import reified_equal
+        a = "p(X) <- (\n    q(X)\n)\n"
+        assert not reified_equal(a, "p(X) <- (\n    r(X)\n)\n")
+        assert not reified_equal(a, "p(X, Y) <- (\n    q(X)\n)\n")
+        assert not reified_equal(a, a + "\nextra(1),\n")
+
+    def test_stronger_than_ast_equivalence_on_the_arrow(self):
+        # `<-` vs `< -` are IDENTICAL ASTs; reification reads the spacing.
+        # An LLM "comment fix" that de-spaced a lambda arrow must be caught.
+        from clausal.fmt.verify import ast_equivalent, reified_equal
+        a = "t(B) <- (\n    fold(((X) <- p(X)), B)\n)\n"
+        b = "t(B) <- (\n    fold(((X) < - p(X)), B)\n)\n"
+        assert ast_equivalent(a, b)          # the weaker fence is blind here
+        assert not reified_equal(a, b)       # this one is not
+
+    def test_unparsable_side_compares_unequal(self):
+        from clausal.fmt.verify import reified_equal
+        assert not reified_equal("p(X) <- (q(X))\n", "p(X) <- (q(X)\n")
