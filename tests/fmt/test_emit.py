@@ -177,13 +177,15 @@ def test_directive_with_a_trailing_comma():
     assert format_source("-module(m, [a]),\n") == "-module(m, [a]),\n"
 
 
-def test_comment_inside_a_multiline_directive_stays_with_it():
-    # The directive is re-rendered on one line, so a note against one of its
-    # entries has no line left to sit on; it files above the statement it was
-    # written in rather than escaping to the next one.
+def test_comment_inside_a_multiline_directive_stays_with_its_entry():
+    # SUPERSEDED v1 behavior (2026-08-15): entries used to evict their notes
+    # above the whole statement when the directive re-rendered on one line.
+    # Directive-list elements are attachment nodes now, and a commented list
+    # explodes — the note rides its entry. The optional trailing comma after
+    # the last element is dropped (v1's standing comma policy).
     src = "-module(m, [\n    p(A),  # about p\n    q(B),\n])\n\nrate(1),\n"
     assert format_source(src) == (
-        "# about p\n-module(m, [p(A), q(B)])\n\nrate(1),\n"
+        "-module(m, [\n    p(A),  # about p\n    q(B)\n])\n\nrate(1),\n"
     )
 
 
@@ -192,3 +194,150 @@ def test_comment_before_a_closing_body_paren_stays_with_the_clause():
     assert format_source(src) == (
         "# dangling note\np(X) <- (\n    q(X)\n)\n\nrate(1),\n"
     )
+
+
+# ---------------------------------------------------------------------------
+# Directive-list explosion (operator conventions, 2026-08-15 trial): a module
+# export list collapsed onto one enormous line, and its section comments were
+# evicted above the whole statement where they read as orphans. Long or
+# commented directive lists explode one element per line; their comments ride
+# their elements.
+# ---------------------------------------------------------------------------
+
+def test_short_directive_stays_on_one_line():
+    src = "-import_from(kit, [met, unmet])\n"
+    assert format_source(src) == src
+
+
+def test_long_directive_list_explodes_one_element_per_line():
+    src = ("-module(wt_compliance, [wt_weekly_limit_minutes(LIMIT), "
+           "reference_period_max_weeks(WEEKS), "
+           "avg_weekly_working_minutes(TOTAL_WORK_MINS, QUALIFYING_WEEKS, AVG), "
+           "total_work_minutes, qualifying_weeks])\n")
+    out = format_source(src)
+    assert out == (
+        "-module(wt_compliance, [\n"
+        "    wt_weekly_limit_minutes(LIMIT),\n"
+        "    reference_period_max_weeks(WEEKS),\n"
+        "    avg_weekly_working_minutes(TOTAL_WORK_MINS, QUALIFYING_WEEKS, AVG),\n"
+        "    total_work_minutes,\n"
+        "    qualifying_weeks\n"
+        "])\n"
+    )
+
+
+def test_element_comments_ride_their_elements():
+    src = ("-module(m, [\n"
+           "    # ---- contract section\n"
+           "    p(A),  # trailing note\n"
+           "    # ---- atoms section\n"
+           "    key_atom\n"
+           "])\n")
+    out = format_source(src)
+    # a commented element opens a section: blank line above its comment block
+    assert out == (
+        "-module(m, [\n"
+        "    # ---- contract section\n"
+        "    p(A),  # trailing note\n"
+        "\n"
+        "    # ---- atoms section\n"
+        "    key_atom\n"
+        "])\n"
+    )
+
+
+def test_commented_but_short_list_still_explodes():
+    src = "-private([\n    # why this is local\n    helper_atom\n])\n"
+    assert format_source(src) == src
+
+
+def test_exploded_directive_is_idempotent():
+    src = ("-module(m, [\n"
+           "    # section\n"
+           "    p(A),\n"
+           "    q(B)\n"
+           "])\n")
+    once = format_source(src)
+    assert format_source(once) == once
+
+
+# ---------------------------------------------------------------------------
+# Arrow preservation (2026-08-15 trial, vat bisect_flip lambdas): the engine
+# distinguishes the arrow `<-` from a genuine less-than-negative `A < -B` BY
+# SOURCE SPACING — the ASTs are identical. ast.unparse prints `< -`, which
+# silently turns every inline lambda argument into a comparison. The formatter
+# must carry an arrow ledger from capture to emission.
+# ---------------------------------------------------------------------------
+
+def test_inline_lambda_argument_keeps_its_arrow():
+    src = ("t(B) <- (\n"
+           "    bisect_flip(0, 7, ((X, V) <- reaches(X, 7, V)), B)\n"
+           ")\n")
+    out = format_source(src)
+    assert "((X, V) <- reaches(X, 7, V))" in out
+    assert "< -" not in out
+
+
+def test_genuine_less_than_negative_stays_spaced():
+    src = "t(A, B) <- (\n    check(A < -B)\n)\n"
+    out = format_source(src)
+    assert "A < -B" in out
+
+
+def test_deeply_nested_arrow_survives():
+    src = ("t(L) <- (\n"
+           "    findall(W, wrap(((ID, S) <- req(ID, S)), W), L)\n"
+           ")\n")
+    out = format_source(src)
+    assert "((ID, S) <- req(ID, S))" in out
+
+
+def test_wide_fixture_dict_explodes_one_key_per_line():
+    # A hand-wrapped profile fixture must not collapse onto one enormous line
+    # (reg-d trial, 2026-08-15): past WIDTH its dict explodes.
+    src = ("q_all_fail({individual_income_y1_usd_cents: 15000000, "
+           "joint_income_y1_usd_cents: 25000000, "
+           "net_worth_excl_residence_usd_cents: 80000000}),\n")
+    assert format_source(src) == (
+        "q_all_fail({\n"
+        "    individual_income_y1_usd_cents: 15000000,\n"
+        "    joint_income_y1_usd_cents: 25000000,\n"
+        "    net_worth_excl_residence_usd_cents: 80000000\n"
+        "}),\n"
+    )
+
+
+def test_short_fixture_dict_stays_on_one_line():
+    src = "q_cert({certifications_held: [series_65]}),\n"
+    assert format_source(src) == src
+
+
+def test_wide_dict_inside_a_goal_explodes_at_goal_indent():
+    src = ("t(R) <- (\n"
+           "    assess({individual_income_y1_usd_cents: 15000000, "
+           "joint_income_y1_usd_cents: 25000000, "
+           "net_worth_excl_residence_usd_cents: 80000000}, R)\n"
+           ")\n")
+    assert format_source(src) == (
+        "t(R) <- (\n"
+        "    assess({\n"
+        "        individual_income_y1_usd_cents: 15000000,\n"
+        "        joint_income_y1_usd_cents: 25000000,\n"
+        "        net_worth_excl_residence_usd_cents: 80000000\n"
+        "    }, R)\n"
+        ")\n"
+    )
+
+
+def test_exploded_dict_is_idempotent():
+    src = ("q_all_fail({individual_income_y1_usd_cents: 15000000, "
+           "joint_income_y1_usd_cents: 25000000, "
+           "net_worth_excl_residence_usd_cents: 80000000}),\n")
+    once = format_source(src)
+    assert format_source(once) == once
+
+
+def test_arrow_lambda_is_idempotent():
+    src = "t(B) <- (\n    fold(((X) <- p(X)), B)\n)\n"
+    once = format_source(src)
+    assert format_source(once) == once

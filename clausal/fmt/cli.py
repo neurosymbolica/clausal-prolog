@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from clausal.fmt.comments import CommentLeakError
-from clausal.fmt.emit import ArrowRenderError, format_source
+from clausal.fmt.emit import format_source
 from clausal.fmt.verify import unified_diff
 
 SUFFIX = ".clausal"
@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             source = path.read_text()
             formatted = format_source(source)
-        except (OSError, SyntaxError, CommentLeakError, ArrowRenderError) as error:
+        except (OSError, SyntaxError, CommentLeakError) as error:
             print(f"{path}: {type(error).__name__}: {error}", file=sys.stderr)
             failed += 1
             continue

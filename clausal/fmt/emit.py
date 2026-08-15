@@ -33,22 +33,17 @@ import tokenize
 
 from clausal.fmt.comments import (
     CommentTable,
-    arrow_candidates,
     clause_body,
+    directive_list,
     is_clause,
     statement_items,
 )
 
 INDENT = "    "
 
-
-class ArrowRenderError(Exception):
-    """An arrow could not be written as an arrow.
-
-    ``<-`` and ``< -`` are one tree and two programs, so a spelling the
-    emitter cannot place is a meaning it cannot preserve -- reported rather
-    than written out wrong.
-    """
+#: One-line renderings past this width explode (directive lists only in v1 --
+#: the goal layer stays no-wrap by design; see todo's fmt style questions).
+WIDTH = 88
 
 
 def format_source(source: str, table_and_tree: tuple | None = None) -> str:
@@ -94,10 +89,6 @@ class Emitter:
         trailing = self.table.trailing(node)
         if trailing and self._lines:
             self._lines[-1] += "  " + "  ".join(trailing)
-
-    def _render(self, node: ast.AST) -> str:
-        """One term, house-quoted, with its registered arrows written tight."""
-        return unparse(node, self.table.arrows)
 
     def _emit_above(self, node: ast.AST, indent: str) -> None:
         for index, group in enumerate(self.table.above(node)):
@@ -160,6 +151,14 @@ class Emitter:
         suffix = "," if comma else ""
         if len(items) == 1 and is_clause(items[0]):
             self._emit_clause(items[0], suffix)
+        elif (lst := directive_list(statement)) is not None:
+            # Before the series branch: a directive parses as one UnaryOp item
+            # and would otherwise take the one-line path with its list intact.
+            self._emit_directive(statement, lst)
+        elif len(items) == 1:
+            # A single fact: over-wide dict displays (profile fixtures) explode
+            # one key per line; the braces keep the statement open across lines.
+            self._write_leaf(items[0], "", suffix)
         elif items:
             # A comma-separated series stays on one line: splitting it across
             # lines would end the statement at the first newline and turn one
@@ -167,12 +166,42 @@ class Emitter:
             rendered = ", ".join(_item_text(item, self.table.arrows) for item in items)
             self._write("", rendered + suffix)
         else:
-            self._write("", self._render(statement))
+            self._write("", unparse(statement, self.table.arrows))
         self._append_trailing(statement)
         self.table.mark_emitted(statement)
 
+    def _emit_directive(self, statement: ast.AST, lst: ast.List) -> None:
+        """A directive with a trailing list: one line while it fits and its
+        elements carry no comments; exploded one-element-per-line otherwise.
+        A collapsed export list is unreadable and evicts its section comments
+        (operator conventions, 2026-08-15 trial); the closing ``])`` sits on
+        its own line, last element without a separator, matching the corpus."""
+        one_line = unparse(statement, self.table.arrows)
+        commented = any(self.table.above(e) or self.table.trailing(e)
+                        for e in lst.elts)
+        if len(one_line) <= WIDTH and not commented:
+            for element in lst.elts:
+                self.table.mark_emitted(element)
+            self._write("", one_line)
+            return
+        call = statement.value.operand
+        leading = ", ".join(unparse(a, self.table.arrows) for a in call.args[:-1])
+        opener = f"-{unparse(call.func, self.table.arrows)}({leading}{', ' if leading else ''}["
+        self._write("", opener)
+        for i, element in enumerate(lst.elts):
+            # A commented element opens a section: a blank line above its
+            # comment block keeps the sections visually separate (hand style).
+            if i and self.table.above(element):
+                self._blank()
+            self._emit_above(element, INDENT)
+            separator = "," if i < len(lst.elts) - 1 else ""
+            self._write(INDENT, unparse(element, self.table.arrows) + separator)
+            self._append_trailing(element)
+            self.table.mark_emitted(element)
+        self._write("", "])")
+
     def _emit_clause(self, clause: ast.AST, suffix: str) -> None:
-        head = self._render(clause.left)
+        head = unparse(clause.left, self.table.arrows)
         self._write("", f"{head} <- (")
         self._emit_goals(*_goals_of(clause_body(clause)), INDENT)
         self._write("", ")" + suffix)
@@ -193,8 +222,20 @@ class Emitter:
         elif isinstance(goal, ast.BoolOp) and isinstance(goal.op, ast.Or):
             self._emit_or(goal, indent, separator)
         else:
-            self._write(indent, self._render(goal) + separator)
+            self._write_leaf(goal, indent, separator)
             self._append_trailing(goal)
+
+    def _write_leaf(self, node: ast.AST, indent: str, separator: str) -> None:
+        """A fact or goal leaf: one line while it fits; past WIDTH its dict
+        displays (profile fixtures, wide-interface queries) explode one key per
+        line -- the open braces keep the term a single statement.  Anything
+        still over-wide with no dict to explode stays long (v1 no-wrap)."""
+        text = unparse(node, self.table.arrows)
+        if len(indent) + len(text) + len(separator) > WIDTH:
+            exploded = _explode_dicts(node, indent, self.table.arrows)
+            if exploded is not None:
+                text = exploded
+        self._write(indent, text + separator)
 
     def _emit_group(self, group: ast.Tuple, indent: str, separator: str) -> None:
         """A nested goal-sequence: its own parenthesised block."""
@@ -238,64 +279,42 @@ def unparse(node: ast.AST, arrows: set | frozenset = frozenset()) -> str:
     language on the first run.  Strings that would need escaping to change stay
     exactly as ``ast.unparse`` wrote them.
 
-    ``arrows`` is the ledger: the nodes in it are written ``<-``, and every
-    other arrow-shaped node keeps the spaced ``< -`` that means less-than.
-    """
-    return _tighten_arrows(_prefer_double_quotes(ast.unparse(node)), node, arrows)
+    ``arrows`` is the CommentTable's arrow ledger: Compare nodes the source
+    spells ``<-``.  ``ast.unparse`` would print them ``< -``, which the engine
+    reads as a genuine less-than-negative -- an inline lambda silently becomes
+    a comparison.  Arrow nodes render ``(left <- operand)``, parenthesised,
+    matching the corpus's inline-lambda style."""
+    if arrows:
+        up = _ArrowUnparser(arrows)
+        return _prefer_double_quotes(up.visit(node))
+    return _prefer_double_quotes(ast.unparse(node))
 
 
-def _tighten_arrows(text: str, node: ast.AST, arrows: set | frozenset) -> str:
-    """Rewrite ``< -`` to ``<-`` for the ledger's nodes, and only those.
+class _ArrowUnparser(ast._Unparser):
+    """``ast._Unparser`` that preserves source-spelled arrows."""
 
-    The rendered text is re-parsed to find out WHERE each arrow landed:
-    ``ast.unparse`` reports no positions, and the node's own positions describe
-    the source it came from, not the line being written.  Structure survives
-    the round trip, so the arrow-shaped nodes of the re-parse correspond one
-    for one with the node's own, and the ledger's membership carries across by
-    index.
+    # ast._Unparser spawns a bare type(self)() for f-string internals, so
+    # arrows must default; an arrow cannot occur inside an f-string anyway.
+    def __init__(self, arrows=frozenset()):
+        super().__init__()
+        self._arrows = arrows
 
-    The arithmetic runs on BYTES.  ``col_offset`` counts utf-8 bytes, not
-    characters, so a non-ascii character earlier on the line shifts every
-    character-based index past the ``-`` -- and this function splices at that
-    index, so it would silently eat source instead of failing.  The engine's
-    own adjacency test encodes for the same reason.
-
-    Anything that would leave a registered arrow spelled ``< -`` raises.  That
-    spelling is a comparison, so returning it quietly would change the program
-    -- the same class of loss that comment conservation refuses to make quiet.
-    """
-    candidates = arrow_candidates(node)
-    marked = [index for index, child in enumerate(candidates) if child in arrows]
-    if not marked:
-        return text
-    try:
-        reparsed = arrow_candidates(ast.parse(text))
-    except SyntaxError as error:  # pragma: no cover - unparse emits parsable text
-        raise ArrowRenderError(f"cannot re-parse rendered term: {text!r}") from error
-    if len(reparsed) != len(candidates):
-        raise ArrowRenderError(
-            f"{len(candidates)} arrow-shaped nodes went in and {len(reparsed)} "
-            f"came back out of {text!r}: the arrows cannot be located"
-        )
-
-    raw = text.encode("utf-8")
-    starts, running = [], 0
-    for line in raw.splitlines(keepends=True):
-        starts.append(running)
-        running += len(line)
-    edits = []
-    for index in marked:
-        usub = reparsed[index].comparators[0]
-        minus = starts[usub.lineno - 1] + usub.col_offset
-        opening = raw.rfind(b"<", 0, minus)
-        if opening == -1:  # pragma: no cover - an arrow always has its '<'
-            raise ArrowRenderError(
-                f"no '<' before the arrow at byte {minus} of {text!r}"
-            )
-        edits.append((opening, minus + 1))
-    for opening, end in sorted(edits, reverse=True):
-        raw = raw[:opening] + b"<- " + raw[end:]
-    return raw.decode("utf-8")
+    def visit_Compare(self, node):
+        if node not in self._arrows:
+            return super().visit_Compare(node)
+        # Precedence discipline matters on both sides: the head may be a bare
+        # tuple (needs its parens back) and the body re-parses under unary-minus
+        # binding — `X <- RESULT is X` would chain into Compare(Lt, Is). The
+        # unparser's own precedence machinery decides both.
+        precedence = ast._Precedence
+        self.write("(")
+        self.set_precedence(precedence.CMP.next(), node.left)
+        self.traverse(node.left)
+        self.write(" <- ")
+        operand = node.comparators[0].operand
+        self.set_precedence(precedence.FACTOR, operand)
+        self.traverse(operand)
+        self.write(")")
 
 
 def _prefer_double_quotes(text: str) -> str:
@@ -332,6 +351,39 @@ def _requote(literal: str) -> str:
             double = '"' * len(quote)
             return f"{prefix}{double}{body}{double}"
     return literal
+
+
+def _explode_dicts(
+    node: ast.AST, indent: str, arrows: set | frozenset
+) -> str | None:
+    """Render ``node`` with each dict display of two or more entries exploded
+    one key per line, or ``None`` when the node holds nothing to explode.
+    Recursion follows call arguments only -- the shape fixtures actually use."""
+    changed = False
+
+    def render(n: ast.AST, ind: str) -> str:
+        nonlocal changed
+        if (
+            isinstance(n, ast.Dict)
+            and len(n.keys) >= 2
+            and all(k is not None for k in n.keys)
+        ):
+            changed = True
+            inner = ind + INDENT
+            entries = []
+            for i, (key, value) in enumerate(zip(n.keys, n.values)):
+                separator = "," if i < len(n.keys) - 1 else ""
+                entries.append(
+                    f"{inner}{unparse(key, arrows)}: {unparse(value, arrows)}{separator}"
+                )
+            return "{\n" + "\n".join(entries) + f"\n{ind}}}"
+        if isinstance(n, ast.Call) and not n.keywords:
+            args = ", ".join(render(a, ind) for a in n.args)
+            return f"{unparse(n.func, arrows)}({args})"
+        return unparse(n, arrows)
+
+    text = render(node, indent)
+    return text if changed else None
 
 
 def _item_text(item: ast.AST, arrows: set | frozenset = frozenset()) -> str:

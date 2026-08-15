@@ -154,6 +154,24 @@ def clause_body(item: ast.AST) -> ast.AST | None:
     return item.comparators[0].operand
 
 
+def directive_list(stmt: ast.AST) -> ast.List | None:
+    """The trailing ``List`` argument of a directive statement, or ``None``.
+
+    A directive is ``Expr(UnaryOp(USub, Call))`` -- ``-module(m, [...])``,
+    ``-import_from(kit, [...])``, ``-private([...])``.  Its list elements are
+    attachment nodes: the corpus writes section comments against individual
+    export-list entries, and those must ride their entries through an
+    explosion (emit) rather than evict to above the whole statement."""
+    if not (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.UnaryOp)
+            and isinstance(stmt.value.op, ast.USub)
+            and isinstance(stmt.value.operand, ast.Call)):
+        return None
+    args = stmt.value.operand.args
+    if args and isinstance(args[-1], ast.List):
+        return args[-1]
+    return None
+
+
 def goal_sequence(body: ast.AST) -> list[ast.AST]:
     """The goals of a body expression, in order.
 
@@ -198,6 +216,10 @@ def attachment_nodes(tree: ast.Module) -> list[ast.AST]:
     nodes: list[ast.AST] = []
     for stmt in tree.body:
         nodes.append(stmt)
+        lst = directive_list(stmt)
+        if lst is not None:
+            nodes.extend(lst.elts)
+            continue
         items, _comma = statement_items(stmt)
         if len(items) != 1:
             continue  # a comma-separated series is written back on one line
@@ -212,11 +234,14 @@ class CommentTable:
 
     def __init__(self, module: ast.Module):
         self.module = module
-        self.arrows: set[ast.AST] = set()
         self._slots: dict[ast.AST, _Slots] = {}
         self._module_above: list[list[_Comment]] = []
         self._module_trailing: list[list[_Comment]] = []
         self._ledger: list[_Comment] = []
+        #: Compare nodes the source spells as the arrow ``<-`` (vs a genuine
+        #: ``A < -B``); filled by capture, consulted by the emitter's unparse.
+        #: A transform that BUILDS an arrow node must add it here.
+        self.arrows: set[ast.AST] = set()
 
     # -- capture ---------------------------------------------------------
 

@@ -126,18 +126,3 @@ def test_a_non_ascii_line_does_not_shift_the_splice():
     assert "<- p(X)" in out
     assert "< -" not in out
     assert ast.dump(ast.parse(out)) == ast.dump(ast.parse(source))
-
-
-def test_an_arrow_that_cannot_be_placed_raises():
-    """A ledger arrow the emitter cannot locate is a program change.
-
-    Comment loss raises; so does this, for the same reason -- ``< -`` in the
-    output would be a comparison where the source had an arrow.
-    """
-    from clausal.fmt.emit import ArrowRenderError, _tighten_arrows
-
-    node = ast.parse("(X) < -p(X)").body[0].value
-    with pytest.raises(ArrowRenderError):
-        # a text that does not correspond to the node: the arrows cannot be
-        # located, so the ledger cannot be honoured
-        _tighten_arrows("m(X)", node, {node})
