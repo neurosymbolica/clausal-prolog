@@ -218,3 +218,118 @@ def test_a_head_that_cannot_be_rendered_at_all_is_refused(tmp_path):
         """))
     with pytest.raises(RewriteError, match="cannot be rendered"):
         rewrite_source("p(X) <- (m(X))\n", [callable_head])
+
+
+# ---- modified goals: the positional correspondence -------------------------
+#
+# When a rule keeps the goal COUNT, the correspondence is positional: each
+# output goal is its input goal verbatim or modified in place.  A modified
+# goal is rendered to a fresh node; its comments ride across WITHOUT the
+# stale marker, because the goal survives.
+
+
+def _rename_rule(tmp_path):
+    """old(...) becomes new(...) -- a one-goal modification, same goal count."""
+    rule = tmp_path / "rename.clausal"
+    rule.write_text(textwrap.dedent("""\
+        -import_from(reflection, [Clause, Goal])
+
+        RewriteClause(Clause(H, GOALS, P), Clause(H, GOALS2, P)) <- (
+            RenameGoal(GOALS, GOALS2)
+        )
+        RenameGoal([Goal("old", A, K), *GS], [Goal("new", A, K), *GS]),
+        RenameGoal([G, *GS], [G, *GS2]) <- RenameGoal(GS, GS2)
+        """))
+    return [rule]
+
+
+def test_modified_goal_is_spliced_in_place(tmp_path):
+    src = "p(X) <- (m(X), old(X, 5))\n"
+    result = rewrite_source(src, _rename_rule(tmp_path))
+    assert result.text == "p(X) <- (\n    m(X),\n    new(X, 5)\n)\n"
+    assert len(result.fired) == 1
+
+
+def test_modified_goal_comments_ride_across_unmarked(tmp_path):
+    src = (
+        "p(X) <- (\n"
+        "    m(X),\n"
+        "    # still describes the call\n"
+        "    old(X, 5)  # and so does this\n"
+        ")\n"
+    )
+    result = rewrite_source(src, _rename_rule(tmp_path))
+    assert result.text == (
+        "p(X) <- (\n"
+        "    m(X),\n"
+        "    # still describes the call\n"
+        "    new(X, 5)  # and so does this\n"
+        ")\n"
+    )
+    assert "maybe stale" not in result.text
+
+
+def test_modified_goal_keeps_a_surviving_inline_lambda_arrow(tmp_path):
+    """The arrow route: a modified goal is rendered to TEXT and re-parsed, so
+    a lambda that survives inside it must come back as ``<-``, never ``< -``.
+    """
+    src = "p(B) <- (old(((X, V) <- (V == X * 2)), B))\n"
+    result = rewrite_source(src, _rename_rule(tmp_path))
+    assert "new(((X, V) <- (V == X * 2)), B)" in result.text
+    assert "< -" not in result.text
+
+
+def test_modified_goal_keeps_a_genuine_less_than_negative(tmp_path):
+    """The other half of the arrow rule: a real ``A < -B`` inside a modified
+    goal renders spaced and is NOT registered as an arrow."""
+    src = "p(A, B) <- (old(A < -B))\n"
+    result = rewrite_source(src, _rename_rule(tmp_path))
+    assert "new(A < -B)" in result.text
+    assert "<- B" not in result.text.replace("p(A, B) <- (", "")
+
+
+def test_equal_count_reorder_is_refused(tmp_path):
+    """Swapping two goals keeps the count; the positional correspondence must
+    not read the swap as two modifications and shuffle their comments."""
+    swap = tmp_path / "swap.clausal"
+    swap.write_text(textwrap.dedent("""\
+        -import_from(reflection, [Clause])
+
+        RewriteClause(Clause(H, [G1, G2], P), Clause(H, [G2, G1], P)),
+        """))
+    with pytest.raises(RewriteError, match="REORDER"):
+        rewrite_source("p(X) <- (m(X), r(X))\n", [swap])
+
+
+def test_modification_with_count_change_is_refused(tmp_path):
+    """Modify one goal AND drop another: neither correspondence covers it."""
+    mixed = tmp_path / "mixed.clausal"
+    mixed.write_text(textwrap.dedent("""\
+        -import_from(reflection, [Clause, Goal])
+
+        RewriteClause(Clause(H, [Goal("old", A, K), _], P), Clause(H, [Goal("new", A, K)], P)),
+        """))
+    with pytest.raises(RewriteError, match="splice"):
+        rewrite_source("p(X) <- (old(X), m(X))\n", [mixed])
+
+
+def test_modified_goal_that_is_not_a_goal_is_refused(tmp_path):
+    """A conjunction group reifies as a bare list, which renders as a LIST
+    LITERAL -- no faithful node, so the driver refuses rather than corrupt."""
+    grouping = tmp_path / "grouping.clausal"
+    grouping.write_text(textwrap.dedent("""\
+        -import_from(reflection, [Clause, Goal])
+
+        RewriteClause(Clause(H, [G], P), Clause(H, [[G, Goal("extra", [], [])]], P)),
+        """))
+    with pytest.raises(RewriteError, match="not a plain Goal"):
+        rewrite_source("p(X) <- (m(X))\n", [grouping])
+
+
+def test_modified_goal_rewrite_is_idempotent(tmp_path):
+    src = "p(X) <- (m(X), old(X, 5))\n"
+    rules = _rename_rule(tmp_path)
+    once = rewrite_source(src, rules)
+    again = rewrite_source(once.text, rules)
+    assert again.text == once.text
+    assert again.fired == []

@@ -13,6 +13,14 @@ comments moved above the clause, which is the one place they are certain to
 still make sense.  A goal the rule INVENTED has no node to reuse and no comment
 story, so the driver refuses rather than guess.
 
+Between kept and dropped sits MODIFIED: when the output has exactly as many
+goals as the input, the correspondence is positional -- the i-th output goal IS
+the i-th input goal, either verbatim (node reused) or changed in place.  A
+changed goal is rendered to a fresh node and its comments ride across without
+the stale marker, because the goal survives and its comments almost certainly
+still apply.  An output goal that instead equals a DIFFERENT input goal is a
+reordering, which the positional correspondence does not model; refused.
+
 Two things are registered rather than inferred.  A rebuilt clause arrow goes
 into the formatter's arrow ledger, because ``head <- body`` and ``head < -body``
 are the same tree and only the ledger knows which one this is.  And a rewritten
@@ -30,6 +38,7 @@ import os
 
 from clausal.fmt.comments import (
     CommentTable,
+    arrow_nodes,
     clause_body,
     goal_sequence,
     is_clause,
@@ -41,10 +50,12 @@ from clausal.logic.solve import _deref_walk, call
 from clausal.logic.variables import Var
 from clausal.reflection import (
     _LAMBDA_ARROW_MARKER,
+    Goal,
     ReifyError,
     RenderError,
     reify_ast,
     render_ast,
+    render_source,
 )
 
 FIXPOINT_BOUND = 20
@@ -175,20 +186,50 @@ def _splice(table, old_statement, reified_in, reified_out, position):
 
     consumed = [False] * len(reified_in.goals)
     new_goals = []
-    cursor = 0
-    for out_goal in reified_out.goals:
-        matched = _match(reified_in.goals, consumed, cursor, out_goal)
-        if matched is None:
-            raise RewriteError(
-                f"cannot splice the result at {position}: {out_goal!r} is "
-                f"not available at or after input goal {cursor}. Either the "
-                f"rule invented a goal -- which has no node to reuse and no "
-                f"comments to inherit -- or it REORDERED the goals it kept, "
-                f"which the in-order correspondence does not model"
-            )
-        consumed[matched] = True
-        cursor = matched + 1
-        new_goals.append(old_goals[matched])
+    if len(reified_out.goals) == len(reified_in.goals):
+        # Equal goal counts: the correspondence is positional.  Each output
+        # goal is its input goal verbatim (node reused, comments never in
+        # question) or a MODIFICATION of it (rendered fresh, comments ride
+        # across unmarked -- the goal survives, so its comments almost
+        # certainly still apply).  An output goal that equals a DIFFERENT
+        # input goal is a reordering in disguise, and pairing it with the
+        # goal that happens to share its position would hand it that goal's
+        # comments; refused instead.
+        for index, out_goal in enumerate(reified_out.goals):
+            consumed[index] = True
+            if out_goal == reified_in.goals[index]:
+                new_goals.append(old_goals[index])
+                continue
+            if any(
+                out_goal == other
+                for other_index, other in enumerate(reified_in.goals)
+                if other_index != index
+            ):
+                raise RewriteError(
+                    f"cannot splice the result at {position}: {out_goal!r} "
+                    f"differs from the input goal at its position but equals "
+                    f"another input goal -- the rule REORDERED goals, which "
+                    f"the positional correspondence does not model"
+                )
+            new_node = _render_goal_node(table, out_goal, position)
+            table.move(old_goals[index], new_node)
+            new_goals.append(new_node)
+    else:
+        cursor = 0
+        for out_goal in reified_out.goals:
+            matched = _match(reified_in.goals, consumed, cursor, out_goal)
+            if matched is None:
+                raise RewriteError(
+                    f"cannot splice the result at {position}: {out_goal!r} is "
+                    f"not available at or after input goal {cursor}. Either "
+                    f"the rule invented a goal -- which has no node to reuse "
+                    f"and no comments to inherit -- or it REORDERED or "
+                    f"modified goals while also changing their number, which "
+                    f"neither correspondence models"
+                )
+            consumed[matched] = True
+            cursor = matched + 1
+            new_goals.append(old_goals[matched])
 
     if reified_out.head == reified_in.head:
         head_node = _head_node(old_statement)
@@ -247,6 +288,47 @@ def _render_head(head, position):
             f"nodes"
         )
     return node
+
+
+def _render_goal_node(table, goal, position):
+    """Render a MODIFIED goal to a fresh ``ast`` node, arrows registered.
+
+    Rendering goes to SOURCE text and back through a parse, because that is the
+    one route on which arrows are mechanically knowable: the renderer emits
+    every lambda arrow it renders through the sentinel repair, so in its output
+    text ``<-`` adjacency means arrow and ``< -`` spacing means comparison --
+    exactly the convention the capture-time detector reads.  Running that
+    detector over the re-parse teaches the ledger every arrow the rendered goal
+    contains and nothing else; a genuine ``A < -B`` renders spaced, is not
+    registered, and stays a comparison.
+
+    Only a plain ``Goal`` is accepted.  A conjunction group reifies as a bare
+    list, which would render as a LIST LITERAL -- same for group-carrying
+    ``or``/``not`` operands -- and a goal that is not a ``Goal`` has no
+    rendering this driver can vouch for.
+    """
+    if not isinstance(goal, Goal):
+        raise RewriteError(
+            f"cannot splice a modified goal at {position}: {goal!r} is not a "
+            f"plain Goal, and no other goal shape has a rendering this driver "
+            f"can vouch for (a conjunction group reifies as a list, which "
+            f"renders as a list literal, not a group)"
+        )
+    try:
+        text = render_source(goal)
+    except RenderError as error:
+        raise RewriteError(
+            f"the modified goal at {position} cannot be rendered: {error}"
+        ) from error
+    try:
+        node = ast.parse(text, mode="eval").body
+    except SyntaxError as error:
+        raise RewriteError(
+            f"the modified goal at {position} rendered to unparsable source "
+            f"{text!r}: {error}"
+        ) from error
+    table.arrows.update(arrow_nodes(node, text))
+    return ast.fix_missing_locations(node)
 
 
 def _build_statement(old_statement, head_node, goal_nodes, table):
