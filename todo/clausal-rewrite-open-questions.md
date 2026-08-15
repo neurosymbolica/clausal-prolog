@@ -3,7 +3,7 @@
 **Status:** v1 shipped (`clausal/rewrite/`, `clausal-rewrite` CLI,
 `tests/rewrite/`).  One rule class — the head-fold — plus the driver, the CLI,
 a corpus sweep, and a negative control proving the legality checks are
-load-bearing.  61 folds fire across 22 in-repo corpus files.
+load-bearing.  57 folds fire across the in-repo corpus.
 
 These are the calls v1 made or deferred.
 
