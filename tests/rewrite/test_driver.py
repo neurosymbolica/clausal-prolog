@@ -48,6 +48,19 @@ def test_a_directive_is_left_alone(head_fold_rules):
     assert result.text == "-module(m, [p(A)])\n\np(5),\n"
 
 
+def test_a_keyword_head_is_left_alone(head_fold_rules):
+    """Reification drops a head's keyword NAMES; a rewrite would too.
+
+    ``p(A=X, B=2)`` reifies as ``Goal("p", [X, 2], [])``, so re-rendering the
+    head after a fold would emit ``p(5, 2)`` and quietly change what callers
+    may write.  The driver leaves such clauses byte-stable rather than trade a
+    fold for the predicate's interface.
+    """
+    result = rewrite_source("p(A=X, B=2) <- (X is 5)\n", head_fold_rules)
+    assert result.fired == []
+    assert "A=X" in result.text
+
+
 def test_comments_on_surviving_goals_stay_put(head_fold_rules):
     src = (
         "# the requirement clause\n"

@@ -97,6 +97,12 @@ def rewrite_source(source, rule_paths):
         items, _comma = statement_items(statement)
         if len(items) != 1 or not is_clause(items[0]):
             continue
+        if _head_has_keywords(items[0]):
+            # Reification does not keep a head's keyword-argument NAMES --
+            # `p(A=X, B=2)` reifies as `Goal("p", [X, 2], [])` -- so a
+            # rewritten head would come back positional and quietly change the
+            # predicate's interface.  Leave the clause alone.
+            continue
         segment = ast.get_source_segment(source, statement)
         try:
             reified = reify_ast(statement, source=segment)
@@ -122,6 +128,14 @@ def rewrite_source(source, rule_paths):
             reified = replacement
         tree.body[index] = current
     return RewriteResult(text=format_source(source, (tree, table)), fired=fired)
+
+
+def _head_has_keywords(clause):
+    """Does this clause's head use keyword arguments, anywhere inside it?"""
+    return any(
+        isinstance(node, ast.Call) and node.keywords
+        for node in ast.walk(clause.left)
+    )
 
 
 def _position(statement):

@@ -37,11 +37,11 @@
 #     terms would be sound -- they are still unification -- but v1
 #     stays strict rather than argue the case one term at a time.
 #
-# The post-condition on the rewritten head is the safety net for the
-# substitution: if any occurrence of the variable survived in the new
-# head -- because it sat somewhere SubstTerm does not descend into,
-# such as a keyword argument or a list -- the rule refuses instead of
-# emitting a clause that names a variable nothing binds.
+# The head must additionally be SUBSTITUTABLE: built only from shapes
+# the substitution descends all the way through.  That is a legality
+# condition like the others, and it has to be checked BEFORE anything
+# is built -- see the note on Substitutable/1 below for why a check on
+# the rewritten head cannot work.
 #
 # KNOWN CAVEAT: folding moves the binding from body time to head
 # unification time.  The two differ only to a caller that inspects
@@ -59,8 +59,8 @@ RewriteClause(Clause(HEAD, GOALS, POS), Clause(HEAD2, REST, POS)) <- (
     reified_subterm(HEAD, Variable(N)),
     not reified_subterm(TERM, Variable(N)),
     Foldable(TERM),
-    SubstTerm(HEAD, N, TERM, HEAD2),
-    not reified_subterm(HEAD2, Variable(N))
+    Substitutable(HEAD),
+    SubstTerm(HEAD, N, TERM, HEAD2)
 )
 
 # Pick one top-level conjunct and keep the rest in order.  Only
@@ -88,20 +88,61 @@ Foldable(X) <- (
     PRIMITIVE is ++isinstance(X, (int, str, bool)),
     PRIMITIVE is True
 )
-Foldable([*XS]) <- FoldableList(XS)
+# `[*XS]` alone is NOT a list test: a string unifies with it too, and
+# binds XS to the whole string, so the list case walks into every
+# string term and does not come back.  Gate it on a real list.
+Foldable(X) <- (
+    ISLIST is ++isinstance(X, list),
+    ISLIST is True,
+    FoldableList(X)
+)
 
 FoldableList([]),
 FoldableList([X, *XS]) <- (Foldable(X), FoldableList(XS))
 
+# The head must be built only from shapes SubstTerm descends all the
+# way through.  This is a PRE-condition, and it has to be: an occurs
+# check cannot see into a term a rule just built -- reified_subterm
+# finds a variable in the head it was handed and does NOT find it in
+# the same head after SubstTerm rebuilds it -- so "substitute, then
+# check nothing was missed" passes vacuously.  It did, and a clause
+# with a star-unpacked list head came out with that element unbound.
+# tests/rewrite/test_reflection_contract.py pins the behavior.
+Substitutable(Variable(_)),
+Substitutable(Atom(_)),
+Substitutable(Goal(_, ARGS, KW)) <- (
+    SubstitutableList(ARGS),
+    SubstitutableList(KW)
+)
+Substitutable(X) <- (
+    ISLIST is ++isinstance(X, list),
+    ISLIST is True,
+    SubstitutableList(X)
+)
+Substitutable(X) <- (
+    PRIMITIVE is ++isinstance(X, (int, float, str, bool)),
+    PRIMITIVE is True
+)
+
+SubstitutableList([]),
+SubstitutableList([X, *XS]) <- (Substitutable(X), SubstitutableList(XS))
+
 # Substitution over the head.  The clauses are guarded so they do not
-# overlap, and anything this does not descend into is returned
-# unchanged -- the post-condition in RewriteClause is what turns "not
-# descended into" into a refusal rather than a silent miss.
+# overlap; the last one returns anything else unchanged, and is only
+# ever reached for the leaves Substitutable/1 already vouched for.
 SubstTerm(Variable(N), N, T, T),
 SubstTerm(Variable(M), N, _, Variable(M)) <- (M != N)
-SubstTerm(Goal(NAME, ARGS, KW), N, T, Goal(NAME, ARGS2, KW)) <- SubstList(ARGS, N, T, ARGS2)
+SubstTerm(Goal(NAME, ARGS, KW), N, T, Goal(NAME, ARGS2, KW2)) <- (
+    SubstList(ARGS, N, T, ARGS2),
+    SubstList(KW, N, T, KW2)
+)
+SubstTerm(X, N, T, X2) <- (
+    ISLIST is ++isinstance(X, list),
+    ISLIST is True,
+    SubstList(X, N, T, X2)
+)
 SubstTerm(X, _, _, X) <- (
-    STRUCTURED is ++isinstance(X, (Variable, Goal)),
+    STRUCTURED is ++isinstance(X, (Variable, Goal, list)),
     STRUCTURED is False
 )
 

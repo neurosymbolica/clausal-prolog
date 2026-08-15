@@ -95,6 +95,12 @@ def test_folds_a_list_of_constructor_shapes(rules):
     assert out.head == Goal("r", [[Atom("a"), Atom("b")]], [])
 
 
+def test_folds_into_a_list_in_the_head(rules):
+    out = _rewrite(rules, "b(X, [a, X]) <- (X is 7)\n")
+    assert out is not None
+    assert out.head == Goal("b", [7, [Atom("a"), 7]], [])
+
+
 def test_folds_a_nested_goal_term(rules):
     out = _rewrite(rules, "r(K, S) <- (m(K, M), S is outer(inner(M), tag))\n")
     assert out is not None
@@ -133,6 +139,11 @@ def test_folds_a_nested_goal_term(rules):
         "f(1),\n",
         # neither side is a bare variable
         "r(K) <- (m(K), tag(K) is other(K))\n",
+        # a star-unpacked head element: substitution cannot reach inside it,
+        # and folding anyway would leave T unbound in the head
+        "star(P, [a, *T]) <- (helper(P), T is [b])\n",
+        # an escape term inside the head: substitution cannot descend it
+        "e(L, N) <- (m(++len(L)), N is 5, u(N))\n",
     ],
 )
 def test_refusals(rules, source):
