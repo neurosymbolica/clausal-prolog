@@ -348,6 +348,23 @@ class CommentTable:
         target.above[:0] = slots.above
         target.trailing.extend(slots.trailing)
 
+    def annotate(self, node: ast.AST, suffix: str) -> None:
+        """Append ``suffix`` to every comment filed against ``node``.
+
+        For a transform relocating comments whose subject no longer exists:
+        the marker tells the comment-repair pass to scrutinize the wording.
+        Above groups are marked on their last line only -- one flag per
+        paragraph, not per line.
+        """
+        slots = self._slots.get(node)
+        if slots is None:
+            return
+        for group in slots.above:
+            if group:
+                group[-1].text += suffix
+        for comment in slots.trailing:
+            comment.text += suffix
+
     def drop(self, node: ast.AST) -> None:
         """Declare ``node``'s comments obsolete -- an explicit discharge."""
         slots = self._slots.pop(node, None)

@@ -49,6 +49,10 @@ from clausal.reflection import (
 
 FIXPOINT_BOUND = 20
 
+#: Appended to a deleted goal's relocated comments: the wording described a
+#: goal that no longer exists, so the repair pass must confirm or rewrite it.
+STALE_MARKER = " (maybe stale?)"
+
 _module_counter = itertools.count()
 _loaded: dict[tuple[str, float], object] = {}
 
@@ -195,10 +199,12 @@ def _splice(table, old_statement, reified_in, reified_out, position):
 
     # The statement's own comments ride across.  Matched goals kept their
     # nodes, so their comments never moved at all; a dropped goal's comments
-    # move up to the clause.
+    # move up to the clause, marked so the comment-repair pass scrutinizes
+    # wording whose subject no longer exists (operator call, 2026-08-15).
     table.move(old_statement, new_statement)
     for index, was_consumed in enumerate(consumed):
         if not was_consumed:
+            table.annotate(old_goals[index], STALE_MARKER)
             table.move(old_goals[index], new_statement)
     return new_statement
 

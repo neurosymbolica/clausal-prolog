@@ -95,7 +95,9 @@ def test_comments_on_surviving_goals_stay_put(head_fold_rules):
     )
 
 
-def test_deleted_goal_comments_move_above_the_clause(head_fold_rules):
+def test_deleted_goal_comments_move_above_the_clause_marked_stale(head_fold_rules):
+    # The relocated comment described a goal that no longer exists, so it is
+    # flagged for the comment-repair pass (operator call, 2026-08-15).
     src = (
         "r(K, S) <- (\n"
         "    m(K, M),\n"
@@ -105,11 +107,36 @@ def test_deleted_goal_comments_move_above_the_clause(head_fold_rules):
     )
     result = rewrite_source(src, head_fold_rules)
     assert result.text == (
-        "# the verdict is unknown when keys are missing\n"
+        "# the verdict is unknown when keys are missing (maybe stale?)\n"
         "r(K, unknown(M)) <- (\n"
         "    m(K, M)\n"
         ")\n"
     )
+
+
+def test_deleted_goal_trailing_comment_is_marked_stale_too(head_fold_rules):
+    # The diversity trial's lint pragmas ride as trailing comments; they move
+    # to the statement and carry the marker.
+    src = (
+        "r(K, S) <- (\n"
+        "    m(K, M),\n"
+        "    S is unknown(M)  # lint: do not fold\n"
+        ")\n"
+    )
+    result = rewrite_source(src, head_fold_rules)
+    assert "# lint: do not fold (maybe stale?)" in result.text
+
+
+def test_surviving_goal_comments_are_not_marked(head_fold_rules):
+    src = (
+        "r(K, S) <- (\n"
+        "    m(K, M),  # stays accurate\n"
+        "    S is unknown(M)\n"
+        ")\n"
+    )
+    result = rewrite_source(src, head_fold_rules)
+    assert "# stays accurate\n" in result.text
+    assert "stays accurate (maybe stale?)" not in result.text
 
 
 def test_inline_lambda_in_a_surviving_goal_keeps_its_arrow(head_fold_rules):
