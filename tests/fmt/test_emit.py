@@ -121,3 +121,74 @@ def test_idempotence_over_all_emit_tests():
     ]:
         once = format_source(src)
         assert format_source(once) == once, src
+
+
+def test_one_goal_body_written_as_a_tuple_keeps_its_comma():
+    # (g,) is a one-element tuple; (g) is just g.  Dropping the comma here
+    # would change the tree, so the comma is kept.
+    src = "p(X) <- (\n    q(X),\n)\n"
+    assert format_source(src) == src
+
+
+def test_two_goal_body_drops_the_final_comma():
+    assert format_source("p(X) <- (q(X), r(X),)\n") == (
+        "p(X) <- (\n    q(X),\n    r(X)\n)\n"
+    )
+
+
+def test_one_goal_nested_group_keeps_its_comma():
+    src = "p(X) <- (\n    a(X),\n    (\n        b(X),\n    )\n)\n"
+    assert format_source(src) == src
+
+
+def test_strings_are_written_with_double_quotes():
+    src = "p(X) <- (q('text', X))\n"
+    assert format_source(src) == 'p(X) <- (\n    q("text", X)\n)\n'
+
+
+def test_strings_needing_escapes_keep_their_quotes():
+    for literal in ["'say \"hi\"'", "'back\\\\slash'"]:
+        src = f"p(X) <- (q({literal}))\n"
+        out = format_source(src)
+        assert format_source(out) == out  # whatever it chose, it is stable
+        assert '"say \\"hi\\""' not in out
+
+
+def test_clause_with_a_trailing_comma_keeps_it():
+    # `head <- (...)` and `head <- (...),` are different trees: the comma makes
+    # the statement a tuple.  Dropping it also un-spaces the arrow into `< -`,
+    # which the engine does not accept.
+    src = "p(X) <- (\n    q(X),\n    r(X)\n),\n"
+    assert format_source(src) == src
+
+
+def test_comma_separated_series_stays_on_one_line():
+    # Splitting a series across lines would end the statement at the first
+    # newline and turn one statement into several.
+    src = "p(X) <- (q(X)), r(Y) <- (s(Y)),\n"
+    assert format_source(src) == "p(X) <- (q(X)), r(Y) <- (s(Y)),\n"
+
+
+def test_comma_separated_facts_stay_on_one_line():
+    assert format_source("band(1), band(2),\n") == "band(1), band(2),\n"
+
+
+def test_directive_with_a_trailing_comma():
+    assert format_source("-module(m, [a]),\n") == "-module(m, [a]),\n"
+
+
+def test_comment_inside_a_multiline_directive_stays_with_it():
+    # The directive is re-rendered on one line, so a note against one of its
+    # entries has no line left to sit on; it files above the statement it was
+    # written in rather than escaping to the next one.
+    src = "-module(m, [\n    p(A),  # about p\n    q(B),\n])\n\nrate(1),\n"
+    assert format_source(src) == (
+        "# about p\n-module(m, [p(A), q(B)])\n\nrate(1),\n"
+    )
+
+
+def test_comment_before_a_closing_body_paren_stays_with_the_clause():
+    src = "p(X) <- (\n    q(X)\n    # dangling note\n)\n\nrate(1),\n"
+    assert format_source(src) == (
+        "# dangling note\np(X) <- (\n    q(X)\n)\n\nrate(1),\n"
+    )

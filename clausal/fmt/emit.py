@@ -25,8 +25,15 @@ two would make every layout bug look like a comment bug.
 from __future__ import annotations
 
 import ast
+import io
+import tokenize
 
-from clausal.fmt.comments import CommentTable, clause_body, goal_sequence
+from clausal.fmt.comments import (
+    CommentTable,
+    clause_body,
+    is_clause,
+    statement_items,
+)
 
 INDENT = "    "
 
@@ -132,25 +139,34 @@ class Emitter:
 
     def emit_statement(self, statement: ast.AST) -> None:
         self._emit_above(statement, "")
-        body = clause_body(statement)
-        if body is not None:
-            self._emit_clause(statement, body)
+        items, comma = statement_items(statement)
+        suffix = "," if comma else ""
+        if len(items) == 1 and is_clause(items[0]):
+            self._emit_clause(items[0], suffix)
+        elif items:
+            # A comma-separated series stays on one line: splitting it across
+            # lines would end the statement at the first newline and turn one
+            # statement into several.
+            self._write("", ", ".join(_item_text(item) for item in items) + suffix)
         else:
-            self._write("", _statement_text(statement))
+            self._write("", unparse(statement))
         self._append_trailing(statement)
         self.table.mark_emitted(statement)
 
-    def _emit_clause(self, statement: ast.AST, body: ast.AST) -> None:
-        head = ast.unparse(statement.value.left)
+    def _emit_clause(self, clause: ast.AST, suffix: str) -> None:
+        head = unparse(clause.left)
         self._write("", f"{head} <- (")
-        self._emit_goals(goal_sequence(body), INDENT)
-        self._write("", ")")
+        self._emit_goals(*_goals_of(clause_body(clause)), INDENT)
+        self._write("", ")" + suffix)
 
-    def _emit_goals(self, goals: list[ast.AST], indent: str) -> None:
+    def _emit_goals(
+        self, goals: list[ast.AST], final_comma: bool, indent: str
+    ) -> None:
         for index, goal in enumerate(goals):
             last = index == len(goals) - 1
             self._emit_above(goal, indent)
-            self._emit_goal(goal, indent, separator="" if last else ",")
+            separator = ("," if final_comma else "") if last else ","
+            self._emit_goal(goal, indent, separator)
             self.table.mark_emitted(goal)
 
     def _emit_goal(self, goal: ast.AST, indent: str, separator: str) -> None:
@@ -159,13 +175,13 @@ class Emitter:
         elif isinstance(goal, ast.BoolOp) and isinstance(goal.op, ast.Or):
             self._emit_or(goal, indent, separator)
         else:
-            self._write(indent, ast.unparse(goal) + separator)
+            self._write(indent, unparse(goal) + separator)
             self._append_trailing(goal)
 
     def _emit_group(self, group: ast.Tuple, indent: str, separator: str) -> None:
         """A nested goal-sequence: its own parenthesised block."""
         self._write(indent, "(")
-        self._emit_goals(list(group.elts), indent + INDENT)
+        self._emit_goals(*_goals_of(group), indent + INDENT)
         self._write(indent, ")" + separator)
         self._append_trailing(group)
 
@@ -176,47 +192,93 @@ class Emitter:
                 self._lines[-1] += " or ("
             else:
                 self._write(indent, "(")
-            self._emit_goals(goal_sequence(value), indent + INDENT)
+            self._emit_goals(*_goals_of(value), indent + INDENT)
             self._write(indent, ")")
         self._lines[-1] += separator
         self._append_trailing(node)
 
 
-def _statement_text(statement: ast.AST) -> str:
-    """A non-clause statement as one line of Clausal source."""
-    directive = _directive_operand(statement)
-    if directive is not None:
-        return "-" + ast.unparse(directive)
-    facts = _fact_terms(statement)
-    if facts is not None:
-        return ", ".join(ast.unparse(term) for term in facts) + ","
-    return ast.unparse(statement)
+def _goals_of(body: ast.AST) -> tuple[list[ast.AST], bool]:
+    """The goals of a body or group, and whether to keep a final comma.
+
+    ``(g,)`` is a one-element tuple and ``(g)`` is just ``g``: the comma is
+    load-bearing punctuation in the one-goal case, not decoration, so dropping
+    it would change the tree.  With two or more goals the comma is optional and
+    the house style leaves it off.
+    """
+    if isinstance(body, ast.Tuple):
+        return list(body.elts), len(body.elts) == 1
+    return [body], False
 
 
-def _directive_operand(statement: ast.AST) -> ast.AST | None:
-    """The operand of ``-module(...)``, ``-strict_atoms`` and friends."""
-    if (
-        isinstance(statement, ast.Expr)
-        and isinstance(statement.value, ast.UnaryOp)
-        and isinstance(statement.value.op, ast.USub)
-    ):
-        return statement.value.operand
-    return None
+def unparse(node: ast.AST) -> str:
+    """``ast.unparse`` with the house quote preference applied.
+
+    ``ast.unparse`` writes ``'single'``; the corpus and the surrounding Python
+    are written ``"double"``.  Since the formatter re-renders every term, that
+    difference would otherwise rewrite the quoting of every string in the
+    language on the first run.  Strings that would need escaping to change stay
+    exactly as ``ast.unparse`` wrote them.
+    """
+    return _prefer_double_quotes(ast.unparse(node))
 
 
-def _fact_terms(statement: ast.AST) -> list[ast.AST] | None:
-    """The terms of a fact statement -- a tuple, i.e. a trailing comma."""
-    if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Tuple):
-        return list(statement.value.elts)
-    return None
+def _prefer_double_quotes(text: str) -> str:
+    """Re-quote single-quoted string literals where that costs no escapes."""
+    if "'" not in text:
+        return text
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, SyntaxError, IndentationError):
+        return text
+    lines = text.splitlines(keepends=True)
+    edits = []
+    for token in tokens:
+        if token.type != tokenize.STRING or token.start[0] != token.end[0]:
+            continue
+        requoted = _requote(token.string)
+        if requoted != token.string:
+            edits.append((token.start, token.end, requoted))
+    for (row, start), (_end_row, end), replacement in reversed(edits):
+        line = lines[row - 1]
+        lines[row - 1] = line[:start] + replacement + line[end:]
+    return "".join(lines)
+
+
+def _requote(literal: str) -> str:
+    """``'text'`` -> ``"text"`` when the body holds no quote and no backslash."""
+    prefix = literal[: len(literal) - len(literal.lstrip("bBfFrRuU"))]
+    rest = literal[len(prefix) :]
+    for quote in ("'''", "'"):
+        if rest.startswith(quote) and rest.endswith(quote) and len(rest) >= 2 * len(quote):
+            body = rest[len(quote) : -len(quote)]
+            if '"' in body or "\\" in body:
+                return literal
+            double = '"' * len(quote)
+            return f"{prefix}{double}{body}{double}"
+    return literal
+
+
+def _item_text(item: ast.AST) -> str:
+    """One item of a comma-separated statement, on one line.
+
+    A clause in that position renders inline -- ``head <- (g1, g2)`` -- because
+    the series has to stay on a single line to remain a single statement.
+    """
+    body = clause_body(item)
+    if body is None:
+        return unparse(item)
+    goals, comma = _goals_of(body)
+    rendered = ", ".join(unparse(goal) for goal in goals)
+    return f"{unparse(item.left)} <- ({rendered}{',' if comma else ''})"
 
 
 def _fact_functor(statement: ast.AST) -> str | None:
     """The head functor of a single-term fact, for the fact-table rule."""
-    terms = _fact_terms(statement)
-    if terms is None or len(terms) != 1:
+    items, comma = statement_items(statement)
+    if not comma or len(items) != 1:
         return None
-    term = terms[0]
+    term = items[0]
     if isinstance(term, ast.Call):
-        return ast.unparse(term.func)
+        return unparse(term.func)
     return None

@@ -74,28 +74,43 @@ class _Slots:
         return [c for group in self.above for c in group] + list(self.trailing)
 
 
-def _is_clause(stmt: ast.AST) -> bool:
-    """Is this statement a clause -- ``head <- ( goal, ... )``?
+def is_clause(expression: ast.AST) -> bool:
+    """Is this expression a clause -- ``head <- ( goal, ... )``?
 
     The arrow parses as a comparison whose right-hand side is a unary minus:
-    ``Expr(Compare(left=head, ops=[Lt], comparators=[UnaryOp(USub, body)]))``.
+    ``Compare(left=head, ops=[Lt], comparators=[UnaryOp(USub, body)])``.
     """
     return (
-        isinstance(stmt, ast.Expr)
-        and isinstance(stmt.value, ast.Compare)
-        and len(stmt.value.ops) == 1
-        and isinstance(stmt.value.ops[0], ast.Lt)
-        and len(stmt.value.comparators) == 1
-        and isinstance(stmt.value.comparators[0], ast.UnaryOp)
-        and isinstance(stmt.value.comparators[0].op, ast.USub)
+        isinstance(expression, ast.Compare)
+        and len(expression.ops) == 1
+        and isinstance(expression.ops[0], ast.Lt)
+        and len(expression.comparators) == 1
+        and isinstance(expression.comparators[0], ast.UnaryOp)
+        and isinstance(expression.comparators[0].op, ast.USub)
     )
 
 
-def clause_body(stmt: ast.AST) -> ast.AST | None:
-    """The goal-sequence expression of a clause statement, or ``None``."""
-    if not _is_clause(stmt):
+def statement_items(stmt: ast.AST) -> tuple[list[ast.AST], bool]:
+    """The comma-separated items of a statement, and its trailing comma.
+
+    A statement may be one clause, one term, or a comma-separated series of
+    either, and it may end in a comma -- which is how a fact is written.  That
+    comma makes the statement a tuple, so ``Head <- (...)`` and
+    ``Head <- (...),`` are DIFFERENT trees holding the same clause: the comma
+    has to be read here and written back out, not inferred from the shape.
+    """
+    if not isinstance(stmt, ast.Expr):
+        return [], False
+    if isinstance(stmt.value, ast.Tuple):
+        return list(stmt.value.elts), True
+    return [stmt.value], False
+
+
+def clause_body(item: ast.AST) -> ast.AST | None:
+    """The goal-sequence expression of a clause, or ``None``."""
+    if not is_clause(item):
         return None
-    return stmt.value.comparators[0].operand
+    return item.comparators[0].operand
 
 
 def goal_sequence(body: ast.AST) -> list[ast.AST]:
@@ -142,7 +157,10 @@ def attachment_nodes(tree: ast.Module) -> list[ast.AST]:
     nodes: list[ast.AST] = []
     for stmt in tree.body:
         nodes.append(stmt)
-        body = clause_body(stmt)
+        items, _comma = statement_items(stmt)
+        if len(items) != 1:
+            continue  # a comma-separated series is written back on one line
+        body = clause_body(items[0])
         if body is not None:
             nodes.extend(_goal_attachment_nodes(body))
     return sorted(nodes, key=lambda n: (n.lineno, n.col_offset))
@@ -177,13 +195,6 @@ class CommentTable:
         nodes = attachment_nodes(tree)
         by_end = sorted(nodes, key=lambda n: (n.end_lineno, n.end_col_offset))
 
-        # Rows that carry nothing: the group separator inside comment blocks.
-        blank_rows = {
-            row
-            for row, line in enumerate(source.splitlines(), start=1)
-            if not line.strip()
-        }
-
         runs: dict[ast.AST, list[_Comment]] = {}  # node -> comments above it
         after_last: list[_Comment] = []
         for comment in comments:
@@ -191,19 +202,17 @@ class CommentTable:
             if owner is not None:
                 self._slot(owner).trailing.append(comment)
                 continue
-            below = _next_node(nodes, comment.row)
-            if below is None:
+            owner = _above_owner(nodes, comment)
+            if owner is None:
                 after_last.append(comment)
             else:
-                runs.setdefault(below, []).append(comment)
+                runs.setdefault(owner, []).append(comment)
         for node, run in runs.items():
-            self._file_above(run, node, blank_rows)
+            self._file_above(run, node)
         if after_last:
-            self._module_trailing = _group(after_last, blank_rows)
+            self._module_trailing = _group(after_last)
 
-    def _file_above(
-        self, pending: list[_Comment], node: ast.AST, blank_rows: set[int]
-    ) -> None:
+    def _file_above(self, pending: list[_Comment], node: ast.AST) -> None:
         """File the run of comments standing above ``node``.
 
         For the FIRST node of a file the run may include a detached file
@@ -211,7 +220,7 @@ class CommentTable:
         it is the header, which the formatter emits at the top of the file
         rather than as part of the first statement.
         """
-        groups = _group(pending, blank_rows)
+        groups = _group(pending)
         if not groups:
             return
         first_node = self.module.body[0] if self.module.body else None
@@ -320,6 +329,23 @@ def _trailing_owner(by_end: list[ast.AST], comment: _Comment) -> ast.AST | None:
     return owner
 
 
+def _above_owner(nodes: list[ast.AST], comment: _Comment) -> ast.AST | None:
+    """The node a standalone comment belongs above, or ``None`` at end of file.
+
+    Normally that is the next node down the page -- a comment is about the
+    thing below it.  The exception is a comment written INSIDE a node that the
+    formatter re-renders as one line, such as a note against one entry of a
+    multi-line ``-module([...])`` list: there is no line left to sit on, and
+    the next node down the page belongs to a different statement entirely, so
+    the comment files above the statement it was written in.
+    """
+    below = _next_node(nodes, comment.row)
+    enclosing = _enclosing_node(nodes, comment.row)
+    if enclosing is not None and (below is None or below.end_lineno > enclosing.end_lineno):
+        return enclosing
+    return below
+
+
 def _next_node(nodes: list[ast.AST], row: int) -> ast.AST | None:
     """The first attachment node beginning below ``row``."""
     for node in nodes:
@@ -328,14 +354,26 @@ def _next_node(nodes: list[ast.AST], row: int) -> ast.AST | None:
     return None
 
 
-def _group(comments: list[_Comment], blank_rows: set[int]) -> list[list[_Comment]]:
-    """Split a run of comments into groups on blank source lines."""
+def _enclosing_node(nodes: list[ast.AST], row: int) -> ast.AST | None:
+    """The innermost attachment node whose span contains ``row``."""
+    enclosing = None
+    for node in nodes:  # source order, so the last match is the innermost
+        if node.lineno <= row <= node.end_lineno:
+            enclosing = node
+    return enclosing
+
+
+def _group(comments: list[_Comment]) -> list[list[_Comment]]:
+    """Split a run of comments into groups wherever a line interrupts them.
+
+    Consecutive comment lines are one group; anything in between -- a blank
+    line, or code the formatter re-rendered elsewhere -- ends it.  That is what
+    keeps a multi-paragraph comment block from being welded into one paragraph.
+    """
     groups: list[list[_Comment]] = []
     previous: _Comment | None = None
     for comment in comments:
-        if previous is None or any(
-            row in blank_rows for row in range(previous.row + 1, comment.row)
-        ):
+        if previous is None or comment.row != previous.row + 1:
             groups.append([])
         groups[-1].append(comment)
         previous = comment
