@@ -113,6 +113,58 @@ def clause_body(item: ast.AST) -> ast.AST | None:
     return item.comparators[0].operand
 
 
+def _arrow_nodes(source: str, tree: ast.Module) -> set[ast.AST]:
+    """Every ``Compare`` node the SOURCE spells as an arrow ``<-``.
+
+    The engine distinguishes the arrow from a genuine less-than-negative
+    (``A < -B``) by source spacing alone -- the ASTs are identical -- so the
+    formatter must carry that bit from capture to emission: ``ast.unparse``
+    prints ``< -``, which silently turns an inline lambda argument into a
+    comparison (2026-08-15 trial, vat ``bisect_flip`` lambdas).  A node is an
+    arrow iff nothing separates the ``<`` from the ``-``."""
+    lines = source.splitlines(keepends=True)
+
+    def _slice(from_line, from_col, to_line, to_col):
+        if from_line == to_line:
+            return lines[from_line - 1][from_col:to_col]
+        parts = [lines[from_line - 1][from_col:]]
+        parts += lines[from_line:to_line - 1]
+        parts.append(lines[to_line - 1][:to_col])
+        return "".join(parts)
+
+    arrows: set[ast.AST] = set()
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Compare) and len(node.ops) == 1
+                and isinstance(node.ops[0], ast.Lt)
+                and len(node.comparators) == 1
+                and isinstance(node.comparators[0], ast.UnaryOp)
+                and isinstance(node.comparators[0].op, ast.USub)):
+            between = _slice(node.left.end_lineno, node.left.end_col_offset,
+                             node.comparators[0].lineno,
+                             node.comparators[0].col_offset)
+            if between.strip() == "<" and between.endswith("<"):
+                arrows.add(node)
+    return arrows
+
+
+def directive_list(stmt: ast.AST) -> ast.List | None:
+    """The trailing ``List`` argument of a directive statement, or ``None``.
+
+    A directive is ``Expr(UnaryOp(USub, Call))`` -- ``-module(m, [...])``,
+    ``-import_from(kit, [...])``, ``-private([...])``.  Its list elements are
+    attachment nodes: the corpus writes section comments against individual
+    export-list entries, and those must ride their entries through an
+    explosion (emit) rather than evict to above the whole statement."""
+    if not (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.UnaryOp)
+            and isinstance(stmt.value.op, ast.USub)
+            and isinstance(stmt.value.operand, ast.Call)):
+        return None
+    args = stmt.value.operand.args
+    if args and isinstance(args[-1], ast.List):
+        return args[-1]
+    return None
+
+
 def goal_sequence(body: ast.AST) -> list[ast.AST]:
     """The goals of a body expression, in order.
 
@@ -157,6 +209,10 @@ def attachment_nodes(tree: ast.Module) -> list[ast.AST]:
     nodes: list[ast.AST] = []
     for stmt in tree.body:
         nodes.append(stmt)
+        lst = directive_list(stmt)
+        if lst is not None:
+            nodes.extend(lst.elts)
+            continue
         items, _comma = statement_items(stmt)
         if len(items) != 1:
             continue  # a comma-separated series is written back on one line
@@ -175,6 +231,10 @@ class CommentTable:
         self._module_above: list[list[_Comment]] = []
         self._module_trailing: list[list[_Comment]] = []
         self._ledger: list[_Comment] = []
+        #: Compare nodes the source spells as the arrow ``<-`` (vs a genuine
+        #: ``A < -B``); filled by capture, consulted by the emitter's unparse.
+        #: A transform that BUILDS an arrow node must add it here.
+        self.arrows: set[ast.AST] = set()
 
     # -- capture ---------------------------------------------------------
 
@@ -187,6 +247,7 @@ class CommentTable:
         return tree, table
 
     def _fill(self, source: str, tree: ast.Module) -> None:
+        self.arrows = _arrow_nodes(source, tree)
         comments = _harvest(source)
         self._ledger = list(comments)
         if not comments:

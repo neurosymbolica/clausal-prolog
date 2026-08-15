@@ -31,11 +31,16 @@ import tokenize
 from clausal.fmt.comments import (
     CommentTable,
     clause_body,
+    directive_list,
     is_clause,
     statement_items,
 )
 
 INDENT = "    "
+
+#: One-line renderings past this width explode (directive lists only in v1 --
+#: the goal layer stays no-wrap by design; see todo's fmt style questions).
+WIDTH = 88
 
 
 def format_source(source: str, table_and_tree: tuple | None = None) -> str:
@@ -143,18 +148,48 @@ class Emitter:
         suffix = "," if comma else ""
         if len(items) == 1 and is_clause(items[0]):
             self._emit_clause(items[0], suffix)
+        elif (lst := directive_list(statement)) is not None:
+            # Before the series branch: a directive parses as one UnaryOp item
+            # and would otherwise take the one-line path with its list intact.
+            self._emit_directive(statement, lst)
         elif items:
             # A comma-separated series stays on one line: splitting it across
             # lines would end the statement at the first newline and turn one
             # statement into several.
-            self._write("", ", ".join(_item_text(item) for item in items) + suffix)
+            self._write("", ", ".join(_item_text(item, self.table.arrows) for item in items) + suffix)
         else:
-            self._write("", unparse(statement))
+            self._write("", unparse(statement, self.table.arrows))
         self._append_trailing(statement)
         self.table.mark_emitted(statement)
 
+    def _emit_directive(self, statement: ast.AST, lst: ast.List) -> None:
+        """A directive with a trailing list: one line while it fits and its
+        elements carry no comments; exploded one-element-per-line otherwise.
+        A collapsed export list is unreadable and evicts its section comments
+        (operator conventions, 2026-08-15 trial); the closing ``])`` sits on
+        its own line, last element without a separator, matching the corpus."""
+        one_line = unparse(statement, self.table.arrows)
+        commented = any(self.table.above(e) or self.table.trailing(e)
+                        for e in lst.elts)
+        if len(one_line) <= WIDTH and not commented:
+            for element in lst.elts:
+                self.table.mark_emitted(element)
+            self._write("", one_line)
+            return
+        call = statement.value.operand
+        leading = ", ".join(unparse(a, self.table.arrows) for a in call.args[:-1])
+        opener = f"-{unparse(call.func, self.table.arrows)}({leading}{', ' if leading else ''}["
+        self._write("", opener)
+        for i, element in enumerate(lst.elts):
+            self._emit_above(element, INDENT)
+            separator = "," if i < len(lst.elts) - 1 else ""
+            self._write(INDENT, unparse(element, self.table.arrows) + separator)
+            self._append_trailing(element)
+            self.table.mark_emitted(element)
+        self._write("", "])")
+
     def _emit_clause(self, clause: ast.AST, suffix: str) -> None:
-        head = unparse(clause.left)
+        head = unparse(clause.left, self.table.arrows)
         self._write("", f"{head} <- (")
         self._emit_goals(*_goals_of(clause_body(clause)), INDENT)
         self._write("", ")" + suffix)
@@ -175,7 +210,7 @@ class Emitter:
         elif isinstance(goal, ast.BoolOp) and isinstance(goal.op, ast.Or):
             self._emit_or(goal, indent, separator)
         else:
-            self._write(indent, unparse(goal) + separator)
+            self._write(indent, unparse(goal, self.table.arrows) + separator)
             self._append_trailing(goal)
 
     def _emit_group(self, group: ast.Tuple, indent: str, separator: str) -> None:
@@ -211,7 +246,7 @@ def _goals_of(body: ast.AST) -> tuple[list[ast.AST], bool]:
     return [body], False
 
 
-def unparse(node: ast.AST) -> str:
+def unparse(node: ast.AST, arrows: set | frozenset = frozenset()) -> str:
     """``ast.unparse`` with the house quote preference applied.
 
     ``ast.unparse`` writes ``'single'``; the corpus and the surrounding Python
@@ -219,8 +254,43 @@ def unparse(node: ast.AST) -> str:
     difference would otherwise rewrite the quoting of every string in the
     language on the first run.  Strings that would need escaping to change stay
     exactly as ``ast.unparse`` wrote them.
-    """
+
+    ``arrows`` is the CommentTable's arrow ledger: Compare nodes the source
+    spells ``<-``.  ``ast.unparse`` would print them ``< -``, which the engine
+    reads as a genuine less-than-negative -- an inline lambda silently becomes
+    a comparison.  Arrow nodes render ``(left <- operand)``, parenthesised,
+    matching the corpus's inline-lambda style."""
+    if arrows:
+        up = _ArrowUnparser(arrows)
+        return _prefer_double_quotes(up.visit(node))
     return _prefer_double_quotes(ast.unparse(node))
+
+
+class _ArrowUnparser(ast._Unparser):
+    """``ast._Unparser`` that preserves source-spelled arrows."""
+
+    # ast._Unparser spawns a bare type(self)() for f-string internals, so
+    # arrows must default; an arrow cannot occur inside an f-string anyway.
+    def __init__(self, arrows=frozenset()):
+        super().__init__()
+        self._arrows = arrows
+
+    def visit_Compare(self, node):
+        if node not in self._arrows:
+            return super().visit_Compare(node)
+        # Precedence discipline matters on both sides: the head may be a bare
+        # tuple (needs its parens back) and the body re-parses under unary-minus
+        # binding — `X <- RESULT is X` would chain into Compare(Lt, Is). The
+        # unparser's own precedence machinery decides both.
+        precedence = ast._Precedence
+        self.write("(")
+        self.set_precedence(precedence.CMP.next(), node.left)
+        self.traverse(node.left)
+        self.write(" <- ")
+        operand = node.comparators[0].operand
+        self.set_precedence(precedence.FACTOR, operand)
+        self.traverse(operand)
+        self.write(")")
 
 
 def _prefer_double_quotes(text: str) -> str:
@@ -259,7 +329,7 @@ def _requote(literal: str) -> str:
     return literal
 
 
-def _item_text(item: ast.AST) -> str:
+def _item_text(item: ast.AST, arrows: set | frozenset = frozenset()) -> str:
     """One item of a comma-separated statement, on one line.
 
     A clause in that position renders inline -- ``head <- (g1, g2)`` -- because
@@ -267,10 +337,10 @@ def _item_text(item: ast.AST) -> str:
     """
     body = clause_body(item)
     if body is None:
-        return unparse(item)
+        return unparse(item, arrows)
     goals, comma = _goals_of(body)
-    rendered = ", ".join(unparse(goal) for goal in goals)
-    return f"{unparse(item.left)} <- ({rendered}{',' if comma else ''})"
+    rendered = ", ".join(unparse(goal, arrows) for goal in goals)
+    return f"{unparse(item.left, arrows)} <- ({rendered}{',' if comma else ''})"
 
 
 def _fact_functor(statement: ast.AST) -> str | None:
