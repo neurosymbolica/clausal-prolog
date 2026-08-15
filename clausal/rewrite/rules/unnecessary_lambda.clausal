@@ -1,0 +1,98 @@
+# =====================================================================
+# unnecessary_lambda -- eta-reduction: a lambda argument that merely
+# forwards its parameters to a predicate IS that predicate.
+#
+#     maplist(((X) <- add_one(X)), L)         maplist(add_one, L)
+#     fold(((X, V) <- score(X, V)), L, R)     fold(score, L, R)
+#
+# The engine accepts a bare predicate reference wherever it accepts a
+# lambda, with identical solutions -- pinned for maplist/foldl/include,
+# user-defined higher-order predicates via call_goal, dotted callees,
+# and the param-shadowing collision case in
+# tests/rewrite/test_reflection_contract.py.
+#
+# WHERE IT LOOKS: the lambda must be a DIRECT argument of a top-level
+# conjunct that is a plain Goal -- the position higher-order arguments
+# are actually passed in.  Deeper nestings (an argument of an argument,
+# an or-group, a not, another lambda's body) are far more likely to be
+# data than goals, and are left alone.  One argument of one goal is
+# rewritten per firing; the driver fixpoints.
+#
+# LEGALITY -- all required, and refusal is plain failure:
+#   - the argument is a raw Lambda node (reification only builds one
+#     for a real inline lambda; a lowercase-headed "(foo <- ...)" term
+#     reifies as a Predicate node and never matches);
+#   - every parameter is a plain positional param -- no defaults, no
+#     annotations, no *args/**kwargs;
+#   - the body is a SINGLE predicate call: a Goal, which is also what
+#     rules out a call through a variable (that reifies as an Escape)
+#     and an operator/comparison body (raw operator nodes);
+#   - the body call has NO keyword arguments;
+#   - the body call's arguments are EXACTLY the parameters: pairwise
+#     identical, same order, same count.  A param reference reifies as
+#     Atom(name) while a captured enclosing variable reifies as
+#     Variable(name), so this one match is simultaneously the
+#     forwarding check and the no-closure-capture check;
+#   - the parameters are pairwise DISTINCT: ((X, X) <- p(X, X)) called
+#     with two arguments also UNIFIES them with each other, which the
+#     bare reference would not.
+#
+# The replacement is Atom(CALLEE) -- the bare (possibly dotted)
+# reference the spike pinned.
+#
+# KNOWN CAVEAT: the lambda and the bare reference are equivalent AS A
+# CALLED GOAL, which is what an argument in this position is for.  A
+# predicate that instead stores its argument and structurally inspects
+# it could tell a closure from an atom; as with head_fold's
+# binding-time caveat, the corpus sweep and a domain's own tests are
+# the fence there, not an argument.
+# =====================================================================
+-import_from(reflection, [Clause, Goal, Atom])
+
+RewriteClause(Clause(HEAD, GOALS, POS), Clause(HEAD, GOALS2, POS)) <- (
+    ReduceOneGoal(GOALS, GOALS2)
+)
+
+# Pick ONE top-level conjunct and rewrite it, keeping the rest in
+# place.  Only plain Goal conjuncts are offered to EtaGoal: an
+# or-group is a list/Or node and a negation is a Not node, and neither
+# unifies with the Goal pattern -- which IS the "top-level conjunct"
+# clause of the legality rule, expressed by what declines to match.
+ReduceOneGoal([G, *GS], [G2, *GS]) <- EtaGoal(G, G2)
+ReduceOneGoal([G, *GS], [G, *GS2]) <- ReduceOneGoal(GS, GS2)
+
+# Same goal, one direct argument eta-reduced.  Keyword arguments of
+# the containing goal ride through untouched (and are not searched:
+# a lambda passed by keyword stays as written).
+EtaGoal(Goal(NAME, ARGS, KW), Goal(NAME, ARGS2, KW)) <- (
+    ReduceOneArg(ARGS, ARGS2)
+)
+
+ReduceOneArg([A, *AS], [A2, *AS]) <- EtaArg(A, A2)
+ReduceOneArg([A, *AS], [A, *AS2]) <- ReduceOneArg(AS, AS2)
+
+# The reduction itself.  The Lambda vocabulary is not exported to
+# Clausal (op_node/3 deliberately excludes it), so the node test and
+# the param harvest go through ++escapes over the reified node --
+# type-checked by module and name, exactly the class reification
+# builds.  An escape used as a goal always succeeds, so each test
+# unifies its VALUE with True to mean anything (see head_fold).
+EtaArg(LAM, Atom(CALLEE)) <- (
+    ISLAMBDA is ++(type(LAM).__module__ == "clausal.pythonic_ast.nodes" and type(LAM).__name__ == "Lambda"),
+    ISLAMBDA is True,
+    PLAIN is ++all(type(p).__name__ == "PosOrKwParam" and p.annotation is None and p.default is None for p in LAM.params.params),
+    PLAIN is True,
+    NAMES is ++[p.name for p in LAM.params.params],
+    Distinct(NAMES),
+    BODY is ++LAM.body,
+    BODY is Goal(CALLEE, ARGS, []),
+    Forwards(NAMES, ARGS)
+)
+
+# The body's arguments are the params: pairwise identical (the SAME
+# name N binds the param and the Atom), same order, same count.
+Forwards([], []),
+Forwards([N, *NS], [Atom(N), *AS]) <- Forwards(NS, AS)
+
+Distinct([]),
+Distinct([N, *NS]) <- (not (N in NS), Distinct(NS))

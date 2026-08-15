@@ -43,14 +43,14 @@ def _decayed(text: str) -> int:
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=_ids(CORPUS))
-def test_rewrite_is_conserving_localized_idempotent_and_arrow_safe(path, head_fold_rules):
+def test_rewrite_is_conserving_localized_idempotent_and_arrow_safe(path, shipped_rules):
     source = path.read_text()
     try:
         before = ast.parse(source).body
     except SyntaxError:
         pytest.skip("fixture is deliberately unparsable")
 
-    result = rewrite_source(source, head_fold_rules)  # conservation asserted inside
+    result = rewrite_source(source, shipped_rules)  # conservation asserted inside
 
     after = ast.parse(result.text).body
     assert len(before) == len(after), "the rewrite added or removed a statement"
@@ -61,7 +61,7 @@ def test_rewrite_is_conserving_localized_idempotent_and_arrow_safe(path, head_fo
                 "a statement no rule fired on came back changed"
             )
 
-    again = rewrite_source(result.text, head_fold_rules)
+    again = rewrite_source(result.text, shipped_rules)
     assert again.text == result.text, "the rewriter is not idempotent"
     assert again.fired == [], "a rule fired on its own output"
 
