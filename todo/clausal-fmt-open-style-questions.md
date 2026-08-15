@@ -61,6 +61,14 @@ source; the first is needed regardless for generated files elsewhere.
   to that statement.
 - **Fact tables**: consecutive one-line facts with the same head functor get no
   blank line between them; a comment above one re-introduces the blank.
+- **The arrow ledger** (added after v1, and a bug fix rather than a style
+  call): `head <- body` and `head < -body` are the same tree, so which one a
+  node IS cannot be read off the AST.  Capture records it from the source
+  spacing using the loader's own adjacency test, and emission restores the
+  tight spelling for exactly those nodes.  Without it, `ast.unparse` flattened
+  every inline lambda into a comparison — AST-equal, valid Python, different
+  program — and the corpus's own lambda fixtures were being rewritten that way.
+  The sweep now counts arrows in and out, since AST equivalence cannot see it.
 
 ## 5. Not yet built (the plan's follow-on)
 
