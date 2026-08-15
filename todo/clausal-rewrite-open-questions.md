@@ -59,7 +59,16 @@ the claim is running a rewritten tree through its own test suite, which is what
 the invariance run does and what any adopter should do before keeping the
 output.
 
-## 6. Decided in v1, recorded so it is not re-litigated by accident
+## 6. Three reflection gaps the build ran into
+
+Recorded separately in
+[reflection-gaps-found-by-the-rewriter.md](reflection-gaps-found-by-the-rewriter.md):
+an occurs check cannot see into a term a rule just built (so legality must be a
+pre-condition), `[*XS]` matches strings as well as lists, and reification drops
+a head's keyword-argument names.  The first of the three produced a real unsound
+fold before the suite run caught it.
+
+## 7. Decided in v1, recorded so it is not re-litigated by accident
 
 - **Refusal is failure.** A rule that does not apply simply fails; there is no
   "declined because" channel.  The CLI reports firings, not refusals.
