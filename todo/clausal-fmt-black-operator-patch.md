@@ -1,7 +1,16 @@
 # `clausal fmt` — Black-based Clausal formatter via a `<-` operator patch
 
 **Requested:** 2026-07-22 (implements `todo/one-goal-per-line-style-standard.md`).
-**Status:** DESIGN DONE, first implementation (SHIM) ABANDONED — see "Why the shim failed".
+**Status: SUPERSEDED 2026-08-15.** The formatter shipped instead on Python's own
+`ast` (`clausal/fmt/`, `clausal-fmt` CLI) — no Black fork, no operator patch, no
+sentinel-operator shim, so the corruption described below cannot arise: `<-`
+never becomes another operator because nothing rewrites the source text.  Points
+1–4 of the house style below are honoured except line wrapping, which v1 does not
+do; the open items are tracked in `clausal-fmt-open-style-questions.md`.  The
+history below is kept for the shim post-mortem, which is still the reason not to
+try that approach again.
+
+**Original status:** DESIGN DONE, first implementation (SHIM) ABANDONED — see "Why the shim failed".
 The correct, reusable pieces are salvageable from tag `wip/clausal-fmt-shim-abandoned`
 (branch `feat/clausal-fmt` was deleted; the 13 commits live under that tag).
 
@@ -73,7 +82,7 @@ Only the shim mechanism was wrong; these are sound and tested — cherry-pick / 
     untouched); skips nested `<-` lambda param-groups and bodies; comment-safe backward scan;
     idempotent. (commits `1e9bf871`, `e8a116e0`, `372cb577`.)
   - `format_str` orchestration, `format_file`, `main`/CLI (`--check`, `--line-length`, DIR).
-- `clausal/tests/test_fmt.py` — 22 tests: house-style-matches-peppol, idempotence, **reify
+- `clausal/tests/test_fmt.py` — 22 tests: house-style-matches-a-real-rulebase, idempotence, **reify
   structural round-trip** (compare `Clause.head`+`goals`, NOT `repr` — `Clause` has `position`,
   `Goal` doesn't), all-string-kinds, shim-safety, injector edge cases.
 - Design spec + plan: on the tag under `docs/superpowers/`.
@@ -94,7 +103,7 @@ Only the shim mechanism was wrong; these are sound and tested — cherry-pick / 
 ## Behaviour-preservation bar (the acceptance gate — unchanged)
 
 Whitespace + trailing-comma only; idempotent (`fmt(fmt(x))==fmt(x)`); reify structural round-trip
-(`head`+`goals`); corpus dry-run over a downstream rulebase corpus = 0 errors; one-domain
-oracle+mutation green (peppol: `refutations=0`, all mutants killed). The shim impl passed ALL of
+(`head`+`goals`); corpus dry-run over a downstream rulebase corpus = 0 errors; one-rulebase
+verification run green (no refutations, all mutants killed). The shim impl passed ALL of
 these — but only on `@`-free inputs. **The operator-patch impl MUST also test the code-`@`
 fixtures** (`packages/clausal-jax/tests/fixtures/*.clausal`) to prove no corruption.
