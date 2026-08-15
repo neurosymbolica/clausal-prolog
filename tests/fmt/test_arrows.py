@@ -110,3 +110,34 @@ def test_a_formatted_lambda_still_runs(tmp_path):
     out = Var()
     solutions = list(module.Doubles([1, 2, 3], out))
     assert solutions, "the formatted lambda no longer solves"
+
+
+def test_a_non_ascii_line_does_not_shift_the_splice():
+    """``col_offset`` counts utf-8 BYTES, not characters.
+
+    A character-based index into the rendered text lands past the ``-`` as
+    soon as anything non-ascii precedes it on the line, and the splice would
+    then eat the operand instead of tightening the arrow -- silently, since
+    the result is still valid source.
+    """
+    source = 'p(B) <- (\n    fold(f("caf\u00e9", ((X) <- p(X))), B)\n)\n'
+    out = format_source(source)
+    assert "caf\u00e9" in out
+    assert "<- p(X)" in out
+    assert "< -" not in out
+    assert ast.dump(ast.parse(out)) == ast.dump(ast.parse(source))
+
+
+def test_an_arrow_that_cannot_be_placed_raises():
+    """A ledger arrow the emitter cannot locate is a program change.
+
+    Comment loss raises; so does this, for the same reason -- ``< -`` in the
+    output would be a comparison where the source had an arrow.
+    """
+    from clausal.fmt.emit import ArrowRenderError, _tighten_arrows
+
+    node = ast.parse("(X) < -p(X)").body[0].value
+    with pytest.raises(ArrowRenderError):
+        # a text that does not correspond to the node: the arrows cannot be
+        # located, so the ledger cannot be honoured
+        _tighten_arrows("m(X)", node, {node})

@@ -22,6 +22,7 @@ from pathlib import Path
 
 from clausal.fmt.cli import clausal_files
 from clausal.fmt.comments import CommentLeakError
+from clausal.fmt.emit import ArrowRenderError
 from clausal.fmt.verify import unified_diff
 from clausal.rewrite.driver import RewriteError, rewrite_source
 
@@ -93,7 +94,13 @@ def main(argv: list[str] | None = None) -> int:
         try:
             source = path.read_text()
             result = rewrite_source(source, rules)
-        except (OSError, SyntaxError, CommentLeakError, RewriteError) as error:
+        except (
+            OSError,
+            SyntaxError,
+            CommentLeakError,
+            ArrowRenderError,
+            RewriteError,
+        ) as error:
             print(f"{path}: {type(error).__name__}: {error}", file=sys.stderr)
             failed += 1
             continue

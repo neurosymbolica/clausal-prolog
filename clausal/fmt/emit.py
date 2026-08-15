@@ -42,6 +42,15 @@ from clausal.fmt.comments import (
 INDENT = "    "
 
 
+class ArrowRenderError(Exception):
+    """An arrow could not be written as an arrow.
+
+    ``<-`` and ``< -`` are one tree and two programs, so a spelling the
+    emitter cannot place is a meaning it cannot preserve -- reported rather
+    than written out wrong.
+    """
+
+
 def format_source(source: str, table_and_tree: tuple | None = None) -> str:
     """Format ``source``, or an already-captured ``(tree, table)`` pair."""
     if table_and_tree is None:
@@ -244,6 +253,16 @@ def _tighten_arrows(text: str, node: ast.AST, arrows: set | frozenset) -> str:
     the round trip, so the arrow-shaped nodes of the re-parse correspond one
     for one with the node's own, and the ledger's membership carries across by
     index.
+
+    The arithmetic runs on BYTES.  ``col_offset`` counts utf-8 bytes, not
+    characters, so a non-ascii character earlier on the line shifts every
+    character-based index past the ``-`` -- and this function splices at that
+    index, so it would silently eat source instead of failing.  The engine's
+    own adjacency test encodes for the same reason.
+
+    Anything that would leave a registered arrow spelled ``< -`` raises.  That
+    spelling is a comparison, so returning it quietly would change the program
+    -- the same class of loss that comment conservation refuses to make quiet.
     """
     candidates = arrow_candidates(node)
     marked = [index for index, child in enumerate(candidates) if child in arrows]
@@ -251,25 +270,32 @@ def _tighten_arrows(text: str, node: ast.AST, arrows: set | frozenset) -> str:
         return text
     try:
         reparsed = arrow_candidates(ast.parse(text))
-    except SyntaxError:  # pragma: no cover - unparse emits parsable text
-        return text
-    if len(reparsed) != len(candidates):  # pragma: no cover - defensive
-        return text
-    lines = text.splitlines(keepends=True)
+    except SyntaxError as error:  # pragma: no cover - unparse emits parsable text
+        raise ArrowRenderError(f"cannot re-parse rendered term: {text!r}") from error
+    if len(reparsed) != len(candidates):  # pragma: no cover - structure is stable
+        raise ArrowRenderError(
+            f"{len(candidates)} arrow-shaped nodes went in and {len(reparsed)} "
+            f"came back out of {text!r}: the arrows cannot be located"
+        )
+
+    raw = text.encode("utf-8")
     starts, running = [], 0
-    for line in lines:
+    for line in raw.splitlines(keepends=True):
         starts.append(running)
         running += len(line)
     edits = []
     for index in marked:
         usub = reparsed[index].comparators[0]
         minus = starts[usub.lineno - 1] + usub.col_offset
-        opening = text.rfind("<", 0, minus)
-        if opening != -1:
-            edits.append((opening, minus + 1))
+        opening = raw.rfind(b"<", 0, minus)
+        if opening == -1:  # pragma: no cover - an arrow always has its '<'
+            raise ArrowRenderError(
+                f"no '<' before the arrow at byte {minus} of {text!r}"
+            )
+        edits.append((opening, minus + 1))
     for opening, end in sorted(edits, reverse=True):
-        text = text[:opening] + "<- " + text[end:]
-    return text
+        raw = raw[:opening] + b"<- " + raw[end:]
+    return raw.decode("utf-8")
 
 
 def _prefer_double_quotes(text: str) -> str:

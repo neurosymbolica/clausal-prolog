@@ -30,6 +30,16 @@ predicate everywhere", no "these two clauses are one clause with an or".  The
 spec's `RewriteClause/3` (with a module argument) is the shape that would open
 that up.
 
+## 2b. A comma-separated clause series is exempt
+
+The driver rewrites a statement that IS one clause.  `p(..) <- (..), q(..),` is
+one statement holding several items, and splicing into it would mean rebuilding
+the series and re-deriving which comma belongs to which clause.  It is left
+byte-stable, with a test pinning that.  No file in this repo's corpus writes
+clauses that way (checked: zero statements), so it costs nothing today -- but
+the exemption is silent, and a `--check` run would report such a file clean
+whether or not a rule would have fired in it.
+
 ## 3. Folding interacts with the formatter's missing width engine
 
 `NatnumProgram(PROGRAM) <- (PROGRAM is [ ...five lines of list... ])` folds to

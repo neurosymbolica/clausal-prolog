@@ -39,11 +39,15 @@ from clausal.fmt.emit import format_source
 from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, call
 from clausal.logic.variables import Var
-from clausal.reflection import ReifyError, reify_ast, render_ast
+from clausal.reflection import (
+    _LAMBDA_ARROW_MARKER,
+    ReifyError,
+    RenderError,
+    reify_ast,
+    render_ast,
+)
 
 FIXPOINT_BOUND = 20
-
-_LAMBDA_SENTINEL = "_LAMBDA_ARROW"
 
 _module_counter = itertools.count()
 _loaded: dict[tuple[str, float], object] = {}
@@ -172,10 +176,11 @@ def _splice(table, old_statement, reified_in, reified_out, position):
         matched = _match(reified_in.goals, consumed, cursor, out_goal)
         if matched is None:
             raise RewriteError(
-                f"cannot splice the result at {position}: the rule produced a "
-                f"goal that was not in the clause ({out_goal!r}), and a goal "
-                f"with no original has no node to reuse and no comments to "
-                f"inherit"
+                f"cannot splice the result at {position}: {out_goal!r} is "
+                f"not available at or after input goal {cursor}. Either the "
+                f"rule invented a goal -- which has no node to reuse and no "
+                f"comments to inherit -- or it REORDERED the goals it kept, "
+                f"which the in-order correspondence does not model"
             )
         consumed[matched] = True
         cursor = matched + 1
@@ -219,11 +224,21 @@ def _head_node(statement):
 
 
 def _render_head(head, position):
-    node = render_ast(head)
-    if _LAMBDA_SENTINEL in ast.unparse(node):
+    try:
+        node = render_ast(head)
+    except RenderError as error:
+        # A rule may bind a head argument to something with no source form at
+        # all -- a Python callable built by an escape, say.  That is a rule
+        # bug, reported as one rather than as a traceback out of the renderer.
         raise RewriteError(
-            f"the rewritten head at {position} contains a lambda, which the "
-            f"renderer marks with a sentinel this driver cannot strip"
+            f"the rewritten head at {position} cannot be rendered: {error}"
+        ) from error
+    if _LAMBDA_ARROW_MARKER in ast.unparse(node):
+        raise RewriteError(
+            f"the rewritten head at {position} contains a lambda: the "
+            f"renderer marks a rendered lambda arrow with a sentinel that "
+            f"only the text-level renderer strips, and this driver splices "
+            f"nodes"
         )
     return node
 

@@ -48,6 +48,21 @@ def test_a_directive_is_left_alone(head_fold_rules):
     assert result.text == "-module(m, [p(A)])\n\np(5),\n"
 
 
+def test_a_comma_separated_clause_series_is_left_alone(head_fold_rules):
+    """Two clauses written as one comma-separated statement are exempt.
+
+    The driver rewrites a statement that IS one clause.  A series is one
+    statement holding several, and splicing into it would have to rebuild the
+    series and re-derive which comma belongs to which clause -- so it is left
+    byte-stable instead.  No file in this repo's corpus writes clauses that
+    way, which is why it costs nothing today.
+    """
+    src = "p(X) <- (X is 5), r(1),\n"
+    result = rewrite_source(src, head_fold_rules)
+    assert result.fired == []
+    assert "X is 5" in result.text
+
+
 def test_a_keyword_head_is_left_alone(head_fold_rules):
     """Reification drops a head's keyword NAMES; a rewrite would too.
 
@@ -136,3 +151,43 @@ def test_a_rule_that_invents_a_goal_is_refused_loudly(tmp_path):
         """))
     with pytest.raises(RewriteError, match="splice"):
         rewrite_source("p(X) <- (m(X))\n", [inventive])
+
+
+def test_a_rule_that_puts_a_lambda_in_the_head_is_refused(tmp_path):
+    """``render_ast`` marks a rendered lambda arrow with a sentinel.
+
+    Only the text-level renderer strips it, and the driver splices NODES, so a
+    head carrying one would be written out with ``__clausal_lambda_arrow__``
+    in it.  No shipped rule can produce that -- which is exactly why the guard
+    has to be tested with one that can, or it is dead code.  It was: the guard
+    matched a constant that never appears.
+    """
+    lambda_head = tmp_path / "lambda_head.clausal"
+    lambda_head.write_text(textwrap.dedent("""\
+        -import_from(reflection, [Clause, Goal])
+
+        # carry the lambda term out of the body goal and into the head
+        RewriteClause(Clause(Goal(NAME, ARGS, KW), [Goal(_, [LAM], _)], POS), Clause(Goal(NAME, [*ARGS, LAM], KW), [], POS)),
+        """))
+    with pytest.raises(RewriteError, match="lambda"):
+        rewrite_source("p(X) <- (m(((Y) <- q(Y))))\n", [lambda_head])
+
+
+def test_a_head_that_cannot_be_rendered_at_all_is_refused(tmp_path):
+    """A rule may bind a head argument to something with no source form.
+
+    An escape builds a Python callable, which the renderer refuses outright.
+    That is a rule bug and is reported as one, not as a traceback escaping
+    the driver.
+    """
+    callable_head = tmp_path / "callable_head.clausal"
+    callable_head.write_text(textwrap.dedent("""\
+        -import_from(reflection, [Clause, Goal])
+
+        RewriteClause(Clause(Goal(NAME, ARGS, KW), GOALS, POS), Clause(HEAD2, GOALS, POS)) <- (
+            LAM is ((X) <- p(X)),
+            HEAD2 is Goal(NAME, [*ARGS, LAM], KW)
+        )
+        """))
+    with pytest.raises(RewriteError, match="cannot be rendered"):
+        rewrite_source("p(X) <- (m(X))\n", [callable_head])
