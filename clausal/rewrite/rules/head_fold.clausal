@@ -1,0 +1,96 @@
+# =====================================================================
+# head_fold -- fold `V is TERM` body goals into the clause head.
+#
+# `X is T` compiles to unification, never to arithmetic evaluation, so
+# a body goal that merely unifies a head variable with a term is saying
+# something the head could say itself:
+#
+#     r(K, S) <- (m(K, M), S is unknown(M))
+#     r(K, unknown(M)) <- (m(K, M))
+#
+# LEGALITY -- all required, and refusal is plain failure:
+#   - the goal is a top-level conjunct, never inside an or-group or a
+#     nested group;
+#   - one side is a bare Variable that occurs in the head;
+#   - that variable occurs in NO other body goal, and NOT inside the
+#     folded term (the occurs check);
+#   - the folded term is constructor-shaped: a Goal without keywords,
+#     an Atom, a Variable, an int/str/bool, or a list of those.
+#     Escapes, f-strings, lambdas and operator terms refuse.  Operator
+#     terms would be sound -- they are still unification -- but v1
+#     stays strict rather than argue the case one term at a time.
+#
+# The post-condition on the rewritten head is the safety net for the
+# substitution: if any occurrence of the variable survived in the new
+# head -- because it sat somewhere SubstTerm does not descend into,
+# such as a keyword argument or a list -- the rule refuses instead of
+# emitting a clause that names a variable nothing binds.
+#
+# KNOWN CAVEAT: folding moves the binding from body time to head
+# unification time.  The two differ only to a caller that inspects
+# bindings between goals, which is why the corpus sweep and a domain's
+# own tests are the fence here rather than an argument.
+# =====================================================================
+-import_from(reflection, [
+    reified_subterm,
+    Clause, Goal, Variable, Atom,
+])
+
+RewriteClause(Clause(HEAD, GOALS, POS), Clause(HEAD2, REST, POS)) <- (
+    SelectGoal(GOALS, GOAL, REST),
+    UnifySides(GOAL, Variable(N), TERM),
+    reified_subterm(HEAD, Variable(N)),
+    not reified_subterm(REST, Variable(N)),
+    not reified_subterm(TERM, Variable(N)),
+    Foldable(TERM),
+    SubstTerm(HEAD, N, TERM, HEAD2),
+    not reified_subterm(HEAD2, Variable(N))
+)
+
+# Pick one top-level conjunct and keep the rest in order.  Only
+# top-level elements are offered: a nested group is a list and an
+# or-block is an Or node, and neither is looked inside -- which IS the
+# "top-level conjunct" clause of the legality rule, expressed by what
+# this predicate declines to enumerate.
+SelectGoal([G, *GS], G, GS),
+SelectGoal([G, *GS], X, [G, *RS]) <- SelectGoal(GS, X, RS)
+
+# `V is TERM` either way round.  Both orders match when both sides are
+# variables; the legality goals prune, and the driver takes the first
+# survivor.
+UnifySides((A is B), A, B),
+UnifySides((A is B), B, A),
+
+# Constructor shapes only.
+Foldable(Goal(_, ARGS, [])) <- FoldableList(ARGS)
+Foldable(Atom(_)),
+Foldable(Variable(_)),
+# A `++escape` used as a goal ALWAYS SUCCEEDS -- it is evaluated for its
+# value, not its truth -- so a type test has to unify that value with
+# True to mean anything.
+Foldable(X) <- (
+    PRIMITIVE is ++isinstance(X, (int, str, bool)),
+    PRIMITIVE is True
+)
+Foldable([*XS]) <- FoldableList(XS)
+
+FoldableList([]),
+FoldableList([X, *XS]) <- (Foldable(X), FoldableList(XS))
+
+# Substitution over the head.  The clauses are guarded so they do not
+# overlap, and anything this does not descend into is returned
+# unchanged -- the post-condition in RewriteClause is what turns "not
+# descended into" into a refusal rather than a silent miss.
+SubstTerm(Variable(N), N, T, T),
+SubstTerm(Variable(M), N, _, Variable(M)) <- (M != N)
+SubstTerm(Goal(NAME, ARGS, KW), N, T, Goal(NAME, ARGS2, KW)) <- SubstList(ARGS, N, T, ARGS2)
+SubstTerm(X, _, _, X) <- (
+    STRUCTURED is ++isinstance(X, (Variable, Goal)),
+    STRUCTURED is False
+)
+
+SubstList([], _, _, []),
+SubstList([A, *AS], N, T, [A2, *AS2]) <- (
+    SubstTerm(A, N, T, A2),
+    SubstList(AS, N, T, AS2)
+)
