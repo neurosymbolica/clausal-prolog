@@ -4,8 +4,9 @@ The unit tests pin the style rules on hand-written snippets, which is the wrong
 shape of evidence for a formatter: what it has to survive is source nobody
 wrote with it in mind.  So this sweeps every ``.clausal`` file in the repository
 -- fixtures, examples, package test data, the standard library -- and requires
-three things of each: the tree is unchanged, no comment was lost (the formatter
-raises if one was), and a second pass changes nothing.
+four things of each: the tree is unchanged, no comment was lost (the formatter
+raises if one was), every comment still anchors the code it anchored, and every
+arrow is still spelled as an arrow.  A second pass must change nothing.
 
 Point ``CLAUSAL_FMT_CORPUS`` at a directory to sweep source living outside this
 repository as well.
@@ -19,6 +20,7 @@ from pathlib import Path
 import pytest
 
 from clausal.fmt import format_source
+from clausal.fmt.comments import arrow_nodes
 from clausal.fmt.verify import ast_equivalent
 
 REPO = Path(__file__).resolve().parents[2]
@@ -113,6 +115,27 @@ def test_comments_keep_pointing_at_the_same_code(path):
     for comment, below in before.items():
         assert comment in after, f"{comment} is no longer on a line of its own"
         assert _head(below) == _head(after[comment]), f"{comment} changed anchor"
+
+
+@pytest.mark.parametrize("path", CORPUS, ids=_ids(CORPUS))
+def test_every_arrow_is_still_an_arrow(path):
+    """AST equivalence cannot see this one: ``<-`` and ``< -`` are one tree.
+
+    A clause arrow, and any lambda arrow inside a goal, is an arrow only
+    because of how it is spelled.  So the sweep counts them the way the loader
+    does -- by adjacency -- on the way in and on the way out.
+    """
+    source = path.read_text()
+    try:
+        ast.parse(source)
+    except SyntaxError:
+        pytest.skip("fixture is deliberately unparsable")
+    formatted = format_source(source)
+    assert len(_arrows(formatted)) == len(_arrows(source)), "an arrow changed meaning"
+
+
+def _arrows(text: str) -> set:
+    return arrow_nodes(ast.parse(text), text)
 
 
 def test_the_corpus_is_not_empty():

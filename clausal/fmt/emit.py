@@ -15,7 +15,10 @@ Goal leaves are rendered by :func:`ast.unparse`, which is the reason the whole
 approach is cheap: Clausal terms ARE Python expressions, so the stdlib already
 knows how to write them back out.  What it does not know is Clausal's statement
 shapes -- ``head <- (...)`` and the trailing-comma fact -- so those are written
-here.
+here.  Nor does it know that ``<-`` is one token: it writes every such node as
+``< -``, which is a comparison, so an inline lambda inside a goal would decay
+into a less-than.  Emission repairs exactly the nodes the capture-time arrow
+ledger vouches for, and leaves every other ``< -`` alone.
 
 v1 does not wrap long goals.  A goal too long for the line stays too long; a
 line-width engine is a separate decision from comment survival, and mixing the
@@ -30,6 +33,7 @@ import tokenize
 
 from clausal.fmt.comments import (
     CommentTable,
+    arrow_candidates,
     clause_body,
     is_clause,
     statement_items,
@@ -81,6 +85,10 @@ class Emitter:
         trailing = self.table.trailing(node)
         if trailing and self._lines:
             self._lines[-1] += "  " + "  ".join(trailing)
+
+    def _render(self, node: ast.AST) -> str:
+        """One term, house-quoted, with its registered arrows written tight."""
+        return unparse(node, self.table.arrows)
 
     def _emit_above(self, node: ast.AST, indent: str) -> None:
         for index, group in enumerate(self.table.above(node)):
@@ -147,14 +155,15 @@ class Emitter:
             # A comma-separated series stays on one line: splitting it across
             # lines would end the statement at the first newline and turn one
             # statement into several.
-            self._write("", ", ".join(_item_text(item) for item in items) + suffix)
+            rendered = ", ".join(_item_text(item, self.table.arrows) for item in items)
+            self._write("", rendered + suffix)
         else:
-            self._write("", unparse(statement))
+            self._write("", self._render(statement))
         self._append_trailing(statement)
         self.table.mark_emitted(statement)
 
     def _emit_clause(self, clause: ast.AST, suffix: str) -> None:
-        head = unparse(clause.left)
+        head = self._render(clause.left)
         self._write("", f"{head} <- (")
         self._emit_goals(*_goals_of(clause_body(clause)), INDENT)
         self._write("", ")" + suffix)
@@ -175,7 +184,7 @@ class Emitter:
         elif isinstance(goal, ast.BoolOp) and isinstance(goal.op, ast.Or):
             self._emit_or(goal, indent, separator)
         else:
-            self._write(indent, unparse(goal) + separator)
+            self._write(indent, self._render(goal) + separator)
             self._append_trailing(goal)
 
     def _emit_group(self, group: ast.Tuple, indent: str, separator: str) -> None:
@@ -211,16 +220,56 @@ def _goals_of(body: ast.AST) -> tuple[list[ast.AST], bool]:
     return [body], False
 
 
-def unparse(node: ast.AST) -> str:
-    """``ast.unparse`` with the house quote preference applied.
+def unparse(node: ast.AST, arrows: set | frozenset = frozenset()) -> str:
+    """``ast.unparse`` with the house quote preference and the arrows restored.
 
     ``ast.unparse`` writes ``'single'``; the corpus and the surrounding Python
     are written ``"double"``.  Since the formatter re-renders every term, that
     difference would otherwise rewrite the quoting of every string in the
     language on the first run.  Strings that would need escaping to change stay
     exactly as ``ast.unparse`` wrote them.
+
+    ``arrows`` is the ledger: the nodes in it are written ``<-``, and every
+    other arrow-shaped node keeps the spaced ``< -`` that means less-than.
     """
-    return _prefer_double_quotes(ast.unparse(node))
+    return _tighten_arrows(_prefer_double_quotes(ast.unparse(node)), node, arrows)
+
+
+def _tighten_arrows(text: str, node: ast.AST, arrows: set | frozenset) -> str:
+    """Rewrite ``< -`` to ``<-`` for the ledger's nodes, and only those.
+
+    The rendered text is re-parsed to find out WHERE each arrow landed:
+    ``ast.unparse`` reports no positions, and the node's own positions describe
+    the source it came from, not the line being written.  Structure survives
+    the round trip, so the arrow-shaped nodes of the re-parse correspond one
+    for one with the node's own, and the ledger's membership carries across by
+    index.
+    """
+    candidates = arrow_candidates(node)
+    marked = [index for index, child in enumerate(candidates) if child in arrows]
+    if not marked:
+        return text
+    try:
+        reparsed = arrow_candidates(ast.parse(text))
+    except SyntaxError:  # pragma: no cover - unparse emits parsable text
+        return text
+    if len(reparsed) != len(candidates):  # pragma: no cover - defensive
+        return text
+    lines = text.splitlines(keepends=True)
+    starts, running = [], 0
+    for line in lines:
+        starts.append(running)
+        running += len(line)
+    edits = []
+    for index in marked:
+        usub = reparsed[index].comparators[0]
+        minus = starts[usub.lineno - 1] + usub.col_offset
+        opening = text.rfind("<", 0, minus)
+        if opening != -1:
+            edits.append((opening, minus + 1))
+    for opening, end in sorted(edits, reverse=True):
+        text = text[:opening] + "<- " + text[end:]
+    return text
 
 
 def _prefer_double_quotes(text: str) -> str:
@@ -259,7 +308,7 @@ def _requote(literal: str) -> str:
     return literal
 
 
-def _item_text(item: ast.AST) -> str:
+def _item_text(item: ast.AST, arrows: set | frozenset = frozenset()) -> str:
     """One item of a comma-separated statement, on one line.
 
     A clause in that position renders inline -- ``head <- (g1, g2)`` -- because
@@ -267,10 +316,10 @@ def _item_text(item: ast.AST) -> str:
     """
     body = clause_body(item)
     if body is None:
-        return unparse(item)
+        return unparse(item, arrows)
     goals, comma = _goals_of(body)
-    rendered = ", ".join(unparse(goal) for goal in goals)
-    return f"{unparse(item.left)} <- ({rendered}{',' if comma else ''})"
+    rendered = ", ".join(unparse(goal, arrows) for goal in goals)
+    return f"{unparse(item.left, arrows)} <- ({rendered}{',' if comma else ''})"
 
 
 def _fact_functor(statement: ast.AST) -> str | None:

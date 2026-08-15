@@ -20,6 +20,14 @@ Comment loss is a hard error.  :meth:`CommentTable.assert_conserved` raises
 :class:`CommentLeakError` for every captured comment that was neither emitted
 nor explicitly dropped, so a transform that forgets its comment obligations
 fails the run rather than quietly deleting a paragraph of someone's reasoning.
+
+The table carries one other thing the tree cannot hold: :attr:`CommentTable
+.arrows`, the set of ``Compare(Lt, [UnaryOp(USub, ...)])`` nodes that were
+written as ``<-`` rather than ``< -``.  Those two spellings parse identically
+and mean different things -- a clause or lambda arrow versus a less-than
+against a negation -- and the engine reads the difference from the source
+spacing.  Since that is not in the AST, it has to be captured alongside the
+comments, for the same reason and by the same means.
 """
 
 from __future__ import annotations
@@ -28,6 +36,8 @@ import ast
 import io
 import tokenize
 from dataclasses import dataclass, field
+
+from clausal.templating.term_rewriting import _is_arrow_adjacent
 
 
 class CommentLeakError(Exception):
@@ -88,6 +98,37 @@ def is_clause(expression: ast.AST) -> bool:
         and isinstance(expression.comparators[0], ast.UnaryOp)
         and isinstance(expression.comparators[0].op, ast.USub)
     )
+
+
+def arrow_candidates(node: ast.AST) -> list[ast.AST]:
+    """Every arrow-SHAPED node in ``node``'s subtree, in a stable order.
+
+    Shape is all the tree offers: ``head <- body`` and ``head < -body`` are the
+    same nodes.  The order is :func:`ast.walk`'s, which depends only on the
+    structure -- so the list taken from a node and the list taken from a
+    re-parse of that node's rendered text correspond element by element, which
+    is how emission finds where to write a tight arrow.
+    """
+    return [child for child in ast.walk(node) if is_clause(child)]
+
+
+def arrow_nodes(tree: ast.Module, source: str) -> set[ast.AST]:
+    """The arrow-shaped nodes in ``tree`` that ``source`` spells ``<-``.
+
+    The adjacency test is the engine's own :func:`_is_arrow_adjacent`, imported
+    rather than reimplemented: a formatter that disagreed with the loader about
+    what an arrow is would rewrite meaning while preserving the tree.
+    """
+    lines = source.splitlines()
+    found = set()
+    for node in arrow_candidates(tree):
+        try:
+            adjacent = _is_arrow_adjacent(node.left, node.comparators[0], lines)
+        except ValueError:  # a node with no source position: not from this text
+            continue
+        if adjacent:
+            found.add(node)
+    return found
 
 
 def statement_items(stmt: ast.AST) -> tuple[list[ast.AST], bool]:
@@ -171,6 +212,7 @@ class CommentTable:
 
     def __init__(self, module: ast.Module):
         self.module = module
+        self.arrows: set[ast.AST] = set()
         self._slots: dict[ast.AST, _Slots] = {}
         self._module_above: list[list[_Comment]] = []
         self._module_trailing: list[list[_Comment]] = []
@@ -183,6 +225,7 @@ class CommentTable:
         """Parse ``source`` and file every comment in it against a node."""
         tree = ast.parse(source)
         table = cls(tree)
+        table.arrows = arrow_nodes(tree, source)
         table._fill(source, tree)
         return tree, table
 
