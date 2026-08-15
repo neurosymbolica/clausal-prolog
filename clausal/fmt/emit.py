@@ -272,7 +272,7 @@ def _tighten_arrows(text: str, node: ast.AST, arrows: set | frozenset) -> str:
         reparsed = arrow_candidates(ast.parse(text))
     except SyntaxError as error:  # pragma: no cover - unparse emits parsable text
         raise ArrowRenderError(f"cannot re-parse rendered term: {text!r}") from error
-    if len(reparsed) != len(candidates):  # pragma: no cover - structure is stable
+    if len(reparsed) != len(candidates):
         raise ArrowRenderError(
             f"{len(candidates)} arrow-shaped nodes went in and {len(reparsed)} "
             f"came back out of {text!r}: the arrows cannot be located"

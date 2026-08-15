@@ -60,7 +60,7 @@ def test_a_comma_separated_clause_series_is_left_alone(head_fold_rules):
     src = "p(X) <- (X is 5), r(1),\n"
     result = rewrite_source(src, head_fold_rules)
     assert result.fired == []
-    assert "X is 5" in result.text
+    assert result.text == src  # byte-stable, formatting included
 
 
 def test_a_keyword_head_is_left_alone(head_fold_rules):
