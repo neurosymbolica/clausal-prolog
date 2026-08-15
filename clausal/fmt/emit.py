@@ -181,6 +181,10 @@ class Emitter:
         opener = f"-{unparse(call.func, self.table.arrows)}({leading}{', ' if leading else ''}["
         self._write("", opener)
         for i, element in enumerate(lst.elts):
+            # A commented element opens a section: a blank line above its
+            # comment block keeps the sections visually separate (hand style).
+            if i and self.table.above(element):
+                self._blank()
             self._emit_above(element, INDENT)
             separator = "," if i < len(lst.elts) - 1 else ""
             self._write(INDENT, unparse(element, self.table.arrows) + separator)

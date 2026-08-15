@@ -234,10 +234,12 @@ def test_element_comments_ride_their_elements():
            "    key_atom\n"
            "])\n")
     out = format_source(src)
+    # a commented element opens a section: blank line above its comment block
     assert out == (
         "-module(m, [\n"
         "    # ---- contract section\n"
         "    p(A),  # trailing note\n"
+        "\n"
         "    # ---- atoms section\n"
         "    key_atom\n"
         "])\n"
