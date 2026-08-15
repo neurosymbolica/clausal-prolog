@@ -292,6 +292,51 @@ def test_deeply_nested_arrow_survives():
     assert "((ID, S) <- req(ID, S))" in out
 
 
+def test_wide_fixture_dict_explodes_one_key_per_line():
+    # A hand-wrapped profile fixture must not collapse onto one enormous line
+    # (reg-d trial, 2026-08-15): past WIDTH its dict explodes.
+    src = ("q_all_fail({individual_income_y1_usd_cents: 15000000, "
+           "joint_income_y1_usd_cents: 25000000, "
+           "net_worth_excl_residence_usd_cents: 80000000}),\n")
+    assert format_source(src) == (
+        "q_all_fail({\n"
+        "    individual_income_y1_usd_cents: 15000000,\n"
+        "    joint_income_y1_usd_cents: 25000000,\n"
+        "    net_worth_excl_residence_usd_cents: 80000000\n"
+        "}),\n"
+    )
+
+
+def test_short_fixture_dict_stays_on_one_line():
+    src = "q_cert({certifications_held: [series_65]}),\n"
+    assert format_source(src) == src
+
+
+def test_wide_dict_inside_a_goal_explodes_at_goal_indent():
+    src = ("t(R) <- (\n"
+           "    assess({individual_income_y1_usd_cents: 15000000, "
+           "joint_income_y1_usd_cents: 25000000, "
+           "net_worth_excl_residence_usd_cents: 80000000}, R)\n"
+           ")\n")
+    assert format_source(src) == (
+        "t(R) <- (\n"
+        "    assess({\n"
+        "        individual_income_y1_usd_cents: 15000000,\n"
+        "        joint_income_y1_usd_cents: 25000000,\n"
+        "        net_worth_excl_residence_usd_cents: 80000000\n"
+        "    }, R)\n"
+        ")\n"
+    )
+
+
+def test_exploded_dict_is_idempotent():
+    src = ("q_all_fail({individual_income_y1_usd_cents: 15000000, "
+           "joint_income_y1_usd_cents: 25000000, "
+           "net_worth_excl_residence_usd_cents: 80000000}),\n")
+    once = format_source(src)
+    assert format_source(once) == once
+
+
 def test_arrow_lambda_is_idempotent():
     src = "t(B) <- (\n    fold(((X) <- p(X)), B)\n)\n"
     once = format_source(src)

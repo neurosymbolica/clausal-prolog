@@ -152,6 +152,10 @@ class Emitter:
             # Before the series branch: a directive parses as one UnaryOp item
             # and would otherwise take the one-line path with its list intact.
             self._emit_directive(statement, lst)
+        elif len(items) == 1:
+            # A single fact: over-wide dict displays (profile fixtures) explode
+            # one key per line; the braces keep the statement open across lines.
+            self._write_leaf(items[0], "", suffix)
         elif items:
             # A comma-separated series stays on one line: splitting it across
             # lines would end the statement at the first newline and turn one
@@ -214,8 +218,20 @@ class Emitter:
         elif isinstance(goal, ast.BoolOp) and isinstance(goal.op, ast.Or):
             self._emit_or(goal, indent, separator)
         else:
-            self._write(indent, unparse(goal, self.table.arrows) + separator)
+            self._write_leaf(goal, indent, separator)
             self._append_trailing(goal)
+
+    def _write_leaf(self, node: ast.AST, indent: str, separator: str) -> None:
+        """A fact or goal leaf: one line while it fits; past WIDTH its dict
+        displays (profile fixtures, wide-interface queries) explode one key per
+        line -- the open braces keep the term a single statement.  Anything
+        still over-wide with no dict to explode stays long (v1 no-wrap)."""
+        text = unparse(node, self.table.arrows)
+        if len(indent) + len(text) + len(separator) > WIDTH:
+            exploded = _explode_dicts(node, indent, self.table.arrows)
+            if exploded is not None:
+                text = exploded
+        self._write(indent, text + separator)
 
     def _emit_group(self, group: ast.Tuple, indent: str, separator: str) -> None:
         """A nested goal-sequence: its own parenthesised block."""
@@ -331,6 +347,39 @@ def _requote(literal: str) -> str:
             double = '"' * len(quote)
             return f"{prefix}{double}{body}{double}"
     return literal
+
+
+def _explode_dicts(
+    node: ast.AST, indent: str, arrows: set | frozenset
+) -> str | None:
+    """Render ``node`` with each dict display of two or more entries exploded
+    one key per line, or ``None`` when the node holds nothing to explode.
+    Recursion follows call arguments only -- the shape fixtures actually use."""
+    changed = False
+
+    def render(n: ast.AST, ind: str) -> str:
+        nonlocal changed
+        if (
+            isinstance(n, ast.Dict)
+            and len(n.keys) >= 2
+            and all(k is not None for k in n.keys)
+        ):
+            changed = True
+            inner = ind + INDENT
+            entries = []
+            for i, (key, value) in enumerate(zip(n.keys, n.values)):
+                separator = "," if i < len(n.keys) - 1 else ""
+                entries.append(
+                    f"{inner}{unparse(key, arrows)}: {unparse(value, arrows)}{separator}"
+                )
+            return "{\n" + "\n".join(entries) + f"\n{ind}}}"
+        if isinstance(n, ast.Call) and not n.keywords:
+            args = ", ".join(render(a, ind) for a in n.args)
+            return f"{unparse(n.func, arrows)}({args})"
+        return unparse(n, arrows)
+
+    text = render(node, indent)
+    return text if changed else None
 
 
 def _item_text(item: ast.AST, arrows: set | frozenset = frozenset()) -> str:
