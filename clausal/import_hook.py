@@ -328,6 +328,35 @@ def _preseed_py_submodules(module_items) -> None:
 CLAUSAL_BYTECODE_TAG = 7
 
 
+# ── One source file → one compilation ────────────────────────────────────────
+#
+# Maps a resolved source path to the dotted name it was first imported under.
+# A .clausal file is reachable under more than one dotted name whenever both a
+# package directory and its parent sit on sys.path (``pkg/soledom.clausal`` is
+# then both ``soledom`` and ``pkg.soledom``), and CPython's per-name module
+# cache would compile it once per name.  For a predicate module that is not
+# merely wasteful: each compilation mints its *own* PredicateMeta class for
+# every declared compound, so a term built under one name does not unify with a
+# pattern built under the other — silently, because the two terms render
+# identically and nothing raises.  So the second name aliases the first
+# module rather than compiling a parallel copy.
+#
+# Only imports that came through the finders register here; ``_load_module``
+# deliberately compiles a fresh copy each call and stays out of the registry.
+#
+# The claim is made after exec, and importlib's import lock is per *name*, so
+# two threads importing two names for one file at the same moment can still
+# both compile it.  That is the pre-existing behaviour rather than a new
+# failure mode, and a path-wide lock is not worth its cost for a race that
+# needs two dotted names for one file to first load concurrently.
+_MODULES_BY_PATH: dict[str, str] = {}
+
+
+def _canonical_source_key(path):
+    """Registry key for a source file: symlinks and ``..`` resolved away."""
+    return os.path.normcase(os.path.realpath(path))
+
+
 class _ClausalSourceLoader(SourceLoader):
     """Common file I/O for .clausal and .pl loaders.
 
@@ -336,9 +365,19 @@ class _ClausalSourceLoader(SourceLoader):
     ``_recover_module_items``.
     """
 
+    #: Set by ``_ExtensionFinder.find_spec`` to the key this load should claim
+    #: in ``_MODULES_BY_PATH``.  ``None`` for loaders built directly (e.g. by
+    #: ``_load_module``), which must not claim a file they compile privately.
+    _canonical_path = None
+
     def __init__(self, fullname, path):
         self._fullname = fullname
         self._path = path
+
+    def _register_canonical(self, module):
+        """Claim this source path for ``module`` if the finder asked us to."""
+        if self._canonical_path is not None:
+            _MODULES_BY_PATH[self._canonical_path] = module.__name__
 
     def get_filename(self, fullname):
         return self._path
@@ -435,6 +474,7 @@ class PredicateLoader(_ClausalSourceLoader):
         filename = self._path
         module.__file__ = filename
         sys.modules[module.__name__] = module
+        self._register_canonical(module)
         module_dict = module.__dict__
         module_dict.update(predicate_builtins)
 
@@ -525,6 +565,7 @@ class PrologLoader(_ClausalSourceLoader):
         filename = self._path
         module.__file__ = filename
         sys.modules[module.__name__] = module
+        self._register_canonical(module)
         module_dict = module.__dict__
         module_dict.update(predicate_builtins)
         _run_v2_pipeline(self, module, module_dict, filename,
@@ -573,10 +614,55 @@ def _load_prolog_module(fullname, path, dialect=None):
 # ── Finder ───────────────────────────────────────────────────────────────────
 
 
+class _AliasLoader:
+    """Bind an already-compiled module to a second dotted name.
+
+    ``exec_module`` swapping ``sys.modules[name]`` is the supported way to hand
+    importlib a different object than the one it created: ``_bootstrap._load``
+    re-reads ``sys.modules[spec.name]`` after ``exec_module`` returns and uses
+    *that* as the imported module (the same trick the real loaders here already
+    use).  Going through ``exec_module`` rather than ``create_module`` matters —
+    a module returned from ``create_module`` gets ``_init_module_attrs``
+    applied, which would overwrite the canonical module's ``__name__`` and
+    ``__spec__`` with the alias's.
+    """
+
+    def __init__(self, canonical_name):
+        self._canonical_name = canonical_name
+
+    def create_module(self, spec):
+        return None  # let importlib make the throwaway we are about to discard
+
+    def exec_module(self, module):
+        sys.modules[module.__name__] = sys.modules[self._canonical_name]
+
+
 class _ExtensionFinder(MetaPathFinder):
     """Base finder that searches sys.path for files with a given extension."""
     _extension: str = ""
     _loader_cls: type = None
+
+    def _spec_for(self, fullname, source_path, pkg_dir=None):
+        """Build the spec for ``fullname``, deduplicating by source path.
+
+        If this exact file is already loaded under another dotted name, alias
+        that module instead of compiling a second, term-incompatible copy.
+        """
+        key = _canonical_source_key(source_path)
+        canonical = _MODULES_BY_PATH.get(key)
+        if (canonical is not None and canonical != fullname
+                and sys.modules.get(canonical) is not None):
+            loader = _AliasLoader(canonical)
+        else:
+            # Either this file is new, or its registry entry is stale because
+            # the module was evicted from sys.modules.  Compile, and let the
+            # load claim (or reclaim) the path.
+            loader = self._loader_cls(fullname, source_path)
+            loader._canonical_path = key
+        spec = ModuleSpec(fullname, loader, origin=source_path)
+        if pkg_dir is not None:
+            spec.submodule_search_locations = [pkg_dir]
+        return spec
 
     def find_spec(self, fullname, path, target=None):
         tail = fullname.rsplit(".", 1)[-1]
@@ -618,16 +704,12 @@ class _ExtensionFinder(MetaPathFinder):
             # Flat file takes priority over a same-named package directory so
             # existing flat-module resolution is unchanged.
             if is_file:
-                loader = self._loader_cls(fullname, file_candidate)
-                return ModuleSpec(fullname, loader, origin=file_candidate)
+                return self._spec_for(fullname, file_candidate)
 
-            loader = self._loader_cls(fullname, init_candidate)
-            spec = ModuleSpec(fullname, loader, origin=init_candidate)
             # A non-None search-locations list is what marks the module a
             # *package*: importlib sets ``__path__`` from it, so a later
             # find_spec(fullname + ".sub", path=[pkg_dir]) resolves submodules.
-            spec.submodule_search_locations = [pkg_dir]
-            return spec
+            return self._spec_for(fullname, init_candidate, pkg_dir=pkg_dir)
 
 
 class PredicateFinder(_ExtensionFinder):

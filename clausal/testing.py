@@ -209,7 +209,19 @@ class FileResults:
 
 
 def load_clausal_module(path: str | Path) -> object:
-    """Load a .clausal file as a Python module and return it."""
+    """Load a .clausal file as a Python module and return it.
+
+    Every call compiles the file **afresh**, under a private
+    ``_clausal_test_<basename>`` name, so each test gets an independent
+    database.  That independence extends to declared terms: the compounds this
+    module exports are distinct classes from the ones a plain
+    ``import``/``-import_from`` of the same file produces, so a term built here
+    will not unify with a pattern built there — it simply yields no solution,
+    and the two terms render identically.  Callers that need one term universe
+    across both routes should reach the file through ``importlib`` (dotted
+    imports of one file are deduplicated by source path; see
+    ``import_hook._MODULES_BY_PATH``) rather than mixing the two.
+    """
     # Ensure import hook is installed.
     import clausal.import_hook  # noqa: F401
 
