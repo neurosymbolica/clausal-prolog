@@ -85,3 +85,41 @@ def test_fstring_use_counts_as_occurrence(tmp_path):
         warnings.simplefilter("always")
         _load(tmp_path, "h", 'show(X) <- ++print(X)\n')
     assert _singleton_warnings(rec) == []
+
+
+# ── Fix round 1: arrow-lambda parameter binding was never itself counted as
+# an occurrence, so a param used exactly once in the lambda body read as
+# count 1 (false-positive singleton) and a param never referenced in the
+# body never appeared in the Counter at all (false-negative — no warning
+# for a truly inert binding). See _build_arrow_lambda.
+
+
+def test_arrow_lambda_param_used_once_does_not_warn(tmp_path):
+    """A lambda param referenced once in its body is genuinely
+    bound-and-used (2 real occurrences: the binding + the use) — not a
+    singleton, even though the body-only count reads as 1."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        _load(tmp_path, "i", "p() <- call_goal((X <- (X > 0)), 1)\n")
+    assert _singleton_warnings(rec) == []
+
+
+def test_arrow_lambda_param_never_used_warns(tmp_path):
+    """A lambda param never referenced in its body is a genuine singleton —
+    the binding occurrence alone (count 1) must trigger the warning."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        _load(tmp_path, "j", "p() <- call_goal((X <- (True)), 1)\n")
+    msgs = [str(w.message) for w in _singleton_warnings(rec)]
+    assert any("X" in m and "singleton" in m.lower() for m in msgs)
+
+
+def test_arrow_lambda_unused_suffixed_param_used_in_body_triggers_inverse(tmp_path):
+    """A lambda param marked _UNUSED but referenced in its body occurs more
+    than once (binding + use) — the inverse lint must fire."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        _load(tmp_path, "k",
+              "p() <- call_goal((X_UNUSED <- (X_UNUSED > 0)), 1)\n")
+    msgs = [str(w.message) for w in _singleton_warnings(rec)]
+    assert any("more than once" in m for m in msgs)

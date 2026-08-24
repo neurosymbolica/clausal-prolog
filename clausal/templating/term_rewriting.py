@@ -1412,6 +1412,14 @@ class TermTransformer(NodeTransformer):
         lambda_transformer.var_occurrences = transformer.var_occurrences
 
         logic_var_params = [p for p in param_names if _is_logic_var_name(p)]
+        # A parameter's binding is itself an occurrence — without this, a
+        # param referenced exactly once in the body reads as count 1 (a
+        # false-positive singleton warning: it's genuinely bound-and-used,
+        # 2 real occurrences) and a param never referenced in the body
+        # never appears in the Counter at all (a false-negative: a truly
+        # inert binding that should warn). See ClausalSingletonWarning.
+        for param in logic_var_params:
+            transformer.var_occurrences[param] += 1
         lambda_transformer._load_names = (
             set(logic_var_params)
             | getattr(transformer, '_load_names', set())
