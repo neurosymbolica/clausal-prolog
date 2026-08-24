@@ -26,7 +26,7 @@ from __future__ import annotations
 from typing import Any, NoReturn
 
 from clausal.pythonic_ast import nodes
-from clausal.terms import PyThunk, Unknown
+from clausal.terms import PyThunk, Undefined
 from clausal.logic.variables import is_var
 from clausal.logic.compiler.terms_to_ast import (
     _is_star_list,
@@ -206,22 +206,22 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
         return Fail()
     if goal is True:
         return Sequence(ops=[])
-    # ``Unknown`` (the Kleene K3 third truth value) is *data*, never a goal
+    # ``Undefined`` (the Kleene K3 third truth value) is *data*, never a goal
     # outcome.  ``True`` compiles to the unit and ``False`` to ``Fail`` above,
-    # but there is no third success/failure mode: a bare ``Unknown`` in goal
-    # position is an author error (e.g. writing ``Unknown`` where a call was
+    # but there is no third success/failure mode: a bare ``Undefined`` in goal
+    # position is an author error (e.g. writing ``Undefined`` where a call was
     # meant).  Reject it at compile time with a clear, actionable message —
     # mirroring ``BareGoalVariableError`` — rather than silently treating it
     # as truthy/falsy or crashing in ``_not_yet``.
-    if goal is Unknown:
-        raise BareGoalUnknownError()
-    # ``Unknown`` in goal position also arrives here as an unresolved
+    if goal is Undefined:
+        raise BareGoalUndefinedError()
+    # ``Undefined`` in goal position also arrives here as an unresolved
     # ``LoadName`` node (it is an injected runtime binding, not a parser
     # literal like ``True``/``False`` which become ``BoolLiteral``s and
     # deref to Python bools above).  Reject that shape too, with the same
     # clear error, before it falls through to the generic ``_not_yet``.
-    if isinstance(goal, nodes.LoadName) and goal.name == "Unknown":
-        raise BareGoalUnknownError()
+    if isinstance(goal, nodes.LoadName) and goal.name == "Undefined":
+        raise BareGoalUndefinedError()
     # ``TupleLiteral`` reaching ``_convert`` (nested inside an
     # :class:`Or` arm, :class:`Not` operand, or :class:`IfExpr` branch
     # rather than at the conjunction top where ``_extend`` flattens
@@ -478,14 +478,22 @@ class BareGoalVariableError(Exception):
         )
 
 
-class BareGoalUnknownError(Exception):
-    """The Kleene ``Unknown`` truth value was used in goal position.
+class BareGoalUndefinedError(Exception):
+    """The Kleene ``Undefined`` truth value was used in goal position.
 
-    ``Unknown`` is *data* (the third strong-Kleene truth value), not a goal:
+    ``Undefined`` is *data* (the third strong-Kleene truth value), not a goal:
     ``True`` compiles to the unit and ``False`` to ``Fail``, but there is no
-    third goal outcome.  A bare ``Unknown`` in a clause body is therefore an
-    author error — typically ``Unknown`` written where a call/relation was
+    third goal outcome.  A bare ``Undefined`` in a clause body is therefore an
+    author error — typically ``Undefined`` written where a call/relation was
     intended.
+
+    Note the deliberate divergence from XSB/SWI, whose ``undefined/0`` *is* a
+    callable goal denoting a third outcome.  Clausal shares the spelling (the
+    lowercase ``undefined`` alias resolves to this very singleton) but not the
+    goal semantics: the engine has two goal outcomes, and an unfounded answer is
+    reported through :meth:`TableEntry.truth_value` rather than by a goal that
+    neither succeeds nor fails.  The message says so, because an author arriving
+    from XSB will have written the goal on purpose.
 
     ``predicate`` is filled in by :func:`compile_predicate_trampoline` once the
     enclosing ``functor/arity`` is known (like :class:`BareGoalVariableError`),
@@ -497,10 +505,13 @@ class BareGoalUnknownError(Exception):
         self.predicate = predicate
         location = f" in predicate {predicate}" if predicate else ""
         super().__init__(
-            f"Unknown is not a callable goal: the Kleene truth value Unknown "
-            f"appears in goal position{location}. Unknown is data (a truth "
+            f"Undefined is not a callable goal: the Kleene truth value Undefined "
+            f"appears in goal position{location}. Undefined is data (a truth "
             f"value), not a goal — it has no success/failure outcome. If a "
-            f"comparison was intended, write it explicitly (e.g. `T is Unknown`)."
+            f"comparison was intended, write it explicitly (e.g. `T is Undefined`). "
+            f"(Unlike XSB/SWI, Clausal has no `undefined/0` goal: a goal either "
+            f"succeeds or fails, and an unfounded tabled answer carries its "
+            f"Undefined truth value on the answer, not on the call.)"
         )
 
 
@@ -517,4 +528,4 @@ def _not_yet(goal: Any) -> NoReturn:
     )
 
 
-__all__ = ["terms_to_goalop", "BareGoalVariableError", "BareGoalUnknownError"]
+__all__ = ["terms_to_goalop", "BareGoalVariableError", "BareGoalUndefinedError"]

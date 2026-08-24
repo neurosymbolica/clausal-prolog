@@ -1,17 +1,24 @@
 """Tests for the truth-literal hint on undeclared-atom diagnostics.
 
 A bare undeclared atom raises the same generic five-remedy ``NameError``
-whatever its name, and for ``true`` / ``false`` / ``null`` not one of the five
-remedies is the right answer — the right answer is ``True`` / ``False`` /
-``Unknown``.  See
+whatever its name, and for the JSON/Python vocabulary of absent-or-unknown —
+``null``, ``none``, ``nil``, ``maybe`` — not one of the five remedies is the
+right answer.  The right answer is ``Undefined``.  See
 ``todo/lowercase-true-false-null-should-name-the-True-False-Unknown-literals.md``:
-in a measured authoring study, those three names were roughly a quarter of the
-undeclared-atom mentions — a model writing the Python/JSON spelling of a value
-the language already has.
+in a measured authoring study, ``true``/``false``/``null`` were roughly a
+quarter of the undeclared-atom mentions — a model writing the Python/JSON
+spelling of a value the language already has.
 
-The hint names ``Unknown`` even when the misspelling is ``true`` or ``false``,
-because titlecase is the part a reader is least likely to guess — every other
-atom in the language is lowercase, and titlecase normally reads as a variable.
+``true``, ``false`` and ``undefined`` are no longer part of that set: they are
+parse-time aliases for ``True``, ``False`` and ``Undefined`` and load without a
+diagnostic at all, which is the stronger fix for the two largest buckets.  The
+tests at the bottom of this file guard that, so a regression in the aliases
+surfaces here as well as in ``test_truth_value_aliases.py``.
+
+``unknown`` stays in the hint set on purpose: it was ``Undefined``'s name
+before the rename to the XSB/SWI spelling, so it is a name authors and older
+documents still reach for, and binding it as a second alias would restore the
+ambiguity the rename removed.
 """
 
 from __future__ import annotations
@@ -32,14 +39,11 @@ from clausal.import_hook import _load_module
 @pytest.mark.parametrize(
     "name,literal",
     [
-        ("true", "True"),
-        ("false", "False"),
-        ("null", "Unknown"),
-        ("none", "Unknown"),
-        ("nil", "Unknown"),
-        ("unknown", "Unknown"),
-        ("undefined", "Unknown"),
-        ("maybe", "Unknown"),
+        ("null", "Undefined"),
+        ("none", "Undefined"),
+        ("nil", "Undefined"),
+        ("unknown", "Undefined"),
+        ("maybe", "Undefined"),
     ],
 )
 def test_each_spelling_names_its_literal(name, literal):
@@ -51,6 +55,13 @@ def test_each_spelling_names_its_literal(name, literal):
     assert f"did you mean `{literal}`?" in joined
 
 
+@pytest.mark.parametrize("name", ["true", "false", "undefined"])
+def test_alias_spellings_are_not_hinted(name):
+    """The aliases resolve, so they must never reach the hint set — a hint for
+    a spelling that works would be actively misleading."""
+    assert truth_literal_hint_lines([name]) == []
+
+
 def test_unrelated_name_yields_no_hint():
     """The helper must stay silent for ordinary atoms, so every non-boolean
     diagnostic keeps today's wording byte-for-byte."""
@@ -59,22 +70,29 @@ def test_unrelated_name_yields_no_hint():
 
 
 def test_match_is_case_insensitive():
-    """``TRUE`` is the same mistake as ``true``.  The working spellings
-    ``True``/``False``/``Unknown`` are already bound and never reach a raise
-    site, so case-insensitivity cannot shadow a name that works."""
-    assert "did you mean `True`?" in "\n".join(truth_literal_hint_lines(["TRUE"]))
-    assert "did you mean `Unknown`?" in "\n".join(
+    """``NULL`` is the same mistake as ``null``.  The working spellings are
+    already bound and never reach a raise site, so case-insensitivity cannot
+    shadow a name that works."""
+    assert "did you mean `Undefined`?" in "\n".join(
         truth_literal_hint_lines(["NULL"])
     )
 
 
 def test_hint_names_all_three_truth_values():
-    """Even for ``true``, the hint spells out ``Unknown`` — titlecase is the
-    least guessable part of the language's vocabulary."""
-    joined = "\n".join(truth_literal_hint_lines(["true"]))
+    """The hint spells out the whole vocabulary, not just the one replacement:
+    ``Undefined`` is titlecase, the least guessable part of the language."""
+    joined = "\n".join(truth_literal_hint_lines(["null"]))
     assert "`True`" in joined
     assert "`False`" in joined
-    assert "`Unknown`" in joined
+    assert "`Undefined`" in joined
+
+
+def test_hint_mentions_the_lowercase_aliases():
+    """An author who reached for ``null`` came from JSON or Prolog; naming the
+    lowercase aliases tells them the spelling they know is available."""
+    joined = "\n".join(truth_literal_hint_lines(["null"]))
+    assert "`true`/`false`" in joined
+    assert "`undefined`" in joined
 
 
 def test_explanation_appears_once_but_every_name_gets_an_arrow():
@@ -90,26 +108,18 @@ def test_explanation_appears_once_but_every_name_gets_an_arrow():
     assert "`nil`" in joined
 
 
-def test_distinct_literals_each_get_an_arrow():
-    """`true` and `null` want different answers, so both must be named."""
-    joined = "\n".join(truth_literal_hint_lines(["true", "null"]))
-    assert joined.count("well-founded semantics") == 1
-    assert "did you mean `True`" in joined
-    assert "did you mean `Unknown`" in joined
-
-
 def test_single_name_arrow_stays_unqualified():
     """The overwhelmingly common case is one bad name.  Its arrow must stay
-    the bare `-> did you mean \\`True\\`?` — no per-name qualifier noise."""
-    lines = truth_literal_hint_lines(["true"])
-    assert lines[-1].strip() == "-> did you mean `True`?"
+    the bare `-> did you mean \\`Undefined\\`?` — no per-name qualifier noise."""
+    lines = truth_literal_hint_lines(["null"])
+    assert lines[-1].strip() == "-> did you mean `Undefined`?"
 
 
 def test_only_matching_names_are_hinted():
-    """Given a mix, the helper hints the boolean spellings and says nothing
+    """Given a mix, the helper hints the truth-value spellings and says nothing
     about the rest — the caller still appends its own remedy list."""
-    joined = "\n".join(truth_literal_hint_lines(["foo_bar", "true"]))
-    assert "`true`" in joined
+    joined = "\n".join(truth_literal_hint_lines(["foo_bar", "null"]))
+    assert "`null`" in joined
     assert "foo_bar" not in joined
 
 
@@ -135,34 +145,38 @@ def _load_inline_clausal(name: str, source: str):
         os.unlink(path)
 
 
-def test_bare_lowercase_true_names_the_True_literal():
-    """The reproduction from the todo: bare ``true`` in a strict file listed
-    five remedies, none of them the right answer."""
-    with pytest.raises(NameError) as exc_info:
-        _load_inline_clausal(
-            "_truth_literal_true_test", "Flag(true),\n"
-        )
-    msg = str(exc_info.value)
-    assert "did you mean `True`?" in msg
-    assert "`Unknown`" in msg
+def test_bare_lowercase_true_loads():
+    """The reproduction from the todo, inverted.  ``true`` used to list five
+    remedies none of which was the right answer; it is now an alias and the
+    file simply loads."""
+    mod = _load_inline_clausal("_truth_alias_true_test", "Flag(true),\n")
+    assert mod is not None
 
 
-def test_bare_null_names_the_Unknown_literal():
+def test_bare_null_names_the_Undefined_literal():
     with pytest.raises(NameError) as exc_info:
         _load_inline_clausal("_truth_literal_null_test", "Tri(null),\n")
-    assert "did you mean `Unknown`?" in str(exc_info.value)
+    assert "did you mean `Undefined`?" in str(exc_info.value)
+
+
+def test_bare_unknown_still_names_the_Undefined_literal():
+    """The pre-rename name is a diagnostic, not an alias — it must land the
+    author on ``Undefined`` rather than silently working."""
+    with pytest.raises(NameError) as exc_info:
+        _load_inline_clausal("_truth_literal_unknown_test", "Tri(unknown),\n")
+    assert "did you mean `Undefined`?" in str(exc_info.value)
 
 
 def test_mixed_undeclared_keeps_both_hint_and_remedies():
-    """When only some undeclared names are boolean spellings, the author still
-    needs the five remedies to fix the others."""
+    """When only some undeclared names are truth-value spellings, the author
+    still needs the five remedies to fix the others."""
     with pytest.raises(NameError) as exc_info:
         _load_inline_clausal(
             "_truth_literal_mixed_test",
-            "Flag(true),\nColor(truthlit_mixed_beta),\n",
+            "Flag(null),\nColor(truthlit_mixed_beta),\n",
         )
     msg = str(exc_info.value)
-    assert "did you mean `True`?" in msg
+    assert "did you mean `Undefined`?" in msg
     assert "truthlit_mixed_beta" in msg
     assert "bare atom references must be one of:" in msg
     # All five remedies, not a sample: the author still has to fix the
@@ -190,13 +204,20 @@ def test_ordinary_undeclared_atom_message_is_unchanged():
 # ── Call site 2: the dict-key path ─────────────────────────────────────────
 
 
-def test_dict_key_true_names_the_True_literal():
-    """``{true: 1}`` raises from a different site with its own message and
-    deserves the same steer."""
+def test_dict_key_true_loads():
+    """``{true: 1}`` used to raise from its own site with its own message.  The
+    alias is resolved in key position too, so it now loads."""
+    mod = _load_inline_clausal(
+        "_truth_alias_dictkey_test", "Row({true: 1}),\n"
+    )
+    assert mod is not None
+
+
+def test_dict_key_null_names_the_Undefined_literal():
+    """The dict-key raise site keeps its own steer for the names that are still
+    mistakes."""
     with pytest.raises(NameError) as exc_info:
         _load_inline_clausal(
-            "_truth_literal_dictkey_test",
-            "Row({true: 1}),\n",
+            "_truth_literal_dictkey_null_test", "Row({null: 1}),\n"
         )
-    msg = str(exc_info.value)
-    assert "did you mean `True`?" in msg
+    assert "did you mean `Undefined`?" in str(exc_info.value)

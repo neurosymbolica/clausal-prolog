@@ -9,8 +9,8 @@ Covers the acceptance criteria of todo/kleene-nary-connectives-and4-or4.md:
   the established pattern in TestMemberdT).
 
 The module is loaded ONCE per test class and reused. Truth values are the
-Python ``True``/``False`` and the ``Unknown`` builtin singleton (from
-``clausal.terms``); ``Unknown`` carries process-wide identity, so queries just
+Python ``True``/``False`` and the ``Undefined`` builtin singleton (from
+``clausal.terms``); ``Undefined`` carries process-wide identity, so queries just
 reference the imported singleton — no module-scoped-atom dance.
 """
 
@@ -18,7 +18,7 @@ import os
 
 import pytest
 
-from clausal.terms import Var, Unknown
+from clausal.terms import Var, Undefined
 
 
 def _load_stdlib_kleene():
@@ -50,9 +50,9 @@ class _KleeneBase:
 
     @classmethod
     def _unknown(cls):
-        # The Unknown builtin is a process-wide singleton (clausal.terms.Unknown);
+        # The Undefined builtin is a process-wide singleton (clausal.terms.Undefined);
         # the clauses in kleene.clausal unify against this same object.
-        return Unknown
+        return Undefined
 
     @classmethod
     def _solve(cls, name, args):
@@ -251,10 +251,10 @@ class TestExports(_KleeneBase):
     """Module export surface."""
 
     def test_unknown_is_builtin_singleton(self):
-        # `Unknown` is now the process-wide builtin singleton, not a
+        # `Undefined` is now the process-wide builtin singleton, not a
         # module-scoped atom: it is NOT an attribute of the loaded module, and
-        # the imported `Unknown` is the object the clauses unify against.
-        from clausal.terms import Unknown as _Unknown
+        # the imported `Undefined` is the object the clauses unify against.
+        from clausal.terms import Undefined as _Unknown
         U = self._unknown()
         assert U is _Unknown
         assert not hasattr(self._module(), "unknown")

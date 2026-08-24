@@ -42,7 +42,7 @@ from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
-from clausal.terms import Compound
+from clausal.terms import Compound, Undefined
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -671,8 +671,10 @@ def query_wfs(
     """Solve goal and return results with WFS truth annotations.
 
     Like ``query()``, but each result dict includes a ``"_truth"`` key
-    whose value is ``True`` (unconditional), ``"undefined"`` (unfounded),
-    or omitted for non-tabled results (always ``True``).
+    whose value is ``True`` (unconditional), ``Undefined`` (unfounded), or
+    ``True`` for non-tabled results.  The third value is the strong-Kleene
+    ``Undefined`` singleton — the same one ``.clausal`` code writes — so a
+    WFS-undefined answer can flow straight into Kleene-aware code.
 
     Returns a list (not iterator) since WFS resolution requires completing
     all SLG computation before truth values are determined.
@@ -684,7 +686,7 @@ def query_wfs(
     # A04-F004: annotate each result with its REAL WFS truth value read from the
     # tabled entry's conditions, instead of hardcoding True. A single tabled-goal
     # query maps each result to a stored answer (by normalized value) and uses
-    # TableEntry.truth_value(i) → True | "undefined". Non-tabled goals stay True
+    # TableEntry.truth_value(i) → True | Undefined. Non-tabled goals stay True
     # (documented). Composite/conjunctive goals are not decomposed here and keep
     # True (a min-truth semantics over tabled conjuncts is future work).
     entry, goal_args = _tabled_entry_for_goal(goal, module, trail)

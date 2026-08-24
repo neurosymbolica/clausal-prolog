@@ -121,7 +121,7 @@ The builtins `abolish_table/2` and `abolish_all_tables/0` are also available fro
         _current_delays: set          # accumulates DelayedNegation during current derivation
     ```
 
-    `conditions[i]` is `frozenset()` for unconditional answers, a non-empty frozenset for conditional (WFS undefined) answers, or the `_FAILED` sentinel for invalidated answers. `truth_value(i)` returns `True`, `"undefined"`, or `False` accordingly.
+    `conditions[i]` is `frozenset()` for unconditional answers, a non-empty frozenset for conditional (WFS undefined) answers, or the `_FAILED` sentinel for invalidated answers. `truth_value(i)` returns `True`, `Undefined`, or `False` accordingly.
 
     ### SuspendedConsumer
 
@@ -293,7 +293,7 @@ win(X) <- (move(X, Y), not win(Y))
 
 ### Truth value inspection
 
-`TableEntry.truth_value(i)` returns `True`, `False`, or `"undefined"` for the i-th answer based on its conditions. The [`query_wfs()`](wfs.md#the-query_wfs-api) function in `clausal.logic.solve` returns results annotated with `"_truth"` keys.
+`TableEntry.truth_value(i)` returns `True`, `False`, or the strong-Kleene `Undefined` singleton for the i-th answer based on its conditions. The [`query_wfs()`](wfs.md#the-query_wfs-api) function in `clausal.logic.solve` returns results annotated with `"_truth"` keys.
 
 ### Compiler integration
 

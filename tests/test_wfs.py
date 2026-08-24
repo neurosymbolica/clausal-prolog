@@ -23,7 +23,7 @@ from clausal.logic.database import Database, Clause, Module, head_key
 from clausal.logic.trampoline import StepGenerator, DONE, solutions
 from clausal.logic.solve import call, query, query_wfs
 from clausal.logic.predicate import PredicateMeta
-from clausal.terms import Compound
+from clausal.terms import Compound, Undefined
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -96,7 +96,7 @@ class TestTableEntryConditions:
         e = TableEntry()
         dn = DelayedNegation("p", 1, (1,), (1,))
         e.add_answer((1,), frozenset({dn}))
-        assert e.truth_value(0) == "undefined"
+        assert e.truth_value(0) is Undefined
 
     def test_truth_value_failed(self):
         # nv
@@ -398,7 +398,7 @@ class TestWfsSymmetricWin:
 
         move(1,2), move(2,1): win(X) <- move(X,Y), not win(Y)
         win(1) depends on not win(2), and win(2) depends on not win(1).
-        Both are unfounded — WFS assigns 'undefined'.
+        Both are unfounded — WFS assigns ``Undefined``.
         """
         # nv
         m = _load("wfs_win")
@@ -422,8 +422,8 @@ class TestWfsSymmetricWin:
             assert entry.status == "complete"
             for i in range(len(entry.answers)):
                 tv = entry.truth_value(i)
-                # in_ the symmetric case, answers should be undefined or not exist
-                assert tv in ("undefined", False), f"Expected undefined or false, got {tv}"
+                # in_ the symmetric case, answers should be Undefined or not exist
+                assert tv is Undefined or tv is False, f"Expected Undefined or false, got {tv}"
 
 
 # ── WFS integration: asymmetric win/move ────────────────────────────────────

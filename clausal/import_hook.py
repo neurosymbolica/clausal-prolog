@@ -252,7 +252,7 @@ predicate_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__a
 #
 # The runtime *value* bindings injected into every predicate module —
 # ``$ast``, ``PredicateMeta``, ``Var``, ``Compound``, ``DictTerm``, ``SetTerm``,
-# ``Trail``, ``PyThunk``, ``FStringThunk``, ``Quantity``, ``Unknown``,
+# ``Trail``, ``PyThunk``, ``FStringThunk``, ``Quantity``, ``Undefined``,
 # ``BoolEq``/``BoolImpl``, and the ``$``-prefixed engine helpers
 # ``$walk``/``$deref``/``$unify`` — live in a SINGLE source of truth,
 # ``INJECTED_RUNTIME_BUILTINS`` in clausal/logic/compiler/predicate.py.  The
@@ -266,7 +266,7 @@ predicate_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__a
 # helpers walk/deref/unify are pure internals referenced under the ``$``-prefix;
 # injecting them under their PUBLIC names reserved those names — a user predicate
 # ``walk/2``/``deref/2``/``unify/2`` failed at load — so they are ``$``-prefixed
-# only, freeing the public names for user code.  ``Unknown`` is the Kleene (K3)
+# only, freeing the public names for user code.  ``Undefined`` is the Kleene (K3)
 # third truth value, a real binding (not a minted atom) so it resolves in every
 # module including ``-strict_atoms`` ones with process-wide identity.
 from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
@@ -836,7 +836,7 @@ _simple_ast_builtins = {name: getattr(simple_ast, name) for name in simple_ast._
 # Inject the runtime types so that functor class code (which calls Var()) and
 # compiled goals work in IPython cells.  Same single source of truth as
 # ``predicate_builtins`` above (INJECTED_RUNTIME_BUILTINS): $ast, PredicateMeta,
-# Var/Compound/DictTerm/SetTerm, Trail, PyThunk/FStringThunk, Quantity, Unknown,
+# Var/Compound/DictTerm/SetTerm, Trail, PyThunk/FStringThunk, Quantity, Undefined,
 # BoolEq/BoolImpl, and the $-prefixed engine helpers ($walk/$deref/$unify).
 _simple_ast_builtins.update(INJECTED_RUNTIME_BUILTINS)
 _simple_ast_builtins["$unterminated_fact_error"] = _unterminated_fact_error

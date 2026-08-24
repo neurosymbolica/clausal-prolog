@@ -1,8 +1,8 @@
 # Strong-Kleene n-ary connectives (K3) — stdlib module
 #
-# Truth values: True, False, and the `Unknown` builtin constant — a process-wide
+# Truth values: True, False, and the `Undefined` builtin constant — a process-wide
 # singleton injected into every module by the import hook (like True/False), so
-# callers reference `Unknown` directly with no import or export. It carries
+# callers reference `Undefined` directly with no import or export. It carries
 # process-wide identity, so importers/tests unify on the SAME object without the
 # module-scoped-atom dance the earlier `unknown` atom required.
 #
@@ -11,7 +11,7 @@
 #   and4(A, B, C, R)  — R = A ∧ B ∧ C
 #   ... up to and9/9 / or9/9 (8 operands).
 # This is strong-Kleene three-valued logic, NOT Belnap four-valued logic: the
-# value set stays {True, False, Unknown}; only the operand count grows.
+# value set stays {True, False, Undefined}; only the operand count grows.
 #
 # Semantics notes:
 # - Fully relational: any argument may be unbound; backward queries enumerate.
@@ -32,7 +32,7 @@
 # the functor class is pre-registered with the correct arity; the arg names are
 # placeholders (the real head-var names come from the clauses). Bare `pred`
 # names would be minted as zero-arity atoms and collide with the multi-arg
-# clauses. `Unknown` is a builtin (not module-scoped), so it is NOT exported.
+# clauses. `Undefined` is a builtin (not module-scoped), so it is NOT exported.
 -module(kleene, [
     not3(A, R),
     and3(A, B, R), and4(A, B, C, R), and5(A, B, C, D, R),
@@ -47,29 +47,29 @@
 # ── Negation (3 rows) ───────────────────────────────────────────────────────
 not3(True, False),
 not3(False, True),
-not3(Unknown, Unknown),
+not3(Undefined, Undefined),
 
 # ── Conjunction: binary ground truth table (9 rows, disjoint) ───────────────
 and3(True,    True,    True),
 and3(True,    False,   False),
-and3(True,    Unknown, Unknown),
+and3(True,    Undefined, Undefined),
 and3(False,   True,    False),
 and3(False,   False,   False),
-and3(False,   Unknown, False),
-and3(Unknown, True,    Unknown),
-and3(Unknown, False,   False),
-and3(Unknown, Unknown, Unknown),
+and3(False,   Undefined, False),
+and3(Undefined, True,    Undefined),
+and3(Undefined, False,   False),
+and3(Undefined, Undefined, Undefined),
 
 # ── Disjunction: binary ground truth table (9 rows, disjoint) ───────────────
 or3(True,    True,    True),
 or3(True,    False,   True),
-or3(True,    Unknown, True),
+or3(True,    Undefined, True),
 or3(False,   True,    True),
 or3(False,   False,   False),
-or3(False,   Unknown, Unknown),
-or3(Unknown, True,    True),
-or3(Unknown, False,   Unknown),
-or3(Unknown, Unknown, Unknown),
+or3(False,   Undefined, Undefined),
+or3(Undefined, True,    True),
+or3(Undefined, False,   Undefined),
+or3(Undefined, Undefined, Undefined),
 
 # ── Fixed arities 4..9: fold binary connective left-to-right ────────────────
 and4(_a, _b, _c, _r) <- (

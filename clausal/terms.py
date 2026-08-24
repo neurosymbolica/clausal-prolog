@@ -2154,23 +2154,30 @@ def cons_to_list(term: object) -> list:
     return result
 
 
-# ── Kleene truth value: Unknown ───────────────────────────────────────────────
+# ── Kleene truth value: Undefined ─────────────────────────────────────────────
 
-class _UnknownType:
+class _UndefinedType:
     """The third strong-Kleene (K3) truth value, sitting beside ``True``/``False``.
 
-    A process-wide singleton (module-level name :data:`Unknown`), injected into
+    A process-wide singleton (module-level name :data:`Undefined`), injected into
     every predicate module by ``clausal.import_hook`` — so ``.clausal`` code can
-    reference ``Unknown`` with no declaration, import, or export, exactly as it
+    reference ``Undefined`` with no declaration, import, or export, exactly as it
     references ``True``/``False``.  It is an ordinary ground constant: unification
     treats it by identity (there is only ever one instance), and it is hashable
     (default identity hash) so it can key clause indexes.
 
-    ``bool(Unknown)`` raises ``TypeError`` deliberately — ``Unknown`` has no
-    Python truth value, so an accidental ``if Unknown:`` / ``while Unknown:`` is
-    caught loudly rather than silently treated as truthy.  (Contrast ``None``,
-    which means "no value / absent"; ``Unknown`` means "truth value unknown" —
-    the two are deliberately distinct and never unify.)
+    The name follows XSB/SWI, whose well-founded-semantics vocabulary calls the
+    third value ``undefined``; ``.clausal`` source accepts the lowercase
+    ``undefined`` as an alias, resolved to this same singleton at parse time.
+    This is also the value :meth:`TableEntry.truth_value` reports for an
+    unfounded answer — WFS's third value and K3's are the same lattice element,
+    so the language spells them the same way.
+
+    ``bool(Undefined)`` raises ``TypeError`` deliberately — ``Undefined`` has no
+    Python truth value, so an accidental ``if Undefined:`` / ``while Undefined:``
+    is caught loudly rather than silently treated as truthy.  (Contrast ``None``,
+    which means "no value / absent"; ``Undefined`` means "truth value neither
+    true nor false" — the two are deliberately distinct and never unify.)
 
     Copy/deepcopy/pickle all round-trip back to the same singleton via
     ``__reduce__`` so trailing, ``copy_term``, or serialisation can never mint a
@@ -2181,37 +2188,38 @@ class _UnknownType:
 
     def __new__(cls):
         # Return the existing singleton if it is already built, so that even a
-        # direct ``_UnknownType()`` call (or an unpickle that bypasses
+        # direct ``_UndefinedType()`` call (or an unpickle that bypasses
         # ``__reduce__``) yields the one instance.
-        existing = globals().get("Unknown")
+        existing = globals().get("Undefined")
         if existing is not None:
             return existing
         return super().__new__(cls)
 
     def __repr__(self) -> str:
-        return "Unknown"
+        return "Undefined"
 
     __str__ = __repr__
 
     def __bool__(self):
         raise TypeError(
-            "Unknown has no Python truth value (it is the third strong-Kleene "
-            "truth value). Compare it explicitly (e.g. `T is Unknown`) instead "
+            "Undefined has no Python truth value (it is the third strong-Kleene "
+            "truth value). Compare it explicitly (e.g. `T is Undefined`) instead "
             "of using it in a Python if/while."
         )
 
     def __reduce__(self):
-        # Pickle/copy/deepcopy resolve to the module-level ``Unknown`` name,
+        # Pickle/copy/deepcopy resolve to the module-level ``Undefined`` name,
         # preserving the singleton across process/serialisation boundaries.
-        return (_get_unknown, ())
+        return (_get_undefined, ())
 
 
-def _get_unknown() -> "_UnknownType":
-    """Module-level factory used by ``_UnknownType.__reduce__`` (picklable)."""
-    return Unknown
+def _get_undefined() -> "_UndefinedType":
+    """Module-level factory used by ``_UndefinedType.__reduce__`` (picklable)."""
+    return Undefined
 
 
-Unknown = _UnknownType()
+
+Undefined = _UndefinedType()
 
 
 # ── Deferred Python expression thunk ──────────────────────────────────────────
@@ -2712,7 +2720,7 @@ __all__ = [
     "Quantity",
     "UnitsMismatch",
     # Kleene (K3) third truth value
-    "Unknown",
+    "Undefined",
     # Partial-term error (catchable by callers of partial Seg* ops)
     "PartialTermError",
     # Rendering style

@@ -7,7 +7,7 @@ Dict builtins:
   dict_values/2     — extract value list (in key order)
   dict_pairs/2      — DictTerm ↔ list of (Key: Value) pairs
   dict_get/3        — dict_get(Key, Dict, Value) — semidet lookup
-  tri_get/3         — tri_get(Dict, Key, Value) — Kleene read (absent → Unknown)
+  tri_get/3         — tri_get(Dict, Key, Value) — Kleene read (absent → Undefined)
   dict_put/4        — dict_put(Key, Value, Old, New) — functional update
   dict_put_pairs/3   — dict_put(Pairs, Old, New) — bulk update from pair list
   dict_remove/3     — dict_remove(Key, Old, New) — remove key
@@ -382,22 +382,22 @@ def _tri_get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail)
     """tri_get(Dict, Key, Value) — three-valued (Kleene) profile read.
 
     Binds ``Value`` to ``Dict[Key]`` if the key is present, else to the Kleene
-    ``Unknown`` builtin (the third truth value).  This replaces the pervasive
+    ``Undefined`` builtin (the third truth value).  This replaces the pervasive
     ``tri_<key>(Profile, T)`` reader boilerplate — 2 clauses per key — in the
     deontic corpus domains (absent profile key → ``unknown``).
 
     Edge cases mirror ``get/3`` exactly: soft (never throws) — a non-ground key,
     a non-hashable key, or a non-dict ``Dict`` simply **fails**.  The ONLY
     behavioural difference from ``get/3`` is the absent-key branch: ``get/3``
-    fails, ``tri_get/3`` binds ``Unknown``.  Deterministic (one solution when it
+    fails, ``tri_get/3`` binds ``Undefined``.  Deterministic (one solution when it
     succeeds).
     """
-    from clausal.terms import Unknown  # noqa: PLC0415
+    from clausal.terms import Undefined  # noqa: PLC0415
     key_val = deref(key)
     d_val = deref(d)
     if (not is_var(key_val) and _is_hashable(key_val)
             and isinstance(d_val, DictTerm)):
-        result = d_val[key_val] if key_val in d_val else Unknown
+        result = d_val[key_val] if key_val in d_val else Undefined
         mark = trail.mark()
         if unify(value, result, trail):
             yield (_proceed, None)

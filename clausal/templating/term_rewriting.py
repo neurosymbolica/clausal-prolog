@@ -347,6 +347,73 @@ def _check_hidden_arrow(node, source_lines=None):
 # ─── Logic variable name helper ───────────────────────────────────────────────
 
 
+# ── Truth-value spelling aliases ────────────────────────────────────────────
+#
+# ISO Prolog spells the booleans ``true``/``false``; XSB and SWI spell the
+# well-founded third value ``undefined``.  Clausal borrows Python's parser, so
+# its canonical spellings are ``True``/``False`` (which arrive as ``Constant``
+# and never reach name resolution) and ``Undefined`` (an injected runtime
+# binding arriving as a ``Name``).  An author coming from Prolog writes the
+# lowercase form and, under strict atoms, meets an undeclared-atom error whose
+# five remedies do not include the right one.
+#
+# Folding the aliases here — at the single point where a bare ``Name`` is
+# classified — makes them indistinguishable from the canonical spelling in
+# everything downstream: the same node, the same term, the same index key, the
+# same Prolog output.  Nothing else in the compiler learns a second spelling.
+#
+# The cost is that ``true``, ``false`` and ``undefined`` are no longer available
+# as user atom or predicate names.  The corpus uses none of the three.
+#
+# ``unknown`` is deliberately absent: it was ``Undefined``'s name before the
+# rename and binding it too would restore the two-names-for-one-value ambiguity
+# the rename removed.  ``clausal.atom_diagnostics`` catches it instead.
+_TRUTH_ALIASES = {
+    "true": "True",
+    "false": "False",
+    "undefined": "Undefined",
+}
+
+_BOOL_ALIAS_VALUES = {"True": True, "False": False}
+
+
+def _reserved_truth_decl_name(item) -> str | None:
+    """The truth-value spelling *item* tries to declare, or ``None``.
+
+    Declaration lists are parsed straight off the Python AST, before the alias
+    fold, so a truth value reaches here in one of two shapes: ``True``/``False``
+    as a ``Constant`` (Python parsed them as literals) and
+    ``undefined``/``Undefined`` as a ``Name``.  Both the bare form
+    (``-private([True])``) and the arity form (``-private([True(X)])``) count.
+
+    Without this, a bool-valued entry matched neither the ``Name`` branch nor
+    the ``Call``-of-``Name`` branch and fell through the "other item shapes"
+    fallthrough, declaring nothing at all and saying nothing about it — the
+    exact silent no-op A10-F012 removed for malformed ``-private`` lists.
+    """
+    if isinstance(item, Call):
+        item = item.func
+    if isinstance(item, Constant) and isinstance(item.value, bool):
+        return "True" if item.value else "False"
+    if isinstance(item, Name) and item.id in _RESERVED_TRUTH_DECL_NAMES:
+        return item.id
+    return None
+
+
+_RESERVED_TRUTH_DECL_NAMES = {"true", "false", "undefined", "Undefined"}
+
+
+def _raise_reserved_truth_decl(name: str, directive: str) -> None:
+    raise SyntaxError(
+        f"{directive} cannot declare `{name}`: the three truth values "
+        f"`True`, `False` and `Undefined` (aliases `true`, `false`, "
+        f"`undefined`) are builtins, not predicates or atoms. Every "
+        f"reference to that name resolves to the value, so the declared "
+        f"predicate could never be called. Rename it."
+    )
+
+
+
 def _is_logic_var_name(identifier: str) -> bool:
     """Return True if ``identifier`` should be treated as a logic variable.
 
@@ -1174,6 +1241,16 @@ class TermTransformer(NodeTransformer):
         (left to their existing behaviour), and computed expressions — is
         transformed as before.
         """
+        # A truth-value alias in key position resolves to whatever its canonical
+        # spelling resolves to, or ``{true: 1}`` and ``{True: 1}`` would build
+        # dicts that do not unify.  ``true``/``false`` are ``Constant`` keys like
+        # the literals they alias; ``undefined`` is rewritten to ``Undefined``
+        # and then takes the ordinary key path below, unchanged.
+        if isinstance(key, Name) and key.id in _TRUTH_ALIASES:
+            aliased = _TRUTH_ALIASES[key.id]
+            if aliased in _BOOL_ALIAS_VALUES:
+                return replace(Constant(value=_BOOL_ALIAS_VALUES[aliased]), key)
+            key = replace(Name(id=aliased, ctx=key.ctx), key)
         if (
             isinstance(key, Name)
             and key.id != "_"
@@ -1363,6 +1440,16 @@ class TermTransformer(NodeTransformer):
 
     def visit_Name(transformer, name):
         identifier = name.id
+        # ISO/XSB truth-value spellings.  ``true``/``false`` become the very
+        # ``Constant`` a literal ``True``/``False`` produces, so goal position
+        # (unit / ``Fail``), head position, indexing and the Prolog bridges all
+        # behave identically with no second spelling to teach them.
+        # ``undefined`` folds into ``Undefined`` and then takes the ordinary
+        # injected-builtin path below.  See ``_TRUTH_ALIASES``.
+        if identifier in _TRUTH_ALIASES:
+            identifier = _TRUTH_ALIASES[identifier]
+            if identifier in _BOOL_ALIAS_VALUES:
+                return replace(Constant(value=_BOOL_ALIAS_VALUES[identifier]), name)
         # Anonymous variable: each _ is a fresh Var, never reused.
         if identifier == "_":
             return replace(
@@ -3901,6 +3988,9 @@ class EmbedTransformer(NodeTransformer):
         # args[1] should be the export list: ast.List of Call / Name nodes.
         if len(args) == 2:
             for export in args[1].elts:
+                reserved = _reserved_truth_decl_name(export)
+                if reserved is not None:
+                    _raise_reserved_truth_decl(reserved, "-module")
                 if isinstance(export, Name):
                     # Bare atom: generate zero-arity PredicateMeta class
                     transformer._atoms.add(export.id)
@@ -3960,6 +4050,9 @@ class EmbedTransformer(NodeTransformer):
                 "-private([atom, pred(A, B), ...])")
         export_list = args[0]
         for item in export_list.elts:
+            reserved = _reserved_truth_decl_name(item)
+            if reserved is not None:
+                _raise_reserved_truth_decl(reserved, "-private")
             if isinstance(item, Name):
                 # Bare atom: generate zero-arity PredicateMeta class
                 transformer._atoms.add(item.id)

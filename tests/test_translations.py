@@ -161,9 +161,9 @@ class TestDisplayLocale:
 
     def test_no_translation_passthrough(self):
         # nv
-        t = Compound("Unknown", (1, 2))
+        t = Compound("Undefined", (1, 2))
         s = term_str(t, TermStyle(locale="th"))
-        assert "Unknown" in s
+        assert "Undefined" in s
 
     def test_atom_in_compound_arg(self):
         """Atom names inside compound args are NOT translated (strings are data)."""

@@ -149,6 +149,11 @@ def compile_module(
     logic_module = LogicModule(module_name, module_dict=module_dict)
     db = logic_module.db
 
+    # ── Step 0-: Reserved truth-value names ───────────────────────────────
+    #    Runs before everything so the diagnostic names the real problem
+    #    rather than whatever incidental error the name causes downstream.
+    _reject_reserved_truth_names(module_items, predicate_nodes, module_name)
+
     # ── Step 0: Process imports (before term expansion, so imported TE
     #    rules are available) ──────────────────────────────────────────────
     _process_imports(module_items, module_dict)
@@ -396,6 +401,85 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
             # Store the top-level name (e.g., "foo" for "foo.bar.baz").
             top_name = item.module.split(".")[0]
             module_dict[top_name] = mod
+
+
+# The six spellings of the three truth values.  ``True``/``False`` are Python
+# constants and ``Undefined`` is an injected runtime binding; ``true``/``false``/
+# ``undefined`` are their parse-time aliases (``term_rewriting._TRUTH_ALIASES``).
+# All six denote values, never predicates.
+_RESERVED_TRUTH_NAMES = {
+    "True": "True", "true": "True",
+    "False": "False", "false": "False",
+    "Undefined": "Undefined", "undefined": "Undefined",
+}
+
+
+def _reject_reserved_truth_names(
+    module_items: list, predicate_nodes: list, module_name: str
+) -> None:
+    """Refuse to define a predicate or atom named after a truth value.
+
+    Value position already resolves these names to the literal — that is what
+    makes them builtins — but *definition* position had no guard, so a clause
+    head ``true(1),`` quietly minted a ``true/1`` predicate and a declaration
+    ``-private([True(X)])`` quietly minted a class.  Neither is reachable by
+    name afterwards (every reference site resolves to the value instead), so
+    the author gets a predicate they cannot call.
+
+    Where a definition did fail before, it failed by accident and said so
+    badly: ``True(1),`` raised ``TypeError: 'bool' object is not callable`` from
+    deep in the generated code, naming neither the clause nor the rule.  Both
+    spellings are therefore checked, not just the aliases — the canonical ones
+    were never really definable either.
+
+    Raises ``NameError`` listing every offending name at once, so an author
+    fixing a file with several does not discover them one re-run at a time.
+    """
+    offenders: list[tuple[str, str]] = []   # (name, where)
+    seen: set[tuple[str, str]] = set()
+
+    def note(name, where):
+        if name in _RESERVED_TRUTH_NAMES and (name, where) not in seen:
+            seen.add((name, where))
+            offenders.append((name, where))
+
+    for pred_node in predicate_nodes:
+        functor, arity = head_key(pred_node.head)
+        note(functor, f"clause head {functor}/{arity}")
+
+    for item in module_items:
+        if isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
+            entries = (
+                item.exports if isinstance(item, ModuleDeclItem) else item.items
+            )
+            kind = "-module" if isinstance(item, ModuleDeclItem) else "-private"
+            for entry in entries:
+                name = entry[0] if isinstance(entry, tuple) else entry
+                if isinstance(name, str):
+                    note(name, f"{kind} declaration")
+        elif isinstance(item, DirectiveItem):
+            for functor, arity in item.specs:
+                note(functor, f"-{item.name}({functor}/{arity})")
+
+    if not offenders:
+        return
+
+    lines = [
+        f"reserved truth value name(s) defined in {module_name}:",
+    ]
+    lines += [
+        f"  `{name}` in {where} — `{_RESERVED_TRUTH_NAMES[name]}` is a builtin "
+        f"truth value, not a predicate"
+        for name, where in offenders
+    ]
+    lines += [
+        "",
+        "  The three truth values are `True`, `False` and `Undefined` (aliases:",
+        "  `true`, `false`, `undefined`).  All six spellings resolve to the value",
+        "  wherever they appear, so a predicate or atom of that name could never",
+        "  be referenced.  Rename the predicate.",
+    ]
+    raise NameError("\n".join(lines))
 
 
 def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) -> None:

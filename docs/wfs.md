@@ -1,6 +1,6 @@
 # Well-Founded Semantics (WFS)
 
-Well-Founded Semantics provides a sound three-valued treatment of negation for [tabled](tabling.md) predicates. Unlike simple negation-as-failure (which can loop or give wrong answers with recursive negation), WFS assigns each atom a truth value of **true**, **false**, or **undefined**.
+Well-Founded Semantics provides a sound three-valued treatment of negation for [tabled](tabling.md) predicates. Unlike simple negation-as-failure (which can loop or give wrong answers with recursive negation), WFS assigns each atom a truth value of **true**, **false**, or **unknown** — and that third value is exactly the strong-Kleene `Undefined` literal the language already has, not a separate marker.
 
 ---
 
@@ -18,14 +18,46 @@ Without WFS, `not wins(Y)` would loop or produce incorrect answers. With WFS:
 
 - If `wins(Y)` is provably true → negation fails
 - If `wins(Y)` is provably false → negation succeeds
-- If `wins(Y)` is undefined (cyclic dependency) → the answer is marked "undefined"
+- If `wins(Y)` is unknown (cyclic dependency) → the answer is marked `Undefined`
+
+## Spelling the truth values
+
+Each truth value has two spellings, and they are the same value — not two values
+that happen to compare equal:
+
+| value | canonical | alias |
+|---|---|---|
+| true | `True` | `true` |
+| false | `False` | `false` |
+| third | `Undefined` | `undefined` |
+
+The canonical spellings are Python's, because Clausal borrows Python's parser.
+The aliases are Prolog's: ISO writes `true`/`false`, and XSB and SWI write
+`undefined` for the well-founded third value. Aliases are resolved at parse
+time, so the two spellings are indistinguishable everywhere downstream — they
+unify with each other, key the same dict entry, and emit the same Prolog atom.
+
+Two consequences worth knowing:
+
+- `true` and `false` work in goal position, as ISO `true/0` and `fail/0` do.
+  `undefined` does **not**: unlike XSB/SWI, Clausal has no `undefined/0` goal.
+  A goal either succeeds or fails, and an unfounded tabled answer carries its
+  `Undefined` truth value on the *answer* rather than on the call. Writing
+  `undefined` as a goal is a compile-time error that says so.
+- `true`, `false` and `undefined` are therefore reserved: they cannot also be
+  used as ordinary atom or predicate names.
+
+`unknown` is **not** an alias. It was this value's name before it was renamed to
+match XSB/SWI; writing it gets a diagnostic pointing at `Undefined`.
+
+---
 
 ### WFS vs Standard NAF
 
 | Scenario | Standard NAF | WFS |
 |---|---|---|
 | `not member(X, [1,2,3])` | Works fine | Works fine (overkill) |
-| `not wins(Y)` with cycles | Loops forever | Returns "undefined" |
+| `not wins(Y)` with cycles | Loops forever | Returns `Undefined` |
 | `not even(X)` where `even`/`odd` are mutually recursive through negation | Wrong answers or loops | Correct three-valued result |
 
 **Rule of thumb**: Use `-table` + WFS when you have negation inside a recursive predicate. For non-recursive negation, standard NAF is sufficient and faster.
@@ -41,13 +73,16 @@ from clausal.logic.solve import query_wfs
 
 results = query_wfs(goal, {"X": X}, module=mod)
 for r in results:
-    print(r["X"], r["_truth"])  # True or "undefined"
+    print(r["X"], r["_truth"])  # True or Undefined
 ```
 
 `query_wfs` returns a **list** (not iterator) of binding dicts, each with a `"_truth"` key:
 
 - `True` — the answer is definitely true
-- `"undefined"` — the answer is neither provably true nor provably false
+- `Undefined` — the answer is neither provably true nor provably false.  This is the
+  same `Undefined` singleton `.clausal` code writes, so it can be compared with
+  `is Undefined` and fed straight into Kleene-aware code.  Note `bool(Undefined)`
+  raises `TypeError` by design — test it explicitly rather than with `if`.
 
 ---
 
@@ -65,7 +100,7 @@ move("c", "a"),
 wins(X) <- (move(X, Y), not wins(Y))
 ```
 
-With the cyclic graph a→b→c→a, every position depends on its successor not winning, which depends on *its* successor not winning, and so on in a circle. WFS correctly assigns all positions as **undefined** — there are no definite winners.
+With the cyclic graph a→b→c→a, every position depends on its successor not winning, which depends on *its* successor not winning, and so on in a circle. WFS correctly assigns all positions as **`Undefined`** — there are no definite winners.
 
 ### Asymmetric Moves
 

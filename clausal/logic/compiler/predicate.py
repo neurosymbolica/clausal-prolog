@@ -27,7 +27,7 @@ from clausal.terms import (
     SegString,
     SegBytes,
     _seglist_unify_gen,
-    Unknown,
+    Undefined,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.database import Clause, Database
@@ -74,7 +74,7 @@ from ._ast_helpers import (
 )
 from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
-from .terms_to_goalop import BareGoalVariableError, BareGoalUnknownError
+from .terms_to_goalop import BareGoalVariableError, BareGoalUndefinedError
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup,
     _findall_copy_row, _disp_key,
@@ -232,7 +232,7 @@ from .tro import (  # noqa: E402,F401
 #
 # ``term_to_ast_expr`` can emit a *bare Name* for a runtime value (not just a
 # module-declared predicate): the term-constructor helpers ``Var``/``Compound``/
-# ``DictTerm``/``SetTerm``/``KWTerm``, the Kleene ``Unknown`` singleton, and any
+# ``DictTerm``/``SetTerm``/``KWTerm``, the Kleene ``Undefined`` singleton, and any
 # ``is_term_instance`` runtime type referenced as ``Cls(...)`` — e.g. ``Quantity``,
 # a ``PyThunk``/``FStringThunk`` wrapper, or a CLP(B) ``BoolEq``/``BoolImpl``.
 # Inside a *module clause* these names resolve because the module namespace has
@@ -241,7 +241,7 @@ from .tro import (  # noqa: E402,F401
 # (clausal/logic/solve.py::_compile_as_query), which need not carry those
 # injections — so a name that compiles fine in a module clause could raise a
 # ``NameError`` in a query.  Commit 999ed1cb papered over the one case that had
-# surfaced (``Unknown``) by baking ``"Unknown": Unknown`` into both base_globals
+# surfaced (``Undefined``) by baking ``"Undefined": Undefined`` into both base_globals
 # dicts; this dict is the generic fix — every base_globals below is seeded from
 # it, so a future injected runtime binding cannot silently regress the query
 # path.
@@ -279,7 +279,7 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "PyThunk": _PyThunk,
     "FStringThunk": _FStringThunk,
     "Quantity": _Quantity,
-    "Unknown": Unknown,
+    "Undefined": Undefined,
     "BoolEq": _BoolEq,
     "BoolImpl": _BoolImpl,
     # Engine internals — public names walk/deref/unify are deliberately NOT
@@ -713,7 +713,7 @@ def compile_predicate_trampoline(
 
     base_globals: dict = {
         # Seed with the injected runtime builtins so every name term_to_ast_expr
-        # can emit (Var/Compound/DictTerm/SetTerm/KWTerm, Unknown, Quantity,
+        # can emit (Var/Compound/DictTerm/SetTerm/KWTerm, Undefined, Quantity,
         # PyThunk/FStringThunk, BoolEq/BoolImpl, plus $-prefixed engine helpers)
         # resolves even on the bare-query path — whose globals derive only from
         # the module dict, which need not carry the injections.  See
@@ -1198,11 +1198,11 @@ def compile_predicate_trampoline(
                 exc.var, predicate=f"{functor}/{arity}"
             ) from None
         raise
-    except BareGoalUnknownError as exc:
-        # Bare ``Unknown`` in goal position — locate the clause by predicate
+    except BareGoalUndefinedError as exc:
+        # Bare ``Undefined`` in goal position — locate the clause by predicate
         # name (mirrors the BareGoalVariableError handling above).
         if exc.predicate is None:
-            raise BareGoalUnknownError(predicate=f"{functor}/{arity}") from None
+            raise BareGoalUndefinedError(predicate=f"{functor}/{arity}") from None
         raise
     finally:
         pass
@@ -1731,9 +1731,9 @@ def compile_predicate_shallow(
                 exc.var, predicate=f"{functor}/{arity}"
             ) from None
         raise
-    except BareGoalUnknownError as exc:
+    except BareGoalUndefinedError as exc:
         if exc.predicate is None:
-            raise BareGoalUnknownError(predicate=f"{functor}/{arity}") from None
+            raise BareGoalUndefinedError(predicate=f"{functor}/{arity}") from None
         raise
     finally:
         _CURRENT_SHALLOW_BASE_GLOBALS = _saved_shallow_globals

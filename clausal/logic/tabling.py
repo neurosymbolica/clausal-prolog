@@ -39,7 +39,7 @@ from typing import Any, Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, term_field_names
-from clausal.terms import Compound
+from clausal.terms import Compound, Undefined
 
 # ── Sentinels ──────────────────────────────────────────────────────────────
 
@@ -268,13 +268,21 @@ class TableEntry:
         return True
 
     def truth_value(self, i: int):
-        """Return True, False, or 'undefined' for the i-th answer."""
+        """Return the i-th answer's WFS truth value: True, False, or ``Undefined``.
+
+        The third value is the strong-Kleene ``Undefined`` singleton, not a
+        string: WFS *is* a three-valued semantics over K3, so an unfounded
+        (conditionally delayed) answer denotes the same lattice element that
+        ``.clausal`` code writes as ``Undefined``.  Using the singleton also means
+        ``bool(...)`` on the result raises rather than silently reporting the
+        old truthy ``"undefined"`` string as true.
+        """
         c = self.conditions[i]
         if c is _FAILED:
             return False
         if not c:
             return True
-        return "undefined"
+        return Undefined
 
 
 class SuspendedConsumer:

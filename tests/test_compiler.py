@@ -260,7 +260,7 @@ class TestHeadToMatchPattern:
         assert ("str", right_pat.name, "done") in list_guards
         assert v._id in ctx
 
-    # ── Unknown term → wildcard ──
+    # ── Undefined term → wildcard ──
 
     def test_unknown_term_gives_wildcard(self):
         # nv

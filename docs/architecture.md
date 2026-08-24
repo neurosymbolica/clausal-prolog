@@ -115,7 +115,7 @@ The `clausal.logic.tabling` module maintains a table mapping `(functor, arity, v
 
 ### Well-founded semantics
 
-Well-founded semantics (WFS) assigns three truth values to ground atoms: *true*, *false*, or *undefined*. It gives a principled treatment of negation in the presence of recursion — the "undefined" value propagates through mutually recursive negations rather than looping or giving arbitrary results.
+Well-founded semantics (WFS) assigns three truth values to ground atoms: *true*, *false*, or *unknown*. It gives a principled treatment of negation in the presence of recursion — the unknown value propagates through mutually recursive negations rather than looping or giving arbitrary results. WFS is a three-valued semantics over strong Kleene, so its third value is represented by the language's own `Undefined` singleton rather than a separate sentinel.
 
 WFS is implemented directly in `clausal.logic.tabling`, extending the existing SLG machinery with delayed negation and conditional answer resolution. when `not P(args)` targets a tabled predicate whose table is still evaluating (cycle through negation), the negation is *delayed* rather than checked immediately. After SLG completion, a simplification pass resolves delayed negations:
 

@@ -683,7 +683,7 @@ class TestCompoundHead:
 
 
 class TestAHeadShapeNobodyAnticipated:
-    """Unknown arity means *nothing is refused*, never *something is raised*."""
+    """Undefined arity means *nothing is refused*, never *something is raised*."""
 
     def test_an_unreadable_head_refuses_nothing(self):
         junk = make_atom("arcm_junk")

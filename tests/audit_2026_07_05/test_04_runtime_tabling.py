@@ -19,6 +19,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve, call, once, query, query_wfs, _query_cache
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
+from clausal.terms import Undefined
 
 
 # ── Fixture loader ────────────────────────────────────────────────────────────
@@ -477,7 +478,7 @@ class TestTablingGuards:
         assert got == [1, 2]  # documented: undefined answers are yielded
         (entry,) = m.__clausal_module__.db.table_store.values()
         truths = [entry.truth_value(i) for i in range(len(entry.answers))]
-        assert truths == ["undefined", "undefined"]
+        assert truths == [Undefined, Undefined]
 
     def test_asym_win_ground_docs_order(self, load):
         # docs/wfs.md truth table holds when 'a' is queried first
@@ -885,12 +886,12 @@ class TestF004QueryWfsStub:
     def test_query_wfs_reports_undefined(self, load):
         # A04-F004: query_wfs reads the tabled entry's real conditions — the
         # symmetric-win answers are internally conditional, so both are
-        # annotated "undefined" instead of a hardcoded True.
+        # annotated Undefined instead of a hardcoded True.
         m = load("f004", WIN_SYM_SRC.replace("win", "winu").replace("move", "movu"))
         X = Var()
         res = query_wfs(m.winu(X), {"X": X}, m)
         assert len(res) == 2
-        assert all(r["_truth"] == "undefined" for r in res)
+        assert all(r["_truth"] is Undefined for r in res)
 
 
 # ══ A04-F005: unhashable tabled answers crash add_answer ══════════════════════
