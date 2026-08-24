@@ -4260,7 +4260,9 @@ class EmbedTransformer(NodeTransformer):
                 if _is_logic_var_name(local_name):
                     raise SyntaxError(
                         f"-import_from alias {local_name!r} is a logic-variable "
-                        f"name; use a TitleCase alias (e.g. Reach)"
+                        f"name; use a non-variable alias: "
+                        f"alias({orig_name}, "
+                        f"{_suggest_non_var_name(local_name)})"
                     )
                 dotted_key = f"{module_path}.{orig_name}"
                 transformer._import_remap[local_name] = dotted_key
