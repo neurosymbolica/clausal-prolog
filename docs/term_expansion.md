@@ -158,6 +158,9 @@ The compiler pipeline orchestrates both expansions in sequence:
 The goal expansion for regex auto-binding shows both systems working together. when you write:
 
 ```clausal
+-allow_singletons
+# Named-group auto-bind: YEAR's binding occurrence lives inside the
+# pattern STRING, invisible to the singleton counter's AST-Name check.
 -import_from(regex, [match])
 
 Test("auto-bind year") <- (

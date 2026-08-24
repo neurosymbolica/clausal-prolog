@@ -16,3 +16,13 @@
 Bad(X) <- X.foo(X)      # SyntaxError: Logic variable 'X' cannot appear
 Bad(X) <- mod.X(X)      # SyntaxError: Logic variable 'X' cannot appear
 # --8<-- [end:qualified_name_errors]
+
+# --8<-- [start:qualified_constant_access]
+circumference(R, C) <- (C == 2 * other_module._PI_ * R)   # bare term
+half_pi(X) <- (X is ++(other_module._PI_ / 2))              # ++ escape
+# --8<-- [end:qualified_constant_access]
+
+# --8<-- [start:import_from_constants]
+-import_from(other_module, [_PI_])                   # direct
+-import_from(other_module, [alias(_PI_, _MYPI_)])    # alias — both sides must be constant-shaped
+# --8<-- [end:import_from_constants]

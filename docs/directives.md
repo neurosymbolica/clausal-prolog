@@ -280,6 +280,87 @@ matters. See [Compiler](compiler.md) for details on the two compilation modes.
 
 ---
 
+## Constants Directive
+
+### -constants
+
+**Problem**: A magic number like `3.14159` or `3` repeated across several clauses is a
+maintenance hazard — rename the meaning, and every occurrence has to be found and checked by
+hand. Prolog has no answer to this beyond a fact plus an extra goal (`is_pi(PI), area == PI *
+R**2`); Clausal gives constants their own lexical class instead.
+
+```clausal
+-constants(_PI_ = 3.14159, _MAX_RETRIES_ = 3)
+
+area(R, AREA) <- (AREA == _PI_ * R**2)
+
+Test("area of radius 2") <- (
+    area(2, AREA),
+    AREA == 12.56636
+)
+```
+
+`-constants(name = value, ...)` declares one or more module-level constants — identifiers with
+exactly one leading and one trailing underscore (`_PI_`, `_MAX_RETRIES_`; see [Constants in the
+syntax reference](syntax.md#constants) for the full lexical rule). Every reference to a
+declared constant is replaced by its value at compile time — there is no runtime lookup, and
+the substitution applies uniformly, head position included.
+
+The right-hand side must be **fully ground**: scalar literals, previously-declared constants,
+declared atoms, arithmetic over those, or a `++(expr)` escape evaluated at load time. An
+unground right-hand side (one that computes to a value containing an unbound variable) raises
+`ConstantNotGroundError` before any clause compiles. Structured literals (lists, dicts, sets,
+tuples) are not yet supported.
+
+!!! warning "`++` RHS values can be machine-dependent"
+    `-constants(_N_WORKERS_ = ++os.cpu_count())` is legal — but it binds a different value on
+    a different machine. `++()` is evaluated once, at load time; nothing about it guarantees
+    reproducibility across environments.
+
+**Constants are always public** — there is nothing to list in `-module` or `-private`; doing
+so is a `SyntaxError` pointing back at `-constants` and `-import_from`. Import a constant the
+same way you import a predicate:
+
+```clausal
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:constants_importing"
+```
+
+See [Constants](syntax.md#constants) for the full reference, including the undeclared-reference
+error and the `_UNUSED`-suffix naming trap.
+
+---
+
+## Lint Directives
+
+### -allow_singletons
+
+**Problem**: Clausal warns by default whenever a named variable occurs exactly once in its
+clause (`ClausalSingletonWarning`) — almost always a typo. A few files have a *legitimate*
+reason to be full of them: a fixture built to demonstrate the singleton pattern itself, or a
+page of "most general query" examples where an unbound variable is the whole point.
+
+```clausal
+-allow_singletons
+
+Test("most general query") <- var(SOME_UNBOUND_VAR)
+```
+
+`-allow_singletons` is a **file-level opt-out marker** that takes no arguments (bare
+`-allow_singletons` or `-allow_singletons()`). With it present, the singleton lint does not run
+at all for this file — including its inverse check (a `_UNUSED`-suffixed variable that occurs
+more than once). It is a load-time-only flag: nothing about it survives into the compiled
+predicate.
+
+Prefer the narrower, per-variable [`_UNUSED` suffix](syntax.md#singleton-variables-and-_unused)
+where only a handful of variables in an otherwise-normal file are deliberately unused — reach
+for `-allow_singletons` only when the *file itself* is about demonstrating or exercising the
+pattern.
+
+See [Singleton variables and `_UNUSED`](syntax.md#singleton-variables-and-_unused) for the full
+lint reference, including the exact warning text and the DCG/EDCG coverage gap.
+
+---
+
 ## Specialization Directive
 
 ### -specialize

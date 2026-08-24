@@ -88,7 +88,10 @@ Test("split") <- (
 )
 
 # Suffix extraction
-Test("suffix") <- append([1, 2], REST, [1, 2, 3, 4, 5])
+Test("suffix") <- (
+    append([1, 2], REST, [1, 2, 3, 4, 5]),
+    REST == [3, 4, 5]
+)
 ```
 
 ### replicate/3

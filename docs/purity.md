@@ -56,7 +56,10 @@ program by adding and removing goals:
   which one is too restrictive.
 
 ```clausal
-# These three lists are in order of increasing specificity:
+-allow_singletons
+# These three lists are in order of increasing specificity: LIST and N
+# stay unbound in the first two Tests on purpose — that's what makes
+# them "the most general query" (see for_prolog_programmers.md).
 # The most general query — all lists and their lengths
 Test("general") <- list_length(LIST, N)
 
@@ -194,10 +197,11 @@ handle(0, "zero"),
 handle(N, "positive") <- (N > 0)
 handle(N, "negative") <- (N < 0)
 
-# Clean: cases are distinguished by the functor
+# Clean: cases are distinguished by the functor — the wrapped value
+# doesn't matter here, only which functor it's wrapped in
 classify(zero, "zero"),
-classify(positive(N), "positive"),
-classify(negative(N), "negative"),
+classify(positive(_), "positive"),
+classify(negative(_), "negative"),
 ```
 
 Clean representations are not only good for semantic reasons — they also enable

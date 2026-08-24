@@ -20,7 +20,7 @@ succeed or fail — they never bind variables.
 `var(X)` — succeeds if `X` is an unbound logic variable.
 
 ```clausal
-Test("unbound") <- var(X)
+Test("unbound") <- var(_)
 Test("bound fails") <- (not var(42))
 ```
 
@@ -33,7 +33,7 @@ Test("bound fails") <- (not var(42))
 Test("number") <- nonvar(42)
 Test("string") <- nonvar("hello")
 Test("list") <- nonvar([1, 2])
-Test("unbound") <- (not nonvar(X))
+Test("unbound") <- (not nonvar(_))
 ```
 
 ---
@@ -164,7 +164,7 @@ fields.
 ```clausal
 Test("ground int") <- ground(42)
 Test("ground list") <- ground([1, 2, 3])
-Test("unbound fails") <- (not ground([1, X, 3]))
+Test("unbound fails") <- (not ground([1, _, 3]))
 ```
 
 This is useful as a guard before [arithmetic](arithmetic.md) or [I/O](io.md) operations that require all

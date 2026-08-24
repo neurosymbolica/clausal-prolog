@@ -53,7 +53,7 @@ parse_line(LINE, FIELDS) <- parse_row(LINE, FIELDS)
 -import_from(py.json, [get])
 
 parse_and_get_name(CSV_TEXT, NAME) <- (
-    parse_records(CSV_TEXT, HEADERS, RECORDS),
+    parse_records(CSV_TEXT, HEADERS_UNUSED, RECORDS),
     Member(RECORD, RECORDS),
     get(RECORD, "name", NAME)
 )

@@ -140,6 +140,21 @@ Alias names must be **TitleCase** (multi-character). Single uppercase letters li
 
 Behind the scenes, imported predicates are stored under a fully-qualified dotted key in compiled function globals — e.g., `"myapp.graphs.utils.Reachable"` rather than bare `"Reachable"`. This means Python code in the `.clausal` file cannot accidentally shadow an imported predicate by assigning to the same name. The dotted key is invisible to the user; clause bodies use the short local name as written.
 
+#### Importing constants
+
+[Module-level constants](syntax.md#constants) (`_PI_`) use the same two directives, with the
+same direct and alias forms:
+
+```clausal
+--8<-- "tests/fixtures/docs/import_sigs.txt:import_from_constants"
+```
+
+Two differences from a predicate import: a constant alias must have a constant-shaped name on
+**both** sides (`alias(_PI_, Pi)` is rejected — a constant can only alias to another constant,
+never to a predicate-style name), and importing a constant name that collides with an earlier
+`-constants` declaration or an earlier import in the same file is a `SyntaxError` rather than a
+silent overwrite — rename the incoming one with `alias(...)`.
+
 ### `-import_module` — whole-module import with qualified calls
 
 ```clausal
@@ -163,6 +178,16 @@ The dotted chain in a qualified call must consist entirely of non-variable names
 ```
 
 Only simple dotted name chains are supported. Computed attribute access or method calls are not valid in predicate position.
+
+[Constants](syntax.md#constants) (`_PI_`) are not variable names — the re-carve that gave
+constants their own lexical class specifically excluded them from `_is_logic_var_name` — so a
+qualified constant reference passes this rule by construction, with no special-casing needed.
+After `-import_module(other_module)`, `other_module._PI_` resolves in **both** term position
+and inside a `++()` escape:
+
+```clausal
+--8<-- "tests/fixtures/docs/import_sigs.txt:qualified_constant_access"
+```
 
 ### How it works under the hood
 
@@ -365,7 +390,10 @@ the domain's `requirement` predicate as a goal argument rather than calling a
 bare `requirement/4` and hoping the caller defined one:
 
 ```clausal
-# Generic, reusable: the requirement relation is passed in.
+-allow_singletons
+# Generic, reusable: the requirement relation is passed in. Every
+# parameter below is a singleton on purpose — the body is elided; the
+# point of this sketch is the meaningful argument names themselves.
 Assess(SUBJECT, REQ_IDS, PROFILE, REQUIREMENT, LABELS, RESULT) <- (
     # ... evaluate each id in REQ_IDS by calling REQUIREMENT as a goal ...
 )

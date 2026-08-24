@@ -26,7 +26,8 @@ Or via [module import](import.md):
 Main <- (
     sqlite.connect(":memory:", "db"),
     sqlite.exec("db", "CREATE TABLE t (x INTEGER)"),
-    sqlite.query("db", "SELECT x FROM t", X)
+    sqlite.query("db", "SELECT x FROM t", X),
+    ++print(f"Found: {X}")
 )
 ```
 

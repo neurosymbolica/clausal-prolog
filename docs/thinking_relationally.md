@@ -67,7 +67,10 @@ Test("split") <- (
     RIGHT == [2, 3]
 )
 
-Test("suffix") <- append([1, 2], REST, [1, 2, 3, 4, 5])
+Test("suffix") <- (
+    append([1, 2], REST, [1, 2, 3, 4, 5]),
+    REST == [3, 4, 5]
+)
 ```
 
 The same definition of `append/3` can:

@@ -1,8 +1,10 @@
 # Module-level constants: `_PI_` — declared, ground, folded at compile time
 
-**Status:** DESIGN DECIDED (2026-08-24). Not implemented. The seven open questions were
-resolved the same day (record: `todo/done/module-level-constants-open-questions.md`);
-decisions are folded into the text below.
+**Status:** IMPLEMENTED (2026-08-25, branch `feat/constants-and-singleton-lint`). The seven
+open questions were resolved 2026-08-24 (record:
+`todo/done/module-level-constants-open-questions.md`); decisions are folded into the text
+below. See [Deviations from this plan](#deviations-from-this-plan-as-shipped) for the points
+where the shipped behavior differs from the design text.
 
 **Goal:** `area == _PI_ * R**2` instead of `(is_pi(PI), area == PI * R**2)` or
 `R is ++math.pi`. Constants must be usable as ordinary term arguments (`foo(_MAX_RETRIES_, X)`),
@@ -142,3 +144,64 @@ that programmers read some English.
   time.
 - Prolog translators: outbound inline; inbound rename rule for `_X_`-shaped Prolog variables.
 - Singleton lint ships in the same release (cost #2).
+
+## Deviations from this plan, as shipped
+
+The implementation (Tasks 1–8, `docs/superpowers/plans/2026-08-24-module-level-constants.md`)
+matches this design in its lexical rule, folding mechanism, groundness gate, and default-on
+singleton lint. A handful of points came out differently from the text above, all narrowing
+rather than reversing a decision:
+
+- **RHS grammar is v1 scalar-only.** Scalar literals, previously-declared constants, declared
+  atoms, unary/binary arithmetic over those, and a `++(expr)` escape (evaluated at load time —
+  `-constants(_N_ = ++os.cpu_count())` is legal and machine-dependent, exactly as the
+  reproducibility caveat above anticipated). Structured literals (list/dict/set/tuple RHS) raise
+  `SyntaxError` rather than being supported — the Clausal-term-vs-Python-value question for them
+  is deliberately deferred, not designed away.
+- **`-module`/`-private` reject constant names outright**, rather than "list in `-module` to
+  export" (line 140 above). Constants are process-wide module globals as soon as they're
+  declared with `-constants` — there is nothing an export listing could add — so
+  `-module(m, [_PI_])` and `-private([_PI_])` are both a load-time `SyntaxError` pointing at
+  `-constants` + `-import_from` instead. This is a correction of the plan text, caught during
+  implementation, not an open design question.
+- **Qualified bare-term access works, better than the plan's contingency.** The plan (Task 6)
+  anticipated that `m._PI_` in term position (no `++`) might need a new `visit_Attribute` case,
+  with a fallback of rejecting it with a `SyntaxError` pointing at `-import_from`/`++(mod._X_)`
+  if that turned out to be contortive. In fact the existing `LoadAttr` lowering — the same
+  mechanism that already supports qualified atom references like `currency.euro` in value
+  position — covers constants for free. Both `m._PI_` as a bare term and `++(m._PI_)` work,
+  test-pinned (`test_qualified_constant_access`).
+- **Prolog translators refuse rather than inline.** `clausal_to_prolog` raises
+  `NotImplementedError` on any file carrying `-constants`, rather than emitting the folded
+  literal values (line 85, 143 above: "outbound inlines ground values"). In practice this
+  distinction rarely bites: constant *references* inside ordinary clauses are already folded to
+  literals by the time the translator sees them (folding happens in `EmbedTransformer`, before
+  the Prolog-emission pass runs) — the only thing that cannot round-trip is the `-constants`
+  directive statement itself, which has no Prolog equivalent to emit. `prolog_var_to_clausal`
+  (inbound direction) does implement the rename rule as planned: a Prolog variable spelled
+  `_PI_` stays a variable — trailing underscores are stripped — so it can never collide with the
+  constant class.
+- **Escape-validation scoping.** The load-time `SyntaxError` for an undeclared constant-shaped
+  reference (line 25 above) also had to be taught, inside `++()`/f-string escapes, to skip a
+  comprehension's or a walrus expression's own *Store*-context target — `sum(_ITEM_ for _ITEM_
+  in range(N))` must not be misread as a free reference to an undeclared `_ITEM_` constant. This
+  is a bug-fix refinement of "every reference is folded," not a new design point (cost #1's
+  conformance-test spirit, applied to the new escape-validation code path).
+- **Lambda-parameter counting, for the singleton lint's companion feature.** The singleton lint
+  (cost #2) initially undercounted arrow-lambda parameters (`(X <- (X > 0))`-shaped code) because
+  the shared occurrence-`Counter` never recorded the parameter's own binding site, only body
+  uses — a parameter used exactly once in its body was indistinguishable from one used zero
+  times. Fixed to count the binding site, which also closes a related blind spot noted at design
+  time: a bound-but-never-used lambda parameter now correctly warns.
+- **Census guard made repo-relative.** The five-classifier conformance guard (cost #1) needed a
+  path-membership fix — the verbatim design used `.claude in p.parts` to skip non-repo
+  directories, which is vacuous when the checkout itself lives under `.claude/worktrees/…` (as
+  this one does); fixed to test membership relative to the repo root instead.
+- **Survey addendum gains one more mint, and one inert case.** The "implementation survey
+  addendum" above (compiler-minted constant-shaped hidden variables) missed `_dcg_pb_`
+  (pushback-list state, alongside the `_dcg{N}_` and `_edcg_*_` mints already listed) — found and
+  renamed during Task 1. Separately, `_clausal_star_query_` (the REPL's `*(goal)` sentinel name)
+  is constant-shaped by the lexical rule but provably inert to the classifier: it is matched
+  literally, as a string, at statement dispatch in `term_rewriting.py` *before* any name reaches
+  `_is_constant_name` — so it never needed a rename and never collides with a real constant
+  declaration of the same spelling.

@@ -550,6 +550,11 @@ Phase A bytecode is cached by Python's `SourceLoader` machinery. On cache hit, `
 when a [`match/2` or `search/2`](regex.md) call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `match/3` + `Unify` chains:
 
 ```clausal
+-allow_singletons
+# Named-group auto-bind (see regex.md): the second occurrence of YEAR
+# and MONTH lives inside the pattern STRING, invisible to the singleton
+# counter's AST-Name check — a known, documented lint gap for this
+# specific pattern, not a mistake in this example.
 # Source:
 parse(S, YEAR, MONTH) <- match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
 

@@ -7,6 +7,10 @@ The `regex` standard library module provides regular expression predicates for `
 ## Quick Example
 
 ```clausal
+-allow_singletons
+# Named-group auto-bind: the second occurrence of YEAR/MONTH lives
+# inside the pattern STRING, invisible to the singleton counter's
+# AST-Name check — a known, documented lint gap for this pattern.
 -import_from(regex, [match])
 
 ParseDate(DATE, YEAR, MONTH) <- (
@@ -153,6 +157,9 @@ Named groups using ALLCAPS or leading-underscore names are automatically bound t
 ### ALLCAPS Groups
 
 ```clausal
+-allow_singletons
+# Named-group auto-bind: the head params' second occurrence lives
+# inside the pattern STRING, invisible to the singleton counter.
 -import_from(regex, [match])
 
 ParseEmail(EMAIL, USER, DOMAIN) <- (
@@ -169,6 +176,9 @@ Test("parse email") <- (
 ### Leading-Underscore Groups
 
 ```clausal
+-allow_singletons
+# Named-group auto-bind: _port's second occurrence lives inside the
+# pattern STRING, invisible to the singleton counter.
 -import_from(regex, [search])
 
 ExtractPort(URL, _port) <- (
@@ -198,6 +208,9 @@ You never see the expanded form — just use the variable names in your pattern.
 ### Log Parsing
 
 ```clausal
+-allow_singletons
+# Named-group auto-bind: LEVEL/MESSAGE's second occurrence lives inside
+# the pattern STRING, invisible to the singleton counter.
 -import_from(regex, [match])
 
 ParseLogLine(LINE, LEVEL, MESSAGE) <- (
@@ -231,6 +244,9 @@ Test("parse csv") <- (
 ### URL Routing
 
 ```clausal
+-allow_singletons
+# Named-group auto-bind: USER_ID's second occurrence lives inside the
+# pattern STRING, invisible to the singleton counter.
 -import_from(regex, [match])
 
 RouteUser(PATH, USER_ID) <- (
@@ -314,6 +330,10 @@ is a binding candidate, so a non-participating group leaves the variable
 unbound rather than clobbering it with `None`.
 
 ```clausal
+-allow_singletons
+# Dynamic-pattern auto-bind: YEAR's binding happens at runtime from the
+# pattern's group name, which isn't visible to the singleton counter
+# (the pattern itself is a variable here, not a literal).
 -import_from(regex, [match])
 
 FindYear(PAT, S, YEAR) <- match(PAT, S)

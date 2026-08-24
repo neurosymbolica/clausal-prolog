@@ -125,7 +125,7 @@ Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreter
 **Solve/2** — vanilla list-based meta-interpreter (tail-recursive). Resolves goals against an explicit program:
 
 ```clausal
-Solve([], _PROGRAM),
+Solve([], _PROGRAM_UNUSED),
 Solve([GOAL, *GOALS], PROGRAM) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
@@ -142,7 +142,7 @@ MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
 **SolveCount/3** — counts inference steps:
 
 ```clausal
-SolveCount([], _PROGRAM, 0),
+SolveCount([], _PROGRAM_UNUSED, 0),
 SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
@@ -154,7 +154,7 @@ SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
 **SolveLimit/3** — depth-limited search. Each clause resolution consumes one unit of depth:
 
 ```clausal
-SolveLimit([], _PROGRAM, _MAX),
+SolveLimit([], _PROGRAM_UNUSED, _MAX_UNUSED),
 SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX > 0,
     MAX1 == MAX - 1,
@@ -176,7 +176,7 @@ SolveIterativeDeepening(GOALS, PROGRAM) <- (
 **SolveTree/3** — builds explicit proof trees. Each node is `[Goal, [subtrees...]]`:
 
 ```clausal
-SolveTree([], _PROGRAM, []),
+SolveTree([], _PROGRAM_UNUSED, []),
 SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     SolveTree(BODY, PROGRAM, BODY_TREE),

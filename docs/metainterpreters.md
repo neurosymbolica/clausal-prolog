@@ -79,7 +79,7 @@ MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
 The simplest meta-interpreter processes a *list* of goals, replacing each goal with the body of a matching clause, and recursing until the list is empty.
 
 ```clausal
-Solve([], _PROGRAM),
+Solve([], _PROGRAM_UNUSED),
 Solve([GOAL, *GOALS], PROGRAM) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
@@ -113,7 +113,7 @@ result = list(Solve.query(goals=[Path("a", "c")], program=g))
 By adding a counter argument, we can count the number of resolution steps (clause applications) the interpreter performs:
 
 ```clausal
-SolveCount([], _PROGRAM, 0),
+SolveCount([], _PROGRAM_UNUSED, 0),
 SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
@@ -142,7 +142,7 @@ Each recursive call adds one to the count after the sub-proof completes. The cou
 The vanilla interpreter will loop forever on programs that have cycles or infinite derivations. Adding a depth limit causes it to fail rather than diverge:
 
 ```clausal
-SolveLimit([], _PROGRAM, _MAX),
+SolveLimit([], _PROGRAM_UNUSED, _MAX_UNUSED),
 SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX > 0,
     MAX1 == MAX - 1,
@@ -200,7 +200,7 @@ CyclicProgram(PROGRAM) <- (
 The proof tree interpreter extends the vanilla interpreter to build a *trace* of the proof — a tree recording which clause was used to resolve each goal, and how its body was proved:
 
 ```clausal
-SolveTree([], _PROGRAM, []),
+SolveTree([], _PROGRAM_UNUSED, []),
 SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     SolveTree(BODY, PROGRAM, BODY_TREE),

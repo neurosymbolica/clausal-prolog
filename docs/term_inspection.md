@@ -104,6 +104,9 @@ variables replaced by fresh variables. Shared variables remain shared in the
 copy.
 
 ```clausal
+-allow_singletons
+# X_ stands for "some unbound variable" — its identity is never used
+# again, only that copy_term/2 gives it a fresh one in COPY_.
 Test("copy list") <- (
     copy_term([1, X_, 3], COPY_),
     length(COPY_, 3)
@@ -120,6 +123,9 @@ Test("copy list") <- (
 list, in left-to-right order, with duplicates removed (by identity).
 
 ```clausal
+-allow_singletons
+# X_, Y_, Z_ each stand for "some unbound variable" — the point is that
+# term_variables/2 collects three of them, not what they're named.
 Test("collect vars") <- (
     term_variables([X_, 1, Y_, Z_], VARS_),
     length(VARS_, 3)
@@ -135,6 +141,9 @@ Test("ground term") <- term_variables([1, 2, 3], [])
 next available number.
 
 ```clausal
+-allow_singletons
+# X_, Y_, Z_ each stand for "some unbound variable" — numbervars/3 binds
+# them to $VAR(0..2); their names are never referenced again.
 Test("number vars") <- (
     numbervars([X_, Y_, Z_], 0, END_),
     END_ == 3
@@ -171,8 +180,10 @@ Transform all arguments of any term by applying a goal (using [maplist](higher_o
 ### Count variables in a term
 
 ```clausal
+-allow_singletons
 var_count(TERM_, N_) <- (term_variables(TERM_, VARS_), length(VARS_, N_))
 
+# X_, Y_, Z_ each stand for "some unbound variable" fed into var_count/2.
 Test("count") <- var_count([X_, 1, Y_, Z_], 3)
 ```
 

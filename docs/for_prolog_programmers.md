@@ -35,6 +35,8 @@ out of the box, but some Prolog conventions must change.
 | `parent(alice, bob).` | `parent("alice", "bob"),` | Trailing comma, not period. Undeclared atoms are strings; declared atoms are zero-arity classes. |
 | `X`, `Parent` | `X`, `PARENT` | Variables are ALLCAPS (or leading underscore: `_x`) |
 | `_` | `_` | Anonymous variable — same |
+| `_Foo` singleton silently allowed | [`_UNUSED` suffix](syntax.md#singleton-variables-and-_unused) (`_foo_UNUSED`, `FOO_UNUSED`) | Clausal warns by default on *any* named variable used once, in both styles — matching SWI's `singleton variable` warning, but the suppression is a **suffix**, not a leading-underscore reading. Leading underscore is already a first-class variable *style* here (`_x`), so it can't double as "don't warn" too — and a case-based exemption would be blind for caseless-script variables, which are forced into leading-underscore spelling. `-allow_singletons` opts a whole file out. |
+| — (no equivalent) | [`_PI_`](syntax.md#constants) module-level constant | Prolog has no compile-time constants — the nearest idiom is a fact plus an extra goal (`is_pi(PI), area == PI * R**2`). Clausal's `-constants(_PI_ = 3.14159)` folds the ground value into every reference at compile time instead; see [Constants](syntax.md#constants). There is nothing to translate this *to* in Prolog — a `.clausal` file carrying `-constants` refuses outbound translation (`clausal_to_prolog` raises `NotImplementedError`). |
 | `head :- body.` | `head <- (body)` | `<-` instead of `:-`. Multi-goal bodies parenthesized. |
 | `a, b, c` (conjunction) | `a, b, c` | Same — comma is conjunction |
 | `a ; b` (disjunction) | `a \| b` or separate clauses | Prefer separate clauses |

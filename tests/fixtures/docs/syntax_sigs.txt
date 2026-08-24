@@ -364,3 +364,13 @@ fib(N, RESULT) <- (
     RESULT == A + B
 )
 --8<-- [end:body_style_ex4]
+
+# === Constants ===
+
+--8<-- [start:constants_importing]
+-import_from(other_module, [_PI_])                        # direct
+-import_from(other_module, [alias(_PI_, _MYPI_)])          # alias — both sides must be
+                                                             # constant-shaped
+-import_module(other_module)                               # whole-module, qualified access
+circumference(R, C) <- (C == 2 * other_module._PI_ * R)     # bare-term — works directly
+--8<-- [end:constants_importing]

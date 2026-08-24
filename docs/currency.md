@@ -22,12 +22,13 @@ read [Applying currency in a formalization](#applying-currency-in-a-formalizatio
 price is 7.89(euro)
 
 # arithmetic keeps full precision; same-currency only
-total <- (eval_(0.1(euro), A), eval_(0.2(euro), B), eval_(A + B, T))   # T = 0.30(euro), exact
+total <- (eval_(0.1(euro), A), eval_(0.2(euro), B), eval_(A + B, T_UNUSED))   # T = 0.30(euro), exact
 
-# round / display with an EXPLICIT mode
-show  <- money_str(T, half_up, S)              # S = "0.30 EUR"
-euros <- money_round(SomeAmount, half_even, R) # R quantized to 2 dp, still a currency amount
-sym   <- money_format(price, symbol, half_up, S)  # S = "€7.89"
+# round / display with an EXPLICIT mode — each line below is its own
+# independent predicate, not a continuation of the one above
+show  <- money_str(T_UNUSED, half_up, S_UNUSED)              # S = "0.30 EUR"
+euros <- money_round(SomeAmount, half_even, R_UNUSED) # R quantized to 2 dp, still a currency amount
+sym   <- money_format(price, symbol, half_up, S_UNUSED)  # S = "€7.89"
 ```
 
 ---
@@ -173,7 +174,7 @@ you want parsed exactly with no chance of a float in the pipeline.
 
 ```clausal
 -import_from(py.units, [strip_units])
-amount_value <- (eval_(7.89(euro), A), strip_units(A, V))   # V = Decimal("7.89")
+amount_value <- (eval_(7.89(euro), A), strip_units(A, V_UNUSED))   # V = Decimal("7.89")
 ```
 
 ---

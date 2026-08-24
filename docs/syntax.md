@@ -4,7 +4,7 @@ Clausal uses Python's parser, and so it conforms to Python's grammar. Like Prolo
 
 Clausal uses 'grammatical holes' which are and must remain syntactically valid, but have no semantic purpose in Python, and are therefore never used in practice. Clausal uses a very small set of these 'holes' to allow the free mixing of logic code with Python code. Python and logic programming code in the same file means better code cohesion, easing development.
 
-> **Quick navigation:** [Variables](#logic-variables) · [Escape operators](#escape-operators) · [Unification](#unification) · [Clauses](#horn-clauses) · [Lists](#lists) · [Arithmetic](#arithmetic-binding) · [Constraints](#comparison-operators-clpℤ) · [DCGs](#definite-clause-grammars--) · [Lambdas](#lambdas) · [Meta-predicates](#meta-predicates) · [Cheatsheet](#syntax-cheat-sheet)
+> **Quick navigation:** [Variables](#logic-variables) · [Constants](#constants) · [Escape operators](#escape-operators) · [Unification](#unification) · [Clauses](#horn-clauses) · [Lists](#lists) · [Arithmetic](#arithmetic-binding) · [Constraints](#comparison-operators-clpℤ) · [DCGs](#definite-clause-grammars--) · [Lambdas](#lambdas) · [Meta-predicates](#meta-predicates) · [Cheatsheet](#syntax-cheat-sheet)
 
 ---
 
@@ -58,6 +58,12 @@ Both styles may be used in the same file. ALL_CAPS is the preferred style for ne
 
 A single `_` is the anonymous variable — it never stores a value, and unification against it always succeeds (matching Python's and Prolog's existing convention).
 
+One shape is carved *out* of both conventions: an identifier with exactly one leading and one
+trailing underscore (`_PI_`, `_MAX_RETRIES_`) is a [**constant**](#constants) reference, not a
+logic variable — see below. `_x` (single leading underscore, no trailing one) and `X_` (no
+leading underscore) are unaffected and remain ordinary leading-underscore and ALL-CAPS
+variables respectively.
+
 Logic variables are not declared; they come into existence by appearing in logical context. They work differently from Python variables: they can be unbound, and their bindings are undone on backtracking. This difference warrants a clear visual marker.
 
 This is a deliberate departure from Prolog, where variables start with an uppercase letter (`Foo`, `Bar`). In Python, TitleCase names are conventionally class names, so Clausal reserves TitleCase for atoms and compound-term functors (`Red`, `Point(X, Y)`); predicates themselves are lowercase (`findall`, `in_`, `length`). Reusing TitleCase for variables as well would create ambiguity: in `Foo(Bar)`, is `Bar` the atom `Bar` or a logic variable? ALL-CAPS resolves this cleanly — `findall(X, in_(X, LIST), BAG)` is unambiguous.
@@ -67,6 +73,170 @@ Why ALL-CAPS works well:
 - ALL-CAPS is used in many languages for constants and distinguished names; here it marks the variable role in the logic sense.
 - Single letters like `X`, `Y`, `N` are universally understood as logic variables from mathematics.
 - Leading underscore (`_x`) aligns with ISO Prolog's `_Var` convention, making translation between Clausal and Prolog more natural. See [Prolog Translation](prolog_translation.md) for the full variable naming mapping.
+
+### Singleton variables and `_UNUSED`
+
+A named variable that occurs exactly once in its clause binds nothing — almost always a typo
+(a dropped letter, a copy-paste that missed one occurrence). Clausal warns on this by default,
+in **both** variable styles:
+
+```python
+Test("bug: wrong var name") <- (
+    length([1, 2, 3], N),
+    N1 == N + 1     # meant N, typo'd N1 — N1 is a singleton
+)
+```
+
+```text
+ClausalSingletonWarning: m.clausal:1: singleton variable `N1` — a variable occurring once
+binds nothing. Misspelling? Rename to `N1_UNUSED` (or `_`) if deliberate, or add
+-allow_singletons to the file
+```
+
+(The reported line is where the *clause statement* starts, not the specific goal inside it —
+useful context for a multi-goal body.)
+
+If a single-occurrence variable is deliberate — you want its *name* for readability but never
+read its value — suppress the warning with the `_UNUSED` suffix. This is the **sole** canonical
+spelling: `_UNUSED` (uppercase, exact) is recognised; `_unused`, `_Unused`, and every other
+casing are not exempt — one spelling, one grep target, no guessing which files opted out.
+
+```clausal
+handle(EVENT, REASON_UNUSED) <- (EVENT == "click")   # REASON_UNUSED never read — fine
+```
+
+If you don't need the name at all, prefer the bare anonymous variable `_` — it never warns,
+in any number of occurrences per clause.
+
+The check runs **per clause**, so `_UNUSED` on a genuinely-reused name is a real bug the lint
+catches too — this is the inverse lint, modeled on SWI-Prolog's `_X` warning:
+
+```text
+ClausalSingletonWarning: m.clausal:1: variable `N1_UNUSED` is marked _UNUSED but occurs more
+than once in its clause
+```
+
+To opt an entire file out — a fixture that deliberately demonstrates the pattern, for
+example — use [`-allow_singletons`](directives.md#-allow_singletons):
+
+```clausal
+-allow_singletons
+
+Test("most general query") <- var(SOME_UNBOUND_VAR)
+```
+
+!!! note "Known gap: DCG/EDCG bodies are not yet linted"
+    `>>` grammar rules (both plain [DCGs](#definite-clause-grammars--) and
+    [EDCGs](#extended-dcgs--edcgs)) do not run through the singleton check — a genuine
+    singleton inside a DCG body currently goes unwarned. Ordinary `<-` clauses (including
+    the ones a DCG rule rewrites *to*, if you write them by hand) are fully covered.
+
+---
+
+## Constants
+
+`area == _PI_ * R**2` instead of `(is_pi(PI), area == PI * R**2)` or a Python `math.pi`
+escape: a **constant** is a module-level name, bound once to a ground value at load time, that
+reads exactly like an ordinary term argument.
+
+**Lexical rule** — a constant name has exactly one leading underscore, exactly one trailing
+underscore, and at least one character between them, with the interior starting with a
+non-digit:
+
+```python
+_PI_, _MAX_RETRIES_, _円周率_   # constant names
+_1_                              # rejected — interior starts with a digit
+_X__, __X_                       # excluded — the interior touches a second underscore
+```
+
+This shape is carved out of both logic-variable conventions (see [Logic
+variables](#logic-variables) above) — a constant name is never read as a variable, in either
+style.
+
+### Declaring
+
+```clausal
+-constants(_PI_ = 3.14159, _MAX_RETRIES_ = 3)
+
+area(R, AREA) <- (AREA == _PI_ * R**2)
+
+Test("area of radius 2") <- (
+    area(2, AREA),
+    AREA == 12.56636
+)
+```
+
+Declarations are keyword arguments on the `-constants(...)` directive, one module-level
+directive per file (repeat the directive, or add more `name = value` pairs, for more
+constants). The right-hand side accepts:
+
+- scalar literals (`3.14159`, `"eur"`, `True`),
+- a previously-declared constant (`-constants(_BASE_ = 10, _LIMIT_ = _BASE_ * 4 + 2)`),
+- a declared atom,
+- unary/binary arithmetic over those, and
+- a `++(expr)` escape, evaluated as raw Python **at load time**:
+
+```clausal
+-constants(_PI_ = ++__import__('math').pi)
+```
+
+!!! warning "`++` RHS values can be machine-dependent"
+    `++(expr)` is evaluated once, when the file loads — nothing stops it from calling
+    something that isn't reproducible across machines or runs:
+    `-constants(_N_WORKERS_ = ++os.cpu_count())` is legal, and will bind a different value on
+    a different machine. This is a documented caveat, not a guardrail — if reproducibility
+    matters, don't reach for `++` in a `-constants` RHS.
+
+**Structured literals are not yet supported.** `-constants(_L_ = [1, 2, 3])` raises a
+load-time `SyntaxError` — lists, dicts, sets, and tuples are deferred to a future revision
+(the Clausal-term-vs-Python-value question for them isn't settled yet). Stick to scalars and
+`++()` for now.
+
+Every declaration must be **fully ground** — no unbound logic variable may appear anywhere in
+the computed value. An unground right-hand side raises `ConstantNotGroundError` at load time,
+before any clause compiles.
+
+### References fold — no runtime lookup, ever
+
+A constant reference is replaced by its ground value during compilation — the same mechanism
+that already folds the `true`/`false`/`undefined` truth-value aliases. There is no `Var`, no
+deref, and no runtime cost: `_PI_` in a compiled clause *is* `3.14159`. This applies uniformly,
+**including in head position** — `area(_PI_, R)` compiles exactly as `area(3.14159, R)` would,
+and dispatching on the literal value is a legitimate idiom that earns no lint.
+
+Referencing a constant-shaped name that nothing declares is a load-time `SyntaxError`, not a
+fresh variable and not a runtime `NameError` — this also applies inside `++()` and f-string
+escapes (a comprehension's or walrus expression's own binding target of the same shape is not
+mistaken for a free reference):
+
+```text
+SyntaxError: `_PI_` is a constant name (one leading and one trailing underscore) but nothing
+declares it. Declare -constants(_PI_ = <ground value>) before this clause, or import it:
+-import_from(mod, [_PI_])
+```
+
+### Importing
+
+Constants export automatically — every `-constants` declaration is a public module global, so
+there is nothing to list in `-module` or `-private` (doing so is a `SyntaxError`: "constants
+are public module globals — declare with `-constants` and import with `-import_from`; no
+export listing is needed"). Import with the same directives used for predicates:
+
+```clausal
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:constants_importing"
+```
+
+Qualified access (`other_module._PI_`) works both as a bare term and inside `++()` — the same
+dotted-attribute mechanism that already resolves a qualified atom reference like
+`currency.euro` covers constants too. See [Import System](import.md#importing-constants) for
+the full directive semantics.
+
+### The `_UNUSED` edge
+
+A constant name ending in `_UNUSED` (`_X_UNUSED_`) is legal, but earns a load-time
+`ClausalLintWarning` — it visually collides with the [singleton-suppression
+suffix](#singleton-variables-and-_unused) above, which applies to *variables*, not constants.
+Pick a different name.
 
 ---
 
@@ -159,6 +329,9 @@ names a term and uses it in the same goal — where Python code would reach for
 the walrus operator:
 
 ```clausal
+-allow_singletons
+# VALUE is named to demonstrate the inline-naming feature itself — that
+# it *can* be named is the point, not any further use of it here.
 Test("name a term inline") <- (
     D is {"k": [1, 2]},
     VALUE is [1, X] is D["k"],
@@ -326,7 +499,7 @@ Python dict literals in `.clausal` files create `DictTerm` objects — unificati
 point({"x": 0, "y": 0}),
 
 # Dict pattern in head — X binds during unification
-get_x({"x": X, "y": Y}, X),
+get_x({"x": X, "y": _}, X),
 
 # Dict construction in body
 make_point(X, Y, P) <- (P is {"x": X, "y": Y})
@@ -504,8 +677,8 @@ See [Units](units.md) for the full reference.
 ## Compound terms and goals
 
 ```clausal
-goal(A, B),            # compound goal
-not goal,              # negation as failure
+goal(_, _),             # compound goal
+not goal,               # negation as failure
 ```
 
 ---
@@ -859,6 +1032,10 @@ Meta-predicates are higher-order predicates that take goals as arguments. They a
 ### [All-solutions predicates](meta_predicates.md)
 
 ```clausal
+-allow_singletons
+# BAG and LIST name what each goal produces/expects for readability —
+# each line here is an independent illustration, not a chained example.
+
 # Collect all X where in_(X, [1,2,3]) into Bag
 findall(X, in_(X, [1, 2, 3]), BAG),
 

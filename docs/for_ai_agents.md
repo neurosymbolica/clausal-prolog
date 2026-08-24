@@ -233,7 +233,7 @@ word_frequency(TEXT, WORD, COUNT) <- (
 # Clausal does the reasoning
 most_common(TEXT, WORD) <- (
     word_frequency(TEXT, WORD, COUNT),
-    not (word_frequency(TEXT, OTHER, HIGHER), HIGHER > COUNT)
+    not (word_frequency(TEXT, _, HIGHER), HIGHER > COUNT)
 )
 ```
 

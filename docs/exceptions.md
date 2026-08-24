@@ -141,16 +141,16 @@ undeclared-atom guard:
 
 is_ymd_triple([Y, M, D]) <- (integer(Y), integer(M), integer(D))
 
-window_days_used(REF_YMD, _DAYS) <- (
+window_days_used(REF_YMD, _DAYS_UNUSED) <- (
     not is_ymd_triple(REF_YMD),
     throw(wf_bad_shape("window_days_used: REF_YMD must be [Y,M,D]", REF_YMD))
 )
-window_days_used([_Y, _M, _D], 7),
+window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7),
 
 Test("malformed input raises, not a silent empty findall") <- (
     catch(
-        findall(D, window_days_used("2020-01-01", D), _DAYS),
-        wf_bad_shape(_MSG, CULPRIT),
+        findall(D, window_days_used("2020-01-01", D), _DAYS_UNUSED),
+        wf_bad_shape(_MSG_UNUSED, CULPRIT),
         CULPRIT == "2020-01-01"
     )
 )  # nv
@@ -172,16 +172,16 @@ from clausal.logic.exceptions import type_error
 
 is_ymd_triple([Y, M, D]) <- (integer(Y), integer(M), integer(D))
 
-window_days_used(REF_YMD, _DAYS) <- (
+window_days_used(REF_YMD, _DAYS_UNUSED) <- (
     not is_ymd_triple(REF_YMD),
     throw(type_error("[Y,M,D]", REF_YMD))
 )
-window_days_used([_Y, _M, _D], 7),
+window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7),
 
 Test("iso type_error term raises from a guard") <- (
     catch(
-        findall(D, window_days_used("2020-01-01", D), _DAYS),
-        error(type_error(_T, CULPRIT), _CTX),
+        findall(D, window_days_used("2020-01-01", D), _DAYS_UNUSED),
+        error(type_error(_T_UNUSED, CULPRIT), _CTX_UNUSED),
         CULPRIT == "2020-01-01"
     )
 )  # nv
