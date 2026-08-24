@@ -1,8 +1,18 @@
 # `"true"` used as a truth value should point at the `True` literal
 
 Split out of `todo/done/lowercase-true-false-null-should-name-the-True-False-Unknown-literals.md`,
-which shipped the *atom* half: bare `true` / `false` / `null` now name `True` /
-`False` / `Unknown` in the undeclared-atom diagnostic (`clausal/atom_diagnostics.py`).
+which shipped the *atom* half.
+
+**Restated 2026-08-24**, after the truth-value alias work superseded that half:
+bare `true` / `false` / `undefined` are no longer diagnostics at all — they are
+parse-time aliases for `True` / `False` / `Undefined` and simply work. The
+undeclared-atom diagnostic in `clausal/atom_diagnostics.py` now covers only the
+JSON/Python vocabulary that has no Clausal meaning (`null`, `none`, `nil`,
+`maybe`) plus `unknown`, the pre-rename spelling of `Undefined`.
+
+That makes this half MORE valuable, not less: the atom spellings are now all
+either legal or diagnosed, so the string form is the only remaining way to write
+a truth value that silently half-works.
 
 ## Why this half was deferred
 
