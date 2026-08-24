@@ -24,9 +24,9 @@ process_list([X, *REST]) >> (collect_and_count(X), process_list(REST))
 
 # Entry point: wraps EDCG call with initial values
 run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS) <- (
-    process_list(INPUT_LIST, _edcg_counter_in_=0, _edcg_counter_out_=COUNT,
-                 _edcg_items_in_=[], _edcg_items_out_=OUTPUT_ITEMS,
-                 _edcg_scale_=SCALE_FACTOR)
+    process_list(INPUT_LIST, _edcg_counter_in=0, _edcg_counter_out=COUNT,
+                 _edcg_items_in=[], _edcg_items_out=OUTPUT_ITEMS,
+                 _edcg_scale=SCALE_FACTOR)
 )
 
 Test("scaled count 3 items") <- (

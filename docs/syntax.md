@@ -837,9 +837,9 @@ process_list([]) >> ([])
 process_list([X, *XS]) >> (collect_and_count(X), process_list(XS))
 
 run_scaled(LIST, SCALE, COUNT, ITEMS) <- (
-    process_list(LIST, _edcg_counter_in_=0, _edcg_counter_out_=COUNT,
-                 _edcg_items_in_=[], _edcg_items_out_=ITEMS,
-                 _edcg_scale_=SCALE)
+    process_list(LIST, _edcg_counter_in=0, _edcg_counter_out=COUNT,
+                 _edcg_items_in=[], _edcg_items_out=ITEMS,
+                 _edcg_scale=SCALE)
 )
 ```
 

@@ -409,7 +409,7 @@ class TestEdcgPatterns:
             'count_elem >> ([_], [1] // adder)\n'
             'count_list >> (count_elem, count_list)\n'
             'count_list >> ([])\n'
-            'my_len(_list, _n) <- count_list(_edcg_adder_in_=0, _edcg_adder_out_=_n, _edcg_dcg_in_=_list, _edcg_dcg_out_=[])\n'
+            'my_len(_list, _n) <- count_list(_edcg_adder_in=0, _edcg_adder_out=_n, _edcg_dcg_in=_list, _edcg_dcg_out=[])\n'
         )
         mod = _load("len1", src, tmp_path)
         n = Var()
@@ -509,7 +509,7 @@ class TestEdcgEdgeCases:
             '-edcg_pred(count_elems, 1, [len])\n'
             'count_elems([]) >> ([])\n'
             'count_elems([_, *_xs]) >> ([1] // len, count_elems(_xs))\n'
-            'my_length(_l, _n) <- count_elems(_l, _edcg_len_in_=0, _edcg_len_out_=_n)\n'
+            'my_length(_l, _n) <- count_elems(_l, _edcg_len_in=0, _edcg_len_out=_n)\n'
         )
         mod = _load("rc1", src, tmp_path)
         n = Var()

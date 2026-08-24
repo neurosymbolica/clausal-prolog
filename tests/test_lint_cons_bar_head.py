@@ -70,7 +70,7 @@ def test_warns_on_cons_in_dcg_head(tmp_path):
 
 
 def test_no_warn_on_clean_dcg_head(tmp_path):
-    # The DCG path appends the synthetic _dcg0_/_dcg1_ state args to the
+    # The DCG path appends the synthetic _dcg0/_dcg1 state args to the
     # head before the lint runs — bare Names must not trip it.
     ws = _lint_warnings(tmp_path, "ok_dcg",
                         'takes([H, *T]) >> (["x"])\n')

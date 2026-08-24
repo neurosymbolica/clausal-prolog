@@ -439,15 +439,15 @@ class TestTheRemedyPrintsTheTemplateEdit:
         """)
 
     def test_minted_accumulator_fields_suppress_the_template(self, tmp_path):
-        """``-edcg_pred(r, 1, [cnt])`` mints hidden ``_edcg_cnt_in_/_out_``.
+        """``-edcg_pred(r, 1, [cnt])`` mints hidden ``_edcg_cnt_in/_out``.
 
         Two things make the template form wrong here, and neither is visible
         without knowing how the check is fed:
 
         * those positions are compiler-minted and a source head never spells
           them — they reach ``all_field_names`` only because the declared tuple
-          is overlaid onto the head BY POSITION, so ``r(ARG_0, _edcg_cnt_in_,
-          _edcg_cnt_out_, ARG_3)`` puts declared names on arguments the author
+          is overlaid onto the head BY POSITION, so ``r(ARG_0, _edcg_cnt_in,
+          _edcg_cnt_out, ARG_3)`` puts declared names on arguments the author
           wrote as ``2`` and ``3``;
         * ``-edcg_pred`` takes a VISIBLE arity, so "give the declaration the
           same arity" as a /4 template would push the hidden fields to
@@ -465,12 +465,12 @@ class TestTheRemedyPrintsTheTemplateEdit:
         flat = " ".join(msg.split())
         assert "remedy:" in flat
         # the misleading template is gone, in either casing
-        assert "`r(ARG_0, _edcg_cnt_in_, _edcg_cnt_out_, ARG_3)`" not in flat
-        assert "_EDCG_CNT_IN_" not in flat
+        assert "`r(ARG_0, _edcg_cnt_in, _edcg_cnt_out, ARG_3)`" not in flat
+        assert "_EDCG_CNT_IN" not in flat
         # visible arity, and the minted fields named as the reason
         assert "VISIBLE arity 1" in flat
         assert "2 compiler-minted accumulator fields" in flat
-        assert "_edcg_cnt_in_, _edcg_cnt_out_" in flat
+        assert "_edcg_cnt_in, _edcg_cnt_out" in flat
         assert "`r(ARG_0)`" in flat              # the visible-only shape
         assert "raise the visible arity" in flat
         assert "to 4." in flat

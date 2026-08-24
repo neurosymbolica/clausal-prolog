@@ -183,7 +183,7 @@ do_both(X) >> (inc_only, [X] // items)    # inc_only threads counter only
 --8<-- [start:calling_edcg_predicates]
 # -edcg_pred(count_elems, 1, [len])
 # Compiled arity: 1 (visible) + 2 (len_in, len_out) = 3
-my_length(L, N) <- count_elems(L, _edcg_len_in_=0, _edcg_len_out_=N)
+my_length(L, N) <- count_elems(L, _edcg_len_in=0, _edcg_len_out=N)
 --8<-- [end:calling_edcg_predicates]
 
 

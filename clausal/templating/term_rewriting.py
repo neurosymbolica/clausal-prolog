@@ -2274,7 +2274,7 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
     """Rewrite a single DCG body element into ordinary clause body AST.
 
     Returns ``(rewritten_ast, new_counter)`` where *counter* tracks the next
-    available ``_dcg{N}_`` intermediate variable index.
+    available ``_dcg{N}`` intermediate variable index.
     """
     match node:
         case List(elts=[]):
@@ -2367,7 +2367,7 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
         ):
             # If-then-else: If(cond, then, else)
             cond, then_, else_ = args
-            mid = f"_dcg{counter}_"
+            mid = f"_dcg{counter}"
             counter += 1
             cond_r, counter = _rewrite_dcg_body(cond, s_in, mid, counter, source)
             then_r, counter = _rewrite_dcg_body(then_, mid, s_out, counter, source)
@@ -2407,7 +2407,7 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
 
         case UnaryOp(op=Not(), operand=inner):
             # NAF: not rewrite(inner, s_in, _fresh). State passes through.
-            fresh = f"_dcg{counter}_"
+            fresh = f"_dcg{counter}"
             counter += 1
             inner_r, counter = _rewrite_dcg_body(inner, s_in, fresh, counter, source)
             result = UnaryOp(op=Not(), operand=inner_r)
@@ -2440,7 +2440,7 @@ def _rewrite_dcg_sequence(elements, s_in, s_out, counter, source):
             if isinstance(elem, Set):
                 parts.append(_dcg_set_goals(elem, source))
             elif isinstance(elem, UnaryOp) and isinstance(elem.op, Not):
-                fresh = f"_dcg{counter}_"
+                fresh = f"_dcg{counter}"
                 counter += 1
                 inner_r, counter = _rewrite_dcg_body(
                     elem.operand, s_in, fresh, counter, source
@@ -2467,7 +2467,7 @@ def _rewrite_dcg_sequence(elements, s_in, s_out, counter, source):
         elif isinstance(elem, List) and len(elem.elts) == 0:
             pass  # empty terminal — nothing to emit
         elif isinstance(elem, UnaryOp) and isinstance(elem.op, Not):
-            fresh = f"_dcg{counter}_"
+            fresh = f"_dcg{counter}"
             counter += 1
             inner_r, counter = _rewrite_dcg_body(
                 elem.operand, current_state, fresh, counter, source
@@ -2480,7 +2480,7 @@ def _rewrite_dcg_sequence(elements, s_in, s_out, counter, source):
             if i == last_consumer:
                 next_state = s_out
             else:
-                next_state = f"_dcg{counter}_"
+                next_state = f"_dcg{counter}"
                 counter += 1
             r, counter = _rewrite_dcg_body(
                 elem, current_state, next_state, counter, source
@@ -2499,12 +2499,12 @@ def _rewrite_dcg_sequence(elements, s_in, s_out, counter, source):
 
 def _edcg_acc_vars(acc_name, suffix=""):
     """Return (in_var, out_var) names for an EDCG accumulator."""
-    return f"_edcg_{acc_name}_in{suffix}_", f"_edcg_{acc_name}_out{suffix}_"
+    return f"_edcg_{acc_name}_in{suffix}", f"_edcg_{acc_name}_out{suffix}"
 
 
 def _edcg_pass_var(pass_name):
     """Return the variable name for an EDCG passed argument."""
-    return f"_edcg_{pass_name}_"
+    return f"_edcg_{pass_name}"
 
 
 def _is_edcg_push(node):
@@ -2585,7 +2585,7 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             )
         in_var, out_var = acc_states[acc_name]
         # Create an intermediate variable for the new state.
-        mid = f"_edcg_{acc_name}_{counter}_"
+        mid = f"_edcg_{acc_name}_{counter}"
         counter += 1
         if acc_name == "dcg":
             # DCG accumulator: [V | Rest] pattern
@@ -2663,7 +2663,7 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
                     "predicate doesn't use it"
                 )
             in_var, out_var = acc_states["dcg"]
-            mid = f"_edcg_dcg_{counter}_"
+            mid = f"_edcg_dcg_{counter}"
             counter += 1
             starred = replace(
                 Starred(value=Name(id=mid, ctx=load), ctx=load), source
@@ -2718,7 +2718,7 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
                 # and the terminal-list case) — consuming straight to out_var
                 # and setting the state to (out_var, out_var) collapsed every
                 # following sequence element to ``out = out``.
-                mid = f"_edcg_dcg_{counter}_"
+                mid = f"_edcg_dcg_{counter}"
                 counter += 1
                 call_node = Call(
                     func=Name(id=name, ctx=load),
@@ -2742,7 +2742,7 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             if "dcg" in acc_states:
                 in_var, out_var = acc_states["dcg"]
                 # A10-F003: mint a fresh mid var (see the Name branch above).
-                mid = f"_edcg_dcg_{counter}_"
+                mid = f"_edcg_dcg_{counter}"
                 counter += 1
                 new_args = list(args) + [
                     Name(id=in_var, ctx=load), Name(id=mid, ctx=load),
@@ -2806,7 +2806,7 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             # Create fresh out vars for the inner goal.
             inner_acc_states = {}
             for acc_name, (in_var, out_var) in acc_states.items():
-                fresh = f"_edcg_{acc_name}_{counter}_"
+                fresh = f"_edcg_{acc_name}_{counter}"
                 counter += 1
                 inner_acc_states[acc_name] = (in_var, fresh)
             inner_r, _, counter = _rewrite_edcg_body(
@@ -2820,7 +2820,7 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             # If-then-else.
             mid_states = {}
             for acc_name, (in_var, out_var) in acc_states.items():
-                mid = f"_edcg_{acc_name}_{counter}_"
+                mid = f"_edcg_{acc_name}_{counter}"
                 counter += 1
                 mid_states[acc_name] = (in_var, mid)
             cond_r, cond_out_states, counter = _rewrite_edcg_body(
@@ -2871,16 +2871,16 @@ def _rewrite_edcg_subcall(callee_name, args, kwargs, acc_states, pass_states,
             if ap_name in acc_states:
                 in_var, out_var = acc_states[ap_name]
                 # Create intermediate variable for callee's output.
-                mid = f"_edcg_{ap_name}_{counter}_"
+                mid = f"_edcg_{ap_name}_{counter}"
                 counter += 1
                 full_args.append(Name(id=in_var, ctx=load))
                 full_args.append(Name(id=mid, ctx=load))
                 new_acc_states[ap_name] = (mid, out_var)
             else:
                 # Caller doesn't use this accumulator — use fresh vars.
-                fresh_in = f"_edcg_{ap_name}_{counter}_"
+                fresh_in = f"_edcg_{ap_name}_{counter}"
                 counter += 1
-                fresh_out = f"_edcg_{ap_name}_{counter}_"
+                fresh_out = f"_edcg_{ap_name}_{counter}"
                 counter += 1
                 full_args.append(Name(id=fresh_in, ctx=load))
                 full_args.append(Name(id=fresh_out, ctx=load))
@@ -2890,7 +2890,7 @@ def _rewrite_edcg_subcall(callee_name, args, kwargs, acc_states, pass_states,
                 full_args.append(Name(id=pass_states[ap_name], ctx=load))
             else:
                 # Caller doesn't have this pass — use fresh var.
-                fresh = f"_edcg_{ap_name}_{counter}_"
+                fresh = f"_edcg_{ap_name}_{counter}"
                 counter += 1
                 full_args.append(Name(id=fresh, ctx=load))
 
@@ -2985,7 +2985,7 @@ class EmbedTransformer(NodeTransformer):
       ~~expr      Nested adjacent Invert: produces a standard Python ast.XXX node.
       head,       Trailing-comma tuple expression-statement: Prolog fact notation.
       head<-body  Module-level predicate definition (only at module scope).
-      head>>(body) DCG rule: rewrites to head(_dcg0_,_dcg1_)<-(rewritten body).
+      head>>(body) DCG rule: rewrites to head(_dcg0,_dcg1)<-(rewritten body).
       with --{} as target:
           <body>  Block form of --: transforms each expression-statement body
                   line via TermTransformer into a simple_ast node, assigns the
@@ -3082,7 +3082,7 @@ class EmbedTransformer(NodeTransformer):
         names uppercased, ``ARG_N`` for the positions that have none (a literal
         argument, an ``_``).  The value is the template form itself, not clever
         naming.  A field name that already reads as a logic variable is left
-        exactly as it is — uppercasing ``_edcg_cnt_in_`` would produce a name
+        exactly as it is — uppercasing ``_edcg_cnt_in`` would produce a name
         the compiler does not mint.
 
         The *where* half is tailored to the recorded ``decl_kind`` so the
@@ -3710,27 +3710,27 @@ class EmbedTransformer(NodeTransformer):
                     )
 
                 # Standard DCG rule.
-                # Add DCG state args (_dcg0_, _dcg1_) to the head.
-                dcg_in = replace(Name(id="_dcg0_", ctx=load), src)
-                dcg_out = replace(Name(id="_dcg1_", ctx=load), src)
+                # Add DCG state args (_dcg0, _dcg1) to the head.
+                dcg_in = replace(Name(id="_dcg0", ctx=load), src)
+                dcg_out = replace(Name(id="_dcg1", ctx=load), src)
                 orig_pos_args.append(dcg_in)
                 orig_pos_args.append(dcg_out)
 
                 # Rewrite DCG body to ordinary clause body AST.
                 if pushback is not None:
-                    # (head, [pb...]) >> body → body s_out is _dcg_pb_,
-                    # then _dcg1_ is [pb..., *_dcg_pb_]
+                    # (head, [pb...]) >> body → body s_out is _dcg_pb,
+                    # then _dcg1 is [pb..., *_dcg_pb]
                     body_raw, _ = _rewrite_dcg_body(
-                        rhs, "_dcg0_", "_dcg_pb_", 2, src
+                        rhs, "_dcg0", "_dcg_pb", 2, src
                     )
                     pb_starred = replace(
-                        Starred(value=Name(id="_dcg_pb_", ctx=load), ctx=load), src
+                        Starred(value=Name(id="_dcg_pb", ctx=load), ctx=load), src
                     )
                     pb_list = replace(
                         List(elts=list(pushback) + [pb_starred], ctx=load), src
                     )
                     pb_unify = replace(Compare(
-                        left=Name(id="_dcg1_", ctx=load),
+                        left=Name(id="_dcg1", ctx=load),
                         ops=[Is()],
                         comparators=[pb_list],
                     ), src)
@@ -3739,7 +3739,7 @@ class EmbedTransformer(NodeTransformer):
                     )
                 else:
                     body_expr_raw, _ = _rewrite_dcg_body(
-                        rhs, "_dcg0_", "_dcg1_", 2, src
+                        rhs, "_dcg0", "_dcg1", 2, src
                     )
 
                 # From here: same pipeline as <- rules.
@@ -4534,14 +4534,14 @@ class EmbedTransformer(NodeTransformer):
         # Pre-register the functor with its full field set so the class
         # gets the right number of fields.  Field names: visible args use
         # arg_0..arg_N pattern (will be overridden by first clause), hidden
-        # args use _edcg_{name}_in_, _edcg_{name}_out_, _edcg_{name}_.
+        # args use _edcg_{name}_in, _edcg_{name}_out, _edcg_{name}.
         field_names = [f"arg_{i}" for i in range(visible_arity)]
         for ap_name in acc_pass_names:
             if ap_name in transformer._edcg_accs or ap_name == "dcg":
-                field_names.append(f"_edcg_{ap_name}_in_")
-                field_names.append(f"_edcg_{ap_name}_out_")
+                field_names.append(f"_edcg_{ap_name}_in")
+                field_names.append(f"_edcg_{ap_name}_out")
             elif ap_name in transformer._edcg_passes:
-                field_names.append(f"_edcg_{ap_name}_")
+                field_names.append(f"_edcg_{ap_name}")
 
         transformer._module_items.append(
             EdcgPredDecl(
@@ -4790,7 +4790,7 @@ class EmbedTransformer(NodeTransformer):
         Takes the rewritten body AST and emits the functor class definition
         and $define_predicate call.
         """
-        # orig_pos_args already carries the appended _dcg0_/_dcg1_ state
+        # orig_pos_args already carries the appended _dcg0/_dcg1 state
         # args (bare Name nodes) — harmless to the cons lint, which only
         # fires on lists.
         _warn_cons_bar_head(orig_pos_args, orig_kw_args, expr_stmt,
