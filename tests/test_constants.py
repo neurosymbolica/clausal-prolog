@@ -165,3 +165,21 @@ def test_qualified_constant_access(tmp_path):
     # that the existing general mechanism covers constants too.
     assert [deref(v) for _ in call("q", v, module=m.__dict__["$module"])] == \
         [3.14159]
+
+
+def test_import_constant_direct_collides_with_local_constant_rejected(tmp_path):
+    _load(tmp_path, "own7", "-constants(_PI_ = 3.14159)\n")
+    with pytest.raises(SyntaxError, match="already bound"):
+        _load(tmp_path, "use7", """
+            -constants(_PI_ = 3)
+            -import_from(tc_own7, [_PI_])
+        """)
+
+
+def test_import_constant_alias_collides_with_earlier_import_rejected(tmp_path):
+    _load(tmp_path, "own8", "-constants(_PI_ = 3.14159)\n")
+    with pytest.raises(SyntaxError, match="already bound"):
+        _load(tmp_path, "use8", """
+            -import_from(tc_own8, [_PI_])
+            -import_from(tc_own8, [alias(_PI_, _PI_)])
+        """)
