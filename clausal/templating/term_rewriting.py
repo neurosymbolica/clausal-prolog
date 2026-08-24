@@ -433,7 +433,8 @@ def _is_constant_name(identifier: str) -> bool:
     )
 
 
-def _raise_undeclared_constant(identifier: str) -> None:
+def _raise_undeclared_constant(identifier: str, node=None, source_lines=None,
+                                filename=None) -> None:
     """Shared message for a constant-shaped reference nothing declares.
 
     Raised both from ``visit_Name`` (ordinary term position) and from
@@ -441,12 +442,32 @@ def _raise_undeclared_constant(identifier: str) -> None:
     escapes — their body never passes through ``visit_Name``, so it would
     otherwise silently fall through to a Python ``NameError`` at solve time
     instead of a load-time ``SyntaxError``).
+
+    *node*/*source_lines*/*filename* mirror ``_arrow_body_error``: every raise
+    site holds the offending AST node, so the coordinates are already in
+    hand.  Setting filename/lineno on the ``SyntaxError`` (rather than only
+    naming the site inside the message) is what qualifies it for
+    ``clausal_syntax_diagnostics``'s caret/window enrichment — see
+    syntax_diagnostics.py, which requires ``exc.filename == filename`` and a
+    valid ``exc.lineno``.
     """
-    raise SyntaxError(
+    lineno = getattr(node, "lineno", None)
+    col = getattr(node, "col_offset", None)
+    text = None
+    if source_lines and lineno and 1 <= lineno <= len(source_lines):
+        text = source_lines[lineno - 1]
+    msg = (
         f"`{identifier}` is a constant name (one leading and one "
         f"trailing underscore) but nothing declares it. Declare "
         f"-constants({identifier} = <ground value>) before this "
-        f"clause, or import it: -import_from(mod, [{identifier}])")
+        f"clause, or import it: -import_from(mod, [{identifier}]) — "
+        f"or if you meant a logic variable, drop one of the underscores "
+        f"(`_x` or `x_`)."
+    )
+    if lineno is None:
+        raise SyntaxError(msg)
+    raise SyntaxError(
+        msg, (filename, lineno, (col + 1) if col is not None else None, text))
 
 
 def _is_logic_var_name(identifier: str) -> bool:
@@ -1000,7 +1021,8 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
     # NameError at solve time instead of a load-time SyntaxError.
     for ident in _collect_constant_refs(expression):
         if ident not in transformer.constants:
-            _raise_undeclared_constant(ident)
+            _raise_undeclared_constant(
+                ident, node, transformer._source_lines, transformer._filename)
     # An f-string / ``++()`` use is an occurrence for the singleton lint —
     # these names never pass through visit_Name, so bump the counter here.
     # Exact multiplicity within one thunk body is not needed; one bump per
@@ -1073,7 +1095,7 @@ class TermTransformer(NodeTransformer):
 
     def __init__(transformer, atoms=frozenset(), import_remap=None,
                  source_lines=None, bare_atom_refs=None,
-                 logic_var_refs=None, constants=frozenset()):
+                 logic_var_refs=None, constants=frozenset(), filename=None):
         transformer.seen_vars = set()
         # Per-clause occurrence count of each logic-variable name, keyed by
         # identifier — feeds the ClausalSingletonWarning lint (see
@@ -1090,6 +1112,11 @@ class TermTransformer(NodeTransformer):
         transformer.constants = constants
         transformer._import_remap = import_remap or {}
         transformer._source_lines = source_lines
+        # Source file being rewritten, used only to attribute compile-time
+        # errors (mirrors EmbedTransformer._filename) — threaded through so
+        # an undeclared-constant SyntaxError raised from here qualifies for
+        # clausal_syntax_diagnostics's caret/window enrichment.
+        transformer._filename = filename
         # Shared sink for bare-atom collection.  EmbedTransformer passes the
         # same set into every per-clause TermTransformer so that the final
         # union is naturally available without a post-pass merge.  Phase 2 of
@@ -1479,6 +1506,8 @@ class TermTransformer(NodeTransformer):
             source_lines=transformer._source_lines,
             bare_atom_refs=transformer._bare_atom_refs,
             logic_var_refs=transformer._logic_var_refs,
+            constants=transformer.constants,
+            filename=transformer._filename,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
         # Shared object (not a copy): occurrences inside the lambda body
@@ -1588,7 +1617,9 @@ class TermTransformer(NodeTransformer):
         if identifier in transformer.constants:
             return replace(Name(id=identifier, ctx=load), name)
         if _is_constant_name(identifier):
-            _raise_undeclared_constant(identifier)
+            _raise_undeclared_constant(
+                identifier, name, transformer._source_lines,
+                transformer._filename)
         # Anonymous variable: each _ is a fresh Var, never reused.
         if identifier == "_":
             return replace(
@@ -3532,6 +3563,7 @@ class EmbedTransformer(NodeTransformer):
             bare_atom_refs=transformer._bare_atom_refs,
             logic_var_refs=transformer._logic_var_refs,
             constants=frozenset(transformer._constants),
+            filename=transformer._filename,
         )
 
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
@@ -4342,7 +4374,11 @@ class EmbedTransformer(NodeTransformer):
         See implementation_plans/module-level-constants.md.
         """
         call_node = expr_stmt.value.operand  # the Call under the USub
-        if args or not call_node.keywords:
+        # Bare ``-constants`` (no parens) hands a Name operand here, not a
+        # Call — it has no ``keywords`` attribute at all. getattr (mirroring
+        # -specialize's defence against the same shape) turns that into the
+        # ordinary usage error below instead of an AttributeError.
+        if args or not getattr(call_node, 'keywords', None):
             raise SyntaxError(
                 "-constants takes name = value pairs: "
                 "-constants(_PI_ = 3.14159, _MAX_ = 3)")

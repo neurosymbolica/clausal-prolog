@@ -1,6 +1,6 @@
 # Library module for the JOINT direct-bucket-ref regression coverage.
 # pos 0 has 2 distinct keys, pos 1 has 3 — joint distinct 6 > 3 * min_gain
-# (1.5) and coverage 6/6 = 1.0 >= _JOINT_COVERAGE THRESHOLD (0.8), so the
+# (1.5) and coverage 6/6 = 1.0 >= _JOINT_COVERAGE_THRESHOLD (0.8), so the
 # predicate takes the FLAT JOINT dispatch path and exposes
 # _index_plans_joint. An importing call site with BOTH args ground compiles
 # to a direct joint bucket ref (the _joint_exposed wrapping path).

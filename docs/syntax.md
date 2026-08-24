@@ -125,6 +125,13 @@ example — use [`-allow_singletons`](directives.md#-allow_singletons):
 Test("most general query") <- var(SOME_UNBOUND_VAR)
 ```
 
+!!! note "Chained comparisons count their middle operand twice"
+    `1 < X < 10` desugars to two goals sharing `X` (`1 < X` and `X < 10`), so `X` counts as
+    2 occurrences even though it appears once in the source. A variable that occurs only as
+    the middle term of a chained comparison therefore never warns as a singleton — and, by
+    the same token, renaming it to `X_UNUSED` would trip the *inverse* lint (marked
+    `_UNUSED` but occurs more than once), since the desugaring still duplicates it.
+
 !!! note "Known gap: DCG/EDCG bodies are not yet linted"
     `>>` grammar rules (both plain [DCGs](#definite-clause-grammars--) and
     [EDCGs](#extended-dcgs--edcgs)) do not run through the singleton check — a genuine

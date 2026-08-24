@@ -63,6 +63,49 @@ def test_undeclared_constant_reference_is_syntax_error(tmp_path):
         _load(tmp_path, "e", "area(R, A) <- (A is ++(_PI_ * R))\n")
 
 
+def test_undeclared_constant_error_has_location_and_underscore_remedy(tmp_path):
+    """IMPORTANT: the raise sites hold the AST node, so filename/lineno must
+    land on the SyntaxError itself — both for a readable location and to
+    qualify for clausal_syntax_diagnostics's caret/window enrichment, which
+    requires exc.filename == filename and a valid exc.lineno (see
+    syntax_diagnostics.enrich_syntax_error). The message must also offer the
+    most likely remedy for legacy code that meant a logic variable."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _load(tmp_path, "e2", "area(R, A) <- (A is ++(_PI_ * R))\n")
+    exc = exc_info.value
+    assert exc.filename == str(tmp_path / "e2.clausal")
+    assert exc.lineno == 1
+    assert "drop one of the underscores" in str(exc)
+
+
+def test_constant_usable_inside_arrow_lambda_body(tmp_path):
+    """CRITICAL regression: the arrow-lambda sub-transformer used to be
+    built with no constants=, so it always got the default frozenset() and
+    any declared constant referenced inside a lambda body (the
+    ``call_goal((X <- (body)), ...)`` form) fell through to the
+    undeclared-constant SyntaxError even though it was properly declared.
+    Loading must succeed AND the folded value must actually be used at solve
+    time — not just silently accepted — so this checks both a passing and a
+    failing comparison against the same declared threshold."""
+    m = _load(tmp_path, "m", """
+        -constants(_K_ = 5)
+        p(R) <- call_goal((X <- (X > _K_)), R)
+    """)
+    module = m.__dict__["$module"]
+    assert list(call("p", 7, module=module))       # 7 > 5: folded value used, solves
+    assert list(call("p", 3, module=module)) == []  # 3 > 5: same fold, correctly fails
+
+
+def test_bare_constants_directive_raises_usage_syntax_error(tmp_path):
+    """IMPORTANT: ``-constants`` with no parens hands a bare Name operand to
+    _handle_constants_directive, which used to assume a Call and blow up
+    with ``AttributeError: 'Name' object has no attribute 'keywords'``
+    instead of the ordinary usage SyntaxError every other malformed
+    ``-constants(...)`` gets."""
+    with pytest.raises(SyntaxError, match="-constants takes name = value pairs"):
+        _load(tmp_path, "e3", "-constants\np(X) <- (X == 1)\n")
+
+
 def test_unground_rhs_raises_at_load(tmp_path):
     from clausal.logic.constants import ConstantNotGroundError
     with pytest.raises(ConstantNotGroundError):

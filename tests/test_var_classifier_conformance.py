@@ -54,8 +54,12 @@ def test_pinned_divergences():
     assert ds_var("__x") is True and tr_var("__x") is False
 
 def test_corpus_has_no_constant_shaped_variables():
-    """Census guard: no .clausal file may use a _X_-shaped name until the
-    constants feature gives it meaning (and after that, only declared ones)."""
+    """Census guard: no committed .clausal file contains a _X_-shaped token,
+    declared or not — the regex below flags every occurrence regardless of
+    whether a -constants declaration covers it, so today the bar is simply
+    "none exist yet". A future fixture that legitimately declares and uses a
+    -constants name will need an explicit allowlist added to this test (not
+    implemented — nothing has needed it yet)."""
     import pathlib, re
     root = pathlib.Path(__file__).resolve().parent.parent
     pat = re.compile(r"(?<![A-Za-z0-9_])_[^\W\d_][\w]*?[^\W_]_(?![A-Za-z0-9_])")
