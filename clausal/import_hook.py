@@ -40,6 +40,7 @@ from .syntax_diagnostics import clausal_syntax_diagnostics
 from .templating.term_rewriting import EmbedTransformer, TermTransformer
 from .logic.database import Module as LogicModule, head_key
 from .logic.compiler import compile_predicate_trampoline, compile_predicate_shallow
+from .logic.constants import check_constant_ground
 from .logic.predicate import PredicateMeta
 from .logic.variables import Var, Trail, unify, deref, walk
 from .terms import Compound, KWTerm, DictTerm, SetTerm
@@ -150,6 +151,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     module_dict["$assert_fact"] = (
         lambda term: predicate_nodes.append(_fact_to_predicate_node(term))
     )
+    module_dict["$check_constant_ground"] = check_constant_ground
     code = loader.get_code(module.__name__)
 
     # _last_transformer is set by source_to_code.  If the code came
@@ -498,6 +500,7 @@ class PredicateLoader(_ClausalSourceLoader):
             lambda term: _assert_fact_deferred(
                 term, logic_module, module_dict, pending)
         )
+        module_dict["$check_constant_ground"] = check_constant_ground
         code = self.get_code(module.__name__)
         transformer = getattr(self, '_last_transformer', None)
         module_items = (transformer._module_items if transformer is not None

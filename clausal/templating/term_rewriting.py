@@ -433,6 +433,22 @@ def _is_constant_name(identifier: str) -> bool:
     )
 
 
+def _raise_undeclared_constant(identifier: str) -> None:
+    """Shared message for a constant-shaped reference nothing declares.
+
+    Raised both from ``visit_Name`` (ordinary term position) and from
+    ``_build_py_thunk_ast`` (the ``++``/f-string/unit-sugar raw-Python
+    escapes — their body never passes through ``visit_Name``, so it would
+    otherwise silently fall through to a Python ``NameError`` at solve time
+    instead of a load-time ``SyntaxError``).
+    """
+    raise SyntaxError(
+        f"`{identifier}` is a constant name (one leading and one "
+        f"trailing underscore) but nothing declares it. Declare "
+        f"-constants({identifier} = <ground value>) before this "
+        f"clause, or import it: -import_from(mod, [{identifier}])")
+
+
 def _is_logic_var_name(identifier: str) -> bool:
     """Return True if ``identifier`` should be treated as a logic variable.
 
@@ -804,6 +820,29 @@ def _collect_logic_var_names(node) -> list[str]:
     return ordered
 
 
+def _collect_constant_refs(node) -> list[str]:
+    """Collect constant-shaped (``_X_``) free names, in first-occurrence order.
+
+    Mirrors ``_collect_logic_var_names`` but for the constants class — used
+    by ``_build_py_thunk_ast`` to validate the raw-Python escapes (``++()``,
+    f-strings, unit sugar), whose body is embedded verbatim as a Python
+    lambda and so never passes through ``visit_Name``.
+    """
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    class _Collector(NodeVisitor):
+        def visit_Name(self, name):
+            ident = name.id
+            if _is_constant_name(ident) and ident not in seen:
+                seen.add(ident)
+                ordered.append(ident)
+            self.generic_visit(name)
+
+    _Collector().visit(node)
+    return ordered
+
+
 class ClausalLintWarning(UserWarning):
     """Load-time lint diagnostic for a likely-footgun Clausal construct."""
 
@@ -931,6 +970,13 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
     *node* is used for source locations.  *expression* is the lambda body AST.
     *var_names* is the ordered list of logic variable names.
     """
+    # Constant-shaped free names in the thunk body never pass through
+    # visit_Name either (the body is embedded verbatim as a Python lambda),
+    # so an undeclared one would otherwise silently defer to a Python
+    # NameError at solve time instead of a load-time SyntaxError.
+    for ident in _collect_constant_refs(expression):
+        if ident not in transformer.constants:
+            _raise_undeclared_constant(ident)
     # An f-string / ``++()`` use is an occurrence for the singleton lint —
     # these names never pass through visit_Name, so bump the counter here.
     # Exact multiplicity within one thunk body is not needed; one bump per
@@ -1003,7 +1049,7 @@ class TermTransformer(NodeTransformer):
 
     def __init__(transformer, atoms=frozenset(), import_remap=None,
                  source_lines=None, bare_atom_refs=None,
-                 logic_var_refs=None):
+                 logic_var_refs=None, constants=frozenset()):
         transformer.seen_vars = set()
         # Per-clause occurrence count of each logic-variable name, keyed by
         # identifier — feeds the ClausalSingletonWarning lint (see
@@ -1014,6 +1060,10 @@ class TermTransformer(NodeTransformer):
         transformer._logic_var_refs = (
             logic_var_refs if logic_var_refs is not None else {})
         transformer.atoms = atoms
+        # -constants (Task 5): names bound to a ground value before any
+        # clause statement executes. A plain Name reference to one embeds
+        # the value in the clause term — see visit_Name.
+        transformer.constants = constants
         transformer._import_remap = import_remap or {}
         transformer._source_lines = source_lines
         # Shared sink for bare-atom collection.  EmbedTransformer passes the
@@ -1507,6 +1557,14 @@ class TermTransformer(NodeTransformer):
             identifier = _TRUTH_ALIASES[identifier]
             if identifier in _BOOL_ALIAS_VALUES:
                 return replace(Constant(value=_BOOL_ALIAS_VALUES[identifier]), name)
+        # Declared or imported constant: a module global holding a ground
+        # value, bound before any clause statement executes. A plain Name
+        # load embeds the value in the clause term — indexing sees the
+        # literal, no Var is involved.
+        if identifier in transformer.constants:
+            return replace(Name(id=identifier, ctx=load), name)
+        if _is_constant_name(identifier):
+            _raise_undeclared_constant(identifier)
         # Anonymous variable: each _ is a fresh Var, never reused.
         if identifier == "_":
             return replace(
@@ -3075,6 +3133,11 @@ class EmbedTransformer(NodeTransformer):
         # can name the declaration it disagrees with.
         transformer._functor_decl_site: dict[str, tuple[int, str]] = {}
         transformer._atoms: set[str] = set()
+        # Names bound by -constants (Task 5) so far in this file — a plain
+        # module global holding a ground value, threaded into every
+        # per-clause TermTransformer by _make_term_transformer. Task 6 also
+        # adds imported constant names to this set.
+        transformer._constants: set[str] = set()
         transformer._import_remap: dict[str, str] = {}
         # Local names bound by an -import_from seen SO FAR in this file. A
         # clause head for one of these binds by position rather than by field
@@ -3444,6 +3507,7 @@ class EmbedTransformer(NodeTransformer):
             source_lines=transformer._source_lines,
             bare_atom_refs=transformer._bare_atom_refs,
             logic_var_refs=transformer._logic_var_refs,
+            constants=frozenset(transformer._constants),
         )
 
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
@@ -4039,12 +4103,15 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_overwrites_directive(args, expr_stmt)
         if name == "allow_singletons":
             return transformer._handle_allow_singletons_directive(args, expr_stmt)
+        if name == "constants":
+            return transformer._handle_constants_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
             f"(known directives: -module, -private, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
-            f"-strict_atoms, -implicit_atoms, -overwrites, -allow_singletons)"
+            f"-strict_atoms, -implicit_atoms, -overwrites, -allow_singletons, "
+            f"-constants)"
         )
 
     def _handle_module_directive(transformer, args, expr_stmt):
@@ -4077,6 +4144,12 @@ class EmbedTransformer(NodeTransformer):
                 reserved = _reserved_truth_decl_name(export)
                 if reserved is not None:
                     _raise_reserved_truth_decl(reserved, "-module")
+                if isinstance(export, Name) and _is_constant_name(export.id):
+                    raise SyntaxError(
+                        f"-module cannot list constant `{export.id}`: "
+                        f"constants are public module globals — declare "
+                        f"with -constants and import with -import_from; no "
+                        f"export listing is needed")
                 if isinstance(export, Name):
                     # Bare atom: generate zero-arity PredicateMeta class
                     transformer._atoms.add(export.id)
@@ -4139,6 +4212,12 @@ class EmbedTransformer(NodeTransformer):
             reserved = _reserved_truth_decl_name(item)
             if reserved is not None:
                 _raise_reserved_truth_decl(reserved, "-private")
+            if isinstance(item, Name) and _is_constant_name(item.id):
+                raise SyntaxError(
+                    f"-private cannot list constant `{item.id}`: constants "
+                    f"are public module globals — declare with -constants "
+                    f"and import with -import_from; no export listing is "
+                    f"needed")
             if isinstance(item, Name):
                 # Bare atom: generate zero-arity PredicateMeta class
                 transformer._atoms.add(item.id)
@@ -4227,6 +4306,98 @@ class EmbedTransformer(NodeTransformer):
             )
         transformer._allow_singletons = True
         return replace(Pass(), expr_stmt)
+
+    def _handle_constants_directive(transformer, args, expr_stmt):
+        """Process ``-constants(_PI_ = 3.14159, _MAX_ = _PI_ * 2)``.
+
+        Declarations arrive as keyword arguments on the directive call. Each
+        lowers to ``<name> = $check_constant_ground('<name>', <rhs>)`` at
+        module level, so the value is bound (and gated for groundness) before
+        any clause statement executes; references are plain Name loads and the
+        value lands inside clause terms — folding, without a Var anywhere.
+        See implementation_plans/module-level-constants.md.
+        """
+        call_node = expr_stmt.value.operand  # the Call under the USub
+        if args or not call_node.keywords:
+            raise SyntaxError(
+                "-constants takes name = value pairs: "
+                "-constants(_PI_ = 3.14159, _MAX_ = 3)")
+        statements = []
+        for kw in call_node.keywords:
+            ident = kw.arg
+            if ident is None or not _is_constant_name(ident):
+                raise SyntaxError(
+                    f"-constants: {ident!r} is not a constant name — "
+                    f"constants spell with exactly one leading and one "
+                    f"trailing underscore, e.g. _PI_")
+            if ident in transformer._constants:
+                raise SyntaxError(
+                    f"-constants: `{ident}` is already bound (earlier "
+                    f"-constants or an import)")
+            if ident[1:-1].endswith("_UNUSED"):
+                # Decided edge (todo/done/module-level-constants-open-
+                # questions.md #3): legal, but visually collides with the
+                # singleton-suppression suffix.
+                import warnings  # noqa: PLC0415
+                warnings.warn(
+                    f"-constants: `{ident}` ends in _UNUSED, which reads as "
+                    f"the unused-variable marker; consider another name",
+                    ClausalLintWarning, stacklevel=2)
+            rhs = transformer._transform_constant_rhs(kw.value, ident)
+            transformer._constants.add(ident)
+            assign = replace(
+                Assign(
+                    targets=[replace(Name(id=ident, ctx=store), kw.value)],
+                    value=replace(
+                        Call(
+                            func=replace(
+                                Name(id="$check_constant_ground", ctx=load),
+                                kw.value),
+                            args=[replace(Constant(value=ident), kw.value),
+                                  rhs],
+                            keywords=[],
+                        ), kw.value),
+                ), expr_stmt)
+            fix_missing_locations(assign)
+            statements.append(assign)
+        return statements if len(statements) > 1 else statements[0]
+
+    def _transform_constant_rhs(transformer, node, ident):
+        """Validate and return the Python AST for a -constants RHS.
+
+        v1 grammar: scalar Constant, previously declared constant, declared
+        atom, unary/binary arithmetic over those, and a ``++`` escape
+        (adjacent double UAdd) whose operand is emitted verbatim as Python.
+        Structured literals (list/dict/set/tuple) are deferred — the
+        Clausal-term vs Python-value question is not yet decided for them.
+        """
+        if isinstance(node, Constant):
+            return node
+        if isinstance(node, Name):
+            if node.id in transformer._constants or node.id in transformer._atoms:
+                return node
+            raise SyntaxError(
+                f"-constants: `{ident}` RHS references `{node.id}`, which is "
+                f"neither a previously declared constant nor a declared atom")
+        if (isinstance(node, UnaryOp) and isinstance(node.op, UAdd)
+                and isinstance(node.operand, UnaryOp)
+                and isinstance(node.operand.op, UAdd)):
+            return node.operand.operand  # ++expr: raw Python, load-time eval
+        if isinstance(node, UnaryOp):
+            return replace(UnaryOp(op=node.op, operand=transformer.
+                           _transform_constant_rhs(node.operand, ident)), node)
+        if isinstance(node, BinOp):
+            return replace(BinOp(
+                left=transformer._transform_constant_rhs(node.left, ident),
+                op=node.op,
+                right=transformer._transform_constant_rhs(node.right, ident),
+            ), node)
+        if isinstance(node, (List, Tuple, Set, Dict)):
+            raise SyntaxError(
+                f"-constants: structured constant RHS not yet supported for "
+                f"`{ident}` — use a scalar or a ++() escape")
+        raise SyntaxError(
+            f"-constants: unsupported RHS for `{ident}`: {unparse(node)}")
 
     def _handle_overwrites_directive(transformer, args, expr_stmt):
         """Process ``-overwrites([atom1, atom2, ...])`` directive (Phase 4 of
