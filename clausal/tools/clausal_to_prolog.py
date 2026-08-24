@@ -308,11 +308,32 @@ def emit_module(pmodule: PModule, op_table: OperatorTable) -> str:
 
 # ── Clausal source → Prolog AST conversion ───────────────────────────
 
+def _is_constant_name(identifier: str) -> bool:
+    """True for the module-constant lexical class (``_PI_``, ``_円周率_``).
+
+    Mirrors ``term_rewriting._is_constant_name``; kept local so this module
+    stays free of an engine import.
+    """
+    return (
+        len(identifier) >= 3
+        and identifier[0] == "_" and identifier[-1] == "_"
+        and identifier[1] != "_" and identifier[-2] != "_"
+        and not identifier[1].isdigit()
+    )
+
+
 def _is_logic_var_name(identifier: str) -> bool:
-    """Return True if identifier should be treated as a logic variable."""
+    """Return True if identifier should be treated as a logic variable.
+
+    Bare ``_`` stays a variable here (translation context) — pinned by
+    test_var_classifier_conformance, which also pins the constant-shape
+    exclusion below.
+    """
     if identifier == "_":
         return True
     if identifier.startswith("__"):
+        return False
+    if _is_constant_name(identifier):
         return False
     if identifier.startswith("_"):
         return True

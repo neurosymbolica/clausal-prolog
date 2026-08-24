@@ -54,13 +54,31 @@ import ast
 __all__ = ["desugar_surface", "dotted_attr_chain", "is_dict_attr_access"]
 
 
+def _is_constant_name(identifier: str) -> bool:
+    """True for the module-constant lexical class (``_PI_``, ``_円周率_``).
+
+    Mirrors ``term_rewriting._is_constant_name``; kept local so this module
+    stays free of engine imports.
+    """
+    return (
+        len(identifier) >= 3
+        and identifier[0] == "_" and identifier[-1] == "_"
+        and identifier[1] != "_" and identifier[-2] != "_"
+        and not identifier[1].isdigit()
+    )
+
+
 def _is_logic_var_name(identifier: str) -> bool:
     """True for a Clausal logic-variable name (``P``, ``FOO_BAR``, ``_x``).
 
     Mirrors ``term_rewriting._is_logic_var_name``; kept local so this module
     stays free of engine imports.  ``term_rewriting`` is the caller, not the
-    provider, so there is no cycle to invert.
+    provider, so there is no cycle to invert.  No dunder exclusion here
+    (sugar-recognition context) — pinned by test_var_classifier_conformance,
+    which also pins the constant-shape exclusion below.
     """
+    if _is_constant_name(identifier):
+        return False
     if identifier.startswith("_"):
         return True
     # ALL-CAPS: str.isupper() is True iff all cased chars are uppercase AND

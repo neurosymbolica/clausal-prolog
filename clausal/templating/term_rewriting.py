@@ -414,6 +414,24 @@ def _raise_reserved_truth_decl(name: str, directive: str) -> None:
 
 
 
+def _is_constant_name(identifier: str) -> bool:
+    """True for the module-constant lexical class: exactly one leading and
+    one trailing underscore with a non-digit-initial interior (``_PI_``,
+    ``_MAX_RETRIES_``, ``_円周率_``).
+
+    Carved OUT of the logic-variable namespace — every ``_is_logic_var_name``
+    copy excludes this shape (pinned by test_var_classifier_conformance).
+    ``_1_`` is rejected: a constant named ``1`` invites confusion with the
+    literal. See implementation_plans/module-level-constants.md.
+    """
+    return (
+        len(identifier) >= 3
+        and identifier[0] == "_" and identifier[-1] == "_"
+        and identifier[1] != "_" and identifier[-2] != "_"
+        and not identifier[1].isdigit()
+    )
+
+
 def _is_logic_var_name(identifier: str) -> bool:
     """Return True if ``identifier`` should be treated as a logic variable.
 
@@ -426,10 +444,15 @@ def _is_logic_var_name(identifier: str) -> bool:
       Every *cased* character must be uppercase and there must be at least one
       cased character (so plain ``_`` and digit-only names are excluded).
       Underscores and digits are allowed inside (e.g. ``N1``, ``MAX_OF``).
+
+    Constant-shaped names (``_PI_``) are excluded too — pinned by
+    test_var_classifier_conformance.
     """
     if identifier == "_":
         return False
     if identifier.startswith("__"):
+        return False
+    if _is_constant_name(identifier):
         return False
     if identifier.startswith("_"):
         return True
