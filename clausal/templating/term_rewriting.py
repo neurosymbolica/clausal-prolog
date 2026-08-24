@@ -821,20 +821,44 @@ def _collect_logic_var_names(node) -> list[str]:
 
 
 def _collect_constant_refs(node) -> list[str]:
-    """Collect constant-shaped (``_X_``) free names, in first-occurrence order.
+    """Collect FREE constant-shaped (``_X_``) names, in first-occurrence order.
 
     Mirrors ``_collect_logic_var_names`` but for the constants class — used
     by ``_build_py_thunk_ast`` to validate the raw-Python escapes (``++()``,
     f-strings, unit sugar), whose body is embedded verbatim as a Python
     lambda and so never passes through ``visit_Name``.
+
+    "Free" excludes any identifier locally bound *within this same escape
+    subtree* — a comprehension target (``_ITEM_`` in ``[x for _ITEM_ in
+    ...]``) or a walrus target (``(_X_ := ...)``) is a plain ``Store``-ctx
+    ``Name`` node reachable by the same walk, not a reference to a module
+    global, so it must never be flagged as an undeclared constant. Two
+    passes: first collect every ``Store``-ctx identifier anywhere in the
+    subtree (its local-binding set), then collect ``Load``-ctx
+    constant-shaped names that are not in that set.
     """
+    bound: set[str] = set()
+
+    class _BindCollector(NodeVisitor):
+        def visit_Name(self, name):
+            if isinstance(name.ctx, Store):
+                bound.add(name.id)
+            self.generic_visit(name)
+
+    _BindCollector().visit(node)
+
     ordered: list[str] = []
     seen: set[str] = set()
 
     class _Collector(NodeVisitor):
         def visit_Name(self, name):
             ident = name.id
-            if _is_constant_name(ident) and ident not in seen:
+            if (
+                isinstance(name.ctx, Load)
+                and _is_constant_name(ident)
+                and ident not in bound
+                and ident not in seen
+            ):
                 seen.add(ident)
                 ordered.append(ident)
             self.generic_visit(name)

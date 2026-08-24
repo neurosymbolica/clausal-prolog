@@ -86,3 +86,35 @@ def test_module_export_list_rejects_constant_names(tmp_path):
 def test_non_constant_shaped_declaration_rejected(tmp_path):
     with pytest.raises(SyntaxError, match="constant name"):
         _load(tmp_path, "i", "-constants(PI = 3.14)\np(X) <- (X == 1)\n")
+
+
+def test_comprehension_target_matching_constant_shape_is_not_flagged(tmp_path):
+    """A comprehension's own loop variable is locally bound, not a reference
+    to any module global — even when it happens to be constant-shaped. The
+    undeclared-constant check inside a ``++()`` escape must see past a
+    Store-context binding, not just any Name node of the right shape."""
+    m = _load(tmp_path, "j", """
+        total(R, T) <- (T is ++(sum(_ITEM_ for _ITEM_ in range(int(R)))))
+    """)
+    v = Var()
+    results = [deref(v) for _ in call("total", 5, v, module=m.__dict__["$module"])]
+    assert results == [10]
+
+
+def test_walrus_target_matching_constant_shape_is_not_flagged(tmp_path):
+    """Same as the comprehension case, for a walrus target inside a
+    ``++()`` escape."""
+    m = _load(tmp_path, "k", """
+        doubled(R, T) <- (T is ++((_TMP_ := int(R) * 2) + _TMP_))
+    """)
+    v = Var()
+    results = [deref(v) for _ in call("doubled", 3, v, module=m.__dict__["$module"])]
+    assert results == [12]
+
+
+def test_genuinely_free_undeclared_constant_inside_escape_still_raises(tmp_path):
+    """The fix for the two cases above must not swallow the real case: a
+    constant-shaped name that is truly free (never locally bound) inside a
+    ``++()`` escape still raises the load-time SyntaxError."""
+    with pytest.raises(SyntaxError, match="_PI_"):
+        _load(tmp_path, "l", "area(R, A) <- (A is ++(_PI_ * R))\n")
