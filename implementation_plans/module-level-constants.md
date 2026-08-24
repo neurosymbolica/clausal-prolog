@@ -97,9 +97,17 @@ as a feature on a deliberately-dead name). Inverse lint (as SWI does for `_X`): 
 strict-atoms precedent of defaulting to the strict behavior. Corpus census at decision time:
 439 singleton occurrences in 310 clauses across 102 of 370 `.clausal` files (314 ALL_CAPS
 style, 125 underscore style), with the largest cluster in generated `clausal-scipy` bidir
-fixtures (unused outputs of `svd(M, U, S, VH)`-style calls). The same series fixes the scipy
-fixture *generator* (collapsing that cluster at the source) and mechanically cleans the rest
-(`_` or `_UNUSED`); warnings don't fail the suite, so partial cleanup doesn't block landing.
+fixtures (unused outputs of `svd(M, U, S, VH)`-style calls; the fixtures turned out to be
+hand-written, not generated). The same series mechanically cleans the corpus with a
+script-assisted per-occurrence rename (`_` or `_UNUSED`); warnings don't fail the suite, so
+partial cleanup doesn't block landing.
+
+**Implementation survey addendum (2026-08-24, pre-implementation):** the compiler itself mints
+constant-shaped hidden variables — DCG `_dcg{N}_` (`term_rewriting.py:2370,2410`) and EDCG
+`_edcg_{acc}_in_`/`_out_`/`_edcg_{pass}_` (`term_rewriting.py:2500-2507`); the
+`edcg_counter.clausal` fixture hand-writes that minted convention. These mints lose the trailing
+underscore before the re-carve lands. Full task breakdown:
+`docs/superpowers/plans/2026-08-24-module-level-constants.md`.
 
 Why a suffix, not the Prolog leading-underscore convention: (a) caseless scripts are *forced*
 into leading-underscore variables by `isupper()`, so a case-based exemption is blind exactly for
