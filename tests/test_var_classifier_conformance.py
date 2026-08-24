@@ -61,7 +61,7 @@ def test_corpus_has_no_constant_shaped_variables():
     pat = re.compile(r"(?<![A-Za-z0-9_])_[^\W\d_][\w]*?[^\W_]_(?![A-Za-z0-9_])")
     offenders = []
     for p in root.rglob("*.clausal"):
-        if ".claude" in p.parts:
+        if ".claude" in p.relative_to(root).parts:
             continue
         for m in pat.finditer(p.read_text()):
             offenders.append((str(p), m.group(0)))
