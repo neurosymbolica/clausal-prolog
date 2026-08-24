@@ -118,3 +118,50 @@ def test_genuinely_free_undeclared_constant_inside_escape_still_raises(tmp_path)
     ``++()`` escape still raises the load-time SyntaxError."""
     with pytest.raises(SyntaxError, match="_PI_"):
         _load(tmp_path, "l", "area(R, A) <- (A is ++(_PI_ * R))\n")
+
+
+def test_import_constant_direct(tmp_path):
+    _load(tmp_path, "own1", "-constants(_PI_ = 3.14159)\npi(_PI_),\n")
+    m = _load(tmp_path, "use1", """
+        -import_from(tc_own1, [_PI_])
+        twopi(X) <- (X is ++(_PI_ * 2))
+    """)
+    v = Var()
+    [x] = [deref(v) for _ in call("twopi", v, module=m.__dict__["$module"])]
+    assert abs(x - 6.28318) < 1e-4
+
+
+def test_import_constant_alias(tmp_path):
+    _load(tmp_path, "own2", "-constants(_PI_ = 3.14159)\n")
+    m = _load(tmp_path, "use2", """
+        -import_from(tc_own2, [alias(_PI_, _MYPI_)])
+        p(_MYPI_),
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("p", v, module=m.__dict__["$module"])] == [3.14159]
+
+
+def test_import_constant_alias_shape_mismatch_rejected(tmp_path):
+    _load(tmp_path, "own3", "-constants(_PI_ = 3.14159)\n")
+    with pytest.raises(SyntaxError, match="constant"):
+        _load(tmp_path, "use3", "-import_from(tc_own3, [alias(_PI_, Pi)])\n")
+
+
+def test_qualified_constant_access(tmp_path):
+    _load(tmp_path, "own4", "-constants(_PI_ = 3.14159)\n")
+    m = _load(tmp_path, "use4", """
+        -import_module(tc_own4)
+        p(X) <- (X is ++(tc_own4._PI_ + 0))
+        q(tc_own4._PI_),
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("p", v, module=m.__dict__["$module"])] == \
+        [3.14159]
+    # Bare-term qualified access (no ``++`` escape): the dotted chain
+    # already lowers to a plain LoadAttr node — the SAME mechanism that
+    # already supports a qualified atom reference like ``currency.euro``
+    # in value position (see term_to_ast.py's ``_dotted_name_from_loadattr``
+    # handling). No visit_Attribute change was needed; this assertion pins
+    # that the existing general mechanism covers constants too.
+    assert [deref(v) for _ in call("q", v, module=m.__dict__["$module"])] == \
+        [3.14159]
