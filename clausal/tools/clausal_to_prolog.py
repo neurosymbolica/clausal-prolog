@@ -496,6 +496,11 @@ class _ClausalToProlog:
         if name == "private":
             # Private is not emitted in Prolog (module exports handle visibility)
             return None
+        if name == "constants":
+            raise NotImplementedError(
+                "clausal_to_prolog: -constants files are not translatable "
+                "yet — Prolog has no constants; inlining is tracked in "
+                "implementation_plans/module-level-constants.md")
         if name in ("dynamic", "discontiguous", "table"):
             return self._convert_meta_directive(name, call)
         # Generic directive

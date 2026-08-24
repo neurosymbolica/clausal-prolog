@@ -148,14 +148,24 @@ def prolog_var_to_clausal(name: str) -> str:
     Head     -> _head      (titlecase -> leading underscore lowercase)
     _Ignored -> _ignored   (leading underscore, lowercase)
     _        -> _          (anonymous stays)
+    Foo_     -> _foo       (trailing underscore(s) stripped — a variable
+                            must never land on Clausal's _x_ constant
+                            spelling)
+    _PI_     -> _pi        (same: constant-shaped input is de-constant-ed)
     """
     if name == "_":
         return "_"
     if name.startswith("_"):
-        return "_" + name[1:].lower()
-    if len(name) == 1 and name.isupper():
+        candidate = "_" + name[1:].lower()
+    elif len(name) == 1 and name.isupper():
         return name
-    return "_" + name.lower()
+    else:
+        candidate = "_" + name.lower()
+    # Clausal reserves one-underscore-each-end spellings for constants;
+    # a translated VARIABLE must never land on that class.
+    while len(candidate) > 1 and candidate.endswith("_"):
+        candidate = candidate[:-1]
+    return candidate if candidate != "_" else "_v"
 
 
 # ── Builtin name mapping ────────────────────────────────────────────
