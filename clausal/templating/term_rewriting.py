@@ -1,4 +1,5 @@
 from ast import *
+from collections import Counter
 from copy import deepcopy
 
 from .parser import is_template_func
@@ -807,6 +808,16 @@ class ClausalLintWarning(UserWarning):
     """Load-time lint diagnostic for a likely-footgun Clausal construct."""
 
 
+class ClausalSingletonWarning(ClausalLintWarning):
+    """A named logic variable occurring exactly once in its clause.
+
+    Suppress per-variable with the ``_UNUSED`` suffix, per-file with
+    ``-allow_singletons``. The suffix is the sole canonical spelling —
+    case-based exemptions are blind for caseless scripts, which the
+    ``isupper()`` rule forces into leading-underscore variables.
+    """
+
+
 def _node_has_var_or_wildcard(node) -> bool:
     """True if *node* contains a logic variable or a bare ``_`` wildcard."""
     found = False
@@ -920,6 +931,12 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
     *node* is used for source locations.  *expression* is the lambda body AST.
     *var_names* is the ordered list of logic variable names.
     """
+    # An f-string / ``++()`` use is an occurrence for the singleton lint —
+    # these names never pass through visit_Name, so bump the counter here.
+    # Exact multiplicity within one thunk body is not needed; one bump per
+    # captured name is enough to take it out of "singleton" territory.
+    for name in var_names:
+        transformer.var_occurrences[name] += 1
     lambda_params = [
         arg(arg=name, annotation=None,
             lineno=node.lineno, col_offset=node.col_offset,
@@ -988,6 +1005,12 @@ class TermTransformer(NodeTransformer):
                  source_lines=None, bare_atom_refs=None,
                  logic_var_refs=None):
         transformer.seen_vars = set()
+        # Per-clause occurrence count of each logic-variable name, keyed by
+        # identifier — feeds the ClausalSingletonWarning lint (see
+        # EmbedTransformer._warn_singletons). Every TermTransformer starts a
+        # fresh Counter; the arrow-clause build's shared instance (head +
+        # body) is what makes "per clause" the right granularity.
+        transformer.var_occurrences = Counter()
         transformer._logic_var_refs = (
             logic_var_refs if logic_var_refs is not None else {})
         transformer.atoms = atoms
@@ -1384,6 +1407,9 @@ class TermTransformer(NodeTransformer):
             logic_var_refs=transformer._logic_var_refs,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
+        # Shared object (not a copy): occurrences inside the lambda body
+        # count toward the enclosing clause's singleton lint.
+        lambda_transformer.var_occurrences = transformer.var_occurrences
 
         logic_var_params = [p for p in param_names if _is_logic_var_name(p)]
         lambda_transformer._load_names = (
@@ -1488,6 +1514,7 @@ class TermTransformer(NodeTransformer):
         # Examples (all-caps):   X, FOO, HEAD, TAIL, N1, MAX_OF.
         # Excluded: __, __init__ (dunder-style), MixedCase, lowercase.
         if _is_logic_var_name(identifier):
+            transformer.var_occurrences[identifier] += 1
             transformer._logic_var_refs.setdefault(
                 identifier, getattr(name, "lineno", 0))
             # Lambda param or outer-lambda param: generate LoadName term node
@@ -3064,6 +3091,8 @@ class EmbedTransformer(NodeTransformer):
         transformer._edcg_accs: dict[str, dict] = {}   # name → {val, in_, out, joiner_ast}
         transformer._edcg_passes: set[str] = set()      # set of pass names
         transformer._edcg_preds: dict[str, tuple[int, list[str]]] = {}  # pred → (visible_arity, [acc/pass names])
+        # Per-file opt-out for ClausalSingletonWarning, set by -allow_singletons.
+        transformer._allow_singletons = False
 
     def _register_functor(transformer, functor_name, field_names, node, kind):
         """Record *functor_name*'s signature and where it was fixed.
@@ -3088,6 +3117,28 @@ class EmbedTransformer(NodeTransformer):
         if not lines or not lineno or lineno > len(lines):
             return ""
         return lines[lineno - 1].strip()
+
+    def _warn_singletons(transformer, term_transformer, expr_stmt):
+        """Clause-end singleton check (see ClausalSingletonWarning)."""
+        if transformer._allow_singletons:
+            return
+        import warnings  # noqa: PLC0415
+        lineno = getattr(expr_stmt, "lineno", None)
+        where = transformer._site(lineno) if lineno else "unknown site"
+        for ident, count in term_transformer.var_occurrences.items():
+            if ident.endswith("_UNUSED"):
+                if count > 1:
+                    warnings.warn(
+                        f"{where}: variable `{ident}` is marked _UNUSED but "
+                        f"occurs more than once in its clause",
+                        ClausalSingletonWarning, stacklevel=2)
+            elif count == 1:
+                warnings.warn(
+                    f"{where}: singleton variable `{ident}` — a variable "
+                    f"occurring once binds nothing. Misspelling? Rename to "
+                    f"`{ident}_UNUSED` (or `_`) if deliberate, or add "
+                    f"-allow_singletons to the file",
+                    ClausalSingletonWarning, stacklevel=2)
 
     def _arity_conflict_remedy(transformer, functor_name, all_field_names,
                                prev_fields, decl_kind, decl_lineno):
@@ -3434,6 +3485,7 @@ class EmbedTransformer(NodeTransformer):
             body=replace(Constant(value=True), expr_stmt.value),
         )
         define_stmt = _make_define_stmt(predicate_ast, expr_stmt)
+        transformer._warn_singletons(term_transformer, expr_stmt)
 
         statements = []
         if functor_name not in transformer._seen_functors:
@@ -3862,6 +3914,7 @@ class EmbedTransformer(NodeTransformer):
                     ),
                     expr_stmt,
                 )
+                transformer._warn_singletons(term_transformer, expr_stmt)
 
                 statements = []
                 if functor_name not in transformer._seen_functors:
@@ -3976,12 +4029,14 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_implicit_atoms_directive(args, expr_stmt)
         if name == "overwrites":
             return transformer._handle_overwrites_directive(args, expr_stmt)
+        if name == "allow_singletons":
+            return transformer._handle_allow_singletons_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
             f"(known directives: -module, -private, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
-            f"-strict_atoms, -implicit_atoms, -overwrites)"
+            f"-strict_atoms, -implicit_atoms, -overwrites, -allow_singletons)"
         )
 
     def _handle_module_directive(transformer, args, expr_stmt):
@@ -4146,6 +4201,23 @@ class EmbedTransformer(NodeTransformer):
                 "`-implicit_atoms` or `-implicit_atoms()`"
             )
         transformer._module_items.append(ImplicitAtomsItem())
+        return replace(Pass(), expr_stmt)
+
+    def _handle_allow_singletons_directive(transformer, args, expr_stmt):
+        """Process ``-allow_singletons`` directive.
+
+        Marker directive — no arguments.  Accepts the bare form
+        ``-allow_singletons`` and the parenthesised ``-allow_singletons()``.
+        Opts this file out of ``ClausalSingletonWarning`` entirely — a
+        load-time-only flag, so no module item is emitted (nothing for
+        ``compiler_v2`` to consume; the lint never runs past load).
+        """
+        if args:
+            raise SyntaxError(
+                "-allow_singletons takes no arguments: use bare "
+                "`-allow_singletons` or `-allow_singletons()`"
+            )
+        transformer._allow_singletons = True
         return replace(Pass(), expr_stmt)
 
     def _handle_overwrites_directive(transformer, args, expr_stmt):

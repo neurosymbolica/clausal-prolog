@@ -27,8 +27,10 @@ def _lint_warnings(tmp_path, name, text):
 
 def test_warns_on_bracketed_cons_in_rule_head(tmp_path):
     # The canonical Prolog shape: [H | T] — BitOr as a list-literal element.
+    # H_UNUSED: only the cons-bar shape matters here, not H's binding — a
+    # plain H would also trip the (unrelated) singleton lint.
     ws = _lint_warnings(tmp_path, "cons_rule",
-                        "my_len([H | T], N) <- (my_len(T, M), N == M + 1)\n")
+                        "my_len([H_UNUSED | T], N) <- (my_len(T, M), N == M + 1)\n")
     assert len(ws) == 1
     assert "did you mean" in str(ws[0].message)
     assert "[H, *T]" in str(ws[0].message)
@@ -37,9 +39,11 @@ def test_warns_on_bracketed_cons_in_rule_head(tmp_path):
 def test_warns_on_list_literal_bitor_operand(tmp_path):
     # The measured authoring study's exact shape: head([W, S] | REST, ...) —
     # a list literal as a BitOr operand, outside any brackets.
+    # S_UNUSED: only the cons-bar shape matters here — a plain S would also
+    # trip the (unrelated) singleton lint.
     ws = _lint_warnings(
         tmp_path, "cons_study",
-        "totals([W, S] | REST, N) <- (totals(REST, M), N == M + W)\n")
+        "totals([W, S_UNUSED] | REST, N) <- (totals(REST, M), N == M + W)\n")
     assert len(ws) == 1
     assert "[H, *T]" in str(ws[0].message)
 
@@ -95,8 +99,10 @@ def test_no_warn_on_clean_asserted_rule_head(tmp_path):
 
 def test_no_warn_on_star_spread_head(tmp_path):
     # The correct spelling must stay silent.
+    # H_UNUSED: only the cons-bar shape matters here — a plain H would also
+    # trip the (unrelated) singleton lint.
     ws = _lint_warnings(tmp_path, "ok_star",
-                        "my_len([H, *T], N) <- (my_len(T, M), N == M + 1)\n")
+                        "my_len([H_UNUSED, *T], N) <- (my_len(T, M), N == M + 1)\n")
     assert ws == []
 
 
@@ -108,8 +114,10 @@ def test_no_warn_on_plain_heads(tmp_path):
 def test_no_warn_on_bare_name_bitor_head(tmp_path):
     # A | B over plain names in a head is a structural BitOr pattern
     # (clpb-style) — not obviously cons; stay silent.
+    # B_UNUSED: only the cons-bar shape matters here — a plain B would also
+    # trip the (unrelated) singleton lint.
     ws = _lint_warnings(tmp_path, "ok_names",
-                        "-private([holds(E)])\nholds(A | B) <- (holds(A))\n")
+                        "-private([holds(E)])\nholds(A | B_UNUSED) <- (holds(A))\n")
     assert ws == []
 
 

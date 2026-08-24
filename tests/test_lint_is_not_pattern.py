@@ -32,13 +32,17 @@ def test_warns_on_compound_with_wildcard(tmp_path):
 
 
 def test_warns_on_list_with_var(tmp_path):
-    ws = _lint_warnings(tmp_path, "lint_list", "bad(S) <- (S is not [Z])\n")
+    # Z_UNUSED: only Z's unbound-ness matters here — a plain Z would also
+    # trip the (unrelated) singleton lint.
+    ws = _lint_warnings(tmp_path, "lint_list", "bad(S) <- (S is not [Z_UNUSED])\n")
     assert len(ws) == 1
 
 
 def test_warns_on_nested_compound_with_var(tmp_path):
+    # Z_UNUSED: only Z's unbound-ness matters here — a plain Z would also
+    # trip the (unrelated) singleton lint.
     ws = _lint_warnings(tmp_path, "lint_nested",
-                        "-private([f(X), g(Y)])\nbad(S) <- (S is not f(g(Z)))\n")
+                        "-private([f(X), g(Y)])\nbad(S) <- (S is not f(g(Z_UNUSED)))\n")
     assert len(ws) == 1
 
 
