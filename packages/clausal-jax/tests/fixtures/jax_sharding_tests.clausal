@@ -55,7 +55,7 @@ Test("device_id reverse") <- (
 )  # nv
 
 Test("device_id enumerates all pairs when unbound") <- (
-    findall(ID, device_id(_D, ID), IDS),
+    findall(ID, device_id(_D_UNUSED, ID), IDS),
     device_count(N),
     length(IDS, N)
 )  # nv
@@ -107,7 +107,7 @@ Test("mesh_devices has length matching mesh size") <- (
 # multi-device hosts.
 Test("mesh_devices list pattern match") <- (
     make_mesh([1], ["x"], MESH),
-    mesh_devices(MESH, [D, *_REST]),
+    mesh_devices(MESH, [D, *_REST_UNUSED]),
     device_platform(D, "cpu")
 )  # nv
 

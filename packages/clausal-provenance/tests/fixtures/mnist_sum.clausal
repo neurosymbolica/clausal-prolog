@@ -36,7 +36,7 @@ Test("boolean: enumerate possible sums when value uncertain") <- (
         (Digit(0, 4), True),
         (Digit(1, 5), True),
     ],
-    solve(boolean, FACTS, SumDigits(0, 1, T), R),
+    solve(boolean, FACTS, SumDigits(0, 1, T_UNUSED), R),
     length(R, 2)
 )
 

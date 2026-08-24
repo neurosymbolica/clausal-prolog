@@ -31,7 +31,7 @@ Test("best params from grid search") <- (
     GridSearch(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf", "linear"]},
                DATASET, kfold(3), BEST),
-    BestParams(BEST, PARAMS)
+    BestParams(BEST, PARAMS_UNUSED)
 )  # nv
 
 # ── SearchResults ────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ Test("search results from grid search") <- (
     GridSearch(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf"]},
                DATASET, kfold(3), BEST),
-    SearchResults(BEST, RESULTS)
+    SearchResults(BEST, RESULTS_UNUSED)
 )  # nv
 
 # ── RandomSearch ─────────────────────────────────────────────────────

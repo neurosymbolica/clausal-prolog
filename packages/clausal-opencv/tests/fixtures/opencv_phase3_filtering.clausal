@@ -203,7 +203,7 @@ Test("morphology_ex with iterations") <- (
 
 Test("pyr_down halves the dimensions") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
-    shape(IMG, [H, W, _]),
+    shape(IMG, [H_UNUSED, W_UNUSED, _]),
     pyr_down(IMG, DOWN),
     shape(DOWN, [HD, WD, _]),
     HD == 2,

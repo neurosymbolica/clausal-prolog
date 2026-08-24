@@ -18,10 +18,10 @@ Test("activation lookup by name") <- (
 )  # nv
 
 Test("activation registry contains common names") <- (
-    activation("sigmoid", _S),
-    activation("tanh", _T),
-    activation("gelu", _G),
-    activation("softmax", _SM)
+    activation("sigmoid", _S_UNUSED),
+    activation("tanh", _T_UNUSED),
+    activation("gelu", _G_UNUSED),
+    activation("softmax", _SM_UNUSED)
 )  # nv
 
 Test("activation registry contains leaky_relu and selu") <- (
@@ -164,11 +164,11 @@ Test("initializer lookup by name") <- (
 )  # nv
 
 Test("initializer registry contains common names") <- (
-    initializer("zeros", _Z),
-    initializer("ones", _O),
-    initializer("glorot_uniform", _GU),
-    initializer("he_normal", _HN),
-    initializer("orthogonal", _OR)
+    initializer("zeros", _Z_UNUSED),
+    initializer("ones", _O_UNUSED),
+    initializer("glorot_uniform", _GU_UNUSED),
+    initializer("he_normal", _HN_UNUSED),
+    initializer("orthogonal", _OR_UNUSED)
 )  # nv
 
 Test("initializer findall enumerates full registry") <- (

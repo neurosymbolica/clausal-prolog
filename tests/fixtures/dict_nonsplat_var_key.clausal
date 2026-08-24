@@ -36,6 +36,6 @@ nonsplat_var_value(GOT) <- (
 # A never-bound key must raise a catchable instantiation error at CALL time —
 # this clause existing in the module must NOT break module load.
 nonsplat_unbound_key(GOT) <- (
-    OUT is {K: 20},
+    OUT is {K_UNUSED: 20},
     get(OUT, "x", GOT)
 )

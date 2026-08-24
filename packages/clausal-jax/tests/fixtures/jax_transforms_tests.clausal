@@ -72,7 +72,7 @@ Test("jvp sum(x^2) along [1,0,0] gives 2") <- (
     array([1.0, 2.0, 3.0], P),
     array([1.0, 0.0, 0.0], T),
     jvp_value(F, [P], [T], RESULT),
-    RESULT is (_PRIMAL, TANGENT),
+    RESULT is (_PRIMAL_UNUSED, TANGENT),
     array_list(TANGENT, 2.0)
 )  # nv
 
@@ -82,7 +82,7 @@ Test("vjp value matches forward eval") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([1.0, 2.0, 3.0], X),
     vjp_value(F, X, RESULT),
-    RESULT is (V, _VJP_FN),
+    RESULT is (V, _VJP_FN_UNUSED),
     array_list(V, 14.0)
 )  # nv
 
@@ -90,7 +90,7 @@ Test("vjp_fn applied gives gradient") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([1.0, 2.0, 3.0], X),
     vjp_value(F, X, RESULT),
-    RESULT is (_V, VJP_FN),
+    RESULT is (_V_UNUSED, VJP_FN),
     array(1.0, COTANGENT),
     VJP_RESULT is ++VJP_FN(COTANGENT),
     VJP_RESULT is (G,),
@@ -213,5 +213,5 @@ Test("grad with dict input") <- (
 Test("grad of vector output fails (not scalar)") <- (
     F is ++(lambda x: x ** 2),
     array([1.0, 2.0, 3.0], X),
-    not grad_value(F, X, _G)
+    not grad_value(F, X, _G_UNUSED)
 )  # nv

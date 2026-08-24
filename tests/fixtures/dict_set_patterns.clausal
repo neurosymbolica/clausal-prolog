@@ -1,6 +1,11 @@
 # tests/fixtures/dict_set_patterns.clausal
 # Phase 2: DictTerm and SetTerm pattern matching in clause heads and bodies.
 -private([foo, bar, num, inner])
+# -allow_singletons: the "dot variable key" test's KEYV is a dynamic dict key
+# read via P.KEYV — Attribute.attr is a string, not an ast.Name, so the
+# singleton lint's occurrence counter never sees that second reference and
+# misreads KEYV as unused.
+-allow_singletons
 
 # ── DictTerm in clause heads ──
 
@@ -113,7 +118,7 @@ Test("subscript missing throws") <- (
 # --- Test: non-ground key index throws a catchable instantiation_error ---
 Test("subscript nonground errors") <- (
     catch(
-        (_ is {"a": 1}[K]),
+        (_ is {"a": 1}[K_UNUSED]),
         error(ETYPE, _),
         ETYPE is "instantiation_error",
     )
@@ -180,7 +185,7 @@ Test("subscript nondict object errors") <- (
 Test("get nondict fails") <- (not get(5, "a", _))  # nv
 Test("splat unbound source errors") <- (
     catch(
-        (_ is {**P, "b": 9}),
+        (_ is {**P_UNUSED, "b": 9}),
         error(ETYPE, _),
         ETYPE is "instantiation_error",
     )
@@ -296,14 +301,14 @@ Test("dot nondict throws") <- (
 # --- Test: unbound base throws instantiation_error (both spellings) ---
 Test("dot unbound base throws") <- (
     catch(
-        (_ is P.foo),
+        (_ is P_UNUSED.foo),
         error(ETYPE, _),
         ETYPE is "instantiation_error",
     )
 )  # nv
 Test("bracket unbound base throws") <- (
     catch(
-        (_ is P[foo]),
+        (_ is P_UNUSED[foo]),
         error(ETYPE, _),
         ETYPE is "instantiation_error",
     )

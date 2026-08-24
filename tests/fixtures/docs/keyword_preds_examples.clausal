@@ -24,7 +24,7 @@ Test("change multiple") <- (
 
 # --8<-- [start:unbound_keys_examples]
 Test("unbound") <- (
-    unbound_keys(point(1, Y, Z), KEYS),
+    unbound_keys(point(1, Y_UNUSED, Z_UNUSED), KEYS),
     in_("y", KEYS),
     in_("z", KEYS),
     length(KEYS, 2)

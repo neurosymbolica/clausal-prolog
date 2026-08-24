@@ -70,5 +70,5 @@ Test("eval spline derivative arity-4") <- (
 
 Test("eval spline first derivative") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    EvalSpline(HANDLE, 1.0, 1, DY),
+    EvalSpline(HANDLE, 1.0, 1, DY_UNUSED),
     Free(HANDLE))  # nv

@@ -20,7 +20,7 @@ Test("algorithm kmeans is clusterer") <- (
 
 Test("load iris dataset") <- (
     LoadDataset("iris", DATASET),
-    DATASET is ("Dataset", X, Y)
+    DATASET is ("Dataset", X_UNUSED, Y_UNUSED)
 )  # nv
 
 # ── Fit and predict (classification) ────────────────────────────────
@@ -28,9 +28,9 @@ Test("load iris dataset") <- (
 Test("fit and predict random forest on iris") <- (
     LoadDataset("iris", DATASET),
     Fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
-    FITTED is ("Fitted", INNER, HANDLE),
-    DATASET is ("Dataset", X, Y),
-    Predict(FITTED, X, PREDS)
+    FITTED is ("Fitted", INNER_UNUSED, HANDLE_UNUSED),
+    DATASET is ("Dataset", X, Y_UNUSED),
+    Predict(FITTED, X, PREDS_UNUSED)
 )  # nv
 
 # ── Fit and score ────────────────────────────────────────────────────
@@ -46,18 +46,18 @@ Test("fit and score logistic regression on iris") <- (
 
 Test("fit and transform pca") <- (
     LoadDataset("iris", DATASET),
-    DATASET is ("Dataset", X, Y),
+    DATASET is ("Dataset", X, Y_UNUSED),
     Fit(Est("pca", {"n_components": 2}), ("Dataset", X, None), FITTED),
-    Transform(FITTED, X, TRANSFORMED)
+    Transform(FITTED, X, TRANSFORMED_UNUSED)
 )  # nv
 
 # ── FitTransform ─────────────────────────────────────────────────────
 
 Test("fit_transform standard scaler") <- (
     LoadDataset("iris", DATASET),
-    DATASET is ("Dataset", X, Y),
-    FitTransform(Est("standard_scaler", {}), ("Dataset", X, None), TRANSFORMED, FITTED),
-    FITTED is ("Fitted", INNER, HANDLE)
+    DATASET is ("Dataset", X, Y_UNUSED),
+    FitTransform(Est("standard_scaler", {}), ("Dataset", X, None), TRANSFORMED_UNUSED, FITTED),
+    FITTED is ("Fitted", INNER_UNUSED, HANDLE_UNUSED)
 )  # nv
 
 # ── Fit/4 (raw X, Y) ────────────────────────────────────────────────
@@ -75,7 +75,7 @@ Test("fit with raw X and Y") <- (
 Test("learned feature importances") <- (
     LoadDataset("iris", DATASET),
     Fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
-    Learned(FITTED, "feature_importances", IMPORTANCES)
+    Learned(FITTED, "feature_importances", IMPORTANCES_UNUSED)
 )  # nv
 
 Test("learned n_features_in") <- (
@@ -96,7 +96,7 @@ Test("param from est term") <- (
 
 Test("make est fills defaults") <- (
     MakeEst("random_forest", {"n_estimators": 200}, EST_OBJ),
-    EST_OBJ is ("Est", ALG, PARAMS),
+    EST_OBJ is ("Est", ALG, PARAMS_UNUSED),
     ALG == "random_forest"
 )  # nv
 
@@ -105,8 +105,8 @@ Test("make est fills defaults") <- (
 Test("predict proba on iris") <- (
     LoadDataset("iris", DATASET),
     Fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
-    DATASET is ("Dataset", X, Y),
-    PredictProba(FITTED, X, PROBA)
+    DATASET is ("Dataset", X, Y_UNUSED),
+    PredictProba(FITTED, X, PROBA_UNUSED)
 )  # nv
 
 # ── SVC with decision_function ───────────────────────────────────────
@@ -114,6 +114,6 @@ Test("predict proba on iris") <- (
 Test("svc decision function on iris") <- (
     LoadDataset("iris", DATASET),
     Fit(Est("svc", {"kernel": "linear"}), DATASET, FITTED),
-    DATASET is ("Dataset", X, Y),
-    DecisionFunction(FITTED, X, SCORES)
+    DATASET is ("Dataset", X, Y_UNUSED),
+    DecisionFunction(FITTED, X, SCORES_UNUSED)
 )  # nv

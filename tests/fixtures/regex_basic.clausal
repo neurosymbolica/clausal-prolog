@@ -30,7 +30,7 @@ Test("match no match fails") <- (not match(r"\d+", "abc", _))  # nv
 # ── match/2: auto-binding via ALLCAPS groups ────────────────────────────────
 
 Test("auto-bind YEAR") <- (
-    YEAR is "2026" and
+    YEAR_UNUSED is "2026" and
     match(r"(?P<YEAR>\d{4})-\d{2}", "2026-03")
 )  # nv
 

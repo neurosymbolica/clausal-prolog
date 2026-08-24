@@ -54,7 +54,7 @@ SumListFold(XS, S) <- foldl(((E, A, R) <- (R == A + E)), XS, 0, S)
 ProductList(XS, P) <- foldl(((E, A, R) <- (R == A * E)), XS, 1, P)
 
 # Count elements via fold.
-CountFold(XS, N) <- foldl(((ELEM, A, R) <- (R == A + 1)), XS, 0, N)
+CountFold(XS, N) <- foldl(((ELEM_UNUSED, A, R) <- (R == A + 1)), XS, 0, N)
 
 # max_ via fold with initial value.
 MaxFold(XS, INIT, M) <- foldl(((E, A, R) <- (

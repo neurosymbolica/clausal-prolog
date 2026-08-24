@@ -119,7 +119,7 @@ Test("solve_pnp with explicit flags") <- (
         dtype=numpy.float32)),
     K is ++(numpy.array([[800,0,320],[0,800,240],[0,0,1]], dtype=numpy.float64)),
     DIST is ++(numpy.zeros(5, dtype=numpy.float64)),
-    solve_pnp(OBJ, IMG, K, DIST, solvepnp_iterative, RVEC, TVEC),
+    solve_pnp(OBJ, IMG, K, DIST, solvepnp_iterative, RVEC, TVEC_UNUSED),
     shape(RVEC, [3, 1])
 )  # nv
 
@@ -132,7 +132,7 @@ Test("solve_pnp_ransac returns tagged pnp_ransac result") <- (
         dtype=numpy.float32)),
     K is ++(numpy.array([[800,0,320],[0,800,240],[0,0,1]], dtype=numpy.float64)),
     DIST is ++(numpy.zeros(5, dtype=numpy.float64)),
-    solve_pnp_ransac(OBJ, IMG, K, DIST, ("pnp_ransac", _RVEC, _TVEC, _INLIERS))
+    solve_pnp_ransac(OBJ, IMG, K, DIST, ("pnp_ransac", _RVEC_UNUSED, _TVEC_UNUSED, _INLIERS_UNUSED))
 )  # nv
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -153,7 +153,7 @@ Test("calibrate_camera from two synthetic views") <- (
         [[105.0 + 20.0*x, 110.0 + 20.0*y] for y in range(6) for x in range(7)],
         dtype=numpy.float32)),
     calibrate_camera([OBJP, OBJP], [IMGP1, IMGP2], [640, 480],
-                       ("calib", _RMS, _K, _DIST, _RVECS, _TVECS))
+                       ("calib", _RMS_UNUSED, _K_UNUSED, _DIST_UNUSED, _RVECS_UNUSED, _TVECS_UNUSED))
 )  # nv
 
 Test("calibrate_camera tagged result has matching list lengths") <- (
@@ -167,7 +167,7 @@ Test("calibrate_camera tagged result has matching list lengths") <- (
         [[105.0 + 20.0*x, 110.0 + 20.0*y] for y in range(6) for x in range(7)],
         dtype=numpy.float32)),
     calibrate_camera([OBJP, OBJP], [IMGP1, IMGP2], [640, 480],
-                       ("calib", _RMS, K, _DIST, RVECS, TVECS)),
+                       ("calib", _RMS_UNUSED, K, _DIST_UNUSED, RVECS, TVECS)),
     shape(K, [3, 3]),
     length(RVECS, 2),
     length(TVECS, 2)
@@ -183,7 +183,7 @@ Test("project_points returns image points and jacobian") <- (
     TVEC is ++(numpy.array([[0],[0],[5]], dtype=numpy.float64)),
     K is ++(numpy.array([[800,0,320],[0,800,240],[0,0,1]], dtype=numpy.float64)),
     DIST is ++(numpy.zeros(5, dtype=numpy.float64)),
-    project_points(OBJ, RVEC, TVEC, K, DIST, IMG_PTS, JAC),
+    project_points(OBJ, RVEC, TVEC, K, DIST, IMG_PTS, JAC_UNUSED),
     shape(IMG_PTS, [2, 1, 2])
 )  # nv
 
@@ -268,7 +268,7 @@ Test("recover_pose from essential matrix returns tagged pose result") <- (
     P2 is ++(P1 + numpy.random.default_rng(43).random((15, 2)).astype(numpy.float32) * 5),
     K is ++(numpy.array([[800,0,320],[0,800,240],[0,0,1]], dtype=numpy.float64)),
     find_essential_mat(P1, P2, K, E),
-    recover_pose(E, P1, P2, K, ("pose", _R, _T, _MASK, _N_INLIERS))
+    recover_pose(E, P1, P2, K, ("pose", _R_UNUSED, _T_UNUSED, _MASK_UNUSED, _N_INLIERS_UNUSED))
 )  # nv
 
 Test("recover_pose pose fields have expected shapes") <- (

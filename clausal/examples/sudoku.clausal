@@ -6,7 +6,7 @@
 
 transpose([], []),
 
-transpose([[], *_REST], []),
+transpose([[], *_REST_UNUSED], []),
 
 transpose(MATRIX, [HEADS, *REST_COLS]) <- (
     ExtractColumn(MATRIX, HEADS, TAILS),

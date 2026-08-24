@@ -195,11 +195,11 @@ Test("distribution lookup by name") <- (
 )  # nv
 
 Test("distribution registry includes common names") <- (
-    distribution("norm", _N),
-    distribution("beta", _B),
-    distribution("gamma", _G),
-    distribution("uniform", _U),
-    distribution("bernoulli", _BN)
+    distribution("norm", _N_UNUSED),
+    distribution("beta", _B_UNUSED),
+    distribution("gamma", _G_UNUSED),
+    distribution("uniform", _U_UNUSED),
+    distribution("bernoulli", _BN_UNUSED)
 )  # nv
 
 Test("distribution findall enumerates registry") <- (
@@ -315,9 +315,9 @@ Test("poisson pmf at 0 for lam=1") <- (
 
 # Missing methods fail cleanly
 Test("bernoulli has no pdf — failure") <- (
-    not pdf("bernoulli", 1, {"p": 0.5}, _P)
+    not pdf("bernoulli", 1, {"p": 0.5}, _P_UNUSED)
 )  # nv
 
 Test("t has no cdf in this JAX — failure") <- (
-    not cdf("t", 0.0, {"df": 5.0}, _C)
+    not cdf("t", 0.0, {"df": 5.0}, _C_UNUSED)
 )  # nv

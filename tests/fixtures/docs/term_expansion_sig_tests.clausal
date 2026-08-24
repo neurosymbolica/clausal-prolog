@@ -14,6 +14,11 @@ Test("identity passthrough green") <- color("green")  # nv
 # separate, deferred capability (A10-F005).
 -import_from(regex, [match])
 
+# -allow_singletons: YEAR is a regex named-group name (?P<YEAR>...) referenced
+# only via the group-name string inside the pattern, invisible to the
+# singleton lint's ast.Name-based occurrence count.
+-allow_singletons
+
 year_of(S, YEAR) <- match(r"(?P<YEAR>\d{4})-\d{2}", S)
 
 Test("regex auto-bind year") <- (

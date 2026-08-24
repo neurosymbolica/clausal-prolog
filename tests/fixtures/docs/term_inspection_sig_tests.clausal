@@ -11,6 +11,6 @@ Test("gensym generates unique") <- (
 Test("unpack decompose") <- unpack("hello", [".", "h", "ello"])  # nv
 
 Test("numbervars") <- (
-    numbervars([X, Y, Z], 0, END),
+    numbervars([X_UNUSED, Y_UNUSED, Z_UNUSED], 0, END),
     END == 3
 )  # nv

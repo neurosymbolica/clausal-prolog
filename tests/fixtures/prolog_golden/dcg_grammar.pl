@@ -28,7 +28,7 @@ look_ahead(Token), [Token] -->
     [Token].
 
 not_a -->
-    \+ ["a"], [X].
+    \+ ["a"], [X_unused].
 
 valid_sentence(Sentence) :-
     phrase(sentence, Sentence).

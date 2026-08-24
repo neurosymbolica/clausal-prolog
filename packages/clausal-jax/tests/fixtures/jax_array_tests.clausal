@@ -358,7 +358,7 @@ Test("array_list nested") <- (
 
 Test("jax_numpy forward") <- (
     array([1.0, 2.0, 3.0], A),
-    jax_numpy(A, N),
+    jax_numpy(A, N_UNUSED),
     array_list(A, [1.0, 2.0, 3.0])
 )  # nv
 
@@ -412,7 +412,7 @@ Test("at_set tuple index") <- (
 
 Test("at_set does not mutate input") <- (
     arange(0, 3, A),
-    at_set(A, 0, 99, _A2),
+    at_set(A, 0, 99, _A2_UNUSED),
     array_list(A, [0, 1, 2])
 )  # nv
 
@@ -424,7 +424,7 @@ Test("at_add scalar") <- (
 
 Test("at_add does not mutate input") <- (
     array([10, 20, 30], A),
-    at_add(A, 1, 5, _A2),
+    at_add(A, 1, 5, _A2_UNUSED),
     array_list(A, [10, 20, 30])
 )  # nv
 
@@ -509,5 +509,5 @@ Test("at_set with tuple containing bound variable") <- (
 # wrapper turns the TypeError into a predicate failure.
 Test("at_set with python list index fails (not a jnp.array)") <- (
     array([10, 20, 30, 40, 50], A),
-    not at_set(A, [0, 2, 4], 0, _A2)
+    not at_set(A, [0, 2, 4], 0, _A2_UNUSED)
 )  # nv

@@ -9,4 +9,4 @@
 ])
 -import_from(tests.fixtures.impord_vocab, [impord_verdict])
 
-impord_dti_check(S) <- impord_verdict(S, C)
+impord_dti_check(S) <- impord_verdict(S, C_UNUSED)

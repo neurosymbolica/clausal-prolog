@@ -51,8 +51,8 @@ Test("conjunction binds two vars") <- (
     _x == 1,
     _y == 2
 )  # nv
-Test("conjunction fails if first fails") <- (not (a is b and _x is 1))  # nv
-Test("conjunction fails if second fails") <- (not (_x is 1 and a is b))  # nv
+Test("conjunction fails if first fails") <- (not (a is b and _x_UNUSED is 1))  # nv
+Test("conjunction fails if second fails") <- (not (_x_UNUSED is 1 and a is b))  # nv
 Test("triple conjunction") <- (
     _x is 1,
     _y is 2,
@@ -63,7 +63,7 @@ Test("triple conjunction") <- (
 # ── Disjunction (or) ────────────────────────────────────────────────────────
 
 Test("disjunction first succeeds") <- (_x is 1 or _x is 2)  # nv
-Test("disjunction first fails, second succeeds") <- (a is b or _x is 1)  # nv
+Test("disjunction first fails, second succeeds") <- (a is b or _x_UNUSED is 1)  # nv
 Test("disjunction both fail") <- (not (a is b or c is d))  # nv
 
 # ── Negation as failure (not) ────────────────────────────────────────────────
@@ -137,7 +137,7 @@ Test("disjunction with conjunction: 2 solutions") <- (
 
 # ── NAF does not bind ──────────────────────────────────────────────────────
 
-Test("naf does not bind: not(X is a) fails") <- (not (not (_x is a)))  # nv
+Test("naf does not bind: not(X is a) fails") <- (not (not (_x_UNUSED is a)))  # nv
 
 # ── Multi-clause facts (color/1) ───────────────────────────────────────────
 

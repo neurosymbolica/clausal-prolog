@@ -7,4 +7,4 @@
     impord_itd_check(STATUS)
 ])
 
-impord_itd_check(S) <- impord_verdict(S, C)
+impord_itd_check(S) <- impord_verdict(S, C_UNUSED)

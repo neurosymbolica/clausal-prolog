@@ -149,7 +149,7 @@ Test("marker with size and thickness") <- (
 Test("no-mutation for line") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     copy_image(IMG, SNAP),
-    line(IMG, [0, 0], [3, 3], [255], _OUT),
+    line(IMG, [0, 0], [3, 3], [255], _OUT_UNUSED),
     absdiff(IMG, SNAP, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
@@ -157,7 +157,7 @@ Test("no-mutation for line") <- (
 Test("no-mutation for arrowed_line") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     copy_image(IMG, SNAP),
-    arrowed_line(IMG, [0, 0], [3, 3], [255], _OUT),
+    arrowed_line(IMG, [0, 0], [3, 3], [255], _OUT_UNUSED),
     absdiff(IMG, SNAP, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
@@ -165,7 +165,7 @@ Test("no-mutation for arrowed_line") <- (
 Test("no-mutation for rectangle") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     copy_image(IMG, SNAP),
-    rectangle(IMG, [0, 0], [3, 3], [128], 1, _OUT),
+    rectangle(IMG, [0, 0], [3, 3], [128], 1, _OUT_UNUSED),
     absdiff(IMG, SNAP, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
@@ -173,7 +173,7 @@ Test("no-mutation for rectangle") <- (
 Test("no-mutation for circle") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     copy_image(IMG, SNAP),
-    circle(IMG, [2, 2], 1, [128], _OUT),
+    circle(IMG, [2, 2], 1, [128], _OUT_UNUSED),
     absdiff(IMG, SNAP, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
@@ -181,7 +181,7 @@ Test("no-mutation for circle") <- (
 Test("no-mutation for ellipse") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     copy_image(IMG, SNAP),
-    ellipse(IMG, [2, 2], [1, 1], 0.0, 0.0, 360.0, [128], _OUT),
+    ellipse(IMG, [2, 2], [1, 1], 0.0, 0.0, 360.0, [128], _OUT_UNUSED),
     absdiff(IMG, SNAP, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
@@ -189,7 +189,7 @@ Test("no-mutation for ellipse") <- (
 Test("no-mutation for polylines") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     copy_image(IMG, SNAP),
-    polylines(IMG, [[[0,0],[3,0],[3,3],[0,3]]], True, [255], _OUT),
+    polylines(IMG, [[[0,0],[3,0],[3,3],[0,3]]], True, [255], _OUT_UNUSED),
     absdiff(IMG, SNAP, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
@@ -197,7 +197,7 @@ Test("no-mutation for polylines") <- (
 Test("no-mutation for fill_poly") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     copy_image(IMG, SNAP),
-    fill_poly(IMG, [[[0,0],[3,0],[3,3],[0,3]]], [200], _OUT),
+    fill_poly(IMG, [[[0,0],[3,0],[3,3],[0,3]]], [200], _OUT_UNUSED),
     absdiff(IMG, SNAP, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
@@ -205,7 +205,7 @@ Test("no-mutation for fill_poly") <- (
 Test("no-mutation for put_text") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     copy_image(IMG, SNAP),
-    put_text(IMG, "x", [2, 16], font_hershey_simplex, 0.5, [255], 1, _OUT),
+    put_text(IMG, "x", [2, 16], font_hershey_simplex, 0.5, [255], 1, _OUT_UNUSED),
     absdiff(IMG, SNAP, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
@@ -213,7 +213,7 @@ Test("no-mutation for put_text") <- (
 Test("no-mutation for marker") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     copy_image(IMG, SNAP),
-    marker(IMG, [2, 2], [200], _OUT),
+    marker(IMG, [2, 2], [200], _OUT_UNUSED),
     absdiff(IMG, SNAP, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
@@ -261,7 +261,7 @@ Test("draw_contours does not mutate source") <- (
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
     copy_image(IMG, SNAP),
-    draw_contours(IMG, CS, -1, [128], _OUT),
+    draw_contours(IMG, CS, -1, [128], _OUT_UNUSED),
     absdiff(IMG, SNAP, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv

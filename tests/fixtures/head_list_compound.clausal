@@ -19,7 +19,7 @@ Test("list head compound, plain body-bound inner var ground") <- (
 # list-nested head).
 mkpair([pair(A, B)]) <- (A is "k", call_goal(((K, V) <- prov(K, V)), "x", B))
 Test("list multi-arg compound, body-bound inner var ground") <- (
-    mkpair([pair(A, B)]), ground(B), B == "met")
+    mkpair([pair(A_UNUSED, B)]), ground(B), B == "met")
 
 # deeper nesting: [c(d(S))].
 ev_deep([c(d(S))]) <- (prov("x", S))

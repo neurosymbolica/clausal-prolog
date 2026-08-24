@@ -21,7 +21,7 @@ Test("cpsat bool declares 0-1 variable") <- (
 )  # nv
 
 Test("cpsat check succeeds on SAT problem") <- (
-    ortools.cpsat.in_(X, 1, 10),
+    ortools.cpsat.in_(X_UNUSED, 1, 10),
     ortools.cpsat.check()
 )  # nv
 

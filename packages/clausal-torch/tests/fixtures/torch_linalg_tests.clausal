@@ -34,12 +34,12 @@ Test("inv of identity") <- (
 Test("inv roundtrip") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], A),
     inv(A, B),
-    inv(B, C),
+    inv(B, C_UNUSED),
     # C should be close to A — check via norm of difference
-    tensor([[1.0, 2.0], [3.0, 4.0]], A2),
+    tensor([[1.0, 2.0], [3.0, 4.0]], A2_UNUSED),
     matmul(A, B, PROD),
     # A @ inv(A) should be close to identity
-    eye(2, I),
+    eye(2, I_UNUSED),
     shape(PROD, [2, 2])
 )  # nv
 

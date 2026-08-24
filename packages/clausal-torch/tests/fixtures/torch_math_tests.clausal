@@ -172,8 +172,8 @@ Test("sigmoid range") <- (
     tensor([-10.0, 0.0, 10.0], T),
     sigmoid(T, R),
     # sigmoid(0) = 0.5
-    tensor([0.5], HALF),
-    tensor_list(R, L),
+    tensor([0.5], HALF_UNUSED),
+    tensor_list(R, L_UNUSED),
     shape(R, [3])
 )  # nv
 

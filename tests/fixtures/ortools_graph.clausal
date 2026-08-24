@@ -52,7 +52,7 @@ Test("assignment 3x3 optimal") <- (
 )  # nv
 
 Test("assignment 2x2") <- (
-    ortools.graph.assignment([[1, 2], [3, 4]], ASSIGN, COST),
+    ortools.graph.assignment([[1, 2], [3, 4]], ASSIGN_UNUSED, COST),
     COST == 5
 )  # nv
 
@@ -79,6 +79,6 @@ Test("knapsack multidimensional positive") <- (
         [10, 20, 30],
         [[5, 10, 15], [3, 6, 9]],
         [20, 12],
-        SEL, TOTAL),
+        SEL_UNUSED, TOTAL),
     TOTAL > 0
 )  # nv

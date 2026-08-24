@@ -133,7 +133,7 @@ Test("lstm_cell single-step shape") <- (
     zeros(8, H0),
     zeros(8, C0),
     R is ++M(X, (H0, C0)),
-    R is (H, _C),
+    R is (H, _C_UNUSED),
     shape(H, [8])
 )  # nv
 
@@ -144,7 +144,7 @@ Test("lstm_cell single-step shape") <- (
 Test("filter_grad_value over a Linear loss") <- (
     key(0, K),
     linear(4, 1, K, MODEL),
-    ones(4, XS),
+    ones(4, XS_UNUSED),
     LOSS_FN is ++(lambda m: jax.numpy.sum(m(jax.numpy.ones(4)) ** 2)),
     filter_grad_value(LOSS_FN, MODEL, GRADS),
     # Grads should match the model's pytree structure (linear weight + bias)
@@ -262,13 +262,13 @@ Test("MLP one optax SGD step changes the model") <- (
     key(0, K0),
     split_key(K0, 2, [K_INIT, _]),
     mlp(2, 1, 4, 1, K_INIT, MODEL),
-    array([[1.0, 2.0], [3.0, 4.0]], XS),
-    array([[5.0], [6.0]], YS),
+    array([[1.0, 2.0], [3.0, 4.0]], XS_UNUSED),
+    array([[5.0], [6.0]], YS_UNUSED),
     LOSS_FN is ++(lambda m: jax.numpy.mean(
         (jax.vmap(m)(jax.numpy.array([[1.0, 2.0], [3.0, 4.0]]))
          - jax.numpy.array([[5.0], [6.0]])) ** 2)),
     filter_value_and_grad(LOSS_FN, MODEL, VG),
-    VG is (_LOSS, GRADS),
+    VG is (_LOSS_UNUSED, GRADS),
     sgd(0.01, OPT),
     init_optimizer(OPT, MODEL, STATE),
     update_optimizer(OPT, GRADS, STATE, UR),
@@ -282,12 +282,12 @@ Test("MLP one optax SGD step changes the model") <- (
 # ════════════════════════════════════════════════════════════════════════════
 
 Test("batch_norm constructs model and state") <- (
-    batch_norm(3, "batch", BN, STATE),
+    batch_norm(3, "batch", BN, STATE_UNUSED),
     is_stateful(BN)
 )  # nv
 
 Test("batch_norm with mode=batch opts") <- (
-    batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
+    batch_norm(3, "batch", {"mode": "batch"}, BN, STATE_UNUSED),
     is_stateful(BN)
 )  # nv
 
@@ -295,7 +295,7 @@ Test("apply_stateful_module in inference mode preserves shape") <- (
     batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
     inference_mode(BN, BN_EVAL),
     ones(3, X),
-    apply_stateful_module(BN_EVAL, X, STATE, Y, _NEW_STATE),
+    apply_stateful_module(BN_EVAL, X, STATE, Y, _NEW_STATE_UNUSED),
     shape(Y, [3])
 )  # nv
 
@@ -304,7 +304,7 @@ Test("apply_stateful_module under vmap preserves batch shape") <- (
     ones([4, 3], X),
     VMAPPED is ++jax.vmap(BN, axis_name="batch",
                           in_axes=(0, None), out_axes=(0, None)),
-    apply_stateful_module(VMAPPED, X, STATE, Y, _NEW_STATE),
+    apply_stateful_module(VMAPPED, X, STATE, Y, _NEW_STATE_UNUSED),
     shape(Y, [4, 3])
 )  # nv
 
@@ -318,21 +318,21 @@ Test("dropout_train differs from its input under a key") <- (
 )  # nv
 
 Test("inference_mode flips inference field to True") <- (
-    batch_norm(3, "batch", BN, _STATE),
+    batch_norm(3, "batch", BN, _STATE_UNUSED),
     inference_mode(BN, BN_EVAL),
     ++BN.inference == False,
     ++BN_EVAL.inference == True
 )  # nv
 
 Test("inference_mode/3 with value=False switches back") <- (
-    batch_norm(3, "batch", BN, _STATE),
+    batch_norm(3, "batch", BN, _STATE_UNUSED),
     inference_mode(BN, BN_EVAL),
     inference_mode(BN_EVAL, False, BN_TRAIN),
     ++BN_TRAIN.inference == False
 )  # nv
 
 Test("is_stateful discriminates BatchNorm vs Linear") <- (
-    batch_norm(3, "batch", BN, _STATE),
+    batch_norm(3, "batch", BN, _STATE_UNUSED),
     key(0, K),
     linear(3, 3, K, LIN),
     is_stateful(BN),

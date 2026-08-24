@@ -57,7 +57,7 @@ Test("degree cubic") <- (
 )  # nv
 
 Test("degree quadratic") <- (
-    Degree(X**2 + Y*X, X, D),
+    Degree(X**2 + Y_UNUSED*X, X, D),
     D == 2
 )  # nv
 

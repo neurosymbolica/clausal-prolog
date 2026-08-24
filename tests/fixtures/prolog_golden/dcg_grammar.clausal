@@ -20,7 +20,7 @@ Ab() >> ([])
 
 (LookAhead(_token), [_token]) >> ([_token])
 
-NotA() >> (not ['a'], [X])
+NotA() >> (not ['a'], [_x_unused])
 
 ValidSentence(_sentence) <- (phrase(sentence, _sentence))
 

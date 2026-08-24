@@ -20,9 +20,9 @@ Test("pipeline predict") <- (
               ("clf", Est("logistic_regression", {"max_iter": 200}))],
              PIPE),
     LoadDataset("iris", DATASET),
-    DATASET is ("Dataset", X, Y),
+    DATASET is ("Dataset", X, Y_UNUSED),
     Fit(PIPE, DATASET, FITTED),
-    Predict(FITTED, X, PREDS)
+    Predict(FITTED, X, PREDS_UNUSED)
 )  # nv
 
 # ── PipelineStep ─────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ Test("pipeline step extraction") <- (
     LoadDataset("iris", DATASET),
     Fit(PIPE, DATASET, FITTED),
     PipelineStep(FITTED, "scaler", SCALER_FITTED),
-    Learned(SCALER_FITTED, "mean", M)
+    Learned(SCALER_FITTED, "mean", M_UNUSED)
 )  # nv
 
 # ── Pipeline with PCA ────────────────────────────────────────────────

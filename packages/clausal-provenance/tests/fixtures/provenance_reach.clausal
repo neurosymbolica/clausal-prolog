@@ -46,7 +46,7 @@ Test("multiple answers from one start node") <- (
         (Edge("b", "c"), True),
         (Edge("c", "d"), True),
     ],
-    solve(boolean, FACTS, Path("a", DST), R),
+    solve(boolean, FACTS, Path("a", DST_UNUSED), R),
     length(R, 3)
 )
 
@@ -66,7 +66,7 @@ Test("cycle does not blow up the fixpoint — set semantics") <- (
         (Edge("a", "b"), True),
         (Edge("b", "a"), True),
     ],
-    solve(boolean, FACTS, Path("a", DST), R),
+    solve(boolean, FACTS, Path("a", DST_UNUSED), R),
     length(R, 2)
 )
 
@@ -79,7 +79,7 @@ Test("multiple starts: pairs from two disjoint components") <- (
         (Edge(1, 2), True),
         (Edge(10, 11), True),
     ],
-    solve(boolean, FACTS, Path(SRC, DST), R),
+    solve(boolean, FACTS, Path(SRC_UNUSED, DST_UNUSED), R),
     length(R, 4)
 )
 
@@ -114,7 +114,7 @@ Test("facts-only relation queried on input predicate") <- (
         (Edge("a", "b"), True),
         (Edge("b", "c"), True),
     ],
-    solve(boolean, FACTS, Edge(SRC, DST), R),
+    solve(boolean, FACTS, Edge(SRC_UNUSED, DST_UNUSED), R),
     length(R, 2)
 )
 
@@ -127,7 +127,7 @@ Test("duplicate facts merge: True ∨ True = True, single tuple") <- (
         (Edge("a", "b"), True),
         (Edge("a", "b"), True),
     ],
-    solve(boolean, FACTS, Edge(SRC, DST), R),
+    solve(boolean, FACTS, Edge(SRC_UNUSED, DST_UNUSED), R),
     length(R, 1)
 )
 

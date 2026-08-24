@@ -12,4 +12,4 @@ Test("datetime lt") <- (datetime(2020,1,1,10,0,0,A), datetime(2020,1,1,11,0,0,B)
 Test("time lt") <- (time(9,0,0,A), time(17,0,0,B), A < B)  # nv
 Test("min_list earliest") <- (date(2021,1,1,A), date(2019,5,5,B), min_list([A,B], M), M == B)  # nv
 Test("max_list latest") <- (date(2021,1,1,A), date(2019,5,5,B), max_list([A,B], M), M == A)  # nv
-Test("catch incomparable") <- catch((date(2020,1,1,A), datetime(2020,1,1,0,0,0,B), A < B), _E, writeln("caught"))  # nv
+Test("catch incomparable") <- catch((date(2020,1,1,A), datetime(2020,1,1,0,0,0,B), A < B), _E_UNUSED, writeln("caught"))  # nv

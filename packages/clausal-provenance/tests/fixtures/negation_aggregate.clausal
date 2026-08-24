@@ -29,7 +29,7 @@ Test("boolean: blocked node excluded from Allowed") <- (
         (Edge("a", "d"), True),
         (Block("c"), True),
     ],
-    solve(boolean, FACTS, Allowed(NODE), R),
+    solve(boolean, FACTS, Allowed(NODE_UNUSED), R),
     length(R, 2)
 )
 
@@ -39,7 +39,7 @@ Test("boolean: no blocks keeps everything Reachable") <- (
         (Edge("a", "c"), True),
         (Edge("a", "d"), True),
     ],
-    solve(boolean, FACTS, Allowed(NODE), R),
+    solve(boolean, FACTS, Allowed(NODE_UNUSED), R),
     length(R, 3)
 )
 
@@ -50,7 +50,7 @@ Test("boolean: every node blocked → empty Allowed") <- (
         (Block("b"), True),
         (Block("c"), True),
     ],
-    solve(boolean, FACTS, Allowed(NODE), [])
+    solve(boolean, FACTS, Allowed(NODE_UNUSED), [])
 )
 
 

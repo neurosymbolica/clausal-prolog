@@ -3,12 +3,12 @@
 # ── Latex/2 ──────────────────────────────────────────────────────────────────
 
 Test("latex simple") <- (
-    Latex(X**2 + 1, S),
+    Latex(X_UNUSED**2 + 1, S),
     ++("x^{2}" in S)
 )  # nv
 
 Test("latex fraction") <- (
-    Latex(1 / X, S),
+    Latex(1 / X_UNUSED, S),
     ++("frac" in S)
 )  # nv
 
@@ -25,6 +25,6 @@ Test("pretty integer") <- (
 )  # nv
 
 Test("pretty expression") <- (
-    Pretty(X**2, S),
+    Pretty(X_UNUSED**2, S),
     ++("2" in S)
 )  # nv

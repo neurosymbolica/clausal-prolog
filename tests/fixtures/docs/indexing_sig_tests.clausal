@@ -8,5 +8,5 @@ color("green",  "cool"),
 color("yellow", "warm"),
 color("white",  "neutral")
 
-Test("color first arg ground") <- color("red", TEMP)  # nv
-Test("color second arg ground") <- color(NAME, "warm")  # nv
+Test("color first arg ground") <- color("red", TEMP_UNUSED)  # nv
+Test("color second arg ground") <- color(NAME_UNUSED, "warm")  # nv

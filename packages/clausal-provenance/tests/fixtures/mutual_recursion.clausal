@@ -25,7 +25,7 @@ Test("mutual recursion across two predicates: Even") <- (
         (Pred(1, 0), True), (Pred(2, 1), True), (Pred(3, 2), True),
         (Pred(4, 3), True), (Pred(5, 4), True),
     ],
-    solve(boolean, FACTS, Even(X), R),
+    solve(boolean, FACTS, Even(X_UNUSED), R),
     length(R, 3)
 )
 
@@ -35,7 +35,7 @@ Test("mutual recursion across two predicates: Odd") <- (
         (Pred(1, 0), True), (Pred(2, 1), True), (Pred(3, 2), True),
         (Pred(4, 3), True), (Pred(5, 4), True),
     ],
-    solve(boolean, FACTS, Odd(X), R),
+    solve(boolean, FACTS, Odd(X_UNUSED), R),
     length(R, 3)
 )
 

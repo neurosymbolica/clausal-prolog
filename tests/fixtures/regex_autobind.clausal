@@ -1,5 +1,11 @@
 -import_from(py.re, [match, search, findall])
 
+# -allow_singletons: every clause head parameter here is a regex named-group
+# name (?P<NAME>...) referenced only via the group-name STRING inside the
+# pattern; the singleton lint can't see that second reference (it's not an
+# ast.Name), so it misreads every auto-bind parameter as unused.
+-allow_singletons
+
 # Regex auto-binding — ALLCAPS group names auto-bind to clause variables.
 
 # ── Basic auto-binding ──────────────────────────────────────────────────────

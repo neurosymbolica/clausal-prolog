@@ -197,7 +197,7 @@ Test("lstsq returns 4-tuple") <- (
     array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], A),
     array([1.0, 2.0, 3.0], B),
     lstsq(A, B, RESULT),
-    RESULT is (X, _RES, _RANK, _S),
+    RESULT is (X, _RES_UNUSED, _RANK_UNUSED, _S_UNUSED),
     shape(X, [2])
 )  # nv
 

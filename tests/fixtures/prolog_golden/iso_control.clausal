@@ -30,15 +30,15 @@ SafeMax(X, Y, Y) <- (Y > X)
 
 Test('conjunction binds two vars') <- (X is 1, Y is 2, X == 1, Y == 2)
 
-Test('conjunction fails if first fails') <- (not (a is b, X is 1))
+Test('conjunction fails if first fails') <- (not (a is b, _x_unused is 1))
 
-Test('conjunction fails if second fails') <- (not (X is 1, a is b))
+Test('conjunction fails if second fails') <- (not (_x_unused is 1, a is b))
 
 Test('triple conjunction') <- (X is 1, Y is 2, Z is 3, X + Y + Z == 6)
 
 Test('disjunction first succeeds') <- ((X is 1 or X is 2))
 
-Test('disjunction first fails, second succeeds') <- ((a is b or X is 1))
+Test('disjunction first fails, second succeeds') <- ((a is b or _x_unused is 1))
 
 Test('disjunction both fail') <- (not (a is b or c is d))
 
@@ -80,7 +80,7 @@ Test('disjunction yields 2 solutions') <- (findall(X, X is 1 or X is 2, L), L ==
 
 Test('disjunction with conjunction: 2 solutions') <- (findall([X, Y], (X is 1, Y is a) or (X is 2, Y is b), L), L == [[1, a], [2, b]])
 
-Test('naf does not bind: not(X is a) fails') <- (not not X is a)
+Test('naf does not bind: not(X is a) fails') <- (not not _x_unused is a)
 
 Test('color enumerates three') <- (findall(X, Color(X), L), L == [red, green, blue])
 

@@ -58,11 +58,11 @@ Test("decompose string: 'Hello' =.. X") <- (
 # ── numeric-literal decomposition (migrated from .py) ──────────────────────
 
 Test("decompose int: functor(1, N, A)") <- (
-    functor(1, _n, _a),
+    functor(1, _n_UNUSED, _a),
     _a == 0
 )  # nv
 Test("decompose float: functor(1.0, N, A)") <- (
-    functor(1.0, _n, _a),
+    functor(1.0, _n_UNUSED, _a),
     _a == 0
 )  # nv
 Test("unpack int: 1 =.. X gives [1]") <- (

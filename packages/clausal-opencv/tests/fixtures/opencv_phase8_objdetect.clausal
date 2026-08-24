@@ -153,7 +153,7 @@ Test("hog_detect with opts on SVM-installed HOG") <- (
 Test("original HOG handle remains usable after set_svm_detector") <- (
     make_hog(HOG0),
     hog_default_people_detector(SVM),
-    hog_set_svm_detector(HOG0, SVM, _HOG1),
+    hog_set_svm_detector(HOG0, SVM, _HOG1_UNUSED),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     resize(IMG, [64, 128], RESIZED),
     hog_compute(HOG0, RESIZED, DESC),
@@ -184,5 +184,5 @@ Test("free on the SVM-installed HOG does not invalidate the original") <- (
     free(HOG1),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     resize(IMG, [64, 128], RESIZED),
-    hog_compute(HOG0, RESIZED, _DESC)
+    hog_compute(HOG0, RESIZED, _DESC_UNUSED)
 )  # nv

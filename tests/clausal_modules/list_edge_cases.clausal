@@ -34,4 +34,4 @@ HeadTail([HEAD, *TAIL], HEAD, TAIL),
 
 # Phase 2: palindrome-like — first and last same via repeated var
 Bookend([X, *_, X]),
-Bookend([X]),
+Bookend([X_UNUSED]),

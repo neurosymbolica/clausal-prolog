@@ -281,14 +281,14 @@ Test("binomial symbolic") <- (
 # ── Latex/2 ─────────────────────────────────────────────────────────────────
 
 Test("latex expression") <- (
-    Latex(X**2 + 1, S),
+    Latex(X_UNUSED**2 + 1, S),
     ++("x^{2}" in S)
 )  # nv
 
 # ── Pretty/2 ────────────────────────────────────────────────────────────────
 
 Test("pretty expression") <- (
-    Pretty(X**2, S),
+    Pretty(X_UNUSED**2, S),
     ++("2" in S)
 )  # nv
 

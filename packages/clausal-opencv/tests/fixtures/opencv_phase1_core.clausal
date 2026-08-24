@@ -109,7 +109,7 @@ Test("absdiff with self is zero on grayscale") <- (
 Test("add saturates at 255 for uint8 grayscale") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     add(IMG, IMG, OUT),
-    min_max_loc(OUT, ("min_max", _MIN, MAX_V, _, _)),
+    min_max_loc(OUT, ("min_max", _MIN_UNUSED, MAX_V, _, _)),
     MAX_V <= 255.0
 )  # nv
 
@@ -271,7 +271,7 @@ Test("bitwise_or with mask") <- (
 
 Test("dtype query returns numpy dtype") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
-    dtype(IMG, _D)
+    dtype(IMG, _D_UNUSED)
 )  # nv
 
 Test("dtype check mode succeeds for uint8 fixture") <- (

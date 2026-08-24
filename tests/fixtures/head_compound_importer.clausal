@@ -15,37 +15,37 @@
 
 # Rule form — head contains the imported Wrap compound.
 # Should ONLY fire when ITEM is a Wrap(_) term.
-Check(Wrap(SUB), RESULT) <- (RESULT is "matched")
-Check(ANY,       "fallback"),
+Check(Wrap(SUB_UNUSED), RESULT) <- (RESULT is "matched")
+Check(ANY_UNUSED,       "fallback"),
 
 # Fact form (trailing-comma) — same head shape.  The fact path
 # already routes correctly today via body Unify; included as the
 # parity comparison.
-CheckFact(Wrap(SUB), "matched"),
-CheckFact(ANY,       "fallback"),
+CheckFact(Wrap(SUB_UNUSED), "matched"),
+CheckFact(ANY_UNUSED,       "fallback"),
 
 # Mixed: rule that destructures further to bind SUB.
 CheckMixed(Wrap(SUB), RESULT) <- (RESULT is SUB)
-CheckMixed(ANY,       "fallback"),
+CheckMixed(ANY_UNUSED,       "fallback"),
 
 # Nested imported compounds — the case from the original
 # clausal-thai_imm_rules report:
 # ``RenderItem(Item(REQ_ID, Met(S), _, _), NL) <- (NL is REQ_ID)``.
 # Both the outer Item(_, _, _) and inner Met(_) are imported compound
 # functors; pattern-matching must destructure both.
-CheckNested(Item(REQ_ID, Met(SUB), _), RESULT) <- (RESULT is REQ_ID)
-CheckNested(ANY, "fallback"),
+CheckNested(Item(REQ_ID, Met(SUB_UNUSED), _), RESULT) <- (RESULT is REQ_ID)
+CheckNested(ANY_UNUSED, "fallback"),
 
 # Indexer-stress variant: enough rule clauses for the first-argument
 # indexer (_INDEX_THRESHOLD = 4) to actually engage.  Without the
 # arg_index fix the rule clauses get bucketed under ``('Call', 4)`` at
 # compile time but a runtime ``Wrap`` term keys to ``('Wrap', 1)`` —
 # the buckets never match and only the catchall fires.
-CheckIndexed(Wrap(SUB), R) <- (R is "first")
-CheckIndexed(Wrap(SUB), R) <- (R is "second")
-CheckIndexed(Item(REQ, S, D), R) <- (R is "item")
-CheckIndexed(Item(REQ, Met(_), D), R) <- (R is "item-met")
-CheckIndexed(ANY, "fallback"),
+CheckIndexed(Wrap(SUB_UNUSED), R) <- (R is "first")
+CheckIndexed(Wrap(SUB_UNUSED), R) <- (R is "second")
+CheckIndexed(Item(REQ_UNUSED, S_UNUSED, D_UNUSED), R) <- (R is "item")
+CheckIndexed(Item(REQ_UNUSED, Met(_), D_UNUSED), R) <- (R is "item-met")
+CheckIndexed(ANY_UNUSED, "fallback"),
 
 # Second-position imported-compound index.  The distinguishing key is
 # arg0 (a plain string); the imported compound sits at arg1.  >= 4 fact
@@ -65,5 +65,5 @@ Tagged("r4", Item(direct, direct, direct)),
 # the rule form lets the test assert dispatch equivalence on the head
 # shape my fix specifically targets.  Fact clauses use bare-Var head
 # vars so the body-rewrite has a captured cell to bind the marker into.
-CheckNestedFact(Item(REQ_ID, Met(SUB), _), "matched"),
-CheckNestedFact(ANY, "fallback"),
+CheckNestedFact(Item(REQ_ID_UNUSED, Met(SUB_UNUSED), _), "matched"),
+CheckNestedFact(ANY_UNUSED, "fallback"),

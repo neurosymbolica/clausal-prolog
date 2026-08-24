@@ -54,7 +54,7 @@ Test("leaf_with_path exposes dict key") <- (
 
 Test("leaf_with_path on nested dict yields correct depth") <- (
     TREE is {"a": [1.0, 2.0]},
-    findall(P, leaf_with_path(TREE, P, _L), PS),
+    findall(P, leaf_with_path(TREE, P, _L_UNUSED), PS),
     length(PS, 2)
 )  # nv
 
@@ -67,7 +67,7 @@ Test("leaf_with_path dict path then list index") <- (
 
 Test("tree_flatten forward count") <- (
     TREE is {"a": [1.0, 2.0], "b": 3.0},
-    tree_flatten(TREE, _TREEDEF, LEAVES),
+    tree_flatten(TREE, _TREEDEF_UNUSED, LEAVES),
     length(LEAVES, 3)
 )  # nv
 
@@ -94,7 +94,7 @@ Test("unflatten with modified leaves") <- (
 )  # nv
 
 Test("tree_flatten on single value") <- (
-    tree_flatten(42.0, _TREEDEF, LEAVES),
+    tree_flatten(42.0, _TREEDEF_UNUSED, LEAVES),
     LEAVES == [42.0]
 )  # nv
 
@@ -103,7 +103,7 @@ Test("tree_flatten on single value") <- (
 Test("tree_structure returns PyTreeDef") <- (
     TREE is {"a": 1.0, "b": 2.0},
     tree_structure(TREE, TD),
-    tree_flatten(TREE, TD2, _LEAVES),
+    tree_flatten(TREE, TD2, _LEAVES_UNUSED),
     TD == TD2
 )  # nv
 
@@ -128,13 +128,13 @@ Test("all_leaves rejects nested list") <- (
 )  # nv
 
 Test("treedef_is_leaf on scalar flatten") <- (
-    tree_flatten(42.0, TD, _LS),
+    tree_flatten(42.0, TD, _LS_UNUSED),
     treedef_is_leaf(TD)
 )  # nv
 
 Test("treedef_is_leaf false on list flatten") <- (
     TREE is [1.0, 2.0],
-    tree_flatten(TREE, TD, _LS),
+    tree_flatten(TREE, TD, _LS_UNUSED),
     not treedef_is_leaf(TD)
 )  # nv
 

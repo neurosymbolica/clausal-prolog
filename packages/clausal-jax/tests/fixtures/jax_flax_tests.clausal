@@ -165,7 +165,7 @@ Test("MLP one optax SGD step changes the variables") <- (
     LOSS_FN is ++(lambda v: jax.numpy.mean(
         (jax.vmap(MODEL.apply, in_axes=(None, 0))(v, XS) - YS) ** 2)),
     value_and_grad(LOSS_FN, VARS, VG),
-    VG is (_LOSS, GRADS),
+    VG is (_LOSS_UNUSED, GRADS),
     sgd(0.01, OPT),
     init_optimizer(OPT, VARS, STATE),
     update_optimizer(OPT, GRADS, STATE, UR),

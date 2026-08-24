@@ -63,8 +63,8 @@ Test("named matches the int-code result") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, BGR),
     cvt_color_named(BGR, "bgr2hsv", BY_NAME),
     cvt_color(BGR, color_bgr2hsv, BY_CODE),
-    channels(BY_NAME, [BN_H, BN_S, BN_V]),
-    channels(BY_CODE, [BC_H, BC_S, BC_V]),
+    channels(BY_NAME, [BN_H, BN_S_UNUSED, BN_V_UNUSED]),
+    channels(BY_CODE, [BC_H, BC_S_UNUSED, BC_V_UNUSED]),
     absdiff(BN_H, BC_H, DH),
     min_max_loc(DH, ("min_max", 0.0, 0.0, _, _))
 )  # nv

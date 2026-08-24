@@ -73,6 +73,6 @@ Test("uuid5 version is 5") <- (
 
 Test("uuid fields decompose") <- (
     uuid_v4(U),
-    uuid_fields(U, TIME_LOW, TIME_MID, TIME_HI, CLOCK_SEQ_HI, CLOCK_SEQ_LOW, NODE),
+    uuid_fields(U, TIME_LOW_UNUSED, TIME_MID_UNUSED, TIME_HI_UNUSED, CLOCK_SEQ_HI_UNUSED, CLOCK_SEQ_LOW_UNUSED, NODE_UNUSED),
     is_uuid(U)
 )  # nv

@@ -26,7 +26,7 @@ Classify(X, "list") <- is_list(X)
 Classify(X, "compound") <- compound(X)
 
 
-Test("is var") <- CheckVar(X)  # nv
+Test("is var") <- CheckVar(X_UNUSED)  # nv
 Test("is bound") <- CheckNonvar(42)  # nv
 Test("is atom") <- CheckAtom("hello")  # nv
 Test("is number") <- CheckNumber(42)  # nv

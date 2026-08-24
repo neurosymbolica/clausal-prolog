@@ -55,7 +55,7 @@ Test("term_variables: ground atom has no vars") <- HasNoVars("hello")  # nv
 Test("term_variables: ground list has no vars") <- HasNoVars([1, 2, 3])  # nv
 
 Test("term_variables: single unbound var yields length 1") <- (
-    CountVars(X, N),
+    CountVars(X_UNUSED, N),
     N == 1
 )  # nv
 

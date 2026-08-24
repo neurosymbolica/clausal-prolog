@@ -92,7 +92,7 @@ Test("orb detect_and_compute with full-image mask") <- (
     make_orb({"n_features": 50}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     MASK is ++(numpy.ones((128, 128), dtype=numpy.uint8) * 255),
-    detect_and_compute(ORB, IMG, MASK, KPS, _DESCS),
+    detect_and_compute(ORB, IMG, MASK, KPS, _DESCS_UNUSED),
     length(KPS, N),
     N > 0
 )  # nv
@@ -152,7 +152,7 @@ Test("keypoint/7 decomposes a single keypoint") <- (
     make_orb({"n_features": 10}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect(ORB, IMG, [KP, *_]),
-    keypoint(KP, [X, Y], SIZE, _ANGLE, RESPONSE, _OCTAVE, _CLASS_ID),
+    keypoint(KP, [X, Y], SIZE, _ANGLE_UNUSED, RESPONSE, _OCTAVE_UNUSED, _CLASS_ID_UNUSED),
     X >= 0.0,
     Y >= 0.0,
     SIZE > 0.0,
@@ -233,7 +233,7 @@ Test("dmatch decomposes into 4 integers/float") <- (
     detect_and_compute(ORB, IMG, _, DESCS),
     make_bf_matcher(norm_hamming, BF),
     match(BF, DESCS, DESCS, [M, *_]),
-    dmatch(M, QIDX, TIDX, _IIDX, DIST),
+    dmatch(M, QIDX, TIDX, _IIDX_UNUSED, DIST),
     integer(QIDX),
     integer(TIDX),
     DIST >= 0.0

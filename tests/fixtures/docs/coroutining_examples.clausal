@@ -36,9 +36,9 @@ ProcessFile(PATH, RESULT) <- setup_call_cleanup(
 # Call fails — Cleanup still runs, overall fails
 Test("scc call fails") <- (
     not setup_call_cleanup(
-        S is 1,
-        in_(X, []),
-        C is 3
+        S_UNUSED is 1,
+        in_(X_UNUSED, []),
+        C_UNUSED is 3
     )
 )  # nv
 # --8<-- [end:setup_call_cleanup_3_ex2]
@@ -52,20 +52,20 @@ Test("third") <- (
 
 # N exceeds available solutions — fails
 Test("too few") <- (
-    not call_nth(in_(X, [1, 2]), 5)
+    not call_nth(in_(X_UNUSED, [1, 2]), 5)
 )  # nv
 # --8<-- [end:call_nth_2_ex2]
 
 # --8<-- [start:count_all_2_ex2]
 # Count members
 Test("count") <- (
-    count_all(in_(X, ["a", "b", "c", "d"]), N),
+    count_all(in_(X_UNUSED, ["a", "b", "c", "d"]), N),
     N is 4
 )  # nv
 
 # No solutions — 0
 Test("empty") <- (
-    count_all(in_(X, []), N),
+    count_all(in_(X_UNUSED, []), N),
     N is 0
 )  # nv
 
@@ -86,7 +86,7 @@ Test("findall+callnth") <- (
 # catch wrapping call_nth with bad N
 Test("catch+callnth") <- (
     catch(
-        call_nth(in_(X, [1, 2, 3]), 0),
+        call_nth(in_(X_UNUSED, [1, 2, 3]), 0),
         _,
         R is "caught"
     ),
@@ -107,7 +107,7 @@ Test("findall+freeze") <- (
 Test("findall+countall") <- (
     findall(
         N,
-        count_all(in_(X, ["a", "b", "c"]), N),
+        count_all(in_(X_UNUSED, ["a", "b", "c"]), N),
         BAG
     ),
     BAG is [3]

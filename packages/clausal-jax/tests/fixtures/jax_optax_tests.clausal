@@ -28,7 +28,7 @@ Test("sgd one step on a flat array") <- (
     init_optimizer(OPT, PARAMS, STATE0),
     array([1.0, 1.0, 1.0], GRADS),
     update_optimizer(OPT, GRADS, STATE0, RESULT),
-    RESULT is (UPDATES, _STATE1),
+    RESULT is (UPDATES, _STATE1_UNUSED),
     apply_updates(PARAMS, UPDATES, NEW_PARAMS),
     array([0.9, 1.9, 2.9], EXPECTED),
     allclose(NEW_PARAMS, EXPECTED)
@@ -40,7 +40,7 @@ Test("sgd opts: momentum") <- (
     init_optimizer(OPT, PARAMS, STATE0),
     array([1.0, 1.0], GRADS),
     update_optimizer(OPT, GRADS, STATE0, RESULT),
-    RESULT is (UPDATES, _S),
+    RESULT is (UPDATES, _S_UNUSED),
     # First step with momentum: -lr * grad = -0.1
     apply_updates(PARAMS, UPDATES, NEW),
     array([-0.1, -0.1], EXPECTED),
@@ -51,11 +51,11 @@ Test("adam step using value_and_grad") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([3.0, 4.0], PARAMS),
     value_and_grad(F, PARAMS, VG),
-    VG is (_VAL, GRADS),
+    VG is (_VAL_UNUSED, GRADS),
     adam(0.01, OPT),
     init_optimizer(OPT, PARAMS, STATE0),
     update_optimizer(OPT, GRADS, STATE0, RESULT),
-    RESULT is (UPDATES, _STATE1),
+    RESULT is (UPDATES, _STATE1_UNUSED),
     apply_updates(PARAMS, UPDATES, NEW),
     shape(NEW, [2])
 )  # nv
@@ -68,10 +68,10 @@ Test("two-step training reduces loss for x^2") <- (
     value_and_grad(F, P0, VG0),
     VG0 is (L0, G0),
     update_optimizer(OPT, G0, S0, R0),
-    R0 is (U0, S1),
+    R0 is (U0, S1_UNUSED),
     apply_updates(P0, U0, P1),
     value_and_grad(F, P1, VG1),
-    VG1 is (L1, _G1),
+    VG1 is (L1, _G1_UNUSED),
     array_list(L0, V0),
     array_list(L1, V1),
     V1 < V0
@@ -330,7 +330,7 @@ Test("optimizer lookup by name returns the constructor") <- (
     optimizer("sgd", CTOR),
     OPT is ++CTOR(0.1),
     array([1.0], PARAMS),
-    init_optimizer(OPT, PARAMS, _STATE)
+    init_optimizer(OPT, PARAMS, _STATE_UNUSED)
 )  # nv
 
 Test("schedule registry has known names") <- (
@@ -361,11 +361,11 @@ Test("multi_steps accumulates K gradients before applying") <- (
     # Step 1 of 4: no real update yet
     array_list(P1, [0.0]),
     update_optimizer(OPT, GRADS, S1, R2),
-    R2 is (_U2, S2),
+    R2 is (_U2_UNUSED, S2),
     update_optimizer(OPT, GRADS, S2, R3),
-    R3 is (_U3, S3),
+    R3 is (_U3_UNUSED, S3),
     update_optimizer(OPT, GRADS, S3, R4),
-    R4 is (U4, _S4),
+    R4 is (U4, _S4_UNUSED),
     apply_updates(P1, U4, P4),
     # Step 4 of 4: mean accumulated grad applied (use_grad_mean=True default)
     array_list(P4, [F0, *_]),

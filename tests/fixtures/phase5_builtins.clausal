@@ -13,7 +13,7 @@ Test("lcm 4 6 = 12") <- (lcm(4, 6, L), L == 12)  # nv
 Test("lcm coprime 7 13 = 91") <- (lcm(7, 13, L), L == 91)  # nv
 Test("lcm with zero = 0") <- (lcm(0, 5, L), L == 0)  # nv
 Test("lcm with negative") <- (lcm(-4, 6, L), L == 12)  # nv
-Test("lcm unbound fails") <- (not lcm(_x, 6, _))  # nv
+Test("lcm unbound fails") <- (not lcm(_x_UNUSED, 6, _))  # nv
 
 # ── exp_mod/4 ─────────────────────────────────────────────────────────────
 

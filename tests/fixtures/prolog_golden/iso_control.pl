@@ -38,10 +38,10 @@ test("conjunction binds two vars") :-
     Y == 2.
 
 test("conjunction fails if first fails") :-
-    \+ (a = b, X = 1).
+    \+ (a = b, X_UNUSED = 1).
 
 test("conjunction fails if second fails") :-
-    \+ (X = 1, a = b).
+    \+ (X_UNUSED = 1, a = b).
 
 test("triple conjunction") :-
     X = 1,
@@ -53,7 +53,7 @@ test("disjunction first succeeds") :-
     X = 1 ; X = 2.
 
 test("disjunction first fails, second succeeds") :-
-    a = b ; X = 1.
+    a = b ; X_UNUSED = 1.
 
 test("disjunction both fail") :-
     \+ (a = b ; c = d).
@@ -126,7 +126,7 @@ test("disjunction with conjunction: 2 solutions") :-
     L == [[1, a], [2, b]].
 
 test("naf does not bind: not(X is a) fails") :-
-    \+ \+ X = a.
+    \+ \+ X_UNUSED = a.
 
 test("color enumerates three") :-
     findall(X, color(X), L),

@@ -114,7 +114,7 @@ Test("contour_area oriented variant") <- (
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
     contour(CS, C),
-    contour_area(C, True, A_SIGNED),
+    contour_area(C, True, A_SIGNED_UNUSED),
     contour_area(C, False, A_UNSIGNED),
     # |signed| == unsigned
     A_UNSIGNED >= 150.0
@@ -154,7 +154,7 @@ Test("min_area_rect decomposes to rotated_rect") <- (
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
     contour(CS, C),
-    min_area_rect(C, ("rotated_rect", _CENTER, _SIZE, _ANGLE))
+    min_area_rect(C, ("rotated_rect", _CENTER_UNUSED, _SIZE_UNUSED, _ANGLE_UNUSED))
 )  # nv
 
 # --- Convex hull ---

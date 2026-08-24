@@ -22,12 +22,12 @@ is_ymd_triple([Y, M, D]) <- (integer(Y), integer(M), integer(D))
 # The functor `wf_bad_shape` is declared in -private above so it constructs a
 # term under the strict-atoms default rather than tripping the undeclared-atom
 # guard.
-window_days_used(REF_YMD, _DAYS) <- (
+window_days_used(REF_YMD, _DAYS_UNUSED) <- (
     not is_ymd_triple(REF_YMD),
     throw(wf_bad_shape("window_days_used: REF_YMD must be [Y,M,D]", REF_YMD))
 )
 # Well-formed input: return a real answer (a stand-in for the real count).
-window_days_used([_Y, _M, _D], 7),
+window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7),
 
 # A malformed REF_YMD (a string standing in for a date OBJECT — not a triple)
 # passed through a findall.  Without the guard this findall would collapse to

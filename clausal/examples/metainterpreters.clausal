@@ -75,7 +75,7 @@ MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
 # Processes a goal list: for each goal, find a matching clause, prepend its
 # body to the remaining goals, and continue.
 
-Solve([], _PROGRAM),
+Solve([], _PROGRAM_UNUSED),
 Solve([GOAL, *GOALS], PROGRAM) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
@@ -87,7 +87,7 @@ Solve([GOAL, *GOALS], PROGRAM) <- (
 # SolveCount(Goals, Program, Count) — Count is the total number of
 # clause resolution steps performed.
 
-SolveCount([], _PROGRAM, 0),
+SolveCount([], _PROGRAM_UNUSED, 0),
 SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
@@ -100,7 +100,7 @@ SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
 # SolveLimit(Goals, Program, MaxDepth) — fails if the number of resolution
 # steps exceeds MaxDepth.  Each clause resolution consumes one unit of depth.
 
-SolveLimit([], _PROGRAM, _MAX),
+SolveLimit([], _PROGRAM_UNUSED, _MAX_UNUSED),
 SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX > 0,
     MAX1 == MAX - 1,
@@ -126,7 +126,7 @@ SolveIterativeDeepening(GOALS, PROGRAM) <- (
 # Each node is [Goal, SubTree] where SubTree is the proof for the
 # clause body that was used to resolve Goal.
 
-SolveTree([], _PROGRAM, []),
+SolveTree([], _PROGRAM_UNUSED, []),
 SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     SolveTree(BODY, PROGRAM, BODY_TREE),

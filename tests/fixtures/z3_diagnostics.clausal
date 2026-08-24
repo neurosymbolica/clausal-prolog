@@ -34,7 +34,7 @@ Test("satisfiability unsat") <- (
 
 Test("model without binding") <- (
     z3.integer(X == 7),
-    z3.model([X], [[NAME, VAL]]),
+    z3.model([X], [[NAME_UNUSED, VAL]]),
     VAL == 7,
 )  # nv
 

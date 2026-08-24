@@ -118,7 +118,7 @@ Test('sign zero') <- (sign(0, S), S == 0)
 
 Test('sign float negative') <- (sign(-3.14, S), S == -1)
 
-Test('sign unbound fails') <- (not sign(X, _))
+Test('sign unbound fails') <- (not sign(_x_unused, _))
 
 Test('sign check mode: correct') <- (sign(5, 1))
 
@@ -132,7 +132,7 @@ Test('gcd with zero: gcd(0, 5) = 5') <- (gcd(0, 5, G), G == 5)
 
 Test('gcd negative: gcd(-12, 8) = 4') <- (gcd(-12, 8, G), G == 4)
 
-Test('gcd unbound fails') <- (not gcd(X, 8, _))
+Test('gcd unbound fails') <- (not gcd(_x_unused, 8, _))
 
 Test('divmod 17 5 = (3, 2)') <- (divmod_(17, 5, Q, R), Q == 3, R == 2)
 
@@ -142,7 +142,7 @@ Test('divmod by zero fails') <- (not divmod_(10, 0, _, _))
 
 Test('divmod negative: -7 // 2 = -4, -7 % 2 = 1 (Python floor)') <- (divmod_(-7, 2, Q, R), Q == -4, R == 1)
 
-Test('divmod unbound fails') <- (not divmod_(X, 5, _, _))
+Test('divmod unbound fails') <- (not divmod_(_x_unused, 5, _, _))
 
 Test('divmod check mode: correct') <- (divmod_(17, 5, 3, 2))
 

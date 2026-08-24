@@ -5,7 +5,7 @@ is_bound_number(X) :-
     number(X).
 
 test("var: unbound var succeeds") :-
-    var(X).
+    var(X_UNUSED).
 
 test("var: integer fails") :-
     \+ var(42).
@@ -24,7 +24,7 @@ test("nonvar: atom succeeds") :-
     nonvar(hello).
 
 test("nonvar: unbound var fails") :-
-    \+ nonvar(X).
+    \+ nonvar(X_UNUSED).
 
 test("nonvar: bound var succeeds") :-
     X = 1,
@@ -46,7 +46,7 @@ test("atom: integer fails") :-
     \+ atom(1).
 
 test("atom: unbound var fails") :-
-    \+ atom(X).
+    \+ atom(X_UNUSED).
 
 test("str: plain string succeeds") :-
     atom("hello").
@@ -61,7 +61,7 @@ test("str: integer fails") :-
     \+ atom(1).
 
 test("str: unbound var fails") :-
-    \+ atom(X).
+    \+ atom(X_UNUSED).
 
 test("str: list fails") :-
     \+ atom([]).
@@ -79,7 +79,7 @@ test("integer: string fails") :-
     \+ integer("1").
 
 test("integer: var fails") :-
-    \+ integer(X).
+    \+ integer(X_UNUSED).
 
 test("number: integer") :-
     number(42).
@@ -91,7 +91,7 @@ test("number: string fails") :-
     \+ number("42").
 
 test("number: var fails") :-
-    \+ number(X).
+    \+ number(X_UNUSED).
 
 test("callable: declared atom") :-
     callable(hello).
@@ -106,7 +106,7 @@ test("callable: int fails") :-
     \+ callable(42).
 
 test("callable: var fails") :-
-    \+ callable(X).
+    \+ callable(X_UNUSED).
 
 test("is_list: list") :-
     is_list([1, 2, 3]).
@@ -124,7 +124,7 @@ test("is_list: int fails") :-
     \+ is_list(42).
 
 test("is_list: var fails") :-
-    \+ is_list(X).
+    \+ is_list(X_UNUSED).
 
 test("ground: integer") :-
     ground(42).
@@ -139,7 +139,7 @@ test("ground: empty list") :-
     ground([]).
 
 test("ground: var fails") :-
-    \+ ground(X).
+    \+ ground(X_UNUSED).
 
 test("is_bound_number: integer") :-
     is_bound_number(42).
@@ -151,7 +151,7 @@ test("is_bound_number: string fails") :-
     \+ is_bound_number("42").
 
 test("is_bound_number: unbound fails") :-
-    \+ is_bound_number(X).
+    \+ is_bound_number(X_UNUSED).
 
 test("is_str: float fails") :-
     \+ atom(1.0).
@@ -184,7 +184,7 @@ test("float_: string fails") :-
     \+ float("1.0").
 
 test("float_: var fails") :-
-    \+ float(X).
+    \+ float(X_UNUSED).
 
 test("number: large int (via eval)") :-
     X =:= 10 ** 100,
@@ -197,4 +197,4 @@ test("ground: nested ground") :-
     ground([[1, 2], [3, 4]]).
 
 test("ground: list containing var fails") :-
-    \+ ground([1, X, 3]).
+    \+ ground([1, X_UNUSED, 3]).

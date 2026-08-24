@@ -37,7 +37,7 @@ test("findall with filter: X > 1") :-
     L == [2, 3].
 
 test("findall empty: no solutions yields []") :-
-    findall(X, false, L),
+    findall(X_unused, false, L),
     L == [].
 
 test("findall cartesian product") :-
@@ -57,14 +57,14 @@ test("bagof basic") :-
     L == [1, 2].
 
 test("bagof fails on empty") :-
-    \+ bagof(X, false, _).
+    \+ bagof(X_unused, false, _).
 
 test("setof deduplicates") :-
     setof(X, in(X, [1, 1, 2, 2, 3]), L),
     L == [1, 2, 3].
 
 test("setof fails on empty") :-
-    \+ setof(X, false, _).
+    \+ setof(X_unused, false, _).
 
 test("forall positive elements") :-
     forall(in(X, [2, 4, 6]), X > 0).
@@ -73,4 +73,4 @@ test("forall fails with negative") :-
     \+ forall(in(X, [2, -1, 6]), X > 0).
 
 test("forall vacuously true when cond fails") :-
-    forall(false, X > 0).
+    forall(false, X_unused > 0).

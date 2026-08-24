@@ -93,9 +93,9 @@ Test("explog round-trip") <- (
 Test("lu forward") <- (
     A is ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
     LuDecompose(A, R),
-    ResultGet(R, 'p', P),
-    ResultGet(R, 'l', L),
-    ResultGet(R, 'u', U))  # nv
+    ResultGet(R, 'p', P_UNUSED),
+    ResultGet(R, 'l', L_UNUSED),
+    ResultGet(R, 'u', U_UNUSED))  # nv
 
 # backward (recompose)
 Test("lu recompose") <- (
@@ -114,8 +114,8 @@ Test("lu both unbound fails") <- (not LuDecompose(_, _))  # nv
 Test("qr forward") <- (
     A is ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])),
     QrDecompose(A, R),
-    ResultGet(R, 'q', Q),
-    ResultGet(R, 'r', RR))  # nv
+    ResultGet(R, 'q', Q_UNUSED),
+    ResultGet(R, 'r', RR_UNUSED))  # nv
 
 # backward (recompose)
 Test("qr recompose") <- (
@@ -134,9 +134,9 @@ Test("qr both unbound fails") <- (not QrDecompose(_, _))  # nv
 Test("svd forward") <- (
     A is ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
     SingularValueDecompose(A, R),
-    ResultGet(R, 'u', U),
-    ResultGet(R, 's', S),
-    ResultGet(R, 'vh', VH))  # nv
+    ResultGet(R, 'u', U_UNUSED),
+    ResultGet(R, 's', S_UNUSED),
+    ResultGet(R, 'vh', VH_UNUSED))  # nv
 
 # backward (recompose)
 Test("svd recompose") <- (
@@ -178,8 +178,8 @@ Test("cholesky both unbound fails") <- (not Cholesky(_, _))  # nv
 Test("eigen forward") <- (
     A is ++(__import__('numpy').array([[2.0, 1.0], [1.0, 2.0]])),
     EigenDecompose(A, R),
-    ResultGet(R, 'eigenvalues', VALS),
-    ResultGet(R, 'eigenvectors', VECS))  # nv
+    ResultGet(R, 'eigenvalues', VALS_UNUSED),
+    ResultGet(R, 'eigenvectors', VECS_UNUSED))  # nv
 
 # backward (recompose)
 Test("eigen recompose") <- (
@@ -199,8 +199,8 @@ Test("eigen both unbound fails") <- (not EigenDecompose(_, _))  # nv
 Test("eigen hermitian forward") <- (
     A is ++(__import__('numpy').array([[4.0, 1.0], [1.0, 3.0]])),
     EigenDecomposeHermitian(A, R),
-    ResultGet(R, 'eigenvalues', VALS),
-    ResultGet(R, 'eigenvectors', VECS))  # nv
+    ResultGet(R, 'eigenvalues', VALS_UNUSED),
+    ResultGet(R, 'eigenvectors', VECS_UNUSED))  # nv
 
 # backward (recompose)
 Test("eigen hermitian recompose") <- (
@@ -220,8 +220,8 @@ Test("eigen hermitian both unbound fails") <- (not EigenDecomposeHermitian(_, _)
 Test("schur forward") <- (
     A is ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
     Schur(A, R),
-    ResultGet(R, 't', T),
-    ResultGet(R, 'z', Z))  # nv
+    ResultGet(R, 't', T_UNUSED),
+    ResultGet(R, 'z', Z_UNUSED))  # nv
 
 # backward (recompose)
 Test("schur recompose") <- (

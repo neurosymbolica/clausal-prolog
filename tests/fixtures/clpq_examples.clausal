@@ -1,5 +1,12 @@
 # CLP(Q) doc examples — each predicate matches a code block in docs/clpq.md.
 
+# -allow_singletons: LP/3's head functor "LP" is an ALLCAPS predicate name
+# (Call.func in head-defining position), not a variable — but the classifier
+# can't distinguish functor position from argument position, so it counts
+# LP as a singleton variable occurrence. Renaming it would rename the
+# predicate itself (tests/test_clpq.py looks it up by the literal name "LP").
+-allow_singletons
+
 # --- Two-variable linear system ---
 TwoVar(X, Y) <- (
     in_q([X, Y], 0, 10),

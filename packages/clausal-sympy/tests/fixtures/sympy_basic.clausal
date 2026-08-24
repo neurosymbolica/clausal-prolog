@@ -158,7 +158,7 @@ Test("sym_str constant") <- (
 )  # nv
 
 Test("sym_str expression") <- (
-    SymStr(X**2 + 1, S),
+    SymStr(X_UNUSED**2 + 1, S),
     ++("**2" in S)
 )  # nv
 

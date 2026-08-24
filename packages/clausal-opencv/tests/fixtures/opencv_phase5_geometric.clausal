@@ -30,7 +30,7 @@ Test("resize with explicit interpolation") <- (
 
 Test("resize_factor halves both dims") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
-    size(IMG, [W, H]),
+    size(IMG, [W_UNUSED, H_UNUSED]),
     resize_factor(IMG, 0.5, 0.5, OUT),
     size(OUT, [W2, H2]),
     W2 == 16,
@@ -171,7 +171,7 @@ Test("get_perspective_transform from 4 corner pairs") <- (
 
 Test("remap with identity maps returns input") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
-    size(IMG, [W, H]),
+    size(IMG, [W_UNUSED, H_UNUSED]),
     MAP_X is ++(numpy.tile(numpy.arange(32, dtype=numpy.float32), (32, 1))),
     MAP_Y is ++(numpy.tile(numpy.arange(32, dtype=numpy.float32).reshape(-1, 1), (1, 32))),
     remap(IMG, MAP_X, MAP_Y, inter_nearest, OUT),
@@ -191,7 +191,7 @@ Test("remap with border_mode arg") <- (
 
 Test("copy_make_border replicate adds 2-pixel margin") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
-    size(IMG, [W, H]),
+    size(IMG, [W_UNUSED, H_UNUSED]),
     copy_make_border(IMG, 2, 2, 2, 2, border_replicate, OUT),
     size(OUT, [W2, H2]),
     W2 == 8,

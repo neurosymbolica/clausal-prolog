@@ -14,8 +14,8 @@ Test("decompose atom: 'a' =.. X") <- (unpack(a, X), X == [a])
 
 Test("decompose string: 'Hello' =.. X") <- (unpack(hello, X), X == [hello])
 
-Test('decompose int: functor(1, N, A)') <- (functor(1, N, A), A == 0)
+Test('decompose int: functor(1, N, A)') <- (functor(1, _n_unused, A), A == 0)
 
-Test('decompose float: functor(1.0, N, A)') <- (functor(1.0, N, A), A == 0)
+Test('decompose float: functor(1.0, N, A)') <- (functor(1.0, _n_unused, A), A == 0)
 
 Test('unpack int: 1 =.. X gives [1]') <- (unpack(1, X), X == [1])

@@ -14,4 +14,4 @@
 
 fnm_verdict("ok", [])
 
-fnm_chk(R) <- fnm_verdict(R, C)
+fnm_chk(R) <- fnm_verdict(R, C_UNUSED)

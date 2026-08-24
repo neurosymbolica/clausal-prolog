@@ -38,7 +38,7 @@ Test("is_dict: empty dict") <- is_dict({})  # nv
 Test("is_dict: populated dict") <- is_dict({"a": 1})  # nv
 Test("is_dict: atom fails") <- (not is_dict("hello"))  # nv
 Test("is_dict: set fails") <- (not is_dict({1, 2}))  # nv
-Test("is_dict: var fails") <- (not is_dict(X))  # nv
+Test("is_dict: var fails") <- (not is_dict(X_UNUSED))  # nv
 
 # ── dict_size/2 ────────────────────────────────────────────────────────────
 

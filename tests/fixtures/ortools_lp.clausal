@@ -31,10 +31,10 @@ Diet(BREAD, MILK, COST) <- (
     ortools.lp.solve([BREAD, MILK])
 )
 
-Test("diet problem has a solution") <- Diet(BREAD, MILK, COST)  # nv
+Test("diet problem has a solution") <- Diet(BREAD_UNUSED, MILK_UNUSED, COST_UNUSED)  # nv
 
 Test("diet problem cost is non-negative") <- (
-    Diet(BREAD, MILK, COST),
+    Diet(BREAD_UNUSED, MILK_UNUSED, COST),
     COST >= 0
 )  # nv
 

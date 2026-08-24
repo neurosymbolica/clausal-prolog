@@ -1,5 +1,5 @@
 # Term expansion: suppress all items
-TermExpansion(TERM, "none", M0, M0),
+TermExpansion(TERM_UNUSED, "none", M0, M0),
 
 foo("a"),
 foo("b"),

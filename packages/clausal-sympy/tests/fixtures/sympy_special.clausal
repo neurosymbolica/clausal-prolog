@@ -13,7 +13,7 @@ Test("sum of i^2 from 1 to 5") <- (
 )  # nv
 
 Test("sum of constants") <- (
-    sum_(3, I, 1, N, R),
+    sum_(3, I_UNUSED, 1, N, R),
     R == 3*N
 )  # nv
 
@@ -25,7 +25,7 @@ Test("product 1 to 5") <- (
 )  # nv
 
 Test("product symbolic") <- (
-    Product(X, X, 1, N, R),
+    Product(X, X, 1, N_UNUSED, R),
     S is ++str(R),
     ++("factorial" in S)
 )  # nv

@@ -29,7 +29,7 @@ Test("r2 metric on diabetes") <- (
     Fit(Est("ridge", {}), DATASET, FITTED),
     DATASET is ("Dataset", X, Y),
     Predict(FITTED, X, PREDS),
-    Metric("r2", Y, PREDS, SCORE)
+    Metric("r2", Y, PREDS, SCORE_UNUSED)
 )  # nv
 
 Test("mse metric on diabetes") <- (
@@ -46,13 +46,13 @@ Test("mse metric on diabetes") <- (
 Test("cross val score on iris") <- (
     LoadDataset("iris", DATASET),
     CrossValScore(Est("logistic_regression", {"max_iter": 200}),
-                  DATASET, kfold(3), SCORES)
+                  DATASET, kfold(3), SCORES_UNUSED)
 )  # nv
 
 Test("cross val score with metric") <- (
     LoadDataset("iris", DATASET),
     CrossValScore(Est("logistic_regression", {"max_iter": 200}),
-                  DATASET, kfold(3), "accuracy", SCORES)
+                  DATASET, kfold(3), "accuracy", SCORES_UNUSED)
 )  # nv
 
 # ── CrossValidate ────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ Test("cross val score with metric") <- (
 Test("cross validate multiple metrics") <- (
     LoadDataset("iris", DATASET),
     CrossValidate(Est("logistic_regression", {"max_iter": 200}),
-                  DATASET, kfold(3), ["accuracy", "f1_weighted"], RESULTS)
+                  DATASET, kfold(3), ["accuracy", "f1_weighted"], RESULTS_UNUSED)
 )  # nv
 
 # ── ConfusionMatrix ──────────────────────────────────────────────────
@@ -70,5 +70,5 @@ Test("confusion matrix on iris") <- (
     Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), DATASET, FITTED),
     DATASET is ("Dataset", X, Y),
     Predict(FITTED, X, PREDS),
-    ConfusionMatrix(Y, PREDS, MATRIX)
+    ConfusionMatrix(Y, PREDS, MATRIX_UNUSED)
 )  # nv

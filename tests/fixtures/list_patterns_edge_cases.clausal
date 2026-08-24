@@ -46,7 +46,7 @@ HeadTail([HEAD, *TAIL], HEAD, TAIL),
 AllSame(X, X, X),
 HeadIs(X, [X, *_]),
 Bookend([X, *_, X]),
-Bookend([X]),
+Bookend([X_UNUSED]),
 
 # ── Phase 3 ─────────────────────────────────────────────────────────────────
 
@@ -86,7 +86,7 @@ Test("three_and_rest: 5 elements") <- (
     A == 10, B == 20, C == 30, REST == [40, 50]
 )  # nv
 Test("three_and_rest: exactly 3 → REST=[]") <- (
-    ThreeAndRest([10, 20, 30], A, B, C, REST),
+    ThreeAndRest([10, 20, 30], A_UNUSED, B_UNUSED, C_UNUSED, REST),
     REST == []
 )  # nv
 Test("three_and_rest: too short → no solution") <- (
@@ -165,7 +165,7 @@ Test("second: exact 2 elements") <- (
 )  # nv
 Test("second: singleton fails") <- (not Second([10], _))  # nv
 Test("member_of_pair: [1,1] yields 2 solutions") <- (
-    findall(T, MemberOfPair(1, [1, 1]), L),
+    findall(T_UNUSED, MemberOfPair(1, [1, 1]), L),
     length(L, 2)
 )  # nv
 Test("const: numeric input gives 42") <- (

@@ -13,7 +13,7 @@ Test("point distance exists") <- (
 
 Test("kdtree exists") <- (
     MakeKdTree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], KD),
-    KdTreeQuery(KD, ++([0.0, 0.0]), R),
+    KdTreeQuery(KD, ++([0.0, 0.0]), R_UNUSED),
     Free(KD))  # nv
 
 Test("convex hull exists") <- (

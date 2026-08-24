@@ -16,7 +16,7 @@ Test("tsp 3 cities triangle") <- (
         [[0, 1, 2],
          [1, 0, 3],
          [2, 3, 0]],
-        0, TOUR, DIST),
+        0, TOUR_UNUSED, DIST),
     DIST == 6
 )  # nv
 
@@ -29,7 +29,7 @@ Test("vrp 2 vehicles all customers served") <- (
          [25, 30, 20, 15, 0]],
         [0, 5, 8, 3, 6],
         [15, 15],
-        0, ROUTES, DIST),
+        0, ROUTES, DIST_UNUSED),
     length(ROUTES, 2)
 )  # nv
 

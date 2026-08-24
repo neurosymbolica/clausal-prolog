@@ -23,7 +23,7 @@ ab >> ([])
 (look_ahead(TOKEN), [TOKEN]) >> ([TOKEN])
 
 # Negation in DCG
-not_a >> (not ["a"], [X])
+not_a >> (not ["a"], [X_UNUSED])
 
 # Regular predicate coexisting with DCG rules
 valid_sentence(SENTENCE) <- phrase(sentence, SENTENCE)

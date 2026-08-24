@@ -33,7 +33,7 @@ RemoveEven(XS, OS) <- exclude((X <- (X % 2 == 0)), XS, OS)
 NegateList(XS, YS) <- maplist(((X, Y) <- (Y == 0 - X)), XS, YS)
 
 # CountFold/2 — count elements via foldl (ignore element, just increment)
-CountFold(XS, N) <- foldl(((ELEM, A, R) <- (R == A + 1)), XS, 0, N)
+CountFold(XS, N) <- foldl(((ELEM_UNUSED, A, R) <- (R == A + 1)), XS, 0, N)
 
 # MaxFold/3 — find max starting from an initial value
 MaxFold(XS, INIT, M) <- foldl(((E, A, R) <- (

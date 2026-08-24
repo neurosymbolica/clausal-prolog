@@ -3,7 +3,7 @@
 # length/2
 
 length(LIST=[], N=0),
-length([HEAD, *TAIL], N) <- (
+length([HEAD_UNUSED, *TAIL], N) <- (
     length(TAIL, N1),
     N == N1 + 1
 )

@@ -365,7 +365,7 @@ Test("tensor_list nested") <- (
 
 Test("tensor_numpy forward") <- (
     tensor([1.0, 2.0, 3.0], T),
-    tensor_numpy(T, A),
+    tensor_numpy(T, A_UNUSED),
     tensor_list(T, [1.0, 2.0, 3.0])
 )  # nv
 

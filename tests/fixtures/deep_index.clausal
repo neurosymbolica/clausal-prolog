@@ -18,7 +18,7 @@ Test("mylen empty") <- (MyLen([], N) and N == 0)  # nv
 Test("mylen one element") <- (MyLen([42], N) and N == 1)  # nv
 Test("mylen three elements") <- (MyLen([1, 2, 3], N) and N == 3)  # nv
 Test("mylen five elements") <- (MyLen([1, 2, 3, 4, 5], N) and N == 5)  # nv
-Test("mylen query mode") <- (MyLen([A, B], N) and N == 2)  # nv
+Test("mylen query mode") <- (MyLen([A_UNUSED, B_UNUSED], N) and N == 2)  # nv
 
 # ── MyAppend/3: list concatenation ───────────────────────────────────────────
 # Index target: arg0 (first list): [] vs [HEAD|TAIL].

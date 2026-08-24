@@ -12,7 +12,7 @@ CheckDiagonals([QUEEN, *REST]) <- (
     CheckDiagonals(REST)
 )
 
-SafeFrom(QUEEN, [], DISTANCE),
+SafeFrom(QUEEN_UNUSED, [], DISTANCE_UNUSED),
 
 SafeFrom(QUEEN, [HEAD, *TAIL], DISTANCE) <- (
     QUEEN != HEAD,
