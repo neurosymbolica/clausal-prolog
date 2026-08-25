@@ -167,6 +167,13 @@ global_atom(-Name, +Atom)   % reverse lookup: succeeds iff Atom is genuinely glo
 global_atom(-Name, -Atom)   % enumerate global atoms (ordering not guaranteed)
 --8<-- [end:global_atom_2]
 
+--8<-- [start:module_constant_3]
+module_constant(+Module, +Name, ?Value)   % look up / check a declared constant
+module_constant(+Module, -Name, ?Value)   % enumerate Module's own -constants
+module_constant(-Module, +Name, ?Value)   % find which loaded module(s) declare Name
+module_constant(-Module, -Name, ?Value)   % enumerate every loaded module's constants
+--8<-- [end:module_constant_3]
+
 
 # === Runtime Database ===
 

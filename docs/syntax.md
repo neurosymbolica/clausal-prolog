@@ -173,15 +173,18 @@ Test("area of radius 2") <- (
 )
 ```
 
-Declarations are keyword arguments on the `-constants(...)` directive, one module-level
-directive per file (repeat the directive, or add more `name = value` pairs, for more
-constants). The right-hand side accepts:
+Declarations are keyword arguments on the `-constants(...)` directive. A file may carry more
+than one `-constants(...)` directive — a later one can reference a constant an earlier one
+declared, same as multiple `name = value` pairs in one directive can. The right-hand side
+accepts:
 
 - scalar literals (`3.14159`, `"eur"`, `True`),
 - a previously-declared constant (`-constants(_BASE_ = 10, _LIMIT_ = _BASE_ * 4 + 2)`),
 - a declared atom,
-- unary/binary arithmetic over those, and
-- a `++(expr)` escape, evaluated as raw Python **at load time**:
+- unary/binary arithmetic over those,
+- a `++(expr)` escape, evaluated as raw Python **at load time**, and
+- **structured literals** — lists, tuples, sets, dicts, and functor calls, nested arbitrarily,
+  mixing any of the above at any depth:
 
 ```clausal
 -constants(_PI_ = ++__import__('math').pi)
@@ -194,14 +197,63 @@ constants). The right-hand side accepts:
     a different machine. This is a documented caveat, not a guardrail — if reproducibility
     matters, don't reach for `++` in a `-constants` RHS.
 
-**Structured literals are not yet supported.** `-constants(_L_ = [1, 2, 3])` raises a
-load-time `SyntaxError` — lists, dicts, sets, and tuples are deferred to a future revision
-(the Clausal-term-vs-Python-value question for them isn't settled yet). Stick to scalars and
-`++()` for now.
+### Structured constants
 
-Every declaration must be **fully ground** — no unbound logic variable may appear anywhere in
-the computed value. An unground right-hand side raises `ConstantNotGroundError` at load time,
-before any clause compiles.
+A structured RHS builds a **real Clausal term** — the same term the identical literal would
+build in a clause body, with the same unification semantics — not a Python value:
+
+```clausal
+-module(m, [Point(X, Y)])
+-private([mn, mx, red, green])
+
+-constants(
+    _COUNTRY_CODES_ = ['au', 'al', 'za'],
+    _ORIGIN_ = Point(0, 0),
+    _LIMITS_ = {mn: 1, mx: 99},
+    _FLAGS_ = {red, green},
+)
+```
+
+Lists, tuples, sets, and dicts lower through the same construction a clause body's literal of
+the same shape uses (a list is a plain list, a set is a `SetTerm`, a dict is a `DictTerm`), and
+a functor call (`Point(0, 0)`) constructs a real instance of that functor's class — so a
+structured constant unifies exactly as the equivalent literal would, indexes the same way, and
+carries no extra runtime cost per reference.
+
+**A functor used in a structured RHS must already be declared *above* the `-constants`
+directive** — via `-module`, `-private`, `-dynamic`, or an earlier clause defining it, or
+imported via `-import_from`/`-import_module`. This is the same source-order rule that makes the
+functor's class *statement* execute before the constant's assignment does; an undeclared
+functor is a located, load-time `SyntaxError` naming the remedy:
+
+```text
+SyntaxError: -constants: `_P_` RHS calls `Point(...)`, which is not a declared functor above
+this -constants directive — declare it with -module/-private/-dynamic before -constants, or
+import it with -import_from/-import_module
+```
+
+Every declaration must still be **fully ground** — no unbound logic variable may appear
+anywhere in the computed value, structured RHS included: `-constants(_L_ = [1, X, 3])` is a
+located, load-time `SyntaxError`, not a freshly-minted `Var`. (An unground value that only a
+`++()` escape could produce still hits the runtime `ConstantNotGroundError` backstop, before
+any clause compiles.) A `++()` escape is legal as an *element* inside a structured RHS
+(`[1, ++(2 + 3), 3]`) — it lowers exactly as it would at the top level.
+
+!!! warning "Structured constants are frozen, not hidden"
+    A structured constant's value is bound to the module global once, at load time, and that
+    value is **immutable**: a list constant is a frozen list, a dict constant's backing store is
+    a frozen dict, and a `++()`-escape-built raw Python set is a frozen set (a source-level
+    `{...}` set literal lowers to `SetTerm`, which is already immutable, nothing further to
+    freeze). Any mutating call reached from Python — `.append`, `__setitem__`, `.add`, and the
+    like, most commonly reached through a `++()` escape holding a reference to the constant —
+    raises `TypeError` rather than silently corrupting the value: `isinstance(x, list)` /
+    `isinstance(x, dict)` still hold, so unification and clause-head indexing see no difference
+    from an ordinary literal; only mutation is blocked. **Constants cannot be hidden from
+    Python** at module level — the module global holds this same frozen value, and
+    `module_constant/3` reflects it (see [Builtins](builtins.md#module_constant3)) — frozen, not
+    hidden. The one deliberate exception: a functor constant's *own field values* are **not**
+    frozen (`Point([1, 2, 3], 0)`'s list field can still be mutated) — freezing stops at the
+    term boundary a functor call introduces, not inside it.
 
 ### References fold — no runtime lookup, ever
 

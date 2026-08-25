@@ -152,12 +152,53 @@ matches this design in its lexical rule, folding mechanism, groundness gate, and
 singleton lint. A handful of points came out differently from the text above, all narrowing
 rather than reversing a decision:
 
-- **RHS grammar is v1 scalar-only.** Scalar literals, previously-declared constants, declared
-  atoms, unary/binary arithmetic over those, and a `++(expr)` escape (evaluated at load time —
-  `-constants(_N_ = ++os.cpu_count())` is legal and machine-dependent, exactly as the
-  reproducibility caveat above anticipated). Structured literals (list/dict/set/tuple RHS) raise
-  `SyntaxError` rather than being supported — the Clausal-term-vs-Python-value question for them
-  is deliberately deferred, not designed away.
+- **RHS grammar was v1 scalar-only; lifted 2026-08-25.** v1 shipped scalar literals,
+  previously-declared constants, declared atoms, unary/binary arithmetic over those, and a
+  `++(expr)` escape (evaluated at load time — `-constants(_N_ = ++os.cpu_count())` is legal and
+  machine-dependent, exactly as the reproducibility caveat above anticipated). Structured
+  literals (list/dict/set/tuple RHS, and functor calls) raised `SyntaxError` rather than being
+  supported. This is now lifted: a structured RHS — nested arbitrarily, mixing any of the above
+  at any depth — builds a real Clausal term, the same construction the identical literal would
+  build in a clause body (`clausal/templating/term_rewriting.py`'s
+  `EmbedTransformer._transform_constant_rhs`, extended rather than routed through the generic
+  `TermTransformer`/`_make_term_transformer` — see that method's docstring for why: the generic
+  term transformer is built for clause bodies, where a functor call or a set/tuple literal
+  lowers to an *uninstantiated* `pythonic_ast` node that only becomes a real term when
+  `compiler_v2` later compiles the STATIC clause tree into a predicate's bytecode; a
+  `-constants` assignment has no such second pass — it runs once, directly, as an ordinary
+  module-level statement — so the extension emits AST that constructs the real term on that one
+  pass instead). A functor call requires the functor already declared *above* the `-constants`
+  directive (`-module`/`-private`/`-dynamic`/an earlier clause, or an import) — a located
+  `SyntaxError` otherwise. Structured values are recursively **frozen** at the groundness gate
+  (`clausal.logic.constants.check_constant_ground` → `_freeze`): type-preserving frozen
+  subclasses (`_FrozenList`/`_FrozenDict`/`_FrozenSet`) so `isinstance` checks and the C unify
+  extension see no difference from a literal, only mutation is blocked (`TypeError`); a
+  functor constant's own field values are the one deliberate exception, left unfrozen and
+  shared. Discovered and fixed along the way, in `clausal/logic/compiler/terms_to_ast.py`
+  (`term_to_ast_expr`, the pre-existing value→AST codegen a *compiled* clause body already used
+  for any bound module global, not new to this feature): the `SetTerm` branch embedded every
+  element as a bare `ast.Constant`, which `compile()` rejects for a non-literal element (an atom
+  instance) — fixed to recurse per element, mirroring the `SetLiteral` branch beside it; and
+  there was no branch at all for an already-materialized Python `tuple` (only for the
+  uninstantiated `TupleLiteral` node) — added, mirroring the `TupleLiteral` branch. Both gaps
+  were latent until a structured constant's value flowed through this codegen for the first
+  time. See `docs/syntax.md`'s [Structured constants](../docs/syntax.md#structured-constants)
+  section for the full reference, including the identity caveat: a constant's value is one
+  frozen object as far as its own module-global storage and `module_constant/3` registration go
+  (verified/pinned), but a *compiled clause body's* reference to it is constant-propagated at
+  predicate-compile time into fresh construction code — so cross-invocation object identity
+  (two different clauses' solutions holding the literal same object) does **not** hold; this is
+  pre-existing `terms_to_ast` behavior for any known-bound global, not something `-constants`
+  controls, and freezing makes it moot for correctness (every reconstruction is equally
+  immutable).
+- **`module_constant/3` reflection, added 2026-08-25.** The `-constants` lowering also registers
+  each `(name, value)` pair on the declaring module (`clausal.logic.database.Module.constants`,
+  populated via a second injected helper, `clausal.logic.constants.register_module_constant`,
+  mirroring `$check_constant_ground`'s injection sites in `clausal/import_hook.py`). Only a
+  module's own declarations are recorded — an imported constant is not re-registered on the
+  importer, so `module_constant/3` never finds it there; query the declaring module instead (see
+  `docs/import.md`). See `docs/builtins.md`'s `module_constant/3` entry for the full mode
+  breakdown.
 - **`-module`/`-private` reject constant names outright**, rather than "list in `-module` to
   export" (line 140 above). Constants are process-wide module globals as soon as they're
   declared with `-constants` — there is nothing an export listing could add — so

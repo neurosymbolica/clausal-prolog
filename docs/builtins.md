@@ -77,7 +77,7 @@ Notation in signature lines:
 | [Meta-Predicates](#meta-predicates) | findall/3, bagof/3, setof/3, forall/2, call_nth/2, count_all/2 |
 | [Higher-Order Call](#higher-order-call) | call/1..8, call_goal/1..8 |
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
-| [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2 |
+| [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2, module_constant/3 |
 | [Runtime Database](#runtime-database) | assertz/1, asserta/1, retract/1, abolish_table/2, abolish_all_tables/0 |
 | [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, extend/3, unbound_keys/2, signature/3 |
 | [Attributed Variables](#attributed-variables) | put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2 |
@@ -554,6 +554,50 @@ way for a strict-default file to obtain a global atom it does not list. See
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/inspection.py` (`global_atom/2`)
     **Python tests:** `tests/test_term_inspection.py` (`TestGlobalAtom`)
+
+---
+
+### `module_constant/3`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:module_constant_3"
+```
+Reflect on a module's own [`-constants`](directives.md#-constants) declarations. `Module` is the
+Python module object a `-import_module(...)` directive binds — the same object a qualified
+constant reference like `other_module._PI_` resolves against; `Name` is the constant's full
+declaration spelling as a string, underscores included (`"_PI_"`, not `"PI"`); `Value` is the
+constant's frozen value — the identical object the declaring module's own clause bodies embed.
+
+```clausal
+-module(m, [])
+-constants(_MAX_RETRIES_ = 3)
+```
+```clausal
+-import_module(m)
+retry_limit(N) <- module_constant(m, "_MAX_RETRIES_", N)
+```
+
+Four modes, following directly from which of `Module`/`Name` are bound:
+
+- **`(+Module, +Name, ?Value)` — look up / check.** Fails if `Module` declares no constant
+  named `Name`; otherwise checks/binds `Value`.
+- **`(+Module, -Name, ?Value)` — enumerate a module's constants.** One solution per
+  `(Name, Value)` pair `Module` declares.
+- **`(-Module, +Name, ?Value)` — find the declaring module(s).** Searches every *loaded*
+  Clausal module (a snapshot of `sys.modules`) for one that declares a constant named `Name`;
+  `Module` need not be imported into the querying file.
+- **`(-Module, -Name, ?Value)` — enumerate everything.** One solution per
+  `(Module, Name, Value)` triple across every loaded Clausal module.
+
+**Only a module's own declarations are reflected** — a constant reached via `-import_from` or
+`-import_module` is *not* re-registered on the importer, so `module_constant/3` never sees it
+there. Query the module that actually declared it instead (see
+[Importing constants](import.md#importing-constants)).
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/inspection.py` (`module_constant/3`),
+    `clausal/logic/constants.py` (`register_module_constant`),
+    `clausal/logic/database.py` (`Module.constants`)
+    **Python tests:** `tests/test_module_constant_reflection.py`
 
 ---
 

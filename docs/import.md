@@ -155,6 +155,12 @@ never to a predicate-style name), and importing a constant name that collides wi
 `-constants` declaration or an earlier import in the same file is a `SyntaxError` rather than a
 silent overwrite — rename the incoming one with `alias(...)`.
 
+A module's `-constants` declarations are all public interface — there is nothing to list in
+`-module`/`-private` and no export step — and enumerable via
+[`module_constant/3`](builtins.md#module_constant3); an imported constant is *not* re-registered
+on the importing module, so it stays reachable only through the module that actually declared
+it.
+
 ### `-import_module` — whole-module import with qualified calls
 
 ```clausal

@@ -307,15 +307,23 @@ declared constant is replaced by its value at compile time — there is no runti
 the substitution applies uniformly, head position included.
 
 The right-hand side must be **fully ground**: scalar literals, previously-declared constants,
-declared atoms, arithmetic over those, or a `++(expr)` escape evaluated at load time. An
+declared atoms, arithmetic over those, a `++(expr)` escape evaluated at load time, or (2026-08-25)
+a **structured literal** — a list, tuple, set, dict, or functor call, nested arbitrarily. An
 unground right-hand side (one that computes to a value containing an unbound variable) raises
-`ConstantNotGroundError` before any clause compiles. Structured literals (lists, dicts, sets,
-tuples) are not yet supported.
+`ConstantNotGroundError` before any clause compiles; a logic-variable-shaped name anywhere in a
+structured RHS is caught earlier still, as a located `SyntaxError` at compile time. A structured
+RHS builds the same real Clausal term the identical literal would build in a clause body — see
+[Structured constants](syntax.md#structured-constants) for the full reference, including the
+declared-above ordering rule a functor call needs and the frozen/immutable-value guarantee.
 
 !!! warning "`++` RHS values can be machine-dependent"
     `-constants(_N_WORKERS_ = ++os.cpu_count())` is legal — but it binds a different value on
     a different machine. `++()` is evaluated once, at load time; nothing about it guarantees
     reproducibility across environments.
+
+**A file may carry more than one `-constants` directive** — a later one can reference a
+constant an earlier one declared, exactly like a later `name = value` pair within one directive
+can.
 
 **Constants are always public** — there is nothing to list in `-module` or `-private`; doing
 so is a `SyntaxError` pointing back at `-constants` and `-import_from`. Import a constant the
@@ -324,6 +332,11 @@ same way you import a predicate:
 ```clausal
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:constants_importing"
 ```
+
+Every `-constants` declaration also registers on the declaring module for
+[`module_constant/3`](builtins.md#module_constant3) reflection — an imported constant is *not*
+re-registered on the importer, so it is only reachable through the module that actually
+declared it.
 
 See [Constants](syntax.md#constants) for the full reference, including the undeclared-reference
 error and the `_UNUSED`-suffix naming trap.
