@@ -582,10 +582,20 @@ def describe_imported_predicate_redefinition(
         lines.append(f"{_INDENT}{functor} is declared at {site[0]}:{site[1]}")
     elif site:
         lines.append(f"{_INDENT}{functor} is declared at {site}")
-    owner = author if author is not None else exporter
+    # With no recorded author the honest remedy is a HEDGE: the line above has
+    # just said ownership is unknown, and naming the exporter as the supplier
+    # anyway would state as fact the very attribution this diagnostic exists to
+    # get right (todo/done/imported-clause-refusal-misattributes-ownership.md).
+    if author is not None:
+        supplies = (f"move this clause into {author}, which supplies "
+                    f"{functor}'s clauses — that is the only module whose "
+                    f"clauses for it are compiled together;")
+    else:
+        supplies = (f"move this clause into the module that supplies "
+                    f"{functor}'s clauses — likely {exporter}, though this "
+                    f"process has no record of which module wrote them;")
     lines.extend(_arrow([
-        f"move this clause into {owner}, which supplies {functor}'s clauses — "
-        f"that is the only module whose clauses for it are compiled together;",
+        supplies,
         f"or, if it is meant to be a predicate of this module, drop "
         f"{functor} from the -import_from({exporter}, [...]) list and give "
         f"the local one a name of its own.",

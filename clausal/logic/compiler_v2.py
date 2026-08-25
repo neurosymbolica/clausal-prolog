@@ -493,17 +493,31 @@ def _reject_reserved_truth_names(
     raise NameError("\n".join(lines))
 
 
-def _import_from_origins(module_items: list) -> dict:
-    """``{local_name: dotted module}`` for every name an ``-import_from``
-    binds in this file.  Aliased imports (``alias(f, G)``) bind the ALIAS, so
-    that is the name a clause head here could collide with."""
-    origins: dict[str, str] = {}
+def _import_from_origins(module_items: list, module_dict: dict) -> dict:
+    """``{name: (dotted module, bound class or None)}`` for every name an
+    ``-import_from`` binds in this file.
+
+    Indexed under BOTH names an aliased import gives a predicate.  ``alias(f,
+    G)`` binds the exporter's class under ``G``, but the class keeps its own
+    functor ``f``, and a clause head compiles to the CLASS's functor — so
+    ``head_key`` hands step 3c ``f`` while the file only ever mentions ``G``.
+    Indexing the alias alone let the aliased spelling walk straight past the
+    refusal and clobber the exporter through step 5's dispatch assignment,
+    with the clause list left intact so the damage was invisible to a clause
+    count (found by review, 2026-08-25).
+    """
+    origins: dict[str, tuple[str, Any]] = {}
     for item in module_items:
         if not isinstance(item, ImportFromItem):
             continue
         for name_spec in item.names:
             local = name_spec[1] if isinstance(name_spec, tuple) else name_spec
-            origins[local] = item.module
+            bound = module_dict.get(local)
+            if not isinstance(bound, PredicateMeta):
+                bound = None
+            origins[local] = (item.module, bound)
+            if bound is not None and bound.__name__ != local:
+                origins.setdefault(bound.__name__, (item.module, bound))
     return origins
 
 
@@ -540,7 +554,7 @@ def _reject_redefinition_of_imported_predicates(
       the previous attempt at this refuse a file beside itself
       (``todo/done/imported-clause-refusal-misattributes-ownership.md``).
     """
-    origins = _import_from_origins(module_items)
+    origins = _import_from_origins(module_items, module_dict)
     if not origins:
         return
     here = module_source_path(module_dict)
@@ -550,7 +564,13 @@ def _reject_redefinition_of_imported_predicates(
         if functor in checked or functor not in origins:
             continue
         checked.add(functor)
+        exporter_name, bound_cls = origins[functor]
+        # Under an alias the class is NOT in module_dict under its own functor
+        # — the import bound it under the alias — so fall back to the class the
+        # import itself bound.
         pred_cls = module_dict.get(functor)
+        if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = bound_cls
         if not isinstance(pred_cls, PredicateMeta) or not pred_cls._clauses:
             continue
         source = getattr(pred_cls, "_clauses_source", None)
@@ -562,8 +582,8 @@ def _reject_redefinition_of_imported_predicates(
             describe_imported_predicate_redefinition,
         )
         raise SyntaxError(describe_imported_predicate_redefinition(
-            functor, arity, module_name, origins[functor], pred_cls,
-            exporter_module=module_dict.get(origins[functor]),
+            functor, arity, module_name, exporter_name, pred_cls,
+            exporter_module=module_dict.get(exporter_name),
         ))
 
 

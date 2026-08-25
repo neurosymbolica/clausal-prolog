@@ -1,0 +1,11 @@
+# clausal: no-collect
+# Same clobber shape as impclob_redefine, reached through an ALIASED import:
+# -import_from binds the ALIAS, so the alias is the name a local clause head
+# collides with.  Pins _import_from_origins' tuple branch — reading the wrong
+# tuple element would silently let this through and destroy the owner's
+# clauses again.
+-module(impclob_alias_redefine, [impclob_alias_hue(NAME)])
+-import_from(tests.fixtures.impclob_owner, [alias(impclob_colour, impclob_alias_hue)])
+-private([teal])
+
+impclob_alias_hue(teal),

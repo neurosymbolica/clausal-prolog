@@ -501,7 +501,17 @@ class PredicateLoader(_ClausalSourceLoader):
             self._exec_module_v1(module, module_dict)
 
     def _exec_module_v1(self, module, module_dict):
-        """Original pipeline: exec bytecode → $define_predicate → compile."""
+        """Original pipeline: exec bytecode → $define_predicate → compile.
+
+        KNOWN GAP, deliberate: this path does NOT carry compiler_v2's step 3c
+        refusal, so a module that -import_from's a defined functor and then
+        defines a clause for it still silently replaces the exporter's clause
+        list here (todo/done/imported-functor-clause-list-replaced-not-extended.md).
+        The deferred helpers record ownership via ``record_clause_source`` so
+        the two paths agree on the bookkeeping, but only v2 consults it.
+        Dormant while ``_USE_V2_PIPELINE`` is True; anyone flipping that flag
+        must port the refusal before trusting this route.
+        """
         logic_module = LogicModule(module.__name__, module_dict=module_dict)
         module_dict["$module"] = logic_module
         module.__clausal_module__ = logic_module

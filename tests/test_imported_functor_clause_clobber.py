@@ -115,6 +115,24 @@ class TestExporterClausesSurvive:
         assert "-import_from" in msg
         assert "2 clause" in msg           # the size of the hole
 
+    def test_an_aliased_import_is_refused_too(self):
+        """``-import_from(m, [alias(f, G)])`` binds the ALIAS, so ``G`` is the
+        name a local clause head collides with.  Without this, reading the
+        wrong element of the ``(orig, local)`` tuple in
+        ``_import_from_origins`` would silently stop refusing and let the
+        clobber back in — every other fixture here imports plainly."""
+        owner = _load_fixture("impclob_owner")
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_fixture("impclob_alias_redefine")
+        msg = str(exc_info.value)
+        # Named by the CLASS's own functor — what the clause actually compiles
+        # against — not by the local alias spelling.
+        assert "impclob_colour/1" in msg
+        assert "impclob_owner" in msg
+        # And, as ever, nothing was mutated on the way to the refusal.
+        assert sorted(_solutions(owner.impclob_colour, 1)) == [
+            ("green",), ("red",)]
+
 
 class TestTheDiagnosticAttributesClausesCorrectly:
     """``todo/done/imported-clause-refusal-misattributes-ownership.md``.
