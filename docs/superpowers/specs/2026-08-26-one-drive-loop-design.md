@@ -47,6 +47,10 @@ divergence.
    implementations in one session; deleting a routing branch from either
    side reds it.
 4. The `catch/3`-inside-ITE-condition bug is confirmed and fixed.
+5. **Performance-neutral where it matters, measured, not assumed.** The
+   three C entry points are the engine's innermost loops; the refactor
+   must not regress them (see Performance below). The consumer re-basing
+   is expected to be a win and must be shown to be one.
 
 ## Non-goals
 
@@ -151,19 +155,74 @@ Acceptance (from the todo): deleting a routing branch from **either**
 implementation reds this module — to be demonstrated once by temporary
 mutation of each side during development, not kept as an automated check.
 
+## Performance
+
+Every trampoline-mode goal resolution runs through `drive_until_yield_func`
+(via `solve._drive_trampoline`) or `solutions_func`; their inner loop is
+the hottest code in the engine. Two obligations follow.
+
+**Constraint: the C core must compile to what the three loops are today.**
+The core is a `static inline` helper whose `flags` argument is a
+compile-time constant at each of the three call sites, so the compiler
+constant-folds the flag tests and dead-branch-eliminates the unused
+policies — one source specialising into effectively the same three loops.
+Per-iteration costs that exist today (`PyTuple_CheckExact` unpack,
+`StepGen_Check`, the `_TABLING_SUSPEND` pointer compare where enabled)
+stay; no new per-iteration allocation, indirect call, or runtime flag
+dispatch is acceptable in the steady-state step path. If measurement shows
+the inlined-core shape regressing, the fallback is an internal macro or
+an included template expanded per wrapper — uglier, but the "one site to
+edit" goal survives; what is not acceptable is trading hot-loop speed for
+the refactor.
+
+**Expected wins, to be demonstrated:** `_tramp_call`, `_naf_has_solution`
+and the ITE lowering currently step the chain in interpreted Python (or
+emitted-AST Python) even when the C extension is built; after re-basing,
+their stepping runs in C, at the cost of one `$drive_until_yield` call per
+solution rather than per step. Net win expected for any goal that takes
+more than ~one step per solution; the NAF/ITE benchmark below confirms it
+(and would catch the pathological opposite: a helper-call-per-solution
+regression on trivial one-step goals).
+
+**Measurement protocol** (built tree, canonical practice: run from the
+clone with `/workspace/clausal/venv/bin/python`):
+
+- Baseline **before stage 3** and compare after each of stages 1 and 3:
+  - `benchmarks/microbench.py` — already measures trampoline dispatch
+    (1-step) and `StepGenerator` allocation at the ns level.
+  - `benchmarks/workloads.py` — fib, nqueens (deep backtracking), qsort,
+    graph, tabling: all drive-loop-bound macro workloads.
+- Add one workload exercising the re-based consumers: a NAF-heavy and
+  general-ITE-heavy predicate (negation in an inner loop, if-then-else
+  with a multi-solution condition), since no existing workload isolates
+  `$naf_has_solution` / the ITE path. Added in stage 1 (it also serves as
+  the perf check for the bug fix's change of emission).
+- Compare medians of repeated runs; ns-level microbenches are noisy, so
+  regressions are called on the median, not single runs.
+- Acceptance for stage 3: no macro-workload regression beyond run-to-run
+  noise; microbench trampoline dispatch within noise of baseline; the
+  NAF/ITE workload at least as fast as baseline.
+
+The Python twin (`_trampoline_py.py`) is the no-build fallback; its
+wrapper-over-core call per root yield is accepted and not benchmarked.
+
 ## Sequencing (each stage lands green)
 
 1. **ITE bug, test-first.** Failing test in `tests/test_catch_trampolined.py`
    (`catch/3` inside a general-ITE condition, trampoline mode) plus a
    root-TS case if expressible; fix by emitting `$drive_until_yield`.
    Smallest user-visible win; lands independently of everything else.
+   Includes the NAF/ITE workload benchmark, measured before and after the
+   emission change.
 2. **Extract + harness.** Move the Python fallbacks to
    `logic/_trampoline_py.py` (mechanical move, no logic change); land
    `tests/test_trampoline_parity.py` green against both implementations
    as they are today.
 3. **Core+wrappers refactor.** C `drive_to_root_yield` + thin wrappers;
    Python twin to the same shape; re-base `_tramp_call` /
-   `_naf_has_solution` on `_drive_until_yield`. Corpus and suite green.
+   `_naf_has_solution` on `_drive_until_yield`. Corpus and suite green;
+   benchmark comparison against the stage-2 baseline passes the
+   acceptance thresholds in the Performance section.
 4. **Bookkeeping.** Record the audit (below) in the todos, archive both,
    file the policy-convergence follow-up todo.
 
@@ -189,6 +248,14 @@ open-coded stepping of the `(gen, value)` protocol, 2026-08-26:
 
 ## Risks
 
+- **Hot-loop regression from the C core extraction.** Covered by the
+  Performance section: `static inline` + constant flags, benchmarked
+  against a pre-refactor baseline, with the macro/template fallback if
+  inlining doesn't deliver.
+- **Per-solution helper-call overhead in the re-based consumers** on
+  trivial one-step goals (NAF over a fact, ITE with a deterministic
+  condition). The NAF/ITE workload includes exactly these shapes so the
+  trade is visible, not assumed away.
 - **C refactor of exception paths / refcounting.** Mitigated by
   corpus-first ordering (stage 2 before stage 3) and by the traceback-
   identity corpus case (pins the `PyException_SetTraceback` behaviour that
