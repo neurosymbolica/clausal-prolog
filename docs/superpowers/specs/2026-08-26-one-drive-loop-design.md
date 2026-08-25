@@ -246,6 +246,17 @@ open-coded stepping of the `(gen, value)` protocol, 2026-08-26:
 - `goal_trampoline.py`, `control_constructs.py`, `tro.py` — no protocol
   stepping emitted.
 
+Addendum (post-implementation): a repo-wide search for AST-emitted
+protocol stepping (`attr="send"` over `clausal/logic/compiler/`,
+including `optimisations/`) confirmed the general-ITE arm held the only
+emitted drive loop; it now emits `$drive_until_yield`.  The parity
+corpus found one pre-existing C/Python divergence on landing (a
+returning inner generator: C raised the marked engine-protocol
+RuntimeError, the Python twin surfaced bare StopIteration which
+`_drive_until_yield` swallowed as silent exhaustion) — fixed in the
+twin, pinned by
+`test_generator_that_returns_is_a_protocol_error_not_a_catchable`.
+
 ## Risks
 
 - **Hot-loop regression from the C core extraction.** Covered by the

@@ -1,8 +1,20 @@
 # The C trampoline and its pure-Python twin are kept in sync by comment only
 
 **Filed:** 2026-08-26, from the `catch/3` review (`883cdf08`).
-**Status: OPEN — no known divergence today; the point is that nothing would
-tell us.**
+**Status: DONE 2026-08-26** — see docs/superpowers/specs/2026-08-26-one-drive-loop-design.md
+and the commits it names.
+
+## Closing note
+
+`f2f348c5` added `tests/test_trampoline_parity.py`, a single module running a
+32-case behavioural corpus against both the C extension and the pure-Python
+twin (`ffd406b2` extracted the twin into `clausal/logic/_trampoline_py.py`).
+The corpus found and fixed exactly the one pre-existing divergence: a
+returning inner generator raised the marked engine-protocol `RuntimeError` on
+the C side but surfaced a bare `StopIteration` on the Python side, recorded in
+Task 4's report. Mutation-checked in both directions — deleting a routing
+branch from either implementation reds the module — satisfying both
+acceptance criteria.
 
 ## The situation
 

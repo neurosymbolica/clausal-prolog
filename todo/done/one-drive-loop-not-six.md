@@ -1,8 +1,21 @@
 # The trampoline drive loop exists six times, and each copy learns fixes separately
 
 **Filed:** 2026-08-26, from the `catch/3` fix (`463291d6`) and its review
-follow-up (`883cdf08`). **Status: OPEN — refactor, no user-visible bug
-outstanding.**
+follow-up (`883cdf08`).
+**Status: DONE 2026-08-26** — see docs/superpowers/specs/2026-08-26-one-drive-loop-design.md
+and the commits it names.
+
+## Closing note
+
+Landed as one core per language with stop-condition wrappers:
+`08e066a0` (C: `drive_to_root_yield`, constprop'd single copy) and
+`213371b8` (Python: `_drive_to_root_yield` + wrappers), with `4224094d`
+re-basing `_tramp_call`/`_naf_has_solution` on the shared core. The general-ITE
+arm was the seventh, previously-unrouted inline copy — found and fixed by
+`35ad41df`, which routes it through `$drive_until_yield` instead of emitting
+its own loop. All three acceptance criteria are met: an exception-policy or
+protocol change now touches one site per language, no drive loop is emitted
+as generated AST, and the audit (spec addendum) is recorded.
 
 ## What the two fixes showed
 
