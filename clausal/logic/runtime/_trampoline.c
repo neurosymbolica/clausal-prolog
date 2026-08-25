@@ -482,10 +482,140 @@ unwind_to_catcher(PyObject *failed_gen, PyObject **out_gen, PyObject **out_value
 }
 
 
+/* ── The drive core ──────────────────────────────────────────────────────
+ *
+ * "Advance the chain to the next ROOT yield."  The three entry points
+ * (trampoline / solutions / _drive_until_yield) differ ONLY in their stop
+ * condition — what they do with the root-yield value — and in two policy
+ * flags:
+ *
+ *   intercept_ts                — convert a mid-chain _TABLING_SUSPEND step
+ *                                 into send(DONE)
+ *   stopiteration_is_exhaustion — treat StopIteration / a PEP-479 wrapper
+ *                                 from a send as end-of-search (A04-F009)
+ *
+ * Call it with LITERAL flag values only, so a compiler that specialises the
+ * body per call site can constant-fold the flag branches away.  Whether it
+ * bothers is its business: gcc 12 at -O2 on aarch64 emits ONE shared body
+ * and passes the flags in registers, and the drive-loop benchmarks are
+ * unmoved by that (trampoline microbench and every macro workload land
+ * inside run-to-run noise of the pre-refactor build, measured interleaved).
+ * The flags stay literal so the option remains open, not because any
+ * measurement depends on it.  ``who`` feeds the (cold) protocol-error
+ * messages.
+ *
+ * The entry send (root.send(None)) is never routed to a catcher — all six
+ * historical loops agreed on that — only the exhaustion flags touch it.
+ *
+ * On DRIVE_YIELDED, *out_value holds a NEW reference to the root-yield
+ * value.  On DRIVE_ERROR the exception is set.  DRIVE_EXHAUSTED is only
+ * possible when stopiteration_is_exhaustion is true.
+ *
+ * KEEP IN SYNC with _drive_to_root_yield in logic/_trampoline_py.py;
+ * tests/test_trampoline_parity.py enforces the agreement.
+ */
+typedef enum { DRIVE_YIELDED, DRIVE_EXHAUSTED, DRIVE_ERROR } drive_result;
+
+static inline drive_result
+drive_to_root_yield(PyObject *root, int intercept_ts,
+                    int stopiteration_is_exhaustion,
+                    const char *who, PyObject **out_value)
+{
+    if (intercept_ts)
+        /* Resolve the lazy import while no exception is active. */
+        (void)get_TABLING_SUSPEND();
+
+    PyObject *step = StepGen_send(StepGen_CAST(root), Py_None);
+    if (!step) {
+        if (stopiteration_is_exhaustion &&
+            (PyErr_ExceptionMatches(PyExc_StopIteration) ||
+             (PyErr_ExceptionMatches(PyExc_RuntimeError) &&
+              is_pep479_stopiteration_wrapper()))) {
+            PyErr_Clear();
+            return DRIVE_EXHAUSTED;
+        }
+        return DRIVE_ERROR;
+    }
+
+    while (1) {
+        if (!PyTuple_CheckExact(step) || PyTuple_GET_SIZE(step) != 2) {
+            PyErr_Format(PyExc_TypeError,
+                         "%s: generator must yield 2-tuples", who);
+            Py_DECREF(step);
+            return DRIVE_ERROR;
+        }
+
+        PyObject *gen   = PyTuple_GET_ITEM(step, 0);  /* borrowed */
+        PyObject *value = PyTuple_GET_ITEM(step, 1);  /* borrowed */
+
+        if (gen == Py_None) {
+            Py_INCREF(value);
+            Py_DECREF(step);
+            *out_value = value;
+            return DRIVE_YIELDED;
+        }
+
+        if (!StepGen_Check(gen)) {
+            PyErr_Format(PyExc_TypeError,
+                         "%s: step target must be StepGenerator or None, "
+                         "got %.200s", who, Py_TYPE(gen)->tp_name);
+            Py_DECREF(step);
+            return DRIVE_ERROR;
+        }
+
+        int is_suspend = 0;
+        if (intercept_ts) {
+            PyObject *ts = get_TABLING_SUSPEND();
+            is_suspend = (ts && value == ts);
+        }
+
+        /* Keep value alive across the send */
+        Py_INCREF(value);
+        Py_INCREF(gen);
+        Py_DECREF(step);
+
+        step = StepGen_send(StepGen_CAST(gen), is_suspend ? g_DONE : value);
+        Py_DECREF(value);
+
+        if (!step) {
+            if (stopiteration_is_exhaustion &&
+                (PyErr_ExceptionMatches(PyExc_StopIteration) ||
+                 (PyErr_ExceptionMatches(PyExc_RuntimeError) &&
+                  is_pep479_stopiteration_wrapper()))) {
+                /* Tested BEFORE routing so a converted exhaustion is never
+                 * offered to a catch/3 as an error (A04-F009). */
+                PyErr_Clear();
+                Py_DECREF(gen);
+                return DRIVE_EXHAUSTED;
+            }
+            /* Hand it to the enclosing catch/3, if there is one */
+            if (is_routable_exception()) {
+                PyObject *new_gen, *new_value;
+                int r = unwind_to_catcher(gen, &new_gen, &new_value);
+                Py_DECREF(gen);
+                if (r == 1) {
+                    step = PyTuple_Pack(2, new_gen, new_value);
+                    Py_DECREF(new_gen);
+                    Py_DECREF(new_value);
+                    if (!step) return DRIVE_ERROR;
+                    continue;
+                }
+                /* r == 0: uncaught (re-raised), r == -1: different error */
+                return DRIVE_ERROR;
+            }
+            Py_DECREF(gen);
+            return DRIVE_ERROR;
+        }
+        Py_DECREF(gen);
+    }
+}
+
+
 /* ── trampoline(root_step_gen) ───────────────────────────────────────────
  *
- * Tight C loop driving the tuple-based step protocol with exception
- * unwinding through the parent chain.
+ * Drive the tuple-based step protocol to the root yield and return its
+ * value.  The loop (and its exception unwinding through the parent chain)
+ * lives in drive_to_root_yield above.
  */
 static PyObject *
 trampoline_func(PyObject *Py_UNUSED(module), PyObject *root)
@@ -496,67 +626,15 @@ trampoline_func(PyObject *Py_UNUSED(module), PyObject *root)
         return NULL;
     }
 
-    /* step = root.send(None) */
-    PyObject *step = StepGen_send(StepGen_CAST(root), Py_None);
-    if (!step) return NULL;
-
-    while (1) {
-        /* Unpack tuple: (gen, value) */
-        if (!PyTuple_CheckExact(step) || PyTuple_GET_SIZE(step) != 2) {
-            PyErr_SetString(PyExc_TypeError,
-                            "trampoline: generator must yield 2-tuples");
-            Py_DECREF(step);
-            return NULL;
-        }
-
-        PyObject *gen   = PyTuple_GET_ITEM(step, 0);  /* borrowed */
-        PyObject *value = PyTuple_GET_ITEM(step, 1);  /* borrowed */
-
-        if (gen == Py_None) {
-            /* Root computation done */
-            Py_INCREF(value);
-            Py_DECREF(step);
-            return value;
-        }
-
-        if (!StepGen_Check(gen)) {
-            PyErr_Format(PyExc_TypeError,
-                         "trampoline: step target must be StepGenerator or None, "
-                         "got %.200s", Py_TYPE(gen)->tp_name);
-            Py_DECREF(step);
-            return NULL;
-        }
-
-        /* Keep value alive across the send */
-        Py_INCREF(value);
-        Py_INCREF(gen);
-        Py_DECREF(step);
-
-        step = StepGen_send(StepGen_CAST(gen), value);
-        Py_DECREF(value);
-
-        if (!step) {
-            /* Hand it to the enclosing catch/3, if there is one */
-            if (is_routable_exception()) {
-                PyObject *new_gen, *new_value;
-                int r = unwind_to_catcher(gen, &new_gen, &new_value);
-                Py_DECREF(gen);
-                if (r == 1) {
-                    /* Caught — build a new step tuple and continue */
-                    step = PyTuple_Pack(2, new_gen, new_value);
-                    Py_DECREF(new_gen);
-                    Py_DECREF(new_value);
-                    if (!step) return NULL;
-                    continue;
-                }
-                /* r == 0: uncaught (re-raised), r == -1: different error */
-                return NULL;
-            }
-            Py_DECREF(gen);
-            return NULL;
-        }
-        Py_DECREF(gen);
-    }
+    /* The root protocol ends with yield (None, final_value); no
+     * mid-chain suspend interception, no exhaustion conversion —
+     * exactly the historical trampoline loop. */
+    PyObject *value = NULL;
+    if (drive_to_root_yield(root, /*intercept_ts=*/0,
+                            /*stopiteration_is_exhaustion=*/0,
+                            "trampoline", &value) != DRIVE_YIELDED)
+        return NULL;   /* DRIVE_EXHAUSTED impossible with the flag off */
+    return value;
 }
 
 
@@ -589,127 +667,64 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
     PyObject *results = PyList_New(0);
     if (!results) return NULL;
 
-    /* step = root.send(None) */
-    PyObject *step = StepGen_send(StepGen_CAST(root), Py_None);
-    if (!step) { Py_DECREF(results); return NULL; }
-
     while (1) {
-        if (!PyTuple_CheckExact(step) || PyTuple_GET_SIZE(step) != 2) {
-            PyErr_SetString(PyExc_TypeError,
-                            "solutions: generator must yield 2-tuples");
-            Py_DECREF(step);
+        PyObject *value = NULL;
+        if (drive_to_root_yield(root, /*intercept_ts=*/1,
+                                /*stopiteration_is_exhaustion=*/0,
+                                "solutions", &value) != DRIVE_YIELDED) {
             Py_DECREF(results);
             return NULL;
         }
 
-        PyObject *gen   = PyTuple_GET_ITEM(step, 0);
-        PyObject *value = PyTuple_GET_ITEM(step, 1);
-
-        if (gen == Py_None) {
-            if (value == g_DONE) {
-                /* Search exhausted */
-                Py_DECREF(step);
-                return results;
-            }
-            {
-                /* A04-F008: a root/orphaned consumer yields
-                 * (None, _TABLING_SUSPEND) — a control sentinel, never a
-                 * solution; treat it as exhaustion. */
-                PyObject *ts = get_TABLING_SUSPEND();
-                if (ts && value == ts) {
-                    Py_DECREF(step);
-                    return results;
-                }
-            }
-            if (value == g_FINAL) {
-                /* Producer is retiring with its last solution: deliver
-                 * it and stop — no further pull from the (now-retired)
-                 * root.  FINAL is a sentinel, not a payload, so when
-                 * snapshot is None there is no raw value to record. */
-                Py_DECREF(step);
-                if (snapshot_fn != Py_None) {
-                    PyObject *snap = PyObject_CallNoArgs(snapshot_fn);
-                    if (!snap) { Py_DECREF(results); return NULL; }
-                    if (PyList_Append(results, snap) < 0) {
-                        Py_DECREF(snap);
-                        Py_DECREF(results);
-                        return NULL;
-                    }
-                    Py_DECREF(snap);
-                }
-                return results;
-            }
-            /* Solution found — take snapshot or collect raw value.
-             * INCREF value before DECREF step because value is borrowed
-             * from step and DECREF may free both. */
-            Py_INCREF(value);
-            Py_DECREF(step);
-            PyObject *snap;
-            if (snapshot_fn != Py_None) {
-                Py_DECREF(value);  /* snapshot_fn doesn't need value */
-                snap = PyObject_CallNoArgs(snapshot_fn);
-            } else {
-                snap = value;  /* already INCREF'd above */
-            }
-            if (!snap) { Py_DECREF(results); return NULL; }
-            if (PyList_Append(results, snap) < 0) {
-                Py_DECREF(snap);
-                Py_DECREF(results);
-                return NULL;
-            }
-            Py_DECREF(snap);
-
-            /* Ask for next solution */
-            step = StepGen_send(StepGen_CAST(root), Py_None);
-            if (!step) { Py_DECREF(results); return NULL; }
-        } else {
-            if (!StepGen_Check(gen)) {
-                PyErr_Format(PyExc_TypeError,
-                             "solutions: step target must be StepGenerator or None, "
-                             "got %.200s", Py_TYPE(gen)->tp_name);
-                Py_DECREF(step);
-                Py_DECREF(results);
-                return NULL;
-            }
-
-            /* Check for _TABLING_SUSPEND interception */
-            PyObject *tabling_suspend = get_TABLING_SUSPEND();
-            int is_suspend = (tabling_suspend && value == tabling_suspend);
-
-            Py_INCREF(value);
-            Py_INCREF(gen);
-            Py_DECREF(step);
-
-            if (is_suspend) {
-                /* Convert suspend to DONE so the parent exits normally */
-                step = StepGen_send(StepGen_CAST(gen), g_DONE);
-            } else {
-                step = StepGen_send(StepGen_CAST(gen), value);
-            }
+        if (value == g_DONE) {
+            /* Search exhausted */
             Py_DECREF(value);
-
-            if (!step) {
-                /* Hand it to the enclosing catch/3, if there is one */
-                if (is_routable_exception()) {
-                    PyObject *new_gen, *new_value;
-                    int r = unwind_to_catcher(gen, &new_gen, &new_value);
-                    Py_DECREF(gen);
-                    if (r == 1) {
-                        step = PyTuple_Pack(2, new_gen, new_value);
-                        Py_DECREF(new_gen);
-                        Py_DECREF(new_value);
-                        if (!step) { Py_DECREF(results); return NULL; }
-                        continue;
-                    }
+            return results;
+        }
+        {
+            /* A04-F008: a root/orphaned consumer yields
+             * (None, _TABLING_SUSPEND) — a control sentinel, never a
+             * solution; treat it as exhaustion. */
+            PyObject *ts = get_TABLING_SUSPEND();
+            if (ts && value == ts) {
+                Py_DECREF(value);
+                return results;
+            }
+        }
+        if (value == g_FINAL) {
+            /* Producer is retiring with its last solution: deliver
+             * it and stop — no further pull from the (now-retired)
+             * root.  FINAL is a sentinel, not a payload, so when
+             * snapshot is None there is no raw value to record. */
+            Py_DECREF(value);
+            if (snapshot_fn != Py_None) {
+                PyObject *snap = PyObject_CallNoArgs(snapshot_fn);
+                if (!snap) { Py_DECREF(results); return NULL; }
+                if (PyList_Append(results, snap) < 0) {
+                    Py_DECREF(snap);
                     Py_DECREF(results);
                     return NULL;
                 }
-                Py_DECREF(gen);
-                Py_DECREF(results);
-                return NULL;
+                Py_DECREF(snap);
             }
-            Py_DECREF(gen);
+            return results;
         }
+
+        /* Solution found — take snapshot or collect the raw value. */
+        PyObject *snap;
+        if (snapshot_fn != Py_None) {
+            Py_DECREF(value);  /* snapshot_fn doesn't need the raw value */
+            snap = PyObject_CallNoArgs(snapshot_fn);
+        } else {
+            snap = value;      /* already a new reference */
+        }
+        if (!snap) { Py_DECREF(results); return NULL; }
+        if (PyList_Append(results, snap) < 0) {
+            Py_DECREF(snap);
+            Py_DECREF(results);
+            return NULL;
+        }
+        Py_DECREF(snap);
     }
 }
 
@@ -718,8 +733,8 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
  *
  * Inner loop of _drive_trampoline moved to C.
  *
- * Calls sg.send(None) and then loops through the trampoline chain until
- * either:
+ * Delegates to drive_to_root_yield, which calls sg.send(None) and then
+ * loops through the trampoline chain until either:
  *   - A solution is found (gen == None, value != DONE) → returns Py_True
  *   - Search exhausted (gen == None, value == DONE)    → returns Py_None
  *   - StopIteration from send()                        → returns Py_None
@@ -773,103 +788,24 @@ drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
         return NULL;
     }
 
-    /* Eagerly resolve the lazy import while no exception is active:
-     * get_TABLING_SUSPEND calls PyImport_ImportModule, which must not be
-     * called with an active exception. */
-    (void)get_TABLING_SUSPEND();
-
-    /* step = sg.send(None) */
-    PyObject *step = StepGen_send(StepGen_CAST(sg_obj), Py_None);
-    if (!step) {
-        /* A04-F009: exhaustion only — a real user/protocol RuntimeError
-         * propagates instead of becoming a silent zero-solution result. */
-        if (PyErr_ExceptionMatches(PyExc_StopIteration) ||
-            (PyErr_ExceptionMatches(PyExc_RuntimeError) &&
-             is_pep479_stopiteration_wrapper())) {
-            PyErr_Clear();
-            Py_RETURN_NONE;
-        }
+    PyObject *value = NULL;
+    drive_result r = drive_to_root_yield(sg_obj, /*intercept_ts=*/1,
+                                         /*stopiteration_is_exhaustion=*/1,
+                                         "_drive_until_yield", &value);
+    if (r == DRIVE_EXHAUSTED)
+        Py_RETURN_NONE;
+    if (r == DRIVE_ERROR)
         return NULL;
-    }
 
-    while (1) {
-        if (!PyTuple_CheckExact(step) || PyTuple_GET_SIZE(step) != 2) {
-            PyErr_SetString(PyExc_TypeError,
-                            "_drive_until_yield: generator must yield 2-tuples");
-            Py_DECREF(step);
-            return NULL;
-        }
-
-        PyObject *gen   = PyTuple_GET_ITEM(step, 0);  /* borrowed */
-        PyObject *value = PyTuple_GET_ITEM(step, 1);  /* borrowed */
-
-        if (gen == Py_None) {
-            /* A04-F008: (None, _TABLING_SUSPEND) is a control sentinel, never a
-             * solution — a root/orphaned consumer would otherwise fabricate an
-             * unbound answer. Treat it as exhaustion alongside DONE. */
-            PyObject *ts = get_TABLING_SUSPEND();
-            int is_done = (value == g_DONE) || (ts && value == ts);
-            Py_DECREF(step);
-            if (is_done) {
-                Py_RETURN_NONE;   /* search exhausted */
-            }
-            Py_RETURN_TRUE;       /* solution found — caller should yield */
-        }
-
-        if (!StepGen_Check(gen)) {
-            PyErr_Format(PyExc_TypeError,
-                         "_drive_until_yield: step target must be "
-                         "StepGenerator or None, got %.200s",
-                         Py_TYPE(gen)->tp_name);
-            Py_DECREF(step);
-            return NULL;
-        }
-
-        /* Check for _TABLING_SUSPEND interception */
-        PyObject *tabling_suspend = get_TABLING_SUSPEND();
-        int is_suspend = (tabling_suspend && value == tabling_suspend);
-
-        Py_INCREF(value);
-        Py_INCREF(gen);
-        Py_DECREF(step);
-
-        if (is_suspend) {
-            step = StepGen_send(StepGen_CAST(gen), g_DONE);
-        } else {
-            step = StepGen_send(StepGen_CAST(gen), value);
-        }
-        Py_DECREF(value);
-
-        if (!step) {
-            /* StopIteration (clean exhaustion) or a PEP-479 wrapper only;
-             * A04-F009: a genuine RuntimeError falls through to propagate. */
-            if (PyErr_ExceptionMatches(PyExc_StopIteration) ||
-                (PyErr_ExceptionMatches(PyExc_RuntimeError) &&
-                 is_pep479_stopiteration_wrapper())) {
-                PyErr_Clear();
-                Py_DECREF(gen);
-                Py_RETURN_NONE;
-            }
-            /* Hand it to the enclosing catch/3, if there is one */
-            if (is_routable_exception()) {
-                PyObject *new_gen, *new_value;
-                int r = unwind_to_catcher(gen, &new_gen, &new_value);
-                Py_DECREF(gen);
-                if (r == 1) {
-                    step = PyTuple_Pack(2, new_gen, new_value);
-                    Py_DECREF(new_gen);
-                    Py_DECREF(new_value);
-                    if (!step) return NULL;
-                    continue;
-                }
-                /* r == 0: uncaught (re-raised), r == -1: different error */
-                return NULL;
-            }
-            Py_DECREF(gen);
-            return NULL;
-        }
-        Py_DECREF(gen);
-    }
+    /* A04-F008: (None, _TABLING_SUSPEND) is a control sentinel, never a
+     * solution — a root/orphaned consumer would otherwise fabricate an
+     * unbound answer.  Treat it as exhaustion alongside DONE. */
+    PyObject *ts = get_TABLING_SUSPEND();
+    int is_done = (value == g_DONE) || (ts && value == ts);
+    Py_DECREF(value);
+    if (is_done)
+        Py_RETURN_NONE;   /* search exhausted */
+    Py_RETURN_TRUE;       /* solution found — caller should yield */
 }
 
 
