@@ -8,6 +8,8 @@ and constant-shaped names (_PI_) must be variables NOWHERE.
 Known, deliberate divergences pinned at the bottom: clausal_to_prolog treats
 bare `_` as a variable; desugar does not exclude dunders or `_`.
 """
+import re
+
 import pytest
 
 from clausal.templating.term_rewriting import (
@@ -53,20 +55,47 @@ def test_pinned_divergences():
     # desugar: no dunder exclusion (sugar-recognition context).
     assert ds_var("__x") is True and tr_var("__x") is False
 
+# Loose token-finder for the census guard: any ``_..._`` run bounded by
+# non-word characters. Deliberately looser than _is_constant_name (it does
+# not check interior length, leading digit, or doubled boundary
+# underscores) — candidates it finds are handed to _is_constant_name itself
+# to decide, so the census can never drift out of sync with the classifier
+# the way a hand-rolled equivalent-but-independent regex did (roborev
+# finding: the old pattern required a >=2-char interior and so missed
+# single-char constants like _X_/_a_).
+_CONSTANT_TOKEN_CANDIDATE = re.compile(
+    r"(?<![A-Za-z0-9_])_\w+_(?![A-Za-z0-9_])")
+
+
+def _constant_shaped_tokens(text):
+    return [m.group(0) for m in _CONSTANT_TOKEN_CANDIDATE.finditer(text)
+            if _is_constant_name(m.group(0))]
+
+
+def test_census_candidate_regex_delegates_to_classifier():
+    """Unit check on the census mechanism itself, independent of any
+    fixture corpus: the loose candidate regex plus _is_constant_name must
+    agree with the classifier on tokens the old, stricter regex got wrong
+    (single non-digit interior char) as well as ones it must still reject."""
+    assert _constant_shaped_tokens("x = _X_") == ["_X_"]
+    assert _constant_shaped_tokens("x = _a_") == ["_a_"]
+    assert _constant_shaped_tokens("x = _1_") == []
+    assert _constant_shaped_tokens("x = _X__") == []
+
+
 def test_corpus_has_no_constant_shaped_variables():
     """Census guard: no committed .clausal file contains a _X_-shaped token,
-    declared or not — the regex below flags every occurrence regardless of
-    whether a -constants declaration covers it, so today the bar is simply
-    "none exist yet". A future fixture that legitimately declares and uses a
+    declared or not — flags every occurrence regardless of whether a
+    -constants declaration covers it, so today the bar is simply "none
+    exist yet". A future fixture that legitimately declares and uses a
     -constants name will need an explicit allowlist added to this test (not
     implemented — nothing has needed it yet)."""
-    import pathlib, re
+    import pathlib
     root = pathlib.Path(__file__).resolve().parent.parent
-    pat = re.compile(r"(?<![A-Za-z0-9_])_[^\W\d_][\w]*?[^\W_]_(?![A-Za-z0-9_])")
     offenders = []
     for p in root.rglob("*.clausal"):
         if ".claude" in p.relative_to(root).parts:
             continue
-        for m in pat.finditer(p.read_text()):
-            offenders.append((str(p), m.group(0)))
+        for tok in _constant_shaped_tokens(p.read_text()):
+            offenders.append((str(p), tok))
     assert offenders == [], offenders

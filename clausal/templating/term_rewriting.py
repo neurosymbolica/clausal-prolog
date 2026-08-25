@@ -3169,7 +3169,7 @@ class EmbedTransformer(NodeTransformer):
     """
 
     def __init__(transformer, source_lines=None, implicit_atoms_default=False,
-                 filename=None):
+                 filename=None, interactive=False):
         transformer._scope_depth = 0
         # Source file being rewritten, used only to attribute compile-time
         # errors.  A load failure surfaces through the *importing* file, so a
@@ -3204,6 +3204,13 @@ class EmbedTransformer(NodeTransformer):
         # defaults to loose auto-mint: visit_Module seeds an
         # ImplicitAtomsDeclaration unless the cell states its own mode.
         transformer._implicit_atoms_default = implicit_atoms_default
+        # Set by the REPL/IPython transform site (same caller as
+        # implicit_atoms_default, but a distinct axis): -constants has no
+        # cross-cell persistence story, so ``_handle_constants_directive``
+        # rejects the directive outright rather than half-working — see
+        # roborev finding "constants crashes in IPython and forgets across
+        # cells".
+        transformer._interactive = interactive
         # Shared bare-atom collection sink — every per-clause TermTransformer
         # writes into this single set so the union is naturally accumulated.
         # ``visit_Module`` emits a final ``BareAtomRefs`` module item that
@@ -4372,7 +4379,18 @@ class EmbedTransformer(NodeTransformer):
         any clause statement executes; references are plain Name loads and the
         value lands inside clause terms — folding, without a Var anywhere.
         See implementation_plans/module-level-constants.md.
+
+        Interactive sessions (IPython/REPL) reject this directive outright:
+        each cell gets a fresh transformer, so ``_constants`` is forgotten
+        between cells — a constant declared in one cell would raise the
+        undeclared-constant SyntaxError from the next. Half-working (bind in
+        the declaring cell, forget it in the next) is worse than a clear
+        refusal, so this is checked before any of the usual validation.
         """
+        if transformer._interactive:
+            raise SyntaxError(
+                "-constants is not supported interactively yet; declare "
+                "constants in a .clausal module and import it")
         call_node = expr_stmt.value.operand  # the Call under the USub
         # Bare ``-constants`` (no parens) hands a Name operand here, not a
         # Call — it has no ``keywords`` attribute at all. getattr (mirroring
@@ -4442,7 +4460,20 @@ class EmbedTransformer(NodeTransformer):
         if (isinstance(node, UnaryOp) and isinstance(node.op, UAdd)
                 and isinstance(node.operand, UnaryOp)
                 and isinstance(node.operand.op, UAdd)):
-            return node.operand.operand  # ++expr: raw Python, load-time eval
+            # ++expr: raw Python, load-time eval. The operand never passes
+            # through visit_Name (same reason as _build_py_thunk_ast's
+            # f-string/++ escapes elsewhere), so an undeclared constant
+            # reference inside it would otherwise fall through to a raw
+            # NameError at exec time instead of a located, load-time
+            # SyntaxError. Declared-earlier constants (transformer._constants
+            # at this point in the file) are legal here — by exec time they
+            # are already-bound module globals.
+            for ident in _collect_constant_refs(node.operand.operand):
+                if ident not in transformer._constants:
+                    _raise_undeclared_constant(
+                        ident, node, transformer._source_lines,
+                        transformer._filename)
+            return node.operand.operand
         if isinstance(node, UnaryOp):
             return replace(UnaryOp(op=node.op, operand=transformer.
                            _transform_constant_rhs(node.operand, ident)), node)

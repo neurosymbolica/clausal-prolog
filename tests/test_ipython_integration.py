@@ -15,6 +15,7 @@ from clausal.import_hook import (
 from clausal.pythonic_ast.nodes import (
     Call, LoadName, Add, TupleLiteral,
 )
+from clausal.templating.term_rewriting import EmbedTransformer
 
 
 def run_cell(source):
@@ -127,6 +128,49 @@ def test_each_visit_gets_fresh_transformer():
     # Two calls should not share EmbedTransformer state
     t.visit(tree1)
     t.visit(tree2)  # must not raise due to stale _seen_functors or _scope_depth
+
+
+# ── -constants is rejected interactively (roborev finding) ───────────────────
+#
+# ``-constants`` lowers to ``$check_constant_ground(...)`` calls, and a fresh
+# EmbedTransformer per cell means ``_constants`` is forgotten between cells —
+# a name declared in one cell would raise the undeclared-constant SyntaxError
+# from the very next one. Rather than half-work, the directive is rejected
+# outright in interactive sessions.
+
+def test_constants_directive_rejected_interactively():
+    # EmbedTransformer directly, at the actual interception point
+    # (_handle_constants_directive consulting transformer._interactive) —
+    # bypasses _FreshEmbedTransformer's catch-and-print wrapper so the
+    # SyntaxError itself can be asserted on.
+    # nv
+    tree = ast.parse("-constants(_PI_ = 3.14)\n")
+    with pytest.raises(SyntaxError, match="not supported interactively"):
+        EmbedTransformer(implicit_atoms_default=True, interactive=True).visit(tree)
+
+
+def test_constants_directive_still_works_in_module_compile():
+    # A non-interactive EmbedTransformer (the .clausal module-compile path,
+    # interactive=False by default) must be unaffected.
+    # nv
+    tree = ast.parse("-constants(_PI_ = 3.14)\n")
+    transformed = EmbedTransformer().visit(tree)
+    ast.fix_missing_locations(transformed)
+    src = ast.unparse(transformed)
+    assert "$check_constant_ground" in src
+
+
+def test_constants_directive_rejection_surfaces_through_fresh_transformer(capsys):
+    # End-to-end through the actual IPython call path: _FreshEmbedTransformer
+    # catches and prints rather than propagating (so a bad cell does not
+    # unregister the transformer) — confirm the printed traceback carries our
+    # rejection message rather than the old bare NameError.
+    # nv
+    tree = ast.parse("-constants(_PI_ = 3.14)\nresult = _PI_\n")
+    _FreshEmbedTransformer().visit(tree)
+    err = capsys.readouterr().err
+    assert "not supported interactively" in err
+    assert "NameError" not in err
 
 
 # ── Normal Python is unaffected ───────────────────────────────────────────────

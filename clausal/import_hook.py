@@ -848,6 +848,14 @@ _simple_ast_builtins["$unterminated_fact_error"] = _unterminated_fact_error
 # overrides this with a module-specific closure.
 _ipython_facts: list = []
 _simple_ast_builtins["$assert_fact"] = _ipython_facts.append
+# ``-constants`` lowers to ``$check_constant_ground(...)`` calls (see
+# ``_handle_constants_directive``).  The directive itself is rejected
+# interactively (``_FreshEmbedTransformer`` / EmbedTransformer's
+# ``interactive`` flag) rather than run to completion, so this entry is not
+# reachable via that path today — registered anyway so a module-backed
+# ``$check_constant_ground`` reference exec'd in an IPython namespace (e.g.
+# copy-pasted compiled output) does not raise a bare NameError.
+_simple_ast_builtins["$check_constant_ground"] = check_constant_ground
 
 from clausal.repl import Solutions as _Solutions, _run_ipython_goal as _run_ipython_goal
 _simple_ast_builtins["Solutions"] = _Solutions
@@ -974,7 +982,7 @@ class _FreshEmbedTransformer(ast.NodeTransformer):
 
     def visit(self, tree):
         try:
-            tree = EmbedTransformer(implicit_atoms_default=True).visit(tree)
+            tree = EmbedTransformer(implicit_atoms_default=True, interactive=True).visit(tree)
             tree = _StarQueryTransformer().visit(tree)
             ast.fix_missing_locations(tree)
             return tree

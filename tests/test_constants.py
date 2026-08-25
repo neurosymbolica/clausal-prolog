@@ -58,6 +58,45 @@ def test_plusplus_rhs(tmp_path):
     assert [deref(v) for _ in call("pi", v, module=m.__dict__["$module"])] == [math.pi]
 
 
+def test_plusplus_rhs_undeclared_constant_is_syntax_error(tmp_path):
+    """The ``++`` RHS of a -constants declaration never passes through
+    visit_Name (it is emitted verbatim as raw Python), so an undeclared
+    constant reference inside it used to fall through to a raw NameError at
+    load time instead of the located, remedy-bearing SyntaxError every other
+    undeclared-constant reference gets."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _load(tmp_path, "d2", "-constants(_A_ = ++(_B_ * 2))\np(_A_),\n")
+    exc = exc_info.value
+    assert "_B_" in str(exc)
+    assert "drop one of the underscores" in str(exc)
+    assert exc.filename == str(tmp_path / "d2.clausal")
+    assert exc.lineno == 1
+
+
+def test_plusplus_rhs_declared_earlier_constant_still_works(tmp_path):
+    """A constant declared by an earlier -constants entry IS legal inside a
+    later ++ RHS — by exec time it is already a bound module global. Keeps
+    the existing passing ``++`` RHS behaviour green alongside the new scan."""
+    m = _load(tmp_path, "d3", """
+        -constants(_BASE_ = 10, _SCALED_ = ++(_BASE_ * 2))
+        scaled(_SCALED_),
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("scaled", v, module=m.__dict__["$module"])] == [20]
+
+
+def test_plusplus_rhs_comprehension_target_matching_constant_shape_is_not_flagged(tmp_path):
+    """Same exemption as the ordinary ++() escape: a comprehension's own loop
+    variable is locally bound, not a reference to any module global, even
+    when it happens to be constant-shaped."""
+    m = _load(tmp_path, "d4", """
+        -constants(_TOTAL_ = ++(sum(_ITEM_ for _ITEM_ in range(5))))
+        total(_TOTAL_),
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("total", v, module=m.__dict__["$module"])] == [10]
+
+
 def test_undeclared_constant_reference_is_syntax_error(tmp_path):
     with pytest.raises(SyntaxError, match="_PI_"):
         _load(tmp_path, "e", "area(R, A) <- (A is ++(_PI_ * R))\n")
