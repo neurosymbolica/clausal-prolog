@@ -147,7 +147,7 @@ def test_catch_around_a_many_solution_callee_yields_all(mod):
 
 # ── the same seam under a shallow driver ─────────────────────────────────────
 #
-# once/findall/\+ /lambda bodies compile shallow and reach a trampoline-mode
+# once/findall/`not`/lambda bodies compile shallow and reach a trampoline-mode
 # callee through ``runtime/tramp_call.py``'s mini-trampoline — a fourth copy of
 # the drive loop, which had no catcher routing at all.  A catch/3 *inside* the
 # trampolined predicate was therefore inert under any of them, for throw/1 as
@@ -169,3 +169,92 @@ def test_catch_inside_a_predicate_called_through_findall(mod):
 def test_throw_caught_inside_a_predicate_called_through_once(mod):
     """The LogicException half of the same hole."""
     assert _answers(mod.catch_throw_via_once) == [("boom",)]
+
+
+# ── the two remaining tramp_call drivers, and a raising recovery goal ────────
+# Added 2026-08-26 after a review found the `not` lowering emitted its OWN copy
+# of the drive loop as generated AST — the one copy with no routing at all.
+
+
+def test_catch_inside_a_negated_goal_absorbs_the_exception(mod):
+    """`not GOAL` is a drive loop of its own (the ``Negate`` lowering).
+
+    The negated predicate's catch/3 absorbs the ValueError and its recovery
+    then fails, so the negation succeeds.  Before the fix the exception
+    escaped the negation entirely and the whole query raised.
+    """
+    assert _answers(mod.naf_over_catch) == [("absorbed_then_failed",)]
+
+
+def test_catch_inside_a_goal_lambda_absorbs_the_exception(mod):
+    """A goal lambda reaches a trampoline-mode callee through _tramp_call."""
+    assert _answers(mod.catch_from_callee_via_lambda) == [
+        (Compound("ValueError", (_INT_NOPE,)),)]
+
+
+def test_an_exception_from_a_recovery_goal_reaches_the_outer_catch(mod):
+    """The handler absorbs one exception and then raises a different one.
+
+    ``unwind_to_catcher``'s "throw() raised a NEW routable exception" path:
+    the walk continues from that frame's own catcher, so the outer catch/3
+    binds the SECOND exception, not the first.
+    """
+    also_nope = "invalid literal for int() with base 10: 'also_nope'"
+    assert _answers(mod.outer_catches_a_raising_recovery) == [
+        (Compound("ValueError", (also_nope,)),)]
+
+
+# ── the routing policy itself ────────────────────────────────────────────────
+
+
+class TestWhatIsRoutable:
+    """``_is_routable`` is the Python twin of C ``is_routable_exception``.
+
+    Both are always live: the helper is defined above the C fast-path import,
+    so ``tramp_call`` and the ``not`` lowering use exactly this function while
+    the C drive loops use the twin.  What these tests do NOT cover is the
+    pure-Python ``trampoline`` / ``solutions`` / ``_drive_until_yield``
+    fallbacks, which the C extension shadows in any built tree; their routing
+    is verified only by reading, and by this shared policy.
+    """
+
+    def test_ordinary_python_errors_are_routable(self):
+        from clausal.logic.trampoline import _is_routable
+        assert _is_routable(ValueError("x"))
+        assert _is_routable(NameError("x"))
+
+    def test_control_signals_are_not_routable(self):
+        from clausal.logic.trampoline import _is_routable
+        assert not _is_routable(StopIteration())
+        assert not _is_routable(SystemExit(3))
+        assert not _is_routable(GeneratorExit())
+        assert not _is_routable(KeyboardInterrupt())
+
+    def test_a_pep479_wrapper_is_not_routable(self):
+        """A converted exhaustion must never be offered to catch/3 as an error."""
+        from clausal.logic.trampoline import _is_routable
+        wrapper = RuntimeError("generator raised StopIteration")
+        wrapper.__cause__ = StopIteration()
+        assert not _is_routable(wrapper)
+        # A genuine RuntimeError from user code still is.
+        assert _is_routable(RuntimeError("from a ++ escape"))
+
+    def test_the_engine_protocol_error_is_not_routable(self):
+        from clausal.logic.trampoline import _is_routable
+        err = RuntimeError("StepGenerator inner generator returned unexpectedly")
+        err.__clausal_engine_protocol__ = True
+        assert not _is_routable(err)
+
+    def test_the_c_protocol_error_carries_the_marker(self):
+        """The C StepGen_send marks its protocol error so ``_is_routable`` can
+        exclude it without matching on message text."""
+        from clausal.logic.trampoline import StepGenerator
+
+        def returns_without_yielding(_self, _proceed, _fail, _catcher, _trail):
+            return
+            yield  # pragma: no cover — makes this a generator function
+
+        sg = StepGenerator(returns_without_yielding, None, None, None, None)
+        with pytest.raises(RuntimeError) as exc_info:
+            sg.send(None)
+        assert getattr(exc_info.value, "__clausal_engine_protocol__", False)

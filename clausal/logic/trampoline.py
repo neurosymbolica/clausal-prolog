@@ -85,7 +85,19 @@ class Step:
 
 def _is_routable(exc: BaseException) -> bool:
     """True when *exc* is an error ``catch/3`` may handle, not a control signal."""
-    return isinstance(exc, Exception) and not isinstance(exc, StopIteration)
+    if not isinstance(exc, Exception) or isinstance(exc, StopIteration):
+        return False
+    if isinstance(exc, RuntimeError):
+        # The engine talking to itself: a PEP-479 wrapper (a converted
+        # exhaustion) or the StepGen protocol error (a compiler bug).  Neither
+        # is the author's to catch, and excluding them HERE — not only in
+        # ``_drive_until_yield``, which tests the wrapper before it asks about
+        # routing — keeps all four drive loops agreeing on what a handler sees.
+        if isinstance(exc.__cause__, StopIteration):
+            return False
+        if getattr(exc, "__clausal_engine_protocol__", False):
+            return False
+    return True
 
 
 def _unwind_to_catcher(failed_gen: Any, exc: Exception) -> tuple:

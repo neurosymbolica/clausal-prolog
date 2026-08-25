@@ -27,6 +27,11 @@
     catch_from_callee_via_once(E),
     catch_from_callee_via_findall(ES),
     catch_throw_via_once(E),
+    catch_then_fail(TAG),
+    naf_over_catch(R),
+    catch_from_callee_via_lambda(E),
+    recovery_raises(R),
+    outer_catches_a_raising_recovery(E),
 ])
 -import_from(catch_tramp_sibling, [art_9])
 -allow_singletons
@@ -72,7 +77,7 @@ counted(3),
 catch_multi(N) <- (catch(counted(N), _E, true)),
 
 # ── the same seam reached from a SHALLOW driver ─────────────────────────────
-# once/1, findall/3, \+ and lambda bodies compile shallow and reach a
+# once/1, findall/3, `not` and lambda bodies compile shallow and reach a
 # trampoline-mode callee through runtime/tramp_call.py's mini-trampoline.  That
 # driver is a fourth copy of the same loop, so a catch/3 *inside* the
 # trampolined predicate needs its exceptions routed there too — this held for
@@ -83,6 +88,22 @@ catch_throw(E) <- (catch(throw_in_callee(_X), E, true)),
 catch_from_callee_via_once(E) <- (once(catch_from_callee(E))),
 catch_from_callee_via_findall(ES) <- (findall(E, catch_from_callee(E), ES)),
 catch_throw_via_once(E) <- (once(catch_throw(E))),
+
+# `not` and a goal lambda are the two remaining tramp_call drivers.  The inner
+# catch/3 ABSORBS the ValueError, so catch_from_callee succeeds and each of
+# these must simply FAIL (`not` over a success) or succeed with the bound term —
+# never raise.  Unrouted, the exception escapes the mini-trampoline instead.
+catch_then_fail(TAG) <- (TAG is "t", catch(raise_value_error(_X), _E, "a" == "b")),
+naf_over_catch(R) <- (not catch_then_fail(_T), R is "absorbed_then_failed"),
+catch_from_callee_via_lambda(E) <- (call_goal((() <- catch_from_callee(E)))),
+
+# ── an exception raised by the RECOVERY goal itself ─────────────────────────
+# The handler absorbs the ValueError and then raises a fresh one from its own
+# frame.  That is unwind_to_catcher's "throw() raised a NEW routable
+# exception" path: keep walking from THIS frame's catcher, so the outer
+# catch/3 sees the second exception, not the first.
+recovery_raises(R) <- (catch(raise_value_error(_X), _E, R is ++(int("also_nope")))),
+outer_catches_a_raising_recovery(E) <- (catch(recovery_raises(_R), E, true)),
 
 Test("an inner catch/3 absorbs it; the outer recovery does not run") <- (
     inner_catches(R),

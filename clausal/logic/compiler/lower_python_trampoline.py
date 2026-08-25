@@ -260,56 +260,19 @@ def _lower_body(
                 _call(_name("StepGenerator"), _name(naf_gen_fn),
                       ast.Constant(None), ast.Constant(None), ast.Constant(None),
                       _name(trail_name)))
-            first_send = ast.Assign(
-                targets=[ast.Tuple(
-                    elts=[_name(naf_g, ast.Store()), _name(naf_v, ast.Store())],
-                    ctx=ast.Store(),
-                )],
-                value=_call(ast.Attribute(value=_name(naf_sg), attr="send", ctx=ast.Load()),
-                            ast.Constant(None)),
-            )
-            inner_if = ast.If(
-                test=ast.Compare(
-                    left=_name(naf_g),
-                    ops=[ast.Is()],
-                    comparators=[ast.Constant(None)],
-                ),
-                body=[
-                    ast.If(
-                        test=ast.Compare(
-                            left=_name(naf_v),
-                            ops=[ast.Is()],
-                            comparators=[_name("$DONE")],
-                        ),
-                        body=[ast.Break()],
-                        orelse=[],
-                    ),
-                    _assign(naf_flag, ast.Constant(value=False)),
-                    ast.Break(),
-                ],
-                orelse=[
-                    ast.Assign(
-                        targets=[ast.Tuple(
-                            elts=[_name(naf_g, ast.Store()), _name(naf_v, ast.Store())],
-                            ctx=ast.Store(),
-                        )],
-                        value=_call(ast.Attribute(value=_name(naf_g), attr="send", ctx=ast.Load()),
-                                    _name(naf_v)),
-                    ),
-                ],
-            )
-            while_loop = ast.While(
-                test=ast.Constant(value=True),
-                body=[inner_if],
-                orelse=[],
-            )
+            # The drive loop lives in $naf_has_solution, not here.  Emitted
+            # inline it was a fifth copy of the loop and the only one with no
+            # exception routing, so a catch/3 inside a negated goal was inert
+            # and its exception escaped the negation (review, 2026-08-25).
+            drive = _assign(naf_flag, ast.UnaryOp(
+                op=ast.Not(),
+                operand=_call(_name("$naf_has_solution"), _name(naf_sg)),
+            ))
             return [
                 naf_fn_def,
-                _assign(naf_flag, ast.Constant(value=True)),
                 _assign_mark(naf_mark, trail_name),
                 sg_create,
-                first_send,
-                while_loop,
+                drive,
                 _undo_stmt(naf_mark, trail_name),
                 _if(_name(naf_flag), k_stmts),
             ]

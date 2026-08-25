@@ -29,7 +29,7 @@ def _tramp_call(dispatch_fn, args, trail):
     in *this* frame, not in the caller's ``try``, so a ``catch/3`` written
     inside ``dispatch_fn`` only ever sees an exception this loop throws back
     into the ``catcher`` chain.  Without that, every handler under a ``once`` /
-    ``findall`` / ``\\+`` / lambda body was inert — for ``throw/1`` as much as
+    ``findall`` / ``not`` / lambda body was inert — for ``throw/1`` as much as
     for a Python exception.  Anything the chain does not absorb propagates on
     to the shallow caller, whose own ``try`` covers this loop.
     """
@@ -48,3 +48,27 @@ def _tramp_call(dispatch_fn, args, trail):
                 if not _is_routable(exc):
                     raise
                 gen, value = _unwind_to_catcher(gen, exc)
+
+
+def _naf_has_solution(sg) -> bool:
+    """True if the mini-trampolined goal *sg* yields at least one solution.
+
+    The ``not`` lowering used to emit this loop inline as generated AST — a
+    fifth copy of the drive loop, and the only one with no exception routing
+    at all, so a ``catch/3`` inside a negated goal was inert and its exception
+    escaped the negation entirely (review finding, 2026-08-25).  Keeping the
+    loop here instead of in codegen means there is one routing policy to
+    change, not one per emitter.
+
+    Stops at the first solution: negation needs existence, not enumeration.
+    """
+    gen, value = sg.send(None)
+    while True:
+        if gen is None:
+            return value is not DONE
+        try:
+            gen, value = gen.send(value)
+        except Exception as exc:  # noqa: BLE001 — see _is_routable
+            if not _is_routable(exc):
+                raise
+            gen, value = _unwind_to_catcher(gen, exc)

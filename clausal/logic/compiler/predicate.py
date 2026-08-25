@@ -58,7 +58,9 @@ from clausal.logic.runtime.body_star_unify import (  # noqa: F401
     _build_multi_star_list,
     _in_iter,
 )
-from clausal.logic.runtime.tramp_call import _tramp_call  # noqa: F401
+from clausal.logic.runtime.tramp_call import (  # noqa: F401
+    _tramp_call, _naf_has_solution,
+)
 from clausal.logic.runtime.dict_ops import _subscript, _splat_data, _dict_key  # noqa: F401
 from clausal.logic.runtime.const_set import _const_set, _CONST_SET_TYPES  # noqa: F401
 
@@ -764,6 +766,7 @@ def compile_predicate_trampoline(
         "$build_star_list": _build_star_list,
         "$build_multi_star_list": _build_multi_star_list,
         "$tramp_call": _tramp_call,
+        "$naf_has_solution": _naf_has_solution,
         "$dispatch_at": _dispatch_at,
         "$deref_walk": _deref_walk_fn,
         "$findall_copy": _findall_copy_row,
@@ -1509,6 +1512,7 @@ def compile_predicate_shallow(
         "$build_star_list": _build_star_list,
         "$build_multi_star_list": _build_multi_star_list,
         "$tramp_call": _tramp_call,
+        "$naf_has_solution": _naf_has_solution,
         "$dispatch_at": _dispatch_at,
         "$deref_walk": _deref_walk_fn,
         "$findall_copy": _findall_copy_row,

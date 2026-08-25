@@ -66,11 +66,27 @@ static PyObject *g_TABLING_SUSPEND = NULL; /* clausal.logic.tabling._TABLING_SUS
  * Precondition: an exception is currently set.  Leaves it unchanged.
  * KEEP IN SYNC with ``_is_routable`` in ../trampoline.py.
  */
+static int is_pep479_stopiteration_wrapper(void);  /* defined below */
+static int is_engine_protocol_error(void);        /* defined below */
+
 static int
 is_routable_exception(void)
 {
-    return PyErr_ExceptionMatches(PyExc_Exception)
-        && !PyErr_ExceptionMatches(PyExc_StopIteration);
+    if (!PyErr_ExceptionMatches(PyExc_Exception)
+            || PyErr_ExceptionMatches(PyExc_StopIteration))
+        return 0;
+    /* Two RuntimeErrors are the ENGINE talking to itself, not errors the
+     * author wrote a handler for.  drive_until_yield_func tests the first of
+     * these before it ever asks about routing (A04-F009); testing both here
+     * as well is what stops trampoline_func / solutions_func / _tramp_call
+     * from offering a converted exhaustion or a compiler bug to a catch/3
+     * with a variable catcher, which would turn an engine anomaly into a
+     * recovery goal and make one program shape behave differently depending
+     * on which drive loop happened to run it (review finding, 2026-08-25). */
+    if (PyErr_ExceptionMatches(PyExc_RuntimeError)
+            && (is_pep479_stopiteration_wrapper() || is_engine_protocol_error()))
+        return 0;
+    return 1;
 }
 
 /*
@@ -240,9 +256,20 @@ StepGen_send(StepGenObject *self, PyObject *value)
     if (sr == PYGEN_RETURN) {
         /* Generator returned normally — protocol error */
         Py_XDECREF(result);
-        PyErr_SetString(PyExc_RuntimeError,
-                        "StepGenerator inner generator returned "
-                        "unexpectedly (no final yield)");
+        /* Marked with an attribute rather than identified by its message:
+         * is_routable_exception() must keep this away from catch/3, and
+         * matching on message text would break the moment anyone reworded it. */
+        PyObject *perr = PyObject_CallFunction(
+            PyExc_RuntimeError, "s",
+            "StepGenerator inner generator returned "
+            "unexpectedly (no final yield)");
+        if (perr) {
+            if (PyObject_SetAttrString(perr, "__clausal_engine_protocol__",
+                                       Py_True) < 0)
+                PyErr_Clear();  /* best-effort marker; the error still raises */
+            PyErr_SetObject(PyExc_RuntimeError, perr);
+            Py_DECREF(perr);
+        }
         return NULL;
     }
 
@@ -394,8 +421,11 @@ unwind_to_catcher(PyObject *failed_gen, PyObject **out_gen, PyObject **out_value
          * them, which for an exception nobody catches would leave the author
          * a traceback pointing at the caller instead of the culprit —
          * tests/test_source_locations.py::TestSourceLocationsG6 pins this. */
-        if (exc_tb)
-            PyException_SetTraceback(exc_val, exc_tb);
+        if (exc_tb && PyException_SetTraceback(exc_val, exc_tb) < 0)
+            /* Cannot fail for a fetched+normalized traceback, but leaving a
+             * second exception set going into StepGen_throw would conflate
+             * the two.  Drop the nicety, keep the real error. */
+            PyErr_Clear();
         PyObject *throw_args = PyTuple_Pack(1, exc_val);
         if (!throw_args) {
             Py_XDECREF(exc_type);
@@ -717,6 +747,22 @@ is_pep479_stopiteration_wrapper(void)
     PyErr_SetRaisedException(exc);  /* restore (consumes exc ref) */
     return is_wrapper;
 }
+
+/* True for the StepGen protocol error raised by StepGen_send — an engine
+ * anomaly (a compiled generator that returned instead of yielding), never
+ * something an author's catch/3 should absorb.  Precondition: the active
+ * exception matches RuntimeError.  Leaves the current exception unchanged. */
+static int
+is_engine_protocol_error(void)
+{
+    PyObject *exc = PyErr_GetRaisedException();  /* new ref; clears current */
+    if (!exc)
+        return 0;
+    int marked = PyObject_HasAttrString(exc, "__clausal_engine_protocol__");
+    PyErr_SetRaisedException(exc);  /* restore (consumes exc ref) */
+    return marked;
+}
+
 
 static PyObject *
 drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
