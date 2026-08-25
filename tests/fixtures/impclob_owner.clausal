@@ -1,0 +1,9 @@
+# Owner of impclob_colour/1, WITH clauses of its own.  A downstream fixture
+# imports it and defines its own clause for the same functor — the shape that
+# used to silently replace this module's clause list.
+# See todo/done/imported-functor-clause-list-replaced-not-extended.md.
+-module(impclob_owner, [impclob_colour(NAME)])
+-private([red, green])
+
+impclob_colour(red),
+impclob_colour(green),

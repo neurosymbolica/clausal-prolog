@@ -24,7 +24,9 @@ from clausal.logic.compiler import (
     compile_predicate_trampoline,
     compile_predicate_shallow,
 )
-from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.predicate import (
+    PredicateMeta, make_predicate, module_source_path, record_clause_source,
+)
 from clausal.pythonic_ast.nodes import (
     BareAtomRefs as BareAtomRefsItem,
     Directive as DirectiveItem,
@@ -185,6 +187,14 @@ def compile_module(
     #    NameError on undeclared names instead of minting.
     _process_bare_atom_refs(module_items, module_dict, module_name)
 
+    # ── Step 3c: refuse to overwrite an imported predicate's clauses ─────
+    #    Must run BEFORE step 4, which mutates the shared class in place: a
+    #    refusal that fired halfway through the loop would leave the other
+    #    module with a partly-clobbered clause list, which is the very fault
+    #    it exists to prevent.
+    _reject_redefinition_of_imported_predicates(
+        predicate_nodes, module_items, module_dict, module_name)
+
     # ── Step 4: assertz all clauses ───────────────────────────────────────
     pending: dict[tuple[str, int], PredicateMeta | None] = {}
     for pred_node in predicate_nodes:
@@ -197,6 +207,7 @@ def compile_module(
         if isinstance(pred_cls, PredicateMeta):
             db_clauses = db.clauses_for(functor, arity)
             pred_cls._clauses[:] = db_clauses
+            record_clause_source(pred_cls, module_name, module_dict)
             if pred_cls._signature is None:
                 pred_cls._signature = pred_cls._fields
             pending[key] = pred_cls
@@ -480,6 +491,80 @@ def _reject_reserved_truth_names(
         "  be referenced.  Rename the predicate.",
     ]
     raise NameError("\n".join(lines))
+
+
+def _import_from_origins(module_items: list) -> dict:
+    """``{local_name: dotted module}`` for every name an ``-import_from``
+    binds in this file.  Aliased imports (``alias(f, G)``) bind the ALIAS, so
+    that is the name a clause head here could collide with."""
+    origins: dict[str, str] = {}
+    for item in module_items:
+        if not isinstance(item, ImportFromItem):
+            continue
+        for name_spec in item.names:
+            local = name_spec[1] if isinstance(name_spec, tuple) else name_spec
+            origins[local] = item.module
+    return origins
+
+
+def _reject_redefinition_of_imported_predicates(
+    predicate_nodes: list, module_items: list, module_dict: dict,
+    module_name: str,
+) -> None:
+    """Refuse a clause for an ``-import_from``'d predicate that another module
+    has already supplied clauses for.
+
+    ``-import_from`` binds the exporter's predicate CLASS, and step 4 writes
+    this module's clauses straight onto it.  Whatever was there was silently
+    overwritten — for the other module's own queries too
+    (``todo/done/imported-functor-clause-list-replaced-not-extended.md``).
+
+    Extending instead is not a fix that can be made correct here: the clause
+    list is not what answers a goal.  Step 5 compiles ONE dispatch function
+    from ONE clause list against ONE ``globals_`` (``globals_=module_dict``),
+    so a merged list would mean compiling the other module's clause bodies —
+    written against its ``-private`` atoms and its imports — in this module's
+    scope.  A merged clause list with an unmerged dispatch function trades a
+    visible bug for an invisible one.
+
+    Two shapes are deliberately NOT refused:
+
+    * a **clause-free** import.  That is a declaration — a bare vocabulary
+      atom, or a signature whose implementer lives downstream — and supplying
+      its clauses is an established idiom in downstream rulebase corpora.
+      Nothing is destroyed, so nothing is refused.
+    * a **reload of the same file**.  Ownership is keyed on the source path,
+      so a file that reaches step 4 twice in one process (dotted import plus
+      ``load_clausal_module``, or a straight re-load) re-runs an assignment
+      that is idempotent.  Keying it on the module *name* instead is what made
+      the previous attempt at this refuse a file beside itself
+      (``todo/done/imported-clause-refusal-misattributes-ownership.md``).
+    """
+    origins = _import_from_origins(module_items)
+    if not origins:
+        return
+    here = module_source_path(module_dict)
+    checked: set[str] = set()
+    for pred_node in predicate_nodes:
+        functor, arity = head_key(pred_node.head)
+        if functor in checked or functor not in origins:
+            continue
+        checked.add(functor)
+        pred_cls = module_dict.get(functor)
+        if not isinstance(pred_cls, PredicateMeta) or not pred_cls._clauses:
+            continue
+        source = getattr(pred_cls, "_clauses_source", None)
+        if source is not None and here is not None and source[1] == here:
+            # Our own clauses, from an earlier compile of this same file.
+            # Re-running step 4's assignment is idempotent.
+            continue
+        from clausal.import_diagnostics import (  # noqa: PLC0415
+            describe_imported_predicate_redefinition,
+        )
+        raise SyntaxError(describe_imported_predicate_redefinition(
+            functor, arity, module_name, origins[functor], pred_cls,
+            exporter_module=module_dict.get(origins[functor]),
+        ))
 
 
 def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) -> None:

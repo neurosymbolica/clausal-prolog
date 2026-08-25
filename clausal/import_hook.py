@@ -41,7 +41,7 @@ from .templating.term_rewriting import EmbedTransformer, TermTransformer
 from .logic.database import Module as LogicModule, head_key
 from .logic.compiler import compile_predicate_trampoline, compile_predicate_shallow
 from .logic.constants import check_constant_ground, register_module_constant
-from .logic.predicate import PredicateMeta
+from .logic.predicate import PredicateMeta, record_clause_source
 from .logic.variables import Var, Trail, unify, deref, walk
 from .terms import Compound, KWTerm, DictTerm, SetTerm
 
@@ -197,6 +197,9 @@ def _define_predicate_deferred(predicate_node, logic_module, module_dict,
     if isinstance(pred_cls, PredicateMeta):
         db_clauses = logic_module.db.clauses_for(functor, arity)
         pred_cls._clauses[:] = db_clauses
+        # Kept in lockstep with compiler_v2 step 4 — see
+        # PredicateMeta._clauses_source.
+        record_clause_source(pred_cls, logic_module.name, module_dict)
         if pred_cls._signature is None:
             pred_cls._signature = pred_cls._fields
 
@@ -213,6 +216,9 @@ def _assert_fact_deferred(term, logic_module, module_dict, pending):
     if isinstance(pred_cls, PredicateMeta):
         db_clauses = logic_module.db.clauses_for(functor, arity)
         pred_cls._clauses[:] = db_clauses
+        # Kept in lockstep with compiler_v2 step 4 — see
+        # PredicateMeta._clauses_source.
+        record_clause_source(pred_cls, logic_module.name, module_dict)
         if pred_cls._signature is None:
             pred_cls._signature = pred_cls._fields
 

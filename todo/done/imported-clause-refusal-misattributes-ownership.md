@@ -79,3 +79,56 @@ owns clauses it does not.
   own todo, for the fault it was built to fix — which is real)
 - `todo/same-name-two-arities-silently-merge.md` (the other place clause lists
   merge in a way the docs do not describe)
+
+---
+
+## CLOSED — 2026-08-25 (avoided, not patched)
+
+Branch `fix/imported-functor-clause-list-2026-08-25` lands the refusal this
+todo was written against — but built so neither fault can occur.
+`fix/imported-functor-clause-destruction` (`ec6bf7bf`) is **superseded and
+should not be merged**; nothing of its `_clauses_module` mechanism survives.
+
+The reviewer's diagnosis here was right on both counts. Confirmed by reading
+the branch: `_clauses_module` recorded the module *name*, and
+`describe_imported_predicate_redefinition` read `len(pred_cls._clauses)` and
+attributed the count to the module named in the `-import_from`.
+
+### What changed, fault by fault
+
+**1. "Order- and process-state-dependent" / same source loaded twice.**
+Ownership is now keyed on the **source path**
+(`PredicateMeta._clauses_source = (module_name, realpath)`), not the module
+name. One `.clausal` file legitimately compiles under two names in one process
+— its dotted name via `-import_from`, and a private `_clausal_test_*` name via
+`clausal.testing.load_clausal_module`, which is exactly what made
+`test_atom_vocabulary_then_predicate` pass alone and fail in the full run. A
+second compile of the same file re-runs an assignment that is idempotent, so it
+is never a redefinition.
+
+Pinned by `TestOneFileLoadedTwiceUnderTwoNames` in
+`tests/test_imported_functor_clause_clobber.py`, including
+`test_the_atom_vocabulary_shape_survives_both_load_routes`, which loads
+`tests/fixtures/impord_atom_then_pred.clausal` by *both* routes in one process
+— the exact combination that broke the old branch.
+
+**2. "The diagnostic misattributes ownership."** The message now names the
+module that actually wrote the clauses. Where that is not the exporter it says
+so in as many words — *"those N clauses were supplied by X, not by Y — Y only
+declares F"* — and the remedy line points at X. Pinned by
+`TestTheDiagnosticAttributesClausesCorrectly`, whose fixtures are a
+declaration-only vocabulary plus two rival implementers, and which asserts the
+old wording is absent.
+
+Note the second implementer is still **refused** — its clauses really would
+destroy the first implementer's. What was wrong was the *attribution*, not the
+refusal.
+
+### On the `-multifile` note
+
+Agreed and still true: a `-multifile` opt-in would not have fixed this case.
+The wider design question is settled in
+`todo/done/imported-functor-clause-list-replaced-not-extended.md` — extending a
+shared clause list cannot be made correct while one predicate compiles to one
+dispatch against one module's globals, so `-multifile` has no correct
+implementation to opt into today.

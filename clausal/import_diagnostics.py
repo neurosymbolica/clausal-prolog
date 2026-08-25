@@ -492,6 +492,107 @@ def _describe_missing_module(exc, dotted, failed, directive, importer_file):
     return "\n".join(lines)
 
 
+# ── redefining an imported predicate ─────────────────────────────────────────
+
+
+def _clause_author(pred_cls, exporter, exporter_module):
+    """``(name, where)`` of the module that supplied ``pred_cls``'s clauses.
+
+    ``-import_from`` binds a SHARED class, so the clauses sitting on it are not
+    automatically the exporter's: a clause-free export implemented downstream
+    leaves them owned by the *importer* that implemented it.  Blaming the
+    exporter for those is the defect the previous attempt at this refusal
+    shipped — see ``todo/done/imported-clause-refusal-misattributes-ownership.md``.
+
+    Returns ``(None, None)`` when nothing was recorded, so the caller can say
+    so rather than guess.
+    """
+    source = getattr(pred_cls, "_clauses_source", None)
+    if not (isinstance(source, tuple) and len(source) == 2):
+        return None, None
+    name, path = source
+    exporter_path = getattr(exporter_module, "__file__", None)
+    if exporter_path:
+        try:
+            same = path is not None and os.path.realpath(exporter_path) == path
+        except OSError:  # pragma: no cover — defensive
+            same = False
+        if same:
+            # The exporter really is the author; prefer the spelling the
+            # -import_from used, which is the one the reader wrote.
+            return exporter, path
+    return name, path
+
+
+def describe_imported_predicate_redefinition(
+    functor, arity, importer, exporter, pred_cls, exporter_module=None,
+):
+    """Why a clause for an ``-import_from``'d, already-defined predicate is
+    refused — and what to write instead.
+
+    ``-import_from`` binds the *exporter's* predicate class, so a clause
+    written here lands on that shared class and used to overwrite its clause
+    list outright: the clauses already on it vanished, from their own module's
+    queries, with no error (see
+    ``todo/done/imported-functor-clause-list-replaced-not-extended.md``).  The
+    message leads with what is about to be lost — the count is the size of the
+    hole — names **who actually wrote those clauses** rather than assuming the
+    exporter did, and then names the two places a clause could legitimately go,
+    because "you cannot write this" alone leaves the author with a rule and
+    nowhere to put it.
+    """
+    n = len(getattr(pred_cls, "_clauses", ()) or ())
+    plural = "clause" if n == 1 else "clauses"
+    subject = "that 1 clause" if n == 1 else f"those {n} clauses"
+    was = "was" if n == 1 else "were"
+    author, author_path = _clause_author(pred_cls, exporter, exporter_module)
+    lines = [
+        f"{importer} defines a clause for {functor}/{arity}, which it "
+        f"-import_from's from {exporter}."
+    ]
+    lines.extend(textwrap.wrap(
+        f"An -import_from binds the EXPORTER's predicate, so this clause would "
+        f"not add to the {n} {plural} already on {functor} — it would replace "
+        f"{'it' if n == 1 else 'all of them'}, for every module that can reach "
+        f"it. Clausal has no -multifile: a predicate has exactly one defining "
+        f"module.",
+        width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
+        break_long_words=False, break_on_hyphens=False,
+    ))
+    if author is None:
+        lines.append(
+            f"{_INDENT}{subject} {was} not recorded against a module")
+    elif author == exporter:
+        lines.append(
+            f"{_INDENT}{subject} {'is' if n == 1 else 'are'} {exporter}'s own")
+    else:
+        # The exporter merely DECLARES the name; a different module supplies
+        # the clauses.  Saying "exporter already defines it" here would be a
+        # lie, and would point the reader at a file with nothing in it.
+        lines.extend(textwrap.wrap(
+            f"{subject} {was} supplied by {author}, not by "
+            f"{exporter} — {exporter} only declares {functor}.",
+            width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
+            break_long_words=False, break_on_hyphens=False,
+        ))
+    if author_path:
+        lines.append(f"{_INDENT}  {author_path}")
+    site = getattr(pred_cls, "_registered_at", None)
+    if isinstance(site, tuple) and len(site) == 2:
+        lines.append(f"{_INDENT}{functor} is declared at {site[0]}:{site[1]}")
+    elif site:
+        lines.append(f"{_INDENT}{functor} is declared at {site}")
+    owner = author if author is not None else exporter
+    lines.extend(_arrow([
+        f"move this clause into {owner}, which supplies {functor}'s clauses — "
+        f"that is the only module whose clauses for it are compiled together;",
+        f"or, if it is meant to be a predicate of this module, drop "
+        f"{functor} from the -import_from({exporter}, [...]) list and give "
+        f"the local one a name of its own.",
+    ]))
+    return "\n".join(lines)
+
+
 # ── entry point ──────────────────────────────────────────────────────────────
 
 

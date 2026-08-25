@@ -1,0 +1,10 @@
+# clausal: no-collect
+# Imports a functor that is already DEFINED (impclob_owner supplies two
+# clauses) and then defines a clause for it.  Loading this used to overwrite
+# the owner's clause list, deleting red and green from the OWNER's own
+# queries.  It must now be refused at load time.
+-module(impclob_redefine, [impclob_colour(NAME)])
+-import_from(tests.fixtures.impclob_owner, [impclob_colour])
+-private([blue])
+
+impclob_colour(blue),
