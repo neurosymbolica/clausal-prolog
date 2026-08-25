@@ -13,7 +13,9 @@ trampoline-mode dispatch.
 
 from __future__ import annotations
 
-from clausal.logic.trampoline import DONE, StepGenerator
+from clausal.logic.trampoline import (
+    DONE, StepGenerator, _is_routable, _unwind_to_catcher,
+)
 
 
 def _tramp_call(dispatch_fn, args, trail):
@@ -22,6 +24,14 @@ def _tramp_call(dispatch_fn, args, trail):
     Drives a mini-trampoline internally and yields None per solution.
     Used by simple-mode code paths (lambda bodies, NAF, once) that need
     to call trampoline-mode predicates.
+
+    Exception routing, exactly as in the top-level drive loops: a callee raises
+    in *this* frame, not in the caller's ``try``, so a ``catch/3`` written
+    inside ``dispatch_fn`` only ever sees an exception this loop throws back
+    into the ``catcher`` chain.  Without that, every handler under a ``once`` /
+    ``findall`` / ``\\+`` / lambda body was inert — for ``throw/1`` as much as
+    for a Python exception.  Anything the chain does not absorb propagates on
+    to the shallow caller, whose own ``try`` covers this loop.
     """
     sg = StepGenerator(dispatch_fn, None, None, None, *args, trail)
     gen, value = sg.send(None)
@@ -32,4 +42,9 @@ def _tramp_call(dispatch_fn, args, trail):
             yield None
             gen, value = sg.send(None)
         else:
-            gen, value = gen.send(value)
+            try:
+                gen, value = gen.send(value)
+            except Exception as exc:  # noqa: BLE001 — see _is_routable
+                if not _is_routable(exc):
+                    raise
+                gen, value = _unwind_to_catcher(gen, exc)

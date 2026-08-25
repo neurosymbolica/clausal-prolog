@@ -12,9 +12,10 @@
  * DONE is a singleton sentinel yielded as ``(parent, DONE)`` to signal
  * search exhaustion.
  *
- * LogicException unwinding: when a generator raises LogicException, the
- * trampoline walks up the parent chain via .throw() until some catch/3
- * handler absorbs it — exactly mirroring the Python trampoline.
+ * Exception unwinding: when a generator raises, the trampoline walks up the
+ * parent chain via .throw() until some catch/3 handler absorbs it — exactly
+ * mirroring the Python trampoline.  See is_routable_exception() below for
+ * which exceptions take that path and why.
  */
 
 #define PY_SSIZE_T_CLEAN
@@ -31,25 +32,51 @@ static PyObject *g_FINAL = NULL;   /* third yield-action sentinel; see
 
 /* ── Lazily-cached exception / sentinel types ─────────────────────────── */
 
-static PyObject *g_LogicException = NULL;  /* clausal.logic.exceptions.LogicException */
 static PyObject *g_TABLING_SUSPEND = NULL; /* clausal.logic.tabling._TABLING_SUSPEND */
 
-/*
- * Lazy-import helpers.  Called once per process, result cached.
- * Returns a borrowed reference (the module keeps the real ref).
+/* ── Which exceptions the drive loops route to catch/3 ─────────────────
+ *
+ * A trampoline-compiled predicate does not CALL its callees: it yields
+ * (child, None) and the driver runs the child.  So a callee raises inside the
+ * driver's frame, never inside the ``try`` that a compiled catch/3 put in the
+ * caller — the driver is the only place that can put the exception back where
+ * the author wrote the handler, which it does by throwing it into the failing
+ * generator's ``catcher`` chain.
+ *
+ * This used to be done for LogicException alone, which quietly made catch/3
+ * type-dependent: throw/1 and the typed builtin errors were routed, while a
+ * ValueError out of a ``++`` escape or a NameError from an unimported
+ * predicate walked past every enclosing handler.  The shallow route has always
+ * caught both (_compile_catch_impl emits ``except Exception`` and converts
+ * non-LogicExceptions with python_error_term), so routing every Exception is
+ * what makes the two routes agree.
+ *
+ * The exclusions are the exceptions that are PROTOCOL, not errors:
+ *
+ *   - BaseException-only classes — GeneratorExit (an abandoned search),
+ *     KeyboardInterrupt / SystemExit (halt/1).  The catch frame's
+ *     ``except Exception`` declines these anyway; routing them would park a
+ *     shutdown signal in a handler that cannot act on it.
+ *   - StopIteration, the generator protocol's own end-of-iteration marker: a
+ *     drive loop must see exhaustion as exhaustion, and a catch/3 that
+ *     swallowed it would turn a finished search into a recovery goal.  (The
+ *     PEP-479 RuntimeError wrapper around one is consumed as exhaustion by
+ *     drive_until_yield_func BEFORE this test — A04-F009.)
+ *
+ * Precondition: an exception is currently set.  Leaves it unchanged.
+ * KEEP IN SYNC with ``_is_routable`` in ../trampoline.py.
  */
-static PyObject *
-get_LogicException(void)
+static int
+is_routable_exception(void)
 {
-    if (g_LogicException)
-        return g_LogicException;
-    PyObject *mod = PyImport_ImportModule("clausal.logic.exceptions");
-    if (!mod) return NULL;
-    g_LogicException = PyObject_GetAttrString(mod, "LogicException");
-    Py_DECREF(mod);
-    return g_LogicException;   /* owned by this static */
+    return PyErr_ExceptionMatches(PyExc_Exception)
+        && !PyErr_ExceptionMatches(PyExc_StopIteration);
 }
 
+/*
+ * Lazy-import helper.  Called once per process, result cached.
+ * Returns a borrowed reference (the module keeps the real ref).
+ */
 static PyObject *
 get_TABLING_SUSPEND(void)
 {
@@ -295,7 +322,7 @@ static PyGetSetDef StepGen_getset[] = {
     {"fail",    (getter)StepGen_get_fail,    NULL,
      "Exhaustion target (completion frame)", NULL},
     {"catcher", (getter)StepGen_get_catcher, NULL,
-     "Exception handler chain (LogicException unwinding)", NULL},
+     "Exception handler chain (catch/3 unwinding)", NULL},
     {NULL}
 };
 
@@ -322,19 +349,23 @@ static PyType_Spec StepGen_spec = {
 };
 
 
-/* ── LogicException unwinding helper ──────────────────────────────────────
+/* ── Exception unwinding helper ───────────────────────────────────────────
  *
- * When a StepGenerator.send() raises LogicException, walk up the parent
+ * When a StepGenerator.send() raises a routable exception, walk up the parent
  * chain calling .throw(exc) on each parent until one catches it.
  *
  * On success: sets *out_gen and *out_value to the resumed (gen, value) tuple
  *             and returns 1.
- * On re-raise: the same LogicException propagates; returns 0 (caller
- *              should return NULL — the exception is already set).
+ * On re-raise: the ORIGINAL exception propagates, unchanged and on its
+ *              original traceback (the enrichment seam in
+ *              solve._drive_trampoline and every embedding caller's ``except``
+ *              match on the real type, so an unhandled route is invisible);
+ *              returns 0 (caller should return NULL — the exception is
+ *              already set).
  * On error:   a different exception is set; returns -1.
  */
 static int
-unwind_logic_exception(PyObject *failed_gen, PyObject **out_gen, PyObject **out_value)
+unwind_to_catcher(PyObject *failed_gen, PyObject **out_gen, PyObject **out_value)
 {
     PyObject *exc_type, *exc_val, *exc_tb;
     PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
@@ -353,8 +384,19 @@ unwind_logic_exception(PyObject *failed_gen, PyObject **out_gen, PyObject **out_
             break;
         }
 
-        /* Try target.throw(exc_type, exc_val) */
-        PyObject *throw_args = PyTuple_Pack(2, exc_type, exc_val);
+        /* Try target.throw(exc_val).
+         *
+         * The single-argument form on purpose: gen.throw() re-raises from the
+         * instance's own ``__traceback__``, so putting the fetched traceback
+         * back on the instance first keeps the RAISING frames (the callee's
+         * compiled body, the line the author actually wrote) on the exception
+         * as it is handed up the chain.  The legacy (type, value) form drops
+         * them, which for an exception nobody catches would leave the author
+         * a traceback pointing at the caller instead of the culprit —
+         * tests/test_source_locations.py::TestSourceLocationsG6 pins this. */
+        if (exc_tb)
+            PyException_SetTraceback(exc_val, exc_tb);
+        PyObject *throw_args = PyTuple_Pack(1, exc_val);
         if (!throw_args) {
             Py_XDECREF(exc_type);
             Py_XDECREF(exc_val);
@@ -384,10 +426,10 @@ unwind_logic_exception(PyObject *failed_gen, PyObject **out_gen, PyObject **out_
             return 1;
         }
 
-        /* .throw() raised — check if it's still LogicException */
-        PyObject *le = get_LogicException();
-        if (le && PyErr_ExceptionMatches(le)) {
-            /* Same or new LogicException — keep unwinding */
+        /* .throw() raised — a declining handler re-raises (bare ``raise`` in
+         * the compiled ``else`` branch), so keep unwinding from THIS frame's
+         * own catcher as long as the new exception is still routable. */
+        if (is_routable_exception()) {
             Py_XDECREF(exc_type);
             Py_XDECREF(exc_val);
             Py_XDECREF(exc_tb);
@@ -395,7 +437,8 @@ unwind_logic_exception(PyObject *failed_gen, PyObject **out_gen, PyObject **out_
             PyErr_NormalizeException(&exc_type, &exc_val, &exc_tb);
             target = StepGen_CAST(target)->catcher;
         } else {
-            /* Different exception — let it propagate */
+            /* A control signal (GeneratorExit, SystemExit, StopIteration …)
+             * is nobody's to handle — let it propagate. */
             Py_XDECREF(exc_type);
             Py_XDECREF(exc_val);
             Py_XDECREF(exc_tb);
@@ -403,7 +446,7 @@ unwind_logic_exception(PyObject *failed_gen, PyObject **out_gen, PyObject **out_
         }
     }
 
-    /* Uncaught — re-raise the original LogicException */
+    /* Uncaught — re-raise the original exception */
     PyErr_Restore(exc_type, exc_val, exc_tb);
     return 0;
 }
@@ -411,7 +454,7 @@ unwind_logic_exception(PyObject *failed_gen, PyObject **out_gen, PyObject **out_
 
 /* ── trampoline(root_step_gen) ───────────────────────────────────────────
  *
- * Tight C loop driving the tuple-based step protocol with LogicException
+ * Tight C loop driving the tuple-based step protocol with exception
  * unwinding through the parent chain.
  */
 static PyObject *
@@ -463,11 +506,10 @@ trampoline_func(PyObject *Py_UNUSED(module), PyObject *root)
         Py_DECREF(value);
 
         if (!step) {
-            /* Check for LogicException */
-            PyObject *le = get_LogicException();
-            if (le && PyErr_ExceptionMatches(le)) {
+            /* Hand it to the enclosing catch/3, if there is one */
+            if (is_routable_exception()) {
                 PyObject *new_gen, *new_value;
-                int r = unwind_logic_exception(gen, &new_gen, &new_value);
+                int r = unwind_to_catcher(gen, &new_gen, &new_value);
                 Py_DECREF(gen);
                 if (r == 1) {
                     /* Caught — build a new step tuple and continue */
@@ -494,7 +536,7 @@ trampoline_func(PyObject *Py_UNUSED(module), PyObject *root)
  *
  * Handles:
  * - _TABLING_SUSPEND interception (converted to DONE for parent)
- * - LogicException unwinding through parent chain
+ * - exception unwinding through the parent chain
  * - Optional snapshot callable (if None, raw value is collected)
  */
 static PyObject *
@@ -617,11 +659,10 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
             Py_DECREF(value);
 
             if (!step) {
-                /* Check for LogicException */
-                PyObject *le = get_LogicException();
-                if (le && PyErr_ExceptionMatches(le)) {
+                /* Hand it to the enclosing catch/3, if there is one */
+                if (is_routable_exception()) {
                     PyObject *new_gen, *new_value;
-                    int r = unwind_logic_exception(gen, &new_gen, &new_value);
+                    int r = unwind_to_catcher(gen, &new_gen, &new_value);
                     Py_DECREF(gen);
                     if (r == 1) {
                         step = PyTuple_Pack(2, new_gen, new_value);
@@ -652,7 +693,7 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
  *   - A solution is found (gen == None, value != DONE) → returns Py_True
  *   - Search exhausted (gen == None, value == DONE)    → returns Py_None
  *   - StopIteration from send()                        → returns Py_None
- *   - Error (LogicException unwound or propagated)     → returns NULL
+ *   - Error (unwound to a catch/3 or propagated)       → returns NULL
  */
 
 /* A04-F009: distinguish a PEP-479 "generator raised StopIteration" wrapper
@@ -686,10 +727,9 @@ drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
         return NULL;
     }
 
-    /* Eagerly resolve lazy imports while no exception is active.
-     * get_LogicException / get_TABLING_SUSPEND call PyImport_ImportModule
-     * which must not be called with an active exception. */
-    (void)get_LogicException();
+    /* Eagerly resolve the lazy import while no exception is active:
+     * get_TABLING_SUSPEND calls PyImport_ImportModule, which must not be
+     * called with an active exception. */
     (void)get_TABLING_SUSPEND();
 
     /* step = sg.send(None) */
@@ -764,11 +804,10 @@ drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
                 Py_DECREF(gen);
                 Py_RETURN_NONE;
             }
-            /* LogicException — try to unwind through parent chain */
-            PyObject *le = get_LogicException();
-            if (le && PyErr_ExceptionMatches(le)) {
+            /* Hand it to the enclosing catch/3, if there is one */
+            if (is_routable_exception()) {
                 PyObject *new_gen, *new_value;
-                int r = unwind_logic_exception(gen, &new_gen, &new_value);
+                int r = unwind_to_catcher(gen, &new_gen, &new_value);
                 Py_DECREF(gen);
                 if (r == 1) {
                     step = PyTuple_Pack(2, new_gen, new_value);

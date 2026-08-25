@@ -78,6 +78,15 @@ them the same way as logic throw terms:
 
 If the Python exception does not match the catcher it is re-raised unchanged.
 
+This holds wherever in the goal the exception is raised — in the clause that
+wrote the `catch/3`, or several predicate calls down. Whether a handler is live
+never depends on how the engine chose to compile the call.
+
+The two things `catch/3` does **not** intercept are the signals that are
+control flow rather than errors: `halt/0` and `halt/1` (`SystemExit`),
+`KeyboardInterrupt`, and abandoning a solution iterator early (`GeneratorExit`).
+Those are `BaseException`s and pass straight through any handler.
+
 ### halt/0, halt/1
 
 ```clausal
