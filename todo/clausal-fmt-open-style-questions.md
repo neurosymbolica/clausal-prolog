@@ -18,7 +18,7 @@ visible in the corpus:
 
 A width engine would need: a target width, a splitting rule for call argument
 lists and list literals, and a decision on Black-style magic trailing commas
-(the earlier design in `clausal-fmt-black-operator-patch.md` chose to KEEP
+(the earlier design in `done/clausal-fmt-black-operator-patch.md` chose to KEEP
 trailing commas on exploded groups, which is a different default from v1's
 "drop the optional comma").  Deciding width and comma policy together is the
 right shape for that work.

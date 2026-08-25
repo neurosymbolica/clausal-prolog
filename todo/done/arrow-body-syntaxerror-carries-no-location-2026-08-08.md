@@ -82,3 +82,12 @@ attempts and a blocked run that reads like a capability wall.
 
 Related: a handoff note from the external authoring harness's own docs
 ("when a run stalls on a diagnostic, suspect the diagnostic before the model").
+
+---
+
+**CLOSED 2026-08-25.** Fixed by `ad4544c6` — `_arrow_body_error`
+(`clausal/templating/term_rewriting.py:132`) now builds a located `SyntaxError`
+(filename/lineno/offset/text) from the AST node every raise site already holds, so
+`str(exc)` renders `msg (file, line N)`. Pinned by `tests/test_arrow_body_error_location.py`.
+Archived during the 2026-08-25 todo triage, which found the file still filed as open
+because it carried no status line.

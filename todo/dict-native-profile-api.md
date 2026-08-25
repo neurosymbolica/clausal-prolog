@@ -34,7 +34,7 @@ provability, as long as reads use recognized forms with **ground, declared keys*
 | default-merge | `P2 is {filing_status: Default, **P}` | `{k: default, **d}` | P wins if present (this is the *default* order) |
 | delete (functional) | `delete(P, filing_status, P2)` | `del d[k]` | **throws** if absent; `del` keyword → `delete/3` |
 
-Reserved sibling names (claim now, implement on demand — see `dict-delete-builtin.md`): `discard/3`
+Reserved sibling names (claim now, implement on demand — see `done/dict-delete-builtin.md`): `discard/3`
 (no-throw removal, Python `set.discard`), `pop/4` (remove+retrieve, throws), `pop/5` (remove+retrieve,
 defaulted). Relational `pop` outputs the residual dict, so it is `/4` + `/5`, not Python's `/1` + `/2`.
 
@@ -72,7 +72,7 @@ Missing / immature (the work below):
    incl. multi-splat + value-var. → `dict-splat-merge-functional-set.md`.
 5. ~~**`delete/3`** functional key removal~~ — **DONE 2026-07-14** (`delete(Dict,Key,NewDict)`, throw on
    absent/non-ground/non-dict, immutable). Reserved siblings `discard/3`, `pop/4`, `pop/5` still
-   YAGNI-parked. → `dict-delete-builtin.md`.
+   YAGNI-parked. → `done/dict-delete-builtin.md`.
 6. **SMT prover dict-read projection** — separate todo filed in the SMT prover's own repo, not here.
 
 ## Sequencing / acceptance — ✅ ALL DONE (2026-07-14)
@@ -98,7 +98,7 @@ effectively already realized at the runtime level:
 1. **Language-reference docs** — add the dict-profile ops to the canonical Clausal builtins reference
    (a downstream cheat-sheet + scaffolding doc sweep is in progress on the consumer side). Ensure
    `get`/`in`/subscript/`{**}`/`delete` are documented as first-class core, alongside list/set ops.
-2. **Reserved-name siblings** (from `dict-delete-builtin.md`, still YAGNI) — implement `discard/3` (no-throw
+2. **Reserved-name siblings** (from `done/dict-delete-builtin.md`, still YAGNI) — implement `discard/3` (no-throw
    remove), `pop/4`/`pop/5` (remove+retrieve) if/when a consumer appears; no known consumer currently needs one.
 3. **Builtins registry / spec entry** — confirm the dict ops appear in whatever canonical builtin catalog
    or language spec Clausal maintains (they are registered for execution; make sure they're *catalogued*
