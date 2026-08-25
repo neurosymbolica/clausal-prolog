@@ -157,10 +157,21 @@ class StepGenerator:
         self._started: bool = False
 
     def send(self, value: Any) -> tuple:
-        if self._started:
-            return self._gen.send(value)
-        self._started = True
-        return next(self._gen)
+        try:
+            if self._started:
+                return self._gen.send(value)
+            self._started = True
+            return next(self._gen)
+        except StopIteration:
+            # C≡Py: StepGen_send converts a returning inner generator
+            # (PYGEN_RETURN) into the marked engine-protocol error; a
+            # compiled predicate always final-yields (fail, DONE), so a
+            # bare return is an engine anomaly, not exhaustion.
+            err = RuntimeError(
+                "StepGenerator inner generator returned "
+                "unexpectedly (no final yield)")
+            err.__clausal_engine_protocol__ = True
+            raise err
 
     def throw(self, *args: Any) -> tuple:
         return self._gen.throw(*args)
