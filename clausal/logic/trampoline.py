@@ -46,6 +46,73 @@ class Step:
     value: Any = None
 
 
+# ── Which exceptions the drive loops route to catch/3 ────────────────────────
+#
+# A trampoline-compiled predicate does not *call* its callees: it yields
+# ``(child, None)`` and the driver runs the child.  So a callee raises inside
+# the driver's frame, never inside the ``try`` that a compiled ``catch/3`` put
+# in the caller — the driver is the only place that can put the exception back
+# where the author wrote the handler, which it does by throwing it into the
+# failing generator's ``catcher`` chain.
+#
+# This used to be done for ``LogicException`` alone, which quietly made
+# ``catch/3`` type-dependent: ``throw/1`` and the typed builtin errors were
+# routed, while a ValueError out of a ``++`` escape or a NameError from an
+# unimported predicate walked past every enclosing handler.  The shallow route
+# has always caught both — ``_compile_catch_impl`` emits ``except Exception``
+# and converts anything that is not a LogicException with ``python_error_term``
+# — so routing every ``Exception`` is what makes the two routes agree.  It is
+# also A09-D002's "typed exceptions" policy read the other way round: an error
+# a builtin failed to type is still the author's to catch, not the driver's to
+# leak.
+#
+# The exclusions are the exceptions that are *protocol*, not errors:
+#
+#   - ``BaseException``-only classes — ``GeneratorExit`` (an abandoned search),
+#     ``KeyboardInterrupt`` / ``SystemExit`` (``halt/1``).  ``except Exception``
+#     in the catch frame would decline these anyway; routing them would park a
+#     shutdown signal in a handler that cannot act on it.
+#   - ``StopIteration``, the generator protocol's own end-of-iteration marker.
+#     A drive loop that treats exhaustion as exhaustion must see it first; a
+#     ``catch/3`` that swallowed it would turn a finished search into a
+#     recovery goal.  (The PEP-479 ``RuntimeError`` wrapper around one is
+#     likewise consumed as exhaustion by ``_drive_until_yield`` *before* this
+#     test — A04-F009.)
+#
+# KEEP IN SYNC with ``is_routable_exception`` in ``runtime/_trampoline.c``,
+# which is the implementation that actually runs.
+
+
+def _is_routable(exc: BaseException) -> bool:
+    """True when *exc* is an error ``catch/3`` may handle, not a control signal."""
+    return isinstance(exc, Exception) and not isinstance(exc, StopIteration)
+
+
+def _unwind_to_catcher(failed_gen: Any, exc: Exception) -> tuple:
+    """Throw *exc* into *failed_gen*'s ``catcher`` chain; return the resumed step.
+
+    Walks up the chain until some frame's ``catch/3`` absorbs *exc* and yields,
+    and returns that ``(gen, value)`` step so the drive loop can carry on.  A
+    handler that declines re-raises (bare ``raise`` in the compiled ``else``
+    branch), which continues the walk from that frame's own catcher.
+
+    If nothing absorbs it, the exception is re-raised **unchanged and on its
+    original traceback** — the enrichment seam in ``solve._drive_trampoline``
+    and every embedding caller's ``except`` clause both match on the real type,
+    so routing must be invisible when it finds no taker.
+    """
+    target = getattr(failed_gen, "catcher", None)
+    while target is not None:
+        try:
+            return target.throw(exc)
+        except Exception as new_exc:  # noqa: BLE001 — see _is_routable
+            if not _is_routable(new_exc):
+                raise
+            exc = new_exc
+            target = getattr(target, "catcher", None)
+    raise exc
+
+
 # ── C extension fast path ────────────────────────────────────────────────────
 # _trampoline is a C extension providing optimised DONE, StepGenerator,
 # trampoline, and solutions.  Fall back to pure-Python implementations below.
@@ -146,27 +213,19 @@ except ImportError:
         No ``started`` set, no ``resume`` helper — StepGenerator handles
         bootstrapping internally.
 
-        LogicException routing: when a generator raises LogicException, the
-        throwing generator is dead (its try/finally already ran trail.undo).
-        We unwind through the ``catcher`` chain using .throw() until a
-        catch/3 handler catches it.
+        Exception routing: when a generator raises, the throwing generator is
+        dead (its try/finally already ran trail.undo).  We unwind through the
+        ``catcher`` chain using .throw() until a catch/3 handler catches it.
+        See ``_is_routable`` for which exceptions take that path.
         """
-        from clausal.logic.exceptions import LogicException
-
         gen, value = root.send(None)
         while gen is not None:
             try:
                 gen, value = gen.send(value)
-            except LogicException as exc:
-                target = gen.catcher if hasattr(gen, 'catcher') else None
-                while target is not None:
-                    try:
-                        gen, value = target.throw(exc)
-                        break  # handler caught it — resume normal trampoline
-                    except LogicException:
-                        target = target.catcher if hasattr(target, 'catcher') else None
-                else:
-                    raise exc  # uncaught — surface to Python
+            except Exception as exc:  # noqa: BLE001 — see _is_routable
+                if not _is_routable(exc):
+                    raise
+                gen, value = _unwind_to_catcher(gen, exc)
         return value
 
     def solutions(root: StepGenerator, snapshot: Callable | None = None) -> list:  # type: ignore[no-redef]
@@ -180,11 +239,10 @@ except ImportError:
         generator remains saved in the table entry's suspended list for later
         resumption by the leader's completion phase.
 
-        LogicException routing: same as trampoline() — unwind through the
+        Exception routing: same as trampoline() — unwind through the
         ``catcher`` chain via .throw() until caught or surface to Python.
         """
         from clausal.logic.tabling import _TABLING_SUSPEND
-        from clausal.logic.exceptions import LogicException
 
         results: list = []
         gen, value = root.send(None)
@@ -215,16 +273,10 @@ except ImportError:
                         gen, value = gen.send(DONE)
                     else:
                         gen, value = gen.send(value)
-                except LogicException as exc:
-                    target = gen.catcher if hasattr(gen, 'catcher') else None
-                    while target is not None:
-                        try:
-                            gen, value = target.throw(type(exc), exc)
-                            break
-                        except LogicException:
-                            target = target.catcher if hasattr(target, 'catcher') else None
-                    else:
-                        raise exc
+                except Exception as exc:  # noqa: BLE001 — see _is_routable
+                    if not _is_routable(exc):
+                        raise
+                    gen, value = _unwind_to_catcher(gen, exc)
 
     def _drive_until_yield(sg: StepGenerator) -> bool | None:  # type: ignore[no-redef]
         """Pure-Python fallback for C _drive_until_yield.
@@ -234,7 +286,6 @@ except ImportError:
         None).
         """
         from clausal.logic.tabling import _TABLING_SUSPEND
-        from clausal.logic.exceptions import LogicException
 
         try:
             gen, value = sg.send(None)
@@ -259,21 +310,17 @@ except ImportError:
                     gen, value = gen.send(value)
             except StopIteration:
                 return None
-            except RuntimeError as exc:
+            except Exception as exc:  # noqa: BLE001 — see _is_routable
                 # A04-F009: mirror the narrowed C catch (PEP-479 → exhaustion).
-                if isinstance(exc.__cause__, StopIteration):
+                # This test comes FIRST so a converted exhaustion is never
+                # offered to a catch/3 as an error.
+                if isinstance(exc, RuntimeError) and isinstance(
+                    exc.__cause__, StopIteration
+                ):
                     return None
-                raise
-            except LogicException as exc:
-                target = gen.catcher if hasattr(gen, 'catcher') else None
-                while target is not None:
-                    try:
-                        gen, value = target.throw(type(exc), exc)
-                        break
-                    except LogicException:
-                        target = target.catcher if hasattr(target, 'catcher') else None
-                else:
-                    raise exc
+                if not _is_routable(exc):
+                    raise
+                gen, value = _unwind_to_catcher(gen, exc)
 
 
 # ── Minimal test problem: n! ─────────────────────────────────────────────────
