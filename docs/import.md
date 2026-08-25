@@ -492,6 +492,54 @@ class was registered and where the term was constructed. Two arities for one
 functor name cannot be reconciled — give every declaration and clause head the
 same number of arguments, or rename one of them.
 
+### One defining module per predicate
+
+`-import_from` binds the **exporting module's predicate class itself**, not a copy
+of it. That shared identity is the point — it is what lets a term built in one
+module unify with a pattern built in another — but it also means a clause head
+written under an imported name lands on the exporter's predicate.
+
+So a module that imports a functor and then writes a clause for it is refused at
+load time, whenever that functor already has clauses:
+
+```text
+ext defines a clause for colour/1, which it -import_from's from exp.
+  An -import_from binds the EXPORTER's predicate, so this clause would not add
+  to the 2 clauses already on colour — it would replace all of them, for every
+  module that can reach it. Clausal has no -multifile: a predicate has exactly
+  one defining module.
+  those 2 clauses are exp's own
+    /path/to/exp.clausal
+  colour is declared at /path/to/exp.clausal:1
+  -> move this clause into exp, which supplies colour's clauses — that is the
+     only module whose clauses for it are compiled together;
+     or, if it is meant to be a predicate of this module, drop colour from the
+     -import_from(exp, [...]) list and give the local one a name of its own.
+```
+
+Before this check the clause list was silently **replaced**: the exporter's own
+facts vanished, from the exporter's own queries, load-order dependent and with
+no error. Extending the list instead is not available — one predicate compiles
+to one dispatch function against one module's globals, so the exporter's clause
+bodies (written against *its* `-private` atoms and *its* imports) cannot be
+compiled in the importer's scope. Hence the rule: one predicate, one defining
+module.
+
+**What still works: declare here, implement there.** A functor exported with no
+clauses is a *declaration* — a bare vocabulary atom used as a dict key, or a
+signature whose implementation lives downstream. Importing it and supplying the
+clauses is the intended idiom and is not refused; there is nothing to destroy.
+Only the second implementer of the same functor is refused, and the message
+names the module that actually supplied the clauses, which may be an importer
+rather than the exporter.
+
+Reloading the *same file* — under its dotted name and again under a private test
+name, say — is not a redefinition and never refuses: ownership is tracked by
+source path.
+
+Runtime `assertz/1` against an imported predicate is unaffected by this check; it
+already raises `permission_error(modify, static_procedure, F/N)`.
+
 ---
 
 ## Builtin injection

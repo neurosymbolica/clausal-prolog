@@ -1,0 +1,9 @@
+# Implements a functor imported from a DECLARATION-ONLY module.  The owner has
+# no clauses, so nothing is destroyed — this shape must keep loading.
+-private([ok, cited])
+-module(impclob_implements, [impclob_check(STATUS)])
+-import_from(tests.fixtures.impclob_decl_vocab, [impclob_verdict])
+
+impclob_verdict(ok, cited),
+
+impclob_check(S) <- impclob_verdict(S, C_UNUSED)

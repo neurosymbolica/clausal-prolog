@@ -25,10 +25,8 @@ added by the 2026-07-10 fix-review) and has been added.
 The 25 open items are 6 `fix-*` and 19 `investigate-*`. Almost all are open *by
 decision*, not by neglect: the `fix-*` ones are gated on parked design questions
 (A06-D002/D005, A08-D001/D003), and the `investigate-*` ones are either the
-parked questions themselves or Opus-tagged design work. Two exceptions worth
-knowing: `investigate-A10-imported-head-clobber.md` has a real fix sitting on the
-unmerged branch `fix/imported-functor-clause-destruction`, blocked by
-`todo/imported-clause-refusal-misattributes-ownership.md`; and A01-D001's
+parked questions themselves or Opus-tagged design work. One exception worth
+knowing: A01-D001's
 resolution (2026-07-07) unblocked its whole cluster, but only A07 and A09 acted
 on it — A02-D002, A05-D001 and A06-D005 are now ripe and untouched.
 
@@ -262,7 +260,7 @@ to delete; the clusters above are the collapse points.
 | `investigate-A09-ho-committed-choice.md` | investigate (Opus) | correctness (design-gated) | A09-F004 | A09 builtins | queued |
 | `investigate-A09-parked-design-decisions.md` | investigate (USER) | design | A09-D001..D005 (+F022) | A09 builtins | parked by user preference |
 | `investigate-A09-runtimeerror-swallow.md` | investigate (Opus) | correctness (design-gated) | A09-F007 | A09 builtins | done |
-| `investigate-A10-imported-head-clobber.md` | investigate (Opus) | correctness (design-gated) | A10-F004 | A10 rewriting-import | queued |
+| `done/investigate-A10-imported-head-clobber.md` | investigate (Opus) | correctness (design-gated) | A10-F004 | A10 rewriting-import | **DONE 2026-08-25** — A10-D003 answered (load-time error); `fix/imported-functor-clause-list-2026-08-25` |
 | `investigate-A10-parked-design-decisions.md` | investigate (USER) | design | A10-D001..D004 | A10 rewriting-import | parked by user preference |
 | `investigate-A11-parked-design-decisions.md` | investigate (USER) | design | A11-D001..D011 | A11 modules-interop | done |
 | `investigate-A12-tabling-answer-constraints.md` | investigate (Opus) | correctness | A12-F001 | A12 seams | queued |

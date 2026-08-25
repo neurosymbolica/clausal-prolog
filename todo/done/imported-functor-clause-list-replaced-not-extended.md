@@ -111,3 +111,89 @@ defensible.**
   functor.
 - Note `tests/test_functor_reexport.py` is a deliberate tripwire for re-export
   class identity; a fix here must not disturb it.
+
+---
+
+## FIXED — 2026-08-25
+
+Branch `fix/imported-functor-clause-list-2026-08-25`.
+
+### Decision on the open design question: **option 2, refuse at load time**
+
+Recorded here because the todo asked for it to be decided rather than assumed.
+
+**Why not option 1 (extend).** The clause list is not what answers a goal.
+`compile_module` step 5 compiles ONE dispatch function from ONE clause list
+against ONE `globals_` mapping (`globals_=module_dict`). A merged clause list
+would mean compiling the exporter's clause bodies — written against *its*
+`-private` atoms and *its* imports — in the importer's scope. A merged clause
+list with an unmerged dispatch function is the same silent-wrong-answer bug
+wearing a different hat, and would be strictly harder to find.
+
+**Why not "give the importer its own predicate" (option (c) as posed in
+`todo/imported-clause-refusal-misattributes-ownership.md`).** The shared class
+is load-bearing for the idiom the corpus actually uses: a clause-free export
+implemented downstream, where a *third* module importing the vocabulary must
+reach the implementer's clauses (live in two downstream rulebase modules). Splitting the
+predicate per module breaks that, and would mean making dispatch per-module —
+`_get_dispatch()` is a frozen duck-typed protocol with ~22 implementors outside
+this tree.
+
+**Why not option 3 (`-multifile`).** It would be a new directive whose only
+correct implementation is option 1, which is unavailable for the reason above.
+Nothing stops it being added later; refusing now is forward-compatible.
+
+**Corpus sweep (2026-08-25, redone rather than trusted).** 767 `.clausal` files
+over this repo (including `packages/`) plus the downstream rulebase corpora and
+kit available on this box. Live instances of "imports N and defines a clause
+for N": two downstream modules, each importing a 0-arity vocabulary atom
+(`dependents_count`, `query_date`) — both the 0-arity vocabulary-atom
+shape, both with a **clause-free** exporter. The `packages/clausal-provenance`
+fixtures that a textual sweep flags (`bottom_up_`) are false positives:
+`bottom_up_` is a `_RegistrationGoal` instance, not a `PredicateMeta`, and
+`bottom_up_(Edge)` is a module-level goal, not a clause head. Both live domain
+modules were confirmed to still import cleanly after the fix.
+
+So the refusal is narrowed to functors that **already have clauses**. A
+clause-free export is a declaration; supplying its clauses downstream keeps
+working.
+
+### What landed
+
+- `PredicateMeta._clauses_source` — `(module_name, source_path)` of the load
+  that last wrote `_clauses`. Set at all three sites that assign the clause
+  list wholesale (`compiler_v2` step 4 and the two deferred paths in
+  `import_hook`) via `predicate.record_clause_source`.
+- `compiler_v2` **step 3c**, `_reject_redefinition_of_imported_predicates` —
+  runs BEFORE step 4 mutates anything, so a refusal never leaves a half-clobbered
+  clause list.
+- `import_diagnostics.describe_imported_predicate_redefinition` — names the
+  module that actually supplied the clauses, which is **not** always the
+  exporter. See the companion todo.
+- `tests/test_imported_functor_clause_clobber.py` (11 tests) plus five
+  `tests/fixtures/impclob_*.clausal`.
+- `tests/audit_2026_07_05/test_10_rewriting_import.py::test_F004_local_clause_does_not_clobber_imported_predicate`
+  un-`xfail`ed (same bug, found by the A10 audit).
+- `docs/import.md` §"One defining module per predicate".
+
+### The "before fixing" checklist, answered
+
+- **Corpus sweep** — done, above. Option 2 breaks nothing.
+- **Re-export idiom unaffected** — confirmed: a re-export has no local clause
+  head, so `predicate_nodes` never carries the functor and step 3c never looks
+  at it. `tests/test_functor_reexport.py` and
+  `tests/test_functor_import_ordering.py` pass unchanged.
+- **Runtime `assertz` against an imported functor** — NOT affected. It already
+  raises `permission_error(modify, static_procedure, F/N)`, even when the
+  exporter declares `-dynamic`. Now pinned by a test so it stays that way.
+
+### Known limits (deliberate, not oversights)
+
+- `Database.assertz` appends to `pred_cls._clauses` without updating
+  `_clauses_source`, so a runtime-asserted clause is counted in the diagnostic
+  under the *loading* module's name. Only reachable inside the owning module's
+  own process; harmless, and the alternative (per-clause provenance) is a much
+  larger change.
+- If a module has no `__file__`, ownership cannot be compared and the refusal
+  fires. Conservative on purpose: the alternative is the silent destruction
+  this fixes.

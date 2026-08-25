@@ -1,0 +1,4 @@
+# Declaration-only vocabulary: impclob_verdict/2 is exported but never
+# defined here.  Supplying its clauses downstream is the blessed idiom
+# (seen in downstream rulebase corpora) and must keep working.
+-module(impclob_decl_vocab, [impclob_verdict(OUTCOME, CITES)])

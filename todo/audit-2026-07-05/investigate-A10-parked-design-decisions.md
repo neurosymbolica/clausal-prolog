@@ -11,9 +11,12 @@ interactively. Full option analyses in
   warn on `sys.stdlib_module_names` hits + fix import.md
   (fix-A10-stdlib-shadowing-docs-guard.md).
 - **A10-D003 — semantics of a clause head naming an imported predicate.**
-  Recommendation: load-time error; explicit assertz stays the mutation path.
-  Joint with A11 module semantics + A03 compile_module sync
-  (investigate-A10-imported-head-clobber.md).
+  **ANSWERED 2026-08-25 as recommended: load-time error**; explicit assertz
+  stays the mutation path (and already refused — `permission_error`). Shipped
+  on `fix/imported-functor-clause-list-2026-08-25`; the refusal is narrowed to
+  functors that already have clauses, so declare-here/implement-there still
+  works. See `done/investigate-A10-imported-head-clobber.md` and
+  `todo/done/imported-functor-clause-list-replaced-not-extended.md`.
 - **A10-D004 — TermExpansion pattern vocabulary (q(head) vs Predicate
   items).** Recommendation: match bare-term patterns against `item.head` now,
   docs fix immediately; reflection-vocabulary reification is the long-term

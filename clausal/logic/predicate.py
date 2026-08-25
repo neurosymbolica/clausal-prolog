@@ -90,6 +90,39 @@ def _all_placeholders(names: tuple[str, ...]) -> bool:
     return bool(names) and all(_PLACEHOLDER_FIELD_RE.match(n) for n in names)
 
 
+def module_source_path(module_dict_or_module):
+    """Canonical source path of a module (or of its ``__dict__``).
+
+    The identity a clause-ownership check needs.  One ``.clausal`` file
+    legitimately compiles under two module *names* in one process — a dotted
+    ``-import_from`` uses the dotted name, ``clausal.testing.
+    load_clausal_module`` a private ``_clausal_test_*`` one — so keying
+    ownership on the name would make a file refuse to load beside itself.  The
+    path does not move.
+    """
+    if isinstance(module_dict_or_module, dict):
+        path = module_dict_or_module.get("__file__")
+    else:
+        path = getattr(module_dict_or_module, "__file__", None)
+    if not path:
+        return None
+    try:
+        return os.path.realpath(path)
+    except OSError:  # pragma: no cover — defensive
+        return path
+
+
+def record_clause_source(pred_cls, module_name: str, module_dict: dict) -> None:
+    """Note whose load wrote ``pred_cls._clauses``.
+
+    Called at every site that assigns the clause list wholesale (here and the
+    two deferred paths in ``clausal.import_hook``).  Step 3c reads it back to
+    tell a module reloading its own clauses from a module about to destroy
+    another's.
+    """
+    pred_cls._clauses_source = (module_name, module_source_path(module_dict))
+
+
 def _source_site(depth: int) -> tuple[str, int] | None:
     """Return ``(filename, lineno)`` of the nearest user frame above *depth*.
 
@@ -620,6 +653,16 @@ class PredicateMeta(type):
         super().__init__(name, bases, namespace, **kwargs)
         # Predicate machinery — per-class, not inherited
         cls._clauses: list = []
+        # ``(module_name, source_path)`` of the load that last wrote
+        # ``_clauses``, or ``None`` while the class has none.  An
+        # ``-import_from`` SHARES this class across modules, so "whose clauses
+        # are these" is the only thing separating a module reloading its own
+        # work from a second module quietly overwriting someone else's — see
+        # ``compiler_v2._reject_redefinition_of_imported_predicates``.  The
+        # source PATH is the identity that matters, not the module name: one
+        # file legitimately compiles under two names in one process (a dotted
+        # import and ``clausal.testing.load_clausal_module``).
+        cls._clauses_source: tuple[str, str] | None = None
         cls._dispatch_fn: Callable | None = None
         cls._lazy_recompile: Callable | None = None
         cls._signature: tuple[str, ...] | None = None

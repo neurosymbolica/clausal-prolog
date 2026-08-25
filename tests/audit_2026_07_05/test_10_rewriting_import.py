@@ -155,10 +155,16 @@ def test_F003_guard_edcg_accumulator_with_plain_call(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F004: defining a clause on an "
-                   "imported predicate replaces its dispatch process-wide; the "
-                   "source module loses its own solutions")
 def test_F004_local_clause_does_not_clobber_imported_predicate(tmp_path):
+    """A10-D003 resolved 2026-08-25 as option (a): a load-time error.
+
+    Was ``xfail`` — the importer's clause silently replaced the library's
+    clause list process-wide.  Extending it instead is not available (step 5
+    compiles ONE dispatch from ONE clause list against ONE ``globals_``), so
+    the shape is refused at load time and the library keeps its own answers.
+    See ``todo/done/imported-functor-clause-list-replaced-not-extended.md`` and
+    ``tests/test_imported_functor_clause_clobber.py``.
+    """
     lib_path = tmp_path / "a10_f004_lib.clausal"
     lib_path.write_text('twice(X, Y) <- (Y == X * 2)\n')
     lib = _load_module("a10_f004_lib", str(lib_path))
@@ -166,11 +172,13 @@ def test_F004_local_clause_does_not_clobber_imported_predicate(tmp_path):
     b = Var()
     assert _values(lib.twice(4, b), b) == [8]
 
-    _load(tmp_path, """
-        -import_from(a10_f004_lib, [twice])
-        twice(0, "zero") <- (1 is 1)
-        use(A, B) <- twice(A, B)
-    """)
+    with pytest.raises(SyntaxError) as exc_info:
+        _load(tmp_path, """
+            -import_from(a10_f004_lib, [twice])
+            twice(0, "zero") <- (1 is 1)
+            use(A, B) <- twice(A, B)
+        """)
+    assert "twice/2" in str(exc_info.value)
 
     b2 = Var()
     assert _values(lib.twice(4, b2), b2) == [8], \
