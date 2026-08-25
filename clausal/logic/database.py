@@ -304,6 +304,11 @@ class Module:
         self.name = name
         self.db: Database = db if db is not None else Database(module_dict=module_dict)
         self.module_dict: dict | None = module_dict
+        # -constants declared BY this module (not imported ones — see
+        # register_module_constant in clausal/logic/constants.py). Backs the
+        # module_constant/3 reflection builtin (docs/builtins.md). Keyed by
+        # the full `_NAME_`-shaped declaration spelling.
+        self.constants: dict[str, Any] = {}
 
     def assert_fact(self, term: Any) -> None:
         """assertz a fact (clause with no body goals)."""

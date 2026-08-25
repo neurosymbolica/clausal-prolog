@@ -40,7 +40,7 @@ from .syntax_diagnostics import clausal_syntax_diagnostics
 from .templating.term_rewriting import EmbedTransformer, TermTransformer
 from .logic.database import Module as LogicModule, head_key
 from .logic.compiler import compile_predicate_trampoline, compile_predicate_shallow
-from .logic.constants import check_constant_ground
+from .logic.constants import check_constant_ground, register_module_constant
 from .logic.predicate import PredicateMeta
 from .logic.variables import Var, Trail, unify, deref, walk
 from .terms import Compound, KWTerm, DictTerm, SetTerm
@@ -152,6 +152,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
         lambda term: predicate_nodes.append(_fact_to_predicate_node(term))
     )
     module_dict["$check_constant_ground"] = check_constant_ground
+    module_dict["$register_module_constant"] = register_module_constant
     code = loader.get_code(module.__name__)
 
     # _last_transformer is set by source_to_code.  If the code came
@@ -174,6 +175,13 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     logic_module = compile_module(
         predicate_nodes, module_items, module_dict, module.__name__,
     )
+    # -constants directives register into $module.constants (see
+    # register_module_constant, clausal/logic/constants.py) WHILE the
+    # module body execs — i.e. onto dummy_logic_module, the placeholder
+    # $module that compile_module below then throws away in favour of a
+    # freshly-built LogicModule. Carry the registrations across the swap
+    # so module_constant/3 sees what the module actually declared.
+    logic_module.constants.update(dummy_logic_module.constants)
     module_dict["$module"] = logic_module
     module.__clausal_module__ = logic_module
 
@@ -501,6 +509,7 @@ class PredicateLoader(_ClausalSourceLoader):
                 term, logic_module, module_dict, pending)
         )
         module_dict["$check_constant_ground"] = check_constant_ground
+        module_dict["$register_module_constant"] = register_module_constant
         code = self.get_code(module.__name__)
         transformer = getattr(self, '_last_transformer', None)
         module_items = (transformer._module_items if transformer is not None
@@ -848,14 +857,15 @@ _simple_ast_builtins["$unterminated_fact_error"] = _unterminated_fact_error
 # overrides this with a module-specific closure.
 _ipython_facts: list = []
 _simple_ast_builtins["$assert_fact"] = _ipython_facts.append
-# ``-constants`` lowers to ``$check_constant_ground(...)`` calls (see
-# ``_handle_constants_directive``).  The directive itself is rejected
-# interactively (``_FreshEmbedTransformer`` / EmbedTransformer's
-# ``interactive`` flag) rather than run to completion, so this entry is not
-# reachable via that path today — registered anyway so a module-backed
-# ``$check_constant_ground`` reference exec'd in an IPython namespace (e.g.
-# copy-pasted compiled output) does not raise a bare NameError.
+# ``-constants`` lowers to ``$check_constant_ground(...)`` + a
+# ``$register_module_constant(...)`` call (see ``_handle_constants_directive``).
+# The directive itself is rejected interactively (``_FreshEmbedTransformer`` /
+# EmbedTransformer's ``interactive`` flag) rather than run to completion, so
+# these entries are not reachable via that path today — registered anyway so
+# a module-backed reference exec'd in an IPython namespace (e.g. copy-pasted
+# compiled output) does not raise a bare NameError.
 _simple_ast_builtins["$check_constant_ground"] = check_constant_ground
+_simple_ast_builtins["$register_module_constant"] = register_module_constant
 
 from clausal.repl import Solutions as _Solutions, _run_ipython_goal as _run_ipython_goal
 _simple_ast_builtins["Solutions"] = _Solutions

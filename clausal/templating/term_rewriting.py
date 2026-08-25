@@ -470,6 +470,36 @@ def _raise_undeclared_constant(identifier: str, node=None, source_lines=None,
         msg, (filename, lineno, (col + 1) if col is not None else None, text))
 
 
+def _raise_constant_rhs_logic_var(identifier: str, node=None, source_lines=None,
+                                   filename=None) -> None:
+    """A -constants RHS (structured or scalar) referenced a logic-variable-
+    shaped name (or the anonymous ``_`` wildcard).
+
+    Groundness is required at COMPILE time for a -constants RHS — not only
+    at the runtime ``$check_constant_ground`` gate, which exists as a
+    backstop for values a ``++()`` escape can construct outside the parser's
+    view. Raised here so the error is located (mirrors
+    ``_raise_undeclared_constant``) instead of silently minting a fresh Var
+    (which would then only surface, unlocated, as a ConstantNotGroundError
+    once the module finishes loading).
+    """
+    lineno = getattr(node, "lineno", None)
+    col = getattr(node, "col_offset", None)
+    text = None
+    if source_lines and lineno and 1 <= lineno <= len(source_lines):
+        text = source_lines[lineno - 1]
+    shown = "_" if identifier == "_" else f"`{identifier}`"
+    msg = (
+        f"-constants RHS references {shown}, a logic-variable name — "
+        f"-constants values must be fully ground at compile time. Use a "
+        f"declared constant, a declared atom, or a ground literal instead."
+    )
+    if lineno is None:
+        raise SyntaxError(msg)
+    raise SyntaxError(
+        msg, (filename, lineno, (col + 1) if col is not None else None, text))
+
+
 def _is_logic_var_name(identifier: str) -> bool:
     """Return True if ``identifier`` should be treated as a logic variable.
 
@@ -4438,22 +4468,65 @@ class EmbedTransformer(NodeTransformer):
                 ), expr_stmt)
             fix_missing_locations(assign)
             statements.append(assign)
+            # Record (name, value) on $module for module_constant/3
+            # reflection (docs/builtins.md). $module is already the real
+            # LogicModule by the time this statement executes (set before
+            # exec_with_import_diagnostics runs — see _run_v2_pipeline /
+            # _exec_module_v1 in import_hook.py), and `ident` is already
+            # bound (by the Assign just above) to the gated, frozen value.
+            register = replace(
+                Expr(value=replace(
+                    Call(
+                        func=replace(
+                            Name(id="$register_module_constant", ctx=load),
+                            kw.value),
+                        args=[replace(Name(id="$module", ctx=load), kw.value),
+                              replace(Constant(value=ident), kw.value),
+                              replace(Name(id=ident, ctx=load), kw.value)],
+                        keywords=[],
+                    ), kw.value),
+                ), expr_stmt)
+            fix_missing_locations(register)
+            statements.append(register)
         return statements if len(statements) > 1 else statements[0]
 
     def _transform_constant_rhs(transformer, node, ident):
         """Validate and return the Python AST for a -constants RHS.
 
-        v1 grammar: scalar Constant, previously declared constant, declared
-        atom, unary/binary arithmetic over those, and a ``++`` escape
-        (adjacent double UAdd) whose operand is emitted verbatim as Python.
-        Structured literals (list/dict/set/tuple) are deferred — the
-        Clausal-term vs Python-value question is not yet decided for them.
+        Grammar: scalar Constant, previously declared constant, declared
+        atom, unary/binary arithmetic over those, a ``++`` escape (adjacent
+        double UAdd) whose operand is emitted verbatim as Python, and —
+        2026-08-25 — structured literals (list/tuple/set/dict) and functor
+        calls, nested arbitrarily, mixing any of the above at any depth.
+
+        Structured construction deliberately does NOT reuse
+        ``_make_term_transformer()``/``TermTransformer.visit`` wholesale:
+        that machinery is built for CLAUSE bodies, where a functor call or a
+        set/tuple literal lowers to an uninstantiated ``pythonic_ast`` node
+        (``Call``/``TupleLiteral``/``SetLiteral``) that only becomes a real
+        term later, when ``compiler_v2`` walks the STATIC clause tree and
+        generates the bytecode a predicate invocation runs. A -constants
+        RHS has no such second compile pass — the emitted code here runs
+        exactly once, directly, as an ordinary module-level statement — so
+        this method instead emits AST that constructs the REAL runtime term
+        directly on that one pass: a genuine ``list``/``tuple``, a real
+        ``SetTerm``/``DictTerm`` (the same real construction
+        ``TermTransformer.visit_Dict`` already uses for clause bodies), or a
+        direct call to the already-bound functor class. This is exactly
+        what ``clausal/logic/compiler/terms_to_ast.py``'s
+        ``term_to_ast_expr`` generates for a clause body's compiled
+        function — so the value built here is the identical shape, just
+        built once instead of once per invocation.
         """
         if isinstance(node, Constant):
             return node
         if isinstance(node, Name):
             if node.id in transformer._constants or node.id in transformer._atoms:
                 return node
+            if node.id == "_" or _is_logic_var_name(node.id):
+                _raise_constant_rhs_logic_var(
+                    node.id, node, transformer._source_lines,
+                    transformer._filename)
             raise SyntaxError(
                 f"-constants: `{ident}` RHS references `{node.id}`, which is "
                 f"neither a previously declared constant nor a declared atom")
@@ -4467,7 +4540,10 @@ class EmbedTransformer(NodeTransformer):
             # NameError at exec time instead of a located, load-time
             # SyntaxError. Declared-earlier constants (transformer._constants
             # at this point in the file) are legal here — by exec time they
-            # are already-bound module globals.
+            # are already-bound module globals. Legal as a structured RHS's
+            # ELEMENT too (this branch is reached the same way whether
+            # ``node`` is the whole RHS or an element/key/value/arg a
+            # container branch below recursed into).
             for ident in _collect_constant_refs(node.operand.operand):
                 if ident not in transformer._constants:
                     _raise_undeclared_constant(
@@ -4483,12 +4559,101 @@ class EmbedTransformer(NodeTransformer):
                 op=node.op,
                 right=transformer._transform_constant_rhs(node.right, ident),
             ), node)
-        if isinstance(node, (List, Tuple, Set, Dict)):
-            raise SyntaxError(
-                f"-constants: structured constant RHS not yet supported for "
-                f"`{ident}` — use a scalar or a ++() escape")
+        if isinstance(node, List):
+            elements = [transformer._transform_constant_rhs(e, ident)
+                       for e in node.elts]
+            return replace(List(elts=elements, ctx=load), node)
+        if isinstance(node, Tuple):
+            # A real Python tuple — the same construction
+            # term_to_ast_expr gives a clause body's TupleLiteral (tuples
+            # are immutable already; no freezing needed).
+            elements = [transformer._transform_constant_rhs(e, ident)
+                       for e in node.elts]
+            return replace(Tuple(elts=elements, ctx=load), node)
+        if isinstance(node, Set):
+            elements = [transformer._transform_constant_rhs(e, ident)
+                       for e in node.elts]
+            return replace(
+                Call(
+                    func=replace(Name(id="SetTerm", ctx=load), node),
+                    args=[replace(List(elts=elements, ctx=load), node)],
+                    keywords=[],
+                ), node)
+        if isinstance(node, Dict):
+            if any(k is None for k in node.keys):
+                raise SyntaxError(
+                    f"-constants: `{ident}` RHS: dict-splat (**) is not "
+                    f"supported in a structured constant")
+            keys = [transformer._transform_constant_dict_key(k, ident)
+                   for k in node.keys]
+            values = [transformer._transform_constant_rhs(v, ident)
+                     for v in node.values]
+            dict_ast = replace(Dict(keys=keys, values=values), node)
+            return replace(
+                Call(
+                    func=replace(Name(id="DictTerm", ctx=load), node),
+                    args=[dict_ast],
+                    keywords=[make_keyword_node(
+                        "_position", pos_ast(node), node)],
+                ), node)
+        if isinstance(node, Call):
+            if not isinstance(node.func, Name):
+                raise SyntaxError(
+                    f"-constants: unsupported RHS for `{ident}`: "
+                    f"{unparse(node)}")
+            functor_name = node.func.id
+            if (functor_name not in transformer._seen_functors
+                    and functor_name not in transformer._imported_functors):
+                raise SyntaxError(
+                    f"-constants: `{ident}` RHS calls `{functor_name}(...)`, "
+                    f"which is not a declared functor above this "
+                    f"-constants directive — declare it with -module/"
+                    f"-private/-dynamic before -constants, or import it "
+                    f"with -import_from/-import_module")
+            pos_args = [transformer._transform_constant_rhs(a, ident)
+                       for a in node.args]
+            kw_args = [
+                replace(keyword(
+                    arg=kw.arg,
+                    value=transformer._transform_constant_rhs(kw.value, ident),
+                ), kw)
+                for kw in node.keywords
+            ]
+            return replace(
+                Call(func=replace(Name(id=functor_name, ctx=load), node.func),
+                     args=pos_args, keywords=kw_args), node)
         raise SyntaxError(
             f"-constants: unsupported RHS for `{ident}`: {unparse(node)}")
+
+    def _transform_constant_dict_key(transformer, key, ident):
+        """Transform a dict-literal KEY inside a structured -constants RHS.
+
+        Mirrors ``TermTransformer._visit_dict_key``'s atom-key convention (a
+        bare lowercase identifier key resolves to its interned atom, via
+        ``$intern_atom`` — the same helper ordinary clause dict literals
+        use) but routes everything else through ``_transform_constant_rhs``
+        instead of the generic ``TermTransformer.visit`` — a logic-variable-
+        shaped key must be a compile-time SyntaxError here, not a freshly
+        minted Var, and a computed key must be materialized eagerly, not
+        left as an uninstantiated node (see ``_transform_constant_rhs``'s
+        docstring for why the generic term transformer isn't reused).
+        """
+        if isinstance(key, Name) and key.id in _TRUTH_ALIASES:
+            aliased = _TRUTH_ALIASES[key.id]
+            if aliased in _BOOL_ALIAS_VALUES:
+                return replace(Constant(value=_BOOL_ALIAS_VALUES[aliased]), key)
+            key = replace(Name(id=aliased, ctx=key.ctx), key)
+        if (isinstance(key, Name) and key.id != "_"
+                and not _is_logic_var_name(key.id)
+                and key.id not in transformer._constants):
+            transformer._bare_atom_refs.add(key.id)
+            return replace(
+                Call(
+                    func=replace(Name(id="$intern_atom", ctx=load), key),
+                    args=[replace(Constant(value=key.id), key)],
+                    keywords=[],
+                ), key)
+        return transformer._transform_constant_rhs(key, ident)
 
     def _handle_overwrites_directive(transformer, args, expr_stmt):
         """Process ``-overwrites([atom1, atom2, ...])`` directive (Phase 4 of

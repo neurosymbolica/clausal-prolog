@@ -155,9 +155,200 @@ def test_unground_rhs_raises_at_load(tmp_path):
         """)
 
 
-def test_structured_rhs_rejected_for_now(tmp_path):
-    with pytest.raises(SyntaxError, match="structured"):
-        _load(tmp_path, "g", "-constants(_L_ = [1, 2, 3])\np(X) <- (X == 1)\n")
+def test_structured_list_constant(tmp_path):
+    m = _load(tmp_path, "s1", """
+        -constants(_CODES_ = ['au', 'al', 'za'])
+        codes(X) <- (X is _CODES_)
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("codes", v, module=m.__dict__["$module"])] == \
+        [['au', 'al', 'za']]
+
+
+def test_structured_tuple_constant(tmp_path):
+    m = _load(tmp_path, "s2", """
+        -constants(_PAIR_ = (1, 2))
+        pair(X) <- (X is _PAIR_)
+    """)
+    v = Var()
+    [result] = [deref(v) for _ in call("pair", v, module=m.__dict__["$module"])]
+    assert result == (1, 2)
+    assert isinstance(result, tuple)
+
+
+def test_structured_set_constant(tmp_path):
+    from clausal.terms import SetTerm
+    m = _load(tmp_path, "s3", """
+        -private([red, green])
+        -constants(_FLAGS_ = {red, green})
+        flags(X) <- (X is _FLAGS_)
+    """)
+    v = Var()
+    [result] = [deref(v) for _ in call("flags", v, module=m.__dict__["$module"])]
+    assert isinstance(result, SetTerm)
+    assert len(result) == 2
+    assert m.__dict__["red"] in result and m.__dict__["green"] in result
+
+
+def test_structured_dict_constant(tmp_path):
+    from clausal.terms import DictTerm
+    m = _load(tmp_path, "s4", """
+        -private([mn, mx])
+        -constants(_LIMITS_ = {mn: 1, mx: 99})
+        limits(X) <- (X is _LIMITS_)
+    """)
+    v = Var()
+    [result] = [deref(v) for _ in call("limits", v, module=m.__dict__["$module"])]
+    assert isinstance(result, DictTerm)
+    assert result[m.__dict__["mn"]] == 1
+    assert result[m.__dict__["mx"]] == 99
+
+
+def test_structured_rhs_nesting_and_mixing(tmp_path):
+    """A structured RHS mixes a prior constant, arithmetic over it, a
+    declared atom, a functor call, and a nested list — all inside one
+    list — exactly the "nested arbitrarily" requirement."""
+    m = _load(tmp_path, "s5", """
+        -module(s5, [Point(X, Y)])
+        -private([tag])
+        -constants(_BASE_ = 10, _ALL_ = [_BASE_ * 2, tag, Point(1, 2), [3, 4]])
+        got(X) <- (X is _ALL_)
+    """)
+    v = Var()
+    [result] = [deref(v) for _ in call("got", v, module=m.__dict__["$module"])]
+    assert result[0] == 20
+    assert result[1] is m.__dict__["tag"]
+    assert result[2].X == 1 and result[2].Y == 2
+    assert result[3] == [3, 4]
+
+
+def test_structured_functor_constant_declared_above_works(tmp_path):
+    """-module(m, [Point(X, Y)]) precedes -constants: the emitted functor
+    class statement executes first (source order), so Point is already a
+    bound module global by the time the -constants assignment runs."""
+    m = _load(tmp_path, "s6", """
+        -module(s6, [Point(X, Y)])
+        -constants(_ORIGIN_ = Point(0, 0))
+        origin(X) <- (X is _ORIGIN_)
+    """)
+    v = Var()
+    [result] = [deref(v) for _ in call("origin", v, module=m.__dict__["$module"])]
+    assert result.X == 0 and result.Y == 0
+
+
+def test_structured_functor_constant_undeclared_functor_is_syntax_error(tmp_path):
+    """Nothing above -constants declares Point (no -module/-private/-dynamic,
+    no import) — a located, remedy-bearing SyntaxError, not a NameError at
+    exec time and not a silently-wrong Call-node embedding."""
+    with pytest.raises(SyntaxError, match="not a declared functor"):
+        _load(tmp_path, "s7", "-constants(_P_ = Point(0, 0))\np(X) <- (X is 1)\n")
+
+
+def test_structured_rhs_logic_var_rejected(tmp_path):
+    with pytest.raises(SyntaxError) as exc_info:
+        _load(tmp_path, "s8", "-constants(_L_ = [1, X, 3])\np(Y) <- (Y is 1)\n")
+    exc = exc_info.value
+    assert "logic-variable" in str(exc)
+    assert exc.filename == str(tmp_path / "s8.clausal")
+    assert exc.lineno == 1
+
+
+def test_structured_rhs_anonymous_var_rejected(tmp_path):
+    with pytest.raises(SyntaxError, match="logic-variable"):
+        _load(tmp_path, "s9", "-constants(_L_ = [1, _, 3])\np(X) <- (X is 1)\n")
+
+
+def test_structured_rhs_plusplus_element(tmp_path):
+    """A ++() escape is legal as an ELEMENT inside a structured RHS — it
+    falls out naturally because container branches recurse through the
+    same _transform_constant_rhs that already has the ++ branch."""
+    m = _load(tmp_path, "s10", """
+        -constants(_L_ = [1, ++(2 + 3), 3])
+        got(X) <- (X is _L_)
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("got", v, module=m.__dict__["$module"])] == \
+        [[1, 5, 3]]
+
+
+def test_structured_constant_module_global_and_reflection_registry_share_object(tmp_path):
+    """"Share, don't copy": the module global and the module_constant/3
+    registry entry are the SAME object, not equal copies. (A per-invocation
+    CLAUSE solution does NOT preserve identity across use sites — the
+    compiler constant-propagates any known-bound global's value into fresh
+    construction code at predicate-compile time, a pre-existing behavior
+    that applies to any bound global, not something -constants controls —
+    so identity is pinned at the one place this codebase actually promises
+    it: the constant's own storage.)"""
+    m = _load(tmp_path, "s11", "-constants(_L_ = [1, 2, 3])\n")
+    assert m.__dict__["_L_"] is m.__dict__["$module"].constants["_L_"]
+
+
+def test_structured_list_constant_mutation_via_plusplus_raises_typeerror(tmp_path):
+    m = _load(tmp_path, "s12", """
+        -constants(_L_ = [1, 2, 3])
+        bad(X) <- (X is ++(_L_.append(4)))
+    """)
+    v = Var()
+    with pytest.raises(TypeError, match="frozen constant"):
+        list(call("bad", v, module=m.__dict__["$module"]))
+    # Loudly failed, not silently mutated.
+    assert m.__dict__["_L_"] == [1, 2, 3]
+
+
+def test_structured_dict_constant_mutation_via_plusplus_raises_typeerror(tmp_path):
+    m = _load(tmp_path, "s13", """
+        -constants(_D_ = {"k": 1})
+        bad(X) <- (X is ++(_D_.data.__setitem__("k", 2)))
+    """)
+    v = Var()
+    with pytest.raises(TypeError, match="frozen constant"):
+        list(call("bad", v, module=m.__dict__["$module"]))
+    assert m.__dict__["_D_"].data["k"] == 1
+
+
+def test_plusplus_set_constant_mutation_via_plusplus_raises_typeerror(tmp_path):
+    """A ++()-escape-built raw Python set (not a source-level {...} set
+    literal, which lowers to the already-immutable SetTerm instead) goes
+    through the same freeze pass and is protected the same way."""
+    m = _load(tmp_path, "s14", """
+        -constants(_S_ = ++set([1, 2, 3]))
+        bad(X) <- (X is ++(_S_.add(4)))
+    """)
+    v = Var()
+    with pytest.raises(TypeError, match="frozen constant"):
+        list(call("bad", v, module=m.__dict__["$module"]))
+
+
+def test_structured_set_literal_constant_is_already_immutable_by_construction(tmp_path):
+    """A source-level {...} set literal lowers to SetTerm (frozenset-backed,
+    no public mutator at all) — freezing has nothing to do here."""
+    m = _load(tmp_path, "s15", "-private([tag])\n-constants(_S_ = {tag})\n")
+    value = m.__dict__["_S_"]
+    assert not hasattr(value, "add") and not hasattr(value, "discard")
+
+
+def test_frozen_list_unifies_with_equal_plain_list_literal(tmp_path):
+    """Unification behavior of a frozen container is identical to a
+    literal: structural equality, not identity."""
+    m = _load(tmp_path, "s16", """
+        -constants(_L_ = [1, 2, 3])
+        matches(X) <- (_L_ is [X, 2, 3])
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("matches", v, module=m.__dict__["$module"])] == [1]
+
+
+def test_multiple_constants_directives(tmp_path):
+    """Two -constants directives in one file; the second references the
+    first's constant. (Already worked pre-2026-08-25 — pinned directly.)"""
+    m = _load(tmp_path, "s17", """
+        -constants(_BASE_ = 10)
+        -constants(_DOUBLE_ = _BASE_ * 2)
+        got(X) <- (X is _DOUBLE_)
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("got", v, module=m.__dict__["$module"])] == [20]
 
 
 def test_module_export_list_rejects_constant_names(tmp_path):

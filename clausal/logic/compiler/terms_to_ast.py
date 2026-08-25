@@ -319,6 +319,19 @@ def term_to_ast_expr(
             ctx=ast.Load(),
         )
 
+    if isinstance(term, tuple):
+        # An already-materialized Python tuple (e.g. a structured
+        # -constants RHS, which builds a real tuple directly rather than
+        # the uninstantiated TupleLiteral node an ordinary clause body's
+        # ``(a, b)`` literal produces — see the docstring on
+        # EmbedTransformer._transform_constant_rhs). Same recursive
+        # reconstruction as the TupleLiteral branch just above.
+        _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
+        return ast.Tuple(
+            elts=[_rec(e) for e in term],
+            ctx=ast.Load(),
+        )
+
     if isinstance(term, list):
         # If the list contains a StarUnpack, use _build_star_list/_build_multi_star_list
         # helper to safely handle unbound Vars at runtime.
@@ -404,10 +417,19 @@ def term_to_ast_expr(
         )
 
     if isinstance(term, SetTerm):
+        # Recurse per element (mirrors the SetLiteral branch just below):
+        # a bare ``ast.Constant(value=e)`` is only valid when every element
+        # is a Python-literal-embeddable scalar. A SetTerm built from a
+        # structured -constants RHS (``_FLAGS_ = {red, green}``) can hold
+        # atom instances (PredicateMeta 0-arity classes) or other term
+        # types, which ``ast.Constant`` rejects at compile() time — those
+        # need the same Name-reference/constructor-call treatment any other
+        # term position gets.
+        _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
         return _call(
             _name("SetTerm"),
             ast.List(
-                elts=[ast.Constant(value=e) for e in sorted(term.elements, key=repr)],
+                elts=[_rec(e) for e in sorted(term.elements, key=repr)],
                 ctx=ast.Load(),
             ),
         )

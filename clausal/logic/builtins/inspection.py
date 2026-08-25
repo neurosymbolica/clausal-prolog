@@ -1,5 +1,5 @@
 """Core term inspection builtins: functor/3, arg/3, unpack/2, copy_term/2,
-term_variables/2, numbervars/3."""
+term_variables/2, numbervars/3, gensym/2, global_atom/2, module_constant/3."""
 
 from __future__ import annotations
 
@@ -498,3 +498,101 @@ def _global_atom__2(name, atom, trail, k):
         if unify(name, key, trail) and unify(atom, val, trail):
             yield None
         trail.undo(mark)
+
+
+# ── module_constant/3 ──────────────────────────────────────────────────────────
+
+
+def _module_constants_dict(py_module):
+    """The ``-constants`` registry a loaded ``.clausal`` module owns, or
+    ``None`` if *py_module* isn't a compiled Clausal module.
+
+    ``__clausal_module__`` is set at the end of ``import_hook``'s module-exec
+    pipeline (both the V1 and V2 pipelines) to the ``clausal.logic.database.
+    Module`` instance — see ``docs/import.md``'s "two module objects" table.
+    Its ``.constants`` dict is populated by ``register_module_constant``
+    (``clausal/logic/constants.py``), called from the lowered ``-constants``
+    directive itself — so only a module's OWN declarations appear here, never
+    a constant it merely imported (see docs/import.md).
+    """
+    logic_module = getattr(py_module, "__clausal_module__", None)
+    if logic_module is None:
+        return None
+    return logic_module.constants
+
+
+@_builtin("module_constant", 3)
+def _module_constant__3(m, name, value, trail, k):
+    """module_constant(Module, Name, Value) — reflect on a module's own
+    ``-constants`` declarations.
+
+    ``Module`` is the Python module object a ``-import_module(...)``
+    directive binds (the same object a qualified reference like
+    ``other_module._PI_`` resolves against); ``Name`` is the constant's full
+    declaration spelling as a string (``"_PI_"``, underscores included, not
+    ``"PI"``); ``Value`` is the constant's frozen value (see
+    ``clausal.logic.constants._freeze``) — the identical object the module's
+    own clause bodies embed.
+
+    Modes:
+
+      (+Module, +Name, ?Value): look up.  Fails if ``Module`` declares no
+        constant named ``Name``; otherwise checks/binds ``Value``.
+      (+Module, -Name, ?Value): enumerate ``Module``'s constants.
+      (-Module, +Name, ?Value): enumerate every LOADED Clausal module
+        (``sys.modules``, snapshotted) that declares a constant named
+        ``Name``.
+      (-Module, -Name, ?Value): enumerate every ``(Module, Name, Value)``
+        triple across every loaded Clausal module.
+
+    Only constants a module DECLARES (via its own ``-constants``
+    directive(s)) are reflected here — an imported constant is not
+    re-registered on the importer, so it is reachable only through the
+    module that actually declared it. See docs/import.md.
+    """
+    m_val = deref(m)
+    name_val = deref(name)
+    m_bound = not is_var(m_val)
+    name_bound = not is_var(name_val)
+
+    if m_bound:
+        cdict = _module_constants_dict(m_val)
+        if cdict is None:
+            return
+        if name_bound:
+            if not isinstance(name_val, str) or name_val not in cdict:
+                return
+            mark = trail.mark()
+            if unify(value, cdict[name_val], trail):
+                yield None
+            trail.undo(mark)
+            return
+        for n, v in list(cdict.items()):
+            mark = trail.mark()
+            if unify(name, n, trail) and unify(value, v, trail):
+                yield None
+            trail.undo(mark)
+        return
+
+    # Module unbound: enumerate every loaded Clausal module.
+    # Snapshot values() so a module load triggered mid-iteration (e.g. by a
+    # lazy import somewhere downstream) can't perturb this iteration.
+    import sys as _sys  # noqa: PLC0415
+    for py_module in list(_sys.modules.values()):
+        cdict = _module_constants_dict(py_module)
+        if not cdict:
+            continue
+        if name_bound:
+            if not isinstance(name_val, str) or name_val not in cdict:
+                continue
+            mark = trail.mark()
+            if unify(m, py_module, trail) and unify(value, cdict[name_val], trail):
+                yield None
+            trail.undo(mark)
+            continue
+        for n, v in list(cdict.items()):
+            mark = trail.mark()
+            if (unify(m, py_module, trail) and unify(name, n, trail)
+                    and unify(value, v, trail)):
+                yield None
+            trail.undo(mark)
