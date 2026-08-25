@@ -179,36 +179,84 @@ class StepGenerator:
     def close(self) -> None:
         self._gen.close()
 
+# ── The drive core ───────────────────────────────────────────────────────────
+# "Advance the chain to the next ROOT yield."  The three public entry points
+# differ ONLY in their stop condition (what to do with the root-yield value)
+# and in two policy flags, passed as literals at each call site:
+#
+#   intercept_ts                — convert a mid-chain _TABLING_SUSPEND step
+#                                 into send(DONE) (solutions, _drive_until_yield)
+#   stopiteration_is_exhaustion — treat StopIteration / a PEP-479 wrapper
+#                                 from a send as end-of-search
+#                                 (_drive_until_yield only; A04-F009)
+#
+# The entry send (root.send(None)) is never routed to a catcher — all six
+# historical loops agreed on that — so only the flags' branches touch it.
+# KEEP IN SYNC with drive_to_root_yield in runtime/_trampoline.c (the
+# implementation that actually runs); tests/test_trampoline_parity.py
+# enforces the agreement.
+
+_YIELDED = "yielded"
+_EXHAUSTED = "exhausted"
+
+
+def _drive_to_root_yield(root, *, intercept_ts, stopiteration_is_exhaustion):
+    from clausal.logic.tabling import _TABLING_SUSPEND
+
+    def _is_pep479(exc):
+        return (isinstance(exc, RuntimeError)
+                and isinstance(exc.__cause__, StopIteration))
+
+    try:
+        gen, value = root.send(None)
+    except StopIteration:
+        if stopiteration_is_exhaustion:
+            return (_EXHAUSTED, None)
+        raise
+    except RuntimeError as exc:
+        if stopiteration_is_exhaustion and _is_pep479(exc):
+            return (_EXHAUSTED, None)
+        raise
+    while gen is not None:
+        try:
+            if intercept_ts and value is _TABLING_SUSPEND:
+                gen, value = gen.send(DONE)
+            else:
+                gen, value = gen.send(value)
+        except StopIteration:
+            if stopiteration_is_exhaustion:
+                return (_EXHAUSTED, None)
+            raise
+        except Exception as exc:  # noqa: BLE001 — see _is_routable
+            if stopiteration_is_exhaustion and _is_pep479(exc):
+                # Tested BEFORE routing so a converted exhaustion is never
+                # offered to a catch/3 as an error (A04-F009).
+                return (_EXHAUSTED, None)
+            if not _is_routable(exc):
+                raise
+            gen, value = _unwind_to_catcher(gen, exc)
+    return (_YIELDED, value)
+
+
 # ── Trampoline ────────────────────────────────────────────────────────
 
 def trampoline(root: StepGenerator) -> Any:
     """
     Drive a chain of tuple-yielding generators without growing the call stack.
 
-    Each generator yields ``(target, value)`` tuples.  The trampoline loop is
-    just::
-
-        step = root.send(None)
-        while step[0] is not None:
-            step = step[0].send(step[1])
-        return step[1]
-
-    No ``started`` set, no ``resume`` helper — StepGenerator handles
-    bootstrapping internally.
+    Each generator yields ``(target, value)`` tuples.  Delegates to
+    ``_drive_to_root_yield``, which advances the chain — no ``started``
+    set, no ``resume`` helper; ``StepGenerator`` handles bootstrapping
+    internally — until a step yields to nobody, and returns that step's
+    value.
 
     Exception routing: when a generator raises, the throwing generator is
     dead (its try/finally already ran trail.undo).  We unwind through the
     ``catcher`` chain using .throw() until a catch/3 handler catches it.
     See ``_is_routable`` for which exceptions take that path.
     """
-    gen, value = root.send(None)
-    while gen is not None:
-        try:
-            gen, value = gen.send(value)
-        except Exception as exc:  # noqa: BLE001 — see _is_routable
-            if not _is_routable(exc):
-                raise
-            gen, value = _unwind_to_catcher(gen, exc)
+    _kind, value = _drive_to_root_yield(
+        root, intercept_ts=False, stopiteration_is_exhaustion=False)
     return value
 
 def solutions(root: StepGenerator, snapshot: Callable | None = None) -> list:
@@ -228,79 +276,40 @@ def solutions(root: StepGenerator, snapshot: Callable | None = None) -> list:
     from clausal.logic.tabling import _TABLING_SUSPEND
 
     results: list = []
-    gen, value = root.send(None)
     while True:
-        if gen is None:
-            if value is DONE:
-                return results
-            if value is _TABLING_SUSPEND:
-                # A04-F008: a root/orphaned consumer yields
-                # (None, _TABLING_SUSPEND) — a control sentinel, never a
-                # solution. Treating it as one fabricates an unbound answer.
-                return results
-            if value is FINAL:
-                # Producer is retiring with its last solution: deliver
-                # it and stop — no further pull from the (now-retired)
-                # root.  ``FINAL`` is a sentinel, not a payload, so
-                # when *snapshot* is None there's no raw value to
-                # record.
-                if snapshot is not None:
-                    results.append(snapshot())
-                return results
-            results.append(snapshot() if snapshot is not None else value)
-            gen, value = root.send(None)
-        else:
-            try:
-                # Intercept _TABLING_SUSPEND → send DONE to parent instead
-                if value is _TABLING_SUSPEND:
-                    gen, value = gen.send(DONE)
-                else:
-                    gen, value = gen.send(value)
-            except Exception as exc:  # noqa: BLE001 — see _is_routable
-                if not _is_routable(exc):
-                    raise
-                gen, value = _unwind_to_catcher(gen, exc)
+        _kind, value = _drive_to_root_yield(
+            root, intercept_ts=True, stopiteration_is_exhaustion=False)
+        if value is DONE or value is _TABLING_SUSPEND:  # A04-F008
+            # A root/orphaned consumer yields (None, _TABLING_SUSPEND) —
+            # a control sentinel, never a solution. Treating it as one
+            # fabricates an unbound answer.
+            return results
+        if value is FINAL:
+            # Producer is retiring with its last solution: deliver
+            # it and stop — no further pull from the (now-retired)
+            # root.  ``FINAL`` is a sentinel, not a payload, so
+            # when *snapshot* is None there's no raw value to
+            # record.
+            if snapshot is not None:
+                results.append(snapshot())
+            return results
+        results.append(snapshot() if snapshot is not None else value)
 
 def _drive_until_yield(sg: StepGenerator) -> bool | None:
     """Pure-Python fallback for C _drive_until_yield.
 
-    Calls sg.send(None) and loops through the trampoline chain until a
-    solution is found (returns True) or the search is exhausted (returns
-    None).
+    Delegates to ``_drive_to_root_yield``, which calls sg.send(None) and
+    loops through the trampoline chain until a solution is found (returns
+    True) or the search is exhausted (returns None).  A PEP-479 "generator
+    raised StopIteration" wrapper is treated as a converted exhaustion,
+    same as a bare StopIteration (A04-F009).
     """
     from clausal.logic.tabling import _TABLING_SUSPEND
 
-    try:
-        gen, value = sg.send(None)
-    except StopIteration:
+    kind, value = _drive_to_root_yield(
+        sg, intercept_ts=True, stopiteration_is_exhaustion=True)
+    if kind is _EXHAUSTED:
         return None
-    except RuntimeError as exc:
-        # A04-F009 (C≡Py parity): a PEP-479 "generator raised
-        # StopIteration" wrapper is a converted exhaustion; a genuine
-        # RuntimeError (user ++ escape, protocol bug) must propagate.
-        if isinstance(exc.__cause__, StopIteration):
-            return None
-        raise
-    while True:
-        if gen is None:
-            if value is DONE or value is _TABLING_SUSPEND:
-                return None   # A04-F008: suspend sentinel is not a solution
-            return True
-        try:
-            if value is _TABLING_SUSPEND:
-                gen, value = gen.send(DONE)
-            else:
-                gen, value = gen.send(value)
-        except StopIteration:
-            return None
-        except Exception as exc:  # noqa: BLE001 — see _is_routable
-            # A04-F009: mirror the narrowed C catch (PEP-479 → exhaustion).
-            # This test comes FIRST so a converted exhaustion is never
-            # offered to a catch/3 as an error.
-            if isinstance(exc, RuntimeError) and isinstance(
-                exc.__cause__, StopIteration
-            ):
-                return None
-            if not _is_routable(exc):
-                raise
-            gen, value = _unwind_to_catcher(gen, exc)
+    if value is DONE or value is _TABLING_SUSPEND:
+        return None   # A04-F008: suspend sentinel is not a solution
+    return True
