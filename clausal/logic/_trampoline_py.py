@@ -5,9 +5,11 @@ C implementations and this module is reached only by
 ``tests/test_trampoline_parity.py``, which runs the same behavioural
 corpus against both.  The C side is canonical: fix divergences HERE.
 
-``_is_routable`` / ``_unwind_to_catcher`` also serve the always-Python
-drive-loop consumers (``runtime/tramp_call.py``) regardless of which
-implementation is active.
+``_is_routable`` / ``_unwind_to_catcher`` serve this twin's own drive
+core, ``_drive_to_root_yield``, and remain exported via
+``logic/trampoline.py`` for the parity tests; ``runtime/tramp_call.py``
+no longer imports them (it delegates routing to ``_drive_until_yield``
+instead, since Task 7).
 """
 
 from __future__ import annotations

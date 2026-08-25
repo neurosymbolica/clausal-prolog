@@ -120,8 +120,19 @@ tree, the simple-mode bridge, NAF, and ITE conditions get C-driven stepping
   and exhaustion-on-StopIteration (today they have neither).
 - The ITE loop gains exception routing (the bug fix) and stops treating a
   root-level `_TABLING_SUSPEND` as a solution.
+- The ITE condition also gains exhaustion-on-StopIteration/PEP-479: the old
+  emitted loop let a `StopIteration` (or its PEP-479 `RuntimeError` wrapper)
+  from the condition propagate; under `_drive_until_yield` it is now treated
+  as exhaustion, so the condition fails and the else-branch runs instead of
+  raising. Flagged by the final whole-branch review (Minor-4) — a cold,
+  anomaly-only path with no compiled-predicate test; the corpus's
+  entry-send PEP-479 case (`test_entry_send_pep479_wrapper_exhausts_duy_but_raises_via_solutions`
+  in `tests/test_trampoline_parity.py`) pins the underlying
+  `_drive_until_yield` mechanism the ITE now inherits.
 
-Each of these is exercised by a test, not assumed.
+The first two are exercised directly by a compiled-predicate test; the
+third is pinned only at the mechanism level (no compiled-predicate test),
+per the review — not assumed, but not directly demonstrated either.
 
 ### Parity harness
 

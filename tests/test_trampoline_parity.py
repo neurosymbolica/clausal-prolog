@@ -101,6 +101,26 @@ def test_solutions_final_retires_the_root(impl):
     assert pulls == ["first", "second"]
 
 
+def test_solutions_final_without_snapshot_appends_no_sentinel(impl):
+    # Review Minor-1: FINAL is a sentinel, not a payload — without a
+    # snapshot callback there is nothing to record for it. A regression
+    # that appended the raw FINAL value would leak the sentinel object
+    # into caller-visible results.
+    pulls = []
+
+    def fn(this, proceed, fail, catcher):
+        pulls.append("first")
+        yield (proceed, 1)
+        pulls.append("second")
+        yield (proceed, impl.FINAL)
+        pulls.append("MUST NOT HAPPEN")  # FINAL means: do not pull again
+        yield (fail, impl.DONE)
+
+    got = impl.solutions(root(impl, fn))
+    assert got == [1]  # solution 1 only; FINAL contributes nothing
+    assert pulls == ["first", "second"]
+
+
 def test_trampoline_returns_the_final_value_through_a_child(impl):
     def child(this, proceed, fail, catcher, n):
         yield (proceed, n + 1)
@@ -129,7 +149,14 @@ def test_root_suspend_is_exhaustion_not_a_solution(impl):
 
 
 def suspend_chain(impl, log):
-    """Parent whose child yields (parent, _TABLING_SUSPEND) mid-chain."""
+    """Parent whose child yields (parent, _TABLING_SUSPEND) mid-chain.
+
+    Terminates with an explicit ``(None, DONE)`` root yield after the
+    intercepted/leaked yield so a caller that keeps pulling (``solutions``)
+    can exit cleanly instead of resuming an exhausted generator.  The
+    single-pull tests (``_drive_until_yield``, ``trampoline``) never reach
+    it.
+    """
     def child(this, proceed, fail, catcher):
         yield (proceed, _TABLING_SUSPEND)
 
@@ -137,6 +164,7 @@ def suspend_chain(impl, log):
         got = yield (impl.StepGenerator(child, this, this, this), None)
         log.append(got)
         yield (None, "intercepted" if got is impl.DONE else "leaked")
+        yield (None, impl.DONE)
 
     return root(impl, fn)
 
@@ -153,6 +181,16 @@ def test_mid_chain_suspend_is_NOT_intercepted_by_trampoline(impl):
     log = []
     assert impl.trampoline(suspend_chain(impl, log)) == "leaked"
     assert log == [_TABLING_SUSPEND]
+
+
+def test_solutions_intercepts_mid_chain_suspend(impl):
+    # Review Minor-1: solutions() shares _drive_until_yield's intercept_ts
+    # policy but had no direct pin — flipping solutions' intercept_ts to
+    # False (either core) would turn this "intercepted" into "leaked" and
+    # escape the whole corpus.
+    log = []
+    assert impl.solutions(suspend_chain(impl, log)) == ["intercepted"]
+    assert log == [impl.DONE]
 
 
 # ── exception routing through the catcher chain ──────────────────────────────
@@ -245,6 +283,18 @@ def test_pep479_wrapper_is_exhaustion_for_duy_and_propagates_elsewhere(impl):
     assert impl._drive_until_yield(root(impl, greedy)) is None  # A04-F009
     with pytest.raises(RuntimeError):
         impl.solutions(root(impl, greedy))
+
+
+def test_entry_send_pep479_wrapper_exhausts_duy_but_raises_via_solutions(impl):
+    # Review Minor-1: the PEP-479 wrapper case above is hit mid-chain (in
+    # the while loop); the ROOT's very first send() has its own try/except
+    # in _drive_to_root_yield that no existing test reached. A root frame
+    # that raises StopIteration before its first yield surfaces the
+    # wrapper on that entry send instead.
+    assert impl._drive_until_yield(
+        root(impl, raiser_fn(StopIteration()))) is None
+    with pytest.raises(RuntimeError):
+        impl.solutions(root(impl, raiser_fn(StopIteration())))
 
 
 def test_generator_that_returns_is_a_protocol_error_not_a_catchable(impl):
