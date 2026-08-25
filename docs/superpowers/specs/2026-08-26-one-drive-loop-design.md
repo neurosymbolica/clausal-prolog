@@ -1,0 +1,201 @@
+# One drive loop per language — design
+
+**Date:** 2026-08-26
+**Todos:** `todo/one-drive-loop-not-six.md`, `todo/c-and-python-trampoline-twins-have-no-parity-test.md`
+**Approach approved:** corpus-first (Option A), 2026-08-26.
+
+## Problem
+
+The trampoline drive loop — interpret `(gen, value)` steps, decide when to
+stop, route exceptions to `catch/3` — exists as independent copies that each
+learn fixes separately. The `catch/3` routing broadening (`463291d6`,
+`883cdf08`) had to be applied by hand to every copy and missed two of them.
+
+Inventory as of this design (verified by reading, 2026-08-26):
+
+| # | copy | where | TS interception | StopIteration = exhaustion | exception routing |
+|---|------|-------|-----------------|---------------------------|-------------------|
+| 1 | `trampoline_func` | `logic/runtime/_trampoline.c` | no | no | yes |
+| 2 | `solutions_func` | `logic/runtime/_trampoline.c` | yes | no | yes |
+| 3 | `drive_until_yield_func` | `logic/runtime/_trampoline.c` | yes | yes | yes |
+| 4–6 | `trampoline` / `solutions` / `_drive_until_yield` | `logic/trampoline.py` (fallbacks, **never executed by the suite** in a built tree) | mirror 1–3 | mirror 1–3 | yes |
+| 7 | `_tramp_call` | `logic/runtime/tramp_call.py` (always runs, even with the C extension) | **no** | no | yes |
+| 8 | `_naf_has_solution` | `logic/runtime/tramp_call.py` | **no** | no | yes |
+| 9 | general-ITE arm | `logic/compiler/lower_python_trampoline.py:105-181`, emitted as generated AST | yes (mid-chain only) | no | **NO** |
+
+Copy 9 was not in the todo's table of six. Its `step_send` statements step
+`g.send(v)` with no `try`/`except` at all, so a `catch/3` inside the
+*condition* of a general if-then-else compiled in trampoline mode is almost
+certainly inert — the same defect shape as the `Negate` bug fixed 2026-08-25.
+It also treats a root-level `(None, _TABLING_SUSPEND)` as a solution (the
+A04-F008 shape). The legacy emitter it once mirrored
+(`_compile_general_ite_trampoline`) is already deleted; the lowering is the
+only copy. **To be confirmed with a failing test before any fix is claimed.**
+
+The C twins (1–3) and Python twins (4–6) are kept in sync by `KEEP IN SYNC`
+comments only; nothing executes the fallbacks, so nothing would detect
+divergence.
+
+## Goals
+
+1. A new exception-policy or step-protocol change touches **one site per
+   language**: one C core, one Python core. (Two, not one — the C extension
+   is the production path and must stay; the pure-Python twin is the
+   no-build fallback and must stay.)
+2. No drive loop is emitted as generated AST.
+3. A parity test module runs a shared behavioural corpus against **both**
+   implementations in one session; deleting a routing branch from either
+   side reds it.
+4. The `catch/3`-inside-ITE-condition bug is confirmed and fixed.
+
+## Non-goals
+
+- Converging the per-entry-point policy differences (TS interception in
+  `trampoline`, `FINAL` handling outside `solutions`, exhaustion-on-
+  StopIteration outside `_drive_until_yield`). The refactor **preserves
+  today's per-entry-point behaviour exactly** via mode flags; deliberate
+  convergence is parked as a follow-up todo.
+- Any change to the step protocol itself, to `StepGenerator`, or to the
+  continuation-TCO plan (`FINAL` stays a cold sentinel).
+- Touching the shallow strategy or the `arg_index` dispatch loops (audited:
+  they are PEP-380 delegating wrappers that forward `send`/`throw` without
+  interpreting the protocol — not drive-loop copies).
+
+## End state
+
+### Core + wrappers, per language
+
+The shared primitive in both languages is **advance to the next root
+yield**: step the chain, intercepting `_TABLING_SUSPEND` and routing
+exceptions per policy, until the current step is `(None, value)` or the
+chain is exhausted / an exception propagates.
+
+- **C** (`_trampoline.c`): one `static` helper,
+  `drive_to_root_yield(sg_or_step, flags, &value)` returning
+  {`YIELDED`, `EXHAUSTED`, `ERROR`}. `trampoline_func`, `solutions_func`
+  and `drive_until_yield_func` become thin wrappers: each calls the core
+  with its flags and applies its own stop condition to the root-yield
+  value (`trampoline`: return the value; `solutions`: DONE/TS/FINAL vs
+  collect-and-repull; `_drive_until_yield`: DONE/TS → None, else True).
+- **Python**: the fallbacks move out of the `except ImportError:` block in
+  `logic/trampoline.py` into their own always-importable module
+  (`logic/_trampoline_py.py`) with the same core+wrappers shape.
+  `logic/trampoline.py` keeps its public surface:
+  `try: from runtime._trampoline import … except ImportError: from
+  _trampoline_py import …`. Making the pure module directly importable is
+  what makes the parity harness trivial — no `sys.modules` blocking, no
+  reload games.
+
+Mode flags (initial values preserve today's behaviour, per the inventory
+table): `intercept_tabling_suspend`, `stopiteration_is_exhaustion`. `FINAL`
+is passed through as a root-yield value; only the `solutions` wrapper
+interprets it, exactly as today.
+
+### Consumers re-based on `_drive_until_yield`
+
+`_drive_until_yield` *is* the per-solution primitive, so the remaining
+Python-side copies stop being loops:
+
+- `_tramp_call` → `sg = StepGenerator(…)` then
+  `while _drive_until_yield(sg): yield None`.
+- `_naf_has_solution` → `return _drive_until_yield(sg) is True`.
+- The general-ITE lowering emits
+  `while $drive_until_yield(_ite_sg): found = True; <then-stmts>` instead
+  of an inline loop (`$drive_until_yield` injected into predicate globals
+  alongside `$naf_has_solution` in `compiler/predicate.py`).
+
+Because `_drive_until_yield` resolves to the C implementation in a built
+tree, the simple-mode bridge, NAF, and ITE conditions get C-driven stepping
+— a performance improvement in addition to the single-policy win.
+
+**Accepted behaviour changes** from re-basing (all three inherit
+`_drive_until_yield`'s policy, which is the policy the main query path in
+`solve._drive_trampoline` already uses):
+
+- `_tramp_call` / `_naf_has_solution` gain `_TABLING_SUSPEND` interception
+  and exhaustion-on-StopIteration (today they have neither).
+- The ITE loop gains exception routing (the bug fix) and stops treating a
+  root-level `_TABLING_SUSPEND` as a solution.
+
+Each of these is exercised by a test, not assumed.
+
+### Parity harness
+
+`tests/test_trampoline_parity.py`, parameterised over
+`clausal.logic.runtime._trampoline` (C; skipped with a loud reason if the
+extension is not built) and `clausal.logic._trampoline_py`. The corpus
+drives **hand-built `StepGenerator` chains** constructed with the
+implementation-under-test's own `StepGenerator` type — this sidesteps the
+compiled-globals obstacle (`compiler/predicate.py:746`) entirely; no
+recompilation needed. Compiled-predicate behaviour stays covered by the
+existing suite plus the new ITE test.
+
+Corpus cases, run against each of `trampoline`, `solutions`,
+`_drive_until_yield` where the case is expressible for that entry point:
+
+1. single and multi-solution enumeration; exhaustion via `DONE`
+2. `FINAL` at root (with and without snapshot) — `solutions` only
+3. `_TABLING_SUSPEND` at root and mid-chain
+4. routable exception absorbed by a catcher at depth k (k = 1, 2)
+5. declining handler re-raises; next catcher up absorbs
+6. no taker: exception propagates unchanged, original traceback preserved
+7. unroutable: `StopIteration`, `GeneratorExit`, `KeyboardInterrupt`,
+   `SystemExit` propagate unrouted
+8. PEP-479 wrapper (`RuntimeError` with `StopIteration` cause):
+   exhaustion for `_drive_until_yield`, propagation elsewhere
+9. engine-protocol `RuntimeError` (`__clausal_engine_protocol__`): never
+   offered to a catcher
+10. snapshot callable invoked while bindings live (`solutions`)
+
+Acceptance (from the todo): deleting a routing branch from **either**
+implementation reds this module — to be demonstrated once by temporary
+mutation of each side during development, not kept as an automated check.
+
+## Sequencing (each stage lands green)
+
+1. **ITE bug, test-first.** Failing test in `tests/test_catch_trampolined.py`
+   (`catch/3` inside a general-ITE condition, trampoline mode) plus a
+   root-TS case if expressible; fix by emitting `$drive_until_yield`.
+   Smallest user-visible win; lands independently of everything else.
+2. **Extract + harness.** Move the Python fallbacks to
+   `logic/_trampoline_py.py` (mechanical move, no logic change); land
+   `tests/test_trampoline_parity.py` green against both implementations
+   as they are today.
+3. **Core+wrappers refactor.** C `drive_to_root_yield` + thin wrappers;
+   Python twin to the same shape; re-base `_tramp_call` /
+   `_naf_has_solution` on `_drive_until_yield`. Corpus and suite green.
+4. **Bookkeeping.** Record the audit (below) in the todos, archive both,
+   file the policy-convergence follow-up todo.
+
+Verification throughout per project practice: run the suite chunked with
+`/workspace/clausal/venv/bin/python` from the clone; in worktrees run
+`build_ext` before diffing failure **sets** (not counts) against baseline.
+
+## Audit record (goal 2 / todo's audit ask)
+
+Searched `logic/compiler/` for engine control flow emitted as AST or
+open-coded stepping of the `(gen, value)` protocol, 2026-08-26:
+
+- `lower_python_trampoline.py` — `Negate`: already lifted to
+  `$naf_has_solution`. **General ITE: inline loop found** (copy 9 above);
+  fixed by stage 1.
+- `goal_shallow.py` — calls the `$tramp_call` runtime helper; no emitted
+  loop.
+- `arg_index.py` — `_drive_tro_bucket` and the TRO `dispatch` closures
+  forward `send`/`throw`/`close` (PEP-380 delegation) without interpreting
+  steps or owning exception policy; not copies. Left untouched.
+- `goal_trampoline.py`, `control_constructs.py`, `tro.py` — no protocol
+  stepping emitted.
+
+## Risks
+
+- **C refactor of exception paths / refcounting.** Mitigated by
+  corpus-first ordering (stage 2 before stage 3) and by the traceback-
+  identity corpus case (pins the `PyException_SetTraceback` behaviour that
+  `tests/test_source_locations.py::TestSourceLocationsG6` also pins).
+- **Behaviour drift from re-basing consumers.** The three accepted changes
+  are listed above and each gets a test; anything else showing up in the
+  failure-set diff is a defect in the refactor, not an accepted change.
+- **`_trampoline_py` import cycle** (`solutions` lazily imports
+  `logic.tabling`): the move keeps the lazy import inside the function
+  bodies, as today.
