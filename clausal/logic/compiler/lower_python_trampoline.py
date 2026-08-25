@@ -2,15 +2,19 @@
 ``ast.stmt`` list — trampoline strategy.
 
 Covers the D2 subset plus ``Alternate`` (D5b) and ``Negate`` (D5c).
-Output is byte-for-byte identical to what ``compile_goal_trampoline``
-would emit today for the same input; the D4 parallel-implementation
-harness in ``_compile_body_impl`` enforces this via ``ast.dump`` diff
-on every body compilation.
+The D4 parallel-implementation harness that once enforced byte-for-byte
+``ast.dump`` parity against ``compile_goal_trampoline`` retired in
+D7c-alpha (see ``goal_shallow._compile_body_impl``'s docstring); the
+``Negate`` and general-``Branch`` mini-loops here no longer replicate
+that legacy shape verbatim — both now delegate their drive step to a
+shared runtime helper (``$naf_has_solution``, ``$drive_until_yield``)
+instead of emitting their own inline ``StepGenerator`` loop.
 
 Strategy-agnostic cases delegate to ``_lower_goalop_shared``.  The
-trampoline-specific arms (``Negate`` today — a mini-trampoline
-``StepGenerator`` loop — and later ``SubCall``, catch-family, meta-call
-arms that diverge from shallow) live in this module.
+trampoline-specific arms (``Negate`` and the general ``Branch`` —
+each a mini-trampoline that builds a ``StepGenerator`` and drives it
+through a shared runtime helper — and later ``SubCall``, catch-family,
+meta-call arms that diverge from shallow) live in this module.
 
 Before D5c, this module delegated entirely to ``lower_python_shallow``
 because every covered op was strategy-agnostic.  ``Negate`` is the
@@ -56,9 +60,10 @@ def _lower_body(
     match ir:
 
         # ── General ITE — trampoline form.  (Reified Branch is handled
-        # by ``lower_shared``.)  Mirrors legacy
-        # ``_compile_general_ite_trampoline`` byte-for-byte.  Tabled-NAF
-        # handling isn't needed here until D5e lands Call → SubCall.
+        # by ``lower_shared``.)  The condition sub-generator is driven
+        # through ``$drive_until_yield``, the same shared runtime loop
+        # ``Negate`` below uses.  Tabled-NAF handling isn't needed here
+        # until D5e lands Call → SubCall.
         case Branch(test=t_op, then=th_op, else_=el_op,
                     reified_test=None, tabled_naf=tnaf):
             from clausal.logic.compiler.goal_trampoline import _yield_step_stmt
@@ -97,8 +102,6 @@ def _lower_body(
             then_stmts = lower(th_op, ctx, k_stmts)
             else_stmts = lower(el_op, ctx, k_stmts)
             sg_name = ctx.fresh("_ite_sg")
-            g_name = ctx.fresh("_ite_g")
-            v_name = ctx.fresh("_ite_v")
             true_mark = ctx.fresh(_MARK_PREFIX)
             found_flag = ctx.fresh("_found")
 
@@ -106,75 +109,21 @@ def _lower_body(
                 _call(_name("StepGenerator"), _name(cond_fn_name),
                       ast.Constant(None), ast.Constant(None), ast.Constant(None),
                       _name(trail_name)))
-            first_send = ast.Assign(
-                targets=[ast.Tuple(
-                    elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
-                    ctx=ast.Store(),
-                )],
-                value=_call(ast.Attribute(value=_name(sg_name), attr="send", ctx=ast.Load()),
-                            ast.Constant(None)),
-            )
-            continue_send = ast.Assign(
-                targets=[ast.Tuple(
-                    elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
-                    ctx=ast.Store(),
-                )],
-                value=_call(ast.Attribute(value=_name(sg_name), attr="send", ctx=ast.Load()),
-                            ast.Constant(None)),
-            )
-            step_send_normal = ast.Assign(
-                targets=[ast.Tuple(
-                    elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
-                    ctx=ast.Store(),
-                )],
-                value=_call(ast.Attribute(value=_name(g_name), attr="send", ctx=ast.Load()),
-                            _name(v_name)),
-            )
-            step_send_done = ast.Assign(
-                targets=[ast.Tuple(
-                    elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
-                    ctx=ast.Store(),
-                )],
-                value=_call(ast.Attribute(value=_name(g_name), attr="send", ctx=ast.Load()),
-                            _name("$DONE")),
-            )
-            step_send = ast.If(
-                test=ast.Compare(
-                    left=_name(v_name),
-                    ops=[ast.Is()],
-                    comparators=[_name("$TABLING_SUSPEND")],
-                ),
-                body=[step_send_done],
-                orelse=[step_send_normal],
-            )
-            true_loop_body = ast.If(
-                test=ast.Compare(
-                    left=_name(g_name),
-                    ops=[ast.Is()],
-                    comparators=[ast.Constant(None)],
-                ),
-                body=[
-                    ast.If(
-                        test=ast.Compare(
-                            left=_name(v_name),
-                            ops=[ast.Is()],
-                            comparators=[_name("$DONE")],
-                        ),
-                        body=[ast.Break()],
-                        orelse=[],
-                    ),
-                    _assign(found_flag, ast.Constant(value=True)),
-                ] + then_stmts + [continue_send],
-                orelse=[step_send],
-            )
+            # Drive the condition through the shared runtime loop.  Emitted
+            # inline this was a seventh copy of the drive loop and the only
+            # one with no exception routing, so a catch/3 inside the
+            # condition never saw its exception (confirmed 2026-08-26); it
+            # also treated a root-level _TABLING_SUSPEND as a solution
+            # (A04-F008 shape).  $drive_until_yield is the C loop in a
+            # built tree.
             true_block = [
                 _assign(found_flag, ast.Constant(value=False)),
                 _assign_mark(true_mark, trail_name),
                 sg_create,
-                first_send,
                 ast.While(
-                    test=ast.Constant(value=True),
-                    body=[true_loop_body],
+                    test=_call(_name("$drive_until_yield"), _name(sg_name)),
+                    body=[_assign(found_flag, ast.Constant(value=True))]
+                    + then_stmts,
                     orelse=[],
                 ),
                 _undo_stmt(true_mark, trail_name),

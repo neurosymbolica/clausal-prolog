@@ -32,6 +32,12 @@
     catch_from_callee_via_lambda(E),
     recovery_raises(R),
     outer_catches_a_raising_recovery(E),
+    cond_absorbs(R),
+    ite_cond_catch(R),
+    cond_declines(R),
+    ite_cond_decline(R),
+    ite_cond_raw(R),
+    ite_multi(N),
 ])
 -import_from(catch_tramp_sibling, [art_9])
 -allow_singletons
@@ -119,3 +125,21 @@ Test("catch/3 around a many-solution callee still yields every solution") <- (
     findall(N, catch_multi(N), NS),
     NS == [1, 2, 3],
 )
+
+# ── the SEVENTH copy: the general-ITE condition driver ──────────────────────
+# If/3 with a non-reifiable (user-predicate) condition compiles to a
+# mini-trampoline that drives the condition sub-generator.  Emitted inline it
+# had no exception routing at all, so a catch/3 inside the CONDITION was
+# inert — the ValueError walked out of the whole construct (confirmed
+# 2026-08-26).  These pin the routed behaviour plus the two controls that
+# must not change: a declining/absent handler still lets the error escape,
+# and the then-branch still runs once per condition solution.
+cond_absorbs(R) <- (catch(raise_value_error(_X), _E, R is "absorbed")),
+ite_cond_catch(R) <- (If(cond_absorbs(_C), R is "then", R is "else")),
+
+cond_declines(R) <- (catch(raise_value_error(_X), "no_such_error", R is "nope")),
+ite_cond_decline(R) <- (If(cond_declines(_C), R is "then", R is "else")),
+
+ite_cond_raw(R) <- (If(raise_value_error(_X), R is "then", R is "else")),
+
+ite_multi(N) <- (If(counted(N), true, N == 0)),

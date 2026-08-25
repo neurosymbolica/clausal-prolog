@@ -192,6 +192,38 @@ def test_catch_inside_a_goal_lambda_absorbs_the_exception(mod):
         (Compound("ValueError", (_INT_NOPE,)),)]
 
 
+# ── the general-ITE condition driver (the seventh loop copy) ─────────────────
+
+
+def test_catch_inside_an_ite_condition_absorbs_the_exception(mod):
+    """A catch/3 inside a general-ITE *condition* absorbs; then-branch runs.
+
+    The condition sub-generator is driven by the ITE's own mini-trampoline,
+    which — emitted inline — had no exception routing, so the ValueError
+    escaped the whole construct instead of reaching the handler.
+    """
+    assert _answers(mod.ite_cond_catch) == [("then",)]
+
+
+def test_declining_catch_in_an_ite_condition_still_lets_the_error_escape(mod):
+    """Control: routing must be invisible when no handler absorbs."""
+    with pytest.raises(ValueError) as exc_info:
+        _answers(mod.ite_cond_decline)
+    assert str(exc_info.value) == _INT_NOPE
+
+
+def test_uncaught_error_in_an_ite_condition_still_escapes(mod):
+    """Control: no handler at all — the original exception surfaces."""
+    with pytest.raises(ValueError) as exc_info:
+        _answers(mod.ite_cond_raw)
+    assert str(exc_info.value) == _INT_NOPE
+
+
+def test_ite_then_branch_runs_once_per_condition_solution(mod):
+    """Control: the general ITE enumerates ALL condition solutions."""
+    assert _answers(mod.ite_multi) == [(1,), (2,), (3,)]
+
+
 def test_an_exception_from_a_recovery_goal_reaches_the_outer_catch(mod):
     """The handler absorbs one exception and then raises a different one.
 

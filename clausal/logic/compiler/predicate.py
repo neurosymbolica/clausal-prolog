@@ -19,7 +19,7 @@ import warnings
 from typing import Any, Callable
 
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
-from clausal.logic.trampoline import Step, DONE, StepGenerator
+from clausal.logic.trampoline import Step, DONE, StepGenerator, _drive_until_yield
 from clausal.terms import (
     Compound,
     Call, LoadName, LoadAttr,
@@ -767,6 +767,7 @@ def compile_predicate_trampoline(
         "$build_multi_star_list": _build_multi_star_list,
         "$tramp_call": _tramp_call,
         "$naf_has_solution": _naf_has_solution,
+        "$drive_until_yield": _drive_until_yield,
         "$dispatch_at": _dispatch_at,
         "$deref_walk": _deref_walk_fn,
         "$findall_copy": _findall_copy_row,
@@ -1513,6 +1514,7 @@ def compile_predicate_shallow(
         "$build_multi_star_list": _build_multi_star_list,
         "$tramp_call": _tramp_call,
         "$naf_has_solution": _naf_has_solution,
+        "$drive_until_yield": _drive_until_yield,
         "$dispatch_at": _dispatch_at,
         "$deref_walk": _deref_walk_fn,
         "$findall_copy": _findall_copy_row,
