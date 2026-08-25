@@ -500,6 +500,31 @@ def _raise_constant_rhs_logic_var(identifier: str, node=None, source_lines=None,
         msg, (filename, lineno, (col + 1) if col is not None else None, text))
 
 
+def _raise_located_constant_error(msg: str, node, source_lines=None,
+                                   filename=None) -> None:
+    """Raise *msg* as a ``SyntaxError`` located at *node*.
+
+    Shared by every ``-constants`` RHS validation error that isn't one of
+    the two dedicated raisers above (``_raise_undeclared_constant``,
+    ``_raise_constant_rhs_logic_var``) — the dict-splat rejection, the
+    undeclared-functor error, and the generic unsupported-RHS fallthrough
+    in ``EmbedTransformer._transform_constant_rhs``. Every -constants RHS
+    error is a compile-time error with an AST node in hand, so there is no
+    excuse for any of them to come back as a bare, unattributed
+    ``SyntaxError`` — the caller always has *node*, exactly like the two
+    dedicated raisers.
+    """
+    lineno = getattr(node, "lineno", None)
+    col = getattr(node, "col_offset", None)
+    text = None
+    if source_lines and lineno and 1 <= lineno <= len(source_lines):
+        text = source_lines[lineno - 1]
+    if lineno is None:
+        raise SyntaxError(msg)
+    raise SyntaxError(
+        msg, (filename, lineno, (col + 1) if col is not None else None, text))
+
+
 def _is_logic_var_name(identifier: str) -> bool:
     """Return True if ``identifier`` should be treated as a logic variable.
 
@@ -4469,11 +4494,17 @@ class EmbedTransformer(NodeTransformer):
             fix_missing_locations(assign)
             statements.append(assign)
             # Record (name, value) on $module for module_constant/3
-            # reflection (docs/builtins.md). $module is already the real
-            # LogicModule by the time this statement executes (set before
+            # reflection (docs/builtins.md). $module is ALREADY BOUND by
+            # the time this statement executes (set before
             # exec_with_import_diagnostics runs — see _run_v2_pipeline /
-            # _exec_module_v1 in import_hook.py), and `ident` is already
-            # bound (by the Assign just above) to the gated, frozen value.
+            # _exec_module_v1 in import_hook.py) — but on the V2 pipeline
+            # it is only a THROWAWAY placeholder Module at this point
+            # (compile_module below builds the real one afterward and
+            # swaps it in); _run_v2_pipeline carries the registrations
+            # across that swap (``logic_module.constants.update(
+            # dummy_logic_module.constants)``) precisely because they land
+            # here first. `ident` is already bound (by the Assign just
+            # above) to the gated, frozen value.
             register = replace(
                 Expr(value=replace(
                     Call(
@@ -4521,6 +4552,20 @@ class EmbedTransformer(NodeTransformer):
         if isinstance(node, Constant):
             return node
         if isinstance(node, Name):
+            # ISO/XSB truth-value spellings fold the same way they do in
+            # ordinary term position (visit_Name / _TRUTH_ALIASES) — a
+            # -constants RHS is a term position too. Without this,
+            # ``-constants(_B_ = true)`` raised "neither a previously
+            # declared constant nor a declared atom" while the equivalent
+            # ``-constants(_B_ = True)`` (and a dict KEY spelled ``true``,
+            # via _transform_constant_dict_key) already worked — one
+            # spelling of the same value should not be RHS-illegal while
+            # the other is legal.
+            if node.id in _TRUTH_ALIASES:
+                aliased = _TRUTH_ALIASES[node.id]
+                if aliased in _BOOL_ALIAS_VALUES:
+                    return replace(Constant(value=_BOOL_ALIAS_VALUES[aliased]), node)
+                return replace(Name(id=aliased, ctx=load), node)
             if node.id in transformer._constants or node.id in transformer._atoms:
                 return node
             if node.id == "_" or _is_logic_var_name(node.id):
@@ -4581,9 +4626,10 @@ class EmbedTransformer(NodeTransformer):
                 ), node)
         if isinstance(node, Dict):
             if any(k is None for k in node.keys):
-                raise SyntaxError(
+                _raise_located_constant_error(
                     f"-constants: `{ident}` RHS: dict-splat (**) is not "
-                    f"supported in a structured constant")
+                    f"supported in a structured constant",
+                    node, transformer._source_lines, transformer._filename)
             keys = [transformer._transform_constant_dict_key(k, ident)
                    for k in node.keys]
             values = [transformer._transform_constant_rhs(v, ident)
@@ -4598,18 +4644,20 @@ class EmbedTransformer(NodeTransformer):
                 ), node)
         if isinstance(node, Call):
             if not isinstance(node.func, Name):
-                raise SyntaxError(
+                _raise_located_constant_error(
                     f"-constants: unsupported RHS for `{ident}`: "
-                    f"{unparse(node)}")
+                    f"{unparse(node)}",
+                    node, transformer._source_lines, transformer._filename)
             functor_name = node.func.id
             if (functor_name not in transformer._seen_functors
                     and functor_name not in transformer._imported_functors):
-                raise SyntaxError(
+                _raise_located_constant_error(
                     f"-constants: `{ident}` RHS calls `{functor_name}(...)`, "
                     f"which is not a declared functor above this "
                     f"-constants directive — declare it with -module/"
                     f"-private/-dynamic before -constants, or import it "
-                    f"with -import_from/-import_module")
+                    f"with -import_from/-import_module",
+                    node, transformer._source_lines, transformer._filename)
             pos_args = [transformer._transform_constant_rhs(a, ident)
                        for a in node.args]
             kw_args = [
@@ -4622,8 +4670,9 @@ class EmbedTransformer(NodeTransformer):
             return replace(
                 Call(func=replace(Name(id=functor_name, ctx=load), node.func),
                      args=pos_args, keywords=kw_args), node)
-        raise SyntaxError(
-            f"-constants: unsupported RHS for `{ident}`: {unparse(node)}")
+        _raise_located_constant_error(
+            f"-constants: unsupported RHS for `{ident}`: {unparse(node)}",
+            node, transformer._source_lines, transformer._filename)
 
     def _transform_constant_dict_key(transformer, key, ident):
         """Transform a dict-literal KEY inside a structured -constants RHS.

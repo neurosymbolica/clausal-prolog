@@ -264,6 +264,9 @@ from clausal.terms import (  # noqa: E402
     FStringThunk as _FStringThunk,
 )
 from clausal.logic.clpb import BoolEq as _BoolEq, BoolImpl as _BoolImpl  # noqa: E402
+from clausal.logic.constants import (  # noqa: E402
+    _FrozenList, _FrozenDict, _FrozenSet, _freeze_dict_term,
+)
 
 INJECTED_RUNTIME_BUILTINS: dict = {
     # Term-constructor helpers and runtime types emitted as bare Names by
@@ -282,6 +285,18 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "Undefined": Undefined,
     "BoolEq": _BoolEq,
     "BoolImpl": _BoolImpl,
+    # Reconstruction targets for a -constants FROZEN structured value (see
+    # terms_to_ast.term_to_ast_expr's ``_FrozenList``/``_FrozenDict``/
+    # ``_FrozenSet`` branches): a clause referencing a frozen constant must
+    # get a frozen reconstruction back, not a plain mutable one — an
+    # answer built from it (tabling/answer-caching can share a
+    # reconstruction across consumers) must not be corruptible by one
+    # consumer's mutation. ``$``-prefixed (engine-internal plumbing, never
+    # user-facing) so a user predicate can never shadow these.
+    "$FrozenList": _FrozenList,
+    "$FrozenDict": _FrozenDict,
+    "$FrozenSet": _FrozenSet,
+    "$FrozenDictTerm": _freeze_dict_term,
     # Engine internals — public names walk/deref/unify are deliberately NOT
     # bound (A12-F004); generated code references them ``$``-prefixed.
     "$walk": _walk_fn,

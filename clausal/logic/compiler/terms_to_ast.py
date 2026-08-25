@@ -38,6 +38,7 @@ from clausal.logic.predicate import (
     PredicateMeta, is_term_instance, term_field_names,
     register_atom_identity,
 )
+from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
 
 from ._ast_helpers import _name, _call
 from ._vars import _var_python_name
@@ -336,6 +337,16 @@ def term_to_ast_expr(
         # If the list contains a StarUnpack, use _build_star_list/_build_multi_star_list
         # helper to safely handle unbound Vars at runtime.
         _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
+        # A -constants list value is frozen (_FrozenList — see
+        # clausal.logic.constants._freeze). The RECONSTRUCTION a compiled
+        # clause builds from it must be frozen too, not just the original:
+        # under tabling/answer-caching, a reconstructed answer can be
+        # shared across multiple consumers, where a plain mutable list
+        # would let one consumer's mutation corrupt what every other
+        # consumer of the same cached answer sees. A _FrozenList never
+        # holds a StarUnpack (constants are always fully ground), so this
+        # only needs to guard the plain-list return path below.
+        is_frozen_list = isinstance(term, _FrozenList)
         star_count = sum(1 for e in term if isinstance(e, StarUnpack))
         if star_count == 1:
             # Single-star: use _build_star_list(before, star, after)
@@ -381,16 +392,25 @@ def term_to_ast_expr(
                 args=[ast.List(elts=seg_elts, ctx=ast.Load())],
                 keywords=[],
             )
-        return ast.List(
+        list_ast_ = ast.List(
             elts=[_rec(e) for e in term],
             ctx=ast.Load(),
         )
+        if is_frozen_list:
+            return _call(_name("$FrozenList"), list_ast_)
+        return list_ast_
 
     if isinstance(term, dict):
-        return ast.Dict(
+        dict_ast_ = ast.Dict(
             keys=[term_to_ast_expr(k, var_context, eval_arith=eval_arith) for k in term.keys()],
             values=[term_to_ast_expr(v, var_context, eval_arith=eval_arith) for v in term.values()],
         )
+        # An already-materialized raw dict (e.g. a ++()-escape-built
+        # -constants value that never went through DictTerm) — frozen the
+        # same way a list is; see the _FrozenList branch's comment above.
+        if isinstance(term, _FrozenDict):
+            return _call(_name("$FrozenDict"), dict_ast_)
+        return dict_ast_
 
 
     if isinstance(term, DictTerm):
@@ -408,13 +428,22 @@ def term_to_ast_expr(
         def _dictterm_key(k):
             expr = term_to_ast_expr(k, var_context, eval_arith=eval_arith)
             return _call(_name("$dict_key"), expr) if is_var(k) else expr
-        return _call(
-            _name("DictTerm"),
-            ast.Dict(
-                keys=[_dictterm_key(k) for k in term.keys()],
-                values=[term_to_ast_expr(v, var_context, eval_arith=eval_arith) for v in term.values()],
-            ),
+        dict_arg = ast.Dict(
+            keys=[_dictterm_key(k) for k in term.keys()],
+            values=[term_to_ast_expr(v, var_context, eval_arith=eval_arith) for v in term.values()],
         )
+        # A -constants DictTerm value has a frozen backing store (see
+        # clausal.logic.constants._freeze's DictTerm branch). The
+        # RECONSTRUCTION a compiled clause builds each time it runs must be
+        # frozen too — see the _FrozenList branch's comment above for why
+        # (tabling/answer-caching can share a reconstructed answer across
+        # consumers). Plain ``DictTerm(...)`` can't produce that directly —
+        # its constructor takes a defensive ``dict(data)`` copy — so this
+        # routes through ``$FrozenDictTerm`` (clausal.logic.constants.
+        # _freeze_dict_term), which patches ``._data`` after construction.
+        if isinstance(term.data, _FrozenDict):
+            return _call(_name("$FrozenDictTerm"), dict_arg)
+        return _call(_name("DictTerm"), dict_arg)
 
     if isinstance(term, SetTerm):
         # Recurse per element (mirrors the SetLiteral branch just below):
@@ -433,6 +462,21 @@ def term_to_ast_expr(
                 ctx=ast.Load(),
             ),
         )
+
+    if isinstance(term, (set, frozenset)):
+        # A raw Python set (e.g. a ++()-escape-built -constants value —
+        # a SOURCE-level {...} set literal always lowers to SetTerm above,
+        # never a raw set). ``frozenset`` values are returned unwrapped by
+        # ``_freeze`` (already immutable/hashable), so they reconstruct as
+        # a bare ``frozenset(...)`` call; a mutable-set-derived value is a
+        # ``_FrozenSet`` (frozen — see the _FrozenList branch's comment
+        # above for why the RECONSTRUCTION must be frozen too) and
+        # reconstructs via ``$FrozenSet``. Sorted by repr for deterministic
+        # codegen, same as the SetTerm branch above.
+        _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
+        elts = [_rec(e) for e in sorted(term, key=repr)]
+        ctor = "$FrozenSet" if isinstance(term, _FrozenSet) else "frozenset"
+        return _call(_name(ctor), ast.List(elts=elts, ctx=ast.Load()))
 
     # SetLiteral (AST node from visit_Set): emit SetTerm([elem, ...]) constructor
     if isinstance(term, _SetLiteral_t):

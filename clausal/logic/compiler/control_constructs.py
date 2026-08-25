@@ -950,7 +950,24 @@ def _hoist_lambdas_in_term(
         # Call is a node_class node: field-replacement __call__ preserves position.
         return term(args=new_args, kwargs=new_kwargs)
     if isinstance(term, list):
-        return [_hoist_lambdas_in_term(ctx, e, lambda_defs) for e in term]
+        new_elts = [_hoist_lambdas_in_term(ctx, e, lambda_defs) for e in term]
+        # No-op case (the overwhelming majority — a -constants list can
+        # never contain a Lambda, since Lambdas aren't ground and would
+        # already have failed the -constants groundness gate) returns the
+        # ORIGINAL object, mirroring the Compound/Call branches above.
+        # This matters beyond identity: a -constants list is a frozen
+        # subclass (_FrozenList — clausal.logic.constants._freeze), and an
+        # unconditional ``[... for e in term]`` rebuild silently downgrades
+        # it to a plain, mutable list before terms_to_ast.term_to_ast_expr
+        # ever sees it — defeating that function's frozen-reconstruction
+        # branch, which can only preserve a type it still receives.
+        # Identity check (not ==): cheaper, and correct regardless of
+        # whether elements define a meaningful __eq__ (e.g. an unbound Var
+        # comparing equal only to itself, by identity, is exactly what
+        # "unchanged" means here).
+        if all(a is b for a, b in zip(new_elts, term)):
+            return term
+        return new_elts
     return term
 
 

@@ -37,11 +37,30 @@ def _frozen_constant_mutation(self, *_args, **_kwargs):
 
 
 class _FrozenList(list):
-    """A -constants list value, frozen after the load-time groundness gate."""
+    """A -constants list value, frozen after the load-time groundness gate.
+
+    ``copy.deepcopy``/``pickle`` round-trip to a PLAIN (unfrozen) ``list`` —
+    see ``__reduce__``, and the module docstring's "the mutable-copy escape
+    route" note — rather than failing or reconstructing another frozen
+    instance. Without this, stdlib's default subclass reconstruction path
+    rebuilds the object via ``append``/``extend``, which hits the very
+    freeze error being escaped: a misleading "mutation is not permitted"
+    from code that never asked to mutate the constant, only to copy it.
+    """
+
+    def __reduce__(self):
+        return (list, (list(self),))
 
 
 class _FrozenDict(dict):
-    """A -constants dict value, frozen after the load-time groundness gate."""
+    """A -constants dict value, frozen after the load-time groundness gate.
+
+    See ``_FrozenList.__reduce__``: ``copy.deepcopy``/``pickle`` round-trip
+    to a PLAIN (unfrozen) ``dict``.
+    """
+
+    def __reduce__(self):
+        return (dict, (dict(self),))
 
 
 class _FrozenSet(set):
@@ -49,8 +68,16 @@ class _FrozenSet(set):
 
     (Set-shaped ``++`` escape results only — a source-level ``{...}`` set
     literal in a -constants RHS lowers to ``SetTerm``, which is already
-    immutable by construction; see ``_freeze``.)
+    immutable by construction; see ``_freeze``. A ``++``-built ``frozenset``
+    is returned as-is, unwrapped — already immutable and hashable, so
+    wrapping it in this mutable-set subclass would be a downgrade.)
+
+    See ``_FrozenList.__reduce__``: ``copy.deepcopy``/``pickle`` round-trip
+    to a PLAIN (unfrozen) ``set``.
     """
+
+    def __reduce__(self):
+        return (set, (set(self),))
 
 
 for _cls, _mutators in (
@@ -58,7 +85,7 @@ for _cls, _mutators in (
                    "__delitem__", "pop", "remove", "clear", "sort",
                    "reverse", "__iadd__", "__imul__")),
     (_FrozenDict, ("__setitem__", "__delitem__", "pop", "popitem",
-                   "clear", "update", "setdefault")),
+                   "clear", "update", "setdefault", "__ior__")),
     (_FrozenSet, ("add", "discard", "remove", "pop", "clear", "update",
                   "intersection_update", "difference_update",
                   "symmetric_difference_update", "__ior__", "__iand__",
@@ -112,7 +139,14 @@ def _freeze(value):
         return _FrozenList(_freeze(v) for v in value)
     if isinstance(value, dict):
         return _FrozenDict((_freeze(k), _freeze(v)) for k, v in value.items())
-    if isinstance(value, (set, frozenset)):
+    if isinstance(value, frozenset):
+        # Already immutable AND already hashable — _FrozenSet(set) is a
+        # mutable-set subclass (unhashable, since ``set.__hash__`` is None),
+        # so wrapping a frozenset in it would be a downgrade, not a freeze.
+        # Elements of a frozenset must already be hashable (nothing further
+        # to recurse into that could itself need freezing).
+        return value
+    if isinstance(value, set):
         return _FrozenSet(_freeze(v) for v in value)
     if isinstance(value, bytearray):
         return bytes(value)
@@ -152,6 +186,24 @@ def check_constant_ground(name: str, value):
             f"-constants: `{name}` must be fully ground at load time; "
             f"got a value containing an unbound variable: {value!r}")
     return _freeze(value)
+
+
+def _freeze_dict_term(data: dict):
+    """Construct a ``DictTerm`` whose backing store is frozen from the
+    start (``dt._data`` is a ``_FrozenDict``, not the plain ``dict``
+    ``DictTerm.__init__`` would otherwise build).
+
+    ``DictTerm.__init__`` takes a defensive ``dict(data)`` copy — the same
+    constraint ``_freeze``'s ``DictTerm`` branch works around by patching
+    ``._data`` after construction. Used by ``terms_to_ast.term_to_ast_expr``
+    to reconstruct a frozen ``DictTerm`` for a compiled clause that
+    references a -constants dict value: the RECONSTRUCTION a clause builds
+    each time it runs must be frozen too, not only the module-global-held
+    original — see the comment at that call site.
+    """
+    dt = DictTerm(data)
+    dt._data = _FrozenDict(dt._data)
+    return dt
 
 
 def register_module_constant(module, name: str, value) -> None:

@@ -168,7 +168,9 @@ rather than reversing a decision:
   `-constants` assignment has no such second pass — it runs once, directly, as an ordinary
   module-level statement — so the extension emits AST that constructs the real term on that one
   pass instead). A functor call requires the functor already declared *above* the `-constants`
-  directive (`-module`/`-private`/`-dynamic`/an earlier clause, or an import) — a located
+  directive (`-module`/`-private`/`-dynamic`/an earlier clause — a properly-terminated
+  bodyless fact counts, a missing trailing comma does not, see docs/syntax.md — or an
+  import) — a located
   `SyntaxError` otherwise. Structured values are recursively **frozen** at the groundness gate
   (`clausal.logic.constants.check_constant_ground` → `_freeze`): type-preserving frozen
   subclasses (`_FrozenList`/`_FrozenDict`/`_FrozenSet`) so `isinstance` checks and the C unify

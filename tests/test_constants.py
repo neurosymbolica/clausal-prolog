@@ -240,8 +240,29 @@ def test_structured_functor_constant_undeclared_functor_is_syntax_error(tmp_path
     """Nothing above -constants declares Point (no -module/-private/-dynamic,
     no import) — a located, remedy-bearing SyntaxError, not a NameError at
     exec time and not a silently-wrong Call-node embedding."""
-    with pytest.raises(SyntaxError, match="not a declared functor"):
+    with pytest.raises(SyntaxError, match="not a declared functor") as exc_info:
         _load(tmp_path, "s7", "-constants(_P_ = Point(0, 0))\np(X) <- (X is 1)\n")
+    exc = exc_info.value
+    assert exc.filename == str(tmp_path / "s7.clausal")
+    assert exc.lineno == 1
+
+
+def test_structured_rhs_dict_splat_rejected_and_located(tmp_path):
+    with pytest.raises(SyntaxError, match="dict-splat") as exc_info:
+        _load(tmp_path, "s7b", "-constants(_D_ = {**{1: 2}})\np(X) <- (X is 1)\n")
+    exc = exc_info.value
+    assert exc.filename == str(tmp_path / "s7b.clausal")
+    assert exc.lineno == 1
+
+
+def test_structured_rhs_generic_unsupported_shape_is_located(tmp_path):
+    """The final fallthrough (an RHS shape none of the dedicated branches
+    handle, e.g. a comparison expression) is a located SyntaxError too."""
+    with pytest.raises(SyntaxError, match="unsupported RHS") as exc_info:
+        _load(tmp_path, "s7c", "-constants(_X_ = (1 < 2))\np(X) <- (X is 1)\n")
+    exc = exc_info.value
+    assert exc.filename == str(tmp_path / "s7c.clausal")
+    assert exc.lineno == 1
 
 
 def test_structured_rhs_logic_var_rejected(tmp_path):
@@ -307,6 +328,20 @@ def test_structured_dict_constant_mutation_via_plusplus_raises_typeerror(tmp_pat
     assert m.__dict__["_D_"].data["k"] == 1
 
 
+def test_structured_dict_constant_ior_mutation_raises_typeerror(tmp_path):
+    """dict.__ior__ (the ``|=`` operator) mutates in place — a distinct
+    code path from __setitem__, and easy to miss when blocking mutators."""
+    m = _load(tmp_path, "s13b", """
+        -constants(_D_ = {"a": 1})
+        bad(X) <- (X is ++(_D_.data.__ior__({"b": 2})))
+    """)
+    v = Var()
+    with pytest.raises(TypeError, match="frozen constant"):
+        list(call("bad", v, module=m.__dict__["$module"]))
+    assert m.__dict__["_D_"].data == {"a": 1}
+    assert m.__dict__["$module"].constants["_D_"].data == {"a": 1}
+
+
 def test_plusplus_set_constant_mutation_via_plusplus_raises_typeerror(tmp_path):
     """A ++()-escape-built raw Python set (not a source-level {...} set
     literal, which lowers to the already-immutable SetTerm instead) goes
@@ -326,6 +361,100 @@ def test_structured_set_literal_constant_is_already_immutable_by_construction(tm
     m = _load(tmp_path, "s15", "-private([tag])\n-constants(_S_ = {tag})\n")
     value = m.__dict__["_S_"]
     assert not hasattr(value, "add") and not hasattr(value, "discard")
+
+
+def test_clause_solution_list_constant_is_frozen_not_just_the_global(tmp_path):
+    """DESIGNER RULING (review round 1, finding #2): freezing must survive
+    into every clause-body RECONSTRUCTION of the constant, not only the
+    module-global-held original — under tabling/answer-caching a
+    reconstruction can be shared across consumers, where mutability would
+    let one consumer corrupt every other consumer's view of the same
+    cached answer."""
+    from clausal.logic.constants import _FrozenList
+    m = _load(tmp_path, "s16b", """
+        -constants(_L_ = [1, 2, 3])
+        get(X) <- (X is _L_)
+    """)
+    v = Var()
+    [result] = [deref(v) for _ in call("get", v, module=m.__dict__["$module"])]
+    assert isinstance(result, _FrozenList)
+    with pytest.raises(TypeError, match="frozen constant"):
+        result.append(99)
+
+
+def test_clause_solution_dict_constant_backing_is_frozen(tmp_path):
+    from clausal.logic.constants import _FrozenDict
+    m = _load(tmp_path, "s16c", """
+        -constants(_D_ = {"k": 1})
+        get(X) <- (X is _D_)
+    """)
+    v = Var()
+    [result] = [deref(v) for _ in call("get", v, module=m.__dict__["$module"])]
+    assert isinstance(result.data, _FrozenDict)
+    with pytest.raises(TypeError, match="frozen constant"):
+        result.data["k"] = 2
+
+
+def test_mutable_copy_escape_route_via_deepcopy(tmp_path):
+    """The documented way to get a mutable working copy of a structured
+    constant: copy.deepcopy (or list()/dict()/set() for a shallow one)
+    returns a PLAIN, unfrozen container that can be freely mutated,
+    leaving the constant itself untouched."""
+    import copy
+    from clausal.logic.constants import _FrozenList
+    m = _load(tmp_path, "s16d", "-constants(_L_ = [1, 2, 3])\n")
+    original = m.__dict__["_L_"]
+    working_copy = copy.deepcopy(original)
+    assert type(working_copy) is list
+    working_copy.append(4)
+    assert working_copy == [1, 2, 3, 4]
+    # The original constant is untouched and still frozen.
+    assert original == [1, 2, 3]
+    assert isinstance(original, _FrozenList)
+    with pytest.raises(TypeError, match="frozen constant"):
+        original.append(99)
+
+
+def test_frozen_containers_pickle_round_trip_to_plain_containers(tmp_path):
+    import pickle
+    m = _load(tmp_path, "s16e", "-constants(_L_ = [1, 2, 3])\n")
+    original = m.__dict__["_L_"]
+    restored = pickle.loads(pickle.dumps(original))
+    assert type(restored) is list
+    assert restored == [1, 2, 3]
+    restored.append(4)  # plain list: mutation just works
+    assert restored == [1, 2, 3, 4]
+
+
+def test_plusplus_frozenset_constant_is_returned_unwrapped(tmp_path):
+    """A ++()-escape-built frozenset is already immutable AND hashable —
+    _freeze must return it as-is, not wrap it in the mutable-set-derived
+    _FrozenSet (which is unhashable, a downgrade)."""
+    m = _load(tmp_path, "s16f", "-constants(_FS_ = ++frozenset({1, 2}))\n")
+    value = m.__dict__["_FS_"]
+    assert type(value) is frozenset
+    assert value == frozenset({1, 2})
+    hash(value)  # must not raise
+
+
+def test_true_false_undefined_as_constant_values(tmp_path):
+    """Truth-value aliases fold in a -constants RHS the same way they do
+    in ordinary term position — ``true``/``false``/``undefined`` are legal
+    RHS spellings, not just their canonical True/False/Undefined forms."""
+    from clausal.terms import Undefined
+    m = _load(tmp_path, "s16g", """
+        -constants(_B_ = true, _F_ = false, _U_ = undefined)
+        got_b(X) <- (X is _B_)
+        got_f(X) <- (X is _F_)
+        got_u(X) <- (X is _U_)
+    """)
+    module = m.__dict__["$module"]
+    v = Var()
+    assert [deref(v) for _ in call("got_b", v, module=module)] == [True]
+    v = Var()
+    assert [deref(v) for _ in call("got_f", v, module=module)] == [False]
+    v = Var()
+    assert [deref(v) for _ in call("got_u", v, module=module)] == [Undefined]
 
 
 def test_frozen_list_unifies_with_equal_plain_list_literal(tmp_path):

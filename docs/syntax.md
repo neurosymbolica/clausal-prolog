@@ -221,10 +221,13 @@ structured constant unifies exactly as the equivalent literal would, indexes the
 carries no extra runtime cost per reference.
 
 **A functor used in a structured RHS must already be declared *above* the `-constants`
-directive** — via `-module`, `-private`, `-dynamic`, or an earlier clause defining it, or
-imported via `-import_from`/`-import_module`. This is the same source-order rule that makes the
-functor's class *statement* execute before the constant's assignment does; an undeclared
-functor is a located, load-time `SyntaxError` naming the remedy:
+directive** — via `-module`, `-private`, `-dynamic`, an earlier RULE clause (`Point(X, Y) <- (...)`)
+defining it, an earlier properly-terminated bodyless FACT (`Point(1, 2),` — the trailing comma is
+what makes it a fact at all; `Point(1, 2)` with no comma is a bare, unregistered expression
+statement, not a declaration — see the comma-optional fact rule above), or imported via
+`-import_from`/`-import_module`. This is the same source-order rule that makes the functor's
+class *statement* execute before the constant's assignment does; an undeclared functor is a
+located, load-time `SyntaxError` naming the remedy:
 
 ```text
 SyntaxError: -constants: `_P_` RHS calls `Point(...)`, which is not a declared functor above
@@ -244,16 +247,28 @@ any clause compiles.) A `++()` escape is legal as an *element* inside a structur
     value is **immutable**: a list constant is a frozen list, a dict constant's backing store is
     a frozen dict, and a `++()`-escape-built raw Python set is a frozen set (a source-level
     `{...}` set literal lowers to `SetTerm`, which is already immutable, nothing further to
-    freeze). Any mutating call reached from Python — `.append`, `__setitem__`, `.add`, and the
-    like, most commonly reached through a `++()` escape holding a reference to the constant —
-    raises `TypeError` rather than silently corrupting the value: `isinstance(x, list)` /
-    `isinstance(x, dict)` still hold, so unification and clause-head indexing see no difference
-    from an ordinary literal; only mutation is blocked. **Constants cannot be hidden from
-    Python** at module level — the module global holds this same frozen value, and
-    `module_constant/3` reflects it (see [Builtins](builtins.md#module_constant3)) — frozen, not
-    hidden. The one deliberate exception: a functor constant's *own field values* are **not**
-    frozen (`Point([1, 2, 3], 0)`'s list field can still be mutated) — freezing stops at the
-    term boundary a functor call introduces, not inside it.
+    freeze; a `++()`-escape-built `frozenset` is likewise already immutable and is returned
+    as-is, not re-wrapped). Any mutating call reached from Python — `.append`, `__setitem__`,
+    `.add`, `|=`, and the like, most commonly reached through a `++()` escape holding a
+    reference to the constant — raises `TypeError` rather than silently corrupting the value:
+    `isinstance(x, list)` / `isinstance(x, dict)` still hold, so unification and clause-head
+    indexing see no difference from an ordinary literal; only mutation is blocked. This
+    protection is not limited to the module-global-held original: every RECONSTRUCTION a
+    compiled clause builds when it references the constant is frozen too, the same way —
+    load-bearing under [tabling](tabling.md), where a cached answer can be shared across
+    multiple consumers, and one consumer mutating it would corrupt what every other consumer of
+    that same cached answer sees. **Constants cannot be hidden from Python** at module level —
+    the module global holds this same frozen value, and `module_constant/3` reflects it (see
+    [Builtins](builtins.md#module_constant3)) — frozen, not hidden. Need a mutable working copy
+    instead? `copy.deepcopy(constant)` (or `list(constant)` / `dict(constant)` / `set(constant)`
+    for a shallow one) returns a PLAIN, unfrozen container — that round-trip (also how
+    `pickle` serializes a frozen constant) is the documented escape route. The one deliberate
+    exception to all of this: a functor constant's *own field values* are **not** frozen
+    (`Point([1, 2, 3], 0)`'s list field can still be mutated) — freezing stops at the term
+    boundary a functor call introduces, not inside it. And one type-changing freeze: a
+    `++()`-escape-built `bytearray` value freezes to `bytes` (a different type, not a frozen
+    subclass) — `bytes` already *is* Python's immutable byte-string type, so there is nothing
+    to subclass.
 
 ### References fold — no runtime lookup, ever
 
