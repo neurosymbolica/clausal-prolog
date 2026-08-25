@@ -118,6 +118,34 @@ def bench_tabling(n: int = 5000, reps: int = 10) -> object:
     return result
 
 
+def bench_naf_ite(n: int = 3000) -> str:
+    """NAF + general-ITE drive loops — stresses ``$naf_has_solution`` and the
+    ITE condition driver in both the trivial one-step and many-step shapes.
+
+    Each sub-loop recurses *n* times; every iteration drives one NAF or ITE
+    mini-trampoline.  See tests/fixtures/bench_naf_ite.clausal for the four
+    shapes.  Expected wall time: 0.2–1.0 s total (tune *n* to land there).
+    """
+    from clausal.testing import load_clausal_module
+    from clausal.logic.solve import call
+
+    fixture = os.path.join(_FIXTURES, "bench_naf_ite.clausal")
+    mod = load_clausal_module(fixture)
+    for name in ("NafFactLoop", "NafChainLoop", "IteDetLoop", "IteMultiLoop"):
+        pred = getattr(mod, name)
+        # ``load_clausal_module`` evicts its private module name from
+        # sys.modules once loaded (see its docstring), so iterating the
+        # term instance directly (``pred(n)``) can't auto-infer the module
+        # via ``__module__`` lookup.  Passing the PredicateMeta class to
+        # ``call()`` takes its fast path (``_get_dispatch()``), which needs
+        # no module at all.
+        for _ in call(pred, n):
+            break
+        else:
+            raise RuntimeError(f"{name}({n}) produced no solutions")
+    return "ok"
+
+
 # ── Smoke-test all workloads ──────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -129,10 +157,16 @@ if __name__ == "__main__":
         ("bench_qsort",   lambda: bench_qsort()),
         ("bench_graph",   lambda: bench_graph()),
         ("bench_tabling", lambda: bench_tabling()),
+        ("bench_naf_ite",  lambda: bench_naf_ite()),
     ]
 
     for name, fn in workloads:
         t0 = time.perf_counter()
-        result = fn()
+        try:
+            result = fn()
+        except Exception as exc:  # noqa: BLE001 - one bad workload shouldn't hide the rest
+            elapsed = time.perf_counter() - t0
+            print(f"{name:20s}  ERROR={exc!r}  {elapsed:.3f}s")
+            continue
         elapsed = time.perf_counter() - t0
         print(f"{name:20s}  result={result!r:>12}  {elapsed:.3f}s")

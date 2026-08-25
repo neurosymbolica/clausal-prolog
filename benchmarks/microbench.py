@@ -44,12 +44,21 @@ def _make_chain(depth: int = 5) -> tuple[Var, Trail]:
 
 # ── minimal generator for StepGenerator / trampoline benchmarks ──────────────
 
-def _done_fn(this_generator: StepGenerator, parent: object) -> object:
-    """Predicate that immediately signals DONE (no solutions)."""
-    yield (parent, DONE)
+def _done_fn(
+    this_generator: StepGenerator, proceed: object, fail: object, catcher: object
+) -> object:
+    """Predicate that immediately signals DONE (no solutions).
+
+    Current pred_fn signature is ``(sg, proceed, fail, catcher, *args)`` — the
+    single ``parent`` continuation this used to take was split into three
+    slots (see ``StepGenerator``'s docstring in clausal/logic/trampoline.py).
+    """
+    yield (fail, DONE)
 
 
-def _one_solution_fn(this_generator: StepGenerator, parent: object) -> object:
+def _one_solution_fn(
+    this_generator: StepGenerator, proceed: object, fail: object, catcher: object
+) -> object:
     """Predicate that yields one solution then DONE."""
     yield (None, 42)   # root computation done; 42 is final answer
 
@@ -89,11 +98,11 @@ BENCHMARKS: list[tuple[str, Callable]] = [
     ),
     (
         "StepGenerator allocation",
-        lambda: StepGenerator(_done_fn, None),
+        lambda: StepGenerator(_done_fn, None, None, None),
     ),
     (
         "trampoline (1 step, root done)",
-        lambda: trampoline(StepGenerator(_one_solution_fn, None)),
+        lambda: trampoline(StepGenerator(_one_solution_fn, None, None, None)),
     ),
 ]
 
