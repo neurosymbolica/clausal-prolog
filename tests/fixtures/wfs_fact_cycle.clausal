@@ -1,0 +1,7 @@
+-table(Wf/1)
+
+Edge(1, 2),
+Edge(2, 1),
+
+Wf(X) <- (Edge(X, Y), not Wf(Y))
+Wf(1),

@@ -43,6 +43,7 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
 from clausal.terms import Compound, Undefined
+from clausal.terms import Call as _ReifiedCall, LoadName as _ReifiedLoadName
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -676,6 +677,13 @@ def query_wfs(
     ``Undefined`` singleton — the same one ``.clausal`` code writes — so a
     WFS-undefined answer can flow straight into Kleene-aware code.
 
+    Each result also carries ``"_delays"``: a frozenset of ``DelayedNegation``
+    objects, non-empty exactly when ``_truth`` is ``Undefined``.  Each names
+    the negated tabled call the answer is conditional on (``.functor``,
+    ``.arity``, ``.frozen_args``) — for a negation cycle, the cycle partner —
+    so a caller can report *which* pair is unresolved, not just that
+    something is.
+
     Returns a list (not iterator) since WFS resolution requires completing
     all SLG computation before truth values are determined.
     """
@@ -693,6 +701,7 @@ def query_wfs(
     if entry is None:
         for r in results:
             r["_truth"] = True
+            r["_delays"] = frozenset()
         return results
 
     from clausal.logic.tabling import _normalize_for_key, _FAILED
@@ -705,25 +714,42 @@ def query_wfs(
             cand.append(r[var_to_name[id(da)]] if id(da) in var_to_name else da)
         norm_cand = tuple(_normalize_for_key(x) for x in cand)
         truth = True
+        delays = frozenset()
         for i, na in enumerate(norm_answers):
             if entry.conditions[i] is _FAILED:
                 continue
             if na == norm_cand:
                 truth = entry.truth_value(i)
+                if truth is Undefined:
+                    delays = entry.delays_for(i)
                 break
         r["_truth"] = truth
+        r["_delays"] = delays
     return results
 
 
 def _tabled_entry_for_goal(goal, module, trail):
     """Return ``(TableEntry, goal_args)`` for a single tabled-predicate goal,
-    or ``(None, None)`` for a non-tabled or composite goal (A04-F004)."""
-    if is_term_instance(goal):
+    or ``(None, None)`` for a non-tabled or composite goal (A04-F004).
+
+    Handles every single-goal shape ``solve()`` accepts: term instances,
+    ``Compound`` (checked FIRST — ``is_term_instance`` is also true for a
+    Compound and would mangle its functor into ``"Compound"``), and reified
+    ``Call(LoadName(...), args)`` — the shape ``docs/wfs.md`` and the test
+    suite build (todo/wfs-undefined-lost-at-query-surface.md §3)."""
+    if isinstance(goal, Compound):
+        functor = deref(goal.functor)
+        if not isinstance(functor, str):
+            return None, None
+        goal_args = list(goal.args)
+    elif isinstance(goal, _ReifiedCall):
+        if goal.kwargs or not isinstance(goal.func, _ReifiedLoadName):
+            return None, None
+        functor = goal.func.name
+        goal_args = list(goal.args)
+    elif is_term_instance(goal):
         functor = type(goal).__name__
         goal_args = [getattr(goal, f) for f in term_field_names(goal)]
-    elif isinstance(goal, Compound):
-        functor = goal.functor
-        goal_args = list(goal.args)
     else:
         return None, None
     if module is None:

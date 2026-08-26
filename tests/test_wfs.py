@@ -76,14 +76,15 @@ class TestTableEntryConditions:
         # nv
         e = TableEntry()
         e.add_answer((1,))
-        assert e.conditions == [frozenset()]
+        # A04-F003: a condition is a DISJUNCTION of per-derivation delay sets.
+        assert e.conditions == [frozenset({frozenset()})]
 
     def test_add_answer_with_delays(self):
         # nv
         e = TableEntry()
         dn = DelayedNegation("p", 1, (1,), (1,))
         e.add_answer((1,), frozenset({dn}))
-        assert e.conditions == [frozenset({dn})]
+        assert e.conditions == [frozenset({frozenset({dn})})]
 
     def test_truth_value_unconditional(self):
         # nv
@@ -263,7 +264,7 @@ class TestResolveConditions:
         ts[("p", 1, (1,))] = entry
 
         _resolve_conditions(entry, ts)
-        assert entry.conditions[0] == frozenset()
+        assert entry.truth_value(0) is True
 
     def test_resolve_to_true(self):
         """Delay targeting complete table with no match → resolves to true."""
@@ -283,7 +284,7 @@ class TestResolveConditions:
         ts[("p", 1, (1,))] = entry
 
         _resolve_conditions(entry, ts)
-        assert entry.conditions[0] == frozenset()  # resolved to unconditional
+        assert entry.truth_value(0) is True  # resolved to unconditional
 
     def test_resolve_to_false(self):
         """Delay targeting complete table with unconditional match → invalidated."""
@@ -317,8 +318,7 @@ class TestResolveConditions:
 
         _resolve_conditions(entry, ts)
         # The answer depends on not p(1), but p(1) exists (conditionally) → unfounded
-        assert entry.conditions[0] != frozenset()  # still conditional
-        assert entry.conditions[0] is not _FAILED  # not invalidated
+        assert entry.truth_value(0) is Undefined  # still conditional
 
     def test_multiple_delays_partial_resolution(self):
         """Multiple delays: some resolve, others don't."""
@@ -500,3 +500,248 @@ class TestQueryWfs:
         assert len(results) == 1
         assert results[0]["F"] == 5
         assert results[0]["_truth"] is True
+
+
+# ── WFS truth at the query surface ──────────────────────────────────────────
+# todo/wfs-undefined-lost-at-query-surface.md: the engine computed Undefined
+# correctly in the table and every public query path reported True (TermCall
+# and Compound goals never reached their table entry), while _naf_tabled
+# treated a CONDITIONAL answer in a complete table as a definite positive —
+# which made ground queries on a symmetric program asymmetric (one atom
+# false-by-[], the other unconditionally true).
+
+
+def _win_goal(arg, name="Win"):
+    from clausal.terms import Call as TermCall, LoadName
+    return TermCall(func=LoadName(name=name), args=[arg], kwargs=[])
+
+
+class TestNafTabledConditionalMatch:
+    def _with_leader(self, fn):
+        from clausal.logic.tabling import _leader_ctx
+        old = _leader_ctx.stack[:]
+        _leader_ctx.stack.clear()
+        try:
+            leader = TableEntry()
+            push_leader(leader)
+            try:
+                return fn(leader)
+            finally:
+                pop_leader()
+        finally:
+            _leader_ctx.stack.extend(old)
+
+    def test_complete_conditional_match_delays(self):
+        """not p(1) where p(1)'s only match is CONDITIONAL → delay, not fail."""
+        # nv
+        ts = {}
+        entry = TableEntry()
+        dn = DelayedNegation("q", 1, (9,), (9,))
+        entry.add_answer((1,), frozenset({dn}))
+        entry.status = "complete"
+        ts[("p", 1, (1,))] = entry
+
+        def check(leader):
+            trail = Trail()
+            assert _naf_tabled("p", 1, (1,), trail, ts) is True
+            assert len(leader._current_delays) == 1
+            got = next(iter(leader._current_delays))
+            assert got.functor == "p" and got.key == (1,)
+
+        self._with_leader(check)
+
+    def test_complete_unconditional_match_still_fails(self):
+        """Unconditional match keeps failing the negation outright."""
+        # nv
+        ts = {}
+        entry = TableEntry()
+        entry.add_answer((1,))
+        entry.status = "complete"
+        ts[("p", 1, (1,))] = entry
+
+        def check(leader):
+            trail = Trail()
+            assert _naf_tabled("p", 1, (1,), trail, ts) is False
+            assert not leader._current_delays
+
+        self._with_leader(check)
+
+    def test_complete_mixed_matches_fail(self):
+        """A var call matching a conditional AND an unconditional answer fails."""
+        # nv
+        ts = {}
+        from clausal.logic.tabling import _VAR
+        entry = TableEntry()
+        dn = DelayedNegation("q", 1, (9,), (9,))
+        entry.add_answer((1,), frozenset({dn}))
+        entry.add_answer((2,))
+        entry.status = "complete"
+        ts[("p", 1, (_VAR,))] = entry
+
+        def check(leader):
+            trail = Trail()
+            assert _naf_tabled("p", 1, (Var(),), trail, ts) is False
+            assert not leader._current_delays
+
+        self._with_leader(check)
+
+    def test_subsuming_conditional_match_delays(self):
+        """Subsuming complete table with a conditional match → delay, not fail."""
+        # nv
+        ts = {}
+        from clausal.logic.tabling import _VAR
+        entry = TableEntry()
+        dn = DelayedNegation("q", 1, (9,), (9,))
+        entry.add_answer((1,), frozenset({dn}))
+        entry.status = "complete"
+        ts[("p", 1, (_VAR,))] = entry
+
+        def check(leader):
+            trail = Trail()
+            assert _naf_tabled("p", 1, (1,), trail, ts) is True
+            assert len(leader._current_delays) == 1
+
+        self._with_leader(check)
+
+
+class TestQueryWfsUndefinedSurface:
+    """query_wfs on the symmetric win cycle: every ask shape reports Undefined."""
+
+    def _q(self, lm, val=None):
+        if val is None:
+            X = Var()
+            return query_wfs(_win_goal(X), {"X": X}, lm, Trail())
+        Y = Var()
+        t = Trail()
+        unify(Y, val, t)
+        return query_wfs(_win_goal(Y), {}, lm, t)
+
+    def test_unbound_termcall_undefined(self):
+        # nv
+        lm = _module(_load("wfs_win"))
+        results = self._q(lm)
+        assert len(results) == 2
+        assert all(r["_truth"] is Undefined for r in results)
+
+    def test_ground_fresh_undefined(self):
+        """A lone ground query on a fresh module reports Undefined, not True."""
+        # nv
+        for v in (1, 2):
+            lm = _module(_load("wfs_win"))
+            results = self._q(lm, v)
+            assert len(results) == 1, f"Win({v}) lost its undefined answer"
+            assert results[0]["_truth"] is Undefined
+
+    def test_ground_after_unbound_consistent(self):
+        """The todo's order: unbound, then ground 1, then ground 2 — all Undefined."""
+        # nv
+        lm = _module(_load("wfs_win"))
+        self._q(lm)
+        for v in (1, 2):
+            results = self._q(lm, v)
+            assert len(results) == 1, f"Win({v}) reported [] (reads as false)"
+            assert results[0]["_truth"] is Undefined
+
+    def test_ground_then_ground_consistent(self):
+        # nv
+        lm = _module(_load("wfs_win"))
+        r1 = self._q(lm, 1)
+        r2 = self._q(lm, 2)
+        assert len(r1) == 1 and r1[0]["_truth"] is Undefined
+        assert len(r2) == 1 and r2[0]["_truth"] is Undefined
+
+    def test_no_unconditional_answer_ever_stored(self):
+        """Guards finding 2d: no order of asking mints an unconditional Win answer."""
+        # nv
+        lm = _module(_load("wfs_win"))
+        self._q(lm)
+        self._q(lm, 1)
+        self._q(lm, 2)
+        for (f, _a, _k), entry in lm.db.table_store.items():
+            if f != "Win":
+                continue
+            for i in range(len(entry.answers)):
+                assert entry.truth_value(i) is Undefined
+
+    def test_compound_goal_undefined(self):
+        """A Compound goal reaches its table entry (it used to be shadowed by
+        the is_term_instance branch and always read True)."""
+        # nv
+        lm = _module(_load("wfs_win"))
+        X = Var()
+        results = query_wfs(Compound("Win", (X,)), {"X": X}, lm, Trail())
+        assert len(results) == 2
+        assert all(r["_truth"] is Undefined for r in results)
+
+    def test_delays_reachable(self):
+        """An Undefined result carries its delay set, naming the cycle partner."""
+        # nv
+        lm = _module(_load("wfs_win"))
+        results = self._q(lm)
+        by_x = {r["X"]: r for r in results}
+        partner = {1: 2, 2: 1}
+        for x, r in by_x.items():
+            delays = r["_delays"]
+            assert delays, f"Win({x}) is Undefined but has no reachable delays"
+            assert any(
+                dn.functor == "Win" and dn.frozen_args == (partner[x],)
+                for dn in delays
+            )
+
+    def test_true_results_have_empty_delays(self):
+        # nv
+        lm = _module(_load("tabled_fib"))
+        N = Var()
+        F = Var()
+        from clausal.terms import Call as TermCall, LoadName
+        goal = TermCall(func=LoadName(name="Fib"), args=[N, F], kwargs=[])
+        trail = Trail()
+        unify(N, 5, trail)
+        results = query_wfs(goal, {"F": F}, lm, trail)
+        assert results[0]["_truth"] is True
+        assert results[0]["_delays"] == frozenset()
+
+
+# ── A04-F003: disjunctive conditions + negative-subgoal spawning ────────────
+# WFS truth is an OR over derivations. An answer derived both conditionally
+# (through a negation cycle) and unconditionally (a fact, or a negation that
+# resolves true) is TRUE, and that truth must propagate: the cycle partner's
+# delayed negation against it then FAILS. Requires keeping every derivation's
+# delay set (not just the first — the old dedup dropped the true one) and
+# evaluating never-called negated subgoals instead of guessing.
+
+
+class TestWfsDisjunctiveDerivations:
+    def test_fact_beats_cycle_var_mode(self):
+        """Wf(1) <- fact; Wf on a 2-cycle: Wf(1)=True, Wf(2)=False."""
+        # nv
+        lm = _module(_load("wfs_fact_cycle"))
+        X = Var()
+        from clausal.terms import Call as TermCall, LoadName
+        goal = TermCall(func=LoadName(name="Wf"), args=[X], kwargs=[])
+        results = query_wfs(goal, {"X": X}, lm, Trail())
+        assert [(r["X"], r["_truth"]) for r in results] == [(1, True)]
+
+    def test_fact_beats_cycle_ground_mode(self):
+        # nv
+        lm = _module(_load("wfs_fact_cycle"))
+        from clausal.terms import Call as TermCall, LoadName
+        for val, want in ((1, 1), (2, 0)):
+            Y = Var()
+            t = Trail()
+            unify(Y, val, t)
+            goal = TermCall(func=LoadName(name="Wf"), args=[Y], kwargs=[])
+            results = query_wfs(goal, {}, lm, t)
+            assert len(results) == want, f"Wf({val})"
+            if results:
+                assert results[0]["_truth"] is True
+
+    def test_asym_win_truth_values_at_surface(self):
+        """wfs_win_asym: win("a") is the only answer and it is True —
+        the c-path derivation must not be lost to answer dedup."""
+        # nv
+        lm = _module(_load("wfs_win_asym"))
+        X = Var()
+        results = query_wfs(_win_goal(X), {"X": X}, lm, Trail())
+        assert [(r["X"], r["_truth"]) for r in results] == [("a", True)]
+        assert results[0]["_delays"] == frozenset()

@@ -50,6 +50,10 @@ _TABLING_RESUME = object()   # legacy: nothing sends this since the A04-F001
                              # code (tests/test_tabling.py) still imports it
 _FAILED = object()           # sentinel for invalidated conditional answers
 
+# Canonical "unconditionally true" disjunction: one empty delay set
+# (A04-F003 — conditions are a disjunction of per-derivation delay sets).
+_UNCONDITIONAL = frozenset({frozenset()})
+
 # ── Delayed negation ─────────────────────────────────────────────────────
 
 
@@ -232,17 +236,38 @@ def _complete_scc(root: TableEntry, table_store) -> None:
 # ── Table entry ───────────────────────────────────────────────────────────
 
 
+def _simplify_disjuncts(disjuncts: frozenset) -> frozenset:
+    """Canonicalize a disjunction of delay sets (A04-F003).
+
+    An empty delay set means one derivation is unconditional — the answer is
+    True and every other disjunct is redundant. Otherwise drop any disjunct
+    that is a strict superset of another (absorption: ``D ∨ (D ∧ E) = D``).
+    """
+    if frozenset() in disjuncts:
+        return _UNCONDITIONAL
+    return frozenset(
+        d for d in disjuncts
+        if not any(other < d for other in disjuncts)
+    )
+
+
 class TableEntry:
     """Stores status, answers, and suspended consumers for one subgoal."""
-    __slots__ = ("status", "answers", "answer_set", "suspended",
-                 "conditions", "_current_delays", "scc_deps")
+    __slots__ = ("status", "answers", "answer_set", "_answer_index",
+                 "suspended", "conditions", "_current_delays", "scc_deps")
 
     def __init__(self):
         self.status: str = "evaluating"       # "evaluating" | "complete"
         self.answers: list[tuple] = []
         self.answer_set: set = set()   # canonical answer keys (A04-F005/F006)
+        self._answer_index: dict = {}  # canonical key → index into answers
         self.suspended: list = []             # list of SuspendedConsumer
-        self.conditions: list = []            # parallel to answers: frozenset[DelayedNegation] | _FAILED
+        # Parallel to answers. Each element is a DISJUNCTION of delay sets —
+        # frozenset[frozenset[DelayedNegation]] — one inner set per derivation
+        # of the answer (A04-F003: WFS truth is an OR over derivations, and
+        # keeping only the first derivation's delays lost the one that
+        # resolves to true). ``_FAILED`` when every disjunct was invalidated.
+        self.conditions: list = []
         self._current_delays: set[DelayedNegation] = set()
         # A04-F001 SCC completion: entries this one consumed as an evaluating
         # ANCESTOR (mutual recursion). While any dep is still evaluating this
@@ -250,7 +275,7 @@ class TableEntry:
         self.scc_deps: set = set()            # set[TableEntry]
 
     def add_answer(self, answer: tuple, delay_set: frozenset | None = None) -> bool:
-        """Add a frozen answer tuple.  Returns True if it was new.
+        """Add a frozen answer tuple.  Returns True if the TUPLE was new.
 
         Dedup uses the canonical, hashable key (A04-F005) — a frozen answer may
         contain a list/dict/set/term instance, which are unhashable and cannot
@@ -258,13 +283,27 @@ class TableEntry:
         leaves (A04-F006), so 1/True/1.0 answers are kept distinct exactly as
         the untabled dispatch would. The original frozen tuple is stored in
         ``answers`` for unification.
+
+        A re-derivation of a known answer under a DIFFERENT delay set unions
+        that set into the answer's disjunction (A04-F003) and still returns
+        False — the tuple was already streamed to the caller; only its truth
+        got sharper. An unconditional re-derivation erases the delays.
         """
+        ds = delay_set if delay_set is not None else frozenset()
         key = make_subgoal_key(answer, None)
-        if key in self.answer_set:
+        idx = self._answer_index.get(key)
+        if idx is not None:
+            conds = self.conditions[idx]
+            if conds is _FAILED:
+                # Every earlier disjunct was invalidated; this is a live one.
+                self.conditions[idx] = _simplify_disjuncts(frozenset({ds}))
+            else:
+                self.conditions[idx] = _simplify_disjuncts(conds | {ds})
             return False
         self.answer_set.add(key)
+        self._answer_index[key] = len(self.answers)
         self.answers.append(answer)
-        self.conditions.append(delay_set if delay_set is not None else frozenset())
+        self.conditions.append(_simplify_disjuncts(frozenset({ds})))
         return True
 
     def truth_value(self, i: int):
@@ -276,13 +315,24 @@ class TableEntry:
         ``.clausal`` code writes as ``Undefined``.  Using the singleton also means
         ``bool(...)`` on the result raises rather than silently reporting the
         old truthy ``"undefined"`` string as true.
+
+        True iff some derivation is delay-free; False iff every derivation
+        was invalidated; Undefined otherwise (A04-F003 disjunction).
         """
         c = self.conditions[i]
         if c is _FAILED:
             return False
-        if not c:
+        if any(not d for d in c):
             return True
         return Undefined
+
+    def delays_for(self, i: int) -> frozenset:
+        """Flat view of the i-th answer's unresolved delayed negations —
+        the union over its live disjuncts. Empty unless truth is Undefined."""
+        c = self.conditions[i]
+        if c is _FAILED or any(not d for d in c):
+            return frozenset()
+        return frozenset().union(*c) if c else frozenset()
 
 
 class SuspendedConsumer:
@@ -400,41 +450,123 @@ except ImportError:
 # ── Delayed negation runtime (WFS) ──────────────────────────────────────
 
 
-def _naf_tabled(functor, arity, args, trail, table_store):
+def _scan_complete_answers(entry, args):
+    """Scan a COMPLETE table's answers for matches against *args*.
+
+    Returns ``(has_unconditional, has_conditional)``: whether some non-failed
+    answer with an empty / non-empty delay set unifies with the call. Uses a
+    scratch trail — the caller's bindings are untouched. Short-circuits on the
+    first unconditional match (it alone decides the negation).
+    """
+    from clausal.logic.variables import Trail as _Trail
+    scratch = _Trail()
+    has_conditional = False
+    for i, stored in enumerate(entry.answers):
+        if entry.conditions[i] is _FAILED:
+            continue
+        mark = scratch.mark()
+        matched = _unify_answer(list(args), list(stored), scratch)
+        scratch.undo(mark)
+        if matched:
+            if entry.truth_value(i) is True:
+                return True, has_conditional
+            has_conditional = True
+    return False, has_conditional
+
+
+def _delay_negation(functor, arity, key, args, trail):
+    """Record ``not functor(args)`` as a DelayedNegation on the current leader
+    (conditional success). With no leader in scope there is nowhere to attach
+    the condition — the negation still succeeds, matching how ``query()``/
+    ``call()`` surface undefined answers alongside true ones."""
+    frozen = freeze_args(args, trail)
+    dn = DelayedNegation(functor, arity, key, frozen)
+    leader = current_leader()
+    if leader is not None:
+        leader._current_delays.add(dn)
+
+
+def _key_has_var(k) -> bool:
+    """True if a normalized subgoal key contains the ``_VAR`` sentinel
+    anywhere — i.e. the call it keys is nonground."""
+    if k is _VAR:
+        return True
+    if isinstance(k, (tuple, frozenset)):
+        return any(_key_has_var(x) for x in k)
+    return False
+
+
+def _drive_dispatch_to_completion(dispatch, args) -> None:
+    """Drive a trampoline-mode dispatch to exhaustion, discarding solutions.
+
+    A04-F003 negative-subgoal spawning: ``not p(args)`` with no table for the
+    variant EVALUATES ``p(args)`` — the drive's side effect is a completed (or,
+    inside an SCC, dormant) table entry the caller then decides against.
+    Ground args + a scratch trail keep the caller's bindings untouched. The
+    mini-trampoline mirrors ``_trampoline_to_simple_adapter`` (suspension is
+    exhaustion; the drive episode repairs abandoned tables on error)."""
+    from clausal.logic.trampoline import StepGenerator, DONE
+    from clausal.logic.variables import Trail as _Trail
+    scratch = _Trail()
+    root = StepGenerator(dispatch, None, None, None, *args, scratch)
+    begin_drive_episode()
+    try:
+        gen, value = root.send(None)
+        while True:
+            if gen is None:
+                if value is DONE or value is _TABLING_SUSPEND:
+                    return
+                gen, value = root.send(None)  # a solution — discard, continue
+            else:
+                if value is _TABLING_SUSPEND:
+                    gen, value = gen.send(DONE)
+                else:
+                    gen, value = gen.send(value)
+    finally:
+        try:
+            root.close()
+        finally:
+            end_drive_episode()
+
+
+def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     """Check negation-as-failure for a tabled predicate (WFS-aware).
 
     Returns True if negation succeeds (conditionally or unconditionally),
-    False if negation fails (the positive goal has an answer).
+    False if negation fails (the positive goal has an unconditional answer).
 
     when the target table is still evaluating (cycle through negation),
     creates a DelayedNegation and attaches it to the current leader's
-    delay set — the answer is conditional until resolution.
+    delay set — the answer is conditional until resolution. A COMPLETE
+    table whose only matching answers are themselves conditional
+    (Undefined) delays the same way: ``not Undefined`` is Undefined, so
+    failing the negation outright would turn "no determinate answer" into
+    a definite "no" (todo/wfs-undefined-lost-at-query-surface.md — the
+    root of the symmetric-win ground-query asymmetry).
+
+    With ``db`` (the compiled seam passes it as ``$naf_db``), a ground
+    negated call with NO table and no complete subsuming table SPAWNS the
+    positive subgoal and decides against the completed result (A04-F003)
+    instead of conservatively succeeding — the source of mode/order-dependent
+    answer sets. ``db=None`` (legacy callers) keeps the conservative path.
     """
     key = make_subgoal_key(args, trail)
     store_key = (functor, arity, key)
     entry = table_store.get(store_key)
 
     if entry is not None and entry.status == "complete":
-        # Standard NAF on complete table: check if any non-failed answer unifies.
-        from clausal.logic.variables import Trail as _Trail
-        scratch = _Trail()
-        for i, stored in enumerate(entry.answers):
-            if entry.conditions[i] is _FAILED:
-                continue
-            mark = scratch.mark()
-            if _unify_answer(list(args), list(stored), scratch):
-                scratch.undo(mark)
-                return False  # positive answer exists → negation fails
-            scratch.undo(mark)
-        return True  # no matching answer → negation succeeds
+        # Standard NAF on complete table: an unconditional answer fails the
+        # negation; a conditional-only match delays it (undefined).
+        unconditional, conditional = _scan_complete_answers(entry, args)
+        if unconditional:
+            return False  # positive answer exists → negation fails
+        if conditional:
+            _delay_negation(functor, arity, key, args, trail)
+        return True  # no determinate matching answer → negation succeeds
 
     if entry is not None and entry.status == "evaluating":
         # Cycle through negation — delay.
-        frozen = freeze_args(args, trail)
-        dn = DelayedNegation(functor, arity, key, frozen)
-        leader = current_leader()
-        if leader is not None:
-            leader._current_delays.add(dn)
+        _delay_negation(functor, arity, key, args, trail)
         return True  # conditionally succeed
 
     # No exact-variant entry. A COMPLETE same-functor entry whose variant key
@@ -442,24 +574,44 @@ def _naf_tabled(functor, arity, args, trail, table_store):
     # instances (A04-F002): e.g. a complete ``tp(_,_)`` table answers
     # ``not tp(1,2)`` even though there is no exact ``tp(1,2)`` entry. Check the
     # call against such a table before any fallthrough.
-    from clausal.logic.variables import Trail as _Trail
     for (f, a, k), e in table_store.items():
         if f != functor or a != arity or e.status != "complete":
             continue
         if not _key_subsumes(k, key):
             continue
-        scratch = _Trail()
-        for i, stored in enumerate(e.answers):
-            if e.conditions[i] is _FAILED:
-                continue
-            mark = scratch.mark()
-            if _unify_answer(list(args), list(stored), scratch):
-                scratch.undo(mark)
-                return False  # subsuming complete table has a matching answer
-            scratch.undo(mark)
-        # A subsuming complete table with no matching answer means the goal is
-        # false for this call → negation succeeds.
+        unconditional, conditional = _scan_complete_answers(e, args)
+        if unconditional:
+            return False  # subsuming complete table has a definite answer
+        if conditional:
+            # The covering answer is itself Undefined — the negation is too.
+            _delay_negation(functor, arity, key, args, trail)
+        # A subsuming complete table with no determinate matching answer means
+        # the goal is not definitely true for this call → negation succeeds.
         return True
+
+    # A04-F003 (spawn-always): no exact table and no complete subsuming one —
+    # EVALUATE the positive subgoal so the negation is decided by a real
+    # answer set rather than conservatively succeeding. Only for ground calls
+    # (a nonground spawn would bind the caller's vars) with a live dispatch.
+    # An exact table exists from the drive's first step, so cyclic re-entries
+    # hit the evaluating-entry delay above — this terminates exactly like any
+    # SLG evaluation. If the spawned entry consumed a still-evaluating
+    # ancestor it stays DORMANT (A04-F001 SCC) rather than completing on
+    # partial answers; fall through to the delay path in that case.
+    if db is not None and not _key_has_var(key):
+        dispatch = db.get_dispatch(functor, arity)
+        if dispatch is not None:
+            _drive_dispatch_to_completion(dispatch, args)
+            if not _leader_ctx.stack:
+                _resolve_all_conditions(table_store)
+            entry = table_store.get(store_key)
+            if entry is not None and entry.status == "complete":
+                unconditional, conditional = _scan_complete_answers(entry, args)
+                if unconditional:
+                    return False
+                if conditional:
+                    _delay_negation(functor, arity, key, args, trail)
+                return True
 
     # Check if ANY variant of this predicate is evaluating — if so, we're in a
     # cycle through negation and must delay. This handles cases like: leader
@@ -467,19 +619,12 @@ def _naf_tabled(functor, arity, args, trail, table_store):
     # part of the same SLG cycle.
     for (f, a, _k), e in table_store.items():
         if f == functor and a == arity and e.status == "evaluating":
-            frozen = freeze_args(args, trail)
-            dn = DelayedNegation(functor, arity, key, frozen)
-            leader = current_leader()
-            if leader is not None:
-                leader._current_delays.add(dn)
+            _delay_negation(functor, arity, key, args, trail)
             return True  # conditionally succeed
 
-    # No entry at all — predicate never called for a subsuming variant.
-    # SOUND resolution requires spawning the positive subgoal (evaluate the
-    # table, then re-check) — that needs dispatch access threaded from the
-    # compiler and full WFS-cycle integration, tracked in
-    # investigate-A04-wfs-variant-resolution.md (parked decision A04-D004).
-    # Until then this conservatively succeeds (the historical behaviour).
+    # No entry at all and no way (or no need) to spawn — succeed
+    # conservatively (the historical behaviour, kept for ``db=None`` legacy
+    # callers and nonground negated calls).
     return True
 
 
@@ -496,63 +641,105 @@ def _key_subsumes(general: tuple, specific: tuple) -> bool:
 # ── Conditional answer resolution (WFS) ─────────────────────────────────
 
 
-def _resolve_conditions(entry, table_store):
-    """Resolve delayed negations after SLG completion.
+def _delay_target_entry(dn, table_store):
+    """Find the table that decides ``dn``: the exact-variant entry, else a
+    COMPLETE same-functor entry whose key subsumes it (A04-F002/F003 — a delay
+    recorded against a variant that was never led exactly, e.g. under a
+    subsuming leader, is still decided by the subsuming completed table)."""
+    target = table_store.get((dn.functor, dn.arity, dn.key))
+    if target is not None:
+        return target
+    for (f, a, k), e in table_store.items():
+        if (f == dn.functor and a == dn.arity and e.status == "complete"
+                and _key_subsumes(k, dn.key)):
+            return e
+    return None
 
-    Iterates until no changes:
-    - DelayedNegation targeting complete table with no matching answer → remove (true)
-    - DelayedNegation targeting complete table with unconditional match → invalidate (false)
-    - Remaining delays → unfounded (undefined)
+
+def _resolve_one_delay(dn, table_store):
+    """Resolve a single delayed negation: True (negation holds — drop it),
+    False (an unconditional positive answer exists — the disjunct fails),
+    or None (still undecidable — keep the delay)."""
+    target_entry = _delay_target_entry(dn, table_store)
+    if target_entry is None or target_entry.status != "complete":
+        return None
+    has_conditional = False
+    for j, stored in enumerate(target_entry.answers):
+        if target_entry.conditions[j] is _FAILED:
+            continue
+        if stored == dn.frozen_args:
+            if target_entry.truth_value(j) is True:
+                return False
+            has_conditional = True
+    if has_conditional:
+        return None
+    return True
+
+
+def _resolve_conditions(entry, table_store) -> bool:
+    """Resolve delayed negations after SLG completion. Returns whether any
+    condition changed (so ``_resolve_all_conditions`` can run to a fixpoint).
+
+    Per answer, per DISJUNCT (A04-F003 — one delay set per derivation):
+    - a delay whose target holds a delay-free matching answer falsifies its
+      disjunct (that derivation is gone);
+    - a delay whose target has no matching answer is satisfied and dropped;
+    - a delay whose target is undecided (evaluating, never evaluated, or
+      matching only conditional answers) is kept.
+    An answer is _FAILED only when EVERY disjunct falsified; it is True as
+    soon as any disjunct empties.
     """
+    any_change = False
     changed = True
     while changed:
         changed = False
         for i in range(len(entry.answers)):
             conds = entry.conditions[i]
-            if conds is _FAILED or not conds:
-                continue  # already resolved or unconditional
+            if conds is _FAILED or any(not d for d in conds):
+                continue  # already resolved or unconditionally true
 
-            new_delays = set()
-            failed = False
-            for dn in conds:
-                target_key = (dn.functor, dn.arity, dn.key)
-                target_entry = table_store.get(target_key)
+            new_disjuncts = set()
+            for disjunct in conds:
+                new_delays = set()
+                disjunct_failed = False
+                for dn in disjunct:
+                    verdict = _resolve_one_delay(dn, table_store)
+                    if verdict is False:
+                        disjunct_failed = True
+                        break
+                    if verdict is None:
+                        new_delays.add(dn)
+                    # verdict is True → drop the delay
+                if not disjunct_failed:
+                    new_disjuncts.add(frozenset(new_delays))
 
-                if target_entry is None or target_entry.status != "complete":
-                    new_delays.add(dn)  # can't resolve yet
-                    continue
-
-                # Check if target has ANY matching answer
-                has_match = False
-                has_unconditional_match = False
-                for j, stored in enumerate(target_entry.answers):
-                    if target_entry.conditions[j] is _FAILED:
-                        continue
-                    if stored == dn.frozen_args:
-                        has_match = True
-                        if not target_entry.conditions[j]:  # unconditional
-                            has_unconditional_match = True
-                            break
-
-                if has_unconditional_match:
-                    # Negation is false → this answer is invalidated
-                    failed = True
-                    break
-                elif not has_match:
-                    # No matching answer → negation is true → delay resolved
-                    continue
-                else:
-                    # Matching answer exists but is conditional → keep delay
-                    new_delays.add(dn)
-
-            if failed:
+            if not new_disjuncts:
                 entry.conditions[i] = _FAILED
-                changed = True
+                changed = any_change = True
             else:
-                new_conds = frozenset(new_delays)
+                new_conds = _simplify_disjuncts(frozenset(new_disjuncts))
                 if new_conds != conds:
                     entry.conditions[i] = new_conds
-                    changed = True
+                    changed = any_change = True
+    return any_change
+
+
+def _resolve_all_conditions(table_store) -> None:
+    """Cross-table resolution at root exit (A04-F003 global pass).
+
+    Per-leader resolution runs while sibling SCC members may still be
+    evaluating, so a delay can stay undecided at that point and its owner's
+    table completes with a stale condition. Once the ROOT leader finishes,
+    every table it (transitively) drove is complete — iterate resolution over
+    all of them to a joint fixpoint so late-completing targets propagate
+    (e.g. ``win("a")`` turning True must fail ``win("b")``'s delayed
+    ``not win("a")`` even though win("b") completed first)."""
+    changed = True
+    while changed:
+        changed = False
+        for e in list(table_store.values()):
+            if e.status == "complete" and _resolve_conditions(e, table_store):
+                changed = True
 
 
 # ── Simple-mode tabled wrapper (linear tabling) ─────────────────────────
@@ -629,6 +816,8 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
             pop_leader(entry)
 
         entry.status = "complete"
+        if not _leader_ctx.stack:
+            _resolve_all_conditions(table_store)  # A04-F003 root-exit pass
         for i, stored in enumerate(entry.answers):
             if entry.conditions[i] is _FAILED:
                 continue
@@ -813,6 +1002,11 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         )
         if not deps_pending:
             _complete_scc(entry, table_store)
+            # A04-F003: at ROOT exit every driven table is complete — run the
+            # global resolution pass so late-completing targets finalize
+            # conditions in tables that completed earlier.
+            if not _leader_ctx.stack:
+                _resolve_all_conditions(table_store)
         else:
             # A04-F001 (transitive): this entry stays dormant, and its
             # ENCLOSING leader transitively depends on the same still-active

@@ -84,6 +84,18 @@ for r in results:
   `is Undefined` and fed straight into Kleene-aware code.  Note `bool(Undefined)`
   raises `TypeError` by design — test it explicitly rather than with `if`.
 
+Each result also carries a `"_delays"` key: a frozenset of `DelayedNegation`
+objects, non-empty exactly when `_truth` is `Undefined`. Each names the negated
+tabled call the answer is still conditional on (`.functor`, `.arity`,
+`.frozen_args`) — for a negation cycle, the cycle partner. A caller can
+therefore report *which* atoms form the unresolved pair, not merely that
+something is undefined.
+
+The annotation is independent of how the goal is asked: the same atom reports
+the same truth value whether the goal is a reified `Call`, a `Compound`, a
+term instance, and whether the query is ground or unbound — and answer sets
+are stable across query order (see the implementation overview below).
+
 ---
 
 ## Example 1: Game Theory — Winning Positions
@@ -186,21 +198,38 @@ Non-tabled predicates with negation use standard negation-as-failure (which can 
     2. A conditional answer is recorded: "this answer holds if the delayed condition resolves"
     3. After the top-level computation completes, `_resolve_conditions` processes all conditional answers
 
+    An answer's condition is a **disjunction of delay sets** — one set per
+    derivation (A04-F003). WFS truth is an OR over derivations: an answer
+    derived both through a cycle (conditionally) and via a fact or resolved
+    negation (unconditionally) is *true*, and only keeping the first
+    derivation's delays would lose that.
+
     ### `_naf_tabled` Runtime
 
     For tabled predicates, negation-as-failure uses `_naf_tabled` instead of the standard `_found`-flag pattern. This integrates with the tabling engine to correctly handle:
 
     - Incomplete tables (computation still in progress)
-    - Conditional answers (answers with delayed conditions)
+    - Conditional answers (answers with delayed conditions) — negating a
+      *complete* table whose only matching answers are themselves conditional
+      delays too (`not Undefined` is `Undefined`), rather than failing
     - Cyclic dependencies
+    - Never-evaluated subgoals: a ground `not p(...)` with no table and no
+      complete subsuming table **spawns** the positive subgoal (the compiled
+      seam passes the database as `$naf_db`) and decides against the
+      completed result, instead of conservatively succeeding — this is what
+      makes answer sets independent of query mode and order
 
     ### Conditional Answer Resolution
 
     After all tables reach a fixpoint, `_resolve_conditions` iterates over conditional answers and attempts to resolve them:
 
-    - If all conditions are satisfied → answer becomes true
-    - If any condition is violated → answer is removed
+    - If all conditions of some derivation are satisfied → answer becomes true
+    - If every derivation has a violated condition → answer is removed
     - If conditions are cyclic → answer remains undefined
+
+    Resolution runs per-leader at completion and again **globally** over all
+    completed tables when the root leader exits, so a table that completed
+    early still sees the final truth of targets that completed after it.
 
 ---
 
@@ -215,6 +244,12 @@ Non-tabled predicates with negation use standard negation-as-failure (which can 
     - **_resolve_conditions**: unconditional passthrough, resolve to true/false, unfounded stays conditional
     - **WFS integration**: symmetric win (all undefined), asymmetric win (true/false/undefined)
     - **query_wfs API**: truth annotations, list return type
+    - **Query-surface consistency**: the symmetric cycle reports `Undefined`
+      for every goal shape (reified `Call`, `Compound`) and every query order
+      (unbound/ground, either atom first), with `_delays` naming the partner
+    - **Disjunctive derivations**: a fact inside a negation cycle wins
+      (true), and its cycle partner correctly fails; asymmetric win reports
+      exactly `{a: true}` at the surface
 
 ---
 

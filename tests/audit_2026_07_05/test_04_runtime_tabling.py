@@ -476,9 +476,14 @@ class TestTablingGuards:
         X = Var()
         got = sorted(a[0] for a in answers(call("win", X, module=m), X))
         assert got == [1, 2]  # documented: undefined answers are yielded
-        (entry,) = m.__clausal_module__.db.table_store.values()
-        truths = [entry.truth_value(i) for i in range(len(entry.answers))]
-        assert truths == [Undefined, Undefined]
+        # A04-F003 spawn-always: the var-mode drive also creates exact
+        # sub-tables for the spawned ground negations — every entry's every
+        # answer must still be Undefined (the symmetric cycle is unfounded).
+        store = m.__clausal_module__.db.table_store
+        truths = [entry.truth_value(i)
+                  for entry in store.values()
+                  for i in range(len(entry.answers))]
+        assert truths and set(truths) == {Undefined}
 
     def test_asym_win_ground_docs_order(self, load):
         # docs/wfs.md truth table holds when 'a' is queried first
@@ -819,13 +824,10 @@ class TestF001ReLeadReplay:
 
 
 class TestF002NafTabledNoEntry:
-    @pytest.mark.xfail(strict=False, reason="A04-F002 residual: NAF on a "
-                       "never-called tabled subgoal needs SPAWNING the positive "
-                       "goal (no subsuming table exists yet). Spawn requires "
-                       "dispatch access threaded from the compiler + WFS-cycle "
-                       "integration — investigate-A04-wfs-variant-resolution.md "
-                       "(A04-D004). The subsuming-variant case is fixed.")
     def test_naf_before_any_positive_query(self, load):
+        # A04-F002/F003 FIXED: _naf_tabled now SPAWNS the positive subgoal
+        # (dispatch threaded from the compiler as $naf_db) and decides
+        # against the completed table.
         m = load("f002a", NAF_SRC)
         R = Var()
         got = answers(call("ntp", R, module=m), R)
@@ -849,11 +851,8 @@ class TestF002NafTabledNoEntry:
         got = answers(call("ntr", R, module=m), R)
         assert got == []
 
-    @pytest.mark.xfail(strict=False, reason="A04-F002 residual: the even/odd "
-                       "chain reaches NAF on never-yet-called variants, which "
-                       "needs SPAWNING (see test_naf_before_any_positive_query) "
-                       "— investigate-A04-wfs-variant-resolution.md (A04-D004).")
     def test_acyclic_negation_chain_truth(self, load):
+        # A04-F002/F003 FIXED: never-yet-called variants are spawned.
         m = load("f002d", EVEN_ODD_SRC)
         X = Var()
         got = sorted(a[0] for a in answers(call("even_node", X, module=m), X))
@@ -864,15 +863,13 @@ class TestF002NafTabledNoEntry:
 
 
 class TestF003WfsModeOrderDependence:
-    @pytest.mark.xfail(strict=False, reason="A04-F003: win('b') queried first "
-                       "yields a sticky undefined answer; docs say false")
     def test_asym_win_b_first_ground(self, load):
+        # A04-F003 FIXED: negative-subgoal spawning + disjunctive conditions
         m = load("f003a", WIN_ASYM_SRC.replace("win", "wing").replace("move", "movg"))
         assert sum(1 for _ in call("wing", "b", module=m)) == 0
 
-    @pytest.mark.xfail(strict=False, reason="A04-F003: var-mode solution set "
-                       "differs from ground-mode (win('b') extra answer)")
     def test_asym_win_var_mode(self, load):
+        # A04-F003 FIXED: var-mode and ground-mode now agree with docs/wfs.md
         m = load("f003b", WIN_ASYM_SRC.replace("win", "winv").replace("move", "movv"))
         X = Var()
         got = sorted(a[0] for a in answers(call("winv", X, module=m), X))

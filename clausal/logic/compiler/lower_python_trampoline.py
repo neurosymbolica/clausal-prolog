@@ -144,6 +144,7 @@ def _lower_body(
                     ast.List(elts=arg_exprs, ctx=ast.Load()),
                     _name(trail_name),
                     _name("$table_store"),
+                    _name("$naf_db"),
                 )
                 naf_mark = ctx.fresh(_MARK_PREFIX)
                 false_block = [

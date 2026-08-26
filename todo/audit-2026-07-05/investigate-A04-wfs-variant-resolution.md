@@ -98,3 +98,40 @@ Root causes:
   query orders. Symmetric-win undefined results unchanged.
 - `docs/wfs.md` examples all reproduce as documented, in any query order
   and mode.
+
+## IMPLEMENTED (2026-08-27)
+
+The "next implementer" plan above was carried out, together with
+`todo/wfs-undefined-lost-at-query-surface.md` (whose ground-query asymmetry
+was this finding surfacing at the query API):
+
+1. **Disjunction of condition-sets** — `TableEntry.conditions[i]` is now
+   `frozenset[frozenset[DelayedNegation]] | _FAILED` (one inner set per
+   derivation). `add_answer` unions a re-derivation's delay set in (an
+   unconditional derivation erases the rest; absorption drops superset
+   disjuncts); `truth_value` = True on any empty disjunct, False on
+   `_FAILED`, else Undefined; `_resolve_conditions` resolves per disjunct.
+2. **Spawn-always** — `_naf_tabled(..., db=None)` gained the `$naf_db` seam
+   (injected in both compile modes; emitted by `tabled_naf.py` and both
+   general-ITE lowerings). A ground negated call with no exact table and no
+   complete subsuming table drives the positive dispatch to completion
+   (`_drive_dispatch_to_completion`, mirroring the adapter's
+   mini-trampoline) and decides against the result. A spawned entry that
+   consumed a still-evaluating ancestor stays dormant per A04-F001 SCC and
+   the caller falls back to delaying — the partial-consume hazard the old
+   delay-branch guarded against is handled by the SCC machinery.
+3. **Conditional-aware NAF** — a complete table whose only matching answers
+   are conditional DELAYS (`not Undefined` is `Undefined`) instead of
+   failing; unconditional matches still fail the negation outright.
+4. **Global resolution** — `_resolve_conditions` returns changed;
+   `_resolve_all_conditions` runs over all complete entries at root-leader
+   exit (both wrapper modes, and after top-level spawns).
+5. **Resolution subsumption** — `_delay_target_entry` falls back to a
+   complete subsuming variant when the delayed key has no exact entry.
+
+Acceptance from this file: `win("b")`-first → 0; var-mode `win(X)` = {a};
+symmetric win unchanged (both undefined, either order, both modes); the
+F002/F003 xfails in `tests/audit_2026_07_05/test_04_runtime_tabling.py`
+are un-marked and pass; the single-entry guard was updated for the exact
+sub-tables spawning creates. `query_wfs` also now resolves `Call`/`Compound`
+goals to their entries and carries `_delays` (see docs/wfs.md).

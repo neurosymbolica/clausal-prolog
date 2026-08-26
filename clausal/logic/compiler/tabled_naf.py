@@ -73,6 +73,7 @@ def _compile_tabled_naf_simple(ctx: CompilationContext, inner_goal, k_stmts):
         args_tuple,
         _name(trail_name),
         _name("$table_store"),
+        _name("$naf_db"),
     )
     return [
         _assign_mark(mark, trail_name),

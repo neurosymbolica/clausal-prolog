@@ -800,6 +800,7 @@ def compile_predicate_trampoline(
     if db is not None:
         base_globals["$naf_tabled"] = _naf_tabled_fn
         base_globals["$table_store"] = db.table_store
+        base_globals["$naf_db"] = db  # A04-F003: negative-subgoal spawning
         base_globals["$TABLING_SUSPEND"] = _TABLING_SUSPEND
     # Phase 6: single combined traversal replacing three separate walks.
     _head_types, _py_thunks, _call_targets = _collect_globals_info(clauses)
@@ -1547,6 +1548,7 @@ def compile_predicate_shallow(
     if db is not None:
         base_globals["$naf_tabled"] = _naf_tabled_fn_s
         base_globals["$table_store"] = db.table_store
+        base_globals["$naf_db"] = db  # A04-F003: negative-subgoal spawning
     # Phase 6: single combined traversal replacing three separate walks.
     _head_types, _py_thunks, _call_targets = _collect_globals_info(clauses)
     base_globals.update(_head_types)
