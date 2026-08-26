@@ -241,6 +241,14 @@ def compile_module(
     # ── Step 4b: validate directive targets (A12-F003) ───────────────────
     _validate_directive_targets(module_items, db, module_dict)
 
+    # ── Step 4c: stratification analysis (report, never refuse) ──────────
+    #    A negation cycle with an untabled member warns at load time instead
+    #    of surfacing later as a bare RecursionError (or a wrong answer) at
+    #    whichever query happens to reach it. Fully tabled cycles are
+    #    legitimate WFS programs and stay silent.
+    from clausal.logic.stratification import check_stratification
+    check_stratification(db, module_name)
+
     # ── Step 5: Compile each predicate ───────────────────────────────────
     for (functor, arity), pred_cls in pending.items():
         clauses = db.clauses_for(functor, arity)
