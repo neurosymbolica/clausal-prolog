@@ -148,6 +148,19 @@ def test_root_suspend_is_exhaustion_not_a_solution(impl):
     assert impl.solutions(root(impl, fn)) == []
 
 
+def test_root_suspend_is_a_protocol_error_for_trampoline(impl):
+    # Review follow-up to Q1 (2026-08-27): the pull-drivers can answer a
+    # root-level suspend with "no solution" (A04-F008); trampoline()'s
+    # contract — return the root-yield value — cannot, and returning the
+    # raw sentinel fabricated success at its only runtime call site
+    # (clpz3 discards the value).  A loud, unroutable engine-protocol
+    # error is the only honest answer.
+    fn = enum_fn([_TABLING_SUSPEND], impl.DONE)
+    with pytest.raises(RuntimeError) as ei:
+        impl.trampoline(root(impl, fn))
+    assert getattr(ei.value, "__clausal_engine_protocol__", False)
+
+
 def suspend_chain(impl, log):
     """Parent whose child yields (parent, _TABLING_SUSPEND) mid-chain.
 
@@ -386,6 +399,44 @@ def test_duy_retirement_is_visible_to_a_later_solutions_call(impl):
     assert pulls == ["first", "final"]
 
 
+def test_trampoline_final_passthrough_marks_retired(impl):
+    # Review follow-up to Q3 (2026-08-27): trampoline() is inside the
+    # retirement protocol too.  A root FINAL is returned as-is (it IS the
+    # answer for a value-returning driver) but the root is marked, so a
+    # later pull-driver does not re-pull the retired producer.
+    def fn(this, proceed, fail, catcher):
+        yield (proceed, impl.FINAL)
+        raise AssertionError("resumed a retired root")
+        yield  # pragma: no cover
+
+    sg = root(impl, fn)
+    assert impl.trampoline(sg) is impl.FINAL
+    assert impl._drive_until_yield(sg) is None   # retired, not re-pulled
+
+
+def test_trampoline_on_a_retired_root_is_a_protocol_error(impl):
+    # The pull-drivers answer a retired root with benign exhaustion;
+    # trampoline() cannot represent exhaustion, so pulling a retired
+    # root through it is a loud, unroutable engine anomaly.
+    pulls = []
+    sg = root(impl, final_then_explode_fn(impl, pulls))
+    assert impl.solutions(sg) == ["sol"]
+    with pytest.raises(RuntimeError) as ei:
+        impl.trampoline(sg)
+    assert getattr(ei.value, "__clausal_engine_protocol__", False)
+    assert pulls == ["first", "final"]
+
+
+def test_retired_is_a_visible_writable_attribute_on_both_cores(impl):
+    # Review follow-up (2026-08-27): the twin exposes .retired as a
+    # public slot; the C StepGenerator must expose the same surface.
+    sg = root(impl, enum_fn([1], impl.DONE))
+    assert not sg.retired
+    sg.retired = True
+    assert sg.retired
+    assert impl._drive_until_yield(sg) is None   # honoured by the driver
+
+
 # ── malformed steps are TypeErrors from the driver, never routed ─────────────
 # Policy decision (todo/drive-loop-policy-convergence.md, Q4, 2026-08-26):
 # the C core's shape checks are canonical — a step that is not a 2-tuple,
@@ -416,15 +467,30 @@ def bad_step_chain(impl, bad_step):
 @pytest.mark.parametrize("bad_step, match", [
     ("not-a-tuple", "must yield 2-tuples"),
     ((1, 2, 3), "must yield 2-tuples"),
-    ((42, None), "must be StepGenerator or None"),
+    ((42, None), "must be StepGenerator or None, got int"),
 ], ids=["non-tuple", "3-tuple", "bad-target"])
 def test_malformed_step_is_a_typeerror_never_routed(impl, bad_step, match):
-    with pytest.raises(TypeError, match=match):
+    # The match strings include the entry-point prefix: the TypeError must
+    # name the driver that was actually running (review follow-up
+    # 2026-08-27 — the C catcher-resume path used to hardcode
+    # "trampoline:").
+    with pytest.raises(TypeError, match=f"trampoline: .*{match}"):
         impl.trampoline(bad_step_chain(impl, bad_step))
-    with pytest.raises(TypeError, match=match):
+    with pytest.raises(TypeError, match=f"solutions: .*{match}"):
         impl.solutions(bad_step_chain(impl, bad_step))
-    with pytest.raises(TypeError, match=match):
+    with pytest.raises(TypeError, match=f"_drive_until_yield: .*{match}"):
         impl._drive_until_yield(bad_step_chain(impl, bad_step))
+
+
+def test_bad_target_message_spells_a_dotted_type_the_same_way(impl):
+    # C prints the type via tp_name (dotted for many types), the twin via
+    # __name__: both must agree on the LAST component so the two cores
+    # raise the same message (review follow-up 2026-08-27).
+    from collections import OrderedDict
+
+    with pytest.raises(TypeError,
+                       match="must be StepGenerator or None, got OrderedDict"):
+        impl._drive_until_yield(bad_step_chain(impl, (OrderedDict(), None)))
 
 
 def test_malformed_first_step_at_entry_is_a_typeerror(impl):
@@ -435,3 +501,25 @@ def test_malformed_first_step_at_entry_is_a_typeerror(impl):
         impl.trampoline(root(impl, fn))
     with pytest.raises(TypeError, match="must yield 2-tuples"):
         impl._drive_until_yield(root(impl, fn))
+
+
+def test_malformed_step_after_catcher_resume_names_the_entry_point(impl):
+    # A handler absorbs an exception and resumes with a malformed step:
+    # the shape check must run in the driver's main loop with the real
+    # entry-point name, not in the unwind helper with a hardcoded one.
+    def bad_handler(this, proceed, fail, catcher):
+        child = impl.StepGenerator(raiser_fn(ValueError("boom")),
+                                   this, this, this)
+        try:
+            yield (child, None)
+        except ValueError:
+            yield "junk"          # malformed resume step
+        yield (fail, impl.DONE)
+
+    with pytest.raises(TypeError,
+                       match="solutions: generator must yield 2-tuples"):
+        impl.solutions(root(impl, bad_handler))
+    with pytest.raises(
+            TypeError,
+            match="_drive_until_yield: generator must yield 2-tuples"):
+        impl._drive_until_yield(root(impl, bad_handler))

@@ -348,6 +348,26 @@ StepGen_get_catcher(StepGenObject *self, void *Py_UNUSED(closure))
     return self->catcher;
 }
 
+static PyObject *
+StepGen_get_retired(StepGenObject *self, void *Py_UNUSED(closure))
+{
+    return PyBool_FromLong(self->retired);
+}
+
+static int
+StepGen_set_retired(StepGenObject *self, PyObject *value,
+                    void *Py_UNUSED(closure))
+{
+    if (!value) {
+        PyErr_SetString(PyExc_TypeError, "cannot delete retired");
+        return -1;
+    }
+    int truth = PyObject_IsTrue(value);
+    if (truth < 0) return -1;
+    self->retired = truth;
+    return 0;
+}
+
 static PyGetSetDef StepGen_getset[] = {
     {"proceed", (getter)StepGen_get_proceed, NULL,
      "Solution target (consumer frame)", NULL},
@@ -355,6 +375,9 @@ static PyGetSetDef StepGen_getset[] = {
      "Exhaustion target (completion frame)", NULL},
     {"catcher", (getter)StepGen_get_catcher, NULL,
      "Exception handler chain (catch/3 unwinding)", NULL},
+    {"retired", (getter)StepGen_get_retired, (setter)StepGen_set_retired,
+     "True once a root-level FINAL was delivered: pull-drivers answer\n"
+     "exhaustion without resuming the generator (policy Q3).", NULL},
     {NULL}
 };
 
@@ -386,8 +409,10 @@ static PyType_Spec StepGen_spec = {
  * When a StepGenerator.send() raises a routable exception, walk up the parent
  * chain calling .throw(exc) on each parent until one catches it.
  *
- * On success: sets *out_gen and *out_value to the resumed (gen, value) tuple
- *             and returns 1.
+ * On success: sets *out_step to the resumed step (a NEW reference to
+ *             whatever the absorbing handler yielded — the drive loop's
+ *             own shape checks validate it with the real entry-point
+ *             name) and returns 1.
  * On re-raise: the ORIGINAL exception propagates, unchanged and on its
  *              original traceback (the enrichment seam in
  *              solve._drive_trampoline and every embedding caller's ``except``
@@ -397,7 +422,7 @@ static PyType_Spec StepGen_spec = {
  * On error:   a different exception is set; returns -1.
  */
 static int
-unwind_to_catcher(PyObject *failed_gen, PyObject **out_gen, PyObject **out_value)
+unwind_to_catcher(PyObject *failed_gen, PyObject **out_step)
 {
     PyObject *exc_type, *exc_val, *exc_tb;
     PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
@@ -442,22 +467,13 @@ unwind_to_catcher(PyObject *failed_gen, PyObject **out_gen, PyObject **out_value
         Py_DECREF(throw_args);
 
         if (result) {
-            /* Parent caught it — unpack (gen, value) */
+            /* Parent caught it — hand the resumed step back to the drive
+             * loop, whose loop-top shape checks validate it with the real
+             * entry-point name (no hardcoded prefix here). */
             Py_XDECREF(exc_type);
             Py_XDECREF(exc_val);
             Py_XDECREF(exc_tb);
-
-            if (!PyTuple_CheckExact(result) || PyTuple_GET_SIZE(result) != 2) {
-                PyErr_SetString(PyExc_TypeError,
-                                "trampoline: generator must yield 2-tuples");
-                Py_DECREF(result);
-                return -1;
-            }
-            *out_gen = PyTuple_GET_ITEM(result, 0);
-            *out_value = PyTuple_GET_ITEM(result, 1);
-            Py_INCREF(*out_gen);
-            Py_INCREF(*out_value);
-            Py_DECREF(result);
+            *out_step = result;   /* new reference */
             return 1;
         }
 
@@ -491,13 +507,19 @@ unwind_to_catcher(PyObject *failed_gen, PyObject **out_gen, PyObject **out_value
  *
  * "Advance the chain to the next ROOT yield."  The three entry points
  * (trampoline / solutions / _drive_until_yield) differ ONLY in their stop
- * condition — what they do with the root-yield value — and in two policy
- * flags:
+ * condition — what they do with the root-yield value — and in ONE policy
+ * flag:
  *
- *   intercept_ts                — convert a mid-chain _TABLING_SUSPEND step
- *                                 into send(DONE)
  *   stopiteration_is_exhaustion — treat StopIteration / a PEP-479 wrapper
- *                                 from a send as end-of-search (A04-F009)
+ *                                 from a send as end-of-search (A04-F009;
+ *                                 the pull-drivers.  NOT trampoline, whose
+ *                                 contract cannot represent exhaustion.)
+ *
+ * A mid-chain _TABLING_SUSPEND is intercepted UNCONDITIONALLY (2026-08-26
+ * policy convergence; the flag was removed 2026-08-27 so a future call
+ * site cannot reintroduce the leak).  Retirement (policy Q3) also lives
+ * here, once: a retired root answers DRIVE_RETIRED without being resumed,
+ * and a root-level FINAL marks the root retired before delivery.
  *
  * Call it with LITERAL flag values only, so a compiler that specialises the
  * body per call site can constant-fold the flag branches away.  Whether it
@@ -519,16 +541,42 @@ unwind_to_catcher(PyObject *failed_gen, PyObject **out_gen, PyObject **out_value
  * KEEP IN SYNC with _drive_to_root_yield in logic/_trampoline_py.py;
  * tests/test_trampoline_parity.py enforces the agreement.
  */
-typedef enum { DRIVE_YIELDED, DRIVE_EXHAUSTED, DRIVE_ERROR } drive_result;
+typedef enum { DRIVE_YIELDED, DRIVE_EXHAUSTED, DRIVE_RETIRED,
+               DRIVE_ERROR } drive_result;
+
+/* Raise the marked engine-protocol RuntimeError (never offered to a
+ * catch/3 — is_routable_exception refuses the marker). */
+static void
+set_engine_protocol_error(const char *msg)
+{
+    PyObject *perr = PyObject_CallFunction(PyExc_RuntimeError, "s", msg);
+    if (perr) {
+        if (PyObject_SetAttrString(perr, "__clausal_engine_protocol__",
+                                   Py_True) < 0)
+            PyErr_Clear();  /* best-effort marker; the error still raises */
+        PyErr_SetObject(PyExc_RuntimeError, perr);
+        Py_DECREF(perr);
+    }
+}
 
 static inline drive_result
-drive_to_root_yield(PyObject *root, int intercept_ts,
-                    int stopiteration_is_exhaustion,
+drive_to_root_yield(PyObject *root, int stopiteration_is_exhaustion,
                     const char *who, PyObject **out_value)
 {
-    if (intercept_ts)
-        /* Resolve the lazy import while no exception is active. */
-        (void)get_TABLING_SUSPEND();
+    /* Retirement (policy Q3) lives here, once: a retired root answers
+     * without being resumed; each wrapper maps DRIVE_RETIRED to its own
+     * contract (pull-drivers: benign exhaustion; trampoline: a loud
+     * protocol error). */
+    if (StepGen_CAST(root)->retired)
+        return DRIVE_RETIRED;
+
+    /* Resolve the lazy tabling import while no exception is active.  On
+     * failure the ImportError must propagate CLEANLY — running the sends
+     * below with a live exception set is a C-API violation, and the
+     * Python twin raises the ImportError from its own import statement
+     * (review follow-up, 2026-08-27). */
+    if (!get_TABLING_SUSPEND())
+        return DRIVE_ERROR;
 
     PyObject *step = StepGen_send(StepGen_CAST(root), Py_None);
     if (!step) {
@@ -554,6 +602,11 @@ drive_to_root_yield(PyObject *root, int intercept_ts,
         PyObject *value = PyTuple_GET_ITEM(step, 1);  /* borrowed */
 
         if (gen == Py_None) {
+            /* Root-level FINAL: "here is a solution AND I am retiring" —
+             * mark the root before delivery so no driver re-pulls it
+             * (policy Q3). */
+            if (value == g_FINAL)
+                StepGen_CAST(root)->retired = 1;
             Py_INCREF(value);
             Py_DECREF(step);
             *out_value = value;
@@ -561,18 +614,20 @@ drive_to_root_yield(PyObject *root, int intercept_ts,
         }
 
         if (!StepGen_Check(gen)) {
+            /* Last path component of tp_name, so the message matches the
+             * twin's type(gen).__name__ spelling (parity, 2026-08-27). */
+            const char *tn = Py_TYPE(gen)->tp_name;
+            const char *dot = strrchr(tn, '.');
             PyErr_Format(PyExc_TypeError,
                          "%s: step target must be StepGenerator or None, "
-                         "got %.200s", who, Py_TYPE(gen)->tp_name);
+                         "got %.200s", who, dot ? dot + 1 : tn);
             Py_DECREF(step);
             return DRIVE_ERROR;
         }
 
-        int is_suspend = 0;
-        if (intercept_ts) {
-            PyObject *ts = get_TABLING_SUSPEND();
-            is_suspend = (ts && value == ts);
-        }
+        /* Mid-chain _TABLING_SUSPEND is intercepted unconditionally —
+         * cache already resolved at entry, so ts is never NULL here. */
+        int is_suspend = (value == g_TABLING_SUSPEND);
 
         /* Keep value alive across the send */
         Py_INCREF(value);
@@ -595,14 +650,11 @@ drive_to_root_yield(PyObject *root, int intercept_ts,
             }
             /* Hand it to the enclosing catch/3, if there is one */
             if (is_routable_exception()) {
-                PyObject *new_gen, *new_value;
-                int r = unwind_to_catcher(gen, &new_gen, &new_value);
+                PyObject *new_step;
+                int r = unwind_to_catcher(gen, &new_step);
                 Py_DECREF(gen);
                 if (r == 1) {
-                    step = PyTuple_Pack(2, new_gen, new_value);
-                    Py_DECREF(new_gen);
-                    Py_DECREF(new_value);
-                    if (!step) return DRIVE_ERROR;
+                    step = new_step;   /* loop top re-validates its shape */
                     continue;
                 }
                 /* r == 0: uncaught (re-raised), r == -1: different error */
@@ -637,12 +689,30 @@ trampoline_func(PyObject *Py_UNUSED(module), PyObject *root)
      * No exhaustion conversion: this contract returns the root-yield
      * value and has no way to represent exhaustion, so StopIteration /
      * a PEP-479 wrapper raises (blessed difference, see
-     * todo/done/drive-loop-policy-convergence.md). */
+     * todo/done/drive-loop-policy-convergence.md).  For the same reason a
+     * retired root and a ROOT-level suspend — benign exhaustion for the
+     * pull-drivers — are loud protocol errors here: returning the raw
+     * sentinel fabricated success at the clpz3 call site (review
+     * follow-up, 2026-08-27). */
     PyObject *value = NULL;
-    if (drive_to_root_yield(root, /*intercept_ts=*/1,
-                            /*stopiteration_is_exhaustion=*/0,
-                            "trampoline", &value) != DRIVE_YIELDED)
+    drive_result r = drive_to_root_yield(root,
+                                         /*stopiteration_is_exhaustion=*/0,
+                                         "trampoline", &value);
+    if (r == DRIVE_RETIRED) {
+        set_engine_protocol_error(
+            "trampoline: pull on a retired StepGenerator "
+            "(FINAL already delivered)");
+        return NULL;
+    }
+    if (r != DRIVE_YIELDED)
         return NULL;   /* DRIVE_EXHAUSTED impossible with the flag off */
+    if (g_TABLING_SUSPEND && value == g_TABLING_SUSPEND) {
+        Py_DECREF(value);
+        set_engine_protocol_error(
+            "trampoline: root yielded _TABLING_SUSPEND — an orphaned "
+            "tabling consumer cannot be driven to a value");
+        return NULL;
+    }
     return value;
 }
 
@@ -676,21 +746,18 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
     PyObject *results = PyList_New(0);
     if (!results) return NULL;
 
-    /* A FINAL was already delivered from this root (by us or by
-     * _drive_until_yield): do not resume the retired generator. */
-    if (StepGen_CAST(root)->retired)
-        return results;
-
     while (1) {
         PyObject *value = NULL;
         /* stopiteration_is_exhaustion: a StopIteration / PEP-479 wrapper
          * from a send is a converted exhaustion — return what was
          * collected, agreeing with _drive_until_yield (policy convergence
-         * Q2, 2026-08-26; A04-F009 read across entry points). */
-        drive_result r = drive_to_root_yield(root, /*intercept_ts=*/1,
+         * Q2, 2026-08-26; A04-F009 read across entry points).
+         * DRIVE_RETIRED: a FINAL was already delivered from this root
+         * (by any driver) — do not resume the retired generator. */
+        drive_result r = drive_to_root_yield(root,
                                              /*stopiteration_is_exhaustion=*/1,
                                              "solutions", &value);
-        if (r == DRIVE_EXHAUSTED)
+        if (r == DRIVE_EXHAUSTED || r == DRIVE_RETIRED)
             return results;
         if (r != DRIVE_YIELDED) {
             Py_DECREF(results);
@@ -717,9 +784,7 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
              * it and stop — no further pull from the (now-retired)
              * root.  FINAL is a sentinel, not a payload, so when
              * snapshot is None there is no raw value to record.
-             * Mark the root so any later pull-driver on the same
-             * StepGenerator sees exhaustion (policy Q3, 2026-08-26). */
-            StepGen_CAST(root)->retired = 1;
+             * (The drive core already marked the root retired.) */
             Py_DECREF(value);
             if (snapshot_fn != Py_None) {
                 PyObject *snap = PyObject_CallNoArgs(snapshot_fn);
@@ -812,29 +877,26 @@ drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
         return NULL;
     }
 
-    /* A retired root (a FINAL already delivered) answers exhaustion
-     * without resuming the generator (policy Q3, 2026-08-26). */
-    if (StepGen_CAST(sg_obj)->retired)
-        Py_RETURN_NONE;
-
     PyObject *value = NULL;
-    drive_result r = drive_to_root_yield(sg_obj, /*intercept_ts=*/1,
+    /* DRIVE_RETIRED: a FINAL was already delivered from this root —
+     * benign exhaustion, the generator is not resumed (policy Q3,
+     * 2026-08-26; retirement lives in the drive core since the
+     * 2026-08-27 review follow-up). */
+    drive_result r = drive_to_root_yield(sg_obj,
                                          /*stopiteration_is_exhaustion=*/1,
                                          "_drive_until_yield", &value);
-    if (r == DRIVE_EXHAUSTED)
+    if (r == DRIVE_EXHAUSTED || r == DRIVE_RETIRED)
         Py_RETURN_NONE;
     if (r == DRIVE_ERROR)
         return NULL;
 
     /* A04-F008: (None, _TABLING_SUSPEND) is a control sentinel, never a
      * solution — a root/orphaned consumer would otherwise fabricate an
-     * unbound answer.  Treat it as exhaustion alongside DONE. */
-    PyObject *ts = get_TABLING_SUSPEND();
-    int is_done = (value == g_DONE) || (ts && value == ts);
-    /* Root-level FINAL: "here is a solution AND I am retiring" — deliver
-     * the solution, refuse future pulls (policy Q3, 2026-08-26). */
-    if (value == g_FINAL)
-        StepGen_CAST(sg_obj)->retired = 1;
+     * unbound answer.  Treat it as exhaustion alongside DONE.  (A
+     * root-level FINAL was already recorded by the core; it delivers its
+     * solution as True here.) */
+    int is_done = (value == g_DONE) ||
+                  (g_TABLING_SUSPEND && value == g_TABLING_SUSPEND);
     Py_DECREF(value);
     if (is_done)
         Py_RETURN_NONE;   /* search exhausted */
