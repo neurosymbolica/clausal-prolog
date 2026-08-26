@@ -7,7 +7,7 @@ Test("once exists") <- once(1 == 1)  # nv
 
 Test("not exists") <- (not (1 == 2))  # nv
 
-Test("If exists") <- If(1 == 1, (1 == 1), (1 == 2))  # nv
+Test("if_ exists") <- if_(1 == 1, (1 == 1), (1 == 2))  # nv
 
 Test("catch/3 exists") <- catch((1 == 1), _, (1 == 1))  # nv
 

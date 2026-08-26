@@ -1,6 +1,6 @@
 # Classify/2: Classify(X, LABEL)
 # Ground ITE: X >= 0 → 'positive', else 'negative'
-Classify(X, LABEL) <- If(X >= 0, LABEL is "positive", LABEL is "negative")
+Classify(X, LABEL) <- if_(X >= 0, LABEL is "positive", LABEL is "negative")
 
 
 Test("classify positive") <- (Classify(5, LABEL), LABEL == "positive")  # nv

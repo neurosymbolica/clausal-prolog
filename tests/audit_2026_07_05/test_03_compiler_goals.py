@@ -31,9 +31,9 @@ FIXTURE = '''
 trm(0, ACC, ACC),
 trm(N, ACC, OUT) <- (N > 0, X in [1, 2], eval_(N - 1, N1), eval_(ACC + X, ACC1), trm(N1, ACC1, OUT))
 
-# undetermined If prefix (Branch wrongly classed deterministic)
+# undetermined if_ prefix (Branch wrongly classed deterministic)
 tri(0, ACC, ACC),
-tri(N, ACC, OUT) <- (N > 0, If(C is 1, eval_(5, X), eval_(7, X)), eval_(N - 1, N1), eval_(ACC + X, ACC1), tri(N1, ACC1, OUT))
+tri(N, ACC, OUT) <- (N > 0, if_(C is 1, eval_(5, X), eval_(7, X)), eval_(N - 1, N1), eval_(ACC + X, ACC1), tri(N1, ACC1, OUT))
 
 # atom_concat split-mode prefix (wrongly in _DETERMINISTIC_BUILTINS)
 tac(0, ACC, ACC),
@@ -44,13 +44,13 @@ tac(N, ACC, OUT) <- (N > 0, atom_concat(P, Q, "ab"), eval_(N - 1, N1), ACC1 is [
 strm(0, ACC, ACC),
 strm(N, ACC, OUT) <- (N > 0, X in [1, 2], eval_(N - 1, N1), eval_(ACC + X, ACC1), strm(N1, ACC1, OUT))
 stri(0, ACC, ACC),
-stri(N, ACC, OUT) <- (N > 0, If(C is 1, eval_(5, X), eval_(7, X)), eval_(N - 1, N1), eval_(ACC + X, ACC1), stri(N1, ACC1, OUT))
+stri(N, ACC, OUT) <- (N > 0, if_(C is 1, eval_(5, X), eval_(7, X)), eval_(N - 1, N1), eval_(ACC + X, ACC1), stri(N1, ACC1, OUT))
 
 # non-tail controls (Unify after the self-call disables TRO)
 trn(0, ACC, ACC),
 trn(N, ACC, OUT) <- (N > 0, X in [1, 2], eval_(N - 1, N1), eval_(ACC + X, ACC1), trn(N1, ACC1, OUT0), OUT is OUT0)
 trin(0, ACC, ACC),
-trin(N, ACC, OUT) <- (N > 0, If(C is 1, eval_(5, X), eval_(7, X)), eval_(N - 1, N1), eval_(ACC + X, ACC1), trin(N1, ACC1, OUT0), OUT is OUT0)
+trin(N, ACC, OUT) <- (N > 0, if_(C is 1, eval_(5, X), eval_(7, X)), eval_(N - 1, N1), eval_(ACC + X, ACC1), trin(N1, ACC1, OUT0), OUT is OUT0)
 
 # deterministic TRO regression guards
 cnt(0, ACC, ACC),
@@ -63,7 +63,7 @@ ctp(N, ACC, OUT) <- (N > 0, catch(X is 1, _, X is 2), eval_(N - 1, N1), eval_(AC
 
 # ── A03-F002: destructive reuse behind nondeterministic prefixes ─────
 drm(OUT) <- (SRC is [1, 2], X in [10, 20], append(SRC, [X], OUT))
-drb(OUT) <- (SRC is [1, 2], If(C is 1, X is 10, X is 20), append(SRC, [X], OUT))
+drb(OUT) <- (SRC is [1, 2], if_(C is 1, X is 10, X is 20), append(SRC, [X], OUT))
 # controls: live-after source (DR off) and deterministic prefix (intended DR)
 drmc(OUT) <- (SRC is [1, 2], X in [10, 20], append(SRC, [X], OUT), length(SRC, _))
 drok(OUT) <- (SRC is [1, 2], append(SRC, [3], OUT))
@@ -128,15 +128,15 @@ wgr(X, R) <- (when(ground(X), R is "g"), X is 5)
 wand(WX, WY, R) <- (when((nonvar(WX), ground(WY)), R is "both"), WX is 1, WY is 2)
 
 # ── reified / general ITE — regression guards ─────────────────────────
-ifu(X) <- If(C is 1, X is "then", X is "else")
-ifn(X, Y) <- (If(A is 1, X is "t", X is "e"), If(B is 1, Y is "t", Y is "e"))
-clfd(X, L) <- If(X >= 0, L is "pos", L is "neg")
-cldif(X, L) <- If(X is not 3, L is "ne", L is "eq")
+ifu(X) <- if_(C is 1, X is "then", X is "else")
+ifn(X, Y) <- (if_(A is 1, X is "t", X is "e"), if_(B is 1, Y is "t", Y is "e"))
+clfd(X, L) <- if_(X >= 0, L is "pos", L is "neg")
+cldif(X, L) <- if_(X is not 3, L is "ne", L is "eq")
 mem2(X) <- (X in [1, 2])
 gen("a"),
 gen("b"),
 gen("c"),
-altif(X, R) <- If(gen(X), R is "yes", R is "no")
+altif(X, R) <- if_(gen(X), R is "yes", R is "no")
 
 # ── continuation-TCO — regression guards ──────────────────────────────
 w(X) <- gen(X)
@@ -165,7 +165,7 @@ Edge(2, 3),
 Edge(3, 1),
 Path(PA, PB) <- Edge(PA, PB)
 Path(PA, PB) <- (Edge(PA, PC), Path(PC, PB))
-CheckPath(CX, RESULT) <- If(Path(1, CX), RESULT is "reachable", RESULT is "unreachable")
+CheckPath(CX, RESULT) <- if_(Path(1, CX), RESULT is "reachable", RESULT is "unreachable")
 NotPath(NX) <- (not Path(1, NX))
 
 # ── specialization ────────────────────────────────────────────────────

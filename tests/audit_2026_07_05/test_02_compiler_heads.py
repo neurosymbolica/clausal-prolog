@@ -150,8 +150,8 @@ outl([OA, OB]) <- (in_(OA, [1, 2]), OB == OA + 10)
 
 # goal-op shapes (terms_to_goalop / ir)
 orp(GX) <- (GX is 1 or GX is 2 or GX is 3)
-iffu(IX, IA) <- If(IX > 2, IA is "big", IA is "small")
-iffl(IL, IA2) <- If(IL is [1], IA2 is "one", IA2 is "other")
+iffu(IX, IA) <- if_(IX > 2, IA is "big", IA is "small")
+iffl(IL, IA2) <- if_(IL is [1], IA2 is "one", IA2 is "other")
 ftr(FR) <- (False, FR is 1)
 ttr(TT) <- (True, TT is 1)
 

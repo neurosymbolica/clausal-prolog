@@ -117,7 +117,7 @@ print_entries(DIR) <- (DirectoryEntries(DIR, ENTRY), writeln(ENTRY), fail)
 # === reified_ite.md ===
 
 --8<-- [start:if_signature]
-If(condition, then_goal, else_goal)
+if_(condition, then_goal, else_goal)
 --8<-- [end:if_signature]
 
 # === python_integration.md ===

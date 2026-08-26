@@ -138,7 +138,7 @@ class TestCompoundAndKwargs:
 
 class TestIfThenElse:
     @pytest.mark.parametrize("src", [
-        "Pick(X, Y) <- (Y is If(X > 0, 1, 2))\n",
+        "Pick(X, Y) <- (Y is if_(X > 0, 1, 2))\n",
     ])
     def test_ite_round_trips(self, src):
         assert_round_trips(src)

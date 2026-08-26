@@ -598,8 +598,13 @@ class _ClauseRenderer:
                 values=[self.term(val) for val in value.values()],
             )
         if isinstance(value, IfThenElse):
+            # Rendering always emits the canonical spelling, so a round-trip
+            # through the reifier is also a migration off the old one.
+            from clausal.templating.term_rewriting import (  # noqa: PLC0415
+                ITE_NAME,
+            )
             return ast.Call(
-                func=ast.Name(id="If", ctx=ast.Load()),
+                func=ast.Name(id=ITE_NAME, ctx=ast.Load()),
                 args=[
                     self.term(value.condition),
                     self.term(value.then),

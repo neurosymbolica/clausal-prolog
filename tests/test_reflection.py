@@ -200,7 +200,7 @@ class TestOperatorGoals:
         assert goal.right == Goal("Gamma", [Variable("X")], [])
 
     def test_if_expression_reifies_as_if_then_else(self):
-        items = reify_source("Sign(X, S) <- (S is If(X > 0, 1, -1))\n")
+        items = reify_source("Sign(X, S) <- (S is if_(X > 0, 1, -1))\n")
         (clause,) = clauses_of(items)
         (goal,) = clause.goals
         ite = goal.right

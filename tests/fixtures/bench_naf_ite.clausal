@@ -26,7 +26,7 @@ Item(4),
 Item(5),
 
 # 10 solutions (pairs with Y > X); a user-predicate condition is not
-# reifiable, so If(MultiStep(...), ...) takes the general-ITE arm.
+# reifiable, so if_(MultiStep(...), ...) takes the general-ITE arm.
 MultiStep(X, Y) <- (Item(X), Item(Y), Y > X),
 
 # Fails only after enumerating all 25 Item pairs — a many-step NAF goal.
@@ -39,7 +39,7 @@ NafChainLoop(0),
 NafChainLoop(N) <- (N > 0, not NoPair(99), M == N - 1, NafChainLoop(M)),
 
 IteDetLoop(0),
-IteDetLoop(N) <- (N > 0, If(Item(1), true, true), M == N - 1, IteDetLoop(M)),
+IteDetLoop(N) <- (N > 0, if_(Item(1), true, true), M == N - 1, IteDetLoop(M)),
 
 IteMultiLoop(0),
-IteMultiLoop(N) <- (N > 0, If(MultiStep(_X, _Y), true, true), M == N - 1, IteMultiLoop(M)),
+IteMultiLoop(N) <- (N > 0, if_(MultiStep(_X, _Y), true, true), M == N - 1, IteMultiLoop(M)),

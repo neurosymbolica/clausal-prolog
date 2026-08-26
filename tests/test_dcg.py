@@ -341,13 +341,13 @@ class TestNegation:
 
 class TestIfThenElse:
     def test_if_then_else_nonterminals(self, tmp_path):
-        """If-then-else with non-terminal conditions (no star-list in If)."""
+        """If-then-else with non-terminal conditions (no star-list in if_)."""
         # nv
         src = (
             'a_rule >> (["a"])\n'
             'b_rule >> (["b"])\n'
             'c_rule >> (["c"])\n'
-            'a_or_c >> (If(a_rule, b_rule, c_rule))\n'
+            'a_or_c >> (if_(a_rule, b_rule, c_rule))\n'
         )
         mod = _load("ite1", src, tmp_path)
         cls = mod.module_dict["a_or_c"]
@@ -367,7 +367,7 @@ class TestIfThenElse:
         """
         src = (
             "-module(x, [c(X, S0, S), done, empty])\n"
-            "c(_x) >> (If([_x], [done], [empty]))\n"
+            "c(_x) >> (if_([_x], [done], [empty]))\n"
         )
         mod = _load("ite2", src, tmp_path)
         c = mod.module_dict["c"]
@@ -385,7 +385,7 @@ class TestIfThenElse:
         """R2: the else-branch (terminal) path also produces a parse."""
         src = (
             "-module(x, [g(S0, S), x, y, z])\n"
-            "g >> (If([x], [y], [z]))\n"
+            "g >> (if_([x], [y], [z]))\n"
         )
         mod = _load("ite3", src, tmp_path)
         g = mod.module_dict["g"]

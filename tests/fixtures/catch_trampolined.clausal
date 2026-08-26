@@ -127,7 +127,7 @@ Test("catch/3 around a many-solution callee still yields every solution") <- (
 )
 
 # ── the SEVENTH copy: the general-ITE condition driver ──────────────────────
-# If/3 with a non-reifiable (user-predicate) condition compiles to a
+# if_/3 with a non-reifiable (user-predicate) condition compiles to a
 # mini-trampoline that drives the condition sub-generator.  Emitted inline it
 # had no exception routing at all, so a catch/3 inside the CONDITION was
 # inert — the ValueError walked out of the whole construct (confirmed
@@ -135,11 +135,11 @@ Test("catch/3 around a many-solution callee still yields every solution") <- (
 # must not change: a declining/absent handler still lets the error escape,
 # and the then-branch still runs once per condition solution.
 cond_absorbs(R) <- (catch(raise_value_error(_X), _E, R is "absorbed")),
-ite_cond_catch(R) <- (If(cond_absorbs(_C), R is "then", R is "else")),
+ite_cond_catch(R) <- (if_(cond_absorbs(_C), R is "then", R is "else")),
 
 cond_declines(R) <- (catch(raise_value_error(_X), "no_such_error", R is "nope")),
-ite_cond_decline(R) <- (If(cond_declines(_C), R is "then", R is "else")),
+ite_cond_decline(R) <- (if_(cond_declines(_C), R is "then", R is "else")),
 
-ite_cond_raw(R) <- (If(raise_value_error(_X), R is "then", R is "else")),
+ite_cond_raw(R) <- (if_(raise_value_error(_X), R is "then", R is "else")),
 
-ite_multi(N) <- (If(counted(N), true, N == 0)),
+ite_multi(N) <- (if_(counted(N), true, N == 0)),

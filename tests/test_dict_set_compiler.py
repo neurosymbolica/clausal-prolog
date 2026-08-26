@@ -555,13 +555,13 @@ class TestDictReadOnceLowering:
         src = (
             "-private([kee])\n"
             "yes({kee: 1}),\n"
-            "prc(PROF, R) <- If(yes(PROF), R is PROF.kee, R is 0)\n"
+            "prc(PROF, R) <- if_(yes(PROF), R is PROF.kee, R is 0)\n"
         )
         mod, logic_mod, reads = self._load_counting(
             tmp_path, monkeypatch, src, "readonce_ite")
         out = Var()
         # The dict has no `kee`, so the condition fails and the else-branch
-        # runs; a read hoisted ahead of the If would throw instead.
+        # runs; a read hoisted ahead of the if_ would throw instead.
         got = [deref(out) for _ in
                call("prc", DictTerm({}), out, module=logic_mod)]
         assert got == [0]

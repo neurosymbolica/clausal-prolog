@@ -599,7 +599,7 @@ def test_guard_dcg_parse_generate_if_not_str(tmp_path):
     m = _load(tmp_path, """
         greeting >> (["hello"], name)
         name >> (["world"])
-        opt >> If(["a"], ["b"], ["c"])
+        opt >> if_(["a"], ["b"], ["c"])
         nox >> (not ["x"], ["y"])
         hi >> ("hi")
     """)
@@ -749,8 +749,8 @@ def test_guard_lazy_hook_activates_and_removes_itself(tmp_path):
 
 
 def test_guard_if_call_syntax_errors(tmp_path):
-    with pytest.raises(SyntaxError, match="If"):
-        _load(tmp_path, "c(X, L) <- If(X >= 0, L is 1)")
+    with pytest.raises(SyntaxError, match="if_"):
+        _load(tmp_path, "c(X, L) <- if_(X >= 0, L is 1)")
 
 
 def test_guard_lambda_keyword_rejected(tmp_path):
@@ -759,7 +759,7 @@ def test_guard_lambda_keyword_rejected(tmp_path):
 
 
 def test_guard_ternary_rejected(tmp_path):
-    with pytest.raises(SyntaxError, match="If"):
+    with pytest.raises(SyntaxError, match="if_"):
         _load(tmp_path, 'c(X, L) <- (L is (1 if X else 2))')
 
 

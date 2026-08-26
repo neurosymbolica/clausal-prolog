@@ -4,7 +4,7 @@
 # Partial queries explore both branches with correct constraints.
 
 Memberd(X, [ELEMENT, *REST]) <- (
-    If(X is not ELEMENT, Memberd(X, REST), True)
+    if_(X is not ELEMENT, Memberd(X, REST), True)
 )
 
 

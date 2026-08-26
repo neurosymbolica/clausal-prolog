@@ -576,7 +576,7 @@ def test_F061_higher_order_accepts_seg_inputs():
 -module(t, [is_vowel(_c), concat(_c, _a, _o), key_of(_c, _k)])
 is_vowel(_c) <- in_(_c, ['a', 'e', 'i', 'o', 'u'])
 concat(_c, _a, _o) <- atom_concat(_a, _c, _o)
-key_of(_c, _k) <- If(in_(_c, ['a', 'e', 'i', 'o', 'u']), _k == 1, _k == 0)
+key_of(_c, _k) <- if_(in_(_c, ['a', 'e', 'i', 'o', 'u']), _k == 1, _k == 0)
 """
     mod = load_inline_clausal("c09_f061_higher_order_seg", src).__dict__[
         "$module"

@@ -11,7 +11,7 @@ Path(X, Y) <- (
 )
 
 # CheckPath/2: uses ITE with a tabled predicate as condition
-CheckPath(X, RESULT) <- If(Path(1, X), RESULT is "reachable", RESULT is "unreachable")
+CheckPath(X, RESULT) <- if_(Path(1, X), RESULT is "reachable", RESULT is "unreachable")
 
 
 Test("path 1 to 2") <- Path(1, 2)  # nv

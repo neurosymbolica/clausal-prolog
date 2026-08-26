@@ -9,7 +9,7 @@ not +Goal
 --8<-- [end:not_1]
 
 --8<-- [start:if_3]
-If(+Cond, +Then, +Else)
+if_(+Cond, +Then, +Else)
 --8<-- [end:if_3]
 
 --8<-- [start:throw_1]

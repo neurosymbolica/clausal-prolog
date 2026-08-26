@@ -114,7 +114,7 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_reified_ite",
-            "ReifiedITE(X) <- If(1 == 1, (X is ++(1/0)), X is 0)\n",
+            "ReifiedITE(X) <- if_(1 == 1, (X is ++(1/0)), X is 0)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
             list(call("ReifiedITE", None, module=logic_mod))
@@ -127,7 +127,7 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_general_ite",
-            "GeneralITE(X) <- If(++(1/0) == 1, X is 1, X is 2)\n",
+            "GeneralITE(X) <- if_(++(1/0) == 1, X is 1, X is 2)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
             list(call("GeneralITE", None, module=logic_mod))

@@ -472,7 +472,7 @@ def test_call_string_callable_keyword():
 
 def test_if_expr():
     # nv
-    node = term_eval("If(c, a, b)", sa.IfExpr)
+    node = term_eval("if_(c, a, b)", sa.IfExpr)
     assert isinstance(node.test,   sa.LoadName)
     assert isinstance(node.body,   sa.LoadName)
     assert isinstance(node.orelse, sa.LoadName)
@@ -481,7 +481,7 @@ def test_if_expr():
 def test_if_expr_rejects_two_args():
     # nv
     with pytest.raises(SyntaxError, match="exactly 3"):
-        term_eval("If(c, a)", sa.IfExpr)
+        term_eval("if_(c, a)", sa.IfExpr)
 
 
 def test_if_expr_ternary_rejected():

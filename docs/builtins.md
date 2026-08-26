@@ -72,7 +72,7 @@ Notation in signature lines:
 
 | Category | Predicates |
 |---|---|
-| [Control Flow](#control-flow) | once, Not, If/3, throw/1, Catch/2, catch_recover/3, catch/3, halt/0,1, setup_call_cleanup/3, call_cleanup/2 |
+| [Control Flow](#control-flow) | once, Not, if_/3, throw/1, Catch/2, catch_recover/3, catch/3, halt/0,1, setup_call_cleanup/3, call_cleanup/2 |
 | [Coroutining](#coroutining) | freeze/2, when/2 |
 | [Meta-Predicates](#meta-predicates) | findall/3, bagof/3, setof/3, forall/2, call_nth/2, count_all/2 |
 | [Higher-Order Call](#higher-order-call) | call/1..8, call_goal/1..8 |
@@ -95,7 +95,7 @@ Notation in signature lines:
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | now, now_utc, today, date, time, datetime, timedelta, date_add, date_sub, date_diff, datetime_string, timestamp, datetime_string_iso, date_string_iso, date_of, days_between, weekday, date_between |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
 | [Time & statistics](#time--statistics) | current_time/1, statistics/2 |
-| [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
+| [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `if_` |
 
 ---
 
@@ -130,7 +130,7 @@ For tabled predicates, uses well-founded semantics (delayed negation via `_naf_t
 
 ---
 
-### `If/3` (If-Then-Else)
+### `if_/3` (If-Then-Else)
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:if_3"
 ```
@@ -2755,7 +2755,7 @@ The following are not builtins in the registry — they are syntax forms compile
 | `X in Coll` | For-loop over collection | `compiler.py:1570` |
 | `X not in Coll` | Negated membership check | `compiler.py:1594` |
 | `not Goal` | Negation as failure | `compiler.py:1507` |
-| `If(Cond, Then, Else)` | If-Then-Else | `compiler.py` (`_compile_ite`) |
+| `if_(Cond, Then, Else)` | If-Then-Else | `compiler.py` (`_compile_ite`) |
 
 ---
 
@@ -2772,13 +2772,13 @@ The following are not builtins in the registry — they are syntax forms compile
     | `tests/fixtures/tabled_mutual_rec.clausal` | tabled mutual recursion |
     | `tests/fixtures/tabled_left_rec.clausal` | tabled left recursion |
     | `tests/fixtures/tabled_same_gen.clausal` | tabled same-generation |
-    | `tests/fixtures/tabled_ite.clausal` | `If/3` with tabled predicate |
+    | `tests/fixtures/tabled_ite.clausal` | `if_/3` with tabled predicate |
     | `tests/fixtures/clpfd_queens.clausal` | `in_domain/3`, `all_different/1`, `label/1` |
     | `tests/fixtures/clpfd_sendmore.clausal` | `in_domain/3`, `all_different/1`, `label/1` |
     | `tests/fixtures/wfs_win.clausal` | well-founded semantics, `not` on tabled |
     | `tests/fixtures/wfs_win_asym.clausal` | well-founded semantics, asymmetric |
-    | `tests/fixtures/reified_memberd.clausal` | `If/3`, `dif/2` (reified ITE) |
-    | `tests/fixtures/reified_max.clausal` | `If/3` with arithmetic |
+    | `tests/fixtures/reified_memberd.clausal` | `if_/3`, `dif/2` (reified ITE) |
+    | `tests/fixtures/reified_max.clausal` | `if_/3` with arithmetic |
     | `tests/fixtures/reif_eq_test.clausal` | `eq/3` |
     | `tests/fixtures/once_member.clausal` | `once/1` |
     | `tests/fixtures/meta_test.clausal` | `findall/3`, `setof/3`, `forall/2`, `in_/2` |

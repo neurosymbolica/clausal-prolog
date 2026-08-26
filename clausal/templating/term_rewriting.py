@@ -377,6 +377,16 @@ _TRUTH_ALIASES = {
 
 _BOOL_ALIAS_VALUES = {"True": True, "False": False}
 
+# The reified if-then-else goal.  ``if_`` is canonical — lower-case like every
+# other goal, trailing underscore to dodge the Python keyword, and the spelling
+# the reified-conditional literature uses (Neumerkel & Kral's ``if_/3``, see
+# docs/reified_ite.md).  ``If`` is the superseded spelling: every recogniser
+# below accepts it, the term pass warns once per site, and nothing in the
+# library emits it any more.
+ITE_NAME = "if_"
+ITE_DEPRECATED_NAME = "If"
+_ITE_NAMES = frozenset({ITE_NAME, ITE_DEPRECATED_NAME})
+
 
 def _reserved_truth_decl_name(item) -> str | None:
     """The truth-value spelling *item* tries to declare, or ``None``.
@@ -792,7 +802,7 @@ def _lower_dict_reads_in_goal(goal, mint, shared):
             goal,
         )]
     if (isinstance(goal, Call) and isinstance(goal.func, Name)
-            and goal.func.id == "If" and len(goal.args) == 3
+            and goal.func.id in _ITE_NAMES and len(goal.args) == 3
             and not goal.keywords):
         return [replace(
             Call(func=goal.func,
@@ -954,6 +964,16 @@ class ClausalSingletonWarning(ClausalLintWarning):
     ``-allow_singletons``. The suffix is the sole canonical spelling —
     case-based exemptions are blind for caseless scripts, which the
     ``isupper()`` rule forces into leading-underscore variables.
+    """
+
+
+class ClausalDeprecatedSpellingWarning(ClausalLintWarning):
+    """A construct written with a superseded surface spelling.
+
+    Not a ``DeprecationWarning``: those are silenced by default outside
+    ``__main__``, and a load-time lint that nobody sees is the silent alias
+    this warning exists to avoid.  Suppress it the way the other lints are
+    suppressed — ``warnings.filterwarnings`` on this class.
     """
 
 
@@ -1240,6 +1260,35 @@ class TermTransformer(NodeTransformer):
         finally:
             transformer._suppress_bare_atom_collection = prev
 
+    def _warn_deprecated_ite_spelling(transformer, call):
+        """Lint one ``If(...)`` site (see ClausalDeprecatedSpellingWarning).
+
+        Every surface path funnels through ``visit_Call`` eventually.  The DCG
+        body rewriter runs first, but it rebuilds the node with the author's
+        own spelling rather than normalising to ``if_``, so an ``If`` inside a
+        grammar body is warned about here too instead of being laundered
+        upstream.  Message shape follows ``EmbedTransformer._site``.
+        """
+        import warnings  # noqa: PLC0415
+        lineno = getattr(call, "lineno", None)
+        if transformer._filename:
+            where = f"{transformer._filename}:{lineno or '?'}"
+        else:
+            where = f"line {lineno}" if lineno else "unknown site"
+        snippet = ""
+        lines = transformer._source_lines
+        if lines and lineno and 1 <= lineno <= len(lines):
+            snippet = " — " + lines[lineno - 1].strip()
+        warnings.warn(
+            f"{where}{snippet}: `{ITE_DEPRECATED_NAME}` is the old spelling of "
+            f"the reified if-then-else. Rename "
+            f"`{ITE_DEPRECATED_NAME}` -> `{ITE_NAME}` "
+            f"({ITE_NAME}(COND, THEN, ELSE)); the old spelling still works but "
+            f"will be removed in a future release",
+            ClausalDeprecatedSpellingWarning,
+            stacklevel=2,
+        )
+
     def visit_Call(transformer, call):
         visit = transformer.visit
 
@@ -1254,12 +1303,14 @@ class TermTransformer(NodeTransformer):
         ):
             return visit(call.args[0])
 
-        # If(cond, then) or If(cond, then, else) → IfExpr node
-        if isinstance(call.func, Name) and call.func.id == "If":
+        # if_(cond, then, else) → IfExpr node.  ``If`` is the old spelling.
+        if isinstance(call.func, Name) and call.func.id in _ITE_NAMES:
+            if call.func.id == ITE_DEPRECATED_NAME:
+                transformer._warn_deprecated_ite_spelling(call)
             if call.keywords or len(call.args) != 3:
                 raise SyntaxError(
-                    "If() takes exactly 3 positional arguments: "
-                    "If(condition, then, else)"
+                    f"{ITE_NAME}() takes exactly 3 positional arguments: "
+                    f"{ITE_NAME}(condition, then, else)"
                 )
             return node_ast(
                 "IfExpr", call,
@@ -1537,7 +1588,7 @@ class TermTransformer(NodeTransformer):
     def visit_IfExp(transformer, if_expression):
         raise SyntaxError(
             "Ternary 'THEN if COND else ELSE' is not supported; "
-            "use If(COND, THEN, ELSE) instead"
+            f"use {ITE_NAME}(COND, THEN, ELSE) instead"
         )
 
     def visit_Lambda(transformer, lambda_expr):
@@ -2589,9 +2640,11 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
             return replace(call, source), counter
 
         case Call(func=Name(id=name), args=args, keywords=kwargs) if (
-            name == "If" and len(args) == 3
+            name in _ITE_NAMES and len(args) == 3
         ):
-            # If-then-else: If(cond, then, else)
+            # If-then-else: if_(cond, then, else).  The rebuilt node keeps
+            # *name* rather than normalising to ``if_`` so that a deprecated
+            # spelling still reaches the term pass's lint.
             cond, then_, else_ = args
             mid = f"_dcg{counter}"
             counter += 1
@@ -2599,7 +2652,7 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
             then_r, counter = _rewrite_dcg_body(then_, mid, s_out, counter, source)
             else_r, counter = _rewrite_dcg_body(else_, s_in, s_out, counter, source)
             result = Call(
-                func=Name(id="If", ctx=load),
+                func=Name(id=name, ctx=load),
                 args=[cond_r, then_r, else_r],
                 keywords=[],
             )
@@ -3042,8 +3095,18 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             result = UnaryOp(op=Not(), operand=inner_r)
             return replace(result, source), acc_states, counter
 
-        case Call(func=Name(id="If"), args=[cond, then_, else_], keywords=_):
-            # If-then-else.
+        case Call(func=Name(id=name), args=[cond, then_, else_], keywords=_) if (
+            name in _ITE_NAMES
+        ):
+            # If-then-else.  As in the DCG rewriter, the rebuilt node keeps
+            # *name* so a deprecated spelling still reaches the term lint.
+            #
+            # UNREACHABLE as written: the generic ``case Call(func=Name(...))``
+            # above matches any call, so an ITE in an EDCG body is rewritten
+            # there instead and its branches never get accumulator threading.
+            # Pre-existing (verified on canonical main 2026-08-26), tracked in
+            # todo/edcg-ite-case-is-unreachable.md — kept in sync with the
+            # rename so the fix does not have to redo it.
             mid_states = {}
             for acc_name, (in_var, out_var) in acc_states.items():
                 mid = f"_edcg_{acc_name}_{counter}"
@@ -3070,7 +3133,7 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
                 edcg_accs, edcg_passes, edcg_preds, counter, source
             )
             result = Call(
-                func=Name(id="If", ctx=load),
+                func=Name(id=name, ctx=load),
                 args=[cond_r, then_r, else_r],
                 keywords=[],
             )

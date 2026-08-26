@@ -10,7 +10,7 @@ Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (so
 
 ## Syntax
 
-In `.clausal` files, use the `If` function call:
+In `.clausal` files, use the `if_` function call:
 
 ```clausal
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:if_signature"
@@ -20,23 +20,40 @@ This compiles to a reified three-way branch when the condition is a built-in rei
 
 All three arguments are required.
 
+### The old spelling, `If/3`
+
+`if_` was once spelled `If`. The old spelling still compiles — every
+recogniser accepts it — but it warns at load time
+(`ClausalDeprecatedSpellingWarning`, naming the file, line and rewrite) and
+will be removed in a future release. Nothing in the library emits it any more:
+the [reifier](reflection.md)'s renderer writes `if_`, so a round-trip through
+`reify_source`/`render_source` migrates a clause for you.
+
+To silence the lint while you migrate:
+
+```python
+import warnings
+from clausal.templating.term_rewriting import ClausalDeprecatedSpellingWarning
+warnings.filterwarnings("ignore", category=ClausalDeprecatedSpellingWarning)
+```
+
 ### Examples
 
 **Ground branching — deterministic:**
 ```clausal
-classify(X, L) <- If(X >= 0, L is "positive", L is "negative")
+classify(X, L) <- if_(X >= 0, L is "positive", L is "negative")
 ```
 
 **Undetermined branching — explores both paths:**
 ```clausal
-check(X, R) <- If(X is 1, R is "equal", R is "different")
+check(X, R) <- if_(X is 1, R is "equal", R is "different")
 ```
 
 when `X` is unbound, this produces two solutions: `X=1, R="equal"` and `dif(X,1), R="different"`.
 
 **Nested ITE:**
 ```clausal
-grade(S, G) <- If(S >= 90, G is "A", If(S >= 80, G is "B", G is "C"))
+grade(S, G) <- if_(S >= 90, G is "A", if_(S >= 80, G is "B", G is "C"))
 ```
 
 ---
@@ -115,11 +132,11 @@ Three-valued CLP(ℤ) comparison in `clausal.logic.clpfd`:
 
 ## Compiler Integration
 
-The `If(condition, then, else)` call syntax is parsed into an `IfExpr` AST node, which is handled in both `compile_goal` and `compile_goal_trampoline` in the [compiler](compiler.md).
+The `if_(condition, then, else)` call syntax is parsed into an `IfExpr` AST node, which is handled in both `compile_goal` and `compile_goal_trampoline` in the [compiler](compiler.md).
 
 ### Generated code (reifiable equality condition)
 
-For `If(X is 1, R is "yes", R is "no")`:
+For `if_(X is 1, R is "yes", R is "no")`:
 
 ```python
 _reif_0 = _reify_eq(X_, 1, trail)
@@ -153,7 +170,7 @@ else:
 
 ### Generated code (general non-reifiable condition)
 
-For `If(member(X, Xs), then_goal, else_goal)`:
+For `if_(member(X, Xs), then_goal, else_goal)`:
 
 ```python
 def _ite_cond_0():
@@ -252,7 +269,7 @@ Key properties:
 - **Failing goal = no solutions**: if the inner goal has no solutions, the continuation is never reached.
 - **Works in both simple and trampoline modes**: inner goal always compiles in simple mode (sub-generator pattern).
 
-`once()` is the explicit escape hatch for users who want first-solution commitment. It replaces Prolog's `once/1` and is the building block for committed-choice patterns like `If(once(goal), then, else)`. See also [Control](control.md) for other control-flow predicates.
+`once()` is the explicit escape hatch for users who want first-solution commitment. It replaces Prolog's `once/1` and is the building block for committed-choice patterns like `if_(once(goal), then, else)`. See also [Control](control.md) for other control-flow predicates.
 
 ---
 
@@ -271,7 +288,7 @@ Key properties:
     - **dif interaction** (2): pre-existing dif constraint, undetermined with compatible dif
     - **Tabled ITE** (2): tabled condition with true/false paths
     - **Import integration** (5): `.clausal` file with ITE, memberd ground/absent/unbound/no-duplicates
-    - **`once()` tests** (12): first solution only, failing goal, continuation backtracking, binding preservation, once-inside-If, `.clausal` file integration — simple + trampoline modes
+    - **`once()` tests** (12): first solution only, failing goal, continuation backtracking, binding preservation, once-inside-if_, `.clausal` file integration — simple + trampoline modes
     - **`once()` .clausal integration** (1): `once_member.clausal` fixture
 
 ---

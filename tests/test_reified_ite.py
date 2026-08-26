@@ -349,7 +349,7 @@ class TestReifiedIteEquality:
         return results
 
     def test_ground_true_simple(self):
-        """If(1 is 1, result is 'yes', result is 'no') → 'yes'."""
+        """if_(1 is 1, result is 'yes', result is 'no') → 'yes'."""
         # nv
         r = Var()
         clause = Clause(
@@ -364,7 +364,7 @@ class TestReifiedIteEquality:
         assert results == [("yes",)]
 
     def test_ground_false_simple(self):
-        """If(1 is 2, result is 'yes', result is 'no') → 'no'."""
+        """if_(1 is 2, result is 'yes', result is 'no') → 'no'."""
         # nv
         r = Var()
         clause = Clause(
@@ -379,7 +379,7 @@ class TestReifiedIteEquality:
         assert results == [("no",)]
 
     def test_undetermined_explores_both_simple(self):
-        """If(X is 1, result is 'eq', result is 'neq') with X unbound → both branches."""
+        """if_(X is 1, result is 'eq', result is 'neq') with X unbound → both branches."""
         # nv
         x = Var()
         r = Var()
@@ -458,7 +458,7 @@ class TestReifiedIteDif:
         return results
 
     def test_ground_dif_true(self):
-        """If(1 is not 2, 'yes', 'no') → 'yes'."""
+        """if_(1 is not 2, 'yes', 'no') → 'yes'."""
         # nv
         r = Var()
         clause = Clause(
@@ -473,7 +473,7 @@ class TestReifiedIteDif:
         assert results == [("yes",)]
 
     def test_ground_dif_false(self):
-        """If(1 is not 1, 'yes', 'no') → 'no'."""
+        """if_(1 is not 1, 'yes', 'no') → 'no'."""
         # nv
         r = Var()
         clause = Clause(
@@ -488,7 +488,7 @@ class TestReifiedIteDif:
         assert results == [("no",)]
 
     def test_undetermined_dif(self):
-        """If(X is not 1, 'diff', 'same') with X unbound → both branches (swapped)."""
+        """if_(X is not 1, 'diff', 'same') with X unbound → both branches (swapped)."""
         # nv
         x = Var()
         r = Var()
@@ -547,7 +547,7 @@ class TestReifiedIteFd:
     # ── Ground tests: all operators ──
 
     def test_ground_lt_true(self):
-        """If(2 < 5, 'yes', 'no') → 'yes'."""
+        """if_(2 < 5, 'yes', 'no') → 'yes'."""
         # nv
         r = Var()
         clause = Clause(
@@ -562,7 +562,7 @@ class TestReifiedIteFd:
         assert results == [("yes",)]
 
     def test_ground_lt_false(self):
-        """If(5 < 2, 'yes', 'no') → 'no'."""
+        """if_(5 < 2, 'yes', 'no') → 'no'."""
         # nv
         r = Var()
         clause = Clause(
@@ -577,7 +577,7 @@ class TestReifiedIteFd:
         assert results == [("no",)]
 
     def test_ground_eq_true(self):
-        """If(3 == 3, 'yes', 'no') → 'yes'."""
+        """if_(3 == 3, 'yes', 'no') → 'yes'."""
         # nv
         r = Var()
         clause = Clause(
@@ -592,7 +592,7 @@ class TestReifiedIteFd:
         assert results == [("yes",)]
 
     def test_ground_eq_false(self):
-        """If(3 == 4, 'yes', 'no') → 'no'."""
+        """if_(3 == 4, 'yes', 'no') → 'no'."""
         # nv
         r = Var()
         clause = Clause(
@@ -607,7 +607,7 @@ class TestReifiedIteFd:
         assert results == [("no",)]
 
     def test_ground_ne_true(self):
-        """If(3 != 4, 'yes', 'no') → 'yes'."""
+        """if_(3 != 4, 'yes', 'no') → 'yes'."""
         # nv
         r = Var()
         clause = Clause(
@@ -622,7 +622,7 @@ class TestReifiedIteFd:
         assert results == [("yes",)]
 
     def test_ground_ne_false(self):
-        """If(3 != 3, 'yes', 'no') → 'no'."""
+        """if_(3 != 3, 'yes', 'no') → 'no'."""
         # nv
         r = Var()
         clause = Clause(
@@ -637,7 +637,7 @@ class TestReifiedIteFd:
         assert results == [("no",)]
 
     def test_ground_le_true(self):
-        """If(3 <= 3, 'yes', 'no') → 'yes'."""
+        """if_(3 <= 3, 'yes', 'no') → 'yes'."""
         # nv
         r = Var()
         clause = Clause(
@@ -652,7 +652,7 @@ class TestReifiedIteFd:
         assert results == [("yes",)]
 
     def test_ground_le_false(self):
-        """If(4 <= 3, 'yes', 'no') → 'no'."""
+        """if_(4 <= 3, 'yes', 'no') → 'no'."""
         # nv
         r = Var()
         clause = Clause(
@@ -667,7 +667,7 @@ class TestReifiedIteFd:
         assert results == [("no",)]
 
     def test_ground_gt_true(self):
-        """If(5 > 3, 'yes', 'no') → 'yes'."""
+        """if_(5 > 3, 'yes', 'no') → 'yes'."""
         # nv
         r = Var()
         clause = Clause(
@@ -682,7 +682,7 @@ class TestReifiedIteFd:
         assert results == [("yes",)]
 
     def test_ground_gt_false(self):
-        """If(3 > 5, 'yes', 'no') → 'no'."""
+        """if_(3 > 5, 'yes', 'no') → 'no'."""
         # nv
         r = Var()
         clause = Clause(
@@ -697,7 +697,7 @@ class TestReifiedIteFd:
         assert results == [("no",)]
 
     def test_ground_ge_true(self):
-        """If(5 >= 5, 'yes', 'no') → 'yes'."""
+        """if_(5 >= 5, 'yes', 'no') → 'yes'."""
         # nv
         r = Var()
         clause = Clause(
@@ -712,7 +712,7 @@ class TestReifiedIteFd:
         assert results == [("yes",)]
 
     def test_ground_ge_false(self):
-        """If(4 >= 5, 'yes', 'no') → 'no'."""
+        """if_(4 >= 5, 'yes', 'no') → 'no'."""
         # nv
         r = Var()
         clause = Clause(
@@ -787,7 +787,7 @@ class TestReifiedIteFd:
     # ── Undetermined: FD var tests (both branches explored) ──
 
     def test_undetermined_lt_explores_both(self):
-        """If(X < 5, 'lo', 'hi') with X as FD var [1..10] → both branches."""
+        """if_(X < 5, 'lo', 'hi') with X as FD var [1..10] → both branches."""
         # nv
         x = Var()
         r = Var()
@@ -815,7 +815,7 @@ class TestReifiedIteFd:
         assert "hi" in labels
 
     def test_undetermined_eq_explores_both(self):
-        """If(X == 3, 'hit', 'miss') with FD var X [1..5] → both branches."""
+        """if_(X == 3, 'hit', 'miss') with FD var X [1..5] → both branches."""
         # nv
         x = Var()
         r = Var()
@@ -840,7 +840,7 @@ class TestReifiedIteFd:
         assert "miss" in labels
 
     def test_undetermined_ge_explores_both_trampoline(self):
-        """If(X >= 5, 'hi', 'lo') with FD var X [1..10] in trampoline mode."""
+        """if_(X >= 5, 'hi', 'lo') with FD var X [1..10] in trampoline mode."""
         # nv
         from clausal.logic.trampoline import StepGenerator, DONE
         x = Var()
@@ -876,7 +876,7 @@ class TestReifiedIteFd:
     # ── FD reification + labeling integration ──
 
     def test_fd_ite_then_label(self):
-        """If(X < 5, R is 'lo', R is 'hi') then label X — correct domain restriction."""
+        """if_(X < 5, R is 'lo', R is 'hi') then label X — correct domain restriction."""
         # nv
         from clausal.logic.clpfd import label as fd_label
         x = Var()
@@ -922,7 +922,7 @@ class TestReifiedIteFd:
     # ── Nested FD ITE ──
 
     def test_nested_fd_ite(self):
-        """If(X < 10, If(X > 5, 'mid', 'lo'), 'hi') — nested FD conditions."""
+        """if_(X < 10, if_(X > 5, 'mid', 'lo'), 'hi') — nested FD conditions."""
         # nv
         r = Var()
         clause = Clause(
@@ -983,7 +983,7 @@ class TestGeneralIte:
     def test_succeeding_condition_simple(self):
         """If condition succeeds, run then branch."""
         # member/2: member(X, [X|_]). member(X, [_|T]) :- member(X, T).
-        # We'll use in_ instead for simplicity: If(1 in [1,2,3], 'yes', 'no')
+        # We'll use in_ instead for simplicity: if_(1 in [1,2,3], 'yes', 'no')
         # nv
         r = Var()
         clause = Clause(
@@ -1061,7 +1061,7 @@ class TestIteControlFlow:
         return results
 
     def test_nested_ite(self):
-        """If(c1, If(c2, a, b), c) with ground conditions."""
+        """if_(c1, if_(c2, a, b), c) with ground conditions."""
         # nv
         r = Var()
         clause = Clause(
@@ -1080,7 +1080,7 @@ class TestIteControlFlow:
         assert results == [("both_true",)]
 
     def test_nested_ite_inner_false(self):
-        """If(true, If(false, a, b), c)."""
+        """if_(true, if_(false, a, b), c)."""
         # nv
         r = Var()
         clause = Clause(
@@ -1118,7 +1118,7 @@ class TestIteControlFlow:
         assert results[1][1] == "free"
 
     def test_ite_with_conjunction_body(self):
-        """ITE where then is a conjunction: If(cond, a and b, c)."""
+        """ITE where then is a conjunction: if_(cond, a and b, c)."""
         # nv
         x = Var()
         y = Var()
@@ -1175,7 +1175,7 @@ class TestGeneralIteMultiSolution:
         return results
 
     def test_multi_solution_runs_then_for_each(self):
-        """If(X in [1,2,3], R is X, R is 'none') → then runs 3 times."""
+        """if_(X in [1,2,3], R is X, R is 'none') → then runs 3 times."""
         # nv
         x = Var()
         r = Var()
@@ -1216,7 +1216,7 @@ class TestGeneralIteMultiSolution:
         # nv
         x = Var()
         r = Var()
-        # If(X in [10, 20], R is X, R is 0) — then branch sees X bound by condition
+        # if_(X in [10, 20], R is X, R is 0) — then branch sees X bound by condition
         clause = Clause(
             head=Compound("ite_test", (x, r)),
             body=[IfExpr(
@@ -1248,7 +1248,7 @@ class TestIteDifInteraction:
         return results
 
     def test_undetermined_ite_with_preexisting_dif(self):
-        """dif(X, 1) before If(X is 1, then, else) → only else branch."""
+        """dif(X, 1) before if_(X is 1, then, else) → only else branch."""
         # nv
         x = Var()
         r = Var()
@@ -1273,7 +1273,7 @@ class TestIteDifInteraction:
         assert "eq" not in labels
 
     def test_undetermined_ite_with_dif_still_explores_both_when_compatible(self):
-        """dif(X, 2) before If(X is 1, then, else) → both branches (dif doesn't block)."""
+        """dif(X, 2) before if_(X is 1, then, else) → both branches (dif doesn't block)."""
         # nv
         x = Var()
         r = Var()
@@ -1579,7 +1579,7 @@ class TestOnce:
         assert results == [(42,)]
 
     def test_once_in_if_condition_simple(self):
-        """If(once(X in [1,2,3]), then, else) — once inside If condition."""
+        """if_(once(X in [1,2,3]), then, else) — once inside if_ condition."""
         # nv
         r = Var()
         x = Var()

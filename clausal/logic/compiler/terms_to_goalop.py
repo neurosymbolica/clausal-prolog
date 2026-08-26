@@ -279,7 +279,7 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
             # reified-branch lowering can't consume (it reads test_op.l/.r).
             # Such a test is NOT reifiable as a simple eq — fall back to the
             # general single-eval ITE shape. Surfaces with DCG terminal-branch
-            # if-then-else, e.g. ``g >> (If([x], [y], [z]))``.
+            # if-then-else, e.g. ``g >> (if_([x], [y], [z]))``.
             star_list_unify = (
                 isinstance(test, nodes.Unify)
                 and (_is_star_list(test.left) or _is_star_list(test.right))
