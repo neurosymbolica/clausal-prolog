@@ -175,12 +175,16 @@ def test_mid_chain_suspend_is_intercepted_by_drive_until_yield(impl):
     assert log == [impl.DONE]  # driver converted the suspend to DONE
 
 
-def test_mid_chain_suspend_is_NOT_intercepted_by_trampoline(impl):
-    # Pins today's per-entry-point flag difference (spec: preserved, not
-    # converged).  trampoline() hands the sentinel through untouched.
+def test_mid_chain_suspend_is_intercepted_by_trampoline_too(impl):
+    # Policy convergence (todo/drive-loop-policy-convergence.md, Q1,
+    # 2026-08-26): all three entry points intercept a mid-chain suspend.
+    # trampoline()'s only runtime call site is the Z3 propagator embedding
+    # (clpz3._run_goal), which discards the value — a leaked sentinel there
+    # fabricated success; interception (suspend → DONE for the parent) is
+    # what the other two entry points always did.
     log = []
-    assert impl.trampoline(suspend_chain(impl, log)) == "leaked"
-    assert log == [_TABLING_SUSPEND]
+    assert impl.trampoline(suspend_chain(impl, log)) == "intercepted"
+    assert log == [impl.DONE]
 
 
 def test_solutions_intercepts_mid_chain_suspend(impl):
@@ -265,9 +269,15 @@ def test_control_signals_are_never_routed(impl, exc_type):
         impl.solutions(root(impl, greedy))
 
 
-def test_pep479_wrapper_is_exhaustion_for_duy_and_propagates_elsewhere(impl):
+def test_pep479_wrapper_is_exhaustion_for_duy_and_solutions(impl):
     # StopIteration raised inside a generator surfaces as the PEP-479
-    # RuntimeError wrapper at the frame boundary.
+    # RuntimeError wrapper at the frame boundary.  Policy convergence
+    # (todo/drive-loop-policy-convergence.md, Q2, 2026-08-26): solutions
+    # agrees with _drive_until_yield that the wrapper is a converted
+    # exhaustion (A04-F009) — the exhaustion test runs BEFORE routing, so
+    # the enclosing handler must not steal it either.  trampoline() keeps
+    # raising: its contract (return the root-yield value) has no way to
+    # represent exhaustion, a blessed difference, not an accident.
     def stop_raiser(this, proceed, fail, catcher):
         raise StopIteration()
         yield  # pragma: no cover
@@ -281,11 +291,12 @@ def test_pep479_wrapper_is_exhaustion_for_duy_and_propagates_elsewhere(impl):
         yield (fail, impl.DONE)
 
     assert impl._drive_until_yield(root(impl, greedy)) is None  # A04-F009
+    assert impl.solutions(root(impl, greedy)) == []
     with pytest.raises(RuntimeError):
-        impl.solutions(root(impl, greedy))
+        impl.trampoline(root(impl, greedy))
 
 
-def test_entry_send_pep479_wrapper_exhausts_duy_but_raises_via_solutions(impl):
+def test_entry_send_pep479_wrapper_exhausts_duy_and_solutions(impl):
     # Review Minor-1: the PEP-479 wrapper case above is hit mid-chain (in
     # the while loop); the ROOT's very first send() has its own try/except
     # in _drive_to_root_yield that no existing test reached. A root frame
@@ -293,8 +304,9 @@ def test_entry_send_pep479_wrapper_exhausts_duy_but_raises_via_solutions(impl):
     # wrapper on that entry send instead.
     assert impl._drive_until_yield(
         root(impl, raiser_fn(StopIteration()))) is None
+    assert impl.solutions(root(impl, raiser_fn(StopIteration()))) == []
     with pytest.raises(RuntimeError):
-        impl.solutions(root(impl, raiser_fn(StopIteration())))
+        impl.trampoline(root(impl, raiser_fn(StopIteration())))
 
 
 def test_generator_that_returns_is_a_protocol_error_not_a_catchable(impl):
@@ -321,3 +333,105 @@ def test_generator_that_returns_is_a_protocol_error_not_a_catchable(impl):
     assert getattr(ei.value, "__clausal_engine_protocol__", False)
     with pytest.raises(RuntimeError):
         impl._drive_until_yield(root(impl, greedy))
+
+
+# ── FINAL at the root retires the StepGenerator for every pull-driver ────────
+# Policy decision (todo/drive-loop-policy-convergence.md, Q3, 2026-08-26),
+# made BEFORE any producer emits FINAL (CONTINUATION_TCO_PLAN Phase 4b+):
+# a root-level FINAL is "here is a solution AND I am retiring".
+# _drive_until_yield delivers the solution (True) and marks the root
+# retired; every later pull answers None WITHOUT resuming the retired
+# generator.  solutions already stopped pulling; it now also marks the
+# root so a later _drive_until_yield on the same root agrees.
+
+
+def final_then_explode_fn(impl, pulls):
+    """Root frame: one solution, then FINAL.  Resuming after FINAL is a
+    protocol violation, made loud."""
+    def fn(this, proceed, fail, catcher):
+        pulls.append("first")
+        yield (proceed, "sol")
+        pulls.append("final")
+        yield (proceed, impl.FINAL)
+        pulls.append("MUST NOT HAPPEN")
+        raise AssertionError("resumed a retired root")
+        yield  # pragma: no cover
+    return fn
+
+
+def test_final_at_root_is_a_solution_then_retirement_for_duy(impl):
+    pulls = []
+    sg = root(impl, final_then_explode_fn(impl, pulls))
+    assert impl._drive_until_yield(sg) is True   # "sol"
+    assert impl._drive_until_yield(sg) is True   # FINAL delivers its solution
+    assert impl._drive_until_yield(sg) is None   # retired: no further pull
+    assert impl._drive_until_yield(sg) is None   # stays retired
+    assert pulls == ["first", "final"]
+
+
+def test_solutions_retirement_is_visible_to_a_later_duy_pull(impl):
+    pulls = []
+    sg = root(impl, final_then_explode_fn(impl, pulls))
+    assert impl.solutions(sg) == ["sol"]         # FINAL itself: no payload
+    assert impl._drive_until_yield(sg) is None   # solutions marked it retired
+    assert pulls == ["first", "final"]
+
+
+def test_duy_retirement_is_visible_to_a_later_solutions_call(impl):
+    pulls = []
+    sg = root(impl, final_then_explode_fn(impl, pulls))
+    assert impl._drive_until_yield(sg) is True
+    assert impl._drive_until_yield(sg) is True
+    assert impl.solutions(sg) == []              # retired root: nothing more
+    assert pulls == ["first", "final"]
+
+
+# ── malformed steps are TypeErrors from the driver, never routed ─────────────
+# Policy decision (todo/drive-loop-policy-convergence.md, Q4, 2026-08-26):
+# the C core's shape checks are canonical — a step that is not a 2-tuple,
+# or whose target is neither StepGenerator nor None, is a protocol
+# violation (a compiler bug or a hand-built chain gone wrong).  The
+# driver raises TypeError directly, OUTSIDE exception routing: no
+# enclosing catch/3 may absorb it.  The Python twin used to route the
+# unpack TypeError; it now performs the same explicit checks.
+
+
+def bad_step_chain(impl, bad_step):
+    """Child hands the driver *bad_step*; the enclosing handler must not
+    steal the resulting TypeError."""
+    def bad(this, proceed, fail, catcher):
+        yield bad_step
+
+    def greedy(this, proceed, fail, catcher):
+        child = impl.StepGenerator(bad, this, this, this)
+        try:
+            yield (child, None)
+        except Exception:
+            yield (proceed, "stolen")
+        yield (fail, impl.DONE)
+
+    return root(impl, greedy)
+
+
+@pytest.mark.parametrize("bad_step, match", [
+    ("not-a-tuple", "must yield 2-tuples"),
+    ((1, 2, 3), "must yield 2-tuples"),
+    ((42, None), "must be StepGenerator or None"),
+], ids=["non-tuple", "3-tuple", "bad-target"])
+def test_malformed_step_is_a_typeerror_never_routed(impl, bad_step, match):
+    with pytest.raises(TypeError, match=match):
+        impl.trampoline(bad_step_chain(impl, bad_step))
+    with pytest.raises(TypeError, match=match):
+        impl.solutions(bad_step_chain(impl, bad_step))
+    with pytest.raises(TypeError, match=match):
+        impl._drive_until_yield(bad_step_chain(impl, bad_step))
+
+
+def test_malformed_first_step_at_entry_is_a_typeerror(impl):
+    def fn(this, proceed, fail, catcher):
+        yield "junk"
+
+    with pytest.raises(TypeError, match="must yield 2-tuples"):
+        impl.trampoline(root(impl, fn))
+    with pytest.raises(TypeError, match="must yield 2-tuples"):
+        impl._drive_until_yield(root(impl, fn))

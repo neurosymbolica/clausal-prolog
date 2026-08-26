@@ -61,7 +61,8 @@ static PyObject *g_TABLING_SUSPEND = NULL; /* clausal.logic.tabling._TABLING_SUS
  *     drive loop must see exhaustion as exhaustion, and a catch/3 that
  *     swallowed it would turn a finished search into a recovery goal.  (The
  *     PEP-479 RuntimeError wrapper around one is consumed as exhaustion by
- *     drive_until_yield_func BEFORE this test — A04-F009.)
+ *     solutions_func and drive_until_yield_func BEFORE this test —
+ *     A04-F009, converged 2026-08-26.)
  *
  * Precondition: an exception is currently set.  Leaves it unchanged.
  * KEEP IN SYNC with ``_is_routable`` in ../trampoline.py.
@@ -115,6 +116,9 @@ typedef struct {
     PyObject *fail;         /* exhaustion target (or Py_None) */
     PyObject *catcher;      /* exception handler chain (or Py_None) */
     int       started;      /* 0 = first send does next(); 1 = delegates */
+    int       retired;      /* 1 = a pull-driver saw this root yield FINAL
+                             * ("solution AND retiring"): later pulls answer
+                             * exhaustion without resuming the generator. */
 } StepGenObject;
 
 static PyTypeObject *StepGenType = NULL;   /* heap type, set at module init */
@@ -187,6 +191,7 @@ StepGen_init(StepGenObject *self, PyObject *args, PyObject *kwds)
     Py_XDECREF(self->gen);
     self->gen = gen;
     self->started = 0;
+    self->retired = 0;
     return 0;
 }
 
@@ -626,11 +631,15 @@ trampoline_func(PyObject *Py_UNUSED(module), PyObject *root)
         return NULL;
     }
 
-    /* The root protocol ends with yield (None, final_value); no
-     * mid-chain suspend interception, no exhaustion conversion —
-     * exactly the historical trampoline loop. */
+    /* The root protocol ends with yield (None, final_value).  A mid-chain
+     * _TABLING_SUSPEND is intercepted like every other entry point (policy
+     * convergence Q1, 2026-08-26 — it used to leak through as a value).
+     * No exhaustion conversion: this contract returns the root-yield
+     * value and has no way to represent exhaustion, so StopIteration /
+     * a PEP-479 wrapper raises (blessed difference, see
+     * todo/done/drive-loop-policy-convergence.md). */
     PyObject *value = NULL;
-    if (drive_to_root_yield(root, /*intercept_ts=*/0,
+    if (drive_to_root_yield(root, /*intercept_ts=*/1,
                             /*stopiteration_is_exhaustion=*/0,
                             "trampoline", &value) != DRIVE_YIELDED)
         return NULL;   /* DRIVE_EXHAUSTED impossible with the flag off */
@@ -667,11 +676,23 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
     PyObject *results = PyList_New(0);
     if (!results) return NULL;
 
+    /* A FINAL was already delivered from this root (by us or by
+     * _drive_until_yield): do not resume the retired generator. */
+    if (StepGen_CAST(root)->retired)
+        return results;
+
     while (1) {
         PyObject *value = NULL;
-        if (drive_to_root_yield(root, /*intercept_ts=*/1,
-                                /*stopiteration_is_exhaustion=*/0,
-                                "solutions", &value) != DRIVE_YIELDED) {
+        /* stopiteration_is_exhaustion: a StopIteration / PEP-479 wrapper
+         * from a send is a converted exhaustion — return what was
+         * collected, agreeing with _drive_until_yield (policy convergence
+         * Q2, 2026-08-26; A04-F009 read across entry points). */
+        drive_result r = drive_to_root_yield(root, /*intercept_ts=*/1,
+                                             /*stopiteration_is_exhaustion=*/1,
+                                             "solutions", &value);
+        if (r == DRIVE_EXHAUSTED)
+            return results;
+        if (r != DRIVE_YIELDED) {
             Py_DECREF(results);
             return NULL;
         }
@@ -695,7 +716,10 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
             /* Producer is retiring with its last solution: deliver
              * it and stop — no further pull from the (now-retired)
              * root.  FINAL is a sentinel, not a payload, so when
-             * snapshot is None there is no raw value to record. */
+             * snapshot is None there is no raw value to record.
+             * Mark the root so any later pull-driver on the same
+             * StepGenerator sees exhaustion (policy Q3, 2026-08-26). */
+            StepGen_CAST(root)->retired = 1;
             Py_DECREF(value);
             if (snapshot_fn != Py_None) {
                 PyObject *snap = PyObject_CallNoArgs(snapshot_fn);
@@ -788,6 +812,11 @@ drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
         return NULL;
     }
 
+    /* A retired root (a FINAL already delivered) answers exhaustion
+     * without resuming the generator (policy Q3, 2026-08-26). */
+    if (StepGen_CAST(sg_obj)->retired)
+        Py_RETURN_NONE;
+
     PyObject *value = NULL;
     drive_result r = drive_to_root_yield(sg_obj, /*intercept_ts=*/1,
                                          /*stopiteration_is_exhaustion=*/1,
@@ -802,6 +831,10 @@ drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
      * unbound answer.  Treat it as exhaustion alongside DONE. */
     PyObject *ts = get_TABLING_SUSPEND();
     int is_done = (value == g_DONE) || (ts && value == ts);
+    /* Root-level FINAL: "here is a solution AND I am retiring" — deliver
+     * the solution, refuse future pulls (policy Q3, 2026-08-26). */
+    if (value == g_FINAL)
+        StepGen_CAST(sg_obj)->retired = 1;
     Py_DECREF(value);
     if (is_done)
         Py_RETURN_NONE;   /* search exhausted */

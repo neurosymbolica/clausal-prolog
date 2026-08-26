@@ -45,8 +45,9 @@ from typing import Any, Callable, Generator
 #     A drive loop that treats exhaustion as exhaustion must see it first; a
 #     ``catch/3`` that swallowed it would turn a finished search into a
 #     recovery goal.  (The PEP-479 ``RuntimeError`` wrapper around one is
-#     likewise consumed as exhaustion by ``_drive_until_yield`` *before* this
-#     test — A04-F009.)
+#     likewise consumed as exhaustion by ``solutions`` and
+#     ``_drive_until_yield`` *before* this test — A04-F009, converged
+#     2026-08-26.)
 #
 # KEEP IN SYNC with ``is_routable_exception`` in ``runtime/_trampoline.c``,
 # which is the implementation that actually runs.
@@ -139,7 +140,7 @@ class StepGenerator:
     first call does ``next(inner_gen)``; subsequent calls delegate to
     ``inner_gen.send(value)``.
     """
-    __slots__ = ('_gen', '_started', 'proceed', 'fail', 'catcher')
+    __slots__ = ('_gen', '_started', 'proceed', 'fail', 'catcher', 'retired')
 
     def __init__(
         self,
@@ -152,6 +153,10 @@ class StepGenerator:
         self.proceed = proceed
         self.fail = fail
         self.catcher = catcher
+        # Set by a pull-driver that saw this root yield FINAL ("here is a
+        # solution AND I am retiring"): later pulls answer exhaustion
+        # without resuming the retired generator.
+        self.retired = False
         # Forward all three continuation slots to the generator body.
         # Compiled-predicate signature is
         # (this_generator, _proceed, _fail, _catcher, *args, trail).
@@ -187,10 +192,15 @@ class StepGenerator:
 # and in two policy flags, passed as literals at each call site:
 #
 #   intercept_ts                — convert a mid-chain _TABLING_SUSPEND step
-#                                 into send(DONE) (solutions, _drive_until_yield)
+#                                 into send(DONE) (ALL entry points since the
+#                                 2026-08-26 policy convergence)
 #   stopiteration_is_exhaustion — treat StopIteration / a PEP-479 wrapper
-#                                 from a send as end-of-search
-#                                 (_drive_until_yield only; A04-F009)
+#                                 from a send as end-of-search (A04-F009;
+#                                 solutions and _drive_until_yield.  NOT
+#                                 trampoline: its contract — return the
+#                                 root-yield value — cannot represent
+#                                 exhaustion, so it raises.  Blessed, see
+#                                 todo/done/drive-loop-policy-convergence.md)
 #
 # The entry send (root.send(None)) is never routed to a catcher — all six
 # historical loops agreed on that — so only the flags' branches touch it.
@@ -202,7 +212,8 @@ _YIELDED = "yielded"
 _EXHAUSTED = "exhausted"
 
 
-def _drive_to_root_yield(root, *, intercept_ts, stopiteration_is_exhaustion):
+def _drive_to_root_yield(root, *, intercept_ts, stopiteration_is_exhaustion,
+                         who):
     from clausal.logic.tabling import _TABLING_SUSPEND
 
     def _is_pep479(exc):
@@ -210,7 +221,7 @@ def _drive_to_root_yield(root, *, intercept_ts, stopiteration_is_exhaustion):
                 and isinstance(exc.__cause__, StopIteration))
 
     try:
-        gen, value = root.send(None)
+        step = root.send(None)
     except StopIteration:
         if stopiteration_is_exhaustion:
             return (_EXHAUSTED, None)
@@ -219,12 +230,25 @@ def _drive_to_root_yield(root, *, intercept_ts, stopiteration_is_exhaustion):
         if stopiteration_is_exhaustion and _is_pep479(exc):
             return (_EXHAUSTED, None)
         raise
-    while gen is not None:
+    while True:
+        # Shape checks OUTSIDE the routing try, matching the C core (Q4,
+        # todo/drive-loop-policy-convergence.md): a malformed step is a
+        # protocol violation raised straight to the caller, never offered
+        # to a catch/3.
+        if type(step) is not tuple or len(step) != 2:
+            raise TypeError(f"{who}: generator must yield 2-tuples")
+        gen, value = step
+        if gen is None:
+            return (_YIELDED, value)
+        if not isinstance(gen, StepGenerator):
+            raise TypeError(
+                f"{who}: step target must be StepGenerator or None, "
+                f"got {type(gen).__name__}")
         try:
             if intercept_ts and value is _TABLING_SUSPEND:
-                gen, value = gen.send(DONE)
+                step = gen.send(DONE)
             else:
-                gen, value = gen.send(value)
+                step = gen.send(value)
         except StopIteration:
             if stopiteration_is_exhaustion:
                 return (_EXHAUSTED, None)
@@ -236,8 +260,7 @@ def _drive_to_root_yield(root, *, intercept_ts, stopiteration_is_exhaustion):
                 return (_EXHAUSTED, None)
             if not _is_routable(exc):
                 raise
-            gen, value = _unwind_to_catcher(gen, exc)
-    return (_YIELDED, value)
+            step = _unwind_to_catcher(gen, exc)
 
 
 # ── Trampoline ────────────────────────────────────────────────────────
@@ -256,9 +279,16 @@ def trampoline(root: StepGenerator) -> Any:
     dead (its try/finally already ran trail.undo).  We unwind through the
     ``catcher`` chain using .throw() until a catch/3 handler catches it.
     See ``_is_routable`` for which exceptions take that path.
+
+    A mid-chain ``_TABLING_SUSPEND`` is intercepted (converted to a DONE
+    send for the parent) like every other entry point — policy
+    convergence Q1, 2026-08-26; the sentinel used to leak through as a
+    value.  ``FINAL`` at the root is returned as-is: trampoline-driven
+    roots are not solution streams, so retirement does not apply.
     """
     _kind, value = _drive_to_root_yield(
-        root, intercept_ts=False, stopiteration_is_exhaustion=False)
+        root, intercept_ts=True, stopiteration_is_exhaustion=False,
+        who="trampoline")
     return value
 
 def solutions(root: StepGenerator, snapshot: Callable | None = None) -> list:
@@ -273,14 +303,25 @@ def solutions(root: StepGenerator, snapshot: Callable | None = None) -> list:
     resumption by the leader's completion phase.
 
     Exception routing: same as trampoline() — unwind through the
-    ``catcher`` chain via .throw() until caught or surface to Python.
+    ``catcher`` chain via .throw() until caught or surface to Python,
+    except that a StopIteration / PEP-479 wrapper from a send is a
+    converted exhaustion (return what was collected) rather than an
+    error, agreeing with ``_drive_until_yield`` — policy convergence
+    Q2, 2026-08-26 (A04-F009 read across entry points).
     """
     from clausal.logic.tabling import _TABLING_SUSPEND
 
     results: list = []
+    if root.retired:
+        # A FINAL was already delivered from this root (by us or by
+        # _drive_until_yield): do not resume the retired generator.
+        return results
     while True:
-        _kind, value = _drive_to_root_yield(
-            root, intercept_ts=True, stopiteration_is_exhaustion=False)
+        kind, value = _drive_to_root_yield(
+            root, intercept_ts=True, stopiteration_is_exhaustion=True,
+            who="solutions")
+        if kind is _EXHAUSTED:
+            return results
         if value is DONE or value is _TABLING_SUSPEND:  # A04-F008
             # A root/orphaned consumer yields (None, _TABLING_SUSPEND) —
             # a control sentinel, never a solution. Treating it as one
@@ -291,7 +332,9 @@ def solutions(root: StepGenerator, snapshot: Callable | None = None) -> list:
             # it and stop — no further pull from the (now-retired)
             # root.  ``FINAL`` is a sentinel, not a payload, so
             # when *snapshot* is None there's no raw value to
-            # record.
+            # record.  Mark the root so any later pull-driver on the
+            # same StepGenerator sees exhaustion (policy Q3).
+            root.retired = True
             if snapshot is not None:
                 results.append(snapshot())
             return results
@@ -305,13 +348,23 @@ def _drive_until_yield(sg: StepGenerator) -> bool | None:
     True) or the search is exhausted (returns None).  A PEP-479 "generator
     raised StopIteration" wrapper is treated as a converted exhaustion,
     same as a bare StopIteration (A04-F009).
+
+    A root-level ``FINAL`` is "here is a solution AND I am retiring":
+    the solution is delivered (True) and *sg* is marked retired, so
+    every later pull answers None without resuming the retired
+    generator (policy Q3, 2026-08-26).
     """
     from clausal.logic.tabling import _TABLING_SUSPEND
 
+    if sg.retired:
+        return None
     kind, value = _drive_to_root_yield(
-        sg, intercept_ts=True, stopiteration_is_exhaustion=True)
+        sg, intercept_ts=True, stopiteration_is_exhaustion=True,
+        who="_drive_until_yield")
     if kind is _EXHAUSTED:
         return None
     if value is DONE or value is _TABLING_SUSPEND:
         return None   # A04-F008: suspend sentinel is not a solution
+    if value is FINAL:
+        sg.retired = True
     return True

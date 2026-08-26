@@ -257,6 +257,15 @@ open-coded stepping of the `(gen, value)` protocol, 2026-08-26:
 - `goal_trampoline.py`, `control_constructs.py`, `tro.py` — no protocol
   stepping emitted.
 
+Addendum (2026-08-26, later the same day): the parked policy-convergence
+follow-up was decided and landed — all three entry points now intercept
+mid-chain `_TABLING_SUSPEND`; `solutions` treats StopIteration/PEP-479
+as exhaustion (`trampoline`'s raise is blessed — its contract cannot
+represent exhaustion); a root-level `FINAL` retires the StepGenerator
+for every pull-driver; and the Python twin gained the C core's
+malformed-step shape checks.  Decision record:
+`todo/done/drive-loop-policy-convergence.md`.
+
 Addendum (post-implementation): a repo-wide search for AST-emitted
 protocol stepping (`attr="send"` over `clausal/logic/compiler/`,
 including `optimisations/`) confirmed the general-ITE arm held the only
