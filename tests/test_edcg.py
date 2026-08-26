@@ -376,6 +376,26 @@ class TestEdcgControlFlow:
         assert 1 in solutions
         assert 2 in solutions
 
+    def test_goal_after_disjunction_continues_the_chain(self, tmp_path):
+        """A disjunction is not the end of the chain — the next goal threads on.
+
+        The branches used to close straight to the head's own out variable,
+        which left nothing for a following element to push onto. Same defect
+        as todo/done/edcg-ite-case-is-unreachable.md, one construct over.
+        """
+        # nv
+        src = (
+            '-module(dj2, [branch_then_inc(_cnt0, _cnt)])\n'
+            '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
+            '-edcg_pred(branch_then_inc, 0, [counter])\n'
+            'branch_then_inc >> (([1] // counter or [2] // counter), '
+            '[10] // counter)\n'
+        )
+        mod = _load("dj2", src, tmp_path)
+        n = Var()
+        solutions = [deref(n) for _ in call("branch_then_inc", 0, n, module=mod)]
+        assert sorted(solutions) == [11, 12]
+
     def test_inline_goal(self, tmp_path):
         """Inline goals {goal} don't thread accumulators."""
         # nv
@@ -553,3 +573,82 @@ class TestEdcgEdgeCases:
             assert deref(cnt) == 2
             assert deref(items) == ["world", "hello"]
             break
+
+
+# ── Phase 8: If-then-else in an EDCG body ────────────────────────────────────
+
+
+class TestEdcgIfThenElse:
+    """`if_/3` threads accumulators through the condition and both branches.
+
+    The condition and the then-branch form one chain (`in` → cond → then →
+    `out`); the else-branch runs from `in` straight to `out`, so a push made
+    by a failing condition never reaches it. Both chains are closed to `out`
+    so the element *after* the ITE picks up from there.
+
+    Regression: this whole case used to be unreachable — the generic
+    ``case Call(...)`` above it matched first, leaving the branches with no
+    accumulator threading at all. See todo/done/edcg-ite-case-is-unreachable.md.
+    """
+
+    COUNTER = (
+        '-module({name}, [pick(_cnt0, _cnt)])\n'
+        '-edcg_acc(counter, _x, _in, _out, {{_out == _in + _x}})\n'
+        '-edcg_pred(inc, 0, [counter])\n'
+        '-edcg_pred(pick, 0, [counter])\n'
+        'inc >> ([1] // counter)\n'
+        'pick >> ({body})\n'
+    )
+
+    def _count(self, name, body, tmp_path):
+        mod = _load(name, self.COUNTER.format(name=name, body=body), tmp_path)
+        n = Var()
+        for _ in call("pick", 0, n, module=mod):
+            return deref(n)
+        return None
+
+    def test_then_branch_threads_the_accumulator(self, tmp_path):
+        """# nv"""
+        assert self._count(
+            "ite_then", "if_({1 == 1}, inc, (inc, inc))", tmp_path) == 1
+
+    def test_else_branch_threads_the_accumulator(self, tmp_path):
+        """# nv"""
+        assert self._count(
+            "ite_else", "if_({1 == 2}, inc, (inc, inc))", tmp_path) == 2
+
+    def test_condition_push_carries_into_the_then_branch(self, tmp_path):
+        """# nv"""
+        assert self._count(
+            "ite_condpush", "if_((inc, {1 == 1}), inc, inc)", tmp_path) == 2
+
+    def test_condition_push_does_not_reach_the_else_branch(self, tmp_path):
+        """A push made by a *failing* condition must not be counted."""
+        # nv
+        assert self._count(
+            "ite_condfail", "if_((inc, {1 == 2}), inc, inc)", tmp_path) == 1
+
+    def test_a_goal_after_the_ite_continues_the_chain(self, tmp_path):
+        """Both branches close to `out`, so the next element picks up there."""
+        # nv
+        assert self._count(
+            "ite_after", "(if_({1 == 1}, inc, inc), inc)", tmp_path) == 2
+
+    def test_dcg_accumulator_inside_an_ite(self, tmp_path):
+        """The implicit `dcg` accumulator threads through the branches too."""
+        # nv
+        src = (
+            "-module(ite_dcg, [g(_dcg0, _dcg1), x, y, z])\n"
+            "-edcg_pred(g, 0, [dcg])\n"
+            "g >> (if_([x], [y], [z]))\n"
+        )
+        mod = _load("ite_dcg", src, tmp_path)
+        g = mod.module_dict["g"]
+        x = mod.module_dict["x"]
+        y = mod.module_dict["y"]
+        z = mod.module_dict["z"]
+        # leading x → condition holds → then-branch consumes y
+        assert _succeeds("phrase", g, [x, y], module=mod)
+        # no leading x → else-branch consumes z
+        assert _succeeds("phrase", g, [z], module=mod)
+        assert not _succeeds("phrase", g, [x, z], module=mod)

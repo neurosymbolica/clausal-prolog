@@ -2837,6 +2837,46 @@ def _make_joiner_call(acc_info, val_ast, in_var, out_var, source):
     return replace(result, source)
 
 
+def _edcg_join_vars(acc_states, counter):
+    """One fresh join variable per accumulator, plus the advanced *counter*.
+
+    A branching construct (disjunction, if-then-else) makes every alternative
+    end at the same variable so the body can carry on from a single place.
+    That meeting point must be *fresh* rather than the accumulator's
+    ``out_var``: ``out_var`` is the head's output, and closing to it mid-body
+    would force the rest of the body to be a no-op.  ``_rewrite_edcg_rule``
+    unifies the last link with ``out_var`` after the whole body is rewritten.
+    """
+    joins = {}
+    for acc_name in acc_states:
+        joins[acc_name] = f"_edcg_{acc_name}_{counter}"
+        counter += 1
+    return joins, counter
+
+
+def _edcg_close_branch(rewritten, targets, final_states, source):
+    """``And``-append ``final_in is target`` for each accumulator left open.
+
+    *targets* maps accumulator name to the variable this alternative must end
+    at (see :func:`_edcg_join_vars`); *final_states* is what rewriting the
+    alternative reported.  An alternative that pushed fewer times than its
+    siblings ends short, and unifying the two ends closes the gap.
+    """
+    closers = []
+    for acc_name, target in targets.items():
+        final_in, _ = final_states.get(acc_name, (target, target))
+        if final_in != target:
+            eq = Compare(
+                left=Name(id=final_in, ctx=load),
+                ops=[Is()],
+                comparators=[Name(id=target, ctx=load)],
+            )
+            closers.append(replace(eq, source))
+    if not closers:
+        return rewritten
+    return replace(BoolOp(op=And(), values=[rewritten] + closers), source)
+
+
 def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
                         edcg_preds, counter, source):
     """Rewrite an EDCG body element into ordinary clause body AST.
@@ -2981,6 +3021,67 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
                 edcg_accs, edcg_passes, edcg_preds, counter, source
             )
 
+        case Call(func=Name(id=name), args=[cond, then_, else_], keywords=[]) if (
+            name in _ITE_NAMES
+        ):
+            # If-then-else.  Must precede BOTH Call cases below: they match any
+            # call, and until 2026-08-26 this case sat after them and so never
+            # ran at all (todo/done/edcg-ite-case-is-unreachable.md).  Ordering it
+            # first also makes ``if_`` a reserved control construct here, which
+            # is what it already is in an ordinary clause body — TermTransformer
+            # .visit_Call recognises it before any user predicate of that name.
+            #
+            # Condition and then-branch are one chain (in → cond → then → out);
+            # the else-branch runs in → out, so a push made by a *failing*
+            # condition never reaches it.  Mirrors _rewrite_dcg_body's ITE arm,
+            # which threads the same three edges through s_in/mid/s_out.
+            #
+            # The rebuilt node keeps *name* rather than normalising to ``if_``
+            # so that a deprecated spelling still reaches the term pass's lint.
+            joins, counter = _edcg_join_vars(acc_states, counter)
+            mid_states = {}
+            for acc_name, (in_var, out_var) in acc_states.items():
+                mid = f"_edcg_{acc_name}_{counter}"
+                counter += 1
+                mid_states[acc_name] = (in_var, mid)
+            cond_r, cond_out_states, counter = _rewrite_edcg_body(
+                cond, mid_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+            # Then branch starts from where cond left off.
+            then_states = {}
+            for acc_name in acc_states:
+                cin, _ = cond_out_states[acc_name]
+                then_states[acc_name] = (cin, joins[acc_name])
+            then_r, then_final, counter = _rewrite_edcg_body(
+                then_, then_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+            then_r = _edcg_close_branch(then_r, joins, then_final, source)
+            # Else branch starts from the original in — a push made by a
+            # condition that failed must not be counted.
+            else_states = {
+                acc_name: (in_var, joins[acc_name])
+                for acc_name, (in_var, _) in acc_states.items()
+            }
+            else_r, else_final, counter = _rewrite_edcg_body(
+                else_, else_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+            else_r = _edcg_close_branch(else_r, joins, else_final, source)
+            result = Call(
+                func=Name(id=name, ctx=load),
+                args=[cond_r, then_r, else_r],
+                keywords=[],
+            )
+            # Both branches end at the join var, so the next body element
+            # continues from there rather than restarting at in_var.
+            joined_states = {
+                acc_name: (joins[acc_name], out_var)
+                for acc_name, (_, out_var) in acc_states.items()
+            }
+            return replace(result, source), joined_states, counter
+
         case Call(func=Name(id=name), args=args, keywords=kwargs) if name in edcg_preds:
             # EDCG non-terminal with args.
             return _rewrite_edcg_subcall(
@@ -3049,36 +3150,32 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             )
 
         case BoolOp(op=Or(), values=elements):
-            # Disjunction: each branch gets the same starting acc_states,
-            # all branches must independently close to out_var.
+            # Disjunction: each branch gets the same starting acc_states and
+            # must independently close to the shared join var.
+            joins, counter = _edcg_join_vars(acc_states, counter)
             rewritten = []
             max_counter = counter
             for elem in elements:
-                branch_states = dict(acc_states)
+                branch_states = {
+                    acc_name: (in_var, joins[acc_name])
+                    for acc_name, (in_var, _) in acc_states.items()
+                }
                 r, branch_final, c = _rewrite_edcg_body(
                     elem, branch_states, dict(pass_states),
                     edcg_accs, edcg_passes, edcg_preds, counter, source
                 )
                 # Close any open accumulator chains in this branch.
-                closers = []
-                for acc_name, (orig_in, orig_out) in acc_states.items():
-                    final_in, _ = branch_final.get(acc_name, (orig_in, orig_out))
-                    if final_in != orig_out:
-                        eq = Compare(
-                            left=Name(id=final_in, ctx=load),
-                            ops=[Is()],
-                            comparators=[Name(id=orig_out, ctx=load)],
-                        )
-                        closers.append(replace(eq, source))
-                if closers:
-                    r = replace(BoolOp(op=And(), values=[r] + closers), source)
+                r = _edcg_close_branch(r, joins, branch_final, source)
                 rewritten.append(r)
                 if c > max_counter:
                     max_counter = c
             result = BoolOp(op=Or(), values=rewritten)
-            # After disjunction, all accumulators are at their out_var.
-            closed_states = {k: (v[1], v[1]) for k, v in acc_states.items()}
-            return replace(result, source), closed_states, max_counter
+            # After the disjunction every accumulator is at its join var.
+            joined_states = {
+                acc_name: (joins[acc_name], out_var)
+                for acc_name, (_, out_var) in acc_states.items()
+            }
+            return replace(result, source), joined_states, max_counter
 
         case UnaryOp(op=Not(), operand=inner):
             # NAF: doesn't affect accumulator state.
@@ -3093,50 +3190,6 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
                 edcg_accs, edcg_passes, edcg_preds, counter, source
             )
             result = UnaryOp(op=Not(), operand=inner_r)
-            return replace(result, source), acc_states, counter
-
-        case Call(func=Name(id=name), args=[cond, then_, else_], keywords=_) if (
-            name in _ITE_NAMES
-        ):
-            # If-then-else.  As in the DCG rewriter, the rebuilt node keeps
-            # *name* so a deprecated spelling still reaches the term lint.
-            #
-            # UNREACHABLE as written: the generic ``case Call(func=Name(...))``
-            # above matches any call, so an ITE in an EDCG body is rewritten
-            # there instead and its branches never get accumulator threading.
-            # Pre-existing (verified on canonical main 2026-08-26), tracked in
-            # todo/edcg-ite-case-is-unreachable.md — kept in sync with the
-            # rename so the fix does not have to redo it.
-            mid_states = {}
-            for acc_name, (in_var, out_var) in acc_states.items():
-                mid = f"_edcg_{acc_name}_{counter}"
-                counter += 1
-                mid_states[acc_name] = (in_var, mid)
-            cond_r, cond_out_states, counter = _rewrite_edcg_body(
-                cond, mid_states, pass_states,
-                edcg_accs, edcg_passes, edcg_preds, counter, source
-            )
-            # Then branch starts from where cond left off.
-            then_states = {}
-            for acc_name in acc_states:
-                cin, _ = cond_out_states[acc_name]
-                _, out_var = acc_states[acc_name]
-                then_states[acc_name] = (cin, out_var)
-            then_r, _, counter = _rewrite_edcg_body(
-                then_, then_states, pass_states,
-                edcg_accs, edcg_passes, edcg_preds, counter, source
-            )
-            # Else branch starts from original in.
-            else_states = dict(acc_states)
-            else_r, _, counter = _rewrite_edcg_body(
-                else_, else_states, pass_states,
-                edcg_accs, edcg_passes, edcg_preds, counter, source
-            )
-            result = Call(
-                func=Name(id=name, ctx=load),
-                args=[cond_r, then_r, else_r],
-                keywords=[],
-            )
             return replace(result, source), acc_states, counter
 
     raise SyntaxError(

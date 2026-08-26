@@ -71,6 +71,25 @@ class TestIfUnderscore:
         assert any(True for _ in call("phrase", g, [x, y], module=mod))
         assert any(True for _ in call("phrase", g, [z], module=mod))
 
+    def test_edcg_body(self, tmp_path):
+        """The EDCG body rewriter recognises the new spelling.
+
+        Behaviour of the construct itself is pinned in
+        ``tests/test_edcg.py::TestEdcgIfThenElse``; this only checks the name.
+        """
+        # nv
+        src = (
+            "-module(e, [pick(_cnt0, _cnt)])\n"
+            "-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n"
+            "-edcg_pred(inc, 0, [counter])\n"
+            "-edcg_pred(pick, 0, [counter])\n"
+            "inc >> ([1] // counter)\n"
+            "pick >> (if_({1 == 1}, inc, (inc, inc)))\n"
+        )
+        mod = _load("ifu_edcg", src, tmp_path)
+        out = Var()
+        assert [deref(out) for _ in call("pick", 0, out, module=mod)] == [1]
+
     def test_dict_read_stays_inside_the_taken_branch(self, tmp_path):
         """The read-hoisting scope walker recognises the new spelling."""
         # nv
@@ -122,6 +141,20 @@ class TestLegacyIf:
         )
         with pytest.warns(ClausalDeprecatedSpellingWarning):
             _load("legacy_dcg", src, tmp_path)
+
+    def test_edcg_body_warns(self, tmp_path):
+        """Likewise for an EDCG body."""
+        # nv
+        src = (
+            "-module(e, [pick(_cnt0, _cnt)])\n"
+            "-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n"
+            "-edcg_pred(inc, 0, [counter])\n"
+            "-edcg_pred(pick, 0, [counter])\n"
+            "inc >> ([1] // counter)\n"
+            "pick >> (If({1 == 1}, inc, (inc, inc)))\n"
+        )
+        with pytest.warns(ClausalDeprecatedSpellingWarning):
+            _load("legacy_edcg", src, tmp_path)
 
 
 # ── Canonical spelling is what the library emits ─────────────────────────────

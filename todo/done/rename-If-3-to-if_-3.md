@@ -44,10 +44,10 @@ purpose; they still load.
 
 ## Caveat found on the way
 
-The EDCG body rewriter's ITE case is **unreachable** — a generic `Call` case
-above it matches first. Pre-existing, verified against canonical main; the
-rename keeps the dead case in sync but does not fix it. Tracked in
-[[edcg-ite-case-is-unreachable]], which also carries the EDCG test
+The EDCG body rewriter's ITE case was **unreachable** — a generic `Call` case
+above it matched first. Pre-existing, verified against canonical main; this
+commit only kept the dead case in sync with the rename. Fixed straight after,
+in [[edcg-ite-case-is-unreachable]], which also restored the EDCG test
 `tests/test_if_spelling.py` had to drop.
 
 Related: [[one-drive-loop-not-six]], `docs/reified_ite.md`.

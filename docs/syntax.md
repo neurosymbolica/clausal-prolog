@@ -1090,6 +1090,32 @@ run_scaled(LIST, SCALE, COUNT, ITEMS) <- (
 )
 ```
 
+### Control flow in an EDCG body
+
+Disjunction (`or`), negation (`not`) and [reified if-then-else](reified_ite.md)
+(`if_/3`) all thread accumulators:
+
+```clausal
+-module(edcg_ite, [classify(_edcg_counter_in, _edcg_counter_out)])
+-edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
+-edcg_pred(inc, 0, [counter])
+-edcg_pred(classify, 0, [counter])
+
+inc >> ([1] // counter)
+classify >> (if_({1 == 1}, inc, (inc, inc)), inc)
+```
+
+- **Disjunction and `if_/3` are joins**: every branch is rewritten from the
+  same starting state and meets at one variable, so a branch that pushes fewer
+  times than its siblings is padded out. Whatever follows the construct
+  continues from that meeting point.
+- **The condition and the then-branch are one chain**: a push inside the
+  condition is visible to the then-branch. The else-branch starts from the
+  state *before* the condition, so a push made by a condition that failed is
+  not counted.
+- **Negation does not consume**: `not G` leaves every accumulator where it
+  found it.
+
 ### Design notes
 
 - **Purely syntactic**: EDCG `>>` rules are rewritten to ordinary `<-` clauses before compilation. No runtime support needed.
