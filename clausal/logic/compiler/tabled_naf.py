@@ -52,7 +52,10 @@ def _compile_tabled_naf_simple(ctx: CompilationContext, inner_goal, k_stmts):
     if call_kwargs:
         sig = db.signature_for(fname, len(call_args) + len(call_kwargs))
         if sig is not None:
-            kw_dict = {kw.arg: kw.value for kw in call_kwargs}
+            # Keyword nodes carry .name (never .arg — that is Python's
+            # ast.keyword, not this AST); .arg crashed on any NAF'd tabled
+            # call with keywords and a registered signature.
+            kw_dict = {kw.name: kw.value for kw in call_kwargs}
             all_args = []
             for i, field in enumerate(sig):
                 if i < len(call_args):

@@ -34,6 +34,7 @@ predicate calls.
 
 from __future__ import annotations
 
+import sys
 from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
@@ -708,24 +709,25 @@ def query_wfs(
             r["_delays"] = frozenset()
         return results
 
-    from clausal.logic.tabling import _normalize_for_key
+    from clausal.logic.tabling import make_subgoal_key
     var_to_name = {id(v): name for name, v in variables.items()}
-    norm_answers = [tuple(_normalize_for_key(x) for x in ans) for ans in entry.answers]
     kept = []
     for r in results:
         cand = []
         for a in goal_args:
             da = deref(a)
             cand.append(r[var_to_name[id(da)]] if id(da) in var_to_name else da)
-        norm_cand = tuple(_normalize_for_key(x) for x in cand)
+        # The entry's own answer index is keyed by exactly this
+        # normalization (make_subgoal_key IS tuple-of-_normalize_for_key),
+        # so answer lookup is one dict get instead of an O(answers) scan
+        # per result.
+        idx = entry._answer_index.get(make_subgoal_key(cand, None))
         truth = True
         delays = frozenset()
-        for i, na in enumerate(norm_answers):
-            if na == norm_cand:
-                truth = entry.truth_value(i)
-                if truth is Undefined:
-                    delays = entry.delays_for(i)
-                break
+        if idx is not None:
+            truth = entry.truth_value(idx)
+            if truth is Undefined:
+                delays = entry.delays_for(idx)
         if truth is False:
             # The stored row was invalidated (WFS-false) AFTER solve()
             # streamed it — resolution can outrun the incremental yields.
@@ -765,16 +767,44 @@ def _tabled_entry_for_goal(goal, module, trail):
         func = goal.func
         if isinstance(func, _ReifiedLoadName):
             functor = func.name
-        elif (isinstance(func, _ReifiedLoadAttr)
-                and isinstance(func.object, _ReifiedLoadName)):
-            owner = mod.module_dict.get(func.object.name)
+        elif isinstance(func, _ReifiedLoadAttr):
+            # Qualified goal, possibly nested (pkg.sub.Pred) — walk the
+            # dotted chain down to a LoadName base, then resolve segment by
+            # segment through the querying module's dict and getattr, and
+            # consult the EXPORTING module's db. A directly-constructed
+            # Module has module_dict=None — fall back gracefully.
+            functor = func.attr
+            segments = []
+            node = func.object
+            while isinstance(node, _ReifiedLoadAttr):
+                segments.append(node.attr)
+                node = node.object
+            if not isinstance(node, _ReifiedLoadName):
+                return None, None
+            segments.append(node.name)
+            segments.reverse()
+            md = mod.module_dict
+            if md is None:
+                return None, None
+            owner = md.get(segments[0])
+            if len(segments) > 1:
+                # The import hook does not bind submodules as parent-package
+                # attributes, so walk sys.modules by the full dotted name
+                # first; fall back to a getattr chain for plain objects.
+                dotted = sys.modules.get(".".join(segments))
+                if dotted is not None:
+                    owner = dotted
+                else:
+                    for seg in segments[1:]:
+                        if owner is None:
+                            return None, None
+                        owner = getattr(owner, seg, None)
             if owner is None:
                 return None, None
             try:
                 mod = _coerce_module(owner)
             except (TypeError, AttributeError, KeyError):
                 return None, None
-            functor = func.attr
         else:
             return None, None
         goal_args = list(goal.args)
@@ -799,7 +829,22 @@ def _tabled_entry_for_goal(goal, module, trail):
         goal_args = merged
     arity = len(goal_args)
     if not mod.db.is_tabled(functor, arity):
-        return None, None
+        # An -import_from-remapped predicate resolves by bare name here but
+        # is tabled — and tabled INTO — the exporting module's db. Follow
+        # the PredicateMeta back to its defining module before giving up.
+        md = mod.module_dict
+        pred_cls = md.get(functor) if md is not None else None
+        owner_name = getattr(pred_cls, "__module__", None)
+        owner = sys.modules.get(owner_name) if owner_name else None
+        if owner is None:
+            return None, None
+        try:
+            owner_mod = _coerce_module(owner)
+        except (TypeError, AttributeError, KeyError):
+            return None, None
+        if owner_mod.db is mod.db or not owner_mod.db.is_tabled(functor, arity):
+            return None, None
+        mod = owner_mod
     from clausal.logic.tabling import make_subgoal_key
     key = make_subgoal_key(goal_args, trail or Trail())
     return mod.db.table_store.get((functor, arity, key)), goal_args

@@ -135,3 +135,29 @@ F002/F003 xfails in `tests/audit_2026_07_05/test_04_runtime_tabling.py`
 are un-marked and pass; the single-entry guard was updated for the exact
 sub-tables spawning creates. `query_wfs` also now resolves `Call`/`Compound`
 goals to their entries and carries `_delays` (see docs/wfs.md).
+
+### Post-review refinement (2026-08-27, same day)
+
+The review of the first cut caught real holes; the shipped design differs
+from item 2's first description in three ways (see commit "wfs: close the
+review findings on the truth-surface work"):
+
+- A DORMANT spawned entry is not merely "delayed on": the exact-entry
+  branch delays only on an actively-LEADING entry; a dormant one is
+  RE-SPAWNED (wrapper re-lead) on every enclosing fixpoint pass, which is
+  what makes `_complete_scc`'s sweep sound for spawn-created tables. Only
+  when a drive still cannot complete the table does the caller delay.
+- POSITIVE delay propagation was added: consuming a conditional answer
+  makes the consuming derivation conditional on the same literals (flat
+  union of live disjuncts; streaming sites attribute to the enclosing
+  leader at stack[-2]). Per-disjunct precision remains future work.
+- Resolution matching (`_resolve_one_delay`) shares the NAF-time
+  unification scan instead of ``==``; a spawn-depth cap (32) bounds
+  ground-growing negation chains; `end_drive_episode` runs the global
+  resolution pass for abandoned roots; spawns drive only the predicate's
+  own `_tabled_for`-stamped wrapper.
+
+Still open, split to their own todos:
+`todo/tabled-conditional-answers-stream-before-invalidation.md` (root
+callers can see a conditional answer that resolution then falsifies) and
+`todo/cross-module-tabled-naf-loses-wfs-delay.md` (unchanged).

@@ -173,26 +173,37 @@ def end_drive_episode() -> None:
     if not created:
         return
     created_ids = {id(entry) for entry, _, _ in created}
-    if not any(id(e) in created_ids for e in _leader_ctx.stack):
-        return  # normal completion — nothing of ours is still leading
-    for entry, store, key in created:
-        if entry.status != "evaluating":
-            continue
-        if store.get(key) is entry:
-            del store[key]
-        for sc in entry.suspended:
-            try:
-                sc.generator.close()
-            except BaseException:
-                pass
-        entry.suspended.clear()
-        pop_leader(entry)
-    # A04-F003: the abandoned root never reached the wrapper's root-exit
-    # resolution pass, but tables completed BENEATH it are staying — without
-    # a pass here their conditions freeze at whatever was resolvable
-    # mid-drive (e.g. win("b") forever Undefined although win("a") completed
-    # True moments later). Run the global pass over every store this episode
-    # touched, once no leader is active.
+    if any(id(e) in created_ids for e in _leader_ctx.stack):
+        # Abandoned mid-fixpoint — repair.
+        for entry, store, key in created:
+            if entry.status != "evaluating":
+                continue
+            if store.get(key) is entry:
+                del store[key]
+            for sc in entry.suspended:
+                try:
+                    sc.generator.close()
+                except BaseException:
+                    pass
+            entry.suspended.clear()
+            pop_leader(entry)
+    if episodes:
+        # Nested episode (a NAF spawn, a ++-escape): hand every created
+        # entry up to the enclosing episode, whether we completed or were
+        # abandoned — the ROOT close is the one place that can cover repair
+        # and cross-store resolution for everything the whole drive touched
+        # (a spawn can complete tables in a FOREIGN module's store, which
+        # the wrappers' own root-exit passes — each bound to its closed-over
+        # store — would never revisit).
+        episodes[-1].extend(created)
+        return
+    # A04-F003: the root episode is closing. An ABANDONED root never reached
+    # the wrapper's root-exit resolution pass, and even a normal one only
+    # resolved its own store — without a pass here, conditions in other
+    # touched stores freeze at whatever was resolvable mid-drive (e.g.
+    # win("b") forever Undefined although win("a") completed True moments
+    # later). Run the global pass over every store this drive touched, once
+    # no leader is active.
     if not _leader_ctx.stack:
         seen = set()
         for _entry, store, _key in created:
@@ -501,19 +512,42 @@ def _propagate_answer_delays(entry, i) -> None:
     Approximation, deliberately matching the existing negative-delay
     bookkeeping: the FLAT union of the answer's live disjuncts is added to
     the innermost active leader's in-progress delay set. Per-disjunct
-    precision (and exact leader attribution under nested streaming) is
-    future work; the union direction errs toward Undefined, and the
-    disjunction-of-derivations model keeps a genuinely unconditional
-    derivation True regardless."""
+    precision (and exact leader attribution when the consuming continuation
+    is resumed under an unrelated mid-stream leader) is future work; the
+    union direction errs toward Undefined, and the disjunction-of-
+    derivations model keeps a genuinely unconditional derivation True
+    regardless."""
+    c = entry.conditions[i]
+    if c is _FAILED or c is _UNCONDITIONAL:
+        return  # the overwhelmingly common rows — one identity test each
     leader = current_leader()
     if leader is None:
-        return
-    c = entry.conditions[i]
-    if c is _FAILED:
         return
     delays = entry.delays_for(i)
     if delays:
         leader._current_delays |= delays
+
+
+def _streaming_consumer_leader(entry):
+    """Attribution target for a STREAMING leader's incremental yields:
+    the leader immediately BELOW *entry*'s own position on the stack —
+    not stack[-2] (a deeper leader may be parked mid-stream above us) and
+    not current_leader() (that is *entry* itself).
+
+    Returns None — no propagation — when *entry* is the bottom of a spawn
+    segment: a spawn drive's root yields land in a discard loop, not in
+    any derivation, and crediting its delays to the leader outside the
+    boundary would contaminate an unrelated derivation with foreign
+    conditions (which a False-resolving delay could then wrongly kill)."""
+    stack = _leader_ctx.stack
+    for idx in range(len(stack) - 1, -1, -1):
+        if stack[idx] is entry:
+            below = idx - 1
+            boundaries = _spawn_ctx.boundaries
+            if boundaries and below < boundaries[-1]:
+                return None
+            return stack[below] if below >= 0 else None
+    return None
 
 
 def _delay_negation(functor, arity, key, args, trail):
@@ -543,14 +577,23 @@ def _key_has_var(k) -> bool:
 # GROW per level — ``Pn(X) <- (Y == X + 1, not Pn(Y))`` — would otherwise
 # spawn unboundedly and die in a bare RecursionError. Beyond the cap the
 # negation falls back to the conservative delay path (Undefined), the
-# pre-spawn behaviour. Small enough to stay far from Python's recursion
-# limit; deep POSITIVE call chains are unaffected (they trampoline).
-_SPAWN_DEPTH_CAP = 32
+# pre-spawn behaviour. Derived from the interpreter's recursion limit
+# rather than a magic constant (measured ~4 frames per spawn level; 8 in
+# the divisor leaves 2x headroom plus the query's own baseline depth), so
+# raising sys.setrecursionlimit buys deeper definite chains. Deep POSITIVE
+# call chains are unaffected (they trampoline).
+def _spawn_depth_cap() -> int:
+    import sys
+    return max(32, (sys.getrecursionlimit() - 200) // 8)
 
 
 class _SpawnContext(threading.local):
     def __init__(self):
         self.depth = 0
+        # Leader-stack lengths at each active spawn's start: streaming
+        # attribution must not cross the innermost boundary (see
+        # _streaming_consumer_leader).
+        self.boundaries: list[int] = []
 
 _spawn_ctx = _SpawnContext()
 
@@ -668,7 +711,7 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     # ancestor it stays DORMANT (A04-F001 SCC) rather than completing on
     # partial answers; fall through to the delay path in that case.
     if (db is not None and not _key_has_var(key)
-            and _spawn_ctx.depth < _SPAWN_DEPTH_CAP):
+            and _spawn_ctx.depth < _spawn_depth_cap()):
         dispatch = db.get_dispatch(functor, arity)
         # Only ever drive the predicate's OWN tabled wrapper: get_dispatch
         # falls back to the builtin registry, and driving a same-name
@@ -676,9 +719,11 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
         # no table at all.
         if getattr(dispatch, "_tabled_for", None) == (functor, arity):
             _spawn_ctx.depth += 1
+            _spawn_ctx.boundaries.append(len(_leader_ctx.stack))
             try:
                 _drive_dispatch_to_completion(dispatch, args)
             finally:
+                _spawn_ctx.boundaries.pop()
                 _spawn_ctx.depth -= 1
             if not _leader_ctx.stack:
                 _resolve_all_conditions(table_store)
@@ -824,7 +869,17 @@ def _resolve_all_conditions(table_store) -> None:
     while changed:
         changed = False
         for e in list(table_store.values()):
-            if e.status == "complete" and _resolve_conditions(e, table_store):
+            if e.status != "complete":
+                continue
+            # Skip entries with only trivial conditions — two identity
+            # tests per row versus a full resolution fixpoint. This runs on
+            # every root exit (including once()-style abandonments over
+            # long-lived stores), so the negation-free common case must
+            # stay near-free.
+            if not any(c is not _FAILED and c is not _UNCONDITIONAL
+                       for c in e.conditions):
+                continue
+            if _resolve_conditions(e, table_store):
                 changed = True
 
 
@@ -1024,11 +1079,13 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, entry.answers[i], trail):
-                    replay_delays = entry.delays_for(i)
-                    if replay_delays and len(_leader_ctx.stack) >= 2:
-                        # Same streaming-site attribution as above: the
-                        # replay consumer is the enclosing leader.
-                        _leader_ctx.stack[-2]._current_delays |= replay_delays
+                    if entry.conditions[i] is not _UNCONDITIONAL:
+                        replay_delays = entry.delays_for(i)
+                        if replay_delays:
+                            # Same streaming-site attribution as above.
+                            consumer = _streaming_consumer_leader(entry)
+                            if consumer is not None:
+                                consumer._current_delays |= replay_delays
                     yield (_proceed, None)
                 trail.undo(mark)
             # A04-F001: drive the dispatch to a FIXPOINT by re-running it until
@@ -1054,12 +1111,15 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                         # New tuple OR a revived _FAILED row — both change the
                         # visible answer set: stream it and run another pass.
                         changed = True
-                        if delay_set and len(_leader_ctx.stack) >= 2:
+                        if delay_set:
                             # Positive propagation for the STREAMING site:
                             # the consumer of this incremental yield is the
-                            # ENCLOSING leader (stack[-2]) — current_leader()
-                            # is this entry itself while it streams.
-                            _leader_ctx.stack[-2]._current_delays |= delay_set
+                            # leader below OUR OWN stack position (a deeper
+                            # leader may be parked mid-stream above us), and
+                            # a spawn-discard root propagates to nobody.
+                            consumer = _streaming_consumer_leader(entry)
+                            if consumer is not None:
+                                consumer._current_delays |= delay_set
                         yield (_proceed, None)  # new answer to caller (incremental)
                     _st = yield (_gen, None)
                 entry._current_delays.clear()

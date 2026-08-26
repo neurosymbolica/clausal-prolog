@@ -939,3 +939,94 @@ class TestResolutionMatchesNafSemantics:
         assert e.add_answer((1,)) is True   # revival
         assert e.truth_value(0) is True
         assert e.add_answer((1,)) is False  # plain duplicate
+
+
+# ── Second review round (2026-08-27): attribution, shapes, and bounds ───────
+
+
+class TestNestedStreamingAttribution:
+    def test_undefined_propagates_through_two_positive_hops(self):
+        """Aa <- Bb <- Cc with Cc unfounded: when Bb streams its conditional
+        answer, a deeper leader (Cc) can still be parked on the stack —
+        attribution must go to the leader below Bb's OWN position (Aa), not
+        blindly to stack[-2]. All three atoms are Undefined."""
+        # nv
+        lm = _module(_load("wfs_nested_stream"))
+        assert _q(lm, "Aa") == [(1, Undefined)]
+        assert _q(lm, "Bb") == [(1, Undefined)]
+        assert _q(lm, "Cc") == [(1, Undefined)]
+
+
+class TestSpawnDepthBudget:
+    def test_definite_chain_within_budget_stays_definite(self):
+        """A terminating, definite ground negation chain of depth 50 must
+        get its real truth value — the spawn cap is derived from the
+        recursion limit, not a magic 32."""
+        # nv
+        lm = _module(_load("wfs_bounded_chain"))
+        assert _q(lm, "Pb", 1) == [True]
+
+
+class TestGoalShapeEdges:
+    def test_bare_module_without_dict_is_graceful(self):
+        """A directly-constructed Module has module_dict=None — qualified
+        goals must fall back to (None, None), not AttributeError."""
+        # nv
+        from clausal.logic.solve import _tabled_entry_for_goal
+        from clausal.terms import Call as TermCall, LoadName, LoadAttr
+        X = Var()
+        goal = TermCall(func=LoadAttr(object=LoadName(name="nope"), attr="P"),
+                        args=[X], kwargs=[])
+        assert _tabled_entry_for_goal(goal, Module("bare"), Trail()) == (None, None)
+
+    def test_import_from_remapped_name_annotates(self, tmp_path):
+        """-import_from remaps the bare name into the importer, but the
+        table lives in the EXPORTER's db — the annotation must follow the
+        PredicateMeta home instead of stamping True."""
+        # nv
+        import sys
+        sys.path.insert(0, FIXTURES)
+        try:
+            from clausal.import_hook import _load_module
+            p = tmp_path / "wfs_impfrom.clausal"
+            p.write_text("-import_from(wfs_win, [Win])\n\nUsesF(X) <- Win(X)\n")
+            lm = _load_module("wfs_impfrom", str(p)).__dict__["$module"]
+            assert _q(lm, "Win") == [(1, Undefined), (2, Undefined)]
+        finally:
+            sys.path.remove(FIXTURES)
+
+    def test_nested_dotted_qualified_goal(self, tmp_path):
+        """pkg.sub.mod.Win(X) — the dotted chain resolves through
+        sys.modules to the exporting module's table."""
+        # nv
+        import sys
+        import shutil
+        pkg = tmp_path / "pkgn" / "subn"
+        pkg.mkdir(parents=True)
+        (tmp_path / "pkgn" / "__init__.py").write_text("")
+        (pkg / "__init__.py").write_text("")
+        shutil.copy(os.path.join(FIXTURES, "wfs_win.clausal"),
+                    str(pkg / "winmod.clausal"))
+        (tmp_path / "nested_imp.clausal").write_text(
+            "-import_module(pkgn.subn.winmod)\n\n"
+            "UsesN(X) <- pkgn.subn.winmod.Win(X)\n")
+        sys.path.insert(0, str(tmp_path))
+        try:
+            from clausal.import_hook import _load_module
+            lm = _load_module("nested_imp",
+                              str(tmp_path / "nested_imp.clausal")).__dict__["$module"]
+            from clausal.terms import Call as TermCall, LoadName, LoadAttr
+            X = Var()
+            goal = TermCall(
+                func=LoadAttr(
+                    object=LoadAttr(
+                        object=LoadAttr(object=LoadName(name="pkgn"),
+                                        attr="subn"),
+                        attr="winmod"),
+                    attr="Win"),
+                args=[X], kwargs=[])
+            res = query_wfs(goal, {"X": X}, lm, Trail())
+            assert [(r["X"], r["_truth"]) for r in res] == [
+                (1, Undefined), (2, Undefined)]
+        finally:
+            sys.path.remove(str(tmp_path))
