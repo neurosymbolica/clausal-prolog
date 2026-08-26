@@ -187,6 +187,18 @@ def end_drive_episode() -> None:
                 pass
         entry.suspended.clear()
         pop_leader(entry)
+    # A04-F003: the abandoned root never reached the wrapper's root-exit
+    # resolution pass, but tables completed BENEATH it are staying — without
+    # a pass here their conditions freeze at whatever was resolvable
+    # mid-drive (e.g. win("b") forever Undefined although win("a") completed
+    # True moments later). Run the global pass over every store this episode
+    # touched, once no leader is active.
+    if not _leader_ctx.stack:
+        seen = set()
+        for _entry, store, _key in created:
+            if id(store) not in seen:
+                seen.add(id(store))
+                _resolve_all_conditions(store)
 
 
 def _complete_scc(root: TableEntry, table_store) -> None:
@@ -296,9 +308,13 @@ class TableEntry:
             conds = self.conditions[idx]
             if conds is _FAILED:
                 # Every earlier disjunct was invalidated; this is a live one.
+                # Report the tuple as NEW: consumers skip _FAILED rows during
+                # replay, so anyone iterating this lead has not seen it —
+                # returning False here would silently drop it from their
+                # joins (a lost solution, not a duplicate).
                 self.conditions[idx] = _simplify_disjuncts(frozenset({ds}))
-            else:
-                self.conditions[idx] = _simplify_disjuncts(conds | {ds})
+                return True
+            self.conditions[idx] = _simplify_disjuncts(conds | {ds})
             return False
         self.answer_set.add(key)
         self._answer_index[key] = len(self.answers)
@@ -474,6 +490,32 @@ def _scan_complete_answers(entry, args):
     return False, has_conditional
 
 
+def _propagate_answer_delays(entry, i) -> None:
+    """POSITIVE delay propagation (A04-F003 follow-up): a derivation that
+    consumes a CONDITIONAL answer is itself conditional on the same delayed
+    literals — WFS answer clauses carry delay lists through positive joins,
+    not only through negation. Without this, a rule reading a conditional
+    answer out of a completed table mints an unconditionally-true answer
+    from an Undefined premise.
+
+    Approximation, deliberately matching the existing negative-delay
+    bookkeeping: the FLAT union of the answer's live disjuncts is added to
+    the innermost active leader's in-progress delay set. Per-disjunct
+    precision (and exact leader attribution under nested streaming) is
+    future work; the union direction errs toward Undefined, and the
+    disjunction-of-derivations model keeps a genuinely unconditional
+    derivation True regardless."""
+    leader = current_leader()
+    if leader is None:
+        return
+    c = entry.conditions[i]
+    if c is _FAILED:
+        return
+    delays = entry.delays_for(i)
+    if delays:
+        leader._current_delays |= delays
+
+
 def _delay_negation(functor, arity, key, args, trail):
     """Record ``not functor(args)`` as a DelayedNegation on the current leader
     (conditional success). With no leader in scope there is nowhere to attach
@@ -496,32 +538,52 @@ def _key_has_var(k) -> bool:
     return False
 
 
+# A04-F003 spawn-depth guard: spawns nest on the Python stack (each drive is
+# synchronous inside _naf_tabled), and a negated call whose ground arguments
+# GROW per level — ``Pn(X) <- (Y == X + 1, not Pn(Y))`` — would otherwise
+# spawn unboundedly and die in a bare RecursionError. Beyond the cap the
+# negation falls back to the conservative delay path (Undefined), the
+# pre-spawn behaviour. Small enough to stay far from Python's recursion
+# limit; deep POSITIVE call chains are unaffected (they trampoline).
+_SPAWN_DEPTH_CAP = 32
+
+
+class _SpawnContext(threading.local):
+    def __init__(self):
+        self.depth = 0
+
+_spawn_ctx = _SpawnContext()
+
+
 def _drive_dispatch_to_completion(dispatch, args) -> None:
     """Drive a trampoline-mode dispatch to exhaustion, discarding solutions.
 
     A04-F003 negative-subgoal spawning: ``not p(args)`` with no table for the
     variant EVALUATES ``p(args)`` — the drive's side effect is a completed (or,
     inside an SCC, dormant) table entry the caller then decides against.
-    Ground args + a scratch trail keep the caller's bindings untouched. The
-    mini-trampoline mirrors ``_trampoline_to_simple_adapter`` (suspension is
-    exhaustion; the drive episode repairs abandoned tables on error)."""
-    from clausal.logic.trampoline import StepGenerator, DONE
+    Ground args + a scratch trail keep the caller's bindings untouched.
+
+    The pull loop is the converged ``solutions()`` driver (suspension is
+    exhaustion; FINAL retires the root; malformed steps raise; PEP-479
+    StopIteration converts to exhaustion) — not another hand-rolled twin.
+
+    A table this drive creates (or re-leads) can end still-``evaluating``:
+    it consumed a still-evaluating ancestor and went dormant (A04-F001).
+    The CALLER must then delay the negation — and the negation site
+    re-spawns the dormant entry on every pass of the enclosing fixpoint
+    (the exact-entry branch of ``_naf_tabled`` falls through for dormant
+    entries instead of delaying), which re-leads it against the ancestor's
+    grown answers. That is what makes ``_complete_scc``'s root-exit sweep
+    of dormant members sound for spawn-created tables too: by the time the
+    root stabilises, so have they.
+    """
+    from clausal.logic.trampoline import StepGenerator, solutions
     from clausal.logic.variables import Trail as _Trail
     scratch = _Trail()
     root = StepGenerator(dispatch, None, None, None, *args, scratch)
     begin_drive_episode()
     try:
-        gen, value = root.send(None)
-        while True:
-            if gen is None:
-                if value is DONE or value is _TABLING_SUSPEND:
-                    return
-                gen, value = root.send(None)  # a solution — discard, continue
-            else:
-                if value is _TABLING_SUSPEND:
-                    gen, value = gen.send(DONE)
-                else:
-                    gen, value = gen.send(value)
+        solutions(root, snapshot=lambda: None)  # exhaust; answers land in the table
     finally:
         try:
             root.close()
@@ -564,10 +626,17 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
             _delay_negation(functor, arity, key, args, trail)
         return True  # no determinate matching answer → negation succeeds
 
-    if entry is not None and entry.status == "evaluating":
-        # Cycle through negation — delay.
+    if (entry is not None and entry.status == "evaluating"
+            and _on_leader_stack(entry)):
+        # Genuine cycle through negation (the target is an actively-leading
+        # ancestor) — delay.
         _delay_negation(functor, arity, key, args, trail)
         return True  # conditionally succeed
+    # A DORMANT evaluating entry (its leader finished without completing —
+    # an SCC member) falls through: the spawn path below RE-LEADS it against
+    # the ancestor's grown answers, exactly like the wrapper's own re-lead
+    # path for positive calls (A04-F001/F003). Delaying on it instead would
+    # freeze it with the partial answers spawn time happened to see.
 
     # No exact-variant entry. A COMPLETE same-functor entry whose variant key
     # SUBSUMES this call already knows the full answer set for the call's
@@ -598,10 +667,19 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     # SLG evaluation. If the spawned entry consumed a still-evaluating
     # ancestor it stays DORMANT (A04-F001 SCC) rather than completing on
     # partial answers; fall through to the delay path in that case.
-    if db is not None and not _key_has_var(key):
+    if (db is not None and not _key_has_var(key)
+            and _spawn_ctx.depth < _SPAWN_DEPTH_CAP):
         dispatch = db.get_dispatch(functor, arity)
-        if dispatch is not None:
-            _drive_dispatch_to_completion(dispatch, args)
+        # Only ever drive the predicate's OWN tabled wrapper: get_dispatch
+        # falls back to the builtin registry, and driving a same-name
+        # builtin to exhaustion would run its side effects while creating
+        # no table at all.
+        if getattr(dispatch, "_tabled_for", None) == (functor, arity):
+            _spawn_ctx.depth += 1
+            try:
+                _drive_dispatch_to_completion(dispatch, args)
+            finally:
+                _spawn_ctx.depth -= 1
             if not _leader_ctx.stack:
                 _resolve_all_conditions(table_store)
             entry = table_store.get(store_key)
@@ -612,6 +690,12 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
                 if conditional:
                     _delay_negation(functor, arity, key, args, trail)
                 return True
+            # The drive could not COMPLETE the table (it consumed a
+            # still-evaluating ancestor and stays dormant, to be re-led by
+            # a later pass) — the truth is undecided at this point in the
+            # fixpoint: delay.
+            _delay_negation(functor, arity, key, args, trail)
+            return True
 
     # Check if ANY variant of this predicate is evaluating — if so, we're in a
     # cycle through negation and must delay. This handles cases like: leader
@@ -659,19 +743,21 @@ def _delay_target_entry(dn, table_store):
 def _resolve_one_delay(dn, table_store):
     """Resolve a single delayed negation: True (negation holds — drop it),
     False (an unconditional positive answer exists — the disjunct fails),
-    or None (still undecidable — keep the delay)."""
+    or None (still undecidable — keep the delay).
+
+    Matching MUST mirror the NAF-time decision, which unifies the call
+    against stored answers (``_scan_complete_answers``): equality would miss
+    a nonground stored answer (a universal fact covering the delayed call)
+    or a nonground delayed call, flipping the literal's truth depending on
+    WHEN the target table happened to complete."""
     target_entry = _delay_target_entry(dn, table_store)
     if target_entry is None or target_entry.status != "complete":
         return None
-    has_conditional = False
-    for j, stored in enumerate(target_entry.answers):
-        if target_entry.conditions[j] is _FAILED:
-            continue
-        if stored == dn.frozen_args:
-            if target_entry.truth_value(j) is True:
-                return False
-            has_conditional = True
-    if has_conditional:
+    unconditional, conditional = _scan_complete_answers(
+        target_entry, dn.frozen_args)
+    if unconditional:
+        return False
+    if conditional:
         return None
     return True
 
@@ -767,6 +853,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, stored, trail):
+                    _propagate_answer_delays(entry, i)
                     yield None
                 trail.undo(mark)
             return
@@ -778,6 +865,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                 if entry.conditions[i] is not _FAILED:
                     mark = trail.mark()
                     if _unify_answer(args, entry.answers[i], trail):
+                        _propagate_answer_delays(entry, i)
                         yield None
                     trail.undo(mark)
                 i += 1
@@ -791,16 +879,18 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
         try:
             changed = True
             while changed:
-                old_count = len(entry.answers)
+                changed = False
                 mark = trail.mark()
                 for _ in original_dispatch(*args, trail, None):
                     answer = freeze_args(args, trail)
                     delay_set = frozenset(entry._current_delays)
                     entry._current_delays.clear()
-                    entry.add_answer(answer, delay_set)
+                    if entry.add_answer(answer, delay_set):
+                        # New tuple OR a revived _FAILED row — both change
+                        # the visible answer set, so run another pass.
+                        changed = True
                 trail.undo(mark)
                 entry._current_delays.clear()
-                changed = len(entry.answers) > old_count
 
             _resolve_conditions(entry, table_store)
         except BaseException:
@@ -823,6 +913,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                 continue
             mark = trail.mark()
             if _unify_answer(args, stored, trail):
+                _propagate_answer_delays(entry, i)
                 yield None
             trail.undo(mark)
 
@@ -855,6 +946,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, stored, trail):
+                    _propagate_answer_delays(entry, i)
                     yield (_proceed, None)
                 trail.undo(mark)
             yield (_fail, DONE)
@@ -878,6 +970,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, stored, trail):
+                    _propagate_answer_delays(entry, i)
                     yield (_proceed, None)
                 trail.undo(mark)
 
@@ -931,6 +1024,11 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, entry.answers[i], trail):
+                    replay_delays = entry.delays_for(i)
+                    if replay_delays and len(_leader_ctx.stack) >= 2:
+                        # Same streaming-site attribution as above: the
+                        # replay consumer is the enclosing leader.
+                        _leader_ctx.stack[-2]._current_delays |= replay_delays
                     yield (_proceed, None)
                 trail.undo(mark)
             # A04-F001: drive the dispatch to a FIXPOINT by re-running it until
@@ -944,7 +1042,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # mutual recursion additionally needs SCC-aware completion (below).
             changed = True
             while changed:
-                old_count = len(entry.answers)
+                changed = False
                 _gen = StepGenerator(original_dispatch, this_generator,
                                      this_generator, this_generator, *args, trail)
                 _st = yield (_gen, None)
@@ -953,6 +1051,15 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     delay_set = frozenset(entry._current_delays)
                     entry._current_delays.clear()
                     if entry.add_answer(answer, delay_set):
+                        # New tuple OR a revived _FAILED row — both change the
+                        # visible answer set: stream it and run another pass.
+                        changed = True
+                        if delay_set and len(_leader_ctx.stack) >= 2:
+                            # Positive propagation for the STREAMING site:
+                            # the consumer of this incremental yield is the
+                            # ENCLOSING leader (stack[-2]) — current_leader()
+                            # is this entry itself while it streams.
+                            _leader_ctx.stack[-2]._current_delays |= delay_set
                         yield (_proceed, None)  # new answer to caller (incremental)
                     _st = yield (_gen, None)
                 entry._current_delays.clear()
@@ -964,7 +1071,6 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     except BaseException:
                         pass
                 entry.suspended.clear()
-                changed = len(entry.answers) > old_count
 
             _resolve_conditions(entry, table_store)
         except BaseException:

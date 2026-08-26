@@ -1,0 +1,9 @@
+-table(Pw/1)
+-table(Qw/1)
+
+Base(1),
+Big(6),
+
+Pw(X) <- Base(X)
+Pw(X) <- (Big(X), not Qw(X))
+Qw(6) <- (Pw(Z), Z < 5)

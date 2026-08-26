@@ -43,7 +43,11 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
 from clausal.terms import Compound, Undefined
-from clausal.terms import Call as _ReifiedCall, LoadName as _ReifiedLoadName
+from clausal.terms import (
+    Call as _ReifiedCall,
+    LoadName as _ReifiedLoadName,
+    LoadAttr as _ReifiedLoadAttr,
+)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -704,9 +708,10 @@ def query_wfs(
             r["_delays"] = frozenset()
         return results
 
-    from clausal.logic.tabling import _normalize_for_key, _FAILED
+    from clausal.logic.tabling import _normalize_for_key
     var_to_name = {id(v): name for name, v in variables.items()}
     norm_answers = [tuple(_normalize_for_key(x) for x in ans) for ans in entry.answers]
+    kept = []
     for r in results:
         cand = []
         for a in goal_args:
@@ -716,16 +721,22 @@ def query_wfs(
         truth = True
         delays = frozenset()
         for i, na in enumerate(norm_answers):
-            if entry.conditions[i] is _FAILED:
-                continue
             if na == norm_cand:
                 truth = entry.truth_value(i)
                 if truth is Undefined:
                     delays = entry.delays_for(i)
                 break
+        if truth is False:
+            # The stored row was invalidated (WFS-false) AFTER solve()
+            # streamed it — resolution can outrun the incremental yields.
+            # A definite-false answer must not surface at all (a rerun of
+            # the same query yields nothing for it), and it must certainly
+            # not default to _truth=True.
+            continue
         r["_truth"] = truth
         r["_delays"] = delays
-    return results
+        kept.append(r)
+    return kept
 
 
 def _tabled_entry_for_goal(goal, module, trail):
@@ -734,27 +745,58 @@ def _tabled_entry_for_goal(goal, module, trail):
 
     Handles every single-goal shape ``solve()`` accepts: term instances,
     ``Compound`` (checked FIRST — ``is_term_instance`` is also true for a
-    Compound and would mangle its functor into ``"Compound"``), and reified
-    ``Call(LoadName(...), args)`` — the shape ``docs/wfs.md`` and the test
-    suite build (todo/wfs-undefined-lost-at-query-surface.md §3)."""
+    Compound and would mangle its functor into ``"Compound"``), reified
+    ``Call(LoadName(...))`` — the shape ``docs/wfs.md`` and the test suite
+    build (todo/wfs-undefined-lost-at-query-surface.md §3) — and qualified
+    ``Call(LoadAttr(LoadName(mod), pred))``, whose table lives in the
+    EXPORTING module's db. Keyword arguments are normalized positionally
+    via the owning db's registered signature, mirroring the tabled-NAF
+    compiler seam."""
+    if module is None:
+        return None, None
+    mod = _coerce_module(module)
+    kwargs = []
     if isinstance(goal, Compound):
         functor = deref(goal.functor)
         if not isinstance(functor, str):
             return None, None
         goal_args = list(goal.args)
     elif isinstance(goal, _ReifiedCall):
-        if goal.kwargs or not isinstance(goal.func, _ReifiedLoadName):
+        func = goal.func
+        if isinstance(func, _ReifiedLoadName):
+            functor = func.name
+        elif (isinstance(func, _ReifiedLoadAttr)
+                and isinstance(func.object, _ReifiedLoadName)):
+            owner = mod.module_dict.get(func.object.name)
+            if owner is None:
+                return None, None
+            try:
+                mod = _coerce_module(owner)
+            except (TypeError, AttributeError, KeyError):
+                return None, None
+            functor = func.attr
+        else:
             return None, None
-        functor = goal.func.name
         goal_args = list(goal.args)
+        kwargs = list(goal.kwargs)
     elif is_term_instance(goal):
         functor = type(goal).__name__
         goal_args = [getattr(goal, f) for f in term_field_names(goal)]
     else:
         return None, None
-    if module is None:
-        return None, None
-    mod = _coerce_module(module)
+    if kwargs:
+        if any(kw.name is None for kw in kwargs):
+            return None, None  # **splat — positions unknowable here
+        sig = mod.db.signature_for(functor, len(goal_args) + len(kwargs))
+        if sig is None:
+            return None, None
+        kw_map = {kw.name: kw.value for kw in kwargs}
+        merged = list(goal_args)
+        for field in sig[len(goal_args):]:
+            if field not in kw_map:
+                return None, None
+            merged.append(kw_map[field])
+        goal_args = merged
     arity = len(goal_args)
     if not mod.db.is_tabled(functor, arity):
         return None, None

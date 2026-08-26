@@ -745,3 +745,197 @@ class TestWfsDisjunctiveDerivations:
         results = query_wfs(_win_goal(X), {"X": X}, lm, Trail())
         assert [(r["X"], r["_truth"]) for r in results] == [("a", True)]
         assert results[0]["_delays"] == frozenset()
+
+
+# ── Review follow-ups (2026-08-27): truth must survive resolution timing ────
+# The A04-F003 machinery resolves conditions at root exit — AFTER solve()
+# streamed conditional answers and possibly AFTER inner tables completed.
+# These pin the cases where that timing used to leak wrong truth.
+
+
+def _goal(name, arg):
+    from clausal.terms import Call as TermCall, LoadName
+    return TermCall(func=LoadName(name=name), args=[arg], kwargs=[])
+
+
+def _q(lm, name, val=None):
+    if val is None:
+        X = Var()
+        return [(r["X"], r["_truth"]) for r in query_wfs(_goal(name, X), {"X": X}, lm, Trail())]
+    Y = Var()
+    t = Trail()
+    unify(Y, val, t)
+    return [r["_truth"] for r in query_wfs(_goal(name, Y), {}, lm, t)]
+
+
+class TestWfsPositiveNegativeMix:
+    """Pw(1) via fact; Pw(6) via `not Qw(6)`; Qw(6) reads Pw back positively.
+
+    wfs_posneg_true (Qw(6) <- Pw(Z), Z < 5): Qw(6) is TRUE via Pw(1), so
+    Pw(6) is definitively FALSE — it must not surface at all, in any order.
+    wfs_posneg_undef (Z > 5): Qw(6) depends on the conditional Pw(6) —
+    everything in the loop is Undefined, in any order. The second program
+    needs POSITIVE delay propagation: Qw's derivation consumes the
+    conditional Pw(6) answer and must inherit its delays."""
+
+    def test_true_program_pw_first(self):
+        # nv
+        lm = _module(_load("wfs_posneg_true"))
+        assert _q(lm, "Pw") == [(1, True)]
+        assert _q(lm, "Qw", 6) == [True]
+        assert _q(lm, "Pw") == [(1, True)]
+
+    def test_true_program_qw_first(self):
+        # nv
+        lm = _module(_load("wfs_posneg_true"))
+        assert _q(lm, "Qw", 6) == [True]
+        assert _q(lm, "Pw") == [(1, True)]
+
+    def test_undef_program_pw_first(self):
+        # nv
+        lm = _module(_load("wfs_posneg_undef"))
+        assert _q(lm, "Pw") == [(1, True), (6, Undefined)]
+        assert _q(lm, "Qw", 6) == [Undefined]
+
+    def test_undef_program_qw_first(self):
+        # nv
+        lm = _module(_load("wfs_posneg_undef"))
+        assert _q(lm, "Qw", 6) == [Undefined]
+        assert _q(lm, "Pw") == [(1, True), (6, Undefined)]
+
+    def test_no_failed_row_reported_true(self):
+        """A row invalidated after streaming must not default to True."""
+        # nv
+        lm = _module(_load("wfs_posneg_true"))
+        for x, truth in _q(lm, "Pw"):
+            assert truth is not False  # False rows are dropped, never shown
+        # And the table really does hold the falsified row:
+        for (f, _a, _k), e in lm.db.table_store.items():
+            if f == "Pw" and len(e.answers) == 2:
+                truths = {e.truth_value(i) for i in range(len(e.answers))}
+                assert truths == {True, False}
+
+
+class TestWfsSpawnTermination:
+    def test_growing_ground_negation_terminates(self):
+        """not Pn(X+1) spawns; the depth cap makes it delay past the cap
+        instead of dying in a bare RecursionError."""
+        # nv
+        lm = _module(_load("wfs_growing_neg"))
+        assert _q(lm, "Pn", 1) == [Undefined]
+
+
+class TestWfsAbandonedRootResolution:
+    def test_stale_conditions_resolve_after_abandonment(self):
+        """Breaking out of a solve() iteration (once()-style) must not leave
+        inner completed tables with forever-unresolved conditions."""
+        # nv
+        lm = _module(_load("wfs_win_asym"))
+        X = Var()
+        for _t in solve_first(lm, X):
+            break
+        Y = Var()
+        t = Trail()
+        unify(Y, "b", t)
+        res = query_wfs(_goal("Win", Y), {}, lm, t)
+        assert res == []  # win("b") is definitively false, not Undefined
+
+
+def solve_first(lm, X):
+    from clausal.logic.solve import solve
+    return solve(_goal("Win", X), lm, Trail())
+
+
+class TestQueryWfsGoalShapes:
+    def test_qualified_loadattr_goal(self, tmp_path):
+        """module.Pred(X) goals resolve their table in the EXPORTING db."""
+        # nv
+        import sys
+        sys.path.insert(0, FIXTURES)
+        try:
+            from clausal.import_hook import _load_module
+            src = (
+                "-import_module(wfs_win)\n\n"
+                "ProbeQ(X) <- wfs_win.Win(X)\n"
+            )
+            p = tmp_path / "wfs_importer_q.clausal"
+            p.write_text(src)
+            m = _load_module("wfs_importer_q", str(p))
+            lm = m.__dict__["$module"]
+            from clausal.terms import Call as TermCall, LoadName, LoadAttr
+            X = Var()
+            goal = TermCall(
+                func=LoadAttr(object=LoadName(name="wfs_win"), attr="Win"),
+                args=[X], kwargs=[])
+            res = query_wfs(goal, {"X": X}, lm, Trail())
+            assert len(res) == 2
+            assert all(r["_truth"] is Undefined for r in res)
+        finally:
+            sys.path.remove(FIXTURES)
+
+    def test_kwargs_goal_entry_resolution(self):
+        """_tabled_entry_for_goal normalizes keyword args positionally via
+        the registered signature (solve() itself does not take reified
+        kwargs goals yet — this guards the annotation-side contract)."""
+        # nv
+        from clausal.logic.solve import _tabled_entry_for_goal
+        from clausal.terms import Call as TermCall, LoadName
+        from clausal.pythonic_ast.nodes import Keyword
+        lm = _module(_load("tabled_fib"))
+        N, F = Var(), Var()
+        t = Trail()
+        unify(N, 10, t)
+        # populate the table
+        list(call("Fib", N, F, module=lm))
+        goal = TermCall(func=LoadName(name="Fib"), args=[N],
+                        kwargs=[Keyword(name="RESULT", value=F)])
+        entry, goal_args = _tabled_entry_for_goal(goal, lm, t)
+        assert entry is not None
+        assert len(goal_args) == 2
+
+
+class TestResolutionMatchesNafSemantics:
+    def test_nonground_stored_answer_blocks_resolution_to_true(self):
+        """_resolve_one_delay must unify like NAF does: a universal stored
+        answer (Var) covers the delayed call — the negation is FALSE, not
+        resolved-true."""
+        # nv
+        from clausal.logic.tabling import _resolve_one_delay
+        ts = {}
+        target = TableEntry()
+        target.add_answer((Var(),))  # universal answer p(_)
+        target.status = "complete"
+        from clausal.logic.tabling import _VAR
+        ts[("p", 1, (_VAR,))] = target
+        dn = DelayedNegation("p", 1, (1,), (1,))
+        assert _resolve_one_delay(dn, ts) is False
+
+    def test_spawn_requires_the_tabled_wrapper(self):
+        """A db whose get_dispatch hands back something other than the
+        predicate's own tabled wrapper (e.g. the builtin fallback) must not
+        be driven — conservative True instead."""
+        # nv
+        ran = []
+
+        class FakeDb:
+            def get_dispatch(self, f, a):
+                def plain(*args):  # not stamped with _tabled_for
+                    ran.append(True)
+                    yield None
+                return plain
+
+        ts = {}
+        trail = Trail()
+        assert _naf_tabled("p", 1, (1,), trail, ts, FakeDb()) is True
+        assert ran == []  # never driven
+
+    def test_add_answer_revival_reports_new(self):
+        """Flipping a _FAILED row back to live must report the tuple as
+        new — replay skipped it, so consumers have not seen it."""
+        # nv
+        e = TableEntry()
+        assert e.add_answer((1,)) is True
+        e.conditions[0] = _FAILED
+        assert e.add_answer((1,)) is True   # revival
+        assert e.truth_value(0) is True
+        assert e.add_answer((1,)) is False  # plain duplicate

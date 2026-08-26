@@ -59,3 +59,12 @@ extra spawning work):
   --ignore=tests/test_clportools.py -q -p no:cacheprovider
 # → FAILED ...test_minimize_makespan  (assert 6 == 5), every run
 ```
+
+## Update (same day, after the review-fix round)
+
+After the WFS review follow-ups (commit after 82267432) the full-suite
+failure set is byte-identical to pristine main — the makespan failure no
+longer reproduces here. Consistent with the diagnosis: it is heap/GC-timing
+sensitive, and the perturbation moved again. The underlying soundness
+question (an optimize "model" that violates its own asserted constraint)
+stands and is worth chasing independently of what currently tickles it.
