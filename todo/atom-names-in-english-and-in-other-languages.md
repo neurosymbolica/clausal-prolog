@@ -92,6 +92,12 @@ that fails if a template prettifies it. A name layer must be something a consume
 into per vocabulary, never a global display transform — otherwise the first thing it
 does is soften the engine's own word.
 
+> **Scope note (2026-08-30):** this file is the CORPUS half. The portal's own
+> translation story -- gettext for the chrome it authors, the language dropdown, the
+> unsaved-input warning, and the rules that hold across all of it -- is scoped together
+> in `law-portal/docs/todo/2026-08-30-translation-and-language-selection.md`. One
+> language selection has to drive both, so the two should be read together.
+
 ## Portal side, once this exists
 
 FB-0012 also asks for a language dropdown: persistent across pages, reloading the current
