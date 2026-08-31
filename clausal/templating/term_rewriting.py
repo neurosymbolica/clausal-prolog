@@ -3444,6 +3444,16 @@ class EmbedTransformer(NodeTransformer):
                     f"-allow_singletons to the file",
                     ClausalSingletonWarning, stacklevel=2)
 
+    def _arity_template(transformer, functor_name, fields):
+        """The copyable ``name(FIELD, ...)`` template form for *fields*.
+
+        Field names uppercased into logic-variable spelling; a name that
+        already reads as a logic variable is left exactly as it is
+        (uppercasing ``_x`` would print a name that mints a different field).
+        """
+        names = [n if _is_logic_var_name(n) else n.upper() for n in fields]
+        return f"{functor_name}({', '.join(names)})"
+
     def _arity_conflict_remedy(transformer, functor_name, all_field_names,
                                prev_fields, decl_kind, decl_lineno):
         """The copyable template-form edit for an arity conflict.
@@ -3481,8 +3491,7 @@ class EmbedTransformer(NodeTransformer):
         visible arity instead, and both of its halves are edits that load.
         """
         def _template(fields):
-            names = [n if _is_logic_var_name(n) else n.upper() for n in fields]
-            return f"{functor_name}({', '.join(names)})"
+            return transformer._arity_template(functor_name, fields)
 
         minted = [n for n in prev_fields if n.startswith("_edcg_")]
         if minted:
@@ -3523,7 +3532,7 @@ class EmbedTransformer(NodeTransformer):
                 f"({decl_kind}) the same arity, or {drop}.")
 
     def _check_head_signature(transformer, functor_name, all_field_names,
-                              prev_fields, node):
+                              prev_fields, node, has_keywords=False):
         """Reject a clause head that cannot be built against the bound class.
 
         ``_seen_functors[functor_name]`` is exactly the tuple the guarded
@@ -3537,13 +3546,25 @@ class EmbedTransformer(NodeTransformer):
         arity N and a later clause head supplies N+k arguments, whose surplus
         positions fall back to ``arg_N`` placeholder names.  A functor name
         has exactly one arity in Clausal, so that is a source error, not
-        something to resolve.  Supplying *fewer* arguments than declared is
-        left alone: it builds a partial head whose trailing fields become
-        fresh ``Var()``s, which is a documented ``PredicateMeta.__call__``
-        behaviour.
+        something to resolve.
+
+        Positional UNDER-supply is the same error in the other direction
+        (``todo/done/same-name-two-arities-silently-merge.md``): it used to
+        build a partial head whose trailing fields became fresh ``Var()``s,
+        silently absorbing what the author meant as ``foo/1`` into ``foo/2``
+        as a ``foo(a, _)`` clause that matches calls nobody wrote.  Two
+        shapes stay legal, because both spell the remainder explicitly
+        rather than falling into it: a head with KEYWORD arguments
+        (*has_keywords* — ``f(A=1)`` names exactly which fields it binds),
+        and an ``-edcg_pred`` head at its VISIBLE arity (the compiler-minted
+        ``_edcg_*`` accumulator fields are never written by a source head,
+        so the deficit is measured against the visible fields only).
         """
+        visible = [n for n in prev_fields if not n.startswith("_edcg_")]
+        deficit = (not has_keywords
+                   and len(all_field_names) < len(visible))
         unknown = [n for n in all_field_names if n not in prev_fields]
-        if not unknown:
+        if not unknown and not deficit:
             return
         lineno = getattr(node, "lineno", 0)
         decl_lineno, decl_kind = transformer._functor_decl_site.get(
@@ -3560,6 +3581,26 @@ class EmbedTransformer(NodeTransformer):
             + (f" — {head_src}" if head_src else "")
         )
         declared = f"({', '.join(prev_fields)})"
+        if deficit:
+            n_missing = len(visible) - len(all_field_names)
+            args = "variable" if n_missing == 1 else "variables"
+            template = transformer._arity_template(functor_name, visible)
+            raise SyntaxError(
+                f"functor {functor_name}/{len(all_field_names)} conflicts "
+                f"with the declaration of {functor_name}/{len(visible)} "
+                f"in the same file\n{where}\n"
+                f"A clause head is not a partial term: this "
+                f"{len(all_field_names)}-argument head would be silently "
+                f"padded with {n_missing} fresh {args} into a "
+                f"{len(visible)}-argument clause that matches calls its "
+                f"author never wrote. A functor name has exactly one arity "
+                f"in Clausal.\n"
+                f"  remedy: write this head at arity {len(visible)} to "
+                f"match `{template}` — a position that really means "
+                f'"anything" must be spelled `_` — or give the '
+                f"{len(all_field_names)}-argument predicate a different "
+                f"name."
+            )
         if len(all_field_names) > len(prev_fields):
             raise SyntaxError(
                 f"functor {functor_name}/{len(all_field_names)} conflicts "
@@ -3766,7 +3807,8 @@ class EmbedTransformer(NodeTransformer):
                     arg_field_names[i] = prev_fields[i]
             all_field_names = arg_field_names + kwarg_field_names
             transformer._check_head_signature(
-                functor_name, all_field_names, prev_fields, expr_stmt)
+                functor_name, all_field_names, prev_fields, expr_stmt,
+                has_keywords=bool(kwarg_field_names))
 
         term_transformer = transformer._make_term_transformer()
         transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
@@ -3806,6 +3848,13 @@ class EmbedTransformer(NodeTransformer):
     def _build_zero_arity_fact_statements(transformer, functor_name, name_node,
                                           expr_stmt):
         """Build AST for a zero-arity bodyless fact ``flag`` / ``flag,``."""
+        prev_fields = transformer._seen_functors.get(functor_name)
+        if prev_fields:
+            # ``foo,`` after ``foo(a, b),`` used to pad into a foo(_, _)
+            # clause matching EVERYTHING — the /0 instance of the same
+            # under-supply refusal _check_head_signature now makes.
+            transformer._check_head_signature(
+                functor_name, [], prev_fields, expr_stmt)
         head_ast = replace(
             Call(
                 func=replace(Name(id=functor_name, ctx=load), name_node),
@@ -4167,7 +4216,8 @@ class EmbedTransformer(NodeTransformer):
                             arg_field_names[i] = prev_fields[i]
                     all_field_names = arg_field_names + kwarg_field_names
                     transformer._check_head_signature(
-                        functor_name, all_field_names, prev_fields, expr_stmt)
+                        functor_name, all_field_names, prev_fields, expr_stmt,
+                        has_keywords=bool(kwarg_field_names))
 
                 # Transform terms. One shared transformer keeps variable bindings
                 # (walrus operator) consistent across head and body.

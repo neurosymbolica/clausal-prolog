@@ -134,7 +134,11 @@ class TestTheMessage:
         flat = " ".join(_report(tmp_path, CITATIONS).split())
         assert "define citation/2 as a predicate of its own" not in flat
         assert "give the 2-argument predicate a different name" in flat
-        assert "absorbed into citation/3" in flat
+        # Since same-name-two-arities-silently-merge.md the second head is a
+        # load error, and the sentence says so instead of describing the old
+        # silent absorption.
+        assert "refused at load" in flat
+        assert "absorbed" not in flat
 
 
 class TestForwardReference:
@@ -920,14 +924,18 @@ class TestAHeadShapeNobodyAnticipated:
 
 
 class TestTwoAritiesInOneFile:
-    """``docs/predicates.md`` used to say these stay unrelated.  They do not.
-
-    Which of the two things happens depends on clause order, and neither of them
-    is "``foo/1`` and ``foo/2`` both exist" — so the remedy line must not send
-    the reader to write the second one.
+    """``docs/predicates.md`` used to say these stay unrelated.  They do not —
+    and since ``todo/done/same-name-two-arities-silently-merge.md`` BOTH
+    orders are load errors, so neither can silently rewrite the program.
+    The runtime remedy line still must not send the reader to write the
+    second arity, because one name has one arity whichever way they try.
     """
 
-    def test_the_longer_head_absorbs_the_shorter(self, tmp_path):
+    def test_the_longer_head_then_the_shorter_is_a_load_error(self, tmp_path):
+        """FLIPPED: this used to pin the silent absorption (the shorter head
+        padded to ``citation(REF, META, _)``) plus the accurate-but-confusing
+        runtime refusal that followed.  The absorption is now refused at
+        load, in the same run the test file's report captures."""
         out = _report(tmp_path, """
             -private([art_1_2, meta])
 
@@ -936,8 +944,9 @@ class TestTwoAritiesInOneFile:
 
             Test("citation record resolves") <- citation(REF, METADATA),
         """, name="argremedy.clausal")
-        # citation/2 was written in this file and still does not exist.
-        assert "citation takes 3 arguments, but this call passes 2" in out
+        assert "citation/2 conflicts" in out
+        assert "citation/3" in out
+        assert "not a partial term" in out
 
     def test_the_shorter_head_first_is_a_load_error(self, tmp_path):
         out = _report(tmp_path, """

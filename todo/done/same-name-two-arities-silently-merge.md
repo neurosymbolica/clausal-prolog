@@ -73,3 +73,52 @@ Care needed on:
   test for "does this class have clauses, and at what arity".
 - **Partial term construction must keep working.** `citation(REF)` in argument
   position is legal and used; only *heads* are in scope here.
+
+---
+
+## Fixed (2026-08-31)
+
+Refused at load, as requested — in `term_rewriting._check_head_signature`,
+which already held the over-supply half, so both directions now raise the same
+`SyntaxError` family naming both sites ("functor foo/1 conflicts with the
+declaration of foo/2 in the same file … A clause head is not a partial term").
+The bare-name shapes turned out to be worse instances of the same bug and are
+refused too: `foo,` and `foo <- body` after `foo(a, b),` each padded into a
+`foo(_, _)` clause matching EVERYTHING (the zero-arity fact builder now runs
+the same check; the rule path already funneled through it).
+
+Scope decisions, one per care bullet:
+
+- **Keyword heads stay legal** (`f(A=1),` against `f(A, B)`): they name
+  exactly which fields they bind, so the unbound remainder is explicit — the
+  refusal fires only on pure-positional under-supply, measured against the
+  VISIBLE arity (`-edcg_pred`'s compiler-minted `_edcg_*` fields are excluded,
+  keeping the pinned `r(1),`-against-/3 shape loading).  The spelled form
+  `foo(a, _),` still loads: `_` is the author saying "anything".
+- **`-dynamic`/`assertz`: no runtime refusal, documented instead.**  At
+  assert time `foo(a)` and `foo(a, _)` are the same already-built term — the
+  written argument count is gone before `assertz` sees it — so refusing one
+  refuses the other, and open facts are legitimate.  `docs/database_ops.md`
+  now says so.
+- **The atom-vs-predicate collision (Phenomenon A) is untouched**: the check
+  lives in the rewriter's per-file `_seen_functors`, which never contains
+  imported classes, so the corpus's re-mint pattern never reaches it (full
+  suite + firb/sara_irc_tax verified).
+
+Two tests that pinned the old padding were flipped, per this todo's own
+framing of it as a defect: `test_fewer_args_than_declared_is_still_allowed`
+(now `..._is_refused_too`) and the diagnostic file's
+`test_the_longer_head_absorbs_the_shorter` (now
+`..._then_the_shorter_is_a_load_error`).  The runtime arity-mismatch remedy
+and `docs/predicates.md` no longer describe the absorption as current
+behavior.
+
+Coverage: `TestShorterHeadAfterLongerIsRefused` (10 tests) in
+`tests/test_functor_arity_conflict.py`.  Full suite diffed against baseline:
+failure sets identical — nothing in-tree relied on the padding.
+
+Files: `clausal/templating/term_rewriting.py` (`_check_head_signature`
+under-supply branch + `_arity_template` extraction + zero-arity guard),
+`clausal/predicate_diagnostics.py` (remedy wording),
+`docs/{predicates,database_ops}.md`, `tests/test_functor_arity_conflict.py`,
+`tests/test_predicate_arity_mismatch_diagnostic.py`.

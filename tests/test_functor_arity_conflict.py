@@ -196,16 +196,26 @@ class TestDeclarationClauseArityConflict:
         # the offending clause text is quoted so a repair loop can locate it
         assert "threshold_bps(2500" in msg
 
-    def test_fewer_args_than_declared_is_still_allowed(self, tmp_path):
-        """A partial head binds the leading fields; the rest become Vars."""
-        mod = _load(tmp_path, "under", """
-            -module(m, [
-                f(A, B)
-            ])
+    def test_fewer_args_than_declared_is_refused_too(self, tmp_path):
+        """FLIPPED (todo/same-name-two-arities-silently-merge.md).
 
-            f(1),
-        """)
-        assert mod.f._fields == ("A", "B")
+        This test used to pin the opposite: ``f(1),`` against a declared
+        ``f(A, B)`` loaded as a partial head padded with a fresh Var.  That
+        padding is the silent-merge bug — the padded clause matches
+        ``f(1, ANYTHING)``, which the author never wrote — so under-supply
+        is now the same load error over-supply has always been.
+        """
+        with pytest.raises(SyntaxError) as exc_info:
+            _load(tmp_path, "under", """
+                -module(m, [
+                    f(A, B)
+                ])
+
+                f(1),
+            """)
+        msg = str(exc_info.value)
+        assert "f/1" in msg
+        assert "f/2" in msg
 
     def test_matching_arity_is_unaffected(self, tmp_path):
         mod = _load(tmp_path, "match", """
@@ -264,6 +274,132 @@ class TestDeclarationClauseArityConflict:
                 f(A=1, C=2),
             """)
         assert "C" in str(exc_info.value)
+
+
+class TestShorterHeadAfterLongerIsRefused:
+    """The other direction of the arity conflict, previously a silent merge.
+
+    ``todo/same-name-two-arities-silently-merge.md``: ``foo(a, b),`` then
+    ``foo(a),`` did not refuse — ``PredicateMeta.__call__`` filled the missing
+    field with a fresh ``Var()``, so ``foo/1``'s fact was absorbed into
+    ``foo/2`` as ``foo(a, _)``, a clause matching ``foo(a, ANYTHING)`` that
+    the author never wrote.  A clause head is not a partial term: positional
+    under-supply against the bound class is now the same load-time
+    ``SyntaxError`` that positional over-supply has always been.
+
+    Keyword heads are exempt — ``f(A=1)`` names exactly which fields it binds,
+    so the unnamed remainder is explicit, not an accident.  ``-edcg_pred``
+    heads are measured against the VISIBLE arity (the compiler-minted
+    ``_edcg_*`` accumulator fields are never written by a source head).
+    """
+
+    def _refused(self, tmp_path, name, text):
+        with pytest.raises(SyntaxError) as exc_info:
+            _load(tmp_path, name, text)
+        return str(exc_info.value)
+
+    def test_the_todo_repro_is_refused(self, tmp_path):
+        msg = self._refused(tmp_path, "merge_fact", """
+            -private([a, b])
+
+            foo(a, b),
+            foo(a),
+        """)
+        assert "foo/1" in msg
+        assert "foo/2" in msg
+
+    def test_a_rule_head_is_refused_too(self, tmp_path):
+        msg = self._refused(tmp_path, "merge_rule", """
+            -private([a, b])
+
+            foo(a, b),
+            foo(X) <- (X == a),
+        """)
+        assert "foo/1" in msg
+        assert "foo/2" in msg
+
+    def test_a_bare_name_fact_is_refused(self, tmp_path):
+        """``foo,`` after ``foo(a, b),`` padded to a match-EVERYTHING clause."""
+        msg = self._refused(tmp_path, "merge_zero", """
+            -private([a, b])
+
+            foo(a, b),
+            foo,
+        """)
+        assert "foo/0" in msg
+        assert "foo/2" in msg
+
+    def test_a_bare_name_rule_head_is_refused(self, tmp_path):
+        msg = self._refused(tmp_path, "merge_zrule", """
+            -private([a, b])
+
+            foo(a, b),
+            foo <- (a == a)
+        """)
+        assert "foo/0" in msg
+        assert "foo/2" in msg
+
+    def test_the_message_names_both_sites_and_the_padding(self, tmp_path):
+        msg = self._refused(tmp_path, "merge_sites", """
+            -private([a, b])
+
+            foo(a, b),
+            foo(a),
+        """)
+        assert "merge_sites.clausal:3" in msg      # the arity-fixing clause
+        assert "merge_sites.clausal:4" in msg      # the offending head
+        flat = " ".join(msg.split())
+        assert "not a partial term" in flat
+        assert "different name" in flat            # the rename remedy
+
+    def test_the_remedy_spells_the_anything_position(self, tmp_path):
+        """Padding meant "anything" exactly once in a while — say how to keep it."""
+        msg = self._refused(tmp_path, "merge_anon", """
+            -private([a, b])
+
+            foo(a, b),
+            foo(a),
+        """)
+        assert "`_`" in msg
+
+    def test_an_explicit_anonymous_argument_still_loads(self, tmp_path):
+        """``foo(a, _)`` is the spelled-out form of what padding fabricated."""
+        mod = _load(tmp_path, "merge_spelled", """
+            -private([a, b])
+
+            foo(a, b),
+            foo(a, _),
+        """)
+        assert len(mod.foo._clauses) == 2
+
+    def test_a_keyword_subset_head_still_loads(self, tmp_path):
+        """``f(A=1)`` binds by NAME; the unbound remainder is explicit."""
+        mod = _load(tmp_path, "merge_kw", """
+            -module(m, [
+                f(A, B)
+            ])
+
+            f(A=1),
+        """)
+        assert mod.f._fields == ("A", "B")
+        assert len(mod.f._clauses) == 1
+
+    def test_edcg_visible_arity_head_still_loads(self, tmp_path):
+        """``r(1),`` against a class minted at /3 is at the VISIBLE arity."""
+        mod = _load(tmp_path, "merge_edcg", """
+            -edcg_acc(cnt, V_, In_, Out_, {Out_ is In_ + V_})
+            -edcg_pred(r, 1, [cnt])
+
+            r(1),
+        """)
+        assert "r" in dir(mod)
+
+    def test_dcg_nonterminals_are_untouched(self, tmp_path):
+        """A DCG rule's written arity is below its class arity by design."""
+        mod = _load(tmp_path, "merge_dcg", """
+            greeting >> (["hello", "world"])
+        """)
+        assert "greeting" in dir(mod)
 
 
 class TestTheRemedyPrintsTheTemplateEdit:

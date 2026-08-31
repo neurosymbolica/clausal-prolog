@@ -128,6 +128,13 @@ does not require dynamic predicates.)
   supported and raises a typed `permission_error(assert, rule, Head)` at
   assert time (the predicate's existing clauses are left untouched). Only
   ground or partially-ground facts can be asserted.
+- **assertz keeps the partial-term rule** — `assertz(foo(a))` against a
+  `foo/2` predicate asserts `foo(a, _)`, an open fact whose second field
+  matches anything. A clause head *written in a file* at the wrong arity is
+  refused at load (see [Predicates](predicates.md)), but at assert time
+  `foo(a)` and `foo(a, _)` are the same already-built term — the argument
+  count the author wrote is gone — so no refusal is possible here. Spell the
+  open field as `_` to make the intent visible.
 - **retract removes one clause** — it removes the *first* matching clause only.
   Call it in a loop (or use `findall` + multiple retracts) to remove all
   matches.

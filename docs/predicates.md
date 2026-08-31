@@ -213,18 +213,23 @@ Unrelated, but not both definable **in one file**: there a name has exactly one
 arity, and writing `foo(a, b),` and `foo(a),` together does not give you `foo/2`
 and `foo/1`.
 
-- Shorter head first (`foo(a),` then `foo(a, b),`) fails at load: *functor
-  foo/2 conflicts with the declaration of foo/1 in the same file*, naming both
-  sites and telling you to rename one of them.
-- Longer head first (`foo(a, b),` then `foo(a),`) is **merged silently**: the
-  short head is padded to `foo(a, _)` and absorbed into `foo/2`, where it
-  matches `foo(a, ANYTHING)`. No `foo/1` is created, and nothing is reported.
+Both orders fail at load, naming both sites and telling you to rename one of
+them:
 
-The padding is a defect, not a feature — it is the partial-term rule
-(`citation(REF)` in argument position builds a term with a fresh variable)
-reaching a clause head, where it rewrites the program instead of describing a
-term. Do not write the second arity expecting it to survive: rename it. Two
-arities of one name are kept genuinely separate only in separate modules.
+- Shorter head first (`foo(a),` then `foo(a, b),`): *functor foo/2 conflicts
+  with the declaration of foo/1 in the same file*.
+- Longer head first (`foo(a, b),` then `foo(a),`): *functor foo/1 conflicts
+  with the declaration of foo/2 in the same file* — a clause head is not a
+  partial term, so the short head is refused rather than silently padded to
+  `foo(a, _)` and absorbed into `foo/2` (which is what happened before this
+  check: the padded clause matched `foo(a, ANYTHING)` and no `foo/1` ever
+  existed). A padded position that really means "anything" must be spelled
+  `_`; a head that names only *some* fields by keyword (`foo(a=1),`) stays
+  legal, because there the unbound remainder is explicit.
+
+The partial-term rule (`citation(REF)` in argument position builds a term with
+a fresh variable) still holds everywhere *except* a clause head. Two arities
+of one name are kept genuinely separate only in separate modules.
 
 Calling a predicate at an arity it does not have is an error, and it is reported
 as one:
@@ -234,8 +239,8 @@ citation takes 3 arguments, but this call passes 2
   citation/3 is defined at citations.clausal:14.
   -> pass 3 arguments to citation, or give the 2-argument predicate a
      different name: a second citation head with 2 arguments in the same file
-     does not define citation/2 — it is padded with a wildcard and absorbed
-     into citation/3.
+     does not define citation/2 — one name has one arity, and the head is
+     refused at load.
 ```
 
 This is a `PredicateArityMismatchError`, which is a `TypeError`. If the name is

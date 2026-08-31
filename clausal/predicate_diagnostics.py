@@ -153,12 +153,13 @@ def _describe_mismatch(head, functor, called_arity, defined_arity, site):
 
     The remedy does not say "define ``functor/called_arity`` as a predicate of
     its own", which was the first wording and is advice the implementation
-    refuses to take: a second head of the same name at another arity in the same
-    file is padded with a wildcard and absorbed into the existing predicate
-    (``todo/same-name-two-arities-silently-merge.md``), so a reader who followed
-    it wrote the clause, watched it vanish, and got this same message again.
-    Renaming is the only remedy that works today, and the sentence says why so
-    the reader does not have to try the other one — see ``docs/predicates.md``.
+    refuses to take: a second head of the same name at another arity in the
+    same file is a load-time SyntaxError
+    (``todo/done/same-name-two-arities-silently-merge.md`` — before that fix
+    it was silently padded with a wildcard and absorbed into the existing
+    predicate, which was worse).  Renaming is the only remedy that works, and
+    the sentence says why so the reader does not have to try the other one —
+    see ``docs/predicates.md``.
     """
     lines = [head]
     if isinstance(site, tuple) and len(site) == 2:
@@ -168,8 +169,8 @@ def _describe_mismatch(head, functor, called_arity, defined_arity, site):
         f"pass {_arguments(defined_arity)} to {functor}, or give the "
         f"{called_arity}-argument predicate a different name: a second "
         f"{functor} head with {_arguments(called_arity)} in the same file does "
-        f"not define {functor}/{called_arity} — it is padded with a wildcard "
-        f"and absorbed into {functor}/{defined_arity}."
+        f"not define {functor}/{called_arity} — one name has one arity, and "
+        f"the head is refused at load."
     ]))
     return lines
 
