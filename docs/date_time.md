@@ -13,7 +13,8 @@ The implementation lives in `clausal/modules/py/datetime.py`.
                          timedelta, date_add, date_sub, date_diff,
                          days_between, datetime_string,
                          date_of, weekday, date_between, timestamp,
-                         datetime_string_iso, date_string_iso])
+                         datetime_string_iso, date_string_iso,
+                         date_max, date_min, ordinal])
 ```
 
 Or via [module import](import.md):
@@ -57,6 +58,8 @@ IsoDate(Y, M, D, S) <- (
     | `N is ++TD.days` | `timedelta(N, _, TD)` |
     | `D is ++DT.date()` | `date_of(DT, D)` |
     | `date_diff(A, B, TD), N is ++TD.days` | `days_between(A, B, N)` |
+    | `M is ++max(D1, D2)` / `++min(D1, D2)` | `date_max(D1, D2, M)` / `date_min(D1, D2, M)` |
+    | `N is ++D.toordinal()` | `ordinal(D, N)` |
 
 ---
 
@@ -168,6 +171,22 @@ CompareSafe(D, DT) <- catch(
 
 ```clausal
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:date_of"
+```
+
+### date_max/3, date_min/3
+
+`date_max(D1, D2, M)` / `date_min(D1, D2, M)` — `M` is the later (resp. earlier) of two dates or datetimes, the clean form of `++max(D1, D2)` / `++min(D1, D2)`. A naive date/datetime mix is not comparable and fails the goal:
+
+```clausal
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:date_max_min"
+```
+
+### ordinal/2 — Bidirectional
+
+`ordinal(Date, N)` — the proleptic-Gregorian ordinal, the clean form of `++D.toordinal()`. Forward binds `N = Date.toordinal()` (a datetime contributes its calendar day's ordinal); in reverse (`Date` unbound) it builds `date.fromordinal(N)`, so enumerating every calendar day in `[CS, CE]` is `ordinal(CS, A), ordinal(CE, B), numlist(A, B, Ns)` mapped back through the inverse mode:
+
+```clausal
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:ordinal"
 ```
 
 ### weekday/2

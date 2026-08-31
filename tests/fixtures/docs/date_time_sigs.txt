@@ -52,6 +52,16 @@ datetime_string(DT, S, "%Y-%m-%d")    # format: S = "2026-03-16"
 datetime_string(DT, "2026-03-16", "%Y-%m-%d")    # parse: DT = midnight datetime
 --8<-- [end:datetime_string]
 
+--8<-- [start:date_max_min]
+date_max(D1, D2, M)    # M = the later of two dates — no ++max(D1, D2)
+date_min(D1, D2, M)    # M = the earlier of two dates
+--8<-- [end:date_max_min]
+
+--8<-- [start:ordinal]
+ordinal(D, N)    # N = D.toordinal()             (date → ordinal)
+ordinal(D, N)    # D = date.fromordinal(N)       (ordinal → date; D unbound)
+--8<-- [end:ordinal]
+
 --8<-- [start:weekday]
 weekday(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
 --8<-- [end:weekday]

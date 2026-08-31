@@ -6,7 +6,8 @@ manipulating dates and times.  Import via::
     -import_from(date_time, [now, today, date, time, datetime,
                              timedelta, date_add, date_sub, date_diff,
                              days_between, datetime_string,
-                             date_of, weekday, date_between])
+                             date_of, weekday, date_between,
+                             date_max, date_min, ordinal])
 
 Or via module import::
 
@@ -418,6 +419,90 @@ def _days_between_3(d1, d2, n, trail, k):
         yield None
 
 
+# ── date_max/3, date_min/3 — later/earlier of two dates ──────────────────
+
+
+def _date_max_3(d1, d2, m, trail, k):
+    """date_max/3: date_max(DateA, DateB, Max).
+
+    Max = the later of two dates (or datetimes) — the clean form of
+    ``M is ++max(D1, D2)``.  With Max bound this acts as a check.  A naive
+    date/datetime mix is not comparable in Python; the goal fails rather
+    than leaking the TypeError.
+    """
+    d1, d2, m = deref(d1), deref(d2), deref(m)
+    if not expect_type(d1, _dt.date, "date_max/3", expected="date or datetime", arg=1):
+        return
+    if not expect_type(d2, _dt.date, "date_max/3", expected="date or datetime", arg=2):
+        return
+    try:
+        out = max(d1, d2)
+    except TypeError as exc:
+        note_rejected_call("date_max/3", exc)
+        return
+    if unify(m, out, trail):
+        yield None
+
+
+def _date_min_3(d1, d2, m, trail, k):
+    """date_min/3: date_min(DateA, DateB, Min).
+
+    Min = the earlier of two dates (or datetimes) — the clean form of
+    ``M is ++min(D1, D2)``.  Same modes and failure behaviour as
+    ``date_max/3``.
+    """
+    d1, d2, m = deref(d1), deref(d2), deref(m)
+    if not expect_type(d1, _dt.date, "date_min/3", expected="date or datetime", arg=1):
+        return
+    if not expect_type(d2, _dt.date, "date_min/3", expected="date or datetime", arg=2):
+        return
+    try:
+        out = min(d1, d2)
+    except TypeError as exc:
+        note_rejected_call("date_min/3", exc)
+        return
+    if unify(m, out, trail):
+        yield None
+
+
+# ── ordinal/2 — bidirectional proleptic-Gregorian ordinal ─────────────────
+
+
+def _ordinal_2(d, n, trail, k):
+    """ordinal/2: bidirectional — ordinal(Date, N).
+
+    - **Forward** (Date is a ``datetime.date``): bind N to its
+      proleptic-Gregorian ordinal, ``Date.toordinal()`` (the clean form of
+      ``++D.toordinal()``).  A datetime contributes its calendar day's
+      ordinal.  With N bound this acts as a check.
+    - **Inverse** (Date unbound, N an integer): bind Date to
+      ``date.fromordinal(N)`` — so "every calendar day in [CS, CE]" is
+      ``ordinal(CS, A), ordinal(CE, B), numlist(A, B, Ns)`` mapped back
+      through the inverse mode.  An out-of-range N fails the goal.
+
+    Fails if neither argument is usable (both unbound, or wrong types).
+    """
+    d, n = deref(d), deref(n)
+    if isinstance(d, _dt.date):
+        # forward (or check) — date/datetime → ordinal
+        if unify(n, d.toordinal(), trail):
+            yield None
+        return
+    if not is_var(d):
+        expect_type(d, _dt.date, "ordinal/2", expected="date or datetime", arg=1)
+        return
+    if isinstance(n, int) and not isinstance(n, bool):
+        try:
+            out = _dt.date.fromordinal(n)
+        except (ValueError, OverflowError) as exc:
+            note_rejected_call("ordinal/2", exc)
+            return
+        if unify(d, out, trail):
+            yield None
+    elif not is_var(n):
+        expect_type(n, int, "ordinal/2", arg=2)
+
+
 # ── weekday/2 — weekday ─────────────────────────────────────────────────
 
 
@@ -612,6 +697,15 @@ date_of._register(2, simple_to_trampoline(_date_of_2))
 
 days_between = ModulePredicate("days_between", module="datetime")
 days_between._register(3, simple_to_trampoline(_days_between_3))
+
+date_max = ModulePredicate("date_max", module="datetime")
+date_max._register(3, simple_to_trampoline(_date_max_3))
+
+date_min = ModulePredicate("date_min", module="datetime")
+date_min._register(3, simple_to_trampoline(_date_min_3))
+
+ordinal = ModulePredicate("ordinal", module="datetime")
+ordinal._register(2, simple_to_trampoline(_ordinal_2))
 
 weekday = ModulePredicate("weekday", module="datetime")
 weekday._register(2, simple_to_trampoline(_weekday_2))

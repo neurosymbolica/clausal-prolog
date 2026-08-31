@@ -92,7 +92,7 @@ Notation in signature lines:
 | [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
 | [I/O](#io) | write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | get_logger, debug, info, warning, error, critical, log, set_level, get_level, stream_handler, file_handler |
-| [Date & Time (`date_time` module)](#date--time-date_time-module) | now, now_utc, today, date, time, datetime, timedelta, date_add, date_sub, date_diff, datetime_string, timestamp, datetime_string_iso, date_string_iso, date_of, days_between, weekday, date_between |
+| [Date & Time (`date_time` module)](#date--time-date_time-module) | now, now_utc, today, date, time, datetime, timedelta, date_add, date_sub, date_diff, datetime_string, timestamp, datetime_string_iso, date_string_iso, date_of, days_between, weekday, date_between, date_max, date_min, ordinal |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
 | [Time & statistics](#time--statistics) | current_time/1, statistics/2 |
 | [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `if_` |

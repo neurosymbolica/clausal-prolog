@@ -21,6 +21,7 @@ from clausal.modules.py.datetime import (
     _datetime_string_3, _weekday_2,
     _date_of_2, _days_between_3, _timestamp_2,
     _datetime_string_iso_2, _date_string_iso_2,
+    _date_max_3, _date_min_3, _ordinal_2,
 )
 from clausal.logic.trampoline import DONE
 
@@ -881,4 +882,136 @@ class TestDateStringIso:
     def test_both_unbound_fails(self):
         # vv
         results, _ = simple_solutions(_date_string_iso_2, Var(), Var())
+        assert len(results) == 0
+
+
+# ── date_max/3, date_min/3 — earlier/later of two dates ──────────────────
+
+
+class TestDateMaxMin:
+    def test_date_max_binds_later(self):
+        """date_max(D1, D2, M) → M is the later date (covers ++max(D1, D2))."""
+        # nnv
+        m = Var()
+        results, _ = simple_solutions(
+            _date_max_3, dt.date(2026, 3, 16), dt.date(2026, 3, 23), m
+        )
+        assert len(results) == 1
+        assert deref(m) == dt.date(2026, 3, 23)
+
+    def test_date_min_binds_earlier(self):
+        # nnv
+        m = Var()
+        results, _ = simple_solutions(
+            _date_min_3, dt.date(2026, 3, 16), dt.date(2026, 3, 23), m
+        )
+        assert len(results) == 1
+        assert deref(m) == dt.date(2026, 3, 16)
+
+    def test_equal_dates_bind_that_date(self):
+        # nnv
+        m = Var()
+        results, _ = simple_solutions(
+            _date_max_3, dt.date(2026, 3, 16), dt.date(2026, 3, 16), m
+        )
+        assert len(results) == 1
+        assert deref(m) == dt.date(2026, 3, 16)
+
+    def test_datetimes_compare_too(self):
+        # nnv
+        m = Var()
+        a = dt.datetime(2026, 3, 16, 9, 0)
+        b = dt.datetime(2026, 3, 16, 17, 30)
+        results, _ = simple_solutions(_date_max_3, a, b, m)
+        assert len(results) == 1
+        assert deref(m) == b
+
+    def test_check_mode(self):
+        # nnn
+        results, _ = simple_solutions(
+            _date_max_3, dt.date(2026, 3, 16), dt.date(2026, 3, 23),
+            dt.date(2026, 3, 23)
+        )
+        assert len(results) == 1
+        results, _ = simple_solutions(
+            _date_max_3, dt.date(2026, 3, 16), dt.date(2026, 3, 23),
+            dt.date(2026, 3, 16)
+        )
+        assert len(results) == 0
+
+    def test_mixed_date_and_datetime_fails_cleanly(self):
+        """date < datetime comparison raises TypeError in Python — the
+        builtin fails the goal rather than leaking the exception."""
+        # nnv
+        results, _ = simple_solutions(
+            _date_max_3, dt.date(2026, 3, 16),
+            dt.datetime(2026, 3, 16, 9, 0), Var()
+        )
+        assert len(results) == 0
+
+    def test_non_date_arg_fails(self):
+        # nnv
+        results, _ = simple_solutions(
+            _date_min_3, "2026-03-16", dt.date(2026, 3, 23), Var()
+        )
+        assert len(results) == 0
+
+
+# ── ordinal/2 — bidirectional proleptic-Gregorian ordinal ─────────────────
+
+
+class TestOrdinal:
+    def test_forward_date_to_ordinal(self):
+        """ordinal(Date, N) → N = Date.toordinal() (covers ++D.toordinal())."""
+        # nv
+        n = Var()
+        d = dt.date(2026, 3, 16)
+        results, _ = simple_solutions(_ordinal_2, d, n)
+        assert len(results) == 1
+        assert deref(n) == d.toordinal()
+
+    def test_reverse_ordinal_to_date(self):
+        """ordinal(D, N) with D unbound builds date.fromordinal(N) — the
+        numlist-over-ordinals day-enumeration pattern maps back to dates."""
+        # vn
+        v = Var()
+        d = dt.date(2026, 3, 16)
+        results, _ = simple_solutions(_ordinal_2, v, d.toordinal())
+        assert len(results) == 1
+        out = deref(v)
+        assert out == d
+        assert isinstance(out, dt.date) and not isinstance(out, dt.datetime)
+
+    def test_check_mode(self):
+        # nn
+        d = dt.date(2026, 3, 16)
+        results, _ = simple_solutions(_ordinal_2, d, d.toordinal())
+        assert len(results) == 1
+        results, _ = simple_solutions(_ordinal_2, d, d.toordinal() + 1)
+        assert len(results) == 0
+
+    def test_datetime_forward_uses_its_calendar_day(self):
+        # nv
+        n = Var()
+        results, _ = simple_solutions(
+            _ordinal_2, dt.datetime(2026, 3, 16, 14, 30), n
+        )
+        assert len(results) == 1
+        assert deref(n) == dt.date(2026, 3, 16).toordinal()
+
+    def test_reverse_out_of_range_fails(self):
+        """date.fromordinal raises ValueError for ordinal < 1 — the builtin
+        fails the goal rather than leaking the exception."""
+        # vn
+        results, _ = simple_solutions(_ordinal_2, Var(), 0)
+        assert len(results) == 0
+
+    def test_both_unbound_fails(self):
+        # vv
+        results, _ = simple_solutions(_ordinal_2, Var(), Var())
+        assert len(results) == 0
+
+    def test_non_integer_reverse_fails(self):
+        # vn
+        results, _ = simple_solutions(_ordinal_2, Var(), "737000")
         assert len(results) == 0
