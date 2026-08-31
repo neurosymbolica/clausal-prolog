@@ -14,6 +14,63 @@ from clausal.logic.variables import deref, is_var, unify
 from clausal.terms import Quantity
 
 from clausal.logic.builtins._registry import _builtin
+from clausal.logic.exceptions import ARITH_OPERATOR_TERMS
+
+
+# ── between/3 bound evaluation ─────────────────────────────────────────────
+#
+# A bound written as an expression — ``between(0, LENGTH - 1, X)`` — reaches
+# the builtin as an unevaluated operator term (call arguments are structural,
+# eval_arith=False). It is not a Var and not an int, so it used to fall
+# through the type guard and *silently fail*: findall collected [] as a
+# well-formed wrong answer. Comparison operators evaluate their operands
+# (ARITH_OPERATOR_TERMS is exactly "the nodes ``==`` evaluates"), so
+# "arithmetic works in argument position" is the generalisation the
+# surrounding surface teaches — between/3 now follows it.
+# See todo/done/between3-does-not-evaluate-arithmetic-in-its-bounds.md.
+
+
+def _arith_has_unbound_var(term) -> bool:
+    """True when an arithmetic operator term still contains an unbound Var."""
+    term = deref(term)
+    if is_var(term):
+        return True
+    if isinstance(term, ARITH_OPERATOR_TERMS):
+        if hasattr(term, "operand"):  # Negate (unary)
+            return _arith_has_unbound_var(term.operand)
+        return (_arith_has_unbound_var(term.left)
+                or _arith_has_unbound_var(term.right))
+    return False
+
+
+def _eval_between_bound(term):
+    """Evaluate an arithmetic operator term appearing as a between/3 bound.
+
+    Reuses the runtime ground evaluator behind the ``==`` comparison surface
+    (``clpfd._eval_ground`` — int/int division yields an exact Fraction).
+
+    Returns the evaluated int, or None when the expression still contains an
+    unbound Var — the caller then keeps between/3's silent mode-failure,
+    matching a plain unbound bound. A *ground* bound that does not evaluate
+    to an integer raises ``type_error(integer, ...)`` — the silent [] was
+    the bug (see the module todo reference above).
+    """
+    from fractions import Fraction
+    from clausal.logic.clpfd import _eval_ground  # lazy: clpfd is heavy
+    from clausal.logic.exceptions import LogicException, type_error
+
+    val = _eval_ground(term)
+    if val is None:
+        if _arith_has_unbound_var(term):
+            return None
+        # Ground but unevaluable (non-numeric leaf, zero divisor, ...):
+        # name the unevaluated bound rather than vanish.
+        raise LogicException(type_error("integer", term, "between/3"))
+    if isinstance(val, Fraction) and val.denominator == 1:
+        val = int(val)  # exact rational that IS an integer (e.g. 6 / 2)
+    if not isinstance(val, int) or isinstance(val, bool):
+        raise LogicException(type_error("integer", val, "between/3"))
+    return val
 
 
 # ── Quantity helpers ───────────────────────────────────────────────────────
@@ -569,6 +626,20 @@ if _USE_C_ARITH:
 
 @_builtin("between", 3)
 def _between__3(low, high, x, trail, k):
+    # Evaluate expression bounds here, at the dispatch boundary (the same
+    # placement as plus/3's A09-F011 guard), so the C fast path and the
+    # Python reference implementation see identical already-evaluated ints
+    # in both enumeration and check mode.
+    low_d = deref(low)
+    if isinstance(low_d, ARITH_OPERATOR_TERMS):
+        low = _eval_between_bound(low_d)
+        if low is None:
+            return
+    high_d = deref(high)
+    if isinstance(high_d, ARITH_OPERATOR_TERMS):
+        high = _eval_between_bound(high_d)
+        if high is None:
+            return
     yield from (_between__3_c if _USE_C_ARITH else _between__3_py)(low, high, x, trail, k)
 
 @_builtin("succ", 2)

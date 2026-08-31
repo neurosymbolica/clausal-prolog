@@ -90,3 +90,31 @@ the surprise. They compose — evaluate, then throw on what still isn't an integ
 - The same silent-`return`-on-non-numeric shape guards `plus/3`, `max_/3`, `min_/3`
   (`_all_known_numeric`). Those take *values* rather than an idiom that invites an
   expression, so they are lower risk, but the audit is the same one.
+
+## Fixed (2026-08-31)
+
+Options 1 + 2 composed, as suggested: **evaluate, then throw on what still
+isn't an integer.**
+
+- `clausal/logic/builtins/arithmetic.py` — the registered `between/3`
+  dispatcher now derefs each bound and, when it is one of
+  `ARITH_OPERATOR_TERMS` (`clausal.logic.exceptions` — the documented set of
+  "nodes `==` evaluates"), evaluates it with `clpfd._eval_ground`, the runtime
+  ground evaluator behind the comparison surface (lazy import; int/int → exact
+  Fraction, so `6 / 2` is accepted as the integer 3). The evaluation sits at
+  the dispatch boundary — the same placement as plus/3's A09-F011 guard — so
+  the C fast path and the Python reference see identical already-evaluated
+  ints, in both enumeration and check mode.
+- A bound expression still containing an unbound Var keeps the plain-unbound
+  mode behaviour: silent failure (acceptance bullet 2).
+- A *ground* bound that does not evaluate to an integer (`7 / 2`, non-numeric
+  leaves, zero divisor) raises `type_error(integer, ...)` naming the culprit —
+  never `[]`. Plain non-expression bounds (bool, float, string passed
+  directly) keep their existing silent-failure behaviour, so A09-F015's
+  `between(False, True, X)` C/Py-agreement pin is untouched.
+- Tests: `tests/test_builtins.py::TestBetweenArithmeticBounds` — 12 cases
+  pinning the todo's exact surface repro (`findall` over
+  `between(0, LENGTH - 1, X)` returns `[0, 1, 2]`, shown red as `[]` first),
+  low/high/nested expression bounds, check mode, integral-division
+  acceptance, both typed-error classes, the three silent-failure regression
+  pins, and C-vs-Python agreement.

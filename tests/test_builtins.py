@@ -489,3 +489,147 @@ class TestBuiltinsInCompiledPredicates:
         fn = db.get_dispatch("pick", 1)
         results = solutions(StepGenerator(fn, None, None, None, out, t), lambda: deref(out))
         assert results == ["a", "b", "c"]
+
+
+# ── between/3 arithmetic bounds ───────────────────────────────────────────────
+
+
+class TestBetweenArithmeticBounds:
+    """between/3 evaluates arithmetic operator terms in its bound positions.
+
+    todo/between3-does-not-evaluate-arithmetic-in-its-bounds.md: a bound
+    written as an expression (``between(0, LENGTH - 1, X)``) used to reach the
+    builtin as an unevaluated Sub term, fail the ``isinstance(int)`` guard,
+    and silently yield nothing — findall then returned [] as a well-formed
+    wrong answer.  The bounds now go through the same ground evaluator the
+    ``==`` comparison surface uses (clpfd._eval_ground over
+    ARITH_OPERATOR_TERMS); a ground bound that still is not an integer raises
+    type_error(integer, ...) instead of failing silently.
+    """
+
+    def _between(self, low, high, x):
+        return Call(func=LoadName(name="between"), args=[low, high, x], kwargs=[])
+
+    def test_expression_high_bound_enumerates(self):
+        """between(0, 3 - 1, X) enumerates 0..2 — the todo's core shape."""
+        from clausal.terms import Sub
+        x = Var()
+        assert sol_var(self._between(0, Sub(left=3, right=1), x), x) == [0, 1, 2]
+
+    def test_expression_low_bound_enumerates(self):
+        """The low bound is evaluated too: between(1 + 1, 4, X) → 2..4."""
+        from clausal.terms import Add
+        x = Var()
+        assert sol_var(self._between(Add(left=1, right=1), 4, x), x) == [2, 3, 4]
+
+    def test_expression_bounds_check_mode(self):
+        """Check mode evaluates as well: between(0, 2 * 2, 3) succeeds,
+        between(0, 2 * 2, 5) fails."""
+        from clausal.terms import Mult
+        assert len(solutions(self._between(0, Mult(left=2, right=2), 3))) == 1
+        assert solutions(self._between(0, Mult(left=2, right=2), 5)) == []
+
+    def test_nested_expression_bound(self):
+        """Nested arithmetic evaluates through: between(0, (2 * 3) - 4, X)."""
+        from clausal.terms import Mult, Sub
+        x = Var()
+        goal = self._between(0, Sub(left=Mult(left=2, right=3), right=4), x)
+        assert sol_var(goal, x) == [0, 1, 2]
+
+    def test_integral_division_bound_accepted(self):
+        """6 / 2 evaluates to the exact rational 3 (house int/int → Fraction);
+        an integer-valued bound is an integer bound."""
+        from clausal.terms import Div
+        x = Var()
+        assert sol_var(self._between(0, Div(left=6, right=2), x), x) == [0, 1, 2, 3]
+
+    def test_non_integral_bound_raises_type_error(self):
+        """A ground bound that evaluates to a non-integer (7/2) raises
+        type_error(integer, ...) — not a silent []."""
+        from clausal.terms import Div
+        from clausal.logic.exceptions import LogicException
+        x = Var()
+        with pytest.raises(LogicException) as exc:
+            sol_var(self._between(0, Div(left=7, right=2), x), x)
+        err = exc.value.term
+        assert err.functor == "error"
+        assert err.args[0].functor == "type_error"
+        assert err.args[0].args[0] == "integer"
+
+    def test_ground_non_numeric_expression_raises_type_error(self):
+        """An arith term over non-numeric ground leaves cannot evaluate:
+        typed error naming the unevaluated bound, not silence."""
+        from clausal.terms import Add
+        from clausal.logic.exceptions import LogicException
+        x = Var()
+        with pytest.raises(LogicException) as exc:
+            sol_var(self._between(0, Add(left="a", right="b"), x), x)
+        err = exc.value.term
+        assert err.args[0].functor == "type_error"
+        assert err.args[0].args[0] == "integer"
+
+    def test_expression_with_unbound_leaf_keeps_mode_failure(self):
+        """A bound expression still containing an unbound Var behaves like a
+        plain unbound bound: silent failure (current documented mode error)."""
+        from clausal.terms import Sub
+        x = Var()
+        assert sol_var(self._between(0, Sub(left=Var(), right=1), x), x) == []
+
+    def test_plain_unbound_bound_still_fails_silently(self):
+        """Regression pin: between(0, HIGH, X) with HIGH unbound keeps its
+        current silent mode-failure behaviour."""
+        x = Var()
+        assert sol_var(self._between(0, Var(), x), x) == []
+
+    def test_bool_bounds_still_fail_silently(self):
+        """Regression pin (A09-F015): plain bool bounds are rejected by
+        failing, not by raising — unchanged."""
+        x = Var()
+        assert sol_var(self._between(False, True, x), x) == []
+
+    def test_c_and_python_paths_agree_on_expression_bounds(self):
+        """The evaluation happens at the dispatch boundary, so the C and
+        Python paths see identical (already-evaluated) bounds."""
+        import clausal.logic.builtins.arithmetic as ar
+        from clausal.terms import Sub
+        x = Var()
+        with_c = sol_var(self._between(0, Sub(left=3, right=1), x), x)
+        saved = ar._USE_C_ARITH
+        ar._USE_C_ARITH = False
+        try:
+            x2 = Var()
+            without_c = sol_var(self._between(0, Sub(left=3, right=1), x2), x2)
+        finally:
+            ar._USE_C_ARITH = saved
+        assert with_c == without_c == [0, 1, 2]
+
+    def test_todo_repro_surface_level(self):
+        """The exact repro from the todo: findall over between(0, LENGTH - 1, X)
+        in a compiled .clausal module returns [0, 1, 2], not []."""
+        import os
+        import tempfile
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        from clausal.logic import solve as solve_mod
+
+        src = (
+            "-module(btwfix, [])\n"
+            "\n"
+            "btw_probe(XS) <- (\n"
+            "    LENGTH == 3,\n"
+            "    findall(X, between(0, LENGTH - 1, X), XS),\n"
+            ")\n"
+        )
+        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+                                         delete=False) as f:
+            f.write(src)
+            path = f.name
+        try:
+            pymod = _load_module("btwfix_between_bounds", path)
+            m = pymod.__dict__["$module"]
+            solve_mod._query_cache.clear()
+            xs = Var()
+            out = [deref(xs) for _ in call("btw_probe", xs, module=m)]
+            assert out == [[0, 1, 2]]
+        finally:
+            os.unlink(path)
