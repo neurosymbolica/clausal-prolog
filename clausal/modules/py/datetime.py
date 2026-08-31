@@ -683,6 +683,22 @@ today._register(1, simple_to_trampoline(_today_1))
 date = ModulePredicate("date", module="datetime")
 date._register(4, simple_to_trampoline(_date_4))
 
+# TRANSITIONAL, added 2026-09-01 for the date/3 migration. This is the SAME
+# components<->object relation `date/4` provides (same `_date_4`), under a name
+# that does not collide with the incoming arity-3 `date` TERM. It exists so the
+# corpus can migrate domain by domain instead of in one commit: between the
+# engine landing and the last domain migrating, un-migrated code still needs
+# this relation to work.
+#
+# Named ymd_date/4, not date_ymd/4, because a predicate name should read in
+# ARGUMENT ORDER -- ymd_date(Y, M, D, DATE), as date_string_iso(DateObj, String)
+# and days_between(A, B, N) do.
+#
+# DELETE when it has no callers. `date(Y, M, D)` is the representation; this is
+# scaffolding, not an API.
+ymd_date = ModulePredicate("ymd_date", module="datetime")
+ymd_date._register(4, simple_to_trampoline(_date_4))
+
 time = ModulePredicate("time", module="datetime")
 time._register(4, simple_to_trampoline(_time_4))
 

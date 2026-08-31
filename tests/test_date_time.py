@@ -11,7 +11,7 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.datetime import (
-    now, now_utc, today, date, time, datetime, timedelta,
+    now, now_utc, today, date, time, datetime, timedelta, ymd_date,
     date_add, date_sub, date_diff, date_between, date_of, days_between,
     weekday, datetime_string, timestamp,
     datetime_string_iso, date_string_iso,
@@ -1015,3 +1015,44 @@ class TestOrdinal:
         # vn
         results, _ = simple_solutions(_ordinal_2, Var(), "737000")
         assert len(results) == 0
+
+
+# ── ymd_date/4 — the transitional alias for the date/3 migration ──────────────
+
+
+class TestYmdDateTransitionalAlias:
+    """`ymd_date/4` is the SAME relation as `date/4`, under a name that does not
+    collide with the incoming arity-3 `date` TERM.
+
+    It exists so the corpus migrates domain by domain rather than in one commit:
+    once `date` becomes the term, `date/4` is gone, and every un-migrated call
+    site needs this to keep working in the meantime. Delete it — and this class —
+    when it has no callers left."""
+
+    def test_it_is_registered_alongside_date4_during_the_transition(self):
+        # nv
+        assert callable(ymd_date._get_dispatch())
+        assert callable(date._get_dispatch())
+
+    def test_it_constructs_exactly_as_date4_does(self):
+        # nv
+        d1, d2 = Var(), Var()
+        r1, _ = simple_solutions(_date_4, 2026, 3, 16, d1)
+        r2, _ = trampoline_solutions(ymd_date, 2026, 3, 16, d2)
+        assert r1 and r2
+        assert deref(d1) == dt.date(2026, 3, 16) == deref(d2)
+
+    def test_it_decomposes_exactly_as_date4_does(self):
+        # nv
+        y, m, d = Var(), Var(), Var()
+        results, _ = trampoline_solutions(ymd_date, y, m, d, dt.date(2026, 3, 16))
+        assert results
+        assert (deref(y), deref(m), deref(d)) == (2026, 3, 16)
+
+    def test_an_impossible_date_still_FAILS_rather_than_raising(self):
+        """The transitional relation keeps date/4's semantics unchanged — a goal
+        that fails. Only the arity-3 TERM raises, because a term constructor has
+        no way to fail."""
+        # nv
+        results, _ = trampoline_solutions(ymd_date, 2025, 2, 29, Var())
+        assert results == []
