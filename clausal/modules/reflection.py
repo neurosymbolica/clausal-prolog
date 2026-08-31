@@ -34,6 +34,9 @@ Builtins
 - ``reified_subterm(TERM, SUB)`` — enumerate every subterm, depth-first,
   starting with ``TERM`` itself; recurses through vocabulary terms, raw
   operator nodes, lists, tuples, and dict values.
+- ``clause_source(TERM, TEXT)`` — render a reified term back to ``.clausal``
+  source text (the inverse direction), so a rulebase can quote a clause it
+  took apart or rebuilt.
 
 Reification is cached per source text (and per file path + mtime), so
 back-to-back matcher queries over the same source parse it once.
@@ -64,6 +67,7 @@ from clausal.reflection import (
     Variable,
     reify_file,
     reify_source,
+    render_source,
     # The operator classes op_node names/builds are exactly those the renderer
     # round-trips, so the two stay bijective (see _OP_NODE_CLASSES).
     RENDER_OP_CLASS_NAMES,
@@ -175,6 +179,22 @@ def _clause_head_2(clause, head, trail, k):
 def _clause_body_2(clause, goals, trail, k):
     clause = deref(clause)
     if isinstance(clause, Clause) and unify(goals, clause.goals, trail):
+        yield None
+
+
+def _clause_source_2(term, text, trail, k):
+    """``clause_source(TERM, TEXT)`` — render a reified term (a ``Clause``, or
+    any renderable subterm) to ``.clausal`` source text, the Clausal-callable
+    face of :func:`clausal.reflection.render_source`.
+
+    TERM must be bound (``instantiation_error`` otherwise — there is nothing
+    to render, and the reverse mode is already ``reified_item/2``).  A term
+    the renderer refuses raises ``RenderError`` rather than failing silently,
+    matching how ``reified_item/2`` lets ``ReifyError`` escape."""
+    term = deref(term)
+    if is_var(term):
+        raise LogicException(instantiation_error("clause_source/2"))
+    if unify(text, render_source(term), trail):
         yield None
 
 
@@ -383,6 +403,9 @@ clause_head._register(2, simple_to_trampoline(_clause_head_2))
 
 clause_body = ModulePredicate("clause_body", module="reflection")
 clause_body._register(2, simple_to_trampoline(_clause_body_2))
+
+clause_source = ModulePredicate("clause_source", module="reflection")
+clause_source._register(2, simple_to_trampoline(_clause_source_2))
 
 goal_functor = ModulePredicate("goal_functor", module="reflection")
 goal_functor._register(3, simple_to_trampoline(_goal_functor_3))

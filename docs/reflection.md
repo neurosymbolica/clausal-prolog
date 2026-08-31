@@ -80,6 +80,7 @@ inside `or` becomes a nested list.
 -import_from(reflection, [
     reified_item, reified_clause, reified_file_item,
     clause_head, clause_body, goal_functor, reified_subterm,
+    op_node, replace_subterm, clause_source,
     Clause, Goal, Variable, Atom, Escape,
 ])
 ```
@@ -138,6 +139,28 @@ EscapeCode(SRC, CODE) <- (
     reified_subterm(ITEM, Escape(CODE, _, _))
 )
 ```
+
+### clause_source/2 — Render Back to Source
+
+`clause_source(TERM, TEXT)` — the inverse direction: renders a reified term
+(a `Clause`, or any renderable subterm) back to `.clausal` source text, so a
+matcher can *quote* the clause it is objecting to — including one it rebuilt
+with `replace_subterm/4` that never came from source text:
+
+```clausal
+SwappedSource(SRC, TEXT) <- (
+    reified_clause(SRC, CLAUSE),
+    reified_subterm(CLAUSE, SUB),
+    op_node(SUB, "GtE", ARGS),
+    op_node(NEW, "Gt", ARGS),
+    replace_subterm(CLAUSE, SUB, NEW, CLAUSE2),
+    clause_source(CLAUSE2, TEXT)
+)
+```
+
+`TERM` must be bound (`instantiation_error` otherwise — the reverse mode is
+already `reified_item/2`). A term the renderer refuses raises `RenderError`
+rather than failing silently.
 
 ---
 
