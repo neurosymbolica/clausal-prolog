@@ -14,6 +14,10 @@ merged into every bucket), and the lifted thunk's `$headlit` global is never
 collected for bucket functions — so it now skips `PyThunk` like str/bytes and
 `LoadName`. Both halves mutation-verified; units and currency spellings
 covered by `tests/test_quantity_head_literal.py`.
+Review round (roborev job 5) added the missing coverage its findings named:
+currency (`7.89(euro)`), plus the non-quantity thunk producers the type-keyed
+hoist also generalizes to — an f-string and a `++()` escape directly in head
+position. All mutation-verified red without the hoist.
 
 **Filed:** 2026-07-30, found while fixing
 `todo/done/headlit-global-not-injected-symbolic-diff-example.md` (adjacent

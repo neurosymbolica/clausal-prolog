@@ -71,6 +71,23 @@ class TestQuantityHeadLiteral:
         assert _atom_names(_collect("ChkPack", [N], N, module=mod)) == [("packed_",)]
 
 
+class TestOtherPyThunkHeadLiterals:
+    """The hoist is keyed on the PyThunk type, so the currency spelling and
+    the other thunk producers (f-strings, ++() escapes) take the same path."""
+
+    def test_currency_head_literal(self, mod):
+        N = Var()
+        assert _atom_names(_collect("ChkPrice", [N], N, module=mod)) == [("pricey_",)]
+
+    def test_fstring_head_literal(self, mod):
+        N = Var()
+        assert _atom_names(_collect("ChkTag", [N], N, module=mod)) == [("tagged_",)]
+
+    def test_python_escape_head_literal(self, mod):
+        N = Var()
+        assert _atom_names(_collect("ChkEsc", [N], N, module=mod)) == [("escd_",)]
+
+
 class TestQuantityClauseInIndexedPredicate:
     """The quantity clause keys as _INDEX_VAR and is merged into every
     argument-index bucket; the bucket compiler must not re-lift its hoisted

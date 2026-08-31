@@ -6,9 +6,14 @@
 -module(quantity_head_literal, [Len(AMOUNT, NAME), Chk(N), Amt(A),
                                 Sel(AMOUNT, NAME), Pick(N),
                                 Pack(L, N), ChkPack(N),
-                                Mix(K, NAME), PickMix(N), PickQty(N)])
+                                Mix(K, NAME), PickMix(N), PickQty(N),
+                                Price(AMOUNT, NAME), ChkPrice(N),
+                                Tagd(TAG, NAME), ChkTag(N),
+                                Esc(V, NAME), ChkEsc(N)])
 -import_from(py.units, [m])
--private([short_, long_, tiny_, packed_, one_, two_, three_, qty_])
+-import_from(european_union, [euro])
+-private([short_, long_, tiny_, packed_, one_, two_, three_, qty_,
+          pricey_, tagged_, escd_])
 
 # One ruled clause, quantity in the head — the filed repro.
 Len(5(m), short_) <- (number(1))
@@ -45,3 +50,18 @@ Mix(5(m), qty_) <- (number(1))
 PickMix(N) <- Mix(2, N)
 
 PickQty(N) <- Mix(5(m), N)
+
+# Currency spelling of the same head literal (also a PyThunk).
+Price(7.89(euro), pricey_) <- (number(1))
+
+ChkPrice(N) <- Price(7.89(euro), N)
+
+# Non-quantity PyThunks directly in head position: the hoist is type-keyed,
+# so f-strings and ++() escapes take the same path.
+Tagd(f"v{0}", tagged_) <- (number(1))
+
+ChkTag(N) <- Tagd("v0", N)
+
+Esc(++(2 + 3), escd_) <- (number(1))
+
+ChkEsc(N) <- Esc(5, N)
