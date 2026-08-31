@@ -561,13 +561,13 @@ Test("date_time: now exists") <- now(_)  # nv
 Test("date_time: today exists") <- today(_)  # nv
 
 Test("date_time: date exists") <- (
-    date(2024, 1, 15, D),
+    D is date(2024, 1, 15),
     datetime_string(D, S, "%Y-%m-%d"),
     S == "2024-01-15"
 )  # nv
 
 Test("date_time: weekday exists") <- (
-    date(2024, 1, 15, D),
+    D is date(2024, 1, 15),
     weekday(D, W),
     integer(W)
 )  # nv

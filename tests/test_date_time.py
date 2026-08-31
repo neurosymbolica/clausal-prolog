@@ -746,9 +746,12 @@ class TestAdapters:
         # nv
         assert callable(today._get_dispatch())
 
-    def test_date_has_dispatch(self):
+    def test_date_is_a_term_constructor_not_a_predicate(self):
+        """date/3 replaced date/4: `date` is now the TERM, so it has no goal
+        dispatch. Construct and decompose are unification, not a call."""
         # nv
-        assert callable(date._get_dispatch())
+        assert not hasattr(date, "_get_dispatch")
+        assert date(2026, 3, 16) == dt.date(2026, 3, 16)
 
     def test_time_has_dispatch(self):
         # nv
@@ -800,7 +803,8 @@ class TestAdapters:
 
     def test_repr(self):
         # nv
-        assert "datetime.date" in repr(date)
+        # `date` is a term constructor, not a ModulePredicate, so it has no
+        # module-qualified predicate repr; date_between is still a predicate.
         assert "datetime.date_between" in repr(date_between)
 
     def test_datetime_string_iso_has_dispatch(self):
@@ -1029,10 +1033,14 @@ class TestYmdDateTransitionalAlias:
     site needs this to keep working in the meantime. Delete it — and this class —
     when it has no callers left."""
 
-    def test_it_is_registered_alongside_date4_during_the_transition(self):
+    def test_it_is_registered_and_date4_is_gone(self):
+        """Step A registered this alongside date/4; step C removed date/4, so
+        `date` is now the arity-3 TERM and this is the only remaining route to
+        the components<->object relation. It stays only until the corpus's
+        remaining call sites migrate."""
         # nv
         assert callable(ymd_date._get_dispatch())
-        assert callable(date._get_dispatch())
+        assert not hasattr(date, "_get_dispatch")
 
     def test_it_constructs_exactly_as_date4_does(self):
         # nv

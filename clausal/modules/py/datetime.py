@@ -66,6 +66,9 @@ _dt = _import_stdlib("datetime")
 from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.predicate import PredicateMeta
+from clausal.logic.exceptions import LogicException, domain_error, type_error
+from clausal.terms import Compound
 from clausal.logic.trampoline import DONE
 
 
@@ -94,7 +97,16 @@ def _today_1(d, trail, k):
 
 
 def _date_4(year, month, day, dt, trail, k):
-    """date/4: bidirectional — date(Y, M, D, DateObj).
+    """date/4: UNREGISTERED as of the date/3 migration -- DEAD from Clausal.
+
+    No longer bound to any predicate: `date` is the arity-3 TERM constructor
+    and unification does both of this relation's modes. Kept only because 13
+    call sites across three test files still exercise it directly, some
+    covering semantics date/3 must also honour (leap years, datetime-vs-date,
+    float rejection). DELETE once that coverage is ported to date/3 -- do not
+    build on it, and do not re-register it.
+
+    Original: bidirectional — date(Y, M, D, DateObj).
 
     If DateObj is unbound: construct datetime.date(Y, M, D) → DateObj.
     If DateObj is a datetime.date: decompose → Y, M, D.
@@ -135,6 +147,114 @@ def _date_4(year, month, day, dt, trail, k):
             trail.undo(mark)
     else:
         expect_type(dt, _dt.date, "date/4", expected="date or datetime", arg=4)
+
+
+# ── date/3 — the date TERM (the standard representation) ────────────────
+#
+# `date(Y, M, D)` IS a real datetime.date, and it is bidirectional by
+# UNIFICATION rather than by a constructor predicate:
+#
+#     DATE = date(2026, 1, 15)     construct — ground args
+#     DATE = date(Y, M, D)         decompose — DATE bound, components free
+#
+# That is what makes date/4 redundant: it does both of those modes as a
+# 4-place relation, and neither needs a predicate once the term carries
+# the value itself.
+#
+# The value must be a real datetime.date and NOT a compound named `date`.
+# A compound compares its arguments in standard order, which for the
+# integer-like components is string order — so "15" < "2" < "9" and
+# msort/2 returns a WRONG chronological order without raising. A real
+# date orders natively and sorts correctly through sort/msort/min_list/
+# max_list (see the Ordering note in this module's docstring).
+
+
+class _DatePattern(metaclass=PredicateMeta):
+    """`date(Y, M, D)` with at least one component still unbound.
+
+    Only a partially-instantiated date needs a term object at all: a fully
+    ground one is simply the datetime.date. This exists so the SAME source
+    form works in decompose mode, and it disappears the moment it unifies
+    against a real date.
+
+    PredicateMeta (rather than a plain class) because the engine's clause
+    copier rebuilds *term instances* with fresh variables on each
+    resolution step, and it recognises them via PredicateMeta or
+    @dataclass (``c_is_term_instance`` in logic/variables/_variables.c).
+    A plain class would silently share variables across resolution steps.
+    """
+
+    _fields = ("year", "month", "day")
+
+    # Unifies with datetime.date, a foreign type, so it must never be
+    # indexed by its own class identity. See arg_index._arg_to_index_key.
+    _index_transparent = True
+
+
+# PredicateMeta GENERATES a structural ``__unify__`` in its ``__new__`` and
+# installs it over anything of that name in the class body -- defining the
+# hook inline above would have been silently discarded. So take the
+# generated one and layer the date case on top, delegating everything else
+# back to it unchanged.
+_date_pattern_structural_unify = _DatePattern.__dict__["__unify__"]
+
+
+def _date_pattern_unify(self, other, *rest):
+    if not rest:
+        # Class-side call (PredicateMeta passes a sentinel default rather
+        # than a trail). Nothing date-specific to add -- delegate.
+        return _date_pattern_structural_unify(self, other)
+    trail = rest[0]
+    o = deref(other)
+    # A datetime IS-A date in Python; it is not one here. The ordering
+    # builtins raise type_error(orderable, ...) when the two meet, so
+    # letting them unify would turn a loud failure into a quiet one.
+    if isinstance(o, _dt.date) and not isinstance(o, _dt.datetime):
+        return (unify(self.year, o.year, trail)
+                and unify(self.month, o.month, trail)
+                and unify(self.day, o.day, trail))
+    return _date_pattern_structural_unify(self, other, trail)
+
+
+_DatePattern.__unify__ = _date_pattern_unify
+
+
+def date(year, month, day):
+    """Construct a datetime.date, or a pattern when a component is unbound."""
+    y, m, d = deref(year), deref(month), deref(day)
+    if is_var(y) or is_var(m) or is_var(d):
+        # KNOWN BOUNDARY, shared with date/4's construct mode: a pattern
+        # whose components are bound *later* stays a pattern and never
+        # becomes a datetime.date. The two modes that matter -- a ground
+        # literal, and decomposing a bound date -- both resolve to a real
+        # date, and grounding-after-the-fact has no caller in the corpus.
+        return _DatePattern(y, m, d)
+    # Ground: hand the components to datetime.date UNCHANGED so it rejects a
+    # float with a TypeError instead of int()-truncating 2020.9 to 2020, and
+    # rejects (2025, 2, 29) as the non-date it is. Same reasoning as _date_4
+    # (F015) -- a bogus date must never be constructible.
+    try:
+        return _dt.date(y, m, d)
+    except (TypeError, ValueError) as exc:
+        # A term constructor cannot FAIL the way date/4's goal could, so it
+        # raises -- but as a proper ISO error term, not a bare Python one.
+        # An impossible date is a fact about the PROGRAM, not about Python,
+        # and ISO already has a term for it; leaking `ValueError` here would
+        # make the one case with a portable meaning the one case that does not
+        # translate. `catch(D is date(Y, 2, 29), error(domain_error(date, _),
+        # _), fail)` recovers date/4's failure semantics where a caller wants
+        # them.
+        note_rejected_call("date/3", exc)
+        culprit = Compound("date", (y, m, d))
+        if isinstance(exc, TypeError):
+            # Wrong TYPE of component (a float, a string) -> type_error.
+            raise LogicException(
+                type_error("integer", culprit, "date/3")) from None
+        # Right types, impossible VALUE (month 13, 29 Feb in a common year)
+        # -> domain_error. This is the ISO distinction and it is the one a
+        # reader needs: a typo in the shape, versus a date that is not a day.
+        raise LogicException(
+            domain_error("date", culprit, "date/3")) from None
 
 
 # ── time/4 — construct or decompose datetime.time ───────────────────────
@@ -679,9 +799,6 @@ now_utc._register(1, simple_to_trampoline(_now_utc_1))
 
 today = ModulePredicate("today", module="datetime")
 today._register(1, simple_to_trampoline(_today_1))
-
-date = ModulePredicate("date", module="datetime")
-date._register(4, simple_to_trampoline(_date_4))
 
 # TRANSITIONAL, added 2026-09-01 for the date/3 migration. This is the SAME
 # components<->object relation `date/4` provides (same `_date_4`), under a name

@@ -189,7 +189,7 @@ DATE_ADD_INT_SRC = """
 -import_from(date_time, [date_add, date])
 
 Test("window end computes") <- (
-    date(2024, 1, 1, D),
+    D is date(2024, 1, 1),
     date_add(D, 90, END),
     END is not _
 ),
@@ -211,7 +211,7 @@ window_end(START, END) <- (
 ),
 
 Test("window end via helper") <- (
-    date(2024, 1, 1, D),
+    D is date(2024, 1, 1),
     window_end(D, END),
     END is not _
 ),
@@ -231,7 +231,7 @@ CONSTRUCT_REJECT_SRC = """
 -import_from(date_time, [date])
 
 Test("month 13") <- (
-    date(2024, 13, 1, D),
+    D is date(2024, 13, 1),
     D is not _
 ),
 """
@@ -241,15 +241,20 @@ def test_constructor_rejection_noted(capsys, tmp_path):
     p = write(tmp_path, "d13.clausal", CONSTRUCT_REJECT_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    assert "date/4 rejected its arguments" in out
+    assert "date/3 rejected its arguments" in out
     assert "month must be in 1..12" in out
+    # date/3 is a TERM constructor, so it cannot fail the way date/4's goal
+    # could: it raises an ISO domain_error carrying the culprit. The note is
+    # kept as well, because the note is what names the predicate in a failure
+    # report and losing it would make the diagnostic worse than what it replaced.
+    assert "domain_error" in out
 
 
 UNBOUND_TD_SRC = """
 -import_from(date_time, [date_add, date])
 
 Test("unbound timedelta is a mode, not a type error") <- (
-    date(2024, 1, 1, D),
+    D is date(2024, 1, 1),
     date_add(D, TD, END),
     END is not _
 ),

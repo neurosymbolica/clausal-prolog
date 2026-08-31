@@ -178,6 +178,14 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
     # class, but kept adjacent for clarity).
     if isinstance(arg, type) and isinstance(arg, PredicateMeta):
         return (arg.__name__, 0)
+    # A term class may unify with values of a FOREIGN type -- date/3's
+    # pattern unifies with a real datetime.date. Keying such a term by its
+    # own (class_name, field_count) sends a caller to a bucket that no
+    # stored value can ever land in, and the predicate silently yields no
+    # solutions once _INDEX_THRESHOLD clauses make indexing kick in. These
+    # are index-transparent: treat them as a Var and let the scan unify.
+    if getattr(type(arg), "_index_transparent", False):
+        return _INDEX_VAR
     if is_term_instance(arg):
         cls = type(arg)
         return (cls.__name__, len(term_field_names(arg)))
@@ -368,6 +376,9 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
     # routes to the same bucket as its head key.
     if isinstance(a, type) and isinstance(a, PredicateMeta):
         return (a.__name__, 0)
+    # Mirror of the index-transparent branch in _arg_to_index_key.
+    if getattr(type(a), "_index_transparent", False):
+        return _INDEX_VAR
     if is_term_instance(a):
         cls = type(a)
         # P3-3 Task 4 fold-in: the same gate the cell branch above carries,
