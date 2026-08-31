@@ -1003,3 +1003,69 @@ class TestProfileAPIPlainDict:
     def test_tri_get_nondict_still_fails_softly(self):
         # nv
         assert _fails("tri_get", "not_a_dict", "k", Var())
+
+
+# ── in_/2 and in_check/2 accept dicts and sets like the ``in`` operator ────────
+#
+# The ``in`` OPERATOR iterates DictTerm/dict keys (pair mode: items) and
+# SetTerm/set elements via _in_iter's iter() fallback; the PREDICATE spelling
+# in_/2 went through the list-only _as_items path and failed SILENTLY on all
+# of them, so the two spellings disagreed on the same collection. See
+# todo/done/in-predicate-does-not-accept-a-dict.md.
+
+
+class TestInPredicateDictSet:
+    def test_in_dictterm_key_succeeds(self):
+        # nv
+        assert _succeeds("in_", "a", DictTerm({"a": 1, "b": 2}))
+
+    def test_in_dictterm_absent_key_fails(self):
+        # nv
+        assert _fails("in_", "missing", DictTerm({"a": 1}))
+
+    def test_in_dictterm_enumerates_keys_in_operator_order(self):
+        # nv
+        sols = _sols("in_", Var(), DictTerm({"b": 2, "a": 1, "c": 3}))
+        assert [s[0] for s in sols] == ["b", "a", "c"]
+
+    def test_in_dictterm_is_key_not_value(self):
+        # nv
+        assert _fails("in_", 1, DictTerm({"a": 1}))
+
+    def test_in_plain_dict_key_succeeds(self):
+        # nv
+        assert _succeeds("in_", "a", {"a": 1, "b": 2})
+
+    def test_in_plain_dict_enumerates_keys(self):
+        # nv
+        sols = _sols("in_", Var(), {"b": 2, "a": 1})
+        assert [s[0] for s in sols] == ["b", "a"]
+
+    def test_in_setterm_element_succeeds(self):
+        # nv
+        assert _succeeds("in_", 2, SetTerm([1, 2, 3]))
+
+    def test_in_setterm_absent_fails(self):
+        # nv
+        assert _fails("in_", 9, SetTerm([1, 2, 3]))
+
+    def test_in_plain_set_element_succeeds(self):
+        # nv
+        assert _succeeds("in_", 2, {1, 2, 3})
+
+    def test_in_check_dictterm_key_succeeds_once(self):
+        # nv
+        assert _sols("in_check", "a", DictTerm({"a": 1})) == [{}]
+
+    def test_in_check_setterm_element_succeeds(self):
+        # nv
+        assert _succeeds("in_check", 2, SetTerm([1, 2, 3]))
+
+    def test_in_check_plain_dict_absent_fails(self):
+        # nv
+        assert _fails("in_check", "missing", {"a": 1})
+
+    def test_in_list_unchanged(self):
+        # nv
+        assert _succeeds("in_", 2, [1, 2, 3])
+        assert _fails("in_", 9, [1, 2, 3])

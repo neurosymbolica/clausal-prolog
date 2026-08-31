@@ -1,5 +1,19 @@
 # `in_/2` does not accept a DictTerm, while the `in` operator does
 
+**RESOLVED 2026-08-31** on `fix/in-predicate-dict-set` — `in_/2` and
+`in_check/2` (`clausal/logic/builtins/lists.py`) now fall back to
+`_as_membership_items` when `_as_items` says not-a-sequence: DictTerm / plain
+dict → keys, SetTerm / set / frozenset → elements, in iteration order — the
+open question answered YES, enumeration order matches the operator, because
+both now iterate `list(collection)` exactly as `_in_iter`'s `iter()` fallback
+does. Sets were included deliberately: the operator accepts them de facto via
+that same fallback, so a dict-only fix would have re-created this todo for
+sets. Plain dict/set accepted for the reasons in
+[[done/get3-rejects-a-plain-dict-that-subscript-accepts]]. Tests:
+`TestInPredicateDictSet` in `tests/test_dict_set_builtins.py`. Noted for the
+sweep ([[dictterm-only-builtins-sweep]]): pair-mode `(K, V) in D` iterates
+keys, not items, for a PLAIN dict (`_in_iter` special-cases only DictTerm).
+
 **Filed:** 2026-07-30, splitting the last live item out of
 `todo/done/dict-key-membership-in-operator.md` before archiving it.
 

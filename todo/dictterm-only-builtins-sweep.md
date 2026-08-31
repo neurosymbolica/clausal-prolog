@@ -15,9 +15,12 @@ Known DictTerm-only candidates, none yet checked for a lenient sibling:
   `dict_put/4`, `dict_put_pairs/3`, `dict_remove/3`, `dict_merge/3`,
   `gen_dict/3`, `sub_dict/2`, `dict_size/2`, `dict_keys/2`, `dict_values/2`,
   `dict_pairs/2`, and `is_dict/1`.
-- The `in` operator with a plain dict on the right (its DictTerm behaviour is
-  done; the plain-dict case is untested). Related but distinct:
-  [[in-predicate-does-not-accept-a-dict]] (`in_/2` vs `in` on DictTerm).
+- The `in` operator with a plain dict on the right: key mode works via the
+  `iter()` fallback, but pair mode `(K, V) in D` iterates KEYS, not items, for
+  a plain dict — `_in_iter` (`clausal/logic/runtime/body_star_unify.py`)
+  special-cases only DictTerm for pair mode, so a plain dict yields keys that
+  then fail to unify with the tuple pattern (silent no-solutions, found
+  2026-08-31 while fixing [[done/in-predicate-does-not-accept-a-dict]]).
 - The SetTerm twins of all of the above (`set_*` family vs plain `set`) —
   `structural_eq`/`unify` already accept plain sets, so the same asymmetry is
   possible.

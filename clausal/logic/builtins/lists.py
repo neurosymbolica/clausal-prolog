@@ -78,6 +78,19 @@ def _as_items(val):
     return None
 
 
+def _as_membership_items(val):
+    """Membership domain for the dict/set collections the ``in`` OPERATOR
+    already iterates (``_in_iter``'s ``iter()`` fallback): DictTerm / plain
+    dict → keys, SetTerm / set / frozenset → elements, both in iteration
+    order so ``in_/2`` enumerates exactly what ``X in C`` does. Returns None
+    for anything else so ``in_/2``'s member/2 alias keeps its list-only
+    contract for the remaining types."""
+    from clausal.terms import DictTerm, SetTerm
+    if isinstance(val, (DictTerm, dict, SetTerm, set, frozenset)):
+        return list(val)
+    return None
+
+
 def _was_string(val):
     """Return True if *val* should be treated as str-shaped for output
     purposes.
@@ -129,9 +142,15 @@ def _seq_result(items, was_string, was_bytes=False):
 
 @_trampoline_builtin("in_", 2)
 def _member__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
-    """member(Elem, List) — Elem is a member of List; enumerates on backtrack."""
+    """member(Elem, List) — Elem is a member of List; enumerates on backtrack.
+
+    Also accepts the collections the ``in`` operator iterates (DictTerm/dict
+    keys, SetTerm/set elements) so the predicate and operator spellings of
+    membership agree."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
+    if items is None:
+        items = _as_membership_items(lst_val)
     if items is not None:
         if _c_member_find is not None:
             idx = 0
@@ -153,9 +172,13 @@ def _member__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
 
 @_trampoline_builtin("in_check", 2)
 def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
-    """memberchk(Elem, List) — like member/2 but commits to the first match."""
+    """memberchk(Elem, List) — like member/2 but commits to the first match.
+
+    Accepts the same dict/set collections as ``in_/2`` (see _member__2)."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
+    if items is None:
+        items = _as_membership_items(lst_val)
     if items is not None:
         if _c_memberchk_find is not None:
             if _c_memberchk_find(items, elem, trail):
