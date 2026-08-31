@@ -1069,3 +1069,30 @@ class TestInPredicateDictSet:
         # nv
         assert _succeeds("in_", 2, [1, 2, 3])
         assert _fails("in_", 9, [1, 2, 3])
+
+    # review round (roborev job 7): every widened type gets a present AND an
+    # absent case on both predicates
+
+    def test_in_frozenset_element_succeeds(self):
+        # nv
+        assert _succeeds("in_", 2, frozenset({1, 2, 3}))
+
+    def test_in_frozenset_absent_fails(self):
+        # nv
+        assert _fails("in_", 9, frozenset({1, 2, 3}))
+
+    def test_in_plain_set_absent_fails(self):
+        # nv
+        assert _fails("in_", 9, {1, 2, 3})
+
+    def test_in_check_dictterm_absent_fails(self):
+        # nv
+        assert _fails("in_check", "missing", DictTerm({"a": 1}))
+
+    def test_in_check_setterm_absent_fails(self):
+        # nv
+        assert _fails("in_check", 9, SetTerm([1, 2, 3]))
+
+    def test_in_check_frozenset_element_succeeds(self):
+        # nv
+        assert _succeeds("in_check", 2, frozenset({1, 2, 3}))
