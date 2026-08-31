@@ -66,7 +66,13 @@ rejection during the guard's tree walk.
 Leaf legality decided as: int / Var / expression node legal; Fraction leaves
 in trees keep dispatching to CLP(Q) *before* any FD walker runs
 (`_is_rational_arg` walks trees), so they never hit the guard; bare
-float/Decimal/Quantity/str/date/None/compound leaves raise — verified that
+Decimal/Quantity/str/date/None/compound leaves raise, and a float leaf
+raises when it sits beside an FD *Var* (via `_expr_domain`) — a FULLY-GROUND
+tree with a float leaf instead folds numerically in `_eval_ground` and
+dispatches to CLP(R), the pre-existing FD/R boundary (`2 + 0.5 == 2.5` is
+True and stays so; roborev job 14 corrected this note's original blanket
+"float raises" claim, and the ground-float fold is pinned in the same test
+class) — verified that
 `X == Quantity(2,m) * 2` previously posted, left X unconstrained, and then
 accepted `unify(X, 42)` (silently wrong), so rejecting Quantity leaves fixes
 a wrong verdict rather than outlawing a working shape.  The units+CLP(FD)

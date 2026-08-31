@@ -568,6 +568,36 @@ class TestBetweenArithmeticBounds:
         assert err.args[0].functor == "type_error"
         assert err.args[0].args[0] == "integer"
 
+    @pytest.mark.parametrize("shape", ["var_first", "garbage_first"])
+    def test_unbound_var_mixed_with_garbage_still_raises(self, shape):
+        """``N - "a"`` with N unbound raises, whichever side the garbage is
+        on (roborev job 13): no future binding of N makes the bound legal,
+        so the loud typed error beats the silent mode-failure an unbound
+        Var alone gets.  Order-independence pinned by the two shapes."""
+        from clausal.terms import Sub
+        from clausal.logic.exceptions import LogicException
+        x = Var()
+        n = Var()
+        bound = (Sub(left=n, right="a") if shape == "var_first"
+                 else Sub(left="a", right=n))
+        with pytest.raises(LogicException) as exc:
+            sol_var(self._between(0, bound, x), x)
+        assert exc.value.term.args[0].functor == "type_error"
+
+    def test_ground_zero_divisor_raises_with_between_context(self):
+        """``1 // 0`` evaluates to nothing while fully ground — the LOCAL
+        raise (context "between/3"), the one path non-numeric leaves no
+        longer reach (they raise inside _eval_ground first)."""
+        from clausal.terms import FloorDiv
+        from clausal.logic.exceptions import LogicException
+        x = Var()
+        with pytest.raises(LogicException) as exc:
+            sol_var(self._between(0, FloorDiv(left=1, right=0), x), x)
+        err = exc.value.term
+        assert err.args[0].functor == "type_error"
+        assert err.args[0].args[0] == "integer"
+        assert "between/3" in str(err)
+
     def test_expression_with_unbound_leaf_keeps_mode_failure(self):
         """A bound expression still containing an unbound Var behaves like a
         plain unbound bound: silent failure (current documented mode error)."""

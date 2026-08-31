@@ -49,11 +49,20 @@ def _eval_between_bound(term):
     Reuses the runtime ground evaluator behind the ``==`` comparison surface
     (``clpfd._eval_ground`` — int/int division yields an exact Fraction).
 
-    Returns the evaluated int, or None when the expression still contains an
-    unbound Var — the caller then keeps between/3's silent mode-failure,
-    matching a plain unbound bound. A *ground* bound that does not evaluate
-    to an integer raises ``type_error(integer, ...)`` — the silent [] was
-    the bug (see the module todo reference above).
+    Returns the evaluated int, or None when the expression's only obstacle
+    is an unbound Var — the caller then keeps between/3's silent
+    mode-failure, matching a plain unbound bound.  A bound that can NEVER
+    evaluate to an integer raises ``type_error(integer, ...)`` — the silent
+    [] was the bug (see the module todo reference above).  That includes an
+    expression mixing an unbound Var with a non-numeric leaf
+    (``N - "a"``): ``_eval_ground`` raises on the garbage leaf whichever
+    side it sits on (roborev job 13 — verified order-independent), and the
+    raise is right — no future binding of ``N`` makes the bound legal.
+
+    Two raise sites, two contexts: a non-numeric LEAF raises inside
+    ``_eval_ground`` with its own "clpfd expression" context; the local
+    raise below covers what evaluates to None while ground (a zero
+    divisor) or to a non-integer (7/2, bool) and names "between/3".
     """
     from fractions import Fraction
     from clausal.logic.clpfd import _eval_ground  # lazy: clpfd is heavy
@@ -63,8 +72,9 @@ def _eval_between_bound(term):
     if val is None:
         if _arith_has_unbound_var(term):
             return None
-        # Ground but unevaluable (non-numeric leaf, zero divisor, ...):
-        # name the unevaluated bound rather than vanish.
+        # Ground but unevaluable — the reachable case is a zero divisor
+        # (non-numeric leaves raised inside _eval_ground already): name the
+        # unevaluated bound rather than vanish.
         raise LogicException(type_error("integer", term, "between/3"))
     if isinstance(val, Fraction) and val.denominator == 1:
         val = int(val)  # exact rational that IS an integer (e.g. 6 / 2)

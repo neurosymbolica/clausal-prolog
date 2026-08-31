@@ -638,6 +638,15 @@ class TestNonNumericLeafInsideExprTree:
             fd_eq(self._add(Var(), 0.5), 5, Trail())
         self._assert_integer_leaf_error(ei, 0.5)
 
+    def test_fully_ground_float_tree_folds_to_clpr(self):
+        # The float raise above is the VAR-adjacent case only.  A fully
+        # ground tree with a float leaf folds numerically in _eval_ground
+        # and dispatches to CLP(R) — the pre-existing FD/R boundary, which
+        # the leaf guard must not move (roborev job 14): 2 + 0.5 is real
+        # arithmetic, not garbage.
+        assert fd_eq(self._add(2, 0.5), 2.5, Trail()) is True
+        assert fd_eq(self._add(2, 0.5), 5, Trail()) is False
+
     def test_ground_tree_with_str_leaf_raises(self):
         # 2 + "a" == 5 previously succeeded outright (no vars: EqConstraint
         # posted, default domain ∩ {5} non-empty → True).

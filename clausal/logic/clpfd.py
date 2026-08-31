@@ -1325,6 +1325,11 @@ def _eval_ground(expr):
     tree produced silently wrong verdicts.
     """
     expr = deref(expr)
+    # float is DELIBERATELY accepted here (roborev job 14): a fully-ground
+    # tree with a float leaf folds numerically and dispatches to CLP(R)
+    # (``2 + 0.5 == 2.5`` is True and must stay so) — that boundary predates
+    # the leaf guard.  A float leaf beside an FD *Var* never reaches this
+    # fold; it is rejected by _expr_domain's stricter fallback instead.
     if isinstance(expr, (int, float, Fraction)) and not isinstance(expr, bool):
         return expr
     if is_var(expr):
