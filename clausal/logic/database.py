@@ -246,8 +246,25 @@ class Database:
         return (functor, arity) in self._discontiguous
 
     def mark_tabled(self, functor: str, arity: int) -> None:
-        """Mark a predicate as tabled (memoised via SLG resolution)."""
+        """Mark a predicate as tabled (memoised via SLG resolution).
+
+        Also stamps the minted PredicateMeta class (when it exists in this
+        db's ``module_dict``) with ``_tabled_home_db = self``, so tabledness
+        travels with the class across ``-import_from`` — the caller-side NAF
+        seam reads the stamp to find the home db and table store
+        (todo/cross-module-tabled-naf-loses-wfs-delay.md).  Last marker wins:
+        one load pipeline marks the same predicate on more than one db (the
+        exec-time db, then the compile pipeline's) and the most recent is the
+        live one; only the owning module can mark at all (``-table`` in an
+        importing module is refused at load).
+        """
         self._tabled.add((functor, arity))
+        md = self.module_dict
+        if md is not None:
+            from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+            cand = md.get(functor)
+            if isinstance(cand, PredicateMeta):
+                cand._tabled_home_db = self
 
     def is_tabled(self, functor: str, arity: int) -> bool:
         """True if the predicate was declared -table."""

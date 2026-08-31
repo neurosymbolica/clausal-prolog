@@ -58,14 +58,24 @@ _UNCONDITIONAL = frozenset({frozenset()})
 
 
 class DelayedNegation:
-    """Represents a conditional dependency: 'not functor(frozen_args)' must hold."""
-    __slots__ = ("functor", "arity", "key", "frozen_args")
+    """Represents a conditional dependency: 'not functor(frozen_args)' must hold.
 
-    def __init__(self, functor: str, arity: int, key: tuple, frozen_args: tuple):
+    ``store`` (optional, excluded from equality/hash) is the table store the
+    negated call's entry lives in.  A cross-module ``not Imported(...)``
+    delays against the callee's HOME store, which is not the store of the
+    entry carrying the delay — resolution (``_delay_target_entry``) follows
+    ``store`` when set so the delay can still be decided.  ``None`` keeps the
+    historical same-store lookup.
+    """
+    __slots__ = ("functor", "arity", "key", "frozen_args", "store")
+
+    def __init__(self, functor: str, arity: int, key: tuple, frozen_args: tuple,
+                 store: dict | None = None):
         self.functor = functor
         self.arity = arity
         self.key = key
         self.frozen_args = frozen_args
+        self.store = store
 
     def __eq__(self, other):
         if not isinstance(other, DelayedNegation):
@@ -556,13 +566,17 @@ def _streaming_consumer_leader(entry):
     return None
 
 
-def _delay_negation(functor, arity, key, args, trail):
+def _delay_negation(functor, arity, key, args, trail, store=None):
     """Record ``not functor(args)`` as a DelayedNegation on the current leader
     (conditional success). With no leader in scope there is nowhere to attach
     the condition — the negation still succeeds, matching how ``query()``/
-    ``call()`` surface undefined answers alongside true ones."""
+    ``call()`` surface undefined answers alongside true ones.
+
+    *store* is the table store the negated call's entry lives in; passing it
+    lets resolution find the target even when the delay is carried by an
+    entry in a DIFFERENT module's store (cross-module tabled NAF)."""
     frozen = freeze_args(args, trail)
-    dn = DelayedNegation(functor, arity, key, frozen)
+    dn = DelayedNegation(functor, arity, key, frozen, store=store)
     leader = current_leader()
     if leader is not None:
         leader._current_delays.add(dn)
@@ -660,7 +674,30 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     positive subgoal and decides against the completed result (A04-F003)
     instead of conservatively succeeding — the source of mode/order-dependent
     answer sets. ``db=None`` (legacy callers) keeps the conservative path.
+
+    Cross-module: the compiled seam always passes the CALLER's store and db,
+    but an ``-import_from``-ed callee is tabled — and tabled INTO — its own
+    module's db.  When the caller's db does not table the call, follow the
+    shared PredicateMeta's ``_tabled_home_db`` stamp and operate on the home
+    store/db instead (todo/cross-module-tabled-naf-loses-wfs-delay.md); the
+    same-module hot path never takes the extra lookup.
     """
+    # ``db`` is duck-typed (test doubles implement only ``get_dispatch``) —
+    # a db that cannot answer ``is_tabled`` keeps the historical behaviour.
+    _is_tabled = getattr(db, "is_tabled", None) if db is not None else None
+    if _is_tabled is not None and not _is_tabled(functor, arity):
+        md = getattr(db, "module_dict", None)
+        cand = md.get(functor) if md is not None else None
+        home = getattr(cand, "_tabled_home_db", None)
+        if home is not None and home is not db:
+            # The home db keys tables/dispatch by the predicate's OWN name;
+            # the compiled seam may pass the import rewrite's dotted
+            # spelling ("lib.Win") — canonicalize alongside the redirect.
+            canonical = getattr(cand, "__name__", functor)
+            if home.is_tabled(canonical, arity):
+                functor = canonical
+                db = home
+                table_store = home.table_store
     key = make_subgoal_key(args, trail)
     store_key = (functor, arity, key)
     entry = table_store.get(store_key)
@@ -672,14 +709,14 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
         if unconditional:
             return False  # positive answer exists → negation fails
         if conditional:
-            _delay_negation(functor, arity, key, args, trail)
+            _delay_negation(functor, arity, key, args, trail, store=table_store)
         return True  # no determinate matching answer → negation succeeds
 
     if (entry is not None and entry.status == "evaluating"
             and _on_leader_stack(entry)):
         # Genuine cycle through negation (the target is an actively-leading
         # ancestor) — delay.
-        _delay_negation(functor, arity, key, args, trail)
+        _delay_negation(functor, arity, key, args, trail, store=table_store)
         return True  # conditionally succeed
     # A DORMANT evaluating entry (its leader finished without completing —
     # an SCC member) falls through: the spawn path below RE-LEADS it against
@@ -702,7 +739,7 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
             return False  # subsuming complete table has a definite answer
         if conditional:
             # The covering answer is itself Undefined — the negation is too.
-            _delay_negation(functor, arity, key, args, trail)
+            _delay_negation(functor, arity, key, args, trail, store=table_store)
         # A subsuming complete table with no determinate matching answer means
         # the goal is not definitely true for this call → negation succeeds.
         return True
@@ -739,13 +776,13 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
                 if unconditional:
                     return False
                 if conditional:
-                    _delay_negation(functor, arity, key, args, trail)
+                    _delay_negation(functor, arity, key, args, trail, store=table_store)
                 return True
             # The drive could not COMPLETE the table (it consumed a
             # still-evaluating ancestor and stays dormant, to be re-led by
             # a later pass) — the truth is undecided at this point in the
             # fixpoint: delay.
-            _delay_negation(functor, arity, key, args, trail)
+            _delay_negation(functor, arity, key, args, trail, store=table_store)
             return True
 
     # Check if ANY variant of this predicate is evaluating — if so, we're in a
@@ -754,7 +791,7 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     # part of the same SLG cycle.
     for (f, a, _k), e in table_store.items():
         if f == functor and a == arity and e.status == "evaluating":
-            _delay_negation(functor, arity, key, args, trail)
+            _delay_negation(functor, arity, key, args, trail, store=table_store)
             return True  # conditionally succeed
 
     # No entry at all and no way (or no need) to spawn — succeed
@@ -780,7 +817,13 @@ def _delay_target_entry(dn, table_store):
     """Find the table that decides ``dn``: the exact-variant entry, else a
     COMPLETE same-functor entry whose key subsumes it (A04-F002/F003 — a delay
     recorded against a variant that was never led exactly, e.g. under a
-    subsuming leader, is still decided by the subsuming completed table)."""
+    subsuming leader, is still decided by the subsuming completed table).
+
+    A delay recorded by cross-module tabled NAF carries the negated call's
+    HOME store on ``dn.store`` — the entry that decides it does not live in
+    the store of the entry carrying the delay, so prefer the recorded one."""
+    if dn.store is not None:
+        table_store = dn.store
     target = table_store.get((dn.functor, dn.arity, dn.key))
     if target is not None:
         return target

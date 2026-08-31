@@ -1138,3 +1138,133 @@ class TestRootLeadConditionalDeferral:
         )
         rest = [deref(X) for _ in it]
         assert sorted([first_val] + rest) == [0, 1, 2, 3]
+# ── Cross-module tabled NAF (todo/cross-module-tabled-naf-loses-wfs-delay.md) ─
+# ``not Imported(...)`` where Imported is tabled in ITS OWN module's db must
+# lower to the WFS-sound ``$naf_tabled`` form, exactly like the single-module
+# twin.  Before the fix it lowered to plain NAF: the symmetric-cycle answer
+# below came back definitively FALSE ([]) where WFS says Undefined.
+
+
+_XMNAF_COUNTER = [0]
+
+_XMNAF_SYM_LIB = """-module({name}, [Win(X)])
+-table(Win/1)
+
+Move(1, 2),
+Move(2, 1),
+
+Win(X) <- (Move(X, Y), not Win(Y))
+"""
+
+_XMNAF_ASYM_LIB = """-module({name}, [Win(X)])
+-table(Win/1)
+
+Move(1, 2),
+Move(2, 3),
+
+Win(X) <- (Move(X, Y), not Win(Y))
+"""
+
+_XMNAF_USE = """-import_from({lib}, [Win])
+-table(Res/1)
+
+Res(X) <- (not Win(X))
+"""
+
+
+def _load_xmnaf_pair(tmp_path, lib_src, use_src=_XMNAF_USE):
+    """Write + load a lib/importer module pair under unique names."""
+    from clausal.import_hook import _load_module
+    _XMNAF_COUNTER[0] += 1
+    n = _XMNAF_COUNTER[0]
+    lib_name = f"xmnaf_lib_{os.getpid()}_{n}"
+    use_name = f"xmnaf_use_{os.getpid()}_{n}"
+    lib_path = tmp_path / f"{lib_name}.clausal"
+    lib_path.write_text(lib_src.format(name=lib_name))
+    use_path = tmp_path / f"{use_name}.clausal"
+    use_path.write_text(use_src.format(lib=lib_name))
+    lib = _load_module(lib_name, str(lib_path))
+    use = _load_module(use_name, str(use_path))
+    return _module(lib), _module(use)
+
+
+class TestCrossModuleTabledNaf:
+    def test_symmetric_cycle_stays_undefined_across_modules(self, tmp_path):
+        """The repro: Res(X) <- (not Win(X)) with Win imported from the
+        module that tables it.  The single-module twin yields Undefined;
+        the cross-module version must too — NOT definite false ([])."""
+        _lib, use = _load_xmnaf_pair(tmp_path, _XMNAF_SYM_LIB)
+        assert _q(use, "Res", 1) == [Undefined]
+
+    def test_symmetric_cycle_delay_names_the_partner(self, tmp_path):
+        """The Undefined answer carries a delay naming the negated
+        imported call, same as the single-module twin."""
+        _lib, use = _load_xmnaf_pair(tmp_path, _XMNAF_SYM_LIB)
+        Y = Var()
+        t = Trail()
+        unify(Y, 1, t)
+        res = query_wfs(_goal("Res", Y), {}, use, t)
+        assert len(res) == 1
+        assert res[0]["_truth"] is Undefined
+        assert ("Win", (1,)) in {(d.functor, d.frozen_args)
+                                 for d in res[0]["_delays"]}
+
+    def test_single_module_twin_undefined(self, tmp_path):
+        """Guard: the single-module twin of the same program is (and
+        stays) Undefined."""
+        from clausal.import_hook import _load_module
+        _XMNAF_COUNTER[0] += 1
+        name = f"xmnaf_single_{os.getpid()}_{_XMNAF_COUNTER[0]}"
+        p = tmp_path / f"{name}.clausal"
+        p.write_text(
+            "-table(Win/1)\n-table(Res/1)\n\n"
+            "Move(1, 2),\nMove(2, 1),\n\n"
+            "Win(X) <- (Move(X, Y), not Win(Y))\n"
+            "Res(X) <- (not Win(X))\n")
+        lm = _module(_load_module(name, str(p)))
+        assert _q(lm, "Res", 1) == [Undefined]
+
+    def test_definite_cross_module_negation_stays_definite(self, tmp_path):
+        """Acyclic lib (Move 1→2→3): Win(2) true, Win(1)/Win(3) false.
+        Cross-module negation over a DEFINITE predicate must keep definite
+        answers — Res(2) fails outright, Res(1)/Res(3) are True (never
+        Undefined)."""
+        _lib, use = _load_xmnaf_pair(tmp_path, _XMNAF_ASYM_LIB)
+        assert _q(use, "Res", 2) == []
+        assert _q(use, "Res", 1) == [True]
+        assert _q(use, "Res", 3) == [True]
+
+    def test_naf_over_imported_untabled_predicate_unchanged(self, tmp_path):
+        """Negating an imported UNTABLED predicate keeps plain NAF — both
+        the compile-time decision and the observable answers."""
+        from clausal.logic.compiler.tabled_naf import _is_tabled_naf
+        from clausal.terms import Call as TermCall, LoadName
+        lib_src = "-module({name}, [Move(X, Y)])\n\nMove(1, 2),\nMove(2, 3),\n"
+        use_src = ("-import_from({lib}, [Move])\n\n"
+                   "NoMove(X, Y) <- (not Move(X, Y))\n")
+        _lib, use = _load_xmnaf_pair(tmp_path, lib_src, use_src)
+        naf_goal = TermCall(func=LoadName(name="Move"),
+                            args=[Var(), Var()], kwargs=[])
+        assert _is_tabled_naf(naf_goal, use.db) is False
+        A, B = Var(), Var()
+        t = Trail()
+        unify(A, 1, t)
+        unify(B, 3, t)
+        goal = TermCall(func=LoadName(name="NoMove"), args=[A, B], kwargs=[])
+        assert [r["_truth"] for r in query_wfs(goal, {}, use, t)] == [True]
+        t2 = Trail()
+        C, D = Var(), Var()
+        unify(C, 1, t2)
+        unify(D, 2, t2)
+        goal2 = TermCall(func=LoadName(name="NoMove"), args=[C, D], kwargs=[])
+        assert query_wfs(goal2, {}, use, t2) == []
+
+    def test_compile_decision_true_for_imported_tabled(self, tmp_path):
+        """Unit: _is_tabled_naf answers True for a call to an imported
+        tabled predicate compiled against the IMPORTER's db."""
+        from clausal.logic.compiler.tabled_naf import _is_tabled_naf
+        from clausal.terms import Call as TermCall, LoadName
+        lib, use = _load_xmnaf_pair(tmp_path, _XMNAF_SYM_LIB)
+        naf_goal = TermCall(func=LoadName(name="Win"), args=[Var()], kwargs=[])
+        assert _is_tabled_naf(naf_goal, lib.db) is True   # home db: unchanged
+        assert _is_tabled_naf(naf_goal, use.db) is True   # importer db: the fix

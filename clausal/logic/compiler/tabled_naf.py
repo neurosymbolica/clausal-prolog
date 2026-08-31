@@ -19,8 +19,42 @@ from .terms_to_ast import term_to_ast_expr
 from .compile_ctx import CompilationContext
 
 
+def _resolve_tabled_call(fname, call_arity, db):
+    """Resolve ``fname/call_arity`` (as compiled against *db*) to the
+    Database that tables it — ``(home_db, canonical_name)``, or ``None``
+    if the call is not tabled anywhere it can see.
+
+    *db* itself answers for a same-module callee.  An ``-import_from``-ed
+    callee is tabled only in its OWN module's db; the minted PredicateMeta
+    travels across modules carrying a ``_tabled_home_db`` stamp
+    (``Database.mark_tabled``), and ``db.module_dict`` is exactly the
+    namespace the compiled call resolves through at runtime — including the
+    dotted spelling (``"lib.Win"``) the import rewrite emits — so consulting
+    it keeps the NAF lowering decision aligned with what the positive call
+    would actually reach (todo/cross-module-tabled-naf-loses-wfs-delay.md).
+    The home db keys its tables (and dispatch, and signatures) by the
+    predicate's own name, so the class's ``__name__`` is the canonical
+    spelling for everything done against the home db.
+    """
+    if db is None:
+        return None
+    if db.is_tabled(fname, call_arity):
+        return db, fname
+    md = db.module_dict
+    cand = md.get(fname) if md is not None else None
+    home = getattr(cand, "_tabled_home_db", None)
+    if home is None or home is db:
+        return None
+    canonical = getattr(cand, "__name__", fname)
+    if home.is_tabled(canonical, call_arity):
+        return home, canonical
+    return None
+
+
 def _is_tabled_naf(inner_goal, db) -> bool:
-    """Return True if inner_goal is a Call to a tabled predicate."""
+    """Return True if inner_goal is a Call to a tabled predicate (in the
+    compiling module's own db, or — for an imported callee — in its home
+    module's db)."""
     if not isinstance(inner_goal, Call):
         return False
     if not isinstance(inner_goal.func, LoadName):
@@ -29,7 +63,7 @@ def _is_tabled_naf(inner_goal, db) -> bool:
         return False
     fname = inner_goal.func.name
     call_arity = len(inner_goal.args) + len(inner_goal.kwargs)
-    return db.is_tabled(fname, call_arity)
+    return _resolve_tabled_call(fname, call_arity, db) is not None
 
 
 def _compile_tabled_naf_simple(ctx: CompilationContext, inner_goal, k_stmts):
@@ -48,9 +82,14 @@ def _compile_tabled_naf_simple(ctx: CompilationContext, inner_goal, k_stmts):
     fname = inner_goal.func.name
     call_args = inner_goal.args
     call_kwargs = inner_goal.kwargs
-    # Normalize kwargs into positional using signature
+    # Normalize kwargs into positional using signature.  An imported tabled
+    # callee registers its signature in its HOME db under its own name, not
+    # in the caller's — ask the db that actually tables the call.
     if call_kwargs:
-        sig = db.signature_for(fname, len(call_args) + len(call_kwargs))
+        call_arity = len(call_args) + len(call_kwargs)
+        resolved = _resolve_tabled_call(fname, call_arity, db)
+        sig_db, sig_name = resolved if resolved is not None else (db, fname)
+        sig = sig_db.signature_for(sig_name, call_arity)
         if sig is not None:
             # Keyword nodes carry .name (never .arg — that is Python's
             # ast.keyword, not this AST); .arg crashed on any NAF'd tabled

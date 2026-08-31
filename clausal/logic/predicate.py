@@ -674,6 +674,18 @@ class PredicateMeta(type):
         # empty ``_clauses`` (which says nothing) — so ``_refuse_call_at``
         # may consult it when, and only when, the clause list is empty.
         cls._dynamic_arities: set[int] | None = None
+        # The Database of the module that declared this predicate ``-table``,
+        # stamped by ``Database.mark_tabled`` at load.  ``None`` everywhere
+        # else.  Tabledness is recorded in the OWNING module's per-module db;
+        # an ``-import_from`` shares this class with modules whose own db
+        # knows nothing about it, so the stamp is what lets a caller-side
+        # seam (``_is_tabled_naf`` at compile time, ``_naf_tabled`` at run
+        # time) find the callee's home db — and with it the home table store
+        # — instead of silently compiling ``not Imported(...)`` as plain NAF
+        # (todo/cross-module-tabled-naf-loses-wfs-delay.md).  Which arities
+        # are tabled stays the home db's answer (``is_tabled``); the class
+        # carries only the pointer.
+        cls._tabled_home_db = None  # Database | None
 
     # ── Term construction ─────────────────────────────────────────────────
 
