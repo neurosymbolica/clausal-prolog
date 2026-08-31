@@ -967,6 +967,32 @@ do_occurs_check(VarObject *var, PyObject *term, int depth)
  * push_attr_var_binding() to defer hook execution.
  * ================================================================ */
 
+/* Interned "__unify__", set in PyInit__variables before any unify runs. */
+static PyObject *str_dunder_unify = NULL;
+
+/* Probe *obj* for a ``__unify__`` attribute without paying for an
+ * AttributeError on the (overwhelmingly common) miss.  Returns 1 with
+ * *hook_out* set to a strong ref, 0 with *hook_out* NULL on a clean miss,
+ * -1 on error.  Instance attributes are honoured exactly as
+ * PyObject_GetAttr would (the protocol is an attribute lookup, not a
+ * type-only special-method lookup — pinned by
+ * tests/test_unify.py::TestUnifyHookProbe). */
+static inline int
+probe_unify_hook(PyObject *obj, PyObject **hook_out)
+{
+#if PY_VERSION_HEX >= 0x030D0000
+    return PyObject_GetOptionalAttr(obj, str_dunder_unify, hook_out);
+#else
+    *hook_out = PyObject_GetAttr(obj, str_dunder_unify);
+    if (*hook_out)
+        return 1;
+    if (!PyErr_ExceptionMatches(PyExc_AttributeError))
+        return -1;
+    PyErr_Clear();
+    return 0;
+#endif
+}
+
 static int
 do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
 {
@@ -1334,9 +1360,18 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
      * Checked BEFORE the mixed list/tuple guard so that custom types like
      * SegList can unify against plain Python lists.
      * The method signature is: __unify__(other, trail) -> bool | NotImplemented
+     *
+     * The probe is exception-free (probe_unify_hook): the old
+     * GetAttrString+PyErr_Clear tail raised and discarded two
+     * AttributeErrors on every failing unification of ordinary terms —
+     * ~83% of the failure cost (todo/done/unify-failure-pays-two-
+     * attributeerrors.md).  One deliberate tightening rides along: a
+     * broken __getattr__ raising something other than AttributeError now
+     * propagates instead of being silently cleared into an ==-compare.
      */
     if (!PyList_Check(t1) && !PyTuple_Check(t1)) {
-        PyObject *hook = PyObject_GetAttrString(t1, "__unify__");
+        PyObject *hook;
+        if (probe_unify_hook(t1, &hook) < 0) return -1;
         if (hook) {
             PyObject *result = PyObject_CallFunctionObjArgs(
                 hook, t2, (PyObject *)trail, NULL);
@@ -1349,13 +1384,12 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             }
             Py_DECREF(result);
             /* Fall through: NotImplemented — try symmetric or list guard */
-        } else {
-            PyErr_Clear();
         }
     }
     /* Symmetric: try t2.__unify__ if t1 didn't handle it */
     if (!PyList_Check(t2) && !PyTuple_Check(t2)) {
-        PyObject *hook = PyObject_GetAttrString(t2, "__unify__");
+        PyObject *hook;
+        if (probe_unify_hook(t2, &hook) < 0) return -1;
         if (hook) {
             PyObject *result = PyObject_CallFunctionObjArgs(
                 hook, t1, (PyObject *)trail, NULL);
@@ -1367,8 +1401,6 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
                 return r;
             }
             Py_DECREF(result);
-        } else {
-            PyErr_Clear();
         }
     }
 
@@ -3455,6 +3487,10 @@ PyInit__variables(void)
 
     g_attr_hooks = PyDict_New();
     if (!g_attr_hooks) return NULL;
+
+    /* Interned before any unify can run — do_unify's hook probe uses it. */
+    str_dunder_unify = PyUnicode_InternFromString("__unify__");
+    if (!str_dunder_unify) return NULL;
 
     PyObject *m = PyModule_Create(&moduledef);
     if (!m) goto error;

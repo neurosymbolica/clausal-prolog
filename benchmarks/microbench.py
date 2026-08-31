@@ -93,6 +93,20 @@ BENCHMARKS: list[tuple[str, Callable]] = [
         )(),
     ),
     (
+        # Reference point for the failing row below.
+        "unify(1, 1, trail)  [succeeds]",
+        lambda: unify(1, 1, _trail),
+    ),
+    (
+        # Failure is the common case in any scan (list membership, clause
+        # sweeps, dif wakeups).  Before the exception-free __unify__ probe
+        # this was ~9x the succeeding row (two discarded AttributeErrors —
+        # todo/done/unify-failure-pays-two-attributeerrors.md); it must stay
+        # within ~2x.
+        "unify(1, 2, trail)  [fails]",
+        lambda: unify(1, 2, _trail),
+    ),
+    (
         "trail.mark() + trail.undo()",
         lambda: _trail.undo(_trail.mark()),
     ),

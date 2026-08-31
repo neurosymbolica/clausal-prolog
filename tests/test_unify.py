@@ -442,3 +442,82 @@ class TestUnifyOperatorNodes:
         t = fresh()
         assert not unify(Add(left=v, right=2), Add(left=9, right=3), t)
         assert is_var(deref(v))
+
+
+# ── __unify__ hook probe semantics ────────────────────────────────────────────
+# Pins for the C tail's protocol lookup (do_unify in _variables.c), written
+# before the probe was switched from GetAttrString+PyErr_Clear to an
+# exception-free optional lookup — the semantics below must survive that.
+
+
+class TestUnifyHookProbe:
+    def _hooked(self, ret):
+        class Hooked:
+            calls: list = []
+
+            def __unify__(self, other, trail):
+                Hooked.calls.append(other)
+                return ret
+        return Hooked
+
+    def test_class_level_hook_left_operand(self):
+        cls = self._hooked(True)
+        h = cls()
+        assert unify(h, 42, fresh()) is True
+        assert cls.calls == [42]
+
+    def test_class_level_hook_right_operand(self):
+        """Symmetric probe: hook on the right operand runs when the left has
+        none."""
+        cls = self._hooked(True)
+        h = cls()
+        assert unify(42, h, fresh()) is True
+        assert cls.calls == [42]
+
+    def test_hook_false_fails(self):
+        h = self._hooked(False)()
+        assert unify(h, 42, fresh()) is False
+
+    def test_notimplemented_falls_through_to_equality(self):
+        """NotImplemented from the left hook falls through: the right operand
+        is probed, then plain equality decides."""
+        cls = self._hooked(NotImplemented)
+        h = cls()
+        assert unify(h, h, fresh()) is True   # == via identity
+        assert unify(h, 42, fresh()) is False
+
+    def test_instance_level_hook_is_honoured(self):
+        """The probe is an instance attribute lookup, not a type-only one — a
+        hook attached to a single instance still fires."""
+        class Plain:
+            pass
+
+        p = Plain()
+        p.__unify__ = lambda other, trail: True
+        assert unify(p, 42, fresh()) is True
+
+    def test_hook_beats_mixed_list_guard(self):
+        """Documented ordering: the probe runs BEFORE the mixed list/tuple
+        guard, so a custom type can unify against a plain list."""
+        class ListLike:
+            def __unify__(self, other, trail):
+                return other == [1, 2]
+
+        assert unify(ListLike(), [1, 2], fresh()) is True
+        assert unify(ListLike(), [3], fresh()) is False
+
+    def test_ordinary_failing_pairs_still_fail(self):
+        class C:
+            pass
+
+        assert unify(1, 2, fresh()) is False
+        assert unify("a", "b", fresh()) is False
+        assert unify(C, int, fresh()) is False
+
+    def test_hook_exception_propagates(self):
+        class Boom:
+            def __unify__(self, other, trail):
+                raise RuntimeError("hook blew up")
+
+        with pytest.raises(RuntimeError, match="hook blew up"):
+            unify(Boom(), 42, fresh())
