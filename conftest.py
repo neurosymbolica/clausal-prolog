@@ -37,6 +37,33 @@ _docs_dir = Path(__file__).parent / "docs"
 # Fenced ```clausal ... ``` blocks in markdown.
 _CLAUSAL_FENCE_RE = re.compile(r"```clausal\n(.*?)```", re.DOTALL)
 
+# Session-scoped home for doc-block compile buffers.  The blocks used to be
+# NamedTemporaryFiles unlinked at collection time, which is why a failing doc
+# block could only report a bare "no solutions": ``diagnose_failure`` takes
+# ``path`` to reify the source, quote the failing conjunct and name its
+# variables, and by item runtime there was no path left to pass.  Keeping the
+# files for the session buys the full diagnosis; ``pytest_sessionfinish``
+# removes the directory.  (A run with more than 16 *failing* blocks will
+# thrash the 16-entry ``_REIFY_CACHE`` — an efficiency note only, and only on
+# the failure path.)
+_doc_block_dir: Path | None = None
+
+
+def _doc_block_home() -> Path:
+    global _doc_block_dir
+    if _doc_block_dir is None:
+        _doc_block_dir = Path(tempfile.mkdtemp(prefix="clausal-doc-blocks-"))
+    return _doc_block_dir
+
+
+def pytest_sessionfinish(session, exitstatus):
+    global _doc_block_dir
+    if _doc_block_dir is not None:
+        import shutil
+
+        shutil.rmtree(_doc_block_dir, ignore_errors=True)
+        _doc_block_dir = None
+
 
 @pytest.fixture(autouse=True, scope="session")
 def _clear_pycache_before_tests():
@@ -215,13 +242,17 @@ class DocMdFile(pytest.File):
                 continue
 
             buf = io.StringIO()
-            with tempfile.NamedTemporaryFile(
-                suffix=".clausal",
-                mode="w",
-                delete=False,
-            ) as f:
-                f.write(_with_doc_atom_mode(content))
-                tmp_path = Path(f.name)
+            # Session-lived compile buffer (not an unlinked NamedTemporaryFile)
+            # so DocItem.runtest can hand the path to diagnose_failure — see
+            # _doc_block_home above.  Named after the md file and block line so
+            # a quoted path in a report reads back to its source block.
+            try:  # flatten docs-relative path: guide/intro.md -> guide_intro
+                stem = "_".join(
+                    self.path.relative_to(_docs_dir).with_suffix("").parts)
+            except ValueError:
+                stem = self.path.stem
+            tmp_path = _doc_block_home() / f"{stem}_L{lineno}.clausal"
+            tmp_path.write_text(_with_doc_atom_mode(content))
 
             try:
                 with contextlib.redirect_stdout(buf):
@@ -237,8 +268,6 @@ class DocMdFile(pytest.File):
                     load_output=buf.getvalue(),
                 )
                 continue
-            finally:
-                tmp_path.unlink(missing_ok=True)
 
             descs = collect_tests(mod)
             if descs:
@@ -250,6 +279,7 @@ class DocMdFile(pytest.File):
                         desc=desc,
                         lineno=lineno,
                         load_output=buf.getvalue(),
+                        src_path=tmp_path,
                     )
             else:
                 yield DocItem.from_parent(
@@ -265,7 +295,7 @@ class DocMdFile(pytest.File):
 class DocItem(pytest.Item):
     def __init__(self, name, parent, mod, desc, lineno,
                  load_error=None, load_output="", skipped=False,
-                 snippet=False):
+                 snippet=False, src_path=None):
         super().__init__(name, parent)
         self._mod = mod
         self._desc = desc
@@ -274,6 +304,7 @@ class DocItem(pytest.Item):
         self._load_output = load_output
         self._skipped = skipped
         self._snippet = snippet
+        self._src_path = src_path
 
     def runtest(self):
         if self._skipped:
@@ -297,7 +328,13 @@ class DocItem(pytest.Item):
 
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            result = run_test(self._mod, self._desc)
+            # Same contract as ClausalItem.runtest: diagnosis on the failure
+            # path only, quoting goals from the block's session-lived compile
+            # buffer (``src_path``) so the report names the failing conjunct
+            # and its source variables — a rotted tutorial example gets the
+            # same signal as a rotted test file.
+            result = run_test(self._mod, self._desc,
+                              path=self._src_path, diagnose=True)
         output = buf.getvalue()
         if output:
             self.add_report_section("call", "stdout", output)
@@ -305,10 +342,14 @@ class DocItem(pytest.Item):
         if not result.passed:
             if result.error:
                 raise DocTestFailure(
-                    f"Test({self._desc!r}) raised: {result.error}"
+                    _with_diagnosis(
+                        f"Test({self._desc!r}) raised: {result.error}", result
+                    )
                 ) from result.error
             raise DocTestFailure(
-                f"Test({self._desc!r}) has no solutions"
+                _with_diagnosis(
+                    f"Test({self._desc!r}) has no solutions", result
+                )
             )
 
     def repr_failure(self, excinfo):
