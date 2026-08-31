@@ -931,14 +931,16 @@ class TestResolutionMatchesNafSemantics:
 
     def test_add_answer_revival_reports_new(self):
         """Flipping a _FAILED row back to live must report the tuple as
-        new — replay skipped it, so consumers have not seen it."""
+        new — replay skipped it, so consumers have not seen it.  The report
+        is the row's INDEX (so the root-lead deferral can record it without
+        re-deriving the canonical key); None means nothing visibly changed."""
         # nv
         e = TableEntry()
-        assert e.add_answer((1,)) is True
+        assert e.add_answer((1,)) == 0
         e.conditions[0] = _FAILED
-        assert e.add_answer((1,)) is True   # revival
+        assert e.add_answer((1,)) == 0      # revival: same row, reported new
         assert e.truth_value(0) is True
-        assert e.add_answer((1,)) is False  # plain duplicate
+        assert e.add_answer((1,)) is None   # plain duplicate
 
 
 # ── Second review round (2026-08-27): attribution, shapes, and bounds ───────
@@ -1067,6 +1069,49 @@ class TestRootLeadConditionalDeferral:
         first = self._all(lm, "Pw")
         second = self._all(lm, "Pw")
         assert sorted(first) == sorted(second) == [1, 6]
+
+    def test_relead_replays_conditional_rows_into_the_deferral(self):
+        """The REPLAY branch of the deferral (roborev job 12, finding 2).
+
+        A dormant "evaluating" entry with a conditional row already
+        recorded, re-invoked as a root call, REPLAYS its rows — and a
+        replayed conditional row must join the deferred set exactly like a
+        newly-derived one (delivered only if it survives resolution).
+
+        The dormant state is manufactured, not derived: every organic
+        route seems to close over it — an abandoned root lead is dropped by
+        the A04-F007 poisoned-entry cleanup, and an SCC member's deferred
+        completion is finished at its leader's own exit — so the state the
+        replay loop is DEFINED over is set up directly, the way the other
+        unit tests in this file fabricate table entries.  Without the
+        replay-deferral branch this streams the doomed Pw(6) row to the
+        caller before resolution kills it, and the assertion fails.
+        """
+        # nv
+        lm = _module(_load("wfs_posneg_true"))
+        X = Var()
+        assert [deref(X) for _ in call("Pw", X, module=lm)] == [1]
+
+        entries = {f: e for (f, _a, _k), e in lm.db.table_store.items()}
+        pw = entries["Pw"]
+        assert [a[0] for a in pw.answers] == [1, 6]
+        assert pw.conditions[1] is _FAILED          # resolution killed Pw(6)
+
+        # Rewind Pw to its mid-fixpoint shape: dormant, with the (6,) row
+        # conditional on `not Qw(6)` — Qw's own completed table (Qw(6) TRUE)
+        # is what root-exit resolution will consult again.
+        pw.status = "evaluating"
+        pw.conditions[1] = frozenset({frozenset(
+            {DelayedNegation("Qw", 1, (6,), (6,))})})
+
+        Y = Var()
+        full = [deref(Y) for _ in call("Pw", Y, module=lm)]
+        assert full == [1], (
+            "the replayed conditional row must be deferred and then dropped "
+            f"by resolution, not streamed — got {full!r}"
+        )
+        assert pw.status == "complete"
+        assert pw.conditions[1] is _FAILED
 
     def test_unconditional_answers_still_stream_before_completion(self, tmp_path):
         """A negation-free tabled predicate must keep streaming: the caller

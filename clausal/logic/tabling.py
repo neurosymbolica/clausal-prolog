@@ -297,8 +297,13 @@ class TableEntry:
         # entry is an SCC member and must not complete on its own.
         self.scc_deps: set = set()            # set[TableEntry]
 
-    def add_answer(self, answer: tuple, delay_set: frozenset | None = None) -> bool:
-        """Add a frozen answer tuple.  Returns True if the TUPLE was new.
+    def add_answer(self, answer: tuple, delay_set: frozenset | None = None) -> int | None:
+        """Add a frozen answer tuple.  Returns its INDEX if the tuple was new.
+
+        The index (never a bare bool: index 0 is falsy, so callers test
+        ``is not None``) lets the root-lead deferral in the trampoline
+        wrapper record which row it withheld without re-deriving the private
+        canonical key.  ``None`` means the visible answer set did not change.
 
         Dedup uses the canonical, hashable key (A04-F005) — a frozen answer may
         contain a list/dict/set/term instance, which are unhashable and cannot
@@ -309,7 +314,7 @@ class TableEntry:
 
         A re-derivation of a known answer under a DIFFERENT delay set unions
         that set into the answer's disjunction (A04-F003) and still returns
-        False — the tuple was already streamed to the caller; only its truth
+        None — the tuple was already streamed to the caller; only its truth
         got sharper. An unconditional re-derivation erases the delays.
         """
         ds = delay_set if delay_set is not None else frozenset()
@@ -321,17 +326,18 @@ class TableEntry:
                 # Every earlier disjunct was invalidated; this is a live one.
                 # Report the tuple as NEW: consumers skip _FAILED rows during
                 # replay, so anyone iterating this lead has not seen it —
-                # returning False here would silently drop it from their
+                # returning None here would silently drop it from their
                 # joins (a lost solution, not a duplicate).
                 self.conditions[idx] = _simplify_disjuncts(frozenset({ds}))
-                return True
+                return idx
             self.conditions[idx] = _simplify_disjuncts(conds | {ds})
-            return False
+            return None
         self.answer_set.add(key)
-        self._answer_index[key] = len(self.answers)
+        idx = len(self.answers)
+        self._answer_index[key] = idx
         self.answers.append(answer)
         self.conditions.append(_simplify_disjuncts(frozenset({ds})))
-        return True
+        return idx
 
     def truth_value(self, i: int):
         """Return the i-th answer's WFS truth value: True, False, or ``Undefined``.
@@ -940,7 +946,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                     answer = freeze_args(args, trail)
                     delay_set = frozenset(entry._current_delays)
                     entry._current_delays.clear()
-                    if entry.add_answer(answer, delay_set):
+                    if entry.add_answer(answer, delay_set) is not None:
                         # New tuple OR a revived _FAILED row — both change
                         # the visible answer set, so run another pass.
                         changed = True
@@ -1128,8 +1134,8 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     answer = freeze_args(args, trail)
                     delay_set = frozenset(entry._current_delays)
                     entry._current_delays.clear()
-                    prior_len = len(entry.answers)
-                    if entry.add_answer(answer, delay_set):
+                    new_idx = entry.add_answer(answer, delay_set)
+                    if new_idx is not None:
                         # New tuple OR a revived _FAILED row — both change the
                         # visible answer set: stream it and run another pass.
                         changed = True
@@ -1140,11 +1146,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                             # survivors are delivered after resolution below.
                             # (No positive propagation either — a root lead
                             # has no leader below it to credit.)
-                            if len(entry.answers) > prior_len:
-                                deferred.add(prior_len)      # brand-new row
-                            else:                            # revived _FAILED row
-                                deferred.add(entry._answer_index[
-                                    make_subgoal_key(answer, None)])
+                            deferred.add(new_idx)
                         else:
                             if delay_set:
                                 # Positive propagation for the STREAMING site:

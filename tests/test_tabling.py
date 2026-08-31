@@ -54,7 +54,7 @@ class TestTableEntry:
     def test_add_answer_new(self):
         # nv
         e = TableEntry()
-        assert e.add_answer((1, 2)) is True
+        assert e.add_answer((1, 2)) == 0    # the new row's index
         assert e.answers == [(1, 2)]
         assert (1, 2) in e.answer_set
 
@@ -62,7 +62,7 @@ class TestTableEntry:
         # nv
         e = TableEntry()
         e.add_answer((1, 2))
-        assert e.add_answer((1, 2)) is False
+        assert e.add_answer((1, 2)) is None
         assert len(e.answers) == 1
 
     def test_add_answer_preserves_order(self):
