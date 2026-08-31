@@ -46,3 +46,28 @@ root exit".
 Related: `todo/done/wfs-undefined-lost-at-query-surface.md` (the work that
 made invalidation actually happen at root exit — before it, the answer was
 wrongly kept True forever, so the sets "agreed" by both being wrong).
+
+---
+
+## Fixed (2026-08-31)
+
+Direction 1, implemented in `make_tabled_wrapper_trampoline`
+(`clausal/logic/tabling.py`): the OUTERMOST leader — identified by an empty
+leader stack at push time, which is also the leader whose exit runs global
+resolution — DEFERS conditional answers (a `deferred` index set covering both
+newly-derived rows and re-lead replays) and delivers the survivors after
+resolution, skipping `_FAILED`, re-unifying in index order like the COMPLETE
+path.  Unconditional answers stream exactly as before, and inner (non-root)
+leaders still stream conditionals to their mid-fixpoint consumers.  The
+alternative deferral site (the `solutions`/`_drive_until_yield` pull loops)
+was rejected: those are C/Python twins and cannot tell a conditional yield
+from an unconditional one without a new protocol sentinel.
+
+The repro is now stable (`[1]` on both invocations; `wfs_posneg_undef`'s
+surviving Undefined rows still `[1, 6]` on both).  One visible change at the
+streaming surface: surviving conditional answers arrive after the fixpoint
+completes instead of interleaved — set-identical, row order may differ.
+
+Coverage: `tests/test_wfs.py::TestRootLeadConditionalDeferral`, including a
+streaming-preserved pin (an answer is consumable while the table still says
+"evaluating" for a negation-free predicate).

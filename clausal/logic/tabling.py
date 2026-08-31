@@ -1071,11 +1071,32 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # with a new second-call answer). No double delivery: everything
             # replayed here dedups inside the drive.
             replay_count = len(entry.answers)
+        # Root-lead deferral (todo/tabled-conditional-answers-stream-before-
+        # invalidation.md): a ROOT leader's incremental yields land in the
+        # surface caller (solve()/call()/query()), which cannot retract an
+        # answer that root-exit resolution later invalidates (_FAILED) — the
+        # same ground query then returns a different answer SET on the first
+        # call vs the second. So the outermost leader (empty leader stack at
+        # push — the one whose exit runs global resolution) DEFERS conditional
+        # answers and delivers the survivors after resolution, while
+        # unconditional answers keep streaming untouched. Inner (non-root)
+        # leaders still stream conditionals: their consumers are other tabled
+        # frames mid-fixpoint, which legitimately join against them and
+        # re-derive per pass. A spawn-discard root (also pushed on an empty
+        # stack) defers into _drive_dispatch_to_completion's discard loop —
+        # harmless, the yields are discarded either way.
+        root_lead = not _leader_ctx.stack
+        deferred: set[int] = set()   # answer indices withheld from the root
         push_leader(entry)
 
         try:
             for i in range(replay_count):
                 if entry.conditions[i] is _FAILED:
+                    continue
+                if root_lead and entry.conditions[i] is not _UNCONDITIONAL:
+                    # Re-lead at the root: conditional rows join the same
+                    # deferred delivery as newly-derived ones.
+                    deferred.add(i)
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, entry.answers[i], trail):
@@ -1107,20 +1128,34 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     answer = freeze_args(args, trail)
                     delay_set = frozenset(entry._current_delays)
                     entry._current_delays.clear()
+                    prior_len = len(entry.answers)
                     if entry.add_answer(answer, delay_set):
                         # New tuple OR a revived _FAILED row — both change the
                         # visible answer set: stream it and run another pass.
                         changed = True
-                        if delay_set:
-                            # Positive propagation for the STREAMING site:
-                            # the consumer of this incremental yield is the
-                            # leader below OUR OWN stack position (a deeper
-                            # leader may be parked mid-stream above us), and
-                            # a spawn-discard root propagates to nobody.
-                            consumer = _streaming_consumer_leader(entry)
-                            if consumer is not None:
-                                consumer._current_delays |= delay_set
-                        yield (_proceed, None)  # new answer to caller (incremental)
+                        if delay_set and root_lead:
+                            # Root-lead deferral: the surface caller must not
+                            # see a conditional answer that root-exit
+                            # resolution may yet invalidate. Withhold it; the
+                            # survivors are delivered after resolution below.
+                            # (No positive propagation either — a root lead
+                            # has no leader below it to credit.)
+                            if len(entry.answers) > prior_len:
+                                deferred.add(prior_len)      # brand-new row
+                            else:                            # revived _FAILED row
+                                deferred.add(entry._answer_index[
+                                    make_subgoal_key(answer, None)])
+                        else:
+                            if delay_set:
+                                # Positive propagation for the STREAMING site:
+                                # the consumer of this incremental yield is the
+                                # leader below OUR OWN stack position (a deeper
+                                # leader may be parked mid-stream above us), and
+                                # a spawn-discard root propagates to nobody.
+                                consumer = _streaming_consumer_leader(entry)
+                                if consumer is not None:
+                                    consumer._current_delays |= delay_set
+                            yield (_proceed, None)  # new answer to caller (incremental)
                     _st = yield (_gen, None)
                 entry._current_delays.clear()
                 # Consumers that suspended during this pass are re-derived by the
@@ -1191,6 +1226,19 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                             and dep.status == "evaluating"
                             and _on_leader_stack(dep)):
                         cl.scc_deps.add(dep)
+        # Root-lead deferred delivery: fixpoint done and (on the normal path)
+        # global resolution has run — deliver the withheld conditional rows
+        # that SURVIVED (skipping _FAILED), re-unifying against the call args
+        # exactly like the COMPLETE path. Index order keeps delivery
+        # deterministic. A caller that stopped pulling earlier (once()-style)
+        # simply never resumes this generator — normal abandonment.
+        for i in sorted(deferred):
+            if entry.conditions[i] is _FAILED:
+                continue
+            mark = trail.mark()
+            if _unify_answer(args, entry.answers[i], trail):
+                yield (_proceed, None)
+            trail.undo(mark)
         yield (_fail, DONE)
 
     tabled_dispatch._tabled_for = (functor, arity)

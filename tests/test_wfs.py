@@ -1030,3 +1030,66 @@ class TestGoalShapeEdges:
                 (1, Undefined), (2, Undefined)]
         finally:
             sys.path.remove(str(tmp_path))
+
+
+# ── Root-lead deferral of conditional answers (2026-08-31) ──────────────────
+# todo/tabled-conditional-answers-stream-before-invalidation.md: a ROOT
+# leader used to stream CONDITIONAL answers to the surface caller during the
+# fixpoint; root-exit resolution could then invalidate one (_FAILED), but it
+# was already delivered — so the same ground query returned a different
+# answer SET on the first call (streamed) vs the second (complete path).
+# Fix: the root leader defers conditional answers until the fixpoint and
+# resolution have run, then delivers the survivors. Unconditional answers
+# keep streaming; inner (non-root) leaders/consumers are untouched.
+
+
+class TestRootLeadConditionalDeferral:
+    def _all(self, lm, name):
+        X = Var()
+        return [deref(X) for _ in call(name, X, module=lm)]
+
+    def test_invalidated_answer_never_reaches_root_caller(self):
+        """wfs_posneg_true: Qw(6) is TRUE via Pw(1), so Pw(6) is FALSE.
+        The first (streamed) call and the second (complete-path) call must
+        return the SAME set — the complete-path one, [1]."""
+        # nv
+        lm = _module(_load("wfs_posneg_true"))
+        first = self._all(lm, "Pw")
+        second = self._all(lm, "Pw")
+        assert first == second == [1]
+
+    def test_surviving_undefined_answers_still_delivered(self):
+        """wfs_posneg_undef: Pw(6) survives resolution as Undefined — the
+        deferral must deliver it after completion, not drop it. Both calls
+        agree on the set."""
+        # nv
+        lm = _module(_load("wfs_posneg_undef"))
+        first = self._all(lm, "Pw")
+        second = self._all(lm, "Pw")
+        assert sorted(first) == sorted(second) == [1, 6]
+
+    def test_unconditional_answers_still_stream_before_completion(self, tmp_path):
+        """A negation-free tabled predicate must keep streaming: the caller
+        receives the first answer while the leader's table is still
+        'evaluating' (mid-fixpoint), exactly as before the deferral."""
+        # nv
+        from clausal.import_hook import _load_module
+        p = tmp_path / "wfs_stream_probe.clausal"
+        p.write_text(
+            "-table(Cnt/1)\n\n"
+            "Cnt(0),\n"
+            "Cnt(N) <- (Cnt(M), M < 3, N == M + 1)\n"
+        )
+        lm = _load_module("wfs_stream_probe", str(p)).__dict__["$module"]
+        X = Var()
+        it = call("Cnt", X, module=lm)
+        next(it)
+        first_val = deref(X)
+        entries = [e for (f, _a, _k), e in lm.db.table_store.items()
+                   if f == "Cnt"]
+        assert entries, "table entry must exist while streaming"
+        assert entries[0].status == "evaluating", (
+            "unconditional answers must stream before the fixpoint completes"
+        )
+        rest = [deref(X) for _ in it]
+        assert sorted([first_val] + rest) == [0, 1, 2, 3]
