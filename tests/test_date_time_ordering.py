@@ -292,7 +292,12 @@ class TestVarVsNonNumericOperand:
         from clausal.terms import Add
         trail = Trail()
         x, y = Var(), Var()
-        assert fd_lt(x, Add(y, 1), trail)
+        # NB keyword construction: Node's first dataclass field is
+        # ``position``, so positional Add(y, 1) built the malformed node
+        # Add(position=y, left=1, right=None) — which only "posted" through
+        # the pre-fix unguarded leaf fall-through (the None leaf now raises
+        # the typed unknown-leaf error, as any garbage leaf must).
+        assert fd_lt(x, Add(left=y, right=1), trail)
 
     def test_ground_str_lt_still_python_compare(self):
         trail = Trail()

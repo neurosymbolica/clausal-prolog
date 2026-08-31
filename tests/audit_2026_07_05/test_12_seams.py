@@ -530,6 +530,215 @@ badexpr(X) <- ( X + 1 == "banana", X is 4 )
         assert deref(x) == 4
 
 
+class TestNonNumericLeafInsideExprTree:
+    """Residue of TestF002ExprTreeVsNonNumericOperand: garbage as a LEAF of
+    the expression tree itself (``X + "a" == 5``) still posted silently.
+    ``_linearise`` fails on the string leaf, the EqConstraint is posted, and
+    ``_expr_domain``'s catch-all treated the leaf as an unconstrained
+    integer — X stayed unconstrained, silently wrong verdicts (worse under
+    ``not`` / indeterminate routes).  ``!=`` shared the defect one walker
+    over: ``_eval_ground`` returned ``None`` for the garbage leaf, which
+    NeConstraint reads as "still has unbound vars", keeping the constraint
+    pending forever — ``2 + "a" == 5`` and ``X + "a" != 5`` both succeeded.
+    Both leaf fall-throughs now raise the house-style catchable
+    ``type_error(integer, Leaf, "clpfd expression")``.  Recognized arithmetic
+    NODES (Div/FloorDiv/Mod/Pow, ground or not) and int/Var leaves keep
+    their previous behaviour exactly, and Fraction leaves in trees keep
+    dispatching to CLP(Q) before any FD walker runs.
+    Fixed: todo/nonnumeric-leaf-inside-expr-tree-unguarded.md
+    """
+
+    def _add(self, l, r):
+        from clausal.terms import Add
+        return Add(left=l, right=r)
+
+    def _assert_integer_leaf_error(self, exc_info, culprit):
+        term = exc_info.value.term
+        assert term.functor == "error"
+        inner = term.args[0]
+        assert inner.functor == "type_error"
+        assert inner.args[0] == "integer"
+        assert inner.args[1] == culprit
+        assert term.args[1] == "clpfd expression"
+
+    # ── the repro: eq / ne / orderings with a garbage leaf ───────────────
+
+    def test_eq_str_leaf_raises(self):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            fd_eq(self._add(Var(), "a"), 5, Trail())
+        self._assert_integer_leaf_error(ei, "a")
+
+    def test_eq_str_leaf_on_rhs_raises(self):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_eq(5, self._add(Var(), "a"), Trail())
+
+    def test_ne_str_leaf_raises(self):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            fd_ne(self._add(Var(), "a"), 5, Trail())
+        self._assert_integer_leaf_error(ei, "a")
+
+    def test_lt_str_leaf_raises(self):
+        from clausal.logic.clpfd import fd_lt
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            fd_lt(self._add(Var(), "a"), 5, Trail())
+        self._assert_integer_leaf_error(ei, "a")
+
+    def test_le_str_leaf_raises(self):
+        from clausal.logic.clpfd import fd_le
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_le(self._add(Var(), "a"), 5, Trail())
+
+    def test_gt_str_leaf_raises(self):
+        from clausal.logic.clpfd import fd_gt
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_gt(self._add(Var(), "a"), 5, Trail())
+
+    # ── other garbage leaf kinds (same allowlist as the operand guards) ──
+
+    def test_none_leaf_raises(self):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            fd_eq(self._add(Var(), None), 5, Trail())
+        self._assert_integer_leaf_error(ei, None)
+
+    def test_quantity_leaf_raises(self):
+        from clausal.logic.exceptions import LogicException
+        from clausal.terms import Quantity
+        from clausal.modules.units import Metre
+        q = Quantity(2, {Metre: 1})
+        with pytest.raises(LogicException) as ei:
+            fd_eq(self._add(Var(), q), 5, Trail())
+        self._assert_integer_leaf_error(ei, q)
+
+    def test_ground_quantity_tree_vs_var_raises(self):
+        # X == Quantity(2, m) * 2: the tree is fully ground but not
+        # FD-evaluable.  Before the fix it posted, left X unconstrained, and
+        # then accepted unify(X, 42) — silently wrong.  Units arithmetic in
+        # constraint position is not (and was not) supported; the typed
+        # error points users at ``is``, where Quantity.__mul__ works.
+        from clausal.logic.exceptions import LogicException
+        from clausal.terms import Mult, Quantity
+        from clausal.modules.units import Metre
+        q = Quantity(2, {Metre: 1})
+        with pytest.raises(LogicException):
+            fd_eq(Var(), Mult(left=q, right=2), Trail())
+
+    def test_float_leaf_raises(self):
+        # A bare float leaf inside a var-containing FD tree never dispatched
+        # to CLP(R) (_is_real_arg does not walk trees) and was treated as an
+        # unconstrained integer.  CLP(Z) semantics: type_error(integer, 0.5).
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            fd_eq(self._add(Var(), 0.5), 5, Trail())
+        self._assert_integer_leaf_error(ei, 0.5)
+
+    def test_ground_tree_with_str_leaf_raises(self):
+        # 2 + "a" == 5 previously succeeded outright (no vars: EqConstraint
+        # posted, default domain ∩ {5} non-empty → True).
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            fd_eq(self._add(2, "a"), 5, Trail())
+
+    # ── the sibling walkers: reification and _expr_domain itself ─────────
+
+    def test_reify_str_leaf_raises(self):
+        from clausal.logic.clpfd import reify_fd
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            reify_fd("eq", self._add(Var(), "a"), 5, Trail())
+
+    def test_expr_domain_unknown_leaf_raises(self):
+        # The enforcement point named by the todo: the catch-all must never
+        # hand back the default domain for a leaf it cannot type as integer
+        # (this is the path element/3 items and sum totals also take, and
+        # the C slow path delegates trees here).
+        from clausal.logic.clpfd import _expr_domain
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            _expr_domain("a", Trail())
+        self._assert_integer_leaf_error(ei, "a")
+
+    # ── compiled routes: raise instead of wrong answer; catchable ────────
+
+    def test_compiled_repro_raises_instead_of_wrong_answer(self, load):
+        from clausal.logic.exceptions import LogicException
+        m = load("leafguard", """\
+badleaf(X) <- ( X + "a" == 5, X is 4 )
+""")
+        with pytest.raises(LogicException):
+            list(solve(m.badleaf(Var())))
+
+    def test_compiled_repro_catchable_via_catch3(self, load):
+        # catch/3 must catch it, and the error term must be a proper ground
+        # term that round-trips through unification with the catcher var.
+        m = load("leafguard_catch", """\
+safeleaf(SX, SE) <- catch((SX + "a" == 5), SE, 1 == 1)
+""")
+        e = Var()
+        caught = [deref(e) for _ in solve(m.safeleaf(Var(), e))]
+        assert len(caught) == 1
+        term = caught[0]
+        assert term.functor == "error"
+        assert term.args[0].functor == "type_error"
+        assert term.args[0].args[0] == "integer"
+        assert term.args[0].args[1] == "a"
+        assert term.args[1] == "clpfd expression"
+
+    # ── controls: legitimate leaves and nodes keep working ───────────────
+
+    def test_int_leaf_still_propagates(self):
+        tr = Trail()
+        x = Var()
+        assert fd_eq(self._add(x, 1), 5, tr) is True
+        assert deref(x) == 4
+
+    def test_nested_arith_still_legal(self):
+        from clausal.terms import Mult
+        tr = Trail()
+        x = Var()
+        assert fd_eq(self._add(x, Mult(left=2, right=3)), 7, tr) is True
+        assert deref(x) == 1
+
+    def test_nonground_floordiv_node_still_posts(self):
+        # A recognized arithmetic NODE containing vars must keep its default
+        # (unbounded) domain — that over-approximation is deliberate.
+        from clausal.terms import FloorDiv
+        tr = Trail()
+        assert fd_eq(self._add(Var(), FloorDiv(left=Var(), right=2)), 5, tr) is True
+
+    def test_ground_pow_node_still_evaluates(self):
+        from clausal.terms import Pow
+        tr = Trail()
+        z = Var()
+        assert fd_eq(z, Pow(left=2, right=3), tr) is True
+        assert deref(z) == 8
+
+    def test_fraction_leaf_still_dispatches_clpq(self):
+        from fractions import Fraction
+        tr = Trail()
+        x = Var()
+        assert fd_eq(self._add(x, Fraction(1, 2)), 5, tr) is True
+        assert deref(x) == Fraction(9, 2)
+
+    def test_ne_var_tree_still_posts_and_enforces(self):
+        tr = Trail()
+        x = Var()
+        assert fd_ne(self._add(x, 1), 5, tr) is True
+        assert unify(x, 4, tr) is False  # 4 + 1 == 5 violates X + 1 != 5
+        assert unify(x, 7, tr) is True
+
+    def test_ne_both_ground_tree_still_python_ne(self):
+        tr = Trail()
+        assert fd_ne(self._add(2, 3), 5, tr) is False
+        assert fd_ne(self._add(2, 3), 6, tr) is True
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # A12-F003 — directive targets are not validated: -table naming an undefined
 # predicate, or a defined predicate with the wrong arity, is silently accepted

@@ -1164,12 +1164,14 @@ class CircuitConstraint(Constraint):
 
 # Import term node types lazily to avoid circular imports
 _Add = _Sub = _Mult = _Div = _FloorDiv = _Mod = _Pow = _Negate = None
+_Node = None
 
 
 def _ensure_term_imports():
-    global _Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow, _Negate
+    global _Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow, _Negate, _Node
     if _Add is None:
         from clausal.terms import Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate
+        from clausal.pythonic_ast.nodes import Node
         _Add = Add
         _Sub = Sub
         _Mult = Mult
@@ -1178,6 +1180,37 @@ def _ensure_term_imports():
         _Mod = Mod
         _Pow = Pow
         _Negate = Negate
+        _Node = Node
+
+
+# Lazily cached exception machinery (same circular-import caution as above).
+_LogicException = None
+_type_error = None
+
+
+def _ensure_exc_imports():
+    global _LogicException, _type_error
+    if _LogicException is None:
+        from clausal.logic.exceptions import LogicException, type_error
+        _LogicException = LogicException
+        _type_error = type_error
+
+
+def _unknown_expr_leaf_error(leaf) -> "Exception":
+    """Catchable ``type_error(integer, Leaf, "clpfd expression")`` for a LEAF
+    inside an arithmetic expression tree that CLP(FD) cannot type as an
+    integer (str, atom, date, Quantity, Decimal, None, compound, bare
+    float/Fraction, …).  Both leaf fall-throughs — ``_expr_domain``'s
+    catch-all and ``_eval_ground``'s final ``return None`` — previously
+    treated such a leaf as an unconstrained integer / still-pending
+    expression, so ``X + "a" == 5`` posted and produced silently wrong
+    verdicts (the todo's confident-silence class).  Same house style as the
+    operand-level guards (:func:`_reject_nonnumeric_eq`): the error term is
+    ground and round-trips through unification, so ``catch/3`` handles it.
+    The context is a fixed string because these walkers are shared by every
+    comparator (their signatures are frozen — the C extension calls them)."""
+    _ensure_exc_imports()
+    return _LogicException(_type_error("integer", leaf, "clpfd expression"))
 
 
 def _expr_domain(expr, trail: Trail) -> Domain:
@@ -1206,17 +1239,29 @@ def _expr_domain(expr, trail: Trail) -> Domain:
     if isinstance(expr, _Negate):
         od = _expr_domain(expr.operand, trail)
         return _domain_negate(od)
-    # Fallback: if ground, evaluate.  Only an integer result is a valid CLP(Z)
-    # domain bound — a Fraction/float (e.g. from a Div subexpression that
-    # slipped past CLP(Q) dispatch) must NOT become a domain bound, or the C
-    # domain ops raise a TypeError that escapes through unify (A06-F006).
-    try:
-        val = _eval_ground(expr)
-        if isinstance(val, int) and not isinstance(val, bool):
-            return ((val, val),)
-    except Exception:
-        pass
-    return domain_from_range(DEFAULT_MIN, DEFAULT_MAX)
+    if isinstance(expr, _Node):
+        # Recognized expression NODE (Div/FloorDiv/Mod/Pow, …): if ground,
+        # evaluate.  Only an integer result is a valid CLP(Z) domain bound —
+        # a Fraction/float (e.g. from a Div subexpression that slipped past
+        # CLP(Q) dispatch) must NOT become a domain bound, or the C domain
+        # ops raise a TypeError that escapes through unify (A06-F006).
+        _ensure_exc_imports()
+        try:
+            val = _eval_ground(expr)
+            if isinstance(val, int) and not isinstance(val, bool):
+                return ((val, val),)
+        except _LogicException:
+            raise  # a garbage leaf deeper in the node — keep it catchable
+        except Exception:
+            pass
+        return domain_from_range(DEFAULT_MIN, DEFAULT_MAX)
+    # An unrecognized LEAF: not an int, not a Var, not an expression node.
+    # The old catch-all handed back the default domain here, silently
+    # treating the leaf as an unconstrained integer (A06-F014 note) —
+    # `X + "a" == 5` then posted and produced wrong verdicts.  Raise the
+    # catchable typed error at the exact point where the "unconstrained
+    # integer" assumption is made instead.
+    raise _unknown_expr_leaf_error(expr)
 
 
 def _domain_add(d1: Domain, d2: Domain) -> Domain:
@@ -1271,6 +1316,13 @@ def _eval_ground(expr):
     """Evaluate an expression if all vars are bound to numbers.
 
     Returns int or float on success, None if expression contains unbound Vars.
+
+    Raises the catchable :func:`_unknown_expr_leaf_error` on a LEAF that is
+    not a number, a Var, or an expression node: returning ``None`` for it
+    meant "still has unbound vars" to every caller — NeConstraint kept the
+    constraint pending forever (``X + "a" != 5`` could never fail) and
+    ``_resolve`` left the tree unevaluated, so garbage inside an expression
+    tree produced silently wrong verdicts.
     """
     expr = deref(expr)
     if isinstance(expr, (int, float, Fraction)) and not isinstance(expr, bool):
@@ -1278,6 +1330,10 @@ def _eval_ground(expr):
     if is_var(expr):
         return None
     _ensure_term_imports()
+    if not isinstance(expr, _Node):
+        if isinstance(expr, bool):
+            return None  # bools are deliberately not FD numbers; keep pending
+        raise _unknown_expr_leaf_error(expr)
     if isinstance(expr, _Add):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
@@ -1465,8 +1521,10 @@ def _is_fd_sum_element(x) -> bool:
     """True if *x* may legally appear as a sum_/scalar_product element: an FD
     candidate (Var or plain int) or an arithmetic-expression node such as the
     compiler emits for ``X + 1`` (A06-F014).  A non-integer atom (string,
-    float, Fraction) would otherwise reach _expr_domain's catch-all and be
-    treated as an unconstrained integer."""
+    float, Fraction) would otherwise reach _expr_domain's catch-all — which
+    historically treated it as an unconstrained integer and now raises the
+    typed unknown-leaf error; rejecting up front keeps sum_/scalar_product's
+    silent-skip contract for malformed element lists."""
     if _is_fd_candidate(x):
         return True
     _ensure_term_imports()
