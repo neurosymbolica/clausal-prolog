@@ -4484,6 +4484,7 @@ class EmbedTransformer(NodeTransformer):
         """
         statements = []
         private_info = []  # for ModuleAST accumulation
+        private_constants = []  # documentation-only constant listings
         # A10-F012: a missing/malformed list (e.g. -private(helper(X))) used to
         # silently become a no-op, so the predicate signature was later
         # inferred from the first clause with no warning. Raise instead.
@@ -4497,11 +4498,12 @@ class EmbedTransformer(NodeTransformer):
             if reserved is not None:
                 _raise_reserved_truth_decl(reserved, "-private")
             if isinstance(item, Name) and _is_constant_name(item.id):
-                raise SyntaxError(
-                    f"-private cannot list constant `{item.id}`: constants "
-                    f"are public module globals — declare with -constants "
-                    f"and import with -import_from; no export listing is "
-                    f"needed")
+                # Documentation-only: visibility is advisory throughout, so a
+                # constant listing just records "implementation detail" — no
+                # class is minted (the constant stays a public module global,
+                # which is why -module still rejects the same shape).
+                private_constants.append(item.id)
+                continue
             if isinstance(item, Name):
                 # Bare atom: generate zero-arity PredicateMeta class
                 transformer._atoms.add(item.id)
@@ -4531,7 +4533,8 @@ class EmbedTransformer(NodeTransformer):
                     )
             # Other item shapes (e.g. the ISO ``foo/2`` arity form) are not
             # pre-registered here; the list itself is still well-formed.
-        transformer._module_items.append(PrivateDeclItem(items=private_info))
+        transformer._module_items.append(
+            PrivateDeclItem(items=private_info, constants=private_constants))
         if not statements:
             return replace(Pass(), expr_stmt)
         return statements if len(statements) > 1 else statements[0]

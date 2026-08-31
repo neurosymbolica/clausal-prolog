@@ -1090,6 +1090,10 @@ class ModuleDeclaration(Node):
 class PrivateDeclaration(Node):
     """Module-level -private([preds...]) directive."""
     items: list = field(default_factory=list)  # same format as ModuleDeclaration.exports
+    # Constant-shaped names (``_PI_``) listed for documentation only:
+    # visibility is advisory, so this is a recorded no-op — nothing is
+    # minted for them (constants stay public module globals).
+    constants: list = field(default_factory=list)
 
 @node_class
 class StrictAtomsDeclaration(Node):

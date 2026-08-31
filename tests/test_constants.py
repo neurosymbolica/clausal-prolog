@@ -585,3 +585,41 @@ def test_import_constant_alias_collides_with_earlier_import_rejected(tmp_path):
             -import_from(tc_own8, [_PI_])
             -import_from(tc_own8, [alias(_PI_, _PI_)])
         """)
+
+
+def test_constant_in_private_is_a_documentation_no_op(tmp_path):
+    """-private may list a constant-shaped name: advisory only — the module
+    loads, and the constant keeps its value (no predicate class is minted
+    over it)."""
+    m = _load(tmp_path, "pdoc1", """
+        -constants(_PI_ = 3.14159)
+        -private([helper, _PI_])
+        helper,
+        q(X) <- (X is _PI_)
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("q", v, module=m.__dict__["$module"])] == \
+        [3.14159]
+    assert m.__dict__["_PI_"] == 3.14159
+
+
+def test_private_listed_constant_names_are_recorded(tmp_path):
+    """The listed constant names are recorded on the private declaration —
+    reified as the directive's second argument — so tooling can filter on
+    the advisory-internal flag."""
+    from clausal.reflection import reify_source, ModuleDirective
+    items = reify_source(
+        "-constants(_PI_ = 3.14)\n-private([helper, _PI_])\nhelper,\n")
+    (priv,) = [d for d in items
+               if isinstance(d, ModuleDirective) and d.name == "private"]
+    assert priv.args == [["helper"], ["_PI_"]]
+
+
+def test_module_export_list_still_rejects_constants(tmp_path):
+    """-module keeps rejecting constants: they are always public, so an
+    export-list entry would imply a distinction that does not exist."""
+    with pytest.raises(SyntaxError, match="cannot list constant"):
+        _load(tmp_path, "pdoc3", """
+            -constants(_PI_ = 3.14)
+            -module(pdoc3, [_PI_])
+        """)

@@ -53,6 +53,8 @@ The list may also contain bare atoms:
 
 An atom may appear in both `-module` and `-private`. The first listing processed wins and the second is a no-op, so the name still gets exactly one module-local class.
 
+A [constant](#-constants) (`_PI_`) may also be listed in `-private`, as pure documentation: it records "this constant is an implementation detail" and nothing more — no class is minted, and the constant stays a public module global (effect 5 above only). `-module` still rejects constants, since an export-list entry would imply a public/private distinction that constants do not have.
+
 ---
 
 ## Import Directives
