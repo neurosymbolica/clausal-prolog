@@ -1,7 +1,7 @@
 # Bug: a `-dynamic` predicate with no clauses yet still blames `trail`
 
 **Reported:** 2026-07-29, found while reviewing
-[`arity-mismatch-reports-a-missing-trail-argument.md`](done/arity-mismatch-reports-a-missing-trail-argument.md)
+[`arity-mismatch-reports-a-missing-trail-argument.md`](arity-mismatch-reports-a-missing-trail-argument.md)
 
 ---
 
@@ -85,3 +85,47 @@ a generated dispatch function never surfaces `missing 1 required positional
 argument: 'trail'` whatever the reason. That is a narrower change than teaching
 `_refuse_call_at` a second source of truth, and it covers the other declined
 cases (heads that disagree, unreadable head shapes) at the same time.
+
+---
+
+## Fixed (2026-08-31)
+
+Went with the first source (the declaration), but stamped on the class at load
+rather than plumbing a database handle: `compiler_v2` walks the `-dynamic`
+directive specs anyway (step 4a), and now writes each declared arity into a new
+`PredicateMeta._dynamic_arities` set on the minted class (default `None`
+everywhere else).  `_refuse_call_at` consults it through `_declared_arity`,
+which answers **only** when the clause list is *empty* — so each of the "not
+obviously safe" bullets above lands on the safe side:
+
+- the clause-free class about to change (vocabulary atom, forward
+  declaration): never stamped → `None` → declines exactly as before;
+- clauses that live in `db._clauses`, not on the class: those dispatch via
+  single-argument `_get_dispatch` implementors that `_dispatch_at` never
+  forwards an arity to, and a stamped class with its *own* clauses defers to
+  the heads (`_clause_arity` answered, or agreed via `accept=`, before the
+  fallback is reached — and `_declared_arity` additionally refuses to act
+  while `_clauses` is non-empty);
+- `-dynamic` at two arities: the fallback declines unless exactly ONE arity
+  is declared, and never refuses a call whose arity is in the declared set;
+- the four surveyed correct-code shapes: unreachable — they never route
+  through `_get_dispatch(arity)`, which is unchanged.
+
+The stamp is written unconditionally (not gated on the predicate being
+clause-free at load) so the assertz-then-retract-back-to-empty leg refuses on
+the declaration too.  The message-only "cheap first step" became unnecessary:
+the declined cases that remain (multi-arity declarations, disagreeing heads)
+still leak the old `TypeError`, and that residue is the message-fix's scope if
+it ever bites.
+
+Coverage: `TestDynamicDeclaredArity` (8 tests) in
+`tests/test_predicate_arity_mismatch_diagnostic.py` — the repro verbatim, the
+0-solutions guard for a declared-arity call on the empty predicate, clauses
+outranking the declaration, the `maplist` position (via the
+`higher-order-meta-call-wrong-arity.md` fix, same day), retract-to-empty,
+multi-arity decline, declared-arity-never-refused, and the `None` default.
+Full suite diffed against baseline: failure sets identical.
+
+Files: `clausal/logic/predicate.py` (`_dynamic_arities`, `_declared_arity`),
+`clausal/logic/compiler_v2.py` (step 4a stamp),
+`tests/test_predicate_arity_mismatch_diagnostic.py`.

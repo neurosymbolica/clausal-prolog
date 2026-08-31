@@ -667,6 +667,13 @@ class PredicateMeta(type):
         cls._lazy_recompile: Callable | None = None
         cls._signature: tuple[str, ...] | None = None
         cls._locked: bool = False  # starts unlocked; lock after module load
+        # Arities this name was DECLARED at (``-dynamic(f/N)``), stamped by
+        # compiler_v2 at load.  ``None`` everywhere else.  A declaration is
+        # the one arity source that cannot be a stale inference — unlike
+        # ``_fields`` (stale on the re-minted vocabulary atom) and unlike an
+        # empty ``_clauses`` (which says nothing) — so ``_refuse_call_at``
+        # may consult it when, and only when, the clause list is empty.
+        cls._dynamic_arities: set[int] | None = None
 
     # ── Term construction ─────────────────────────────────────────────────
 
@@ -857,6 +864,34 @@ class PredicateMeta(type):
                 return None
         return first
 
+    def _declared_arity(cls, calling: int) -> int | None:
+        """The one arity ``-dynamic`` declared *cls* at, when nothing else answers.
+
+        Consulted by ``_refuse_call_at`` only after ``_clause_arity`` came back
+        empty-handed, and answers only for the shape that motivates it: a
+        declared-but-clause-free predicate (the ISO declare-then-assertz
+        pattern, and its retract-back-to-empty return leg).  ``None`` — refuse
+        nothing — whenever:
+
+        - the class has clauses (the heads were the authority and declined;
+          a declaration must not outvote them);
+        - nothing was declared (``_dynamic_arities`` is ``None`` on every
+          class the compiler did not stamp — vocabulary atoms, forward
+          declarations, plain predicates — so all of those decline exactly
+          as before);
+        - more than one arity was declared (one number in the message means
+          one declared arity; guessing which to blame would be wrong half
+          the time);
+        - *calling* IS the declared arity (a declared call is never refused,
+          whatever ``_fields`` thinks).
+        """
+        if cls._clauses:
+            return None
+        declared = cls._dynamic_arities
+        if not declared or len(declared) != 1 or calling in declared:
+            return None
+        return next(iter(declared))
+
     def _refuse_call_at(cls, arity: int) -> None:
         """Raise if no clause of *cls* could match a call of *arity* arguments.
 
@@ -874,6 +909,8 @@ class PredicateMeta(type):
             defined = cls._clause_arity(accept=arity)
         except Exception:  # noqa: BLE001 - see docstring
             return
+        if defined is None:
+            defined = cls._declared_arity(arity)
         if defined is None:
             return
         from clausal.predicate_diagnostics import (  # noqa: PLC0415

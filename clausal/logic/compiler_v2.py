@@ -224,6 +224,15 @@ def compile_module(
     for item in module_items:
         if isinstance(item, DirectiveItem) and item.name == "dynamic":
             for functor, arity in item.specs:
+                # Stamp the declared arity on the class whatever its clause
+                # state — the ``_refuse_call_at`` fallback only reads it while
+                # the clause list is EMPTY, which includes the retract-back-
+                # to-empty return leg of a predicate that did have clauses.
+                stamped = module_dict.get(functor)
+                if isinstance(stamped, PredicateMeta):
+                    if stamped._dynamic_arities is None:
+                        stamped._dynamic_arities = set()
+                    stamped._dynamic_arities.add(arity)
                 key = (functor, arity)
                 if key in pending:
                     continue

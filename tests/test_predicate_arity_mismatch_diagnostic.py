@@ -529,6 +529,103 @@ class TestForeignSingleArgumentImplementor:
             )
 
 
+# ── a -dynamic declaration is an arity source clause heads cannot be ─────────
+
+
+class TestDynamicDeclaredArity:
+    """A clause-free ``-dynamic`` predicate refuses on its *declared* arity.
+
+    See ``todo/done/dynamic-declared-arity-not-used-by-the-arity-diagnostic.md``.
+    ``_clause_arity`` deliberately distrusts ``_fields`` (stale on the
+    re-minted vocabulary atom), but a ``-dynamic(dfact/3)`` directive is a
+    *declaration* — it cannot be a stale inference — so it is stamped on the
+    class (``_dynamic_arities``) at load and consulted only when the clause
+    list is EMPTY: never when the first head already agreed with the call,
+    and never on the clause-carrying shapes ``_clause_arity`` was built for.
+    """
+
+    def test_clause_free_dynamic_names_the_declared_arity(self, tmp_path):
+        """The todo's repro, verbatim in spirit."""
+        out = _report(tmp_path, """
+            -dynamic(dfact/3)
+
+            Test("dyn wrong arity") <- dfact(_A, _B),
+        """, name="argdyn.clausal")
+        assert "dfact takes 3 arguments, but this call passes 2" in out
+        assert "positional argument" not in out
+        assert "dfact__3" not in out
+
+    def test_correct_arity_still_fails_cleanly_with_no_clauses(self, tmp_path):
+        """Declare-then-assertz: a pre-assertz call at /3 is 0 solutions."""
+        out = _report(tmp_path, """
+            -dynamic(dfact/3)
+
+            Test("dyn empty") <- dfact(_A, _B, _C),
+        """, name="argdynok.clausal")
+        assert "TypeError" not in out
+        assert "takes 3 arguments" not in out     # failed, not refused
+        assert "1 failed" in out
+
+    def test_clauses_outrank_the_declaration(self, tmp_path):
+        """With a clause asserted the head walk answers, same as before."""
+        out = _report(tmp_path, """
+            -dynamic(dfact/3)
+
+            Test("dyn assertz") <- (assertz(dfact(1, 2, 3)), dfact(_A, _B)),
+        """, name="argdynz.clausal")
+        assert "dfact takes 3 arguments, but this call passes 2" in out
+        assert "positional argument" not in out
+
+    def test_higher_order_position_reports_it_too(self, tmp_path):
+        """The meta-call family funnels into the same refusal."""
+        out = _report(tmp_path, """
+            -dynamic(dfact/3)
+
+            Test("dyn maplist") <- maplist(dfact, [1]),
+        """, name="argdynho.clausal")
+        assert "dfact takes 3 arguments, but this call passes 1" in out
+        assert "positional argument" not in out
+
+    def test_retracting_back_to_empty_keeps_the_declaration(self):
+        """assertz → retract → the declared arity still refuses."""
+        pair = make_predicate("arcm_dynpair", ["k", "v", "w"])
+        moving = make_predicate("arcm_dyndecl", ["a", "b", "c"])
+        moving._dynamic_arities = {3}
+        with pytest.raises(PredicateArityMismatchError):
+            moving._refuse_call_at(2)
+        moving._assertz(Clause(head=pair(1, 2, 3), body=[]))
+        with pytest.raises(PredicateArityMismatchError):
+            moving._refuse_call_at(2)            # via the heads now
+        assert moving._retract(pair(1, 2, 3)) is True
+        with pytest.raises(PredicateArityMismatchError) as exc:
+            moving._refuse_call_at(2)            # via the declaration again
+        assert "takes 3 arguments, but this call passes 2" in str(exc.value)
+
+    def test_two_declared_arities_decline(self):
+        """One number in the message means one declared arity, or nothing.
+
+        The multi-arity ``-dynamic`` name has its own dispatch tangle; a
+        refusal that guessed which declared arity to blame would be wrong
+        half the time, so the fallback declines exactly like an unreadable
+        head shape does.
+        """
+        both = make_predicate("arcm_dynboth", ["a", "b", "c"])
+        both._dynamic_arities = {2, 3}
+        both._refuse_call_at(4)                  # must not raise
+        both._refuse_call_at(1)
+
+    def test_a_declared_arity_is_never_itself_refused(self):
+        one = make_predicate("arcm_dynself", ["a", "b", "c"])
+        one._dynamic_arities = {2}               # declaration disagrees with
+        one._refuse_call_at(2)                   # _fields: the call wins
+
+    def test_undeclared_stays_declined(self):
+        """The default is ``None`` — every pre-existing decline is untouched."""
+        plain = make_predicate("arcm_dynnone", ["a", "b", "c"])
+        assert plain._dynamic_arities is None
+        plain._refuse_call_at(2)                 # must not raise
+
+
 # ── the two runtime funnels that know their own arity ────────────────────────
 
 
