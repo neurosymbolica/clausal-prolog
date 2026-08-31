@@ -155,7 +155,8 @@ Files: `clausal/logic/predicate.py` (`_get_dispatch(arity)`, `_clause_arity`,
 
 **Left open**, as separate todos rather than widened scope:
 
-- [`higher-order-meta-call-wrong-arity.md`](../higher-order-meta-call-wrong-arity.md)
+- [`higher-order-meta-call-wrong-arity.md`](higher-order-meta-call-wrong-arity.md)
+  (since fixed — see its **Fixed** section)
   — `maplist`/`foldl`/`include`/… still give the old message. The funnel takes
   the arity now; the 17 sites each need their own value read off their own
   contract, and guessing would refuse working code.

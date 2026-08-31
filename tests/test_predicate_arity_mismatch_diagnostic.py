@@ -185,6 +185,93 @@ class TestOtherGoalPositions:
         assert "positional argument" not in out
 
 
+class TestHigherOrderFamily:
+    """The ``higher_order.py`` meta-call family names the arity it calls at.
+
+    See ``todo/done/higher-order-meta-call-wrong-arity.md``.  Unlike ``call/N``,
+    where the source spells the argument count, each of these builtins has its
+    own contract for how many arguments the goal receives — the element alone,
+    element plus an output/key/truth slot, or element plus both accumulators —
+    so each site passes its *own* count, and these tests pin every count
+    against the same /3 predicate (or a /2 one where 3 is the count under
+    test).  A wrong count here would refuse working code, which is what the
+    correct-arity guards below are for.
+    """
+
+    def _out(self, tmp_path, goal, name):
+        return _report(tmp_path, f"""
+            -private([art_1_2, meta])
+
+            citation(art_1_2, "Reg-Z Article 1(2)", meta),
+            citepair(art_1_2, meta),
+
+            Test("g") <- {goal},
+        """, name=name)
+
+    # The goal receives the element and nothing else.
+    @pytest.mark.parametrize("goal", [
+        "maplist(citation, [art_1_2])",
+        "include(citation, [art_1_2], KEPT)",
+        "exclude(citation, [art_1_2], KEPT)",
+        "partition(citation, [art_1_2], YES, NO)",
+        "take_while(citation, [art_1_2], PREFIX)",
+        "drop_while(citation, [art_1_2], SUFFIX)",
+        "span(citation, [art_1_2], YES, NO)",
+    ])
+    def test_element_only_family_passes_1(self, tmp_path, goal):
+        out = self._out(tmp_path, goal, f"argho1_{goal.split('(')[0]}.clausal")
+        assert "citation takes 3 arguments, but this call passes 1" in out
+        assert "positional argument" not in out
+        assert "citation__3" not in out
+
+    # The goal receives the element plus one output/key/truth-value slot.
+    @pytest.mark.parametrize("goal", [
+        "maplist(citation, [art_1_2], YS)",
+        "group_by(citation, [art_1_2], GROUPS)",
+        "sort_by(citation, [art_1_2], SORTED)",
+        "max_by(citation, [art_1_2], MAX)",
+        "min_by(citation, [art_1_2], MIN)",
+        "filter_map(citation, [art_1_2], OUT)",
+        "tfilter(citation, [art_1_2], KEPT)",
+        "tpartition(citation, [art_1_2], YES, NO)",
+    ])
+    def test_element_and_slot_family_passes_2(self, tmp_path, goal):
+        out = self._out(tmp_path, goal, f"argho2_{goal.split('(')[0]}.clausal")
+        assert "citation takes 3 arguments, but this call passes 2" in out
+        assert "positional argument" not in out
+        assert "citation__3" not in out
+
+    def test_foldl_passes_3(self, tmp_path):
+        """Element plus both accumulators — /3 agrees, so a /2 callee pins it."""
+        out = self._out(tmp_path, "foldl(citepair, [art_1_2], V0, V)",
+                        "argho3_foldl.clausal")
+        assert "citepair takes 2 arguments, but this call passes 3" in out
+        assert "positional argument" not in out
+
+    # ── correct-arity guards: one per count, since a wrong count refuses ──
+
+    def test_element_only_at_its_arity_still_runs(self, tmp_path):
+        # cite_one/1 is not in the shared preamble; run a dedicated source.
+        out = _report(tmp_path, """
+            -private([art_1_2])
+
+            cite_one(art_1_2),
+
+            Test("ok1") <- maplist(cite_one, [art_1_2]),
+        """, name="arghook1.clausal")
+        assert "PASSED" in out
+
+    def test_element_and_slot_at_its_arity_still_runs(self, tmp_path):
+        out = self._out(tmp_path, "sort_by(citepair, [art_1_2], SORTED)",
+                        "arghook2.clausal")
+        assert "PASSED" in out
+
+    def test_foldl_at_its_arity_still_runs(self, tmp_path):
+        out = self._out(tmp_path, "foldl(citation, [art_1_2], LABEL, V)",
+                        "arghook3.clausal")
+        assert "PASSED" in out
+
+
 class TestImportedPredicate:
     """-import_from binds the exporter's class, so the name IS in scope."""
 
@@ -451,9 +538,9 @@ class TestRuntimeFunnels:
     Both were still printing the old ``citation__3() missing 3 required
     positional arguments`` after the compiled goal positions were fixed, and
     both know exactly how many arguments they are about to supply — unlike the
-    ``higher_order.py`` family, which is filed in
-    ``todo/higher-order-meta-call-wrong-arity.md`` precisely because it does
-    not.
+    ``higher_order.py`` family, which was filed separately in
+    ``todo/done/higher-order-meta-call-wrong-arity.md`` (now fixed — see
+    ``TestHigherOrderFamily``) precisely because it does not.
     """
 
     def test_time_goal_names_the_arity(self, tmp_path):

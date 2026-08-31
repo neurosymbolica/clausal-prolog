@@ -64,7 +64,7 @@ def _map_list__2(this_generator, _proceed, _fail, _catcher, goal, lst, trail):
     if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
         yield (_fail, DONE)
         return
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     for elem in items:
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
@@ -94,7 +94,7 @@ def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail)
         yield (_fail, DONE)
         return
     was_str = isinstance(xs_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     results = []
     for x in xs_items:
@@ -122,7 +122,7 @@ def _include__3(this_generator, _proceed, _fail, _catcher, goal, lst, included, 
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     kept = []
     for elem in items:
@@ -153,7 +153,7 @@ def _exclude__3(this_generator, _proceed, _fail, _catcher, goal, lst, excluded, 
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     kept = []
     for elem in items:
@@ -181,7 +181,7 @@ def _foldl__4(this_generator, _proceed, _fail, _catcher, goal, lst, v0, v, trail
     if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
         yield (_fail, DONE)
         return
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 3)
     outer_mark = trail.mark()
     acc = v0
     for elem in items:
@@ -217,7 +217,7 @@ def _take_while__3(this_generator, _proceed, _fail, _catcher, goal, lst, prefix,
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     taken = []
     for elem in items:
@@ -245,7 +245,7 @@ def _drop_while__3(this_generator, _proceed, _fail, _catcher, goal, lst, suffix,
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     i = 0
     for elem in items:
@@ -273,7 +273,7 @@ def _span__4(this_generator, _proceed, _fail, _catcher, goal, lst, yes, no, trai
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     taken = []
     i = 0
@@ -309,7 +309,7 @@ def _group_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, groups, t
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     result: list[list] = []
     prev_key = object()  # sentinel
@@ -356,7 +356,7 @@ def _sort_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, sorted_lst
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     keyed: list[tuple] = []
     for elem in items:
@@ -392,7 +392,7 @@ def _max_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, maximum, tr
     if items is None or not items or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     keyed: list[tuple] = []
     for elem in items:
@@ -437,7 +437,7 @@ def _min_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, minimum, tr
     if items is None or not items or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     keyed: list[tuple] = []
     for elem in items:
@@ -486,7 +486,7 @@ def _filter_map__3(this_generator, _proceed, _fail, _catcher, goal, lst, result,
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     kept = []
     for elem in items:
@@ -522,7 +522,7 @@ def _partition__4(this_generator, _proceed, _fail, _catcher, goal, lst, included
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     yes = []
     no = []
@@ -562,7 +562,7 @@ def _tfilter__3(this_generator, _proceed, _fail, _catcher, goal, lst, filtered, 
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     kept = []
     for elem in items:
@@ -600,7 +600,7 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
         yield (_fail, DONE)
         return
     was_str = isinstance(lst_val, str)
-    dispatch = _ensure_trampoline_dispatch(goal_val)
+    dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     yes = []
     no = []

@@ -1,7 +1,7 @@
 # Bug: `maplist/foldl/...` at the wrong arity still blames a missing argument
 
 **Reported:** 2026-07-29, found while fixing
-[`arity-mismatch-reports-a-missing-trail-argument.md`](done/arity-mismatch-reports-a-missing-trail-argument.md)
+[`arity-mismatch-reports-a-missing-trail-argument.md`](arity-mismatch-reports-a-missing-trail-argument.md)
 
 ---
 
@@ -71,3 +71,41 @@ deliberately, with a test per family.
 
 `tests/test_predicate_arity_mismatch_diagnostic.py::TestOtherGoalPositions` is
 where the coverage goes — it already pins negation, `findall/3` and `call/N`.
+
+---
+
+## Fixed (2026-08-31)
+
+Done as requested: one arity argument per site, each value read off the
+builtin's own goal invocation (the `StepGenerator` / `_run_goal_once` call a
+few lines below each funnel call, which lists the exact arguments the goal
+receives).  The counts, audited site by site:
+
+- **1** (the element alone): `maplist/2`, `include/3`, `exclude/3`,
+  `partition/4`, `take_while/3`, `drop_while/3`, `span/4`
+- **2** (element + output/key/truth slot): `maplist/3`, `group_by/3`,
+  `sort_by/3`, `max_by/3`, `min_by/3`, `filter_map/3`, `tfilter/3`,
+  `tpartition/4`
+- **3** (element + both accumulators): `foldl/4`
+
+Two corrections to this note's own framing, discovered while fixing:
+
+- The family list above ("maplist/2..5, foldl/4..6, aggregate_all") was
+  SWI-shaped; this codebase registers only `maplist/2,3` and `foldl/4`, and
+  has no `aggregate_all`.  The 16 sites in `higher_order.py` were the whole
+  set.
+- Nothing needed changing in `_ensure_trampoline_dispatch` or below it:
+  `_dispatch_at` forwards the arity only to a `PredicateMeta`, and
+  `_refuse_call_at` declines quietly when heads are unreadable or disagree, so
+  closures, foreign implementors and stale-`_arity` predicates are untouched
+  by construction.
+
+Coverage: `TestHigherOrderFamily` in the same test file — the 16 mismatch
+shapes parametrized against `citation/3` (a `/2` callee for `foldl`, whose
+count agrees with `/3`), plus one correct-arity guard per count, because a
+wrong count here refuses working code.  Full suite diffed against a stashed
+baseline: failure sets identical (the pre-existing `test_clpsat.py` /
+`test_clportools.py` / doc-snippet failures, nothing new).
+
+Files: `clausal/logic/builtins/higher_order.py`,
+`tests/test_predicate_arity_mismatch_diagnostic.py` (+19 tests).
