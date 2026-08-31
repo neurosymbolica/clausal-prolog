@@ -69,6 +69,26 @@ _REVERSE_OVERRIDES: dict[str, str] = {
     "member": "in_",
 }
 
+# (prolog_name, arity) -> clausal_name, consulted BEFORE the name-only map at
+# call sites that know the arity.  The name-only map is built from
+# BUILTIN_NAME_MAP, which keys on names alone, so a Prolog name shared by two
+# Clausal predicates of different arity resolves to whichever won map order:
+# ISO ``catch/3`` came back as ``catch_error/3``, which the compiler treats as
+# an ordinary call to an undefined predicate rather than as exception handling
+# (``catch_error``'s metacall pattern is 2-arg).  ``catch_error`` stays the
+# 2-arg form's name via the name-only map.
+_REVERSE_ARITY_OVERRIDES: dict[tuple[str, int], str] = {
+    ("catch", 3): "catch",
+}
+
+
+def _indicator_arity(term) -> int | None:
+    """Integer arity of a ``name/N`` predicate indicator's ``N``, or None when
+    it is unbound/non-numeric (a var in a template, say)."""
+    if isinstance(term, PNumber) and isinstance(term.value, int):
+        return term.value
+    return None
+
 
 def _build_reverse_builtin_map() -> dict[str, str]:
     """Build a mapping from Prolog builtin names to clausal names."""
@@ -325,13 +345,13 @@ class _PrologToClausal:
                 "Rewrite the grammar rule without a pushback list."
             )
         if isinstance(term, PCompound):
-            name = self._predicate_name(term.functor)
+            name = self._predicate_name(term.functor, len(term.args))
             if not term.args:
                 return f"{name}()"
             args = ", ".join(self._emit_term(a) for a in term.args)
             return f"{name}({args})"
         if isinstance(term, PAtom):
-            name = self._predicate_name(term.name)
+            name = self._predicate_name(term.name, 0)
             return f"{name}()"
         return self._emit_term(term)
 
@@ -572,7 +592,7 @@ class _PrologToClausal:
         """Emit pred/N as a predicate indicator."""
         if isinstance(term, PCompound) and term.functor == "/" and len(term.args) == 2:
             name = self._emit_atom_name(term.args[0])
-            pascal = self._predicate_name(name)
+            pascal = self._predicate_name(name, _indicator_arity(term.args[1]))
             arity = self._emit_term(term.args[1])
             return f"{pascal}/{arity}"
         # Comma-separated list: (a/1, b/2)
@@ -810,7 +830,7 @@ class _PrologToClausal:
             return f"{clausal_op}{operand}"
 
         # Regular compound: functor(args) → PascalCase(args)
-        name = self._predicate_name(functor)
+        name = self._predicate_name(functor, len(args))
         if not args:
             return f"{name}()"
         arg_strs = ", ".join(self._emit_term(a) for a in args)
@@ -871,7 +891,7 @@ class _PrologToClausal:
                 op = _PREFIX_MAP.get(term.functor, term.functor)
                 return f"{op}{operand}"
             # Arithmetic functions
-            name = self._predicate_name(term.functor)
+            name = self._predicate_name(term.functor, len(term.args))
             args = ", ".join(self._emit_expr(a) for a in term.args)
             return f"{name}({args})"
         return self._emit_term(term)
@@ -888,8 +908,16 @@ class _PrologToClausal:
 
     # ── Name conversion helpers ──────────────────────────────────────
 
-    def _predicate_name(self, prolog_name: str) -> str:
-        """Convert a Prolog predicate/functor name to clausal PascalCase."""
+    def _predicate_name(self, prolog_name: str, arity: int | None = None) -> str:
+        """Convert a Prolog predicate/functor name to clausal PascalCase.
+
+        ``arity`` disambiguates Prolog names shared by Clausal predicates of
+        different arity (``catch/3`` vs ``catch_error/2``); pass it wherever
+        the call site knows it."""
+        if arity is not None:
+            override = _REVERSE_ARITY_OVERRIDES.get((prolog_name, arity))
+            if override is not None:
+                return override
         # Check reverse builtin map first
         clausal_name = _REVERSE_BUILTIN_MAP.get(prolog_name)
         if clausal_name is not None:
@@ -933,7 +961,8 @@ class _PrologToClausal:
             for e in term.elements:
                 if isinstance(e, PCompound) and e.functor == "/" and len(e.args) == 2:
                     name = self._emit_atom_name(e.args[0])
-                    items.append(self._predicate_name(name))
+                    items.append(self._predicate_name(
+                        name, _indicator_arity(e.args[1])))
                 elif isinstance(e, PAtom):
                     items.append(self._predicate_name(e.name))
                 else:

@@ -423,3 +423,23 @@ class TestIsImportsAsEval:
         out = prolog_to_clausal("add_one(X, Y) :- Y is X + 1.\n")
         assert "eval_(X + 1, Y)" in out, out
         assert ":=" not in out, out
+
+
+class TestCatchArity:
+    """Prolog catch/3 reverse-maps by ARITY: the 3-arg ISO form is clausal
+    catch/3, while catch_error stays reserved for the 2-arg form.  Name-only
+    mapping produced catch_error/3, which the compiler treats as an ordinary
+    call to an undefined predicate, not as exception handling (roborev job
+    271 on ae703f04)."""
+
+    def test_prolog_catch_3_maps_to_clausal_catch_3(self):
+        out = prolog_to_clausal(
+            "p(X) :- catch((X == a, fail), _, true).\n")
+        assert "catch(" in out, out
+        assert "catch_error" not in out, out
+
+    def test_two_arg_catch_still_maps_to_catch_error(self):
+        # The 2-arg form is what clausal catch_error/2 forward-translates to;
+        # the reverse leg must keep round-tripping it.
+        out = prolog_to_clausal("p(G, E) :- catch(G, E).\n")
+        assert "catch_error(G, E)" in out, out
