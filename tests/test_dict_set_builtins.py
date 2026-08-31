@@ -962,3 +962,44 @@ class TestProfileAPIPlainDict:
         # nv
         sols = _sols("delete", {"k": 7, "j": 8}, "k", Var())
         assert sols == [{2: DictTerm({"j": 8})}]
+
+    # symmetry: plain dict and DictTerm behave identically for the whole family
+
+    def test_get4_matches_dictterm_behavior(self):
+        # nv
+        for key in ("k", "missing"):
+            assert (_sols("get", {"k": 7}, key, Var(), 0)
+                    == _sols("get", DictTerm({"k": 7}), key, Var(), 0))
+
+    def test_tri_get_matches_dictterm_behavior(self):
+        # nv
+        for key in ("k", "missing"):
+            assert (_sols("tri_get", {"k": 7}, key, Var())
+                    == _sols("tri_get", DictTerm({"k": 7}), key, Var()))
+
+    def test_delete_matches_dictterm_behavior(self):
+        # nv
+        assert (_sols("delete", {"k": 7, "j": 8}, "k", Var())
+                == _sols("delete", DictTerm({"k": 7, "j": 8}), "k", Var()))
+
+    # error paths: plain dict keeps the family's documented strict/soft splits
+
+    def test_delete_plain_dict_absent_key_throws_existence(self):
+        # nv
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException, match="existence_error"):
+            _sols("delete", {"k": 7}, "missing", Var())
+
+    def test_delete_nondict_still_throws_type_error(self):
+        # nv
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException, match="type_error"):
+            _sols("delete", "not_a_dict", "k", Var())
+
+    def test_get4_nondict_still_fails_softly(self):
+        # nv
+        assert _fails("get", "not_a_dict", "k", Var(), 0)
+
+    def test_tri_get_nondict_still_fails_softly(self):
+        # nv
+        assert _fails("tri_get", "not_a_dict", "k", Var())
