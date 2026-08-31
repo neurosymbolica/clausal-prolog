@@ -27,3 +27,13 @@ day_ordinals(CS, CE, DAYS) <- (..., A is ++CS.toordinal(), B is ++CE.toordinal()
 
 Context: the primary date todo `date-clean-apis.md` (already done) covered date/days/isoformat;
 this is the remaining slice.
+
+---
+
+**CLOSED 2026-08-31 (engine side):** `date_max/3`, `date_min/3`, and
+bidirectional `ordinal/2` shipped in `clausal/modules/py/datetime.py` with
+tests + docs (date_time.md, builtins.md, sigs snippets). Chose the
+`DateMax/DateMin` spelling from the two options offered. The remaining
+"Done when" item — converting a representative rolling date-window caller's
+`++` escapes — lives in the downstream corpus, not this repo; do it there
+on next contact with those domains.
