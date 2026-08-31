@@ -619,6 +619,23 @@ class TestDynamicDeclaredArity:
         one._dynamic_arities = {2}               # declaration disagrees with
         one._refuse_call_at(2)                   # _fields: the call wins
 
+    def test_a_declaration_for_a_differently_shaped_class_declines(self):
+        """The stamp can land on a same-named class of another arity.
+
+        ``-dynamic(f/3)`` in a module that imported a 0-arity vocabulary
+        atom ``f`` stamps {3} onto a class whose authored shape is /0.  Two
+        authored sources disagree, so refusing with either number would be
+        confidently wrong half the time — the fallback declines instead
+        (roborev job 9).  ``_fields`` acts only as a VETO here, never as
+        the arity source, so the stale-``_fields`` hazard cannot return.
+        """
+        atom = make_atom("arcm_dynatom")         # authored at /0
+        atom._dynamic_arities = {3}              # declared at /3
+        atom._refuse_call_at(1)                  # must not raise
+        pair = make_predicate("arcm_dynpair2", ["k", "v"])
+        pair._dynamic_arities = {3}              # /2 class, /3 declaration
+        pair._refuse_call_at(1)                  # must not raise
+
     def test_undeclared_stays_declined(self):
         """The default is ``None`` — every pre-existing decline is untouched."""
         plain = make_predicate("arcm_dynnone", ["a", "b", "c"])

@@ -883,14 +883,25 @@ class PredicateMeta(type):
           one declared arity; guessing which to blame would be wrong half
           the time);
         - *calling* IS the declared arity (a declared call is never refused,
-          whatever ``_fields`` thinks).
+          whatever ``_fields`` thinks);
+        - the declaration disagrees with the class's own shape.  A
+          ``-dynamic(f/3)`` can stamp a same-named class authored at another
+          arity (a module that imported a 0-arity vocabulary atom ``f`` and
+          also declares ``f/3``), and when two authored sources disagree,
+          refusing with either number is confidently wrong half the time.
+          ``_fields`` serves only as this VETO — it cancels refusals, it is
+          never the arity the refusal reports — so the stale-``_fields``
+          hazard the clause walk exists to avoid cannot return through it.
         """
         if cls._clauses:
             return None
         declared = cls._dynamic_arities
         if not declared or len(declared) != 1 or calling in declared:
             return None
-        return next(iter(declared))
+        arity = next(iter(declared))
+        if arity != len(cls._fields):
+            return None
+        return arity
 
     def _refuse_call_at(cls, arity: int) -> None:
         """Raise if no clause of *cls* could match a call of *arity* arguments.
