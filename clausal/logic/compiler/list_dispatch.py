@@ -19,7 +19,7 @@ from clausal.logic.variables import is_var, deref  # noqa: F401
 from clausal.terms import (
     Compound,
     Call, LoadName, LoadAttr,  # noqa: F401
-    Unify,
+    PyThunk, Unify,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.predicate import is_term_instance, term_field_names
@@ -120,6 +120,15 @@ def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
     # that breaks list callers reaching this clause via the coalesced
     # str/charlist bucket built by ``arg_index._arg_to_index_key``.
     if isinstance(lift_term, (str, bytes)):
+        return clause
+
+    # Skip the lift when the lifted term is a PyThunk (quantity/currency
+    # literal, f-string, ``++()`` escape) — the Unify being lifted is the one
+    # ``_normalize_structural_head_args`` created precisely to keep the thunk
+    # out of the head: ``head_to_match_pattern`` has no branch that evaluates
+    # a thunk, so lifting it back re-creates the dead-clause capture that the
+    # hoist fixed.  The body ``Unify`` evaluates the thunk at runtime instead.
+    if isinstance(lift_term, PyThunk):
         return clause
 
     # Skip the lift when the lifted term is a bare name reference

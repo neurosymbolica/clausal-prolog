@@ -1,5 +1,20 @@
 # A `value(unit)` amount in a clause HEAD compiles to a PyThunk and never matches
 
+**RESOLVED 2026-08-31** on `fix/quantity-head-literal-pythunk` — direction 2
+(hoist to a body `Unify`), not direction 1: `_is_structural_head_value`
+(`clausal/logic/database.py`) now treats a `PyThunk` head arg as structural, so
+`_normalize_structural_head_args` hoists it to Var + prepended
+`Unify(var, thunk)` and the existing body compilation evaluates the thunk at
+runtime — per call, preserving `++()` escape semantics, and working for
+var-bearing thunks (f-strings) too, which assert-time forcing could not.
+Second half found during the fix: `_lift_clause_at_pos`
+(`clausal/logic/compiler/list_dispatch.py`) would lift that Unify back into the
+head in argument-index buckets (the quantity clause keys `_INDEX_VAR` and is
+merged into every bucket), and the lifted thunk's `$headlit` global is never
+collected for bucket functions — so it now skips `PyThunk` like str/bytes and
+`LoadName`. Both halves mutation-verified; units and currency spellings
+covered by `tests/test_quantity_head_literal.py`.
+
 **Filed:** 2026-07-30, found while fixing
 `todo/done/headlit-global-not-injected-symbolic-diff-example.md` (adjacent
 defect, deliberately not folded into that fix — different subsystem, different

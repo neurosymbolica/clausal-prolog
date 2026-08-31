@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Callable
 
-from clausal.terms import And, Call, Compound, KWTerm, LoadName
+from clausal.terms import And, Call, Compound, KWTerm, LoadName, PyThunk
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
 from clausal.logic.predicate import (
     PredicateMeta,
@@ -439,6 +439,14 @@ def _is_structural_head_value(val: Any) -> bool:
     if isinstance(val, Call):
         return isinstance(val.func, LoadName)
     if is_term_instance(val):
+        return True
+    # A deferred Python expression (quantity/currency literal `5(m)`,
+    # f-string, `++()` escape) in a head arg: nothing on the head-match path
+    # evaluates it, so unhoisted it is captured as an opaque literal and the
+    # clause guards against the thunk OBJECT — matching nothing. The hoisted
+    # body Unify compiles through term_to_ast_expr, which calls the thunk at
+    # runtime and unifies its value.
+    if isinstance(val, PyThunk):
         return True
     return False
 

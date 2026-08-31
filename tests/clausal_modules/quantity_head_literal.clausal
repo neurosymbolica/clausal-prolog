@@ -1,0 +1,47 @@
+# Fixture for the quantity-head-literal bug
+# (todo/quantity-head-literal-compiles-to-a-pythunk-that-never-matches.md).
+# A value(unit) amount in a clause head compiles to a PyThunk; unhoisted it
+# is captured as an opaque head literal and the clause never matches.
+
+-module(quantity_head_literal, [Len(AMOUNT, NAME), Chk(N), Amt(A),
+                                Sel(AMOUNT, NAME), Pick(N),
+                                Pack(L, N), ChkPack(N),
+                                Mix(K, NAME), PickMix(N), PickQty(N)])
+-import_from(py.units, [m])
+-private([short_, long_, tiny_, packed_, one_, two_, three_, qty_])
+
+# One ruled clause, quantity in the head — the filed repro.
+Len(5(m), short_) <- (number(1))
+
+# Input mode: ground quantity built in a body goal.
+Chk(N) <- Len(5(m), N)
+
+# Output mode: the head quantity must bind into an unbound caller arg.
+Amt(A) <- Len(A, short_)
+
+# Multiple clauses with distinct quantities — exercises the indexed/bucket
+# compilation path (and the Phase 8 Unify re-lift).
+Sel(2(m), tiny_) <- (number(1))
+Sel(5(m), short_) <- (number(1))
+Sel(50(m), long_) <- (number(1))
+
+Pick(N) <- Sel(50(m), N)
+
+# Quantity nested inside a head list.
+Pack([5(m)], packed_) <- (number(1))
+
+ChkPack(N) <- Pack([5(m)], N)
+
+# Mixed predicate: >= _INDEX_THRESHOLD clauses with scalar index keys plus one
+# quantity clause. The scalar keys build argument-index buckets; the quantity
+# clause keys as _INDEX_VAR and is merged into every bucket, where
+# _lift_clause_at_pos must NOT lift its hoisted Unify(Var, PyThunk) back into
+# the head (the thunk's $headlit global is never collected for buckets).
+Mix(1, one_) <- (number(1))
+Mix(2, two_) <- (number(1))
+Mix(3, three_) <- (number(1))
+Mix(5(m), qty_) <- (number(1))
+
+PickMix(N) <- Mix(2, N)
+
+PickQty(N) <- Mix(5(m), N)
