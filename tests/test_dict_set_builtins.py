@@ -911,3 +911,54 @@ class TestSetTermPlainSetEquality:
         # nv
         t = Trail()
         assert unify({1, 2, 3}, SetTerm([1, 2, 3]), t)
+
+
+# ── Profile API accepts plain Python dicts ─────────────────────────────────────
+#
+# The strict read `V is P[K]` (_subscript) accepts DictTerm AND plain dict; the
+# soft profile API (get/3, get/4, tri_get/3, delete/3) accepted only DictTerm
+# and failed SILENTLY on a plain dict — so a Python caller passing {'k': v} got
+# a partly working profile: subscript reads succeeded while every get/3 guard
+# failed, flipping guarded clauses to their not-guarded fallbacks. See
+# todo/done/get3-rejects-a-plain-dict-that-subscript-accepts.md.
+
+
+class TestProfileAPIPlainDict:
+    def test_get3_plain_dict_present(self):
+        # nv
+        assert _sols("get", {"k": 7}, "k", Var()) == [{2: 7}]
+
+    def test_get3_plain_dict_absent_fails(self):
+        # nv
+        assert _fails("get", {"k": 7}, "missing", Var())
+
+    def test_get3_matches_dictterm_behavior(self):
+        # nv
+        assert (_sols("get", {"k": 7}, "k", Var())
+                == _sols("get", DictTerm({"k": 7}), "k", Var()))
+
+    def test_get3_nondict_still_fails_softly(self):
+        # nv
+        assert _fails("get", "not_a_dict", "k", Var())
+
+    def test_get4_plain_dict_present(self):
+        # nv
+        assert _sols("get", {"k": 7}, "k", Var(), 0) == [{2: 7}]
+
+    def test_get4_plain_dict_default(self):
+        # nv
+        assert _sols("get", {"k": 7}, "missing", Var(), 0) == [{2: 0}]
+
+    def test_tri_get_plain_dict_present(self):
+        # nv
+        assert _sols("tri_get", {"k": 7}, "k", Var()) == [{2: 7}]
+
+    def test_tri_get_plain_dict_absent_undefined(self):
+        # nv
+        from clausal.terms import Undefined
+        assert _sols("tri_get", {"k": 7}, "missing", Var()) == [{2: Undefined}]
+
+    def test_delete_plain_dict_removes_key(self):
+        # nv
+        sols = _sols("delete", {"k": 7, "j": 8}, "k", Var())
+        assert sols == [{2: DictTerm({"j": 8})}]

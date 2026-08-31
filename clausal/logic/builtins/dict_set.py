@@ -346,11 +346,16 @@ def _get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail):
     key is absent (the logic analogue of ``d.get(k)`` returning ``None`` — never
     binds a sentinel).  A non-ground key or non-dict object fails (soft: this
     predicate never throws — use ``V is P[K]`` for the strict, throwing read).
+
+    Accepts a plain Python ``dict`` as well as a ``DictTerm``, matching the
+    subscript read — a Python caller's ``{'k': v}`` profile must not be
+    half-accepted (subscript reads working, every ``get`` guard silently
+    failing).
     """
     key_val = deref(key)
     d_val = deref(d)
     if (not is_var(key_val) and _is_hashable(key_val)
-            and isinstance(d_val, DictTerm) and key_val in d_val):
+            and isinstance(d_val, (DictTerm, dict)) and key_val in d_val):
         mark = trail.mark()
         if unify(value, d_val[key_val], trail):
             yield (_proceed, None)
@@ -363,12 +368,13 @@ def _get__4(this_generator, _proceed, _fail, _catcher, d, key, value, default, t
     """get(Dict, Key, Value, Default) — defaulted read (Python ``dict.get(k, default)``).
 
     Binds ``Value`` to ``Dict[Key]`` if present, else to ``Default``.  Always
-    succeeds when ``Dict`` is a dict and ``Key`` is a ground hashable key.
+    succeeds when ``Dict`` is a dict (``DictTerm`` or plain ``dict``) and
+    ``Key`` is a ground hashable key.
     """
     key_val = deref(key)
     d_val = deref(d)
     if (not is_var(key_val) and _is_hashable(key_val)
-            and isinstance(d_val, DictTerm)):
+            and isinstance(d_val, (DictTerm, dict))):
         result = d_val[key_val] if key_val in d_val else default
         mark = trail.mark()
         if unify(value, result, trail):
@@ -396,7 +402,7 @@ def _tri_get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail)
     key_val = deref(key)
     d_val = deref(d)
     if (not is_var(key_val) and _is_hashable(key_val)
-            and isinstance(d_val, DictTerm)):
+            and isinstance(d_val, (DictTerm, dict))):
         result = d_val[key_val] if key_val in d_val else Undefined
         mark = trail.mark()
         if unify(value, result, trail):
@@ -421,7 +427,7 @@ def _delete__3(this_generator, _proceed, _fail, _catcher, d, key, new_dict, trai
         raise LogicException(instantiation_error("delete/3"))
     if not _is_hashable(key_val):
         raise LogicException(type_error("dict_key", key_val, "delete/3"))
-    if not isinstance(d_val, DictTerm):
+    if not isinstance(d_val, (DictTerm, dict)):
         raise LogicException(type_error("dict", d_val, "delete/3"))
     if key_val not in d_val:
         raise LogicException(existence_error("dict_key", key_val, "delete/3"))
