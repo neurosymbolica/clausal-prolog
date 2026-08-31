@@ -75,11 +75,11 @@ def test_stdlib_bare_import_survives_cleared_clausal():
 def test_clausal_source_module_still_activates_hook(tmp_path):
     """Declining a re-entrant probe must not stop Condition 3 from activating.
 
-    Note the stub *is* still on sys.meta_path afterwards, but it is a different
-    object: clearing ``clausal`` from sys.modules made ``clausal/__init__``
-    re-execute during activation, which inserts a fresh stub.  That duplicate is
-    a separate wart; what matters here is that the real finders are installed
-    and the .clausal source actually loaded.
+    Clearing ``clausal`` from sys.modules makes ``clausal/__init__`` re-execute
+    during activation; idempotent installation reuses the stub already on
+    sys.meta_path instead of inserting a fresh one, and the activating stub
+    then removes itself.  What matters here is that the real finders are
+    installed and the .clausal source actually loaded.
     """
     moddir = tmp_path / "lazyreentry"
     moddir.mkdir()
@@ -93,6 +93,26 @@ def test_clausal_source_module_still_activates_hook(tmp_path):
     """)
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == "2 True", r.stdout + r.stderr
+
+
+@pytest.mark.timeout(120)
+def test_repeated_sweeps_do_not_accumulate_stub_finders():
+    """A suite that sweeps ``clausal*`` from sys.modules in a loop re-executes
+    ``_lazy_hook`` on every re-import; installation must reuse the stub already
+    on sys.meta_path instead of inserting one per sweep (each duplicate adds a
+    nested Condition-2 probe layer for every failing bare import)."""
+    r = _run("""
+        for _ in range(5):
+            for _name in [n for n in sys.modules
+                          if n == "clausal" or n.startswith("clausal.")]:
+                del sys.modules[_name]
+            import clausal  # noqa: F811 — deliberate re-import after sweep
+        stubs = [f for f in sys.meta_path
+                 if type(f).__name__ == "_LazyHookFinder"]
+        print(len(stubs))
+    """)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "1", r.stdout + r.stderr
 
 
 # ── unit-level guard behaviour ────────────────────────────────────────────────

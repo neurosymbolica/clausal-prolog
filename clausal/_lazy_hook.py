@@ -84,4 +84,31 @@ class _LazyHookFinder(MetaPathFinder):
         return importlib.util.find_spec(fullname)
 
 
-sys.meta_path.insert(0, _LazyHookFinder())
+def _install_finder():
+    """Install the stub at most once per process.
+
+    A ``sys.modules`` sweep of ``clausal*`` makes the next ``import clausal``
+    re-execute this module with a *fresh* class object while the previous
+    stub instance — of the now-orphaned previous class — is still on
+    ``sys.meta_path``, so an unconditional insert accumulates one stub per
+    sweep.  Duplicates never cycle (each stub's in-flight guard declines its
+    own second entry) but every extra stub adds one nested Condition-2 probe
+    layer to every failing bare import, so unbounded accumulation still
+    converges on ``RecursionError``.
+
+    Reuse is matched by exact class identity, then by module + qualname for
+    the re-executed-module case; a subclass carries its own qualname, so it
+    is never silently reused.
+    """
+    for finder in sys.meta_path:
+        cls = type(finder)
+        if cls is _LazyHookFinder or (
+                cls.__module__ == __name__
+                and cls.__qualname__ == _LazyHookFinder.__qualname__):
+            return finder
+    finder = _LazyHookFinder()
+    sys.meta_path.insert(0, finder)
+    return finder
+
+
+_install_finder()
