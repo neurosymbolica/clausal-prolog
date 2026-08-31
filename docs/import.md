@@ -58,13 +58,13 @@ The `Module` also holds `module_dict: dict | None` — a reference to the Python
 
 2. **Create LogicModule** — a `clausal.logic.database.Module` is created with `module_dict=module.__dict__`. It is stored as `$module` in the globals.
 
-3. **Install per-module closures** — `$define_predicate` and `$assert_fact` are deferred closures that assert clauses to the database and sync them to the PredicateMeta class, but do **not** compile. They record each predicate's `(functor, arity)` in a pending dict for later compilation.
+3. **Install per-module closures** — `$define_predicate` and `$assert_fact` are deferred closures that only collect the predicate nodes; nothing is asserted or compiled while the body runs.
 
 4. **Load bytecode** — `self.get_code(module.__name__)` either loads the cached `.pyc` or calls `source_to_code()` to parse and transform fresh source. The `SourceLoader` protocol handles cache validation automatically (comparing mtime and size).
 
-5. **Execute** — the bytecode is executed in the module's `__dict__`. Each `$define_predicate` / `$assert_fact` call asserts clauses but defers compilation.
+5. **Execute** — the bytecode is executed in the module's `__dict__`. Each `$define_predicate` / `$assert_fact` call collects its predicate node but defers all database and compilation work.
 
-6. **Compile all pending predicates** — `_compile_all_pending(pending, db, module_dict)` iterates the pending dict and calls `compile_predicate` once per predicate. This is O(N) per predicate (one compilation with all N clauses) instead of the O(N²) that would result from recompiling after every single clause assertion. In a second pass, predicates marked with `-table(pred/arity)` are wrapped with `make_tabled_wrapper_trampoline`. The two-pass approach ensures cross-predicate references resolve before wrapping. See [tabling.md](tabling.md).
+6. **Compile the module** — `compiler_v2.compile_module(predicate_nodes, module_items, module_dict, module_name)` handles directives, class creation, clause assertion, and predicate compilation in a single pass, compiling each predicate once. This is O(N) per predicate (one compilation with all N clauses) instead of the O(N²) that would result from recompiling after every single clause assertion. In a second pass, predicates marked with `-table(pred/arity)` are wrapped with `make_tabled_wrapper_trampoline`. The two-pass approach ensures cross-predicate references resolve before wrapping. See [tabling.md](tabling.md).
 
 7. **Lock non-dynamic predicates** — iterate module globals and lock every `PredicateMeta` class that was not declared with [`-dynamic(pred/arity)`](directives.md).
 
@@ -97,8 +97,8 @@ Fact normalization: ground values in functor field positions are replaced with f
 Previously, each `$define_predicate` / `$assert_fact` call immediately recompiled the predicate with all accumulated clauses. For a predicate with N clauses, this meant N compilations — O(N²) work.
 
 With deferred compilation, assertions and compilation are separated:
-- During `exec()`, each `$define_predicate` / `$assert_fact` only asserts the clause and records the predicate in a pending dict.
-- After `exec()` completes, `_compile_all_pending()` compiles each predicate exactly once with the full clause set.
+- During `exec()`, each `$define_predicate` / `$assert_fact` only collects the predicate node.
+- After `exec()` completes, `compiler_v2.compile_module` asserts and compiles each predicate exactly once with the full clause set.
 
 This is safe because no predicate is queried during module load — `.clausal` files only contain definitions. [Directives](directives.md) (`-dynamic`, etc.) execute before clause definitions, so `db.is_dynamic()` is already set when compilation runs.
 

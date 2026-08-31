@@ -12,9 +12,9 @@ Files with the ``.clausal`` extension are intercepted by this hook, which:
      ``$define_predicate(Predicate(head=…, body=…), $module)`` calls, and
      trailing-comma expression statements into ``$assert_fact(term)`` calls.
   3. Compilation is deferred: ``$define_predicate`` and ``$assert_fact`` only
-     assert clauses during module exec.  After all clauses are asserted,
-     ``_compile_all_pending`` compiles each predicate once (O(N) per predicate
-     instead of O(N²)).
+     collect predicate nodes during module exec.  After the body has run,
+     ``compiler_v2.compile_module`` compiles each predicate once (O(N) per
+     predicate instead of O(N²)).
   4. ``PredicateLoader`` extends ``importlib.abc.SourceLoader``, which
      provides automatic ``.pyc`` caching via ``get_code()``.  On subsequent
      imports, the parsed+transformed bytecode is loaded from
@@ -38,16 +38,10 @@ from .atom_diagnostics import truth_literal_hint_lines
 from .import_diagnostics import exec_with_import_diagnostics
 from .syntax_diagnostics import clausal_syntax_diagnostics
 from .templating.term_rewriting import EmbedTransformer, TermTransformer
-from .logic.database import Module as LogicModule, head_key
-from .logic.compiler import compile_predicate_trampoline, compile_predicate_shallow
+from .logic.database import Module as LogicModule
 from .logic.constants import check_constant_ground, register_module_constant
-from .logic.predicate import PredicateMeta, record_clause_source
 from .logic.variables import Var, Trail, unify, deref, walk
 from .terms import Compound, KWTerm, DictTerm, SetTerm
-
-# Pipeline selection flag.  Set to True to use the new pipeline-split path.
-_USE_V2_PIPELINE = True
-
 
 # ── Runtime support ──────────────────────────────────────────────────────────
 
@@ -184,78 +178,6 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     logic_module.constants.update(dummy_logic_module.constants)
     module_dict["$module"] = logic_module
     module.__clausal_module__ = logic_module
-
-
-def _define_predicate_deferred(predicate_node, logic_module, module_dict,
-                               pending):
-    """assertz a clause without compiling.  Record for deferred compilation."""
-    logic_module.define_predicate(predicate_node)
-    functor, arity = head_key(predicate_node.head)
-
-    # Sync to PredicateMeta class — use the normalized clause from the DB.
-    pred_cls = module_dict.get(functor)
-    if isinstance(pred_cls, PredicateMeta):
-        db_clauses = logic_module.db.clauses_for(functor, arity)
-        pred_cls._clauses[:] = db_clauses
-        # Kept in lockstep with compiler_v2 step 4 — see
-        # PredicateMeta._clauses_source.
-        record_clause_source(pred_cls, logic_module.name, module_dict)
-        if pred_cls._signature is None:
-            pred_cls._signature = pred_cls._fields
-
-    pending[(functor, arity)] = pred_cls if isinstance(pred_cls, PredicateMeta) else None
-
-
-def _assert_fact_deferred(term, logic_module, module_dict, pending):
-    """assertz a ground fact without compiling.  Record for deferred compilation."""
-    logic_module.assert_fact(term)
-    functor, arity = head_key(term)
-
-    # Sync to PredicateMeta class — use the normalized clause from the DB.
-    pred_cls = module_dict.get(functor)
-    if isinstance(pred_cls, PredicateMeta):
-        db_clauses = logic_module.db.clauses_for(functor, arity)
-        pred_cls._clauses[:] = db_clauses
-        # Kept in lockstep with compiler_v2 step 4 — see
-        # PredicateMeta._clauses_source.
-        record_clause_source(pred_cls, logic_module.name, module_dict)
-        if pred_cls._signature is None:
-            pred_cls._signature = pred_cls._fields
-
-    pending[(functor, arity)] = pred_cls if isinstance(pred_cls, PredicateMeta) else None
-
-
-def _compile_all_pending(pending, db, module_dict):
-    """Compile each pending predicate once (after all clauses asserted).
-
-    Shallow predicates (declared via ``-shallow``) are compiled in short-stack
-    mode.  Tabled predicates are compiled in trampoline mode and wrapped with
-    the SLG tabling wrapper.  All other predicates use the standard trampoline
-    compilation.
-    """
-    for (functor, arity), pred_cls in pending.items():
-        clauses = db.clauses_for(functor, arity)
-        if db.is_shallow(functor, arity):
-            compile_predicate_shallow(functor, arity, clauses, db,
-                                      globals_=module_dict, pred_cls=pred_cls)
-        else:
-            compile_predicate_trampoline(functor, arity, clauses, db,
-                                         globals_=module_dict, pred_cls=pred_cls)
-
-    # Wrap tabled predicates AFTER all compilation (so cross-predicate
-    # references are resolved before wrapping).  Idempotent: the compile above
-    # already installed the wrapper via ``compiler._install``.
-    for (functor, arity), pred_cls in pending.items():
-        if db.is_tabled(functor, arity):
-            from clausal.logic.tabling import ensure_tabled_wrapper
-            original_fn = (pred_cls._get_dispatch() if pred_cls is not None
-                           else db.get_dispatch(functor, arity))
-            wrapped = ensure_tabled_wrapper(db, functor, arity, original_fn)
-            if wrapped is original_fn:
-                continue
-            if pred_cls is not None:
-                pred_cls._dispatch_fn = wrapped
-            db.set_dispatch(functor, arity, wrapped)
 
 
 # ── Builtins injected into every predicate module ────────────────────────────
@@ -494,50 +416,8 @@ class PredicateLoader(_ClausalSourceLoader):
         module_dict = module.__dict__
         module_dict.update(predicate_builtins)
 
-        if _USE_V2_PIPELINE:
-            _run_v2_pipeline(self, module, module_dict, filename,
-                             self._recover_module_items)
-        else:
-            self._exec_module_v1(module, module_dict)
-
-    def _exec_module_v1(self, module, module_dict):
-        """Original pipeline: exec bytecode → $define_predicate → compile.
-
-        KNOWN GAP, deliberate: this path does NOT carry compiler_v2's step 3c
-        refusal, so a module that -import_from's a defined functor and then
-        defines a clause for it still silently replaces the exporter's clause
-        list here (todo/done/imported-functor-clause-list-replaced-not-extended.md).
-        The deferred helpers record ownership via ``record_clause_source`` so
-        the two paths agree on the bookkeeping, but only v2 consults it.
-        Dormant while ``_USE_V2_PIPELINE`` is True; anyone flipping that flag
-        must port the refusal before trusting this route.
-        """
-        logic_module = LogicModule(module.__name__, module_dict=module_dict)
-        module_dict["$module"] = logic_module
-        module.__clausal_module__ = logic_module
-        pending = {}
-        module_dict["$define_predicate"] = (
-            lambda pred, lm: _define_predicate_deferred(
-                pred, lm, module_dict, pending)
-        )
-        module_dict["$assert_fact"] = (
-            lambda term: _assert_fact_deferred(
-                term, logic_module, module_dict, pending)
-        )
-        module_dict["$check_constant_ground"] = check_constant_ground
-        module_dict["$register_module_constant"] = register_module_constant
-        code = self.get_code(module.__name__)
-        transformer = getattr(self, '_last_transformer', None)
-        module_items = (transformer._module_items if transformer is not None
-                        else self._recover_module_items(self._path))
-        exec_with_import_diagnostics(code, module_dict, module_items,
-                                     self._path)
-        _compile_all_pending(pending, logic_module.db, module_dict)
-        for obj in module_dict.values():
-            if isinstance(obj, PredicateMeta) and hasattr(obj, '_fields'):
-                key = (obj.__name__, len(obj._fields))
-                if not logic_module.db.is_dynamic(*key):
-                    obj._lock()
+        _run_v2_pipeline(self, module, module_dict, filename,
+                         self._recover_module_items)
 
     def _recover_module_items(self, path):
         """Cache-hit path: re-parse .clausal source to recover module_items."""

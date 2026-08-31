@@ -212,7 +212,7 @@ The target must be a predicate the declaring module compiles — one with clause
 
 ### Compilation pipeline
 
-Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` in `compiler._install` — the one place a compiled dispatch function is installed, reached by module load and by every runtime recompile alike. `ensure_tabled_wrapper` makes it idempotent, so the load-time second pass (`compiler_v2` step 6 / `_compile_all_pending`) does not stack a second wrapper on the first.
+Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` in `compiler._install` — the one place a compiled dispatch function is installed, reached by module load and by every runtime recompile alike. `ensure_tabled_wrapper` makes it idempotent, so the load-time second pass (`compiler_v2` step 6) does not stack a second wrapper on the first.
 
 Installing there is what makes tabling survive `assertz`/`asserta`/`retract`: those recompile the predicate, and a recompile that installed the raw dispatch would silently drop memoisation — and, for a left-recursive predicate, termination with it.
 

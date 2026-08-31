@@ -4665,9 +4665,9 @@ class EmbedTransformer(NodeTransformer):
             # Record (name, value) on $module for module_constant/3
             # reflection (docs/builtins.md). $module is ALREADY BOUND by
             # the time this statement executes (set before
-            # exec_with_import_diagnostics runs — see _run_v2_pipeline /
-            # _exec_module_v1 in import_hook.py) — but on the V2 pipeline
-            # it is only a THROWAWAY placeholder Module at this point
+            # exec_with_import_diagnostics runs — see _run_v2_pipeline
+            # in import_hook.py) — but it is only a THROWAWAY placeholder
+            # Module at this point
             # (compile_module below builds the real one afterward and
             # swaps it in); _run_v2_pipeline carries the registrations
             # across that swap (``logic_module.constants.update(

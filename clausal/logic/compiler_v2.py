@@ -3,8 +3,9 @@
 Drives compilation from a list of ModuleItems (Predicate nodes, Directive
 descriptors, Import descriptors) produced by EmbedTransformer.
 
-The old pipeline (exec bytecode → $define_predicate → _compile_all_pending)
-is replaced by:
+The old v1 pipeline (exec bytecode → $define_predicate → compile each pending
+predicate; deleted from import_hook.py after months dormant behind the
+hardcoded ``_USE_V2_PIPELINE`` flag) is replaced by:
 
     compile_module(predicate_nodes, module_items, module_dict, module_name)
 

@@ -76,7 +76,7 @@ Previously, each `$define_predicate` call immediately compiled the predicate wit
 
 ### The fix
 
-With deferred compilation, `$define_predicate` and `$assert_fact` only assert clauses and record the predicate key in a `pending` dict. After `exec()` completes, `_compile_all_pending()` compiles each predicate exactly once with the full clause set:
+With deferred compilation, `$define_predicate` and `$assert_fact` only collect predicate nodes. After `exec()` completes, `compiler_v2.compile_module` asserts and compiles each predicate exactly once with the full clause set:
 
 ```clausal
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:caching_phases"
