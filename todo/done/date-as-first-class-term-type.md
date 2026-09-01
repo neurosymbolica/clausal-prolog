@@ -68,30 +68,30 @@ not a blanket change.
 
 ---
 
-## CLOSED 2026-09-02 — shipped, both lowering paths
+## DONE — closed 2026-09-01
 
-Implemented for `datetime.date`, naive `datetime`/`time`, and `timedelta`
-(exact types only — a subclass may carry state the base constructor cannot
-rebuild, so it keeps the honest fallthrough):
+Fixed by `7fd537b3 compiler: lower datetime values as constructor calls in term_to_ast_expr`,
+which is exactly the whitelist omission this file named: `term_to_ast_expr` had no case for a
+`datetime.date` appearing as a VALUE in a term being lowered into a compiled query, so it fell
+through to `NotImplementedError: unsupported term type date`.
 
-1. **Direct query args** (`clausal/logic/solve.py::_ground_value`): the four
-   datetime types are parameterized like ints/strings — the OBJECT is bound
-   at run time by reference. No reconstruction at all on this path, so
-   tz-AWARE datetimes/times work here too, and 20 distinct dates reuse ONE
-   compiled query (pinned).
-2. **Nested occurrences** (`term_to_ast_expr`, which structural args still
-   reach): a reconstruction branch emitting
-   `__import__('datetime').date(Y, M, D)`-style calls — self-contained, no
-   compiled-namespace dependency. tz-aware values fall through to the honest
-   NotImplementedError on this nested path only.
+Resolved via the second of the two options proposed above — a constructor CALL against a name
+injected into compiled globals (`$date(2021, 6, 30)`), not an `ast.Constant`, because
+`ast.Constant` accepts only None/bool/int/float/complex/str/bytes/Ellipsis and `compile()` rejects
+anything else. `datetime`, `time` and `timedelta` got the same treatment, as this file suggested
+they optionally should.
 
-Head-literal dates already worked (the A02-F003 `$headlit_<id>` opaque-literal
-capture) — the gap really was only input lowering, as diagnosed above.
+This file's own three acceptance checks, re-run against `/workspace/clausal` on 2026-09-01 with a
+module whose only clause is `same_day(D, D)`:
 
-Semantics verified in `tests/test_date_query_args.py`: unify by value; a
-`date` and a `[Y, M, D]` list do NOT unify; flows into
-`days_between/3` (note: the API is snake_case now, and `date/4` is
-`date(Y, M, D, DateObj)` — this todo predates the rename).
+    same_day(date(2024,1,1), X)              -> X = datetime.date(2024, 1, 1)   binds
+    same_day(date(2024,1,1), date(2024,1,1)) -> 1 solution                      unifies
+    same_day(date(2024,1,1), date(2024,1,2)) -> 0 solutions                     fails
 
-Not done here, per the scope note: serialization boundaries keep `[Y,M,D]`
-(JSON), and per-domain corpus interface migration is downstream work.
+The **Scope note** above still stands and is not closed by this: `[Y,M,D]` remains at
+SERIALIZATION boundaries, because a `datetime.date` is not JSON-serializable. Migrating a
+rulebase's public interface to `date` args is still a per-domain, opt-in change.
+
+Ordering was never part of this defect. A real `datetime.date` has always compared correctly; a
+domain-local compound merely SPELLED `date(Y, M, D)` is a different term and was mis-ordered for
+an unrelated reason — see `todo/done/msort-orders-compound-integer-args-as-strings.md`.
