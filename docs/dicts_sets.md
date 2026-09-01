@@ -117,6 +117,51 @@ partial(PERSON, NAME) <- sub_dict({"name": NAME, "role": "admin"}, PERSON)
 
 ---
 
+## The Python dict surface
+
+Alongside the KEY-first `dict_*` family below, dicts carry a first-class
+surface that mirrors Python's own dict API one-to-one. These are always
+available — no import required — and each maps onto the Python operation a
+reader already knows:
+
+| Operation | Clausal form | Python analogue | On an absent key |
+|---|---|---|---|
+| read (strict) | `V is P["k"]` | `d[k]` | **throws** `existence_error(dict_key, …)` |
+| read (soft) | `get(P, "k", V)` | `d.get(k)` | **fails** the clause |
+| read (defaulted) | `get(P, "k", V, Default)` | `d.get(k, default)` | binds `Default` |
+| read (Kleene) | `tri_get(P, "k", V)` | — | binds `Undefined` |
+| membership | `"k" in P` | `k in d` | fails |
+| set (functional) | `P2 is {**P, "k": V}` | `{**d, k: v}` | always succeeds; last-wins |
+| default-merge | `P2 is {"k": Default, **P}` | `{k: default, **d}` | `P` wins if present |
+| delete (functional) | `delete(P, "k", P2)` | `del d[k]` | **throws** |
+
+```clausal
+role_of(PROFILE, R) <- (R is PROFILE["role"])
+
+city_or_default(PROFILE, C) <- get(PROFILE, "city", C, "unknown")
+
+promote(PROFILE, P2) <- (P2 is {**PROFILE, "role": "admin"})
+
+drop_draft(PROFILE, P2) <- delete(PROFILE, "draft", P2)
+```
+
+Choosing a read: the strict subscript is for keys the clause is entitled to
+assume (a typo should be loud); `get/3` is for keys whose absence should just
+fail this one rule rather than abort the query; `get/4` when a default is
+the honest answer; `tri_get/3` when absence means the three-valued
+`Undefined`, not failure.
+
+Keys may be strings, ints, or atoms — an atom key and the same-spelled
+string key are **distinct** (atoms do not unify with strings), exactly as in
+head-position dict patterns above.
+
+All of these accept a plain Python `dict` argument wherever a `DictTerm` is
+accepted (the two unify and compare equal), as does the whole `dict_*`/`set_*`
+family below. `length/2` does **not** count dict keys — a dict is not a
+sequence; use `dict_size/2`.
+
+---
+
 ## SetTerm
 
 `SetTerm` is a unification-aware set. Elements must be ground (hashable). Backed by `frozenset` for immutability.

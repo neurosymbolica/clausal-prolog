@@ -85,7 +85,7 @@ Notation in signature lines:
 | [CLP(ℤ) — Integer Constraints](#clpfd-integer-constraints) | in_domain/3, label/1, all_different/1, structural_eq/2, sum_/3, scalar_product/4, element/3, circuit/1 |
 | [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | sat/1, taut/2, sat_count/2, bool_labeling/1 |
 | [Type Checks](#type-checks) | var/1, nonvar/1, atom/1, is_str/1, number/1, integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1, must_be/2, can_be/2 |
-| [Dict and Set Predicates](#dict-and-set-predicates) | is_dict/1, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
+| [Dict and Set Predicates](#dict-and-set-predicates) | get/3,4, tri_get/3, delete/3, is_dict/1, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
 | [Arithmetic](#arithmetic) | between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4, lcm/3, exp_mod/4, popcount/2, msb/2, lsb/2 |
 | [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
 | [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2,3, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
@@ -1159,18 +1159,29 @@ assertz that `Term` could possibly be of the given type. Succeeds if Term is unb
 
 ## Dict and Set Predicates
 
-Dict and set builtins operate on `DictTerm` and `SetTerm` values. Plain Python `dict` and `set` are not accepted. See [Dicts and Sets](dicts_sets.md) for the full design.
+Dict and set builtins operate on `DictTerm`/`SetTerm` values **and equally on plain Python `dict`/`set`** — the plain flavor is accepted wherever the Term flavor is (they unify and compare equal; outputs bind the Term flavor). See [Dicts and Sets](dicts_sets.md) for the full design, including the always-available [Python dict surface](dicts_sets.md#the-python-dict-surface): `P[key]` subscript, `get/3`, `get/4`, `tri_get/3`, `key in P`, `{**P, k: v}` splat-merge, and `delete/3`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/dict_set.py`
     **Python tests:** `tests/test_dict_set_builtins.py` (79 tests)
     **Fixture:** `tests/fixtures/dict_set_builtins.clausal`
 
+### `get/3`, `get/4`, `tri_get/3`, `delete/3` — the dict surface
+
+The DICT-first read/removal family mirroring Python's `dict.get`/`del`:
+`get(Dict, Key, Value)` soft-fails on an absent key, `get(Dict, Key, Value,
+Default)` binds the default, `tri_get(Dict, Key, Value)` binds `Undefined`,
+and `delete(Dict, Key, NewDict)` removes functionally (throws on absent).
+The strict read is the subscript, `V is Dict[Key]`. Documented in full at
+[The Python dict surface](dicts_sets.md#the-python-dict-surface).
+
+---
+
 ### `is_dict/1`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:is_dict_1"
 ```
-Succeeds if `Term` is a `DictTerm`.
+Succeeds if `Term` is a `DictTerm` or a plain `dict`.
 
 ---
 

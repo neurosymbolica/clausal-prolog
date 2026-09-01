@@ -106,3 +106,26 @@ effectively already realized at the runtime level:
 4. **`length/2` on DictTerm** — a domain (diversity) hit `length/2` returning None on a `DictTerm` and used
    `dict_size/2` instead. Decide whether `length/2` should also count dict keys, or standardize on
    `dict_size/2` and document it.
+
+---
+
+## CLOSED 2026-09-02 — promotion finalization complete
+
+The runtime shipped 2026-07-14 and the corpus migration is reported complete
+(above). The four finalization items:
+
+1. **Language-reference docs — DONE.** `docs/dicts_sets.md` gains "The
+   Python dict surface": the full pinned table (`P[k]` / `get/3` / `get/4` /
+   `tri_get/3` / `in` / `{**P, k: v}` / `delete/3`), read-choice guidance,
+   atom-vs-string key distinctness, and the plain-dict acceptance rule.
+2. **Reserved siblings (`discard/3`, `pop/4`, `pop/5`) — still YAGNI**, by
+   design ("implement on demand"); no consumer has appeared. The names stay
+   reserved in this file's table and in done/dict-delete-builtin.md.
+3. **Builtins catalog — DONE.** `docs/builtins.md`: the family is in the
+   section summary table and has a catalog entry pointing at the full doc;
+   the stale "plain Python dict and set are not accepted" sentence is
+   corrected (falsified by the 2026-09-02 widening,
+   todo/done/dictterm-only-builtins-sweep.md).
+4. **`length/2` on DictTerm — decided + documented:** standardize on
+   `dict_size/2`; a dict is not a sequence, `length/2` does not count keys.
+   Stated in the new docs section.
