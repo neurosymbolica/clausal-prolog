@@ -495,3 +495,27 @@ class TestInitFinalInjection:
             results.append(deref(x))
         # Original + init copy + final copy = 3 solutions
         assert results.count("one") == 3
+
+
+class TestNestedVarSubstitution:
+    """A var matched inside a quoted PATTERN flows into the quoted OUTPUT.
+
+    Gap 2 of todo/term-expansion-compile-time-predicate-synthesis.md (filed
+    2026-07-03): ``TermExpansion(q(key(KEY)), [q(marker(KEY))], S, S)`` used
+    to leave ``marker/1`` existing but EMPTY — the matched KEY never reached
+    the registered output facts.  Fixed since; pinned here end-to-end.
+    """
+
+    def test_matched_var_registers_in_output_facts(self):
+        # nv
+        mod = _load_module(
+            "_exp_nested_var",
+            os.path.join(FIXTURES_DIR, "expansion_nested_var.clausal"),
+        )
+        lm = mod.__dict__["$module"]
+        x = Var()
+        results = [deref(x) for _ in call("marker", x, module=lm)]
+        names = sorted(getattr(r, "__name__", str(r)) for r in results)
+        assert names == ["income", "stays"], (
+            f"matched KEY must flow into the quoted output; got {results!r}"
+        )
