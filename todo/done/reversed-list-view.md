@@ -73,3 +73,41 @@ be reversed once `BS` is bound; a forward copy of `BS` would be incorrect.
   boundary; with a prototype + benchmark showing the O(1) / re-reversal-free
   win and no behavioural change on the existing suite. Then file the
   implementation as its own todo.
+
+---
+
+## INVESTIGATED 2026-09-02 — recommendation: do not build the view
+
+Evidence gathered in-tree:
+
+1. **Consumer churn is the deciding cost, and this codebase has already paid
+   it once.** A first-class reversed view must be honored at every site that
+   dispatches on sequence type: 51 Seg-dispatch sites across 13 Python files
+   (`isinstance(..., SegList)` / `normalize_seg_input`), plus 19 SegList
+   touchpoints in the C `_list_unify.c` alone. The C3 "SegString blind spot"
+   cluster is the recorded precedent: dispatch sites that historically grew
+   only a SegList arm SILENTLY DROPPED satisfiable goals until
+   `normalize_seg_input` was invented to funnel them (see
+   clausal/logic/runtime/_seg_helpers.py's own docstring). A new lazy term
+   type re-opens exactly that class of silent gap, at every one of those
+   sites, for both Python and C consumers.
+2. **The allocation win is already banked for the common case.**
+   `reverse/2`'s destructive-reuse variant shipped 2026-09-02
+   (todo/done/reverse-in-place-destructive-reuse.md): the unshared forward
+   mode reverses in place with zero allocation. What the view would add on
+   top is O(1) SHARED reversal and free re-reversal — and nothing in-tree is
+   reverse-hot (the only non-test caller is clausal/modules/graphs.py; no
+   corpus hotspot names reverse).
+3. **The partial-list mode gap is real but narrow.** `reverse([1, *BS, 9], R)`
+   with BS unbound still has no solution (the todo's 2026-06-26 verification
+   stands; a query-arg SegList can't even be lowered — separate limitation).
+   The correct reversed shape needs per-segment orientation, i.e. the full
+   view machinery — but NO caller has asked for it in the 10 weeks since
+   filing. If one does, file it as its own narrow todo and weigh the churn
+   then, with the caller's shape in hand.
+
+**Decision:** surface-vs-internal is moot — neither pays. Keep the copying
+path + the DR fast path; leave partial-list reversal a documented
+no-solution until a real caller needs it. (If it is ever built: internal
+only, materialized at every API boundary, never a term users can hold —
+option 1's costs in the open questions above are the reason.)
