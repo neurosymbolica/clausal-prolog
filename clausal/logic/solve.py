@@ -34,6 +34,7 @@ predicate calls.
 
 from __future__ import annotations
 
+import datetime as _datetime
 import sys
 from typing import Any, Iterator
 
@@ -243,6 +244,14 @@ def _goal_cache_key(goal: Any, module: Module):
         return None
 
 
+# The datetime scalar types _templatize_query_goal parameterizes (see
+# _ground_value): first-class value terms the input-lowering path otherwise
+# rejects. Exact types — subclasses are deliberately excluded.
+_DATETIME_QUERY_SCALARS = (
+    _datetime.date, _datetime.datetime, _datetime.time, _datetime.timedelta,
+)
+
+
 def _templatize_query_goal(goal: Any):
     """Parameterize the fully-ground top-level arguments of a predicate-call goal.
 
@@ -278,6 +287,14 @@ def _templatize_query_goal(goal: Any):
         if is_var(dv):
             return None
         if type(dv) in (int, float, complex, bool, str, bytes) or dv is None:
+            return dv
+        # datetime values are first-class scalar terms at runtime (immutable,
+        # hashable, unify by value — `Date/4` produces them, `DaysBetween`
+        # consumes them), so parameterize them like ints: the OBJECT is bound
+        # at run time, which also spares tz-aware values any reconstruction.
+        # Exact types only — a subclass may carry state the base constructor
+        # cannot rebuild, so it keeps the structural fallback.
+        if type(dv) in _DATETIME_QUERY_SCALARS:
             return dv
         if is_atom(dv):
             return dv
