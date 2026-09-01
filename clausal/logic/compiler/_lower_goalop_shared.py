@@ -411,6 +411,7 @@ def _lower_shared_body(
                     "append": "$dr_append__3",
                     "dict_put": "$dr_dict_put__4",
                     "set_union": "$dr_set_union__3",
+                    "reverse": "$dr_reverse__2",
                 }
                 fname = _DR_NAME_MAP.get(fname, fname)
             return _compile_predicate_call_impl(

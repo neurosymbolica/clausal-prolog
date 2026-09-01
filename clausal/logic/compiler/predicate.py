@@ -158,6 +158,7 @@ _SetLiteral_t = _SetLiteral
 
 from clausal.logic.builtins.lists import (  # noqa: F401
     _append_dr__3 as _dr_append_fn,
+    _reverse_dr__2 as _dr_reverse_fn,
 )
 from clausal.logic.builtins.dict_set import (  # noqa: F401
     _dict_put_dr__4 as _dr_dict_put_fn,
@@ -844,6 +845,7 @@ def compile_predicate_trampoline(
     # that rewritten goal names (e.g. _dr_append__3) resolve at runtime via
     # the locked-dispatch fast path.
     base_globals[_disp_key("$dr_append__3", 3)] = _dr_append_fn
+    base_globals[_disp_key("$dr_reverse__2", 2)] = _dr_reverse_fn
     base_globals[_disp_key("$dr_dict_put__4", 4)] = _dr_dict_put_fn
     base_globals[_disp_key("$dr_set_union__3", 3)] = _dr_set_union_fn
 

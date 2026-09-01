@@ -716,3 +716,99 @@ class TestDestructiveReuseIntegration:
         X2 = Var()
         results = _snap(fn, lambda: deref(X2), [1, 2], X2, trail)
         assert [1, 2, "x"] in results
+
+
+class TestReverseDR:
+    """Test _reverse_dr__2 directly (same refcount calibration as append)."""
+
+    def _run(self, lst, rev, trail):
+        from clausal.logic.builtins.lists import _reverse_dr__2
+        solutions = []
+        gen = _reverse_dr__2(None, None, None, None, lst, rev, trail)
+        for parent, value in gen:
+            if value is not DONE:
+                solutions.append(deref(rev))
+        return solutions
+
+    def test_unique_list_reversed_in_place(self):
+        # nv
+        trail = Trail()
+        source_var = Var()
+        the_list = [1, 2, 3]
+        list_id = id(the_list)
+        unify(source_var, the_list, trail)
+        del the_list
+
+        result_var = Var()
+        solutions = self._run(source_var, result_var, trail)
+        assert solutions == [[3, 2, 1]]
+        assert id(solutions[0]) == list_id, "expected in-place reversal"
+
+    def test_shared_list_not_mutated(self):
+        # nv
+        trail = Trail()
+        source_var = Var()
+        the_list = [1, 2, 3]
+        alias = the_list
+        unify(source_var, the_list, trail)
+
+        result_var = Var()
+        solutions = self._run(source_var, result_var, trail)
+        assert solutions == [[3, 2, 1]]
+        assert alias == [1, 2, 3], "shared list must not be mutated"
+        _ = alias
+
+    def test_fallback_for_string(self):
+        # nv — strings are immutable; the copying path preserves the str type
+        trail = Trail()
+        result_var = Var()
+        assert self._run("abc", result_var, trail) == ["cba"]
+
+    def test_backward_mode_falls_back(self):
+        # nv — reverse(-, +): nothing to mutate; standard bidirectional path
+        trail = Trail()
+        out_var = Var()
+        from clausal.logic.builtins.lists import _reverse_dr__2
+        gen = _reverse_dr__2(None, None, None, None, out_var, [3, 2, 1], trail)
+        solutions = []
+        for parent, value in gen:
+            if value is not DONE:
+                solutions.append(deref(out_var))
+        assert solutions == [[1, 2, 3]]
+
+
+class TestReverseEligibility:
+    def test_reverse_eligible_with_evaluate(self):
+        """reverse(Temp, Out) where Temp is created by Evaluate."""
+        # nv
+        Temp, Out = Var(), Var()
+        head = Compound("process", (Out,))
+        body = [
+            Evaluate(left=Temp, right=[1, 2, 3]),
+            Call(func=LoadName(name="reverse"), args=[Temp, Out], kwargs=[]),
+        ]
+        clause = Clause(head=head, body=body)
+        assert 1 in _find_destructive_reuse_goals(clause)
+
+    def test_reverse_head_var_not_eligible(self):
+        # nv
+        In, Out = Var(), Var()
+        head = Compound("process", (In, Out))
+        body = [Call(func=LoadName(name="reverse"), args=[In, Out], kwargs=[])]
+        clause = Clause(head=head, body=body)
+        assert 0 not in _find_destructive_reuse_goals(clause)
+
+    def test_reverse_with_evaluate_end_to_end(self):
+        """make(Out) <- T = [1, 2, 3], reverse(T, Out)."""
+        # nv
+        T, Out = Var(), Var()
+        head = Compound("make", (Out,))
+        body = [
+            Evaluate(left=T, right=[1, 2, 3]),
+            Call(func=LoadName(name="reverse"), args=[T, Out], kwargs=[]),
+        ]
+        db, fn = make_pred("make", 1, [(head, body)])
+        trail = Trail()
+        X = Var()
+        results = _snap(fn, lambda: deref(X), X, trail)
+        assert results == [[3, 2, 1]]

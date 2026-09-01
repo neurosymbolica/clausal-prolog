@@ -328,6 +328,33 @@ def _last__2(this_generator, _proceed, _fail, _catcher, lst, elem, trail):
     yield (_fail, DONE)
 
 
+def _reverse_dr__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
+    """Destructive-reuse variant of reverse/2.
+
+    Forward mode over an unshared plain list: reverse it in place
+    (``list.reverse``), no allocation.  Every other shape — shared list,
+    str/bytes (immutable; the copying path preserves the sequence type),
+    Seg*, backward mode — falls back to the standard implementation.
+    Selected by the compiler's destructive-reuse analysis only when the
+    source var is dead after the goal, unaliased with head vars, and the
+    prefix is deterministic (see compiler/destructive_reuse.py); the
+    refcount gate guards object-level sharing at run time, exactly as in
+    ``_append_dr__3``.
+    """
+    lst_val = deref(lst)
+    if (_HAS_REFCOUNT and isinstance(lst_val, list)
+            and _sys.getrefcount(lst_val) <= 3):
+        lst_val.reverse()
+        mark = trail.mark()
+        if unify(rev, lst_val, trail):
+            yield (_proceed, None)
+        trail.undo(mark)
+        yield (_fail, DONE)
+        return
+    # Fallback to standard reverse
+    yield from _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail)
+
+
 @_trampoline_builtin("reverse", 2)
 def _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
     """reverse(List, Rev) — Rev is the reverse of List.

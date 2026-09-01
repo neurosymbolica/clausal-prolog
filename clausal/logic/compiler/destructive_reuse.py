@@ -46,6 +46,7 @@ _DR_CANDIDATES: dict[tuple[str, int], int] = {
     ("append", 3): 0,       # append(Source, Extra, Result)
     ("dict_put", 4): 2,     # dict_put(Key, Value, Source, Result)
     ("set_union", 3): 0,    # set_union(Source, S2, Result)
+    ("reverse", 2): 0,      # reverse(Source, Result)
 }
 
 
