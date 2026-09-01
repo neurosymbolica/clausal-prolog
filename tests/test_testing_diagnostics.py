@@ -355,3 +355,50 @@ def test_run_test_does_not_diagnose_by_default():
         r = run_test(mod, "first conjunct fails")
     assert not r.passed
     assert r.diagnostic is None
+
+
+# ── generic Compound vs declared term confusion ──────────────────────────────
+
+COMPOUND_CONFUSION_SRC = """
+-private([cite(A)])
+
+make(T) <- functor(T, "cite", 1)
+
+Test("citation term mismatch") <- (
+    make(T2),
+    T2 is cite(_)
+),
+"""
+
+
+def test_generic_compound_vs_declared_term_is_named(capsys, tmp_path):
+    # `T2 = cite(_)` failing on the goal `T2 is cite(_)` reads as a
+    # contradiction: the binding renders character-for-character as what the
+    # author asked for. The only thing that matters — one side is a generic
+    # Compound, the other the declared term class — must be said out loud.
+    # (todo/a-generic-compound-renders-identically-to-a-declared-term.md,
+    # option 1: only in failure diagnostics.)
+    p = write(tmp_path, "cc.clausal", COMPOUND_CONFUSION_SRC)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "goal 2 of 2 failed" in out
+    assert "generic compound" in out
+    assert "cite/1" in out
+    assert "T2" in out
+
+
+def test_no_confusion_note_without_a_declared_class(capsys, tmp_path):
+    # A generic compound whose name matches nothing declared is not confusing
+    # — no note.
+    src = """
+    make(T) <- functor(T, "zote", 1)
+
+    Test("undeclared functor mismatch") <- (
+        make(T2),
+        T2 is 42
+    ),
+    """
+    p = write(tmp_path, "nc.clausal", src)
+    assert main([str(p)]) == 1
+    out = capsys.readouterr().out
+    assert "generic compound" not in out

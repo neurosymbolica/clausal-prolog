@@ -483,11 +483,10 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
                         "bindings and nearest-solution analysis skipped"
                     )
                     return
-                _report_bindings(
-                    diag, prefix,
-                    _collect_named(prefix, reified and reified[:failing - 1]),
-                    failing,
-                )
+                named = _collect_named(
+                    prefix, reified and reified[:failing - 1])
+                _report_bindings(diag, prefix, named, failing)
+                _note_generic_compound_confusion(diag, mod.__dict__, named)
                 _report_nearest(diag, goal, reified_goal, logic_module, deadline, path)
                 _report_wrong_value(
                     diag, goal, prefix, logic_module, deadline, path)
@@ -693,6 +692,65 @@ def _report_bindings(diag, prefix, named, failing) -> None:
     if not diag.bindings:
         span = "goal 1" if failing == 2 else f"goals 1..{failing - 1}"
         diag.bindings_note = f"(none from {span})"
+
+
+def _generic_compounds_in(value, depth: int = 0):
+    """Yield every generic ``Compound`` inside *value* (bounded depth)."""
+    from clausal.logic.variables import deref, is_var
+    from clausal.terms import Compound
+
+    if depth > 6:
+        return
+    value = deref(value)
+    if is_var(value):
+        return
+    if isinstance(value, Compound):
+        yield value
+        for arg in value.args:
+            yield from _generic_compounds_in(arg, depth + 1)
+    elif isinstance(value, (list, tuple)):
+        for element in value:
+            yield from _generic_compounds_in(element, depth + 1)
+
+
+def _note_generic_compound_confusion(diag, namespace, named) -> None:
+    """Say out loud when a binding holds a generic ``Compound`` shadowing a
+    declared term class of the same name/arity.
+
+    ``T2 = cite(_)`` failing on the goal ``T2 is cite(_)`` reads as a
+    contradiction: the two render identically, and the only thing that
+    matters — one side is a ``clausal.terms.Compound``, the other a declared
+    ``PredicateMeta`` instance, and they never unify — is invisible.  Option 1
+    of todo/done/a-generic-compound-renders-identically-to-a-declared-term.md:
+    draw the distinction only here, in failure diagnostics, where the reader
+    pays for it exactly when confused."""
+    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.variables import deref
+
+    if not named:
+        return
+    seen: set[str] = set()
+    for name, var in named:
+        for compound in _generic_compounds_in(deref(var)):
+            functor = compound.functor
+            if not isinstance(functor, str):
+                continue
+            arity = len(compound.args)
+            declared = namespace.get(functor)
+            if not (isinstance(declared, PredicateMeta)
+                    and len(declared._fields or ()) == arity):
+                continue
+            key = f"{functor}/{arity}"
+            if key in seen:
+                continue
+            seen.add(key)
+            diag.notes.append(
+                f"`{name}` holds a GENERIC compound {key}, not the declared "
+                f"{key} term this module constructs — the two render "
+                f"identically and never unify. A generic compound comes from "
+                f"functor/3 with a string name, unpack/2, or a term built "
+                f"against another module's classes."
+            )
 
 
 def _pair_vars(runtime, reified, out) -> bool:
