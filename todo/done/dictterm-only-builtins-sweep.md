@@ -30,3 +30,35 @@ strict sibling already accepts it) vs keep-DictTerm-only (fine while every
 spelling agrees and the failure is loud). The property to enforce is no silent
 half-acceptance; a table of spelling × type → behaviour is probably the
 fastest way to see the disagreements.
+
+---
+
+## CLOSED 2026-09-02 — swept, all listed candidates widened
+
+The behaviour table is pinned executable in
+`tests/test_plain_dict_set_widening.py` (30 cases, mixed flavors included).
+Decision applied uniformly: ACCEPT the plain type — for every listed builtin a
+strict sibling (subscript, `__unify__`, structural `==`, the `get/3` family /
+`SetTerm.__eq__`) already accepted it, which is exactly the rule this file
+proposed.
+
+- `clausal/logic/builtins/dict_set.py`: two helpers, `_dict_input` /
+  `_set_input` (Term-or-plain → underlying mapping/element-set, `None`
+  otherwise; documented no-mutation rule since the plain flavor IS the
+  caller's object). Every `dict_*` and `set_*` guard now routes through them:
+  is_dict, dict_size/keys/values, dict_pairs (decompose), dict_get, dict_put,
+  dict_put_pairs, dict_remove, dict_merge, gen_dict, sub_dict; is_set,
+  set_size, set_list (decompose), set_union/intersection/subtract/sym_diff,
+  set_subset, set_disjoint, set_add, set_remove, gen_set. Outputs still bind
+  the Term flavor, which unifies with either.
+- `(K, V) in D` pair mode (`_in_iter`,
+  `clausal/logic/runtime/body_star_unify.py`): a plain dict now iterates
+  ITEMS; it iterated keys, which never unify with the tuple pattern — the
+  silent-no-solutions case this file recorded from 2026-08-31. Key mode
+  unchanged.
+- The `_dr` destructive-reuse variants keep their Term-only fast path (the
+  refcount trick needs the wrapper) and FALL BACK to the now-widened standard
+  implementations, so plain inputs work there too — no silent gap.
+- Checked, not a live candidate: the `<<` DictSelect operator the module
+  docstring mentions — `_dict_select` no longer exists anywhere in the tree
+  (stale comment, left for a docs pass).

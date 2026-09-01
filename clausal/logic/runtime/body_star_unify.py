@@ -443,7 +443,10 @@ def _in_iter(collection, pair_mode):
     (e.g. ``(KEY, VALUE) in DICT``).  For DictTerms, pair_mode switches
     from key iteration to (key, value) pair iteration.
     """
-    if pair_mode and isinstance(collection, DictTerm):
+    if pair_mode and isinstance(collection, (DictTerm, dict)):
+        # A plain dict is a dict-valued term too (the dictterm-only sweep):
+        # without this arm, pair mode iterated its KEYS, which never unify
+        # with the tuple pattern — silent no-solutions.
         return collection.items()
     return iter(collection)
 
