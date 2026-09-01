@@ -185,7 +185,7 @@ classes:
   consecutive dry passes or a per-session token budget, whichever first. Cores
   (audits 1–4) warrant the most passes. The mode dimension is not optional — a
   numeric-head-literal bug survived 8085 tests because every test used input
-  mode only (`todo/audit-tests-input-output-mode-coverage.md`).
+  mode only (`todo/done/audit-tests-input-output-mode-coverage.md`).
 - **Run to confirm:** every correctness finding must be reproduced by an
   executed pytest before it is logged as confirmed. Runs are **per-file**
   (`pytest tests/audit_2026_07_05/test_NN_*.py`) — never the whole suite (OOM).
