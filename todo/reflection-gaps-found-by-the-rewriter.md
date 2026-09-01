@@ -62,3 +62,31 @@ in this corpus (`Factorial(N=0, RESULT=1),`).
 
 The rewriter refuses to touch a clause whose head has keyword arguments, which
 costs it those folds.
+
+---
+
+## STATUS 2026-09-02 — gaps 1 and 2 closed; gap 3 parked as a design question
+
+1. **FIXED.** `_subterms` (`clausal/modules/reflection.py`) now derefs on
+   entry, so `reified_subterm/2` follows bound logic variables — matching the
+   deref discipline `replace_subterm`'s `_rewrites` already had (that walker
+   was audited and was NOT blind). "Build the answer, then check it" is an
+   available shape now; a pre-condition remains the better rule design and
+   head_fold keeps its `Substitutable/1` gate. The pinning test flipped to
+   the new contract:
+   `test_occurs_check_sees_into_a_freshly_built_term`.
+2. **DOCUMENTED.** The `[*XS]`-matches-a-string recursion trap and its
+   `++isinstance(X, list)` gate are now in `docs/strings_as_lists.md`
+   (Pattern Matching) with a pointer from `docs/bytes_as_lists.md`. No lint —
+   the note names the in-tree example (head_fold's Foldable gate).
+3. **PARKED — not a plain hole.** Dropping head keyword names is the recorded
+   A11-F010 decision: keyword heads canonicalize to the runtime's
+   first-definition field order so reified positional args match what the
+   runtime enumerates (`kp(y=20, x=10)` → args `[10, 20]`), and the F010 pin
+   (`test_F010_keyword_head_reify_matches_runtime_order`) explicitly allows
+   either shape. Preserving kwargs pairs instead would improve render
+   fidelity and let the rewrite driver lift its `_head_has_keywords` skip,
+   but every cross-representation matcher that compares reified heads
+   against runtime-shaped patterns would need the same canonicalization
+   moved into matching. That is a fidelity-vs-canonicalization design call
+   reversing F010, not a patch — decide it deliberately.

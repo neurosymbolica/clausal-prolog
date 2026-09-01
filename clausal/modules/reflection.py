@@ -142,6 +142,13 @@ def _reified_file_item_2(this_generator, _proceed, _fail, _catcher,
 
 
 def _subterms(term):
+    # Deref on entry, so the walk follows BOUND logic variables — a term a
+    # rule just rebuilt holds vars bound to the original's structure, and a
+    # walk that stops at them makes every "build, then check" post-condition
+    # pass vacuously (the head-fold's did; see gap 1 of
+    # todo/reflection-gaps-found-by-the-rewriter.md).  Matches the deref
+    # discipline of replace_subterm's ``_rewrites``.
+    term = deref(term)
     yield term
     if is_term_instance(term):
         for field_name in term_field_names(term):

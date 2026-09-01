@@ -138,6 +138,12 @@ the type — exactly as they bind to `str` substrings under
 (`[*A, *B]`, `[*_, X, *_]`) match `bytes` too, and enumerate splits on
 backtracking just as they do for lists and strings.
 
+The flip side is that `[*XS]` is **not** a list test — a `bytes` (or `str`)
+matches it too, and a recursive list-walker destructures a `bytes` byte by
+byte instead of passing it through as a leaf. See the note under
+[Pattern Matching in strings-as-lists](strings_as_lists.md#pattern-matching)
+for the explicit `++isinstance(X, list)` gate.
+
 ---
 
 ## DCGs over Binary Protocols

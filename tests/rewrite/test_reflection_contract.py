@@ -93,19 +93,19 @@ def test_reified_subterm_walks_goal_lists_and_finds_variables(tmp_path):
     assert not occurs(rest, "S")  # S is not -- which is what makes it foldable
 
 
-def test_occurs_check_cannot_see_into_a_freshly_built_term(tmp_path):
-    """A legality check must be a PRE-condition, never a post-condition.
+def test_occurs_check_sees_into_a_freshly_built_term(tmp_path):
+    """``reified_subterm`` follows bound logic variables while walking.
 
-    ``reified_subterm`` finds a variable inside a term it was handed, and does
-    NOT find the same variable inside the same term after a rule has rebuilt it
-    -- the rebuilt structure holds logic variables that the walk does not
-    follow.  So "construct the answer, then check the answer is sound" is not
-    an available shape here: whatever a rule needs to guarantee, it has to
-    establish about its INPUT, before building anything.
-
-    This is not hypothetical.  The head-fold first checked its rewritten head
-    this way, the check passed vacuously, and a clause with a star-unpacked
-    list head came out of the rewriter with its list element unbound.
+    It used not to: a term a rule had just rebuilt holds logic variables bound
+    to the original's structure, and the walk stopped at them — so "construct
+    the answer, then check the answer is sound" was not an available shape,
+    and the head-fold's post-condition once passed vacuously (a clause with a
+    star-unpacked list head came out with its element unbound).  The walk now
+    derefs as it descends (matching ``replace_subterm``'s ``_rewrites``), so a
+    variable is found in the rebuilt term exactly as in the original.  A
+    PRE-condition is still the better rule design — it refuses before building
+    anything — but a post-check is no longer a silent no-op.  See
+    todo/reflection-gaps-found-by-the-rewriter.md, gap 1.
     """
     module = _rules_module(tmp_path, "_spike_rebuilt", """\
         -import_from(reflection, [reified_subterm, Goal, Variable])
@@ -117,7 +117,7 @@ def test_occurs_check_cannot_see_into_a_freshly_built_term(tmp_path):
         """)
     head = _reify_stmt("star(P, [a, *T]) <- (helper(P), T is [b])\n").head
     assert any(True for _ in call("SeesDirect", head, "T", module=module))
-    assert not any(True for _ in call("SeesRebuilt", head, "T", module=module))
+    assert any(True for _ in call("SeesRebuilt", head, "T", module=module))
 
 
 def test_render_of_mutated_clause_emits_valid_clausal():

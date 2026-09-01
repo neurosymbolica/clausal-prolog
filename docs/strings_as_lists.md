@@ -53,6 +53,17 @@ This is the same pattern syntax used for lists — no special string patterns
 needed. when matching a string, `*Prefix` binds to a substring; when matching
 a list, it binds to a sublist.
 
+**`[*XS]` is not a list test.** Because a string unifies with list patterns,
+`Listish([*XS])` succeeds for `Listish("met")` too — binding `XS` to the whole
+string — and `[H, *T]` destructures a string one character at a time. A
+recursive list-walking predicate written the obvious way therefore walks
+*into* every string in its input instead of treating it as a leaf. When a
+predicate must recurse over lists but pass strings through whole, gate the
+destructuring clause explicitly: `ISLIST is ++isinstance(X, list),
+ISLIST is True` before matching `[H, *T]`. (Found the expensive way by the
+rewriter's rule walker — see `clausal/rewrite/rules/head_fold.clausal` for
+the in-tree example of the gate.)
+
 ---
 
 ## List Predicates on Strings
