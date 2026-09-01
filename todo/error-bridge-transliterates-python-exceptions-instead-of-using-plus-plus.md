@@ -1,19 +1,21 @@
 # The error bridge transliterates Python exceptions instead of using `++`
 
 **Raised:** 2026-09-01, from the ISO-compatibility question on the `date/3`
-migration. Full analysis:
-`clausify-executor-train/docs/analysis/iso-prolog-error-handling-and-the-python-bridge.md`
+migration. The full written analysis lives in the downstream (closed) notes; the
+measured evidence it rests on is reproduced in full below, so this file stands
+on its own.
 
 **Routed here 2026-09-01 (operator):** engine bug-fix work happens in this tree.
 The copy in `/workspace/clausal/todo/` is the original; this is the one to work.
 
 **A SECOND CALLER NOW WANTS IT, which raises the priority.** Retiring
 `ymd_date/4` stalled on exactly this. `ymd_date/4` FAILS on a calendrically
-invalid triple; the `date/3` TERM RAISES. `kit/rolling_window.clausal` needs the
-failure — its E-malformed tests require `[2024, 2, 30]` to yield no solution and
-`interval_offsets` to skip it silently, byte-for-byte with
-`eu/schengen_90_180_max_stay`. A working `catch/3` would let a caller convert
-the raise back into a failure at the call site and the retirement could finish.
+invalid triple; the `date/3` TERM RAISES. A downstream library module needs the
+FAILURE: its malformed-input tests require a calendrically invalid triple such as
+`[2024, 2, 30]` to yield no solution and the surrounding predicate to skip it
+silently, matching an existing implementation byte-for-byte. A working `catch/3`
+would let a caller convert the raise back into a failure at the call site and the
+retirement could finish.
 Today it cannot: the only catcher that matches is a bare CamelCase functor,
 which ISO reads as a VARIABLE — so a specific catcher silently widens to a
 catch-all. See `clausal/todo/port-date4-coverage-to-date3-then-delete-it.md`.
@@ -52,9 +54,9 @@ Clausal and a **variable** in ISO. Translating `catch(G, ValueError(M), R)`
 outward, a translator that resolves it as a variable produces
 `catch(G, Catcher, R)` with `Catcher` free — **a catcher for one specific error
 silently becomes a catch-everything**, swallowing errors meant to propagate. It
-fails in the unsafe direction with no syntax error to warn anyone. For the legal
-formalizations this is the difference between "this rule did not apply" and
-"something went wrong and we hid it".
+fails in the unsafe direction with no syntax error to warn anyone. For a rulebase
+whose answers are relied on, this is the difference between "this rule did not
+apply" and "something went wrong and we hid it".
 
 Marked `++` syntax has neither problem: a translator must handle it deliberately,
 and it makes the genuinely non-portable region *visible and enumerable* — which
@@ -75,10 +77,11 @@ works. Then the split is by whether an error has a portable meaning:
 
 ## Scope and risk
 
-- `clausify-domains` uses `catch`/`throw` **0 times in 765 files**, so no
-  formalization depends on the current shape. The only in-tree user is
-  `kit/rolling_window.clausal`, which throws **bare strings** — a third shape,
-  and the least translatable of them; convert those to error terms too.
+- A survey of the downstream rulebases found **zero** uses of `catch`/`throw`, so
+  no existing rulebase depends on the current shape and the bridge can change
+  freely. One downstream library module throws **bare strings** — a third shape,
+  and the least translatable of them; those should become error terms too. That
+  module lives outside this repository, so it is a separate change made there.
 - This touches every `++` callout's failure path, which is why it was kept out
   of the `date/3` change deliberately.
 - The operator has deferred the Python-exception→ISO-formal-term **mapping
@@ -98,5 +101,5 @@ works. Then the split is by whether an error has a portable meaning:
   tested for real rather than reasoned about.
 
 **Done when:** `catch(G, ++SomeError(M), R)` matches a real Python exception, the
-kit's bare-string throws are error terms, and a conformance test pins catcher
+downstream bare-string throws are error terms, and a conformance test pins catcher
 selectivity across translation. Move this file to `todo/done/` on completion.
