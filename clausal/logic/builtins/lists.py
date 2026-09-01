@@ -12,6 +12,7 @@ from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
 from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
+from clausal.logic.builtins._helpers import _standard_order_sorted
 
 # ── Destructive-reuse: CPython refcount availability ────────────────────────
 
@@ -466,10 +467,7 @@ def _msort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail)
     items = _as_items(lst_val)
     if items is not None:
         items = [deref(x) for x in items]
-        try:
-            result = sorted(items)
-        except TypeError:
-            result = sorted(items, key=lambda x: (type(x).__name__, repr(x)))
+        result = _standard_order_sorted(items)
         out = _seq_result(result, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):
@@ -489,10 +487,7 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
         for x in items:
             if x not in seen:
                 seen.append(x)
-        try:
-            result = sorted(seen)
-        except TypeError:
-            result = sorted(seen, key=lambda x: (type(x).__name__, repr(x)))
+        result = _standard_order_sorted(seen)
         out = _seq_result(result, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):

@@ -7,11 +7,17 @@ Python reference implementations are kept here as fallbacks.
 
 from __future__ import annotations
 
+from decimal import Decimal as _Decimal
+from fractions import Fraction as _Fraction
+from numbers import Real as _Real
 from typing import Any
 
 from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
-from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes, VarSeg, ConcreteSeg
+from clausal.terms import (
+    Compound, KWTerm, DictTerm, SetTerm,
+    SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
+)
 
 
 # ── Python reference implementations ─────────────────────────────────────────
@@ -250,3 +256,160 @@ try:
         return _c_is_ground(t)
 except ImportError:
     pass
+
+
+# ── Standard order of terms ──────────────────────────────────────────────────
+#
+# ``sort/2``, ``msort/2``, ``setof/3`` and the ``*_by`` higher-order builtins
+# sort with Python's ``sorted()`` when the elements happen to be mutually
+# comparable, and fall back to a sort *key* when they are not.  Terms —
+# ``Compound``, ``KWTerm``, declared term instances — define no ``__lt__``, so
+# any list of them takes the fallback.
+#
+# That fallback used to be ``(type name, repr(x))``, which ordered a compound's
+# arguments by their *decimal rendering*: ``score(15) < score(2) < score(9)``,
+# because ``"15" < "2" < "9"``.  ``msort`` did not raise — it returned a
+# well-formed list in a confidently wrong order, and a test asserting "the
+# result is sorted" passed.  See
+# ``todo/msort-orders-compound-integer-args-as-strings.md``.
+#
+# ``_standard_order_key`` replaces it with a structural key that recurses into
+# arguments, so a compound's arguments get exactly the comparison the same
+# values get when bare.  Ranks follow the ISO standard order of terms
+# (Var < Number < Atom < String < Compound); everything with no term shape of
+# its own keeps the old type-name grouping via ``_OpaqueOrder``.
+#
+# Every key is a tuple whose first element is one of these rank ints, so keys
+# of different ranks decide on that int alone and the remaining elements are
+# only ever compared against elements of the same shape.  The key is therefore
+# TOTAL: sorting can never raise, which is what lets it stand in for a
+# comparison the terms do not implement.
+
+_ORD_VAR = 0
+_ORD_NUM = 1
+_ORD_ATOM = 2
+_ORD_BYTES = 3
+_ORD_SEQ = 4
+_ORD_COMPOUND = 5
+_ORD_DICT = 6
+_ORD_SET = 7
+_ORD_OTHER = 8
+
+# Flavours within _ORD_COMPOUND.  A generic ``Compound`` and a declared term
+# that render alike are *not* the same term (they do not unify — see
+# ``todo/a-generic-compound-renders-identically-to-a-declared-term.md``), so
+# they get adjacent but distinct places in the order rather than interleaving.
+# The flavour also keeps the argument payloads shape-uniform: positional
+# flavours carry a tuple of keys, ``KWTerm`` carries name/key pairs, and the
+# two are never compared against each other.
+_CF_POSITIONAL = 0   # Compound
+_CF_KEYWORD = 1      # KWTerm (keyword-matched: fields sorted by name)
+_CF_DECLARED = 2     # declared term instance / dataclass
+
+
+class _OpaqueOrder:
+    """Order key for a value with no term shape of its own.
+
+    Same Python type: compare with ``<``, so ``date``/``datetime``/``Quantity``
+    and friends keep their *natural* order even here (``repr`` would order
+    ``date(2020, 1, 15)`` before ``date(2020, 1, 2)``).  Different types: order
+    by type name, the grouping this fallback has always used.  Never raises —
+    a value whose ``<`` rejects its own type (a ``Quantity`` compared across
+    dimensions) drops to ``repr``, which is arbitrary but total.
+    """
+
+    __slots__ = ("value", "type_name")
+
+    def __init__(self, value: Any) -> None:
+        self.value = value
+        self.type_name = type(value).__name__
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, _OpaqueOrder):
+            return NotImplemented
+        if self.type_name != other.type_name:
+            return False
+        if self.value is other.value:
+            return True
+        try:
+            return bool(self.value == other.value)
+        except Exception:
+            return repr(self.value) == repr(other.value)
+
+    def __lt__(self, other: "_OpaqueOrder") -> bool:
+        if not isinstance(other, _OpaqueOrder):
+            return NotImplemented
+        if self.type_name != other.type_name:
+            return self.type_name < other.type_name
+        try:
+            return bool(self.value < other.value)
+        except Exception:
+            return repr(self.value) < repr(other.value)
+
+
+def _standard_order_key(term: Any) -> tuple:
+    """Sort key implementing the standard order of terms.
+
+    Total over every value a term can hold, so ``sorted(xs, key=...)`` never
+    raises.  Recurses through compounds, lists, dicts and sets, dereferencing
+    as it goes, so nested numbers compare *numerically* rather than as strings.
+    """
+    term = deref(term)
+    if is_var(term):
+        # Unbound vars sort first, in a stable but arbitrary order — ISO
+        # leaves the order among distinct variables implementation-defined.
+        return (_ORD_VAR, id(term))
+    # The concrete types first (fast), then the ABC for anything registered
+    # into the numeric tower.  ``Decimal`` is a ``Number`` but not a ``Real``.
+    if isinstance(term, (bool, int, float, _Fraction, _Decimal, _Real)):
+        return (_ORD_NUM, term)
+    if isinstance(term, str):
+        return (_ORD_ATOM, term, 0)
+    if isinstance(term, PredicateMeta) and not term._fields:
+        # A zero-arity declared class IS an atom; order it by its name,
+        # next to the plain str of the same name rather than among classes.
+        return (_ORD_ATOM, term.__name__, 1)
+    if isinstance(term, bytes):
+        return (_ORD_BYTES, term)
+    if isinstance(term, (list, tuple)):
+        return (_ORD_SEQ, tuple(_standard_order_key(e) for e in term))
+    if isinstance(term, Compound):
+        functor = deref(term.functor)
+        # A Var functor has no name to order by; park all of them after the
+        # named ones and let the arguments decide between them.
+        name_key = (0, functor) if isinstance(functor, str) else (1, "")
+        return (_ORD_COMPOUND, len(term.args), name_key, _CF_POSITIONAL,
+                tuple(_standard_order_key(a) for a in term.args))
+    if isinstance(term, KWTerm):
+        # KWTerm equality is by keyword *name*, not position, so the key must
+        # be too — otherwise two equal terms could sort to different places.
+        by_name = dict(term.items())
+        fields = tuple(
+            (name, _standard_order_key(by_name[name])) for name in sorted(by_name)
+        )
+        return (_ORD_COMPOUND, len(fields), (0, term.functor), _CF_KEYWORD, fields)
+    if is_term_instance(term):
+        names = term_field_names(term)
+        return (_ORD_COMPOUND, len(names), (0, type(term).__name__), _CF_DECLARED,
+                tuple(_standard_order_key(getattr(term, n)) for n in names))
+    if isinstance(term, (dict, DictTerm)):
+        # DictTerm and a plain dict compare equal, so they share one key shape.
+        pairs = [(_standard_order_key(k), _standard_order_key(v))
+                 for k, v in term.items()]
+        return (_ORD_DICT, tuple(sorted(pairs)))
+    if isinstance(term, (set, frozenset, SetTerm)):
+        return (_ORD_SET, tuple(sorted(_standard_order_key(e) for e in term)))
+    return (_ORD_OTHER, _OpaqueOrder(term))
+
+
+def _standard_order_sorted(items: list) -> list:
+    """Sort *items* into the standard order of terms.
+
+    Mutually comparable elements keep Python's own ordering — that path was
+    always right and stays the fast one.  Anything else (any compound, or a
+    mix of types) goes through :func:`_standard_order_key`.
+    """
+    try:
+        return sorted(items)
+    except TypeError:
+        return sorted(items, key=_standard_order_key)

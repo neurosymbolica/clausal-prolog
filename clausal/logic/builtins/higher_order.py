@@ -8,6 +8,7 @@ from __future__ import annotations
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result
+from clausal.logic.builtins._helpers import _standard_order_key
 
 from clausal.logic.builtins._registry import (
     _trampoline_builtin, _ensure_trampoline_dispatch,
@@ -375,7 +376,7 @@ def _sort_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, sorted_lst
     try:
         keyed.sort(key=lambda pair: pair[0])
     except TypeError:
-        keyed.sort(key=lambda pair: (type(pair[0]).__name__, repr(pair[0])))
+        keyed.sort(key=lambda pair: _standard_order_key(pair[0]))
     result = [e for _, e in keyed]
     if unify(sorted_lst, _seq_result(result, was_str), trail):
         yield (_proceed, None)
@@ -410,13 +411,13 @@ def _max_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, maximum, tr
         keyed.append((k, deref(elem)))
     # A09-F012: incomparable keys (e.g. int vs str) raised a raw TypeError
     # from `k > best_key`, uncatchable by catch/3 — while sort_by silently
-    # falls back. Use the same (type-name, repr) fallback so max_by/min_by
-    # are consistent with sort_by instead of crashing.
+    # falls back. Use the same standard-order key so max_by/min_by are
+    # consistent with sort_by instead of crashing.
     if keyed:
         try:
             best_elem = max(keyed, key=lambda pair: pair[0])[1]
         except TypeError:
-            best_elem = max(keyed, key=lambda pair: (type(pair[0]).__name__, repr(pair[0])))[1]
+            best_elem = max(keyed, key=lambda pair: _standard_order_key(pair[0]))[1]
     else:
         best_elem = None
     if best_elem is not None:
@@ -453,13 +454,13 @@ def _min_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, minimum, tr
         k = deref(key)
         trail.undo(mark)
         keyed.append((k, deref(elem)))
-    # A09-F012: same (type-name, repr) fallback as sort_by / max_by so
-    # incomparable keys do not leak a raw TypeError.
+    # A09-F012: same standard-order key as sort_by / max_by so incomparable
+    # keys do not leak a raw TypeError.
     if keyed:
         try:
             best_elem = min(keyed, key=lambda pair: pair[0])[1]
         except TypeError:
-            best_elem = min(keyed, key=lambda pair: (type(pair[0]).__name__, repr(pair[0])))[1]
+            best_elem = min(keyed, key=lambda pair: _standard_order_key(pair[0]))[1]
     else:
         best_elem = None
     if best_elem is not None:

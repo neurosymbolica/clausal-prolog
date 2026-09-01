@@ -58,16 +58,12 @@ def _set_of_sort_dedup(items: list) -> list:
     """setof/3 result: sort into standard order, then remove duplicates.
 
     ISO / ``docs/meta_predicates.md`` promise a *sorted* list with duplicates
-    removed (A03-F005). Reuses ``sort/2`` (``_sort__2``)'s ordering — the same
-    ``sorted()`` with a ``(type name, repr)`` key fallback for heterogeneous /
-    unhashable elements — so there is only one standard term order in the
-    system.
+    removed (A03-F005). Reuses ``sort/2`` (``_sort__2``)'s ordering — the
+    shared ``_standard_order_sorted`` — so there is only one standard term
+    order in the system.
     """
-    try:
-        ordered = sorted(items)
-    except TypeError:
-        ordered = sorted(items, key=lambda x: (type(x).__name__, repr(x)))
-    return _set_of_dedup(ordered)
+    from clausal.logic.builtins._helpers import _standard_order_sorted  # noqa: PLC0415
+    return _set_of_dedup(_standard_order_sorted(items))
 
 
 def _findall_copy_row(template):
