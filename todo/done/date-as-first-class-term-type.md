@@ -95,3 +95,35 @@ rulebase's public interface to `date` args is still a per-domain, opt-in change.
 Ordering was never part of this defect. A real `datetime.date` has always compared correctly; a
 domain-local compound merely SPELLED `date(Y, M, D)` is a different term and was mis-ordered for
 an unrelated reason — see `todo/done/msort-orders-compound-integer-args-as-strings.md`.
+
+---
+
+(The note below arrived with the 2026-09-02 clone sync — the same gap was closed independently there, plus the DIRECT-arg parameterization `_templatize_query_goal` half, which this tree's 7fd537b3 did not have. The two nested lowerings were reconciled during the sync: the injected-builtin `$date` constructor calls are the kept implementation.)
+
+## CLOSED 2026-09-02 — shipped, both lowering paths
+
+Implemented for `datetime.date`, naive `datetime`/`time`, and `timedelta`
+(exact types only — a subclass may carry state the base constructor cannot
+rebuild, so it keeps the honest fallthrough):
+
+1. **Direct query args** (`clausal/logic/solve.py::_ground_value`): the four
+   datetime types are parameterized like ints/strings — the OBJECT is bound
+   at run time by reference. No reconstruction at all on this path, so
+   tz-AWARE datetimes/times work here too, and 20 distinct dates reuse ONE
+   compiled query (pinned).
+2. **Nested occurrences** (`term_to_ast_expr`, which structural args still
+   reach): a reconstruction branch emitting
+   `__import__('datetime').date(Y, M, D)`-style calls — self-contained, no
+   compiled-namespace dependency. tz-aware values fall through to the honest
+   NotImplementedError on this nested path only.
+
+Head-literal dates already worked (the A02-F003 `$headlit_<id>` opaque-literal
+capture) — the gap really was only input lowering, as diagnosed above.
+
+Semantics verified in `tests/test_date_query_args.py`: unify by value; a
+`date` and a `[Y, M, D]` list do NOT unify; flows into
+`days_between/3` (note: the API is snake_case now, and `date/4` is
+`date(Y, M, D, DateObj)` — this todo predates the rename).
+
+Not done here, per the scope note: serialization boundaries keep `[Y,M,D]`
+(JSON), and per-domain corpus interface migration is downstream work.
