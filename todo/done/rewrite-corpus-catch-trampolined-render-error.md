@@ -29,3 +29,32 @@ args reify wrong.
     cd /workspace/clausal-bug-fix
     /workspace/clausal/venv/bin/python -m pytest \
       "tests/rewrite/test_corpus.py::test_rewrite_is_conserving_localized_idempotent_and_arrow_safe[tests/fixtures/catch_trampolined.clausal]" -q
+
+---
+
+## CLOSED 2026-09-02 — renderer gap, fixed in `_deref_seq_field`
+
+Root cause was neither a malformed reifier Goal nor a rewriter rebuild bug,
+and none of the suspect commits was at fault (`883cdf08` merely added the
+first fixture clause that *exposes* it, `catch_then_fail(TAG) <- (TAG is
+"t", ...)`).  The chain:
+
+1. head_fold folds `TAG is "t"` into the head; `SubstList` builds the new
+   args as `[A2, *AS2]` in a clause head against an unbound output var.
+2. The engine's star-list reconstruction runs `maybe_promote_to_str` (the
+   F018 strings-as-lists rule: a list of provably 1-char strs IS the
+   equivalent str), so the rule answer's head comes back
+   `Goal('catch_then_fail', 't', [])` — the promoted spelling of `["t"]`.
+   Verified engine-level with a minimal `CopyList` module: `['t']` → `'t'`,
+   while `[7]` and `['longer']` stay lists.  Deliberate, per the
+   `maybe_promote_to_str` docstring ("used at result-construction sites …
+   no type-source plumbing required — consumers see the natural str shape").
+3. The renderer's `_deref_seq_field` (clausal/reflection.py) refused any
+   non-list/tuple — including the promoted str, which under the language's
+   own rule is a valid char list.
+
+Fix: `_deref_seq_field` reads a `str` as its char list (`list(value)`).
+Tests: `tests/test_reflection_render.py::TestPromotedStrSeqFields` (unit)
+and `tests/rewrite/test_driver.py::test_folds_a_single_char_string`
+(driver-level; pins the fold output `p("t")`).  The corpus test this todo
+was filed on passes; full rewrite + fmt + reflection suites green.

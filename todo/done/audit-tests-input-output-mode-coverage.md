@@ -101,3 +101,31 @@ noted as a consideration, not implemented.
   term-inspection (`functor`, `arg`, `=..`), and meta-predicates (`bagof`,
   `setof`, `aggregate_all`) have not been swept mode-by-mode. No bug found in the
   representative survey, but the matrix above is not yet complete for these.
+
+---
+
+## Sweep completed 2026-09-02 — the remaining areas, mode-by-mode
+
+Probed empirically (direct `solve()` goals against a fresh module, plus the
+CLP API); one genuine hole found and fixed.
+
+| Predicate | input mode | output / reverse mode |
+|---|---|---|
+| functor/3 | ✓ | ✓ (construct from name/arity; a str decomposes as `'.'/2` — the cons view, consistent with lists) |
+| **arg/3** | ✓ | ✗→✓ **FOUND + FIXED**: unbound N failed SILENTLY (the exact blind-spot shape); now enumerates (N, Arg) pairs SWI-style, semidet against a given arg. `TestArg::test_var_n_*` in tests/test_builtins.py |
+| unpack/2 (=..) | ✓ | ✓ (construct; pinned in tests/test_builtins.py) |
+| char_code/2, atom_chars/2, atom_codes/2 | ✓ | ✓ |
+| atom_concat/3 | ✓ | ✓ (enumerates splits; pinned in tests/test_chars.py) |
+| sub_atom/5 | ✓ | ✓ (full 10-row enumeration on "abc"; pinned) |
+| atom_length/2, upcase_atom/2, downcase_atom/2 | ✓ | single-mode BY ERROR — `instantiation_error`, loud and ISO-consistent, not silent |
+| bagof/3, setof/3 | ✓ | per documented spec (docs/meta_predicates.md): deliberately findall-like, no ISO free-variable grouping — not a mode gap |
+| aggregate_all/3 | — | NOT IMPLEMENTED (no builtin of that name; loud existence error) |
+| CLP: label, fd_sum `#=` | ✓ (check) | ✓ (label generates; fixing the sum's total propagates BACKWARD into an addend — X+1#=Y, Y=5 → X=4) |
+
+Probe caveat for future sweeps: `fd_sum` and friends return GENERATORS — an
+unconsumed call posts nothing, and a bare `assert fd_sum(...)` is vacuously
+true. Consume with `list(...)` (this sweep's first CLP probe made exactly
+that mistake and briefly read as a propagation gap).
+
+Every area from "Still open" is now swept; the one hole is fixed with
+both-mode regression tests. Done-criteria met.

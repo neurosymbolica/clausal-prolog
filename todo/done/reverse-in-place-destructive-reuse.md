@@ -47,3 +47,28 @@ only if reverse shows up in an allocation-heavy hot path.
 
 - A refcount-gated in-place reverse variant exists, the copying path remains the
   default/fallback, and a benchmark or test confirms no behavioural change.
+
+---
+
+## CLOSED 2026-09-02 — shipped exactly per the sketch
+
+- `_reverse_dr__2` (`clausal/logic/builtins/lists.py`): forward mode over an
+  unshared plain list (`getrefcount <= 3`, mirroring `_append_dr__3`) does
+  `list.reverse()` in place and unifies; str/bytes/Seg*/shared/backward all
+  fall back to the copying `_reverse__2`. NOT registered as the `reverse`
+  builtin — only reachable through the compiler's rewrite, because the
+  refcount gate alone is insufficient (backtracking could re-read the
+  reversed list through the still-live source var; the liveness analysis is
+  what rules that out).
+- `("reverse", 2): 0` added to `_DR_CANDIDATES`
+  (compiler/destructive_reuse.py) — the analyse→apply pass and its
+  eligibility conditions (source dead after, unaliased with head vars,
+  deterministic prefix) are table-driven, so nothing else changed.
+- `"reverse": "$dr_reverse__2"` in `_DR_NAME_MAP`
+  (_lower_goalop_shared.py) + dispatch registration in
+  compiler/predicate.py.
+
+Tests: `TestReverseDR` (in-place identity pinned, shared-list protection,
+str fallback, backward-mode fallback) and `TestReverseEligibility`
+(analysis + end-to-end) in tests/test_destructive_reuse.py; all 97
+reverse-touching tests in the tree green.

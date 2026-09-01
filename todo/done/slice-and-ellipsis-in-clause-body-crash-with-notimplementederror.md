@@ -85,3 +85,35 @@ while rendering these: `EmbedTransformer` reaches it and dies on
 `assert type(tuple_expr.ctx) == Load` in `visit_Tuple`
 (`clausal/templating/term_rewriting.py:1457`) — a bare `AssertionError` with no
 message at all, at import and under `reify_source` alike.
+
+---
+
+## CLOSED 2026-09-02 — option (1) shipped: diagnose, don't crash, all four surfaces
+
+- **Slice** (`S is P[1:3]`): refused in `visit_Subscript` with a located
+  SyntaxError naming the construct and pointing at `nth0/3` / `take/3` /
+  `drop/3` / `split_at/4` (no `sublist` builtin exists; the todo's suggestion
+  was corrected against `clausal/logic/builtins/lists.py`). Reify never
+  modelled slices, so its error just improves too.
+- **`...`**: NOT refused at the visit site — reflection must keep modelling it
+  (`TestPlainConstants` round-trips `X is ...`; reify_source shares
+  EmbedTransformer). Refused in `term_to_ast_expr` instead, as a SyntaxError
+  located via the compiler's Slice-G5 clause-position stack (clause line, no
+  caret — the compile phase runs outside `clausal_syntax_diagnostics`).
+- **Logic-variable comprehension target** (`[Y for Y in L]`): refused in
+  `_visit_comprehension`, naming the variable and pointing at `findall/3` —
+  but only on the COMPILE path. The renderer suite pins reify of exactly this
+  shape (`V1` in `TestComprehensions`), so "reflection models more than
+  compiles" is now an explicit `reify=True` mode on
+  EmbedTransformer/TermTransformer, set only by `clausal.reflection`.
+  (`_raise_located_constant_error` was generalised to
+  `_raise_located_syntax_error` for these sites.)
+- **Tuple comprehension target** (`[x for x, y in L]`): refused by name in
+  `_visit_comprehension` (both modes — reify never modelled it; it died on the
+  same bare assert there too), and the `visit_Tuple` Store-context assert is
+  now a located SyntaxError backstop.
+
+Declared-lowercase targets and `for _ in L` stay legal (pinned).
+Tests: `tests/test_body_construct_diagnostics.py` (7 cases, line-number
+asserted against a 6-line prelude). Slice support as a feature stays a
+separate request, per the recommendation above.

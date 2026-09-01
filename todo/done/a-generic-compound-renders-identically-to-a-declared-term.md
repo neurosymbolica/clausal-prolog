@@ -70,3 +70,24 @@ module that only runs once something has already failed.
   engine prereqs); whatever is chosen should go through it rather than around it.
 - Not urgent: nothing crashes, and after the construction fix the common
   round-trip path no longer produces the mismatch at all.
+
+---
+
+## CLOSED 2026-09-02 — option 1 shipped (failure diagnostics only)
+
+As recommended: the distinction is drawn only once something has already
+failed, in the goal-level diagnosis. After `bindings at failure` is reported,
+`_note_generic_compound_confusion` (`clausal/testing.py`) walks the derefed
+binding values (bounded depth); a generic `Compound` whose string functor
+matches a declared `PredicateMeta` of the same arity in the module namespace
+gets a note naming the variable:
+
+    note: `T2` holds a GENERIC compound cite/1, not the declared cite/1 term
+    this module constructs — the two render identically and never unify. …
+
+A compound with no declared twin gets no note (pinned). Options 2 (mark in
+the general renderer) and 3 (warn at construction) stay rejected for the
+reasons above — noise, and the unresolved "in scope" ambiguity.
+Tests: `test_generic_compound_vs_declared_term_is_named` /
+`test_no_confusion_note_without_a_declared_class` in
+tests/test_testing_diagnostics.py.

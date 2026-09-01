@@ -65,3 +65,33 @@ not a blanket change.
 - `todo/date-api-snake-case-rename.md` (date_time API → snake_case) — do the ergonomics together.
 - Corpus convention today (the downstream corpus's authoring-conventions doc, "Corpus authoring"):
   `[Y,M,D]` triples + `Date/4`; update it if/when date-args land.
+
+---
+
+## CLOSED 2026-09-02 — shipped, both lowering paths
+
+Implemented for `datetime.date`, naive `datetime`/`time`, and `timedelta`
+(exact types only — a subclass may carry state the base constructor cannot
+rebuild, so it keeps the honest fallthrough):
+
+1. **Direct query args** (`clausal/logic/solve.py::_ground_value`): the four
+   datetime types are parameterized like ints/strings — the OBJECT is bound
+   at run time by reference. No reconstruction at all on this path, so
+   tz-AWARE datetimes/times work here too, and 20 distinct dates reuse ONE
+   compiled query (pinned).
+2. **Nested occurrences** (`term_to_ast_expr`, which structural args still
+   reach): a reconstruction branch emitting
+   `__import__('datetime').date(Y, M, D)`-style calls — self-contained, no
+   compiled-namespace dependency. tz-aware values fall through to the honest
+   NotImplementedError on this nested path only.
+
+Head-literal dates already worked (the A02-F003 `$headlit_<id>` opaque-literal
+capture) — the gap really was only input lowering, as diagnosed above.
+
+Semantics verified in `tests/test_date_query_args.py`: unify by value; a
+`date` and a `[Y, M, D]` list do NOT unify; flows into
+`days_between/3` (note: the API is snake_case now, and `date/4` is
+`date(Y, M, D, DateObj)` — this todo predates the rename).
+
+Not done here, per the scope note: serialization boundaries keep `[Y,M,D]`
+(JSON), and per-domain corpus interface migration is downstream work.
