@@ -129,8 +129,50 @@ def python_error_term(exc: Exception) -> Compound:
         catch(Goal, UnitsMismatch(MSG), Recovery)
         catch(Goal, _, Recovery)   % any exception
         Catch(Goal, UnitsMismatch(MSG))
+
+    This transliteration discards the exception OBJECT, so it cannot serve a
+    ``++`` catcher — those are handled by :func:`catch_match`, which receives
+    the live exception alongside this structural term.
     """
     return Compound(type(exc).__name__, (str(exc),))
+
+
+def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool:
+    """Match a ``catch/3`` catcher against a raised exception.
+
+    ``catcher`` is the evaluated catcher expression, ``term`` the structural
+    ball (``LogicException.term``, or :func:`python_error_term` of a stray
+    Python exception), ``exc`` the ORIGINAL exception object.
+
+    A catcher that evaluated to a Python exception CLASS (``++ValueError``)
+    matches by ``isinstance`` — subclasses in, Python semantics, and never a
+    logic ``throw/1`` ball (whose ``exc`` is a ``LogicException``).  One that
+    evaluated to an exception INSTANCE (``++ValueError(M)`` — the escape
+    constructs the instance with ``M`` dereferenced) matches by isinstance on
+    its type and unifies ``catcher.args`` against ``exc.args``, binding ``M``
+    to the real message.  Anything else keeps the structural ``unify`` against
+    ``term``, unchanged.
+
+    Rationale: the transliterated ball defeats ``++`` (no object left to
+    match) and a bare CamelCase functor catcher is an ISO translation hazard
+    (initial-capital reads as a VARIABLE there, silently widening a specific
+    catcher to a catch-all).  See
+    todo/error-bridge-transliterates-python-exceptions-instead-of-using-plus-plus.md.
+    """
+    from clausal.logic.variables import deref, unify  # noqa: PLC0415
+
+    catcher = deref(catcher)
+    if isinstance(catcher, type) and issubclass(catcher, BaseException):
+        return isinstance(exc, catcher)
+    if isinstance(catcher, BaseException):
+        if not isinstance(exc, type(catcher)):
+            return False
+        catcher_args = list(catcher.args)
+        exc_args = list(exc.args)
+        return len(catcher_args) == len(exc_args) and unify(
+            catcher_args, exc_args, trail
+        )
+    return unify(catcher, term, trail)
 
 
 # ── Structured error term helpers ─────────────────────────────────────────────

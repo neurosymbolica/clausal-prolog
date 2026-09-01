@@ -726,8 +726,13 @@ def _compile_catch_impl(
         _undo_stmt(catch_mark, trail_name),
         _assign_mark(unify_mark, trail_name),
         ast.If(
+            # $catch_match: structural unify against the transliterated ball,
+            # EXCEPT for a catcher that evaluated to a Python exception class
+            # or instance (a ++ escape), which matches the ORIGINAL exception
+            # object — see clausal.logic.exceptions.catch_match.
             test=_call(
-                _name("$unify"), catcher_expr, _name(term_name), _name(trail_name),
+                _name("$catch_match"), catcher_expr, _name(term_name),
+                _name(exc_name), _name(trail_name),
             ),
             body=recovery_body_stmts or [ast.Pass()],
             orelse=orelse_stmts or [ast.Pass()],

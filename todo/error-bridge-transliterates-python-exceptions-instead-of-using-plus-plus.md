@@ -103,3 +103,42 @@ works. Then the split is by whether an error has a portable meaning:
 **Done when:** `catch(G, ++SomeError(M), R)` matches a real Python exception, the
 downstream bare-string throws are error terms, and a conformance test pins catcher
 selectivity across translation. Move this file to `todo/done/` on completion.
+
+---
+
+## STATUS 2026-09-02 — engine half SHIPPED in this tree
+
+`catch(G, ++SomeError(M), R)` now matches the real Python exception. The
+mechanism is narrower than "change the ball" and preserves every existing
+shape:
+
+- The ball is UNCHANGED (`python_error_term` still builds
+  `ClassName(Message)`, so the documented structural idiom keeps working and
+  nothing downstream can notice). Instead, the generated catch matcher —
+  `_compile_catch_impl`, the single assembly point shared by the shallow,
+  trampoline, always_catch and routed (`unwind_to_catcher`) paths — calls a
+  new `$catch_match(catcher, ball, exc, trail)`
+  (`clausal/logic/exceptions.py::catch_match`) which has the ORIGINAL
+  exception object in hand:
+  - catcher evaluated to an exception CLASS (`++ValueError`) → `isinstance`
+    match (subclasses in, Python semantics; never matches a logic `throw/1`
+    ball, whose exc is the LogicException).
+  - catcher evaluated to an exception INSTANCE (`++ValueError(M)` — the
+    escape constructs it with `M` dereffed) → isinstance on its type +
+    unify `catcher.args` against `exc.args`; `M` binds to the real message.
+  - anything else → structural unify against the ball, byte-for-byte as
+    before.
+- Selectivity pinned: `++TypeError` does not swallow a `ValueError`; a `++`
+  catcher does not match a logic ball; the structural `ValueError(M)` shape
+  still binds. `tests/test_catch_python_exceptions.py`.
+
+This unblocks the `ymd_date/4` retirement: the downstream caller can write
+`catch(date3_goal, ++ValueError(_), fail)` (or the error-term equivalent) to
+convert the raise back into the failure its malformed-input tests need.
+
+**Remaining, both OUTSIDE this repository (do not close until done):**
+1. the downstream library module's bare-string `throw`s → error terms (its
+   own repo);
+2. the translator conformance test pinning catcher selectivity across an
+   actual round trip (needs the translator; `prolog_backends/` error
+   surfacing is still unprobed).

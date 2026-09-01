@@ -192,9 +192,11 @@ _reify_fd_fn_s = _reify_fd_fn
 
 from clausal.logic.exceptions import (  # noqa: F401
     LogicException as _LogicException_cls,
+    catch_match as _catch_match_fn,
     python_error_term as _python_error_term_fn,
     type_error as _type_error_fn,
 )
+_catch_match_fn_s = _catch_match_fn
 _python_error_term_fn_s = _python_error_term_fn
 _type_error_fn_s = _type_error_fn
 
@@ -775,6 +777,7 @@ def compile_predicate_trampoline(
         "$set_of_sort_dedup": _set_of_sort_dedup,
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn,
+        "$catch_match": _catch_match_fn,
         "$in_iter": _in_iter,
         "$const_set": _const_set,
         "$CSET_TYPES": _CONST_SET_TYPES,
@@ -1523,6 +1526,7 @@ def compile_predicate_shallow(
         "$set_of_sort_dedup": _set_of_sort_dedup,
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn_s,
+        "$catch_match": _catch_match_fn_s,
         "$in_iter": _in_iter,
         "$const_set": _const_set,
         "$CSET_TYPES": _CONST_SET_TYPES,
