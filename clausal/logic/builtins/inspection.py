@@ -277,8 +277,26 @@ def _arg__3(n, term, arg_out, trail, k):
     """arg(N, Term, arg) — unify arg with the N-th argument of Term (1-based)."""
     n_val = deref(n)
     term_val = deref(term)
-    if is_var(n_val) or is_var(term_val):
+    if is_var(term_val):
         return
+    if is_var(n_val):
+        # Output mode: enumerate (N, Arg) pairs, SWI-style relational arg/3.
+        # This used to FAIL SILENTLY — the exact ground-vs-var blind spot of
+        # todo/audit-tests-input-output-mode-coverage.md.  Same _nth_arg
+        # semantics as the ground mode, so a list enumerates its cons view
+        # (1 → head, 2 → tail) and arity-0 terms yield nothing.
+        term_norm = normalize_seg_input(term_val)
+        index = 1
+        while True:
+            try:
+                arg_val = _nth_arg(term_norm, index)
+            except IndexError:
+                return
+            mark = trail.mark()
+            if unify(n_val, index, trail) and unify(arg_out, arg_val, trail):
+                yield None
+            trail.undo(mark)
+            index += 1
     # A09-F015 / A01-D001(c): a bool index is rejected (True is not 1).
     if not isinstance(n_val, int) or isinstance(n_val, bool):
         return
