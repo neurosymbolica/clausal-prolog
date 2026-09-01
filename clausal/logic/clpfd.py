@@ -2562,6 +2562,15 @@ class CumulativeConstraint(Constraint):
             if changed:
                 if not _narrow_if_changed(si, new_domain, trail, queue):
                     return False
+                # Refresh this task's snapshot so tasks processed LATER in
+                # this same pass see the narrowed compulsory part.  With the
+                # stale bounds kept, each pass filtered against pre-pass
+                # state — weaker per-pass filtering, extra AC-3 iterations
+                # to converge (cross_cutting_issues.md item 3; not unsound).
+                tasks_info[i] = (
+                    start_i, si,
+                    domain_min(new_domain), domain_max(new_domain), di, ri,
+                )
 
         # Final check: at each time point where all tasks have compulsory parts,
         # verify total doesn't exceed capacity

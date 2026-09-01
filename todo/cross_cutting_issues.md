@@ -5,12 +5,14 @@ codebase as a whole and should be addressed uniformly, not piecemeal.
 
 ## Correctness
 
-### 1. Trail cast without type check (all C extensions)
+### 1. Trail cast without type check (all C extensions) — RESOLVED
 
-Every C extension casts `trail_obj` to `TrailObject *` without calling
-`Trail_Check(trail_obj)`. Passing a non-Trail object causes undefined behavior.
-
-**Affected files:** `_constraints_dif.c`, `_tabling_core.c`, `_list_unify.c`
+**Verified resolved project-wide (2026-09-02):** every remaining cast site is
+guarded. `_constraints_dif.c` — all 4 `Trail_CAST` sites have `Trail_Check`
+at function entry; `_tabling_core.c` — its single cast (`py_unify_answer`)
+is guarded; `_list_unify.c` — casts nothing (threads the trail through to
+the Python `unify`, which validates — same clean pattern as
+`_clpfd_propagate.c`).
 
 **Audited clean (2026-07-05, A06-F017):** `_arithmetic_core.c` — all 14
 exported functions call `Trail_Check(trail_obj)` before `Trail_CAST`
@@ -24,16 +26,15 @@ guarded.
 **Fix:** Add `Trail_Check()` guard at entry to every exported function that
 receives a trail. Must be done project-wide.
 
-### 2. PyObject_IsInstance error returns (-1) not checked (~13 sites)
+### 2. PyObject_IsInstance error returns (-1) not checked — RESOLVED
 
-Call sites compare `PyObject_IsInstance()` result to `== 1`, silently swallowing
-`-1` (error) returns. Can cause undefined behavior.
+**Verified resolved project-wide (2026-09-02):** every `PyObject_IsInstance`
+call site in `_variables.c` (25), `_constraints_dif.c` (6, incl. all
+`is_compound` callers), `_tabling_core.c` (1) and `_arithmetic_core.c`
+(via the error-propagating `is_quantity` wrapper) checks `< 0` before
+comparing. No other C file calls it.
 
-**Affected:** `_variables.c` (most sites now fixed), but audit all C extensions.
-
-**Fix:** Check `if (r < 0) return -1;` before comparing.
-
-### 3. Cumulative constraint uses stale domain snapshots
+### 3. Cumulative constraint uses stale domain snapshots — FIXED
 
 `CumulativeConstraint.propagate()` snapshots start/end bounds at top of the
 function, then uses stale values when computing compulsory parts for later tasks.
@@ -42,7 +43,12 @@ function, then uses stale values when computing compulsory parts for later tasks
 
 **File:** `clausal/logic/clpfd.py`, `CumulativeConstraint` class.
 
-**Fix:** Re-read bounds from live FD state inside inner loop.
+**FIXED 2026-09-02:** after `_narrow_if_changed` narrows task *i*, its
+`tasks_info` snapshot is refreshed in place, so tasks processed later in the
+same pass (and the final compulsory-part check) see the narrowed bounds.
+Pinned by `TestCumulativeSinglePassStrength` in
+`tests/test_global_constraints.py`, which drives ONE `propagate()` pass and
+asserts the cascaded filtering happens within it.
 
 ## Thread Safety
 

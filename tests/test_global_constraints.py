@@ -426,3 +426,49 @@ class TestBacktracking:
         assert deref(x) == 1
         trail.undo(mark)
         assert is_var(deref(x))
+
+
+class TestCumulativeSinglePassStrength:
+    def test_single_pass_uses_narrowed_bounds_of_earlier_task(self):
+        """One propagate() pass filters task k with task i's NARROWED part.
+
+        propagate() used to snapshot every task's start bounds up front and
+        keep using the stale values after narrowing an earlier task in the
+        same pass — weaker filtering per AC-3 pass, extra iterations to
+        converge (cross_cutting_issues.md item 3; not unsound).  Setup, all
+        resource-1 on capacity 1:
+
+          fixed task at 0 (dur 2)  → compulsory [0, 1]
+          S0 ∈ [0, 2] (dur 2)      → narrows to {2} in this pass
+                                     → compulsory part [2, 3]
+          S2 ∈ [2, 4] (dur 1)      → must see [2, 3] IN THE SAME PASS
+                                     and narrow to {4}
+        """
+        # nv
+        from collections import deque
+
+        from clausal.logic.clpfd import CumulativeConstraint
+
+        trail = fresh_trail()
+        s0, s2 = Var(), Var()
+        assert in_domain([s0], 0, 2, trail)
+        assert in_domain([s2], 2, 4, trail)
+        constraint = CumulativeConstraint(
+            ((s0, 2, 1), (0, 2, 1), (s2, 1, 1)), 1)
+        assert constraint.propagate(trail, deque())
+
+        st0 = get_attr(deref(s0), FD_KEY)
+        if st0 is not None:  # singleton domains may bind s0 outright
+            assert domain_min(st0.domain) == domain_max(st0.domain) == 2
+        stale_msg = (
+            "task S2 was filtered with STALE bounds for S0 — the narrowed "
+            "compulsory part [2, 3] must be visible within the same pass"
+        )
+        v2 = deref(s2)
+        if is_var(v2):
+            st2 = get_attr(v2, FD_KEY)
+            assert st2 is not None
+            assert domain_min(st2.domain) == 4, stale_msg
+        else:
+            # narrowing to the singleton {4} may bind the var outright
+            assert v2 == 4, stale_msg
