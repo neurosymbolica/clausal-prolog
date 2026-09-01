@@ -510,19 +510,21 @@ def _raise_constant_rhs_logic_var(identifier: str, node=None, source_lines=None,
         msg, (filename, lineno, (col + 1) if col is not None else None, text))
 
 
-def _raise_located_constant_error(msg: str, node, source_lines=None,
-                                   filename=None) -> None:
+def _raise_located_syntax_error(msg: str, node, source_lines=None,
+                                filename=None) -> None:
     """Raise *msg* as a ``SyntaxError`` located at *node*.
 
-    Shared by every ``-constants`` RHS validation error that isn't one of
-    the two dedicated raisers above (``_raise_undeclared_constant``,
-    ``_raise_constant_rhs_logic_var``) — the dict-splat rejection, the
-    undeclared-functor error, and the generic unsupported-RHS fallthrough
-    in ``EmbedTransformer._transform_constant_rhs``. Every -constants RHS
-    error is a compile-time error with an AST node in hand, so there is no
-    excuse for any of them to come back as a bare, unattributed
-    ``SyntaxError`` — the caller always has *node*, exactly like the two
-    dedicated raisers.
+    The generic located raiser: shared by every ``-constants`` RHS
+    validation error that isn't one of the two dedicated raisers above
+    (``_raise_undeclared_constant``, ``_raise_constant_rhs_logic_var``) —
+    the dict-splat rejection, the undeclared-functor error, the generic
+    unsupported-RHS fallthrough in
+    ``EmbedTransformer._transform_constant_rhs`` — and by the visit-site
+    construct rejections (slice subscripts, comprehension loop targets).
+    Every such error is a compile-time error with an AST node in hand, so
+    there is no excuse for any of them to come back as a bare,
+    unattributed ``SyntaxError`` — the caller always has *node*, exactly
+    like the two dedicated raisers.
     """
     lineno = getattr(node, "lineno", None)
     col = getattr(node, "col_offset", None)
@@ -1170,8 +1172,15 @@ class TermTransformer(NodeTransformer):
 
     def __init__(transformer, atoms=frozenset(), import_remap=None,
                  source_lines=None, bare_atom_refs=None,
-                 logic_var_refs=None, constants=frozenset(), filename=None):
+                 logic_var_refs=None, constants=frozenset(), filename=None,
+                 reify=False):
         transformer.seen_vars = set()
+        # Reflection models MORE than compiles: ``reify_source`` reuses this
+        # transformer but must keep accepting shapes the compiler refuses —
+        # e.g. a logic-variable comprehension target, pinned by the renderer
+        # round-trip suite.  ``reify=True`` (set only by clausal.reflection)
+        # suppresses the compile-only rejections.
+        transformer._reify = reify
         # Per-clause occurrence count of each logic-variable name, keyed by
         # identifier — feeds the ClausalSingletonWarning lint (see
         # EmbedTransformer._warn_singletons). Every TermTransformer starts a
@@ -1614,6 +1623,7 @@ class TermTransformer(NodeTransformer):
             logic_var_refs=transformer._logic_var_refs,
             constants=transformer.constants,
             filename=transformer._filename,
+            reify=transformer._reify,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
         # Shared object (not a copy): occurrences inside the lambda body
@@ -1929,6 +1939,17 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_Subscript(transformer, subscript):
+        # A slice subscript would flow through as a raw ``ast.Slice`` inside
+        # the LoadSubscript and only die much later — an internal
+        # NotImplementedError out of terms_to_ast, with no source line.
+        # Refuse it here, by name, like the method-call form and ``:=``.
+        if isinstance(subscript.slice, Slice):
+            _raise_located_syntax_error(
+                f"a slice subscript `{unparse(subscript)}` is not supported "
+                f"in a clause body: a Clausal list is a term with no slice "
+                f"evaluation rule. Use nth0/3 to take one element, or "
+                f"take/3, drop/3 or split_at/4 for sublists.",
+                subscript, transformer._source_lines, transformer._filename)
         return node_ast(
             "LoadSubscript",
             subscript,
@@ -1937,7 +1958,16 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_Tuple(transformer, tuple_expr):
-        assert type(tuple_expr.ctx) == Load
+        if type(tuple_expr.ctx) != Load:
+            # Backstop: the one legal Store-context tuple surface (a
+            # comprehension loop target) is refused by name in
+            # ``_visit_comprehension`` before this is reached; anything else
+            # that stores into a tuple has no clause-body meaning either, and
+            # used to die here as a bare AssertionError with no message.
+            _raise_located_syntax_error(
+                f"a tuple assignment target `{unparse(tuple_expr)}` is not "
+                f"supported in a clause body.",
+                tuple_expr, transformer._source_lines, transformer._filename)
         elements = [transformer.visit(element) for element in tuple_expr.elts]
         return node_ast(
             "TupleLiteral",
@@ -2012,6 +2042,35 @@ class TermTransformer(NodeTransformer):
 
     def _visit_comprehension(transformer, generator_clause):
         """Convert an ast.comprehension into Python AST constructing a ForClause node."""
+        # A comprehension in a clause body is inert term structure — nothing
+        # iterates it, so nothing ever binds its loop target.  A declared
+        # (lowercase) loop atom and the anonymous ``_`` are fine: they resolve
+        # like any other term.  A logic-variable target is never meaningful
+        # and, left alone, dies at import as a bare ``NameError`` with no
+        # line; a tuple target died as a bare AssertionError in visit_Tuple.
+        # Refuse both by name, pointing at the working spelling.
+        # Reify mode keeps the logic-variable target: reflection models the
+        # shape (the renderer round-trips `[x for X in L]`) even though the
+        # compiler refuses it.
+        target = generator_clause.target
+        if (not transformer._reify and isinstance(target, Name)
+                and target.id != "_" and _is_logic_var_name(target.id)):
+            _raise_located_syntax_error(
+                f"the comprehension loop variable `{target.id}` is a logic "
+                f"variable, but a comprehension in a clause body is inert "
+                f"term structure — nothing iterates it or binds "
+                f"`{target.id}`. Use findall/3 to collect a goal's "
+                f"solutions; for an inert comprehension term, declare a "
+                f"lowercase loop name instead (e.g. -private([...])).",
+                target, transformer._source_lines, transformer._filename)
+        if isinstance(target, Tuple):
+            _raise_located_syntax_error(
+                f"a tuple loop target `for {unparse(target)} in ...` is not "
+                f"supported in a clause-body comprehension — a comprehension "
+                f"here is inert term structure that iterates nothing. Use "
+                f"findall/3 with a compound template to collect a goal's "
+                f"solutions.",
+                target, transformer._source_lines, transformer._filename)
         # Use the iterable as the source-position anchor.
         source = generator_clause.iter
         filter_nodes = [
@@ -3340,8 +3399,10 @@ class EmbedTransformer(NodeTransformer):
     """
 
     def __init__(transformer, source_lines=None, implicit_atoms_default=False,
-                 filename=None, interactive=False):
+                 filename=None, interactive=False, reify=False):
         transformer._scope_depth = 0
+        # Reflection models MORE than compiles — see TermTransformer._reify.
+        transformer._reify = reify
         # Source file being rewritten, used only to attribute compile-time
         # errors.  A load failure surfaces through the *importing* file, so a
         # message that does not name its own file reads as an error in every
@@ -3783,6 +3844,7 @@ class EmbedTransformer(NodeTransformer):
             logic_var_refs=transformer._logic_var_refs,
             constants=frozenset(transformer._constants),
             filename=transformer._filename,
+            reify=transformer._reify,
         )
 
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
@@ -4795,7 +4857,7 @@ class EmbedTransformer(NodeTransformer):
                 ), node)
         if isinstance(node, Dict):
             if any(k is None for k in node.keys):
-                _raise_located_constant_error(
+                _raise_located_syntax_error(
                     f"-constants: `{ident}` RHS: dict-splat (**) is not "
                     f"supported in a structured constant",
                     node, transformer._source_lines, transformer._filename)
@@ -4813,14 +4875,14 @@ class EmbedTransformer(NodeTransformer):
                 ), node)
         if isinstance(node, Call):
             if not isinstance(node.func, Name):
-                _raise_located_constant_error(
+                _raise_located_syntax_error(
                     f"-constants: unsupported RHS for `{ident}`: "
                     f"{unparse(node)}",
                     node, transformer._source_lines, transformer._filename)
             functor_name = node.func.id
             if (functor_name not in transformer._seen_functors
                     and functor_name not in transformer._imported_functors):
-                _raise_located_constant_error(
+                _raise_located_syntax_error(
                     f"-constants: `{ident}` RHS calls `{functor_name}(...)`, "
                     f"which is not a declared functor above this "
                     f"-constants directive — declare it with -module/"
@@ -4839,7 +4901,7 @@ class EmbedTransformer(NodeTransformer):
             return replace(
                 Call(func=replace(Name(id=functor_name, ctx=load), node.func),
                      args=pos_args, keywords=kw_args), node)
-        _raise_located_constant_error(
+        _raise_located_syntax_error(
             f"-constants: unsupported RHS for `{ident}`: {unparse(node)}",
             node, transformer._source_lines, transformer._filename)
 

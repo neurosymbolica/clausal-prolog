@@ -1069,7 +1069,7 @@ def reify_source(text, filename="<reflected>"):
             )
             tree = ast.parse(text, filename=filename)
             transformer = EmbedTransformer(
-                source_lines=source_lines, filename=filename)
+                source_lines=source_lines, filename=filename, reify=True)
             transformed = transformer.visit(tree)
     except SyntaxError as exc:
         # Same treatment as the loader gives a broken .clausal file: the source
@@ -1251,7 +1251,7 @@ def reify_ast(node, source=None):
 
     from clausal.templating.term_rewriting import TermTransformer
 
-    ctor = TermTransformer().visit(node)
+    ctor = TermTransformer(reify=True).visit(node)
     return _ClauseReifier().term(ctor)
 
 

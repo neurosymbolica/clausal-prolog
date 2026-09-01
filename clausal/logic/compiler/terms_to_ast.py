@@ -663,6 +663,21 @@ def term_to_ast_expr(
     if isinstance(raw, Var) and raw._id in var_context:
         return _name(var_context[raw._id])
 
+    # `...` REIFIES (render inverts reify, so reflection must keep modelling
+    # it — TestPlainConstants pins the round-trip) but has no evaluation rule
+    # in a goal; without this branch it fell through to the internal
+    # NotImplementedError below, with no source line.  The clause-position
+    # scope stack the compiler maintains (Slice G5) locates it at the owning
+    # clause.
+    if term is Ellipsis:
+        from ._ast_helpers import _current_position
+        msg = ("`...` (Ellipsis) is not supported in a clause body: it is "
+               "inert term structure with no evaluation rule. Remove it.")
+        pos = _current_position()
+        if isinstance(pos, tuple) and pos and isinstance(pos[0], int):
+            raise SyntaxError(msg, (None, pos[0], None, None))
+        raise SyntaxError(msg)
+
     raise NotImplementedError(
         f"term_to_ast_expr: unsupported term type {type(term).__name__}: {term!r}"
     )
