@@ -450,10 +450,18 @@ def _deref_field(value):
 
 def _deref_seq_field(value, what):
     """:func:`_deref_field` for a field that must be a concrete sequence — a
-    goal/arg/param list, dict keys/values.  A var *or* a non-list/tuple raises
+    goal/arg/param list, dict keys/values.  A var *or* a non-sequence raises
     :class:`RenderError` rather than leaking a ``TypeError`` from ``len``/
-    iteration, so the renderer honours its contract on malformed terms too."""
+    iteration, so the renderer honours its contract on malformed terms too.
+
+    A ``str`` counts as a sequence: under the strings-as-lists rule the engine
+    promotes a list of provably 1-char strs to the equivalent ``str`` at
+    reconstruction sites (``maybe_promote_to_str``), so a field built as
+    ``["t"]`` can arrive here as ``"t"`` — the same term, read as its char
+    list."""
     value = _deref_field(value)
+    if isinstance(value, str):
+        return list(value)
     if not isinstance(value, (list, tuple)):
         raise RenderError(f"cannot render {what}: expected a sequence, got {value!r}")
     return value

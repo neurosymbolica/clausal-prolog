@@ -565,6 +565,31 @@ class TestBoundLogicVarsInFields:
             render_source(term)
 
 
+class TestPromotedStrSeqFields:
+    """Sequence fields carrying a promoted ``str`` instead of a char list.
+
+    Under the strings-as-lists rule (F018), engine reconstruction sites
+    promote a list of provably 1-char strs to the equivalent ``str``
+    (``maybe_promote_to_str``) — so a reified term that rode through a rule
+    answer can come back with ``Goal.args == "t"`` where ``["t"]`` was built
+    (the head-fold on ``TAG is "t"`` in ``catch_trampolined.clausal`` did
+    exactly this).  The promoted str IS that char list, so a seq field must
+    read it as one rather than refuse it as "not a sequence"."""
+
+    def test_goal_args_promoted_single_char_str_renders_as_its_char_list(self):
+        assert render_source(Goal("f", "t", [])) == render_source(Goal("f", ["t"], []))
+
+    def test_goal_args_promoted_multi_char_str_renders_as_its_char_list(self):
+        assert render_source(Goal("f", "ab", [])) == render_source(
+            Goal("f", ["a", "b"], [])
+        )
+
+    def test_clause_goals_promoted_str_renders_as_its_char_list(self):
+        promoted = Clause(Goal("H", [], []), "t", None)
+        listed = Clause(Goal("H", [], []), ["t"], None)
+        assert render_source(promoted) == render_source(listed)
+
+
 # ── Comprehensions ───────────────────────────────────────────────────────────
 # A comprehension in a clause body is an inert *term* structure, like
 # await/yield: nothing iterates it, so the loop variable is a bare name that has

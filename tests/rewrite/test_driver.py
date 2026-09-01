@@ -333,3 +333,12 @@ def test_modified_goal_rewrite_is_idempotent(tmp_path):
     again = rewrite_source(once.text, rules)
     assert again.text == once.text
     assert again.fired == []
+
+
+def test_folds_a_single_char_string(head_fold_rules):
+    # The rule answer's head args come back as the promoted str "t", not
+    # ["t"] (F018 strings-as-lists promotion at reconstruction sites); the
+    # renderer must read that as the char list, not refuse the head.
+    result = rewrite_source('p(TAG) <- (TAG is "t", m(1))\n', head_fold_rules)
+    assert result.text == 'p("t") <- (\n    m(1)\n)\n'
+    assert len(result.fired) == 1
