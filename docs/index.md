@@ -101,6 +101,7 @@ for the full feature set.
 | [For Decision Makers](for_decision_makers.md) | The business case: explainability, reliability, rules-as-code |
 | **Getting Started** | |
 | [Syntax](syntax.md) | The trailing-comma convention, escape operators, logic variables, clause syntax |
+| [Style & Formatting](style.md) | One goal per line, clause separation, `clausal-fmt` |
 | [Predicates](predicates.md) | How to define predicates in .clausal files |
 | [Builtins](builtins.md) | Complete index of built-in predicates |
 | [Dicts & Sets](dicts_sets.md) | DictTerm, SetTerm, `__unify__` protocol |

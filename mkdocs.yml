@@ -48,6 +48,7 @@ nav:
     - Project Goals: goals.md
     - Tutorial: tutorial.md
     - Syntax: syntax.md
+    - Style & Formatting: style.md
     - Testing: testing.md
   - Language:
     - Predicates: predicates.md

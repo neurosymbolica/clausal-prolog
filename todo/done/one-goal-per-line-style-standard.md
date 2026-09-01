@@ -26,3 +26,19 @@ nested compounds, and strings stay put.
    engine formatter could work off the parsed AST rather than regex, and also normalise clause
    separation (facts end `,`; rules `)` no trailing comma; blank line between clauses).
 3. Optionally a lint (advisory) flagging multi-goal-on-one-line bodies.
+
+---
+
+## CLOSED 2026-09-02 — all three asks are met
+
+1. **Documented:** `docs/style.md` (new; in the mkdocs nav and the index
+   table beside Syntax) — the one-goal-per-line rule, clause separation, and
+   the formatter's contract (comment-preserving, AST-preserving, idempotent).
+2. **Formatter:** shipped 2026-08-15 as `clausal-fmt` (`clausal/fmt/`,
+   AST-based per the "proper engine formatter" note here, not the regex
+   reference impl). One deviation from this file's sketch, documented rather
+   than papered over: v1 parenthesises single-goal rule bodies too
+   (`q(X) <- r(X)` emits as the multi-line form) — that call and the other
+   deferred style decisions live in `todo/clausal-fmt-open-style-questions.md`.
+3. **Lint:** `clausal-fmt --check` is the advisory lint (exit 1 on any
+   would-change file); no separate lint needed.
