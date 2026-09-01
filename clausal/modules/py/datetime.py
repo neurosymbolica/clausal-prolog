@@ -93,62 +93,6 @@ def _today_1(d, trail, k):
         yield None
 
 
-# ── date/4 — construct or decompose datetime.date ───────────────────────
-
-
-def _date_4(year, month, day, dt, trail, k):
-    """date/4: UNREGISTERED as of the date/3 migration -- DEAD from Clausal.
-
-    No longer bound to any predicate: `date` is the arity-3 TERM constructor
-    and unification does both of this relation's modes. Kept only because 13
-    call sites across three test files still exercise it directly, some
-    covering semantics date/3 must also honour (leap years, datetime-vs-date,
-    float rejection). DELETE once that coverage is ported to date/3 -- do not
-    build on it, and do not re-register it.
-
-    Original: bidirectional — date(Y, M, D, DateObj).
-
-    If DateObj is unbound: construct datetime.date(Y, M, D) → DateObj.
-    If DateObj is a datetime.date: decompose → Y, M, D.
-    """
-    year, month, day, dt = deref(year), deref(month), deref(day), deref(dt)
-    if is_var(dt):
-        # construct mode — all components must be ground integers. Pass them
-        # through unchanged so datetime.date rejects floats with a TypeError
-        # instead of int()-truncating 2020.9 to 2020 (F015).
-        try:
-            d = _dt.date(year, month, day)
-        except (TypeError, ValueError) as exc:
-            # Note only fully-bound rejections: an unbound component is a
-            # mode signal (the diagnostic re-run probes with fresh Vars,
-            # and those TypeErrors would read as user error).
-            if not (is_var(year) or is_var(month) or is_var(day)):
-                note_rejected_call("date/4", exc)
-            return
-        if unify(dt, d, trail):
-            yield None
-    elif isinstance(dt, _dt.date) and not isinstance(dt, _dt.datetime):
-        # decompose mode
-        mark = trail.mark()
-        if (unify(year, dt.year, trail)
-                and unify(month, dt.month, trail)
-                and unify(day, dt.day, trail)):
-            yield None
-        else:
-            trail.undo(mark)
-    elif isinstance(dt, _dt.datetime):
-        # decompose datetime → date components
-        mark = trail.mark()
-        if (unify(year, dt.year, trail)
-                and unify(month, dt.month, trail)
-                and unify(day, dt.day, trail)):
-            yield None
-        else:
-            trail.undo(mark)
-    else:
-        expect_type(dt, _dt.date, "date/4", expected="date or datetime", arg=4)
-
-
 # ── date/3 — the date TERM (the standard representation) ────────────────
 #
 # `date(Y, M, D)` IS a real datetime.date, and it is bidirectional by
@@ -800,21 +744,6 @@ now_utc._register(1, simple_to_trampoline(_now_utc_1))
 today = ModulePredicate("today", module="datetime")
 today._register(1, simple_to_trampoline(_today_1))
 
-# TRANSITIONAL, added 2026-09-01 for the date/3 migration. This is the SAME
-# components<->object relation `date/4` provides (same `_date_4`), under a name
-# that does not collide with the incoming arity-3 `date` TERM. It exists so the
-# corpus can migrate domain by domain instead of in one commit: between the
-# engine landing and the last domain migrating, un-migrated code still needs
-# this relation to work.
-#
-# Named ymd_date/4, not date_ymd/4, because a predicate name should read in
-# ARGUMENT ORDER -- ymd_date(Y, M, D, DATE), as date_string_iso(DateObj, String)
-# and days_between(A, B, N) do.
-#
-# DELETE when it has no callers. `date(Y, M, D)` is the representation; this is
-# scaffolding, not an API.
-ymd_date = ModulePredicate("ymd_date", module="datetime")
-ymd_date._register(4, simple_to_trampoline(_date_4))
 
 time = ModulePredicate("time", module="datetime")
 time._register(4, simple_to_trampoline(_time_4))

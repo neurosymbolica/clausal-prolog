@@ -61,6 +61,39 @@ class TestConstruct:
             date(2024, 13, 1)
         assert "date/3" in repr(exc.value.args[0])
 
+    # --- coverage ported from _date_4's tests (todo, 2026-09-01) -------------
+    # These were written while `_date_4` was still live, then became its ONLY
+    # home: `_date_4` and the `ymd_date/4` alias were deleted the same day, once
+    # the last caller migrated. Rejection of 2025-02-29 and of a float YEAR were
+    # already covered above; these are the parts that were not, and without them
+    # the deletion would have dropped real coverage silently.
+
+    def test_a_real_leap_day_constructs(self):
+        """The rejection case above only proves date/3 says NO. Without the
+        acceptance case a constructor that rejected EVERY 29 February would
+        pass — a gate needs a test that it says YES."""
+        d = date(2024, 2, 29)
+        assert isinstance(d, dt.date) and d.isoformat() == "2024-02-29"
+
+    def test_a_float_is_rejected_in_every_component_not_just_the_year(self):
+        """Audit finding F015: a float component must be REJECTED, never
+        int()-truncated, or 2020.9 silently becomes 2020. The existing test
+        pins the year; a truncation bug in the month or day slot would have
+        gone unseen."""
+        for args in ((2020.9, 1, 5), (2020, 1.9, 5), (2020, 1, 5.9)):
+            with pytest.raises(LogicException) as exc:
+                date(*args)
+            assert "type_error" in repr(exc.value.args[0]), args
+
+    def test_a_bool_component_follows_python_and_is_not_an_error(self):
+        """PINNED BEHAVIOUR, not an endorsement. `bool` is a subclass of `int`,
+        so date(2020, True, 5) is 2020-01-05 — exactly what datetime.date does.
+        The corpus's own gold harnesses take the opposite view and exclude bool
+        explicitly (`isinstance(x, int) and not isinstance(x, bool)`), so the
+        two disagree. Recorded here so that if date/3 is ever made stricter it
+        is a decision someone took, not a silent divergence discovered later."""
+        assert date(2020, True, 5) == dt.date(2020, 1, 5)
+
 
 class TestDecompose:
     def test_pattern_unifies_against_a_real_date_and_binds_components(self):

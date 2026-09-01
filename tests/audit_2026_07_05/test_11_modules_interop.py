@@ -317,19 +317,16 @@ def test_guard_reified_item_enumerates(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def test_F015_date4_rejects_float_components():
-    # A11-F015 (fixed): float components rejected, not truncated.
-    from clausal.modules.py.datetime import _date_4
-    sols = list(_date_4(2020.9, 1.9, 5, Var(), Trail(), None))
-    assert sols == []  # stdlib datetime.date raises TypeError on floats
-
-
-def test_F015_guard_date4_construct_and_decompose():
-    import datetime as pydt
-    from clausal.modules.py.datetime import _date_4
-    D = Var()
-    sols = list(_date_4(2020, 1, 5, D, Trail(), None))
-    assert len(sols) == 1 and deref(D) == pydt.date(2020, 1, 5)
+# A11-F015's two date/4 tests were DELETED 2026-09-01 with the predicate itself.
+# The finding they pinned is not lost -- a float component must be REJECTED,
+# never int()-truncated (2020.9 must not become 2020) -- it moved to
+# tests/test_date_term.py:
+#     test_a_float_is_rejected_in_every_component_not_just_the_year
+#     test_ground_args_build_a_real_datetime_date
+# and it is now STRONGER than what was deleted: date/3 raises type_error rather
+# than failing silently, and the ported test checks the year, month AND day
+# slots where the audit version only checked the year.
+# The time/4 equivalent below is untouched -- _time_4 still exists.
 
 
 def test_F015_time4_rejects_float_components():

@@ -11,12 +11,12 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.datetime import (
-    now, now_utc, today, date, time, datetime, timedelta, ymd_date,
+    now, now_utc, today, date, time, datetime, timedelta,
     date_add, date_sub, date_diff, date_between, date_of, days_between,
     weekday, datetime_string, timestamp,
     datetime_string_iso, date_string_iso,
     _now_1, _now_utc_1, _today_1,
-    _date_4, _time_4, _datetime_7, _timedelta_3,
+    _time_4, _datetime_7, _timedelta_3,
     _date_add_3, _date_sub_3, _date_diff_3,
     _datetime_string_3, _weekday_2,
     _date_of_2, _days_between_3, _timestamp_2,
@@ -82,83 +82,6 @@ class TestNow:
 
 
 # ── date/4 ──────────────────────────────────────────────────────────────
-
-
-class TestDate:
-    def test_construct(self):
-        """Date(2026, 3, 16, D_) → D_ = datetime.date(2026, 3, 16)."""
-        # nv
-        d = Var()
-        results, trail = simple_solutions(_date_4, 2026, 3, 16, d)
-        assert len(results) == 1
-        val = deref(d)
-        assert val == dt.date(2026, 3, 16)
-        assert type(val) is dt.date
-
-    def test_decompose(self):
-        """Date(Y_, M_, D_, datetime.date(2026, 3, 16)) → Y_=2026, M_=3, D_=16."""
-        # nv
-        y, m, d = Var(), Var(), Var()
-        results, trail = simple_solutions(_date_4, y, m, d, dt.date(2026, 3, 16))
-        assert len(results) == 1
-        assert deref(y) == 2026
-        assert deref(m) == 3
-        assert deref(d) == 16
-
-    def test_decompose_datetime_object(self):
-        """Date/4 can decompose a datetime.datetime too (extracts date components)."""
-        # nv
-        y, m, d = Var(), Var(), Var()
-        results, _ = simple_solutions(
-            _date_4, y, m, d, dt.datetime(2026, 3, 16, 10, 30, 0)
-        )
-        assert len(results) == 1
-        assert deref(y) == 2026
-        assert deref(m) == 3
-        assert deref(d) == 16
-
-    def test_construct_invalid_date_fails(self):
-        """Date(2026, 13, 1, D_) fails — month 13 is invalid."""
-        # nv
-        d = Var()
-        results, _ = simple_solutions(_date_4, 2026, 13, 1, d)
-        assert len(results) == 0
-
-    def test_construct_and_check(self):
-        """Date(2026, 3, 16, datetime.date(2026, 3, 16)) succeeds."""
-        # nv
-        results, _ = simple_solutions(
-            _date_4, 2026, 3, 16, dt.date(2026, 3, 16)
-        )
-        # decompose mode: ground date, ground components — unify must match
-        assert len(results) == 1
-
-    def test_construct_and_check_mismatch(self):
-        """Date(2026, 3, 16, datetime.date(2026, 3, 17)) fails."""
-        # nv
-        results, _ = simple_solutions(
-            _date_4, 2026, 3, 16, dt.date(2026, 3, 17)
-        )
-        # decompose: year=2026→2026 OK, month=3→3 OK, day=16→17 FAIL
-        assert len(results) == 0
-
-    def test_leap_year(self):
-        """Date(2024, 2, 29, D_) succeeds — 2024 is a leap year."""
-        # nv
-        d = Var()
-        results, _ = simple_solutions(_date_4, 2024, 2, 29, d)
-        assert len(results) == 1
-        assert deref(d) == dt.date(2024, 2, 29)
-
-    def test_non_leap_year_feb29_fails(self):
-        """Date(2025, 2, 29, D_) fails — 2025 is not a leap year."""
-        # nv
-        d = Var()
-        results, _ = simple_solutions(_date_4, 2025, 2, 29, d)
-        assert len(results) == 0
-
-
-# ── time/4 ──────────────────────────────────────────────────────────────
 
 
 class TestTime:
@@ -1021,46 +944,3 @@ class TestOrdinal:
         assert len(results) == 0
 
 
-# ── ymd_date/4 — the transitional alias for the date/3 migration ──────────────
-
-
-class TestYmdDateTransitionalAlias:
-    """`ymd_date/4` is the SAME relation as `date/4`, under a name that does not
-    collide with the incoming arity-3 `date` TERM.
-
-    It exists so the corpus migrates domain by domain rather than in one commit:
-    once `date` becomes the term, `date/4` is gone, and every un-migrated call
-    site needs this to keep working in the meantime. Delete it — and this class —
-    when it has no callers left."""
-
-    def test_it_is_registered_and_date4_is_gone(self):
-        """Step A registered this alongside date/4; step C removed date/4, so
-        `date` is now the arity-3 TERM and this is the only remaining route to
-        the components<->object relation. It stays only until the corpus's
-        remaining call sites migrate."""
-        # nv
-        assert callable(ymd_date._get_dispatch())
-        assert not hasattr(date, "_get_dispatch")
-
-    def test_it_constructs_exactly_as_date4_does(self):
-        # nv
-        d1, d2 = Var(), Var()
-        r1, _ = simple_solutions(_date_4, 2026, 3, 16, d1)
-        r2, _ = trampoline_solutions(ymd_date, 2026, 3, 16, d2)
-        assert r1 and r2
-        assert deref(d1) == dt.date(2026, 3, 16) == deref(d2)
-
-    def test_it_decomposes_exactly_as_date4_does(self):
-        # nv
-        y, m, d = Var(), Var(), Var()
-        results, _ = trampoline_solutions(ymd_date, y, m, d, dt.date(2026, 3, 16))
-        assert results
-        assert (deref(y), deref(m), deref(d)) == (2026, 3, 16)
-
-    def test_an_impossible_date_still_FAILS_rather_than_raising(self):
-        """The transitional relation keeps date/4's semantics unchanged — a goal
-        that fails. Only the arity-3 TERM raises, because a term constructor has
-        no way to fail."""
-        # nv
-        results, _ = trampoline_solutions(ymd_date, 2025, 2, 29, Var())
-        assert results == []
