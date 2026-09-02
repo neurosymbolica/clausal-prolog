@@ -32,6 +32,7 @@ from clausal.tools.prolog_dialect import (
 __all__ = [
     "emit_term", "emit_item", "emit_module",
     "clausal_source_to_prolog", "clausal_source_to_prolog_ast",
+    "module_export_signature",
     "pascal_to_snake", "snake_to_pascal",
     "clausal_var_to_prolog", "prolog_var_to_clausal",
     "UntranslatableConstructError",
@@ -432,6 +433,26 @@ class _ClausalToProlog:
                     self._items.extend(item)
                 else:
                     self._items.append(item)
+
+        # Post-pass: keep only locally-defined predicates in :- module
+        # exports. Scryer raises permission_error(...
+        # module_does_not_contain_claimed_export...) on an export with no
+        # backing clause (signature-only kernels, term constructors like
+        # cite/1, 0-arity atoms), so a name only ever *declared* in the
+        # export list must not survive into the emitted directive.
+        defined: set[tuple[str, int]] = set()
+        for item in self._items:
+            dcg_key = _dcg_head_key(item)
+            if dcg_key is not None:
+                defined.add(dcg_key)
+            key = _clause_key(item)
+            if key is not None:
+                defined.add(key)
+        self._items = [
+            _filter_module_exports(item, defined) if _is_module_directive(item) else item
+            for item in self._items
+        ]
+
         if self.strict and self._all_warnings:
             raise UntranslatableConstructError(list(self._all_warnings))
         return PModule(tuple(self._items))
@@ -1128,6 +1149,96 @@ class _ClausalToProlog:
         return PList(tuple(
             PCompound("attribute", (k, v)) for k, v in pairs
         ))
+
+
+# ── Module export / discontiguous post-pass ────────────────────────────
+#
+# Shared by convert_module's post-pass (Task 4: filter dead module
+# exports; Task 5: emit :- discontiguous for interrupted clause runs).
+
+def _clause_key(item: PItem) -> tuple[str, int] | None:
+    """(functor, arity) for a PClause head; None for any other item kind.
+
+    DCG rules deliberately return None here — a DCG predicate's real
+    callable arity (written arity + 2 hidden state args) is computed
+    separately by _dcg_head_key, and Task 5's clause-run tracking only
+    considers PClause items.
+    """
+    if not isinstance(item, PClause):
+        return None
+    head = item.head
+    if isinstance(head, PCompound):
+        return (head.functor, len(head.args))
+    if isinstance(head, PAtom):
+        return (head.name, 0)
+    return None
+
+
+def _dcg_head_key(item: PItem) -> tuple[str, int] | None:
+    """(functor, explicit_arity + 2) for a PDCGRule head; None otherwise.
+
+    A ``-->`` clause is expanded (by the Prolog engine, not this
+    translator) to take two extra difference-list state arguments, so a
+    DCG predicate's real callable arity is the written arity plus 2. A
+    pushback/semicontext head arrives as a comma pair
+    ``(Call, PushbackList)`` — the callable predicate is the left side.
+    """
+    if not isinstance(item, PDCGRule):
+        return None
+    head = item.head
+    if isinstance(head, PCompound) and head.functor == "," and len(head.args) == 2:
+        head = head.args[0]
+    if isinstance(head, PCompound):
+        return (head.functor, len(head.args) + 2)
+    if isinstance(head, PAtom):
+        return (head.name, 2)
+    return None
+
+
+def _is_module_directive(item: PItem) -> bool:
+    """True if *item* is a ``:- module(Name, Exports).`` directive."""
+    return (
+        isinstance(item, PDirective)
+        and isinstance(item.body, PCompound)
+        and item.body.functor == "module"
+        and len(item.body.args) == 2
+    )
+
+
+def _export_pairs(directive: PDirective) -> set[tuple[str, int]]:
+    """The (name, arity) pairs a ``:- module(...)`` directive's export list names."""
+    exports = directive.body.args[1]
+    pairs: set[tuple[str, int]] = set()
+    if not isinstance(exports, PList):
+        return pairs
+    for elt in exports.elements:
+        if (isinstance(elt, PCompound) and elt.functor == "/" and len(elt.args) == 2
+                and isinstance(elt.args[0], PAtom) and isinstance(elt.args[1], PNumber)):
+            pairs.add((elt.args[0].name, int(elt.args[1].value)))
+    return pairs
+
+
+def _filter_module_exports(directive: PDirective,
+                            defined: set[tuple[str, int]]) -> PDirective:
+    """Rebuild *directive*'s export list keeping only Name/Arity pairs in *defined*."""
+    mod_name, exports = directive.body.args
+    if not isinstance(exports, PList):
+        return directive
+    kept = tuple(
+        elt for elt in exports.elements
+        if isinstance(elt, PCompound) and elt.functor == "/" and len(elt.args) == 2
+        and isinstance(elt.args[0], PAtom) and isinstance(elt.args[1], PNumber)
+        and (elt.args[0].name, int(elt.args[1].value)) in defined
+    )
+    return PDirective(PCompound("module", (mod_name, PList(kept))))
+
+
+def module_export_signature(pmodule: PModule) -> set[tuple[str, int]]:
+    """The (name, arity) set the emitted :- module directive exports."""
+    for item in pmodule.items:
+        if _is_module_directive(item):
+            return _export_pairs(item)
+    return set()
 
 
 # ── Public API ───────────────────────────────────────────────────────

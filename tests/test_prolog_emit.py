@@ -317,7 +317,9 @@ Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
 
     def test_module_directive(self):
         # nv
-        source = '-module(my_mod, [Foo(X)])'
+        # Foo/1 needs a backing clause or the module-export post-pass
+        # (Task 4) drops it as a declaration-only export.
+        source = '-module(my_mod, [Foo(X)])\nFoo(1),\n'
         result = clausal_source_to_prolog(source)
         assert ":- module(my_mod, [foo/1])." in result
 
