@@ -1160,13 +1160,22 @@ class _ClausalToProlog:
         `q`), `attrs_put(...)` would sit there as an inert, never-called data
         term — silently wrong output. So when *goal_position* is False, the
         splat still falls through to the generic dict-splat warning path.
+
+        `attrs_put/3` is an ISO-export staging predicate — it does not exist
+        under SWI dict semantics, so the lowering also requires
+        `not self.dialect.has_dicts`. Under a `has_dicts` dialect the splat
+        instead falls through to the plain `X = Dict` unify, where
+        `_convert_dict`'s SWI branch renders the splat's `**D` entry as a
+        `_=D` pair inside `dict_create/3` (pre-existing behavior, unchanged
+        by this gate).
         """
         # First check for <- arrow (should already be handled at statement level)
         # Handle single comparison
         if len(node.ops) == 1:
             op = node.ops[0]
 
-            if (goal_position and isinstance(op, python_ast.Is)
+            if (goal_position and not self.dialect.has_dicts
+                    and isinstance(op, python_ast.Is)
                     and isinstance(node.comparators[0], python_ast.Dict)):
                 splat_goal = self._convert_is_rhs_splat(
                     node.left, node.comparators[0])
