@@ -33,7 +33,8 @@ from clausal.logic.variables import deref
 
 _SRC = """\
 -module(cpe, [ raise_ve(X), c_class(R), c_inst(M), c_wrong(R), c_super(R),
-               c_structural(M), c_logic(R), c_inst_wrong(R) ])
+               c_structural(M), c_logic(R), c_inst_wrong(R),
+               c_logic_super(R) ])
 
 raise_ve(X) <- (X is ++int("nope"))
 
@@ -43,6 +44,7 @@ c_wrong(R) <- (catch(raise_ve(_C), ++TypeError, R is "swallowed"))
 c_super(R) <- (catch(raise_ve(_D), ++Exception, R is "caught_super"))
 c_structural(M) <- (catch(raise_ve(_E), ValueError(M), true))
 c_logic(R) <- (catch(throw("oops"), ++ValueError, R is "swallowed"))
+c_logic_super(R) <- (catch(throw("oops"), ++Exception, R is "swallowed"))
 c_inst_wrong(R) <- (catch(raise_ve(_F), ++TypeError(_M2), R is "swallowed"))
 """
 
@@ -96,3 +98,12 @@ def test_structural_shape_still_matches(mod):
 def test_python_catcher_does_not_match_a_logic_ball(mod):
     with pytest.raises(LogicException):
         _solutions(mod.c_logic(Var()))
+
+
+def test_superclass_python_catcher_does_not_match_a_logic_ball(mod):
+    # LogicException subclasses Exception, so a bare isinstance check would
+    # let ++Exception swallow a logic throw/1 ball (roborev job 18). The ++
+    # boundary is Python-only: logic balls keep their own catch-all spelling,
+    # catch(G, _, R).
+    with pytest.raises(LogicException):
+        _solutions(mod.c_logic_super(Var()))

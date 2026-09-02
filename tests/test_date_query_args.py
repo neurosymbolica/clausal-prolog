@@ -105,6 +105,18 @@ def test_date_nested_in_a_list_arg(tmp_path):
     ]
 
 
+def test_nested_reconstruction_preserves_fold(tmp_path):
+    # fold is not part of datetime equality, so unification succeeds either
+    # way — but the BOUND object must be what the caller passed (roborev
+    # job 18): the reconstruction has to carry fold through.
+    mod = _load(tmp_path, "dq_fold", "heads(L, H) <- (L is [H, *_REST])\n")
+    value = datetime(2024, 11, 3, 1, 30, fold=1)
+    h = Var()
+    [got] = _solutions(mod.heads([value, "sentinel"], h), h)
+    assert got == value
+    assert got.fold == 1, "fold was dropped by the nested reconstruction"
+
+
 def test_naive_datetime_and_timedelta_nested_in_a_list_arg(tmp_path):
     mod = _load(tmp_path, "dq_g", "heads(L, H) <- (L is [H, *_REST])\n")
     for value in (datetime(2024, 1, 2, 3, 4, 5, 6), time(1, 2, 3),

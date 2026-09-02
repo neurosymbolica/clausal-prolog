@@ -812,3 +812,104 @@ class TestReverseEligibility:
         X = Var()
         results = _snap(fn, lambda: deref(X), X, trail)
         assert results == [[3, 2, 1]]
+
+
+class TestSameGoalAlias:
+    """The source var occurring in ANOTHER argument of the SAME goal.
+
+    reverse(L, L) is the natural palindrome idiom.  The eligibility analysis
+    only checked head-aliasing and liveness in SUBSEQUENT goals, so the goal
+    was rewritten to the DR variant, which reversed the list in place and
+    then unified it WITH ITSELF — unconditionally true for every input
+    (roborev job 18, High).  A same-op occurrence observes the mutation, so
+    it must disqualify the candidate.
+    """
+
+    def test_reverse_source_aliased_to_output_not_eligible(self):
+        # nv
+        L, W = Var(), Var()
+        head = Compound("is_pal", (W,))
+        body = [
+            Evaluate(left=L, right=[1, 2, 3]),
+            Call(func=LoadName(name="reverse"), args=[L, L], kwargs=[]),
+        ]
+        clause = Clause(head=head, body=body)
+        assert 1 not in _find_destructive_reuse_goals(clause)
+
+    def test_append_source_aliased_to_output_not_eligible(self):
+        # nv
+        T, W = Var(), Var()
+        head = Compound("app_alias", (W,))
+        body = [
+            Evaluate(left=T, right=[1, 2]),
+            Call(func=LoadName(name="append"), args=[T, [3], T], kwargs=[]),
+        ]
+        clause = Clause(head=head, body=body)
+        assert 1 not in _find_destructive_reuse_goals(clause)
+
+    def test_reverse_self_unify_end_to_end_fails_for_non_palindrome(self):
+        """is_pal(W) <- L = list(W), reverse(L, L) — sound again."""
+        # nv
+        L, W = Var(), Var()
+        head = Compound("is_pal", (W,))
+        body = [
+            Evaluate(left=L, right=[1, 2, 3]),
+            Call(func=LoadName(name="reverse"), args=[L, L], kwargs=[]),
+        ]
+        db, fn = make_pred("is_pal", 1, [(head, body)])
+        trail = Trail()
+        X = Var()
+        results = _snap(fn, lambda: True, X, trail)
+        assert results == [], "reverse(L, L) must FAIL on the non-palindrome [1, 2, 3]"
+
+    def test_reverse_dr_variant_falls_back_when_output_is_bound(self):
+        # Belt-and-braces at the runtime variant itself: a bound second arg
+        # (aliasing included) takes the copying path, never the mutation.
+        # nv
+        from clausal.logic.builtins.lists import _reverse_dr__2
+        trail = Trail()
+        source_var = Var()
+        the_list = [1, 2, 3]
+        unify(source_var, the_list, trail)
+        del the_list
+        gen = _reverse_dr__2(None, None, None, None, source_var, source_var, trail)
+        solutions = [1 for parent, value in gen if value is not DONE]
+        assert solutions == [], "self-aliased reverse must fail, not self-unify"
+        assert deref(source_var) == [1, 2, 3], "and must not mutate the list"
+
+
+class TestDrFallbackShapes:
+    """Shapes the DR fast paths must hand to the standard implementations."""
+
+    def test_reverse_partial_list_output_takes_the_copying_path(self):
+        # nv — rev bound to a partial list: no mutation, structural unify.
+        from clausal.logic.builtins.lists import _reverse_dr__2
+        from clausal.terms import SegList, ConcreteSeg, VarSeg
+
+        trail = Trail()
+        source_var = Var()
+        the_list = [1, 2, 3]
+        unify(source_var, the_list, trail)
+        rest = Var()
+        pattern = SegList([ConcreteSeg([3]), VarSeg(rest)])
+        gen = _reverse_dr__2(None, None, None, None, source_var, pattern, trail)
+        solutions = [deref(rest) for parent, value in gen if value is not DONE]
+        assert solutions == [[2, 1]]
+        assert the_list == [1, 2, 3], "partial-list output must not mutate"
+
+    def test_dict_put_dr_falls_back_for_a_plain_dict(self):
+        # nv — the Term-only fast path skips; the widened standard impl runs.
+        trail = Trail()
+        out = Var()
+        gen = _dict_put_dr__4(None, None, None, None,
+                              "k", 2, {"a": 1}, out, trail)
+        solutions = [deref(out) for parent, value in gen if value is not DONE]
+        assert solutions == [DictTerm({"a": 1, "k": 2})]
+
+    def test_set_union_dr_falls_back_for_plain_sets(self):
+        # nv
+        trail = Trail()
+        out = Var()
+        gen = _set_union_dr__3(None, None, None, None, {1, 2}, {2, 3}, out, trail)
+        solutions = [deref(out) for parent, value in gen if value is not DONE]
+        assert solutions == [SetTerm({1, 2, 3})]

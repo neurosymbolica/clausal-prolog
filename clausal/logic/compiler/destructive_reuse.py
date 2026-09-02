@@ -121,6 +121,18 @@ def analyse_ir(ir: Any, head: Any) -> set[int]:
         if source_id in aliased_ids:
             continue
 
+        # The source occurring in ANOTHER argument of the SAME goal observes
+        # the mutation: reverse(L, L) rewritten to the DR variant reversed
+        # in place and then unified the list WITH ITSELF — unconditionally
+        # true for every input (roborev job 18). Liveness below only scans
+        # SUBSEQUENT ops, so the same-op occurrence must be excluded here.
+        same_op_ids: set[int] = set()
+        for j, other in enumerate(op.args):
+            if j != source_idx:
+                _collect_var_ids(other, same_op_ids)
+        if source_id in same_op_ids:
+            continue
+
         live_after: set[int] = set()
         for sop in ops[i + 1:]:
             _collect_op_var_ids(sop, live_after)

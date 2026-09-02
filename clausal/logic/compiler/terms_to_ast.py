@@ -337,6 +337,12 @@ def term_to_ast_expr(
     # date stays unification, never a CLP constraint.
     if type(term) in _DATETIME_CTOR_FIELDS and getattr(term, "tzinfo", None) is None:
         ctor, fields = _DATETIME_CTOR_FIELDS[type(term)]
+        # ``fold`` is not part of datetime equality, so unification would
+        # succeed without it — but the bound object must be what the caller
+        # passed, matching the by-reference direct-arg path.
+        keywords = []
+        if getattr(term, "fold", 0):
+            keywords.append(ast.keyword(arg="fold", value=ast.Constant(value=1)))
         return ast.Call(
             func=ast.Attribute(
                 value=ast.Call(
@@ -348,7 +354,7 @@ def term_to_ast_expr(
                 ctx=ast.Load(),
             ),
             args=[ast.Constant(value=getattr(term, f)) for f in fields],
-            keywords=[],
+            keywords=keywords,
         )
 
     if isinstance(term, StarUnpack):

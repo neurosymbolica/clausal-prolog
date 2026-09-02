@@ -342,7 +342,13 @@ def _reverse_dr__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
     ``_append_dr__3``.
     """
     lst_val = deref(lst)
+    # Belt-and-braces beyond the compile-time analysis: mutate only in the
+    # true forward OUTPUT mode (second arg an unbound var). A bound second
+    # arg — the self-aliased reverse(L, L) palindrome idiom included — takes
+    # the copying path, where unification gives the correct answer instead
+    # of a vacuous self-unify against the mutated list (roborev job 18).
     if (_HAS_REFCOUNT and isinstance(lst_val, list)
+            and is_var(deref(rev))
             and _sys.getrefcount(lst_val) <= 3):
         lst_val.reverse()
         mark = trail.mark()

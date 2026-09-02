@@ -145,8 +145,9 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
     Python exception), ``exc`` the ORIGINAL exception object.
 
     A catcher that evaluated to a Python exception CLASS (``++ValueError``)
-    matches by ``isinstance`` — subclasses in, Python semantics, and never a
-    logic ``throw/1`` ball (whose ``exc`` is a ``LogicException``).  One that
+    matches by ``isinstance`` — subclasses in, Python semantics — and never a
+    logic ``throw/1`` ball: its ``LogicException`` wrapper is excluded from
+    both ++ arms unless the catcher names ``LogicException`` itself.  One that
     evaluated to an exception INSTANCE (``++ValueError(M)`` — the escape
     constructs the instance with ``M`` dereferenced) matches by isinstance on
     its type and unifies ``catcher.args`` against ``exc.args``, binding ``M``
@@ -163,8 +164,20 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
 
     catcher = deref(catcher)
     if isinstance(catcher, type) and issubclass(catcher, BaseException):
+        # A ++ catcher is the PYTHON side of the boundary only: a logic
+        # throw/1 ball travels as a LogicException, which subclasses
+        # Exception, so a bare isinstance would let ``++Exception`` swallow
+        # logic balls (roborev job 18). Those keep their own catch-all
+        # spelling, ``catch(G, _, R)`` — a ++ class matches a logic ball
+        # only when it names LogicException (or a subclass) explicitly.
+        if isinstance(exc, LogicException) and not issubclass(
+                catcher, LogicException):
+            return False
         return isinstance(exc, catcher)
     if isinstance(catcher, BaseException):
+        if isinstance(exc, LogicException) and not isinstance(
+                catcher, LogicException):
+            return False
         if not isinstance(exc, type(catcher)):
             return False
         catcher_args = list(catcher.args)
