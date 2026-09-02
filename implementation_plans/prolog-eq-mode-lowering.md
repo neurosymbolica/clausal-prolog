@@ -14,8 +14,20 @@ Everything below was re-derived in this session against
 `/workspace/clausify-domains` (765 published-domain `.clausal` files),
 `/workspace/clausal/venv/bin/python -c "from clausal.tools.clausal_to_prolog import
 clausal_source_to_prolog"`, the Clausal engine itself, and
-`/workspace/scryer-prolog/target/release/scryer-prolog`. Every Prolog output block is
-pasted verbatim from a real run. Where this document contradicts
+`/workspace/scryer-prolog/target/release/scryer-prolog`. Every output block is unedited terminal
+output, of one of two kinds, and each block says which:
+
+- **Scryer blocks** show the consulted file and the exact
+  `$ printf '…' | scryer-prolog …` invocation, with Scryer's own answers beneath.
+  Scryer does not echo a piped query, so the queries live in the `printf` and the
+  answers are in query order. Re-running the shown command reproduces the shown lines
+  byte for byte — this was checked mechanically for all 6 blocks after the last edit.
+- **Engine blocks** are marked "Python driver stdout". They are the unedited stdout of a
+  small Python driver calling the predicate once per row against the live Clausal
+  engine; the `-> succeeds` / `-> fails` wording is that driver's `print()`, while the
+  values and any exception text are the engine's.
+
+Where this document contradicts
 `docs/iso-export-pilot-2026-09.md` §5.1 or `.superpowers/.../task-6-report.md` §7, the
 divergence is called out explicitly.
 
@@ -55,7 +67,9 @@ dead for this corpus.
 ### 1.2 Clausal `==`, measured
 
 Run against the live engine (`/workspace/clausal/venv/bin/python`), predicate
-`eq(A, B) <- (A == B)`:
+`eq(A, B) <- (A == B)` (Python driver stdout — one call per row, printing the outcome and
+the dereferenced bindings; the `-> succeeds` / `-> fails` wording is the driver's, the
+exception text is the engine's):
 
 ```
 eq(2500, 2500.0)   ground/ground numeric, diff type  -> succeeds, bindings (2500, 2500.0)
@@ -75,19 +89,29 @@ non-numbers, and raising when one side is unbound and the other is a ground non-
 ### 1.3 The same shapes in ISO, measured
 
 Scryer (`/workspace/scryer-prolog/target/release/scryer-prolog`, `--version` reports
-`cargo:0.10.0`), predicates `seq(A,B) :- A == B.` and `aeq(A,B) :- A =:= B.`:
+`cargo:0.10.0`). Consulted file `mx2.pl`:
+
+```prolog
+seq(A, B) :- A == B.
+aeq(A, B) :- A =:= B.
+```
 
 ```
-== : 2500 == 2500.0             fails
-== : foo == foo                 succeeds
-== : foo == bar                 fails
-== : V == 1257000               fails
-== : V == foo                   fails
-== : V == W                     fails
-=:=: 2500 =:= 2500.0            succeeds
-=:=: V =:= 1257000              RAISES error(instantiation_error,(is)/2)
-=:=: V =:= foo                  RAISES error(instantiation_error,(is)/2)
+$ printf 'seq(2500, 2500.0).\nseq(foo, foo).\nseq(foo, bar).\nseq(_, 1257000).\nseq(_, foo).\nseq(_, _).\naeq(2500, 2500.0).\naeq(_, 1257000).\naeq(_, foo).\n' | scryer-prolog mx2.pl
+   false.
+   true.
+   false.
+   false.
+   false.
+   false.
+   true.
+   error(instantiation_error,(is)/2).
+   error(instantiation_error,(is)/2).
 ```
+
+Answers in query order: `2500 == 2500.0` false; `foo == foo` true; `foo == bar` false;
+`V == 1257000` false; `V == foo` false; `V == W` false; `2500 =:= 2500.0` true;
+`V =:= 1257000` raises; `V =:= foo` raises.
 
 Side by side, of the 7 Clausal rows, **4 diverge** from the emitted `==` and **2 of the
 3 comparable rows diverge** from the emitted `=:=`. Neither ISO operator can bind, so
@@ -122,7 +146,7 @@ doc did not list are included below:
 doc missed**: a full-taper case where the domain means "the allowance is nil" and the
 export emits a structural test that can only ever fail on an unbound `Allowance`.
 
-The two shapes, minimised and run in Scryer:
+The two shapes, minimised. File `eq_witness.pl`:
 
 ```prolog
 taxable(Total, Allow, After) :- After =:= Total - Allow.   % liability.clausal:169 shape
@@ -130,22 +154,27 @@ allow(A, F)                  :- A == F.                    % liability.clausal:1
 ```
 
 ```
-?- taxable(1257000, 257000, After)  raised(error(instantiation_error,(is)/2))
-failed
-?- allow(A, 1257000)                failed
-?- taxable(1257000, 257000, 1000000)succeeded
+$ printf 'taxable(1257000, 257000, After).\nallow(A, 1257000).\ntaxable(1257000, 257000, 1000000).\n' | scryer-prolog eq_witness.pl
+   error(instantiation_error,(is)/2).
+   false.
+   true.
 ```
 
-The same two predicates written in Clausal and run on the engine:
+Answers in query order: computing `After` **raises**; computing `A` **fails**; checking
+an `After` the caller already supplied **succeeds**.
+
+The same two predicates written in Clausal and run on the engine (Python driver stdout;
+the wording is the driver's, the values are the engine's):
 
 ```
 CLAUSAL  taxable(1257000, 257000, AFTER) succeeds with AFTER = 1000000
 CLAUSAL  allow(A, 1257000)               succeeds with A = 1257000
 ```
 
-That is the defect in four lines of output: the engine computes `1000000` and
-`1257000`; the export raises on one and fails on the other. The third Scryer line shows
-why no gate below G3 can see it — hand the export the answer and it happily checks it.
+That is the defect in five lines of output: the engine computes `1000000` and
+`1257000`; the export raises on one and fails on the other. The third Scryer answer
+shows why no gate below G3 can see it — hand the export the answer and it happily
+checks it.
 
 ### 1.5 A second divergence, for operands that *are* bound
 
@@ -153,11 +182,19 @@ The pilot doc treats this as purely a binding-mode problem. It is not. Even wher
 operands are bound — the 429-goal majority of emitted `==` (see §2) — the emitted `==`
 is the wrong *operator family*, because Clausal `==` is arithmetic:
 
+Clausal, `chk(X) <- (X == 2500)` (Python driver stdout):
+
 ```
-CLAUSAL chk(2500.0) -> succeeds        (for  chk(X) <- (X == 2500))
+CLAUSAL chk(2500.0) -> succeeds
 CLAUSAL chk(2500)   -> succeeds
-scryer chk(2500.0) fails               (for  chk(X) :- X == 2500.)
-scryer chk(2500) succeeds
+```
+
+ISO, the emitted `chk(X) :- X == 2500.` in file `num2.pl`:
+
+```
+$ printf 'chk(2500.0).\nchk(2500).\n' | scryer-prolog num2.pl
+   false.
+   true.
 ```
 
 An integer-vs-float mismatch anywhere in a bound comparison silently flips the verdict.
@@ -182,8 +219,8 @@ q(X, Y, Z) :-            % from  Q(X, Y, Z) <- (X == Y + 1 == Z)
     Y + 1 == Z.
 ```
 
-`X == Y + 1` can never succeed for numeric `X` in ISO (`5 == 4+1` → `fails`, verified in
-Scryer). An AST scan of all 765 published `.clausal` files finds **0 chained `Compare`
+`X == Y + 1` can never succeed for numeric `X` in ISO — `printf '5 == 4 + 1.\n' |
+scryer-prolog` prints `   false.` An AST scan of all 765 published `.clausal` files finds **0 chained `Compare`
 nodes**, so this is dead code today; any fix must not leave it behind as the one path
 that still guesses.
 
@@ -469,7 +506,7 @@ get. Clausal's `date` values are real `datetime.date` objects and are natively o
 > each other (`date` vs `datetime`, naive vs tz-aware `datetime`, `date` vs a number)
 > raises a catchable `error(type_error(orderable, Culprit), (<)/2)`.
 
-Confirmed live on the engine:
+Confirmed live on the engine (Python driver stdout; the exception text is the engine's):
 
 ```
 CLAUSAL sif("virtual_asset", date(2026,9,2)) -> succeeds
@@ -501,11 +538,12 @@ service_in_force(Category, Query_date) :-
     Commencement_date =< Query_date.
 ```
 
-In Scryer, on exactly that emitted text:
+In Scryer, on exactly that emitted text (saved as `date_witness.pl`, the two facts above
+plus the clause):
 
 ```
-?- service_in_force("virtual_asset", date(2026,9,2)). raised error(type_error(evaluable,date/3),(is)/2)
- failed
+$ printf 'service_in_force("virtual_asset", date(2026,9,2)).\n' | scryer-prolog date_witness.pl
+   error(type_error(evaluable,date/3),(is)/2).
 ```
 
 Task 6's §7 quoted this witness and this error term; **both reproduce exactly.**
@@ -581,23 +619,23 @@ machinery this needs (`to_ordinal/2` at line 116, guarded by a cut-free `valid_d
 
 **D2 — map to standard order `@<` / `@=<` / `@>` / `@>=`.** Tempting, because for
 ground `date/3` terms with integer components, standard order **is** chronological
-order — verified in Scryer:
+order — verified in Scryer, no consulted file needed:
 
 ```
-?- date(2018,4,3) @< date(2026,3,31).             succeeded
-?- date(2007,12,12) @< date(2007,2,1).            failed
-?- date(2007,2,1) @< date(2007,12,12).            succeeded
+$ printf 'date(2018,4,3) @< date(2026,3,31).\ndate(2007,12,12) @< date(2007,2,1).\ndate(2007,2,1) @< date(2007,12,12).\n' | scryer-prolog
+   true.
+   false.
+   true.
 ```
 
 It is nonetheless the wrong answer, for three separately verified reasons:
 
 ```
-?- date(2018,4,3) @< 42.                          failed
-?- date(2018,4,3) @< date(2018,4,X).              failed
-```
-```
-2 @< 1.5    fails          % (a second Scryer run, on numbers alone)
-1.5 @< 2    succeeds
+$ printf 'date(2018,4,3) @< 42.\ndate(2018,4,3) @< date(2018,4,X).\n2 @< 1.5.\n1.5 @< 2.\n' | scryer-prolog
+   false.
+   false.
+   false.
+   true.
 ```
 
 1. **Mixed date/number gives an answer where Clausal raises.** `date(…) @< 42` fails
@@ -608,9 +646,10 @@ It is nonetheless the wrong answer, for three separately verified reasons:
    `date(2018,4,3) @< date(2018,4,X)` fails because an unbound `X` precedes `3` in
    standard order. Clausal supports partially-instantiated dates on purpose
    (`_DatePattern`, `clausal/modules/py/datetime.py:115-122`).
-3. **`@<` cannot be applied unconditionally**, because it breaks numbers: `2 @< 1.5`
-   succeeds-as-`false` and `1.5 @< 2` succeeds, since standard order sorts all floats
-   before all integers regardless of value. So D2 still needs the same type analysis D1
+3. **`@<` cannot be applied unconditionally**, because it breaks numbers: the last two
+   answers show `2 @< 1.5` false and `1.5 @< 2` true, since standard order sorts all
+   floats before all integers regardless of value — the opposite of `<` on those
+   operands. So D2 still needs the same type analysis D1
    needs, and then buys nothing D1 does not buy more correctly.
 
 **D3 — runtime-dispatching companion `clausal_lt/2` &c.** Mirror the engine at call
