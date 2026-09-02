@@ -465,9 +465,11 @@ class TestPrologAstConversion:
         assert isinstance(item, PClause)
         head = item.head
         assert isinstance(head, PCompound)
-        # _x → PVar("X"), _head → PVar("Head")
-        assert head.args[0] == PVar("X")
-        assert head.args[1] == PVar("Head")
+        # _x → PVar("X"), _head → PVar("Head"), then both are singletons
+        # (each occurs once in this item) so the singleton post-pass
+        # underscore-prefixes them: PVar("_X"), PVar("_Head").
+        assert head.args[0] == PVar("_X")
+        assert head.args[1] == PVar("_Head")
 
     def test_list_with_star_unpack(self):
         # nv

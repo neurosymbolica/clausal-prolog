@@ -94,7 +94,7 @@ test("arithmetic term is structural: 1+2 != 3 in unify") :-
     \+ (X = 1 + 2, X = 3).
 
 test("var/atom is not: succeeds with constraint") :-
-    dif(X_unused, a).
+    dif(_X_unused, a).
 
 test("different numbers: 1 is not 2") :-
     dif(1, 2).
@@ -103,16 +103,16 @@ test("int == float (Python quirk)") :-
     1 == 1.0.
 
 test("two fresh vars: X == Y (CLP(FD) posts)") :-
-    X_unused == Y_unused.
+    _X_unused == _Y_unused.
 
 test("same var: X == X") :-
     X == X.
 
 test("var != atom raises catchable type_error") :-
-    catch((X_unused \== a, false), _, true).
+    catch((_X_unused \== a, false), _, true).
 
 test("two fresh vars: X != Y") :-
-    X_unused \== Y_unused.
+    _X_unused \== _Y_unused.
 
 test("structural_eq: a == a") :-
     structural_eq(a, a).
@@ -128,10 +128,10 @@ test("structural_eq: same var") :-
     structural_eq(X, Y).
 
 test("structural_eq: distinct unbound vars fail") :-
-    \+ structural_eq(X_unused, Y_unused).
+    \+ structural_eq(_X_unused, _Y_unused).
 
 test("structural_eq: unbound var vs atom fails") :-
-    \+ structural_eq(X_unused, a).
+    \+ structural_eq(_X_unused, a).
 
 test("structural_eq: nested lists") :-
     structural_eq([1, [2, 3]], [1, [2, 3]]).

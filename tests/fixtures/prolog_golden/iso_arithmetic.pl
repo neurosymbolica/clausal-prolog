@@ -195,7 +195,7 @@ test("sign float negative") :-
     S =:= -1.
 
 test("sign unbound fails") :-
-    \+ sign(X_UNUSED, _).
+    \+ sign(_X_UNUSED, _).
 
 test("sign check mode: correct") :-
     sign(5, 1).
@@ -220,7 +220,7 @@ test("gcd negative: gcd(-12, 8) = 4") :-
     G == 4.
 
 test("gcd unbound fails") :-
-    \+ gcd(X_UNUSED, 8, _).
+    \+ gcd(_X_UNUSED, 8, _).
 
 test("divmod 17 5 = (3, 2)") :-
     divmod_(17, 5, Q, R),
@@ -241,7 +241,7 @@ test("divmod negative: -7 // 2 = -4, -7 % 2 = 1 (Python floor)") :-
     R == 1.
 
 test("divmod unbound fails") :-
-    \+ divmod_(X_UNUSED, 5, _, _).
+    \+ divmod_(_X_UNUSED, 5, _, _).
 
 test("divmod check mode: correct") :-
     divmod_(17, 5, 3, 2).

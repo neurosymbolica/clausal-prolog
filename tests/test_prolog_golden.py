@@ -105,13 +105,15 @@ class TestInNotIn:
 
     def test_in_translates_to_member(self):
         # nv
+        # _x occurs once in this item, so the singleton post-pass
+        # underscore-prefixes it: X -> _X.
         result = clausal_source_to_prolog("Test() <- (_x in [1, 2, 3])")
-        assert "member(X, [1, 2, 3])" in result
+        assert "member(_X, [1, 2, 3])" in result
 
     def test_not_in_translates_to_negated_member(self):
         # nv
         result = clausal_source_to_prolog("Test() <- (_x not in [1, 2, 3])")
-        assert "\\+ member(X, [1, 2, 3])" in result or "\\+(member(X, [1, 2, 3]))" in result
+        assert "\\+ member(_X, [1, 2, 3])" in result or "\\+(member(_X, [1, 2, 3]))" in result
 
 
 class TestKeywordArgs:

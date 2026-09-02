@@ -19,7 +19,7 @@ import re
 from clausal.tools.prolog_ast import (
     PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
     PClause, PDCGRule, PDirective, PComment, PModule,
-    PTerm, PItem,
+    PTerm, PItem, PrologVisitor, PrologTransformer,
 )
 from clausal.tools.prolog_operators import OperatorTable
 from clausal.tools.prolog_dialect import (
@@ -454,9 +454,9 @@ class _ClausalToProlog:
                 ))
             if item is not None:
                 if isinstance(item, list):
-                    self._items.extend(item)
+                    self._items.extend(_prefix_singletons(i) for i in item)
                 else:
-                    self._items.append(item)
+                    self._items.append(_prefix_singletons(item))
 
         # Post-pass: (1) keep only locally-defined predicates in :- module
         # exports. Scryer raises permission_error(...
@@ -1308,6 +1308,59 @@ class _ClausalToProlog:
         return PList(tuple(
             PCompound("attribute", (k, v)) for k, v in pairs
         ))
+
+
+# ── Singleton variable post-pass ────────────────────────────────────────
+
+def _prefix_singletons(item: PItem) -> PItem:
+    """Rename every singleton (exactly-one-occurrence) variable in *item*
+    to a ``_``-prefixed name.
+
+    ISO engines (Scryer) warn on a singleton variable — a name occurring
+    only once anywhere it appears. The corpus deliberately writes some
+    variables exactly once (a fact-head "any value" position, e.g.
+    ``schedule_by_criteria(high, no_accepted_medical_use, DEPENDENCE,
+    schedule_i)``), relying on Prolog's convention that a leading ``_``
+    silences the warning. clausal_var_to_prolog renames ``DEPENDENCE`` to
+    ``Dependence``, which un-silences it purely as an artifact of
+    translation — this pass restores the silence at emission time without
+    touching source semantics (a rename only; unification is unaffected).
+
+    Counted over *item* alone (clause head+body together, a fact's args,
+    or a DCG rule's head+body): the same per-item scope convert_module
+    already resets its variable-rename table on (F022), since a variable
+    name has no meaning across top-level items in the first place.
+    The anonymous variable (``_``) is exempt — every occurrence is already
+    independent, so it is never "a singleton" in the sense that matters
+    here. A name already spelled with a leading underscore (a Clausal
+    ``_x``-style singleton, which clausal_var_to_prolog may leave
+    underscore-led in edge cases) is left as-is rather than double-prefixed.
+
+    A plain AST rewrite, applied per item by construction: walking every
+    PVar in the item's subterms means DCG hidden args, nested compounds,
+    and list elements are all covered without enumerating term shapes by
+    hand.
+    """
+    counts: dict[str, int] = {}
+
+    class _Counter(PrologVisitor):
+        def visit_PVar(self, node):
+            if node.name != "_":
+                counts[node.name] = counts.get(node.name, 0) + 1
+
+    _Counter().visit(item)
+
+    singletons = {name for name, n in counts.items() if n == 1}
+    if not singletons:
+        return item
+
+    class _Renamer(PrologTransformer):
+        def visit_PVar(self, node):
+            if node.name in singletons and not node.name.startswith("_"):
+                return PVar("_" + node.name)
+            return node
+
+    return _Renamer().visit(item)
 
 
 # ── Module export / discontiguous post-pass ────────────────────────────

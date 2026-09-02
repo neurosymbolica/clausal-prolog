@@ -10,7 +10,7 @@ check_diagonals([Queen|Rest]) :-
     safe_from(Queen, Rest, 1),
     check_diagonals(Rest).
 
-safe_from(Queen_unused, [], Distance_unused).
+safe_from(_Queen_unused, [], _Distance_unused).
 
 safe_from(Queen, [Head|Tail], Distance) :-
     Queen \== Head,

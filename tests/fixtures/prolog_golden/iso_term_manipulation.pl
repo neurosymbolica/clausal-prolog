@@ -32,11 +32,11 @@ test("decompose string: 'Hello' =.. X") :-
     X == [hello].
 
 test("decompose int: functor(1, N, A)") :-
-    functor(1, N_UNUSED, A),
+    functor(1, _N_UNUSED, A),
     A == 0.
 
 test("decompose float: functor(1.0, N, A)") :-
-    functor(1.0, N_UNUSED, A),
+    functor(1.0, _N_UNUSED, A),
     A == 0.
 
 test("unpack int: 1 =.. X gives [1]") :-
