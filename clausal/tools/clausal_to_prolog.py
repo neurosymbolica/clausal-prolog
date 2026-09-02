@@ -13,6 +13,7 @@ Public API:
 from __future__ import annotations
 
 import ast as python_ast
+import posixpath
 import re
 
 from clausal.tools.prolog_ast import (
@@ -48,6 +49,15 @@ class UntranslatableConstructError(NotImplementedError):
         super().__init__(
             f"{len(constructs)} untranslatable construct(s):\n  {listing}"
         )
+
+
+# Dotted clausal module → the file name it is exported under at the root of
+# the export tree. These libraries are flattened out of their source package
+# so every exported module can reach them by climbing to the root.
+_LIBRARY_REMAP = {
+    "clausal.stdlib.kleene": "clausal_kleene",
+    "formalize_lib": "formalize_lib",
+}
 
 
 # ── Prolog text emission ─────────────────────────────────────────────
@@ -276,6 +286,10 @@ def emit_item(item: PItem, op_table: OperatorTable) -> str:
         body_str = emit_term(item.body, op_table)
         return ":- " + body_str + ".\n"
     if isinstance(item, PComment):
+        if item.text.startswith("%"):
+            # Already written as Prolog line comment(s) — emit verbatim so a
+            # one-line note does not become a block comment.
+            return item.text.rstrip("\n") + "\n"
         return "/* " + item.text + " */\n"
     # PQuery
     body_str = emit_term(item.body, op_table)
@@ -378,9 +392,19 @@ class _ClausalToProlog:
     >> DCG rules, -directives.
     """
 
-    def __init__(self, dialect: Dialect, strict: bool = False):
+    def __init__(self, dialect: Dialect, strict: bool = False, *,
+                 module_path: str | None = None,
+                 module_signatures: dict[str, set[tuple[str, int]]] | None = None):
         self.dialect = dialect
         self.strict = strict
+        # Dotted path of the module being translated. When set, use_module
+        # file paths are emitted relative to this module's package directory
+        # (Scryer resolves a consulted path against the consulting file).
+        self.module_path = module_path
+        # Dotted target path → that target's FILTERED export set, as returned
+        # by module_export_signature. When set, import lists are narrowed to
+        # names the target really exports.
+        self.module_signatures = module_signatures
         self._items: list[PItem] = []
         self._warnings: list[str] = []
         self._all_warnings: list[str] = []
@@ -600,6 +624,80 @@ class _ClausalToProlog:
         export_list = PList(tuple(exports))
         return PDirective(PCompound("module", (PAtom(mod_name), export_list)))
 
+    def _module_reference(self, mod_path: str) -> PTerm:
+        """The term naming *mod_path* in a use_module directive.
+
+        Dialect libraries keep their ``library(name)`` form. Everything else
+        is a file path with dots turned into slashes. Without ``module_path``
+        that path is the dotted path verbatim. With it — the export-tree case
+        — the libraries in :data:`_LIBRARY_REMAP` are first relocated to the
+        root of the tree they are exported into, then the whole path is made
+        relative to the consuming module's own package, because Scryer
+        resolves a consulted path against the consulting file.
+        """
+        library_name = self.dialect.library_map.get(mod_path)
+        if library_name is not None:
+            # Known library: parse "library(clpfd)" → library(clpfd).
+            lib_inner = library_name[len("library("):-1]  # "clpfd"
+            return PCompound("library", (PAtom(lib_inner),))
+
+        if self.module_path is None:
+            # Single-file use: absolute dotted path, unchanged.
+            return PAtom(mod_path.replace(".", "/"), quoted=True)
+
+        target = _LIBRARY_REMAP.get(mod_path, mod_path)
+        consumer_pkg = "/".join(self.module_path.split(".")[:-1])
+        prolog_path = posixpath.relpath(target.replace(".", "/"), consumer_pkg or ".")
+        return PAtom(prolog_path, quoted=True)
+
+    def _import_list(self, mod_path: str, elts: list) -> list[PTerm] | None:
+        """The import-list elements for -import_from(*mod_path*, [*elts*]).
+
+        With no ``module_signatures`` the requested names are emitted as they
+        always were (bare atoms, or Name/Arity when written with arguments).
+        With signatures, each requested name is resolved the same way a
+        predicate name is (PascalCase → snake_case, builtin remaps) and then
+        looked up in the target's export set; names the target does not export
+        — atoms, term constructors, signature-only predicates — are dropped,
+        because Scryer raises at load time on an import it cannot satisfy.
+        """
+        requested: list[tuple[str, int | None]] = []
+        for elt in elts:
+            if isinstance(elt, python_ast.Call) and isinstance(elt.func, python_ast.Name):
+                requested.append((resolve_name(elt.func.id, self.dialect), len(elt.args)))
+            elif isinstance(elt, python_ast.Name):
+                requested.append((resolve_name(elt.id, self.dialect), None))
+
+        if self.module_signatures is None:
+            if self.module_path is not None:
+                # Relative-path mode without signatures: no way to tell which
+                # requested names the target really exports, so import its
+                # whole export set instead of naming any of them.
+                return None
+            return [
+                PCompound("/", (PAtom(name), PNumber(arity)))
+                if arity is not None else PAtom(name)
+                for name, arity in requested
+            ]
+
+        exported = self.module_signatures.get(mod_path)
+        if exported is None:
+            # Target outside the export set being built: nothing to filter
+            # against, so import everything it exports (a listless use_module
+            # can never claim an export the target does not have).
+            return None
+
+        imports: list[PTerm] = []
+        seen: set[tuple[str, int]] = set()
+        for name, arity in requested:
+            arities = ([arity] if arity is not None
+                       else sorted(a for n, a in exported if n == name))
+            for a in arities:
+                if (name, a) in exported and (name, a) not in seen:
+                    seen.add((name, a))
+                    imports.append(PCompound("/", (PAtom(name), PNumber(a))))
+        return imports
+
     def _convert_import_from(self, call: python_ast.Call) -> PDirective | PComment:
         """Convert -import_from(module, [names]).
 
@@ -616,30 +714,22 @@ class _ClausalToProlog:
                 f"   No Prolog equivalent available."
             )
 
-        # Resolve via dialect library_map, or fallback to path
-        library_name = self.dialect.library_map.get(mod_path)
-        if library_name is not None:
-            # Known library: parse "library(clpfd)" → library(clpfd).
-            lib_inner = library_name[len("library("):-1]  # "clpfd"
-            prolog_mod = PCompound("library", (PAtom(lib_inner),))
-        else:
-            # Unknown: use plain path
-            prolog_path = mod_path.replace(".", "/")
-            prolog_mod = PAtom(prolog_path, quoted=True)
+        prolog_mod = self._module_reference(mod_path)
 
-        imports = []
-        if len(call.args) > 1 and isinstance(call.args[1], python_ast.List):
-            for elt in call.args[1].elts:
-                if isinstance(elt, python_ast.Call) and isinstance(elt.func, python_ast.Name):
-                    functor = resolve_name(elt.func.id, self.dialect)
-                    arity = len(elt.args)
-                    imports.append(PCompound("/", (PAtom(functor), PNumber(arity))))
-                elif isinstance(elt, python_ast.Name):
-                    functor = resolve_name(elt.id, self.dialect)
-                    imports.append(PAtom(functor))
+        elts = (call.args[1].elts
+                if len(call.args) > 1 and isinstance(call.args[1], python_ast.List)
+                else [])
+        imports = self._import_list(mod_path, elts)
 
-        import_list = PList(tuple(imports))
-        return PDirective(PCompound("use_module", (prolog_mod, import_list)))
+        if imports is None:
+            # Unknown or unfiltered target: import its whole export set.
+            return PDirective(PCompound("use_module", (prolog_mod,)))
+        if not imports and self.module_signatures is not None:
+            # Nothing the target exports was asked for — a use_module naming
+            # predicates it does not export would abort the consult.
+            return PComment(f"% skipped: {mod_path} exports nothing")
+
+        return PDirective(PCompound("use_module", (prolog_mod, PList(tuple(imports)))))
 
     def _convert_import_module(self, call: python_ast.Call) -> PDirective | PComment:
         """Convert -import_module(module)."""
@@ -652,14 +742,7 @@ class _ClausalToProlog:
                 f"   No Prolog equivalent available."
             )
 
-        library_name = self.dialect.library_map.get(mod_path)
-        if library_name is not None:
-            lib_inner = library_name[len("library("):-1]
-            prolog_mod = PCompound("library", (PAtom(lib_inner),))
-        else:
-            prolog_path = mod_path.replace(".", "/")
-            prolog_mod = PAtom(prolog_path, quoted=True)
-        return PDirective(PCompound("use_module", (prolog_mod,)))
+        return PDirective(PCompound("use_module", (self._module_reference(mod_path),)))
 
     def _convert_meta_directive(self, name: str, call: python_ast.Call) -> PDirective | list:
         """Convert -dynamic(pred/arity), -table(...), -discontiguous(...)."""
@@ -1325,7 +1408,10 @@ def module_export_signature(pmodule: PModule) -> set[tuple[str, int]]:
 
 def clausal_source_to_prolog_ast(source: str, *,
                                   dialect: Dialect | None = None,
-                                  strict: bool = False) -> PModule:
+                                  strict: bool = False,
+                                  module_path: str | None = None,
+                                  module_signatures: dict[str, set[tuple[str, int]]] | None = None,
+                                  ) -> PModule:
     """Parse .clausal source text and return a Prolog AST (PModule).
 
     Uses Python's parser on the clausal source, then converts the
@@ -1335,17 +1421,33 @@ def clausal_source_to_prolog_ast(source: str, *,
     When *strict* is True, any construct with no ISO Prolog equivalent
     raises :class:`UntranslatableConstructError` instead of emitting a
     ``???`` placeholder plus a warning comment.
+
+    *module_path* is the dotted path of the module being translated
+    (``"eu.ai_act.prohibited_practices.prohibition"``). When given,
+    ``use_module`` file paths are emitted relative to that module's package
+    directory, which is what Scryer resolves a consulted path against.
+
+    *module_signatures* maps a dotted target path to that target's filtered
+    export set (:func:`module_export_signature`'s return value). When given,
+    import lists are narrowed to ``Name/Arity`` pairs the target really
+    exports; when omitted alongside *module_path*, the import list is dropped
+    entirely (``:- use_module('path').``).
     """
     if dialect is None:
         dialect = Dialect.iso()
     tree = python_ast.parse(source)
-    converter = _ClausalToProlog(dialect, strict=strict)
+    converter = _ClausalToProlog(dialect, strict=strict,
+                                 module_path=module_path,
+                                 module_signatures=module_signatures)
     return converter.convert_module(tree)
 
 
 def clausal_source_to_prolog(source: str, *,
                               dialect: Dialect | None = None,
-                              strict: bool = False) -> str:
+                              strict: bool = False,
+                              module_path: str | None = None,
+                              module_signatures: dict[str, set[tuple[str, int]]] | None = None,
+                              ) -> str:
     """Translate .clausal source text to Prolog source text.
 
     Full pipeline: .clausal → Python AST → Prolog AST → .pl text.
@@ -1353,10 +1455,15 @@ def clausal_source_to_prolog(source: str, *,
     When *strict* is True, any construct with no ISO Prolog equivalent
     raises :class:`UntranslatableConstructError` instead of emitting a
     ``???`` placeholder plus a warning comment.
+
+    *module_path* and *module_signatures* control ``use_module`` emission —
+    see :func:`clausal_source_to_prolog_ast`.
     """
     if dialect is None:
         dialect = Dialect.iso()
-    pmodule = clausal_source_to_prolog_ast(source, dialect=dialect, strict=strict)
+    pmodule = clausal_source_to_prolog_ast(source, dialect=dialect, strict=strict,
+                                           module_path=module_path,
+                                           module_signatures=module_signatures)
     return emit_module(pmodule, dialect.operator_table)
 
 
