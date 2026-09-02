@@ -1,0 +1,232 @@
+# Tagged-tuple term representation ("s-expressions in a Python tuple")
+
+**Status:** DESIGN RECORD, sized, not scheduled (2026-09-03). No engine change made.
+Rev 2: tuple-data tag changed from `()` to the `tuple` type object.
+Rev 3: tag domain opened (OWA); atoms become global interned strings (standard-Prolog
+semantics) with a Ciao-style `-hide` directive for opt-in module-local symbols. This SUPERSEDES
+the per-module class-identity atom design shipped 2026-07-29 (strict-atoms release) — the
+*checking* survives, the *identity mechanism* is replaced. See §1a.
+**Origin:** design discussion 2026-09-03; resolves (rather than works around) both phenomena in
+`implementation_plans/dict-atom-keys-vs-predicates.md` — see §3a.
+
+---
+
+## 1. The design
+
+Replace the runtime representation of compound terms — instances of per-functor classes minted
+by `PredicateMeta` — with plain Python tuples under a **uniform tagged-cell discipline**:
+
+- **Compound term** `foo(x, y)` → `("foo", x, y)`: slot 0 is the functor, an **interned str**.
+- **Tuple data** `(x, y)` → `(tuple, x, y)`: slot 0 is the builtin `tuple` type object
+  (identity is a language-level guarantee, one type object per interpreter; in C the tag check
+  is `slot0 == (PyObject *)&PyTuple_Type`, a static pointer).
+- **The discipline, not the domain, is what resolves ambiguity.** Every tuple inside the
+  runtime has a tag in slot 0; no untagged tuple exists. Given that closure property the tag
+  domain is **open** (OWA): a str functor, the `tuple` type, an unbound `Var` (higher-order
+  terms — `(F, X)` unifies with `("foo", 1)` binding `F = "foo"`, which the class
+  representation cannot express), or any object (thunks, partial applications). Only `tuple`
+  itself is reserved (it marks tuple data).
+- **Zero-arg atom** is the bare interned str; the empty user tuple is `(tuple,)`; a tuple
+  containing an empty tuple is `(tuple, (tuple,))`. All mutually unambiguous — but note the
+  atom/string collapse, §5.
+- **Keyword arguments are a compile-time affair.** The compiler already resolves keyword goals
+  against registered signatures and reorders positionally
+  (`clausal/logic/compiler/terms_to_goalop.py:398-423`, fed by the `-module` functor lists
+  parsed at `clausal/templating/term_rewriting.py:4508`). Construction takes the same path:
+  named/positional only, placed by the signature; `**kwargs` stays unsupported (nothing lost).
+  Partial terms (`point(x=10)` → `Var()` backfill) are compiler-emitted when the signature is
+  known; impossible (compile error) for OWA-unknown functors.
+- **Open-world construction is a per-module toggle**: signatures from `-module` are advisory
+  when on (any arity/functor constructs a cell), checked when off. All checking is compiler-side.
+
+## 1a. Atoms: global strings + `-hide`, replacing per-module class identity
+
+Standard-Prolog / Ciao model: **predicate names are module-local; atom/functor names in data
+are shared globally** (Ciao module-system docs, Cabeza & Hermenegildo 1999/2000). Atoms lower
+to interned Python strings. Module-local symbols become **opt-in** via a Ciao-style `-hide`
+directive: the compiler automatically renames hidden symbols (mangling, e.g. `"m1$foo"`, or an
+unforgeable non-str object — open question §8), which is Ciao's mechanism for true abstract
+data types and is also what its later work exploits for static analysis and cheap run-time
+checking ("Exploiting Term Hiding...", Hermenegildo et al. 2018).
+
+What this replaces vs. preserves from the strict-atoms design (shipped 2026-07-29):
+- **Preserved:** "undeclared bare atom is a compile-time error." It becomes a pure compiler
+  lint against the declared vocabulary — it no longer rides on Python name resolution at all.
+  `-implicit_atoms` remains the escape hatch.
+- **Replaced:** runtime per-module atom identity (`m1.foo is not m2.foo`, non-unifying).
+  Default becomes global (`"foo" == "foo"` everywhere); locality is what `-hide` is for.
+  The known footguns of the identity design go away with it: the "`-private` in two files
+  silently breaks atom identity" trap, `register_atom_identity`/`atom_by_id`
+  (`predicate.py:1178-1211`), `CLAUSAL_WARN_ATOM_IDENTITY`, and the import-the-atom-everywhere
+  convention.
+- **New capability:** terms become picklable/serializable/process-portable for free — class
+  terms never were (they need the minting module imported on the other side). The
+  second-package-copy hazard (`predicate.py:1138`) vanishes for term data (str and `tuple`
+  are copy-proof); it remains only for the machinery types (Var, DictTerm, ...).
+
+## 2. Measured numbers (CPython 3.13, /workspace/clausal/venv, 2026-09-03)
+
+| Operation | Class repr today | Tagged tuple |
+|---|---|---|
+| Construct arity-3 term via `PredicateMeta.__call__` | ~857 ns | — |
+| Construct via plain `__init__` (no metaclass `__call__`) | ~86 ns | — |
+| Construct tuple literal | — | ~18–25 ns |
+| Field access | ~13 ns (`getattr`, slots) | ~15 ns (subscript) — a wash |
+| Head dispatch, first-arm hit | ~114 ns (MATCH_CLASS) | ~48 ns (value/literal-pattern seq match) |
+| Head dispatch, second-arm hit | ~178 ns | ~85–102 ns |
+| Tag dispatch, tuple-data arm | — | ~66 ns |
+
+Str-literal tags in match arms are *literal patterns* (`case ("foo", a, b)` — no dotted-name
+issue at all, unlike class tags); `==` on interned strs is pointer-check-first.
+`benchmarks/bench_f046_head_dispatch.py` already measures exactly str-literal head dispatch —
+it is the stated yardstick for "what native match dispatch costs here."
+
+Context that bounds the win:
+- **Goal calls never construct terms** (args flattened/positionally,
+  `goal_trampoline.py:390`); construction wins apply to structure-heavy programs.
+- **Most of the 857 ns is `PredicateMeta.__call__`** overhead; a generated-code fast path
+  recovers ~10× with no repr change — **Phase 0**, worth doing regardless.
+- **The C unifier win is the big one**: `do_unify` unifies tuples element-wise in C
+  (`_variables.c:1114`), never consulting Python `__unify__` on them — compound unification
+  stays entirely in C with zero `do_unify` changes. Slot-0 recursion handles every tag kind:
+  str vs str (rich-compare, interned fast path), `tuple` vs `tuple`, Var (binds — the
+  higher-order case), mismatches fail. One caveat: the cons rule, §5.
+
+## 3. What the tag fixes (the five collision subsystems)
+
+1. **First-arg indexing**: `_runtime_arg_key` (`arg_index.py:157-165`) currently drops tuples;
+   slot 0 becomes the index key. Str functor keys are ideal dict keys. Unbound-Var/exotic tags
+   index as `_INDEX_VAR` (correct fallback).
+2. **Tabling keys**: `_normalize_for_key`'s `("__tuple__", ...)`/`(functor-name, ...)` scheme
+   (`tabling.py:396-438` + C twin) — the representation is now *already* that key, str functor
+   included. Non-hashable exotic tags need the existing unhashable fallback.
+3. **Standard order**: one branch on slot 0 (`_helpers.py:349-401`) — but see §5, atom
+   ordering changes observably.
+4. **Structural inspection**: `functor/3`, `arg/3`, `=..`, `compound/1` uniform.
+5. **Unification**: no C change; tags differ → same-length data tuple never captures a term.
+
+## 3a. Phenomena A and B die outright
+
+From `implementation_plans/dict-atom-keys-vs-predicates.md`:
+- **Phenomenon A** (imported atom shadows same-named exported predicate → construction
+  `TypeError`): atoms are no longer Python names in module namespaces; a bare atom is a string
+  constant and cannot shadow anything. The un-export workaround convention retires.
+- **Phenomenon B** (Python-built `DictTerm` atom keys embed as bare `Name`s in query
+  templates → `NameError` in unrelated modules): that document already records "string keys
+  compile as `Constant` nodes and are therefore always safe." All atom keys become that safe
+  case. The import-into-every-queried-module convention retires.
+
+## 4. Codegen notes
+
+- Str-functor arms are plain literal patterns: `case ("point", a, b)` — no trap.
+- The `tuple` tag must be a **dotted value pattern**: `case (builtins.tuple, a, b)` after
+  `import builtins`. Never `__builtins__.tuple` (`__builtins__` is the module only in
+  `__main__`; in imported modules it is a dict — verified). Never bare `tuple` (capture
+  pattern). Rev-1 note: the earlier `()` tag had the worse trap that literal `()` is an
+  empty-sequence pattern matching `[]` too.
+- Hidden (`-hide`) symbols: the compiler substitutes the mangled/unforgeable form at every
+  literal occurrence in the owning module; other modules cannot spell it.
+
+## 5. Semantic changes to decide consciously (new in rev 3, mostly from str atoms)
+
+- **Atom/string collapse.** `red` IS `"red"`: `atom/1` vs `string/1` merge (or `atom/1`
+  becomes a lint-level notion), `{foo: 1}` and `{"foo": 1}` become the same dict, and the
+  clausify-domains string→atom profile-key migration (R8 allowlist etc.) becomes semantically
+  moot. Standard order changes observably (atoms currently sort via the compound branch;
+  they'd sort as strings) — affects `sort/2`, `setof`, existing golden outputs.
+- **The cons rule leaks into atoms** (verified, `_variables.c` "String ↔ List unification",
+  ~:1166–1284): a str unifies element-wise with a same-length list of single-char strings, so
+  `red` would unify with `['r','e','d']` under `unify()` — class atoms never did. Match
+  literal patterns and `==` are unaffected (`"red" == ['r','e','d']` is False); the exposure
+  is head-args compiled to wildcard+unify-guard and explicit `=`. Options: accept (document),
+  or gate the cons rule to SegString/DCG contexts. Must be decided before Phase 2.
+- **Predicate state relocation is now forced** (was an open question in rev 2): `_clauses`,
+  `_dispatch_fn`, `_signature`, `_locked`, tabling homes move off the functor class into the
+  `Database`, keyed `(module, name, arity)` — predicates stay module-local (Prolog/Ciao model)
+  even though atoms go global.
+- **Module inference for term-as-goal is lost.** Today `solve()`/`_term_to_goal`/goal
+  iteration infer the owning module from the class's `__module__`. A str functor carries none:
+  data terms used as goals need explicit module context — a module-qualified goal form (the
+  `m:foo(X)` analog) or a resolution rule. Affects `call/N`, `solve(m.pred(...))` surfaces.
+- **Hashability**: ground cells are hashable (str functors even more usefully so — compound
+  dict keys). Class terms were deliberately unhashable (`predicate.py:622`). Leaning feature.
+- **Diagnostics under OWA**: wrong-arity construction stops raising at build time; per-module
+  flag, default checked, as before.
+- **Embedding idioms** `for trail in term:` and `term.FieldName` (docs) exist only on class
+  instances: seam-reconstruct vs deprecate — still open, §8.
+
+## 6. Hazards
+
+1. **The seam widens**: tagging is mandatory both directions for tuple data; `_get_dispatch`
+   implementors (frozen single-arg protocol, ~20 out-of-tree) see new shapes for compounds and
+   tuples; `clausal-provenance/engine.py` (getattr + `cls(**{...})`, ~10 sites) is heaviest.
+2. **Dict/set pairs** are plain 2-tuples today (`dict_set.py:69-80`) → become `(tuple, k, v)`.
+   Migrate, don't exempt. 19 `.clausal` stdlib/corpus files to audit for destructuring.
+3. **Off-by-one + C-twin lock-step**: `do_walk` rebuild (`_variables.c:1747`,
+   `PyObject_Call(cls, kwargs)` → `PyTuple_New`), `_tabling_core.c`, `_constraints_dif.c`
+   (17 term-aware sites), `_clpfd_core.c` (5). Drift is silent corruption, not errors.
+4. **Source-level `(a, b)` overload** in `.clausal` (goal position = conjunction, arg position
+   = data): compile-time only; emitter tags exactly the data occurrences.
+5. **Atom-identity migration**: every test/golden output that relies on `m1.foo ≠ m2.foo`, on
+   atom-vs-string dict-key distinctness (`docs/dicts_sets.md:154`), or on atom ordering flips
+   behaviour. This is the migration with user-visible semantics, not just representation.
+
+## 7. Refactoring effort — inventory and sizing
+
+Site counts (grep, 2026-09-03, `clausal/` excl. tests unless noted):
+
+| Coupled surface | Count |
+|---|---|
+| `is_term_instance` | 141 sites / 35 files |
+| `term_field_names` | 142 sites / 32 files |
+| `isinstance(..., Compound)` | 114 sites / 30 files |
+| `PredicateMeta` references | 367 sites / 47 files |
+| `type(...).__name__` (functor-by-classname) | 114 sites / 43 files |
+| `_fields` | 279 sites / 32 files |
+| Term-aware C | `_variables.c` (105), `_tabling_core.c` (17), `_constraints_dif.c` (17), `_clpfd_core.c` (5) |
+| Tests touching these internals | 273 sites / 56 files (suite: 245 test files) |
+| Out-of-tree `packages/` | 5 files (provenance ≫ scipy, sklearn, torch, sympy-tests) |
+| Docs | `python_integration.md`, `keyword_preds.md`, `dicts_sets.md`, strict-atoms migration doc, dot-attribute design doc |
+
+### Phases
+
+- **Phase 0 — construction fast path** (no repr change): bypass `PredicateMeta.__call__` in
+  generated code; add the missing term-construction benchmark. ~857→~90 ns. **1–2 days.**
+  Sets the baseline that decides whether Phases 2+ pay.
+- **Phase 1 — funnel refactor** (prep, pays regardless): route all representation probes
+  through the `_helpers.py` accessors + `is_term_instance`/`term_field_names`; kill the direct
+  `getattr`/`type().__name__` long tail. ~40 files. **1–2 weeks.**
+- **Phase 2 — dual-representation bridge**: funnel/unifier/walkers/tabling accept tagged cells
+  alongside class terms; interleaved A/B parity corpus (drive-loop-refactor style, diff
+  failure SETS); C twins here. Cons-rule decision (§5) gates entry. **~1 week.**
+- **Phase 3 — compiler flip + atom pivot**: `terms_to_ast` emits cells; `head_match` emits
+  literal/value-pattern dispatch; kwarg placement + partial backfill; per-module OWA flag;
+  atoms lower to interned strs; `-hide` mangling; predicate state relocates to `Database`;
+  specialization stops minting classes; delete `register_atom_identity` machinery;
+  module-qualified goal form for term-as-goal. **2–3 weeks** (grew from rev 2: state
+  relocation + atom lowering + goal-module surface are new here).
+- **Phase 4 — pair migration + semantic audit**: `dict_set` pairs; tabling/order/indexing
+  collapse onto slot 0; atom/string-collapse audit across tests, golden outputs, domains
+  corpus (dict keys, sort order). **1–2 weeks** (grew: the audit is user-visible semantics).
+- **Phase 5 — seam + ecosystem**: bidirectional converter; embedding-idiom decision shipped;
+  5 `packages/` files; docs incl. strict-atoms migration note. **~1 week.**
+
+**Total: ~6–9 engineer-weeks** (rev 2 said 5–8; the atom pivot forces predicate-state
+relocation and a user-visible semantics audit, partially offset by deleting the atom-identity
+machinery). Calibration unchanged: WFS work (far narrower) took 2 review rounds / 13 defects.
+Risk concentrates in C-twin lock-step, the atom/string semantic collapse, and out-of-tree
+frozen-protocol consumers. Phases 0–1 are safe standalone merges; **Phase 2's A/B bridge is
+the go/no-go gate** — if end-to-end corpus numbers don't justify Phases 3–5, stop after
+Phase 1 and keep the fast path.
+
+## 8. Open design questions (park, don't block)
+
+1. `for trail in term:` / `term.FieldName` embedding idioms: seam-reconstruct vs deprecate?
+2. Cons rule (`str` ~ char-list) applying to atoms: accept or gate? (§5 — gates Phase 2.)
+3. `-hide` renaming scheme: mangled str (`"m$foo"` — simple, but leaks via printing and is
+   forgeable by spelling the mangled name) vs unforgeable per-module object (true ADT hiding,
+   Ciao-style guarantees, but reintroduces a non-str atom kind at the seam)?
+4. Module-qualified goal syntax for data-terms-as-goals (the `m:foo(X)` analog): spelling and
+   default-resolution rule when unqualified?
+5. Does anything genuinely need per-module atom *identity* (not just hiding) that `-hide`
+   cannot express? Scan the corpus before Phase 3 commits to global-by-default.
