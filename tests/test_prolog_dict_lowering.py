@@ -30,10 +30,14 @@ def test_dict_in_rule_body():
 
 
 def test_dict_splat_still_untranslatable():
+    # Splat not first: task 2 only lowers the splat-FIRST `is`-RHS shape
+    # (X is {**D, k: v, ...}) to attrs_put/3; splat-not-first stays
+    # untranslatable.
     import pytest
     from clausal.tools.clausal_to_prolog import UntranslatableConstructError
     with pytest.raises(UntranslatableConstructError):
-        clausal_source_to_prolog("p(X) <- (X is {**base_profile()})\n", strict=True)
+        clausal_source_to_prolog(
+            "p(X) <- (X is {a: 1, **base_profile()})\n", strict=True)
 
 
 def test_get_maps_to_profile_get():

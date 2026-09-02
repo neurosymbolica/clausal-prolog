@@ -1133,9 +1133,17 @@ class _ClausalToProlog:
         # First check for <- arrow (should already be handled at statement level)
         # Handle single comparison
         if len(node.ops) == 1:
+            op = node.ops[0]
+
+            if isinstance(op, python_ast.Is) and isinstance(
+                    node.comparators[0], python_ast.Dict):
+                splat_goal = self._convert_is_rhs_splat(
+                    node.left, node.comparators[0])
+                if splat_goal is not None:
+                    return splat_goal
+
             left = self._convert_expr(node.left)
             right = self._convert_expr(node.comparators[0])
-            op = node.ops[0]
 
             if isinstance(op, python_ast.Is):
                 # Check for "is not"
@@ -1279,6 +1287,40 @@ class _ClausalToProlog:
         self._add_warning(f'f-string: f"{fmt_string}"')
         return PAtom("???")
 
+    def _dict_attr_list(self, keys, values) -> tuple[PTerm, ...]:
+        """Build a key-sorted ``attribute(K, V)`` list from parallel
+        key/value node sequences.
+
+        Callers must ensure *keys* contains no splat (``**``, i.e. ``None``)
+        entries — this only builds the plain-pair list shared by
+        :meth:`_convert_dict` (ISO branch) and :meth:`_convert_is_rhs_splat`.
+        """
+        pairs = [(self._convert_expr(k), self._convert_expr(v))
+                 for k, v in zip(keys, values)]
+        pairs.sort(key=lambda kv: emit_term(kv[0], self.dialect.operator_table))
+        return tuple(PCompound("attribute", (k, v)) for k, v in pairs)
+
+    def _convert_is_rhs_splat(self, left_node, dict_node: python_ast.Dict):
+        """Lower ``X is {**D, k1: v1, ...}`` to
+        ``attrs_put(D, [attribute(k1, v1), ...], X)``.
+
+        Only the single-splat-FIRST shape (the kit's ``override_key``
+        idiom) is translatable this way. Returns ``None`` for any other
+        shape — no splat, splat not first, or more than one splat — so the
+        caller falls through to the generic ``is``/dict handling, which
+        keeps the existing warning/strict-raise path for those cases.
+        """
+        keys, values = dict_node.keys, dict_node.values
+        if not keys or keys[0] is not None:
+            return None  # no splat, or the splat isn't the first entry
+        if any(k is None for k in keys[1:]):
+            return None  # multi-splat — stays untranslatable
+
+        left = self._convert_expr(left_node)
+        splat_target = self._convert_expr(values[0])
+        attr_list = self._dict_attr_list(keys[1:], values[1:])
+        return PCompound("attrs_put", (splat_target, PList(attr_list), left))
+
     def _convert_dict(self, node: python_ast.Dict) -> PTerm:
         """Convert dict literal: SWI dict, or key-sorted attribute-list (ISO)."""
         if self.dialect.has_dicts:
@@ -1298,16 +1340,10 @@ class _ClausalToProlog:
                 PList(tuple(pairs)),
             ))
         # ISO / Scryer / Trealla: lower to a key-sorted attribute(K, V) list.
-        pairs = []
-        for k, v in zip(node.keys, node.values):
-            if k is None:  # {**expr} splat — no static key set
-                self._add_warning("dict splat " + python_ast.unparse(node))
-                return PAtom("???")
-            pairs.append((self._convert_expr(k), self._convert_expr(v)))
-        pairs.sort(key=lambda kv: emit_term(kv[0], self.dialect.operator_table))
-        return PList(tuple(
-            PCompound("attribute", (k, v)) for k, v in pairs
-        ))
+        if any(k is None for k in node.keys):  # {**expr} splat — no static key set
+            self._add_warning("dict splat " + python_ast.unparse(node))
+            return PAtom("???")
+        return PList(self._dict_attr_list(node.keys, node.values))
 
 
 # ── Singleton variable post-pass ────────────────────────────────────────

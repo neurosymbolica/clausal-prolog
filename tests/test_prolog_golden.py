@@ -191,9 +191,10 @@ class TestUntranslatable:
         assert 'attribute("a", 1)' in result
 
     def test_dict_splat_iso_warning(self):
-        """Dict splat still emits a warning in ISO dialect."""
+        """Dict splat not in first position still emits a warning in ISO
+        dialect (task 2 only lowers the splat-FIRST `is`-RHS shape)."""
         # nv
-        result = clausal_source_to_prolog('Test() <- (_x is {**base()})')
+        result = clausal_source_to_prolog('Test() <- (_x is {a: 1, **base()})')
         assert "WARNING" in result
         assert "dict splat" in result
 
