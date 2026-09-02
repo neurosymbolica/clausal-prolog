@@ -34,7 +34,19 @@ __all__ = [
     "clausal_source_to_prolog", "clausal_source_to_prolog_ast",
     "pascal_to_snake", "snake_to_pascal",
     "clausal_var_to_prolog", "prolog_var_to_clausal",
+    "UntranslatableConstructError",
 ]
+
+
+class UntranslatableConstructError(NotImplementedError):
+    """Raised in strict mode when source contains constructs with no ISO Prolog equivalent."""
+
+    def __init__(self, constructs: list[str]):
+        self.constructs = constructs
+        listing = "\n  ".join(constructs)
+        super().__init__(
+            f"{len(constructs)} untranslatable construct(s):\n  {listing}"
+        )
 
 
 # ── Prolog text emission ─────────────────────────────────────────────
@@ -365,10 +377,12 @@ class _ClausalToProlog:
     >> DCG rules, -directives.
     """
 
-    def __init__(self, dialect: Dialect):
+    def __init__(self, dialect: Dialect, strict: bool = False):
         self.dialect = dialect
+        self.strict = strict
         self._items: list[PItem] = []
         self._warnings: list[str] = []
+        self._all_warnings: list[str] = []
         # Per-clause variable rename table (reset per top-level item).
         # clausal_var_to_prolog is non-injective (_result and RESULT both →
         # Result), so without disambiguation two distinct clausal variables
@@ -397,6 +411,7 @@ class _ClausalToProlog:
     def _add_warning(self, construct: str) -> None:
         """Record an untranslatable construct warning."""
         self._warnings.append(construct)
+        self._all_warnings.append(construct)
 
     def convert_module(self, tree: python_ast.Module) -> PModule:
         """Convert a full Python AST Module to a PModule."""
@@ -417,6 +432,8 @@ class _ClausalToProlog:
                     self._items.extend(item)
                 else:
                     self._items.append(item)
+        if self.strict and self._all_warnings:
+            raise UntranslatableConstructError(list(self._all_warnings))
         return PModule(tuple(self._items))
 
     def _convert_stmt(self, stmt) -> PItem | list[PItem] | None:
@@ -709,7 +726,8 @@ class _ClausalToProlog:
             ) + "}")
             return PAtom("???")
 
-        # Fallback
+        # Fallback: no conversion rule for this Python AST node type
+        self._add_warning(f"unsupported expression: {python_ast.unparse(node)}")
         return PAtom("???")
 
     def _convert_constant(self, value) -> PTerm:
@@ -793,6 +811,7 @@ class _ClausalToProlog:
             # Qualified call: mod.pred(...)
             functor = self._qualified_name(node.func)
         else:
+            self._add_warning(f"unsupported call target: {python_ast.unparse(node.func)}")
             functor = "???"
 
         args = [self._convert_expr(a) for a in node.args]
@@ -900,7 +919,10 @@ class _ClausalToProlog:
             python_ast.LShift: "<<",
             python_ast.RShift: ">>",
         }
-        op_str = op_map.get(type(node.op), "???")
+        op_str = op_map.get(type(node.op))
+        if op_str is None:
+            self._add_warning(f"unsupported operator: {type(node.op).__name__}")
+            op_str = "???"
         return PCompound(op_str, (left, right))
 
     @staticmethod
@@ -1103,29 +1125,39 @@ class _ClausalToProlog:
 # ── Public API ───────────────────────────────────────────────────────
 
 def clausal_source_to_prolog_ast(source: str, *,
-                                  dialect: Dialect | None = None) -> PModule:
+                                  dialect: Dialect | None = None,
+                                  strict: bool = False) -> PModule:
     """Parse .clausal source text and return a Prolog AST (PModule).
 
     Uses Python's parser on the clausal source, then converts the
     Python AST patterns (trailing comma facts, <- rules, -directives)
     directly into Prolog AST nodes.
+
+    When *strict* is True, any construct with no ISO Prolog equivalent
+    raises :class:`UntranslatableConstructError` instead of emitting a
+    ``???`` placeholder plus a warning comment.
     """
     if dialect is None:
         dialect = Dialect.iso()
     tree = python_ast.parse(source)
-    converter = _ClausalToProlog(dialect)
+    converter = _ClausalToProlog(dialect, strict=strict)
     return converter.convert_module(tree)
 
 
 def clausal_source_to_prolog(source: str, *,
-                              dialect: Dialect | None = None) -> str:
+                              dialect: Dialect | None = None,
+                              strict: bool = False) -> str:
     """Translate .clausal source text to Prolog source text.
 
     Full pipeline: .clausal → Python AST → Prolog AST → .pl text.
+
+    When *strict* is True, any construct with no ISO Prolog equivalent
+    raises :class:`UntranslatableConstructError` instead of emitting a
+    ``???`` placeholder plus a warning comment.
     """
     if dialect is None:
         dialect = Dialect.iso()
-    pmodule = clausal_source_to_prolog_ast(source, dialect=dialect)
+    pmodule = clausal_source_to_prolog_ast(source, dialect=dialect, strict=strict)
     return emit_module(pmodule, dialect.operator_table)
 
 
