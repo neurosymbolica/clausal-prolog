@@ -181,12 +181,19 @@ class TestUntranslatable:
         )
         assert "dict_create" in result
 
-    def test_dict_iso_warning(self):
-        """Dict literal emits warning in ISO dialect."""
+    def test_dict_iso_lowers_to_attribute_list(self):
+        """Dict literal lowers to an attribute-list in ISO dialect (no warning)."""
         # nv
         result = clausal_source_to_prolog('Test() <- (_x is {"a": 1})')
+        assert "WARNING" not in result
+        assert 'attribute("a", 1)' in result
+
+    def test_dict_splat_iso_warning(self):
+        """Dict splat still emits a warning in ISO dialect."""
+        # nv
+        result = clausal_source_to_prolog('Test() <- (_x is {**base()})')
         assert "WARNING" in result
-        assert "dict literal" in result
+        assert "dict splat" in result
 
 
 class TestDialectDirectives:

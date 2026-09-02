@@ -4,18 +4,18 @@ from clausal.tools.clausal_to_prolog import (
     UntranslatableConstructError,
 )
 
-DICT_SRC = 'meta(k, {"label": "x"}),\n'
+DICT_SRC = 'p(X) <- (X is {**base()})\n'
 PLUSPLUS_SRC = 'p(S) <- (X is ++str(S), q(X))\n'
 
 
 def test_strict_dict_literal_raises():
     with pytest.raises(UntranslatableConstructError) as exc:
         clausal_source_to_prolog(DICT_SRC, strict=True)
-    assert any("dict literal" in c for c in exc.value.constructs)
+    assert any("dict splat" in c for c in exc.value.constructs)
 
 
 def test_strict_aggregates_all_constructs():
-    src = DICT_SRC + 'meta2(k, {"a": 1}),\n'
+    src = DICT_SRC + 'p2(X) <- (X is {**base2()})\n'
     with pytest.raises(UntranslatableConstructError) as exc:
         clausal_source_to_prolog(src, strict=True)
     assert len(exc.value.constructs) == 2

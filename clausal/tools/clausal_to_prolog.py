@@ -1100,7 +1100,7 @@ class _ClausalToProlog:
         return PAtom("???")
 
     def _convert_dict(self, node: python_ast.Dict) -> PTerm:
-        """Convert dict literal to SWI dict or warning."""
+        """Convert dict literal: SWI dict, or key-sorted attribute-list (ISO)."""
         if self.dialect.has_dicts:
             # SWI dict: tag{key: val, ...}
             # Emit as: dict_create(D, _, [key=val, ...]) or use Tag.put_dict
@@ -1117,9 +1117,17 @@ class _ClausalToProlog:
                 PAtom("_"),
                 PList(tuple(pairs)),
             ))
-        # ISO / Scryer: untranslatable
-        self._add_warning("dict literal " + python_ast.unparse(node))
-        return PAtom("???")
+        # ISO / Scryer / Trealla: lower to a key-sorted attribute(K, V) list.
+        pairs = []
+        for k, v in zip(node.keys, node.values):
+            if k is None:  # {**expr} splat — no static key set
+                self._add_warning("dict splat " + python_ast.unparse(node))
+                return PAtom("???")
+            pairs.append((self._convert_expr(k), self._convert_expr(v)))
+        pairs.sort(key=lambda kv: emit_term(kv[0], self.dialect.operator_table))
+        return PList(tuple(
+            PCompound("attribute", (k, v)) for k, v in pairs
+        ))
 
 
 # ── Public API ───────────────────────────────────────────────────────
