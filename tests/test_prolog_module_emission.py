@@ -51,3 +51,41 @@ def test_discontiguous_directive_emitted():
     assert ":- discontiguous(exception_a/1)." in out
     # contiguous predicates get no directive
     assert ":- discontiguous(other/0)." not in out
+
+
+# A hand-written -discontiguous(...) for the same predicate the
+# interruption tracker would ALSO flag must not be duplicated.
+DUPLICATE_DISCONTIG_SRC = """-module(m, [Foo(X)])
+-discontiguous(Foo(X))
+Foo(1),
+Bar(2),
+Foo(3),
+"""
+
+
+def test_discontiguous_directive_not_duplicated_when_hand_written():
+    out = clausal_source_to_prolog(DUPLICATE_DISCONTIG_SRC, strict=True)
+    assert out.count(":- discontiguous(foo/1).") == 1
+
+
+# Two DCG rules of one nonterminal interrupted by an ordinary clause —
+# the emitted indicator carries the +2 hidden difference-list state args
+# (the same arity module_export_signature would report for this rule).
+DCG_INTERRUPTED_SRC = """greeting >> (["hi"])
+other(x),
+greeting >> (["yo"])
+"""
+
+DCG_CONTIGUOUS_SRC = """greeting >> (["hi"])
+greeting >> (["yo"])
+"""
+
+
+def test_discontiguous_directive_emitted_for_interrupted_dcg_run():
+    out = clausal_source_to_prolog(DCG_INTERRUPTED_SRC, strict=True)
+    assert ":- discontiguous(greeting/2)." in out
+
+
+def test_no_discontiguous_directive_for_contiguous_dcg_run():
+    out = clausal_source_to_prolog(DCG_CONTIGUOUS_SRC, strict=True)
+    assert ":- discontiguous(greeting/2)." not in out

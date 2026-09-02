@@ -445,6 +445,7 @@ class _ClausalToProlog:
         # interrupted run as a silent redefinition, so leaving it unmarked
         # is a correctness hazard, not a style nicety.
         defined: set[tuple[str, int]] = set()
+        existing_discontiguous: set[tuple[str, int]] = set()
         seen_order: list[tuple[str, int]] = []   # first-appearance order
         seen_set: set[tuple[str, int]] = set()
         interrupted: set[tuple[str, int]] = set()
@@ -454,10 +455,15 @@ class _ClausalToProlog:
             if dcg_key is not None:
                 defined.add(dcg_key)
 
-            key = _clause_key(item)
+            existing_discontiguous |= _existing_discontiguous_indicators(item)
+
+            # Run-tracking covers both PClause and PDCGRule (+2 arity) —
+            # an interrupted DCG rule run is the same Scryer silent-
+            # redefinition hazard as an interrupted plain clause run.
+            key = _run_key(item)
             if key is None:
                 continue
-            defined.add(key)
+            defined.add(key)  # no-op when this is the dcg_key already added above
             if key != last_key and key in seen_set:
                 interrupted.add(key)
             if key not in seen_set:
@@ -469,7 +475,8 @@ class _ClausalToProlog:
             PDirective(PCompound("discontiguous", (
                 PCompound("/", (PAtom(name), PNumber(arity))),
             )))
-            for name, arity in seen_order if (name, arity) in interrupted
+            for name, arity in seen_order
+            if (name, arity) in interrupted and (name, arity) not in existing_discontiguous
         ]
 
         rewritten: list[PItem] = []
@@ -1193,8 +1200,9 @@ def _clause_key(item: PItem) -> tuple[str, int] | None:
 
     DCG rules deliberately return None here — a DCG predicate's real
     callable arity (written arity + 2 hidden state args) is computed
-    separately by _dcg_head_key, and Task 5's clause-run tracking only
-    considers PClause items.
+    separately by _dcg_head_key. Combined with it via _run_key for
+    clause-run/interruption tracking, so both PClause and PDCGRule runs
+    are covered.
     """
     if not isinstance(item, PClause):
         return None
@@ -1225,6 +1233,22 @@ def _dcg_head_key(item: PItem) -> tuple[str, int] | None:
     if isinstance(head, PAtom):
         return (head.name, 2)
     return None
+
+
+def _run_key(item: PItem) -> tuple[str, int] | None:
+    """(name, arity) for clause-run/interruption tracking; None to be skipped.
+
+    Unifies PClause (as written) and PDCGRule (+2 hidden state args, via
+    _dcg_head_key — the same indicator Scryer calls the translated DCG
+    predicate with, and the same one _filter_module_exports uses for
+    module exports) into one run-tracking key. Anything else — module
+    directives, discontiguous directives, comments — returns None and is
+    skipped by the caller: it neither starts nor breaks a run.
+    """
+    key = _clause_key(item)
+    if key is not None:
+        return key
+    return _dcg_head_key(item)
 
 
 def _is_module_directive(item: PItem) -> bool:
@@ -1263,6 +1287,30 @@ def _filter_module_exports(directive: PDirective,
         and (elt.args[0].name, int(elt.args[1].value)) in defined
     )
     return PDirective(PCompound("module", (mod_name, PList(kept))))
+
+
+def _existing_discontiguous_indicators(item: PItem) -> set[tuple[str, int]]:
+    """(name, arity) pairs an already-present ``:- discontiguous(...)`` names.
+
+    A hand-written ``-discontiguous(...)`` (via _convert_meta_directive)
+    emits either a single spec or a PList of specs, each either
+    ``Name/Arity`` (PCompound) or a bare 0-arity atom (PAtom). Used so the
+    auto-inserted directive (below) never duplicates one the source
+    already wrote out.
+    """
+    if not (isinstance(item, PDirective) and isinstance(item.body, PCompound)
+            and item.body.functor == "discontiguous" and len(item.body.args) == 1):
+        return set()
+    spec = item.body.args[0]
+    specs = spec.elements if isinstance(spec, PList) else (spec,)
+    pairs: set[tuple[str, int]] = set()
+    for s in specs:
+        if (isinstance(s, PCompound) and s.functor == "/" and len(s.args) == 2
+                and isinstance(s.args[0], PAtom) and isinstance(s.args[1], PNumber)):
+            pairs.add((s.args[0].name, int(s.args[1].value)))
+        elif isinstance(s, PAtom):
+            pairs.add((s.name, 0))
+    return pairs
 
 
 def module_export_signature(pmodule: PModule) -> set[tuple[str, int]]:
