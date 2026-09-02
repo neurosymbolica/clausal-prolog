@@ -434,24 +434,56 @@ class _ClausalToProlog:
                 else:
                     self._items.append(item)
 
-        # Post-pass: keep only locally-defined predicates in :- module
+        # Post-pass: (1) keep only locally-defined predicates in :- module
         # exports. Scryer raises permission_error(...
         # module_does_not_contain_claimed_export...) on an export with no
         # backing clause (signature-only kernels, term constructors like
         # cite/1, 0-arity atoms), so a name only ever *declared* in the
         # export list must not survive into the emitted directive.
+        # (2) emit :- discontiguous(Name/Arity) for every predicate whose
+        # clause run is interrupted by another item — Scryer treats an
+        # interrupted run as a silent redefinition, so leaving it unmarked
+        # is a correctness hazard, not a style nicety.
         defined: set[tuple[str, int]] = set()
+        seen_order: list[tuple[str, int]] = []   # first-appearance order
+        seen_set: set[tuple[str, int]] = set()
+        interrupted: set[tuple[str, int]] = set()
+        last_key: tuple[str, int] | None = None
         for item in self._items:
             dcg_key = _dcg_head_key(item)
             if dcg_key is not None:
                 defined.add(dcg_key)
+
             key = _clause_key(item)
-            if key is not None:
-                defined.add(key)
-        self._items = [
-            _filter_module_exports(item, defined) if _is_module_directive(item) else item
-            for item in self._items
+            if key is None:
+                continue
+            defined.add(key)
+            if key != last_key and key in seen_set:
+                interrupted.add(key)
+            if key not in seen_set:
+                seen_order.append(key)
+                seen_set.add(key)
+            last_key = key
+
+        discontiguous_directives = [
+            PDirective(PCompound("discontiguous", (
+                PCompound("/", (PAtom(name), PNumber(arity))),
+            )))
+            for name, arity in seen_order if (name, arity) in interrupted
         ]
+
+        rewritten: list[PItem] = []
+        module_seen = False
+        for item in self._items:
+            if _is_module_directive(item):
+                rewritten.append(_filter_module_exports(item, defined))
+                rewritten.extend(discontiguous_directives)
+                module_seen = True
+            else:
+                rewritten.append(item)
+        if not module_seen:
+            rewritten = discontiguous_directives + rewritten
+        self._items = rewritten
 
         if self.strict and self._all_warnings:
             raise UntranslatableConstructError(list(self._all_warnings))
