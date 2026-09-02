@@ -749,7 +749,15 @@ class _ClausalToProlog:
         if not imports and self.module_signatures is not None:
             # Nothing the target exports was asked for — a use_module naming
             # predicates it does not export would abort the consult.
-            return PComment(f"% skipped: {mod_path} exports nothing")
+            #
+            # The wording is about the INTERSECTION, not the target: this
+            # branch is reached whenever the filtered list comes back empty,
+            # which is usually a target that exports plenty, just none of the
+            # names this import asked for. Saying "exports nothing" there is
+            # simply false, and sends a reader looking for a bug in the target
+            # module instead of at the import list in front of them.
+            return PComment(
+                f"% skipped: {mod_path} exports none of the requested names")
 
         return PDirective(PCompound("use_module", (prolog_mod, PList(tuple(imports)))))
 

@@ -123,11 +123,17 @@ def test_relative_paths_and_filtered_import_lists():
         module_path="eu.ai_act.prohibited_practices.prohibition",
         module_signatures=SIGS,
     )
-    # same package → bare sibling name; kernel exports nothing → skipped
+    # same package → bare sibling name; kernel's export set is empty → skipped
     assert "use_module('kernel'" not in out
-    assert "% skipped:" in out
-    # citations: cite/1 not exported → dropped; nothing importable remains
+    assert ("% skipped: eu.ai_act.prohibited_practices.kernel exports none of "
+            "the requested names") in out
+    # citations: exports citation/2, but neither cite nor eu_reg_x was asked
+    # for → the filtered list is empty, so the import is skipped. The comment
+    # must say "none of the requested names", not "exports nothing": this
+    # target exports plenty, just nothing this import named.
     assert "use_module('citations'" not in out
+    assert ("% skipped: eu.ai_act.prohibited_practices.citations exports none "
+            "of the requested names") in out
     # root libraries: relative climb from a 3-deep package
     assert ":- use_module('../../../formalize_lib', [check_gte/5])." in out
     assert ":- use_module('../../../clausal_kleene', [and3/3, or3/3])." in out
