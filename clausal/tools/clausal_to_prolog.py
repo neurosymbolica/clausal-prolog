@@ -552,7 +552,7 @@ class _ClausalToProlog:
             if arrow is not None:
                 head_ast, body_ast = arrow
                 head = self._convert_head(head_ast)
-                body = self._convert_expr(body_ast)
+                body = self._convert_expr(body_ast, goal_position=True)
                 return PClause(head, body)
 
         # head >> body (DCG rule — RShift)
@@ -833,8 +833,19 @@ class _ClausalToProlog:
             return PCompound(functor, args)
         return self._convert_expr(call)
 
-    def _convert_expr(self, node) -> PTerm:
-        """Convert a Python AST expression node to a Prolog AST term."""
+    def _convert_expr(self, node, goal_position: bool = False) -> PTerm:
+        """Convert a Python AST expression node to a Prolog AST term.
+
+        *goal_position* is True exactly when *node* is being converted as a
+        goal — the whole clause body, or a body conjunct — rather than as
+        data nested inside an argument/value position (a Call argument, a
+        list element, a dict value, ...). It defaults to False and is only
+        propagated True through the constructs that combine sub-goals
+        (a parenthesized comma-body Tuple, ``and``/``or`` BoolOp) from a
+        caller that itself received True. It gates constructs whose Prolog
+        lowering is only valid as an executed goal (e.g. the `is`-RHS
+        dict-splat → ``attrs_put/3`` rewrite) — see `_convert_compare`.
+        """
         if isinstance(node, python_ast.Constant):
             return self._convert_constant(node.value)
 
@@ -850,17 +861,20 @@ class _ClausalToProlog:
         if isinstance(node, python_ast.Tuple):
             # Single-element tuple used for trailing-comma facts in nested context
             if len(node.elts) == 1:
-                return self._convert_expr(node.elts[0])
+                return self._convert_expr(node.elts[0], goal_position=goal_position)
             # Multi-element tuple → Prolog comma-separated (conjunction-like)
             if len(node.elts) >= 2:
-                result = self._convert_expr(node.elts[-1])
+                result = self._convert_expr(node.elts[-1], goal_position=goal_position)
                 for elt in reversed(node.elts[:-1]):
-                    result = PCompound(",", (self._convert_expr(elt), result))
+                    result = PCompound(",", (
+                        self._convert_expr(elt, goal_position=goal_position),
+                        result,
+                    ))
                 return result
             return PAtom("true")
 
         if isinstance(node, python_ast.BoolOp):
-            return self._convert_boolop(node)
+            return self._convert_boolop(node, goal_position=goal_position)
 
         if isinstance(node, python_ast.UnaryOp):
             return self._convert_unaryop(node)
@@ -869,7 +883,7 @@ class _ClausalToProlog:
             return self._convert_binop(node)
 
         if isinstance(node, python_ast.Compare):
-            return self._convert_compare(node)
+            return self._convert_compare(node, goal_position=goal_position)
 
         if isinstance(node, python_ast.IfExp):
             return self._convert_ifexp(node)
@@ -1044,16 +1058,24 @@ class _ClausalToProlog:
 
         return PList(tuple(elements), tail=tail)
 
-    def _convert_boolop(self, node: python_ast.BoolOp) -> PTerm:
-        """Convert 'and'/'or' to ','/';'."""
+    def _convert_boolop(self, node: python_ast.BoolOp, goal_position: bool = False) -> PTerm:
+        """Convert 'and'/'or' to ','/';'.
+
+        Each operand is itself a body conjunct/disjunct, so *goal_position*
+        (whatever this BoolOp itself was converted under) propagates
+        unchanged to every operand.
+        """
         if isinstance(node.op, python_ast.And):
             op = ","
         else:
             op = ";"
 
-        result = self._convert_expr(node.values[-1])
+        result = self._convert_expr(node.values[-1], goal_position=goal_position)
         for val in reversed(node.values[:-1]):
-            result = PCompound(op, (self._convert_expr(val), result))
+            result = PCompound(op, (
+                self._convert_expr(val, goal_position=goal_position),
+                result,
+            ))
         return result
 
     def _convert_unaryop(self, node: python_ast.UnaryOp) -> PTerm:
@@ -1121,7 +1143,7 @@ class _ClausalToProlog:
             return True
         return False
 
-    def _convert_compare(self, node: python_ast.Compare) -> PTerm:
+    def _convert_compare(self, node: python_ast.Compare, goal_position: bool = False) -> PTerm:
         """Convert comparison operators.
 
         Handles special clausal patterns:
@@ -1129,14 +1151,23 @@ class _ClausalToProlog:
         - X is not Y → dif(X, Y) (DoesNotUnify)
         - X == Y → X == Y (structural) / X =:= Y+1 (arithmetic operand)
         - X != Y → X \\== Y (structural) / X =\\= Y+1 (arithmetic operand)
+
+        *goal_position* gates the `is`-RHS dict-splat → `attrs_put/3` lowering
+        (see `_convert_is_rhs_splat`): that rewrite produces a goal, which is
+        only valid Prolog when the `is` comparison is itself executed as a
+        goal (the whole clause body, or a body conjunct). Reached in a
+        nested/argument position (e.g. `q(X is {**D, k: v})`, an argument to
+        `q`), `attrs_put(...)` would sit there as an inert, never-called data
+        term — silently wrong output. So when *goal_position* is False, the
+        splat still falls through to the generic dict-splat warning path.
         """
         # First check for <- arrow (should already be handled at statement level)
         # Handle single comparison
         if len(node.ops) == 1:
             op = node.ops[0]
 
-            if isinstance(op, python_ast.Is) and isinstance(
-                    node.comparators[0], python_ast.Dict):
+            if (goal_position and isinstance(op, python_ast.Is)
+                    and isinstance(node.comparators[0], python_ast.Dict)):
                 splat_goal = self._convert_is_rhs_splat(
                     node.left, node.comparators[0])
                 if splat_goal is not None:
