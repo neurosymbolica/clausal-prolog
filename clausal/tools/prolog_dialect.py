@@ -200,6 +200,9 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "arg":           {"iso": "arg"},
     "length":        {"iso": "length"},
     "member":        {"iso": "member"},
+    # "get" targets attribute-lists (Task 2's dict lowering); member/2 on a
+    # dict-valued argument is not statically detectable and is left to gate G4.
+    "get":           {"iso": "profile_get"},
     "append":        {"iso": "append"},
     "reverse":       {"iso": "reverse"},
     "last":          {"iso": "last"},

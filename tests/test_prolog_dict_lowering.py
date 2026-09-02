@@ -1,3 +1,5 @@
+import re
+
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 
 
@@ -40,7 +42,12 @@ def test_get_maps_to_profile_get():
         strict=True,
     )
     assert "profile_get(P, exception_d_supports_human_assessment, V)" in out
-    assert "get(P," not in out
+    # Word-boundary check, not a plain substring: "profile_get(P," itself
+    # contains the substring "get(P," as a tail, so a naive `"get(P," not in
+    # out` can never pass once the mapping fires. \b does not match between
+    # "_" and "g" (both word chars), so this only catches an *unmapped*,
+    # standalone "get(P," call.
+    assert re.search(r"\bget\(P,", out) is None
 
 
 def test_tri_get_passes_through():
