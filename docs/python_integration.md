@@ -160,7 +160,7 @@ unify(v, dt.date(2026, 3, 16), trail)
 deref(v)  # → datetime.date(2026, 3, 16)
 ```
 
-This means `datetime`, `Decimal`, `pathlib.Path`, and any other Python type with `__eq__` works as a logic term without wrapping. Call methods via `++()`:
+This means `datetime`, `Decimal`, `pathlib.Path`, and any other Python type with `__eq__` works as a logic term without wrapping. `datetime.date`, naive `datetime`/`time`, and `timedelta` are also accepted directly as **query arguments** — `solve(m.same_day(date(2024, 1, 1), X))` just works, both as direct arguments and nested inside list/compound arguments — no `[Y, M, D]` triple encoding needed on the Python-interop path. Call methods via `++()`:
 
 ```clausal
 -import_from(date_time, [date])

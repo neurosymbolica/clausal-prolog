@@ -67,7 +67,16 @@ Test("second arg") <- arg(2, point(10, 20, 30), 20)
 Test("third arg") <- arg(3, point(10, 20, 30), 30)
 ```
 
-Fails if N is out of range or Term is atomic.
+Fails if N is out of range or Term is atomic. With `N` unbound, `arg/3`
+enumerates the `(N, Value)` pairs in order on backtracking (SWI-style), and
+is semidet when `Value` is given:
+
+```clausal
+kv(10, 20),
+
+Test("enumerates args") <- findall([N, V], arg(N, kv(10, 20), V), [[1, 10], [2, 20]])
+Test("finds the index") <- arg(N2, kv(10, 20), 20)
+```
 
 ### unpack/2
 

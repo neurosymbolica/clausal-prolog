@@ -462,7 +462,9 @@ Decompose a term into its functor name and arity, or construct a term from a nam
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:arg_3"
 ```
-Unify `arg` with the `N`-th argument of `Term` (1-based indexing).
+Unify `arg` with the `N`-th argument of `Term` (1-based indexing). With `N`
+unbound, enumerates `(N, arg)` pairs in order on backtracking; semidet when
+`arg` is given.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:394`

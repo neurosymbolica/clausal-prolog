@@ -82,6 +82,37 @@ This holds wherever in the goal the exception is raised — in the clause that
 wrote the `catch/3`, or several predicate calls down. Whether a handler is live
 never depends on how the engine chose to compile the call.
 
+### `++` catchers: matching the Python exception object
+
+The `ClassName(Message)` shape above matches by *spelling*. A catcher written
+as a [`++()` escape](python_integration.md) instead matches the **original
+Python exception object**:
+
+```clausal
+risky(X) <- (X is ++int("nope"))
+
+guarded_class(R) <- catch(risky(_A), ++ValueError, R is "caught")
+
+guarded_msg(M) <- catch(risky(_B), ++ValueError(M), true)
+```
+
+- A catcher that evaluates to an exception **class** (`++ValueError`) matches
+  by `isinstance` — Python semantics, so `++ArithmeticError` catches a
+  `ZeroDivisionError` and `++Exception` catches any stray Python exception.
+- A catcher that evaluates to an exception **instance** (`++ValueError(M)`)
+  matches by `isinstance` on its type and unifies its `args` against the real
+  exception's `args` — binding `M` to the actual message. Arity counts: a
+  two-arg pattern only matches a two-arg exception.
+- A `++` catcher never matches a logic `throw/1` ball, so it stays selective
+  in both directions.
+
+Prefer `++` catchers when writing for portability: Clausal's ALL_CAPS
+variable rule means a bare `ValueError(M)` catcher is a *functor* here but
+reads as a **variable** under ISO's initial-capital rule, silently widening a
+specific catcher to a catch-all if the code is ever translated outward. The
+marked `++` form makes the Python-specific region visible, and a translator
+must handle it deliberately.
+
 The two things `catch/3` does **not** intercept are the signals that are
 control flow rather than errors: `halt/0` and `halt/1` (`SystemExit`),
 `KeyboardInterrupt`, and abandoning a solution iterator early (`GeneratorExit`).
