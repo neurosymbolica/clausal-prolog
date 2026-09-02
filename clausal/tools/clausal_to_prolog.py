@@ -624,7 +624,7 @@ class _ClausalToProlog:
         export_list = PList(tuple(exports))
         return PDirective(PCompound("module", (PAtom(mod_name), export_list)))
 
-    def _module_reference(self, mod_path: str) -> PTerm:
+    def _module_reference(self, mod_path: str) -> PTerm | None:
         """The term naming *mod_path* in a use_module directive.
 
         Dialect libraries keep their ``library(name)`` form. Everything else
@@ -634,6 +634,14 @@ class _ClausalToProlog:
         root of the tree they are exported into, then the whole path is made
         relative to the consuming module's own package, because Scryer
         resolves a consulted path against the consulting file.
+
+        Returns None when the relative path does not name a file: a consumer
+        whose own package IS the target (``formalize_lib.helper`` importing
+        ``formalize_lib``) relativizes to ``'.'``, and one nested inside it
+        to ``'..'``. Both are directory references that Scryer cannot consult,
+        so the import is recorded as an untranslatable construct instead —
+        raising under strict, a warning comment otherwise — rather than
+        emitting a path that only fails at load time.
         """
         library_name = self.dialect.library_map.get(mod_path)
         if library_name is not None:
@@ -648,6 +656,12 @@ class _ClausalToProlog:
         target = _LIBRARY_REMAP.get(mod_path, mod_path)
         consumer_pkg = "/".join(self.module_path.split(".")[:-1])
         prolog_path = posixpath.relpath(target.replace(".", "/"), consumer_pkg or ".")
+        if posixpath.basename(prolog_path) in ("", ".", ".."):
+            self._add_warning(
+                f"unresolvable use_module path: consumer package "
+                f"'{consumer_pkg}' shadows root target '{target}'"
+            )
+            return None
         return PAtom(prolog_path, quoted=True)
 
     def _import_list(self, mod_path: str, elts: list) -> list[PTerm] | None:
@@ -715,6 +729,14 @@ class _ClausalToProlog:
             )
 
         prolog_mod = self._module_reference(mod_path)
+        if prolog_mod is None:
+            # No path names this target from here — _module_reference has
+            # already recorded the warning.
+            return PComment(
+                f"WARNING: unresolvable use_module path: "
+                f"-import_from({mod_path}, ...)\n"
+                f"   No relative path from this module names that file."
+            )
 
         elts = (call.args[1].elts
                 if len(call.args) > 1 and isinstance(call.args[1], python_ast.List)
@@ -742,7 +764,14 @@ class _ClausalToProlog:
                 f"   No Prolog equivalent available."
             )
 
-        return PDirective(PCompound("use_module", (self._module_reference(mod_path),)))
+        prolog_mod = self._module_reference(mod_path)
+        if prolog_mod is None:
+            return PComment(
+                f"WARNING: unresolvable use_module path: "
+                f"-import_module({mod_path})\n"
+                f"   No relative path from this module names that file."
+            )
+        return PDirective(PCompound("use_module", (prolog_mod,)))
 
     def _convert_meta_directive(self, name: str, call: python_ast.Call) -> PDirective | list:
         """Convert -dynamic(pred/arity), -table(...), -discontiguous(...)."""

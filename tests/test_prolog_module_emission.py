@@ -225,3 +225,57 @@ def test_dialect_libraries_keep_library_form_in_relative_mode():
         module_signatures={},
     )
     assert "use_module(library(clpz)" in out
+
+
+# A consumer whose own package IS the target it imports relativizes to '.',
+# and one nested deeper inside it to '..'. Both are directory references
+# Scryer cannot consult, so neither may reach the emitted file — the import
+# is an untranslatable construct instead.
+SELF_PACKAGE_SRC = """-import_from(formalize_lib, [check_gte])
+noop(a),
+"""
+
+SELF_PACKAGE_SIGS = {"formalize_lib": {("check_gte", 5)}}
+
+
+def test_unresolvable_relative_path_raises_under_strict():
+    with pytest.raises(UntranslatableConstructError):
+        clausal_source_to_prolog(
+            SELF_PACKAGE_SRC, strict=True,
+            module_path="formalize_lib.helper",
+            module_signatures=SELF_PACKAGE_SIGS,
+        )
+
+
+def test_unresolvable_relative_path_emits_no_dot_path_when_lenient():
+    out = clausal_source_to_prolog(
+        SELF_PACKAGE_SRC,
+        module_path="formalize_lib.helper",
+        module_signatures=SELF_PACKAGE_SIGS,
+    )
+    assert "use_module('.'" not in out
+    assert ":- use_module" not in out          # no directive at all
+    assert "unresolvable use_module path" in out
+
+
+def test_parent_package_target_is_unresolvable_too():
+    """A module nested below the target relativizes to '..' — also a directory."""
+    with pytest.raises(UntranslatableConstructError):
+        clausal_source_to_prolog(
+            SELF_PACKAGE_SRC, strict=True,
+            module_path="formalize_lib.sub.helper",
+            module_signatures=SELF_PACKAGE_SIGS,
+        )
+    out = clausal_source_to_prolog(
+        SELF_PACKAGE_SRC, module_path="formalize_lib.sub.helper",
+        module_signatures=SELF_PACKAGE_SIGS,
+    )
+    assert "use_module('..'" not in out
+
+
+def test_import_module_unresolvable_path_is_untranslatable():
+    with pytest.raises(UntranslatableConstructError):
+        clausal_source_to_prolog(
+            "-import_module(formalize_lib)\nnoop(a),\n", strict=True,
+            module_path="formalize_lib.helper",
+        )
