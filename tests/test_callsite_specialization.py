@@ -323,6 +323,44 @@ class TestStaticCallKey:
         # nv
         assert _static_call_key(ast.Constant(value="")) == ""
 
+    def test_clausal_new_fast_path_call_keys_by_class_name(self):
+        # Phase 0 construction fast path: term_to_ast_expr now emits
+        # Dog._clausal_new(a, b) for saturated PredicateMeta terms instead
+        # of Dog(a=a, b=b). The class name lives in func.value here, NOT
+        # func.attr (which is always the literal string "_clausal_new") —
+        # unlike the module.Dog(...) qualified-call shape right above,
+        # where func.attr IS the class name.
+        # nv
+        node = ast.Call(
+            func=ast.Attribute(
+                value=ast.Name(id="Dog", ctx=ast.Load()),
+                attr="_clausal_new",
+                ctx=ast.Load(),
+            ),
+            args=[ast.Name(id="_v_a", ctx=ast.Load()),
+                  ast.Name(id="_v_b", ctx=ast.Load())],
+            keywords=[],
+        )
+        assert _static_call_key(node) == ("Dog", 2)
+
+    def test_clausal_new_fast_path_distinguishes_classes(self):
+        # Two different fast-pathed classes of the same arity must NOT
+        # collide on a shared ("_clausal_new", n) key.
+        # nv
+        def _fast_call(cls_name):
+            return ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id=cls_name, ctx=ast.Load()),
+                    attr="_clausal_new",
+                    ctx=ast.Load(),
+                ),
+                args=[ast.Name(id="_v_a", ctx=ast.Load())],
+                keywords=[],
+            )
+        assert _static_call_key(_fast_call("Dog")) == ("Dog", 1)
+        assert _static_call_key(_fast_call("Cat")) == ("Cat", 1)
+        assert _static_call_key(_fast_call("Dog")) != _static_call_key(_fast_call("Cat"))
+
 
 # ── Phase 10c: _bucket_key and _joint_bucket_key naming ─────────────────────
 

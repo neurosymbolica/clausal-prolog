@@ -213,6 +213,16 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
             return (func.id, n_args)
         if isinstance(func, ast.Attribute):
             n_args = len(arg_expr.args) + len(arg_expr.keywords)
+            # Cls._clausal_new(...) (Phase 0 construction fast path,
+            # term_to_ast_expr): unlike a qualified mod.Dog(...) call, the
+            # class name is the ATTRIBUTE'S VALUE, not its attr string — the
+            # attr is the literal "_clausal_new" for every fast-pathed class.
+            # Read the class name off ``func.value`` so different classes of
+            # the same arity don't collide on a single ("_clausal_new", n)
+            # key (which would just never match any real index bucket and
+            # silently disable this specialisation).
+            if func.attr == "_clausal_new" and isinstance(func.value, ast.Name):
+                return (func.value.id, n_args)
             return (func.attr, n_args)
     return None
 
