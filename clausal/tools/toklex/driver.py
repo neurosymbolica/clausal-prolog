@@ -169,6 +169,13 @@ class IncrementalLexer:
                 r = self._nest_step()
                 if r is NEED_MORE:
                     return NEED_MORE
+                if r is not None:
+                    # a bad-byte marker reached inside nest mode resolves
+                    # to its own zero-width error token (R6: invalid
+                    # entities are ordinary error tokens uniformly,
+                    # comments included) -- nest state is untouched, so
+                    # the enclosing comment keeps scanning afterward.
+                    return r
                 continue
 
             entry = self._buf[0] if self._buf else None
@@ -348,6 +355,9 @@ class IncrementalLexer:
                 return None
 
         if self._buf:
+            if isinstance(self._buf[0], _BadMarker):
+                marker = self._buf.popleft()
+                return self._bad_tok(marker)
             self._buf.popleft()
             return None
 

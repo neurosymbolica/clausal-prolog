@@ -50,3 +50,13 @@ def test_truncated_multibyte_at_close_is_bad():
     while (t := f.next_token()) is not EOF:
         kinds.append(t.kind)
     assert kinds == ["name", "error"]
+
+
+def test_bad_byte_inside_nested_comment_still_yields_error_token():
+    # R6 / §6.1: invalid entities are ordinary error tokens uniformly,
+    # including when the invalid byte falls inside a (nested-capable)
+    # block comment -- the comment must not silently swallow it.
+    toks = blex(b"/* a \xff b */ cd ")
+    assert [(t.kind, t.value) for t in toks[:1]] == [("error", ("invalid_encoding", b"\xff"))]
+    assert toks[0].start == toks[0].end          # zero-width
+    assert [t.lexeme for t in toks[1:]] == ["cd"]  # comment still terminates normally
