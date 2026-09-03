@@ -284,7 +284,11 @@ Site counts (grep, 2026-09-03, `clausal/` excl. tests unless noted):
 
 ### Phases
 
-- **Phase 0 — construction fast path** (no repr change): bypass `PredicateMeta.__call__` in
+- **Phase 0 — construction fast path: DONE 2026-09-03**, merged to clone main at 64bed74c
+  (`_clausal_new` classmethod, saturated-emission gate, `_static_call_key` fix, interleaved
+  benchmark): measured ~7.3× at arity 3 (~960→~130 ns), suite failure set unchanged; the
+  benchmark's repo-root sys.path insert is flagged for canonical sync. Original scope:
+  bypass `PredicateMeta.__call__` in
   generated code; add the missing term-construction benchmark. ~857→~90 ns. **1–2 days.**
   Sets the baseline that decides whether Phases 2+ pay.
 - **Phase 1 — funnel refactor** (prep, pays regardless): route all representation probes
