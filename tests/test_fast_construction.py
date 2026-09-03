@@ -407,16 +407,35 @@ class TestCopyTermFastPath:
 # "KEEP THE THREE WALKERS IN SYNC" (solve.py's ``_deref_walk_py`` comment):
 # ``_deref_walk_py``, ``_deref_walk`` (the C twin exposed by
 # ``clausal.logic._tabling_core``), and ``walk()`` (``clausal.logic.variables``)
-# must all agree. These tests are skip-guarded: if the C extension is absent
-# they are skipped rather than failing, matching the convention in
-# tests/test_trampoline_parity.py.
+# must all agree.
+#
+# ``clausal.logic._tabling_core`` is an OPTIONAL accelerator — solve.py:100-104
+# wraps its import in ``try/except ImportError`` and falls back to
+# ``_deref_walk_py`` when it is absent. A module-scope ``importorskip`` on it
+# would therefore skip this ENTIRE test module — including the pure-Python
+# gate tests above (TestFastConstructorBasics, TestDerefWalkFastPath,
+# TestCopyTermFastPath) — on exactly the build configuration where those
+# tests matter most. So only the C-specific test classes below are
+# skip-guarded (via ``pytest.mark.skipif`` on ``_HAVE_TABLING_CORE``); every
+# class above this section always runs.
+#
+# ``clausal.logic.variables._variables`` is NOT optional the same way: the
+# package's own ``__init__.py`` imports it unconditionally (and this file's
+# own ``from clausal.logic.variables import ...`` at the top would already
+# have failed if it were missing) — so no skip guard is needed for it.
 
-_tabling_core = pytest.importorskip(
-    "clausal.logic._tabling_core",
-    reason="C extension not built — the C-walker parity corpus needs the C twins",
-)
-_variables_c = pytest.importorskip(
-    "clausal.logic.variables._variables",
+try:
+    from clausal.logic import _tabling_core
+
+    _HAVE_TABLING_CORE = True
+except ImportError:
+    _tabling_core = None
+    _HAVE_TABLING_CORE = False
+
+from clausal.logic.variables import _variables as _variables_c
+
+_needs_tabling_core = pytest.mark.skipif(
+    not _HAVE_TABLING_CORE,
     reason="C extension not built — the C-walker parity corpus needs the C twins",
 )
 
@@ -452,6 +471,7 @@ def _c_walker_corpus():
     return [nested, node, weird_term, posy_term]
 
 
+@_needs_tabling_core
 class TestCWalkerFastPathParity:
     def test_deref_walk_py_matches_deref_walk_c(self):
         # nv
@@ -499,7 +519,25 @@ class TestCWalkerFastPathParity:
         assert result is not term
         assert result.p is not term.p
 
+    def test_field_order_non_alphabetical(self):
+        # nv — pins the C fast path's positional-tuple ordering directly
+        # (rather than trusting alphabetical field order by accident),
+        # mirroring TestDerefWalkFastPath.test_field_order_non_alphabetical
+        # and TestCopyTermFastPath.test_field_order_non_alphabetical above.
+        p = make_predicate("cw_nonalpha", ["b", "a"])
+        assert p._fields == ("b", "a")
+        term = p(b=1, a=2)
 
+        result = _tabling_core._deref_walk(term)
+        assert result.b == 1
+        assert result.a == 2
+
+        result2 = _variables_c.walk(term)
+        assert result2.b == 1
+        assert result2.a == 2
+
+
+@_needs_tabling_core
 class TestCWalkerFastPathActuallyFires:
     """Confirm the C arms take the FAST branch (call ``_clausal_new``), not
     merely that results happen to match — instrument ``_clausal_new`` with a
@@ -623,6 +661,7 @@ def _c_copy_term_corpus():
     return [nested, node, weird_term, posy_term]
 
 
+@_needs_tabling_core
 class TestCCopyTermFastPathParity:
     def test_copy_term_c_matches_copy_term_py(self):
         # nv — ``_copy_term`` here is deliberately the runtime-wired name
@@ -675,6 +714,7 @@ class TestCCopyTermFastPathParity:
         assert result is not term
 
 
+@_needs_tabling_core
 class TestCCopyTermFastPathActuallyFires:
     def test_copy_term_c_uses_fast_new_for_nested_term(self):
         # nv — same call-recording technique as
