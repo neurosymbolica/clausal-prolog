@@ -182,7 +182,7 @@ does not consume, so each legality clause was transliterated to the Python-AST l
 
 | `unnecessary_lambda` legality clause | Python-AST transliteration | verified |
 |---|---|---|
-| argument is a raw `Lambda` node | `Compare` with `Lt` + leftmost `USub` at depth 0, adjacency confirmed by the engine's own `_is_arrow_adjacent` | site set matches the translator's refusal exactly (below) |
+| argument is a raw `Lambda` node | `Compare` with `Lt` + leftmost `USub` at depth 0, adjacency confirmed by the engine's own `_is_arrow_adjacent` | site set matches the translator's refusal exactly (below) — **but see §2.2's footnote: this row is where the transliteration is one site wide** |
 | every param is a plain positional param, no defaults/annotations/`*args` | every element of the head `Tuple` (or the bare head) is an `ast.Name` | 0 of 390 sites violate |
 | body is a SINGLE predicate call (a `Goal`) | body is an `ast.Call` whose `func` is a `Name`/`Attribute` | 39 of 390 violate → class (c) |
 | the body call has NO keyword arguments | `body.keywords == []` | 0 of 390 violate |
@@ -196,6 +196,17 @@ lambda parameters shadow the enclosing clause — pinned by
 an argument `Name` that is not a parameter is a capture, and the exact match rejects it. So
 the one comparison is simultaneously the forwarding check and the capture check on both
 representations.
+
+**One legality clause the transliteration did not carry, and its cost.** Reification
+builds a `Lambda` node only when the arrow's head is a valid parameter list —
+`_extract_arrow_lambda_params` (`clausal/templating/term_rewriting.py:304-325`) requires
+every head element to be a *logic-variable name* (`_is_logic_var_name`: ALL-CAPS, or
+`_`-leading). A head element that is merely an `ast.Name` but not a logic variable makes
+the whole arrow reify as a `Predicate` rule literal instead, which `unnecessary_lambda`
+never matches. The Python-AST transliteration of row 1 tests `isinstance(elt, ast.Name)`
+and **not** `_is_logic_var_name`, so it is strictly wider than the rule. Running the
+engine's own `_extract_arrow_lambda_params` over all 390 head ASTs finds **exactly 1 site**
+where the two disagree — §2.2's footnote.
 
 **The site set is the translator's own, not a re-derivation.** The census script
 monkey-patches `_ClausalToProlog._refuse_arrow_lambda_in_term_position`
@@ -228,6 +239,31 @@ kit: 144 sites in 15 files (40 files translated, 3 raised before translation)
 
 *(File counts do not add to 112 across classes: 95 files carry one class, 14 carry two,
 3 carry all three — 92 + 8 + 32 = 132 class-file pairs over 112 distinct files.)*
+
+> **Footnote — the one classification-uncertain site, resolved.** Running the engine's own
+> `_extract_arrow_lambda_params` over all 390 head ASTs returns `None` — *not a lambda
+> parameter list* — for exactly one:
+>
+> ```
+> === sites whose head is NOT a lambda param list per the engine's _extract_arrow_lambda_params: 1 ===
+>    [a] /workspace/clausify-executor-train/kit/repros/callgoal_imported_lambda_repro.clausal:28 :: (ID, P, St, C) < -requirement(ID, P, St, C)
+> ```
+>
+> `St` is mixed-case, so `"St".isupper()` is false and it is not a logic variable. The
+> file is a **deliberately adversarial fixture** and says so in its own header: the arrow
+> "is parsed as a `Predicate` rule literal instead of a `Lambda`", and the test at that
+> line asserts `call_goal` raises `error(type_error("callable", _), _)` — the engine path
+> at `clausal/logic/builtins/_registry.py:117-134`. Line 35 of the same file is the
+> corrected control with an ALL-CAPS `ST`, and is a genuine class (a).
+>
+> So the site is **counted class (a) by the transliteration and is not eta-reducible**: it
+> is not a lambda at all. The engine-faithful class-(a) count is **317 sites, not 318**
+> (kit 133, not 134) — 0.26 % of 390, immaterial to every headline in this note, and
+> stated because the transliteration's fidelity is the census's whole warrant. The
+> translator is *right* to refuse the site (it is untranslatable either way); only the
+> classification is wide. Any implementation of §4.1 A2 must carry `_is_logic_var_name`
+> into its parameter test, and §4.1's test list gains a fifth item: a refusal test that
+> `((ID, P, St, C) <- requirement(ID, P, St, C))` is **not** treated as eta-reducible.
 
 **The operator's hypothesis is confirmed, and more strongly than stated: four in five
 refused sites are redundant eta-expansions.** The kit is more extreme than the corpus —
@@ -332,6 +368,73 @@ document's file walk (705 corpus + 40 kit files that translate), not over the ra
 manifest-driven set, so the baseline must be re-measured rather than added to.
 The `('other',)` residue is 43 `unsupported call target` + 14 `unsupported expression` +
 11 `-import_from(py.datetime, …)` + 1 dict splat.
+
+### 2.5 The residual: what stays refused if classes (b) and (c) are deferred
+
+§8 recommends deferring classes (b) and (c). That deferral has a named cost, and it should
+be read before the recommendation is accepted, not after.
+
+Of the 74 files whose only refusal class is the lambda, 47 clear entirely through the
+class-(a) migration (§2.4). **The other 27 stay refused solely because of a class-(b) or
+class-(c) lambda** — nothing else in them is untranslatable. 23 corpus files across 22
+domains (22 of the 23 are `queries.clausal` or `tests/test_queries.clausal`), 4 kit files. Census stdout, `b=`/`c=` being that file's site counts by class:
+
+```
+=== files still refused SOLELY by class (b)/(c) lambdas: 27 ===
+   corpus b=0 c=1  au/merger_clearance/threshold.clausal
+   corpus b=0 c=5  eu/aml/amlr_bo_chain/queries.clausal
+   corpus b=1 c=0  eu/cbam/declarant_scope/queries.clausal
+   corpus b=0 c=6  eu/chemicals/reach_registration_tonnage_band/tests/test_queries.clausal
+   corpus b=0 c=1  eu/crypto_assets/mica_casp_authorisation_conditions/queries.clausal
+   corpus b=0 c=1  eu/data_protection/gdpr_arts33_34_breach_notification/queries.clausal
+   corpus b=0 c=2  eu/derivatives/emir_nfc_clearing/tests/test_queries.clausal
+   corpus b=0 c=1  eu/labour/blue_card_eligibility/queries.clausal
+   corpus b=0 c=1  eu/labour/posted_workers_long_term_trigger/queries.clausal
+   corpus b=0 c=1  eu/labour/working_time_average/tests/test_queries.clausal
+   corpus b=0 c=1  eu/labour/working_time_reference_period/tests/test_queries.clausal
+   corpus b=1 c=1  eu/merger/eumr_jurisdiction_turnover/queries.clausal
+   corpus b=0 c=2  eu/mifid/client_categorisation/queries.clausal
+   corpus b=1 c=1  eu/peppol_einvoicing/queries.clausal
+   corpus b=0 c=1  eu/procurement/light_regime/queries.clausal
+   corpus b=1 c=1  eu/procurement/selection_criteria/queries.clausal
+   corpus b=1 c=0  eu/procurement/shortlisting/queries.clausal
+   corpus b=2 c=3  eu/schengen_90_180/queries.clausal
+   corpus b=1 c=4  eu/schengen_90_180_max_stay/queries.clausal
+   corpus b=0 c=1  eu/state_aid/de_minimis_cumulation/queries.clausal
+   corpus b=2 c=0  eu/state_aid/de_minimis_cumulation/tests/test_queries.clausal
+   corpus b=0 c=3  eu/vat/pro_rata_deduction/tests/test_queries.clausal
+   corpus b=0 c=1  th/visa/queries.clausal
+   kit    b=0 c=2  optimization_lib.clausal
+   kit    b=0 c=3  query_combinators.clausal
+   kit    b=0 c=3  tests/test_kit_gap_wave2.clausal
+   kit    b=0 c=2  tests/test_validate_props.clausal
+```
+
+*(Paths abbreviated to the repo-relative form; the census prints them absolute under
+`/workspace/clausify-domains` and `/workspace/clausify-executor-train/kit`.)*
+
+Three things this list says that the aggregate does not:
+
+- **22 of the 23 corpus files are `queries.clausal` or `tests/test_queries.clausal`** —
+  `au/merger_clearance/threshold.clausal` is the single exception. These are the query / what-if
+  surfaces (`flip_scan`, `bisect_flip`, `what_if_nth`, `aggregate_over`), not the normative
+  rule files. A domain whose `queries.clausal` stays refused still exports its rules; it
+  loses its boundary-probe and minimal-cause surface. That is a smaller loss than
+  "21 domains blocked", and the distinction should not be lost when the deferral is scored.
+- **Only 6 of the 27 involve class (b) at all**, and 3 of those 6 also carry class (c). So
+  teaching the engine `call_goal/N` partial application (§4.2) would unblock at most
+  **3 files on its own** — `eu/cbam/declarant_scope/queries.clausal`,
+  `eu/procurement/shortlisting/queries.clausal`, and
+  `eu/state_aid/de_minimis_cumulation/tests/test_queries.clausal`. Class (c) lifting is
+  where the residual actually lives: it alone would unblock 24 of the 27.
+- **Two of the four kit files are libraries** — `query_combinators.clausal` (3 class-(c)
+  sites) and `optimization_lib.clausal` (2). A kit library that will not translate blocks
+  every domain importing it at G2/G3 regardless of that domain's own cleanliness, so these
+  two are worth more than their file count. `query_combinators` is the host of
+  `flip_scan` / `bisect_flip` / `what_if`, i.e. of most of the 27.
+
+The honest summary of the deferral: **27 files, 22 corpus domains' query surfaces, and two
+kit libraries stay refused**, and the class-(c) half is 24 of the 27.
 
 ---
 
@@ -851,13 +954,52 @@ is correct (`p(X) <- (X < -1)` emits `X < -1`), because that path goes through
 So the hazard is narrow and exactly located: **only the clause-level arrow detection
 diverges, and only for a top-level statement.**
 
-**Incidence: zero.** Every top-level `Compare` statement in the corpus and kit, tested for
-"translator says clause arrow, engine says comparison":
+**Incidence: zero — method first, then result.** This is a *different* scan from §2.1's,
+and its method is not the census script's. §2.1 enumerates sites through the translator's
+refusal hook, which only ever sees **term**-position arrows; the divergence here is at
+**clause** level, which that hook cannot reach by construction. So this scan does not run
+the translator at all:
+
+- **File set:** the same walk as §2 — `rglob("*.clausal")` under
+  `/workspace/clausify-domains` and `/workspace/clausify-executor-train/kit`, skipping any
+  path with a `_`-prefixed component. 748 files; 3 fail `ast.parse` and are skipped;
+  **745 walked** (705 corpus, 40 kit).
+- **"Top-level" is `ast.parse(source).body`, nothing deeper.** A statement qualifies when
+  it is an `ast.Expr` whose `.value` is an `ast.Compare` — exactly the shape
+  `convert_module` hands to `_convert_stmt` → `_detect_arrow`
+  (`clausal_to_prolog.py:463-483, 591-599`), i.e. the shape the diverging code path
+  actually receives. Nested and body-position `Compare` nodes are deliberately excluded:
+  this section's own transcript shows the body path is already correct.
+- **Both verdicts are computed from the two real implementations, not restated.** The
+  translator's rule is transcribed inline from `clausal_to_prolog.py:591-599` — `Lt` first
+  op, leftmost `USub` present, `depth == 0`, `len(ops) == 1`, and *no* adjacency test; the
+  engine's is the imported
+  `clausal.templating.term_rewriting._is_arrow_adjacent(left, usub, source_lines)`, called
+  with that file's own `source.splitlines()`, so the exact-character check at `:249-254` is
+  the one running rather than the column-gap fallback. A site is DIVERGENT when the
+  translator's four conditions hold and `_is_arrow_adjacent` returns `False`.
+
+Result, with the denominators, so "zero" can be read against something (Python driver
+stdout):
 
 ```
-top-level Compare statements scanned: 9600
-DIVERGENT (translator: clause arrow / engine: comparison): 0
+corpus: 705 files (0 unparseable), 8645 top-level Compare stmts, 8645 arrows, 0 divergent
+kit:     40 files (3 unparseable),  963 top-level Compare stmts,  963 arrows, 0 divergent
 ```
+
+**9,608 top-level `Compare` statements, every one of them a `<-` clause arrow both
+implementations accept, and 0 divergent.** Note what the denominator is and is not: it is
+not a population of comparisons among which none happened to diverge — in these trees a
+top-level `Compare` statement is *always* a clause, because a bare comparison at file scope
+would be a statement with no effect. The scan's real content is therefore the negative:
+**no file in either tree writes a top-level `X < -N`**, so nothing today is mis-emitted as
+`_X :- N.`
+
+*(An earlier run of this same scan, before the trunk kit migration landed as
+`clausify-executor-train@1587802` mid-session, returned 9,600; the 8-statement difference
+is clauses that commit added to 8 kit files. The §2 lambda census was re-run against the
+post-migration trees and is **row-for-row identical** — 390 rows, the same 246/97 and
+144/15 splits, the same per-site class for every row.)*
 
 **Proposed alignment.** Delete the translator's `_detect_arrow` and `_leftmost_usub` and
 call `clausal.templating.term_rewriting._detect_arrow(left, ops, comparators,
@@ -942,7 +1084,12 @@ classes (b) and (c) refused until the refactor.** In order:
 6. **Not now:** class (b)'s `call/N` lowering (it would make the export more capable than
    the engine), class (c)'s lifting (converter surgery against a converter the refactor
    replaces), and translator-side eta-reduction (a duplicate of an engine rule). All 72
-   sites stay refused, which is today's behaviour and the honest one.
+   sites stay refused, which is today's behaviour and the honest one — **at the cost named
+   in §2.5: 27 files, being 22 corpus domains' `queries.clausal` surfaces plus two kit
+   libraries (`query_combinators`, `optimization_lib`), stay refused for a (b)/(c) lambda
+   and nothing else.** 24 of the 27 turn on class (c) alone, so if the operator wants to
+   buy some of that back before the refactor, class-(c) lifting is the purchase and
+   class-(b) `call/N` (3 files) is not.
 
 Explicitly **not** recommended: adding `include/3` to `LIBRARY_INJECTIONS` (§5 — it does
 not exist in `library(lists)`), and any remedy that emits a bare predicate reference
@@ -963,8 +1110,10 @@ without a corresponding `meta_predicate` declaration (§3.2 — it raises).
 | class (b) maps to ISO `call/N` directly | brief | **true of ISO, false of the engine** — `call_goal(p(A,B), X, V)` and `call(p(A,B), X, V)` both fail *silently* on the engine (`higher_order.py:27,37`); lowering it would make the export more capable than the engine |
 | `include/3` is one missing `LIBRARY_INJECTIONS` entry (class L) | `progress.md` | **the remedy does not work** — Scryer's `library(lists)` has no `include/3`; injection moves the error rather than removing it. A companion is required (§5) |
 | Scryer lacks `include/3` | brief | **confirmed**, and widened: `exclude/3`, `partition/4`, `msort/2`, `last/2`, `max_by/3`, `min_by/3`, `take_while/3`, `filter_map/3` are also absent; `maplist/2,3` and **`foldl/4` are present** |
-| the translator's clause-level `_detect_arrow` does no adjacency check | refusal work | **confirmed**, with the emission measured (`X < -1` → `_X :- 1.`) — and **0 live instances** across 9,600 top-level `Compare` statements |
+| the translator's clause-level `_detect_arrow` does no adjacency check | refusal work | **confirmed**, with the emission measured (`X < -1` → `_X :- 1.`) — and **0 live instances** across all 9,608 top-level `Compare` statements in the two trees (§6 states the scan's method and denominators) |
 | lambda lifting can emit aux clauses next to their host | — | **would fire the `:- discontiguous` post-pass** (`clausal_to_prolog.py:486-528`); aux clauses must be blocked at the module end (§4.3) |
+| the Python-AST transliteration of "is a raw `Lambda` node" is faithful | §2.1, first draft | **one site wide** — it omits `_is_logic_var_name`, so the mixed-case head at `kit/repros/callgoal_imported_lambda_repro.clausal:28` classifies as (a) though the engine reifies it as a `Predicate`. Engine-faithful class (a) is **317, not 318** (§2.2 footnote) |
+| deferring classes (b) and (c) is free, since they are already refused | implied by §7 | **has a named cost** — 27 files stay refused for a (b)/(c) lambda and nothing else: 22 corpus domains' query surfaces plus `query_combinators` and `optimization_lib`; 24 of the 27 are class (c) alone (§2.5) |
 | a lifted aux must be exported to be reachable | — | **false** — a non-exported aux resolves both via a `meta_predicate` host and via `Module:aux` (§3.3) |
 
 ---
