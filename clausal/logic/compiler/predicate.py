@@ -1266,18 +1266,21 @@ def compile_predicate_trampoline(*args, **kwargs) -> Callable:
     parameter because ``term_to_ast_expr`` and ``head_to_match_pattern`` are
     reached from ~56 call sites across the compiler; the scope covers exactly
     one predicate's compilation, mirroring how ``atom_identity_lowering``
-    scopes query-template atom lowering.  With no flag present nothing is
-    pushed, so the emission and pattern branches are never consulted and the
-    generated AST is byte-identical to the pre-bridge compiler (the
+    scopes query-template atom lowering.  An unflagged compile pushes ``None``
+    rather than nothing, so it is sealed against an outer flagged scope; with
+    ``None`` on top the emission and pattern branches are never consulted and
+    the generated AST is byte-identical to the pre-bridge compiler (the
     DEFAULT-PATH INVARIANT, pinned by ``tests/golden/*.codegen.txt``).
     """
     globals_ = kwargs.get("globals_")
     if globals_ is None and len(args) > 5:
         globals_ = args[5]
-    if globals_ is not None and globals_.get(TAGGED_TERMS_FLAG):
-        with tagged_terms_lowering(globals_):
-            return _compile_predicate_trampoline_impl(*args, **kwargs)
-    return _compile_predicate_trampoline_impl(*args, **kwargs)
+    flagged = globals_ if (globals_ or {}).get(TAGGED_TERMS_FLAG) else None
+    # ALWAYS enter the scope -- with ``None`` when unflagged.  Pushing nothing
+    # would let this compile inherit an outer flagged scope and emit cells into
+    # a module that never asked for them; the stack is the seal, not the flag.
+    with tagged_terms_lowering(flagged):
+        return _compile_predicate_trampoline_impl(*args, **kwargs)
 
 
 def compile_predicate_trampoline_ast(
@@ -1291,6 +1294,12 @@ def compile_predicate_trampoline_ast(
 
     Identical to ``compile_predicate_trampoline`` but returns the AST node
     instead of executing it.  Does *not* install anything in the database.
+
+    Takes no ``globals_``, so it bypasses the ``-tagged_terms`` wrapper: the
+    visualiser (``clausal.tools.visualize``) renders a flagged module's
+    predicates with CLASS emission, not cells.  Intentional — this entrypoint
+    has no module namespace to read the flag from, and inventing one would
+    make the rendering depend on the caller rather than on the module.
     """
     if body_compiler is None:
         body_compiler = _make_body_compiler_trampoline(db)
@@ -1827,18 +1836,21 @@ def compile_predicate_shallow(*args, **kwargs) -> Callable:
     parameter because ``term_to_ast_expr`` and ``head_to_match_pattern`` are
     reached from ~56 call sites across the compiler; the scope covers exactly
     one predicate's compilation, mirroring how ``atom_identity_lowering``
-    scopes query-template atom lowering.  With no flag present nothing is
-    pushed, so the emission and pattern branches are never consulted and the
-    generated AST is byte-identical to the pre-bridge compiler (the
+    scopes query-template atom lowering.  An unflagged compile pushes ``None``
+    rather than nothing, so it is sealed against an outer flagged scope; with
+    ``None`` on top the emission and pattern branches are never consulted and
+    the generated AST is byte-identical to the pre-bridge compiler (the
     DEFAULT-PATH INVARIANT, pinned by ``tests/golden/*.codegen.txt``).
     """
     globals_ = kwargs.get("globals_")
     if globals_ is None and len(args) > 5:
         globals_ = args[5]
-    if globals_ is not None and globals_.get(TAGGED_TERMS_FLAG):
-        with tagged_terms_lowering(globals_):
-            return _compile_predicate_shallow_impl(*args, **kwargs)
-    return _compile_predicate_shallow_impl(*args, **kwargs)
+    flagged = globals_ if (globals_ or {}).get(TAGGED_TERMS_FLAG) else None
+    # ALWAYS enter the scope -- with ``None`` when unflagged.  Pushing nothing
+    # would let this compile inherit an outer flagged scope and emit cells into
+    # a module that never asked for them; the stack is the seal, not the flag.
+    with tagged_terms_lowering(flagged):
+        return _compile_predicate_shallow_impl(*args, **kwargs)
 
 
 def compile_predicate(
@@ -1875,6 +1887,10 @@ def compile_predicate_shallow_ast(
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
 ) -> ast.FunctionDef:
     """Return the ``ast.FunctionDef`` for a shallow-mode compiled predicate.
+
+    Like ``compile_predicate_trampoline_ast``, this takes no ``globals_`` and
+    so bypasses the ``-tagged_terms`` wrapper — the visualiser renders a
+    flagged module with class emission.  Intentional; see that function.
 
     Identical to ``compile_predicate_shallow`` but returns the AST node
     instead of executing it.  Useful for inspecting or pretty-printing

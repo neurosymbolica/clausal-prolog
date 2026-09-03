@@ -128,8 +128,17 @@ def normalize_answers(answers) -> list:
 # occurrences of the same original name still map to the same canonical name,
 # and two different originals still differ -- so a genuine codegen change
 # (an extra mark, a reordered capture, a dropped guard) still shows up.
+# Anchored at an identifier boundary, and the whole matched identifier must be
+# compiler-generated -- it starts with ``_`` or ``$`` and may carry a generated
+# stem (``_fa_m246``, the fallback function's marks).  Without the anchor a
+# USER identifier that merely ends in one of these shapes (``foo_v12`` -- a
+# predicate or field a fixture happens to name that way) would have its tail
+# renumbered, rewriting source the golden is supposed to pin verbatim.
 _UNSTABLE_NAME_RE = re.compile(
-    r"(_pyt_|\$headlit_|_v|_m|_gen|_st|_ncap|_acap|_dcap|_scap|_xcap)(\d+)"
+    r"(?<![A-Za-z0-9_$])"                                   # identifier start
+    r"((?:_[A-Za-z0-9]+)*)"                                 # generated stem
+    r"(_pyt_|\$headlit_|_v|_m|_gen|_st|_ncap|_acap|_dcap|_scap|_xcap)"
+    r"(\d+)"
 )
 
 
@@ -138,14 +147,15 @@ def _stabilise(src: str) -> str:
     counters: dict[str, int] = {}
 
     def _sub(match: re.Match) -> str:
-        key = (match.group(1), match.group(2))
+        stem, prefix, number = match.group(1), match.group(2), match.group(3)
+        key = (prefix, number)
         canonical = mapping.get(key)
         if canonical is None:
-            n = counters.get(match.group(1), 0)
-            counters[match.group(1)] = n + 1
-            canonical = f"{match.group(1)}{n}"
+            n = counters.get(prefix, 0)
+            counters[prefix] = n + 1
+            canonical = f"{prefix}{n}"
             mapping[key] = canonical
-        return canonical
+        return stem + canonical
 
     return _UNSTABLE_NAME_RE.sub(_sub, src)
 

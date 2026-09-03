@@ -643,8 +643,12 @@ def head_to_match_pattern(
             # instance that the flagged module never constructs.  Saturation
             # is required: a cell is positional and total, so a partial
             # reference keeps class construction AND class matching.
+            # Resolve against ``globals_`` -- the very dict
+            # ``_resolve_loadname`` just used for ``fields``, so the cell
+            # branch and the MatchClass fallback beside it cannot disagree
+            # about which class ``term.func.name`` names.
             _cell_f = (
-                cell_functor_for_name(term.func.name, len(term.args))
+                cell_functor_for_name(term.func.name, len(term.args), globals_)
                 if len(term.args) == len(fields) else None
             )
             if _cell_f is not None:

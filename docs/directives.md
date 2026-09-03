@@ -429,6 +429,24 @@ Declares how many visible arguments a predicate has and which accumulators/passe
 
 ---
 
+## Experimental Directive
+
+### -tagged_terms
+
+!!! warning "Experimental — not a supported feature"
+    `-tagged_terms` opts a file into an alternative *tagged-cell* term
+    representation, in which a saturated construction of a functor the module
+    declares compiles to a plain tuple `("point", X, Y)` rather than an
+    instance of the generated `point` class. It exists to measure that
+    representation (Phase 2 of `implementation_plans/tagged-tuple-term-representation.md`)
+    and carries real limits — most sharply, compound data cannot cross the
+    module boundary, and the module's own generated constructors silently
+    match nothing. Read the directive's docstring in
+    `clausal/templating/term_rewriting.py` (`_handle_tagged_terms_directive`)
+    for the full list before using it.
+
+---
+
 ## Backend Directive (planned)
 
 !!! note "Not yet implemented"

@@ -4681,12 +4681,33 @@ class EmbedTransformer(NodeTransformer):
           a ``point`` instance into a flagged module (or a cell into an
           unflagged one) and it simply will not unify with the callee's
           clause heads.  Keep flagged modules self-contained.
+        - **The module's own generated classes still exist, and still match
+          nothing.**  ``-tagged_terms`` changes what the module's clauses
+          BUILD; it does not remove the ``point`` class the declaration
+          generates.  That class remains importable and callable, so
+          ``m.point(1, 2)`` from a test or a Python caller yields a value
+          that unifies with nothing in ``m`` — SILENTLY, as no solutions
+          rather than as an error.  Query a flagged module with cells
+          (``("point", 1, 2)``), not with its constructors.
         - **Partial and keyword construction keep class emission**, even
           here: ``point(X=1)`` names its fields and leaves the rest to be
           back-filled, which a positional tuple cannot express.
         - **Atoms stay class atoms.**  A 0-arity reference is still the
           generated class object; only arity >= 1 constructions become
           cells.
+        - **A functor with a ``position`` / ``_position`` field keeps class
+          emission.**  The instance construction path drops those fields,
+          and a positional cell cannot reproduce a dropped field.
+        - **"Data functor" is inferred from having no clauses**, so a
+          PREDICATE that happens to be clause-free where this module can see
+          it is misread as data and its references compile to cells that its
+          real clauses can never match.  ``-dynamic`` is gated against
+          explicitly; the remaining shapes — a ``-discontiguous`` or
+          ``-table`` declaration whose clauses arrive later, a multifile
+          predicate whose clauses all live in another file, or any predicate
+          not yet locked when this module compiles — are NOT, and are a
+          known limitation of the experiment rather than a supported
+          configuration.
         - **Single-character functors are ambiguous.**  A cell whose
           functor and every argument are 1-character strings — ``("a",
           "b")`` — is indistinguishable from a character list, which the

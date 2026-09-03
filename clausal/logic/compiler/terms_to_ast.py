@@ -209,20 +209,33 @@ def atom_identity_expr(term: Any) -> ast.expr | None:
 # the emission gate can resolve a functor NAME to the class it names; a
 # ``compile_predicate_*`` entrypoint pushes exactly one entry for the duration
 # of one predicate's compilation.
-_TAGGED_TERMS_STACK: list[dict] = []
+#
+# The stack is SEALING, not merely settable: an UNFLAGGED compile pushes
+# ``None``, it does not push nothing.  Only the TOP entry is ever consulted, so
+# a compile that targets an unflagged namespace cannot inherit a flagged scope
+# an outer compile happens to have left open and start emitting cells into a
+# module that never asked for them.  No path reaches that nesting today, which
+# is exactly why it has to be structural rather than a convention -- see
+# ``TestGateSymmetry.test_an_unflagged_compile_inside_a_flagged_scope_emits_no_cells``.
+_TAGGED_TERMS_STACK: "list[dict | None]" = []
 
 
 @contextmanager
-def tagged_terms_lowering(module_globals: dict):
-    """Lower declared-functor constructions to cells for the duration.
+def tagged_terms_lowering(module_globals: "dict | None"):
+    """Scope the cell lowering for the duration of one predicate's compile.
 
     *module_globals* is the flagged module's namespace — the same dict the
     compile entrypoint received as ``globals_`` — used to resolve a functor
-    name to the class it refers to.  Entered by
-    :func:`clausal.logic.compiler.predicate.compile_predicate_trampoline` /
-    ``compile_predicate_shallow`` when that namespace carries
-    :data:`clausal.logic.cells.TAGGED_TERMS_FLAG`; never entered otherwise,
-    which is what keeps the flag-off path byte-identical.
+    name to the class it refers to, and to answer "does this functor belong to
+    the flagged module?".
+
+    ``None`` opens an explicitly UNFLAGGED scope: the block emits no cells even
+    if an outer block left a flagged scope open.  Both
+    :func:`clausal.logic.compiler.predicate.compile_predicate_trampoline` and
+    ``compile_predicate_shallow`` always enter this manager — with the
+    namespace when it carries :data:`clausal.logic.cells.TAGGED_TERMS_FLAG`,
+    with ``None`` when it does not — so "unflagged" is a state the stack
+    records, never merely the absence of one.
     """
     _TAGGED_TERMS_STACK.append(module_globals)
     try:
@@ -231,8 +244,12 @@ def tagged_terms_lowering(module_globals: dict):
         _TAGGED_TERMS_STACK.pop()
 
 
-def tagged_terms_globals() -> dict | None:
-    """The flagged module's namespace, or None outside a flagged compile."""
+def tagged_terms_globals() -> "dict | None":
+    """The flagged module's namespace, or None outside a flagged compile.
+
+    Reads only the TOP of the stack: an unflagged compile nested inside a
+    flagged one answers ``None``, because it pushed ``None``.
+    """
     return _TAGGED_TERMS_STACK[-1] if _TAGGED_TERMS_STACK else None
 
 
@@ -255,6 +272,17 @@ def _is_cell_functor_class(cls: Any) -> bool:
     references to cells that the clauses asserted afterwards could never
     match.  ``_dynamic_arities`` is ``None`` on every class the compiler did
     not stamp, so ordinary data functors are unaffected.
+
+    So does a ``_position`` / ``position`` field.  ``term_to_ast_expr``'s
+    keyword slow path DROPS those fields when it constructs a term instance,
+    and a positional cell cannot reproduce a dropped field — the two
+    representations of such a functor are not interchangeable.  The exclusion
+    lives HERE, in the gate that both :func:`cell_functor_for_name` and
+    :func:`cell_functor_for_instance` go through, rather than at one emission
+    site: a check applied to construction but not to matching (or to instances
+    but not to source references) yields a clause that builds one shape and
+    matches another — one that can never fire.  Whatever the answer is for a
+    given functor, every site has to give the same one.
     """
     return (
         isinstance(cls, type)
@@ -262,27 +290,40 @@ def _is_cell_functor_class(cls: Any) -> bool:
         and bool(getattr(cls, "_fields", ()))
         and not getattr(cls, "_clauses", None)
         and not getattr(cls, "_dynamic_arities", None)
+        and not any(
+            name in ("_position", "position")
+            for name in getattr(cls, "_fields", ())
+        )
     )
 
 
 def cell_functor_for_name(name: str, arity: int,
-                          module_globals: dict | None = None) -> str | None:
+                          resolve_globals: "dict | None" = None) -> "str | None":
     """Resolve *name* to a cell functor for a saturated *arity* construction.
 
     Returns the functor string to put in slot 0, or None when the reference
-    must keep class emission — the name does not resolve in the flagged
-    module's namespace, resolves to something that is not a data functor, is
-    not saturated at *arity*, or belongs to another module (compound data
-    does not cross the flag boundary; see the directive docstring).
+    must keep class emission — no flagged scope is open, the name does not
+    resolve, resolves to something that is not a data functor, is not
+    saturated at *arity*, or belongs to another module (compound data does not
+    cross the flag boundary; see the directive docstring).
+
+    *resolve_globals* is the namespace to look *name* up in.  Call sites that
+    have one pass it, so the name resolves against the SAME dict the
+    class-emission branch beside it uses — in ``head_match`` that is
+    ``_resolve_loadname(name, globals_)``, and a cell branch resolving
+    somewhere else could disagree with its own fallback about what ``name``
+    means.  When omitted, the flagged module's own namespace is used.  Either
+    way the OWNERSHIP question is answered against the flagged scope, the only
+    namespace that can say what "this module" is.
 
     A dotted name (``other.Wrap``) always returns None: it is by definition
     another module's functor.
     """
-    if module_globals is None:
-        module_globals = tagged_terms_globals()
-    if module_globals is None or "." in name:
+    scope = tagged_terms_globals()
+    if scope is None or "." in name:
         return None
-    cls = module_globals.get(name)
+    namespace = resolve_globals if resolve_globals is not None else scope
+    cls = namespace.get(name)
     if not _is_cell_functor_class(cls):
         return None
     if len(cls._fields) != arity:
@@ -291,27 +332,28 @@ def cell_functor_for_name(name: str, arity: int,
     # defining module.  An imported functor keeps class emission so that data
     # built here still matches the owner's clause heads.
     owner = getattr(cls, "__module__", None)
-    here = module_globals.get("__name__")
+    here = scope.get("__name__")
     if owner is not None and here is not None and owner != here:
         return None
     return cls.__name__
 
 
-def cell_functor_for_instance(term: Any,
-                              module_globals: dict | None = None) -> str | None:
+def cell_functor_for_instance(term: Any) -> "str | None":
     """Resolve a live term INSTANCE to its cell functor, or None.
 
-    Same gates as :func:`cell_functor_for_name`, applied to ``type(term)``.
+    Same gates as :func:`cell_functor_for_name` — including the
+    ``_position``/``position`` exclusion both inherit from
+    :func:`_is_cell_functor_class` — applied to ``type(term)``.  No name
+    resolution is involved: the class is the term's own type.
     """
-    if module_globals is None:
-        module_globals = tagged_terms_globals()
-    if module_globals is None:
+    scope = tagged_terms_globals()
+    if scope is None:
         return None
     cls = type(term)
     if not _is_cell_functor_class(cls):
         return None
     owner = getattr(cls, "__module__", None)
-    here = module_globals.get("__name__")
+    here = scope.get("__name__")
     if owner is not None and here is not None and owner != here:
         return None
     return cls.__name__
@@ -782,23 +824,25 @@ def term_to_ast_expr(
         # above).  The reachable producer of such an instance is the query
         # compiler, whose template globals ARE the callee module's namespace
         # — so a query argument built as ``m.point(1, 2)`` still meets the
-        # flagged module's cells.  Positional and total, exactly like the
-        # ``_clausal_new`` fast path just below, whose gate this mirrors:
-        # a ``_position``/``position`` field means the slow keyword path
-        # DROPS fields, which a positional cell cannot reproduce.
-        if not any(name in ("_position", "position") for name in fields):
-            _cell_f = cell_functor_for_instance(term)
-            if _cell_f is not None:
-                return cell_literal_ast(
-                    _cell_f,
-                    [
-                        term_to_ast_expr(
-                            getattr(term, name), var_context,
-                            eval_arith=eval_arith,
-                        )
-                        for name in fields
-                    ],
-                )
+        # flagged module's cells.
+        #
+        # The scope check comes FIRST (one list-index test outside a flagged
+        # compile, ahead of any per-field work).  The ``_position``/
+        # ``position`` exclusion that used to sit here now lives in
+        # ``_is_cell_functor_class``, so ``head_match``'s pattern branch
+        # inherits the same answer — see that gate's docstring.
+        _cell_f = cell_functor_for_instance(term)
+        if _cell_f is not None:
+            return cell_literal_ast(
+                _cell_f,
+                [
+                    term_to_ast_expr(
+                        getattr(term, name), var_context,
+                        eval_arith=eval_arith,
+                    )
+                    for name in fields
+                ],
+            )
         if (
             isinstance(cls, PredicateMeta)
             and isinstance(vars(cls).get("_clausal_new"), classmethod)

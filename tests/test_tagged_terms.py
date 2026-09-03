@@ -344,6 +344,18 @@ class TestCellHeadDispatch:
     def test_unknown_functor_cell_matches_no_clause(self):
         assert self._kind_of(_TAGGED, lambda m: ("square", 1, 2)) == []
 
+    def test_the_flagged_modules_own_class_constructor_matches_nothing(self):
+        """The trap this bridge cannot remove, pinned on the real path.
+
+        ``-tagged_terms`` changes what the module's clauses BUILD; it does not
+        remove the generated ``point`` class, which is still importable and
+        still callable.  A caller that reaches for it gets a value that
+        unifies with nothing in the flagged module -- silently, as no
+        solutions rather than as an error.  Asserted here so the behaviour is
+        a decision on record rather than a surprise.
+        """
+        assert self._kind_of(_TAGGED, lambda m: m.point(1, 2)) == []
+
 
 # ── Head patterns ────────────────────────────────────────────────────────────
 
@@ -657,3 +669,115 @@ class TestNormalizer:
             {"T": ("point", 1, ("nil",))},
             ("point", 1, ("nil",)),
         ]
+
+
+class TestGateSymmetry:
+    """Construction and matching must agree, functor by functor.
+
+    Any gate that one side applies and the other does not produces a clause
+    that can never match: built one shape, matched as another.  These pin the
+    two sides against each other on the awkward cases.
+    """
+
+    _POS_SRC = (
+        "-tagged_terms\n"
+        "-module(_tt_pos, [rec(position, x), p(A)])\n"
+        "p(rec(1, 2)),\n"
+    )
+
+    def _pos_module(self):
+        import sys
+
+        if "_tt_pos" not in sys.modules:
+            _load_inline("_tt_pos", self._POS_SRC)
+        return sys.modules["_tt_pos"]
+
+    def test_position_field_functor_constructs_as_a_class(self):
+        """``term_to_ast_expr``'s keyword slow path DROPS a ``position``
+        field, so a positional cell cannot reproduce it -- such a functor
+        keeps class construction even in a flagged module."""
+        self._pos_module()
+        src = capture_predicate_codegen("_tt_pos", ["p"])
+        assert "('rec'," not in src
+        assert "rec(" in src
+
+    def test_position_field_functor_matches_as_a_class(self):
+        """... and therefore must keep class MATCHING too.  A cell pattern
+        here could never match the class term the other half builds."""
+        from clausal.logic.compiler.head_match import head_to_match_pattern
+        from clausal.logic.compiler.terms_to_ast import tagged_terms_lowering
+
+        mod = self._pos_module()
+        with tagged_terms_lowering(mod.__dict__):
+            pattern = head_to_match_pattern(
+                mod.rec(1, 2), {}, [], [], None, globals_=mod.__dict__,
+            )
+        assert _unparse_pattern(pattern).startswith("case rec(")
+
+    def test_the_cell_branch_resolves_names_where_its_fallback_does(self):
+        """``cell_functor_for_name`` looks the name up in the ``globals_``
+        argument -- the same dict ``_resolve_loadname`` just used to pin
+        ``fields`` for the MatchClass beside it.  Resolving in the SCOPE's
+        namespace instead would let the two branches disagree about which
+        class a name means.
+
+        Constructed so the two answers differ: ``globals_`` binds ``point`` to
+        the UNFLAGGED sibling's class (another module's functor -> class
+        pattern), while the open scope binds the same name to the flagged
+        module's own (-> cell pattern).  Only globals_-resolution gives the
+        class pattern, which is the one that agrees with its own fallback.
+        """
+        from clausal.logic.compiler.head_match import head_to_match_pattern
+        from clausal.logic.compiler.terms_to_ast import tagged_terms_lowering
+
+        plain, tagged = _fixture(_PLAIN), _fixture(_TAGGED)
+        assert plain.point is not tagged.point      # the premise
+        term = self._source_compound_for("point", 2)
+        with tagged_terms_lowering(tagged.__dict__):
+            pattern = head_to_match_pattern(
+                term, {}, [], [], None,
+                globals_={"__name__": tagged.__name__, "point": plain.point},
+            )
+        assert _unparse_pattern(pattern).startswith("case point(")
+
+    @staticmethod
+    def _source_compound_for(name, n):
+        from clausal.terms import Call as TCall, LoadName
+
+        return TCall(func=LoadName(name=name),
+                     args=[Var() for _ in range(n)], kwargs=[])
+
+    def test_an_unflagged_compile_inside_a_flagged_scope_emits_no_cells(self):
+        """The lowering scope must be SEALED, not merely unset.
+
+        An unflagged compile that pushes nothing would inherit whatever scope
+        happens to be open and silently emit cells into a module that never
+        asked for them.  No path reaches that today; the invariant is
+        absolute anyway.
+        """
+        from clausal.logic.compiler import predicate as predicate_mod
+        from clausal.logic.compiler.terms_to_ast import tagged_terms_lowering
+
+        plain = _fixture(_PLAIN)
+        tagged = _fixture(_TAGGED)
+        db = _logic_module(plain).db
+        captured = []
+        original = predicate_mod.functiondef_to_function
+
+        def _spy(func_def, globals_=None, **kwargs):
+            captured.append(ast.unparse(func_def))
+            return original(func_def, globals_=globals_, **kwargs)
+
+        predicate_mod.functiondef_to_function = _spy
+        try:
+            with tagged_terms_lowering(tagged.__dict__):
+                predicate_mod.compile_predicate_trampoline(
+                    "kind", 2, db.clauses_for("kind", 2), db,
+                    globals_=plain.__dict__,
+                )
+        finally:
+            predicate_mod.functiondef_to_function = original
+
+        src = "\n".join(captured)
+        assert "('point'," not in src
+        assert "point(" in src
