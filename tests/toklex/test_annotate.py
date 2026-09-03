@@ -12,7 +12,12 @@ trivia(ws, layout then layout*).
 """
 
 
-def test_extend_sets_drive_emission():
+def test_extend_sets_computed():
+    # `extend` is per-state metadata for the DCG/doc layer (which symbols
+    # can still lead somewhere live) -- the runtime driver (Task 6) walks
+    # `dfa.delta` directly and never consults `extend`. This test just
+    # checks the set is computed correctly, not that anything "drives" off
+    # it at scan time.
     lx = annotate(parse_spec_text(NUM))
     p = lx.partition
     # after '1' the state accepts integer; '.' extends (float path), ' ' does not

@@ -136,10 +136,20 @@ token(semicolon, ';').
 token(end,      '.' followed_by (layout | '%' | eof)).
 token(variable, (capital | '_') then alnum*).
 token(name_atom, small then alnum*).
-token(char_code, '0' then quote then (quote then quote | escape | any)) value char_code.
-token(hex_int,  '0' then ('x' | 'X') then (hexdig | '_') then (hexdig | '_')*) value int_16.
-token(oct_int,  '0' then ('o' | 'O') then (octdig | '_') then (octdig | '_')*) value int_8.
-token(bin_int,  '0' then ('b' | 'B') then (bindig | '_') then (bindig | '_')*) value int_2.
+token(char_code, '0' then quote then (quote then quote | escape | (any - bslash))) value char_code.
+% hex_int/oct_int/bin_int require at least one REAL digit somewhere in the
+% run (underscores alone don't count) -- `'_'* then hexdig then (hexdig |
+% '_')*` generates exactly the language "any string over {hexdig,'_'} that
+% contains >=1 hexdig", matching the old hand-written tokenizer's rule
+% (collect the whole digit-or-'_' run, then `int(run.replace('_',''), 16)`,
+% which raises on an all-underscore run). `0x_1`/`0x1_` still match (>=1
+% real digit present); `0x_` does not, so maximal munch backs up to `0`
+% (integer) + a fresh name_atom for `x_` -- the same ratified 0x./1.5e.
+% shape (Task 10 divergence set), extended here to the underscore-only
+% case; see tests/toklex/test_parity.py's EXPECTED_DIVERGENCES.
+token(hex_int,  '0' then ('x' | 'X') then '_'* then hexdig then (hexdig | '_')*) value int_16.
+token(oct_int,  '0' then ('o' | 'O') then '_'* then octdig then (octdig | '_')*) value int_8.
+token(bin_int,  '0' then ('b' | 'B') then '_'* then bindig then (bindig | '_')*) value int_2.
 token(float_num, (udigits then '.' then udigits then exp?
                | udigits then exp)) value float_of.
 token(integer,  udigits) value int_10.

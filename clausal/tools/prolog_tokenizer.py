@@ -143,6 +143,11 @@ def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
                 raise TokenizeError("Unterminated quoted atom", line, col)
             if reason == "no_token":
                 raise TokenizeError(f"Unexpected character {culprit!r}", line, col)
+            if reason == "bad_token":
+                # A value builder raised on this lexeme (driver.py's
+                # defense-in-depth catch in `_emit`, e.g. a malformed
+                # `0x_`/`0'\...` shape) -- `culprit` is the lexeme itself.
+                raise TokenizeError(f"malformed token {culprit!r}", line, col)
             # 'invalid_encoding' -- unreachable when driving from a str
             # source (no feed_bad calls occur in this batch shim), kept
             # only so an error Tok never falls through silently.

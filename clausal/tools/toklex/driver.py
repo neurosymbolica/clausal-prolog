@@ -335,12 +335,34 @@ class IncrementalLexer:
         lexeme = "".join(e[0] for e in matched)
         builder_name = self.lexer.builder.get(label)
         builder = self.builders.get(builder_name) if builder_name else None
-        value = builder(lexeme) if builder is not None else lexeme
 
         start = matched[0][1:]
         last = matched[-1]
         end = _next_pos(last[1], last[2], last[3], last[0])
         glue = self._glue
+
+        if builder is not None:
+            try:
+                value = builder(lexeme)
+            except Exception:
+                # Defense in depth: a builder is expected to be total over
+                # whatever its token rule can match, but the grammar and a
+                # builder's own re-decoding of the lexeme (e.g. char_code's
+                # escape re-parse) don't always agree at the edges -- see
+                # the toklex final-wave findings (malformed 0x_/0'\...
+                # shapes). The public contract is that tokenize() never
+                # raises anything but a positioned TokenizeError, so a
+                # builder exception here becomes an `error` token instead
+                # of propagating a bare ValueError/TypeError/IndexError;
+                # the shim (prolog_tokenizer.py) turns this into a
+                # positioned TokenizeError.
+                self._glue = "glued"
+                self._reset_attempt()
+                return Tok(kind="error", value=("bad_token", lexeme), lexeme=lexeme,
+                           start=start, end=end, glue=glue)
+        else:
+            value = lexeme
+
         self._glue = "glued"
         self._reset_attempt()
         return Tok(kind=label, value=value, lexeme=lexeme, start=start, end=end, glue=glue)

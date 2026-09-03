@@ -185,10 +185,13 @@ token(cut,      '!').
 token(semicolon, ';').
 token(variable, (capital | '_') then alnum*).
 token(name_atom, small then alnum*).
-token(char_code, '0' then quote then (quote then quote | escape | (any - reserved))) value char_code.
-token(hex_int,  '0' then ('x' | 'X') then (hexdig | '_') then (hexdig | '_')*) value int_16.
-token(oct_int,  '0' then ('o' | 'O') then (octdig | '_') then (octdig | '_')*) value int_8.
-token(bin_int,  '0' then ('b' | 'B') then (bindig | '_') then (bindig | '_')*) value int_2.
+token(char_code, '0' then quote then (quote then quote | escape | (any - reserved - bslash))) value char_code.
+% hex_int/oct_int/bin_int: kept in sync with iso.toklex.pl -- require at
+% least one REAL digit (underscores alone don't count); see that file's
+% comment above the same three rules for the full rationale.
+token(hex_int,  '0' then ('x' | 'X') then '_'* then hexdig then (hexdig | '_')*) value int_16.
+token(oct_int,  '0' then ('o' | 'O') then '_'* then octdig then (octdig | '_')*) value int_8.
+token(bin_int,  '0' then ('b' | 'B') then '_'* then bindig then (bindig | '_')*) value int_2.
 token(float_num, (udigits then '.' then udigits then exp?
                | udigits then exp)) value float_of.
 token(integer,  udigits) value int_10.

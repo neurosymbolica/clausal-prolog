@@ -154,6 +154,24 @@ def _assert_lexes_1_5e_no_digits(toks):
     ]
 
 
+def _assert_lexes_0x_underscore_only(toks):
+    assert [(t.type, t.value) for t in toks[:3]] == [
+        (TokenType.INTEGER, 0), (TokenType.ATOM, "x_"), (TokenType.DOT, "."),
+    ]
+
+
+def _assert_lexes_0o_underscore_only(toks):
+    assert [(t.type, t.value) for t in toks[:3]] == [
+        (TokenType.INTEGER, 0), (TokenType.ATOM, "o_"), (TokenType.DOT, "."),
+    ]
+
+
+def _assert_lexes_0b_underscore_only(toks):
+    assert [(t.type, t.value) for t in toks[:3]] == [
+        (TokenType.INTEGER, 0), (TokenType.ATOM, "b_"), (TokenType.DOT, "."),
+    ]
+
+
 EXPECTED_DIVERGENCES = {
     # Old: TokenizeError("malformed hexadecimal literal at 1:1") -- the
     # hand-written `_read_number` required at least one hex digit after
@@ -173,6 +191,23 @@ EXPECTED_DIVERGENCES = {
     # `integer`-then-dot semantics: `1.5` (float_num, no exponent) then a
     # fresh `name_atom` (`e`). Brief pre-approved.
     "1.5e.": _assert_lexes_1_5e_no_digits,
+    # Final-wave finding 1a: `0x_`/`0o_`/`0b_` (underscore-only digit run,
+    # no real digit at all). Old: `_read_number`'s hex/oct/bin loop
+    # collects the whole digit-or-`_` run (here just `_`), strips `_`,
+    # and calls `int('', 16/8/2)` -- a bare `ValueError`, wrapped by
+    # `_to_number` into TokenizeError("malformed hexadecimal/octal/binary
+    # literal"). New: `hex_int`/`oct_int`/`bin_int` were tightened to
+    # require at least one REAL digit (`'_'* then hexdig then (hexdig |
+    # '_')*` etc. -- see iso.toklex.pl's comment above those three
+    # rules), so with none present the rule doesn't match at all and
+    # maximal munch falls back to `0` (integer) + a fresh name_atom for
+    # the rest (`x_`/`o_`/`b_`) -- the SAME ratified 0x./1.5e. shape,
+    # extended to the underscore-only case. Ratified by the final-wave
+    # controller (no bare exception either way is the hard invariant;
+    # this is the deliberate divergence, not just backstop hardening).
+    "0x_.": _assert_lexes_0x_underscore_only,
+    "0o_.": _assert_lexes_0o_underscore_only,
+    "0b_.": _assert_lexes_0b_underscore_only,
 }
 
 
@@ -191,6 +226,89 @@ class TestExpectedDivergences:
         got = [(t.type, t.value) for t in toks[:3]]
         assert got == [
             (TokenType.FLOAT, 10.0), (TokenType.VAR, "_0"), (TokenType.DOT, "."),
+        ]
+
+    def test_no_divergence_for_digit_adjacent_underscore(self):
+        # `0x_1`/`0x1_` DO have a real digit somewhere in the run, so they
+        # are NOT part of the underscore-only divergence above -- both old
+        # and new agree these lex as the integer 1 (see iso.toklex.pl's
+        # comment on hex_int/oct_int/bin_int: the tightened rule generates
+        # exactly "at least one real digit, `_` anywhere else").
+        for src in ("0x_1.", "0x1_.", "0o_1.", "0o1_.", "0b_1.", "0b1_."):
+            toks = tokenize(src)
+            assert [(t.type, t.value) for t in toks[:2]] == [
+                (TokenType.INTEGER, 1), (TokenType.DOT, "."),
+            ]
+
+
+# ── Final-wave hardening: no bare (non-TokenizeError) exception may ever ──
+# escape the public tokenize(), on any input -- this is the hard invariant
+# regardless of whether a given malformed shape matches the OLD tokenizer's
+# behavior (some of these shapes are bare-exception bugs in the OLD
+# hand-written tokenizer too, e.g. `0'\q` / `0'\.` -- see the module-level
+# probe in the final-wave report; matching that bug is not the goal, never
+# raising anything but a positioned TokenizeError is).
+
+MALFORMED_INPUTS = [
+    "X = 0x_.",
+    "X = 0o_.",
+    "X = 0b_.",
+    "X = 0'\\",       # 0'\ at absolute end of input
+    "X = 0'\\x.",     # empty hex escape in char-code
+    "X = 0'\\xG.",    # hex escape with no hex digit before the delimiter
+    "X = 0'\\q.",     # unknown escape char (pre-existing bug class in OLD too)
+]
+
+
+class TestMalformedHardening:
+    @pytest.mark.parametrize("src", MALFORMED_INPUTS)
+    def test_never_raises_a_bare_exception(self, src):
+        try:
+            tokenize(src)
+        except TokenizeError as e:
+            assert isinstance(e.line, int)
+            assert isinstance(e.col, int)
+        # else: succeeded, which is also an acceptable outcome -- the
+        # invariant is "never anything but a positioned TokenizeError",
+        # not "must raise".
+
+    def test_0x_underscore_only_lexes_as_ratified_divergence(self):
+        toks = tokenize("X = 0x_.")
+        got = [(t.type, t.value) for t in toks[2:5]]
+        assert got == [
+            (TokenType.INTEGER, 0), (TokenType.ATOM, "x_"), (TokenType.DOT, "."),
+        ]
+
+    def test_bslash_at_eof_raises_positioned_error(self):
+        with pytest.raises(TokenizeError) as exc_info:
+            tokenize("X = 0'\\")
+        assert isinstance(exc_info.value.line, int)
+        assert isinstance(exc_info.value.col, int)
+
+    def test_empty_hex_escape_in_char_code_raises_positioned_error(self):
+        for src in ("X = 0'\\x.", "X = 0'\\xG."):
+            with pytest.raises(TokenizeError) as exc_info:
+                tokenize(src)
+            assert isinstance(exc_info.value.line, int)
+            assert isinstance(exc_info.value.col, int)
+
+    def test_unknown_escape_in_char_code_raises_positioned_error(self):
+        # Pre-existing bug class in the OLD tokenizer too (bare TypeError
+        # from `ord()` on a 2-char "unknown escape" string) -- new must
+        # not propagate it either, even though there's no old behavior to
+        # match here.
+        with pytest.raises(TokenizeError) as exc_info:
+            tokenize("X = 0'\\q.")
+        assert isinstance(exc_info.value.line, int)
+        assert isinstance(exc_info.value.col, int)
+
+    def test_escaped_backslash_char_code_unaffected(self):
+        # `0'\\` (escaped backslash) must keep working -- the char_code
+        # grammar/builder hardening must not touch this well-formed case.
+        toks = tokenize("X = 0'\\\\.")
+        got = [(t.type, t.value) for t in toks[:3]]
+        assert got == [
+            (TokenType.VAR, "X"), (TokenType.ATOM, "="), (TokenType.INTEGER, 92),
         ]
 
 

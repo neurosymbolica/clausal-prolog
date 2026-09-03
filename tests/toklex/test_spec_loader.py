@@ -92,6 +92,16 @@ def test_duplicate_trivia_raises():
         parse_spec_text("trivia(t, 'x'). trivia(t, 'y').")
 
 
+def test_token_trivia_name_collision_raises():
+    # A token rule and a trivia rule sharing a name silently overwrite each
+    # other downstream (kind map overwrite, one rule's matches discarded);
+    # this must be caught at load time regardless of declaration order.
+    with pytest.raises(SpecError):
+        parse_spec_text("token(t, 'x'). trivia(t, 'y').")
+    with pytest.raises(SpecError):
+        parse_spec_text("trivia(t, 'y'). token(t, 'x').")
+
+
 def test_stray_body_in_non_nest_trivia_raises():
     with pytest.raises(SpecError):
         parse_spec_text("trivia(c, '%' then body('*')).")

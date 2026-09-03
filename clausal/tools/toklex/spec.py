@@ -437,6 +437,10 @@ def parse_spec_text(text: str) -> Spec:
             name = _require_atom_name(name_term, "token declaration")
             if name in token_names:
                 raise SpecError(f"duplicate token declaration: token {name!r}")
+            if name in trivia_names:
+                raise SpecError(
+                    f"token {name!r} collides with a trivia declaration of the same name"
+                )
             token_names.add(name)
             tokens.append(_build_token(name, re_term, None, len(tokens), classes, defs))
 
@@ -449,6 +453,10 @@ def parse_spec_text(text: str) -> Spec:
             name = _require_atom_name(name_term, "token declaration")
             if name in token_names:
                 raise SpecError(f"duplicate token declaration: token {name!r}")
+            if name in trivia_names:
+                raise SpecError(
+                    f"token {name!r} collides with a trivia declaration of the same name"
+                )
             token_names.add(name)
             builder = _builder_name(builder_term, f"token {name!r} value builder")
             tokens.append(_build_token(name, re_term, builder, len(tokens), classes, defs))
@@ -458,6 +466,10 @@ def parse_spec_text(text: str) -> Spec:
             name = _require_atom_name(name_term, "trivia declaration")
             if name in trivia_names:
                 raise SpecError(f"duplicate trivia declaration: trivia {name!r}")
+            if name in token_names:
+                raise SpecError(
+                    f"trivia {name!r} collides with a token declaration of the same name"
+                )
             trivia_names.add(name)
             trivia.append(_build_trivia(name, re_term, False, len(trivia), classes, defs))
 
@@ -472,6 +484,10 @@ def parse_spec_text(text: str) -> Spec:
             name = _require_atom_name(name_term, "trivia declaration")
             if name in trivia_names:
                 raise SpecError(f"duplicate trivia declaration: trivia {name!r}")
+            if name in token_names:
+                raise SpecError(
+                    f"trivia {name!r} collides with a token declaration of the same name"
+                )
             trivia_names.add(name)
             trivia.append(_build_trivia(name, re_term, True, len(trivia), classes, defs))
 
