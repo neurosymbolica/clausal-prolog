@@ -45,6 +45,7 @@ from .terms_to_ast import (
     term_to_ast_expr,
     _is_star_list, _parse_star_segments, _count_stars,
     _is_opaque_head_literal, headlit_global_key,
+    cell_functor_for_name, cell_functor_for_instance,
 )
 # Runtime helpers (``_head_list_unify_input`` / ``_head_list_unify_output``
 # / ``_head_multi_star_error``) are referenced by name string in the AST
@@ -66,6 +67,29 @@ _SetLiteral = SetLiteral
 # atom classes, Compound terms, dataclass instances, etc. are NOT in this
 # set — they must be lowered via ``term_to_ast_expr`` instead.
 _AST_CONST_TYPES = (type(None), bool, int, float, str, bytes, complex)
+
+
+def _cell_match_pattern(functor: str, arg_patterns: list) -> ast.MatchSequence:
+    """The cell pattern ``case ('functor', <p0>, ...)`` for a flagged module.
+
+    A ``MatchSequence`` whose first element is a ``MatchValue`` on the functor
+    string: the sequence length discriminates ARITY and the first element
+    discriminates the FUNCTOR, which is exactly what the ``MatchClass`` this
+    replaces did for class terms.
+
+    NOTE for anyone extending this to tuple-DATA cells ``(tuple, e1, ...)``:
+    the slot-0 tag is the ``tuple`` TYPE OBJECT, and a bare ``tuple`` written
+    in a pattern is a CAPTURE, not a value test -- it must be spelled as the
+    dotted value pattern ``builtins.tuple`` (with ``import builtins`` in the
+    compiled function's globals), never ``__builtins__.tuple``, which is a
+    dict rather than a module inside an imported module.  This stage's corpus
+    reaches no tuple-data head pattern, so no such branch is emitted; see
+    ``implementation_plans/tagged-tuple-term-representation.md`` section 4.
+    """
+    return ast.MatchSequence(
+        patterns=[ast.MatchValue(value=ast.Constant(value=functor)),
+                  *arg_patterns],
+    )
 
 
 def _matched_field_names(term: Any) -> tuple[str, ...]:
@@ -612,6 +636,28 @@ def head_to_match_pattern(
         # rejecting branches below — the previous wildcard fallback at the
         # end is what masked this whole class of bug.
         if fields is not None and len(term.args) <= len(fields):
+            # ``-tagged_terms``: in a flagged module this reference builds a
+            # CELL (see the Call(LoadName) branch of ``term_to_ast_expr``), so
+            # the pattern that matches it is a sequence literal
+            # ``case ('point', x, y)`` -- a MatchClass would test for a class
+            # instance that the flagged module never constructs.  Saturation
+            # is required: a cell is positional and total, so a partial
+            # reference keeps class construction AND class matching.
+            _cell_f = (
+                cell_functor_for_name(term.func.name, len(term.args))
+                if len(term.args) == len(fields) else None
+            )
+            if _cell_f is not None:
+                return _cell_match_pattern(
+                    _cell_f,
+                    [
+                        head_to_match_pattern(
+                            a, var_context, dup_guards, list_guards,
+                            _list_reg_ids, globals_=globals_,
+                        )
+                        for a in term.args
+                    ],
+                )
             return ast.MatchClass(
                 cls=_name(term.func.name),
                 patterns=[],
@@ -648,6 +694,24 @@ def head_to_match_pattern(
     if is_term_instance(term):
         cls_name = type(term).__name__
         fields = _matched_field_names(term)
+        # ``-tagged_terms``: the matching half of the term-instance emission
+        # branch in ``term_to_ast_expr``.  ``_matched_field_names`` returns
+        # ``_fields`` verbatim for a PredicateMeta term (every declared
+        # argument of a user functor is semantic), and cell eligibility
+        # requires PredicateMeta -- so the sequence pattern's positions line
+        # up with the cell's slots exactly.
+        _cell_f = cell_functor_for_instance(term)
+        if _cell_f is not None:
+            return _cell_match_pattern(
+                _cell_f,
+                [
+                    head_to_match_pattern(
+                        getattr(term, name), var_context, dup_guards,
+                        list_guards, _list_reg_ids, globals_=globals_,
+                    )
+                    for name in fields
+                ],
+            )
         return ast.MatchClass(
             cls=_name(cls_name),
             patterns=[],

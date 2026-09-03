@@ -326,3 +326,272 @@ class TestCellHeadDispatch:
 
     def test_unknown_functor_cell_matches_no_clause(self):
         assert self._kind_of(_TAGGED, lambda m: ("square", 1, 2)) == []
+
+
+# ── Head patterns ────────────────────────────────────────────────────────────
+
+
+def _unparse_pattern(pattern) -> str:
+    """Render a single ``ast.pattern`` as the ``case`` line it produces."""
+    node = ast.Module(
+        body=[
+            ast.Match(
+                subject=ast.Name(id="_subject", ctx=ast.Load()),
+                cases=[ast.match_case(pattern=pattern, guard=None,
+                                      body=[ast.Pass()])],
+            )
+        ],
+        type_ignores=[],
+    )
+    ast.fix_missing_locations(node)
+    return ast.unparse(node).splitlines()[1].strip()
+
+
+class TestHeadPatterns:
+    """A flagged module's compound head args match as SEQUENCE literals.
+
+    ``head_to_match_pattern`` is exercised directly because the compound
+    MatchClass sites it feeds are, in this stage, reached only from the
+    argument-index bucket path -- see
+    ``TestHeadPatternReachability`` below, which records exactly why the
+    ``.clausal`` corpus does not reach them and what would be needed to close
+    that.  The pattern shapes are pinned here regardless, because they are
+    what any such follow-up would rely on.
+    """
+
+    def _flagged_globals(self):
+        return _fixture(_TAGGED).__dict__
+
+    def _pattern(self, term, flagged, globals_=None):
+        from clausal.logic.compiler.head_match import head_to_match_pattern
+        from clausal.logic.compiler.terms_to_ast import tagged_terms_lowering
+
+        g = globals_ if globals_ is not None else self._flagged_globals()
+        var_context, dup_guards, list_guards = {}, [], []
+        if not flagged:
+            return _unparse_pattern(head_to_match_pattern(
+                term, var_context, dup_guards, list_guards, None, globals_=g,
+            ))
+        with tagged_terms_lowering(g):
+            return _unparse_pattern(head_to_match_pattern(
+                term, var_context, dup_guards, list_guards, None, globals_=g,
+            ))
+
+    def _source_compound(self, name, n):
+        """The term shape a compound written in ``.clausal`` source has."""
+        from clausal.terms import Call as TCall, LoadName
+
+        return TCall(func=LoadName(name=name),
+                     args=[Var() for _ in range(n)], kwargs=[])
+
+    def test_source_compound_becomes_a_sequence_pattern(self):
+        got = self._pattern(self._source_compound("point", 2), flagged=True)
+        # ``ast.unparse`` renders every ``MatchSequence`` with brackets; a
+        # tuple-literal and a list-literal pattern are the SAME node in
+        # Python's grammar, and both match any sequence.  So this IS the
+        # ``case ("point", x, y)`` the design calls for -- and it carries that
+        # design's consequence, that a LIST ["point", x, y] would match it
+        # too.  Flagged modules do not build str-headed list data.
+        assert got.startswith("case ['point', ")
+        assert "point(" not in got
+
+    def test_source_compound_unflagged_stays_a_class_pattern(self):
+        got = self._pattern(self._source_compound("point", 2), flagged=False)
+        assert got.startswith("case point(")
+
+    def test_arity_is_part_of_the_pattern(self):
+        """``seg/3`` and ``point/2`` differ in sequence LENGTH as well as tag."""
+        two = self._pattern(self._source_compound("point", 2), flagged=True)
+        three = self._pattern(self._source_compound("seg", 3), flagged=True)
+        assert two.count(",") == 2      # tag + 2 args
+        assert three.count(",") == 3    # tag + 3 args
+        assert three.startswith("case ['seg', ")
+
+    def test_partial_construction_keeps_the_class_pattern(self):
+        """Unsaturated: no positional cell can express the missing field."""
+        got = self._pattern(self._source_compound("point", 1), flagged=True)
+        assert got.startswith("case point(")
+
+    def test_a_predicate_reference_keeps_the_class_pattern(self):
+        """``kind/2`` has clauses -- it is a predicate, not a data functor."""
+        got = self._pattern(self._source_compound("kind", 2), flagged=True)
+        assert got.startswith("case kind(")
+
+    def test_live_instance_becomes_a_sequence_pattern(self):
+        mod = _fixture(_TAGGED)
+        got = self._pattern(mod.point(1, 2), flagged=True)
+        assert got.startswith("case ['point', ")
+
+    def test_live_instance_unflagged_stays_a_class_pattern(self):
+        mod = _fixture(_TAGGED)
+        got = self._pattern(mod.point(1, 2), flagged=False)
+        assert got.startswith("case point(")
+
+    def test_another_modules_functor_keeps_the_class_pattern(self):
+        """Compound data does not cross the flag boundary: a functor owned by
+        a different module keeps class construction, so it must keep class
+        matching too."""
+        other = _fixture(_PLAIN)
+        got = self._pattern(other.point(1, 2), flagged=True)
+        assert got.startswith("case point(")
+
+    def test_no_tuple_data_tag_is_emitted_in_this_stage(self):
+        """The ``(tuple, ...)`` tuple-DATA pattern is NOT implemented here.
+
+        Recorded as a test so the absence is deliberate rather than an
+        oversight: this stage's corpus reaches no tuple-data head pattern.  If
+        one is ever added it must use the dotted ``builtins.tuple`` value
+        pattern -- a bare ``tuple`` in a pattern is a capture, and
+        ``__builtins__`` is a dict inside an imported module.
+        """
+        from clausal.logic.compiler import head_match
+
+        # The only cell pattern this stage emits tags slot 0 with a functor
+        # STRING; nothing here needs the ``tuple`` type object, so the
+        # ``builtins.tuple`` value pattern is not emitted and cannot be
+        # mis-spelled as a bare ``tuple`` capture.
+        assert not hasattr(head_match, "TUPLE_TAG")
+        pattern = head_match._cell_match_pattern("point", [])
+        assert isinstance(pattern.patterns[0], ast.MatchValue)
+        assert pattern.patterns[0].value.value == "point"
+
+
+class TestBucketPatternIntegration:
+    """The cell pattern through the REAL bucket-compilation path.
+
+    Clauses whose head arg is a live term instance are the shape that
+    ``_lift_clause_at_pos`` will lift into the head, which is what puts a
+    compound in front of ``head_to_match_pattern``.  Compiling five of them
+    against a flagged module's namespace therefore exercises index
+    partitioning, the lift, and cell pattern emission together.
+    """
+
+    #: Head functor for the probe predicate.  A ``Compound`` head under a
+    #: name the fixture does not define, so nothing here mutates the shared
+    #: module's own predicates (an earlier draft asserted onto ``mod.kind``
+    #: and silently polluted every later test in the file).
+    PROBE = "kind_probe"
+
+    def _compile_instance_headed_kind(self):
+        from clausal.logic.compiler import predicate as predicate_mod
+        from clausal.logic.database import Clause, Database
+        from clausal.terms import Compound
+
+        mod = _fixture(_TAGGED)
+        db = Database()
+        for shape, k in [
+            (mod.point(1, 2), "a"),
+            (mod.point(3, 4), "b"),
+            (mod.circle(0, 5), "c"),
+            (mod.seg(1, 2, 3), "d"),
+            (mod.point(9, 9), "e"),
+        ]:
+            db.assertz(Clause(head=Compound(self.PROBE, (shape, k)), body=[]))
+
+        captured = []
+        original = predicate_mod.functiondef_to_function
+
+        def _spy(func_def, globals_=None, **kwargs):
+            captured.append(ast.unparse(func_def))
+            return original(func_def, globals_=globals_, **kwargs)
+
+        predicate_mod.functiondef_to_function = _spy
+        try:
+            predicate_mod.compile_predicate_trampoline(
+                self.PROBE, 2, db.clauses_for(self.PROBE, 2), db,
+                globals_=mod.__dict__,
+            )
+        finally:
+            predicate_mod.functiondef_to_function = original
+        return db, "\n".join(captured)
+
+    def test_buckets_match_cells_by_functor_and_arity(self):
+        _db, src = self._compile_instance_headed_kind()
+        assert "case [['point', _ncap0, _ncap1]," in src
+        assert "case [['circle', _ncap0, _ncap1]," in src
+        assert "case [['seg', _ncap0, _ncap1, _ncap2]," in src
+        assert "case [point(" not in src
+
+    @pytest.mark.parametrize(
+        "shape, expected",
+        [
+            (("point", 3, 4), ["b"]),
+            (("point", 1, 2), ["a"]),
+            (("circle", 0, 5), ["c"]),
+            (("seg", 1, 2, 3), ["d"]),
+            (("point", 1, 2, 3), []),     # wrong arity
+            (("square", 1, 2), []),       # unknown functor
+        ],
+    )
+    def test_cell_callers_select_the_right_clause(self, shape, expected):
+        from clausal.logic.database import Module
+
+        db, _src = self._compile_instance_headed_kind()
+        lm = Module("_tt_bucket_probe")
+        lm.db = db
+        K = Var()
+        got = [deref(K) for _t in call(self.PROBE, shape, K, module=lm)]
+        assert got == expected
+
+    def test_a_class_instance_caller_finds_nothing(self):
+        """The documented cross-boundary limit, asserted rather than assumed.
+
+        In a flagged module every compound is a cell, so a caller that hands
+        in a class INSTANCE simply does not unify -- it is not an error, it
+        is no solutions.  This is why the parity corpus keeps fixtures
+        self-contained.
+        """
+        from clausal.logic.database import Module
+
+        mod = _fixture(_TAGGED)
+        db, _src = self._compile_instance_headed_kind()
+        lm = Module("_tt_bucket_probe")
+        lm.db = db
+        K = Var()
+        assert [
+            deref(K)
+            for _t in call(self.PROBE, mod.point(3, 4), K, module=lm)
+        ] == []
+
+
+class TestHeadPatternReachability:
+    """Where cell head patterns are, and are not, reached in this stage.
+
+    Recorded as executable findings rather than prose so a later stage that
+    changes any of it gets a failing test rather than a stale comment.
+    """
+
+    def test_source_written_compounds_never_reach_a_head_pattern(self):
+        """A compound written in ``.clausal`` source is a ``Call(LoadName)``
+        term, and ``list_dispatch._lift_clause_at_pos`` refuses to lift those
+        into a head (the class may not be in the bucket's globals).  So a
+        flagged module compiled from source emits its compounds ONLY as cell
+        literals in body ``Unify`` goals -- the head arms stay plain arg
+        captures, exactly as they do without the flag.
+        """
+        src = capture_predicate_codegen(_TAGGED)
+        case_lines = [l for l in src.splitlines() if l.lstrip().startswith("case ")]
+        assert case_lines, "the capture found no match arms at all"
+        assert not [l for l in case_lines if "'point'" in l or "'seg'" in l]
+        # ... while the cell literals themselves are all over the bodies.
+        assert "('point', " in src and "('seg', " in src
+
+    def test_index_dispatch_routes_every_cell_to_the_all_clauses_fallback(self):
+        """``arg_index._runtime_arg_key`` has no cell branch, so a cell
+        argument keys as ``_INDEX_VAR`` and dispatch takes the all-clauses
+        fallback (correct, and unindexed).
+
+        Giving it one is NOT a flag-gated change -- the key function runs at
+        dispatch time with no module context -- and it would alter routing
+        for plain data tuples in UNFLAGGED modules, which the bridge's
+        opt-in-only constraint forbids.  Making bucket dispatch cell-aware
+        therefore needs the dispatch key function parameterised per
+        predicate; that is a restructuring, deliberately left to a later
+        stage.
+        """
+        from clausal.logic.compiler import arg_index
+
+        mod = _fixture(_TAGGED)
+        assert arg_index._runtime_arg_key(("point", 3, 4)) is arg_index._INDEX_VAR
+        # ... while the equivalent class term keys, and indexes, normally.
+        assert arg_index._runtime_arg_key(mod.point(3, 4)) == ("point", 2)
