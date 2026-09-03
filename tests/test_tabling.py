@@ -384,6 +384,98 @@ class TestTabledFib:
         assert len(results) == 0
 
 
+# ── Integration tests: tabled compound-chain answers ─────────────────────────
+#
+# struct_tabling.clausal's Nats/2 is bench_struct_tabling's fixture (see
+# benchmarks/workloads.py) -- a tabled predicate whose answers are cons/nil
+# chains, not scalars.  Unlike TestTabledFib above (which safely lets
+# `for trail in call(...)` run to natural exhaustion, since a scalar answer
+# is captured by value the instant `deref` is called), these tests `break`
+# immediately after the first solution: abandoning the generator early is
+# what forces the *next* fresh call to recompute from scratch instead of
+# hitting the COMPLETE fast path (empirically: an abandoned-via-break query
+# leaves ``db.table_store`` empty and a same-module repeat costs the same as
+# the first; a query drained via ``list(...)`` leaves the table intact and a
+# same-module repeat is ~instant -- see task-4-report.md). Reading a nested
+# field (``node.T``) off a compound answer *before* the generator is
+# abandoned/exhausted is required for the same reason bench_qsort/
+# bench_tabling break after the first answer: continuing to iterate a
+# deterministic predicate's generator past its one solution backtracks the
+# trail looking for a next answer that doesn't exist, which can unbind
+# nested chain variables the top-level `deref` never reached.
+
+
+class TestStructTabling:
+    def test_nats_zero(self):
+        # nv
+        m = _load("struct_tabling")
+        L = Var()
+        results = []
+        for trail in call("Nats", 0, L, module=_module(m)):
+            results.append(deref(L))
+            break
+        assert results == [m.nil]
+
+    def test_nats_chain_shape(self):
+        """Nats(3, L) builds cons(3, cons(2, cons(1, nil))) -- one answer."""
+        # nv
+        m = _load("struct_tabling")
+        L = Var()
+        results = []
+        for trail in call("Nats", 3, L, module=_module(m)):
+            results.append(deref(L))
+            break
+        assert len(results) == 1
+        node = results[0]
+        values = []
+        while node is not m.nil:
+            values.append(node.H)
+            node = deref(node.T)
+        assert values == [3, 2, 1]
+
+    def test_nats_cache_hit(self):
+        """Second query should use cached table (COMPLETE path), same as
+        TestTabledFib.test_fib_cache_hit above. The first query is drained
+        via list(...) (not break) so the table survives for the second
+        query to hit -- see the module comment above."""
+        # nv
+        m = _load("struct_tabling")
+        db = _module(m).db
+
+        L = Var()
+        list(call("Nats", 5, L, module=_module(m)))
+        assert len(db.table_store) > 0
+
+        L2 = Var()
+        results = []
+        for trail in call("Nats", 5, L2, module=_module(m)):
+            results.append(deref(L2))
+            break
+        assert len(results) == 1
+        node = results[0]
+        length = 0
+        while node is not m.nil:
+            length += 1
+            node = deref(node.T)
+        assert length == 5
+
+    def test_nats_ground_query_success(self):
+        """Nats(3, cons(3, cons(2, cons(1, nil)))) should succeed."""
+        # nv
+        m = _load("struct_tabling")
+        chain = m.cons(3, m.cons(2, m.cons(1, m.nil)))
+        results = list(call("Nats", 3, chain, module=_module(m)))
+        assert len(results) == 1
+
+    def test_nats_ground_query_failure(self):
+        """Nats(3, cons(99, ...)) should fail (wrong head value)."""
+        # nv
+        m = _load("struct_tabling")
+        chain = m.cons(99, m.cons(2, m.cons(1, m.nil)))
+        results = list(call("Nats", 3, chain, module=_module(m)))
+        assert len(results) == 0
+
+
 # ── Integration tests: tabled cyclic path ────────────────────────────────────
 
 

@@ -1,0 +1,26 @@
+# Workload fixture for benchmarks/workloads.py::bench_struct_tabling.
+#
+# Nats/2 is a TABLED predicate whose answers are deep chains of the declared
+# compound functor `cons/2` (terminated by the 0-arity atom `nil`), not
+# scalars.  Tabling normalizes/copies each stored answer via
+# freeze_args -> _deref_walk (clausal/logic/tabling.py), so the O(K)-deep
+# chain built for subgoal Nats(K, _) costs O(K) walker work to freeze;
+# summed over the N+1 subgoals (K = 0..N) that one top-level Nats(N, _) call
+# spawns, total walk work is O(N^2) BY DESIGN -- that is the point of this
+# fixture.  bench_tabling's scalar Fib/2 answers give the walkers ~0% share
+# of a profile (see
+# .superpowers/sdd/2026-09-03-phase2-prereq-tabling-macro/task-3-report.md);
+# this fixture exists to make the walkers dominate instead.
+-module(struct_tabling, [
+    cons(H, T),
+    nil,
+    Nats(N, L),
+])
+-table(Nats/2)
+
+Nats(0, nil),
+Nats(N, cons(N, T)) <- (
+    N > 0,
+    N1 == N - 1,
+    Nats(N1, T)
+)

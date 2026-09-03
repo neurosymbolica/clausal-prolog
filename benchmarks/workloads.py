@@ -7,6 +7,8 @@ Each function exercises a distinct execution pattern:
   bench_qsort    -- list unification (output phase, append, list patterns)
   bench_graph    -- sub-predicate call overhead (StepGenerator creation)
   bench_tabling  -- SLG tabling (hash lookups, suspension, completion)
+  bench_struct_tabling -- SLG tabling over compound-term answers (walker
+                          normalize/copy: do_deref_walk/c_copy_term/do_walk)
 
 Run standalone to verify all workloads complete without error:
     python benchmarks/workloads.py
@@ -138,6 +140,64 @@ def bench_tabling(n: int = 5000, reps: int = 10) -> object:
     return result
 
 
+def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
+    """Tabled Nats(n) repeated reps times — stresses SLG tabling's per-answer
+    normalization/copy over COMPOUND answers (bench_tabling's Fib/2 answers
+    are scalar ints; this benchmark exists because that gives the walkers
+    ~0% share of a profile -- see
+    .superpowers/sdd/2026-09-03-phase2-prereq-tabling-macro/task-3-report.md).
+
+    Each repetition reloads the module so the table starts empty, same as
+    bench_tabling above (see its docstring for why: a completed table's
+    fresh call hits the COMPLETE fast path, which this benchmark does not
+    want to measure -- it wants the full per-answer freeze/copy work every
+    repetition).
+
+    struct_tabling.clausal's ``Nats/2`` builds ``cons(N, cons(N-1, ...))``
+    down to the 0-arity atom ``nil`` -- an O(K)-deep compound chain for
+    subgoal ``Nats(K, _)``. Tabling normalizes/copies each stored answer via
+    ``freeze_args`` -> ``do_deref_walk`` (the C-exposed entry point for the
+    walker Phase 0 sped up; see the fixture's header comment), so one
+    top-level ``Nats(n, _)`` call spawns n+1 tabled subgoals (K = 0..n) whose
+    answer sizes sum to O(n^2) -- walk-dominated by design, and (per the
+    same construction) exercises Phase 0's ``_clausal_new`` fast path, which
+    builds every ``cons`` node the walk rebuilds.
+
+    Nats/2 is functionally deterministic (each N matches exactly one clause
+    head), so it has exactly one answer per subgoal -- same first-answer
+    stopping shape as bench_tabling and bench_fib above, not full
+    enumeration.
+
+    Returns the length of the answer chain (an int -- no float() conversion,
+    same digit-count-style display discipline as bench_tabling's bignum
+    result), not the chain term itself (dumping a 1500-deep nested compound
+    inline is unreadable).
+    Expected wall time (n=1500, reps=3): ~4-5 s.
+    """
+    from clausal.testing import load_clausal_module
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, Trail, deref
+
+    fixture = os.path.join(_FIXTURES, "struct_tabling.clausal")
+    length = 0
+    for _ in range(reps):
+        mod = load_clausal_module(fixture)
+        lm = mod.__dict__["$module"]
+        nil = mod.nil
+        trail = Trail()
+        L = Var()
+        for _ in call("Nats", n, L, module=lm, trail=trail):
+            length = 0
+            node = deref(L)
+            while node is not nil:
+                length += 1
+                node = deref(node.T)
+            break
+        else:
+            raise RuntimeError(f"Nats({n}) produced no solutions")
+    return length
+
+
 def bench_naf_ite(n: int = 3000) -> str:
     """NAF + general-ITE drive loops — stresses ``$naf_has_solution`` and the
     ITE condition driver in both the trivial one-step and many-step shapes.
@@ -177,6 +237,7 @@ if __name__ == "__main__":
         ("bench_qsort",   lambda: bench_qsort()),
         ("bench_graph",   lambda: bench_graph()),
         ("bench_tabling", lambda: bench_tabling()),
+        ("bench_struct_tabling", lambda: bench_struct_tabling()),
         ("bench_naf_ite",  lambda: bench_naf_ite()),
     ]
 
