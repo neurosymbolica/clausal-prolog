@@ -110,6 +110,14 @@ token(integer,    digit then (digit | '_')*).                   % '_' separators
   the follow-*constraint*, a different thing). `|` alternation, `*`/`+`/`?`
   repetition/option (postfix), literals are quoted atoms/chars, class names denote
   their class.
+- *Why not `,` for sequence, DCG-style?* It is terser and familiar, but a comma
+  sequence at argument position demands parentheses, and forgetting them fails
+  *silently* — by changing arity, not by raising a syntax error:
+  `fragment(qitem, (backslash, nl), gives none)` minus its inner parentheses is a
+  well-formed `fragment/4`, a different declaration. Nested sequences compound it
+  (`body(('*', '/'))` needs the double parentheses or `body` quietly becomes binary).
+  `then` makes that mistake unwritable; the verbosity is the price. Where a rule has
+  no sequence at all, the two spellings are identical anyway.
 - `but_not L` — language subtraction. This replaces every "priority" hack: ISO's rule
   that a graphic token cannot begin `/*` is *subtracted* from the graphic rule rather
   than encoded as comment-beats-graphic ordering. Regular languages are closed under
@@ -429,8 +437,8 @@ hand-written tokenizer behind the same (now incremental) interface.
 1. Is the Prolog-terms surface notation right, and are the operator spellings
    agreeable? We currently spell sequence with the word operator `then` — longer to
    type, but it reads naturally and is unambiguous (`·` is untypeable in practice; `,`
-   at argument positions forces parentheses everywhere and collides with the term
-   syntax of the spec file itself).
+   at argument positions forces parentheses everywhere and fails silently by arity
+   change when they are forgotten — see the note in §3.2).
 2. Is the annotated-DFA dump (§4.4) worth standardizing as an interchange format, so a
    Prolog-hosted reader could consume a DFA compiled elsewhere before a full
    Prolog-hosted compiler exists?
