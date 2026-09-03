@@ -232,13 +232,19 @@ kit: 144 sites in 15 files (40 files translated, 3 raised before translation)
 
 | class | shape | corpus | kit | **total** | share |
 |---|---|---:|---:|---:|---:|
-| **(a)** eta-reducible | pure same-order pass-through, no captures, no extra goals | 184 sites / 79 files | 134 sites / 13 files | **318 sites / 92 files** | **81.5 %** |
+| **(a)** eta-reducible † | pure same-order pass-through, no captures, no extra goals | 184 sites / 79 files | 134 sites / 13 files | **318 sites / 92 files** | **81.5 %** |
 | **(b)** partial-application-shaped | prefix captures + pass-through tail | 10 sites / 8 files | 0 | **10 sites / 8 files** | **2.6 %** |
 | **(c)** genuine closures | multi-goal body, reordering, interleaved captures, non-variable arguments | 52 sites / 28 files | 10 sites / 4 files | **62 sites / 32 files** | **15.9 %** |
 | | | **246 / 97** | **144 / 15** | **390 / 112** | 100 % |
 
 *(File counts do not add to 112 across classes: 95 files carry one class, 14 carry two,
 3 carry all three — 92 + 8 + 32 = 132 class-file pairs over 112 distinct files.)*
+
+† **The class-(a) row is the census figure, and it is one site wide.** The
+engine-faithful count is **317 sites / 92 files (81.3 %)** — corpus 184, **kit 133** (92.4 %
+of the kit's 144, not 93.1 %) — for the reason in the footnote immediately below. Every
+later section quotes 317; the 318 above is retained only so the census stdout in §2.1 and
+this table agree.
 
 > **Footnote — the one classification-uncertain site, resolved.** Running the engine's own
 > `_extract_arrow_lambda_params` over all 390 head ASTs returns `None` — *not a lambda
@@ -266,8 +272,9 @@ kit: 144 sites in 15 files (40 files translated, 3 raised before translation)
 > `((ID, P, St, C) <- requirement(ID, P, St, C))` is **not** treated as eta-reducible.
 
 **The operator's hypothesis is confirmed, and more strongly than stated: four in five
-refused sites are redundant eta-expansions.** The kit is more extreme than the corpus —
-134 of 144 kit sites (93.1 %) are class (a), against 184 of 246 (74.8 %) in the corpus.
+refused sites are redundant eta-expansions** — 317 of 390, 81.3 %. The kit is more extreme
+than the corpus: 133 of 144 kit sites (92.4 %) are class (a), against 184 of 246 (74.8 %)
+in the corpus.
 
 Class (c), by reason (census stdout):
 
@@ -284,7 +291,7 @@ Class (c), by reason (census stdout):
       2  captures interleaved with parameters
 ```
 
-Three further facts about class (a), each measured over all 318 sites:
+Three further facts about class (a), each measured over the 317 engine-faithful sites:
 
 - **0 sites** use an anonymous `_` as a parameter. This matters: `((X, _) <- p(X, _))` is
   *not* eta-equivalent to `p` (each `_` is independent, so the lambda drops the caller's
@@ -294,7 +301,7 @@ Three further facts about class (a), each measured over all 318 sites:
   worth blocking on.
 - **0 sites** have a dotted callee, and **0** have a callee that is not a lowercase-initial
   predicate name. 128 distinct callees.
-- Parameter arities: 1 → 10 sites, 2 → 126, 3 → 39, 4 → 98, 5 → 43, 6 → 2.
+- Parameter arities: 1 → 10 sites, 2 → 126, 3 → 39, 4 → 97, 5 → 43, 6 → 2.
 
 ### 2.3 Where the lambdas are passed
 
@@ -501,7 +508,7 @@ $ printf 'chk_local(["r1"], p, C).\nchk_local_q(["r1"], p, C).\n' | scryer-prolo
 ```
 
 So **the naive form of remedy (a) — "respell to a bare predicate reference" — does not
-work in the ISO export**, for any of the 318 sites, however the source is spelled. It works
+work in the ISO export**, for any of the 317 sites, however the source is spelled. It works
 on the engine and fails in Scryer, which is precisely the class of divergence this pilot
 exists to find.
 
@@ -561,7 +568,7 @@ lifted auxiliary need not pollute a published legal ontology's public surface.
 
 ## 4. Remedies, by class
 
-### 4.1 Class (a) — 318 sites, 92 files: eta reduction
+### 4.1 Class (a) — 317 sites, 92 files: eta reduction
 
 **The engine accepts a bare predicate reference wherever it accepts a forwarding lambda.**
 Re-derived rather than quoted from `fe43afc0`, and through the *real corpus idiom* rather
@@ -584,7 +591,7 @@ dotted `cmhelper.requirement`      lambda=[(['r1'], 'p', [['r1', 'met', 's45']])
 ```
 
 So the answer to the brief's CHECK is **yes on the engine, unconditionally** — including
-the 116 of 318 class-(a) sites whose callee is not defined in the same file (202 are). The
+the 116 of 317 class-(a) sites whose callee is not defined in the same file (201 are). The
 engine imposes no qualification requirement. Scryer does (§3.2), and that is the whole
 difficulty.
 
@@ -592,13 +599,13 @@ difficulty.
 exporter.**
 
 `((ID, PR, S, C) <- aml_ctf_requirement(ID, PR, S, C))` becomes `aml_ctf_requirement`, in
-318 places across 92 files in two sibling repos. The exported kit libraries gain a
+317 places across 92 files in two sibling repos. The exported kit libraries gain a
 `:- meta_predicate(…)` directive per higher-order predicate.
 
 - *Correctness:* exact on the engine (measured above, three shapes). Exact in Scryer once
   the `meta_predicate` directives exist (§3.3, measured). The construct is **removed**
   rather than lowered, so there is nothing left for a later front end to get wrong.
-- *Cost:* 318 source edits in `/workspace/clausify-domains` and
+- *Cost:* 317 source edits in `/workspace/clausify-domains` and
   `/workspace/clausify-executor-train/kit`, plus one directive per exported higher-order
   kit predicate. Not an engine change at all, except for the directive emission. Per the
   standing note, kit edits must be validated against the corpus's own Clausal test suites
@@ -636,7 +643,7 @@ that today refuses.
   keyword-argument *names*) has an analogue that A2 must respect: the translator must check
   `body.keywords == []` before reducing, which the rule also requires and which 0 of 390
   sites violate. Its finding 2 (`[*XS]` is not a list test) has no analogue here.
-- *Verdict:* **not recommended.** It leaves 318 un-reduced lambdas in the Clausal source —
+- *Verdict:* **not recommended.** It leaves 317 un-reduced lambdas in the Clausal source —
   where the engine's own rewrite rule says they should not be — and pays for a duplicated
   analysis to hide them at the boundary.
 
@@ -1034,7 +1041,7 @@ note/refactor". So each remedy has to be scored on whether it survives.
 
 | remedy | survives the refactor? | why |
 |---|---|---|
-| §4.1 A1 — source eta-reduction of 318 sites | **yes, entirely** | it deletes a construct from the source. Any front end over that source sees a bare predicate reference. It also aligns the corpus with the engine's own `unnecessary_lambda` rule, which is a source-quality win independent of ISO. |
+| §4.1 A1 — source eta-reduction of 317 sites | **yes, entirely** | it deletes a construct from the source. Any front end over that source sees a bare predicate reference. It also aligns the corpus with the engine's own `unnecessary_lambda` rule, which is a source-quality win independent of ISO. |
 | §3.3 — `meta_predicate` emission | **yes** | it is a fact about ISO module semantics, not about the Clausal surface. Whatever the front end, an exported higher-order predicate needs it. |
 | §5 — `clausal_hof.pl` companion | **yes** | Scryer will still lack `include/3`. |
 | §6 — `_detect_arrow` alignment | **mostly throwaway** | the refactor's ISO surface will not carry the `<-` / `< -` spacing ambiguity at all. But it is ~10 lines, it closes a latent hole today, and it removes a second copy of an engine rule — worth doing on those grounds, not on durability. |
@@ -1043,7 +1050,7 @@ note/refactor". So each remedy has to be scored on whether it survives.
 | §4.3 — class (c) lambda lifting | **algorithm survives, implementation does not** | any front end still has to lower a closure to a named predicate, so the naming/placement/export decisions of §4.3 are durable design. The converter surgery (returning a clause from a term position) is against a converter the refactor rewrites. |
 
 The read: **§4.1 A1 + §3.3 is the only part of this note that is unambiguously durable**,
-and it is also the part that covers 81.5 % of the sites and moves 47 files. Classes (b) and
+and it is also the part that covers 81.3 % of the sites and moves 47 files. Classes (b) and
 (c) are 72 sites in 40 files, they need either an engine change (`call_goal/N` partial
 application) or converter surgery that the refactor discards, and they are already
 refused — which is the correct interim state.
@@ -1067,9 +1074,12 @@ classes (b) and (c) refused until the refactor.** In order:
    This has to precede the source migration, not follow it: without it, eta-reduction
    turns a silently-wrong export into `existence_error` (§3.2), and the ratchet would
    record a "clean" count for files that cannot run.
-3. **Stage 2 — the class-(a) source migration**, 318 sites across 92 files in the two
+3. **Stage 2 — the class-(a) source migration**, 317 sites across 92 files in the two
    sibling repos, validated against each domain's own Clausal test suites and against kit
-   consumers in the six sibling repos. Expected effect, measured: 47 files (40 corpus, 7
+   consumers in the six sibling repos. The migration must **skip**
+   `kit/repros/callgoal_imported_lambda_repro.clausal:28` — the census counts it class (a)
+   and it is not one; respelling it would destroy the fixture whose whole purpose is to
+   assert `type_error(callable)` (§2.2 footnote). Expected effect, measured: 47 files (40 corpus, 7
    kit) go clean under strict; the refusal un-refuses naturally as sites migrate, exactly
    as the negated-membership migration was designed to. Before it lands, the per-host
    caveat of §2.3 should be discharged for the remaining 36 host predicates — a read, not
@@ -1102,7 +1112,7 @@ without a corresponding `meta_predicate` declaration (§3.2 — it raises).
 | claim | source | re-derived verdict |
 |---|---|---|
 | 390 refused lambda sites — 246 corpus / 97 files, 144 kit / 15 files | migration worklist | **confirmed exactly**, through the translator's own refusal hook |
-| many of the 390 are redundant eta-expansions | operator hypothesis | **confirmed and quantified — 318 of 390 sites (81.5 %), 92 files**; kit 93.1 %, corpus 74.8 % |
+| many of the 390 are redundant eta-expansions | operator hypothesis | **confirmed and quantified — 317 of 390 sites (81.3 %), 92 files**; kit 92.4 %, corpus 74.8 %. (The census reports 318/81.5 %; one of those is not a lambda at all — §2.2's footnote and the row below.) |
 | the pre-refusal emission was inert operator soup | `884c16eb` message | **confirmed**, and its canonical form measured: `<(','(Id,…), -(goal))`, a `(<)/2` term; it raises `existence_error((<)/6)` in Scryer |
 | the engine's `call_goal` accepts a bare predicate reference | `fe43afc0` spike | **confirmed in the real corpus idiom** (`eval_requirements/4`), same-module and `-import_from`'d, identical solutions |
 | respelling to a bare predicate reference fixes the export | implied by the refusal's own message | **FALSE as stated** — Scryer resolves the meta-call in the *library's* module and raises `existence_error`; the fix is `:- meta_predicate`, which nothing in the engine or exporter emits today (§3) |
