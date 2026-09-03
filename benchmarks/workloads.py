@@ -101,6 +101,23 @@ def bench_tabling(n: int = 5000, reps: int = 10) -> object:
     the full SLG computation: table lookup, subgoal suspension, answer
     completion, and answer consumption.
     Expected wall time: ~0.7 s.
+
+    Fib/2 is functionally deterministic (each N matches exactly one clause
+    head), so it has exactly one answer. This loop used to iterate the
+    ``call()`` generator to exhaustion instead of stopping at the first
+    answer -- wrong shape: forcing full enumeration where one answer
+    suffices (2026-09-03 diagnosis, see
+    .superpowers/sdd/2026-09-03-phase2-prereq-tabling-macro/task-2-report.md).
+    Building the table (SLG lookup/suspend/complete) to answer the single
+    query is already the "full SLG computation" the docstring promises;
+    redoing the completed top-level generator for a *second* solution
+    additionally walks its still-parked nested call frames looking for
+    alternatives that provably don't exist, which is exponential in n
+    because those frames resume by generator state rather than by a fresh
+    table lookup. That redo cost is a real engine limitation (tracked
+    separately), not something this benchmark needs to exercise -- taking
+    the first answer and moving on is the correct, intentional shape, same
+    as bench_fib above.
     """
     from clausal.testing import load_clausal_module
     from clausal.logic.solve import call
@@ -115,6 +132,9 @@ def bench_tabling(n: int = 5000, reps: int = 10) -> object:
         R = Var()
         for _ in call("Fib", n, R, module=lm, trail=trail):
             result = deref(R)
+            break
+        else:
+            raise RuntimeError(f"Fib({n}) produced no solutions")
     return result
 
 
@@ -160,6 +180,16 @@ if __name__ == "__main__":
         ("bench_naf_ite",  lambda: bench_naf_ite()),
     ]
 
+    def _display(result: object) -> str:
+        # bench_tabling(5000) returns a ~1046-digit int (Fib(5000)) -- dumping
+        # the full decimal expansion inline is unreadable and, historically,
+        # this codepath is the one that used to float()-convert bignums
+        # (see .superpowers/sdd/2026-09-03-phase2-prereq-tabling-macro/
+        # task-2-report.md); print a digit count instead of the value itself.
+        if isinstance(result, int) and abs(result) >= 10**20:
+            return f"<int, {len(str(abs(result)))} digits>"
+        return repr(result)
+
     for name, fn in workloads:
         t0 = time.perf_counter()
         try:
@@ -169,4 +199,4 @@ if __name__ == "__main__":
             print(f"{name:20s}  ERROR={exc!r}  {elapsed:.3f}s")
             continue
         elapsed = time.perf_counter() - t0
-        print(f"{name:20s}  result={result!r:>12}  {elapsed:.3f}s")
+        print(f"{name:20s}  result={_display(result):>12}  {elapsed:.3f}s")
