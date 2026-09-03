@@ -33,12 +33,21 @@ def test_splat_outside_is_rhs_still_untranslatable():
         clausal_source_to_prolog("p(D) <- q({**D, k: v})\n", strict=True)
 
 
-def test_kit_query_combinators_translates_strict():
+def test_kit_query_combinators_splat_lowering_still_applies():
+    """The is-RHS splat lowering still fires on the real kit file.
+
+    UPDATED for the 2026-09-03 operator decision. This test used to assert
+    the kit file translates clean under strict; it no longer does, because
+    the file carries three `<-`-lambda-in-term-position sites and two
+    negated-membership sites that now refuse (see
+    test_kit_query_combinators_refuses_under_strict). The splat coverage
+    this test actually exists for is preserved here in lenient mode.
+    """
     import pathlib
     src = pathlib.Path(
         "/workspace/clausify-executor-train/kit/query_combinators.clausal"
     ).read_text()
-    out = clausal_source_to_prolog(src, strict=True)  # must not raise
+    out = clausal_source_to_prolog(src)  # lenient: warnings, no raise
     assert "attrs_put(" in out
 
 

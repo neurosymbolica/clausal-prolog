@@ -22,6 +22,16 @@ from clausal.tools.prolog_ast import (
     PTerm, PItem, PrologVisitor, PrologTransformer,
 )
 from clausal.tools.prolog_operators import OperatorTable
+# The engine's canonical `<-` detection primitives. The lambda arrow `<-` and
+# the arithmetic comparison `< -` parse to an IDENTICAL AST
+# (Compare(Lt, UnaryOp(USub, ...))); only the SOURCE SPACING separates them.
+# We import the engine's own predicates rather than re-implementing them so
+# the translator's term-position rule cannot drift from the clause-level rule
+# the engine enforces (see _refuse_arrow_lambda_in_term_position).
+from clausal.templating.term_rewriting import (
+    _is_arrow_adjacent as _engine_is_arrow_adjacent,
+    _leftmost_usub as _engine_leftmost_usub,
+)
 from clausal.tools.prolog_dialect import (
     Dialect,
     pascal_to_snake, snake_to_pascal,
@@ -394,9 +404,16 @@ class _ClausalToProlog:
 
     def __init__(self, dialect: Dialect, strict: bool = False, *,
                  module_path: str | None = None,
-                 module_signatures: dict[str, set[tuple[str, int]]] | None = None):
+                 module_signatures: dict[str, set[tuple[str, int]]] | None = None,
+                 source_lines: list[str] | None = None):
         self.dialect = dialect
         self.strict = strict
+        # Original source, split into lines. Required to tell the lambda arrow
+        # `<-` from the comparison `< -`, which are indistinguishable in the
+        # AST and differ only in source spacing. None when the caller built the
+        # AST programmatically; the arrow-lambda refusal then cannot fire (the
+        # engine's own fallback heuristic is used, matching clause-level).
+        self._source_lines = source_lines
         # Dotted path of the module being translated. When set, use_module
         # file paths are emitted relative to this module's package directory
         # (Scryer resolves a consulted path against the consulting file).
@@ -415,6 +432,11 @@ class _ClausalToProlog:
         # _PrologToClausal._var_name.
         self._var_map: dict[str, str] = {}
         self._var_used: set[str] = set()
+        # Top-level statement currently being converted. The provably-list
+        # analysis behind the negated-membership refusal is CLAUSE-LOCAL: it
+        # reads only this statement's own AST, never other clauses.
+        self._current_stmt: python_ast.stmt | None = None
+        self._provable_lists: set[str] | None = None
 
     def _prolog_var_name(self, name: str) -> str:
         """Map a clausal variable to a unique Prolog name within the clause."""
@@ -445,6 +467,8 @@ class _ClausalToProlog:
             # Variable names are scoped per top-level item (F022).
             self._var_map = {}
             self._var_used = set()
+            self._current_stmt = stmt
+            self._provable_lists = None
             item = self._convert_stmt(stmt)
             # Emit any warnings accumulated during conversion
             for w in self._warnings:
@@ -1081,6 +1105,18 @@ class _ClausalToProlog:
     def _convert_unaryop(self, node: python_ast.UnaryOp) -> PTerm:
         """Convert unary operators."""
         if isinstance(node.op, python_ast.Not):
+            # `not (X in XS)` is the OTHER spelling of negated membership: it
+            # reaches _convert_compare as a POSITIVE `In` under this `\+`, so
+            # the refusal has to be applied here, where the negation is
+            # visible (2026-09-03). `X not in XS` is caught in _convert_compare.
+            operand = node.operand
+            if isinstance(operand, python_ast.Compare):
+                refused = False
+                for op, comp in zip(operand.ops, operand.comparators):
+                    if isinstance(op, python_ast.In):
+                        refused |= self._check_negated_membership(comp)
+                if refused:
+                    return PAtom("???")
             return PCompound("\\+", (self._convert_expr(node.operand),))
         if isinstance(node.op, python_ast.USub):
             inner = self._convert_expr(node.operand)
@@ -1143,6 +1179,156 @@ class _ClausalToProlog:
             return True
         return False
 
+    # ── Interim refusals (operator decision, 2026-09-03) ──────────────
+    #
+    # See docs/iso-export-pilot-2026-09.md, "Operator decision — 2026-09-03
+    # (dict-membership fail-open, class P census)" in the clausify-executor-
+    # train repo. Two shapes that used to translate SILENTLY WRONG now refuse.
+
+    # Goals whose output argument is guaranteed to be a proper list, keyed by
+    # (name, arity) → index of that output argument. Deliberately tiny: each
+    # entry is checkable from the clause's own AST with no cross-clause
+    # inference and no doubt about the callee's contract.
+    _LIST_PRODUCING_GOALS = {
+        ("findall", 3): 2,
+        ("bagof", 3): 2,
+        ("setof", 3): 2,
+        ("msort", 2): 1,
+        ("sort", 2): 1,
+        ("sort", 4): 3,
+    }
+
+    def _clause_local_list_vars(self) -> set[str]:
+        """Names bound to a proper list by the CURRENT clause's own AST.
+
+        Clause-local by construction: the walk never leaves
+        ``self._current_stmt``, so no cross-clause or cross-module inference
+        is involved. A name qualifies when the clause contains either
+
+        * ``V is [...]``  — unification with a list display, or
+        * a call to a goal in :attr:`_LIST_PRODUCING_GOALS` whose output
+          argument is exactly ``V`` (e.g. ``findall(X, Goal, V)``).
+
+        The walk ignores control flow: a binding inside one branch of a
+        disjunction still counts. That is deliberately permissive — this set
+        only ever *widens* what the negated-membership refusal accepts, so an
+        imprecision here costs a missed refusal, never a false one.
+        """
+        if self._provable_lists is not None:
+            return self._provable_lists
+        found: set[str] = set()
+        stmt = self._current_stmt
+        if stmt is not None:
+            for sub in python_ast.walk(stmt):
+                # V is [...]
+                if (isinstance(sub, python_ast.Compare)
+                        and len(sub.ops) == 1
+                        and isinstance(sub.ops[0], python_ast.Is)
+                        and isinstance(sub.left, python_ast.Name)
+                        and isinstance(sub.comparators[0], python_ast.List)):
+                    found.add(sub.left.id)
+                # findall(_, _, V) and friends
+                if (isinstance(sub, python_ast.Call)
+                        and isinstance(sub.func, python_ast.Name)
+                        and not sub.keywords):
+                    idx = self._LIST_PRODUCING_GOALS.get(
+                        (sub.func.id, len(sub.args)))
+                    if idx is not None:
+                        out = sub.args[idx]
+                        if isinstance(out, python_ast.Name):
+                            found.add(out.id)
+        self._provable_lists = found
+        return found
+
+    def _is_provably_list(self, node: python_ast.expr) -> bool:
+        r"""True when *node* is PROVABLY a proper list at this site.
+
+        The rule is deliberately minimal and syntactic — there is no type
+        inference here, and anything not matched below refuses:
+
+        (a) a list display ``[a, b, c]``. A display with a splat tail
+            (``[H, *T]``, Clausal's ``[H|T]``) qualifies only when the tail is
+            itself provably a list, because ``[H|T]`` with an unbound ``T`` is
+            a PARTIAL list and ``\+ member/2`` over one is exactly as unsound
+            as over a dict.
+        (b) a variable bound to a list clause-locally — see
+            :meth:`_clause_local_list_vars`.
+
+        Everything else — a bare parameter, a call result, an attribute, a
+        dict — is NOT provably a list. Exported dicts (attribute-lists) land
+        here, which is the point: ``\+ member(K, Dict)`` is silently
+        always-true, and that is the emission this refusal removes.
+        """
+        if isinstance(node, python_ast.List):
+            return all(
+                self._is_provably_list(e.value)
+                for e in node.elts
+                if isinstance(e, python_ast.Starred)
+            )
+        if isinstance(node, python_ast.Name):
+            return node.id in self._clause_local_list_vars()
+        return False
+
+    def _check_negated_membership(self, right: python_ast.expr) -> bool:
+        """Refuse a NEGATED membership whose RHS is not provably a list.
+
+        Returns True when the site was refused. Positive membership is NOT
+        checked here: the operator explicitly deferred that polarity, because
+        positive ``member/2`` over a dict fails loudly (absent derivation)
+        rather than succeeding silently.
+        """
+        if self._is_provably_list(right):
+            return False
+        self._add_warning(
+            "negated membership over a value not provably a list: "
+            + python_ast.unparse(right)
+            + " — if the RHS is a dict/profile, respell via the accessor "
+            "(not profile_has(P, K)); see the 2026-09-03 decision"
+        )
+        return True
+
+    def _refuse_arrow_lambda_in_term_position(
+            self, node: python_ast.Compare) -> bool:
+        """Refuse a ``<-`` lambda that reached TERM position.
+
+        A ``<-`` lambda is only meaningful as a CLAUSE arrow. Reaching a term
+        position — ``include((D <- Goal), Xs, Ys)`` — it was previously
+        emitted as inert operator soup (``include(D < -(...), ...)``): data,
+        not a closure. It never runs, and nothing downstream says so.
+
+        The lambda arrow ``<-`` and the comparison ``< -`` parse to the SAME
+        AST; only source spacing separates them. This mirrors the engine's
+        clause-level rule by calling the engine's own predicates
+        (:func:`_is_arrow_adjacent`), so `a < -b` — a genuine comparison
+        against a negated term — keeps its current behavior untouched.
+
+        Returns True when the site was refused.
+        """
+        if not node.ops or not isinstance(node.ops[0], python_ast.Lt):
+            return False
+        usub_node, _depth = _engine_leftmost_usub(node.comparators[0])
+        if usub_node is None:
+            return False
+        try:
+            adjacent = _engine_is_arrow_adjacent(
+                node.left, usub_node, self._source_lines)
+        except ValueError:
+            # Missing source positions (programmatically built AST): we
+            # cannot tell `<-` from `< -`, so do not guess — leave the
+            # pre-existing comparison behavior in place.
+            return False
+        if not adjacent:
+            return False
+        self._add_warning(
+            "`<-` lambda in term position: "
+            + python_ast.unparse(node)
+            + " — a `<-` lambda is a clause arrow, not a closure; in term "
+            "position it emits inert operator soup that never runs. Define a "
+            "named auxiliary predicate and pass its name instead (class-M "
+            "design note; see the 2026-09-03 decision)"
+        )
+        return True
+
     def _convert_compare(self, node: python_ast.Compare, goal_position: bool = False) -> PTerm:
         """Convert comparison operators.
 
@@ -1169,10 +1355,32 @@ class _ClausalToProlog:
         `_=D` pair inside `dict_create/3` (pre-existing behavior, unchanged
         by this gate).
         """
-        # First check for <- arrow (should already be handled at statement level)
+        # A `<-` lambda reaching term position is untranslatable (2026-09-03).
+        # Checked before any Lt lowering, and on the chained path too.
+        if self._refuse_arrow_lambda_in_term_position(node):
+            return PAtom("???")
+
         # Handle single comparison
         if len(node.ops) == 1:
             op = node.ops[0]
+
+            # Membership. Negated membership over a value not provably a list
+            # is untranslatable (2026-09-03); positive membership is
+            # unchanged — the operator deferred that polarity.
+            if isinstance(op, python_ast.In):
+                return PCompound("member", (
+                    self._convert_expr(node.left),
+                    self._convert_expr(node.comparators[0]),
+                ))
+            if isinstance(op, python_ast.NotIn):
+                if self._check_negated_membership(node.comparators[0]):
+                    return PAtom("???")
+                return PCompound("\\+", (
+                    PCompound("member", (
+                        self._convert_expr(node.left),
+                        self._convert_expr(node.comparators[0]),
+                    )),
+                ))
 
             if (goal_position and not self.dialect.has_dicts
                     and isinstance(op, python_ast.Is)
@@ -1244,9 +1452,12 @@ class _ClausalToProlog:
             elif isinstance(op, python_ast.In):
                 parts.append(PCompound("member", (prev, right)))
             elif isinstance(op, python_ast.NotIn):
-                parts.append(PCompound("\\+", (
-                    PCompound("member", (prev, right)),
-                )))
+                if self._check_negated_membership(comp):
+                    parts.append(PAtom("???"))
+                else:
+                    parts.append(PCompound("\\+", (
+                        PCompound("member", (prev, right)),
+                    )))
             prev = right
 
         if len(parts) == 1:
@@ -1604,7 +1815,8 @@ def clausal_source_to_prolog_ast(source: str, *,
     tree = python_ast.parse(source)
     converter = _ClausalToProlog(dialect, strict=strict,
                                  module_path=module_path,
-                                 module_signatures=module_signatures)
+                                 module_signatures=module_signatures,
+                                 source_lines=source.splitlines())
     return converter.convert_module(tree)
 
 
