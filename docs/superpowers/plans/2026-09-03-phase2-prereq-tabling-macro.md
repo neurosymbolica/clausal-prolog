@@ -87,3 +87,33 @@ comparison is invalid — patch A's worktree files directly, uncommitted), B = t
   fraction; the workload's compute fraction dilutes it — estimate the walk fraction with one
   cProfile run per side and include the top-10 cumulative functions).
 - Cleanup the throwaway worktree (--force sanctioned). Nothing committed by this task.
+
+## Task 4 (added by controller ruling after Task 3): the compound-answer tabled benchmark + its A/B
+
+Task 3 proved bench_tabling has ~0% walker fraction (scalar answers). The stage's mandate — a
+walker-heavy macro — therefore needs a workload whose TABLED ANSWERS ARE COMPOUND TERMS, so
+per-answer normalization/copying exercises the walkers (and Phase 0's `_clausal_new` fast path).
+
+Files: `benchmarks/workloads.py` (new `bench_struct_tabling(n, reps)`), a new fixture
+`tests/fixtures/` `.clausal` module (follow tabled_fib.clausal's conventions), measurement
+report only for the A/B part.
+
+1. Design: a tabled predicate whose answers are deep chains of DECLARED compound functors —
+   e.g. `-module(m, [cons(h, t), nil, nats(n, l)])` with tabled `nats/2` building
+   `cons(N, cons(N-1, ...))` down to `nil`. Each subgoal's answer is an O(depth) compound
+   chain; tabling normalizes each answer → total walk work O(n²) BY DESIGN (walk-dominated is
+   the point). Choose n so one bench call is ~1-10s (probe 200/500/1000; expect n≈500-1500).
+   Keep answers deterministic and single per subgoal; break after first like bench_tabling.
+   Display via digit-count/length, no float().
+2. Sanity: cProfile ONE run — the walker functions (`do_deref_walk`/`_deref_walk_py`/
+   `c_copy_term`/`do_walk`) must appear with a MEANINGFUL share (target >20% combined; report
+   the actual number). If they don't, the design missed — iterate the shape (e.g. force
+   answer copying via the query surface) before proceeding. This sanity gate is the task.
+3. Commit the benchmark + fixture (explicit paths, trailer). Full suite once, empty name-diff
+   vs baseline_failures.txt.
+4. A/B: recreate the throwaway A worktree exactly as Task 3 did (f0db3fb0 + the SAME fix
+   patches byte-identical + build_ext + the NEW benchmark/fixture copied in — byte-identical
+   both sides, cp+diff parity proof), interleaved 5 rounds/side of bench_struct_tabling at the
+   chosen n, fresh subprocess each, plus one profile per side. Report medians/min-max/B/A and
+   the per-side walker-fraction. Report the number STRAIGHT whatever it is. Cleanup the
+   worktree (--force sanctioned).
