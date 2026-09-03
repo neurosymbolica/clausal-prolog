@@ -195,6 +195,17 @@ assignment works today — and deliberately unhashable):
 8. **A C standard-order comparator** (today the one funnel accessor with no C twin, because
    getattr-chains in C are impractical; tuple recursion is straightforward).
 
+**Keystone macro number (2026-09-03, Stage A of Phase 2 prep — recorded here because the
+measurement reports live in gitignored SDD workspaces):** with the walker-heavy
+`bench_struct_tabling` (compound cons-chain tabled answers; walker share 56% of profile),
+Phase 0's fast path measures **B/A = 0.6509 (~1.54× end-to-end)**, adversarially confirmed by
+a single-build gate-defeat experiment (classmethod→staticmethod on `cons._clausal_new`:
+1.552×), mechanism ratio ≈2.0× after cProfile-inflation correction, load/compile 1.2% of the
+timed window, `bench_fib` control at noise. Stage A also fixed two real bugs en route
+(clpfd `_narrow` bignum saturation — direction-aware, soundness-reviewed; bench_tabling
+redrive) and filed three engine todos (tabled-redo-resumes-generator, `_on_leader_stack`
+linear scan, clpfd↔clpr float-boundary soundness).
+
 Prerequisite for 1–3: the `Var.__hash__ = None` decision (§5-Hashability). Consequence for
 Phase 2: the bridge should measure a tabling-heavy workload WITH selective interning enabled,
 not just representation parity — that is where this class of wins concentrates. (Blocking
