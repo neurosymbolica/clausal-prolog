@@ -205,6 +205,50 @@ exercises the seam conversion, the C tuple path, and the funnel discipline on a 
 - **Embedding idioms** `for trail in term:` and `term.FieldName` (docs) exist only on class
   instances: seam-reconstruct vs deprecate — still open, §8.
 
+## 5a. Seam design: TermProxy (resolves open question 1)
+
+Instead of eagerly converting answer terms back to Python objects at the seam, hand back a
+**lazy proxy over a snapshot**. Prototyped and verified 2026-09-03 (scratchpad
+`proto_termproxy.py`); every load-bearing mechanism demonstrated.
+
+- **Snapshot at yield.** The engine deref-walks the answer (existing C `do_walk`) into a
+  frozen tagged-tuple tree; the proxy wraps that. The one walk — needed for binding
+  correctness anyway — is the only eager cost. This also fixes a *current* pain
+  independently of the redesign: today callers must copy bindings out before resuming
+  iteration because backtracking unbinds them; the snapshot is immune by construction, and
+  the proxy is `__slots__`-frozen (mutation raises).
+- **Existing consumer code works unchanged.** `PredicateMeta.__instancecheck__` accepts a
+  proxy whose functor matches, so `isinstance(answer, m.booking)` is True — and since
+  MATCH_CLASS is `isinstance()` + attribute reads, **`match`/`case` class patterns run
+  unmodified over proxies** (demonstrated: `case booking(who=w, when=d)` matched and
+  destructured a proxy). Keyword patterns never consult `__match_args__` on the subject;
+  positional patterns read it from the pattern class, which still carries it. `.Field`
+  access survives via `__getattr__` resolving field→position through the registered
+  signature — nested compounds wrap on demand, scalars come back raw. So the documented
+  attribute idiom needs NO class reconstruction at the seam.
+- **Materialization is explicit** (`.construct()` / `.to_python()`): the only place
+  Python-side validation can raise (e.g. an invalid date). The known risk — errors far from
+  their Clausal cause — is mitigated three ways:
+  1. **Provenance threading** (demonstrated): the proxy carries its origin (query goal,
+     module); `repr` renders Clausal syntax via the reified renderer; `.construct()` raises
+     `ClausalMaterializationError` naming the term, chained `from` the underlying error
+     (`while materializing date(2026, 2, 31) … caused by ValueError('day is out of range
+     for month')`). Origin must thread through nested `construct()` recursion (one-line fix
+     over the prototype).
+  2. **Eager mode as a debugging dial**: `solve(..., materialize='eager')` per call or per
+     module turns far errors back into near ones.
+  3. **The principled upstream fix is Ciao-style assertions** — an invalid date is
+     constructible in Clausal at all only because OWA construction validates nothing;
+     `:- pred`-style assertions checked under a `-check` mode catch it at the Clausal
+     construction site, demoting the proxy's chained error to a shipping-mode backstop.
+     Natural companion borrow to `-hide` (§1a).
+- **Equality/hash**: structural over the snapshot (ground snapshots hash cleanly, consistent
+  with the `Var.__hash__ = None` rule in §5-Hashability).
+- **Boundaries**: the inner `_get_dispatch` protocol stays raw (frozen ~20-implementor
+  contract untouched); proxies are the outer `solve()`/embedding surface only. Term-as-goal
+  iteration moves to an explicit `proxy.solve()` or the module-qualified goal form (open
+  question 4).
+
 ## 6. Hazards
 
 1. **The seam widens**: tagging is mandatory both directions for tuple data; `_get_dispatch`
@@ -271,7 +315,9 @@ Phase 1 and keep the fast path.
 
 ## 8. Open design questions (park, don't block)
 
-1. `for trail in term:` / `term.FieldName` embedding idioms: seam-reconstruct vs deprecate?
+1. ~~`for trail in term:` / `term.FieldName` embedding idioms: seam-reconstruct vs
+   deprecate?~~ **Resolved by §5a (TermProxy):** `.FieldName` survives unchanged via the
+   proxy; term-as-goal iteration becomes `proxy.solve()` / qualified-goal form (Q4).
 2. Cons rule (`str` ~ char-list) applying to atoms: accept or gate? (§5 — gates Phase 2.)
 3. `-hide` renaming scheme: mangled str (`"m$foo"` — simple, but leaks via printing and is
    forgeable by spelling the mangled name) vs unforgeable per-module object (true ADT hiding,
