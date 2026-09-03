@@ -1,0 +1,411 @@
+# toklex: a token-layer formalism for Prolog readers
+
+**Status: DESIGN — awaiting approval (deliverable (a)+(b) of
+`implementation_plans/prolog-parser-formalism-handoff.md`; implementation plan (c) is
+gated on approval).**
+
+This document is written to be readable outside the Clausal codebase. Clausal-specific
+material is confined to §9 and the appendix; everything before it describes a formalism
+any Prolog reader could adopt.
+
+## 1. Problem
+
+Prolog term syntax needs no grammar formalism: its variable part is precedence-shaped,
+`op/3` *is* the grammar, and a runtime-mutable Pratt/precedence-climbing core handles it.
+The **token layer** is where an actual open problem lives. The requirements (Markus
+Triska, 2026-09-03, on what a Prolog-in-Prolog reader needs):
+
+> "we need to find a good formalism to write it, something that is then compiled to a
+> DCG. it must be able to 'peek ahead' to see whether the current token will be extended,
+> and be able to push characters to the stream, or remember that they were present, for
+> the next token. it must be able to be used from streams that are not repositionable,
+> like user input: in this case, it must be able to wait for more input."
+
+Unpacked, that is four requirements:
+
+- **R1 (formalism, DCG target):** the tokenizer is *written in* something declarative and
+  *compiled to* a DCG — not hand-written as one.
+- **R2 (peek):** never emit a token that unseen input could still extend (`=` vs `=..`,
+  `1` vs `1.5` vs `1.0e7`, `0'c`, quoted atoms with escapes, `.` as end vs graphic char).
+- **R3 (pushback):** reading `1.` and then seeing a space means *two* tokens (integer
+  `1`, end `.`) — characters consumed on a wrong path must be returnable to the stream,
+  or remembered for the next token.
+- **R4 (non-repositionable streams):** works on pipes and user input. No seeking, ever.
+  When input is exhausted mid-token, the lexer *waits* — it does not fail, guess, or
+  demand a rewindable source.
+
+A fifth requirement comes from experience with hand-written lexers (including the one
+this formalism replaces): **R5 (derivability):** R2 and R3 must be *derived from the
+token definitions by the compiler*, not hand-maintained. Hand-maintained peek logic is
+where lexer bugs live.
+
+## 2. Design overview
+
+**toklex** is a token-definition language with:
+
+- a **surface notation that is Prolog terms** — a spec file is read with an ordinary
+  Prolog reader (bootstrapping: the existing batch tokenizer/parser reads the spec that
+  generates its own replacement);
+- a **regular kernel**: token rules are named regular expressions over declared
+  character classes, closed under sequence, alternation, repetition, option, and
+  **subtraction** (set difference of regular languages);
+- exactly **two extensions** beyond regular: *follow constraints* (a one-character
+  lookahead predicate attached to a token rule, e.g. the ISO end token) and *nesting*
+  (self-embedding allowed only in trivia rules, for nested block comments);
+- **compiler-derived munch discipline**: the compiler builds one annotated DFA for the
+  whole token set and computes, per state, the *extend set* (R2's peek test) and the
+  *backup action* (R3's pushback), and it **proves the pushback bounded** or rejects the
+  spec;
+- **incrementality as semantics, not plumbing**: the input is conceptually a partial
+  list of characters; "wait for more input" *is* "demand reached the unbound tail"
+  (§6) — the Python `NEED_MORE` contract and the Prolog `freeze/2`-on-the-tail
+  implementation are two operationalizations of the same definition;
+- **two thin targets** rendered from the same annotated DFA: a DCG (for a Prolog-hosted
+  reader) and a table-driven step function (Clausal's Python L0).
+
+The formalism deliberately does **not** include: lexer modes/start conditions (nesting +
+subtraction + follow constraints cover Prolog without them), general semantic actions
+(value builders are total functions over captures, §3.4), or anything context-free
+beyond trivia nesting.
+
+## 3. Notation
+
+A spec is a list of Prolog terms (read with any conforming reader; operators used:
+`:=`, `|`, `..`, standard functional notation). Four kinds of declarations.
+
+### 3.1 Character classes
+
+```prolog
+class(layout,     [' ', '\t', '\n', '\r']).          % explicit chars
+class(small,      unicode(ll) + ['_']).               % Unicode categories… (see note)
+class(capital,    unicode(lu)).
+class(digit,      range('0','9')).
+class(graphic,    ['#','$','&','*','+','-','.','/',':','<','=','>','?','@','\\','^','~']).
+class(solo,       ['!',',',';','|','%']).
+class(hexdigit,   range('0','9') + range('a','f') + range('A','F')).
+class(quoted_ok,  any - class(hidden_sep)).           % subtraction on classes
+class(hidden_sep, ['\x0\']).                          % see §9: reader-unwritable char
+```
+
+Classes are finite unions/differences of explicit sets, ranges, and named Unicode
+categories. (Whether identifiers are ASCII or Unicode is a *spec* decision, not a
+formalism decision — the ISO spec ships an ASCII-faithful class file; a dialect swaps
+class definitions, nothing else.)
+
+### 3.2 Token rules
+
+```prolog
+token(name_atom,  small · alnum*).
+token(variable,   (capital | '_') · alnum*).
+token(end,        '.'  followed_by  (layout | '%' | eof)).   % declared before graphic_tok
+token(graphic_tok, graphic+  butnot  ('/' · '*' · any*)).    % ISO: no graphic token starts /*
+token(integer,    digit · (digit | '_')*).                   % '_' separators: dialect choice
+```
+
+- `·` sequence, `|` alternation, `*`/`+`/`?` repetition/option (postfix), literals are
+  quoted atoms/chars, class names denote their class.
+- `butnot L` — language subtraction. This replaces every "priority" hack: ISO's rule
+  that a graphic token cannot begin `/*` is *subtracted* from the graphic rule rather
+  than encoded as comment-beats-graphic ordering. Regular languages are closed under
+  difference, so the compiler folds this into the DFA; nothing survives to runtime.
+- `followed_by C` — a **follow constraint**: the token matches only if the *next*
+  character (not consumed) is in class `C`, or the special `eof`. This is the one place
+  ISO genuinely needs lookahead that longest-match cannot express: `.` is the end token
+  exactly when followed by layout, `%`, or end of stream (ISO 6.4.8). Follow constraints
+  are the *declarative* form of "peek ahead"; the compiler folds them into the same
+  one-character peek it already derives for maximal munch (§5).
+- Ties after longest match are broken by declaration order (conventional; with
+  subtraction available, real specs have almost no ties).
+
+### 3.3 Trivia rules
+
+Trivia are skipped between tokens but are *recorded* (§8: layout adjacency is
+semantically load-bearing in Prolog — `f(` vs `f (`).
+
+```prolog
+trivia(whitespace,     layout+).
+trivia(line_comment,   '%' · (any - '\n')*).
+trivia(block_comment,  '/' · '*' · body('*' · '/')  nest  self).
+```
+
+`nest self` is the second extension: the rule may contain itself (nested `/* /* */ */`).
+Only trivia may nest — trivia produce no value, so nesting never interacts with capture,
+and the compiled form is the DFA plus one depth counter (equivalently: a DCG nonterminal
+that recurses). Strict-ISO non-nesting is the same rule without `nest self`.
+
+### 3.4 Values (captures and builders)
+
+A token's default value is its lexeme (the exact characters matched). Where the value is
+computed — quoted atoms decode escapes, numbers parse digits — the rule names its
+fragments and gives a **builder**, a total function over fragment values:
+
+```prolog
+token(quoted_atom, q · qitem* · q)  value  atom_from(qitems).
+
+fragment(qitem, qq,            gives  '\'').        % '' → literal quote
+fragment(qitem, backslash · nl, gives  none).        % \<newline> line continuation
+fragment(qitem, backslash · esc(C), gives  C).       % ISO 6.4.2 escape map
+fragment(qitem, quoted_ok_char(C),  gives  C).
+```
+
+Builders are pure and total on accepted lexemes (the DFA already guarantees the shape),
+so they compile to straight-line code in both targets: difference-list accumulation in
+the DCG, a decode loop over the pending buffer in Python. No general user code runs
+inside the lexer; the analyzability of the kernel is preserved.
+
+### 3.5 What a rule may not say
+
+No rule can mention: stream positions, peeking, pushback, buffers, or chunk boundaries.
+Those are compiler artifacts (§5–§6). This is the enforcement of R5 — if the operational
+concepts are inexpressible in the notation, they cannot be hand-maintained wrongly.
+
+## 4. Semantics: the annotated automaton
+
+The compiler:
+
+1. Compiles every token and trivia rule to an NFA over the class alphabet; applies
+   subtractions (product with complement DFAs); unions all rules; determinizes and
+   minimizes. Accepting states are labeled with the winning rule (longest match, then
+   declaration order).
+2. Computes per accepting state `s` the **extend set** `extend(s)`: the characters on
+   which some path from `s` can reach an accepting state (of any rule). The emission
+   condition is:
+
+   > *emit at `s` ⇔ the next character ∉ extend(s); the winning rule at `s` is the
+   > highest-priority label whose follow constraint (if any) holds of that next
+   > character — a rule whose follow constraint fails is disqualified, and the next
+   > label in longest-match/declaration order takes the token.*
+
+   Both conditions inspect exactly **one character beyond the token, without consuming
+   it**. This is R2, derived: nobody writes the `=` vs `=..` peek — it falls out of
+   `extend(s)` for the graphic-token DFA.
+3. Computes **backup actions**. The DFA may pass an accepting state and continue toward
+   a longer token that never materializes (`1.` + space: passed accept-at-`1`, consumed
+   `.`, failed). The compiler records, for every non-accepting state reachable from an
+   accepting one, the distance back to the last accept. On failure the generated code
+   emits the last-accepted token and **returns the over-consumed characters to the
+   head of the stream** (R3: "push characters to the stream, or remember that they were
+   present"). Crucially:
+
+   > **Boundedness check:** the compiler verifies that no cycle lies on any
+   > accepting→accepting path through non-accepting states, and reports the maximal
+   > backup distance `B`. A spec with unbounded backup is rejected at compile time.
+
+   For the ISO token set, `B = 2` (worst case `1.0e+` followed by a non-digit: emit
+   float `1.0`, return `e+`). Pushback is therefore a fixed two-cell affair, not a
+   general rewind — which is exactly why R4's no-seeking is satisfiable.
+4. Emits the **annotated DFA**: transitions, accept labels, extend sets, follow checks,
+   backup actions, builder attachments. Both targets are mechanical renderings of this
+   object; the object itself (a Prolog term / JSON) is a legitimate interchange format
+   between independent implementations.
+
+Lexical errors are part of the semantics, not exceptions: a character with no transition
+from the start state, or a failure with no accepting state behind it, yields an
+`error(Span, Culprit)` token consuming one character; recovery policy above that (e.g.
+resync to `.`) belongs to the term layer.
+
+## 5. Peek and pushback, precisely
+
+The generated lexer needs exactly two stream capabilities, both cheap and both
+seek-free:
+
+- **peek(1):** inspect the next character without consuming it — for the emission
+  condition and follow constraints. (Scryer's `CharReader` exposes precisely
+  `peek_char`/`put_back_char`; every buffered reader can.)
+- **unread(≤ B):** return the last `k ≤ B` consumed characters, where `B` is the
+  compiler-computed bound. Implemented as a tiny ring/stack in front of the stream —
+  "remember that they were present, for the next token."
+
+In the DCG target both collapse into non-consumption: a DCG relation
+`token(T, S0, S)` that leaves `S` pointing at the right cell has "pushed back" by
+construction — the compiler simply threads the pre-consumption list variable of the
+last accept through to the emit site. Peek is head inspection without advancing:
+
+```prolog
+peek(C), [C] --> [C].          % standard DCG lookahead idiom
+```
+
+## 6. Incrementality: the partial-list semantics
+
+**Definition.** The input is a partial list of characters `S`. Feeding a chunk binds the
+tail: `feed("ab")` performs `Tail = [a,b|Tail']`; closing the stream binds `Tail = []`.
+The lexer's demand for the next character encounters one of three situations:
+
+| head of rest | meaning | lexer behavior |
+|---|---|---|
+| bound cell `[C|_]` | character available | consume / peek `C` |
+| `[]` | true end of stream | `eof` — resolve follow-`eof`, final emit or error |
+| **unbound var** | *stream that can wait* | **suspend: the token is not yet decidable** |
+
+That third row *is* R4. A partial list with an unbound tail is exactly "a stream that
+can wait for more input", and the two implementations differ only in who does the
+waiting:
+
+- **Coroutining Prolog host:** the compiled DCG wraps its character demand in
+  `freeze/2` on the list variable. The lexer *is* a suspended goal; feeding input is
+  unification; the scheduler resumes it. Nothing is reified because nothing needs to be
+  — the suspended goal's continuation is the lexer state. This is the classically
+  elegant answer and the primary DCG rendering.
+- **Explicit-state host (Clausal's Python L0, or a freeze-less Prolog):** the same DFA
+  renders as a **step function** — `lex_step(State0, Event, State, Out)` with
+  `Event ∈ {char(C), eof}` and `Out ∈ {none, tokens([...]), error(...)}` — plus a
+  driver exposing `feed(chunk)` / `next_token() → Token | NEED_MORE | EOF`. `NEED_MORE`
+  is returned precisely when the semantics above says *suspend*. The reified state is
+  small and explicit: DFA state id, pending lexeme, backup buffer (≤ B), position.
+  Freezing the lexer between chunks is copying one small record.
+
+**Correctness property (testable): chunk-boundary insensitivity.** For any character
+sequence and any partition of it into chunks, the emitted token sequence is identical to
+the batch run. This single property test subsumes most incremental-lexer bug classes and
+is the acceptance gate for any implementation of the spec.
+
+Note what is *absent*: seeking, repositioning, re-lexing from the token start after a
+refill. The pending lexeme lives in the lexer state, never in the stream.
+
+## 7. Worked examples (the nasty cases)
+
+**`=` vs `=..`** — one rule, `token(graphic_tok, graphic+)`. After `=`, state is
+accepting with `extend ∋ '.'`; input `=..` keeps consuming to the longer accept; input
+`=, ` peeks `,` ∉ extend → emit `=`. With input exhausted after `=`: unbound tail →
+suspend (a terminal reader showing `X =` correctly waits — `=` could still become
+`=..`). *Nothing was written to achieve this.*
+
+**`1` / `1.5` / `1.0e7` / `1.` as end** — number DFA: after `1`, accepting; consuming
+`.` moves to non-accepting (float wants a digit). `1.5` → accept float. `1. ` → fail at
+`' '`, backup 1: emit `integer(1)`, return `.` to the stream; next round: `.` with
+follow layout → `end`. `1.0e+x` → fail, backup 2 (`B`'s witness): emit `float(1.0)`,
+return `e+`; `e` then lexes as a name atom. `1.` + unbound tail → suspend (could be
+`1.5`).
+
+**`0'c` family** — `0'a` → 97 (longest match beats "integer 0 then quoted atom").
+`0'''` → 39 via the `qq` fragment. `0'\n\` escapes via the shared `esc` fragment map.
+`0'` + unbound tail → suspend.
+
+**Quoted atom with continuation** — `'ab\⏎cd'` decodes to `abcd` via the
+`gives none` fragment; a doubled `''` gives one quote. Unterminated at true EOF
+(`Tail=[]`) → `error(Span, unterminated_quote)`; before that, suspend — on a
+non-repositionable stream "unterminated" is only decidable at EOF, and the formalism
+makes that fall out rather than be a special case.
+
+**Nested block comment** — `trivia(block_comment, ...) nest self`: depth counter in the
+step-function target, recursive nonterminal in the DCG target. `/*` with the tail
+unbound → suspend (the entire comment is pending trivia; its span is recorded, its
+content dropped).
+
+**The dot, completely.** `.` is: end token (followed by layout/`%`/eof — the follow
+constraint on `end`, which outranks `graphic_tok` by declaration order when it holds),
+or a graphic char inside a longer graphic token (`=..`, longest match), or a lone
+graphic atom when the follow constraint fails and nothing extends it (`.(`
+disqualifies `end`, so `graphic_tok` takes the dot), or a float's decimal point
+(between digits, inside the number rule). All four read directly off the spec; none is
+control flow.
+
+## 8. Token output: what the term layer receives
+
+Each emitted token: `tok(Kind, Value, Span, Glue)` where `Span = (StartPos, EndPos)`
+(absolute offsets plus line/col) and `Glue ∈ {glued, spaced}` records whether trivia
+preceded the token. `Glue` makes ISO's adjacency distinctions (`f(` compound-open vs
+`f (` — "open-ct"; adjacent `-1` negative literals) a fact the lexer states rather than
+a reconstruction from positions downstream. Trivia themselves are droppable but
+span-recorded (comment-preserving tools may subscribe; the term layer ignores them).
+
+## 9. Clausal instantiation (Phase 3 deltas from the ISO spec file)
+
+The formalism above is dialect-free; Clausal's Phase 3 surface is a *spec file*, an ISO
+base with these deltas (rulings from `tagged-tuple-term-representation.md` §1b):
+
+- **`hidden_sep` exclusion:** the `-hide` mangling separator (NUL or a private-use
+  codepoint — final char TBD in Phase 3) appears in **no character class at all**, so
+  it is a lexical error *anywhere* in source — inside quoted atoms, strings, comments,
+  everywhere. Stronger than §1b's minimum ("inside any atom token") and simpler: one
+  class-membership fact, zero special cases. The writer renders the human form; only
+  the runtime str carries the separator.
+- **Double-quoted tokens** are `string` tokens at the lexer level; chars-list lowering
+  (ISO `double_quotes = chars`, per §1b) is the reader's term-construction policy, not
+  the lexer's.
+- **Directive surface `-module(...)`, `-private([...])`, bare `-allow_singletons`:**
+  lexically nothing — `-` graphic token, name atom, punctuation. *But note* (open
+  question 3 below): current `.clausal` fixtures are **dot-less and `#`-commented**
+  (they are parsed as Python today). Whether Phase 3's surface is dot-terminated with
+  `%` comments (ISO-faithful, what the §1c L0 contract assumes) or keeps
+  newline-significant items is a surface decision owned by the parser author. The
+  formalism is indifferent: `#`-comments are one trivia line in the spec; a
+  newline-significant surface consumes the `Glue`/span data of §8 in the term layer.
+  The token layer does not change shape either way.
+- The existing `prolog_tokenizer.py` behaviors that are deliberate dialect choices —
+  `_` digit separators, lenient unknown escapes, nested comments — are each one line of
+  spec, on by default to keep `tests/test_prolog_parse.py` green.
+
+## 10. Compilation targets
+
+**DCG target (Prolog-hosted).** One nonterminal per DFA state, first-argument-indexed
+on the peeked character; accepting states carry the emit-vs-extend branch; backup is
+list-variable threading (§5); suspension via `freeze/2` on the stream variable, or the
+step-function rendering below for freeze-less systems. Sketch of generated code for the
+number fragment:
+
+```prolog
+% state 12: seen digits — accepting as integer(...)
+q12(Pnd, T) --> peek(C), { is_digit(C) }, !, [C], q12([C|Pnd], T).
+q12(Pnd, T) --> peek('.'), ['.'], q13(Pnd, T).          % maybe float; q13 non-accepting
+q12(Pnd, T) --> emit_integer(Pnd, T).                   % peek ∉ extend(q12)
+
+% state 13: digits '.' — NOT accepting; fail here = backup to q12's accept
+q13(Pnd, T) --> peek(C), { is_digit(C) }, !, [C], q14([C, '.'|Pnd], T).
+q13(Pnd, T), ['.'] --> emit_integer(Pnd, T).            % pushback via right-hand context
+```
+
+(The `q13 … , ['.'] -->` pushback clause is the generated form of a backup action —
+DCG's right-hand-side context notation *is* "push characters back to the stream", which
+is a pleasing fit: the standard's own notation already contains R3.)
+
+**Step-function target (Python, Clausal L0).** Tables: `delta[state][class] → state`,
+`accept[state]`, `extend[state]` (bitset), `follow[rule]`, `backup[state]`; a ~100-line
+generic driver implements `feed/next_token` per §6 and never changes; regenerating the
+tables is the only effect of a spec edit. This replaces the 487-line hand-written
+`prolog_tokenizer.py` behind the same (now incremental) interface.
+
+## 11. Where it lives (deliverable b — recommendation)
+
+- **The spec files and this design are the shared artifact.** `iso.toklex.pl` (dialect
+  base) and `clausal_phase3.toklex.pl` (deltas of §9) are plain Prolog term files,
+  meaningful to any implementation, suitable to hand to the Prolog-in-Prolog effort
+  as-is. The annotated-DFA dump (§4.4) is the secondary interchange format.
+- **Clausal hosts the first compiler**: `clausal/tools/toklex/` — spec loader
+  (bootstrapped on the *existing* `prolog_parser.py`, which is already capable of
+  reading the spec files), automaton construction + checks, and the two renderers. The
+  Python renderer is what Clausal runs; the DCG renderer is cheap to build from the
+  same DFA and is the concrete contribution back to the Prolog-hosted effort.
+- A future Prolog-hosted compiler reimplements §4 from this document against the same
+  spec files; the chunk-boundary property test plus a token-stream diff on a shared
+  corpus is the conformance suite between implementations.
+
+## 12. Alternatives considered
+
+- **Restricted-DCG style + static checker** (write the tokenizer directly as a DCG in a
+  disciplined idiom; a checker enforces peek/munch hygiene). Rejected on R5: maximal
+  munch and pushback remain hand-written per token; the checker can flag violations but
+  cannot *derive* the discipline, and the incremental transformation of arbitrary DCG
+  code is much harder than rendering a DFA.
+- **PEG / parser combinators with ordered choice and explicit cut.** Expressive, but
+  ordered choice hand-encodes exactly what R5 says must be derived, and general PEG
+  backtracking is unbounded — R3's boundedness proof is unavailable.
+- **Full lexer-generator with modes (flex-style start conditions).** Modes are the
+  traditional escape hatch; Prolog needs them nowhere once `butnot`, follow
+  constraints, and trivia nesting exist. YAGNI — and every dropped feature keeps the
+  DCG rendering honest.
+
+## 13. Open questions for the user
+
+1. **Notation blessing:** happy with Prolog-terms surface + the operator set (`·` or
+   `,`? `butnot`, `followed_by`, `nest self`, `value/gives`)? Names are cosmetic;
+   structure is load-bearing.
+2. **⟨SEP⟩ strictness:** §9 proposes rejecting the hidden separator *everywhere*
+   (including comments/strings), stronger than §1b's "any atom token". Confirm.
+3. **Phase 3 surface:** dot-terminated `%`-commented (ISO-faithful, matches §1c L0) vs
+   dot-less newline-significant like today's `.clausal` files? Token layer is
+   indifferent (§9), but the *spec file* and the L1 item boundary need the ruling —
+   and this is the parser author's call.
+4. **Sharing:** this document + the two spec files are written to be shareable with
+   Markus Triska as the proposal; say the word and nothing Clausal-internal blocks it
+   (§9 would travel as "an embedder's dialect deltas" example).
