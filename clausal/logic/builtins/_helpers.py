@@ -13,7 +13,7 @@ from numbers import Real as _Real
 from typing import Any
 
 from clausal.logic.variables import deref, is_var
-from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
+from clausal.logic.predicate import is_atom, is_term_instance, term_field_names
 from clausal.terms import (
     Compound, KWTerm, DictTerm, SetTerm,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
@@ -51,7 +51,7 @@ def _functor_name_py(term: Any) -> Any:
         # A09-F027: the atomic constant IS its own functor name (ISO:
         # functor(3, N, A) → N=3), so it roundtrips. repr(term) did not.
         return term
-    if isinstance(term, PredicateMeta) and not term._fields:
+    if is_atom(term):
         return term
     return None
 
@@ -76,7 +76,7 @@ def _arity_py(term: Any) -> int | None:
         return 0 if len(term) == 0 else 2
     if isinstance(term, (bool, int, float)) or term is None:
         return 0
-    if isinstance(term, PredicateMeta) and not term._fields:
+    if is_atom(term):
         return 0
     return None
 
@@ -169,7 +169,7 @@ def _is_ground_py(term: Any) -> bool:
         return False
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
         return True
-    if isinstance(term, type) and isinstance(term, PredicateMeta) and not term._fields:
+    if is_atom(term):
         return True
     if isinstance(term, list):
         return all(_is_ground_py(e) for e in term)
@@ -256,6 +256,40 @@ try:
         return _c_is_ground(t)
 except ImportError:
     pass
+
+
+# ── Combined functor+arity probe ─────────────────────────────────────────────
+
+
+def functor_arity(term: Any) -> tuple[Any, int] | None:
+    """Return ``(functor_name, arity)`` for *term* in a single traversal, or None.
+
+    Deliberately narrower than ``_functor_name``/``_arity`` composed: it only
+    covers structural/term shapes (a well-formed, str-functor ``Compound``, a
+    term instance, or a ``PredicateMeta`` atom class), returning None for
+    everything else — including ``KWTerm``, lists, strings and numbers, which
+    the composed pair *does* resolve. Where both are defined, they must agree
+    (see ``tests/test_funnel_accessors.py::TestFunctorArity``); this function
+    exists so callers who already know they hold a term shape (the common
+    case in the compiler/inspection funnels) don't pay for two walks.
+
+    The functor slot is ``str`` for a ``Compound``/term instance, but for a
+    zero-arity atom class it is the atom class itself (``_functor_name_py``'s
+    own contract: an atomic constant IS its own functor name), so the type
+    is ``Any``, not ``str``.
+    """
+    if isinstance(term, Compound):
+        if not isinstance(term.functor, str):
+            return None
+        return (term.functor, len(term.args))
+    if is_term_instance(term):
+        return (type(term).__name__, len(term_field_names(term)))
+    if is_atom(term):
+        # Mirrors _functor_name_py: the atom class IS its own functor
+        # value (ISO: functor(3, N, A) -> N=3 for numbers; an atom class
+        # is the same story), not its __name__ string.
+        return (term, 0)
+    return None
 
 
 # ── Standard order of terms ──────────────────────────────────────────────────
@@ -365,7 +399,7 @@ def _standard_order_key(term: Any) -> tuple:
         return (_ORD_NUM, term)
     if isinstance(term, str):
         return (_ORD_ATOM, term, 0)
-    if isinstance(term, PredicateMeta) and not term._fields:
+    if is_atom(term):
         # A zero-arity declared class IS an atom; order it by its name,
         # next to the plain str of the same name rather than among classes.
         return (_ORD_ATOM, term.__name__, 1)

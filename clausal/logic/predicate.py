@@ -1077,6 +1077,49 @@ def _term_field_names_py(obj: Any) -> tuple[str, ...]:
     raise TypeError(f"Not a term instance: {obj!r}")
 
 
+def term_field_names_of_class(cls: Any) -> tuple[str, ...] | None:
+    """Return field name strings for a term CLASS (not instance), or None.
+
+    The class-level twin of ``term_field_names``: a ``PredicateMeta`` class
+    (including a zero-arity atom class) yields ``cls._fields``; a bare
+    ``@dataclass`` class yields its declared field names in declaration
+    order — the same set ``term_field_names`` yields for an *instance* of
+    it, nothing excluded. Anything else (a non-term class, or a non-class
+    value) yields None rather than raising, since callers use this to test
+    "is this class term-shaped" rather than asserting it.
+
+    Models ``compiler/head_match.py``'s ``_resolved_field_names`` (read
+    that first) but lives here as the canonical version; that function
+    delegates its class-cases to this one.
+    """
+    if not isinstance(cls, type):
+        return None
+    if isinstance(cls, PredicateMeta):
+        return cls._fields
+    if dataclasses.is_dataclass(cls):
+        return tuple(f.name for f in dataclasses.fields(cls))
+    return None
+
+
+def term_field_values(obj: Any) -> tuple:
+    """Return declared-field values for a term instance, in ``term_field_names`` order.
+
+    Term instances only; raises ``TypeError`` otherwise, mirroring
+    ``term_field_names``'s own contract (it is what actually raises here).
+    """
+    return tuple(getattr(obj, name) for name in term_field_names(obj))
+
+
+def term_field_dict(obj: Any) -> dict[str, Any]:
+    """Return a name -> value dict for a term instance's declared fields.
+
+    The reconstruct-pattern helper: callers that build ``dict(zip(term_field_names(x),
+    (getattr(x, n) for n in ...)))`` by hand should use this instead. Term
+    instances only; raises ``TypeError`` otherwise (via ``term_field_names``).
+    """
+    return {name: getattr(obj, name) for name in term_field_names(obj)}
+
+
 # ── C-accelerated versions (with Python fallback) ────────────────────────────
 
 is_term_instance = _is_term_instance_py
@@ -1274,5 +1317,7 @@ def make_atom(name: str) -> "PredicateMeta":
 
 
 __all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "is_atom",
-           "term_field_names", "make_predicate", "make_atom",
+           "term_field_names", "term_field_names_of_class",
+           "term_field_values", "term_field_dict",
+           "make_predicate", "make_atom",
            "register_atom_identity", "atom_by_id"]
