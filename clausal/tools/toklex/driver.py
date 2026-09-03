@@ -38,6 +38,23 @@ EOF = _Sentinel("EOF")
 _CONTINUE = _Sentinel("_CONTINUE")
 
 
+class _BadMarker:
+    """Internal buffer entry for an invalid byte sequence enqueued via
+    ``IncrementalLexer.feed_bad`` (design doc §5-6 R6: byte-mode decode
+    stage). Distinguished from ordinary ``(ch, offset, line, col)``
+    buffer entries by *type*, not by any sentinel character value, so
+    the driver loop can special-case it without risking collision with
+    real input."""
+
+    __slots__ = ("raw", "offset", "line", "col")
+
+    def __init__(self, raw: bytes, offset: int, line: int, col: int) -> None:
+        self.raw = raw
+        self.offset = offset
+        self.line = line
+        self.col = col
+
+
 @dataclass
 class Tok:
     kind: str
@@ -99,6 +116,18 @@ class IncrementalLexer:
             else:
                 self._feed_col += 1
 
+    def feed_bad(self, raw: bytes) -> None:
+        """Enqueue an invalid-byte-sequence marker (byte-mode decode
+        stage, ``decode.Utf8Feeder``). The marker occupies the position
+        the next *valid* character would have received -- zero-width:
+        offset/line/col are the current feed cursor, unadvanced. It is
+        consumed by ``next_token()`` as a zero-width ``error`` token;
+        see ``_resolve`` for how it interacts with an in-progress
+        attempt and with follow checks."""
+        if self._closed:
+            raise ValueError("cannot feed a closed IncrementalLexer")
+        self._buf.append(_BadMarker(raw, self._feed_off, self._feed_line, self._feed_col))
+
     def close(self) -> None:
         self._closed = True
 
@@ -146,7 +175,7 @@ class IncrementalLexer:
             if entry is None and not self._closed:
                 return NEED_MORE
 
-            if entry is not None:
+            if entry is not None and not isinstance(entry, _BadMarker):
                 ch = entry[0]
                 sym = self.partition.symbol_of(ch)
                 dest = self.dfa.delta[self._q].get(sym)
@@ -171,13 +200,25 @@ class IncrementalLexer:
     def _resolve(self, entry):
         pending = self._pending
         is_eof = entry is None
-        nxt_char = entry[0] if entry is not None else None
+        is_bad = isinstance(entry, _BadMarker)
+        # A bad-decode marker (feed_bad) is, for follow-disqualification
+        # purposes ONLY, treated exactly like end-of-input-with-eof_ok:
+        # the invalid byte sequence terminates the character stream
+        # locally the same way EOF does, so e.g. an `end` token whose
+        # follow constraint accepts eof also survives when what follows
+        # is garbage bytes rather than true input end. This does NOT
+        # make `is_bad` behave like real EOF below (an empty attempt
+        # facing a bad marker resolves to a bad token, not to EOF).
+        if is_bad:
+            nxt_char, after_is_eof_default = None, True
+        else:
+            nxt_char, after_is_eof_default = (entry[0], False) if entry is not None else (None, True)
 
         for length, labels in reversed(self._accepts):
             if length < len(pending):
                 after_char, after_is_eof = pending[length][0], False
             else:
-                after_char, after_is_eof = nxt_char, is_eof
+                after_char, after_is_eof = nxt_char, after_is_eof_default
             for label in labels:
                 if self._follow_ok(label, after_char, after_is_eof):
                     matched = pending[:length]
@@ -185,9 +226,12 @@ class IncrementalLexer:
                     return self._emit(label, matched)
 
         # no accept survives this attempt
-        if not pending and is_eof:
-            return EOF
         if not pending:
+            if is_eof:
+                return EOF
+            if is_bad:
+                marker = self._buf.popleft()
+                return self._bad_tok(marker)
             culprit = self._buf.popleft()
             return self._error_tok("no_token", culprit[0], [culprit])
         if is_eof:
@@ -207,6 +251,19 @@ class IncrementalLexer:
         self._reset_attempt()
         return Tok(kind="error", value=(reason, culprit), lexeme="".join(e[0] for e in consumed),
                    start=start, end=end, glue=glue)
+
+    def _bad_tok(self, marker: _BadMarker) -> Tok:
+        """Emit the zero-width `error` token for an invalid byte
+        sequence enqueued via `feed_bad`. Called only once any
+        in-progress attempt has already been resolved (see `_resolve`)
+        and the marker is at the front of the buffer with no pending
+        chars ahead of it."""
+        start = (marker.offset, marker.line, marker.col)
+        glue = self._glue
+        self._glue = "glued"
+        self._reset_attempt()
+        return Tok(kind="error", value=("invalid_encoding", marker.raw), lexeme="",
+                   start=start, end=start, glue=glue)
 
     # ── emitting a resolved accept ──────────────────────────────────
 
@@ -245,7 +302,12 @@ class IncrementalLexer:
         last_accept = None
         while True:
             if i < len(self._buf):
-                ch = self._buf[i][0]
+                entry = self._buf[i]
+                if isinstance(entry, _BadMarker):
+                    # a bad marker can't be matched as comment content;
+                    # stop the walk here as if the pattern couldn't extend.
+                    break
+                ch = entry[0]
             else:
                 if not self._closed:
                     return NEED_MORE
