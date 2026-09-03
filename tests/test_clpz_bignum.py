@@ -547,19 +547,40 @@ class TestBignumBeyondFloatRange:
         assert state is not None
         assert domain_min(state.domain) == -self.BEYOND + 1
 
+    def test_narrow_is_the_c_accelerator(self):
+        """Pin the C path: the beyond-float-range _narrow tests below only
+        exercise the C accelerator's fix (c_narrow in _clpfd_propagate.c)
+        if the C extension is actually the active _narrow. Without this,
+        a future rebind/refactor could silently make these tests pass
+        against the *Python* fallback only, leaving the C path unverified.
+        """
+        from clausal.logic import clpfd
+        assert clpfd._USE_C_PROPAGATE is True, (
+            "C accelerator not built/loaded — the beyond-float-range "
+            "_narrow tests in this class would only cover the Python "
+            "fallback, not the C twin they are meant to pin"
+        )
+        assert clpfd._narrow.__module__ == "clausal.logic._clpfd_propagate"
+
     def test_narrow_syncs_clpr_beyond_float_range(self):
         """``_narrow`` itself (not the higher-level ``fd_lt`` et al, which
         reroute entirely to CLP(R) via ``_any_real`` once a var carries a
         REAL_KEY attribute) must not crash, and must not corrupt the real
         interval, when narrowing an FD domain whose bound is past float
-        range: the FD bound saturates to +-inf for the purposes of the
-        real-interval sync (CLP(R) already only has float precision, so
-        this is the correct representation).
+        range: an upper bound saturates to +inf for the real-interval
+        sync (CLP(R) already only has float precision; the outward
+        direction is sound — see clpfd.py:_safe_float_hi).
+
+        This case only exercises the *benign* saturation direction (an
+        upper bound overflowing positive). See the two tests below for
+        the directions that were unsound before the direction-aware fix.
         """
         import math
         from collections import deque
         from clausal.logic import clpfd
         from clausal.logic.clpr import REAL_KEY, RealVar
+
+        assert clpfd._narrow.__module__ == "clausal.logic._clpfd_propagate"
 
         trail = fresh_trail()
         queue = deque()
@@ -577,3 +598,115 @@ class TestBignumBeyondFloatRange:
         # existing +inf upper bound is unaffected (min(inf, inf) == inf).
         assert real_state.hi == math.inf
         assert real_state.lo == 0.0
+
+    def test_narrow_syncs_clpr_lower_bound_overflow_positive_is_sound(self):
+        """A *lower* bound overflowing positive (magnitude > float max,
+        e.g. a tabled-Fibonacci lower bound past fib(~1475)) must NOT
+        saturate to +inf when synced into CLP(R): +inf is *greater* than
+        the true (finite) bignum lower bound, which is unsound (it would
+        wrongly claim no real value can satisfy the FD constraint) and,
+        combined with an unbounded +inf upper bound, collapses to a
+        degenerate [inf, inf] interval — a silently false real interval
+        that would spuriously wipe out downstream (inf - inf is NaN in
+        clpr's interval arithmetic).
+
+        The sound saturation is ``sys.float_info.max``: the tightest
+        float that is still <= the true lower bound. The resulting real
+        interval must remain a genuine (non-degenerate) superset of the
+        FD range, i.e. it must NOT wipe out and must NOT equal [inf, inf].
+        """
+        import math
+        import sys as _sys
+        from collections import deque
+        from clausal.logic import clpfd
+        from clausal.logic.clpr import REAL_KEY, RealVar
+
+        assert clpfd._narrow.__module__ == "clausal.logic._clpfd_propagate"
+
+        trail = fresh_trail()
+        queue = deque()
+        x = Var()
+        put_attr(x, REAL_KEY, RealVar(-math.inf, math.inf), trail)
+
+        # Lower bound overflows positive; upper bound also overflows
+        # positive (sound as +inf) so the interval stays non-degenerate.
+        dom = domain_from_range(self.BEYOND, self.BEYOND + 5)
+        assert clpfd._narrow(x, dom, trail, queue) is True
+
+        fd_state = get_attr(x, FD_KEY)
+        assert domain_min(fd_state.domain) == self.BEYOND
+        assert domain_max(fd_state.domain) == self.BEYOND + 5
+
+        real_state = get_attr(x, REAL_KEY)
+        assert real_state.lo == _sys.float_info.max, (
+            "lower bound overflowing positive must saturate to "
+            "sys.float_info.max, not +inf (unsound: reviewer repro was "
+            "RealVar(-inf, inf) -> RealVar(inf, inf))"
+        )
+        assert real_state.hi == math.inf
+        # Non-degenerate and sound: lo <= true FD lo, hi >= true FD hi.
+        assert real_state.lo <= self.BEYOND
+        assert real_state.lo < real_state.hi
+
+    def test_narrow_syncs_clpr_upper_bound_overflow_negative_is_sound(self):
+        """Mirror of the lower-bound case: an *upper* bound overflowing
+        negative (magnitude > float max on the negative side) must
+        saturate to ``-sys.float_info.max``, not ``-inf`` — ``-inf`` is
+        *less* than the true (finite, very negative) bignum upper bound,
+        unsoundly excluding admissible values between
+        ``-sys.float_info.max`` and the true bound.
+        """
+        import math
+        import sys as _sys
+        from collections import deque
+        from clausal.logic import clpfd
+        from clausal.logic.clpr import REAL_KEY, RealVar
+
+        assert clpfd._narrow.__module__ == "clausal.logic._clpfd_propagate"
+
+        trail = fresh_trail()
+        queue = deque()
+        x = Var()
+        put_attr(x, REAL_KEY, RealVar(-math.inf, math.inf), trail)
+
+        # Upper bound overflows negative; lower bound also overflows
+        # negative (sound as -inf) so the interval stays non-degenerate.
+        dom = domain_from_range(-self.BEYOND - 5, -self.BEYOND)
+        assert clpfd._narrow(x, dom, trail, queue) is True
+
+        fd_state = get_attr(x, FD_KEY)
+        assert domain_min(fd_state.domain) == -self.BEYOND - 5
+        assert domain_max(fd_state.domain) == -self.BEYOND
+
+        real_state = get_attr(x, REAL_KEY)
+        assert real_state.hi == -_sys.float_info.max, (
+            "upper bound overflowing negative must saturate to "
+            "-sys.float_info.max, not -inf (mirror of the lower-bound "
+            "unsoundness)"
+        )
+        assert real_state.lo == -math.inf
+        # Non-degenerate and sound: lo <= true FD lo, hi >= true FD hi.
+        assert real_state.hi >= -self.BEYOND
+        assert real_state.lo < real_state.hi
+
+    def test_narrow_syncs_clpr_genuinely_unsatisfiable_still_wipes_out(self):
+        """The direction-aware saturation must not turn a genuinely
+        unsatisfiable FD/real combination into a false success: an FD
+        lower bound of 10**400 (saturates to sys.float_info.max on the
+        real side) is still incompatible with an existing real interval
+        capped at 100.0 — this must wipe out (return False), same as
+        before the fix.
+        """
+        from collections import deque
+        from clausal.logic import clpfd
+        from clausal.logic.clpr import REAL_KEY, RealVar
+
+        assert clpfd._narrow.__module__ == "clausal.logic._clpfd_propagate"
+
+        trail = fresh_trail()
+        queue = deque()
+        x = Var()
+        put_attr(x, REAL_KEY, RealVar(0.0, 100.0), trail)
+
+        dom = domain_from_range(self.BEYOND, self.BEYOND + 5)
+        assert clpfd._narrow(x, dom, trail, queue) is False

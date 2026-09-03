@@ -714,22 +714,13 @@ have_constraints:
     Py_DECREF(new_state);
 
     /* CLP(R) sync: delegate to Python _sync_real(var, fd_lo, fd_hi, trail)
-     * so we never depend on the RealVar constructor signature.
-     * Gate on REAL_KEY so we skip entirely when clpr isn't loaded.
-     *
-     * Bounds may be bignum (CLP(Z) propagation produces bounds outside
-     * int64 range, even outside float range — e.g. tabled Fibonacci well
-     * past fib(1475)).  Pass the raw Python int/float bound objects
-     * straight through: _sync_real converts to float itself, lazily,
-     * only once it has confirmed *var* actually carries a real interval
-     * (the REAL_KEY gate here is process-wide — true whenever clpr has
-     * been imported at all, not just when this var uses it — so eagerly
-     * converting here would pay, and risk OverflowError on bignum
-     * bounds, even for vars with no real interval attached).  A prior
-     * version of this code converted via PyFloat_AsDouble() here, which
-     * (contrary to the comment that used to be here) raises
-     * OverflowError for bignums past float range exactly like
-     * float() — it did not saturate to ±inf. */
+     * so we never depend on the RealVar constructor signature. Gate on
+     * REAL_KEY so we skip entirely when clpr isn't loaded. Bounds may be
+     * bignum, even past float range (e.g. tabled Fibonacci); pass the
+     * raw bound objects through unconverted — _sync_real does the
+     * float conversion itself, lazily and direction-aware for soundness
+     * (see clpfd.py:_safe_float_lo/_hi), only once it confirms *var*
+     * actually carries a real interval. */
     if (REAL_KEY && fn_sync_real) {
         Py_ssize_t n = PyTuple_GET_SIZE(new_domain);
         PyObject *first_pair = PyTuple_GET_ITEM(new_domain, 0);

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import math
 import numbers
+import sys
 from collections import deque
 from fractions import Fraction
 from typing import Any
@@ -286,29 +287,60 @@ _clpr_RealVar = None
 _clpr_loaded = False
 
 
-def _safe_float(x) -> float:
-    """Convert an FD bound (may be an arbitrary-precision int) to float,
-    saturating to +-inf instead of raising when the magnitude exceeds a
-    float's range (e.g. bignum growth from tabled Fibonacci well past
-    fib(1475)).  CLP(R) already only carries float precision, so once a
-    bound is too large to represent as a float, "no finite cap from the
-    FD side" (+-inf) is the correct — and only representable —
-    approximation, not an error.
+def _safe_float_lo(x: int | float) -> float:
+    """Convert a *lower*-bound FD value to float, rounded toward -inf so
+    the result never exceeds the true value (clpr's soundness invariant:
+    a real interval's ``lo`` must be <= every value it claims to admit —
+    see ``clausal/logic/clpr.py`` lines 11-14, 52-55).
+
+    A lower bound whose magnitude overflows *negative* (``x < -float_max``,
+    e.g. a bignum growing without bound downward) saturates to ``-inf``:
+    that is still <= the true value, so it stays sound.
+
+    A lower bound overflowing *positive* (``x > float_max`` — e.g. a
+    tabled-Fibonacci lower bound past fib(~1475)) must NOT saturate to
+    ``+inf``: ``+inf`` is *greater* than the true (finite) bignum ``x``,
+    which is unsound (excludes real values that must remain admissible),
+    and combined with an unbounded upper bound of ``+inf`` produces a
+    degenerate ``[inf, inf]`` interval that reads as a spurious wipeout
+    downstream.  ``sys.float_info.max`` is the tightest float that is
+    still <= any such ``x``, so it is the correct saturation target.
     """
     try:
         return float(x)
     except OverflowError:
-        return math.inf if x > 0 else -math.inf
+        return sys.float_info.max if x > 0 else -math.inf
 
 
-def _sync_real(var, fd_lo, fd_hi, trail):
+def _safe_float_hi(x: int | float) -> float:
+    """Convert an *upper*-bound FD value to float, rounded toward +inf so
+    the result never falls short of the true value (the mirror of
+    ``_safe_float_lo`` — see clpr's soundness invariant, same references).
+
+    An upper bound overflowing *positive* saturates to ``+inf`` (sound:
+    ``+inf`` is never less than any finite value).  An upper bound
+    overflowing *negative* (``x < -float_max``) must saturate to
+    ``-sys.float_info.max``, not ``-inf`` — ``-inf`` would be *less* than
+    the true (finite, very negative) bignum ``x``, unsoundly excluding
+    admissible values between ``-sys.float_info.max`` and ``x``.
+    """
+    try:
+        return float(x)
+    except OverflowError:
+        return math.inf if x > 0 else -sys.float_info.max
+
+
+def _sync_real(var, fd_lo: int | float, fd_hi: int | float, trail):
     """Synchronise the CLP(R) real interval on *var* with FD bounds.
 
     *fd_lo*/*fd_hi* are the raw (possibly bignum) FD domain bounds —
     conversion to float happens in here, lazily, only once we know a
     real interval is actually attached to *var*, so plain FD-only
     narrowing (the overwhelming common case) never pays for it and
-    never risks an ``OverflowError`` it has no use for.
+    never risks an ``OverflowError`` it has no use for.  Conversion is
+    direction-aware (``_safe_float_lo``/``_safe_float_hi``) so an
+    out-of-float-range bignum bound saturates soundly rather than
+    silently producing a false interval — see those functions' docs.
 
     Returns False on wipeout, True otherwise.  Called from both the
     Python ``_narrow`` and the C ``c_narrow`` — the latter caches a
@@ -329,8 +361,8 @@ def _sync_real(var, fd_lo, fd_hi, trail):
     real_state = get_attr(var, _clpr_REAL_KEY)
     if real_state is None:
         return True
-    new_lo = max(real_state.lo, _safe_float(fd_lo))
-    new_hi = min(real_state.hi, _safe_float(fd_hi))
+    new_lo = max(real_state.lo, _safe_float_lo(fd_lo))
+    new_hi = min(real_state.hi, _safe_float_hi(fd_hi))
     if new_lo > new_hi:
         return False
     if new_lo != real_state.lo or new_hi != real_state.hi:
@@ -352,7 +384,8 @@ def _narrow(var: Var, new_domain: Domain, trail: Trail, queue: deque) -> bool:
 
     # Keep real interval in sync if present.  Pass the raw (possibly
     # bignum) bounds — _sync_real converts to float lazily, only if a
-    # real interval is actually attached (see _safe_float / _sync_real).
+    # real interval is actually attached (see _safe_float_lo/_hi and
+    # _sync_real).
     if not _sync_real(var, domain_min(new_domain),
                       domain_max(new_domain), trail):
         return False
