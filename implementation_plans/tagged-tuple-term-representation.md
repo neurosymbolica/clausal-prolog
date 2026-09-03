@@ -1,6 +1,10 @@
 # Tagged-tuple term representation ("s-expressions in a Python tuple")
 
-**Status:** DESIGN RECORD, sized, not scheduled (2026-09-03). No engine change made.
+**Status:** PARKED (2026-09-03, same day). Decision by the author after sleeping on it:
+the refactoring is very high-risk — it changes the Python seam, requires massive compiler
+rewriting, and changes multiple language properties at once. Parked on risk/time cost, not on
+lack of merit. Phase 0 (construction fast path, no repr change) remains independently viable.
+No engine change made.
 Rev 2: tuple-data tag changed from `()` to the `tuple` type object.
 Rev 3: tag domain opened (OWA); atoms become global interned strings (standard-Prolog
 semantics) with a Ciao-style `-hide` directive for opt-in module-local symbols. This SUPERSEDES
@@ -80,6 +84,24 @@ Str-literal tags in match arms are *literal patterns* (`case ("foo", a, b)` — 
 issue at all, unlike class tags); `==` on interned strs is pointer-check-first.
 `benchmarks/bench_f046_head_dispatch.py` already measures exactly str-literal head dispatch —
 it is the stated yardstick for "what native match dispatch costs here."
+
+**Rev-3.1 correction — indexing caveat on the dispatch rows.** The head-dispatch numbers
+above apply to (a) predicates below the indexing threshold and (b) the per-clause destructure
+step *inside* an index bucket — not to arm selection in indexed predicates. First-arg/joint
+indexing kicks in at >=4 clauses when `_analyze_index_positions` finds an indexable position
+(`_INDEX_THRESHOLD = 4`, `arg_index.py`); the runtime key is pulled off the instance as
+`(type(a).__name__, len(term_field_names(a)))` (`_runtime_arg_key`, `arg_index.py:146` — the
+class NAME, not the class object: buckets are spelling-keyed over-approximations, exactness
+restored by the in-bucket match) and selects a bucket function by dict lookup. Each bucket body
+is compiled by the same `_build_predicate_trampoline_funcdef`, and Phase 8 lifting deliberately
+makes `head_to_match_pattern` emit MatchValue/MatchClass inside the bucket
+(`compiler/predicate.py:910`), so MATCH_CLASS survives as the post-hash destructure/verify
+step (also in the defaults bucket and `__all` fallback). Net effect on the analysis: for
+indexed predicates both representations converge to key-extraction -> dict hit -> one
+destructure, so the tuple win there is one arm's destructure (~114 -> ~48 ns), not an arm
+scan; the sequential-MATCH_CLASS comparison stands only for the un-indexed (<4-clause)
+majority. Key extraction itself would get cheaper under tuples (`cell[0]` vs the isinstance
+chain + `term_field_names()` + tuple build + hash).
 
 Context that bounds the win:
 - **Goal calls never construct terms** (args flattened/positionally,
