@@ -72,6 +72,54 @@ What this replaces vs. preserves from the strict-atoms design (shipped 2026-07-2
   second-package-copy hazard (`predicate.py:1138`) vanishes for term data (str and `tuple`
   are copy-proof); it remains only for the machinery types (Var, DictTerm, ...).
 
+## 1b. Phase 3 rulings: functor domain + atom scope (recorded 2026-09-03, pre-Phase-3)
+
+Settled in design discussion after the Phase 2 bridge merged; these bind the Phase 3 plan.
+
+**Functor domain contracts to `{str}`.** Clausal functors were always atoms; with atoms as
+strs, the cell functor domain is exactly interned `str`. The slot-0 *tag* domain is
+`{str} ∪ {the tuple type object}` — the type object is the reserved, unforgeable data-tag,
+not a functor. Consequences: the bridge's slot-0-Var (higher-order functor) support is
+DEPRECATED — it caused the bridge's one Critical (cells invisible after the functor Var
+bound), imposes a permanent deref on every recognition, and permits category instability
+(`(F, 1)` flipping from compound to tuple-data if F binds to the tuple type). Higher-order
+metaprogramming routes through `functor/3` / `=..` / `call/N` over cells (ISO's own
+trade-off). Phase 3 removes the slot-0 deref from `is_cell` and the funnel — a restriction
+that pays immediately. Literals/compounds as functors: no cases (ISO agrees:
+`functor(T, 3, 1)` is a type_error). Closes §8 Q5-extension: the tag domain contracts, never
+extends. OWA (advisory arity signatures) is orthogonal and unaffected.
+
+**Atom scope: global by spelling; `-hide` mangles with a READER-UNWRITABLE separator.**
+- Hidden atoms look like bare identifiers in the owning file; the compiler renames them to
+  `module⟨SEP⟩name` where ⟨SEP⟩ is a character the Clausal reader refuses inside any atom
+  token, QUOTED OR NOT (e.g. NUL or a private-use codepoint). A dotted prefix
+  (`'m.my_atom'`) is rejected: it is forgeable from any module via a quoted atom and
+  collides with innocent dotted atoms.
+- **The guarantee is uniqueness + analysis soundness, not runtime security** — the
+  Ciao/Python stance (Ciao's `:- hide` renaming backs static analysis that may assume no
+  foreign module constructs the hidden functor; Python documents `__name` mangling as
+  collision avoidance, with `getattr` forging allowed). Runtime construction via
+  `atom_chars/2` etc. CAN forge the mangled name; documented out-of-warranty, optionally
+  linted, not blocked.
+- **Serialization** (the motive for embedding the module path): in-band within Clausal —
+  the mangled str marshals/pickles as-is and self-locates with no registry; STRUCTURAL at
+  foreign-engine boundaries (the Scryer codec ships hidden atoms as a `(module, name)`
+  pair — a NUL inside an atom does not travel politely).
+- Printing: the writer renders the human form (`m.my_atom`); the runtime str keeps ⟨SEP⟩.
+
+**Double-quoted strings lower to char LISTS (ISO `double_quotes=chars`, Scryer-compatible),
+and the C cons rule retires.** With runtime `str` = atom, the existing str~char-list
+unification rule in `_variables.c` (which exists because str used to BE the string type)
+would make `'abc'` unify with `"abc"` — ISO forbids it. Phase 3 gates/removes the rule:
+str unifies with str by equality, lists with lists; SegString remains the char-list
+optimisation. This RESOLVES the deferred cons-rule decision (§8 Q2) — the source-level
+discrimination (bare/quoted = atom, double-quoted = chars) forces the runtime answer.
+
+**Coordination note:** the surface parser for this syntax (quoted atoms, double-quoted char
+lists, `-hide`) is being built by the author separately, on the Pratt parser already present
+in the translation machinery — Phase 3's compiler work should consume its output rather than
+grow a second reader.
+
 ## 2. Measured numbers (CPython 3.13, /workspace/clausal/venv, 2026-09-03)
 
 | Operation | Class repr today | Tagged tuple |
@@ -403,10 +451,10 @@ Phase 1 and keep the fast path.
 1. ~~`for trail in term:` / `term.FieldName` embedding idioms: seam-reconstruct vs
    deprecate?~~ **Resolved by §5a (TermProxy):** `.FieldName` survives unchanged via the
    proxy; term-as-goal iteration becomes `proxy.solve()` / qualified-goal form (Q4).
-2. Cons rule (`str` ~ char-list) applying to atoms: accept or gate? (§5 — gates Phase 2.)
-3. `-hide` renaming scheme: mangled str (`"m$foo"` — simple, but leaks via printing and is
-   forgeable by spelling the mangled name) vs unforgeable per-module object (true ADT hiding,
-   Ciao-style guarantees, but reintroduces a non-str atom kind at the seam)?
+2. ~~Cons rule (`str` ~ char-list) applying to atoms~~ **RESOLVED (§1b): retired in Phase 3** — double-quotes lower to char lists; str=atom unifies by equality only.
+3. ~~`-hide` renaming scheme~~ **RESOLVED (§1b):** mangled str with a reader-unwritable
+   separator; uniqueness/analysis guarantee, not runtime security; structural at foreign
+   boundaries.
 4. Module-qualified goal syntax for data-terms-as-goals (the `m:foo(X)` analog): spelling and
    default-resolution rule when unqualified?
 5. Does anything genuinely need per-module atom *identity* (not just hiding) that `-hide`
