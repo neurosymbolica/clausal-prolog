@@ -38,6 +38,10 @@ static PyObject *str___list__ = NULL;
 static PyObject *str___tuple__ = NULL;   /* A04-F005 */
 static PyObject *str___dict__ = NULL;    /* A04-F005 */
 static PyObject *str___set__ = NULL;     /* A04-F005 */
+/* Interned "_clausal_new", set in PyInit__tabling_core. Phase 0 fast-path
+ * gate for do_deref_walk's term-instance arm (KEEP THE THREE WALKERS IN
+ * SYNC — solve.py's _deref_walk_py comment). */
+static PyObject *str__clausal_new = NULL;
 /* _VAR sentinel — set by _register_var_sentinel() from tabling.py */
 static PyObject *VAR_sentinel = NULL;
 
@@ -434,6 +438,55 @@ do_deref_walk(PyObject *term, int depth)
                 return NULL;
             }
             Py_ssize_t n = PyTuple_GET_SIZE(fields);
+
+            /* Phase 0 fast-path gate (KEEP THE THREE WALKERS IN SYNC —
+             * solve.py's _deref_walk_py comment, the C twin here mirrors
+             * it): cls's OWN dict has "_clausal_new" as a classmethod
+             * object iff PredicateMeta attached the positional-args fast
+             * constructor. Absent for atoms; also absent for a class with
+             * a field literally named "_clausal_new" (tp_dict then holds
+             * a __slots__ member descriptor under that name instead) —
+             * hence the PyClassMethod_Type check rather than mere name
+             * presence. */
+            {
+                PyObject *cls = (PyObject *)Py_TYPE(term);
+                PyObject *fastm = PyDict_GetItemWithError(
+                    ((PyTypeObject *)cls)->tp_dict, str__clausal_new);
+                if (fastm == NULL && PyErr_Occurred()) {
+                    Py_DECREF(fields);
+                    return NULL;
+                }
+                if (fastm != NULL &&
+                    PyObject_TypeCheck(fastm, &PyClassMethod_Type)) {
+                    PyObject *args_tuple = PyTuple_New(n);
+                    if (!args_tuple) { Py_DECREF(fields); return NULL; }
+                    for (Py_ssize_t i = 0; i < n; i++) {
+                        PyObject *fname = PyTuple_GET_ITEM(fields, i);
+                        PyObject *val = PyObject_GetAttr(term, fname);
+                        if (!val) {
+                            Py_DECREF(fields);
+                            Py_DECREF(args_tuple);
+                            return NULL;
+                        }
+                        PyObject *walked = do_deref_walk(val, depth + 1);
+                        Py_DECREF(val);
+                        if (!walked) {
+                            Py_DECREF(fields);
+                            Py_DECREF(args_tuple);
+                            return NULL;
+                        }
+                        PyTuple_SET_ITEM(args_tuple, i, walked);
+                    }
+                    Py_DECREF(fields);
+                    PyObject *bound = PyObject_GetAttr(cls, str__clausal_new);
+                    if (!bound) { Py_DECREF(args_tuple); return NULL; }
+                    PyObject *result = PyObject_Call(bound, args_tuple, NULL);
+                    Py_DECREF(bound);
+                    Py_DECREF(args_tuple);
+                    return result;
+                }
+            }
+
             PyObject *kwargs = PyDict_New();
             if (!kwargs) { Py_DECREF(fields); return NULL; }
             for (Py_ssize_t i = 0; i < n; i++) {
@@ -647,8 +700,10 @@ PyInit__tabling_core(void)
     str___tuple__ = PyUnicode_InternFromString("__tuple__");
     str___dict__ = PyUnicode_InternFromString("__dict__");
     str___set__ = PyUnicode_InternFromString("__set__");
+    str__clausal_new = PyUnicode_InternFromString("_clausal_new");
     if (!str_functor || !str_args || !str___name__ || !str___list__ ||
-        !str___tuple__ || !str___dict__ || !str___set__) {
+        !str___tuple__ || !str___dict__ || !str___set__ ||
+        !str__clausal_new) {
         Py_DECREF(m);
         return NULL;
     }

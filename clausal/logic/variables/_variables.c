@@ -970,6 +970,10 @@ do_occurs_check(VarObject *var, PyObject *term, int depth)
 /* Interned "__unify__", set in PyInit__variables before any unify runs. */
 static PyObject *str_dunder_unify = NULL;
 
+/* Interned "_clausal_new", set in PyInit__variables. Phase 0 fast-path gate
+ * for do_walk's term-instance arm (KEEP THE THREE WALKERS IN SYNC). */
+static PyObject *str__clausal_new = NULL;
+
 /* Probe *obj* for a ``__unify__`` attribute without paying for an
  * AttributeError on the (overwhelmingly common) miss.  Returns 1 with
  * *hook_out* set to a strong ref, 0 with *hook_out* NULL on a clean miss,
@@ -1728,6 +1732,54 @@ do_walk(PyObject *term, int depth)
                 if (!fields) return NULL;
             }
             Py_ssize_t n = PyTuple_GET_SIZE(fields);
+
+            /* Phase 0 fast-path gate (KEEP THE THREE WALKERS IN SYNC —
+             * solve.py's _deref_walk_py comment): cls's OWN dict has
+             * "_clausal_new" as a classmethod object iff PredicateMeta
+             * attached the positional-args fast constructor. Absent for
+             * atoms; also absent for a class with a field literally named
+             * "_clausal_new" (tp_dict then holds a __slots__ member
+             * descriptor under that name instead) — hence the
+             * PyClassMethod_Type check rather than mere name presence. */
+            {
+                PyObject *cls = (PyObject *)Py_TYPE(term);
+                PyObject *fastm = PyDict_GetItemWithError(
+                    ((PyTypeObject *)cls)->tp_dict, str__clausal_new);
+                if (fastm == NULL && PyErr_Occurred()) {
+                    Py_DECREF(fields);
+                    return NULL;
+                }
+                if (fastm != NULL &&
+                    PyObject_TypeCheck(fastm, &PyClassMethod_Type)) {
+                    PyObject *args_tuple = PyTuple_New(n);
+                    if (!args_tuple) { Py_DECREF(fields); return NULL; }
+                    for (Py_ssize_t i = 0; i < n; i++) {
+                        PyObject *fname = PyTuple_GET_ITEM(fields, i);
+                        PyObject *val = PyObject_GetAttr(term, fname);
+                        if (!val) {
+                            Py_DECREF(fields);
+                            Py_DECREF(args_tuple);
+                            return NULL;
+                        }
+                        PyObject *walked = do_walk(val, depth + 1);
+                        Py_DECREF(val);
+                        if (!walked) {
+                            Py_DECREF(fields);
+                            Py_DECREF(args_tuple);
+                            return NULL;
+                        }
+                        PyTuple_SET_ITEM(args_tuple, i, walked);
+                    }
+                    Py_DECREF(fields);
+                    PyObject *bound = PyObject_GetAttr(cls, str__clausal_new);
+                    if (!bound) { Py_DECREF(args_tuple); return NULL; }
+                    PyObject *result = PyObject_Call(bound, args_tuple, NULL);
+                    Py_DECREF(bound);
+                    Py_DECREF(args_tuple);
+                    return result;
+                }
+            }
+
             PyObject *kwargs = PyDict_New();
             if (!kwargs) { Py_DECREF(fields); return NULL; }
             for (Py_ssize_t i = 0; i < n; i++) {
@@ -3491,6 +3543,10 @@ PyInit__variables(void)
     /* Interned before any unify can run — do_unify's hook probe uses it. */
     str_dunder_unify = PyUnicode_InternFromString("__unify__");
     if (!str_dunder_unify) return NULL;
+
+    /* Interned before any walk can run — do_walk's fast-path gate uses it. */
+    str__clausal_new = PyUnicode_InternFromString("_clausal_new");
+    if (!str__clausal_new) return NULL;
 
     PyObject *m = PyModule_Create(&moduledef);
     if (!m) goto error;

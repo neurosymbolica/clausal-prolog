@@ -17,7 +17,7 @@ from clausal.logic.compiler import (
     compile_predicate_trampoline_ast,
 )
 from clausal.logic.database import Clause, Database
-from clausal.logic.variables import Var, Trail, deref
+from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.terms import Compound, Unify as Is
 from clausal.pythonic_ast.nodes import BinOp
@@ -397,3 +397,186 @@ class TestCopyTermFastPath:
         result = _copy_term_py(term, {})
         assert result.b == 1
         assert result.a == 2
+
+
+# ── Task 2: the C walker twins adopt the same gate ──────────────────────────
+#
+# ``do_walk``'s term-instance arm (clausal/logic/variables/_variables.c) and
+# ``do_deref_walk``'s term-instance arm (clausal/logic/_tabling_core.c) must
+# make the SAME fast/slow decision as ``_deref_walk_py`` on the same terms —
+# "KEEP THE THREE WALKERS IN SYNC" (solve.py's ``_deref_walk_py`` comment):
+# ``_deref_walk_py``, ``_deref_walk`` (the C twin exposed by
+# ``clausal.logic._tabling_core``), and ``walk()`` (``clausal.logic.variables``)
+# must all agree. These tests are skip-guarded: if the C extension is absent
+# they are skipped rather than failing, matching the convention in
+# tests/test_trampoline_parity.py.
+
+_tabling_core = pytest.importorskip(
+    "clausal.logic._tabling_core",
+    reason="C extension not built — the C-walker parity corpus needs the C twins",
+)
+_variables_c = pytest.importorskip(
+    "clausal.logic.variables._variables",
+    reason="C extension not built — the C-walker parity corpus needs the C twins",
+)
+
+
+def _c_walker_corpus():
+    """One corpus, shared by every C-walker parity test in this section.
+
+    Shapes: a nested PredicateMeta term with both a bound and an unbound Var
+    (the everyday tabling/findall snapshot shape), a dataclass node (must take
+    the slow path in all three walkers), a class with a field literally named
+    ``_clausal_new`` (member descriptor, not a classmethod — slow path), and a
+    term with a ``position``-named field (fast-path eligible at the class
+    level, but exercises the "position" name that the *emitter*'s separate
+    skip-filter cares about — the walkers have no such filter, so this must
+    still take the fast path here).
+    """
+    inner = make_predicate("cw_inner", ["a", "b"])
+    outer = make_predicate("cw_outer", ["p", "q"])
+    v_bound = Var()
+    v_unbound = Var()
+    trail = Trail()
+    unify(v_bound, 42, trail)
+    nested = outer(p=inner(a=1, b=v_bound), q=[v_unbound, "x"])
+
+    node = BinOp(left=1, right=2)
+
+    weird = make_predicate("cw_weird", ["_clausal_new"])
+    weird_term = weird(_clausal_new=7)
+
+    posy = make_predicate("cw_posy", ["position"])
+    posy_term = posy(position=v_bound)
+
+    return [nested, node, weird_term, posy_term]
+
+
+class TestCWalkerFastPathParity:
+    def test_deref_walk_py_matches_deref_walk_c(self):
+        # nv
+        from clausal.logic.solve import _deref_walk_py
+
+        for term in _c_walker_corpus():
+            assert _deref_walk_py(term) == _tabling_core._deref_walk(term)
+
+    def test_walk_matches_deref_walk_py(self):
+        # nv — walk() has no separate Python twin of its own; solve.py's
+        # comment names it as one of the three walkers _deref_walk_py must
+        # stay in sync with, so it is the reference here too.
+        from clausal.logic.solve import _deref_walk_py
+
+        for term in _c_walker_corpus():
+            assert _variables_c.walk(term) == _deref_walk_py(term)
+
+    def test_deref_walk_c_produces_fresh_fully_derefed_object(self):
+        # nv — parity of VALUES isn't enough on its own (a bug that always
+        # took the slow path would still pass the ``==`` checks above); pin
+        # down the identity/freshness properties the fast path must preserve.
+        inner = make_predicate("cw_fresh_inner", ["a", "b"])
+        outer = make_predicate("cw_fresh_outer", ["p", "q"])
+        v = Var()
+        trail = Trail()
+        unify(v, 7, trail)
+        term = outer(p=inner(a=1, b=v), q="tail")
+
+        result = _tabling_core._deref_walk(term)
+        assert result == outer(p=inner(a=1, b=7), q="tail")
+        assert result is not term
+        assert result.p is not term.p
+
+    def test_walk_produces_fresh_fully_derefed_object(self):
+        # nv
+        inner = make_predicate("cw_fresh2_inner", ["a", "b"])
+        outer = make_predicate("cw_fresh2_outer", ["p", "q"])
+        v = Var()
+        trail = Trail()
+        unify(v, 7, trail)
+        term = outer(p=inner(a=1, b=v), q="tail")
+
+        result = _variables_c.walk(term)
+        assert result == outer(p=inner(a=1, b=7), q="tail")
+        assert result is not term
+        assert result.p is not term.p
+
+
+class TestCWalkerFastPathActuallyFires:
+    """Confirm the C arms take the FAST branch (call ``_clausal_new``), not
+    merely that results happen to match — instrument ``_clausal_new`` with a
+    call-recording wrapper, the same technique
+    TestDerefWalkFastPath/TestCopyTermFastPath use for the Python walkers."""
+
+    def test_deref_walk_c_uses_fast_new_for_nested_term(self):
+        # nv
+        inner = make_predicate("cwf_inner", ["a", "b"])
+        outer = make_predicate("cwf_outer", ["p", "q"])
+
+        calls = []
+        real_fast_new = inner.__dict__["_clausal_new"]
+
+        def recording(cls, *args):
+            calls.append(args)
+            return real_fast_new.__func__(cls, *args)
+
+        inner._clausal_new = classmethod(recording)
+        try:
+            v = Var()
+            trail = Trail()
+            unify(v, 99, trail)
+            term = outer(p=inner(a=1, b=v), q="tail")
+
+            result = _tabling_core._deref_walk(term)
+
+            assert calls, "expected _clausal_new to be invoked for the inner term"
+            assert result == outer(p=inner(a=1, b=99), q="tail")
+        finally:
+            del inner._clausal_new
+            inner._clausal_new = real_fast_new
+
+    def test_walk_uses_fast_new_for_nested_term(self):
+        # nv
+        inner = make_predicate("cwf2_inner", ["a", "b"])
+        outer = make_predicate("cwf2_outer", ["p", "q"])
+
+        calls = []
+        real_fast_new = inner.__dict__["_clausal_new"]
+
+        def recording(cls, *args):
+            calls.append(args)
+            return real_fast_new.__func__(cls, *args)
+
+        inner._clausal_new = classmethod(recording)
+        try:
+            v = Var()
+            trail = Trail()
+            unify(v, 99, trail)
+            term = outer(p=inner(a=1, b=v), q="tail")
+
+            result = _variables_c.walk(term)
+
+            assert calls, "expected _clausal_new to be invoked for the inner term"
+            assert result == outer(p=inner(a=1, b=99), q="tail")
+        finally:
+            del inner._clausal_new
+            inner._clausal_new = real_fast_new
+
+    def test_deref_walk_c_field_named_clausal_new_uses_slow_path(self):
+        # nv — regression guard for the name-only-check bug: a field
+        # literally named "_clausal_new" must NOT be treated as the fast
+        # constructor (it's a __slots__ member descriptor there, not a
+        # classmethod — calling it would raise TypeError).
+        weird = make_predicate("cwf_weird", ["_clausal_new"])
+        term = weird(_clausal_new=7)
+        result = _tabling_core._deref_walk(term)
+        assert result == term
+        assert result._clausal_new == 7
+        assert result is not term
+
+    def test_walk_field_named_clausal_new_uses_slow_path(self):
+        # nv
+        weird = make_predicate("cwf2_weird", ["_clausal_new"])
+        term = weird(_clausal_new=7)
+        result = _variables_c.walk(term)
+        assert result == term
+        assert result._clausal_new == 7
+        assert result is not term
