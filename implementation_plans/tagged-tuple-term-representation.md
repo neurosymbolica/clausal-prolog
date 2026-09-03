@@ -208,8 +208,8 @@ exercises the seam conversion, the C tuple path, and the funnel discipline on a 
 ## 5a. Seam design: TermProxy (resolves open question 1)
 
 Instead of eagerly converting answer terms back to Python objects at the seam, hand back a
-**lazy proxy over a snapshot**. Prototyped and verified 2026-09-03 (scratchpad
-`proto_termproxy.py`); every load-bearing mechanism demonstrated.
+**lazy proxy over a snapshot**. Prototyped and verified 2026-09-03
+(`implementation_plans/proto_termproxy.py`, runnable); every load-bearing mechanism demonstrated.
 
 - **Snapshot at yield.** The engine deref-walks the answer (existing C `do_walk`) into a
   frozen tagged-tuple tree; the proxy wraps that. The one walk — needed for binding
