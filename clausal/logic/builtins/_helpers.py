@@ -258,6 +258,96 @@ except ImportError:
     pass
 
 
+# ── Cell awareness (Phase 2 bridge Task 1, additive) ─────────────────────────
+#
+# Tagged cells (``clausal.logic.cells``) are plain tuples that already
+# unify/walk through the engine's EXISTING C tuple branches (see the
+# design doc ``implementation_plans/tagged-tuple-term-representation.md``
+# and the Phase 2 bridge plan's Global Constraints) — nothing above this
+# point needs to change for that.
+#
+# What DOES need to change is this funnel: neither the C
+# ``_functor_name``/``_arity``/``_nth_arg``/``_args_list``/``_is_compound``
+# nor their Python fallbacks above have EVER had a plain-tuple branch (no
+# ``PyTuple_Check`` in ``py_functor_name`` et al. in ``_variables.c``, no
+# ``isinstance(term, tuple)`` in the ``_..._py`` functions above) — a bare
+# tuple has always fallen through every one of them unchanged (functor
+# name/arity None, args_list [], is_compound False, nth_arg raises
+# IndexError). ``tests/test_funnel_accessors.py::TestPlainTupleAccessorRegression``
+# pins that fact directly against a plain, non-cell-shaped tuple (slot 0
+# not a str/``tuple``-type/Var), so wrapping each already-selected
+# implementation (C when available, else the ``_..._py`` fallback) with an
+# ``is_cell``-gated branch in FRONT of it is purely additive: nothing that
+# isn't cell-shaped can reach the new code at all.
+#
+# Per the task brief: only cells with a STR or unbound-Var functor are
+# treated as compound/decomposable, same as a Compound term. A
+# ``(tuple, ...)`` cell (``cells.TUPLE_TAG`` in slot 0) is tuple DATA, not
+# a compound — it is deliberately left to fall through to the same "not a
+# recognized shape" answer a plain tuple gets.
+#
+# KNOWN AMBIGUITY (accepted, not solved — see ``clausal/logic/cells.py``'s
+# module docstring for the full ruling): a plain user tuple whose slot 0
+# happens to be a str (e.g. ``("hello", 1)``) is indistinguishable from a
+# str-functor cell by shape, and the branch below — gated on ``is_cell``
+# alone, as the plan requires — DOES change its accessor behavior (e.g.
+# ``_functor_name`` used to answer None for it, now answers ``"hello"``).
+# That is the documented bridge-stage tradeoff.
+
+from clausal.logic.cells import is_cell as _is_cell
+
+
+def _cell_is_compound(term: Any) -> bool:
+    """True if *term* is a cell whose functor slot is a str or unbound Var.
+
+    A tuple-DATA cell (slot 0 is ``cells.TUPLE_TAG``) is explicitly NOT
+    compound here — see the section docstring above.
+    """
+    if not _is_cell(term):
+        return False
+    f = term[0]
+    return isinstance(f, str) or is_var(f)
+
+
+_functor_name_precell = _functor_name
+_arity_precell = _arity
+_nth_arg_precell = _nth_arg
+_args_list_precell = _args_list
+_is_compound_precell = _is_compound
+
+
+def _functor_name(term: Any) -> Any:
+    if _cell_is_compound(term):
+        return term[0]
+    return _functor_name_precell(term)
+
+
+def _arity(term: Any) -> int | None:
+    if _cell_is_compound(term):
+        return len(term) - 1
+    return _arity_precell(term)
+
+
+def _nth_arg(term: Any, n: int) -> Any:
+    if _cell_is_compound(term):
+        if n < 1 or n > len(term) - 1:
+            raise IndexError(f"arg index {n} out of range for {term!r}")
+        return term[n]
+    return _nth_arg_precell(term, n)
+
+
+def _args_list(term: Any) -> list:
+    if _cell_is_compound(term):
+        return list(term[1:])
+    return _args_list_precell(term)
+
+
+def _is_compound(term: Any) -> bool:
+    if _is_cell(term):
+        return _cell_is_compound(term)
+    return _is_compound_precell(term)
+
+
 # ── Combined functor+arity probe ─────────────────────────────────────────────
 
 
@@ -284,7 +374,18 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
     diagnostic display of a ``Compound`` head). Callers that want the type
     name unconditionally must not route a value that might be a ``Compound``
     through ``functor_arity`` first.
+
+    Phase 2 bridge Task 1: a str-functor cell resolves to ``(functor,
+    arity)`` same as a Compound. A ``(tuple, ...)`` tuple-DATA cell or an
+    unbound-Var-functor cell resolves to None — deliberately narrower here
+    than the composed ``_functor_name``/``_arity`` pair (which DOES resolve
+    a Var-functor cell's arity), mirroring the existing
+    Compound-with-Var-functor precedent above.
     """
+    if _is_cell(term):
+        if isinstance(term[0], str):
+            return (term[0], len(term) - 1)
+        return None
     if isinstance(term, Compound):
         if not isinstance(term.functor, str):
             return None

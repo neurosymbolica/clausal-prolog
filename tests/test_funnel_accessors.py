@@ -15,6 +15,23 @@ Also regression-covers the ``is_atom`` adoption at the four hand-rolled
 ``_helpers.py`` (``_functor_name_py``, ``_arity_py``, ``_is_ground_py``,
 ``_standard_order_key``) — those sites must keep behaving exactly as before
 now that they route through ``is_atom``.
+
+Phase 2 bridge Task 1 (see ``docs/superpowers/plans/2026-09-03-phase2-bridge.md``)
+adds two more sections at the bottom of this file:
+
+  - ``TestPlainTupleAccessorRegression`` — pins TODAY's behavior of
+    ``_functor_name``/``_arity``/``_nth_arg``/``_args_list``/``_is_compound``/
+    ``functor_arity`` on plain (non-cell-shaped) tuples, i.e. a tuple whose
+    slot 0 is not a str/``tuple``-type/Var. These accessors had NO tuple
+    branch at all before the cell-awareness addition (verified against both
+    the C extension and the ``_..._py`` fallbacks), so "today's behavior" is
+    simply: ``_functor_name`` -> None, ``_arity`` -> None, ``_nth_arg`` ->
+    raises IndexError, ``_args_list`` -> ``[]``, ``_is_compound`` -> False,
+    ``functor_arity`` -> None. This class must stay green whether or not the
+    cell branch exists — it is the "no regression on the default path"
+    evidence for that branch.
+  - ``TestCellFunnelAwareness`` — the additive cell branch itself (str
+    functor, ``TUPLE_TAG`` tuple-data, and unbound-Var-functor cells).
 """
 
 from __future__ import annotations
@@ -36,11 +53,15 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.builtins._helpers import (
     _arity,
+    _args_list,
     _functor_name,
+    _is_compound,
     _is_ground,
+    _nth_arg,
     _standard_order_key,
     functor_arity,
 )
+from clausal.logic.cells import TUPLE_TAG, make_cell, make_tuple_cell
 from clausal.logic.variables import Var
 from clausal.terms import Compound, KWTerm
 from clausal.pythonic_ast.nodes import Add
@@ -442,3 +463,164 @@ class TestMigrationRegressionBatchB:
         out: set[int] = set()
         _collect_var_ids(term, out)
         assert out == {id(v)}
+
+
+# ── Phase 2 bridge Task 1: plain-tuple regression (default-path invariant) ───
+
+
+class TestPlainTupleAccessorRegression:
+    """Pins TODAY's accessor behavior on plain, non-cell-shaped tuples.
+
+    None of ``_functor_name``/``_arity``/``_nth_arg``/``_args_list``/
+    ``_is_compound`` (C-accelerated or the ``_..._py`` fallback) nor
+    ``functor_arity`` has ever had a tuple branch — a bare Python tuple
+    fell through every one of them before the cell-awareness addition.
+    That absence is exactly what makes the cell branch purely additive:
+    these tests exercise tuples whose slot 0 is NOT a str / ``tuple`` type
+    / Var (so ``is_cell`` is False for every one of them, per
+    ``clausal/logic/cells.py``'s BRIDGE-ENTRY RULING) and must keep passing
+    unchanged after the cell branch lands.
+    """
+
+    def test_functor_name_of_plain_tuple_is_none(self):
+        # nv
+        assert _functor_name((1, 2)) is None
+        assert _functor_name((3.5, "a", None)) is None
+        assert _functor_name(()) is None  # empty tuple: still not cell-shaped
+
+    def test_arity_of_plain_tuple_is_none(self):
+        # nv
+        assert _arity((1, 2)) is None
+        assert _arity((3.5, "a", None)) is None
+
+    def test_nth_arg_of_plain_tuple_raises_index_error(self):
+        # nv — plain tuples were never decomposed by _nth_arg; it falls
+        # through to the final "raise IndexError" for any non-term shape.
+        with pytest.raises(IndexError):
+            _nth_arg((1, 2), 1)
+        with pytest.raises(IndexError):
+            _nth_arg((1, 2), 2)
+
+    def test_args_list_of_plain_tuple_is_empty(self):
+        # nv
+        assert _args_list((1, 2)) == []
+        assert _args_list((3.5, "a", None)) == []
+
+    def test_is_compound_of_plain_tuple_is_false(self):
+        # nv
+        assert _is_compound((1, 2)) is False
+        assert _is_compound((3.5, "a", None)) is False
+
+    def test_functor_arity_of_plain_tuple_is_none(self):
+        # nv
+        assert functor_arity((1, 2)) is None
+        assert functor_arity((3.5, "a", None)) is None
+
+
+# ── Phase 2 bridge Task 1: cell funnel awareness (additive branch) ───────────
+
+
+class TestCellFunnelAwareness:
+    """The additive cell branch in ``_helpers.py``'s funnel accessors.
+
+    KNOWN AMBIGUITY (documented, accepted, not a bug — see
+    ``clausal/logic/cells.py``): a plain user tuple whose slot 0 happens to
+    be a str (e.g. ``("hello", 1)``) is indistinguishable from a
+    str-functor cell by shape, and its accessor behavior DOES change here
+    (``_functor_name`` used to answer None for it; now answers ``"hello"``,
+    same as any other str-functor cell). That change is the documented
+    bridge-stage tradeoff, not something these tests pin against.
+    """
+
+    def test_str_functor_cell_functor_name_and_arity(self):
+        # nv
+        c = make_cell("point", 1, 2)
+        assert _functor_name(c) == "point"
+        assert _arity(c) == 2
+
+    def test_str_functor_cell_nth_arg_and_args_list(self):
+        # nv
+        c = make_cell("point", 1, 2)
+        assert _nth_arg(c, 1) == 1
+        assert _nth_arg(c, 2) == 2
+        assert _args_list(c) == [1, 2]
+
+    def test_str_functor_cell_nth_arg_out_of_range_raises(self):
+        # nv
+        c = make_cell("point", 1, 2)
+        with pytest.raises(IndexError):
+            _nth_arg(c, 3)
+        with pytest.raises(IndexError):
+            _nth_arg(c, 0)
+
+    def test_str_functor_cell_is_compound(self):
+        # nv
+        assert _is_compound(make_cell("point", 1, 2)) is True
+
+    def test_str_functor_zero_arity_cell(self):
+        # nv — ("atom",) : arity 0, args [], still compound (unlike a
+        # PredicateMeta atom class, which has arity 0 and IS its own
+        # functor — a cell atom is a distinct shape).
+        c = make_cell("atom")
+        assert _functor_name(c) == "atom"
+        assert _arity(c) == 0
+        assert _args_list(c) == []
+        assert _is_compound(c) is True
+
+    def test_str_functor_cell_functor_arity(self):
+        # nv
+        c = make_cell("point", 1, 2)
+        assert functor_arity(c) == ("point", 2)
+
+    def test_str_functor_cell_agrees_with_composed_functor_name_and_arity(self):
+        # nv — same invariant TestFunctorArity checks for term shapes.
+        c = make_cell("point", 1, 2)
+        assert functor_arity(c) == (_functor_name(c), _arity(c))
+
+    def test_tuple_tag_cell_is_not_compound(self):
+        # nv — a (tuple, ...) cell is tuple DATA, not a compound term; per
+        # the task brief it must NOT be decomposed the way a str-functor
+        # cell is.
+        c = make_tuple_cell(1, 2, 3)
+        assert c == (TUPLE_TAG, 1, 2, 3)
+        assert _is_compound(c) is False
+
+    def test_tuple_tag_cell_functor_name_arity_unchanged(self):
+        # nv — falls through to the same "not a recognized shape" answer a
+        # plain tuple gets, since it is explicitly not treated as compound.
+        c = make_tuple_cell(1, 2, 3)
+        assert _functor_name(c) is None
+        assert _arity(c) is None
+        assert _args_list(c) == []
+        assert functor_arity(c) is None
+
+    def test_var_functor_cell_functor_name_returns_the_var(self):
+        # nv — task brief: "slot0-Var cells: _functor_name returns the Var"
+        v = Var()
+        c = make_cell(v, 1, 2)
+        assert _functor_name(c) is v
+
+    def test_var_functor_cell_is_compound(self):
+        # nv — task brief: "_is_compound True"
+        v = Var()
+        c = make_cell(v, 1, 2)
+        assert _is_compound(c) is True
+
+    def test_var_functor_cell_arity_and_args_still_resolve(self):
+        # nv — arity/args are positional, independent of the (as yet
+        # unresolved) functor identity.
+        v = Var()
+        c = make_cell(v, 1, 2)
+        assert _arity(c) == 2
+        assert _args_list(c) == [1, 2]
+        assert _nth_arg(c, 1) == 1
+
+    def test_var_functor_cell_functor_arity_is_none(self):
+        # nv — task brief: "functor_arity None" for slot0-Var cells. This
+        # mirrors the existing Compound-with-Var-functor precedent in
+        # TestFunctorArity.test_compound_with_var_functor_is_none:
+        # functor_arity only promises a result for a RESOLVED (str) functor.
+        v = Var()
+        c = make_cell(v, 1, 2)
+        assert functor_arity(c) is None
+        assert (_functor_name(c), _arity(c)) == (v, 2)
