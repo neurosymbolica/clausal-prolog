@@ -172,6 +172,13 @@ def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
     same digit-count-style display discipline as bench_tabling's bignum
     result), not the chain term itself (dumping a 1500-deep nested compound
     inline is unreadable).
+
+    The practical ceiling on n is not time (O(n^2) is slow but finite) --
+    it's C recursion depth: do_deref_walk/do_walk (clausal/logic/
+    _tabling_core.c, clausal/logic/variables/_variables.c) each hard-cap
+    recursive descent at MAX_DEPTH = 50000, so an n approaching that bound
+    would hit the depth guard on the chain walk before it hit any
+    time-based limit.
     Expected wall time (n=1500, reps=3): ~4-5 s.
     """
     from clausal.testing import load_clausal_module

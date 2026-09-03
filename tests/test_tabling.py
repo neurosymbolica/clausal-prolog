@@ -393,10 +393,11 @@ class TestTabledFib:
 # is captured by value the instant `deref` is called), these tests `break`
 # immediately after the first solution: abandoning the generator early is
 # what forces the *next* fresh call to recompute from scratch instead of
-# hitting the COMPLETE fast path (empirically: an abandoned-via-break query
-# leaves ``db.table_store`` empty and a same-module repeat costs the same as
-# the first; a query drained via ``list(...)`` leaves the table intact and a
-# same-module repeat is ~instant -- see task-4-report.md). Reading a nested
+# hitting the COMPLETE fast path (test_nats_break_drops_table below verifies
+# an abandoned-via-break query leaves ``db.table_store`` empty; a query
+# drained via ``list(...)`` leaves the table intact instead, per
+# test_nats_cache_hit below -- see task-4-report.md for the timings this
+# produces). Reading a nested
 # field (``node.T``) off a compound answer *before* the generator is
 # abandoned/exhausted is required for the same reason bench_qsort/
 # bench_tabling break after the first answer: continuing to iterate a
@@ -425,13 +426,44 @@ class TestStructTabling:
         for trail in call("Nats", 3, L, module=_module(m)):
             results.append(deref(L))
             break
-        assert len(results) == 1
         node = results[0]
         values = []
         while node is not m.nil:
             values.append(node.H)
             node = deref(node.T)
         assert values == [3, 2, 1]
+
+    def test_nats_open_query_determinism(self):
+        """Nats/2 is functionally deterministic: an OPEN query (L unbound)
+        drained to exhaustion (no break) must yield exactly one solution.
+        This is the property bench_struct_tabling's break-after-first shape
+        relies on. test_nats_chain_shape's break-based check can't assert
+        it -- len(results) there would be trivially 1 after any break,
+        whether or not a second solution exists -- so it's asserted here
+        instead, with a full drain at a small n (safe: no nested-field
+        access after the drain, so the backtrack-driven unbinding the
+        module comment above warns about doesn't matter here)."""
+        # nv
+        m = _load("struct_tabling")
+        L = Var()
+        results = list(call("Nats", 3, L, module=_module(m)))
+        assert len(results) == 1
+
+    def test_nats_break_drops_table(self):
+        """Verifies the module comment's claim above: abandoning the
+        generator via break (instead of draining it) leaves
+        db.table_store empty afterward -- unlike a full drain, which
+        leaves it populated (test_nats_cache_hit below). This is why
+        bench_struct_tabling must reload the module every rep instead of
+        relying on break alone to force recomputation."""
+        # nv
+        m = _load("struct_tabling")
+        db = _module(m).db
+        L = Var()
+        for trail in call("Nats", 5, L, module=_module(m)):
+            deref(L)
+            break
+        assert len(db.table_store) == 0
 
     def test_nats_cache_hit(self):
         """Second query should use cached table (COMPLETE path), same as
