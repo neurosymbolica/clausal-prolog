@@ -286,8 +286,29 @@ _clpr_RealVar = None
 _clpr_loaded = False
 
 
-def _sync_real(var, fd_lo: float, fd_hi: float, trail):
+def _safe_float(x) -> float:
+    """Convert an FD bound (may be an arbitrary-precision int) to float,
+    saturating to +-inf instead of raising when the magnitude exceeds a
+    float's range (e.g. bignum growth from tabled Fibonacci well past
+    fib(1475)).  CLP(R) already only carries float precision, so once a
+    bound is too large to represent as a float, "no finite cap from the
+    FD side" (+-inf) is the correct — and only representable —
+    approximation, not an error.
+    """
+    try:
+        return float(x)
+    except OverflowError:
+        return math.inf if x > 0 else -math.inf
+
+
+def _sync_real(var, fd_lo, fd_hi, trail):
     """Synchronise the CLP(R) real interval on *var* with FD bounds.
+
+    *fd_lo*/*fd_hi* are the raw (possibly bignum) FD domain bounds —
+    conversion to float happens in here, lazily, only once we know a
+    real interval is actually attached to *var*, so plain FD-only
+    narrowing (the overwhelming common case) never pays for it and
+    never risks an ``OverflowError`` it has no use for.
 
     Returns False on wipeout, True otherwise.  Called from both the
     Python ``_narrow`` and the C ``c_narrow`` — the latter caches a
@@ -308,8 +329,8 @@ def _sync_real(var, fd_lo: float, fd_hi: float, trail):
     real_state = get_attr(var, _clpr_REAL_KEY)
     if real_state is None:
         return True
-    new_lo = max(real_state.lo, fd_lo)
-    new_hi = min(real_state.hi, fd_hi)
+    new_lo = max(real_state.lo, _safe_float(fd_lo))
+    new_hi = min(real_state.hi, _safe_float(fd_hi))
     if new_lo > new_hi:
         return False
     if new_lo != real_state.lo or new_hi != real_state.hi:
@@ -329,9 +350,11 @@ def _narrow(var: Var, new_domain: Domain, trail: Trail, queue: deque) -> bool:
     new_state = FDVar(new_domain, old_constraints)
     put_attr(var, FD_KEY, new_state, trail)
 
-    # Keep real interval in sync if present
-    if not _sync_real(var, float(domain_min(new_domain)),
-                      float(domain_max(new_domain)), trail):
+    # Keep real interval in sync if present.  Pass the raw (possibly
+    # bignum) bounds — _sync_real converts to float lazily, only if a
+    # real interval is actually attached (see _safe_float / _sync_real).
+    if not _sync_real(var, domain_min(new_domain),
+                      domain_max(new_domain), trail):
         return False
 
     # Keep Q bounds in sync if present (mirrors REAL sync above)

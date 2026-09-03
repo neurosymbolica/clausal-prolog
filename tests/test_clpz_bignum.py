@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 
 from clausal.logic.variables import (
-    Var, Trail, deref, is_var, get_attr, unify,
+    Var, Trail, deref, is_var, get_attr, put_attr, unify,
 )
 from clausal.logic.clpfd import (
     FD_KEY,
@@ -487,3 +487,93 @@ class TestBignumNoRegression:
         assert domain_size(d) == _POS_INF
         assert domain_min(d) == _NEG_INF
         assert domain_max(d) == _POS_INF
+
+
+class TestBignumBeyondFloatRange:
+    """Domain bounds whose *magnitude* exceeds a Python float's range
+    (~1.7976931348623157e+308, i.e. bit_length > ~1024).
+
+    ``_narrow`` (both the Python reference implementation and its C
+    accelerator twin in ``_clpfd_propagate.c``) synchronises the CLP(R)
+    real-interval attribute (when present) by converting the new FD
+    bounds to ``float``.  ``2**70``- or ``2**100``-scale bignums (as used
+    above in ``TestBignumPropagation``) still fit comfortably in a float's
+    exponent range, so they never exercise this.  Values genuinely beyond
+    float range (e.g. tabled Fibonacci growth past fib(~1475)) must still
+    propagate: the float conversion is a CLP(R)-sync convenience, not a
+    correctness requirement of CLP(Z) itself.
+    """
+
+    # Comfortably past float's ~1.8e+308 ceiling (2**1024-ish).
+    BEYOND = 10 ** 400
+
+    def test_lt_narrows_beyond_float_range(self):
+        trail = fresh_trail()
+        x = Var()
+        assert fd_lt(x, self.BEYOND, trail) is True
+        state = get_attr(x, FD_KEY)
+        assert state is not None
+        assert domain_max(state.domain) == self.BEYOND - 1
+
+    def test_le_narrows_beyond_float_range(self):
+        trail = fresh_trail()
+        x = Var()
+        assert fd_le(x, self.BEYOND, trail) is True
+        state = get_attr(x, FD_KEY)
+        assert state is not None
+        assert domain_max(state.domain) == self.BEYOND
+
+    def test_ge_narrows_lower_beyond_float_range(self):
+        trail = fresh_trail()
+        x = Var()
+        assert fd_ge(x, self.BEYOND, trail) is True
+        state = get_attr(x, FD_KEY)
+        assert state is not None
+        assert domain_min(state.domain) == self.BEYOND
+
+    def test_eq_binds_beyond_float_range(self):
+        trail = fresh_trail()
+        x = Var()
+        assert fd_eq(x, self.BEYOND, trail) is True
+        assert deref(x) == self.BEYOND
+
+    def test_negative_beyond_float_range_narrows(self):
+        """Symmetric negative-magnitude bignum (sign must be preserved
+        when the C/py float conversion saturates instead of erroring)."""
+        trail = fresh_trail()
+        x = Var()
+        assert fd_gt(x, -self.BEYOND, trail) is True
+        state = get_attr(x, FD_KEY)
+        assert state is not None
+        assert domain_min(state.domain) == -self.BEYOND + 1
+
+    def test_narrow_syncs_clpr_beyond_float_range(self):
+        """``_narrow`` itself (not the higher-level ``fd_lt`` et al, which
+        reroute entirely to CLP(R) via ``_any_real`` once a var carries a
+        REAL_KEY attribute) must not crash, and must not corrupt the real
+        interval, when narrowing an FD domain whose bound is past float
+        range: the FD bound saturates to +-inf for the purposes of the
+        real-interval sync (CLP(R) already only has float precision, so
+        this is the correct representation).
+        """
+        import math
+        from collections import deque
+        from clausal.logic import clpfd
+        from clausal.logic.clpr import REAL_KEY, RealVar
+
+        trail = fresh_trail()
+        queue = deque()
+        x = Var()
+        put_attr(x, REAL_KEY, RealVar(-math.inf, math.inf), trail)
+
+        dom = domain_from_range(0, self.BEYOND)
+        assert clpfd._narrow(x, dom, trail, queue) is True
+
+        fd_state = get_attr(x, FD_KEY)
+        assert domain_max(fd_state.domain) == self.BEYOND
+
+        real_state = get_attr(x, REAL_KEY)
+        # FD bound saturates to +inf on the real side; real interval's
+        # existing +inf upper bound is unaffected (min(inf, inf) == inf).
+        assert real_state.hi == math.inf
+        assert real_state.lo == 0.0

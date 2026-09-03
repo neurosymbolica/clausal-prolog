@@ -718,32 +718,26 @@ have_constraints:
      * Gate on REAL_KEY so we skip entirely when clpr isn't loaded.
      *
      * Bounds may be bignum (CLP(Z) propagation produces bounds outside
-     * int64 range — e.g. Fib above N=92).  Convert directly via
-     * PyFloat_AsDouble, which yields ±inf for sentinel floats and the
-     * nearest double for any other Python int (including bignum).  CLP(R)
-     * loses precision past 2^53 either way, so this is the right
-     * representation. */
+     * int64 range, even outside float range — e.g. tabled Fibonacci well
+     * past fib(1475)).  Pass the raw Python int/float bound objects
+     * straight through: _sync_real converts to float itself, lazily,
+     * only once it has confirmed *var* actually carries a real interval
+     * (the REAL_KEY gate here is process-wide — true whenever clpr has
+     * been imported at all, not just when this var uses it — so eagerly
+     * converting here would pay, and risk OverflowError on bignum
+     * bounds, even for vars with no real interval attached).  A prior
+     * version of this code converted via PyFloat_AsDouble() here, which
+     * (contrary to the comment that used to be here) raises
+     * OverflowError for bignums past float range exactly like
+     * float() — it did not saturate to ±inf. */
     if (REAL_KEY && fn_sync_real) {
         Py_ssize_t n = PyTuple_GET_SIZE(new_domain);
         PyObject *first_pair = PyTuple_GET_ITEM(new_domain, 0);
         PyObject *last_pair = PyTuple_GET_ITEM(new_domain, n - 1);
         PyObject *lo_obj = PyTuple_GET_ITEM(first_pair, 0);
         PyObject *hi_obj = PyTuple_GET_ITEM(last_pair, 1);
-        double fd_lo_f = PyFloat_AsDouble(lo_obj);
-        if (fd_lo_f == -1.0 && PyErr_Occurred()) return -1;
-        double fd_hi_f = PyFloat_AsDouble(hi_obj);
-        if (fd_hi_f == -1.0 && PyErr_Occurred()) return -1;
-        PyObject *lo_py = PyFloat_FromDouble(fd_lo_f);
-        PyObject *hi_py = PyFloat_FromDouble(fd_hi_f);
-        if (!lo_py || !hi_py) {
-            Py_XDECREF(lo_py);
-            Py_XDECREF(hi_py);
-            return -1;
-        }
         PyObject *sr = PyObject_CallFunctionObjArgs(
-            fn_sync_real, var, lo_py, hi_py, trail, NULL);
-        Py_DECREF(lo_py);
-        Py_DECREF(hi_py);
+            fn_sync_real, var, lo_obj, hi_obj, trail, NULL);
         if (!sr) return -1;
         int ok = PyObject_IsTrue(sr);
         Py_DECREF(sr);
