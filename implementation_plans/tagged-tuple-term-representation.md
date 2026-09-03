@@ -362,9 +362,22 @@ Site counts (grep, 2026-09-03, `clausal/` excl. tests unless noted):
   class — this trap produced the one Critical caught at final review. Original scope: route all representation probes
   through the `_helpers.py` accessors + `is_term_instance`/`term_field_names`; kill the direct
   `getattr`/`type().__name__` long tail. ~40 files. **1–2 weeks.**
-- **Phase 2 — dual-representation bridge**: funnel/unifier/walkers/tabling accept tagged cells
-  alongside class terms; interleaved A/B parity corpus (drive-loop-refactor style, diff
-  failure SETS); C twins here. Cons-rule decision (§5) gates entry. **~1 week.**
+- **Phase 2 — dual-representation bridge: DONE 2026-09-03**, merged to clone main at 88b53dff
+  as an EXPERIMENT behind the `-tagged_terms` module flag (not a shippable feature): cell
+  primitives (`clausal/logic/cells.py`, slot-0 deref'd, higher-order Var functors), funnel
+  awareness, dual-site cell emission + sequence-pattern head dispatch (flag-off byte-identity
+  golden-proven; cells ride the EXISTING C tuple branches — zero C changes needed, exactly as
+  §2 predicted), 3-fixture parity corpus (answer-identical), ground-cell interning hook
+  (default OFF).
+  **RESULTS: cells beat even the fast-pathed class representation — B/A = 0.561 (~1.8×) on the
+  walker-heavy macro (controller-reproduced 0.5375; ~2.7× composed vs pre-Phase-0). Interning
+  as-implemented: negative on this fixture (0% hits — shape-driven: all-unique answers;
+  O(depth³) cost — implementation-driven, NOT fundamental: a same-constraint id-consing
+  prototype ran ~7× faster, one complexity order lower, unmeasured at the benchmark — the
+  concrete starting point for any interning follow-up).**
+  Known bridge limits (all documented+pinned): cell dispatch unindexed; flagged modules' own
+  class constructors silently match nothing; cross-module compound exchange out of scope;
+  cons-rule deferred to Phase 3 behind a guard test. Original estimate: ~1 week.
 - **Phase 3 — compiler flip + atom pivot**: `terms_to_ast` emits cells; `head_match` emits
   literal/value-pattern dispatch; kwarg placement + partial backfill; per-module OWA flag;
   atoms lower to interned strs; `-hide` mangling; predicate state relocates to `Database`;
