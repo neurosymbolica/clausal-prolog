@@ -120,6 +120,51 @@ lists, `-hide`) is being built by the author separately, on the Pratt parser alr
 in the translation machinery — Phase 3's compiler work should consume its output rather than
 grow a second reader.
 
+## 1c. Phase 3 parser output interface (recorded 2026-09-03; parser is USER-OWNED work)
+
+The surface parser is being built by the author separately, on the existing Pratt stack:
+`clausal/tools/prolog_parser.py` (446 ln, precedence-climbing over a mutable
+`OperatorTable`), `prolog_tokenizer.py` (487 ln, batch), `prolog_operators.py` (ISO op/3
+semantics incl. op(0,·) removal per ISO 8.14.3.4; dialect defaults), `prolog_ast.py`
+(P-node dataclasses). The Pratt core has NO grammar formalism and needs none: ISO term
+syntax's variable part is precedence-shaped — `op/3` IS the grammar, runtime-mutable
+(`_maybe_apply_op_directive` already applies op directives mid-parse), which a
+compiled-DCG approach handles badly. A formalism is wanted only for the TOKEN layer
+(see the hand-off: implementation_plans/prolog-parser-formalism-handoff.md).
+
+**The contract (three independently-replaceable, resumable layers):**
+- **L0 tokenizer**: `feed(chunk)` / `next_token() -> Token | NEED_MORE | EOF`. Invariant:
+  never emit a token that could still be extended by unseen input (`=` vs `=..`, `1` vs
+  `1.5` vs `1.0e7`) — hold until a non-extending char or EOF. Pushback is an internal
+  buffer; NO SEEKING EVER (works on pipes/user input).
+- **L1 term reader (Pratt)**: owns the OperatorTable (exposed API; auto-applies op/3);
+  `read_term() -> ReaderItem | NEED_MORE | EOF`.
+- **L2 item classification**: clause / directive / DCG rule / query (exists:
+  `_classify_item`).
+
+**ReaderItem** (what the Phase 3 compiler consumes):
+`Clause(term, spans, var_names) | Directive(term, spans) | DCGRule(...) | Query(...)
+| SyntaxIssue(span, msg, resumable)` (resync-to-`.` recovery), where:
+1. `term` is a PURE CELL tree (§1b): compounds `("f", ...)`, atoms = bare surface-name
+   strs (`-hide` mangling is the COMPILER's job — the parser only parses the directive),
+   numbers native, double-quoted → char list, proper lists → Python lists, `{T}` →
+   `('{}', T)`. **Partial/improper lists → cons cells `('.', H, T)` (RULED 2026-09-03:
+   ISO-faithful at the boundary; extensible later if needed — SegList lowering is the
+   compiler's option).**
+2. **Variables are the one non-cell node**: `VarRef(i)` + `var_names: {i: name}`
+   (read_term's variable_names for free). The parser never allocates engine Vars
+   (fresh-per-clause identity is compiler policy). Consequence: parser output is fully
+   GROUND data — hashable, internable, marshallable.
+3. **Positions live in a structure-isomorphic span tree** (nested tuples mirroring the
+   cell shape, leaves `(start, end)`), never on the terms — the bridge's position-field
+   lesson applied: cells stay position-free and interning-safe; diagnostics lose nothing.
+
+The contract is formalism-agnostic: the Python Pratt implementation satisfies it today; a
+future Prolog-hosted tokenizer compiled from a DCG-with-pushback formalism slots in behind
+the same L0 interface. Summary for cross-project discussion: *precedence table for terms,
+formalism only for tokens, incrementality as a layer contract (NEED_MORE) rather than a
+stream capability.*
+
 ## 2. Measured numbers (CPython 3.13, /workspace/clausal/venv, 2026-09-03)
 
 | Operation | Class repr today | Tagged tuple |
