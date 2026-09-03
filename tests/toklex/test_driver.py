@@ -118,3 +118,34 @@ class TestBuilders:
         assert ISO_BUILDERS["char_code"]("0'a") == 97
         assert ISO_BUILDERS["char_code"]("0'''") == 39
         assert ISO_BUILDERS["char_code"]("0'\\n") == 10
+
+
+class TestCommitRegion:
+    def test_doubling_cycle_commits_to_unterminated_error(self):
+        # Task 8 fix round: a minimal doubling-style spec (q_ = a single
+        # quote char; `s` = q_-delimited content where `q_ then q_` is a
+        # doubled-quote escape) that reproduces, in miniature, the real
+        # ISO string/quoted_atom's genuine unbounded-backup ambiguity
+        # (see task-8-report.md). After the first candidate close (`'ab'`,
+        # length 4), a doubled `''` commits the scanner to "this is
+        # content, the string continues" -- if no further, real closing
+        # quote ever turns up before EOF, the correct (prolog_tokenizer.py
+        # -parity) answer is ONE unterminated error spanning everything
+        # consumed, NOT a silent backup to the length-4 accept followed by
+        # a separately-erroring `''ccc` fragment.
+        spec = parse_spec_text("""
+        encoding(chars).
+        class(q_, ['''']).
+        token(s, q_ then ((q_ then q_) | (any - q_))* then q_).
+        """)
+        lx = annotate(spec)
+        assert lx.commit  # the doubling-continuation loop is a real cycle
+
+        text = "'ab''ccc"
+        toks = IncrementalLexer(lx).run(text)
+
+        assert len(toks) == 1
+        tok = toks[0]
+        assert tok.kind == "error"
+        assert tok.value == ("unterminated", text)
+        assert tok.lexeme == text

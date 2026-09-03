@@ -185,7 +185,21 @@ class PrologParser:
                         and not self._can_start_term_conservative(self._peek(1)):
                     entry = postfix_entry
             elif postfix_entry and postfix_entry.precedence <= max_prec:
-                entry = postfix_entry
+                # Infix didn't fit under this call's max_prec, but postfix
+                # does. Apply the SAME guard as above before committing to
+                # postfix: if the next token could still start a term, this
+                # is far more likely a continuing infix chain (e.g. the 2nd
+                # `+` of `a + b + c`, whose recursive right-operand parse
+                # has max_prec reduced below the infix precedence) than a
+                # genuine postfix use, and treating it as postfix would
+                # silently misparse the operand that follows. Leave `entry`
+                # unset and fall through to the "defer to caller" break
+                # below instead of guessing wrong (F041-style bug: a bare
+                # 3+-way chain of an operator declared both infix and
+                # postfix, e.g. toklex's `+`, used to raise a spurious
+                # ParseError here).
+                if not self._can_start_term_conservative(self._peek(1)):
+                    entry = postfix_entry
 
             if entry is None:
                 # Could be infix with too-high precedence — stop

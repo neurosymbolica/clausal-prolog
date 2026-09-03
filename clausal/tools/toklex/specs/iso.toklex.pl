@@ -7,18 +7,9 @@ class(layout,    [' ', '\t', '\n', '\r', '\f', '\v']).
 class(small,     range(a, z)).
 class(capital,   range('A', 'Z')).
 class(digit,     range('0', '9')).
-% NOTE: right-nested `+` chains below (rather than the flat
-% `class(small) + class(capital) + class(digit) + ['_']` form used in the
-% design doc) -- see task-8-report.md: a bare 3+-way chain of an operator
-% that is declared BOTH infix (500 yfx, class-union) and postfix (200 xf,
-% regex one-or-more, defined below via toklex_op_table) trips a real
-% precedence-climbing bug in prolog_parser.py's infix/postfix
-% disambiguation. Right-nesting keeps every level to a single bare `+`,
-% which sidesteps it; set union is associative, so this is semantically
-% identical to the flat form.
-class(alnum,     class(small) + (class(capital) + (class(digit) + ['_']))).
+class(alnum,     class(small) + class(capital) + class(digit) + ['_']).
 class(graphic,   ['#','$','&','*','+','-','.','/',':','<','=','>','?','@','\\','^','~']).
-class(hexdig,    class(digit) + (range(a, f) + range('A', 'F'))).
+class(hexdig,    class(digit) + range(a, f) + range('A', 'F')).
 class(octdig,    range('0', '7')).
 class(bindig,    ['0', '1']).
 class(quote,     ['''']).

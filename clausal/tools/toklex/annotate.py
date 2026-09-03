@@ -6,9 +6,13 @@ Consumes the ``Spec``/``DFA``/``Partition`` produced by earlier tasks
 symbols can still lead somewhere live), a *follow* map for tokens with a
 ``followed_by`` constraint, a proof that the DFA's backup (the number of
 already-consumed characters a maximal-munch scanner may need to "un-read"
-past the last accepting state before it gets stuck) is bounded, copies of
-the nested-comment open/close DFAs, and a Prolog-readable term dump for
-cross-language interchange.
+past the last accepting state before it gets stuck) is bounded wherever
+that is provable -- and, where it genuinely is not (design ISO tension:
+quote-doubling and an escape's optional trailing terminator both create
+real, unavoidable same-position multi-length ambiguity for a
+maximal-munch DFA), a *commit region* the driver treats specially instead
+of raising at compile time -- copies of the nested-comment open/close
+DFAs, and a Prolog-readable term dump for cross-language interchange.
 
 ``annotate(spec)`` is the one-call compiler front door: it orchestrates
 ``build_partition`` -> ``compile_spec`` -> the annotation passes below.
@@ -24,12 +28,17 @@ from clausal.tools.toklex.spec import Spec, SpecError
 
 
 class UnboundedBackupError(SpecError):
-    """Raised when the DFA's "pending" graph (non-accepting states reachable
-    from some accepting state without crossing another accepting state)
-    contains a cycle. A cycle there means a maximal-munch scanner could be
-    forced to consume unboundedly many characters past the last accept
-    before getting stuck, i.e. backup is not bounded by a constant -- the
-    spec must be rewritten (design doc §4.3).
+    """Historically raised when the DFA's "pending" graph (non-accepting
+    states reachable from some accepting state without crossing another
+    accepting state) contained a cycle, meaning backup was not bounded by
+    a constant. As of the Task 8 fix round, ``annotate()`` no longer
+    raises this: such cycle states are instead identified precisely
+    (``Lexer.commit``, see below) and handled at the driver level
+    (``driver._resolve``'s commit-region branch) rather than rejected at
+    compile time -- a cycle in the pending graph is now a *derived*,
+    handled case, not a spec error. The class is kept defined and
+    exported for API compatibility (some callers may still want to catch
+    it); nothing in this module raises it any more.
     """
 
 
@@ -68,9 +77,30 @@ class Lexer:
             the comment body; ``close_dfa`` matches ``TriviaRule.nest_close``.
         builder: ``{rule_name: builder_str | None}`` for token rules only
             (trivia rules have no builder).
+        commit: ``frozenset[int]`` -- the states in the "pending" graph
+            (non-accepting states reachable from an accept without
+            crossing another accept) that lie ON a cycle, or are
+            REACHABLE FROM a cycle while staying inside the pending
+            subgraph. These states cannot be given a constant backup
+            bound: a maximal-munch scanner sitting in one of them could,
+            in the worst case, need to consume unboundedly many
+            characters before either finding a further accept or getting
+            stuck. Rather than rejecting the spec, the driver
+            (``driver._resolve``) *commits* once an attempt enters this
+            region -- if it later dies with no further accept, it emits
+            one zero-pushback ``'unterminated'`` error token spanning
+            everything consumed, instead of backing up to an earlier
+            (shorter) accept. This reproduces ``prolog_tokenizer.py``'s
+            actual greedy, non-backtracking, single-pass behavior for the
+            two ISO constructs that create this (quote-doubling; an
+            escape's optional closing backslash) -- see
+            task-8-report.md's fix-round section.
         max_backup: the proven upper bound (in characters) on how far a
             maximal-munch scanner must back up past the last accepting
-            state before it is guaranteed to be stuck or matched again.
+            state before it is guaranteed to be stuck or matched again,
+            computed over pending states OUTSIDE ``commit`` only (that
+            restricted subgraph is acyclic by construction -- see
+            ``_commit_region``).
     """
 
     spec: Spec
@@ -81,6 +111,7 @@ class Lexer:
     kind: dict  # {rule_name: 'token' | 'trivia'}
     nest: dict  # {rule_name: (DFA, DFA)}
     builder: dict  # {rule_name: str | None}
+    commit: frozenset  # frozenset[int] -- see docstring above
     max_backup: int
 
 
@@ -153,7 +184,7 @@ def _nest_map(spec: Spec, partition: Partition) -> dict:
     return nest
 
 
-# ── bounded-backup proof (design §4.3) ───────────────────────────────
+# ── bounded-backup proof + commit-region derivation (design §4.3, revised) ──
 
 
 def _pending_states(dfa: DFA, accepting: list) -> set:
@@ -179,45 +210,72 @@ def _pending_states(dfa: DFA, accepting: list) -> set:
     return pending
 
 
-def _check_no_cycle(dfa: DFA, pending: set) -> None:
-    """Iterative white/gray/black DFS cycle check over the subgraph induced
-    by `pending`, restricted to edges that stay inside `pending`."""
-    WHITE, GRAY, BLACK = 0, 1, 2
-    color = {q: WHITE for q in pending}
-
-    def pending_edges(q):
-        return [d for d in dfa.delta[q].values() if d in pending]
-
-    for start in pending:
-        if color[start] != WHITE:
-            continue
-        frame_stack = [(start, iter(pending_edges(start)))]
-        color[start] = GRAY
-        while frame_stack:
-            node, it = frame_stack[-1]
-            advanced = False
-            for nxt in it:
-                if color[nxt] == GRAY:
-                    raise UnboundedBackupError(
-                        f"unbounded backup: cycle of non-accepting DFA "
-                        f"states through state {nxt} (reachable from an "
-                        f"accepting state) -- rewrite the spec so the "
-                        f"trailing context after every accept is finite"
-                    )
-                if color[nxt] == WHITE:
-                    color[nxt] = GRAY
-                    frame_stack.append((nxt, iter(pending_edges(nxt))))
-                    advanced = True
-                    break
-            if not advanced:
-                color[node] = BLACK
-                frame_stack.pop()
+def _pending_adjacency(dfa: DFA, pending: set) -> dict:
+    """adj[q] = the distinct destinations of q that are also in `pending`
+    (edges of the subgraph induced by `pending`, deduplicated across
+    symbols)."""
+    return {q: {d for d in dfa.delta[q].values() if d in pending} for q in pending}
 
 
-def _longest_pending_chains(dfa: DFA, pending: set) -> dict:
+def _cyclic_pending_states(adj: dict) -> set:
+    """States in `adj` that lie on at least one cycle -- i.e. are
+    reachable from one of their own successors by staying inside `adj`
+    (equivalently: reachable from themselves via a path of length >= 1).
+    """
+    cyclic = set()
+    for u in adj:
+        stack = list(adj[u])
+        seen = set()
+        while stack:
+            x = stack.pop()
+            if x == u:
+                cyclic.add(u)
+                break
+            if x in seen:
+                continue
+            seen.add(x)
+            stack.extend(adj.get(x, ()))
+    return cyclic
+
+
+def _forward_reachable(adj: dict, sources: set) -> set:
+    """All states reachable within `adj` from any state in `sources`
+    (`sources` themselves included)."""
+    seen = set(sources)
+    stack = list(sources)
+    while stack:
+        u = stack.pop()
+        for v in adj.get(u, ()):
+            if v not in seen:
+                seen.add(v)
+                stack.append(v)
+    return seen
+
+
+def _commit_region(dfa: DFA, pending: set) -> frozenset:
+    """States in `pending` that cannot be given a constant backup bound:
+    states that lie ON a cycle of the induced pending-subgraph, or are
+    REACHABLE FROM such a cycle while staying inside `pending`. See
+    `Lexer.commit`'s docstring for what the driver does with this.
+
+    Every OTHER pending state (`pending - commit`) is, by construction,
+    free of cycles: any cycle running through such a state would put
+    every state on that cycle "on a cycle" and hence in `commit` -- a
+    contradiction. So `_longest_pending_chains`'s acyclicity assumption
+    holds on exactly that restricted subgraph without a separate check.
+    """
+    if not pending:
+        return frozenset()
+    adj = _pending_adjacency(dfa, pending)
+    cyclic = _cyclic_pending_states(adj)
+    return frozenset(_forward_reachable(adj, cyclic))
+
+
+def _longest_pending_chains(dfa: DFA, eligible: set) -> dict:
     """longest[q] = length in states (self-inclusive) of the longest chain
-    of pending states reachable from q by staying inside `pending`.
-    Assumes the induced subgraph is acyclic (call after `_check_no_cycle`)."""
+    of `eligible` states reachable from q by staying inside `eligible`.
+    Assumes the induced subgraph is acyclic -- true by construction when
+    `eligible` is `pending - commit` (see `_commit_region`)."""
     longest: dict = {}
 
     def compute(q):
@@ -225,29 +283,32 @@ def _longest_pending_chains(dfa: DFA, pending: set) -> dict:
             return longest[q]
         best = 0
         for dest in dfa.delta[q].values():
-            if dest in pending:
+            if dest in eligible:
                 best = max(best, compute(dest))
         longest[q] = 1 + best
         return longest[q]
 
-    for q in pending:
+    for q in eligible:
         compute(q)
     return longest
 
 
-def _backup_bound(dfa: DFA) -> int:
-    accepting = [bool(dfa.accepts[q]) for q in range(len(dfa.delta))]
-    pending = _pending_states(dfa, accepting)
-    if not pending:
+def _backup_bound(dfa: DFA, pending: set, commit: frozenset) -> int:
+    """Longest-chain bound computed over `pending - commit` only -- the
+    part of the pending graph proven acyclic by `_commit_region`. States
+    in `commit` contribute no bound here; they're handled by the driver's
+    commit-region branch instead (see `Lexer.commit`)."""
+    eligible = pending - commit
+    if not eligible:
         return 0
-    _check_no_cycle(dfa, pending)
-    longest = _longest_pending_chains(dfa, pending)
+    longest = _longest_pending_chains(dfa, eligible)
 
+    accepting = [bool(dfa.accepts[q]) for q in range(len(dfa.delta))]
     max_backup = 0
     for q in range(len(dfa.delta)):
         if accepting[q]:
             for dest in dfa.delta[q].values():
-                if dest in pending:
+                if dest in eligible:
                     max_backup = max(max_backup, longest[dest])
     return max_backup
 
@@ -259,6 +320,9 @@ def annotate(spec: Spec) -> Lexer:
     partition = build_partition(spec)
     dfa = compile_spec(spec, partition)
     live = _liveness(dfa)
+    accepting = [bool(dfa.accepts[q]) for q in range(len(dfa.delta))]
+    pending = _pending_states(dfa, accepting)
+    commit = _commit_region(dfa, pending)
     return Lexer(
         spec=spec,
         partition=partition,
@@ -268,7 +332,8 @@ def annotate(spec: Spec) -> Lexer:
         kind=_kind_map(spec),
         nest=_nest_map(spec, partition),
         builder=_builder_map(spec),
-        max_backup=_backup_bound(dfa),
+        commit=commit,
+        max_backup=_backup_bound(dfa, pending, commit),
     )
 
 

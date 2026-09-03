@@ -44,6 +44,31 @@ class TestPostfixFallback:
         with pytest.raises(ParseError):
             parse_term("a *")
 
+    def test_bare_infix_chain_not_misparsed_as_postfix(self):
+        # Task 8 fix round (F041): `+` is declared BOTH infix (500 yfx, ISO
+        # default) and postfix (200 xf, toklex's regex one-or-more) here.
+        # A bare 3+-way chain `a + b + c` used to break: parsing the right
+        # operand of the first `+` at a reduced max_prec (499, since yfx's
+        # right side is precedence-1) excludes the 2nd `+`'s infix reading
+        # (500 > 499) but not its postfix reading (200 <= 499), and the old
+        # code guessed postfix -- silently misparsing `b +` and leaving `c`
+        # dangling (`ParseError: Expected '.', got 'atom' ('c')`). The fix:
+        # apply the same "next token can't start a term" guard to that
+        # elif branch too, deferring the operator to the caller instead of
+        # guessing wrong when a term (here, `c`) could still follow.
+        t = toklex_table()
+        a, b, c = PAtom("a"), PAtom("b"), PAtom("c")
+        term = parse_term("a + b + c", op_table=t)
+        assert term == PCompound("+", (PCompound("+", (a, b)), c))
+
+        # And nested inside a functor's argument list (arg-priority-999
+        # parsing, same reduced-max_prec mechanism), alongside another arg.
+        d = PAtom("d")
+        term2 = parse_term("f(a + b + c, d)", op_table=t)
+        assert term2 == PCompound(
+            "f", (PCompound("+", (PCompound("+", (a, b)), c)), d)
+        )
+
 
 class TestBarOperator:
     def test_bar_infix_in_parens(self):
