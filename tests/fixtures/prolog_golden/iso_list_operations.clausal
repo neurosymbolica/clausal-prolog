@@ -27,11 +27,11 @@ Test("not in: present fails") <- (not not b in [a, b, c])
 
 Test("not in: empty list") <- (not x in [])
 
-Test("member: found") <- (in_(b, [a, b, c]))
+Test("member: found") <- (b in [a, b, c])
 
-Test("member: not found") <- (not in_(d, [a, b, c]))
+Test("member: not found") <- (not d in [a, b, c])
 
-Test("member: empty fails") <- (not in_(x, []))
+Test("member: empty fails") <- (not x in [])
 
 Test("memberchk: found") <- (in_check(b, [a, b, c]))
 

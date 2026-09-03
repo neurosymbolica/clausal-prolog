@@ -185,7 +185,6 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "numbervars":    {"iso": "numbervars"},
     "all_different": {"swi": "all_different", "scryer": "all_distinct",
                       "gprolog": "fd_all_different", "trealla": "all_distinct"},
-    "in_":           {"iso": "in"},
     "in_domain":     {"swi": "ins", "scryer": "ins",
                       "gprolog": "fd_domain", "trealla": "ins"},
     "label":         {"iso": "label", "gprolog": "fd_labeling"},
@@ -200,6 +199,25 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "arg":           {"iso": "arg"},
     "length":        {"iso": "length"},
     "member":        {"iso": "member"},
+    # in_/2 is the PREDICATE spelling of membership and is member/2 -- the
+    # engine registers the name exactly once, on _member__2 in
+    # clausal/logic/builtins/lists.py. It used to sit in the CLP(FD) block
+    # above (between all_different and in_domain) mapped to "in", i.e. read
+    # as clpfd's ``X in 1..10`` domain constraint. That was wrong twice
+    # over: no ISO engine defines in/2 without clpfd, so every kit library
+    # that spells membership as a call (query_combinators, formalize_lib,
+    # compliance_lib) exported a program that died with
+    # existence_error(procedure, in/2) on first use -- and under a dialect
+    # that DOES load clpfd it would have resolved and silently meant a
+    # finite-domain constraint instead of list membership, which is worse.
+    # The negated call form needs nothing extra here: `not in_(X, L)` is
+    # already emitted as `\+ <call>`, and Clausal's `not in` is negation as
+    # failure rather than a dif-family constraint (MemberIn(negate=True) in
+    # clausal/logic/compiler/_lower_goalop_shared.py undoes its trail mark
+    # on both branches; on the live engine `X not in [1,2,3]` with X unbound
+    # FAILS, where `X is not 1` succeeds with a residual). So `\+ member/2`
+    # is faithful for both spellings and no not_in/2 companion is wanted.
+    "in_":           {"iso": "member"},
     # "get" targets attribute-lists (Task 2's dict lowering); member/2 on a
     # dict-valued argument is not statically detectable and is left to gate G4.
     "get":           {"iso": "profile_get"},

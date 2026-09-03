@@ -39,13 +39,13 @@ test("not in: empty list") :-
     \+ member(x, []).
 
 test("member: found") :-
-    in(b, [a, b, c]).
+    member(b, [a, b, c]).
 
 test("member: not found") :-
-    \+ in(d, [a, b, c]).
+    \+ member(d, [a, b, c]).
 
 test("member: empty fails") :-
-    \+ in(x, []).
+    \+ member(x, []).
 
 test("memberchk: found") :-
     memberchk(b, [a, b, c]).
@@ -226,11 +226,11 @@ test("is_permutation: empty") :-
     is_permutation([], []).
 
 test("in_ enumerates [1,2,3]") :-
-    findall(X, in(X, [1, 2, 3]), L),
+    findall(X, member(X, [1, 2, 3]), L),
     L == [1, 2, 3].
 
 test("in_ with duplicates [a,b,a]") :-
-    findall(X, in(X, [a, b, a]), L),
+    findall(X, member(X, [a, b, a]), L),
     L == [a, b, a].
 
 test("in enumerates [1,2,3]") :-

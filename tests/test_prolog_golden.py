@@ -115,6 +115,53 @@ class TestInNotIn:
         result = clausal_source_to_prolog("Test() <- (_x not in [1, 2, 3])")
         assert "\\+ member(_X, [1, 2, 3])" in result or "\\+(member(_X, [1, 2, 3]))" in result
 
+    # The PREDICATE spelling of membership. Clausal registers ``in_/2`` in
+    # exactly one place -- clausal/logic/builtins/lists.py, ``_member__2`` --
+    # and it is member/2, so the ISO name has to be member/2 too. It used to
+    # resolve to a bare ``in/2`` (see prolog_dialect.BUILTIN_NAME_MAP), which
+    # no ISO engine defines: every kit library that spells membership as a
+    # call (query_combinators, formalize_lib, compliance_lib) exported a
+    # program that died with existence_error(procedure, in/2) on first use.
+
+    def test_in_call_form_translates_to_member(self):
+        # nv
+        result = clausal_source_to_prolog("Test() <- in_(_x, [1, 2, 3])")
+        assert "member(_X, [1, 2, 3])" in result
+
+    def test_in_call_form_does_not_emit_bare_in(self):
+        # nv
+        result = clausal_source_to_prolog("Test() <- in_(_x, [1, 2, 3])")
+        assert "in(_X" not in result.replace("member(_X", "")
+
+    def test_negated_in_call_form_matches_the_operator_form(self):
+        """``not in_(X, L)`` and ``X not in L`` must lower the same way.
+
+        Clausal's ``not in`` is NEGATION AS FAILURE, not a dif-family
+        constraint: MemberIn(negate=True) scans the collection and UNDOES the
+        trail mark on both branches (clausal/logic/compiler/
+        _lower_goalop_shared.py), so nothing is posted and an unbound element
+        FAILS rather than suspending -- measured on the live engine, where
+        ``X not in [1,2,3]`` with X unbound yields no solutions while
+        ``X is not 1`` succeeds with a residual. ``\\+ member/2`` is therefore
+        the faithful ISO form for both spellings; a pure dif-chain companion
+        would succeed where the engine fails.
+        """
+        # nv
+        # Parenthesised because `<-` parses as Lt+USub, and Python refuses a
+        # bare `not` directly after an operator (the kit spells it the same
+        # way, inside a parenthesised body).
+        call_form = clausal_source_to_prolog(
+            "Test() <- (not in_(_x, [1, 2, 3]))")
+        assert ("\\+ member(_X, [1, 2, 3])" in call_form
+                or "\\+(member(_X, [1, 2, 3]))" in call_form)
+
+    def test_in_check_call_form_still_memberchk(self):
+        """The sibling entry is unchanged: in_check/2 is memberchk/2, not
+        member/2 -- pinned so the in_ repair cannot smear across it."""
+        # nv
+        result = clausal_source_to_prolog("Test() <- in_check(_x, [1, 2, 3])")
+        assert "memberchk(_X, [1, 2, 3])" in result
+
 
 class TestKeywordArgs:
     """Tests for keyword argument handling in clause heads."""
