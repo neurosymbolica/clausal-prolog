@@ -39,6 +39,14 @@ PredicateMeta)`` or ``type(x).__name__`` use (of which there are many, e.g.
 dispatch-table membership tests and error-message formatting — those are
 NOT the funnel's concern and are correctly ignored by the narrow regexes
 below).
+
+Caveat: the scan is textual, not AST-aware, so it would false-positive on
+either idiom appearing verbatim inside a comment or a string literal (e.g.
+a docstring quoting the pattern for exposition). This is an accepted
+tradeoff for a "grep-driven" check per the task brief; there is no live
+instance of it in the tree today, and a real occurrence would be an easy,
+obvious false positive to diagnose and silence with a one-line ALLOWLIST
+entry rather than a silent miss.
 """
 
 from __future__ import annotations
@@ -106,11 +114,14 @@ class AllowEntry:
 # match), plus the Task 2/3 "skip for cause" sites, plus one pre-existing
 # site (last entry) this lint found outside that inventory.
 ALLOWLIST: tuple[AllowEntry, ...] = (
-    # 1. hand-ordered hot cascade; branch order load-bearing.
-    AllowEntry("clausal/logic/compiler/arg_index.py", None,
+    # 1. hand-ordered hot cascade; branch order load-bearing. Scoped to the
+    #    two named functions (not the whole file, which also has plenty of
+    #    unrelated dispatch-building code worth keeping lint-checked).
+    AllowEntry("clausal/logic/compiler/arg_index.py", (84, 181),
                "plan exclusion #1: _runtime_arg_key/_arg_to_index_key hot cascade"),
-    # 2. byte-parity with the C tabling core twin.
-    AllowEntry("clausal/logic/tabling.py", None,
+    # 2. byte-parity with the C tabling core twin. Scoped to the named
+    #    function only, for the same reason as #1.
+    AllowEntry("clausal/logic/tabling.py", (396, 443),
                "plan exclusion #2: _normalize_for_key_py, C-twin byte parity"),
     # 3. the five synced walkers (Python arms only; C arms aren't .py).
     AllowEntry("clausal/logic/solve.py", (58, 122),
@@ -135,7 +146,7 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # 8. class-registry _fields/PredicateMeta uses (class-level ops, not term
     #    probes) -- except the two migrated compiler_v2.py class-arity reads,
     #    which no longer match these patterns anyway.
-    AllowEntry("clausal/logic/compiler/specialization.py", None,
+    AllowEntry("clausal/logic/specialization.py", None,
                "plan exclusion #8: class-registry op, not a term probe"),
     AllowEntry("clausal/logic/compiler_v2.py", None,
                "plan exclusion #8: class-registry op, not a term probe"),
@@ -149,8 +160,11 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
                "plan exclusion #9: CPython-ast site"),
     AllowEntry("clausal/templating/*.py", None, "plan exclusion #9: CPython-ast site"),
     AllowEntry("clausal/tools/prolog_ast.py", None, "plan exclusion #9: CPython-ast site"),
-    AllowEntry("clausal/modules/reflection.py", (1024, 1030),
-               "plan exclusion #9: CPython-ast site (~1027)"),
+    AllowEntry("clausal/reflection.py", (1011, 1049),
+               "plan exclusion #9: CPython-ast site (Embedded Python "
+               "classification, ~1027; note this is clausal/reflection.py, "
+               "NOT clausal/modules/reflection.py -- exclusion #13 below is "
+               "the modules/ one)"),
     # 10. type(x).__name__-in-error-message sites (functor_fallback pattern
     #     only -- these files legitimately use type(x).__name__ in messages).
     AllowEntry("clausal/logic/clp*.py", None,
@@ -276,6 +290,52 @@ def test_migrated_tree_has_no_disallowed_funnel_bypass_patterns():
         f"_helpers.functor_arity) or add a justified entry to ALLOWLIST in "
         f"this file, citing {_PLAN}:\n"
         + "\n".join(f"  {v}" for v in violations)
+    )
+
+
+# ── Test 1b: ALLOWLIST self-check -- every entry must point at something real
+#
+# This is the structural fix for the two "transcribed against the wrong
+# file" bugs a review caught (a nonexistent `compiler/specialization.py`
+# path, and a line range checked against the wrong `reflection.py` of two
+# same-named files): a glob-free entry whose path doesn't exist, or whose
+# line range falls outside the file it names, is silently a dead no-op --
+# it exempts nothing, so the corresponding plan-exclusion item goes
+# unencoded without the real-tree scan (Test 1) necessarily failing (it
+# only fails if that dead entry's file *also* happens to contain the
+# pattern). Checking existence/bounds mechanically, rather than trusting a
+# transcription by eye, is exactly what would have caught both bugs.
+
+
+def test_allowlist_entries_point_at_real_paths_and_in_range_lines():
+    problems = []
+    for entry in ALLOWLIST:
+        if any(ch in entry.path for ch in "*?["):
+            # Glob entry (e.g. "clausal/logic/clp*.py") -- must match at
+            # least one real file, and globs don't carry a line range.
+            matches = [
+                p for p in _CLAUSAL_ROOT.rglob("*.py")
+                if fnmatch(p.relative_to(_REPO_ROOT).as_posix(), entry.path)
+            ]
+            if not matches:
+                problems.append(f"{entry.path}: glob matches no file under clausal/")
+            if entry.lines is not None:
+                problems.append(f"{entry.path}: glob entry must not carry a line range")
+            continue
+        full = _REPO_ROOT / entry.path
+        if not full.is_file():
+            problems.append(f"{entry.path}: no such file (reason: {entry.reason!r})")
+            continue
+        if entry.lines is not None:
+            lo, hi = entry.lines
+            n_lines = sum(1 for _ in full.open(encoding="utf-8"))
+            if not (1 <= lo <= hi <= n_lines):
+                problems.append(
+                    f"{entry.path}: line range {entry.lines} out of bounds "
+                    f"(file has {n_lines} lines)"
+                )
+    assert not problems, "ALLOWLIST entries pointing at nothing real:\n" + "\n".join(
+        f"  {p}" for p in problems
     )
 
 
