@@ -1743,14 +1743,18 @@ do_walk(PyObject *term, int depth)
              * PyClassMethod_Type check rather than mere name presence. */
             {
                 PyObject *cls = (PyObject *)Py_TYPE(term);
-                PyObject *fastm = PyDict_GetItemWithError(
-                    ((PyTypeObject *)cls)->tp_dict, str__clausal_new);
-                if (fastm == NULL && PyErr_Occurred()) {
+                PyObject *d = PyType_GetDict((PyTypeObject *)cls);
+                if (!d) { Py_DECREF(fields); return NULL; }
+                PyObject *fastm = NULL;
+                int has = PyDict_GetItemRef(d, str__clausal_new, &fastm);
+                Py_DECREF(d);
+                if (has < 0) {
                     Py_DECREF(fields);
                     return NULL;
                 }
                 if (fastm != NULL &&
                     PyObject_TypeCheck(fastm, &PyClassMethod_Type)) {
+                    Py_DECREF(fastm);
                     PyObject *args_tuple = PyTuple_New(n);
                     if (!args_tuple) { Py_DECREF(fields); return NULL; }
                     for (Py_ssize_t i = 0; i < n; i++) {
@@ -1778,6 +1782,7 @@ do_walk(PyObject *term, int depth)
                     Py_DECREF(args_tuple);
                     return result;
                 }
+                Py_XDECREF(fastm);
             }
 
             PyObject *kwargs = PyDict_New();
@@ -3010,14 +3015,18 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
              * the PyClassMethod_Type check rather than mere name presence. */
             {
                 PyObject *cls = (PyObject *)Py_TYPE(term);
-                PyObject *fastm = PyDict_GetItemWithError(
-                    ((PyTypeObject *)cls)->tp_dict, str__clausal_new);
-                if (fastm == NULL && PyErr_Occurred()) {
+                PyObject *d = PyType_GetDict((PyTypeObject *)cls);
+                if (!d) { Py_DECREF(fields); return NULL; }
+                PyObject *fastm = NULL;
+                int has = PyDict_GetItemRef(d, str__clausal_new, &fastm);
+                Py_DECREF(d);
+                if (has < 0) {
                     Py_DECREF(fields);
                     return NULL;
                 }
                 if (fastm != NULL &&
                     PyObject_TypeCheck(fastm, &PyClassMethod_Type)) {
+                    Py_DECREF(fastm);
                     PyObject *args_tuple = PyTuple_New(n);
                     if (!args_tuple) { Py_DECREF(fields); return NULL; }
                     for (Py_ssize_t i = 0; i < n; i++) {
@@ -3045,6 +3054,7 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
                     Py_DECREF(args_tuple);
                     return result;
                 }
+                Py_XDECREF(fastm);
             }
 
             PyObject *kwargs = PyDict_New();

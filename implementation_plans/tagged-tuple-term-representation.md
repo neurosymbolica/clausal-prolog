@@ -291,6 +291,19 @@ Site counts (grep, 2026-09-03, `clausal/` excl. tests unless noted):
   bypass `PredicateMeta.__call__` in
   generated code; add the missing term-construction benchmark. ~857→~90 ns. **1–2 days.**
   Sets the baseline that decides whether Phases 2+ pay.
+  **Rebuilder adoption (feat/phase0-adoption, 2026-09-03):** all five term
+  walkers now use the `_clausal_new` fast-path gate (`solve.py`
+  `_deref_walk_py`, `inspection.py` `_copy_term_py`, and their three C twins —
+  `_variables.c` `do_walk`/`c_copy_term`, `_tabling_core.c` `do_deref_walk`).
+  Macro A/B on fib/nqueens/qsort/graph/naf_ite showed NO movement (B/A
+  0.989–1.024, within noise) — a statement about that workload mix (term
+  rebuilding isn't their bottleneck), not about the patch. Walker-level
+  in-build A/B measured real speedups where rebuilding dominates:
+  1.41×–3.19× (`c_copy_term` 3.19×, `_tabling_core` `do_deref_walk` 2.19×,
+  the two Python walkers ~1.4–1.5×). Adoption caveats: `vary/3` must NEVER
+  adopt the fast path — its unknown-key `TypeError` on the slow kwargs
+  constructor is load-bearing for goal failure; `solve.py:323` is a
+  legitimate future adoption candidate, not yet done.
 - **Phase 1 — funnel refactor** (prep, pays regardless): route all representation probes
   through the `_helpers.py` accessors + `is_term_instance`/`term_field_names`; kill the direct
   `getattr`/`type().__name__` long tail. ~40 files. **1–2 weeks.**

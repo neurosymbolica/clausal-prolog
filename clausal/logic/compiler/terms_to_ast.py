@@ -657,6 +657,14 @@ def term_to_ast_expr(
             # solve.py's ``_collect_types_from_term`` update-after-module-dict
             # that keeps query templates resolving to the caller's actual
             # class rather than a stale one.
+            #
+            # Cross-ref: this gate is DELIBERATELY narrower than the walk/copy
+            # rebuilders' Phase 0 gate (see solve.py's _deref_walk_py) — the
+            # extra ``"_position"``/``"position"`` exclusion above is required
+            # here because the slow path just below drops those fields from
+            # the emitted kwargs entirely, whereas the walkers' slow path
+            # keeps all fields. Do not "unify" the two gates by deleting this
+            # condition.
             return _call(
                 _attr(cls_name, "_clausal_new"),
                 *[

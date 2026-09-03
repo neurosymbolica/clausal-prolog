@@ -78,12 +78,27 @@ def _deref_walk_py(term: Any) -> Any:
     # A01-F008: delegate to __walk__ hooks (Compound, KWTerm, DictTerm, Seg*),
     # keeping this Python fallback in sync with the C twin (_tabling_core
     # do_deref_walk) and with walk() itself. Preserves Compound _position and
-    # F018 Seg promotion. KEEP THE THREE WALKERS IN SYNC.
+    # F018 Seg promotion.
     hook = getattr(term, "__walk__", None)
     if hook is not None:
         return hook()
     if is_term_instance(term):
         cls = type(term)
+        # Phase 0 fast-path gate -- KEEP ALL FIVE WALKERS IN SYNC. The five
+        # sites are: this function (_deref_walk_py), inspection.py's
+        # _copy_term_py, and their three C twins -- _variables.c do_walk
+        # (~1735), _variables.c c_copy_term (~3002), and _tabling_core.c
+        # do_deref_walk (~441). This docstring/comment is the single source
+        # of truth for the gate rule; the C sites' comments point back here
+        # rather than restating it.
+        #
+        # The rule: cls's OWN dict (never an inherited attribute -- `vars(cls)`
+        # in Python, `PyType_GetDict` + `PyDict_GetItemRef` on the type's own
+        # dict in C) has "_clausal_new" bound as a classmethod iff
+        # PredicateMeta attached the positional-args fast constructor. When
+        # it does, walk/copy the fields positionally and call
+        # `cls._clausal_new(*args)`; otherwise fall back to the slow,
+        # kwargs-based `cls(**kwargs)` reconstruction.
         fast = vars(cls).get("_clausal_new")
         if isinstance(fast, classmethod):
             return cls._clausal_new(*(
