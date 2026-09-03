@@ -55,7 +55,7 @@ from clausal.logic.compiler.terms_to_ast import (
     arith_to_ast_expr,
     term_to_ast_expr,
 )
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.predicate import PredicateMeta, is_atom
 from clausal.logic.variables import deref, is_var
 from clausal.pythonic_ast.nodes import literal_value
 from clausal.terms import LoadName
@@ -124,7 +124,7 @@ def _is_const_element(term) -> bool:
     if isinstance(term, LoadName):
         return True
     if isinstance(term, PredicateMeta):
-        return not term._fields
+        return is_atom(term)
     value = literal_value(term)
     return value is None or isinstance(value, _CONST_SET_LITERALS)
 

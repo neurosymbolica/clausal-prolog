@@ -7,10 +7,11 @@ import sys as _sys
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import term_str as _term_str, term_pformat as _term_pformat
-from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
+from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, term_field_names_of_class
 from clausal.logic.exceptions import LogicException, type_error
 
 from clausal.logic.builtins._registry import _builtin, BuiltinPredicate
+from clausal.logic.builtins._helpers import functor_arity
 
 
 def _format_term_for_io(val):
@@ -125,7 +126,7 @@ def _format_clause_term(val):
 def _format_clause_head(head):
     """Format a clause head as 'functor(arg1, arg2, ...)'."""
     if is_term_instance(head):
-        name = type(head).__name__
+        name, _arity = functor_arity(head)
         fields = term_field_names(head)
         if not fields:
             return name
@@ -172,7 +173,7 @@ def _listing__1(pred, trail, k):
         raise LogicException(type_error("predicate", val, "listing/1"))
 
     name = val.__name__
-    arity = len(val._fields)
+    arity = len(term_field_names_of_class(val))
     clauses = val._clauses
 
     if not clauses:

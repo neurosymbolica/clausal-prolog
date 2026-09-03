@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import deref, is_var, unify
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.predicate import is_atom
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins.lists import _as_items
@@ -60,7 +60,7 @@ def _atom_to_str(val: Any) -> str | None:
     """
     if isinstance(val, str):
         return val
-    if isinstance(val, PredicateMeta) and not val._fields:
+    if is_atom(val):
         return val.__name__
     # Late import to avoid an import cycle (clausal.terms → clausal.logic
     # via SegString's __walk__).

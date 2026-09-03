@@ -25,6 +25,7 @@ from typing import Any
 from clausal.logic.database import Module as LogicModule, Clause, head_key
 from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.builtins._helpers import functor_arity
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.pythonic_ast.nodes import Predicate as PredicateItem
 
@@ -37,7 +38,7 @@ def _is_term_expansion_clause(pred_node) -> bool:
         return head.func.name == "TermExpansion" and len(head.args) == 4
     # Also check PredicateMeta instances
     if isinstance(type(head), PredicateMeta):
-        return type(head).__name__ == "TermExpansion" and len(type(head)._fields) == 4
+        return functor_arity(head) == ("TermExpansion", 4)
     return False
 
 

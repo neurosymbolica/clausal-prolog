@@ -18,6 +18,7 @@ from clausal.logic.predicate import (
     describe_term_identity_mismatch,
     is_term_instance,
     term_field_names,
+    term_field_dict,
 )
 
 
@@ -511,9 +512,8 @@ def _normalize_structural_head_args(head: Any, body: list) -> tuple[Any, list]:
             prepend.append(Unify(left=v, right=val))
     if not replacements:
         return head, body
-    new_kwargs = {
-        name: replacements.get(name, getattr(head, name)) for name in fields
-    }
+    new_kwargs = term_field_dict(head)
+    new_kwargs.update(replacements)
     new_head = type(head)(**new_kwargs)
     return new_head, prepend + list(body)
 

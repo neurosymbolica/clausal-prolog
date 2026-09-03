@@ -250,3 +250,63 @@ class TestIsAtomAdoptionRegression:
         # both orderings are stable/valid — assert it did not raise and
         # both elements are present
         assert set(id(x) for x in result) == {id(foo_atom), id("foo")}
+
+
+# ── Task 2 migration regression (sites with no existing direct coverage) ─────
+
+
+class TestMigrationRegression:
+    """Task 2 (batch A migration) regression tests for sites the existing
+    suite did not directly exercise at the migrated line. Everything else in
+    the batch A file list (type_checks.py, chars.py, io.py, keyword_ops.py,
+    _lower_goalop_shared.py, terms_to_ast.py, database.py's
+    ``_normalize_structural_head_args``) is already covered by an existing
+    focused suite — see task-2-report.md for the per-file mapping.
+    """
+
+    def test_list_dispatch_rebuilds_term_instance_head_at_pos(self):
+        # nv — list_dispatch.py ~170
+        from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
+        from clausal.logic.database import Clause
+        from clausal.terms import Unify
+
+        pt = make_predicate("pt", ("a", "b"))
+        v = Var()
+        head = pt(a=v, b=99)
+        clause = Clause(head=head, body=[Unify(left=v, right=[1, 2, 3])])
+
+        lifted = _lift_clause_at_pos(clause, 0)
+
+        assert lifted.head.a == [1, 2, 3]  # lifted field
+        assert lifted.head.b == 99  # untouched field preserved via term_field_dict
+        assert lifted.body == []  # matched Unify removed from body
+
+    def test_term_expansion_instance_head_matching_functor_and_arity_detected(self):
+        # nv — term_expansion.py ~40
+        from types import SimpleNamespace
+        from clausal.logic.term_expansion import _is_term_expansion_clause
+
+        te = make_predicate("TermExpansion", ("a", "b", "c", "d"))
+        head = te(a=1, b=2, c=3, d=4)
+        pred_node = SimpleNamespace(head=head)
+        assert _is_term_expansion_clause(pred_node)
+
+    def test_term_expansion_instance_head_wrong_name_not_detected(self):
+        # nv
+        from types import SimpleNamespace
+        from clausal.logic.term_expansion import _is_term_expansion_clause
+
+        other = make_predicate("NotTermExpansion", ("a", "b", "c", "d"))
+        head = other(a=1, b=2, c=3, d=4)
+        pred_node = SimpleNamespace(head=head)
+        assert not _is_term_expansion_clause(pred_node)
+
+    def test_term_expansion_instance_head_wrong_arity_not_detected(self):
+        # nv
+        from types import SimpleNamespace
+        from clausal.logic.term_expansion import _is_term_expansion_clause
+
+        te3 = make_predicate("TermExpansion", ("a", "b", "c"))
+        head = te3(a=1, b=2, c=3)
+        pred_node = SimpleNamespace(head=head)
+        assert not _is_term_expansion_clause(pred_node)

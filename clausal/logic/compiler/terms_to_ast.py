@@ -37,7 +37,7 @@ from clausal.pythonic_ast.nodes import (
     SetLiteral as _SetLiteral_t,
 )
 from clausal.logic.predicate import (
-    PredicateMeta, is_term_instance, term_field_names,
+    PredicateMeta, is_atom, is_term_instance, term_field_names,
     register_atom_identity,
 )
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
@@ -186,11 +186,7 @@ def atom_identity_expr(term: Any) -> ast.expr | None:
     None means either "not an atom" or "not inside
     :func:`atom_identity_lowering`" — both fall back to the bare-Name lowering.
     """
-    if (
-        _ATOM_IDENTITY_DEPTH
-        and isinstance(term, PredicateMeta)
-        and not term._fields
-    ):
+    if _ATOM_IDENTITY_DEPTH and is_atom(term):
         return _call(
             _name("$atom"),
             ast.Constant(value=register_atom_identity(term)),
@@ -630,7 +626,7 @@ def term_to_ast_expr(
     # Emit a bare Name reference so the compiled code loads the class directly
     # — except under ``atom_identity_lowering()`` (query templates), where the
     # name would be re-resolved in a foreign namespace.  See that helper.
-    if isinstance(term, PredicateMeta) and not term._fields:
+    if is_atom(term):
         return atom_identity_expr(term) or _name(term.__name__)
 
     if is_term_instance(term):

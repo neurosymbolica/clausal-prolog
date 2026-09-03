@@ -22,7 +22,7 @@ from clausal.terms import (
     PyThunk, Unify,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import is_term_instance, term_field_names, term_field_dict
 from clausal.logic.database import Clause
 
 from ._ast_helpers import _name, _call, _assign, _if, _MARK_PREFIX  # noqa: F401
@@ -167,7 +167,7 @@ def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
         new_head = Compound(head.functor, tuple(new_args))
     else:  # is_term_instance
         fields = list(term_field_names(head))
-        new_kwargs = {f: getattr(head, f) for f in fields}
+        new_kwargs = term_field_dict(head)
         new_kwargs[fields[pos]] = lift_term
         new_head = type(head)(**new_kwargs)
 

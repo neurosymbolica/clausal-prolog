@@ -4,7 +4,7 @@ unbound_keys/2, signature/3."""
 from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var, unify
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import is_term_instance, term_field_names, term_field_dict
 from clausal.terms import KWTerm, DictTerm
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
@@ -28,8 +28,7 @@ def _vary__3(overrides, term, new_term, trail, k):
         return
     if is_term_instance(term_val) and not isinstance(term_val, KWTerm):
         try:
-            fields = term_field_names(term_val)
-            kwargs = {name: getattr(term_val, name) for name in fields}
+            kwargs = term_field_dict(term_val)
             kwargs.update(overrides_val)
             result = type(term_val)(**kwargs)
         except (TypeError, ValueError):
