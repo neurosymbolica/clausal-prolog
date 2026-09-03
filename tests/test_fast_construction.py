@@ -6,9 +6,21 @@ missing-field backfill, no arity checking.  It exists so a later compiler
 task can emit it for statically-saturated construction.
 """
 
+import ast
+
 import pytest
 
 from clausal.logic.predicate import make_predicate
+from clausal.logic.compiler.terms_to_ast import term_to_ast_expr
+from clausal.logic.compiler import (
+    compile_predicate_trampoline,
+    compile_predicate_trampoline_ast,
+)
+from clausal.logic.database import Clause, Database
+from clausal.logic.variables import Var, Trail, deref
+from clausal.logic.trampoline import StepGenerator, solutions
+from clausal.terms import Compound, Unify as Is
+from clausal.pythonic_ast.nodes import BinOp
 
 
 class TestFastConstructorBasics:
@@ -97,3 +109,99 @@ class TestStructuralParity:
                 assert vy == 2
             case _:
                 pytest.fail("pattern match against fast-path instance failed")
+
+
+# ── Task 2: the emitter uses the fast path for saturated construction ───────
+#
+# ``term_to_ast_expr``'s ``is_term_instance`` branch emits
+# ``Cls._clausal_new(v0, .., vn)`` (positional, no keywords) instead of
+# ``Cls(name=v0, ...)`` when: the term's class is a PredicateMeta class, that
+# class carries a generated ``_clausal_new`` (own ``vars(cls)``, not
+# inherited), and none of its fields are named ``position``/``_position``
+# (the pre-existing skip-filter — those classes must keep today's behaviour
+# byte-identical). Everything else — pythonic_ast dataclass nodes, and any
+# position-field class — keeps the keyword-call emission unchanged.
+
+
+class TestEmitterFastPathUnit:
+    def test_plain_predicate_meta_term_emits_clausal_new(self):
+        # nv
+        foo = make_predicate("emit_foo", ["x", "y"])
+        term = foo(x=1, y=2)
+        expr = term_to_ast_expr(term, {})
+        src = ast.unparse(expr)
+        assert "_clausal_new" in src
+        assert isinstance(expr, ast.Call)
+        assert isinstance(expr.func, ast.Attribute)
+        assert expr.func.attr == "_clausal_new"
+        assert isinstance(expr.func.value, ast.Name)
+        assert expr.func.value.id == "emit_foo"
+        assert expr.keywords == []
+        assert [type(a) for a in expr.args] == [ast.Constant, ast.Constant]
+
+    def test_dataclass_node_never_takes_fast_path(self):
+        # nv — pythonic_ast dataclass nodes must never take the fast path:
+        # their __init__ has defaults/validation that _clausal_new skips.
+        term = BinOp(left=1, right=2)
+        expr = term_to_ast_expr(term, {})
+        src = ast.unparse(expr)
+        assert "_clausal_new" not in src
+        assert isinstance(expr, ast.Call)
+        assert isinstance(expr.func, ast.Name)
+        assert expr.func.id == "BinOp"
+        assert expr.keywords != []
+
+    def test_position_field_class_keeps_keyword_emission(self):
+        # nv — a PredicateMeta class with a field literally named "position"
+        # hits the pre-existing skip-filter and must NOT take the fast path,
+        # even though it has a working _clausal_new.
+        posy = make_predicate("emit_posy", ["position"])
+        assert "_clausal_new" in vars(posy)  # sanity: otherwise eligible
+        term = posy(position=1)
+        expr = term_to_ast_expr(term, {})
+        src = ast.unparse(expr)
+        assert "_clausal_new" not in src
+        assert isinstance(expr.func, ast.Name)
+        assert expr.func.id == "emit_posy"
+        # the "position" field itself is filtered out of the keyword emission
+        assert expr.keywords == []
+
+    def test_underscore_position_field_class_keeps_keyword_emission(self):
+        # nv
+        posy2 = make_predicate("emit_posy2", ["_position"])
+        term = posy2(_position=1)
+        expr = term_to_ast_expr(term, {})
+        assert "_clausal_new" not in ast.unparse(expr)
+        assert isinstance(expr.func, ast.Name)
+
+
+class TestEmitterFastPathIntegration:
+    def test_compiled_body_construction_parity_with_slow_path(self):
+        # nv — a clause body that constructs a saturated compound as data
+        # (``R is pt(X, Y)``): the compiled source takes the fast path, and
+        # the answer it produces is the SAME as one built via the slow path.
+        pt = make_predicate("emit_pt", ["x", "y"])
+        assert "_clausal_new" in vars(pt)  # sanity: fast-path eligible
+
+        hx, hy, hr = Var(), Var(), Var()
+        head = Compound("emit_mk", (hx, hy, hr))
+        body = [Is(left=hr, right=pt(x=hx, y=hy))]
+        clause = Clause(head=head, body=body)
+
+        db = Database()
+        db.assertz(clause)
+        clauses = db.clauses_for("emit_mk", 3)
+
+        # The generated source actually took the fast path.
+        func_def = compile_predicate_trampoline_ast("emit_mk", 3, clauses, db)
+        assert "_clausal_new" in ast.unparse(func_def)
+
+        fn = compile_predicate_trampoline("emit_mk", 3, clauses, db)
+        a, b, r = 1, 2, Var()
+        trail = Trail()
+        sg = StepGenerator(fn, None, None, None, a, b, r, trail)
+        results = solutions(sg, lambda: deref(r))
+
+        assert results == [pt(x=1, y=2)]
+        # Parity with a term built entirely via the slow path.
+        assert results[0] == pt(1, 2)

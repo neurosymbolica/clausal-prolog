@@ -634,7 +634,29 @@ def term_to_ast_expr(
         return atom_identity_expr(term) or _name(term.__name__)
 
     if is_term_instance(term):
-        cls_name = type(term).__name__
+        cls = type(term)
+        cls_name = cls.__name__
+        fields = term_field_names(term)
+        if (
+            isinstance(cls, PredicateMeta)
+            and "_clausal_new" in vars(cls)
+            and not any(name in ("_position", "position") for name in fields)
+        ):
+            # Saturated, no position field, generated fast constructor
+            # available: emit a positional call to it instead of the
+            # keyword-based slow-path constructor call below.
+            return ast.Call(
+                func=ast.Attribute(
+                    value=_name(cls_name), attr="_clausal_new", ctx=ast.Load(),
+                ),
+                args=[
+                    term_to_ast_expr(
+                        getattr(term, name), var_context, eval_arith=eval_arith,
+                    )
+                    for name in fields
+                ],
+                keywords=[],
+            )
         return ast.Call(
             func=_name(cls_name),
             args=[],
@@ -645,7 +667,7 @@ def term_to_ast_expr(
                         getattr(term, name), var_context, eval_arith=eval_arith,
                     ),
                 )
-                for name in term_field_names(term)
+                for name in fields
                 if name not in ("_position", "position")
             ],
         )
