@@ -1,0 +1,497 @@
+"""toklex spec IR + Prolog-term loader.
+
+Reads a token-definition file written as Prolog terms (see the toklex
+design doc §3) and produces a typed intermediate representation: a
+``Spec`` of character classes, token rules and trivia (skip) rules,
+each with a regular-expression IR built from ``CharSet`` (Task 2) atop
+the Prolog term AST produced by ``prolog_parser`` (Task 1).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from clausal.tools.prolog_ast import PAtom, PClause, PCompound, PList, PTerm
+from clausal.tools.prolog_operators import OperatorTable
+from clausal.tools.prolog_parser import parse
+from clausal.tools.toklex.charset import CharSet
+
+
+# ── Errors ──────────────────────────────────────────────────────────
+
+
+class SpecError(Exception):
+    """Raised for any malformed toklex spec declaration.
+
+    Messages always name the offending declaration (functor, and its
+    name argument when available).
+    """
+
+
+# ── RE IR ───────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class Lit:
+    cs: CharSet
+
+
+@dataclass(frozen=True)
+class Seq:
+    parts: tuple
+
+
+@dataclass(frozen=True)
+class Alt:
+    parts: tuple
+
+
+@dataclass(frozen=True)
+class Star:
+    x: object
+
+
+@dataclass(frozen=True)
+class Plus:
+    x: object
+
+
+@dataclass(frozen=True)
+class Opt:
+    x: object
+
+
+@dataclass(frozen=True)
+class ButNot:
+    a: object
+    b: object
+
+
+# ── Declaration IR ─────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class TokenRule:
+    name: str
+    expr: object
+    follow: CharSet | None
+    follow_eof: bool
+    builder: str | None
+    prio: int
+
+
+@dataclass(frozen=True)
+class TriviaRule:
+    name: str
+    expr: object
+    nest_close: object  # RE node, or None
+    prio: int
+
+
+@dataclass(frozen=True)
+class Fragment:
+    name: str
+    expr_repr: str
+    gives_repr: str
+
+
+@dataclass(frozen=True)
+class Spec:
+    classes: dict
+    tokens: tuple
+    trivia: tuple
+    encoding: str
+    fragments: tuple = ()
+
+
+# ── Operator table ──────────────────────────────────────────────────
+
+
+def toklex_op_table() -> OperatorTable:
+    t = OperatorTable.iso_default()
+    for prec, kind, name in [
+        (200, "xf", "*"), (200, "xf", "+"), (200, "xf", "?"),
+        (600, "xfy", "then"), (700, "xfx", "but_not"), (700, "xfx", "followed_by"),
+        (1100, "xfy", "|"), (1150, "xfx", "nest"), (1150, "xfx", "value"),
+        (100, "fy", "gives"),
+    ]:
+        t.define(prec, kind, name)
+    return t
+
+
+# ── Small term helpers ───────────────────────────────────────────────
+
+
+def _term_repr(term) -> str:
+    return repr(term)
+
+
+def _require_atom_name(term, ctx: str) -> str:
+    if isinstance(term, PAtom):
+        return term.name
+    raise SpecError(f"expected an atom name in {ctx}, got {_term_repr(term)}")
+
+
+def _builder_name(term, ctx: str) -> str:
+    if isinstance(term, PAtom):
+        return term.name
+    if isinstance(term, PCompound):
+        return term.functor
+    raise SpecError(f"invalid builder in {ctx}: {_term_repr(term)}")
+
+
+def _flatten_then(term) -> list:
+    if isinstance(term, PCompound) and term.functor == "then" and len(term.args) == 2:
+        return _flatten_then(term.args[0]) + _flatten_then(term.args[1])
+    return [term]
+
+
+def _flatten_bar(term) -> list:
+    if isinstance(term, PCompound) and term.functor == "|" and len(term.args) == 2:
+        return _flatten_bar(term.args[0]) + _flatten_bar(term.args[1])
+    return [term]
+
+
+# ── Class / def environments (lazy resolution + cycle detection) ────
+
+
+class ClassEnv:
+    def __init__(self, raw: dict):
+        self.raw = raw
+        self.resolved: dict = {}
+        self.resolving: set = set()
+
+    def has(self, name: str) -> bool:
+        return name in self.raw
+
+    def get(self, name: str, ctx: str) -> CharSet:
+        if name in self.resolved:
+            return self.resolved[name]
+        if name not in self.raw:
+            raise SpecError(f"unknown class {name!r} referenced in {ctx}")
+        if name in self.resolving:
+            raise SpecError(f"cyclic class definition involving class {name!r}")
+        self.resolving.add(name)
+        try:
+            cs = eval_class_expr(self.raw[name], self, f"class {name!r}")
+        finally:
+            self.resolving.discard(name)
+        self.resolved[name] = cs
+        return cs
+
+
+class DefEnv:
+    def __init__(self, raw: dict):
+        self.raw = raw
+        self.resolving: set = set()
+
+    def has(self, name: str) -> bool:
+        return name in self.raw
+
+    def get(self, name: str, classes: ClassEnv, ctx: str):
+        if name in self.resolving:
+            raise SpecError(f"cyclic def definition involving def {name!r} (referenced from {ctx})")
+        self.resolving.add(name)
+        try:
+            node = translate_re(self.raw[name], classes, self, f"def {name!r}")
+        finally:
+            self.resolving.discard(name)
+        return node
+
+
+# ── Class-expression evaluator (P-nodes -> CharSet) ──────────────────
+
+
+def eval_class_expr(term, classes: ClassEnv, ctx: str) -> CharSet:
+    if isinstance(term, PList):
+        if term.tail is not None:
+            raise SpecError(f"improper char list in {ctx}: {_term_repr(term)}")
+        chars = []
+        for e in term.elements:
+            if not isinstance(e, PAtom) or len(e.name) != 1:
+                raise SpecError(f"invalid char-list element in {ctx}: {_term_repr(e)}")
+            chars.append(e.name)
+        return CharSet.from_chars(chars)
+
+    if isinstance(term, PCompound):
+        f, a = term.functor, term.args
+        if f == "range" and len(a) == 2:
+            lo, hi = a
+            if not (isinstance(lo, PAtom) and len(lo.name) == 1
+                    and isinstance(hi, PAtom) and len(hi.name) == 1):
+                raise SpecError(f"invalid range endpoints in {ctx}: {_term_repr(term)}")
+            return CharSet.from_ranges([(lo.name, hi.name)])
+        if f == "unicode" and len(a) == 1:
+            cat = a[0]
+            if not isinstance(cat, PAtom):
+                raise SpecError(f"invalid unicode category in {ctx}: {_term_repr(term)}")
+            return CharSet.from_unicode_category(cat.name)
+        if f == "class" and len(a) == 1:
+            nm = a[0]
+            if not isinstance(nm, PAtom):
+                raise SpecError(f"invalid class reference in {ctx}: {_term_repr(term)}")
+            return classes.get(nm.name, ctx)
+        if f == "+" and len(a) == 2:
+            return eval_class_expr(a[0], classes, ctx) | eval_class_expr(a[1], classes, ctx)
+        if f == "-" and len(a) == 2:
+            return eval_class_expr(a[0], classes, ctx) - eval_class_expr(a[1], classes, ctx)
+        raise SpecError(f"invalid class expression {f}/{len(a)} in {ctx}: {_term_repr(term)}")
+
+    if isinstance(term, PAtom):
+        if term.quoted:
+            if len(term.name) != 1:
+                raise SpecError(f"multi-char literal {term.name!r} in {ctx}")
+            return CharSet.from_chars([term.name])
+        if term.name == "any":
+            return CharSet.full()
+        return classes.get(term.name, ctx)
+
+    raise SpecError(f"invalid class expression in {ctx}: {_term_repr(term)}")
+
+
+# ── RE translator (P-nodes -> RE IR) ─────────────────────────────────
+
+
+def translate_re(term, classes: ClassEnv, defs: DefEnv, ctx: str):
+    if isinstance(term, PCompound):
+        f, a = term.functor, term.args
+        if f == "then" and len(a) == 2:
+            return _build_seq(_flatten_then(term), classes, defs, ctx)
+        if f == "|" and len(a) == 2:
+            parts = _flatten_bar(term)
+            return Alt(tuple(translate_re(p, classes, defs, ctx) for p in parts))
+        if f == "*" and len(a) == 1:
+            return Star(translate_re(a[0], classes, defs, ctx))
+        if f == "+" and len(a) == 1:
+            return Plus(translate_re(a[0], classes, defs, ctx))
+        if f == "?" and len(a) == 1:
+            return Opt(translate_re(a[0], classes, defs, ctx))
+        if f == "but_not" and len(a) == 2:
+            return ButNot(translate_re(a[0], classes, defs, ctx), translate_re(a[1], classes, defs, ctx))
+        if f == "range" and len(a) == 2:
+            return Lit(eval_class_expr(term, classes, ctx))
+        if f == "unicode" and len(a) == 1:
+            return Lit(eval_class_expr(term, classes, ctx))
+        if f == "class" and len(a) == 1:
+            return Lit(eval_class_expr(term, classes, ctx))
+        if f in ("+", "-") and len(a) == 2:
+            return Lit(eval_class_expr(term, classes, ctx))
+        if f == "body":
+            raise SpecError(
+                f"body(...) not allowed here (only as the last element of a "
+                f"nest trivia rule) in {ctx}"
+            )
+        if f == "followed_by":
+            raise SpecError(f"followed_by not allowed here (only at token RE root) in {ctx}")
+        raise SpecError(f"unsupported RE construct {f}/{len(a)} in {ctx}: {_term_repr(term)}")
+
+    if isinstance(term, PList):
+        return Lit(eval_class_expr(term, classes, ctx))
+
+    if isinstance(term, PAtom):
+        if term.quoted:
+            if len(term.name) != 1:
+                raise SpecError(f"multi-char literal {term.name!r} in {ctx}")
+            return Lit(CharSet.from_chars([term.name]))
+        if term.name == "any":
+            return Lit(CharSet.full())
+        if classes.has(term.name):
+            return Lit(classes.get(term.name, ctx))
+        if defs.has(term.name):
+            return defs.get(term.name, classes, ctx)
+        raise SpecError(f"unknown reference {term.name!r} in {ctx}")
+
+    raise SpecError(f"unsupported RE term in {ctx}: {_term_repr(term)}")
+
+
+def _build_seq(parts: list, classes: ClassEnv, defs: DefEnv, ctx: str):
+    if not parts:
+        raise SpecError(f"empty regular expression in {ctx}")
+    if len(parts) == 1:
+        return translate_re(parts[0], classes, defs, ctx)
+    return Seq(tuple(translate_re(p, classes, defs, ctx) for p in parts))
+
+
+# ── Token / trivia builders ──────────────────────────────────────────
+
+
+def _build_token(name: str, re_term, builder, prio: int, classes: ClassEnv, defs: DefEnv) -> TokenRule:
+    ctx = f"token {name!r}"
+    if isinstance(re_term, PCompound) and re_term.functor == "followed_by" and len(re_term.args) == 2:
+        lhs, rhs = re_term.args
+        expr = _build_seq(_flatten_then(lhs), classes, defs, ctx)
+        follow_cs = CharSet.empty()
+        follow_eof = False
+        for member in _flatten_bar(rhs):
+            if isinstance(member, PAtom) and not member.quoted and member.name == "eof":
+                follow_eof = True
+            else:
+                follow_cs = follow_cs | eval_class_expr(member, classes, ctx)
+        follow = follow_cs
+    else:
+        expr = _build_seq(_flatten_then(re_term), classes, defs, ctx)
+        follow = None
+        follow_eof = False
+    return TokenRule(name=name, expr=expr, follow=follow, follow_eof=follow_eof, builder=builder, prio=prio)
+
+
+def _build_trivia(name: str, re_term, is_nest: bool, prio: int, classes: ClassEnv, defs: DefEnv) -> TriviaRule:
+    ctx = f"trivia {name!r}"
+    parts = _flatten_then(re_term)
+    if is_nest:
+        last = parts[-1] if parts else None
+        if not (isinstance(last, PCompound) and last.functor == "body" and len(last.args) == 1):
+            raise SpecError(f"nest trivia rule {name!r} lacks body(...)")
+        nest_close_raw = last.args[0]
+        open_parts = parts[:-1]
+        if not open_parts:
+            raise SpecError(f"nest trivia rule {name!r} has an empty open expression")
+        expr = _build_seq(open_parts, classes, defs, ctx)
+        nest_close = _build_seq(_flatten_then(nest_close_raw), classes, defs, ctx + " close")
+    else:
+        expr = _build_seq(parts, classes, defs, ctx)
+        nest_close = None
+    return TriviaRule(name=name, expr=expr, nest_close=nest_close, prio=prio)
+
+
+# ── Top-level loader ──────────────────────────────────────────────────
+
+
+def _decl_term(item) -> PCompound:
+    if not isinstance(item, PClause) or item.body is not None:
+        raise SpecError(f"unsupported top-level declaration form: {_term_repr(item)}")
+    term = item.head
+    if not isinstance(term, PCompound):
+        raise SpecError(f"unsupported declaration (expected a compound term): {_term_repr(term)}")
+    return term
+
+
+def parse_spec_text(text: str) -> Spec:
+    module = parse(text, op_table=toklex_op_table())
+    items = module.items
+
+    # Pass 1: collect class/def raw terms (order-independent references)
+    # and the encoding declaration.
+    classes_raw: dict = {}
+    defs_raw: dict = {}
+    encoding_value = None
+    for item in items:
+        term = _decl_term(item)
+        f, a = term.functor, term.args
+        if f == "class":
+            if len(a) != 2:
+                raise SpecError(f"invalid class declaration (expected class/2): {_term_repr(term)}")
+            name = _require_atom_name(a[0], "class declaration")
+            if name in classes_raw:
+                raise SpecError(f"duplicate class declaration: class {name!r}")
+            classes_raw[name] = a[1]
+        elif f == "def":
+            if len(a) != 2:
+                raise SpecError(f"invalid def declaration (expected def/2): {_term_repr(term)}")
+            name = _require_atom_name(a[0], "def declaration")
+            if name in defs_raw:
+                raise SpecError(f"duplicate def declaration: def {name!r}")
+            defs_raw[name] = a[1]
+        elif f == "encoding":
+            if len(a) != 1:
+                raise SpecError(f"invalid encoding declaration (expected encoding/1): {_term_repr(term)}")
+            enc = a[0]
+            if not isinstance(enc, PAtom) or enc.name not in ("chars", "utf8"):
+                raise SpecError(f"invalid encoding declaration: encoding({_term_repr(enc)})")
+            encoding_value = enc.name
+        # token/trivia/value/nest/fragment/unknown are handled in pass 2.
+
+    if encoding_value is None:
+        encoding_value = "chars"
+
+    classes = ClassEnv(classes_raw)
+    defs = DefEnv(defs_raw)
+
+    tokens: list = []
+    trivia: list = []
+    fragments: list = []
+    token_names: set = set()
+    trivia_names: set = set()
+
+    for item in items:
+        term = _decl_term(item)
+        f, a = term.functor, term.args
+
+        if f in ("class", "def", "encoding"):
+            continue
+
+        elif f == "token" and len(a) == 2:
+            name_term, re_term = a
+            name = _require_atom_name(name_term, "token declaration")
+            if name in token_names:
+                raise SpecError(f"duplicate token declaration: token {name!r}")
+            token_names.add(name)
+            tokens.append(_build_token(name, re_term, None, len(tokens), classes, defs))
+
+        elif f == "value" and len(a) == 2:
+            token_term, builder_term = a
+            if not (isinstance(token_term, PCompound) and token_term.functor == "token"
+                    and len(token_term.args) == 2):
+                raise SpecError(f"invalid value/2 declaration: left side must be token(Name, RE): {_term_repr(term)}")
+            name_term, re_term = token_term.args
+            name = _require_atom_name(name_term, "token declaration")
+            if name in token_names:
+                raise SpecError(f"duplicate token declaration: token {name!r}")
+            token_names.add(name)
+            builder = _builder_name(builder_term, f"token {name!r} value builder")
+            tokens.append(_build_token(name, re_term, builder, len(tokens), classes, defs))
+
+        elif f == "trivia" and len(a) == 2:
+            name_term, re_term = a
+            name = _require_atom_name(name_term, "trivia declaration")
+            if name in trivia_names:
+                raise SpecError(f"duplicate trivia declaration: trivia {name!r}")
+            trivia_names.add(name)
+            trivia.append(_build_trivia(name, re_term, False, len(trivia), classes, defs))
+
+        elif f == "nest" and len(a) == 2:
+            trivia_term, self_term = a
+            if not (isinstance(trivia_term, PCompound) and trivia_term.functor == "trivia"
+                    and len(trivia_term.args) == 2):
+                raise SpecError(f"invalid nest declaration: left side must be trivia(Name, RE): {_term_repr(term)}")
+            if not (isinstance(self_term, PAtom) and not self_term.quoted and self_term.name == "self"):
+                raise SpecError(f"invalid nest declaration: expected 'nest self': {_term_repr(term)}")
+            name_term, re_term = trivia_term.args
+            name = _require_atom_name(name_term, "trivia declaration")
+            if name in trivia_names:
+                raise SpecError(f"duplicate trivia declaration: trivia {name!r}")
+            trivia_names.add(name)
+            trivia.append(_build_trivia(name, re_term, True, len(trivia), classes, defs))
+
+        elif f == "fragment" and len(a) == 3:
+            fname_term, re_term, gives_term = a
+            fname = _require_atom_name(fname_term, "fragment declaration")
+            if not (isinstance(gives_term, PCompound) and gives_term.functor == "gives"
+                    and len(gives_term.args) == 1):
+                raise SpecError(f"invalid fragment declaration: third argument must be gives(V): {_term_repr(term)}")
+            fragments.append(Fragment(
+                name=fname,
+                expr_repr=_term_repr(re_term),
+                gives_repr=_term_repr(gives_term.args[0]),
+            ))
+
+        else:
+            raise SpecError(f"unknown declaration: {f}/{len(a)} ({_term_repr(term)})")
+
+    # Force resolution of every declared class (even unreferenced ones) so
+    # Spec.classes is complete.
+    final_classes = {name: classes.get(name, f"class {name!r}") for name in classes_raw}
+
+    return Spec(
+        classes=final_classes,
+        tokens=tuple(tokens),
+        trivia=tuple(trivia),
+        encoding=encoding_value,
+        fragments=tuple(fragments),
+    )
+
+
+def load_spec(path: str) -> Spec:
+    with open(path, "r", encoding="utf-8") as fh:
+        text = fh.read()
+    return parse_spec_text(text)
