@@ -210,21 +210,49 @@ class IncrementalLexer:
         # Commit region (annotate.py's `Lexer.commit`): this attempt has
         # already crossed at least one accept and is now stuck (on this
         # char, a bad-byte marker, or EOF) inside a DFA region proven NOT
-        # to have a constant backup bound -- a real ISO ambiguity
-        # (quote-doubling; an escape's optional closing backslash; see
-        # task-8-report.md's fix-round section). Rather than walking the
-        # accept history below and backing up to an earlier (shorter)
-        # accept, commit to everything consumed so far and report it as
-        # ONE unterminated error, consuming all of `pending` with no
-        # pushback. This reproduces `prolog_tokenizer.py`'s actual
-        # greedy, non-backtracking, single-pass behavior for these
-        # constructs: e.g. `"ab""ccc<EOF>` becomes one unterminated
-        # string, not a short `"ab"` accept followed by a separately
-        # erroring `"ccc` fragment. NEED_MORE (open input) is unaffected
-        # -- `_resolve` is only reached once the driver is already stuck.
+        # to have a constant backup bound *in general* -- a real ISO
+        # ambiguity (quote-doubling; an escape's optional closing
+        # backslash; see task-8-report.md's and task-10-report.md's
+        # fix-round sections). Being in `commit` only means the region's
+        # backup CAN grow unbounded (e.g. quote-doubling that keeps
+        # finding a "rescuing" delimiter arbitrarily far away) -- it does
+        # not mean every attempt that reaches it necessarily traveled
+        # unboundedly far from its last recorded accept.
+        #
+        # distance-gated commit (task-10-report.md round 2): compute
+        # d = len(pending) - (length of the longest recorded accept). If
+        # d is beyond `lexer.max_backup` -- the proven bound for the
+        # *acyclic* (non-commit) part of the pending graph -- there is no
+        # way this could be an ordinary bounded backup; a real
+        # unbounded-lookahead ambiguity is in play (this is Task 8's
+        # `"ab""ccc<EOF>` case: the doubled-quote reading keeps the DFA
+        # alive far past the short `"ab"` accept, with no upper bound on
+        # how far, so it can only be resolved by committing to one
+        # unterminated error over the whole span). If d is within
+        # max_backup, though, this stuck point is reachable by an
+        # ORDINARY bounded backup from a real accept -- exactly the shape
+        # Task 8 proves is always safe for non-commit states -- so it's
+        # safe to fall through to the normal accept-history walk below
+        # instead of committing (this is Task 10's `'\x41\'.` case: the
+        # rival "second escape" reading only travels 1 char past the
+        # length-7 `quoted_atom` accept before dying, which is well
+        # within bound, so backing up to that accept is correct and
+        # reproduces `prolog_tokenizer.py`'s actual greedy behavior:
+        # `'\x41\'.`  ->  ATOM 'A' + DOT, not a spurious unterminated
+        # error). The gate itself is what keeps bounded pushback an
+        # enforced runtime invariant: any backup actually taken out of a
+        # commit state by the fallthrough below is, by construction of
+        # this check, always <= max_backup.
+        #
+        # commit-error only beyond the provable bound; within it, normal
+        # backup is safe and reproduces the reference greedy tokenizer.
         if self._accepts and self._q in self.lexer.commit:
-            text = "".join(e[0] for e in pending)
-            return self._error_tok("unterminated", text, pending)
+            longest_accept = max(length for length, _labels in self._accepts)
+            d = len(pending) - longest_accept
+            if d > self.lexer.max_backup:
+                text = "".join(e[0] for e in pending)
+                return self._error_tok("unterminated", text, pending)
+            # else: fall through to the normal reversed-accepts walk.
 
         is_eof = entry is None
         is_bad = isinstance(entry, _BadMarker)
