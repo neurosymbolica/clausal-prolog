@@ -10,6 +10,10 @@ Rev 3: tag domain opened (OWA); atoms become global interned strings (standard-P
 semantics) with a Ciao-style `-hide` directive for opt-in module-local symbols. This SUPERSEDES
 the per-module class-identity atom design shipped 2026-07-29 (strict-atoms release) — the
 *checking* survives, the *identity mechanism* is replaced. See §1a.
+**Motivation (recorded 2026-09-03):** the driver behind this exploration is making Clausal
+**ISO Prolog compatible**. A founding Clausal design point — Python classes/objects being the
+same shape as Clausal terms — pulls in the opposite direction, and its actual usage frequency
+has never been measured (open question 7).
 **Origin:** design discussion 2026-09-03; resolves (rather than works around) both phenomena in
 `implementation_plans/dict-atom-keys-vs-predicates.md` — see §3a.
 
@@ -138,6 +142,30 @@ From `implementation_plans/dict-atom-keys-vs-predicates.md`:
   compile as `Constant` nodes and are therefore always safe." All atom keys become that safe
   case. The import-into-every-queried-module convention retires.
 
+## 3b. In-tree precedent: `Compound` IS this design, second-class
+
+`Compound` (`clausal/terms.py:89` — a plain dataclass of `functor: str` + `args: tuple`) is
+structurally the rev-3 cell `("foo", args...)` in a box, with rev-3 semantics on every axis:
+string functor (global, spelling-keyed identity), open arity, no signature required (the OWA
+construction path already exists). The engine already treats it as a parallel term
+representation everywhere terms are consumed: `_arg_to_index_key` gives it the same
+`(functor, arity)` bucket key as class instances, tabling's `_normalize_for_key` maps it to
+`(functor,) + args` — literally this design's cell as its canonical key — standard order has
+a branch for it, `head_match.py:579` emits a match pattern for it, and the ~114
+`isinstance(..., Compound)` sites counted in §7 are a pre-existing dual-representation
+funnel. What it lacks is exactly what this design is about: speed (dataclass construction is
+in the ~86–100 ns class band, not ~20 ns) and first-class citizenship — verified 2026-09-03
+that `Compound("foo", (1,))` does NOT unify with `foo(1)`, so it lives as a segregated world
+(clause-head container, reflection/assertz currency). That segregation is a working miniature
+of Phase 2's two-representations risk.
+
+**Cheap experimental wedge (viable while the full plan stays parked):** reimplement
+`Compound` itself as the tagged tuple (or a `tuple` subclass) behind its existing 114-site
+funnel and let the C unifier's structural tuple branch handle it. Contained blast radius, no
+language-property changes, real measurements — correspondingly limited payoff, since
+`Compound` is not the hot representation. Worth doing before any un-parking decision: it
+exercises the seam conversion, the C tuple path, and the funnel discipline on a small target.
+
 ## 4. Codegen notes
 
 - Str-functor arms are plain literal patterns: `case ("point", a, b)` — no trap.
@@ -252,3 +280,17 @@ Phase 1 and keep the fast path.
    default-resolution rule when unqualified?
 5. Does anything genuinely need per-module atom *identity* (not just hiding) that `-hide`
    cannot express? Scan the corpus before Phase 3 commits to global-by-default.
+6. **Monotonicity vs Python objects as terms.** Python objects admitted as terms are mutable
+   and dynamic — an object's observable value can change after it has been unified against,
+   asserted, tabled, or indexed, which distorts the monotonicity/purity properties an ISO
+   direction wants (the engine already half-acknowledges this: terms are deliberately
+   unhashable because "mutable terms shouldn't be hashable", `predicate.py:622`; tabling and
+   indexing keys assume value stability). Decide where the line goes: immutable term core
+   (ISO-shaped) with Python objects quarantined at the seam as opaque leaves, vs today's
+   "classes/objects are terms" stance.
+7. **Measure the founding design point before deciding 6.** How often is the
+   Python-class-shape-as-term surface actually used (constructing terms from Python, `.Field`
+   attribute reads, term-as-goal iteration, isinstance-on-term-classes in user code)? Survey
+   `packages/`, tests, the domains corpus. Known so far: `clausal-provenance` reconstructs
+   via class+kwargs (~10 sites); `clausal-jax`/`clausal-torch` never touch term instances;
+   scipy/sklearn consume deref'd scalars. No in-tree numbers for user-facing usage.
