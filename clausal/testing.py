@@ -759,6 +759,7 @@ def _pair_vars(runtime, reified, out) -> bool:
     Collects ``(source name, runtime Var)`` pairs.  Returns False the moment
     the two shapes disagree — an unnamed binding is worse than none.
     """
+    from clausal.logic.predicate import term_field_names
     from clausal.logic.variables import Var
     from clausal.reflection import Atom, Goal, Variable
     from clausal.terms import Call, LoadName
@@ -800,7 +801,7 @@ def _pair_vars(runtime, reified, out) -> bool:
     if fields is not None and type(runtime) is type(reified):
         return all(
             _pair_vars(getattr(runtime, f, None), getattr(reified, f, None), out)
-            for f in fields
+            for f in term_field_names(reified)
             if f != "position"
         )
     return False
@@ -1171,6 +1172,7 @@ def _collect_var_ids(term, out: set[int]) -> None:
     carry the (wrong) value.  Its OBJECT IDENTITY still ties the comparison to
     the producer that computed it — the whole point of the match — so we key on
     the raw ``Var`` instance, bound or not."""
+    from clausal.logic.predicate import term_field_names
     from clausal.logic.variables import Var
 
     if isinstance(term, Var):
@@ -1186,7 +1188,7 @@ def _collect_var_ids(term, out: set[int]) -> None:
             _collect_var_ids(getattr(kw, "value", kw), out)
     fields = getattr(type(term), "__dataclass_fields__", None)
     if fields is not None and args is None:
-        for f in fields:
+        for f in term_field_names(term):
             if f != "position":
                 _collect_var_ids(getattr(term, f, None), out)
     if isinstance(term, (list, tuple)):

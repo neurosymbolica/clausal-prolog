@@ -48,6 +48,7 @@ import dataclasses
 import functools
 import os
 
+from clausal.logic.builtins._helpers import _functor_name
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.exceptions import LogicException, instantiation_error
 from clausal.logic.trampoline import DONE
@@ -288,7 +289,7 @@ def _op_node_3(node, class_name, args, trail, k):
     # *class identity*, not name — a foreign object that merely shares an
     # operator's name (e.g. CPython ``ast.Gt``) must fail cleanly, not crash in
     # ``_op_operand_fields`` or false-match.
-    cls = _OP_NODE_CLASSES.get(type(node).__name__)
+    cls = _OP_NODE_CLASSES.get(_functor_name(node))
     if cls is None or type(node) is not cls:
         return  # not a renderable operator node -> fail cleanly
     operands = [getattr(node, field) for field in _op_operand_fields(cls)]

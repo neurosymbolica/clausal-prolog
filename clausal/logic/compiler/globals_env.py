@@ -163,6 +163,24 @@ class _GlobalsDb:
         return None
 
 
+def _record_term_type(types: dict[str, type], term: Any) -> type:
+    """Record *term*'s class under its ``__name__`` key and return that class.
+
+    Shared body for the four near-identical collector walkers below: each
+    guards with ``is_term_instance(term)`` first, then wants ``type(term)``
+    back both to key ``types`` and to recurse over its declared fields. The
+    key is deliberately the class **name string**, not the class itself —
+    last-writer-wins on a same-named-functor collision is a known,
+    out-of-scope bug in ``_collect_globals_info``; see
+    ``todo/assertz-foreign-same-named-functor-head-collision-2026-09-03.md``.
+    This helper does not change that semantics, only dedups the four call
+    sites that implement it.
+    """
+    cls = type(term)
+    types[cls.__name__] = cls
+    return cls
+
+
 def _collect_head_types(clauses: list[Clause]) -> dict[str, type]:
     """Return a name→type dict for all user-defined dataclass types found in clause heads.
 
@@ -182,8 +200,7 @@ def _collect_head_types(clauses: list[Clause]) -> dict[str, type]:
             for e in term:
                 _walk(e)
         elif is_term_instance(term):
-            cls = type(term)
-            types[cls.__name__] = cls
+            cls = _record_term_type(types, term)
             for name in term_field_names(term):
                 _walk(getattr(term, name))
 
@@ -247,8 +264,7 @@ def _collect_types_from_term(term: Any) -> dict[str, type]:
             for v in t.values():
                 _walk(v)
         elif is_term_instance(t):
-            cls = type(t)
-            types[cls.__name__] = cls
+            cls = _record_term_type(types, t)
             for name in term_field_names(t):
                 _walk(getattr(t, name))
 
@@ -328,8 +344,7 @@ def _collect_globals_info(
             for e in term:
                 _walk_head(e)
         elif is_term_instance(term):
-            cls = type(term)
-            types[cls.__name__] = cls
+            cls = _record_term_type(types, term)
             for name in term_field_names(term):
                 _walk_head(getattr(term, name))
         elif _is_opaque_head_literal(term):
@@ -363,8 +378,7 @@ def _collect_globals_info(
             for e in dterm:
                 _walk_body(e)
         elif is_term_instance(dterm):
-            cls = type(dterm)
-            types[cls.__name__] = cls
+            cls = _record_term_type(types, dterm)
             for name in term_field_names(dterm):
                 val = getattr(dterm, name)
                 if val is not None:

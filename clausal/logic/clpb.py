@@ -37,7 +37,8 @@ from clausal.logic.variables import (
     get_attr,
     register_attr_hook,
 )
-from clausal.logic.predicate import make_predicate
+from clausal.logic.predicate import is_term_instance, make_predicate
+from clausal.logic.builtins._helpers import _functor_name
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -384,8 +385,8 @@ def _expr_to_bdd(expr, trail: Trail | None = None):
     _ensure_node_imports()
 
     # BoolEq / BoolImpl term constructors
-    if isinstance(expr, type(BoolEq()).__class__) or (hasattr(expr, '_fields') and hasattr(type(expr), '_functor')):
-        functor = type(expr).__name__
+    if is_term_instance(expr):
+        functor = _functor_name(expr)
         if functor == 'BoolEq':
             left_bdd = _expr_to_bdd(expr.left, trail)
             right_bdd = _expr_to_bdd(expr.right, trail)

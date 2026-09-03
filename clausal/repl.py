@@ -111,7 +111,7 @@ def _format_bindings_html(bindings: dict) -> str:
 
 
 def _conj(*goals, _varnames=None):
-    """Execute predicate instances as a Prolog-style conjunction on a shared
+    """Execute term instances as a Prolog-style conjunction on a shared
     trail and yield one binding dict per combined solution.
 
     Used by the ``*A, B, C`` query syntax rewrite.
@@ -119,8 +119,20 @@ def _conj(*goals, _varnames=None):
     *_varnames* maps user-written variable names to their Var objects so that
     binding keys use the names the user wrote (e.g. ``ROWS``) rather than the
     predicate field names (e.g. ``rows``).
+
+    Each *goal* must be term-shaped (``is_term_instance``: a ``PredicateMeta``
+    instance or a ``@dataclass`` instance) AND satisfy the ``_get_dispatch()``
+    duck-typed protocol on its class (see ``predicate.py:_dispatch_at``'s
+    docstring) — the funnel widens the *shape* check from "must be
+    ``PredicateMeta``" to "must be term-shaped", fixing a latent bug where a
+    hand-built ``@dataclass`` goal implementing the same ``_get_dispatch()``
+    contract PredicateMeta instances use was rejected outright instead of
+    driven. ``cls._get_dispatch()`` itself is untouched, so a term-shaped
+    goal whose class does *not* implement the protocol still fails — just
+    later, with ``AttributeError``, at the dispatch call below rather than
+    at this guard.
     """
-    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.predicate import is_term_instance, term_field_names, term_field_values
     from clausal.logic.variables import Trail, Var
     from clausal.logic.variables import walk as _walk
     from clausal.logic.solve import _drive_trampoline
@@ -133,9 +145,9 @@ def _conj(*goals, _varnames=None):
     # when the same Var appears in multiple goals.
     seen: dict[int, tuple[str, object]] = {}
     for goal in goals:
-        if not isinstance(type(goal), PredicateMeta):
+        if not is_term_instance(goal):
             raise TypeError(f"_conj: expected predicate instances, got {type(goal)}")
-        for f in type(goal)._fields:
+        for f in term_field_names(goal):
             v = getattr(goal, f)
             if isinstance(v, Var):
                 seen[id(v)] = (id_to_name.get(id(v), f), v)
@@ -149,7 +161,7 @@ def _conj(*goals, _varnames=None):
         rest = remaining[1:]
         cls = type(goal)
         dispatch = cls._get_dispatch()
-        args = [getattr(goal, f) for f in cls._fields]
+        args = list(term_field_values(goal))
         for _ in _drive_trampoline(dispatch, trail, *args):
             yield from _run(rest)
 
@@ -161,7 +173,7 @@ def _conj(*goals, _varnames=None):
 
 
 def _iter_from_goal(goal_or_iter, _varnames=None):
-    """If given a predicate instance, drive it and yield binding dicts.
+    """If given a term instance, drive it and yield binding dicts.
     Otherwise pass through as an iterator.
 
     *_varnames* maps user-written variable names to their Var objects so that
@@ -170,9 +182,22 @@ def _iter_from_goal(goal_or_iter, _varnames=None):
     ``True`` is treated as a goal that succeeds once with no bindings (displays
     as ``True``).  ``False`` is treated as a goal that fails immediately
     (displays as ``False``).
+
+    Sanctioned funnel-migration behavior fix (see ``_conj``'s docstring for
+    the full rationale): the entry guard used to require ``isinstance(type(x),
+    PredicateMeta)`` specifically, which meant a term instance that duck-types
+    the ``_get_dispatch()`` protocol without being a ``PredicateMeta``
+    instance (e.g. a hand-built ``@dataclass`` goal) was rejected with
+    ``TypeError`` instead of driven — a crash on a term shape the rest of the
+    engine (``solve.py``, the builtin registry) already drives via
+    ``hasattr(x, '_get_dispatch')`` duck typing. Widening the guard to
+    ``is_term_instance`` (PredicateMeta instance OR dataclass instance) fixes
+    that; ``cls._get_dispatch()`` itself is unchanged, so a term-shaped value
+    whose class does not implement the protocol still fails, just with
+    ``AttributeError`` at the dispatch call instead of at this guard.
     """
-    from clausal.logic.predicate import PredicateMeta
-    if not isinstance(type(goal_or_iter), PredicateMeta):
+    from clausal.logic.predicate import is_term_instance, term_field_names, term_field_values
+    if not is_term_instance(goal_or_iter):
         if goal_or_iter is True:
             return iter([{}])
         if goal_or_iter is False:
@@ -193,8 +218,8 @@ def _iter_from_goal(goal_or_iter, _varnames=None):
     id_to_name = {id(v): n for n, v in (_varnames or {}).items()}
     cls = type(goal_or_iter)
     dispatch = cls._get_dispatch()
-    fields = cls._fields
-    args = [getattr(goal_or_iter, f) for f in fields]
+    fields = term_field_names(goal_or_iter)
+    args = list(term_field_values(goal_or_iter))
     var_fields = {
         id_to_name.get(id(getattr(goal_or_iter, f)), f): getattr(goal_or_iter, f)
         for f in fields if isinstance(getattr(goal_or_iter, f), Var)

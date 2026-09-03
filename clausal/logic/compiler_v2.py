@@ -27,6 +27,7 @@ from clausal.logic.compiler import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, module_source_path, record_clause_source,
+    term_field_names_of_class,
 )
 from clausal.pythonic_ast.nodes import (
     BareAtomRefs as BareAtomRefsItem,
@@ -647,7 +648,8 @@ def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) 
                 )
                 continue
             cls = module_dict.get(functor)
-            if isinstance(cls, PredicateMeta) and len(cls._fields) == arity:
+            fields = term_field_names_of_class(cls)
+            if isinstance(cls, PredicateMeta) and fields is not None and len(fields) == arity:
                 continue
             near = sorted({a for (f, a) in db._clauses if f == functor})
             hint = (f"; predicate {functor} is defined at arity/arities {near}"
@@ -676,7 +678,8 @@ def _refuse_untablable_target(
         return
 
     cls = module_dict.get(functor)
-    is_pred = isinstance(cls, PredicateMeta) and len(cls._fields) == arity
+    fields = term_field_names_of_class(cls)
+    is_pred = isinstance(cls, PredicateMeta) and fields is not None and len(fields) == arity
 
     if functor in specialize_aliases:
         raise SyntaxError(

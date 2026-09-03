@@ -310,3 +310,135 @@ class TestMigrationRegression:
         head = te3(a=1, b=2, c=3)
         pred_node = SimpleNamespace(head=head)
         assert not _is_term_expansion_clause(pred_node)
+
+
+# ── Task 3 migration regression (batch B: compiler walkers, reflection, repl) ─
+
+
+class TestMigrationRegressionBatchB:
+    """Task 3 (batch B migration) regression tests for sites the existing
+    suite did not directly exercise at the migrated line, plus the ONE
+    sanctioned behavior fix in this phase (``repl.py``). Everything else in
+    the batch B file list (globals_env.py's four collector walkers,
+    head_match.py's ``_resolved_field_names``, compiler_v2.py's class-arity
+    reads, clpb.py's BoolEq/BoolImpl probe, reflection.py's op-node name
+    read) is already covered by an existing focused suite — see
+    task-3-report.md for the per-file mapping.
+    """
+
+    # ── repl.py: the sanctioned behavior fix ──────────────────────────────
+
+    def _borrowed_dispatch_and_predicate(self):
+        """Build a real compiled 2-field predicate and hand back its
+        ``_get_dispatch()`` trampoline function, so the dataclass tests below
+        drive a genuine, battle-tested dispatch generator rather than a
+        hand-rolled one that might not honour the trampoline protocol."""
+        from clausal import in_  # a real compiled builtin: in_(elem, lst)
+        return in_._get_dispatch()
+
+    def test_repl_iter_from_goal_dataclass_term_round_trips(self):
+        """repl.py's ``_iter_from_goal`` (~196-197): OLD BEHAVIOR (pre-funnel)
+        — the entry guard was ``isinstance(type(goal_or_iter), PredicateMeta)``,
+        which is False for ANY plain ``@dataclass`` instance no matter what
+        methods its class implements, so passing a dataclass-based goal here
+        fell through to ``iter(goal_or_iter)`` (a dataclass instance is not
+        iterable) and RAISED ``TypeError: Solutions expects a predicate
+        instance or iterator, got ...`` — even for a goal whose class fully
+        implements the same ``_get_dispatch()`` duck-typed protocol a
+        PredicateMeta term uses (the protocol ``solve.py``/the builtin
+        registry drive via ``hasattr(x, '_get_dispatch')``, not an
+        ``isinstance`` check).
+
+        NEW BEHAVIOR (this test): the guard is ``is_term_instance`` (accepts
+        a PredicateMeta instance OR a dataclass instance), and field access
+        goes through ``term_field_names``/``term_field_values``. A
+        dataclass-based goal that duck-types ``_get_dispatch()`` on its class
+        now drives and yields bindings instead of raising — it round-trips.
+        """
+        import dataclasses as _dc
+        from clausal.logic.predicate import PredicateMeta
+        from clausal.logic.variables import Var
+        from clausal.repl import _iter_from_goal
+
+        dispatch = self._borrowed_dispatch_and_predicate()
+
+        @_dc.dataclass
+        class DCMember:
+            elem: object
+            lst: object
+
+            @classmethod
+            def _get_dispatch(cls):
+                return dispatch
+
+        # Concretely document the guard widening this fix depends on: a
+        # dataclass instance's type is never a PredicateMeta instance, so
+        # the OLD guard would have rejected DCMember unconditionally.
+        probe = DCMember(elem=1, lst=[1, 2, 3])
+        assert not isinstance(type(probe), PredicateMeta)
+
+        x = Var()
+        goal = DCMember(elem=x, lst=[1, 2, 3])
+        solutions = list(_iter_from_goal(goal, _varnames={"X": x}))
+        assert solutions == [{"X": 1}, {"X": 2}, {"X": 3}]
+
+    def test_repl_conj_dataclass_term_round_trips(self):
+        """repl.py's ``_conj`` (~152): same fix, same rationale as
+        ``_iter_from_goal`` above — OLD BEHAVIOR raised ``TypeError: _conj:
+        expected predicate instances, got ...`` for any dataclass-based goal;
+        NEW BEHAVIOR drives it via ``is_term_instance`` +
+        ``term_field_names``/``term_field_values``."""
+        import dataclasses as _dc
+        from clausal.logic.variables import Var
+        from clausal.repl import _conj
+
+        dispatch = self._borrowed_dispatch_and_predicate()
+
+        @_dc.dataclass
+        class DCMember2:
+            elem: object
+            lst: object
+
+            @classmethod
+            def _get_dispatch(cls):
+                return dispatch
+
+        x = Var()
+        goal = DCMember2(elem=x, lst=[10, 20])
+        solutions = list(_conj(goal, _varnames={"X": x}))
+        assert solutions == [{"X": 10}, {"X": 20}]
+
+    # ── testing.py ~799 / ~1187: __dataclass_fields__ -> term_field_names ─
+
+    def test_pair_vars_operator_node_fallback_pairs_a_variable(self):
+        # nv — testing.py ~799 (_pair_vars's operator-node dataclass fallback)
+        from clausal.logic.variables import Var
+        from clausal.pythonic_ast.nodes import Gt
+        from clausal.reflection import Variable
+        from clausal.testing import _pair_vars
+
+        v = Var()
+        runtime = Gt(left=v, right=1)
+        reified = Gt(left=Variable(name="X"), right=1)
+        out = []
+        assert _pair_vars(runtime, reified, out) is True
+        assert out == [("X", v)]
+
+    def test_pair_vars_operator_node_fallback_rejects_class_mismatch(self):
+        # nv
+        from clausal.pythonic_ast.nodes import Gt, Not
+        from clausal.testing import _pair_vars
+
+        assert _pair_vars(Not(operand=1), Gt(left=1, right=2), []) is False
+
+    def test_collect_var_ids_operator_node_fallback(self):
+        # nv — testing.py ~1187 (_collect_var_ids's operator-node fallback)
+        from clausal.logic.variables import Var
+        from clausal.pythonic_ast.nodes import Gt
+        from clausal.testing import _collect_var_ids
+
+        v = Var()
+        term = Gt(left=v, right=5)
+        out: set[int] = set()
+        _collect_var_ids(term, out)
+        assert out == {id(v)}

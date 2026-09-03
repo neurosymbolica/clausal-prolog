@@ -32,7 +32,9 @@ from clausal.terms import (
 from clausal.pythonic_ast.nodes import (
     StarUnpack, TupleLiteral, SetLiteral, literal_value,
 )
-from clausal.logic.predicate import is_term_instance, term_field_names, PredicateMeta
+from clausal.logic.predicate import (
+    is_term_instance, term_field_names, term_field_names_of_class, PredicateMeta,
+)
 
 from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -205,19 +207,22 @@ def _resolved_field_names(resolved: Any) -> tuple[str, ...] | None:
     bare ``@dataclass`` classes (via ``dataclasses.fields``).  Refuses
     anything else so the caller falls back through to the dataclass-
     instance / wildcard branches.
+
+    Delegates the class-cases to ``term_field_names_of_class`` (the
+    canonical version in predicate.py, modeled on this function). The one
+    thing dropped versus the pre-funnel body is a generic "any class with
+    a tuple ``_fields`` attribute" duck-type check that predated
+    ``PredicateMeta``-specific typing; ``resolved`` here only ever comes
+    from resolving a head functor name against compiled-module globals,
+    so it is always either a ``PredicateMeta`` class or a bare dataclass
+    in practice — the dropped branch could in theory also match an
+    unrelated class that happens to carry a ``_fields`` tuple (a
+    namedtuple, an ``ast.AST`` subclass), which was never a legitimate
+    resolution target in this position.
     """
     if resolved is None or not isinstance(resolved, type):
         return None
-    fields = getattr(resolved, "_fields", None)
-    if isinstance(fields, tuple):
-        return fields
-    try:
-        import dataclasses as _dc
-        if _dc.is_dataclass(resolved):
-            return tuple(f.name for f in _dc.fields(resolved))
-    except Exception:  # noqa: BLE001 — never let pattern-compilation crash on lookup
-        return None
-    return None
+    return term_field_names_of_class(resolved)
 
 
 def head_to_match_pattern(
