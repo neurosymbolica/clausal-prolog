@@ -76,6 +76,8 @@ from ._ast_helpers import (
 )
 from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
+from .terms_to_ast import tagged_terms_lowering
+from clausal.logic.cells import TAGGED_TERMS_FLAG
 from .terms_to_goalop import BareGoalVariableError, BareGoalUndefinedError
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup,
@@ -656,7 +658,7 @@ def _build_predicate_trampoline_funcdef(
     return func_def
 
 
-def compile_predicate_trampoline(
+def _compile_predicate_trampoline_impl(
     functor: str,
     arity: int,
     clauses: list[Clause],
@@ -1251,6 +1253,33 @@ def compile_predicate_trampoline(
     )
 
 
+
+def compile_predicate_trampoline(*args, **kwargs) -> Callable:
+    """Compile all clauses into a trampoline tuple-protocol generator.
+
+    Thin wrapper: opens the ``-tagged_terms`` cell-lowering scope when the
+    ``globals_`` namespace this compile targets carries the flag, then
+    delegates to :func:`_compile_predicate_trampoline_impl` (which holds the real implementation
+    and its documentation).
+
+    The flag is read off the module namespace rather than threaded as a
+    parameter because ``term_to_ast_expr`` and ``head_to_match_pattern`` are
+    reached from ~56 call sites across the compiler; the scope covers exactly
+    one predicate's compilation, mirroring how ``atom_identity_lowering``
+    scopes query-template atom lowering.  With no flag present nothing is
+    pushed, so the emission and pattern branches are never consulted and the
+    generated AST is byte-identical to the pre-bridge compiler (the
+    DEFAULT-PATH INVARIANT, pinned by ``tests/golden/*.codegen.txt``).
+    """
+    globals_ = kwargs.get("globals_")
+    if globals_ is None and len(args) > 5:
+        globals_ = args[5]
+    if globals_ is not None and globals_.get(TAGGED_TERMS_FLAG):
+        with tagged_terms_lowering(globals_):
+            return _compile_predicate_trampoline_impl(*args, **kwargs)
+    return _compile_predicate_trampoline_impl(*args, **kwargs)
+
+
 def compile_predicate_trampoline_ast(
     functor: str,
     arity: int,
@@ -1436,7 +1465,7 @@ def _shallow_to_trampoline(shallow_fn: Callable, func_name: str) -> Callable:
     return _trampoline_wrapper
 
 
-def compile_predicate_shallow(
+def _compile_predicate_shallow_impl(
     functor: str,
     arity: int,
     clauses: list[Clause],
@@ -1783,6 +1812,33 @@ def compile_predicate_shallow(
 
     _install(db, functor, arity, tramp_fn, lazy_recompile=_recompile_shallow, pred_cls=pred_cls)
     return fn
+
+
+
+def compile_predicate_shallow(*args, **kwargs) -> Callable:
+    """Compile all clauses into a shallow (short-stack) generator.
+
+    Thin wrapper: opens the ``-tagged_terms`` cell-lowering scope when the
+    ``globals_`` namespace this compile targets carries the flag, then
+    delegates to :func:`_compile_predicate_shallow_impl` (which holds the real implementation
+    and its documentation).
+
+    The flag is read off the module namespace rather than threaded as a
+    parameter because ``term_to_ast_expr`` and ``head_to_match_pattern`` are
+    reached from ~56 call sites across the compiler; the scope covers exactly
+    one predicate's compilation, mirroring how ``atom_identity_lowering``
+    scopes query-template atom lowering.  With no flag present nothing is
+    pushed, so the emission and pattern branches are never consulted and the
+    generated AST is byte-identical to the pre-bridge compiler (the
+    DEFAULT-PATH INVARIANT, pinned by ``tests/golden/*.codegen.txt``).
+    """
+    globals_ = kwargs.get("globals_")
+    if globals_ is None and len(args) > 5:
+        globals_ = args[5]
+    if globals_ is not None and globals_.get(TAGGED_TERMS_FLAG):
+        with tagged_terms_lowering(globals_):
+            return _compile_predicate_shallow_impl(*args, **kwargs)
+    return _compile_predicate_shallow_impl(*args, **kwargs)
 
 
 def compile_predicate(

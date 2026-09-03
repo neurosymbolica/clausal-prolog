@@ -194,6 +194,129 @@ def atom_identity_expr(term: Any) -> ast.expr | None:
     return None
 
 
+# ── ``-tagged_terms``: the Phase 2 bridge's per-module cell lowering ─────────
+#
+# EXPERIMENTAL.  A module carrying the ``-tagged_terms`` directive compiles
+# saturated constructions of the functors it declares to CELL literals --
+# ``("point", x, y)`` -- instead of ``point(...)`` / ``point._clausal_new(...)``
+# class instances.  See ``clausal/logic/cells.py`` and the directive's
+# docstring in ``clausal/templating/term_rewriting.py``.
+#
+# The flag reaches this module the same way ``atom_identity_lowering`` does:
+# a module-level stack rather than a new parameter on ``term_to_ast_expr``,
+# which has 56 call sites across the compiler and one signature every one of
+# them would have to grow.  The stack holds the flagged module's namespace so
+# the emission gate can resolve a functor NAME to the class it names; a
+# ``compile_predicate_*`` entrypoint pushes exactly one entry for the duration
+# of one predicate's compilation.
+_TAGGED_TERMS_STACK: list[dict] = []
+
+
+@contextmanager
+def tagged_terms_lowering(module_globals: dict):
+    """Lower declared-functor constructions to cells for the duration.
+
+    *module_globals* is the flagged module's namespace — the same dict the
+    compile entrypoint received as ``globals_`` — used to resolve a functor
+    name to the class it refers to.  Entered by
+    :func:`clausal.logic.compiler.predicate.compile_predicate_trampoline` /
+    ``compile_predicate_shallow`` when that namespace carries
+    :data:`clausal.logic.cells.TAGGED_TERMS_FLAG`; never entered otherwise,
+    which is what keeps the flag-off path byte-identical.
+    """
+    _TAGGED_TERMS_STACK.append(module_globals)
+    try:
+        yield
+    finally:
+        _TAGGED_TERMS_STACK.pop()
+
+
+def tagged_terms_globals() -> dict | None:
+    """The flagged module's namespace, or None outside a flagged compile."""
+    return _TAGGED_TERMS_STACK[-1] if _TAGGED_TERMS_STACK else None
+
+
+def _is_cell_functor_class(cls: Any) -> bool:
+    """True if *cls* is a DATA functor whose instances lower to cells.
+
+    A data functor is a :class:`PredicateMeta` class with at least one field
+    and NO clauses: the module declared it (``-module`` export list,
+    ``-private``, or first use) purely to build terms with.  A class that has
+    clauses is a predicate — calling it is a goal, and ``call/1`` and friends
+    dispatch on the class — so its instances keep class emission even in a
+    flagged module.
+
+    Arity 0 is excluded: a 0-arity reference is an ATOM and stays the class
+    object itself (Phase 3 does the atom pivot, not this bridge).
+    """
+    return (
+        isinstance(cls, type)
+        and isinstance(cls, PredicateMeta)
+        and bool(getattr(cls, "_fields", ()))
+        and not getattr(cls, "_clauses", None)
+    )
+
+
+def cell_functor_for_name(name: str, arity: int,
+                          module_globals: dict | None = None) -> str | None:
+    """Resolve *name* to a cell functor for a saturated *arity* construction.
+
+    Returns the functor string to put in slot 0, or None when the reference
+    must keep class emission — the name does not resolve in the flagged
+    module's namespace, resolves to something that is not a data functor, is
+    not saturated at *arity*, or belongs to another module (compound data
+    does not cross the flag boundary; see the directive docstring).
+
+    A dotted name (``other.Wrap``) always returns None: it is by definition
+    another module's functor.
+    """
+    if module_globals is None:
+        module_globals = tagged_terms_globals()
+    if module_globals is None or "." in name:
+        return None
+    cls = module_globals.get(name)
+    if not _is_cell_functor_class(cls):
+        return None
+    if len(cls._fields) != arity:
+        return None
+    # Own-module gate: the flagged module's ``__name__`` must be the class's
+    # defining module.  An imported functor keeps class emission so that data
+    # built here still matches the owner's clause heads.
+    owner = getattr(cls, "__module__", None)
+    here = module_globals.get("__name__")
+    if owner is not None and here is not None and owner != here:
+        return None
+    return cls.__name__
+
+
+def cell_functor_for_instance(term: Any,
+                              module_globals: dict | None = None) -> str | None:
+    """Resolve a live term INSTANCE to its cell functor, or None.
+
+    Same gates as :func:`cell_functor_for_name`, applied to ``type(term)``.
+    """
+    if module_globals is None:
+        module_globals = tagged_terms_globals()
+    if module_globals is None:
+        return None
+    cls = type(term)
+    if not _is_cell_functor_class(cls):
+        return None
+    owner = getattr(cls, "__module__", None)
+    here = module_globals.get("__name__")
+    if owner is not None and here is not None and owner != here:
+        return None
+    return cls.__name__
+
+
+def cell_literal_ast(functor: str, arg_exprs: list[ast.expr]) -> ast.Tuple:
+    """The cell literal ``("functor", <arg0>, ...)`` as an AST expression."""
+    return ast.Tuple(
+        elts=[ast.Constant(value=functor), *arg_exprs],
+        ctx=ast.Load(),
+    )
+
+
 def _is_star_list(term: Any) -> bool:
     """Return True if term is a list containing at least one StarUnpack."""
     return isinstance(term, list) and any(isinstance(e, StarUnpack) for e in term)
@@ -616,6 +739,18 @@ def term_to_ast_expr(
             )
             for kw in (term.kwargs or [])
         ]
+        # ``-tagged_terms``: a SATURATED, keyword-free construction of a
+        # functor this flagged module declares becomes a cell literal.  This
+        # is the branch that matters for ``.clausal`` source — a compound
+        # written in a clause (``cons(N, T)``) reaches the compiler as
+        # ``Call(LoadName('cons'), …)``, not as a live instance.  Keyword or
+        # partial construction falls through to the class call below: a cell
+        # is positional and total, with no field names to attach and no
+        # Var-backfill for the fields left out.
+        if not kw_exprs:
+            _cell_f = cell_functor_for_name(fname, len(arg_exprs))
+            if _cell_f is not None:
+                return cell_literal_ast(_cell_f, arg_exprs)
         return ast.Call(
             func=_name(fname),
             args=arg_exprs,
@@ -633,6 +768,29 @@ def term_to_ast_expr(
         cls = type(term)
         cls_name = cls.__name__
         fields = term_field_names(term)
+        # ``-tagged_terms``: a live instance of a functor this flagged module
+        # declares lowers to a cell literal, matching what the module's own
+        # source-level constructions compile to (the ``Call(LoadName)`` branch
+        # above).  The reachable producer of such an instance is the query
+        # compiler, whose template globals ARE the callee module's namespace
+        # — so a query argument built as ``m.point(1, 2)`` still meets the
+        # flagged module's cells.  Positional and total, exactly like the
+        # ``_clausal_new`` fast path just below, whose gate this mirrors:
+        # a ``_position``/``position`` field means the slow keyword path
+        # DROPS fields, which a positional cell cannot reproduce.
+        if not any(name in ("_position", "position") for name in fields):
+            _cell_f = cell_functor_for_instance(term)
+            if _cell_f is not None:
+                return cell_literal_ast(
+                    _cell_f,
+                    [
+                        term_to_ast_expr(
+                            getattr(term, name), var_context,
+                            eval_arith=eval_arith,
+                        )
+                        for name in fields
+                    ],
+                )
         if (
             isinstance(cls, PredicateMeta)
             and isinstance(vars(cls).get("_clausal_new"), classmethod)

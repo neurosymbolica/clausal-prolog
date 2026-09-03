@@ -58,6 +58,7 @@ from typing import Any
 from clausal.logic.variables import deref, is_var
 
 __all__ = [
+    "TAGGED_TERMS_FLAG",
     "TUPLE_TAG",
     "make_cell",
     "make_tuple_cell",
@@ -76,6 +77,20 @@ __all__ = [
 # ...)``. This is the ``tuple`` TYPE OBJECT itself, not the string
 # ``"tuple"`` -- see ``is_cell``/``make_tuple_cell``.
 TUPLE_TAG = tuple
+
+
+# The module-namespace key a ``-tagged_terms`` module carries.  The directive
+# (clausal/templating/term_rewriting.py, ``_handle_tagged_terms_directive``)
+# compiles to a plain module-level ``__clausal_tagged_terms__ = True``
+# assignment, and the compiler entrypoints
+# (clausal/logic/compiler/predicate.py) read it back off the ``globals_`` they
+# are handed -- which for a ``.clausal`` module IS that module's ``__dict__``.
+#
+# A module-namespace flag rather than a ``module_items`` entry, deliberately:
+# module items are recovered separately when a module loads from its ``.pyc``
+# cache, whereas an assignment is part of the cached bytecode and therefore
+# cannot go missing on the cached path.
+TAGGED_TERMS_FLAG = "__clausal_tagged_terms__"
 
 
 def _valid_functor_slot(resolved_slot0: Any) -> bool:
