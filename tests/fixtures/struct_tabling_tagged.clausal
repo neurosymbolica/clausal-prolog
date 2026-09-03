@@ -1,0 +1,26 @@
+# Parity fixture (TAGGED / cell half) for the Phase 2 bridge's
+# ``-tagged_terms`` experiment -- Task 3 parity corpus.
+#
+# Identical to struct_tabling.clausal (recursion + compound answers, the
+# fixture Task 4's interning measurement depends on) apart from the added
+# directive and the module name.  cons/2 is a declared data functor with no
+# clauses, so every ``cons(N, T)`` construction/match in a flagged module
+# lowers to the cell literal ``('cons', n, t)`` instead of a class instance;
+# the atom ``nil`` stays a class atom either way (Phase 3 does the atom
+# pivot, not this bridge).
+#
+# Self-contained: every functor it constructs or matches is declared here.
+-tagged_terms
+-module(struct_tabling_tagged, [
+    cons(H, T),
+    nil,
+    Nats(N, L),
+])
+-table(Nats/2)
+
+Nats(0, nil),
+Nats(N, cons(N, T)) <- (
+    N > 0,
+    N1 == N - 1,
+    Nats(N1, T)
+)
