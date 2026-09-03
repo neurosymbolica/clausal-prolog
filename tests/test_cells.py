@@ -464,6 +464,48 @@ class TestInternCell:
         assert i2 is c2
         assert i2 is not c1
 
+    def test_moderate_depth_chain_interns_with_identity_and_completes_fast(self):
+        # nv -- Task 4 review fix: a committed regression guard at a
+        # MODERATE depth (~100, not the task report's n=1500) so a future
+        # big-O regression in _try_intern's iterative walk is caught by the
+        # ordinary suite without needing a slow, large-n run. Builds TWO
+        # independently-constructed but structurally-equal 100-deep ground
+        # cons-chains directly via make_cell (no tabling involved -- this
+        # pins intern_cell's own contract, not the tabling integration) and
+        # interns each.
+        import time
+
+        depth = 100
+
+        def build_chain():
+            node = "nil"
+            for i in range(depth, 0, -1):
+                node = make_cell("cons", i, node)
+            return node
+
+        chain1 = build_chain()
+        chain2 = build_chain()
+        assert chain1 is not chain2  # distinct objects going in
+        assert chain1 == chain2      # same shape
+
+        start = time.perf_counter()
+        i1 = intern_cell(chain1)
+        i2 = intern_cell(chain2)
+        elapsed = time.perf_counter() - start
+
+        assert i1 is chain1  # first cell interned becomes canonical
+        assert i2 is i1      # second, structurally-equal chain collapses onto it
+        # Generous bound -- this is a regression GUARD against a big-O
+        # blowup (the task report documents O(depth^2)-per-call/O(depth^3)
+        # total cost at n=1500 for the current groundness-first,
+        # value-keyed implementation), not a tight performance assertion:
+        # depth=100 should complete in well under a second on any
+        # reasonable machine.
+        assert elapsed < 2.0, (
+            f"interning two 100-deep chains took {elapsed:.3f}s (>2.0s) -- "
+            f"possible big-O regression in _try_intern's walk"
+        )
+
 
 class TestInternEnabledSwitch:
     """The module-level toggle gating the tabling freeze-boundary hook.
