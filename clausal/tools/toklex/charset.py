@@ -144,3 +144,18 @@ class Partition:
     def sample(self, sym: int) -> str:
         """Get a representative character for a symbol."""
         return chr(self.starts[sym])
+
+    def cells(self) -> tuple[tuple[int, int], ...]:
+        """Read-only view of each symbol's inclusive (lo, hi) codepoint bounds.
+
+        ``cells()[sym] == (lo, hi)`` where ``lo`` is ``self.starts[sym]`` and
+        ``hi`` is one less than the next cell's start (or ``_MAX`` for the
+        last cell). Additive accessor for interchange dumps that need cell
+        bounds without reaching into ``starts`` directly.
+        """
+        out = []
+        n = len(self.starts)
+        for i, lo in enumerate(self.starts):
+            hi = self.starts[i + 1] - 1 if i + 1 < n else _MAX
+            out.append((lo, hi))
+        return tuple(out)
