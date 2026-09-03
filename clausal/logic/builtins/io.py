@@ -11,7 +11,6 @@ from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_
 from clausal.logic.exceptions import LogicException, type_error
 
 from clausal.logic.builtins._registry import _builtin, BuiltinPredicate
-from clausal.logic.builtins._helpers import functor_arity
 
 
 def _format_term_for_io(val):
@@ -126,7 +125,7 @@ def _format_clause_term(val):
 def _format_clause_head(head):
     """Format a clause head as 'functor(arg1, arg2, ...)'."""
     if is_term_instance(head):
-        name, _arity = functor_arity(head)
+        name = type(head).__name__
         fields = term_field_names(head)
         if not fields:
             return name

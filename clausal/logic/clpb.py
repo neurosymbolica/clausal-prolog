@@ -52,6 +52,10 @@ BDD_FALSE = 0
 BoolEq = make_predicate("BoolEq", ["left", "right"])
 BoolImpl = make_predicate("BoolImpl", ["left", "right"])
 
+# Presence-check sentinel for _expr_to_bdd's BoolEq/BoolImpl getattr guard --
+# see the comment there.
+_MISSING = object()
+
 # ── BDD node representation ─────────────────────────────────────────────────
 
 
@@ -384,16 +388,24 @@ def _expr_to_bdd(expr, trail: Trail | None = None):
 
     _ensure_node_imports()
 
-    # BoolEq / BoolImpl term constructors
+    # BoolEq / BoolImpl term constructors.  is_term_instance() is wider than
+    # "is actually a BoolEq/BoolImpl" -- it admits any dataclass/PredicateMeta
+    # instance, so a term-shaped value that merely happens to be *named*
+    # BoolEq/BoolImpl (e.g. an unrelated predicate declared under the same
+    # name elsewhere) but lacks .left/.right must fall through to the
+    # unsupported-expression TypeError below, not blow up with an
+    # AttributeError.  getattr(..., _MISSING) is the presence check for that.
     if is_term_instance(expr):
         functor = _functor_name(expr)
-        if functor == 'BoolEq':
-            left_bdd = _expr_to_bdd(expr.left, trail)
-            right_bdd = _expr_to_bdd(expr.right, trail)
+        left = getattr(expr, 'left', _MISSING)
+        right = getattr(expr, 'right', _MISSING)
+        if functor == 'BoolEq' and left is not _MISSING and right is not _MISSING:
+            left_bdd = _expr_to_bdd(left, trail)
+            right_bdd = _expr_to_bdd(right, trail)
             return apply('equiv', left_bdd, right_bdd)
-        if functor == 'BoolImpl':
-            left_bdd = _expr_to_bdd(expr.left, trail)
-            right_bdd = _expr_to_bdd(expr.right, trail)
+        if functor == 'BoolImpl' and left is not _MISSING and right is not _MISSING:
+            left_bdd = _expr_to_bdd(left, trail)
+            right_bdd = _expr_to_bdd(right, trail)
             return apply('impl', left_bdd, right_bdd)
 
     # Bitwise operators from AST nodes

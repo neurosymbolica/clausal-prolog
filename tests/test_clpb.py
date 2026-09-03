@@ -299,6 +299,27 @@ class TestExprToBDD:
         with pytest.raises(TypeError, match="unsupported"):
             _expr_to_bdd("not a bool expr")
 
+    def test_term_named_booleq_without_left_right_raises_type_error(self):
+        """A term instance whose functor happens to be 'BoolEq' but which was
+        NOT built by clpb's own make_predicate("BoolEq", ["left", "right"])
+        -- and so has no .left/.right -- must fall through to the same
+        unsupported-expression TypeError as any other unrecognized term, not
+        raise an AttributeError. is_term_instance() admits any dataclass/
+        PredicateMeta instance, so functor-name matching alone is not proof
+        the .left/.right access is safe."""
+        # nv
+        from clausal.logic.predicate import make_predicate
+        fake_bool_eq = make_predicate("BoolEq", ["x"])
+        with pytest.raises(TypeError, match="unsupported"):
+            _expr_to_bdd(fake_bool_eq(1))
+
+    def test_term_named_boolimpl_without_left_right_raises_type_error(self):
+        # nv
+        from clausal.logic.predicate import make_predicate
+        fake_bool_impl = make_predicate("BoolImpl", ["x"])
+        with pytest.raises(TypeError, match="unsupported"):
+            _expr_to_bdd(fake_bool_impl(1))
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # sat

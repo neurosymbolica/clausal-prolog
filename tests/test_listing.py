@@ -9,10 +9,12 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
+from clausal.logic.builtins.io import _format_clause_head
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.database import Clause
 from clausal.logic.exceptions import LogicException
+from clausal.terms import Compound
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -126,6 +128,33 @@ class TestListing:
         color._assertz(Clause(color("blue", "#0000ff"), []))
         output = _capture_listing(color)
         assert "2 clause(s)" in output
+
+
+# ── _format_clause_head / Compound heads ─────────────────────────────────────
+#
+# functor_arity() (clausal/logic/builtins/_helpers.py) treats a Compound as a
+# term shape it resolves directly, in preference to falling through to the
+# generic is_term_instance()/type name path.  _format_clause_head must NOT
+# route a Compound head through functor_arity(): a str-functor Compound would
+# then print its functor name instead of "Compound(...)", and a var-functor
+# Compound makes functor_arity() return None, which crashes the 2-tuple
+# unpack.  These pin the pre-funnel behavior: the type name, not the funneled
+# functor, is what a Compound head prints as.
+
+class TestFormatClauseHeadCompound:
+    def test_str_functor_compound_prints_type_name(self):
+        head = Compound("foo", (1, 2))
+        result = _format_clause_head(head)
+        # Old shape: "Compound(<functor repr>, <args repr>, <position repr>)"
+        # — the funneled functor ("foo") must NOT stand in for the type name.
+        assert result == "Compound('foo', (1, 2), None)"
+        assert not result.startswith("foo(")
+
+    def test_var_functor_compound_does_not_crash(self):
+        head = Compound(Var(), (1, 2))
+        result = _format_clause_head(head)
+        assert result.startswith("Compound(")
+        assert "(1, 2)" in result
 
 
 # ── portray_clause/1 ─────────────────────────────────────────────────────────

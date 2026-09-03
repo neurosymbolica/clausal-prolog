@@ -277,6 +277,13 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
     zero-arity atom class it is the atom class itself (``_functor_name_py``'s
     own contract: an atomic constant IS its own functor name), so the type
     is ``Any``, not ``str``.
+
+    Caller warning: any ``is_term_instance`` guard admits ``Compound`` (it is
+    a dataclass), and ``functor_arity`` will answer for the *Compound*, not
+    for its Python class -- do not use it to get a class/type name (e.g. for
+    diagnostic display of a ``Compound`` head). Callers that want the type
+    name unconditionally must not route a value that might be a ``Compound``
+    through ``functor_arity`` first.
     """
     if isinstance(term, Compound):
         if not isinstance(term.functor, str):

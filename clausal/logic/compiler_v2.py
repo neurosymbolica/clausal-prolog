@@ -648,9 +648,10 @@ def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) 
                 )
                 continue
             cls = module_dict.get(functor)
-            fields = term_field_names_of_class(cls)
-            if isinstance(cls, PredicateMeta) and fields is not None and len(fields) == arity:
-                continue
+            if isinstance(cls, PredicateMeta):
+                fields = term_field_names_of_class(cls)
+                if fields is not None and len(fields) == arity:
+                    continue
             near = sorted({a for (f, a) in db._clauses if f == functor})
             hint = (f"; predicate {functor} is defined at arity/arities {near}"
                     if near else f"; predicate {functor} is never defined")
@@ -678,8 +679,11 @@ def _refuse_untablable_target(
         return
 
     cls = module_dict.get(functor)
-    fields = term_field_names_of_class(cls)
-    is_pred = isinstance(cls, PredicateMeta) and fields is not None and len(fields) == arity
+    if isinstance(cls, PredicateMeta):
+        fields = term_field_names_of_class(cls)
+        is_pred = fields is not None and len(fields) == arity
+    else:
+        is_pred = False
 
     if functor in specialize_aliases:
         raise SyntaxError(

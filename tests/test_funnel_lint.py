@@ -72,14 +72,16 @@ _PLAN = "docs/superpowers/plans/2026-09-03-phase1-funnel.md"
 #      clause and the "not X._fields" clause (predicate.py's own definition
 #      is written that way).
 _ATOM_BYPASS_RE = re.compile(
-    r"isinstance\(\s*(\w+)\s*,\s*"
+    r"isinstance\(\s*([\w.]+)\s*,\s*"
     r"(?:type\s*\)\s*and\s*isinstance\(\s*\1\s*,\s*)?"
     r"PredicateMeta\s*\)\s*and\s*(?:\\\s*\n\s*)?not\s+\1\._fields"
 )
 
 # getattr(X, "functor", None) or type(X).__name__
+#   -- X's group is [\w.]+ (not \w+) so a dotted receiver like "clause.head"
+#      is caught, not just a bare name.
 _FUNCTOR_FALLBACK_RE = re.compile(
-    r'getattr\(\s*(\w+)\s*,\s*["\']functor["\']\s*,\s*None\s*\)\s*or\s*'
+    r'getattr\(\s*([\w.]+)\s*,\s*["\']functor["\']\s*,\s*None\s*\)\s*or\s*'
     r"type\(\s*\1\s*\)\.__name__"
 )
 
@@ -101,7 +103,15 @@ _FUNNEL_MODULES = {
 
 @dataclass(frozen=True)
 class AllowEntry:
-    path: str  # relative to repo root; may contain fnmatch wildcards
+    # Relative to repo root; may contain fnmatch wildcards. Unlike a shell
+    # glob or pathlib's Path.glob, fnmatch's "*" is not "/"-aware -- it
+    # matches across directory separators too, so e.g. "clausal/templating/
+    # *.py" also allowlists a file in a nested subdirectory of templating/,
+    # not just one directly under it. Every current glob entry below (see
+    # exclusion #9) is a "whole subtree, any depth" exemption anyway, so this
+    # is intentional/known, not a gap -- flagged here so a future narrower
+    # glob entry isn't added assuming single-level "*" semantics.
+    path: str
     lines: tuple[int, int] | None  # inclusive 1-based range, or None = whole file
     reason: str
     patterns: frozenset[str] = frozenset(_PATTERNS)  # which pattern(s) it covers
@@ -137,8 +147,10 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    dataclass fields) -- must stay hand-rolled, not funneled.
     AllowEntry("clausal/logic/compiler/head_match.py", (71, 104),
                "plan exclusion #5: _matched_field_names, deliberately narrower"),
-    # 6. nominal-only by design; funnel would WIDEN matching.
-    AllowEntry("clausal/logic/coroutining.py", None,
+    # 6. nominal-only by design; funnel would WIDEN matching. Scoped to
+    #    _install_when_condition, the function containing the nonvar/ground
+    #    name probes (not the whole file).
+    AllowEntry("clausal/logic/coroutining.py", (127, 174),
                "plan exclusion #6: nonvar/ground name probes, nominal-only"),
     # 7. KWTerm._fields is a keyword dict, NOT PredicateMeta._fields.
     AllowEntry("clausal/terms.py", (180, 280),
@@ -148,8 +160,46 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    which no longer match these patterns anyway.
     AllowEntry("clausal/logic/specialization.py", None,
                "plan exclusion #8: class-registry op, not a term probe"),
-    AllowEntry("clausal/logic/compiler_v2.py", None,
-               "plan exclusion #8: class-registry op, not a term probe"),
+    # compiler_v2.py: scoped to the individual functions that hold
+    # class-registry isinstance(x, PredicateMeta) checks, deliberately
+    # carving OUT the two migrated class-arity reads (module_dict.get(functor)
+    # / isinstance(cls, PredicateMeta) / term_field_names_of_class(cls) at
+    # lines 650-654 in _validate_directive_targets and 681-686 in
+    # _refuse_untablable_target -- item 7's reorder put the isinstance guard
+    # first, so the range shifted from where task 2/3 originally left it) --
+    # those lines must stay lint-checked so a regression back to the old
+    # "isinstance(...) and not X._fields" idiom there would be caught, not
+    # silently re-exempted by a whole-file entry.
+    AllowEntry("clausal/logic/compiler_v2.py", (124, 383),
+               "plan exclusion #8: class-registry op, not a term probe "
+               "(compile_module)"),
+    AllowEntry("clausal/logic/compiler_v2.py", (515, 542),
+               "plan exclusion #8: class-registry op, not a term probe "
+               "(_import_from_origins)"),
+    AllowEntry("clausal/logic/compiler_v2.py", (543, 608),
+               "plan exclusion #8: class-registry op, not a term probe "
+               "(_reject_redefinition_of_imported_predicates)"),
+    AllowEntry("clausal/logic/compiler_v2.py", (609, 649),
+               "plan exclusion #8: class-registry op, not a term probe "
+               "(_validate_directive_targets, before the migrated arity read)"),
+    AllowEntry("clausal/logic/compiler_v2.py", (655, 663),
+               "plan exclusion #8: class-registry op, not a term probe "
+               "(_validate_directive_targets, after the migrated arity read)"),
+    AllowEntry("clausal/logic/compiler_v2.py", (664, 680),
+               "plan exclusion #8: class-registry op, not a term probe "
+               "(_refuse_untablable_target, before the migrated arity read)"),
+    AllowEntry("clausal/logic/compiler_v2.py", (687, 723),
+               "plan exclusion #8: class-registry op, not a term probe "
+               "(_refuse_untablable_target, after the migrated arity read)"),
+    AllowEntry("clausal/logic/compiler_v2.py", (742, 775),
+               "plan exclusion #8: class-registry op, not a term probe "
+               "(_preregister_specializations)"),
+    AllowEntry("clausal/logic/compiler_v2.py", (776, 860),
+               "plan exclusion #8: class-registry op, not a term probe "
+               "(_run_specialization)"),
+    AllowEntry("clausal/logic/compiler_v2.py", (984, 1049),
+               "plan exclusion #8: class-registry op, not a term probe "
+               "(_process_declarations)"),
     AllowEntry("clausal/logic/compiler/predicate.py", None,
                "plan exclusion #8/#9: class-registry op / CPython-ast site"),
     # 9. CPython-`ast` sites.
@@ -191,8 +241,9 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     AllowEntry("clausal/modules/reflection.py", (285, 296),
                "plan exclusion #13: class-identity re-check must stay hand-rolled"),
     # 14. goal_expansion.py has an unrelated module-local _functor_name;
-    #     prefer not touching the file.
-    AllowEntry("clausal/logic/goal_expansion.py", None,
+    #     prefer not touching the file. Scoped to just that function's
+    #     definition, not the whole file.
+    AllowEntry("clausal/logic/goal_expansion.py", (503, 509),
                "plan exclusion #14: unrelated local _functor_name, prefer not touching"),
 
     # ── Task-level "skip for cause" sites (not plan-exclusion-list items;
@@ -413,6 +464,52 @@ def test_lint_ignores_bypass_pattern_inside_a_funnel_module(tmp_path):
     violations = find_violations(tmp_path, funnel_modules=frozenset({"clausal/logic/predicate.py"}))
 
     assert violations == []
+
+
+_BAD_FUNCTOR_FALLBACK_DOTTED_SNIPPET = '''\
+def _sneaky_functor(clause):
+    return getattr(clause.head, "functor", None) or type(clause.head).__name__
+'''
+
+
+def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
+    """A dotted receiver (``clause.head``, not a bare name) must still be
+    caught -- the regex's receiver group must be [\\w.]+, not \\w+. This is
+    the exact shape of the real, previously-invisible occurrence at
+    clausal/testing.py:2091."""
+    bad_file = tmp_path / "sneaky_dotted.py"
+    bad_file.write_text(_BAD_FUNCTOR_FALLBACK_DOTTED_SNIPPET, encoding="utf-8")
+
+    violations = find_violations(tmp_path)
+
+    assert len(violations) == 1, violations
+    (v,) = violations
+    assert v.pattern == "functor_fallback"
+    assert v.path == "sneaky_dotted.py"
+
+
+def test_testing_py_allowlist_entry_is_load_bearing():
+    """clausal/testing.py:2091 has a real ``getattr(clause.head, "functor",
+    None) or type(clause.head).__name__`` occurrence -- now that the
+    receiver group is dotted-aware, the task-3 ALLOWLIST range for
+    testing.py (2046-2160) is doing real exemption work, not sitting on an
+    already-invisible site."""
+    entries_without_testing = tuple(
+        e for e in ALLOWLIST if e.path != "clausal/testing.py"
+    )
+    violations = find_violations(
+        _CLAUSAL_ROOT, allowlist=entries_without_testing, repo_root=_REPO_ROOT
+    )
+    testing_violations = [v for v in violations if v.path == "clausal/testing.py"]
+    assert testing_violations, (
+        "expected clausal/testing.py to surface a functor_fallback violation "
+        "once its allowlist entry is removed -- if this is empty, the "
+        "allowlist entry is a dead no-op again"
+    )
+    assert any(
+        v.pattern == "functor_fallback" and v.line == 2091
+        for v in testing_violations
+    ), testing_violations
 
 
 def test_lint_ignores_bypass_pattern_inside_an_allowlisted_line_range(tmp_path):
