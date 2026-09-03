@@ -1,5 +1,12 @@
 # HAND-OFF: design the token-layer formalism for the Phase 3 Prolog parser
 
+> **DONE 2026-09-04.** Design: `toklex-token-formalism-design.md` (+ external version &
+> PDF, shared with Markus Triska/Ulrich Neumerkel). Implementation:
+> `toklex-implementation-plan.md`, executed on branch feat/toklex — compiler, ISO +
+> clausal dialect specs, incremental driver with UTF-8 stage, DCG rendering verified
+> under Scryer, and the hand-written tokenizer swapped for the generated one
+> (empty full-suite name-diff).
+
 **For the next Claude instance.** The user will direct you to design a formalism based on
 this plan. Read this file, then `implementation_plans/tagged-tuple-term-representation.md`
 §1b (atom/functor rulings) and §1c (the parser output interface contract) before doing

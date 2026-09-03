@@ -1,8 +1,12 @@
 # toklex: a token-layer formalism for Prolog readers
 
-**Status: DESIGN — awaiting approval (deliverable (a)+(b) of
-`implementation_plans/prolog-parser-formalism-handoff.md`; implementation plan (c) is
-gated on approval).**
+**Status: IMPLEMENTED 2026-09-04 — branch feat/toklex (f4316f36..HEAD), per
+`implementation_plans/toklex-implementation-plan.md`. The generated tokenizer replaced
+`prolog_tokenizer.py`'s hand-written scanner with an EMPTY full-suite failure-name
+diff; the DCG rendering runs under Scryer and agrees with the Python driver. §4.3 was
+REVISED during implementation (commit regions — see the amendment in that section):
+real ISO tokens falsified the original unconditional-rejection rule exactly as §13's
+external question 4 invited.**
 
 This document is written to be readable outside the Clausal codebase. Clausal-specific
 material is confined to §9 and the appendix; everything before it describes a formalism
@@ -207,13 +211,27 @@ The compiler:
    head of the stream** (R3: "push characters to the stream, or remember that they were
    present"). Crucially:
 
-   > **Boundedness check:** the compiler verifies that no cycle lies on any
-   > accepting→accepting path through non-accepting states, and reports the maximal
-   > backup distance `B`. A spec with unbounded backup is rejected at compile time.
+   > **Boundedness check (REVISED 2026-09-04 during implementation):** the original
+   > rule — reject any spec with a cycle of non-accepting states reachable from an
+   > accept — was falsified by ISO itself: quote-doubling (`"ab""ccc…"`) and the
+   > optional escape terminator each create exactly such cycles, and both are
+   > load-bearing ISO syntax. The implemented rule derives **commit regions** instead:
+   > pending states on or downstream of a cycle are *committed*; the bound `B` is the
+   > DAG longest path over the remaining (provably acyclic) pending states. At a
+   > failure in a committed state, the lexer backs up normally **iff** the nearest
+   > recorded accept lies within `B`; beyond it, it emits one `unterminated` error for
+   > the whole pending — which is precisely what hand-written greedy scanners (and
+   > SWI) do. Bounded pushback survives as a runtime-checked invariant of that gate.
+   > Everything is still derived from the definitions; nothing is hand-annotated (R5).
 
    For the ISO token set, `B = 2` (worst case `1.0e+` followed by a non-digit: emit
-   float `1.0`, return `e+`). Pushback is therefore a fixed two-cell affair, not a
-   general rewind — which is exactly why R4's no-seeking is satisfiable.
+   float `1.0`, return `e+`; the ISO automaton has 28 committed states out of 112 —
+   all inside quoted-token bodies). One further lesson landed in the spec rather than
+   the engine: the reference scanner's greedy escape-terminator rule ("a backslash
+   right after escape digits is always the terminator") is not a longest-match
+   property and had to be stated in the token grammar itself — the body-item rules
+   restrict what may follow an unterminated digit escape. Both revisions answer §13's
+   external question 4: the counterexample exists, and the fix preserves derivability.
 4. Emits the **annotated DFA**: transitions, accept labels, extend sets, follow checks,
    backup actions, builder attachments. Both targets are mechanical renderings of this
    object; the object itself (a Prolog term / JSON) is a legitimate interchange format
@@ -465,3 +483,24 @@ tables is the only effect of a spec edit. This replaces the 487-line hand-writte
    yes — sanitized version produced as
    `implementation_plans/toklex-token-formalism-external.md` + PDF, for Markus Triska,
    who also shares with Ulrich Neumerkel.)*
+
+## 14. Implementation notes (2026-09-04, feat/toklex)
+
+- **Extend sets:** the Python driver walks `delta` directly; `extend(s)` is
+  observationally equivalent there because every constructed DFA state is live. The
+  extend annotation remains the *specification* of the emission rule and drives the
+  DCG rendering and the dump; §5's prose stands, with this equivalence noted.
+- **Bootstrapping is load-bearing:** the retired hand-written tokenizer lives on as
+  `clausal/tools/toklex/_bootstrap.py`, used only to read `.toklex.pl` spec files —
+  the public `tokenize()` is generated (the §2 bootstrap sentence, made literal).
+- **Known v1 gaps:** (1) the reserved codepoint is not rejected inside *block-comment
+  bodies* (the nest sub-scanner consumes chars without class checks — a formalism-level
+  gap; fix candidate: a declarable nest-body class, default `any`); (2) generated
+  tokenizer is ~2.9x slower per file than the hand scanner (interpreted tables;
+  optimization parked); (3) DCG target is chars-mode kinds+lexemes (v1 scope), rendered
+  as generated fact tables plus a small generic engine — i.e. the §4.4 dump plus an
+  interpreter, a legitimate and readable alternative to unrolled per-state clauses.
+- **Ratified surface divergences from the old scanner** (SWI-compatible): `0x`/`0x_`/
+  `1.5e`-style digitless radix/exponent tails now lex as number-then-name instead of
+  raising; malformed char-codes raise positioned errors with a generic message. Full
+  list: `tests/toklex/test_parity.py` `EXPECTED_DIVERGENCES` + `TestMalformedHardening`.
