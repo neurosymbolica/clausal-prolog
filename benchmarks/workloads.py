@@ -102,7 +102,7 @@ def bench_tabling(n: int = 5000, reps: int = 10) -> object:
     Each repetition reloads the module so the table starts empty, forcing
     the full SLG computation: table lookup, subgoal suspension, answer
     completion, and answer consumption.
-    Expected wall time: ~0.7 s.
+    Expected wall time: ~0.55 s per rep at n=5000, ~7.8 s at the default reps=10.
 
     Fib/2 is functionally deterministic (each N matches exactly one clause
     head), so it has exactly one answer. This loop used to iterate the
