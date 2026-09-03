@@ -564,10 +564,30 @@ def test_F038_op_zero_removes():
 
 
 def test_F040_malformed_number_tokenize_error():
-    # A11-F040 (fixed): malformed numbers raise a positioned TokenizeError.
-    from clausal.tools.prolog_tokenizer import tokenize, TokenizeError
-    with pytest.raises(TokenizeError):
-        tokenize("X = 0x.")
+    # A11-F040 (fixed): malformed numbers used to crash with an
+    # UNPOSITIONED bare ValueError; the guarantee is "no unpositioned
+    # crashes, errors carry line/col" -- not the specific raise-on-0x
+    # choice. Behavior changed 2026-09-04 with the toklex generated
+    # tokenizer (see tests/toklex/test_parity.py EXPECTED_DIVERGENCES):
+    # `0x` with no hex digits is now SWI-compatible lexed as `0` then the
+    # atom `x` (maximal munch + backup) instead of raising; malformed-
+    # number text now surfaces as a positioned ParseError at the parser
+    # layer instead.
+    from clausal.tools.prolog_tokenizer import tokenize, TokenType, TokenizeError
+
+    toks = tokenize("X = 0x.")
+    assert [(t.type, t.value) for t in toks] == [
+        (TokenType.VAR, "X"), (TokenType.ATOM, "="), (TokenType.INTEGER, 0),
+        (TokenType.ATOM, "x"), (TokenType.DOT, "."), (TokenType.END, ""),
+    ]
+
+    # The positioned-error guarantee F040 was really about, still witnessed
+    # directly: an unterminated char-code at EOF raises TokenizeError with
+    # real line/col, never a bare unpositioned ValueError.
+    with pytest.raises(TokenizeError) as exc_info:
+        tokenize("0'")
+    assert isinstance(exc_info.value.line, int)
+    assert isinstance(exc_info.value.col, int)
 
 
 def test_guard_tokenizer_radix_and_bignum():
