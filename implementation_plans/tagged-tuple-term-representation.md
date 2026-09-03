@@ -166,6 +166,41 @@ language-property changes, real measurements — correspondingly limited payoff,
 `Compound` is not the hot representation. Worth doing before any un-parking decision: it
 exercises the seam conversion, the C tuple path, and the funnel discipline on a small target.
 
+## 3c. Optimisations the representation would unlock (recorded 2026-09-03)
+
+Beyond the direct wins in §2, the tuple representation's immutability/hashability enables a
+class of optimisations structurally unavailable to class terms (which are mutable — slot
+assignment works today — and deliberately unhashable):
+
+1. **Hash-consing / ground-term interning**: structurally-equal ground terms become
+   pointer-equal → O(1) deep equality; the C unifier's existing identity-first check
+   short-circuits deep unification; tabled answers dedup structurally. Converts the per-node
+   memory disadvantage (48B tuple vs 32B slots instance) into a net win via sharing. Apply
+   selectively (tabling/answer boundaries), not universally.
+2. **Maximal structural sharing in copy_term/answer copying**: immutable ground subtrees are
+   returned by pointer; only Var-containing paths rebuild — asymptotic (O(var-paths)) not
+   constant-factor. Targets exactly the walker loops where Phase 0 measured 1.4–3.2×.
+3. **Self-keying tabling**: the deref-walked answer IS its variant key; variant/subsumption
+   checks accelerate via pointer equality.
+4. **Cheap deep indexing**: `PyTuple_GET_ITEM` array reads make multi-level/joint index keys
+   (`arg[0][0]`, `(a[0], b[0])`) practical in C.
+5. **Columnar fact stores + zero-conversion JAX/torch seam**: tuples decompose into parallel
+   columns for bulk joins; `("foo", x, y)` is already a JAX pytree — clausal_jax/clausal_torch
+   would consume terms without conversion or registration.
+6. **Marshal-grade serialization**: multiprocessing workers, on-disk answer caches, persistent
+   fact stores — no custom reducers, no module-import requirement on the receiving side
+   (dissolves the second-package-copy hazard for term data).
+7. **Specialization without runtime class minting** (removes the class-identity-churn hazards
+   in index bucketing).
+8. **A C standard-order comparator** (today the one funnel accessor with no C twin, because
+   getattr-chains in C are impractical; tuple recursion is straightforward).
+
+Prerequisite for 1–3: the `Var.__hash__ = None` decision (§5-Hashability). Consequence for
+Phase 2: the bridge should measure a tabling-heavy workload WITH selective interning enabled,
+not just representation parity — that is where this class of wins concentrates. (Blocking
+prerequisite from measurement work: the repo currently has NO working walker-heavy macro
+workload — bench_tabling is broken two ways; see todo/bench-tabling-overflow-on-display-2026-09-03.md.)
+
 ## 4. Codegen notes
 
 - Str-functor arms are plain literal patterns: `case ("point", a, b)` — no trap.
@@ -304,7 +339,16 @@ Site counts (grep, 2026-09-03, `clausal/` excl. tests unless noted):
   adopt the fast path — its unknown-key `TypeError` on the slow kwargs
   constructor is load-bearing for goal failure; `solve.py:323` is a
   legitimate future adoption candidate, not yet done.
-- **Phase 1 — funnel refactor** (prep, pays regardless): route all representation probes
+- **Phase 1 — funnel refactor: DONE 2026-09-03**, merged to clone main at 909e9929
+  (accessor gap-fill: `is_atom` adoption, `functor_arity`, `term_field_names_of_class`,
+  `term_field_values`, `term_field_dict`; ~17 sites migrated across builtins/compiler/
+  reflection/repl incl. a sanctioned repl.py dataclass-crash fix; funnel-bypass lint with
+  path-verified allowlist; perf gate passed, no metric >3%). Three sites deliberately stay
+  hand-rolled with proven cause: inspection.py functor/3, testing.py:2091, io.py listing/1
+  head-format — each is a place `functor_arity`'s term-instance contract diverges (KWTerm/
+  Compound shapes). CAVEAT for future callers: `Compound` IS a dataclass, so any
+  `is_term_instance` guard admits it and `functor_arity` answers for the Compound, not the
+  class — this trap produced the one Critical caught at final review. Original scope: route all representation probes
   through the `_helpers.py` accessors + `is_term_instance`/`term_field_names`; kill the direct
   `getattr`/`type().__name__` long tail. ~40 files. **1–2 weeks.**
 - **Phase 2 — dual-representation bridge**: funnel/unifier/walkers/tabling accept tagged cells
