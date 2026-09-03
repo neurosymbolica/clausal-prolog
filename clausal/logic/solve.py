@@ -83,7 +83,14 @@ def _deref_walk_py(term: Any) -> Any:
     if hook is not None:
         return hook()
     if is_term_instance(term):
-        return type(term)(**{
+        cls = type(term)
+        fast = vars(cls).get("_clausal_new")
+        if isinstance(fast, classmethod):
+            return cls._clausal_new(*(
+                _deref_walk_py(getattr(term, name))
+                for name in term_field_names(term)
+            ))
+        return cls(**{
             name: _deref_walk_py(getattr(term, name))
             for name in term_field_names(term)
         })

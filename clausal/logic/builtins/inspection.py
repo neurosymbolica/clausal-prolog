@@ -75,7 +75,14 @@ def _copy_term_py(term: Any, var_map: dict) -> Any:
                 new_segments.append(_copy_term_py(seg, var_map))
         return SegString(new_segments)
     if is_term_instance(term):
-        return type(term)(**{
+        cls = type(term)
+        fast = vars(cls).get("_clausal_new")
+        if isinstance(fast, classmethod):
+            return cls._clausal_new(*(
+                _copy_term_py(getattr(term, name), var_map)
+                for name in term_field_names(term)
+            ))
+        return cls(**{
             name: _copy_term_py(getattr(term, name), var_map)
             for name in term_field_names(term)
         })

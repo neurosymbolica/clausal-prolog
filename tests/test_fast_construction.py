@@ -239,3 +239,161 @@ class TestEmitterFastPathIntegration:
         assert results == [pt(x=1, y=2)]
         # Parity with a term built entirely via the slow path.
         assert results[0] == pt(1, 2)
+
+
+# ── Task 1: the walk/copy rebuilders adopt the fast path ────────────────────
+#
+# ``_deref_walk_py`` (clausal/logic/solve.py) and ``_copy_term_py``
+# (clausal/logic/builtins/inspection.py) both walk every field of a term
+# instance to build the reconstructed/copied result — construction is always
+# saturated at these sites. They adopt the same gate as the emitter: when
+# ``type(term)``'s OWN dict has ``_clausal_new`` bound to a classmethod, call
+# it positionally with the walked field values (in ``_fields`` order);
+# otherwise keep today's ``cls(**kwargs)`` slow path byte-identical.
+
+
+class TestDerefWalkFastPath:
+    def test_fast_new_used_for_nested_predicate_meta_term(self):
+        # nv — instrument ``_clausal_new`` with a call-recording wrapper and
+        # confirm both that it fires AND that the result matches the
+        # pre-change (``cls(**walked)``) semantics: a fresh, fully-deref'd
+        # object equal to the manually-reconstructed one.
+        from clausal.logic.solve import _deref_walk_py
+        from clausal.logic.variables import Var, Trail, unify
+
+        inner = make_predicate("dw_inner", ["a", "b"])
+        outer = make_predicate("dw_outer", ["p", "q"])
+
+        calls = []
+        real_fast_new = inner.__dict__["_clausal_new"]
+
+        def recording(cls, *args):
+            calls.append(args)
+            return real_fast_new.__func__(cls, *args)
+
+        inner._clausal_new = classmethod(recording)
+        try:
+            v = Var()
+            trail = Trail()
+            unify(v, 99, trail)
+            term = outer(p=inner(a=1, b=v), q="tail")
+
+            result = _deref_walk_py(term)
+
+            assert calls, "expected _clausal_new to be invoked for the inner term"
+            expected = outer(
+                p=inner(a=1, b=99),
+                q="tail",
+            )
+            assert result == expected
+            assert result is not term
+            assert result.p is not term.p
+            assert result.p.b == 99
+        finally:
+            del inner._clausal_new
+            inner._clausal_new = real_fast_new
+
+    def test_dataclass_node_slow_path_unchanged(self):
+        # nv — a pythonic_ast dataclass node has no ``_clausal_new`` in its
+        # own ``vars()``, so it must keep going through the kwargs slow path.
+        from clausal.logic.solve import _deref_walk_py
+
+        node = BinOp(left=1, right=2)
+        result = _deref_walk_py(node)
+        assert result == node
+        assert result is not node
+        assert "_clausal_new" not in vars(type(node))
+
+    def test_field_named_clausal_new_walks_via_slow_path(self):
+        # nv — a class whose FIELD is literally named ``_clausal_new`` has a
+        # member descriptor (not a classmethod) at that key in its own
+        # ``vars()``; the gate must reject it and fall back to kwargs.
+        from clausal.logic.solve import _deref_walk_py
+
+        weird = make_predicate("dw_weird", ["_clausal_new"])
+        term = weird(_clausal_new=7)
+        result = _deref_walk_py(term)
+        assert result == term
+        assert result._clausal_new == 7
+
+    def test_field_order_non_alphabetical(self):
+        # nv — ``make_predicate`` field order need not be alphabetical;
+        # ``term_field_names`` must drive positional assignment correctly.
+        from clausal.logic.solve import _deref_walk_py
+
+        p = make_predicate("dw_p", ["b", "a"])
+        assert p._fields == ("b", "a")
+        term = p(b=1, a=2)
+        result = _deref_walk_py(term)
+        assert result.b == 1
+        assert result.a == 2
+
+
+class TestCopyTermFastPath:
+    def test_fast_new_used_for_nested_predicate_meta_term(self):
+        # nv — same instrumentation approach as the deref-walk test, applied
+        # to ``_copy_term_py``: fresh Vars substituted per ``var_map``,
+        # structure preserved, and the fast constructor actually fires.
+        from clausal.logic.builtins.inspection import _copy_term_py
+        from clausal.logic.variables import Var, is_var
+
+        inner = make_predicate("ct_inner", ["a", "b"])
+        outer = make_predicate("ct_outer", ["p", "q"])
+
+        calls = []
+        real_fast_new = inner.__dict__["_clausal_new"]
+
+        def recording(cls, *args):
+            calls.append(args)
+            return real_fast_new.__func__(cls, *args)
+
+        inner._clausal_new = classmethod(recording)
+        try:
+            v = Var()
+            term = outer(p=inner(a=1, b=v), q="tail")
+
+            var_map = {}
+            result = _copy_term_py(term, var_map)
+
+            assert calls, "expected _clausal_new to be invoked for the inner term"
+            assert result is not term
+            assert result.p is not term.p
+            assert result.p.a == 1
+            assert is_var(result.p.b)
+            assert result.p.b is not v
+            assert var_map[id(v)] is result.p.b
+            assert result.q == "tail"
+        finally:
+            del inner._clausal_new
+            inner._clausal_new = real_fast_new
+
+    def test_dataclass_node_slow_path_unchanged(self):
+        # nv
+        from clausal.logic.builtins.inspection import _copy_term_py
+
+        node = BinOp(left=1, right=2)
+        result = _copy_term_py(node, {})
+        assert result == node
+        assert result is not node
+        assert "_clausal_new" not in vars(type(node))
+
+    def test_field_named_clausal_new_copies_via_slow_path(self):
+        # nv
+        from clausal.logic.builtins.inspection import _copy_term_py
+
+        weird = make_predicate("ct_weird", ["_clausal_new"])
+        term = weird(_clausal_new=7)
+        result = _copy_term_py(term, {})
+        assert result == term
+        assert result._clausal_new == 7
+
+    def test_field_order_non_alphabetical(self):
+        # nv
+        from clausal.logic.builtins.inspection import _copy_term_py
+
+        p = make_predicate("ct_p", ["b", "a"])
+        assert p._fields == ("b", "a")
+        term = p(b=1, a=2)
+        result = _copy_term_py(term, {})
+        assert result.b == 1
+        assert result.a == 2
