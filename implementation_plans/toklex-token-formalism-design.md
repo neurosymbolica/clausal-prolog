@@ -33,6 +33,11 @@ Unpacked, that is four requirements:
 - **R4 (non-repositionable streams):** works on pipes and user input. No seeking, ever.
   When input is exhausted mid-token, the lexer *waits* — it does not fail, guess, or
   demand a rewindable source.
+- **R6 (robust to invalid encodings):** "it also needs to handle invalidly encoded
+  characters, like entities that are not valid UTF-8" (Markus Triska, follow-up 2026-09-04). Bytes
+  that decode to no character must surface as ordinary, positioned lexical errors —
+  never crashes — and a multi-byte character split across a chunk boundary must read
+  as *pending input*, not as invalid (§6.1).
 
 A fifth requirement comes from experience with hand-written lexers (including the one
 this formalism replaces): **R5 (derivability):** R2 and R3 must be *derived from the
@@ -60,6 +65,9 @@ where lexer bugs live.
   list of characters; "wait for more input" *is* "demand reached the unbound tail"
   (§6) — the Python `NEED_MORE` contract and the Prolog `freeze/2`-on-the-tail
   implementation are two operationalizations of the same definition;
+- a **fixed decode stage** in front of the automaton for byte input, making invalidly
+  encoded entities ordinary lexical errors and split multi-byte characters pending
+  input (§6.1);
 - **two thin targets** rendered from the same annotated DFA: a DCG (for a Prolog-hosted
   reader) and a table-driven step function (Clausal's Python L0).
 
@@ -70,8 +78,9 @@ beyond trivia nesting.
 
 ## 3. Notation
 
-A spec is a list of Prolog terms (read with any conforming reader; operators used:
-`:=`, `|`, `..`, standard functional notation). Four kinds of declarations.
+A spec is a list of Prolog terms (read with any conforming reader; the spec header
+declares the handful of operators: `then`, `|`, postfix `*`/`+`/`?`, `but_not`,
+`followed_by`, `nest`, `value`, `gives`). Four kinds of declarations.
 
 ### 3.1 Character classes
 
@@ -95,15 +104,18 @@ class definitions, nothing else.)
 ### 3.2 Token rules
 
 ```prolog
-token(name_atom,  small · alnum*).
-token(variable,   (capital | '_') · alnum*).
+token(name_atom,  small then alnum*).
+token(variable,   (capital | '_') then alnum*).
 token(end,        '.'  followed_by  (layout | '%' | eof)).   % declared before graphic_tok
-token(graphic_tok, graphic+  but_not  ('/' · '*' · any*)).    % ISO: no graphic token starts /*
-token(integer,    digit · (digit | '_')*).                   % '_' separators: dialect choice
+token(graphic_tok, graphic+  but_not  ('/' then '*' then any*)).    % ISO: no graphic token starts /*
+token(integer,    digit then (digit | '_')*).                   % '_' separators: dialect choice
 ```
 
-- `·` sequence, `|` alternation, `*`/`+`/`?` repetition/option (postfix), literals are
-  quoted atoms/chars, class names denote their class.
+- `then` sequence — a word operator: longer to type, but it reads naturally and is
+  unambiguous (`followed_by` was considered and rejected for sequence: it already names
+  the follow-*constraint*, a different thing). `|` alternation, `*`/`+`/`?`
+  repetition/option (postfix), literals are quoted atoms/chars, class names denote
+  their class.
 - `but_not L` — language subtraction. This replaces every "priority" hack: ISO's rule
   that a graphic token cannot begin `/*` is *subtracted* from the graphic rule rather
   than encoded as comment-beats-graphic ordering. Regular languages are closed under
@@ -124,8 +136,8 @@ semantically load-bearing in Prolog — `f(` vs `f (`).
 
 ```prolog
 trivia(whitespace,     layout+).
-trivia(line_comment,   '%' · (any - '\n')*).
-trivia(block_comment,  '/' · '*' · body('*' · '/')  nest  self).
+trivia(line_comment,   '%' then (any - '\n')*).
+trivia(block_comment,  '/' then '*' then body('*' then '/')  nest  self).
 ```
 
 `nest self` is the second extension: the rule may contain itself (nested `/* /* */ */`).
@@ -140,11 +152,11 @@ computed — quoted atoms decode escapes, numbers parse digits — the rule name
 fragments and gives a **builder**, a total function over fragment values:
 
 ```prolog
-token(quoted_atom, q · qitem* · q)  value  atom_from(qitems).
+token(quoted_atom, q then qitem* then q)  value  atom_from(qitems).
 
 fragment(qitem, qq,            gives  '\'').        % '' → literal quote
-fragment(qitem, backslash · nl, gives  none).        % \<newline> line continuation
-fragment(qitem, backslash · esc(C), gives  C).       % ISO 6.4.2 escape map
+fragment(qitem, backslash then nl, gives  none).        % \<newline> line continuation
+fragment(qitem, backslash then esc(C), gives  C).       % ISO 6.4.2 escape map
 fragment(qitem, quoted_ok_char(C),  gives  C).
 ```
 
@@ -262,6 +274,32 @@ is the acceptance gate for any implementation of the spec.
 Note what is *absent*: seeking, repositioning, re-lexing from the token start after a
 refill. The pending lexeme lives in the lexer state, never in the stream.
 
+### 6.1 The byte layer: invalid encodings (R6)
+
+Rules are written over characters, but a non-repositionable stream delivers bytes. A
+fixed **decode stage** sits in front of the DFA — itself a tiny incremental automaton
+(a ≤4-byte window for UTF-8) emitting three events: `char(C)`, `bad(Bytes)`, `eof`.
+Two properties matter:
+
+- **Invalid entities are ordinary error tokens.** `bad(_)` belongs to no character
+  class, so the existing rule — no class membership ⇒ no transition ⇒ an
+  `error(Span, invalid_encoding(Bytes))` token consuming the entity — handles it with
+  zero new machinery; recovery is "skip the entity, continue". This is the same
+  mechanism as §9's reserved-codepoint exclusion: in toklex, *rejection is absence
+  from every class*. A `bad` event is emitted only for byte sequences that no
+  continuation can repair — a stray continuation byte, an overlong encoding, `0xFF`.
+- **A split multi-byte character is pending, not invalid.** A valid prefix at the end
+  of fed input is exactly the unbound-tail situation of §6, one level down:
+  suspend/`NEED_MORE`; truncation is only decidable at true EOF. Chunk-boundary
+  insensitivity therefore extends through the decoder and remains the single
+  conformance property.
+
+A spec declares its input form: `encoding(utf8)` (byte input, decode stage active) or
+`encoding(chars)` (the host stream already decodes — e.g. a Prolog whose text streams
+deliver chars; what such a host does with invalid bytes is then its stream layer's
+affair, upstream of toklex). In the DCG rendering the decode stage is a `decode//1`
+nonterminal over a partial list of bytes; hosts that decode natively skip it.
+
 ## 7. Worked examples (the nasty cases)
 
 **`=` vs `=..`** — one rule, `token(graphic_tok, graphic+)`. After `=`, state is
@@ -324,14 +362,17 @@ base with these deltas (rulings from `tagged-tuple-term-representation.md` §1b)
   (ISO `double_quotes = chars`, per §1b) is the reader's term-construction policy, not
   the lexer's.
 - **Directive surface `-module(...)`, `-private([...])`, bare `-allow_singletons`:**
-  lexically nothing — `-` graphic token, name atom, punctuation. *But note* (open
-  question 3 below): current `.clausal` fixtures are **dot-less and `#`-commented**
-  (they are parsed as Python today). Whether Phase 3's surface is dot-terminated with
-  `%` comments (ISO-faithful, what the §1c L0 contract assumes) or keeps
-  newline-significant items is a surface decision owned by the parser author. The
-  formalism is indifferent: `#`-comments are one trivia line in the spec; a
-  newline-significant surface consumes the `Glue`/span data of §8 in the term layer.
-  The token layer does not change shape either way.
+  lexically nothing — `-` graphic token, name atom, punctuation.
+- **No clause terminators (RULED 2026-09-04, user):** Clausal's surface has *no dots —
+  nothing, ideally — with optional commas between items at module level*. So the
+  clausal dialect spec simply **omits the `end` token** (it exists only in the ISO
+  dialect file, for reading `.pl`); item boundaries are the term layer's job, decided
+  structurally (a complete maximal term ends the item) with §8's `Glue`/span data
+  available for any layout-sensitive rule, and an optional module-level `,` consumed
+  as an item separator. Error recovery follows the dialect: resync-to-`.` in ISO mode,
+  resync-to-fresh-line-item-start in clausal mode. Comment syntax (`#` vs `%`) is
+  still an open surface choice — one trivia line either way. The token layer is
+  identical in shape across both dialects; only the spec files differ.
 - The existing `prolog_tokenizer.py` behaviors that are deliberate dialect choices —
   `_` digit separators, lenient unknown escapes, nested comments — are each one line of
   spec, on by default to keep `tests/test_prolog_parse.py` green.
@@ -397,16 +438,19 @@ tables is the only effect of a spec edit. This replaces the 487-line hand-writte
 
 ## 13. Open questions for the user
 
-1. **Notation blessing:** happy with Prolog-terms surface + the operator set (`·` or
-   `,`? `but_not`, `followed_by`, `nest self`, `value/gives`)? Names are cosmetic;
-   structure is load-bearing. *(Partially ruled 2026-09-04: `but_not` with the
-   underscore, not `butnot`. Rest still open.)*
-2. **⟨SEP⟩ strictness:** §9 proposes rejecting the hidden separator *everywhere*
-   (including comments/strings), stronger than §1b's "any atom token". Confirm.
-3. **Phase 3 surface:** dot-terminated `%`-commented (ISO-faithful, matches §1c L0) vs
-   dot-less newline-significant like today's `.clausal` files? Token layer is
-   indifferent (§9), but the *spec file* and the L1 item boundary need the ruling —
-   and this is the parser author's call.
+1. **Notation blessing:** *(RESOLVED 2026-09-04: `but_not` with the underscore; the
+   sequence operator is the word operator `then` — verbose but natural and unambiguous.
+   `followed_by` was rejected for sequence since it already names the follow
+   constraint. Remaining spellings stand unless Markus/Ulrich push back.)*
+2. **⟨SEP⟩ strictness:** *(CONFIRMED 2026-09-04: the separator is in no character
+   class — a lexical error anywhere in source. Code that legitimately needs the
+   character at runtime constructs it via escapes/`char_code` — the documented
+   out-of-warranty path.)*
+3. **Phase 3 surface:** *(RULED 2026-09-04: no dots — nothing, ideally — with
+   optional commas at module level; see the §9 bullet for the consequences. Still
+   open within this: `#` vs `%` comments, and the ruling interacts with the parked
+   bracketed-clause-bodies idea,
+   `todo/phase3-surface-bracketed-clause-bodies-2026-09-04.md`.)*
 4. **Sharing:** this document + the two spec files are written to be shareable with
    Markus Triska as the proposal; say the word and nothing Clausal-internal blocks it
    (§9 would travel as "an embedder's dialect deltas" example). *(Answered 2026-09-04:
