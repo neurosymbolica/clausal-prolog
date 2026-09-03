@@ -103,6 +103,48 @@ class TestNegatedMembershipRefusal:
         assert "negated membership" in msgs[0]
 
 
+
+class TestAllBindingsMustBeProvable:
+    """Control-flow blindness must not be exploitable via ALIASING.
+
+    The walk behind the provably-list analysis cannot tell a disjunct from a
+    conjunct. An earlier version qualified a name on ANY list binding, which
+    reopened the exact hazard this task closes: a name bound to a dict in one
+    disjunct and a list in another was treated as provably-list everywhere.
+    Qualification now requires EVERY binding of the name to be list-producing.
+    """
+
+    def test_mixed_disjunct_bindings_refuse(self):
+        r"""Reviewer's exact reproduction — must raise under strict.
+
+        `V` may be the dict `D` at the membership site, so `\+ member(K, V)`
+        is silently always true.
+        """
+        src = "p(K, D) <- ((V is D) or (V is [a, b]), K not in V)\n"
+        msgs = _refusals(src)
+        assert len(msgs) == 1, msgs
+        assert "negated membership over a value not provably a list" in msgs[0]
+
+    def test_both_disjuncts_binding_list_literals_still_qualifies(self):
+        """The widening that IS safe: every branch produces a list."""
+        src = "p(K) <- ((V is [a]) or (V is [b]), K not in V)\n"
+        assert _refusals(src) == []
+        assert "\\+ member(K, V)" in clausal_source_to_prolog(src, strict=True)
+
+    def test_list_producing_goal_plus_dict_alias_refuses(self):
+        """One good binding (findall) does not rescue a bad one."""
+        assert _refusals(
+            "p(K, D) <- (findall(X, q(X), V) or (V is D), K not in V)\n")
+
+    def test_name_with_no_binding_refuses(self):
+        """A bare clause parameter is bound by the CALLER, not provable here."""
+        assert _refusals("p(K, V) <- (K not in V)\n")
+
+    def test_cyclic_binding_fails_closed(self):
+        """`V is [a, *V]` must not qualify itself — least fixpoint, not greatest."""
+        assert _refusals("p(K) <- (V is [a, *V], K not in V)\n")
+
+
 class TestMembershipPolarityAsymmetry:
     """The operator deferred the POSITIVE polarity; the asymmetry is load-bearing.
 

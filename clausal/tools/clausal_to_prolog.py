@@ -1198,47 +1198,111 @@ class _ClausalToProlog:
         ("sort", 4): 3,
     }
 
-    def _clause_local_list_vars(self) -> set[str]:
-        """Names bound to a proper list by the CURRENT clause's own AST.
+    def _clause_binding_sites(self):
+        """Every binding occurrence in the CURRENT clause, as name → [RHS].
+
+        A "binding" is any place the clause can give a name its value:
+
+        * ``V is X`` — Clausal's ``is`` is UNIFICATION, and unification is
+          symmetric, so this binds ``V`` to ``X`` and, when ``X`` is itself a
+          name, ``X`` to ``V``. Both directions are recorded.
+        * a call to a goal in :attr:`_LIST_PRODUCING_GOALS` whose output
+          argument is a name — recorded as ``None``, meaning "bound to a
+          proper list by construction".
 
         Clause-local by construction: the walk never leaves
-        ``self._current_stmt``, so no cross-clause or cross-module inference
-        is involved. A name qualifies when the clause contains either
+        ``self._current_stmt``.
+        """
+        bindings: dict[str, list] = {}
+        stmt = self._current_stmt
+        if stmt is None:
+            return bindings
+        for sub in python_ast.walk(stmt):
+            if (isinstance(sub, python_ast.Compare)
+                    and len(sub.ops) == 1
+                    and isinstance(sub.ops[0], python_ast.Is)):
+                left, right = sub.left, sub.comparators[0]
+                if isinstance(left, python_ast.Name):
+                    bindings.setdefault(left.id, []).append(right)
+                if isinstance(right, python_ast.Name):
+                    bindings.setdefault(right.id, []).append(left)
+            if (isinstance(sub, python_ast.Call)
+                    and isinstance(sub.func, python_ast.Name)
+                    and not sub.keywords):
+                idx = self._LIST_PRODUCING_GOALS.get(
+                    (sub.func.id, len(sub.args)))
+                if idx is not None:
+                    out = sub.args[idx]
+                    if isinstance(out, python_ast.Name):
+                        bindings.setdefault(out.id, []).append(None)
+        return bindings
 
-        * ``V is [...]``  — unification with a list display, or
-        * a call to a goal in :attr:`_LIST_PRODUCING_GOALS` whose output
-          argument is exactly ``V`` (e.g. ``findall(X, Goal, V)``).
+    def _clause_local_list_vars(self) -> set[str]:
+        """Names this clause proves to be a proper list on EVERY binding.
 
-        The walk ignores control flow: a binding inside one branch of a
-        disjunction still counts. That is deliberately permissive — this set
-        only ever *widens* what the negated-membership refusal accepts, so an
-        imprecision here costs a missed refusal, never a false one.
+        A name qualifies only when it has at least one binding in the clause
+        and **all** of its bindings are list-producing — a list display, a
+        list-producing goal's output, or another qualifying name. A single
+        binding that is not provably a list DISQUALIFIES the name outright.
+
+        That "all bindings" rule is the whole point, and it is what makes the
+        analysis control-flow-safe without tracking control flow. The walk
+        cannot tell a disjunct from a conjunct, so an earlier version that
+        qualified a name on ANY list binding was unsound via aliasing::
+
+            p(K, D) <- ((V is D) or (V is [a, b]), K not in V)
+
+        There ``V`` may be the dict ``D`` at the membership site, and
+        ``\\+ member(K, V)`` is silently always true — precisely the hazard
+        this refusal exists to close. Requiring every binding to be
+        list-producing rejects that clause, because ``V is D`` is not.
+
+        The result is therefore a CONSERVATIVE approximation of control flow:
+        merging all branches and demanding they all produce a list can only
+        *narrow* what is accepted relative to any single real execution path,
+        so an imprecision here costs an extra refusal, never a missed one.
+
+        Resolution is a LEAST fixpoint, starting from nothing and adding only
+        names whose bindings are already known provable. Cyclic bindings
+        (``V is [a, *V]``) therefore never qualify — fail-closed.
         """
         if self._provable_lists is not None:
             return self._provable_lists
-        found: set[str] = set()
-        stmt = self._current_stmt
-        if stmt is not None:
-            for sub in python_ast.walk(stmt):
-                # V is [...]
-                if (isinstance(sub, python_ast.Compare)
-                        and len(sub.ops) == 1
-                        and isinstance(sub.ops[0], python_ast.Is)
-                        and isinstance(sub.left, python_ast.Name)
-                        and isinstance(sub.comparators[0], python_ast.List)):
-                    found.add(sub.left.id)
-                # findall(_, _, V) and friends
-                if (isinstance(sub, python_ast.Call)
-                        and isinstance(sub.func, python_ast.Name)
-                        and not sub.keywords):
-                    idx = self._LIST_PRODUCING_GOALS.get(
-                        (sub.func.id, len(sub.args)))
-                    if idx is not None:
-                        out = sub.args[idx]
-                        if isinstance(out, python_ast.Name):
-                            found.add(out.id)
-        self._provable_lists = found
-        return found
+        bindings = self._clause_binding_sites()
+        qualified: set[str] = set()
+        while True:
+            added = False
+            for name, rhss in bindings.items():
+                if name in qualified:
+                    continue
+                if rhss and all(
+                        self._binding_is_list(r, qualified) for r in rhss):
+                    qualified.add(name)
+                    added = True
+            if not added:
+                break
+        self._provable_lists = qualified
+        return qualified
+
+    def _binding_is_list(self, node, qualified: set[str]) -> bool:
+        """True when a single binding RHS provably yields a proper list.
+
+        *qualified* is the set of names already proven, threaded through so
+        the fixpoint in :meth:`_clause_local_list_vars` stays monotone (this
+        must NOT call back into ``_clause_local_list_vars``, which would
+        recurse).
+        """
+        if node is None:
+            return True                      # list-producing goal output
+        if isinstance(node, python_ast.List):
+            return all(
+                self._binding_is_list(e.value, qualified)
+                for e in node.elts
+                if isinstance(e, python_ast.Starred)
+            )
+        if isinstance(node, python_ast.Name):
+            return node.id in qualified
+        return False
 
     def _is_provably_list(self, node: python_ast.expr) -> bool:
         r"""True when *node* is PROVABLY a proper list at this site.
@@ -1251,8 +1315,8 @@ class _ClausalToProlog:
             itself provably a list, because ``[H|T]`` with an unbound ``T`` is
             a PARTIAL list and ``\+ member/2`` over one is exactly as unsound
             as over a dict.
-        (b) a variable bound to a list clause-locally — see
-            :meth:`_clause_local_list_vars`.
+        (b) a variable ALL of whose clause-local bindings produce a list —
+            see :meth:`_clause_local_list_vars`.
 
         Everything else — a bare parameter, a call result, an attribute, a
         dict — is NOT provably a list. Exported dicts (attribute-lists) land
