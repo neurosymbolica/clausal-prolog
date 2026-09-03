@@ -422,6 +422,33 @@ def _make_init(fields: tuple[str, ...]):
     return fn
 
 
+_fast_new_cache: dict[tuple[str, ...], Callable] = {}
+
+
+def _make_fast_new(fields: tuple[str, ...]):
+    """Generate a ``_clausal_new`` classmethod: positional, no checks.
+
+    Additive fast path alongside ``_make_init`` / ``PredicateMeta.__call__``.
+    Callers must supply every field, in ``_fields`` order — there is no
+    missing-field backfill (no ``Var()`` defaults) and no arity checking.
+    Parameters are named ``_a0.._aN`` (not the field names) so a field
+    literally named e.g. ``x`` can never shadow a parameter.
+    """
+    cached = _fast_new_cache.get(fields)
+    if cached is not None:
+        return cached
+    params = ", ".join(f"_a{i}" for i in range(len(fields)))
+    assigns = "\n    ".join(
+        f"inst.{f} = _a{i}" for i, f in enumerate(fields)
+    )
+    code = f"def _clausal_new(cls, {params}):\n    inst = cls.__new__(cls)\n    {assigns}\n    return inst"
+    globs: dict[str, Any] = {}
+    exec(code, globs)  # noqa: S102
+    fn = globs["_clausal_new"]
+    _fast_new_cache[fields] = fn
+    return fn
+
+
 def _term_iter(self):
     """Iterate solutions for this term as a goal.
 
@@ -624,6 +651,14 @@ class PredicateMeta(type):
         if fields:
             cls.__unify__ = _make_unify(fields, cls)
             cls.__occurs_check__ = _make_occurs_check(fields)
+            # Additive fast constructor (Phase 0 Task 1): skip when a field
+            # is literally named "_clausal_new" -- __slots__ already put a
+            # member descriptor at that class attribute, and attaching a
+            # classmethod over it would silently shadow the field. Atoms
+            # (fields == ()) get nothing; there is no positional payload to
+            # accelerate.
+            if "_clausal_new" not in fields:
+                cls._clausal_new = classmethod(_make_fast_new(fields))
         # For zero-field classes (atoms), skip __unify__/__occurs_check__: the
         # class IS the value, so identity comparison (C line 886: t1 == t2) and
         # the fallback PyObject_RichCompareBool handle unification correctly,
