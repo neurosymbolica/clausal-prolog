@@ -21,12 +21,12 @@ import pathlib
 
 import pytest
 
-from clausal.logic.cells import TAGGED_TERMS_FLAG, is_cell
+from clausal.logic.cells import TAGGED_TERMS_FLAG
 from clausal.logic.variables import Var, deref
 from clausal.logic.solve import call
 
 from tests.tagged_terms_support import (
-    capture_predicate_codegen, normalize_term,
+    capture_predicate_codegen, normalize_answers, normalize_term,
 )
 
 
@@ -69,7 +69,7 @@ class TestDefaultPathGolden:
     """
 
     @pytest.mark.parametrize("module_name", _GOLDEN_MODULES)
-    def test_unflagged_codegen_unchanged(self, module_name, monkeypatch):
+    def test_unflagged_codegen_unchanged(self, module_name):
         import os
 
         actual = capture_predicate_codegen(module_name)
@@ -206,6 +206,23 @@ class TestCellEmission:
         src = capture_predicate_codegen("_tt_kw", ["p"])
         assert "pt(X=1)" in src
         assert "('pt'," not in src
+
+    def test_a_dynamic_declaration_is_not_a_data_functor(self):
+        """``-dynamic`` leaves a predicate clause-free at compile time.
+
+        Without the ``_dynamic_arities`` gate, "no clauses" would misread the
+        ISO declare-then-assertz pattern as a data functor and compile its
+        references to cells that the later-asserted clauses could never match.
+        """
+        _load_inline(
+            "_tt_dyn",
+            "-tagged_terms\n"
+            "-module(_tt_dyn, [d(A, B), p(X, Y)])\n"
+            "-dynamic(d/2)\n"
+            "p(X, d(X, 1)),\n",
+        )
+        src = capture_predicate_codegen("_tt_dyn", ["p"])
+        assert "('d'," not in src
 
     def test_a_predicate_reference_is_not_a_cell(self):
         """Only DATA functors (no clauses) become cells -- a predicate stays a
@@ -595,3 +612,48 @@ class TestHeadPatternReachability:
         assert arg_index._runtime_arg_key(("point", 3, 4)) is arg_index._INDEX_VAR
         # ... while the equivalent class term keys, and indexes, normally.
         assert arg_index._runtime_arg_key(mod.point(3, 4)) == ("point", 2)
+
+
+class TestNormalizer:
+    """The representation normalizer Task 3's parity corpus imports.
+
+    Its whole job is to make one assertion possible: that the two halves of a
+    fixture pair produced the SAME TERM, without the assertion caring which
+    representation carried it.
+    """
+
+    def test_cell_and_class_term_canonicalise_alike(self):
+        plain, tagged = _fixture(_PLAIN), _fixture(_TAGGED)
+        assert normalize_term(plain.point(1, 2)) == normalize_term(("point", 1, 2))
+        assert normalize_term(tagged.point(1, 2)) == ("point", 1, 2)
+
+    def test_nesting_is_canonicalised_all_the_way_down(self):
+        plain = _fixture(_PLAIN)
+        chain = plain.point(3, plain.point(2, plain.nil))
+        assert normalize_term(chain) == ("point", 3, ("point", 2, ("nil",)))
+        assert normalize_term(("point", 3, ("point", 2, plain.nil))) \
+            == ("point", 3, ("point", 2, ("nil",)))
+
+    def test_different_functors_stay_different(self):
+        plain = _fixture(_PLAIN)
+        assert normalize_term(plain.point(1, 2)) != normalize_term(("circle", 1, 2))
+
+    def test_different_arities_stay_different(self):
+        assert normalize_term(("seg", 1, 2, 3)) != normalize_term(("seg", 1, 2))
+
+    def test_unbound_vars_canonicalise_to_one_placeholder(self):
+        """Var identity is not comparable across two independent runs."""
+        assert normalize_term(Var()) == normalize_term(Var()) == ("$var",)
+
+    def test_lists_and_scalars_pass_through(self):
+        plain = _fixture(_PLAIN)
+        assert normalize_term([1, "a", plain.nil]) == [1, "a", ("nil",)]
+        assert normalize_term(42) == 42
+
+    def test_normalize_answers_handles_binding_dicts_and_bare_terms(self):
+        plain = _fixture(_PLAIN)
+        rows = [{"T": plain.point(1, plain.nil)}, ("point", 1, plain.nil)]
+        assert normalize_answers(rows) == [
+            {"T": ("point", 1, ("nil",))},
+            ("point", 1, ("nil",)),
+        ]

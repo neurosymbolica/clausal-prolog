@@ -248,12 +248,20 @@ def _is_cell_functor_class(cls: Any) -> bool:
 
     Arity 0 is excluded: a 0-arity reference is an ATOM and stays the class
     object itself (Phase 3 does the atom pivot, not this bridge).
+
+    A ``-dynamic`` declaration also disqualifies: the ISO declare-then-assertz
+    pattern leaves a predicate clause-free at compile time and fills it in
+    later, so "no clauses" alone would misread it as data and compile its
+    references to cells that the clauses asserted afterwards could never
+    match.  ``_dynamic_arities`` is ``None`` on every class the compiler did
+    not stamp, so ordinary data functors are unaffected.
     """
     return (
         isinstance(cls, type)
         and isinstance(cls, PredicateMeta)
         and bool(getattr(cls, "_fields", ()))
         and not getattr(cls, "_clauses", None)
+        and not getattr(cls, "_dynamic_arities", None)
     )
 
 
