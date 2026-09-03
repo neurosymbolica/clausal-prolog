@@ -205,6 +205,78 @@ def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
     return length
 
 
+def bench_struct_tabling_tagged(n: int = 1500, reps: int = 3, intern: bool = False) -> int:
+    """Cell-representation counterpart of ``bench_struct_tabling`` above --
+    Phase 2 bridge Task 4's THE MEASUREMENT variants B (``intern=False``)
+    and C (``intern=True``); variant A is ``bench_struct_tabling`` itself.
+
+    Same tabled ``Nats(N, L)`` recursion, same O(N^2) walk-dominated shape
+    (see ``bench_struct_tabling``'s docstring), but running the
+    ``-tagged_terms`` fixture (``tests/fixtures/struct_tabling_tagged.
+    clausal``, Task 3) instead: every ``cons(N, T)`` construction/match is
+    the cell literal ``('cons', n, t)`` (a plain tuple) rather than a
+    class instance. ``nil`` stays a class atom in BOTH fixtures (Phase 3
+    does the atom pivot, not this bridge) -- the chain-length walk below
+    therefore handles a cell node and the final ``nil`` sentinel
+    differently, via ``is_cell``.
+
+    ``intern=True`` flips ``clausal.logic.cells``' module-level interning
+    switch on for the duration of this call (Task 4's ``intern_cell`` /
+    the ``TableEntry.add_answer`` hook in ``clausal/logic/tabling.py``):
+    every tabled ``Nats`` answer's cons-cell is interned as it is stored,
+    so a structurally-equal cons chain -- including the SAME chain
+    re-derived by a later rep's fresh module/table (every rep computes an
+    identical ``Nats(n, _)`` chain) -- collapses onto an earlier rep's
+    already-interned object instead of staying a freshly-walked/copied
+    tuple every time. ``intern=False`` (default) leaves the switch off:
+    freeze/copy work only, same shape of work as variant B / a plain
+    cell-representation run with no interning.
+
+    The intern table is cleared once, before the rep loop (not between
+    reps) -- so within a single call, reps AFTER the first can reuse
+    rep 1's interned cons cells (that cross-rep reuse is the effect this
+    benchmark variant exists to measure), but two separate
+    ``bench_struct_tabling_tagged`` calls (e.g. back-to-back invocations
+    from the smoke test at the bottom of this file, or two rounds of a
+    driver script) don't leak interned state into each other. The switch
+    is always restored to OFF in a ``finally`` so an exception here can't
+    leave a later, unrelated benchmark/test running with interning
+    silently enabled.
+    """
+    from clausal.testing import load_clausal_module
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    from clausal.logic.cells import (
+        cell_args,
+        clear_intern_table,
+        is_cell,
+        set_intern_enabled,
+    )
+
+    fixture = os.path.join(_FIXTURES, "struct_tabling_tagged.clausal")
+    clear_intern_table()
+    set_intern_enabled(intern)
+    try:
+        length = 0
+        for _ in range(reps):
+            mod = load_clausal_module(fixture)
+            lm = mod.__dict__["$module"]
+            nil = mod.nil
+            L = Var()
+            for _ in call("Nats", n, L, module=lm):
+                length = 0
+                node = deref(L)
+                while node is not nil:
+                    length += 1
+                    node = deref(cell_args(node)[1]) if is_cell(node) else deref(node.T)
+                break
+            else:
+                raise RuntimeError(f"Nats({n}) produced no solutions")
+        return length
+    finally:
+        set_intern_enabled(False)
+
+
 def bench_naf_ite(n: int = 3000) -> str:
     """NAF + general-ITE drive loops — stresses ``$naf_has_solution`` and the
     ITE condition driver in both the trivial one-step and many-step shapes.
@@ -245,6 +317,10 @@ if __name__ == "__main__":
         ("bench_graph",   lambda: bench_graph()),
         ("bench_tabling", lambda: bench_tabling()),
         ("bench_struct_tabling", lambda: bench_struct_tabling()),
+        ("bench_struct_tabling_tagged (intern=False)",
+         lambda: bench_struct_tabling_tagged(300, 2, intern=False)),
+        ("bench_struct_tabling_tagged (intern=True)",
+         lambda: bench_struct_tabling_tagged(300, 2, intern=True)),
         ("bench_naf_ite",  lambda: bench_naf_ite()),
     ]
 

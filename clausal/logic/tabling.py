@@ -40,6 +40,7 @@ from typing import Any, Callable
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import Compound, Undefined
+from clausal.logic.cells import is_cell, intern_cell, is_intern_enabled
 
 # ── Sentinels ──────────────────────────────────────────────────────────────
 
@@ -326,7 +327,24 @@ class TableEntry:
         that set into the answer's disjunction (A04-F003) and still returns
         None — the tuple was already streamed to the caller; only its truth
         got sharper. An unconditional re-derivation erases the delays.
+
+        Phase 2 bridge Task 4 -- selective ground-cell interning: this is
+        the SINGLE Python funnel every frozen answer passes through
+        regardless of which ``freeze_args`` built it (the pure-Python
+        ``_freeze_args_py`` above, or the C twin ``_tabling_core.freeze_args``
+        that normally shadows it -- both freeze cells as plain tuples
+        either way, since a cell IS a plain tuple; see cells.py's module
+        docstring). When ``is_intern_enabled()`` (default OFF -- flipped
+        only by Task 4's own tests/benchmark), each cell-shaped arg of
+        *answer* is passed through ``intern_cell`` before storage, so two
+        structurally-equal ground cell answers land as the SAME object.
+        Non-cell args (class terms, atoms, scalars) are left exactly as
+        received -- they never reach ``intern_cell`` at all.
         """
+        if is_intern_enabled():
+            answer = tuple(
+                intern_cell(a) if is_cell(a) else a for a in answer
+            )
         ds = delay_set if delay_set is not None else frozenset()
         key = make_subgoal_key(answer, None)
         idx = self._answer_index.get(key)

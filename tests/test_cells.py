@@ -33,9 +33,13 @@ from clausal.logic.cells import (
     cell_args,
     cell_arity,
     cell_functor,
+    clear_intern_table,
+    intern_cell,
     is_cell,
+    is_intern_enabled,
     make_cell,
     make_tuple_cell,
+    set_intern_enabled,
 )
 from clausal.logic.builtins._helpers import (
     _arity,
@@ -324,3 +328,158 @@ class TestConsRuleBoundaryDeferral:
         # boundary this task defers is concrete rather than hypothetical.
         trail = Trail()
         assert unify("ab", ["a", "b"], trail) is True
+
+
+# ── intern_cell / interning table (Task 4) ────────────────────────────────
+
+
+class TestInternCell:
+    """``intern_cell`` -- selective ground-cell interning, Task 4 of the
+    Phase 2 bridge plan. Fixtures clear the module-level table before and
+    after each test so tests never see each other's entries."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_intern_table(self):
+        clear_intern_table()
+        yield
+        clear_intern_table()
+
+    def test_two_equal_ground_cells_intern_to_the_same_object(self):
+        # nv -- the headline property: structurally-equal ground cells
+        # collapse to ONE object after interning, even though they started
+        # as two distinct tuple objects.
+        c1 = make_cell("point", 1, 2)
+        c2 = make_cell("point", 1, 2)
+        assert c1 is not c2  # distinct objects going in
+        i1 = intern_cell(c1)
+        i2 = intern_cell(c2)
+        assert i1 == c1 == c2
+        assert i1 is i2
+
+    def test_second_intern_returns_the_first_cells_object(self):
+        # nv -- the FIRST cell interned with a given ground shape becomes
+        # canonical; a later structurally-equal cell collapses onto it, not
+        # the other way around.
+        c1 = make_cell("point", 1, 2)
+        i1 = intern_cell(c1)
+        assert i1 is c1
+        c2 = make_cell("point", 1, 2)
+        i2 = intern_cell(c2)
+        assert i2 is c1
+        assert i2 is not c2
+
+    def test_non_cell_passes_through_unchanged_and_untouched(self):
+        # nv -- a non-cell object (stand-in for a class term instance) and
+        # a plain scalar both skip interning entirely: object identity
+        # preserved, table untouched.
+        obj = object()
+        assert intern_cell(obj) is obj
+        assert intern_cell(5) == 5
+
+    def test_non_ground_cell_returned_unchanged(self):
+        # nv -- a Var anywhere in the cell's argument slots disqualifies it
+        # from interning: returned object-identical to what was passed in,
+        # never cached.
+        X = Var()
+        c = make_cell("point", X, 2)
+        result = intern_cell(c)
+        assert result is c
+
+    def test_non_ground_functor_slot_returned_unchanged(self):
+        # nv -- an unbound Var IN THE FUNCTOR SLOT also disqualifies (the
+        # higher-order cell case): no Var.__hash__ call, no caching.
+        F = Var()
+        c = make_cell(F, 1, 2)
+        result = intern_cell(c)
+        assert result is c
+
+    def test_a_cell_that_becomes_ground_after_binding_is_interned(self):
+        # nv -- groundness is checked on the CURRENT (dereferenced) state,
+        # not frozen at construction time: bind X, then intern.
+        trail = Trail()
+        X = Var()
+        c = make_cell("point", X, 2)
+        assert unify(X, 1, trail) is True
+        result = intern_cell(c)
+        assert result == ("point", 1, 2)
+        # A second, independently-built cell with the same resolved shape
+        # collapses onto it.
+        c2 = make_cell("point", 1, 2)
+        result2 = intern_cell(c2)
+        assert result2 is result
+
+    def test_nested_ground_cells_intern_bottom_up(self):
+        # nv -- a cons-chain shape (struct_tabling's Nats/2 answers): the
+        # inner cell gets interned as PART OF interning the outer cell
+        # (bottom-up), and a SEPARATELY built, structurally-equal inner
+        # cell interns to that exact same nested object -- proving the
+        # sharing reaches inside nested structure, not just top-level cells.
+        inner = make_cell("cons", 2, "nil")
+        outer = make_cell("cons", 1, inner)
+        interned_outer = intern_cell(outer)
+        assert cell_args(interned_outer)[1] == inner
+
+        inner_dup = make_cell("cons", 2, "nil")
+        assert inner_dup is not inner  # started as distinct objects
+        interned_inner_dup = intern_cell(inner_dup)
+
+        # The inner cell nested inside the (already-interned) outer answer
+        # is the SAME object as interning inner_dup directly.
+        assert cell_args(interned_outer)[1] is interned_inner_dup
+
+    def test_interning_does_not_mutate_the_cell_passed_in(self):
+        # nv -- intern_cell returns a value; it never mutates its argument
+        # (tuples are immutable anyway, but pin that the ORIGINAL first
+        # cell is what ends up canonical, unmodified).
+        c = make_cell("point", 1, 2)
+        before = tuple(c)
+        intern_cell(c)
+        assert tuple(c) == before
+
+    def test_unhashable_ground_argument_falls_back_without_raising(self):
+        # nv -- a ground (no Var) but unhashable argument (a list): the
+        # try/except TypeError guard returns a value equal to the input
+        # rather than raising or caching a bogus entry.
+        c = make_cell("bag", [1, 2, 3])
+        result = intern_cell(c)
+        assert result == c
+        # Not cached: a second structurally-equal cell with the same
+        # unhashable content also just falls back, and is not the SAME
+        # object as the first (nothing was ever stored for it).
+        c2 = make_cell("bag", [1, 2, 3])
+        result2 = intern_cell(c2)
+        assert result2 == c2
+        assert result2 is not result
+
+    def test_clear_intern_table_resets_identity(self):
+        # nv -- after clear_intern_table(), a previously-canonical cell no
+        # longer wins: the NEXT cell interned becomes the new canonical
+        # object.
+        c1 = make_cell("point", 1, 2)
+        i1 = intern_cell(c1)
+        assert i1 is c1
+        clear_intern_table()
+        c2 = make_cell("point", 1, 2)
+        i2 = intern_cell(c2)
+        assert i2 is c2
+        assert i2 is not c1
+
+
+class TestInternEnabledSwitch:
+    """The module-level toggle gating the tabling freeze-boundary hook.
+    Default OFF; only Task 4's tests/benchmark ever flip it."""
+
+    def test_default_is_disabled(self):
+        # nv -- this pins the DEFAULT-PATH INVARIANT at the switch itself:
+        # a fresh process never has interning enabled unless something
+        # explicitly turns it on.
+        assert is_intern_enabled() is False
+
+    def test_set_and_unset(self):
+        assert is_intern_enabled() is False
+        try:
+            set_intern_enabled(True)
+            assert is_intern_enabled() is True
+        finally:
+            set_intern_enabled(False)
+        assert is_intern_enabled() is False

@@ -66,6 +66,10 @@ __all__ = [
     "cell_functor",
     "cell_args",
     "cell_arity",
+    "intern_cell",
+    "clear_intern_table",
+    "is_intern_enabled",
+    "set_intern_enabled",
 ]
 # NOTE: `_cell_shape` is intentionally NOT in __all__ (internal helper) but
 # IS imported directly by clausal/logic/builtins/_helpers.py -- the same
@@ -204,3 +208,234 @@ def cell_args(c: tuple) -> tuple:
 def cell_arity(c: tuple) -> int:
     """Return the arity (argument count) of cell *c*."""
     return len(c) - 1
+
+
+# ── Selective ground-cell interning (Task 4) ──────────────────────────────
+#
+# Spec: ``docs/superpowers/plans/2026-09-03-phase2-bridge.md`` Task 4.
+#
+# ``intern_cell`` recursively collapses structurally-equal, FULLY-GROUND
+# cells to the same tuple object via a module-level table -- the tabling
+# freeze boundary (``clausal.logic.tabling.TableEntry.add_answer``) is the
+# hook that calls it, gated by ``is_intern_enabled()`` below (default OFF).
+#
+# Scope, per the plan's Global Constraints ("Interning (Task 4) applies
+# ONLY to fully-ground cells ... a Var anywhere disqualifies -- Var.__hash__
+# stays untouched this stage"):
+#
+#   - Only CELLS are ever looked up in / stored into the intern table.
+#     Class terms, atoms, scalars, lists, dicts -- everything that is not
+#     ``is_cell``-shaped -- passes through ``intern_cell`` UNCHANGED and
+#     never touches the table.
+#   - "Ground" here means: no ``Var`` reachable by walking slot 0 or the
+#     argument slots of the cell and any CELL nested inside it. A ``Var``
+#     found anywhere in that walk disqualifies the whole cell (and every
+#     cell containing it) from interning -- it is returned unchanged,
+#     object-identical to what was passed in. A non-cell argument (e.g. a
+#     list) is not walked further for embedded Vars -- this stage's cells
+#     are built from declared functors and scalars/cells per Task 2's
+#     emission rules, so that gap is not exercised by this bridge's corpus.
+#   - Interning never calls ``Var.__hash__``: ``_try_intern`` below is
+#     STRICTLY groundness-first -- it never calls ``hash()``/``==`` (via a
+#     dict operation) on ANY value until every value reachable inside it
+#     has already been proven Var-free by this same walk. A tuple's
+#     native ``hash()`` recurses through nested tuples calling ``hash()``
+#     on every element, so a table lookup attempted on a not-yet-proven
+#     substructure would transitively hash any ``Var`` nested inside it --
+#     an earlier version of this function took exactly that shortcut (a
+#     "does *c* already match a previously-interned value?" pre-check
+#     before walking *c*'s own structure) and was rejected on review
+#     because it violated this invariant, even though it happened to be
+#     safe in practice (default ``object.__hash__`` on a Var never raises,
+#     and a Var-containing key can never collide with a stored ground
+#     one). See the task report's "TDD" section for the full trace.
+#
+# ITERATIVE, NOT RECURSIVE (also load-bearing): ``_try_intern`` walks
+# post-order using an explicit stack, not Python recursion. A tabled
+# predicate's cons-chain grows ONE cell per subgoal, bottom-up (``Nats(K,
+# cons(K, T))`` where ``T`` is subgoal ``K-1``'s already-frozen answer) --
+# and ``freeze_args`` (the tabling freeze boundary this hook sits behind,
+# Python fallback or C twin -- see ``clausal.logic.solve._deref_walk_py``)
+# unconditionally rebuilds a brand-new nested tuple on every call, even
+# for substructure that is already fully ground. So *T* arriving at
+# subgoal K is always a length-(K-1) chain that must be groundness-checked
+# in full (no identity or value shortcut is available before groundness
+# is established -- see above), and a naive Python-recursive walk would
+# recurse that many call frames deep on EVERY subsequent cell: for a long
+# chain (n ~ 1500, this stage's target size) that is enough, added to the
+# tabling trampoline's own already-deep call stack, to raise
+# ``RecursionError`` -- hit for real during this task's own measurement
+# dry run before this function was made iterative; see the task report's
+# "TDD" section. An explicit Python-``list``-based stack has no such
+# limit (bounded by available memory, not ``sys.getrecursionlimit()``).
+#
+# Net effect: checking/caching a K-deep chain costs O(K) work on every
+# ``add_answer`` call (O(depth^2) total over a chain of that depth, same
+# order as the O(depth^2) the walk/freeze work already costs by design at
+# each level) -- slower than the (rejected) value-shortcut version, but
+# correct per the ``Var.__hash__`` invariant and immune to
+# ``RecursionError`` regardless of chain depth.
+def intern_cell(c: Any) -> Any:
+    """Recursively intern *c* bottom-up, ground cells only.
+
+    - Not a cell at all (``is_cell(c)`` False) -> returned unchanged. Class
+      terms, atoms, and every other non-cell value take this path; they
+      never touch ``_INTERN_TABLE``.
+    - A cell that is not fully ground (a ``Var`` reachable anywhere in its
+      cell structure) -> returned unchanged, object-identical to *c*.
+      Non-ground cells are never cached (their shape can still change via
+      later unification), and no ``Var`` anywhere in *c* is ever hashed
+      while establishing this (see the section docstring above).
+    - A fully-ground cell -> its nested cell arguments are interned first
+      (bottom-up), then ``(functor, *args)`` is looked up in the shared
+      table; the first cell built with a given ground shape becomes the
+      canonical object every structurally-equal cell thereafter collapses
+      to.
+
+    Hashing a ground cell can still raise ``TypeError`` (e.g. a ``list``
+    argument -- ground but unhashable): guarded per level with try/except,
+    falling back to returning that level's cell unchanged rather than
+    raising or caching a bogus entry.
+    """
+    if not is_cell(c):
+        return c
+    ok, result = _try_intern(c)
+    return result if ok else c
+
+
+# The intern table itself: canonical-tuple -> the SAME canonical-tuple
+# object (a set would do the membership check, but storing the value lets
+# ``.get`` return the canonical object in one lookup).
+_INTERN_TABLE: dict[tuple, tuple] = {}
+
+
+def clear_intern_table() -> None:
+    """Empty the intern table.
+
+    Test isolation: the table is process-global (module-level), so a test
+    that asserts identity via interning must not see another test's
+    entries -- call this in setup/teardown. Also useful between benchmark
+    rounds that must not let one round's interned answers keep an earlier
+    round's table entries "warm."
+    """
+    _INTERN_TABLE.clear()
+
+
+# Sentinel for "this node's subtree contains a Var" in ``_try_intern``'s
+# ``result_of`` map -- distinct from every real value a cell could ever
+# resolve to (never returned to a caller, never stored in
+# ``_INTERN_TABLE``, so no risk of confusion with a genuine cell answer).
+_NOT_GROUND = object()
+
+
+def _try_intern(root: tuple) -> tuple[bool, Any]:
+    """Iterative, post-order, groundness-first combined check-and-intern
+    pass over cell *root*. Returns ``(True, interned_value)`` if *root* is
+    fully ground (recursively) and has been looked-up/stored in
+    ``_INTERN_TABLE``; ``(False, None)`` if a ``Var`` was found anywhere
+    in the reachable structure -- the caller (``intern_cell``) returns
+    *root* itself unchanged in that case.
+
+    Caller has already proven ``is_cell(root)``; this function does not
+    re-check that for *root* itself (only for nested args, via ``is_cell``
+    below). See the section docstring above for why this walk is BOTH
+    iterative (an explicit stack, not Python recursion -- avoids
+    ``RecursionError`` on a long chain) and groundness-first (never
+    hashes/looks-up a value until everything nested inside it has already
+    been proven Var-free -- never touches ``Var.__hash__``).
+
+    Stack entries are ``("visit", node)`` -- node's children still need
+    processing before node itself can be resolved -- or ``("finish",
+    node)`` -- every cell-shaped child of node already has an entry in
+    ``result_of`` (real value if ground, ``_NOT_GROUND`` if not), so
+    node's own result can now be computed.
+    """
+    result_of: dict[int, Any] = {}  # id(cell) -> interned value or _NOT_GROUND
+    stack: list[tuple[str, tuple]] = [("visit", root)]
+    while stack:
+        action, node = stack.pop()
+        node_id = id(node)
+        if action == "finish":
+            raw_functor = node[0]
+            functor = deref(raw_functor)
+            if is_var(functor):
+                result_of[node_id] = _NOT_GROUND
+                continue
+            changed = functor is not raw_functor
+            new_args = []
+            ground = True
+            for a in node[1:]:
+                da = deref(a)
+                if is_var(da):
+                    ground = False
+                    break
+                if is_cell(da):
+                    na = result_of.get(id(da), _NOT_GROUND)
+                    if na is _NOT_GROUND:
+                        ground = False
+                        break
+                else:
+                    na = da
+                if na is not a:
+                    changed = True
+                new_args.append(na)
+            if not ground:
+                result_of[node_id] = _NOT_GROUND
+                continue
+            candidate = node if not changed else (functor, *new_args)
+            try:
+                existing = _INTERN_TABLE.get(candidate)
+            except TypeError:
+                # Some leaf under this cell isn't hashable (e.g. a list
+                # argument, ground but unhashable) -- this node is still
+                # "ground" (no Var was found), so record success, but
+                # with THIS level built fresh here (nested cells already
+                # interned where possible) rather than cached or raising.
+                result_of[node_id] = candidate
+            else:
+                if existing is not None:
+                    result_of[node_id] = existing
+                else:
+                    _INTERN_TABLE[candidate] = candidate
+                    result_of[node_id] = candidate
+        else:  # "visit"
+            if node_id in result_of:
+                continue  # already resolved via an earlier stack entry
+            stack.append(("finish", node))
+            raw_functor = node[0]
+            functor = deref(raw_functor)
+            if is_var(functor):
+                continue  # "finish" will re-detect this cheaply and stop
+            for a in node[1:]:
+                da = deref(a)
+                if is_var(da):
+                    continue  # "finish" will re-detect this cheaply too
+                if is_cell(da) and id(da) not in result_of:
+                    stack.append(("visit", da))
+
+    final = result_of.get(id(root), _NOT_GROUND)
+    if final is _NOT_GROUND:
+        return False, None
+    return True, final
+
+
+# Module-level switch gating the tabling freeze-boundary hook
+# (``clausal.logic.tabling.TableEntry.add_answer``). Default OFF so the
+# DEFAULT-PATH INVARIANT holds unconditionally: nothing calls
+# ``set_intern_enabled(True)`` except Task 4's own tests and
+# ``benchmarks/workloads.py``'s ``bench_struct_tabling_tagged(..., intern=True)``.
+_INTERN_ENABLED = False
+
+
+def is_intern_enabled() -> bool:
+    """True if the tabling freeze-boundary hook should call ``intern_cell``
+    on cell-shaped answer args. Read live (a function, not a cached
+    import) so callers see toggles made after their own import."""
+    return _INTERN_ENABLED
+
+
+def set_intern_enabled(value: bool) -> None:
+    """Flip the module-level interning switch. Test/benchmark use only --
+    no production code path calls this."""
+    global _INTERN_ENABLED
+    _INTERN_ENABLED = bool(value)

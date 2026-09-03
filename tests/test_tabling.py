@@ -74,6 +74,119 @@ class TestTableEntry:
         assert e.answers == [(1,), (2,), (3,)]
 
 
+# ── Task 4: cell interning at the add_answer freeze boundary ─────────────────
+
+
+class TestAddAnswerCellInterning:
+    """``TableEntry.add_answer`` is the single Python funnel every frozen
+    tabled answer passes through, regardless of whether ``freeze_args``
+    resolved to the pure-Python fallback or the C twin (both freeze a cell
+    as a plain tuple either way -- see ``clausal.logic.tabling.add_answer``'s
+    docstring, Task 4 of the Phase 2 bridge plan). These tests exercise the
+    interning hook installed there, gated by ``cells.is_intern_enabled()``.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _clean(self):
+        from clausal.logic.cells import clear_intern_table, set_intern_enabled
+        clear_intern_table()
+        set_intern_enabled(False)
+        yield
+        clear_intern_table()
+        set_intern_enabled(False)
+
+    def test_two_structurally_equal_ground_cell_answers_are_the_same_object(self):
+        # nv -- the headline proof required by the task brief: with
+        # interning enabled, two DIFFERENT TableEntry rows (as two
+        # subgoals of the same or different tabled predicates would each
+        # produce) that store structurally-equal ground cell answers end up
+        # holding the identical object, not merely equal tuples.
+        from clausal.logic.cells import make_cell, set_intern_enabled
+
+        set_intern_enabled(True)
+        e1 = TableEntry()
+        e2 = TableEntry()
+        c1 = make_cell("point", 1, 2)
+        c2 = make_cell("point", 1, 2)
+        assert c1 is not c2
+
+        e1.add_answer((c1,))
+        e2.add_answer((c2,))
+
+        assert e1.answers[0][0] == e2.answers[0][0]
+        assert e1.answers[0][0] is e2.answers[0][0]
+
+    def test_interning_disabled_by_default_leaves_cell_answers_distinct(self):
+        # nv -- DEFAULT-PATH INVARIANT at the hook itself: with the switch
+        # at its default (OFF), two structurally-equal cell answers stored
+        # in two entries remain the two DISTINCT objects that were passed
+        # in -- add_answer does not even look at cells.is_cell without the
+        # switch on.
+        from clausal.logic.cells import make_cell, is_intern_enabled
+
+        assert is_intern_enabled() is False
+        e1 = TableEntry()
+        e2 = TableEntry()
+        c1 = make_cell("point", 1, 2)
+        c2 = make_cell("point", 1, 2)
+
+        e1.add_answer((c1,))
+        e2.add_answer((c2,))
+
+        assert e1.answers[0][0] is c1
+        assert e2.answers[0][0] is c2
+        assert e1.answers[0][0] is not e2.answers[0][0]
+
+    def test_class_term_answers_are_byte_identical_with_interning_enabled(self):
+        # nv -- regression test: class-term (non-cell) answers are
+        # completely unaffected by the interning switch -- same object
+        # identity, same dedup behavior, whether the switch is on or off.
+        # This is the "class terms and non-cell values never touch the
+        # intern table" half of the Global Constraints.
+        from clausal.logic.cells import set_intern_enabled
+
+        @dataclass
+        class Pt:
+            x: object
+            y: object
+
+        set_intern_enabled(True)
+        e = TableEntry()
+        p1 = Pt(1, 2)
+        p2 = Pt(1, 2)  # a distinct, but "equal" (dataclass __eq__), instance
+        assert e.add_answer((p1,)) == 0
+        assert e.answers == [(p1,)]
+        assert e.answers[0][0] is p1  # untouched -- never passed to intern_cell
+
+        # A second, distinct-but-equal instance is still a NEW answer row
+        # (dataclasses are not deduped by interning -- add_answer's own
+        # variant-key dedup is the only thing that would collapse them, and
+        # it uses value equality, independent of this hook).
+        set_intern_enabled(False)
+        e2 = TableEntry()
+        assert e2.add_answer((p1,)) == 0
+        assert e2.add_answer((p2,)) is None  # value-equal dataclass: dedup'd
+        assert e2.answers == [(p1,)]
+
+    def test_mixed_cell_and_scalar_answer_only_the_cell_slot_is_interned(self):
+        # nv -- a per-arg gate: only the cell-shaped slot(s) of a
+        # multi-arg answer go through intern_cell; a scalar sibling arg is
+        # passed through completely unchanged.
+        from clausal.logic.cells import make_cell, set_intern_enabled
+
+        set_intern_enabled(True)
+        e1 = TableEntry()
+        e2 = TableEntry()
+        c1 = make_cell("point", 1, 2)
+        c2 = make_cell("point", 1, 2)
+
+        e1.add_answer((99, c1))
+        e2.add_answer((99, c2))
+
+        assert e1.answers[0][0] == 99 == e2.answers[0][0]
+        assert e1.answers[0][1] is e2.answers[0][1]
+
+
 # ── Unit tests: key computation ───────────────────────────────────────────────
 
 
