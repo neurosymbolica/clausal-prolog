@@ -37,6 +37,11 @@ from clausal.logic.cells import (
     make_cell,
     make_tuple_cell,
 )
+from clausal.logic.builtins._helpers import (
+    _arity,
+    _functor_name,
+    _is_compound,
+)
 from clausal.logic.variables import Trail, Var, deref, is_var, unify
 
 
@@ -127,6 +132,11 @@ class TestCellPrimitives:
     def test_is_cell_true_for_tuple_tag(self):
         # nv
         assert is_cell((tuple, 1, 2)) is True
+
+    def test_is_cell_true_for_zero_arity_tuple_tag(self):
+        # nv — review finding #3: (tuple,) alone (len == 1, the "len >= 1"
+        # boundary) is still a legal (if empty) tuple-DATA cell.
+        assert is_cell((tuple,)) is True
 
     def test_is_cell_true_for_var_functor(self):
         # nv
@@ -236,12 +246,27 @@ class TestCellUnificationBoundary:
         # a cell whose functor slot is itself an unbound Var unifies
         # element-wise (slot 0 included) against a same-shape cell, which
         # binds the Var to the concrete functor string.
+        #
+        # Review fix (reviewer finding #1): the cell must NOT vanish from
+        # the recognition surface once its functor slot resolves. Before
+        # this fix, is_cell/cell_functor/the funnel accessors inspected
+        # slot 0 RAW (never deref'd), so c1's slot 0 was still the bound
+        # Var *object*, not its "f" value — is_cell(c1) flipped to False
+        # and _functor_name(c1) returned None the instant the bind
+        # succeeded, contradicting the unify this test itself just proved.
         f = Var()
         trail = Trail()
         c1 = make_cell(f, 1)
         c2 = make_cell("f", 1)
         assert unify(c1, c2, trail) is True
         assert deref(f) == "f"
+        # c1's tuple slot 0 is still the (now-bound) Var object -- these
+        # assertions require every recognition path to deref it.
+        assert is_cell(c1) is True
+        assert cell_functor(c1) == "f"
+        assert _functor_name(c1) == "f"
+        assert _is_compound(c1) is True
+        assert _arity(c1) == 1
 
     def test_higher_order_slot0_var_mismatched_arity_fails(self):
         # nv — the Var-functor slot doesn't rescue an arity mismatch; tuple

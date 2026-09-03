@@ -289,24 +289,38 @@ except ImportError:
 # KNOWN AMBIGUITY (accepted, not solved — see ``clausal/logic/cells.py``'s
 # module docstring for the full ruling): a plain user tuple whose slot 0
 # happens to be a str (e.g. ``("hello", 1)``) is indistinguishable from a
-# str-functor cell by shape, and the branch below — gated on ``is_cell``
+# str-functor cell by shape, and the branch below — gated on cell-shape
 # alone, as the plan requires — DOES change its accessor behavior (e.g.
 # ``_functor_name`` used to answer None for it, now answers ``"hello"``).
-# That is the documented bridge-stage tradeoff.
+# That is the documented bridge-stage tradeoff; pinned by a running test
+# (``tests/test_funnel_accessors.py::TestCellFunnelAwareness::
+# test_known_ambiguity_plain_str_tuple_pinned_by_running_assertions``).
+#
+# Review fix (finding #1): slot 0 must be inspected DEREFERENCED, not raw
+# — a cell built with an unbound-Var functor that ``unify`` has since
+# bound must not vanish from recognition just because its functor slot
+# resolved. ``cells._cell_shape(term)`` derefs slot 0 exactly once and
+# hands back both "is this cell-shaped at all" and the resolved value;
+# ``_cell_functor`` below layers on "and is it COMPOUND" (str/Var, not
+# ``TUPLE_TAG``) without a second deref, and every accessor calls
+# ``_cell_functor`` exactly once — one deref of slot 0 per top-level
+# accessor call, never two.
 
-from clausal.logic.cells import is_cell as _is_cell
+from clausal.logic.cells import TUPLE_TAG as _CELL_TUPLE_TAG, _cell_shape
 
 
-def _cell_is_compound(term: Any) -> bool:
-    """True if *term* is a cell whose functor slot is a str or unbound Var.
+def _cell_functor(term: Any) -> tuple[bool, Any]:
+    """Return ``(is_compound_cell, resolved_functor)`` for *term*.
 
-    A tuple-DATA cell (slot 0 is ``cells.TUPLE_TAG``) is explicitly NOT
-    compound here — see the section docstring above.
+    ``is_compound_cell`` is True only for a str or unbound-Var functor —
+    a ``(tuple, ...)`` tuple-DATA cell (resolved slot 0 is
+    ``cells.TUPLE_TAG``) is explicitly NOT compound, per the task brief.
+    Dereferences slot 0 at most once (via ``cells._cell_shape``).
     """
-    if not _is_cell(term):
-        return False
-    f = term[0]
-    return isinstance(f, str) or is_var(f)
+    ok, f = _cell_shape(term)
+    if ok and f is not _CELL_TUPLE_TAG:
+        return True, f
+    return False, None
 
 
 _functor_name_precell = _functor_name
@@ -317,19 +331,22 @@ _is_compound_precell = _is_compound
 
 
 def _functor_name(term: Any) -> Any:
-    if _cell_is_compound(term):
-        return term[0]
+    is_compound_cell, f = _cell_functor(term)
+    if is_compound_cell:
+        return f
     return _functor_name_precell(term)
 
 
 def _arity(term: Any) -> int | None:
-    if _cell_is_compound(term):
+    is_compound_cell, _f = _cell_functor(term)
+    if is_compound_cell:
         return len(term) - 1
     return _arity_precell(term)
 
 
 def _nth_arg(term: Any, n: int) -> Any:
-    if _cell_is_compound(term):
+    is_compound_cell, _f = _cell_functor(term)
+    if is_compound_cell:
         if n < 1 or n > len(term) - 1:
             raise IndexError(f"arg index {n} out of range for {term!r}")
         return term[n]
@@ -337,14 +354,16 @@ def _nth_arg(term: Any, n: int) -> Any:
 
 
 def _args_list(term: Any) -> list:
-    if _cell_is_compound(term):
+    is_compound_cell, _f = _cell_functor(term)
+    if is_compound_cell:
         return list(term[1:])
     return _args_list_precell(term)
 
 
 def _is_compound(term: Any) -> bool:
-    if _is_cell(term):
-        return _cell_is_compound(term)
+    is_compound_cell, _f = _cell_functor(term)
+    if is_compound_cell:
+        return True
     return _is_compound_precell(term)
 
 
@@ -380,11 +399,14 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
     unbound-Var-functor cell resolves to None — deliberately narrower here
     than the composed ``_functor_name``/``_arity`` pair (which DOES resolve
     a Var-functor cell's arity), mirroring the existing
-    Compound-with-Var-functor precedent above.
+    Compound-with-Var-functor precedent above. Uses ``_cell_functor``
+    (single deref of slot 0, review fix finding #1) rather than inspecting
+    ``term[0]`` raw.
     """
-    if _is_cell(term):
-        if isinstance(term[0], str):
-            return (term[0], len(term) - 1)
+    is_compound_cell, f = _cell_functor(term)
+    if is_compound_cell:
+        if isinstance(f, str):
+            return (f, len(term) - 1)
         return None
     if isinstance(term, Compound):
         if not isinstance(term.functor, str):

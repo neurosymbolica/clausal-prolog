@@ -624,3 +624,21 @@ class TestCellFunnelAwareness:
         c = make_cell(v, 1, 2)
         assert functor_arity(c) is None
         assert (_functor_name(c), _arity(c)) == (v, 2)
+
+    def test_known_ambiguity_plain_str_tuple_pinned_by_running_assertions(self):
+        # nv — review fix (finding #2): the KNOWN AMBIGUITY documented in
+        # this class's docstring and in clausal/logic/cells.py (BRIDGE-ENTRY
+        # RULING #2 in the ledger: the plain-user-tuple-with-str-slot0
+        # ambiguity is accepted, not solved) must be pinned by RUNNING
+        # assertions, not prose alone. ("hello", 1) is ordinary tuple data
+        # by intent but is_cell-shaped by accident (slot 0 is a str) — every
+        # funnel accessor therefore treats it exactly like a str-functor
+        # cell. This is the accepted bridge-period tradeoff, asserted here
+        # so a future change to that tradeoff shows up as a failing test,
+        # not a silent behavior drift.
+        plain_user_tuple = ("hello", 1)
+        assert _functor_name(plain_user_tuple) == "hello"
+        assert _arity(plain_user_tuple) == 1
+        assert _args_list(plain_user_tuple) == [1]
+        assert _is_compound(plain_user_tuple) is True
+        assert functor_arity(plain_user_tuple) == ("hello", 1)
