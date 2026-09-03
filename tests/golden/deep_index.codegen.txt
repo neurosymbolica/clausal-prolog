@@ -1,0 +1,2067 @@
+# module: tests.fixtures.deep_index  predicates: MyAppend, MyLast, MyLen, MyMax, MyMaxOf, MyMember, MyNthOf, MyPrefix, MyProduct, MySumList, Test
+def MyAppend__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    _d2 = $deref(arg2)
+    match (_d0, _d1, _d2):
+        case [_v0, _v1, _v1__dup0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_v1, _v1__dup0, trail):
+                    _m0 = trail.mark()
+                    if $unify(_v0, [], trail):
+                        yield (_proceed, None)
+                    trail.undo(_m0)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1, _d2):
+        case [_lcap0, _v2, _lcap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v3 = Var()
+                _v4 = Var()
+                _v5 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v3], _v4, [], trail)
+                _lr1 = $head_list_unify_input(_lcap1, [_v3], _v5, [], trail)
+                if _lr0 is not False and _lr1 is not False:
+                    _gen0 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, _v4, _v2, _v5, trail)
+                    _st0 = (yield (_gen0, None))
+                    while _st0 is not $DONE:
+                        if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v3], _v4, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v3], _v5, [], trail)):
+                            yield (_proceed, None)
+                        _st0 = (yield (_gen0, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+# ----
+
+def MyLast__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_lcap0, _v6__dup0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v6 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v6], None, [], trail)
+                if _lr0 is not False:
+                    if $unify(_v6, _v6__dup0, trail):
+                        if _lr0 is not None or $head_list_unify_output(_lcap0, [_v6], None, [], trail):
+                            yield (_proceed, None)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_lcap0, _v7]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v8 = Var()
+                _v9 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v8], _v9, [], trail)
+                if _lr0 is not False:
+                    _gen1 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, _v9, _v7, trail)
+                    _st1 = (yield (_gen1, None))
+                    while _st1 is not $DONE:
+                        if _lr0 is not None or $head_list_unify_output(_lcap0, [_v8], _v9, [], trail):
+                            yield (_proceed, None)
+                        _st1 = (yield (_gen1, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+# ----
+
+def MyLen__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_v10, _v11]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _m1 = trail.mark()
+                if $unify(_v10, [], trail):
+                    _m2 = trail.mark()
+                    if $unify(_v11, 0, trail):
+                        yield (_proceed, None)
+                    trail.undo(_m2)
+                trail.undo(_m1)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_lcap0, _v12]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v13 = Var()
+                _v14 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v13], _v14, [], trail)
+                if _lr0 is not False:
+                    _v15 = Var()
+                    _gen2 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, _v14, _v15, trail)
+                    _st2 = (yield (_gen2, None))
+                    while _st2 is not $DONE:
+                        _m3 = trail.mark()
+                        if $unify(_v12, $deref(_v15) + 1, trail):
+                            if _lr0 is not None or $head_list_unify_output(_lcap0, [_v13], _v14, [], trail):
+                                yield (_proceed, None)
+                        trail.undo(_m3)
+                        _st2 = (yield (_gen2, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+# ----
+
+def MyMax__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_lcap0, _v16__dup0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v16 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v16], None, [], trail)
+                if _lr0 is not False:
+                    if $unify(_v16, _v16__dup0, trail):
+                        if _lr0 is not None or $head_list_unify_output(_lcap0, [_v16], None, [], trail):
+                            yield (_proceed, None)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_lcap0, _v17]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v18 = Var()
+                _v19 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v18], _v19, [], trail)
+                if _lr0 is not False:
+                    _v20 = Var()
+                    _gen3 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, _v19, _v20, trail)
+                    _st3 = (yield (_gen3, None))
+                    while _st3 is not $DONE:
+                        _gen0 = StepGenerator($dispatch_at(MyMaxOf, 3), this_generator, this_generator, this_generator, _v18, _v20, _v17, trail)
+                        _st0 = (yield (_gen0, None))
+                        while _st0 is not $DONE:
+                            if _lr0 is not None or $head_list_unify_output(_lcap0, [_v18], _v19, [], trail):
+                                yield (_proceed, None)
+                            _st0 = (yield (_gen0, None))
+                        _st3 = (yield (_gen3, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+# ----
+
+def MyMaxOf__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    _d2 = $deref(arg2)
+    match (_d0, _d1, _d2):
+        case [_v21, _v22, _v21__dup0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_v21, _v21__dup0, trail):
+                    if $fd_ge(_v21, _v22, trail):
+                        yield (_proceed, None)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1, _d2):
+        case [_v23, _v24, _v24__dup0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_v24, _v24__dup0, trail):
+                    if $fd_lt(_v23, _v24, trail):
+                        yield (_proceed, None)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+# ----
+
+def MyMember__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_v25, _lcap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v25__dup0 = Var()
+                _v26 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v25__dup0], _v26, [], trail)
+                if _lr0 is not False:
+                    if $unify(_v25, _v25__dup0, trail):
+                        if _lr0 is not None or $head_list_unify_output(_lcap0, [_v25__dup0], _v26, [], trail):
+                            yield (_proceed, None)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_v27, _lcap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v28 = Var()
+                _v29 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v28], _v29, [], trail)
+                if _lr0 is not False:
+                    _gen1 = StepGenerator($dispatch_at(MyMember, 2), this_generator, this_generator, this_generator, _v27, _v29, trail)
+                    _st1 = (yield (_gen1, None))
+                    while _st1 is not $DONE:
+                        if _lr0 is not None or $head_list_unify_output(_lcap0, [_v28], _v29, [], trail):
+                            yield (_proceed, None)
+                        _st1 = (yield (_gen1, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+# ----
+
+def MyNthOf__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
+    while True:
+        _d0 = $deref(arg0)
+        _d1 = $deref(arg1)
+        _d2 = $deref(arg2)
+        _tro = False
+        match (_d0, _d1, _d2):
+            case [_v30, _lcap0, _v31__dup0]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _v31 = Var()
+                    _v32 = Var()
+                    _lr0 = $head_list_unify_input(_lcap0, [_v31], _v32, [], trail)
+                    if _lr0 is not False:
+                        if $unify(_v31, _v31__dup0, trail):
+                            _m4 = trail.mark()
+                            if $unify(_v30, 0, trail):
+                                if _lr0 is not None or $head_list_unify_output(_lcap0, [_v31], _v32, [], trail):
+                                    yield (_proceed, None)
+                            trail.undo(_m4)
+                except GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+        match (_d0, _d1, _d2):
+            case [_v33, _lcap0, _v34]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _v35 = Var()
+                    _v36 = Var()
+                    _lr0 = $head_list_unify_input(_lcap0, [_v35], _v36, [], trail)
+                    if _lr0 is not False:
+                        _v37 = Var()
+                        if $fd_gt(_v33, 0, trail):
+                            _m3 = trail.mark()
+                            if $unify(_v37, $deref(_v33) - 1, trail):
+                                _gen4 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, _v37, _v36, _v34, trail)
+                                _st4 = (yield (_gen4, None))
+                                while _st4 is not $DONE:
+                                    if _lr0 is not None or $head_list_unify_output(_lcap0, [_v35], _v36, [], trail):
+                                        yield (_proceed, None)
+                                    _st4 = (yield (_gen4, None))
+                            trail.undo(_m3)
+                except GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+        if _tro:
+            arg0 = _tro_arg0
+            arg1 = _tro_arg1
+            arg2 = _tro_arg2
+            continue
+        break
+    yield (_fail, $DONE)
+
+# ----
+
+def MyPrefix__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_v38, _v39]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _m0 = trail.mark()
+                if $unify(_v38, [], trail):
+                    yield (_proceed, None)
+                trail.undo(_m0)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_lcap0, _lcap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v40 = Var()
+                _v41 = Var()
+                _v42 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v40], _v41, [], trail)
+                _lr1 = $head_list_unify_input(_lcap1, [_v40], _v42, [], trail)
+                if _lr0 is not False and _lr1 is not False:
+                    _gen0 = StepGenerator($dispatch_at(MyPrefix, 2), this_generator, this_generator, this_generator, _v41, _v42, trail)
+                    _st0 = (yield (_gen0, None))
+                    while _st0 is not $DONE:
+                        if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v40], _v41, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v40], _v42, [], trail)):
+                            yield (_proceed, None)
+                        _st0 = (yield (_gen0, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+# ----
+
+def MyProduct__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_v43, _v44]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _m1 = trail.mark()
+                if $unify(_v43, [], trail):
+                    _m2 = trail.mark()
+                    if $unify(_v44, 1, trail):
+                        yield (_proceed, None)
+                    trail.undo(_m2)
+                trail.undo(_m1)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_lcap0, _v45]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v46 = Var()
+                _v47 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v46], _v47, [], trail)
+                if _lr0 is not False:
+                    _v48 = Var()
+                    _gen2 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, _v47, _v48, trail)
+                    _st2 = (yield (_gen2, None))
+                    while _st2 is not $DONE:
+                        _m3 = trail.mark()
+                        if $unify(_v45, $deref(_v48) * $deref(_v46), trail):
+                            if _lr0 is not None or $head_list_unify_output(_lcap0, [_v46], _v47, [], trail):
+                                yield (_proceed, None)
+                        trail.undo(_m3)
+                        _st2 = (yield (_gen2, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+# ----
+
+def MySumList__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_v49, _v50]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _m1 = trail.mark()
+                if $unify(_v49, [], trail):
+                    _m2 = trail.mark()
+                    if $unify(_v50, 0, trail):
+                        yield (_proceed, None)
+                    trail.undo(_m2)
+                trail.undo(_m1)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_lcap0, _v51]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v52 = Var()
+                _v53 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v52], _v53, [], trail)
+                if _lr0 is not False:
+                    _v54 = Var()
+                    _gen2 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, _v53, _v54, trail)
+                    _st2 = (yield (_gen2, None))
+                    while _st2 is not $DONE:
+                        _m3 = trail.mark()
+                        if $unify(_v51, $deref(_v54) + $deref(_v52), trail):
+                            if _lr0 is not None or $head_list_unify_output(_lcap0, [_v52], _v53, [], trail):
+                                yield (_proceed, None)
+                        trail.undo(_m3)
+                        _st2 = (yield (_gen2, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+# ----
+
+def Test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mylen empty' or $unify(_scap0, 'mylen empty', trail):
+                    _v55 = Var()
+                    _gen5 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [], _v55, trail)
+                    _st5 = (yield (_gen5, None))
+                    while _st5 is not $DONE:
+                        if $fd_eq(_v55, 0, trail):
+                            yield (_proceed, None)
+                        _st5 = (yield (_gen5, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mylen one element' or $unify(_scap0, 'mylen one element', trail):
+                    _v56 = Var()
+                    _gen6 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [42], _v56, trail)
+                    _st6 = (yield (_gen6, None))
+                    while _st6 is not $DONE:
+                        if $fd_eq(_v56, 1, trail):
+                            yield (_proceed, None)
+                        _st6 = (yield (_gen6, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mylen three elements' or $unify(_scap0, 'mylen three elements', trail):
+                    _v57 = Var()
+                    _gen7 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v57, trail)
+                    _st7 = (yield (_gen7, None))
+                    while _st7 is not $DONE:
+                        if $fd_eq(_v57, 3, trail):
+                            yield (_proceed, None)
+                        _st7 = (yield (_gen7, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mylen five elements' or $unify(_scap0, 'mylen five elements', trail):
+                    _v58 = Var()
+                    _gen8 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v58, trail)
+                    _st8 = (yield (_gen8, None))
+                    while _st8 is not $DONE:
+                        if $fd_eq(_v58, 5, trail):
+                            yield (_proceed, None)
+                        _st8 = (yield (_gen8, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mylen query mode' or $unify(_scap0, 'mylen query mode', trail):
+                    _v59 = Var()
+                    _v60 = Var()
+                    _v61 = Var()
+                    _gen9 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [_v59, _v60], _v61, trail)
+                    _st9 = (yield (_gen9, None))
+                    while _st9 is not $DONE:
+                        if $fd_eq(_v61, 2, trail):
+                            yield (_proceed, None)
+                        _st9 = (yield (_gen9, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myappend nil left' or $unify(_scap0, 'myappend nil left', trail):
+                    _v62 = Var()
+                    _gen10 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [], [1, 2], _v62, trail)
+                    _st10 = (yield (_gen10, None))
+                    while _st10 is not $DONE:
+                        if $fd_eq(_v62, [1, 2], trail):
+                            yield (_proceed, None)
+                        _st10 = (yield (_gen10, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myappend nil right' or $unify(_scap0, 'myappend nil right', trail):
+                    _v63 = Var()
+                    _gen11 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1, 2], [], _v63, trail)
+                    _st11 = (yield (_gen11, None))
+                    while _st11 is not $DONE:
+                        if $fd_eq(_v63, [1, 2], trail):
+                            yield (_proceed, None)
+                        _st11 = (yield (_gen11, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myappend both empty' or $unify(_scap0, 'myappend both empty', trail):
+                    _v64 = Var()
+                    _gen12 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [], [], _v64, trail)
+                    _st12 = (yield (_gen12, None))
+                    while _st12 is not $DONE:
+                        if $fd_eq(_v64, [], trail):
+                            yield (_proceed, None)
+                        _st12 = (yield (_gen12, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myappend one plus two' or $unify(_scap0, 'myappend one plus two', trail):
+                    _v65 = Var()
+                    _gen13 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1], [2, 3], _v65, trail)
+                    _st13 = (yield (_gen13, None))
+                    while _st13 is not $DONE:
+                        if $fd_eq(_v65, [1, 2, 3], trail):
+                            yield (_proceed, None)
+                        _st13 = (yield (_gen13, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myappend two plus two' or $unify(_scap0, 'myappend two plus two', trail):
+                    _v66 = Var()
+                    _gen14 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1, 2], [3, 4], _v66, trail)
+                    _st14 = (yield (_gen14, None))
+                    while _st14 is not $DONE:
+                        if $fd_eq(_v66, [1, 2, 3, 4], trail):
+                            yield (_proceed, None)
+                        _st14 = (yield (_gen14, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myappend split nil prefix' or $unify(_scap0, 'myappend split nil prefix', trail):
+                    _v67 = Var()
+                    _v68 = Var()
+                    _gen15 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, _v67, _v68, [1, 2], trail)
+                    _st15 = (yield (_gen15, None))
+                    while _st15 is not $DONE:
+                        if $fd_eq(_v67, [], trail):
+                            if $fd_eq(_v68, [1, 2], trail):
+                                yield (_proceed, None)
+                        _st15 = (yield (_gen15, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myappend split cons prefix' or $unify(_scap0, 'myappend split cons prefix', trail):
+                    _v69 = Var()
+                    _gen16 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1], _v69, [1, 2, 3], trail)
+                    _st16 = (yield (_gen16, None))
+                    while _st16 is not $DONE:
+                        if $fd_eq(_v69, [2, 3], trail):
+                            yield (_proceed, None)
+                        _st16 = (yield (_gen16, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymember first element' or $unify(_scap0, 'mymember first element', trail):
+                    _gen17 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 1, [1, 2, 3], trail)
+                    _st17 = (yield (_gen17, None))
+                    while _st17 is not $DONE:
+                        _st17 = (yield (_gen17, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymember last element' or $unify(_scap0, 'mymember last element', trail):
+                    _gen18 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 3, [1, 2, 3], trail)
+                    _st18 = (yield (_gen18, None))
+                    while _st18 is not $DONE:
+                        _st18 = (yield (_gen18, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymember middle element' or $unify(_scap0, 'mymember middle element', trail):
+                    _gen19 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 2, [1, 2, 3], trail)
+                    _st19 = (yield (_gen19, None))
+                    while _st19 is not $DONE:
+                        _st19 = (yield (_gen19, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymember singleton list' or $unify(_scap0, 'mymember singleton list', trail):
+                    _gen20 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 7, [7], trail)
+                    _st20 = (yield (_gen20, None))
+                    while _st20 is not $DONE:
+                        _st20 = (yield (_gen20, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymember absent' or $unify(_scap0, 'mymember absent', trail):
+
+                    def _naf_gen_fn237(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
+                        _gen21 = StepGenerator($dispatch_at(MyMember, 2), _naf_self, _naf_self, _naf_self, 4, [1, 2, 3], trail)
+                        _st21 = (yield (_gen21, None))
+                        while _st21 is not $DONE:
+                            yield (_naf_proceed, None)
+                            _st21 = (yield (_gen21, None))
+                        yield (_naf_fail, $DONE)
+                    _m5 = trail.mark()
+                    _naf_sg239 = StepGenerator(_naf_gen_fn237, None, None, None, trail)
+                    _naf238 = not $naf_has_solution(_naf_sg239)
+                    trail.undo(_m5)
+                    if _naf238:
+                        yield (_proceed, None)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymember enumerate all' or $unify(_scap0, 'mymember enumerate all', trail):
+                    _v70 = Var()
+                    _v71 = Var()
+                    _fa_results245 = []
+                    _fa_m6 = trail.mark()
+
+                    def _fa_gen22():
+                        for _ in $tramp_call($dispatch_at(MyMember, 2), (_v70, [10, 20, 30]), trail):
+                            yield None
+                        return None
+                        yield None
+                    for _ in _fa_gen22():
+                        _fa_results245.append($findall_copy(_v70))
+                    trail.undo(_fa_m6)
+                    _fa_um248 = trail.mark()
+                    if $unify(_v71, _fa_results245, trail):
+                        if $fd_eq(_v71, [10, 20, 30], trail):
+                            yield (_proceed, None)
+                    trail.undo(_fa_um248)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymember duplicate values' or $unify(_scap0, 'mymember duplicate values', trail):
+                    _v72 = Var()
+                    _v73 = Var()
+                    _fa_results249 = []
+                    _fa_m7 = trail.mark()
+
+                    def _fa_gen23():
+                        for _ in $tramp_call($dispatch_at(MyMember, 2), (_v72, [1, 1, 2]), trail):
+                            yield None
+                        return None
+                        yield None
+                    for _ in _fa_gen23():
+                        _fa_results249.append($findall_copy(_v72))
+                    trail.undo(_fa_m7)
+                    _fa_um252 = trail.mark()
+                    if $unify(_v73, _fa_results249, trail):
+                        if $fd_eq(_v73, [1, 1, 2], trail):
+                            yield (_proceed, None)
+                    trail.undo(_fa_um252)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mylast singleton' or $unify(_scap0, 'mylast singleton', trail):
+                    _v74 = Var()
+                    _gen24 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [5], _v74, trail)
+                    _st22 = (yield (_gen24, None))
+                    while _st22 is not $DONE:
+                        if $fd_eq(_v74, 5, trail):
+                            yield (_proceed, None)
+                        _st22 = (yield (_gen24, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mylast two elements' or $unify(_scap0, 'mylast two elements', trail):
+                    _v75 = Var()
+                    _gen25 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2], _v75, trail)
+                    _st23 = (yield (_gen25, None))
+                    while _st23 is not $DONE:
+                        if $fd_eq(_v75, 2, trail):
+                            yield (_proceed, None)
+                        _st23 = (yield (_gen25, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mylast three elements' or $unify(_scap0, 'mylast three elements', trail):
+                    _v76 = Var()
+                    _gen26 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v76, trail)
+                    _st24 = (yield (_gen26, None))
+                    while _st24 is not $DONE:
+                        if $fd_eq(_v76, 3, trail):
+                            yield (_proceed, None)
+                        _st24 = (yield (_gen26, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mylast five elements' or $unify(_scap0, 'mylast five elements', trail):
+                    _v77 = Var()
+                    _gen27 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v77, trail)
+                    _st25 = (yield (_gen27, None))
+                    while _st25 is not $DONE:
+                        if $fd_eq(_v77, 5, trail):
+                            yield (_proceed, None)
+                        _st25 = (yield (_gen27, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myproduct empty' or $unify(_scap0, 'myproduct empty', trail):
+                    _v78 = Var()
+                    _gen28 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [], _v78, trail)
+                    _st26 = (yield (_gen28, None))
+                    while _st26 is not $DONE:
+                        if $fd_eq(_v78, 1, trail):
+                            yield (_proceed, None)
+                        _st26 = (yield (_gen28, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myproduct singleton' or $unify(_scap0, 'myproduct singleton', trail):
+                    _v79 = Var()
+                    _gen29 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [5], _v79, trail)
+                    _st27 = (yield (_gen29, None))
+                    while _st27 is not $DONE:
+                        if $fd_eq(_v79, 5, trail):
+                            yield (_proceed, None)
+                        _st27 = (yield (_gen29, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myproduct three' or $unify(_scap0, 'myproduct three', trail):
+                    _v80 = Var()
+                    _gen30 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [2, 3, 4], _v80, trail)
+                    _st28 = (yield (_gen30, None))
+                    while _st28 is not $DONE:
+                        if $fd_eq(_v80, 24, trail):
+                            yield (_proceed, None)
+                        _st28 = (yield (_gen30, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myproduct with zero' or $unify(_scap0, 'myproduct with zero', trail):
+                    _v81 = Var()
+                    _gen31 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [1, 0, 99], _v81, trail)
+                    _st29 = (yield (_gen31, None))
+                    while _st29 is not $DONE:
+                        if $fd_eq(_v81, 0, trail):
+                            yield (_proceed, None)
+                        _st29 = (yield (_gen31, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myproduct five values' or $unify(_scap0, 'myproduct five values', trail):
+                    _v82 = Var()
+                    _gen32 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v82, trail)
+                    _st30 = (yield (_gen32, None))
+                    while _st30 is not $DONE:
+                        if $fd_eq(_v82, 120, trail):
+                            yield (_proceed, None)
+                        _st30 = (yield (_gen32, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mysumlist empty' or $unify(_scap0, 'mysumlist empty', trail):
+                    _v83 = Var()
+                    _gen33 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [], _v83, trail)
+                    _st31 = (yield (_gen33, None))
+                    while _st31 is not $DONE:
+                        if $fd_eq(_v83, 0, trail):
+                            yield (_proceed, None)
+                        _st31 = (yield (_gen33, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mysumlist singleton' or $unify(_scap0, 'mysumlist singleton', trail):
+                    _v84 = Var()
+                    _gen34 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [7], _v84, trail)
+                    _st32 = (yield (_gen34, None))
+                    while _st32 is not $DONE:
+                        if $fd_eq(_v84, 7, trail):
+                            yield (_proceed, None)
+                        _st32 = (yield (_gen34, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mysumlist three' or $unify(_scap0, 'mysumlist three', trail):
+                    _v85 = Var()
+                    _gen35 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v85, trail)
+                    _st33 = (yield (_gen35, None))
+                    while _st33 is not $DONE:
+                        if $fd_eq(_v85, 6, trail):
+                            yield (_proceed, None)
+                        _st33 = (yield (_gen35, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mysumlist ten values' or $unify(_scap0, 'mysumlist ten values', trail):
+                    _v86 = Var()
+                    _gen36 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], _v86, trail)
+                    _st34 = (yield (_gen36, None))
+                    while _st34 is not $DONE:
+                        if $fd_eq(_v86, 55, trail):
+                            yield (_proceed, None)
+                        _st34 = (yield (_gen36, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mysumlist negative' or $unify(_scap0, 'mysumlist negative', trail):
+                    _v87 = Var()
+                    _gen37 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [-1, -2, -3], _v87, trail)
+                    _st35 = (yield (_gen37, None))
+                    while _st35 is not $DONE:
+                        if $fd_eq(_v87, -6, trail):
+                            yield (_proceed, None)
+                        _st35 = (yield (_gen37, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymax singleton' or $unify(_scap0, 'mymax singleton', trail):
+                    _v88 = Var()
+                    _gen38 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [3], _v88, trail)
+                    _st36 = (yield (_gen38, None))
+                    while _st36 is not $DONE:
+                        if $fd_eq(_v88, 3, trail):
+                            yield (_proceed, None)
+                        _st36 = (yield (_gen38, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymax two ascending' or $unify(_scap0, 'mymax two ascending', trail):
+                    _v89 = Var()
+                    _gen39 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [1, 5], _v89, trail)
+                    _st37 = (yield (_gen39, None))
+                    while _st37 is not $DONE:
+                        if $fd_eq(_v89, 5, trail):
+                            yield (_proceed, None)
+                        _st37 = (yield (_gen39, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymax two descending' or $unify(_scap0, 'mymax two descending', trail):
+                    _v90 = Var()
+                    _gen40 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [5, 1], _v90, trail)
+                    _st38 = (yield (_gen40, None))
+                    while _st38 is not $DONE:
+                        if $fd_eq(_v90, 5, trail):
+                            yield (_proceed, None)
+                        _st38 = (yield (_gen40, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymax three' or $unify(_scap0, 'mymax three', trail):
+                    _v91 = Var()
+                    _gen41 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [3, 1, 4], _v91, trail)
+                    _st39 = (yield (_gen41, None))
+                    while _st39 is not $DONE:
+                        if $fd_eq(_v91, 4, trail):
+                            yield (_proceed, None)
+                        _st39 = (yield (_gen41, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mymax all equal' or $unify(_scap0, 'mymax all equal', trail):
+                    _v92 = Var()
+                    _gen42 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [2, 2, 2], _v92, trail)
+                    _st40 = (yield (_gen42, None))
+                    while _st40 is not $DONE:
+                        if $fd_eq(_v92, 2, trail):
+                            yield (_proceed, None)
+                        _st40 = (yield (_gen42, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mynthof first' or $unify(_scap0, 'mynthof first', trail):
+                    _v93 = Var()
+                    _gen43 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 0, [10, 20, 30], _v93, trail)
+                    _st41 = (yield (_gen43, None))
+                    while _st41 is not $DONE:
+                        if $fd_eq(_v93, 10, trail):
+                            yield (_proceed, None)
+                        _st41 = (yield (_gen43, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mynthof second' or $unify(_scap0, 'mynthof second', trail):
+                    _v94 = Var()
+                    _gen44 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 1, [10, 20, 30], _v94, trail)
+                    _st42 = (yield (_gen44, None))
+                    while _st42 is not $DONE:
+                        if $fd_eq(_v94, 20, trail):
+                            yield (_proceed, None)
+                        _st42 = (yield (_gen44, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'mynthof third' or $unify(_scap0, 'mynthof third', trail):
+                    _v95 = Var()
+                    _gen45 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 2, [10, 20, 30], _v95, trail)
+                    _st43 = (yield (_gen45, None))
+                    while _st43 is not $DONE:
+                        if $fd_eq(_v95, 30, trail):
+                            yield (_proceed, None)
+                        _st43 = (yield (_gen45, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myprefix empty of three' or $unify(_scap0, 'myprefix empty of three', trail):
+                    _gen46 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [], [1, 2, 3], trail)
+                    _st44 = (yield (_gen46, None))
+                    while _st44 is not $DONE:
+                        _st44 = (yield (_gen46, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myprefix singleton' or $unify(_scap0, 'myprefix singleton', trail):
+                    _gen47 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [1], [1, 2, 3], trail)
+                    _st45 = (yield (_gen47, None))
+                    while _st45 is not $DONE:
+                        _st45 = (yield (_gen47, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myprefix full' or $unify(_scap0, 'myprefix full', trail):
+                    _gen48 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [1, 2, 3], [1, 2, 3], trail)
+                    _st46 = (yield (_gen48, None))
+                    while _st46 is not $DONE:
+                        _st46 = (yield (_gen48, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'myprefix enumerate' or $unify(_scap0, 'myprefix enumerate', trail):
+                    _v96 = Var()
+                    _v97 = Var()
+                    _fa_results303 = []
+                    _fa_m8 = trail.mark()
+
+                    def _fa_gen49():
+                        for _ in $tramp_call($dispatch_at(MyPrefix, 2), (_v96, [1, 2]), trail):
+                            yield None
+                        return None
+                        yield None
+                    for _ in _fa_gen49():
+                        _fa_results303.append($findall_copy(_v96))
+                    trail.undo(_fa_m8)
+                    _fa_um306 = trail.mark()
+                    if $unify(_v97, _fa_results303, trail):
+                        if $fd_eq(_v97, [[], [1], [1, 2]], trail):
+                            yield (_proceed, None)
+                    trail.undo(_fa_um306)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+
+# ----
+
+def Test__p0_b0__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mylen empty' or $unify(_scap0, 'mylen empty', trail):
+                _v55 = Var()
+                _gen50 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [], _v55, trail)
+                _st47 = (yield (_gen50, None))
+                while _st47 is not $DONE:
+                    if $fd_eq(_v55, 0, trail):
+                        yield (_proceed, None)
+                    _st47 = (yield (_gen50, None))
+
+# ----
+
+def Test__p0_b1__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mylen one element' or $unify(_scap0, 'mylen one element', trail):
+                _v56 = Var()
+                _gen51 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [42], _v56, trail)
+                _st48 = (yield (_gen51, None))
+                while _st48 is not $DONE:
+                    if $fd_eq(_v56, 1, trail):
+                        yield (_proceed, None)
+                    _st48 = (yield (_gen51, None))
+
+# ----
+
+def Test__p0_b2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mylen three elements' or $unify(_scap0, 'mylen three elements', trail):
+                _v57 = Var()
+                _gen52 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v57, trail)
+                _st49 = (yield (_gen52, None))
+                while _st49 is not $DONE:
+                    if $fd_eq(_v57, 3, trail):
+                        yield (_proceed, None)
+                    _st49 = (yield (_gen52, None))
+
+# ----
+
+def Test__p0_b3__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mylen five elements' or $unify(_scap0, 'mylen five elements', trail):
+                _v58 = Var()
+                _gen53 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v58, trail)
+                _st50 = (yield (_gen53, None))
+                while _st50 is not $DONE:
+                    if $fd_eq(_v58, 5, trail):
+                        yield (_proceed, None)
+                    _st50 = (yield (_gen53, None))
+
+# ----
+
+def Test__p0_b4__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mylen query mode' or $unify(_scap0, 'mylen query mode', trail):
+                _v59 = Var()
+                _v60 = Var()
+                _v61 = Var()
+                _gen54 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [_v59, _v60], _v61, trail)
+                _st51 = (yield (_gen54, None))
+                while _st51 is not $DONE:
+                    if $fd_eq(_v61, 2, trail):
+                        yield (_proceed, None)
+                    _st51 = (yield (_gen54, None))
+
+# ----
+
+def Test__p0_b5__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myappend nil left' or $unify(_scap0, 'myappend nil left', trail):
+                _v62 = Var()
+                _gen55 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [], [1, 2], _v62, trail)
+                _st52 = (yield (_gen55, None))
+                while _st52 is not $DONE:
+                    if $fd_eq(_v62, [1, 2], trail):
+                        yield (_proceed, None)
+                    _st52 = (yield (_gen55, None))
+
+# ----
+
+def Test__p0_b6__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myappend nil right' or $unify(_scap0, 'myappend nil right', trail):
+                _v63 = Var()
+                _gen56 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1, 2], [], _v63, trail)
+                _st53 = (yield (_gen56, None))
+                while _st53 is not $DONE:
+                    if $fd_eq(_v63, [1, 2], trail):
+                        yield (_proceed, None)
+                    _st53 = (yield (_gen56, None))
+
+# ----
+
+def Test__p0_b7__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myappend both empty' or $unify(_scap0, 'myappend both empty', trail):
+                _v64 = Var()
+                _gen57 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [], [], _v64, trail)
+                _st54 = (yield (_gen57, None))
+                while _st54 is not $DONE:
+                    if $fd_eq(_v64, [], trail):
+                        yield (_proceed, None)
+                    _st54 = (yield (_gen57, None))
+
+# ----
+
+def Test__p0_b8__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myappend one plus two' or $unify(_scap0, 'myappend one plus two', trail):
+                _v65 = Var()
+                _gen58 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1], [2, 3], _v65, trail)
+                _st55 = (yield (_gen58, None))
+                while _st55 is not $DONE:
+                    if $fd_eq(_v65, [1, 2, 3], trail):
+                        yield (_proceed, None)
+                    _st55 = (yield (_gen58, None))
+
+# ----
+
+def Test__p0_b9__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myappend two plus two' or $unify(_scap0, 'myappend two plus two', trail):
+                _v66 = Var()
+                _gen59 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1, 2], [3, 4], _v66, trail)
+                _st56 = (yield (_gen59, None))
+                while _st56 is not $DONE:
+                    if $fd_eq(_v66, [1, 2, 3, 4], trail):
+                        yield (_proceed, None)
+                    _st56 = (yield (_gen59, None))
+
+# ----
+
+def Test__p0_b10__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myappend split nil prefix' or $unify(_scap0, 'myappend split nil prefix', trail):
+                _v67 = Var()
+                _v68 = Var()
+                _gen60 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, _v67, _v68, [1, 2], trail)
+                _st57 = (yield (_gen60, None))
+                while _st57 is not $DONE:
+                    if $fd_eq(_v67, [], trail):
+                        if $fd_eq(_v68, [1, 2], trail):
+                            yield (_proceed, None)
+                    _st57 = (yield (_gen60, None))
+
+# ----
+
+def Test__p0_b11__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myappend split cons prefix' or $unify(_scap0, 'myappend split cons prefix', trail):
+                _v69 = Var()
+                _gen61 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1], _v69, [1, 2, 3], trail)
+                _st58 = (yield (_gen61, None))
+                while _st58 is not $DONE:
+                    if $fd_eq(_v69, [2, 3], trail):
+                        yield (_proceed, None)
+                    _st58 = (yield (_gen61, None))
+
+# ----
+
+def Test__p0_b12__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymember first element' or $unify(_scap0, 'mymember first element', trail):
+                _gen62 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 1, [1, 2, 3], trail)
+                _st59 = (yield (_gen62, None))
+                while _st59 is not $DONE:
+                    _st59 = (yield (_gen62, None))
+
+# ----
+
+def Test__p0_b13__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymember last element' or $unify(_scap0, 'mymember last element', trail):
+                _gen63 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 3, [1, 2, 3], trail)
+                _st60 = (yield (_gen63, None))
+                while _st60 is not $DONE:
+                    _st60 = (yield (_gen63, None))
+
+# ----
+
+def Test__p0_b14__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymember middle element' or $unify(_scap0, 'mymember middle element', trail):
+                _gen64 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 2, [1, 2, 3], trail)
+                _st61 = (yield (_gen64, None))
+                while _st61 is not $DONE:
+                    _st61 = (yield (_gen64, None))
+
+# ----
+
+def Test__p0_b15__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymember singleton list' or $unify(_scap0, 'mymember singleton list', trail):
+                _gen65 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 7, [7], trail)
+                _st62 = (yield (_gen65, None))
+                while _st62 is not $DONE:
+                    _st62 = (yield (_gen65, None))
+
+# ----
+
+def Test__p0_b16__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymember absent' or $unify(_scap0, 'mymember absent', trail):
+
+                def _naf_gen_fn339(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
+                    _gen66 = StepGenerator($dispatch_at(MyMember, 2), _naf_self, _naf_self, _naf_self, 4, [1, 2, 3], trail)
+                    _st63 = (yield (_gen66, None))
+                    while _st63 is not $DONE:
+                        yield (_naf_proceed, None)
+                        _st63 = (yield (_gen66, None))
+                    yield (_naf_fail, $DONE)
+                _m9 = trail.mark()
+                _naf_sg341 = StepGenerator(_naf_gen_fn339, None, None, None, trail)
+                _naf340 = not $naf_has_solution(_naf_sg341)
+                trail.undo(_m9)
+                if _naf340:
+                    yield (_proceed, None)
+
+# ----
+
+def Test__p0_b17__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymember enumerate all' or $unify(_scap0, 'mymember enumerate all', trail):
+                _v70 = Var()
+                _v71 = Var()
+                _fa_results347 = []
+                _fa_m10 = trail.mark()
+
+                def _fa_gen67():
+                    for _ in $tramp_call($dispatch_at(MyMember, 2), (_v70, [10, 20, 30]), trail):
+                        yield None
+                    return None
+                    yield None
+                for _ in _fa_gen67():
+                    _fa_results347.append($findall_copy(_v70))
+                trail.undo(_fa_m10)
+                _fa_um350 = trail.mark()
+                if $unify(_v71, _fa_results347, trail):
+                    if $fd_eq(_v71, [10, 20, 30], trail):
+                        yield (_proceed, None)
+                trail.undo(_fa_um350)
+
+# ----
+
+def Test__p0_b18__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymember duplicate values' or $unify(_scap0, 'mymember duplicate values', trail):
+                _v72 = Var()
+                _v73 = Var()
+                _fa_results351 = []
+                _fa_m11 = trail.mark()
+
+                def _fa_gen68():
+                    for _ in $tramp_call($dispatch_at(MyMember, 2), (_v72, [1, 1, 2]), trail):
+                        yield None
+                    return None
+                    yield None
+                for _ in _fa_gen68():
+                    _fa_results351.append($findall_copy(_v72))
+                trail.undo(_fa_m11)
+                _fa_um354 = trail.mark()
+                if $unify(_v73, _fa_results351, trail):
+                    if $fd_eq(_v73, [1, 1, 2], trail):
+                        yield (_proceed, None)
+                trail.undo(_fa_um354)
+
+# ----
+
+def Test__p0_b19__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mylast singleton' or $unify(_scap0, 'mylast singleton', trail):
+                _v74 = Var()
+                _gen69 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [5], _v74, trail)
+                _st64 = (yield (_gen69, None))
+                while _st64 is not $DONE:
+                    if $fd_eq(_v74, 5, trail):
+                        yield (_proceed, None)
+                    _st64 = (yield (_gen69, None))
+
+# ----
+
+def Test__p0_b20__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mylast two elements' or $unify(_scap0, 'mylast two elements', trail):
+                _v75 = Var()
+                _gen70 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2], _v75, trail)
+                _st65 = (yield (_gen70, None))
+                while _st65 is not $DONE:
+                    if $fd_eq(_v75, 2, trail):
+                        yield (_proceed, None)
+                    _st65 = (yield (_gen70, None))
+
+# ----
+
+def Test__p0_b21__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mylast three elements' or $unify(_scap0, 'mylast three elements', trail):
+                _v76 = Var()
+                _gen71 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v76, trail)
+                _st66 = (yield (_gen71, None))
+                while _st66 is not $DONE:
+                    if $fd_eq(_v76, 3, trail):
+                        yield (_proceed, None)
+                    _st66 = (yield (_gen71, None))
+
+# ----
+
+def Test__p0_b22__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mylast five elements' or $unify(_scap0, 'mylast five elements', trail):
+                _v77 = Var()
+                _gen72 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v77, trail)
+                _st67 = (yield (_gen72, None))
+                while _st67 is not $DONE:
+                    if $fd_eq(_v77, 5, trail):
+                        yield (_proceed, None)
+                    _st67 = (yield (_gen72, None))
+
+# ----
+
+def Test__p0_b23__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myproduct empty' or $unify(_scap0, 'myproduct empty', trail):
+                _v78 = Var()
+                _gen73 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [], _v78, trail)
+                _st68 = (yield (_gen73, None))
+                while _st68 is not $DONE:
+                    if $fd_eq(_v78, 1, trail):
+                        yield (_proceed, None)
+                    _st68 = (yield (_gen73, None))
+
+# ----
+
+def Test__p0_b24__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myproduct singleton' or $unify(_scap0, 'myproduct singleton', trail):
+                _v79 = Var()
+                _gen74 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [5], _v79, trail)
+                _st69 = (yield (_gen74, None))
+                while _st69 is not $DONE:
+                    if $fd_eq(_v79, 5, trail):
+                        yield (_proceed, None)
+                    _st69 = (yield (_gen74, None))
+
+# ----
+
+def Test__p0_b25__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myproduct three' or $unify(_scap0, 'myproduct three', trail):
+                _v80 = Var()
+                _gen75 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [2, 3, 4], _v80, trail)
+                _st70 = (yield (_gen75, None))
+                while _st70 is not $DONE:
+                    if $fd_eq(_v80, 24, trail):
+                        yield (_proceed, None)
+                    _st70 = (yield (_gen75, None))
+
+# ----
+
+def Test__p0_b26__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myproduct with zero' or $unify(_scap0, 'myproduct with zero', trail):
+                _v81 = Var()
+                _gen76 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [1, 0, 99], _v81, trail)
+                _st71 = (yield (_gen76, None))
+                while _st71 is not $DONE:
+                    if $fd_eq(_v81, 0, trail):
+                        yield (_proceed, None)
+                    _st71 = (yield (_gen76, None))
+
+# ----
+
+def Test__p0_b27__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myproduct five values' or $unify(_scap0, 'myproduct five values', trail):
+                _v82 = Var()
+                _gen77 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v82, trail)
+                _st72 = (yield (_gen77, None))
+                while _st72 is not $DONE:
+                    if $fd_eq(_v82, 120, trail):
+                        yield (_proceed, None)
+                    _st72 = (yield (_gen77, None))
+
+# ----
+
+def Test__p0_b28__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mysumlist empty' or $unify(_scap0, 'mysumlist empty', trail):
+                _v83 = Var()
+                _gen78 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [], _v83, trail)
+                _st73 = (yield (_gen78, None))
+                while _st73 is not $DONE:
+                    if $fd_eq(_v83, 0, trail):
+                        yield (_proceed, None)
+                    _st73 = (yield (_gen78, None))
+
+# ----
+
+def Test__p0_b29__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mysumlist singleton' or $unify(_scap0, 'mysumlist singleton', trail):
+                _v84 = Var()
+                _gen79 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [7], _v84, trail)
+                _st74 = (yield (_gen79, None))
+                while _st74 is not $DONE:
+                    if $fd_eq(_v84, 7, trail):
+                        yield (_proceed, None)
+                    _st74 = (yield (_gen79, None))
+
+# ----
+
+def Test__p0_b30__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mysumlist three' or $unify(_scap0, 'mysumlist three', trail):
+                _v85 = Var()
+                _gen80 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v85, trail)
+                _st75 = (yield (_gen80, None))
+                while _st75 is not $DONE:
+                    if $fd_eq(_v85, 6, trail):
+                        yield (_proceed, None)
+                    _st75 = (yield (_gen80, None))
+
+# ----
+
+def Test__p0_b31__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mysumlist ten values' or $unify(_scap0, 'mysumlist ten values', trail):
+                _v86 = Var()
+                _gen81 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], _v86, trail)
+                _st76 = (yield (_gen81, None))
+                while _st76 is not $DONE:
+                    if $fd_eq(_v86, 55, trail):
+                        yield (_proceed, None)
+                    _st76 = (yield (_gen81, None))
+
+# ----
+
+def Test__p0_b32__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mysumlist negative' or $unify(_scap0, 'mysumlist negative', trail):
+                _v87 = Var()
+                _gen82 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [-1, -2, -3], _v87, trail)
+                _st77 = (yield (_gen82, None))
+                while _st77 is not $DONE:
+                    if $fd_eq(_v87, -6, trail):
+                        yield (_proceed, None)
+                    _st77 = (yield (_gen82, None))
+
+# ----
+
+def Test__p0_b33__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymax singleton' or $unify(_scap0, 'mymax singleton', trail):
+                _v88 = Var()
+                _gen83 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [3], _v88, trail)
+                _st78 = (yield (_gen83, None))
+                while _st78 is not $DONE:
+                    if $fd_eq(_v88, 3, trail):
+                        yield (_proceed, None)
+                    _st78 = (yield (_gen83, None))
+
+# ----
+
+def Test__p0_b34__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymax two ascending' or $unify(_scap0, 'mymax two ascending', trail):
+                _v89 = Var()
+                _gen84 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [1, 5], _v89, trail)
+                _st79 = (yield (_gen84, None))
+                while _st79 is not $DONE:
+                    if $fd_eq(_v89, 5, trail):
+                        yield (_proceed, None)
+                    _st79 = (yield (_gen84, None))
+
+# ----
+
+def Test__p0_b35__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymax two descending' or $unify(_scap0, 'mymax two descending', trail):
+                _v90 = Var()
+                _gen85 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [5, 1], _v90, trail)
+                _st80 = (yield (_gen85, None))
+                while _st80 is not $DONE:
+                    if $fd_eq(_v90, 5, trail):
+                        yield (_proceed, None)
+                    _st80 = (yield (_gen85, None))
+
+# ----
+
+def Test__p0_b36__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymax three' or $unify(_scap0, 'mymax three', trail):
+                _v91 = Var()
+                _gen86 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [3, 1, 4], _v91, trail)
+                _st81 = (yield (_gen86, None))
+                while _st81 is not $DONE:
+                    if $fd_eq(_v91, 4, trail):
+                        yield (_proceed, None)
+                    _st81 = (yield (_gen86, None))
+
+# ----
+
+def Test__p0_b37__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mymax all equal' or $unify(_scap0, 'mymax all equal', trail):
+                _v92 = Var()
+                _gen87 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [2, 2, 2], _v92, trail)
+                _st82 = (yield (_gen87, None))
+                while _st82 is not $DONE:
+                    if $fd_eq(_v92, 2, trail):
+                        yield (_proceed, None)
+                    _st82 = (yield (_gen87, None))
+
+# ----
+
+def Test__p0_b38__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mynthof first' or $unify(_scap0, 'mynthof first', trail):
+                _v93 = Var()
+                _gen88 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 0, [10, 20, 30], _v93, trail)
+                _st83 = (yield (_gen88, None))
+                while _st83 is not $DONE:
+                    if $fd_eq(_v93, 10, trail):
+                        yield (_proceed, None)
+                    _st83 = (yield (_gen88, None))
+
+# ----
+
+def Test__p0_b39__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mynthof second' or $unify(_scap0, 'mynthof second', trail):
+                _v94 = Var()
+                _gen89 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 1, [10, 20, 30], _v94, trail)
+                _st84 = (yield (_gen89, None))
+                while _st84 is not $DONE:
+                    if $fd_eq(_v94, 20, trail):
+                        yield (_proceed, None)
+                    _st84 = (yield (_gen89, None))
+
+# ----
+
+def Test__p0_b40__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'mynthof third' or $unify(_scap0, 'mynthof third', trail):
+                _v95 = Var()
+                _gen90 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 2, [10, 20, 30], _v95, trail)
+                _st85 = (yield (_gen90, None))
+                while _st85 is not $DONE:
+                    if $fd_eq(_v95, 30, trail):
+                        yield (_proceed, None)
+                    _st85 = (yield (_gen90, None))
+
+# ----
+
+def Test__p0_b41__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myprefix empty of three' or $unify(_scap0, 'myprefix empty of three', trail):
+                _gen91 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [], [1, 2, 3], trail)
+                _st86 = (yield (_gen91, None))
+                while _st86 is not $DONE:
+                    _st86 = (yield (_gen91, None))
+
+# ----
+
+def Test__p0_b42__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myprefix singleton' or $unify(_scap0, 'myprefix singleton', trail):
+                _gen92 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [1], [1, 2, 3], trail)
+                _st87 = (yield (_gen92, None))
+                while _st87 is not $DONE:
+                    _st87 = (yield (_gen92, None))
+
+# ----
+
+def Test__p0_b43__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myprefix full' or $unify(_scap0, 'myprefix full', trail):
+                _gen93 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [1, 2, 3], [1, 2, 3], trail)
+                _st88 = (yield (_gen93, None))
+                while _st88 is not $DONE:
+                    _st88 = (yield (_gen93, None))
+
+# ----
+
+def Test__p0_b44__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_scap0]:
+            if _scap0 == 'myprefix enumerate' or $unify(_scap0, 'myprefix enumerate', trail):
+                _v96 = Var()
+                _v97 = Var()
+                _fa_results405 = []
+                _fa_m12 = trail.mark()
+
+                def _fa_gen94():
+                    for _ in $tramp_call($dispatch_at(MyPrefix, 2), (_v96, [1, 2]), trail):
+                        yield None
+                    return None
+                    yield None
+                for _ in _fa_gen94():
+                    _fa_results405.append($findall_copy(_v96))
+                trail.undo(_fa_m12)
+                _fa_um408 = trail.mark()
+                if $unify(_v97, _fa_results405, trail):
+                    if $fd_eq(_v97, [[], [1], [1, 2]], trail):
+                        yield (_proceed, None)
+                trail.undo(_fa_um408)
+
+# ----
+
+def Test__p0_dflt__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    return None
+    yield None
