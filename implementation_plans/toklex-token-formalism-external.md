@@ -1,19 +1,13 @@
 # toklex: a token-layer formalism for Prolog readers
 
-**Status: DESIGN — awaiting approval (deliverable (a)+(b) of
-`implementation_plans/prolog-parser-formalism-handoff.md`; implementation plan (c) is
-gated on approval).**
-
-This document is written to be readable outside the Clausal codebase. Clausal-specific
-material is confined to §9 and the appendix; everything before it describes a formalism
-any Prolog reader could adopt.
+*Draft for discussion — Clausal project, September 2026.*
 
 ## 1. Problem
 
 Prolog term syntax needs no grammar formalism: its variable part is precedence-shaped,
 `op/3` *is* the grammar, and a runtime-mutable Pratt/precedence-climbing core handles it.
 The **token layer** is where an actual open problem lives. The requirements (Markus
-Triska, 2026-09-03, on what a Prolog-in-Prolog reader needs):
+Triska, September 2026, on what a Prolog-in-Prolog reader needs):
 
 > "we need to find a good formalism to write it, something that is then compiled to a
 > DCG. it must be able to 'peek ahead' to see whether the current token will be extended,
@@ -35,17 +29,17 @@ Unpacked, that is four requirements:
   demand a rewindable source.
 
 A fifth requirement comes from experience with hand-written lexers (including the one
-this formalism replaces): **R5 (derivability):** R2 and R3 must be *derived from the
-token definitions by the compiler*, not hand-maintained. Hand-maintained peek logic is
-where lexer bugs live.
+this formalism replaces in our own system): **R5 (derivability):** R2 and R3 must be
+*derived from the token definitions by the compiler*, not hand-maintained.
+Hand-maintained peek logic is where lexer bugs live.
 
 ## 2. Design overview
 
 **toklex** is a token-definition language with:
 
 - a **surface notation that is Prolog terms** — a spec file is read with an ordinary
-  Prolog reader (bootstrapping: the existing batch tokenizer/parser reads the spec that
-  generates its own replacement);
+  Prolog reader (bootstrapping: an existing batch reader reads the spec that generates
+  its own replacement);
 - a **regular kernel**: token rules are named regular expressions over declared
   character classes, closed under sequence, alternation, repetition, option, and
   **subtraction** (set difference of regular languages);
@@ -58,10 +52,11 @@ where lexer bugs live.
   spec;
 - **incrementality as semantics, not plumbing**: the input is conceptually a partial
   list of characters; "wait for more input" *is* "demand reached the unbound tail"
-  (§6) — the Python `NEED_MORE` contract and the Prolog `freeze/2`-on-the-tail
+  (§6) — an explicit-state `NEED_MORE` contract and a Prolog `freeze/2`-on-the-tail
   implementation are two operationalizations of the same definition;
 - **two thin targets** rendered from the same annotated DFA: a DCG (for a Prolog-hosted
-  reader) and a table-driven step function (Clausal's Python L0).
+  reader) and a table-driven step function (for a host-language implementation; in our
+  case, Clausal's Python reader).
 
 The formalism deliberately does **not** include: lexer modes/start conditions (nesting +
 subtraction + follow constraints cover Prolog without them), general semantic actions
@@ -70,21 +65,21 @@ beyond trivia nesting.
 
 ## 3. Notation
 
-A spec is a list of Prolog terms (read with any conforming reader; operators used:
-`:=`, `|`, `..`, standard functional notation). Four kinds of declarations.
+A spec is a list of Prolog terms (read with any conforming reader). Four kinds of
+declarations.
 
 ### 3.1 Character classes
 
 ```prolog
 class(layout,     [' ', '\t', '\n', '\r']).          % explicit chars
-class(small,      unicode(ll) + ['_']).               % Unicode categories… (see note)
+class(small,      unicode(ll) + ['_']).               % Unicode categories
 class(capital,    unicode(lu)).
 class(digit,      range('0','9')).
 class(graphic,    ['#','$','&','*','+','-','.','/',':','<','=','>','?','@','\\','^','~']).
 class(solo,       ['!',',',';','|','%']).
 class(hexdigit,   range('0','9') + range('a','f') + range('A','F')).
-class(quoted_ok,  any - class(hidden_sep)).           % subtraction on classes
-class(hidden_sep, ['\x0\']).                          % see §9: reader-unwritable char
+class(quoted_ok,  any - class(reserved)).             % subtraction on classes
+class(reserved,   ['\x0\']).                          % embedder-reserved chars, see §9
 ```
 
 Classes are finite unions/differences of explicit sets, ranges, and named Unicode
@@ -98,7 +93,7 @@ class definitions, nothing else.)
 token(name_atom,  small · alnum*).
 token(variable,   (capital | '_') · alnum*).
 token(end,        '.'  followed_by  (layout | '%' | eof)).   % declared before graphic_tok
-token(graphic_tok, graphic+  but_not  ('/' · '*' · any*)).    % ISO: no graphic token starts /*
+token(graphic_tok, graphic+  but_not  ('/' · '*' · any*)).   % ISO: no graphic token starts /*
 token(integer,    digit · (digit | '_')*).                   % '_' separators: dialect choice
 ```
 
@@ -150,8 +145,8 @@ fragment(qitem, quoted_ok_char(C),  gives  C).
 
 Builders are pure and total on accepted lexemes (the DFA already guarantees the shape),
 so they compile to straight-line code in both targets: difference-list accumulation in
-the DCG, a decode loop over the pending buffer in Python. No general user code runs
-inside the lexer; the analyzability of the kernel is preserved.
+the DCG, a decode loop over the pending buffer in a host-language lexer. No general user
+code runs inside the lexer; the analyzability of the kernel is preserved.
 
 ### 3.5 What a rule may not say
 
@@ -196,8 +191,8 @@ The compiler:
    general rewind — which is exactly why R4's no-seeking is satisfiable.
 4. Emits the **annotated DFA**: transitions, accept labels, extend sets, follow checks,
    backup actions, builder attachments. Both targets are mechanical renderings of this
-   object; the object itself (a Prolog term / JSON) is a legitimate interchange format
-   between independent implementations.
+   object; the object itself (a Prolog term) is a legitimate interchange format between
+   independent implementations.
 
 Lexical errors are part of the semantics, not exceptions: a character with no transition
 from the start state, or a failure with no accepting state behind it, yields an
@@ -210,7 +205,7 @@ The generated lexer needs exactly two stream capabilities, both cheap and both
 seek-free:
 
 - **peek(1):** inspect the next character without consuming it — for the emission
-  condition and follow constraints. (Scryer's `CharReader` exposes precisely
+  condition and follow constraints. (Scryer Prolog's `CharReader` exposes precisely
   `peek_char`/`put_back_char`; every buffered reader can.)
 - **unread(≤ B):** return the last `k ≤ B` consumed characters, where `B` is the
   compiler-computed bound. Implemented as a tiny ring/stack in front of the stream —
@@ -246,8 +241,8 @@ waiting:
   unification; the scheduler resumes it. Nothing is reified because nothing needs to be
   — the suspended goal's continuation is the lexer state. This is the classically
   elegant answer and the primary DCG rendering.
-- **Explicit-state host (Clausal's Python L0, or a freeze-less Prolog):** the same DFA
-  renders as a **step function** — `lex_step(State0, Event, State, Out)` with
+- **Explicit-state host (a host-language lexer, or a freeze-less Prolog):** the same
+  DFA renders as a **step function** — `lex_step(State0, Event, State, Out)` with
   `Event ∈ {char(C), eof}` and `Out ∈ {none, tokens([...]), error(...)}` — plus a
   driver exposing `feed(chunk)` / `next_token() → Token | NEED_MORE | EOF`. `NEED_MORE`
   is returned precisely when the semantics above says *suspend*. The reified state is
@@ -278,7 +273,7 @@ return `e+`; `e` then lexes as a name atom. `1.` + unbound tail → suspend (cou
 `1.5`).
 
 **`0'c` family** — `0'a` → 97 (longest match beats "integer 0 then quoted atom").
-`0'''` → 39 via the `qq` fragment. `0'\n\` escapes via the shared `esc` fragment map.
+`0'''` → 39 via the `qq` fragment. `0'\n` escapes via the shared `esc` fragment map.
 `0'` + unbound tail → suspend.
 
 **Quoted atom with continuation** — `'ab\⏎cd'` decodes to `abcd` via the
@@ -309,32 +304,28 @@ preceded the token. `Glue` makes ISO's adjacency distinctions (`f(` compound-ope
 a reconstruction from positions downstream. Trivia themselves are droppable but
 span-recorded (comment-preserving tools may subscribe; the term layer ignores them).
 
-## 9. Clausal instantiation (Phase 3 deltas from the ISO spec file)
+## 9. Example: an embedder's dialect deltas (Clausal)
 
-The formalism above is dialect-free; Clausal's Phase 3 surface is a *spec file*, an ISO
-base with these deltas (rulings from `tagged-tuple-term-representation.md` §1b):
+The formalism is dialect-free; a dialect is a *spec file*. As a concreteness check,
+here is what Clausal (a Prolog system embedded in Python) needs as deltas on the ISO
+base spec — each one a data change, none a formalism change:
 
-- **`hidden_sep` exclusion:** the `-hide` mangling separator (NUL or a private-use
-  codepoint — final char TBD in Phase 3) appears in **no character class at all**, so
-  it is a lexical error *anywhere* in source — inside quoted atoms, strings, comments,
-  everywhere. Stronger than §1b's minimum ("inside any atom token") and simpler: one
-  class-membership fact, zero special cases. The writer renders the human form; only
-  the runtime str carries the separator.
-- **Double-quoted tokens** are `string` tokens at the lexer level; chars-list lowering
-  (ISO `double_quotes = chars`, per §1b) is the reader's term-construction policy, not
+- **A reserved codepoint.** Clausal renames module-hidden atoms internally with a
+  separator character that must be *unwritable from source*. In toklex this is one
+  fact: the character appears in **no character class at all**, so it is a lexical
+  error anywhere — inside quoted atoms, strings, comments, everywhere. Zero special
+  cases.
+- **Double-quoted tokens** are `string` tokens at the lexer level; lowering to char
+  lists (ISO `double_quotes = chars`) is the reader's term-construction policy, not
   the lexer's.
-- **Directive surface `-module(...)`, `-private([...])`, bare `-allow_singletons`:**
-  lexically nothing — `-` graphic token, name atom, punctuation. *But note* (open
-  question 3 below): current `.clausal` fixtures are **dot-less and `#`-commented**
-  (they are parsed as Python today). Whether Phase 3's surface is dot-terminated with
-  `%` comments (ISO-faithful, what the §1c L0 contract assumes) or keeps
-  newline-significant items is a surface decision owned by the parser author. The
-  formalism is indifferent: `#`-comments are one trivia line in the spec; a
-  newline-significant surface consumes the `Glue`/span data of §8 in the term layer.
-  The token layer does not change shape either way.
-- The existing `prolog_tokenizer.py` behaviors that are deliberate dialect choices —
-  `_` digit separators, lenient unknown escapes, nested comments — are each one line of
-  spec, on by default to keep `tests/test_prolog_parse.py` green.
+- **Directive surface** `-module(...)`-style (rather than `:- module(...)`) is
+  lexically nothing — graphic token `-`, name atom, punctuation. Whether items are
+  dot-terminated or newline-significant is a surface-language decision still open on
+  the Clausal side; the token layer is indifferent either way (a `#`-comment dialect
+  is one trivia line; layout-significance consumes §8's `Glue`/span data in the term
+  layer).
+- Deliberate dialect choices in Clausal's current hand-written tokenizer — `_` digit
+  separators, lenient unknown escapes, nested comments — are each one line of spec.
 
 ## 10. Compilation targets
 
@@ -359,26 +350,23 @@ q13(Pnd, T), ['.'] --> emit_integer(Pnd, T).            % pushback via right-han
 DCG's right-hand-side context notation *is* "push characters back to the stream", which
 is a pleasing fit: the standard's own notation already contains R3.)
 
-**Step-function target (Python, Clausal L0).** Tables: `delta[state][class] → state`,
+**Step-function target (host language).** Tables: `delta[state][class] → state`,
 `accept[state]`, `extend[state]` (bitset), `follow[rule]`, `backup[state]`; a ~100-line
-generic driver implements `feed/next_token` per §6 and never changes; regenerating the
-tables is the only effect of a spec edit. This replaces the 487-line hand-written
-`prolog_tokenizer.py` behind the same (now incremental) interface.
+generic driver implements `feed`/`next_token` per §6 and never changes; regenerating the
+tables is the only effect of a spec edit. In Clausal this replaces a ~500-line
+hand-written tokenizer behind the same (now incremental) interface.
 
-## 11. Where it lives (deliverable b — recommendation)
+## 11. Implementations and conformance
 
-- **The spec files and this design are the shared artifact.** `iso.toklex.pl` (dialect
-  base) and `clausal_phase3.toklex.pl` (deltas of §9) are plain Prolog term files,
-  meaningful to any implementation, suitable to hand to the Prolog-in-Prolog effort
-  as-is. The annotated-DFA dump (§4.4) is the secondary interchange format.
-- **Clausal hosts the first compiler**: `clausal/tools/toklex/` — spec loader
-  (bootstrapped on the *existing* `prolog_parser.py`, which is already capable of
-  reading the spec files), automaton construction + checks, and the two renderers. The
-  Python renderer is what Clausal runs; the DCG renderer is cheap to build from the
-  same DFA and is the concrete contribution back to the Prolog-hosted effort.
-- A future Prolog-hosted compiler reimplements §4 from this document against the same
-  spec files; the chunk-boundary property test plus a token-stream diff on a shared
-  corpus is the conformance suite between implementations.
+- **The spec files are the shared artifact**: an `iso.toklex.pl` dialect base plus
+  per-dialect delta files (§9), plain Prolog term files meaningful to any
+  implementation. The annotated-DFA dump (§4.4) is a secondary interchange format.
+- Clausal will host the first compiler (spec loader, automaton construction and
+  checks, both renderers); the DCG renderer is cheap to build from the same DFA and is
+  the concrete contribution to a Prolog-hosted reader.
+- A Prolog-hosted compiler can be reimplemented from §4 of this document against the
+  same spec files. The conformance suite between independent implementations is the
+  chunk-boundary property test (§6) plus a token-stream diff on a shared corpus.
 
 ## 12. Alternatives considered
 
@@ -392,24 +380,19 @@ tables is the only effect of a spec edit. This replaces the 487-line hand-writte
   backtracking is unbounded — R3's boundedness proof is unavailable.
 - **Full lexer-generator with modes (flex-style start conditions).** Modes are the
   traditional escape hatch; Prolog needs them nowhere once `but_not`, follow
-  constraints, and trivia nesting exist. YAGNI — and every dropped feature keeps the
-  DCG rendering honest.
+  constraints, and trivia nesting exist — and every dropped feature keeps the DCG
+  rendering honest.
 
-## 13. Open questions for the user
+## 13. Questions for discussion
 
-1. **Notation blessing:** happy with Prolog-terms surface + the operator set (`·` or
-   `,`? `but_not`, `followed_by`, `nest self`, `value/gives`)? Names are cosmetic;
-   structure is load-bearing. *(Partially ruled 2026-09-04: `but_not` with the
-   underscore, not `butnot`. Rest still open.)*
-2. **⟨SEP⟩ strictness:** §9 proposes rejecting the hidden separator *everywhere*
-   (including comments/strings), stronger than §1b's "any atom token". Confirm.
-3. **Phase 3 surface:** dot-terminated `%`-commented (ISO-faithful, matches §1c L0) vs
-   dot-less newline-significant like today's `.clausal` files? Token layer is
-   indifferent (§9), but the *spec file* and the L1 item boundary need the ruling —
-   and this is the parser author's call.
-4. **Sharing:** this document + the two spec files are written to be shareable with
-   Markus Triska as the proposal; say the word and nothing Clausal-internal blocks it
-   (§9 would travel as "an embedder's dialect deltas" example). *(Answered 2026-09-04:
-   yes — sanitized version produced as
-   `implementation_plans/toklex-token-formalism-external.md` + PDF, for Markus Triska,
-   who also shares with Ulrich Neumerkel.)*
+1. Is the Prolog-terms surface notation right, and are the operator spellings agreeable
+   (`·` vs `,` for sequence; `but_not`, `followed_by`, `nest self`, `value`/`gives`)?
+2. Is the annotated-DFA dump (§4.4) worth standardizing as an interchange format, so a
+   Prolog-hosted reader could consume a DFA compiled elsewhere before a full
+   Prolog-hosted compiler exists?
+3. For the DCG rendering: is `freeze/2`-on-the-tail acceptable as the primary
+   suspension mechanism, or should the pure step-function rendering (explicit state,
+   no coroutining) be the reference form, with freeze as sugar?
+4. Does the ISO token inventory hide any case that breaks the one-character-peek /
+   bounded-backup analysis? (`B = 2` is our computed claim; a counterexample would be
+   very interesting.)
