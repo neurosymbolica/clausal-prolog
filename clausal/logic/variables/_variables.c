@@ -2997,6 +2997,56 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
                 if (!fields) return NULL;
             }
             Py_ssize_t n = PyTuple_GET_SIZE(fields);
+
+            /* Phase 0 fast-path gate (KEEP THE THREE WALKERS IN SYNC --
+             * solve.py's _deref_walk_py comment; c_copy_term is wired in as
+             * clausal.logic.builtins.inspection's runtime _copy_term, so it
+             * must decide identically to _copy_term_py's own gate): cls's
+             * OWN dict has "_clausal_new" as a classmethod object iff
+             * PredicateMeta attached the positional-args fast constructor.
+             * Absent for atoms; also absent for a class with a field
+             * literally named "_clausal_new" (tp_dict then holds a
+             * __slots__ member descriptor under that name instead) -- hence
+             * the PyClassMethod_Type check rather than mere name presence. */
+            {
+                PyObject *cls = (PyObject *)Py_TYPE(term);
+                PyObject *fastm = PyDict_GetItemWithError(
+                    ((PyTypeObject *)cls)->tp_dict, str__clausal_new);
+                if (fastm == NULL && PyErr_Occurred()) {
+                    Py_DECREF(fields);
+                    return NULL;
+                }
+                if (fastm != NULL &&
+                    PyObject_TypeCheck(fastm, &PyClassMethod_Type)) {
+                    PyObject *args_tuple = PyTuple_New(n);
+                    if (!args_tuple) { Py_DECREF(fields); return NULL; }
+                    for (Py_ssize_t i = 0; i < n; i++) {
+                        PyObject *fname = PyTuple_GET_ITEM(fields, i);
+                        PyObject *fval = PyObject_GetAttr(term, fname);
+                        if (!fval) {
+                            Py_DECREF(fields);
+                            Py_DECREF(args_tuple);
+                            return NULL;
+                        }
+                        PyObject *copied_val = c_copy_term(fval, var_map, depth + 1);
+                        Py_DECREF(fval);
+                        if (!copied_val) {
+                            Py_DECREF(fields);
+                            Py_DECREF(args_tuple);
+                            return NULL;
+                        }
+                        PyTuple_SET_ITEM(args_tuple, i, copied_val);
+                    }
+                    Py_DECREF(fields);
+                    PyObject *bound = PyObject_GetAttr(cls, str__clausal_new);
+                    if (!bound) { Py_DECREF(args_tuple); return NULL; }
+                    PyObject *result = PyObject_Call(bound, args_tuple, NULL);
+                    Py_DECREF(bound);
+                    Py_DECREF(args_tuple);
+                    return result;
+                }
+            }
+
             PyObject *kwargs = PyDict_New();
             if (!kwargs) { Py_DECREF(fields); return NULL; }
             for (Py_ssize_t i = 0; i < n; i++) {

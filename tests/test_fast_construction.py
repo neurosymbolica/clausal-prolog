@@ -580,3 +580,127 @@ class TestCWalkerFastPathActuallyFires:
         assert result == term
         assert result._clausal_new == 7
         assert result is not term
+
+
+# ── Fix round 1 (controller ruling): c_copy_term adopts the same gate ───────
+#
+# clausal/logic/builtins/inspection.py:186 wires ``_copy_term =
+# _copy_term_impl``, and that name is imported from
+# ``clausal.logic.variables._variables`` when the C extension is present
+# (see the ``try/except ImportError`` block above ``_copy_term_impl`` in that
+# file) — so the C ``c_copy_term`` accelerator, not ``_copy_term_py``, is
+# what actually runs at ``copy_term/2`` call sites. Its term-instance
+# rebuild arm must decide fast-vs-slow identically to ``_copy_term_py``'s
+# own gate (Task 1) or the two "walkers" silently diverge in practice.
+#
+# NOTE on value-equality checks below: ``copy_term`` mints a FRESH Var for
+# every unbound Var it encounters, so two *independent* copies of a term
+# holding an unbound Var are never ``==`` to each other by construction —
+# that has nothing to do with the fast-path gate. The value-parity corpus
+# here therefore uses a BOUND Var (copy_term dereferences it to its bound
+# value before either implementation's fast/slow decision is even reached),
+# and freshness/sharing on unbound Vars is checked structurally instead, the
+# same way TestCopyTermFastPath does above.
+
+
+def _c_copy_term_corpus():
+    # nv
+    inner = make_predicate("cct_p_inner", ["a", "b"])
+    outer = make_predicate("cct_p_outer", ["p", "q"])
+    v_bound = Var()
+    trail = Trail()
+    unify(v_bound, 42, trail)
+    nested = outer(p=inner(a=1, b=v_bound), q="tail")
+
+    node = BinOp(left=1, right=2)
+
+    weird = make_predicate("cct_p_weird", ["_clausal_new"])
+    weird_term = weird(_clausal_new=7)
+
+    posy = make_predicate("cct_p_posy", ["position"])
+    posy_term = posy(position=1)
+
+    return [nested, node, weird_term, posy_term]
+
+
+class TestCCopyTermFastPathParity:
+    def test_copy_term_c_matches_copy_term_py(self):
+        # nv — ``_copy_term`` here is deliberately the runtime-wired name
+        # from inspection.py (C-backed when the extension is present), not
+        # ``_copy_term_impl`` directly, to exercise exactly what
+        # ``copy_term/2`` calls.
+        from clausal.logic.builtins.inspection import _copy_term, _copy_term_py
+
+        for term in _c_copy_term_corpus():
+            assert _copy_term_py(term, {}) == _copy_term(term, {})
+
+    def test_copy_term_c_produces_fresh_object_with_fresh_unbound_vars(self):
+        # nv — structural parity for the unbound-Var case: both
+        # implementations must produce a fresh top-level object, a fresh
+        # (distinct) Var standing in for each original unbound Var, and
+        # preserve sharing (two references to the same original Var map to
+        # the same fresh Var within one copy).
+        from clausal.logic.builtins.inspection import _copy_term
+
+        inner = make_predicate("cct_fresh_inner", ["a", "b"])
+        outer = make_predicate("cct_fresh_outer", ["p", "q"])
+        v = Var()
+        term = outer(p=inner(a=1, b=v), q=[v, "tail"])
+
+        var_map = {}
+        result = _copy_term(term, var_map)
+
+        assert result is not term
+        assert result.p is not term.p
+        assert result.p.a == 1
+        from clausal.logic.variables import is_var
+
+        assert is_var(result.p.b)
+        assert result.p.b is not v
+        # sharing preserved: the same original Var maps to the same fresh
+        # Var both inside `p` and inside the `q` list.
+        assert result.p.b is result.q[0]
+        assert var_map[id(v)] is result.p.b
+
+    def test_copy_term_c_field_named_clausal_new_uses_slow_path(self):
+        # nv — regression guard for the name-only-check bug on the C
+        # accelerator's own term-instance arm.
+        from clausal.logic.builtins.inspection import _copy_term
+
+        weird = make_predicate("cct_p_weird2", ["_clausal_new"])
+        term = weird(_clausal_new=7)
+        result = _copy_term(term, {})
+        assert result == term
+        assert result._clausal_new == 7
+        assert result is not term
+
+
+class TestCCopyTermFastPathActuallyFires:
+    def test_copy_term_c_uses_fast_new_for_nested_term(self):
+        # nv — same call-recording technique as
+        # TestCWalkerFastPathActuallyFires, applied to the C copy_term
+        # accelerator's term-instance arm.
+        from clausal.logic.builtins.inspection import _copy_term
+
+        inner = make_predicate("cct_fire_inner", ["a", "b"])
+        outer = make_predicate("cct_fire_outer", ["p", "q"])
+
+        calls = []
+        real_fast_new = inner.__dict__["_clausal_new"]
+
+        def recording(cls, *args):
+            calls.append(args)
+            return real_fast_new.__func__(cls, *args)
+
+        inner._clausal_new = classmethod(recording)
+        try:
+            v = Var()
+            term = outer(p=inner(a=1, b=v), q="tail")
+
+            result = _copy_term(term, {})
+
+            assert calls, "expected _clausal_new to be invoked for the inner term"
+            assert result.p.a == 1
+        finally:
+            del inner._clausal_new
+            inner._clausal_new = real_fast_new
