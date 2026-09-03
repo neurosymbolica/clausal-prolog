@@ -77,6 +77,11 @@ def parse_term(source: str, *, op_table: OperatorTable | None = None) -> PTerm:
 class PrologParser:
     """Pratt parser for Prolog terms."""
 
+    _CLOSER_TYPES = frozenset({
+        TokenType.RPAREN, TokenType.RBRACKET, TokenType.RCURLY,
+        TokenType.BAR, TokenType.COMMA, TokenType.DOT, TokenType.END,
+    })
+
     def __init__(self, tokens: list[Token], op_table: OperatorTable):
         self._tokens = tokens
         self._pos = 0
@@ -174,6 +179,11 @@ class PrologParser:
             entry = None
             if infix_entry and infix_entry.precedence <= max_prec:
                 entry = infix_entry
+                # Guarded postfix fallback: if we have both infix and postfix,
+                # and the next token cannot start a term, use postfix instead
+                if postfix_entry and postfix_entry.precedence <= max_prec \
+                        and not self._can_start_term_conservative(self._peek(1)):
+                    entry = postfix_entry
             elif postfix_entry and postfix_entry.precedence <= max_prec:
                 entry = postfix_entry
 
@@ -388,9 +398,10 @@ class PrologParser:
 
     # ── Token helpers ────────────────────────────────────────────────
 
-    def _peek(self) -> Token:
-        if self._pos < len(self._tokens):
-            return self._tokens[self._pos]
+    def _peek(self, offset: int = 0) -> Token:
+        pos = self._pos + offset
+        if pos < len(self._tokens):
+            return self._tokens[pos]
         return Token(TokenType.END, "", 0, 0)
 
     def _advance(self) -> Token:
@@ -444,3 +455,18 @@ class PrologParser:
             TokenType.ATOM, TokenType.VAR, TokenType.INTEGER, TokenType.FLOAT,
             TokenType.STRING, TokenType.LPAREN, TokenType.LBRACKET, TokenType.LCURLY,
         )
+
+    def _can_start_term_conservative(self, tok: Token) -> bool:
+        """Conservative: can *tok* begin a term? Used only to disambiguate an
+        atom that is declared both infix and postfix (never true of default
+        tables). An infix/postfix-only operator atom is treated as unable to
+        start a term (`a* then b`), at the cost of requiring parens for the
+        rare `a * (then)`."""
+        if tok.type in self._CLOSER_TYPES:
+            return False
+        if tok.type == TokenType.ATOM:
+            name = tok.value
+            if (self._ops.lookup_infix(name) or self._ops.lookup_postfix(name)) \
+                    and not self._ops.lookup_prefix(name):
+                return False
+        return True
