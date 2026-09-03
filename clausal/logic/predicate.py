@@ -433,6 +433,10 @@ def _make_fast_new(fields: tuple[str, ...]):
     missing-field backfill (no ``Var()`` defaults) and no arity checking.
     Parameters are named ``_a0.._aN`` (not the field names) so a field
     literally named e.g. ``x`` can never shadow a parameter.
+
+    This path bypasses ``PredicateMeta.__call__`` entirely, so any future
+    construction-time hook (interning, validation, provenance) must be
+    added in both places.
     """
     cached = _fast_new_cache.get(fields)
     if cached is not None:

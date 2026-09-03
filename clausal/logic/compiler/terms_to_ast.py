@@ -42,7 +42,7 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
 
-from ._ast_helpers import _name, _call
+from ._ast_helpers import _name, _call, _attr
 from ._vars import _var_python_name
 
 
@@ -639,23 +639,32 @@ def term_to_ast_expr(
         fields = term_field_names(term)
         if (
             isinstance(cls, PredicateMeta)
-            and "_clausal_new" in vars(cls)
+            and isinstance(vars(cls).get("_clausal_new"), classmethod)
             and not any(name in ("_position", "position") for name in fields)
         ):
             # Saturated, no position field, generated fast constructor
             # available: emit a positional call to it instead of the
-            # keyword-based slow-path constructor call below.
-            return ast.Call(
-                func=ast.Attribute(
-                    value=_name(cls_name), attr="_clausal_new", ctx=ast.Load(),
-                ),
-                args=[
+            # keyword-based slow-path constructor call below.  Gate on
+            # ``vars(cls).get("_clausal_new")`` actually BEING the generated
+            # classmethod, not merely present by that name — a class whose
+            # FIELD is literally named "_clausal_new" also has an entry at
+            # that key (the __slots__ member descriptor; see the attach guard
+            # in predicate.py), and calling that descriptor as a constructor
+            # raises a TypeError at runtime.
+            #
+            # This positional emission is order-dependent on ``fields`` for
+            # whichever class ``cls_name`` resolves to at call time; it is
+            # solve.py's ``_collect_types_from_term`` update-after-module-dict
+            # that keeps query templates resolving to the caller's actual
+            # class rather than a stale one.
+            return _call(
+                _attr(cls_name, "_clausal_new"),
+                *[
                     term_to_ast_expr(
                         getattr(term, name), var_context, eval_arith=eval_arith,
                     )
                     for name in fields
                 ],
-                keywords=[],
             )
         return ast.Call(
             func=_name(cls_name),

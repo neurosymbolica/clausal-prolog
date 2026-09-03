@@ -442,6 +442,46 @@ class TestInjectBucketRefs:
             f"Expected {expected_gkey!r} in base_globals; got {list(base_globals.keys())}"
         assert callable(base_globals[expected_gkey])
 
+    def test_bucket_injected_for_compound_arg(self):
+        """inject_bucket_refs injects a bucket fn for a compound
+        (constructed-term) call-site argument, keyed by class name — the
+        Phase 0 construction fast path (``Cls._clausal_new(...)``) emission
+        shape that ``_static_call_key`` special-cases (ade69afd). End-to-end
+        through ``_inject_bucket_refs_trampoline`` -> ``term_to_ast_expr`` ->
+        ``_static_call_key``, pinning that ade69afd's fix stays fixed at the
+        integration level, not just in the ``_static_call_key`` unit tests
+        above."""
+        # nv
+        dog = _make_pred_cls("Dog", ["name", "age"])
+        cat = _make_pred_cls("Cat", ["name"])
+        facts = [
+            (dog(name="fido", age=1),),
+            (dog(name="rex", age=2),),
+            (dog(name="buddy", age=3),),
+            (dog(name="max", age=4),),
+            (cat(name="tom"),),
+        ]
+        callee_cls, callee_arity = _make_locked_pred_cls("shape", facts)
+        assert hasattr(callee_cls, "_index_plans") and callee_cls._index_plans
+        assert ("Dog", 2) in callee_cls._index_plans[0]
+
+        # Build a caller clause: caller(_x) <- shape(Dog(name=.., age=..), _x)
+        x = Var()
+        arg_term = dog(name="fixed", age=9)
+        call_goal = Call(func=LoadName(name="shape"), args=[arg_term, x])
+        caller_clause = Clause(
+            head=Compound("caller", (x,)),
+            body=[call_goal],
+        )
+
+        base_globals = {"shape": callee_cls}
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+
+        expected_gkey = _bucket_key("shape", 0, ("Dog", 2))
+        assert expected_gkey in base_globals, \
+            f"Expected {expected_gkey!r} in base_globals; got {list(base_globals.keys())}"
+        assert callable(base_globals[expected_gkey])
+
     def test_bucket_ref_map_populated(self):
         """inject_bucket_refs populates ctx.bucket_ref_map."""
         callee_cls, _ = _make_locked_pred_cls("color", [

@@ -592,12 +592,23 @@ The globals key `"Color.bucket(pos=0, 'red')"` is not a valid Python identifier,
     def _static_call_key(arg_expr: ast.expr) -> Any | None:
         if isinstance(arg_expr, ast.Constant):
             return arg_expr.value           # int, str, float, bool, None
+        if isinstance(arg_expr, (ast.List, ast.Tuple)):
+            # literal 1-char-str elements canonicalise to the joined str
+            # (or joined bytes for 0-255 ints), same as _runtime_arg_key
+            ...
         if isinstance(arg_expr, ast.Call):
             func = arg_expr.func
+            n_args = len(arg_expr.args) + len(arg_expr.keywords)
             if isinstance(func, ast.Name):
-                return (func.id, len(arg_expr.args) + len(arg_expr.keywords))
+                return (func.id, n_args)
             if isinstance(func, ast.Attribute):
-                return (func.attr, len(arg_expr.args) + len(arg_expr.keywords))
+                # Cls._clausal_new(...) (Phase 0 construction fast path):
+                # the class name is func.value, not func.attr — func.attr is
+                # always the literal "_clausal_new".  A qualified mod.Dog(...)
+                # call still keys on func.attr.
+                if func.attr == "_clausal_new" and isinstance(func.value, ast.Name):
+                    return (func.value.id, n_args)
+                return (func.attr, n_args)
         return None                         # variable or unknown
     ```
 

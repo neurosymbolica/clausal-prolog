@@ -174,6 +174,40 @@ class TestEmitterFastPathUnit:
         assert "_clausal_new" not in ast.unparse(expr)
         assert isinstance(expr.func, ast.Name)
 
+    def test_field_named_clausal_new_keeps_keyword_emission(self):
+        # nv — regression test for the emitter gate reading
+        # ``"_clausal_new" in vars(cls)``: that's True for a class whose
+        # FIELD happens to be named "_clausal_new" too, because __slots__
+        # puts a member_descriptor at that class attribute (see
+        # TestFieldNamedClausalNew in this file — the class-creation guard
+        # skips attaching the generated classmethod there). The old gate
+        # emitted ``weird_pred._clausal_new(5)``, which raises
+        # ``TypeError: 'member_descriptor' object is not callable`` at
+        # runtime since ``_clausal_new`` on this class is the slot
+        # descriptor, not the fast constructor. The gate must ask whether
+        # ``vars(cls)["_clausal_new"]`` IS a classmethod, not whether the
+        # name is merely present, so this must keep the keyword-call
+        # (slow-path) emission.
+        weird = make_predicate("weird_pred", ["_clausal_new"])
+        assert "_clausal_new" in vars(weird)  # present ...
+        assert not isinstance(vars(weird)["_clausal_new"], classmethod)  # ... but not a classmethod
+        term = weird(_clausal_new=5)
+        expr = term_to_ast_expr(term, {})
+        src = ast.unparse(expr)
+        assert "._clausal_new(" not in src
+        assert isinstance(expr, ast.Call)
+        assert isinstance(expr.func, ast.Name)
+        assert expr.func.id == "weird_pred"
+        assert len(expr.keywords) == 1
+        assert expr.keywords[0].arg == "_clausal_new"
+        # The emitted expression, evaluated, behaves exactly like the old
+        # keyword-construction path: weird_pred(_clausal_new=5).
+        ns = {"weird_pred": weird}
+        expr_ast = ast.fix_missing_locations(ast.Expression(body=expr))
+        rebuilt = eval(compile(expr_ast, "<test>", "eval"), ns)  # noqa: S307
+        assert rebuilt == term
+        assert rebuilt._clausal_new == 5
+
 
 class TestEmitterFastPathIntegration:
     def test_compiled_body_construction_parity_with_slow_path(self):
