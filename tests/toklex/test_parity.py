@@ -344,3 +344,17 @@ class TestScryerCorpus:
         except TokenizeError:
             pytest.skip("file uses syntax outside the dialect (also failed before)")
         assert toks[-1].type == TokenType.END and len(toks) >= 1
+
+
+class TestTokenOffsets:
+    def test_offsets_populated_by_shim(self):
+        toks = tokenize("foo( X , 12 ).\n")
+        assert [(t.type.value, t.offset, t.end_offset) for t in toks] == [
+            ("atom", 0, 3), ("(", 3, 4), ("var", 5, 6), (",", 7, 8),
+            ("integer", 9, 11), (")", 12, 13), (".", 13, 14), ("end", 15, 15),
+        ]
+
+    def test_offsets_excluded_from_equality(self):
+        a = Token(TokenType.ATOM, "x", 1, 1)
+        b = Token(TokenType.ATOM, "x", 1, 1, offset=5, end_offset=6)
+        assert a == b

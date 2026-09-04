@@ -53,6 +53,9 @@ class Token:
     # from equality/repr so existing Token(...) comparisons stay valid.
     end_line: int = field(default=0, compare=False, repr=False)
     end_col: int = field(default=0, compare=False, repr=False)
+    # Character offsets in source (0-based). Populated by shim from toklex Tok objects.
+    offset: int = field(default=-1, compare=False, repr=False)
+    end_offset: int = field(default=-1, compare=False, repr=False)
 
     def __repr__(self) -> str:
         return f"Token({self.type.value!r}, {self.value!r}, {self.line}:{self.col})"
@@ -167,12 +170,14 @@ def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
             _KIND_MAP[t.kind], t.value, t.start[1], t.start[2],
             quoted=(t.kind == "quoted_atom"),
             end_line=t.end[1], end_col=t.end[2],
+            offset=t.start[0], end_offset=t.end[0],
         ))
 
     end_line, end_col = _end_of_source_pos(source)
     result.append(Token(
         TokenType.END, "", end_line, end_col,
         end_line=end_line, end_col=end_col,
+        offset=len(source), end_offset=len(source),
     ))
     return result
 
