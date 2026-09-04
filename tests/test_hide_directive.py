@@ -28,7 +28,9 @@ assertions (same discipline as ``test_global_atoms_default.py``).
 
 from __future__ import annotations
 
+import io as _io
 import os
+import sys as _sys
 import tempfile
 
 import pytest
@@ -239,6 +241,87 @@ def test_end_to_end_solved_value_renders_human_form():
     assert len(vals) == 1
     text = _render_value(vals[0], path=_fixture_path("hide_owner.clausal"))
     assert text == "hide_owner.hide_secret"
+
+
+# ── Prolog writer builtins: write/1, write_to_string/2, term_to_string/2 ────
+#
+# P3-1 Task 6 fix round: the reflection/diagnostic renderers above are NOT
+# the only "writer" -- clausal/logic/builtins/io.py's write/1, writeln/1,
+# write_to_string/2 (via _format_term_for_io) and print_term/1,
+# term_to_string/2, listing/1, portray_clause/1 (via clausal.terms.term_str)
+# independently format terms for I/O.  Design doc section 1b promises "the
+# writer renders the human form" for ANY writer, not just reflection's --
+# this section pins that promise for the actual Prolog-facing builtins.
+# NOT a round-trip: the human ``module.name`` form re-reads as a different
+# (unmangled) term -- display only, per section 1b's own guarantee; the raw
+# mangled str is what actually travels/unifies/marshals.
+
+
+def _dispatch_solutions(name, arity, *args, snap):
+    """Run a builtin predicate directly and collect a snapshot per solution
+    (mirrors tests/test_chars.py's ``_run_collect`` helper)."""
+    trail = Trail()
+    dispatch = get_builtin_dispatch(name, arity, None)
+    return solutions(
+        StepGenerator(dispatch, None, None, None, *args, trail), snapshot=snap
+    )
+
+
+def test_write_to_string_renders_human_form_for_hidden_atom():
+    """``write_to_string/2`` on a solved hidden-atom value renders the
+    human ``module.name`` form -- no raw HIDDEN_SEP in the output."""
+    mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
+    out = Var()
+    vals = [deref(out) for _ in mod.holds(out)]
+    assert len(vals) == 1
+    val = vals[0]
+    assert is_mangled(val)
+
+    result = Var()
+    texts = _dispatch_solutions(
+        "write_to_string", 2, val, result, snap=lambda: deref(result))
+    assert texts == ["hide_owner.hide_secret"]
+    assert HIDDEN_SEP not in texts[0]
+
+
+def test_term_to_string_renders_human_form_for_hidden_atom():
+    """``term_to_string/2`` (the ``term_str``-backed writer, also feeding
+    ``print_term/1``) renders the same human form -- no raw HIDDEN_SEP."""
+    mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
+    out = Var()
+    vals = [deref(out) for _ in mod.holds(out)]
+    val = vals[0]
+
+    result = Var()
+    texts = _dispatch_solutions(
+        "term_to_string", 2, val, result, snap=lambda: deref(result))
+    assert len(texts) == 1
+    assert HIDDEN_SEP not in texts[0]
+    assert "hide_owner.hide_secret" in texts[0]
+
+
+def test_portray_clause_spot_check_renders_human_form():
+    """Spot check (fix-round item 2): ``portray_clause/1`` -- backed by
+    ``clausal.terms.term_pformat``, which itself starts from ``term_str``
+    -- also renders the human form for a hidden atom, with no raw
+    HIDDEN_SEP anywhere in its output."""
+    mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
+    out = Var()
+    vals = [deref(out) for _ in mod.holds(out)]
+    val = vals[0]
+
+    trail = Trail()
+    dispatch = get_builtin_dispatch("portray_clause", 1, None)
+    buf = _io.StringIO()
+    old_stdout = _sys.stdout
+    _sys.stdout = buf
+    try:
+        list(solutions(StepGenerator(dispatch, None, None, None, val, trail)))
+    finally:
+        _sys.stdout = old_stdout
+    text = buf.getvalue()
+    assert HIDDEN_SEP not in text
+    assert "hide_owner.hide_secret" in text
 
 
 # ── -hide requires a preceding -module ───────────────────────────────────────

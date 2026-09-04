@@ -23,6 +23,7 @@ from decimal import (
 from types import MappingProxyType
 from typing import Any, Optional
 
+from .logic.atoms import demangle_for_display, is_mangled
 from .logic.variables import Var, deref
 
 # Re-export operator/expression classes already defined in pythonic_ast.
@@ -2379,7 +2380,14 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
     if isinstance(t, (int, float, complex)):
         return _c(repr(t), 'number', style)
     if isinstance(t, str):
-        return _c(repr(t), 'string', style)
+        # P3-1 Task 6 (-hide, design doc section 1b): "the writer renders
+        # the human form" -- a mangled atom's DISPLAY substitutes
+        # demangle_for_display before quoting; the raw runtime str (and
+        # therefore unification/data semantics) is untouched.  NOT a
+        # round-trip: the human form re-reads as a different (unmangled)
+        # term -- display only, per section 1b's guarantee.
+        display = demangle_for_display(t) if is_mangled(t) else t
+        return _c(repr(display), 'string', style)
     if isinstance(t, bytes):
         return repr(t)
     if isinstance(t, list):

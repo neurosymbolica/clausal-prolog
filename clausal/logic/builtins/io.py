@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys as _sys
 
+from clausal.logic.atoms import demangle_for_display, is_mangled
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import term_str as _term_str, term_pformat as _term_pformat
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, term_field_names_of_class
@@ -16,11 +17,16 @@ from clausal.logic.builtins._registry import _builtin, BuiltinPredicate
 def _format_term_for_io(val):
     """Format a dereffed value for I/O output.
 
-    Strings pass through as-is (supports f-strings naturally).
+    Strings pass through as-is (supports f-strings naturally) -- except a
+    mangled (-hide) atom, which substitutes its human ``module.name`` form
+    (P3-1 Task 6, design doc section 1b: "the writer renders the human
+    form"; NOT a round-trip -- the human form re-reads as a different,
+    unmangled term -- display only).  The raw runtime str is untouched;
+    only what reaches write/1, writeln/1, write_to_string/2 changes.
     Other values use str() which auto-derefs Vars via __str__.
     """
     if isinstance(val, str):
-        return val
+        return demangle_for_display(val) if is_mangled(val) else val
     return str(val)
 
 
@@ -114,7 +120,12 @@ def _format_clause_term(val):
     if isinstance(val, Var):
         return str(val)  # _N format for anonymous vars
     if isinstance(val, str):
-        return repr(val)
+        # P3-1 Task 6: listing/1's own argument formatting does not route
+        # through term_str -- apply the same mangled-atom display
+        # substitution directly (see term_str's str branch for the full
+        # rationale; same display-only, no-round-trip guarantee).
+        display = demangle_for_display(val) if is_mangled(val) else val
+        return repr(display)
     if isinstance(val, list):
         return "[" + ", ".join(_format_clause_term(e) for e in val) + "]"
     if is_term_instance(val):
