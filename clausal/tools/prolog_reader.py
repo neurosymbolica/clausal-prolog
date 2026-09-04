@@ -38,6 +38,11 @@ Span tree (locked, mirrors the cell shape exactly):
         computed from the current element's start and the tail P-node's
         end (falling back through nested elements/tail when spans are
         None); the innermost T's span is just the tail P-node's own span.
+        EXCEPTION: the OUTERMOST level uses the PList node's own span
+        verbatim instead of the remaining-extent rule, so it covers the
+        opening '[' too (e.g. `[a, b | T]`'s top cons node spans the
+        whole bracketed expression, not just from 'a' onward); every
+        level below it still follows the remaining-extent rule.
     curly cell ('{}', body_cell)
         -> ((start, end), span(body))
 """
@@ -59,6 +64,20 @@ from clausal.tools.prolog_ast import (
     PString,
     PVar,
 )
+
+__all__ = [
+    "VarRef",
+    "Clause",
+    "Directive",
+    "DCGRule",
+    "Query",
+    "SyntaxIssue",
+    "transform_term",
+    "PrologReader",
+    "read_module",
+    "NEED_MORE",
+    "EOF",
+]
 
 # ── IR ──────────────────────────────────────────────────────────────
 
@@ -170,19 +189,23 @@ class _Transform:
         if isinstance(node, PList):
             if node.tail is None:
                 return (_span_of(node), [self.span(e) for e in node.elements])
-            return self._cons_span(node.elements, node.tail, _span_of(node))
+            return self._cons_span(node.elements, node.tail, _span_of(node),
+                                    outermost=True)
         raise TypeError(f"transform_term: unsupported P-node {type(node)!r}")
 
-    def _cons_span(self, elements, tail, remaining_span):
+    def _cons_span(self, elements, tail, remaining_span, outermost=False):
         """One level per remaining element; head span = remaining-list
-        extent (start of this element, end of the whole remaining list).
-        The innermost level's tail span is just the tail P-node's span."""
+        extent (start of this element, end of the whole remaining list) --
+        EXCEPT the outermost level, whose span is the PList node's own
+        span verbatim (`remaining_span` unchanged), so it covers the
+        opening '[' too rather than starting at the first element. The
+        innermost level's tail span is just the tail P-node's span."""
         if not elements:
             return self.span(tail)
         head, *rest = elements
         head_start, _ = _span_of(head)
         _, remaining_end = remaining_span
-        this_span = (head_start, remaining_end)
+        this_span = remaining_span if outermost else (head_start, remaining_end)
         return (
             this_span,
             self.span(head),
@@ -299,7 +322,16 @@ class PrologReader:
     ``op_table`` precedence: explicit > ``dialect.operator_table`` >
     ``OperatorTable.swi_default()``. The reader owns the table for its
     lifetime -- ``op/3`` directives parsed by one ``read_term()`` call
-    apply to the SAME table used by later calls, so they persist.
+    apply to the SAME table used by later calls, so they persist. This
+    ownership is exposed: see the ``op_table`` property below.
+
+    WARNING: when constructed with ``dialect=``, the reader does NOT copy
+    ``dialect.operator_table`` -- it takes and mutates that SAME table
+    object, so any ``op/3`` directive read from the source also mutates
+    the ``Dialect`` instance's table (and is visible to anything else
+    sharing it). This is a deliberate, plan-sanctioned ownership choice
+    (no defensive copy), not an oversight -- pass an explicit ``op_table``
+    of your own if you need the dialect's defaults left untouched.
     """
 
     def __init__(self, *, op_table=None, dialect=None, nested_comments=True,
@@ -344,6 +376,15 @@ class PrologReader:
 
     def close(self) -> None:
         self._lexer.close()
+
+    @property
+    def op_table(self):
+        """The ``OperatorTable`` this reader owns (§1c: L1 exposes it).
+        ``op/3`` directives read from the source mutate this SAME table
+        object as items are read -- what this property returns after N
+        items reflects every ``op/3`` seen among those N, not just the
+        table as constructed."""
+        return self._op_table
 
     def _touch_item(self, t) -> None:
         if self._item_start is None:
@@ -462,5 +503,10 @@ def read_module(source: str, **kw) -> list:
         if item is EOF:
             return items
         if item is NEED_MORE:
-            continue
+            # Unreachable in practice: feed()+close() means every future
+            # next_token() call either resolves a token or hits EOF, never
+            # suspends again. Fail loud rather than spin silently if that
+            # invariant is ever violated (a lexer bug, or an injected
+            # `lexer=` that doesn't honor close()).
+            raise RuntimeError("lexer returned NEED_MORE after close()")
         items.append(item)

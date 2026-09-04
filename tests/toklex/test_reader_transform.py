@@ -62,6 +62,26 @@ class TestSpanTrees:
         cell, spans, _ = tt('"ab"')
         assert cell == ["a", "b"] and spans == (0, 4)
 
+    def test_partial_list_span_outermost_covers_bracket(self):
+        # [a, b | T]: the OUTERMOST cons node's span is the PList node's
+        # own span verbatim (0, 10) -- covering the opening '[' -- not the
+        # remaining-extent rule ((1, 10), start of 'a') that inner levels
+        # use. Fix-wave finding #3 (final whole-branch review): the
+        # remaining-extent rule applied uniformly made the top span start
+        # at the first element instead of the bracket, which is wrong for
+        # anything that wants "the span of this list term" (e.g. a
+        # diagnostic pointing at `[a, b | T]` as a whole).
+        cell, spans, vn = tt("[a, b | T]")
+        assert cell == (".", "a", (".", "b", VarRef(0)))
+        assert vn == {0: "T"}
+        outer, a_span, inner = spans
+        assert outer == (0, 10)          # the whole `[a, b | T]`
+        assert a_span == (1, 2)          # 'a'
+        mid, b_span, tail_span = inner
+        assert mid == (4, 10)            # remaining-extent rule: 'b'..']'
+        assert b_span == (4, 5)          # 'b'
+        assert tail_span == (8, 9)       # 'T', the tail P-node's own span
+
 
 class TestExtra:
     def test_deep_nesting_full_shape(self):
