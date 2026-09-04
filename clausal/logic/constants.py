@@ -206,6 +206,93 @@ def _freeze_dict_term(data: dict):
     return dt
 
 
+def constant_functor_term(name: str, args, kwargs, namespace):
+    """Build the term a ``-constants`` RHS functor call denotes.
+
+    P3-2 Task 2 (THE FLIP).  A ``-constants`` right-hand side is evaluated
+    ONCE, at exec time, on the ``-constants`` line itself -- not compiled per
+    invocation the way a clause body is.  It used to emit a direct
+    ``Point(0, 0)`` constructor call, which is now wrong twice over:
+
+    * an IMPORTED data functor never binds a class in the importer at all
+      (the owner's name is its interned spelling by the time the import
+      runs), so the call raised ``TypeError: 'str' object is not callable``
+      from the ``-constants`` line and the module failed to load;
+    * a LOCALLY declared one happened to work only because the ``-module``
+      rewrite's class block runs earlier in the same exec -- and it produced
+      a class INSTANCE where every other reference to that functor in the
+      module produces a cell.
+
+    So the decision is made here, at exec time, on the same BINDING SHAPE
+    rule the compiler uses (R6): a ``PredicateMeta`` binding is a predicate
+    or a Python-minted functor and is CONSTRUCTED, exactly as before;
+    anything else is data and becomes a cell, placed against the declared
+    signature from *namespace*'s ``__clausal_functor_signatures__`` registry
+    (which ``-import_from`` copies under the local spelling, so an imported
+    functor and an aliased import both resolve).
+
+    Slot 0 carries the OWNER's spelling: for a str binding that is the
+    binding itself (an alias binds the owner's spelling under the local
+    name), else the local *name*.
+
+    Raises ``SyntaxError`` for an over-arity or unknown-field construction,
+    matching the compile-time errors ``terms_to_ast._place_signature_slots``
+    raises for the same mistakes in a clause body -- the same mistake should
+    not be a clean error in one position and a mangled term in the other.
+    """
+    from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+    from clausal.logic.predicate import PredicateMeta
+
+    binding = namespace.get(name)
+    if isinstance(binding, PredicateMeta):
+        return binding(*args, **kwargs)
+
+    fields = (namespace.get(FUNCTOR_SIGNATURES_KEY) or {}).get(name)
+    if fields is None:
+        # No class and no declared signature: nothing to place against.  Let
+        # the original call happen so the failure names the real problem
+        # (an uncallable binding) at the line that caused it.
+        return binding(*args, **kwargs)
+
+    functor = binding if isinstance(binding, str) else name
+    if len(args) > len(fields):
+        raise SyntaxError(
+            f"-constants: functor {functor}/{len(fields)} was constructed "
+            f"with {len(args)} positional argument(s) but its signature "
+            f"declares {len(fields)} field(s) {fields!r}"
+        )
+    slots = list(args) + [None] * (len(fields) - len(args))
+    filled = [True] * len(args) + [False] * (len(fields) - len(args))
+    for key, value in (kwargs or {}).items():
+        if key not in fields:
+            raise SyntaxError(
+                f"-constants: functor {functor}/{len(fields)} was "
+                f"constructed with field name {key!r} but its signature "
+                f"declares fields {fields!r}"
+            )
+        index = fields.index(key)
+        if filled[index]:
+            raise SyntaxError(
+                f"-constants: functor {functor}/{len(fields)} was "
+                f"constructed with both a positional argument and keyword "
+                f"`{key}=` for the same field {fields!r}"
+            )
+        slots[index] = value
+        filled[index] = True
+    if not all(filled):
+        # A -constants value must be GROUND ($check_constant_ground gates it
+        # immediately after this returns); an omitted slot would backfill
+        # with a fresh Var in a clause body, which is precisely what a
+        # constant may not hold.  Say so here, where the field is named.
+        missing = [f for f, ok in zip(fields, filled) if not ok]
+        raise SyntaxError(
+            f"-constants: functor {functor}/{len(fields)} left field(s) "
+            f"{missing!r} unfilled — a constant must be ground, so every "
+            f"declared field needs a value"
+        )
+    return (functor, *slots)
+
+
 def register_module_constant(module, name: str, value) -> None:
     """Record a declared ``-constants`` ``(name, value)`` pair on *module*.
 

@@ -1,0 +1,8 @@
+# Owner half of the imported-functor -constants pair
+# (tests/test_constants.py::test_constants_rhs_can_construct_an_imported_functor).
+#
+# Declares a DATA functor and nothing else: post-P3-2 (THE FLIP, R6) the name
+# binds its interned spelling here, so an importer gets a str, not a class --
+# which is exactly the shape a -constants RHS in the importer has to cope
+# with.
+-module(const_functor_owner, [Wrap(SUB), Pair(LEFT, RIGHT)])

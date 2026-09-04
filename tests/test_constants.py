@@ -627,3 +627,89 @@ def test_module_export_list_still_rejects_constants(tmp_path):
             -constants(_PI_ = 3.14)
             -module(pdoc3, [_PI_])
         """)
+
+
+def test_constants_rhs_can_construct_an_imported_functor():
+    """P3-2 Task 2 (THE FLIP, R6): a ``-constants`` RHS that constructs a
+    functor this module IMPORTS rather than declares.
+
+    The importer mints no class for an imported functor, and post-R6 the
+    owner's name is its interned spelling by the time the import runs — so
+    the RHS's old direct ``Wrap(...)`` call raised
+    ``TypeError: 'str' object is not callable`` from the ``-constants`` line
+    and the module failed to LOAD.  The construction is routed through
+    ``constants.constant_functor_term`` now, which decides on the binding
+    shape at exec time and builds the cell the rest of the module speaks.
+
+    Nesting is covered too (``[Wrap(Pair(3, 4))]``): the recursion has to
+    reach an imported functor inside a structured RHS, not only at the top.
+    """
+    import pathlib
+
+    from clausal.import_hook import _load_module
+
+    fixtures = pathlib.Path(__file__).parent / "fixtures"
+    _load_module("tests.fixtures.const_functor_owner",
+                 str(fixtures / "const_functor_owner.clausal"))
+    mod = _load_module("tests.fixtures.const_functor_importer",
+                       str(fixtures / "const_functor_importer.clausal"))
+    lm = mod.__dict__["$module"]
+
+    def one(goal):
+        v = Var()
+        return [deref(v) for _ in call(goal, v, module=lm)]
+
+    assert one("wrapped") == [("Wrap", "inner")]
+    assert one("paired") == [("Pair", 1, 2)]
+    assert one("nested") == [[("Wrap", ("Pair", 3, 4))]]
+
+
+def _load_const_functor_owner():
+    import pathlib
+
+    from clausal.import_hook import _load_module
+
+    fixtures = pathlib.Path(__file__).parent / "fixtures"
+    return _load_module("tests.fixtures.const_functor_owner",
+                        str(fixtures / "const_functor_owner.clausal"))
+
+
+def test_constants_rhs_functor_over_arity_is_a_load_error(tmp_path):
+    """The runtime placer reports an over-arity construction the way the
+    compile-time one does, naming the functor and its declared fields.
+
+    Asked of an IMPORTED functor deliberately: that is the branch with no
+    class to construct through, so it is the placer in
+    ``constants.constant_functor_term`` answering rather than
+    ``PredicateMeta.__call__`` (which still answers, with its own
+    ``ClausalTermConstructionError``, wherever a class does exist).
+    """
+    _load_const_functor_owner()
+    with pytest.raises(SyntaxError, match=r"Wrap/1"):
+        _load(tmp_path, "cfo1", """
+            -import_from(tests.fixtures.const_functor_owner, [Wrap])
+            -constants(_BAD_ = Wrap(1, 2))
+            p(X) <- (X is _BAD_)
+        """)
+
+
+def test_constants_rhs_functor_unknown_field_is_a_load_error(tmp_path):
+    _load_const_functor_owner()
+    with pytest.raises(SyntaxError, match=r"Pair/2"):
+        _load(tmp_path, "cfo2", """
+            -import_from(tests.fixtures.const_functor_owner, [Pair])
+            -constants(_BAD_ = Pair(NOPE=1))
+            p(X) <- (X is _BAD_)
+        """)
+
+
+def test_constants_rhs_functor_partial_construction_is_a_load_error(tmp_path):
+    """A constant must be GROUND, so an omitted slot -- which would backfill
+    with a fresh Var in a clause body -- is named as the error it is."""
+    _load_const_functor_owner()
+    with pytest.raises(SyntaxError, match=r"unfilled"):
+        _load(tmp_path, "cfo3", """
+            -import_from(tests.fixtures.const_functor_owner, [Pair])
+            -constants(_BAD_ = Pair(1))
+            p(X) <- (X is _BAD_)
+        """)

@@ -83,19 +83,52 @@ def test_census_candidate_regex_delegates_to_classifier():
     assert _constant_shaped_tokens("x = _X__") == []
 
 
+# Fixtures that legitimately DECLARE and use a -constants name, and so
+# legitimately contain constant-shaped tokens.  The census guard below
+# anticipated needing this ("a future fixture that legitimately declares and
+# uses a -constants name will need an explicit allowlist"); P3-2 task-2 is the
+# first thing to need it.  Keyed by (filename, token) rather than by file, so
+# an unrelated constant appearing in an allowlisted fixture is still flagged.
+#
+# Every entry must be a name the file's own -constants directive declares --
+# which is the property that makes it a constant rather than a
+# constant-shaped VARIABLE, the thing this census exists to catch.
+_DECLARED_CONSTANT_FIXTURES = {
+    # tests/test_constants.py::test_constants_rhs_can_construct_an_imported_
+    # functor -- a -constants RHS constructing an IMPORTED data functor, the
+    # shape that failed to load before P3-2 task-2's fix.
+    ("const_functor_importer.clausal", "_W_"),
+    ("const_functor_importer.clausal", "_P_"),
+    ("const_functor_importer.clausal", "_NEST_"),
+}
+
+
 def test_corpus_has_no_constant_shaped_variables():
-    """Census guard: no committed .clausal file contains a _X_-shaped token,
-    declared or not — flags every occurrence regardless of whether a
-    -constants declaration covers it, so today the bar is simply "none
-    exist yet". A future fixture that legitimately declares and uses a
-    -constants name will need an explicit allowlist added to this test (not
-    implemented — nothing has needed it yet)."""
+    """Census guard: no committed .clausal file contains a _X_-shaped token
+    unless its own -constants directive declares it.
+
+    The bar used to be simply "none exist yet"; it is now "none except
+    declared constants", enforced through ``_DECLARED_CONSTANT_FIXTURES``
+    above plus a check that each allowlisted token really is declared in the
+    file that carries it -- so the allowlist cannot be used to wave through a
+    constant-shaped VARIABLE, which is the thing this census exists to
+    catch."""
     import pathlib
+    import re as _re
     root = pathlib.Path(__file__).resolve().parent.parent
     offenders = []
     for p in root.rglob("*.clausal"):
         if ".claude" in p.relative_to(root).parts:
             continue
-        for tok in _constant_shaped_tokens(p.read_text()):
+        text = p.read_text()
+        for tok in _constant_shaped_tokens(text):
+            if (p.name, tok) in _DECLARED_CONSTANT_FIXTURES:
+                declared = any(
+                    line.lstrip().startswith("-constants(")
+                    and _re.search(_re.escape(tok) + r"\s*=", line)
+                    for line in text.splitlines()
+                )
+                assert declared, (p, tok)
+                continue
             offenders.append((str(p), tok))
     assert offenders == [], offenders

@@ -5409,9 +5409,37 @@ class EmbedTransformer(NodeTransformer):
                 ), kw)
                 for kw in node.keywords
             ]
+            # P3-2 Task 2 (THE FLIP): route the construction through
+            # ``$constant_functor_term`` rather than calling the name
+            # directly.  A declared DATA functor binds its interned spelling
+            # (R6), not a class -- an IMPORTED one has no class in this
+            # module at all -- so a direct call raised ``TypeError: 'str'
+            # object is not callable`` from the -constants line.  The helper
+            # decides at exec time on the same binding-shape rule the
+            # compiler uses: a ``PredicateMeta`` binding is constructed, a
+            # spelling becomes a cell placed against the signature registry.
+            # See ``clausal.logic.constants.constant_functor_term``.
             return replace(
-                Call(func=replace(Name(id=functor_name, ctx=load), node.func),
-                     args=pos_args, keywords=kw_args), node)
+                Call(
+                    func=replace(
+                        Name(id="$constant_functor_term", ctx=load),
+                        node.func),
+                    args=[
+                        replace(Constant(value=functor_name), node.func),
+                        replace(List(elts=pos_args, ctx=load), node),
+                        replace(
+                            Dict(keys=[replace(Constant(value=kw.arg), kw)
+                                       for kw in kw_args],
+                                 values=[kw.value for kw in kw_args]),
+                            node),
+                        replace(
+                            Call(func=replace(Name(id="globals", ctx=load),
+                                              node),
+                                 args=[], keywords=[]),
+                            node),
+                    ],
+                    keywords=[]),
+                node)
         _raise_located_syntax_error(
             f"-constants: unsupported RHS for `{ident}`: {unparse(node)}",
             node, transformer._source_lines, transformer._filename)
