@@ -175,7 +175,7 @@ def _is_ground_py(term: Any) -> bool:
         return True
     if isinstance(term, list):
         return all(_is_ground_py(e) for e in term)
-    if isinstance(term, tuple):
+    if type(term) is tuple:
         # A CELL -- ``("pt", 1, Y)``.  P3-2 Task 2 (THE FLIP) makes this how
         # every compound data term is represented, so falling through to the
         # "unknown shape -> True" tail answered GROUND for a term holding a
@@ -186,9 +186,15 @@ def _is_ground_py(term: Any) -> bool:
         # shared the caller's Var -- binding it afterwards mutated the
         # collected row (A03-F006, reintroduced for cell rows).
         #
-        # ``isinstance``, not ``type(...) is``: unlike the copy/collect
-        # branches this one only READS, and a tuple subclass holding a free
-        # Var is not ground either, whatever else it is.
+        # ``type(...) is tuple``, NOT ``isinstance`` (P3-2 Task 2C fix round 1,
+        # controller ruling): a tuple SUBCLASS is not a cell -- ``is_cell``
+        # excludes one by design -- and reading through one here while
+        # ``copy_term`` and ``term_variables`` treat it as opaque produced an
+        # incoherent trio: a namedtuple holding a free Var was reported
+        # NON-ground yet had no enumerable variables and could not be copied.
+        # Exact-type in all three keeps the three answers consistent and keeps
+        # a namedtuple as opaque as it was pre-flip.  Kept in step with
+        # ``c_is_ground``'s ``PyTuple_CheckExact``.
         return all(_is_ground_py(e) for e in term)
     if isinstance(term, Compound):
         return isinstance(term.functor, str) and all(_is_ground_py(a) for a in term.args)
@@ -270,10 +276,10 @@ try:
     # had no tuple branch, so a CELL -- a bare tuple, and post-flip how every
     # compound data term is represented -- fell through its tail to "ground"
     # and ``ground(pt(1, Y))`` answered TRUE.  Task 2C gave ``c_is_ground``
-    # the branch (``PyTuple_Check``, the inclusive check, because like
-    # ``_is_ground_py``'s it only READS) and this dispatch is back to the
-    # Seg*-only short-circuit.  Twin parity is pinned by
-    # ``tests/test_python_fallbacks.py::TestCellIsGroundTwinParity``.
+    # the branch (``PyTuple_CheckExact``, matching this module's
+    # ``type(term) is tuple`` gate and the two in ``inspection.py``) and this
+    # dispatch is back to the Seg*-only short-circuit.  Twin parity is pinned
+    # by ``tests/test_python_fallbacks.py::TestCellIsGroundTwinParity``.
     def _is_ground(term: Any) -> bool:
         t = deref(term)
         if isinstance(t, (SegList, SegString, SegBytes)):

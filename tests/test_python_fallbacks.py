@@ -454,10 +454,13 @@ requires_c = pytest.mark.skipif(not _HAVE_C, reason="C accelerator not built")
 class _NT(NamedTuple):
     """A tuple SUBCLASS — deliberately NOT a cell.
 
-    ``_copy_term_py`` / ``_collect_vars_py`` gate their cell branch on
-    ``type(x) is tuple`` precisely so a namedtuple is not silently rebuilt as
-    a plain tuple; ``_is_ground_py`` uses ``isinstance`` because it only
-    reads.  The C twins must make the same two different choices.
+    All six implementations gate their cell branch on exact type
+    (``type(x) is tuple`` / ``PyTuple_CheckExact``), so a tuple subclass is
+    opaque to every one of them: ``is_cell`` excludes a subclass by design, a
+    rebuild would lose the subclass's type, and an implementation that read
+    THROUGH one while its siblings did not would answer "not ground" for a
+    term whose variables it could neither enumerate nor copy (Task 2C fix
+    round 1, controller ruling).
     """
 
     a: object
@@ -724,6 +727,8 @@ class TestCellCollectVarsTwinParity:
         assert result == [x]
 
     def test_a_namedtuple_is_a_leaf_for_both_twins(self):
+        """One third of the coherent trio — see
+        ``TestTupleSubclassTrioIsCoherent``."""
         # nv
         nt = _NT(a=1, b=Var())
         py_result: list = []
@@ -783,12 +788,22 @@ class TestCellIsGroundTwinParity:
         # nv
         assert _c_is_ground_raw(Compound("f", (("pt", Var()),))) is False
 
-    def test_a_namedtuple_is_read_through_by_both_twins(self):
-        """``isinstance``, not ``type(...) is``: this branch only READS."""
+    def test_a_namedtuple_is_opaque_to_both_twins(self):
+        """Exact-type, like the copy/collect twins — controller ruling, Task 2C
+        fix round 1.  The first cut read through a tuple subclass here
+        (``isinstance``) while copy/collect stayed exact, which made a
+        namedtuple holding a free Var NON-ground yet unenumerable and
+        uncopyable.  The coherent trio is asserted whole in
+        ``TestTupleSubclassTrioIsCoherent`` below; this pins the ground half
+        against BOTH twins."""
         # nv
         nt = _NT(a=1, b=Var())
-        assert _is_ground_py(nt) is False
-        assert _c_is_ground_raw(nt) is False
+        assert _is_ground_py(nt) is True
+        assert _c_is_ground_raw(nt) is True
+        # ... while the CELL with the same free Var is not ground, in both.
+        cell = ("f", 1, Var())
+        assert _is_ground_py(cell) is False
+        assert _c_is_ground_raw(cell) is False
 
     def test_a_deeply_nested_cell_chain_is_walked(self):
         # nv
@@ -851,3 +866,193 @@ class TestWrapperUsesTheCPathAgain:
         _collect_vars_impl(seg, result)
         assert result == [x]
         assert _is_ground(seg) is False
+
+
+class TestTupleSubclassTrioIsCoherent:
+    """A tuple SUBCLASS is opaque to all three functions, or to none.
+
+    Task 2C's first cut split the trio: ``ground/1`` read through a namedtuple
+    (inclusive check) while ``copy_term`` and ``term_variables`` treated it as
+    opaque (exact checks).  A ``_NT(a=1, b=Var())`` was then reported
+    NON-ground while having no enumerable variables and no copy that could
+    freshen them — an incoherent answer, and a change to pre-flip behaviour
+    for a shape that is not a cell.  The controller ruled exact-type
+    everywhere.  Each assertion below is stated against BOTH implementations
+    and beside the CELL that the same three functions DO see into, so the line
+    the trio draws is the cell/non-cell line and nothing else.
+    """
+
+    def test_the_three_answers_agree_that_a_namedtuple_is_opaque(self):
+        # nv
+        x = Var()
+        nt = _NT(a=1, b=x)
+
+        # ground/1: opaque -> nothing inside is seen -> GROUND.
+        assert _is_ground_py(nt) is True
+        assert _c_is_ground_raw(nt) is True
+        assert _is_ground(nt) is True
+
+        # term_variables/2: opaque -> no variables.
+        for collect in (_collect_vars_py, _c_collect_raw, _collect_vars_impl):
+            result: list = []
+            collect(nt, result)
+            assert result == []
+
+        # copy_term/2: opaque -> returned as-is, sharing x with the original.
+        for copy in (lambda t: _copy_term_py(t, {}),
+                     lambda t: _c_copy_raw(t, {}),
+                     lambda t: _copy_term_impl(t, {})):
+            out = copy(nt)
+            assert out is nt
+            assert out.b is x
+
+    def test_the_cell_with_the_same_free_var_is_seen_by_all_three(self):
+        """The contrast case: exact-type excludes the SUBCLASS, not tuples."""
+        # nv
+        x = Var()
+        cell = ("f", 1, x)
+
+        assert _is_ground_py(cell) is False
+        assert _c_is_ground_raw(cell) is False
+        assert _is_ground(cell) is False
+
+        for collect in (_collect_vars_py, _c_collect_raw, _collect_vars_impl):
+            result: list = []
+            collect(cell, result)
+            assert result == [x]
+
+        for copy in (lambda t: _copy_term_py(t, {}),
+                     lambda t: _c_copy_raw(t, {}),
+                     lambda t: _copy_term_impl(t, {})):
+            out = copy(cell)
+            assert out is not cell
+            assert is_var(out[2]) and out[2] is not x
+
+    def test_a_namedtuple_nested_inside_a_cell_stays_opaque(self):
+        """The trio must not leak through a container, either."""
+        # nv
+        x = Var()
+        term = ("f", _NT(a=1, b=x))
+        assert _is_ground(term) is True
+        result: list = []
+        _collect_vars_impl(term, result)
+        assert result == []
+        # The cell around it is still rebuilt only if something changed —
+        # nothing did, so the identity short-circuit returns the original.
+        assert _copy_term_impl(term, {}) is term
+
+
+class TestTheWrapperActuallyReachesC:
+    """The dispatch restoration itself, not just the twins' agreement.
+
+    Every other test in this file compares the wrapper against the Python
+    twin, so reverting ``_copy_term_impl`` / ``_collect_vars_impl`` /
+    ``_is_ground`` to "call the Python twin unconditionally" would leave the
+    file green while quietly giving back the whole point of Task 2C.  These
+    tests fail in that case.
+
+    Two independent methods, because neither alone is enough: an ORACLE shape
+    on which the two implementations demonstrably differ, and a SPY on the
+    module-global C name (looked up at call time inside the wrapper, so
+    ``monkeypatch.setattr`` on the module reaches it).
+    """
+
+    # --- oracle: Compound with a Var functor (see
+    #     _KNOWN_COMPOUND_FUNCTOR_DIVERGENCE).  Python walks args only, C
+    #     visits the functor slot too (A01-F003), so the answer names the
+    #     implementation that ran.
+
+    @requires_c
+    def test_term_variables_wrapper_returns_the_c_answer(self):
+        # nv
+        f = Var()
+        term = Compound(f, (1, 2))
+
+        control: list = []
+        _collect_vars_py(term, control)
+        assert control == [], "oracle broken: the twins no longer differ here"
+
+        result: list = []
+        _collect_vars_impl(term, result)
+        assert result == [f], "the wrapper ran the PYTHON twin, not C"
+
+    @requires_c
+    def test_copy_term_wrapper_returns_the_c_answer(self):
+        # nv
+        f = Var()
+        term = Compound(f, (1, 2))
+
+        control = _copy_term_py(term, {})
+        assert control.functor is f, "oracle broken: the twins no longer differ"
+
+        out = _copy_term_impl(term, {})
+        assert is_var(out.functor)
+        assert out.functor is not f, "the wrapper ran the PYTHON twin, not C"
+
+    # --- spy: ground/1's twins agree on the oracle shape (both reject a
+    #     non-str functor), so the only way to prove which one ran is to watch
+    #     the C entry point.  Applied to all three for symmetry.
+
+    def test_is_ground_wrapper_calls_the_c_entry_point(self, monkeypatch):
+        # nv
+        if not _HAVE_C:
+            pytest.skip("C accelerator not built")
+        from clausal.logic.builtins import _helpers
+
+        calls = []
+        real = _helpers._c_is_ground
+        monkeypatch.setattr(
+            _helpers, "_c_is_ground",
+            lambda t: (calls.append(t), real(t))[1],
+        )
+        assert _helpers._is_ground(("pt", 1, 2)) is True
+        assert len(calls) == 1, "the wrapper never reached the C _is_ground"
+
+    def test_copy_and_collect_wrappers_call_their_c_entry_points(self, monkeypatch):
+        # nv
+        if not _HAVE_C:
+            pytest.skip("C accelerator not built")
+        from clausal.logic.builtins import inspection
+
+        copies, collects = [], []
+        real_copy = inspection._c_copy_term_impl
+        real_collect = inspection._c_collect_vars_impl
+        monkeypatch.setattr(
+            inspection, "_c_copy_term_impl",
+            lambda t, m: (copies.append(t), real_copy(t, m))[1],
+        )
+        monkeypatch.setattr(
+            inspection, "_c_collect_vars_impl",
+            lambda t, r: (collects.append(t), real_collect(t, r))[1],
+        )
+        cell = ("pt", 1, Var())
+        inspection._copy_term_impl(cell, {})
+        inspection._collect_vars_impl(cell, [])
+        assert len(copies) == 1, "the wrapper never reached the C _copy_term_impl"
+        assert len(collects) == 1, "the wrapper never reached the C _collect_vars_impl"
+
+    def test_the_seg_star_shapes_still_bypass_c(self, monkeypatch):
+        """The other half of the dispatch: Seg* must NOT reach the blind C."""
+        # nv
+        if not _HAVE_C:
+            pytest.skip("C accelerator not built")
+        from clausal.logic.builtins import _helpers, inspection
+
+        seen = []
+        monkeypatch.setattr(
+            inspection, "_c_copy_term_impl",
+            lambda t, m: seen.append(("copy", t)),
+        )
+        monkeypatch.setattr(
+            inspection, "_c_collect_vars_impl",
+            lambda t, r: seen.append(("collect", t)),
+        )
+        monkeypatch.setattr(
+            _helpers, "_c_is_ground",
+            lambda t: seen.append(("ground", t)),
+        )
+        seg = SegList([ConcreteSeg([1]), VarSeg(Var())])
+        inspection._copy_term_impl(seg, {})
+        inspection._collect_vars_impl(seg, [])
+        _helpers._is_ground(seg)
+        assert seen == [], f"a Seg* shape reached the C twins: {seen}"

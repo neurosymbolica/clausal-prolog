@@ -2194,12 +2194,19 @@ c_is_ground(PyObject *term, int depth)
      * (``compiler/globals_env.py``) skipped the ISO per-solution copy for a
      * cell row, sharing the caller's Var (A03-F006 for cell rows).
      *
-     * PyTuple_Check, NOT the exact check its copy/collect siblings use: this
-     * branch only READS, and a tuple subclass holding a free Var is not ground
-     * either — which is exactly the choice the Python twin makes with
-     * ``isinstance(term, tuple)`` (``_is_ground_py``, ``builtins/_helpers.py``).
-     * PyTuple_GET_ITEM is valid on a subclass instance. */
-    if (PyTuple_Check(term)) {
+     * PyTuple_CheckEXACT, the same check its copy/collect siblings use.  The
+     * first cut of this branch used the inclusive PyTuple_Check, mirroring
+     * ``_is_ground_py``'s then-``isinstance`` on the grounds that this
+     * predicate only READS.  Task 2C fix round 1 (controller ruling) reverses
+     * that: a tuple SUBCLASS is not a cell (``is_cell`` excludes one by
+     * design), and reading through one HERE while ``c_copy_term`` and
+     * ``c_collect_vars`` treat it as opaque made the trio incoherent -- a
+     * namedtuple holding a free Var was NON-ground yet had no enumerable
+     * variables and could not be copied, which also changed pre-flip
+     * behaviour for a non-cell shape.  All three exact keeps the answers
+     * consistent; ``_is_ground_py``'s branch is ``type(term) is tuple`` to
+     * match. */
+    if (PyTuple_CheckExact(term)) {
         Py_ssize_t n = PyTuple_GET_SIZE(term);
         for (Py_ssize_t i = 0; i < n; i++) {
             int r = c_is_ground(PyTuple_GET_ITEM(term, i), depth + 1);
@@ -2822,8 +2829,9 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
      * twin's ``type(term) is tuple`` decides (``_copy_term_py``,
      * ``builtins/inspection.py``): a namedtuple or other tuple subclass would
      * lose its type through the rebuild, and rebuilding one is not this
-     * function's business.  Its sibling in ``c_is_ground`` uses the inclusive
-     * check because that one only READS.
+     * function's business.  Its siblings in ``c_collect_vars`` and
+     * ``c_is_ground`` use the exact check too — a tuple subclass is opaque to
+     * all three, which is what keeps their three answers coherent.
      *
      * Slot 0 needs no special case: a str functor and the TUPLE_TAG type
      * object both contain no Vars and are returned by identity, while an
