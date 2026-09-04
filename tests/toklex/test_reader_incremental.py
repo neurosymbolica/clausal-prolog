@@ -53,5 +53,4 @@ class TestIncremental:
         # SyntaxIssue item rather than raising.
         from clausal.tools.prolog_reader import SyntaxIssue
         naked = read_module("a === b.\n")
-        assert any(isinstance(i, SyntaxIssue) for i in naked) or \
-            naked[0].term != ("===", "a", "b")
+        assert any(isinstance(i, SyntaxIssue) for i in naked)
