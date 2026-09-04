@@ -280,7 +280,11 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    inventory (never named in the plan or any Task 1-3 file list).
     #    Not migrated this phase; see
     #    todo/funnel-term-str-locale-atom-bypass-not-migrated-2026-09-03.md ──
-    AllowEntry("clausal/terms.py", (2355, 2457),
+    #    Range shifted 2355-2457 -> 2373-2475 by P3-2 task-2's cell branch in
+    #    ``term_str`` earlier in the same function (a mechanical line-count
+    #    shift, not a semantic change -- see
+    #    .superpowers/sdd/p32-cell-default-flip/task-2-report.md).
+    AllowEntry("clausal/terms.py", (2373, 2475),
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),

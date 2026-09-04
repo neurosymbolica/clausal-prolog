@@ -2396,6 +2396,25 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
         return ob + ", ".join(term_str(e, style, _bd + 1) for e in t) + cb
     if isinstance(t, Var):
         return _c(style.anon_var, 'var', style)
+    if type(t) is tuple and t and isinstance(deref(t[0]), str):
+        # A CELL -- ``("pt", 1, 2)``.  P3-2 Task 2 (THE FLIP) makes this how
+        # every compound term is represented, so the reader must see
+        # ``pt(1, 2)``, the term they wrote, not a Python tuple repr.
+        # Rendered exactly like the ``Compound`` branch below (same locale
+        # name, same rainbow brackets), which is the shape it replaced.
+        #
+        # Slot 0 is dereferenced once: a cell whose functor slot was an
+        # unbound Var that unify has since bound renders under the bound
+        # spelling, same rule ``_helpers._cell_functor`` applies.  A
+        # non-str slot 0 (tuple DATA, or an unbound functor Var) is NOT a
+        # compound and falls through to the ordinary tuple rendering below.
+        functor = deref(t[0])
+        args = t[1:]
+        functor_s = _c(_locale_name(functor, style, len(args)), 'atom', style)
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
+        return functor_s + ob + ", ".join(
+            term_str(a, style, _bd + 1) for a in args) + cb
     if isinstance(t, Compound):
         functor = deref(t.functor)  # A01-F003: bound functor Var renders as its value, not anon
         functor_raw = _locale_name(functor, style, len(t.args)) if isinstance(functor, str) else term_str(functor, style, _bd)

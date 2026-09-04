@@ -27,6 +27,15 @@ def _format_term_for_io(val):
     """
     if isinstance(val, str):
         return demangle_for_display(val) if is_mangled(val) else val
+    if type(val) is tuple and val and isinstance(deref(val[0]), str):
+        # A CELL -- ``("pt", 1, 2)``.  P3-2 Task 2 (THE FLIP) makes this how
+        # every compound term is represented, and ``str()`` on one is the
+        # Python tuple repr, so ``write(pt(1, 2))`` printed
+        # ``('pt', 1, 2)``.  ``term_str`` renders it as the term
+        # (``clausal/terms.py``'s cell branch); only this shape is routed
+        # there, so every other value keeps the exact ``str()`` rendering
+        # write/1 has always produced.
+        return _term_str(val)
     return str(val)
 
 

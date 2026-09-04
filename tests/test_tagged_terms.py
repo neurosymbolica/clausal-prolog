@@ -1117,3 +1117,58 @@ class TestGateSymmetry:
                     assert cell_signature_for_name("point") is None
             assert cell_signature_for_name("point") == ("point", ("X", "Y"))
         assert lowering_globals() is None
+
+
+class TestCellsAtTheBuiltinSurface:
+    """Fix-round-1 regressions: builtins and writers that were blind to cells.
+
+    Each of these asked a question about a term and answered differently for
+    a cell than for the class term it replaced -- which is an ANSWER
+    difference, not a representation one, and so forbidden by this phase's
+    own invariant.  The class twin is minted the way a PYTHON producer mints
+    one (``_python_minted``), since post-R6 that is the only place class
+    terms still come from.
+    """
+
+    def _module(self):
+        from clausal.logic.database import Module
+
+        return Module("_tt_builtin_surface")
+
+    def _nsol(self, goal, *args):
+        return len(list(call(goal, *args, module=self._module())))
+
+    def test_ground_1_sees_a_free_var_inside_a_cell(self):
+        """``ground(pt(1, Y))`` with Y free said TRUE -- ``_is_ground`` had
+        no tuple branch, so the cell fell through its "unknown shape ->
+        ground" tail."""
+        assert self._nsol("ground", ("pt", 1, 2)) == 1
+        assert self._nsol("ground", ("pt", 1, Var())) == 0
+        # ... and the class twin agrees, which is the actual requirement.
+        assert self._nsol(
+            "ground", _python_minted("pt", ("a", "b"), 1, Var())) == 0
+
+    def test_ground_1_reaches_a_cell_nested_in_a_list(self):
+        assert self._nsol("ground", [1, ("pt", Var())]) == 0
+
+    def test_compound_1_answers_for_a_cell(self):
+        """The one type check that did not route through the funnel."""
+        assert self._nsol("compound", ("pt", 1, 2)) == 1
+        assert self._nsol(
+            "compound", _python_minted("pt", ("a", "b"), 1, 2)) == 1
+        # An atom and a 0-arity shape are still not compound.
+        assert self._nsol("compound", "pt") == 0
+
+    def test_write_1_renders_the_term_not_the_tuple(self, capsys):
+        """``write(pt(1, 2))`` printed ``('pt', 1, 2)``: ``_format_term_for_io``
+        fell to ``str()``, which on a cell is the Python tuple repr."""
+        list(call("write", ("pt", 1, 2), module=self._module()))
+        assert capsys.readouterr().out == "pt(1, 2)"
+
+    def test_term_str_renders_a_nested_cell(self):
+        from clausal.terms import term_str
+
+        assert term_str(("pt", 1, ("q", 2))) == "pt(1, q(2))"
+        # Tuple DATA and an unbound functor slot are NOT compounds: they keep
+        # the ordinary tuple rendering rather than inventing a functor.
+        assert term_str((1, 2)).startswith("(")

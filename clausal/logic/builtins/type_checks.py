@@ -11,7 +11,7 @@ from clausal.logic.predicate import (
 from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
-from clausal.logic.builtins._helpers import _is_ground
+from clausal.logic.builtins._helpers import _arity, _is_compound, _is_ground
 from clausal.logic.runtime._seg_helpers import normalize_seg_input
 
 
@@ -118,6 +118,15 @@ def _compound__1(x, trail, k):
     elif isinstance(x_val, KWTerm) and len(x_val) > 0:
         yield None
     elif is_term_instance(x_val) and len(term_field_names(x_val)) > 0:
+        yield None
+    elif _is_compound(x_val) and (_arity(x_val) or 0) > 0:
+        # P3-2 Task 2 (THE FLIP): a CELL is a compound term, and this was the
+        # one type check in the file that did not go through the funnel and so
+        # answered FALSE for one -- ``compound(pt(1, 2))`` failed while
+        # ``functor/3``, ``arg/3``, ``=../2`` and ``callable/1`` all answered
+        # for the same term.  The funnel's ``_is_compound``/``_arity`` pair is
+        # the shared definition (``builtins/_helpers.py``); the branches above
+        # stay first so the common shapes keep their direct test.
         yield None
 
 

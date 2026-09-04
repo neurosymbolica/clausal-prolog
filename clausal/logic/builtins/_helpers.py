@@ -175,6 +175,21 @@ def _is_ground_py(term: Any) -> bool:
         return True
     if isinstance(term, list):
         return all(_is_ground_py(e) for e in term)
+    if isinstance(term, tuple):
+        # A CELL -- ``("pt", 1, Y)``.  P3-2 Task 2 (THE FLIP) makes this how
+        # every compound data term is represented, so falling through to the
+        # "unknown shape -> True" tail answered GROUND for a term holding a
+        # free variable.  Two answers changed on that: ``ground/1`` said yes
+        # to ``pt(1, Y)``, and ``_findall_copy_row``
+        # (``compiler/globals_env.py``) gates the ISO per-solution copy on
+        # this predicate, so a cell row with a free var skipped the copy and
+        # shared the caller's Var -- binding it afterwards mutated the
+        # collected row (A03-F006, reintroduced for cell rows).
+        #
+        # ``isinstance``, not ``type(...) is``: unlike the copy/collect
+        # branches this one only READS, and a tuple subclass holding a free
+        # Var is not ground either, whatever else it is.
+        return all(_is_ground_py(e) for e in term)
     if isinstance(term, Compound):
         return isinstance(term.functor, str) and all(_is_ground_py(a) for a in term.args)
     if isinstance(term, KWTerm):
@@ -251,11 +266,22 @@ try:
     # unknown container. Short-circuit the Seg* shapes in Python so a
     # SegList / SegString / SegBytes that still holds an unbound ``VarSeg``
     # reports *not* ground. Other shapes still go through the fast C path.
+    # P3-2 Task 2 (THE FLIP): ``c_is_ground`` (``_variables.c``, ~:2160) has
+    # no ``PyTuple_Check`` branch either, so a bare tuple falls through its
+    # tail to "ground" -- and a CELL is a bare tuple.  Unlike Seg*, a cell
+    # cannot be short-circuited by inspecting the TOP of the term: the shapes
+    # that matter are cells nested inside lists and Compounds, which the C
+    # recursion reaches without ever coming back to Python, and deciding
+    # "does this contain a tuple?" costs the same walk as the predicate
+    # itself.  So the Python implementation is used unconditionally, exactly
+    # as ``copy_term``/``term_variables`` now are (see
+    # ``builtins/inspection.py`` for the measurement and the same follow-up).
+    #
+    # FOLLOW-UP for the ``.c``-touching task: give ``c_is_ground`` the
+    # ``PyTuple_Check`` branch ``do_walk`` (:1545) already has, then restore
+    # the Seg*-only short-circuit below.
     def _is_ground(term: Any) -> bool:
-        t = deref(term)
-        if isinstance(t, (SegList, SegString, SegBytes)):
-            return _is_ground_py(t)
-        return _c_is_ground(t)
+        return _is_ground_py(deref(term))
 except ImportError:
     pass
 

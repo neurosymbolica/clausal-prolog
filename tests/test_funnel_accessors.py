@@ -62,7 +62,7 @@ from clausal.logic.builtins._helpers import (
     functor_arity,
 )
 from clausal.logic.cells import TUPLE_TAG, make_cell, make_tuple_cell
-from clausal.logic.variables import Var
+from clausal.logic.variables import Var, deref, is_var
 from clausal.terms import Compound, KWTerm
 from clausal.pythonic_ast.nodes import Add
 
@@ -655,3 +655,74 @@ class TestCellFunnelAwareness:
         assert _args_list(plain_user_tuple) == [1]
         assert _is_compound(plain_user_tuple) is True
         assert functor_arity(plain_user_tuple) == ("hello", 1)
+
+
+class TestCellGroundnessRegression:
+    """``_is_ground`` was the SIXTH member of the cells-blind family.
+
+    The Phase-2 cell-awareness pass wrapped ``_functor_name``/``_arity``/
+    ``_nth_arg``/``_args_list``/``_is_compound`` and skipped this one, so a
+    cell fell through to the "unknown shape -> True" tail and a term holding
+    a free variable reported GROUND.  Two answers rode on it: ``ground/1``,
+    and ``_findall_copy_row``, which gates the ISO per-solution copy on
+    groundness — an ungrounded cell row skipped the copy and shared the
+    caller's Var, so binding it afterwards mutated the collected row
+    (A03-F006, reintroduced for cell rows).
+    """
+
+    def test_a_cell_holding_a_free_var_is_not_ground(self):
+        # nv
+        from clausal.logic.builtins._helpers import _is_ground
+
+        assert _is_ground(make_cell("pt", 1, 2)) is True
+        assert _is_ground(make_cell("pt", 1, Var())) is False
+
+    def test_a_cell_nested_in_a_list_is_reached(self):
+        """The C accelerator recursed into lists without returning to
+        Python, which is why the top-level short-circuit other cells-blind
+        shapes use could not work here."""
+        # nv
+        from clausal.logic.builtins._helpers import _is_ground
+
+        assert _is_ground([1, make_cell("pt", 1, Var())]) is False
+        assert _is_ground(Compound("f", (make_cell("pt", Var()),))) is False
+
+    def test_it_agrees_with_the_class_twin(self):
+        """The whole point: cell and class term answer the same."""
+        # nv
+        from clausal.logic.builtins._helpers import _is_ground
+        from clausal.logic.predicate import make_predicate
+
+        pt = make_predicate("pt", ["a", "b"])
+        free = Var()
+        assert _is_ground(pt(1, free)) is False
+        assert _is_ground(make_cell("pt", 1, free)) is False
+
+    def test_findall_copies_an_ungrounded_cell_row(self):
+        """``_findall_copy_row``'s ISO copy, on the shape that skipped it.
+
+        The row it returns must not be reachable from the caller's Var:
+        binding that Var afterwards is exactly what used to mutate the
+        already-collected row.
+        """
+        # nv
+        from clausal.logic.compiler.globals_env import _findall_copy_row
+        from clausal.logic.variables import Trail, unify
+
+        x = Var()
+        row = _findall_copy_row(make_cell("pt", 1, x))
+        assert unify(x, 9, Trail())
+        assert deref(x) == 9                 # the caller's Var did bind ...
+        assert is_var(deref(row[2]))         # ... and the copy did not move
+        assert deref(row[2]) is not deref(x)
+
+    def test_compound_1_answers_for_a_cell(self):
+        """``compound/1`` was the one type check that did not route through
+        the funnel, so it answered False where ``functor/3``, ``arg/3``,
+        ``=../2`` and ``callable/1`` all answered for the same term."""
+        # nv
+        from clausal.logic.builtins._helpers import _arity, _is_compound
+
+        c = make_cell("pt", 1, 2)
+        assert _is_compound(c) is True
+        assert _arity(c) == 2
