@@ -1,5 +1,3 @@
-import pytest
-
 from clausal.tools.prolog_reader import (
     Clause, DCGRule, Directive, EOF, NEED_MORE, PrologReader, Query, VarRef, read_module,
 )
@@ -51,11 +49,9 @@ class TestIncremental:
         items = read_module(src)
         assert items[1].term == ("===", "a", "b")
         # Without the directive, a fresh reader parsing the same item does
-        # not parse cleanly. Task 5 is what turns that failure into a
-        # SyntaxIssue item; before Task 5 it raises instead (this task's
-        # documented, binding behavior for parse failures). Assert the
-        # pre-Task-5 contingency directly: Task 5 flips this to the
-        # SyntaxIssue assertion.
-        from clausal.tools.prolog_parser import ParseError
-        with pytest.raises(ParseError):
-            read_module("a === b.\n")
+        # not parse cleanly -- Task 5's recovery turns that failure into a
+        # SyntaxIssue item rather than raising.
+        from clausal.tools.prolog_reader import SyntaxIssue
+        naked = read_module("a === b.\n")
+        assert any(isinstance(i, SyntaxIssue) for i in naked) or \
+            naked[0].term != ("===", "a", "b")

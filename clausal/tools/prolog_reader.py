@@ -243,12 +243,34 @@ def _joined_span(a, b):
     return (a_span[0], b_span[1])
 
 
+def _lex_error_message(t) -> str:
+    """A human-readable message for an L0 ``error`` Tok, mirroring
+    ``prolog_tokenizer.tokenize()``'s ``TokenizeError`` text (same
+    reasons, message-only rather than raised)."""
+    reason, culprit = t.value
+    if reason == "unterminated":
+        if t.lexeme.startswith('"'):
+            return "unterminated string"
+        return "unterminated quoted atom"
+    if reason == "no_token":
+        return f"unexpected character {culprit!r}"
+    if reason == "bad_token":
+        return f"malformed token {culprit!r}"
+    return f"invalid input {culprit!r}"  # 'invalid_encoding'
+
+
 def _classify_pitem(pitem):
     """One parsed ``PItem`` -> the matching ``ReaderItem``. Where an item
     has two P-subtrees that must share variable numbering (a rule's head
     and body; a DCG rule's head and body), a synthetic whole-item
     PCompound is built and transformed ONCE, so ``transform_term``'s
-    first-occurrence numbering runs over both halves together."""
+    first-occurrence numbering runs over both halves together.
+
+    ``PrologParser.parse_program()`` never emits a ``PComment`` PItem (no
+    lexical construct in the grammar reduces to one today), so the
+    ``TypeError`` fallback below is a deliberate "should be unreachable"
+    guard, not a gap in this mapping.
+    """
     if isinstance(pitem, PClause):
         if pitem.body is None:
             cell, spans, var_names = transform_term(pitem.head)
@@ -305,6 +327,16 @@ class PrologReader:
                 self._lexer = IncrementalLexer(l0, nested_comments=nested_comments)
 
         self._item_buf: list = []
+        # Current-item-attempt bookkeeping (Task 5): item_start/item_end
+        # track the extent of whatever has been touched for the item in
+        # progress (real Toks AND error Toks alike -- an error can be the
+        # very first thing in an item, e.g. an unterminated quote), so a
+        # SyntaxIssue's span is always available whether the item ends via
+        # a clean 'end' token, a lexical error, or EOF. item_error holds
+        # the first lexical-error message seen for the item, if any.
+        self._item_start = None
+        self._item_end = None
+        self._item_error = None
         self._eof = False
 
     def feed(self, text: str) -> None:
@@ -313,14 +345,27 @@ class PrologReader:
     def close(self) -> None:
         self._lexer.close()
 
+    def _touch_item(self, t) -> None:
+        if self._item_start is None:
+            self._item_start = t.start[0]
+        self._item_end = t.end[0]
+
+    def _reset_item_state(self) -> None:
+        self._item_buf = []
+        self._item_start = None
+        self._item_end = None
+        self._item_error = None
+
     def read_term(self):
-        """-> ReaderItem | NEED_MORE | EOF.
+        """-> ReaderItem | SyntaxIssue | NEED_MORE | EOF.
 
         Pulls L0 tokens into the item buffer until a ``kind == "end"``
-        token completes one item, then parses and classifies it. An L0
-        ``error`` Tok, or EOF with a non-empty buffer (an unterminated
-        trailing item), raises -- Task 5 replaces both with SyntaxIssue
-        handling; this task keeps the wiring simple per the brief.
+        token completes one item, then parses and classifies it.
+
+        Recovery (§1c contract): a Pratt ``ParseError`` on a completed
+        item, or an L0 ``error`` Tok, becomes a ``SyntaxIssue`` instead of
+        raising -- resync is inherent because the ``end`` token (or EOF)
+        already bounds the damaged item, so reading always continues.
         """
         if self._eof:
             return EOF
@@ -329,33 +374,77 @@ class PrologReader:
             if t is NEED_MORE:
                 return NEED_MORE
             if t is EOF:
-                if not self._item_buf:
+                if self._item_start is None:
                     self._eof = True
                     return EOF
-                raise RuntimeError(
-                    "PrologReader: EOF with an unterminated item pending "
-                    "(Task 5 will turn this into a SyntaxIssue)")
+                return self._eof_issue()
             if t.kind == "error":
-                raise RuntimeError(f"PrologReader: lex error {t.value!r} "
-                                    f"at {t.start} (Task 5 will turn this "
-                                    f"into a SyntaxIssue)")
+                issue = self._handle_error_tok(t)
+                if issue is not None:
+                    return issue
+                continue
+            self._touch_item(t)
             self._item_buf.append(t)
             if t.kind == "end":
-                return self._finish_item()
+                return self._finish_item(t)
 
-    def _finish_item(self):
-        from clausal.tools.prolog_parser import PrologParser
+    def _handle_error_tok(self, t):
+        """Handle one L0 ``error`` Tok. Returns a ``SyntaxIssue`` to
+        return from ``read_term()`` now, or ``None`` to keep looping."""
+        message = _lex_error_message(t)
+        reason, _culprit = t.value
+        if reason == "unterminated":
+            # Terminal: the driver has consumed all remaining input and
+            # no 'end' token will ever come (an unclosed quote/comment
+            # etc.). Record it and let the EOF branch above close the
+            # item out (resumable=False) on the next next_token() call.
+            self._touch_item(t)
+            self._item_error = message
+            return None
+        # no_token / bad_token / invalid_encoding: a single skippable bad
+        # token; lexing continues normally afterward.
+        if self._item_start is None:
+            # Between items (nothing buffered yet for a new item) -- a
+            # standalone lexical error, not attributable to any item.
+            return SyntaxIssue(span=(t.start[0], t.end[0]), message=message,
+                                resumable=True)
+        # Mid-item: keep buffering: the item's 'end' token still resyncs
+        # this later, once it arrives.
+        self._touch_item(t)
+        if self._item_error is None:
+            self._item_error = message
+        return None
+
+    def _eof_issue(self) -> "SyntaxIssue":
+        span = (self._item_start, self._item_end)
+        message = self._item_error or "unterminated item (missing end token)"
+        self._reset_item_state()
+        self._eof = True  # no more content will ever follow this issue
+        return SyntaxIssue(span=span, message=message, resumable=False)
+
+    def _finish_item(self, end_tok):
+        span = (self._item_start, self._item_end)
+        pending_error = self._item_error
+        tokens_buf = self._item_buf
+        self._reset_item_state()
+
+        if pending_error is not None:
+            return SyntaxIssue(span=span, message=pending_error, resumable=True)
+
+        from clausal.tools.prolog_parser import ParseError, PrologParser
         from clausal.tools.prolog_tokenizer import Token, TokenType
 
-        end_tok = self._item_buf[-1]
-        tokens = [_to_compat_token(t) for t in self._item_buf]
-        end_off = end_tok.end[0]
+        tokens = [_to_compat_token(t) for t in tokens_buf]
+        end_off = span[1]
         tokens.append(Token(TokenType.END, "", end_tok.end[1], end_tok.end[2],
                              end_line=end_tok.end[1], end_col=end_tok.end[2],
                              offset=end_off, end_offset=end_off))
-        self._item_buf = []
-
-        module = PrologParser(tokens, self._op_table).parse_program()
+        try:
+            module = PrologParser(tokens, self._op_table).parse_program()
+        except ParseError as exc:
+            # The 'end' token already bounds this item -- resync is
+            # inherent, so drop it and keep reading (F5 recovery).
+            return SyntaxIssue(span=span, message=str(exc), resumable=True)
         assert len(module.items) == 1, (
             f"expected exactly one item, got {len(module.items)}")
         return _classify_pitem(module.items[0])
@@ -363,7 +452,7 @@ class PrologReader:
 
 def read_module(source: str, **kw) -> list:
     """Batch helper: feed the whole *source*, close, and drain every
-    item (``SyntaxIssue``s included, once Task 5 produces them)."""
+    item (``SyntaxIssue``s included)."""
     reader = PrologReader(**kw)
     reader.feed(source)
     reader.close()
