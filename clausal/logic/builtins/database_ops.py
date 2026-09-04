@@ -69,7 +69,42 @@ def _build_clause(term_val: Any, context: str) -> "Any":
     if isinstance(term_val, _Predicate):
         raise LogicException(
             permission_error("assert", "rule", term_val.head, context))
+    _reject_cell_head(term_val, context)
     return _normalize_fact_clause(term_val)
+
+
+def _reject_cell_head(term_val: Any, context: str) -> None:
+    """Refuse a CELL head with the ISO error, not an internal ``TypeError``.
+
+    P3-2 Task 2 (THE FLIP): a functor declared with fields but given no
+    clauses is DATA (R6), so ``f(7)`` written anywhere in that module is the
+    cell ``("f", 7)`` -- including the argument handed to ``assertz/1``.
+    Nothing downstream understands a cell as a clause head, and the failure
+    used to surface as ``head_key``'s internal
+    ``TypeError: Cannot extract (functor, arity) from head term: ('f', 7)``,
+    which names neither the mistake nor its remedy.  Pre-flip the same
+    program raised ``permission_error(modify, static_procedure, f/1)``,
+    because the head was an instance of a clause-free class.
+
+    Asserting INTO a cell-headed predicate is P3-3's business, not this
+    task's; what belongs here is the diagnostic.  So the ISO error is
+    restored verbatim, with the remedy named: declare the predicate
+    ``-dynamic``, which keeps it a class and makes the assert legal.
+    """
+    from clausal.logic.cells import TUPLE_TAG, _cell_shape
+
+    ok, functor = _cell_shape(term_val)
+    if not ok or functor is TUPLE_TAG or not isinstance(functor, str):
+        return
+    arity = len(term_val) - 1
+    raise LogicException(permission_error(
+        "modify", "static_procedure",
+        Compound("/", (functor, arity)),
+        f"{context}: {functor}/{arity} is a data functor (declared with "
+        f"fields and given no clauses), so its terms compile to cells and "
+        f"it has no clause list to add to — declare it -dynamic to assert "
+        f"against it",
+    ))
 
 
 def _find_pred_cls(functor: str, module_dict: "dict | None") -> "Any":

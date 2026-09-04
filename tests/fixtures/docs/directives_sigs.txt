@@ -45,6 +45,24 @@
 -module(traffic, [Phase(X), red, amber, green])
 --8<-- [end:module_with_atoms]
 
+--8<-- [start:module_data_functor]
+-module(shapes, [Point(X, Y), kind(S, K), point])
+
+kind(Point(X_UNUSED, Y_UNUSED), point),
+--8<-- [end:module_data_functor]
+
+--8<-- [start:module_predicate_export_vocab]
+# vocab.clausal -- declares, defines nothing
+-module(vocab, [verdict/2])
+--8<-- [end:module_predicate_export_vocab]
+
+--8<-- [start:module_predicate_export_impl]
+# rules.clausal -- supplies the clauses
+-import_from(vocab, [verdict])
+
+verdict(ok, cited),
+--8<-- [end:module_predicate_export_impl]
+
 --8<-- [start:private_with_atoms]
 -private([draft, internal_only])
 --8<-- [end:private_with_atoms]

@@ -468,3 +468,91 @@ class TestRaisingGuardThroughFindAll:
         result = self._run("wellformed REF_YMD does not raise")
         assert result.passed
         assert result.error is None
+
+
+class TestAssertzAgainstADataFunctor:
+    """P3-2 Task 2 (THE FLIP): ``assertz`` to a declared-with-fields,
+    clause-free, non-``-dynamic`` functor.
+
+    Its terms are CELLS now (R6), so what reaches ``assertz/1`` is a plain
+    tuple, and nothing downstream reads one as a clause head — ``head_key``
+    used to surface that as an internal
+    ``TypeError: Cannot extract (functor, arity) from head term: ('f', 7)``,
+    which names neither the mistake nor its remedy.  Pre-flip the same
+    program raised ``permission_error(modify, static_procedure, f/1)``,
+    because the head was an instance of a clause-free class.  The ISO error
+    is restored, and it now names ``-dynamic`` as the fix.
+
+    (Making the assert SUCCEED — general cell-head assertz support — is
+    P3-3's scope, deliberately not this task's.  This pins the diagnostic.)
+    """
+
+    _SRC = (
+        "-module(azdf, [f(A), go(X)])\n"
+        "go(X) <- assertz(f(X))\n"
+    )
+
+    def _module(self, tmp_path):
+        from clausal.import_hook import _load_module
+
+        path = tmp_path / "azdf.clausal"
+        path.write_text(self._SRC)
+        return _load_module("azdf", str(path))
+
+    def test_raises_a_catchable_logic_exception_not_a_typeerror(self, tmp_path):
+        from clausal.logic.exceptions import LogicException
+        from clausal.logic.solve import call
+
+        mod = self._module(tmp_path)
+        with pytest.raises(LogicException) as excinfo:
+            list(call("go", 7, module=mod.__dict__["$module"]))
+        assert not isinstance(excinfo.value, TypeError)
+
+    def test_the_term_is_the_iso_permission_error_naming_functor_and_arity(
+            self, tmp_path):
+        from clausal.logic.exceptions import LogicException
+        from clausal.logic.solve import call
+
+        mod = self._module(tmp_path)
+        with pytest.raises(LogicException) as excinfo:
+            list(call("go", 7, module=mod.__dict__["$module"]))
+        term = excinfo.value.term
+        assert term.functor == "error"
+        inner = term.args[0]
+        assert inner.functor == "permission_error"
+        assert inner.args[0] == "modify"
+        assert inner.args[1] == "static_procedure"
+        indicator = inner.args[2]
+        assert indicator.functor == "/"
+        assert indicator.args == ("f", 1)
+
+    def test_the_message_points_at_dynamic(self, tmp_path):
+        from clausal.logic.exceptions import LogicException
+        from clausal.logic.solve import call
+
+        mod = self._module(tmp_path)
+        with pytest.raises(LogicException) as excinfo:
+            list(call("go", 7, module=mod.__dict__["$module"]))
+        context = excinfo.value.term.args[1]
+        assert "assertz/1" in context
+        assert "-dynamic" in context
+        assert "data functor" in context
+
+    def test_a_dynamic_declaration_makes_the_assert_work(self, tmp_path):
+        """The remedy the message names actually works: ``-dynamic`` keeps
+        the functor a predicate class, so the assert lands."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        from clausal.logic.variables import Var, deref
+
+        path = tmp_path / "azdyn.clausal"
+        path.write_text(
+            "-module(azdyn, [f(A), go(X)])\n"
+            "-dynamic(f/1)\n"
+            "go(X) <- assertz(f(X))\n"
+        )
+        mod = _load_module("azdyn", str(path))
+        lm = mod.__dict__["$module"]
+        assert len(list(call("go", 7, module=lm))) == 1
+        out = Var()
+        assert [deref(out) for _ in call("f", out, module=lm)] == [7]

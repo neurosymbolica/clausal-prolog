@@ -18,6 +18,48 @@ The export list may mix predicates with arity (e.g. `Pred1(A, B)`) and bare atom
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_with_atoms"
 ```
 
+#### Data functors vs predicates
+
+A **field-carrying** entry — `Point(X, Y)` — declares a *data functor*: a shape
+you build terms with. Its terms compile to cells, plain tuples tagged with the
+functor spelling, and the name binds that spelling rather than a class:
+
+```clausal
+--8<-- "tests/fixtures/docs/directives_sigs.txt:module_data_functor"
+```
+
+The `kind/2` clause builds and matches the cell `("Point", X, Y)`.
+
+From Python, `shapes.Point` is the string `"Point"`, and a term of it is the
+tuple `("Point", 1, 2)` — there is no constructor to call. Build the tuple.
+
+An entry that has **clauses** in the file is a predicate as before: it keeps its
+`PredicateMeta` class, `call/1` and friends dispatch on it, and nothing about
+using it changes.
+
+#### `name/arity` — a predicate whose clauses live elsewhere
+
+A declaration-only export is a data functor by default, which is the wrong
+answer for the *vocabulary module* idiom: one module declares the predicate and
+a downstream module supplies its clauses. Say so with the ISO `name/arity`
+spelling, which is what module exports look like in ISO Prolog anyway:
+
+```clausal
+--8<-- "tests/fixtures/docs/directives_sigs.txt:module_predicate_export_vocab"
+```
+
+```clausal
+--8<-- "tests/fixtures/docs/directives_sigs.txt:module_predicate_export_impl"
+```
+
+`verdict/2` keeps its class, so the importer's clauses attach to the same
+predicate the vocabulary module exported, and the "a second module is
+redefining these clauses" diagnostics keep working. Field names are
+placeholders (`arg_0`, `arg_1`) until a real clause supplies its own, exactly
+as with [`-dynamic`](#-dynamic).
+
+Both spellings work in [`-private`](#-private) too.
+
 !!! info "Per-module atom identity"
     Listing an atom here opts that atom into **module-local public** identity — importers see `traffic.red` as a distinct `PredicateMeta` class from any other `red`. Bare atom references that are **not** listed in `-module`, `-private`, or an import raise a compile-time `NameError` by default (strict is the default). In files that carry [`-implicit_atoms`](#-implicit_atoms), unlisted bare atoms resolve to the process-wide **global** atom of the same name instead. See [Atoms § Strict by default](syntax.md#atoms) and the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
 
@@ -46,7 +88,7 @@ The list may also contain bare atoms:
     1. **Module-local identity** — the atom gets a class distinct from the process-wide global atom of the same name, and from any other module's declaration of it (so `draft` here does not unify with `other_module.draft` or with the global `draft`).
     2. **Strict-atom resolution** — the bare name compiles instead of raising the strict-by-default `NameError`. In files that carry [`-implicit_atoms`](#-implicit_atoms) you can omit the listing and rely on auto-minting.
     3. **Shadowing** — inside this module the private class wins over `-module`, over imports, and over the global.
-    4. **Signature pre-registration** — for `P(A, B)` entries, arity and field names are fixed before the first clause rather than inferred from it.
+    4. **Signature pre-registration** — for `P(A, B)` entries, arity and field names are fixed before the first clause rather than inferred from it. A `p/2` entry declares a PREDICATE whose clauses may live in another module, exactly as in [`-module`](#data-functors-vs-predicates).
     5. **Intent** — it tells a reader the name is internal. Advisory only, per the warning above.
 
     The only thing that distinguishes `-private` from `-module` is which of those a reader is told. See the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md) § "Visibility is advisory".
@@ -433,21 +475,23 @@ Declares how many visible arguments a predicate has and which accumulators/passe
 
 ---
 
-## Experimental Directive
+## Removed Directive
 
-### -tagged_terms
+### -tagged_terms (removed)
 
-!!! warning "Experimental — not a supported feature"
-    `-tagged_terms` opts a file into an alternative *tagged-cell* term
-    representation, in which a saturated construction of a functor the module
-    declares compiles to a plain tuple `("point", X, Y)` rather than an
-    instance of the generated `point` class. It exists to measure that
-    representation (Phase 2 of `implementation_plans/tagged-tuple-term-representation.md`)
-    and carries real limits — most sharply, compound data cannot cross the
-    module boundary, and the module's own generated constructors silently
-    match nothing. Read the directive's docstring in
-    `clausal/templating/term_rewriting.py` (`_handle_tagged_terms_directive`)
-    for the full list before using it.
+`-tagged_terms` used to opt a single file into the *tagged-cell* term
+representation, in which a construction of a functor the module declares
+compiles to a plain tuple `("point", X, Y)` rather than an instance of a
+generated `point` class. **The directive is gone: cells are how compound data
+compiles, in every module, with no opt-in to spell.** Writing `-tagged_terms`
+is now an ordinary unknown-directive `SyntaxError`; delete the line.
+
+Nothing else has to change in a file that carried it — its clauses compiled to
+cells before and compile to cells now. What DID change for every other file is
+that its compound data is cells too, which mostly matters at the Python
+boundary: `mod.point` is the functor's spelling rather than a constructor, and
+a term of it is the tuple `("point", 1, 2)`. See
+[Data functors vs predicates](#data-functors-vs-predicates) below.
 
 ---
 
