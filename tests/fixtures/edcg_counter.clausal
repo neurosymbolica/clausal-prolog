@@ -32,9 +32,13 @@ run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS) <- (
 Test("scaled count 3 items") <- (
     run_scaled(["a", "b", "c"], 10, COUNT, ITEMS),
     COUNT == 30,
-    # Phase 2 Task 13 Liskov rule: list-of-1-char-strs may promote to
-    # str — assert against the str form which is the promoted output.
-    ITEMS == "cba"
+    # P3-1 Task 5 (§1b): the accumulator star (_in) is a plain LIST
+    # source (initially []), not a str/SegString, so under the
+    # source-gated maybe_promote_to_str fix (list_unify.py) the result
+    # stays a list — it no longer promotes to the str "cba" (formerly
+    # asserted here under the old unconditional Phase 2 Task 13 Liskov
+    # promotion, which fired regardless of source type).
+    ITEMS == ["c", "b", "a"]
 )  # nv
 Test("scaled count empty") <- (
     run_scaled([], 5, COUNT, ITEMS),

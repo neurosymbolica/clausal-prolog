@@ -28,6 +28,27 @@ from clausal.logic.runtime._seg_helpers import normalize_seg_input
 # nonterminal" mistake.
 
 
+def _empty_remainder_like(list_val):
+    """Return the type-correct "nothing left" sentinel for *list_val*.
+
+    ``phrase/2``'s contract is "the rule must consume List entirely", i.e.
+    the final remaining-state var must unify with the EMPTY sequence. Before
+    P3-1 Task 5, hardcoding the Python list ``[]`` here worked for a str
+    ``List`` too because the (now-retired) C str~char-list cons rule made
+    ``unify("", [], trail)`` succeed as a degenerate case (both "empty").
+    Since §1b retires that rule, an empty str residue no longer unifies
+    with a bare ``[]`` (str unifies with str, lists with lists — including
+    the empty case, with no cross-type exception), so the sentinel must
+    match ``list_val``'s own type: ``""`` for a str input, ``b""`` for
+    bytes, ``[]`` otherwise.
+    """
+    if isinstance(list_val, str):
+        return ""
+    if isinstance(list_val, bytes):
+        return b""
+    return []
+
+
 @_trampoline_builtin("phrase", 2)
 def _phrase__2(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, trail):
     """phrase(RuleBody, List) — invoke DCG rule, must consume entire list.
@@ -45,20 +66,23 @@ def _phrase__2(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, t
     # to lists — `_head_list_unify_input` / `_body_star_unify` handle
     # both str and list uniformly.
     list_val = normalize_seg_input(list_val)
+    # P3-1 Task 5 (§1b): the "must consume entirely" sentinel must match
+    # list_val's own type — see _empty_remainder_like.
+    empty = _empty_remainder_like(list_val)
 
     if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):
         # Class reference (0 extra args): phrase(greeting, [hello, world])
         # A nonterminal's translated arity is its written arity plus S0 and S,
         # so a bare name here is called at 2 — see _DCG_ARITY_NOTE.
         dispatch = _dispatch_at(rule_val, 2)
-        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, list_val, [], trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, list_val, empty, trail)
     elif is_term_instance(rule_val):
         # Instance with args: phrase(digit(D_), [3, plus, 4])
         cls = type(rule_val)
         fields = term_field_names(rule_val)
         user_args = [deref(getattr(rule_val, f)) for f in fields[:-2]]
         dispatch = _dispatch_at(cls, len(user_args) + 2)
-        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *user_args, list_val, [], trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *user_args, list_val, empty, trail)
     else:
         yield (_fail, DONE)
         return

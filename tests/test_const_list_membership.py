@@ -146,8 +146,12 @@ def test_unbound_left_operand_enumerates_in_list_order(build):
     Solution order is observable in Clausal (first-solution semantics,
     ``findall`` results, gold-test transcripts), so the fast path must
     decline whenever the left operand is unbound.
+
+    P3-1 R2: atoms are interned global ``str``s (no more zero-field atom
+    class with a ``.__name__`` attribute) — the atom's spelling IS the
+    returned value.
     """
-    names = [v.__name__ for v in _values(build, "order", Var())]
+    names = _values(build, "order", Var())
     assert names == ["c", "a", "b"]
 
 
@@ -160,8 +164,11 @@ def test_unbound_left_operand_enumerates_strings_in_list_order(build):
 # ── Duplicates ────────────────────────────────────────────────────────────────
 
 def test_duplicate_element_yields_one_solution_per_occurrence(build):
-    """``X in [a, a, b]`` with X unbound succeeds three times."""
-    names = [v.__name__ for v in _values(build, "dup_enumerate", Var())]
+    """``X in [a, a, b]`` with X unbound succeeds three times.
+
+    P3-1 R2: atoms are interned global ``str``s — no ``.__name__``.
+    """
+    names = _values(build, "dup_enumerate", Var())
     assert names == ["a", "a", "b"]
 
 
@@ -203,19 +210,34 @@ def test_bool_matches_int_element(build):
     assert len(_solutions(build, "bools", 7)) == 1
 
 
-def test_string_does_not_match_same_named_atom(build):
-    """An atom and its name as a string are different terms under both
-    ``unify()`` and ``hash``/``__eq__``."""
-    assert len(_solutions(build, "mixed", "a")) == 1
-    assert len(_solutions(build, "mixed", _atom(build, "a"))) == 1
+def test_string_matches_same_named_atom(build):
+    """P3-1 §5/R2: an atom is an interned global ``str`` — its name IS the
+    atom, so ``a`` (the atom) and ``"a"`` (the string) are the SAME term
+    under both ``unify()`` and ``hash``/``__eq__``. ``mixed`` holds both
+    ``a`` and ``"a"`` as distinct list *elements* (still two occurrences,
+    per the duplicates contract this module pins elsewhere), so querying
+    either spelling now matches both positions.
+
+    (Formerly ``test_string_does_not_match_same_named_atom``, inverted —
+    the pre-pivot per-module atom-class identity this test pinned no
+    longer exists.)
+    """
+    assert len(_solutions(build, "mixed", "a")) == 2
+    assert len(_solutions(build, "mixed", _atom(build, "a"))) == 2
     assert len(_solutions(build, "mixed", "b")) == 0
 
 
-def test_atom_from_a_different_module_does_not_match(build):
-    """Atom unification is identity, and so is atom set membership: the
-    same-named atom from the *other* build must not be found."""
+def test_atom_from_a_different_module_matches(build):
+    """P3-1 §5/R2: atoms are global by spelling (no more per-module atom
+    identity/class), so the same-named atom minted by a *different*
+    compiled build is literally the same ``str`` and DOES match.
+
+    (Formerly ``test_atom_from_a_different_module_does_not_match``,
+    inverted — cross-module atom-identity mismatch was the retired
+    per-module atom-class behaviour.)
+    """
     other = _OFF if build is _ON else _ON
-    assert len(_solutions(build, "atoms4", _atom(other, "a"))) == 0
+    assert len(_solutions(build, "atoms4", _atom(other, "a"))) == 1
 
 
 def test_none_element_matches(build):

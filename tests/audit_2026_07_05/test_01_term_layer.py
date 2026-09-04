@@ -583,12 +583,18 @@ class TestAttrHooks:
 
 
 class TestUnifyModes:
-    def test_str_list_liskov_all_modes(self, trail):
+    def test_str_list_cons_rule_retired_all_modes(self, trail):
+        """P3-1 Task 5 (§1b): the str~char-list cons rule is retired — a
+        bare str no longer unifies with a list in any mode, including
+        the empty/empty case. (Formerly
+        ``test_str_list_liskov_all_modes``, pinning the retired rule.)
+        """
         H, T = Var(), Var()
-        assert unify("ab", [H, T], trail) and deref(H) == "a" and deref(T) == "b"
+        assert not unify("ab", [H, T], trail)
+        assert deref(H) is H and deref(T) is T  # unbound: no partial bindings leaked
         trail.reset()
-        assert unify("", [], trail) and unify([], "", trail)
-        assert unify("a", ["a"], trail)
+        assert not unify("", [], trail) and not unify([], "", trail)
+        assert not unify("a", ["a"], trail)
         assert not unify(["ab"], "ab", trail)   # 'ab' is 2 chars
         assert not unify("ab", ["a"], trail)
 

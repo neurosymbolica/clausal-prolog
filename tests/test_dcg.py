@@ -998,6 +998,65 @@ class TestDCGStringInput:
         assert _succeeds("phrase", cls, ["h", "i"], module=mod)
 
 
+# ── P3-1 Task 5 audit: cons-rule retirement vs the DCG strings-as-lists ──────
+#
+# §1b retires ONE specific rule: the C ``do_unify`` cross-type branch that
+# made a bare ``str`` unify with a plain ``list`` via element-wise char
+# comparison (``_variables.c``'s "String <-> List unification" block, now
+# deleted). DCG's string support (``TestDCGStringInput``/``TestStringTerminals``
+# above) is a DIFFERENT, older, and still-intentional contract (Phase 2 Tasks
+# 13/14, "Liskov strings-as-lists"): ``phrase``'s difference-list plumbing
+# (``_head_list_unify_input`` / ``_body_star_unify`` in
+# ``clausal/logic/runtime/list_unify.py`` / ``body_star_unify.py``) natively
+# destructures a bare ``str`` target itself — it never calls the retired
+# ``do_unify`` cross-type branch DIRECTLY, so most of that machinery is
+# unchanged by this task.
+#
+# The audit DID find one real, load-bearing reliance: ``phrase/2``'s "List
+# must be consumed entirely" contract hardcoded the Python list ``[]`` as the
+# "nothing left" sentinel for the rule's final state var. When ``List`` was a
+# str, the rule's terminal matching correctly produces an empty STR residue
+# (``""``, not ``[]``) — and pre-retirement, ``unify("", [], trail)`` secretly
+# succeeded via the retired rule's degenerate empty-vs-empty case. Once that
+# rule is gone, ``"" != []`` (str unifies with str, lists with lists — no
+# empty-case exception), so EVERY ``phrase/2`` call over a non-empty str input
+# broke (9 tests in ``TestDCGStringInput``/``TestStringTerminals`` above).
+# Fixed in ``clausal/logic/builtins/dcg.py`` (``_empty_remainder_like``):
+# the sentinel now matches ``list_val``'s own type (``""`` for str, ``b""``
+# for bytes, ``[]`` otherwise), restoring the Liskov strings-as-lists
+# contract WITHOUT resurrecting the retired cross-type unify rule.
+#
+# The two tests below are the plan's requested pair: an explicit-char-list
+# regression pin, and a "bare str where a [char] list is expected" failure —
+# for the one shape in ``phrase/2,3`` that IS a hard char-list requirement:
+# the RULE reference itself (first argument) must be a nonterminal (a
+# zero/N-ary term-instance/class), not a bare str. That predates this task,
+# but is the accurate, honest answer to "what fails cleanly here after
+# retirement" for the RULE-reference argument specifically (the LIST
+# argument keeps accepting str natively, per the fix above).
+
+
+class TestConsRuleRetirementDCGAudit:
+    def test_phrase_over_explicit_char_list_still_works(self, tmp_path):
+        # nv — pin: an explicit char-list caller is untouched by the
+        # retirement (it was never going through the retired str~list
+        # branch — list-vs-list unify is unaffected).
+        src = 'hi >> (["h", "i"])\n'
+        mod = _load("t5_dcg1", src, tmp_path)
+        cls = mod.module_dict["hi"]
+        assert _succeeds("phrase", cls, ["h", "i"], module=mod)
+        assert not _succeeds("phrase", cls, ["h", "o"], module=mod)
+
+    def test_phrase_bare_str_rule_reference_fails_cleanly(self, tmp_path):
+        # nv — a bare str standing in for the RULE (not the input list) is
+        # not a nonterminal reference; phrase/2 fails cleanly (yields no
+        # solution) rather than silently treating the str as some
+        # cons-decomposed goal shape.
+        src = 'hi >> (["h", "i"])\n'
+        mod = _load("t5_dcg2", src, tmp_path)
+        assert not _succeeds("phrase", "hi", ["h", "i"], module=mod)
+
+
 # ── String / bytes terminals in rule bodies (R3) ─────────────────────────────
 
 

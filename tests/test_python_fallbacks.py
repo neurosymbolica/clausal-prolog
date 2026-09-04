@@ -133,16 +133,21 @@ class TestFunctorNameFallback:
         # nv
         assert _functor_name_py(42) == _functor_name(42)
 
-    def test_string_nonempty_cons_cell(self):
-        # nv
-        # F089 (audit 2026-06-13): under ISO cons-cell, a non-empty
-        # str returns "." as its functor name (Liskov-symmetric with
-        # the non-empty list case above).
-        assert _functor_name_py("hello") == _functor_name("hello") == "."
+    def test_string_nonempty_is_its_own_atom_functor(self):
+        # nv — P3-1 §1b/R2: the C str~char-list cons rule is RETIRED. A
+        # str is now always an atom (runtime str = atom), so a non-empty
+        # str is its own functor name (arity 0), exactly like any other
+        # atomic constant — NOT the ISO cons-cell "." reading this test
+        # pinned pre-pivot (formerly ``test_string_nonempty_cons_cell``,
+        # asserting ``_functor_name_py("hello") == "."``).
+        assert _functor_name_py("hello") == _functor_name("hello") == "hello"
 
     def test_string_empty_nil(self):
         # nv
-        # F089 (audit 2026-06-13): empty str → "[]" (the nil atom).
+        # F089 (audit 2026-06-13): empty str → "[]" (the nil atom) —
+        # unaffected by the P3-1 §1b cons-rule retirement (the empty
+        # string is the one str value that legitimately reads as the
+        # list-shaped nil atom, matching the empty-list case above).
         assert _functor_name_py("") == _functor_name("") == "[]"
 
 
@@ -166,6 +171,15 @@ class TestArityFallback:
         # nv
         assert _arity_py(Atom) == _arity(Atom) == 0
 
+    def test_string_nonempty_is_arity_zero(self):
+        # nv — P3-1 §1b/R2: cons-rule retirement — a non-empty str is
+        # atomic (arity 0), not a "."/2 cons cell (arity 2).
+        assert _arity_py("hello") == _arity("hello") == 0
+
+    def test_string_empty_is_arity_zero(self):
+        # nv — unaffected by the retirement (empty str was already 0).
+        assert _arity_py("") == _arity("") == 0
+
 
 class TestNthArgFallback:
 
@@ -187,6 +201,15 @@ class TestNthArgFallback:
         with pytest.raises(IndexError):
             _nth_arg(c, 5)
 
+    def test_string_has_no_args(self):
+        # nv — P3-1 §1b/R2: cons-rule retirement — a non-empty str is
+        # atomic (arity 0), so even index 1 (formerly the cons-cell
+        # head) now raises IndexError, matching any other atom.
+        with pytest.raises(IndexError):
+            _nth_arg_py("hello", 1)
+        with pytest.raises(IndexError):
+            _nth_arg("hello", 1)
+
 
 class TestArgsListFallback:
 
@@ -203,6 +226,12 @@ class TestArgsListFallback:
     def test_non_compound(self):
         # nv
         assert _args_list_py(42) == _args_list(42) == []
+
+    def test_string_nonempty_has_no_args(self):
+        # nv — P3-1 §1b/R2: cons-rule retirement — a non-empty str is
+        # atomic, so its args list is empty (formerly ``["h", "ello"]``
+        # under the ISO cons-cell reading).
+        assert _args_list_py("hello") == _args_list("hello") == []
 
 
 class TestIsCompoundFallback:

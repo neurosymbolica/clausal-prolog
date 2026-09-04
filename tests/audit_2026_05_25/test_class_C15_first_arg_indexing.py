@@ -67,31 +67,38 @@ TestPred(['a', 'b', 'c']),
         f"4 solutions, either the str-headed or list-headed clause is unreachable."
     )
 
-    # Test 2: str-typed caller should find both str-headed AND list-headed clauses.
-    # (Both should unify under strings-as-lists contract.)
+    # P3-1 Task 5 (\u00a71b/R2): the cons rule that made this test's ORIGINAL
+    # premise true (str and char-list callers should reach each other's
+    # clauses "under strings-as-lists") is retired -- cross-type reachability
+    # via runtime unify() is no longer expected at all. Empirically
+    # re-verified against the rebuilt extension (2026-09-04):
+    #
+    # - str caller "abc" -> 2 solutions (str-headed clause via same-type
+    #   unify, PLUS the list-headed clause). The list-headed hit is a
+    #   pre-existing, unexplained asymmetry in the fact-elaboration /
+    #   indexing layer (`_normalize_dataclass_fact` in database.py hoists
+    #   BOTH str and list literal fact heads into a Var-head + body Unify
+    #   goal, which appears to make ground list-literal facts reachable by
+    #   a str caller through a path other than the retired do_unify
+    #   cross-type branch) -- parked as
+    #   todo/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md,
+    #   NOT fixed here (out of Task 5's do_unify-retirement scope; the
+    #   `_variables.c` block this task removes is confirmed uninvolved).
+    # - list caller ['a','b','c'] -> 1 solution (list-headed clause only;
+    #   the str-headed clause is no longer reachable -- THIS half of the
+    #   asymmetry is exactly the retired cons rule's absence, and is the
+    #   expected, correct post-retirement answer).
     n_str_caller = sum(1 for _ in call("TestPred", "abc", module=mod))
-    # Currently: routes to str bucket (contains str-headed clause + merged default for
-    # list-headed), so returns 2.
     assert n_str_caller == 2, (
-        f"TestPred('abc') should return 2 solutions: "
-        f"the str-headed clause TestPred('abc') and the list-headed clause "
-        f"TestPred(['a','b','c']) (via runtime unify). "
-        f"Got {n_str_caller}. "
-        f"If got 1, the list-headed clause is unreachable from str caller."
+        f"TestPred('abc') returned {n_str_caller} solutions; expected 2 "
+        f"(same-type str-headed clause, plus the unexplained residual "
+        f"reach into the list-headed clause -- see the todo cited above)."
     )
 
-    # Test 3: list-typed caller should find both list-headed AND str-headed clauses.
-    # (This is where C15 breaks: the list caller routes to default bucket, missing str-headed.)
     n_list_caller = sum(1 for _ in call("TestPred", ["a", "b", "c"], module=mod))
-    # Currently: routes to _INDEX_VAR default bucket (contains only list-headed clause),
-    # so returns 1. Expected: 2 (list-headed + str-headed via runtime unify).
-    assert n_list_caller == 2, (
-        f"TestPred(['a','b','c']) should return 2 solutions: "
-        f"the list-headed clause TestPred(['a','b','c']) and the str-headed clause "
-        f"TestPred('abc') (via runtime unify, under strings-as-lists contract). "
-        f"Got {n_list_caller}. "
-        f"This is the C15 bug: list caller routes to _INDEX_VAR default bucket, "
-        f"which does not include the str-headed clause. "
-        f"Fix requires canonicalizing the dispatch-time bucket key so str and "
-        f"char-list callers reach the same clauses."
+    assert n_list_caller == 1, (
+        f"TestPred(['a','b','c']) returned {n_list_caller} solutions; "
+        f"expected 1 (same-type list-headed clause only -- the "
+        f"str-headed clause is correctly unreachable now that the cons "
+        f"rule is retired)."
     )

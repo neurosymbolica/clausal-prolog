@@ -141,15 +141,17 @@ class TestFunctor:
         results_a = sol_var(goal, a, mod=mod)
         assert results_a == [2]
 
-    def test_decompose_str_cons_cell(self):
-        # nv
-        # F089 (audit 2026-06-13): under ISO cons-cell, a non-empty
-        # str decomposes as (".", 2) — Liskov-symmetric with list.
+    def test_decompose_str_is_its_own_atom_functor(self):
+        # nv — P3-1 Task 5 (§1b/R2): the cons rule is retired. A non-empty
+        # str is now always an atom, so it is its own functor with arity 0
+        # — NOT the ISO cons-cell (".", 2) reading this test pinned
+        # pre-pivot (formerly ``test_decompose_str_cons_cell``, asserting
+        # ``functor("hello", F, A) -> F=".", A=2``).
         mod = fresh_module()
         f, a = Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=["hello", f, a], kwargs=[])
-        assert sol_var(goal, f, mod=mod) == ["."]
-        assert sol_var(goal, a, mod=mod) == [2]
+        assert sol_var(goal, f, mod=mod) == ["hello"]
+        assert sol_var(goal, a, mod=mod) == [0]
 
     def test_decompose_empty_str_nil(self):
         # nv
@@ -311,14 +313,18 @@ class TestUniv:
         assert r.functor == "g"
         assert r.args == (3, 4)
 
-    def test_decompose_str_cons_cell(self):
-        # nv
-        # F088/F089/F090 (audit 2026-06-13): unpack on a non-empty str
-        # follows ISO cons-cell — Liskov-symmetric with the list case.
+    def test_decompose_str_is_its_own_atom_functor(self):
+        # nv — P3-1 Task 5 (§1b/R2): the cons rule is retired. ``unpack``
+        # (``=..``) on a non-empty str now gives the ISO atom reading
+        # ``['hello']`` — NOT the cons-cell decomposition this test
+        # pinned pre-pivot (formerly ``test_decompose_str_cons_cell``,
+        # asserting ``unpack("hello", X) -> X=[".", "h", "ello"]``). See
+        # ``tests/conformity/iso_term_manipulation.clausal::"decompose
+        # string: 'Hello' =.. X"``.
         mod = fresh_module()
         lst = Var()
         goal = Call(func=LoadName(name="unpack"), args=["hello", lst], kwargs=[])
-        assert sol_var(goal, lst, mod=mod) == [[".", "h", "ello"]]
+        assert sol_var(goal, lst, mod=mod) == [["hello"]]
 
     def test_decompose_list_cons_cell(self):
         # nv

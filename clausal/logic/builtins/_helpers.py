@@ -26,14 +26,16 @@ from clausal.terms import (
 def _functor_name_py(term: Any) -> Any:
     """Return the functor name of a ground term, or None.
 
-    Lists and strings follow ISO cons-cell semantics:
-      - non-empty list / str → ``"."`` (the cons-cell functor)
-      - empty list / empty str → ``"[]"`` (the nil atom)
+    Lists follow ISO cons-cell semantics (non-empty → ``"."``, empty →
+    ``"[]"`` the nil atom). Bytes mirror that as the codes model (§1b:
+    the codes model is untouched by the str~list cons-rule retirement).
 
-    User decision 2026-06-13: ISO-named inspection predicates
-    (``functor/3``, ``arg/3``, ``unpack/2`` / ``=..``) follow ISO
-    Prolog semantics; strings-as-lists Liskov symmetry applies so str
-    inputs decompose the same shape as list inputs.
+    P3-1 §1b/R2: strs are RETIRED from cons-cell decomposition — a str
+    is now always an atom (runtime str = atom), so it is its own functor
+    name with arity 0, exactly like any other atomic constant. (The
+    empty string keeps the ISO nil-atom spelling ``"[]"`` — the one str
+    value that legitimately reads as a list-shaped atom, matching the
+    empty-list case.)
     """
     if isinstance(term, Compound):
         return term.functor if isinstance(term.functor, str) else None
@@ -44,7 +46,7 @@ def _functor_name_py(term: Any) -> Any:
     if isinstance(term, list):
         return "[]" if len(term) == 0 else "."
     if isinstance(term, str):
-        return "[]" if len(term) == 0 else "."
+        return "[]" if len(term) == 0 else term
     if isinstance(term, bytes):
         return "[]" if len(term) == 0 else "."
     if isinstance(term, (bool, int, float)) or term is None:
@@ -59,8 +61,12 @@ def _functor_name_py(term: Any) -> Any:
 def _arity_py(term: Any) -> int | None:
     """Return the arity of a ground term, or None.
 
-    Lists and strings follow ISO cons-cell semantics: non-empty has
-    arity 2 (head + tail), empty has arity 0 (the nil atom).
+    Lists follow ISO cons-cell semantics: non-empty has arity 2
+    (head + tail), empty has arity 0 (the nil atom). Bytes mirror that
+    as the codes model (untouched by §1b).
+
+    P3-1 §1b/R2: strs are RETIRED from cons-cell decomposition — a str
+    is always atomic (arity 0) now, whether empty or not.
     """
     if isinstance(term, Compound):
         return len(term.args)
@@ -71,7 +77,7 @@ def _arity_py(term: Any) -> int | None:
     if isinstance(term, list):
         return 0 if len(term) == 0 else 2
     if isinstance(term, str):
-        return 0 if len(term) == 0 else 2
+        return 0
     if isinstance(term, bytes):
         return 0 if len(term) == 0 else 2
     if isinstance(term, (bool, int, float)) or term is None:
@@ -84,14 +90,15 @@ def _arity_py(term: Any) -> int | None:
 def _nth_arg_py(term: Any, n: int) -> Any:
     """Return the n-th argument (1-based) of a compound term, or raise IndexError.
 
-    For lists and strings, ISO cons-cell semantics apply:
-      - n=1 → head (first element / 1-char str)
-      - n=2 → tail (rest of list / substring)
+    For lists, ISO cons-cell semantics apply:
+      - n=1 → head (first element)
+      - n=2 → tail (rest of list)
       - n>=3 → IndexError (arity is 2)
+    Bytes mirror that as the codes model (untouched by §1b).
 
-    Str preserves str type for both head (1-char str via ``term[0]``)
-    and tail (substring via ``term[1:]``) — Liskov symmetry with the
-    list branch.
+    P3-1 §1b/R2: strs are RETIRED from cons-cell decomposition — a str
+    is always atomic (arity 0) now, so every index raises IndexError
+    (falls through to the final ``raise IndexError`` below).
     """
     if isinstance(term, Compound):
         if n < 1 or n > len(term.args):
@@ -113,12 +120,6 @@ def _nth_arg_py(term: Any, n: int) -> Any:
         if n == 2:
             return term[1:]
         raise IndexError(f"arg index {n} out of range for {term!r}")
-    if isinstance(term, str) and len(term) > 0:
-        if n == 1:
-            return term[0]
-        if n == 2:
-            return term[1:]
-        raise IndexError(f"arg index {n} out of range for {term!r}")
     if isinstance(term, bytes) and len(term) > 0:
         if n == 1:
             return term[0]
@@ -131,8 +132,13 @@ def _nth_arg_py(term: Any, n: int) -> Any:
 def _args_list_py(term: Any) -> list:
     """Return the argument list of a compound term.
 
-    For lists and strings, ISO cons-cell semantics: non-empty returns
+    For lists, ISO cons-cell semantics: non-empty returns
     ``[head, tail]``; empty returns ``[]`` (the nil atom has no args).
+    Bytes mirror that as the codes model (untouched by §1b).
+
+    P3-1 §1b/R2: strs are RETIRED from cons-cell decomposition — a str
+    is always atomic (arity 0) now, so it always answers ``[]`` (falls
+    through to the final ``return []`` below).
     """
     if isinstance(term, Compound):
         return list(term.args)
@@ -141,10 +147,6 @@ def _args_list_py(term: Any) -> list:
     if is_term_instance(term):
         return [getattr(term, name) for name in term_field_names(term)]
     if isinstance(term, list):
-        if len(term) == 0:
-            return []
-        return [term[0], term[1:]]
-    if isinstance(term, str):
         if len(term) == 0:
             return []
         return [term[0], term[1:]]
@@ -384,13 +386,20 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
     case in the compiler/inspection funnels) don't pay for two walks.
 
     P3-1 Task 1 (R2, str-as-atom acceptance): a plain ``str`` is now an
-    atom VALUE here — ``functor_arity("red") == ("red", 0)`` — which is
-    deliberately NOT the ISO cons-cell (str-as-char-list) reading that
-    ``_functor_name``/``_arity`` give a non-empty str (functor ``"."``,
-    arity 2); those two accessor families answer different questions
-    (structural/term-shape vs. ISO ``functor/3`` decomposition) and were
-    already documented as diverging on strings before this change — see
-    ``is_atom_value`` in ``clausal/logic/predicate.py``.
+    atom VALUE here — ``functor_arity("red") == ("red", 0)``. This USED
+    to deliberately diverge from ``_functor_name``/``_arity`` (which gave
+    a non-empty str the ISO cons-cell reading: functor ``"."``, arity 2)
+    — Task 5 (§1b) retired that cons-cell reading, so ``_functor_name``/
+    ``_arity`` now agree with ``functor_arity`` for every NON-EMPTY str:
+    a str is atomic (its own functor value, arity 0). One residual,
+    pre-existing (Task 1) divergence remains for the EMPTY str: this
+    function's ``is_atom_value`` branch answers ``("", 0)`` (the empty
+    str is its own functor value, same as any other atom), whereas
+    ``_functor_name``/``_arity`` special-case it to the ISO nil-atom
+    spelling ``("[]", 0)`` (shared with the empty-LIST case, which this
+    function's declared domain excludes) — see
+    ``tests/test_funnel_accessors.py::TestFunctorArity::test_str_is_atom_value``.
+    See ``is_atom_value`` in ``clausal/logic/predicate.py``.
 
     The functor slot is ``str`` for a ``Compound``/term instance, but for a
     plain str atom value or a zero-arity atom class it is the value/class

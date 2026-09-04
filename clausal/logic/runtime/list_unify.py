@@ -178,6 +178,16 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
         # Already bound (e.g., by body) — switch to input mode
         return _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail)
     result = [deref(v) for v in var_vals]
+    # P3-1 §1b: the cons rule (str unifies with char-list) is retired —
+    # a constructed list result must stay a list UNLESS a str/SegString
+    # source genuinely contributed the star portion (``star_was_str``),
+    # mirroring how ``maybe_promote_to_bytes`` below only fires when a
+    # bytes/SegBytes source was present. Without this gate, any output
+    # list happening to be all 1-char strs (e.g. two single-char atoms —
+    # atoms are plain strs post-pivot) would silently coalesce into a
+    # str, reintroducing the retired str~list identity through the back
+    # door of result-type "promotion" rather than unification.
+    star_was_str = False
     if star_val is not None:
         s = deref(star_val)
         if isinstance(s, list):
@@ -186,7 +196,11 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             # Liskov "strings-as-lists" rule: a str-bound star is treated
             # as a list of 1-char strs. Splat its chars into the result;
             # the final ``maybe_promote_to_str`` re-promotes the whole
-            # result to a str when every element is 1-char-str.
+            # result to a str when every element is 1-char-str. Legitimate
+            # here (unlike the plain-list case above): the star itself WAS
+            # a str, so preserving that shape on the combined output is
+            # type-preservation, not a cons-rule unification.
+            star_was_str = True
             result.extend(s)
         elif isinstance(s, bytes):
             # Codes-model parallel of the str-star branch: a bytes-bound
@@ -280,10 +294,14 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
         else:
             result.append(s)
     result.extend(deref(v) for v in after_vals)
-    # F033: promote list-of-1-char-strs back to str under the Liskov
-    # "strings-as-lists" rule (default output is list; str only when
-    # provable from the elements themselves).
-    return unify(d, maybe_promote_to_str(result), trail)
+    # P3-1 §1b: only promote when the star itself was str-sourced
+    # (``star_was_str``) — matching ``maybe_promote_to_bytes``'s
+    # source-gated design above. No star, a list-bound star, or a
+    # generic scalar star must all yield a plain list, never an
+    # incidentally-all-1-char-str "promotion" to str.
+    if star_was_str:
+        return unify(d, maybe_promote_to_str(result), trail)
+    return unify(d, result, trail)
 
 
 # ── C-accelerated list unification (with Python fallback) ────────────────────

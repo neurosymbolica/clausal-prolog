@@ -187,6 +187,60 @@ class TestSegStringUnification:
         assert not unify(SegString(["hello"]), [1, 2, 3], Trail())
 
 
+class TestConsRuleRetirementLockstep:
+    """P3-1 Task 5 (§1b): the C str~char-list cons rule is retired —
+    ``do_unify``'s ``PyUnicode_Check``/``PyList_Check`` cross-type branches
+    in ``_variables.c`` are deleted. SegString is the ONE place a str-shaped
+    value still unifies element-wise against a list: it remains the
+    char-LIST optimization (unifies with plain ``list`` / ``SegList``
+    element-wise, both directions), but a BARE ``str`` — no SegString
+    wrapper — must no longer unify against a char list, in either
+    direction. These tests pin both halves side by side.
+    """
+
+    # ── still works: SegString vs list/SegList, both directions ──────────
+
+    def test_segstring_still_unifies_with_list_ground(self):
+        # nv — restates test_segstring_vs_char_list as an explicit
+        # lockstep pin: SegString stays the char-list optimization.
+        assert unify(SegString(["hi"]), ['h', 'i'], Trail())
+
+    def test_segstring_still_unifies_with_list_containing_var(self):
+        # nv — the list side may hold an unbound Var; SegString unify
+        # still binds it element-wise (goes through the C list-vs-list
+        # path after this task's fix, not the retired str~list path).
+        trail = Trail()
+        X = Var()
+        assert unify(SegString(["hi"]), ['h', X], trail)
+        assert deref(X) == 'i'
+
+    def test_list_still_unifies_with_segstring_symmetric(self):
+        # nv — list on the left, SegString on the right: do_unify's
+        # __unify__-protocol probe tries SegString.__unify__(list, trail),
+        # the symmetric call shape to test_segstring_vs_char_list.
+        assert unify(['h', 'i'], SegString(["hi"]), Trail())
+
+    def test_segstring_still_unifies_with_seglist_ground(self):
+        # nv — a ground SegList is walked to a plain list; must still
+        # match a SegString element-wise.
+        from clausal.terms import ConcreteSeg
+        sl = SegList([ConcreteSeg(['h', 'i'])])
+        assert unify(SegString(["hi"]), sl, Trail())
+
+    # ── now fails: a BARE str (no SegString) vs a char list ───────────────
+
+    def test_bare_str_no_longer_unifies_with_char_list(self):
+        # nv — the retired direction: a plain Python str, not wrapped in
+        # SegString, must NOT unify with a char list. Contrast with
+        # test_segstring_still_unifies_with_list_ground just above, which
+        # is the SAME character content but through SegString.
+        assert not unify("hi", ['h', 'i'], Trail())
+
+    def test_char_list_no_longer_unifies_with_bare_str(self):
+        # nv — symmetric direction.
+        assert not unify(['h', 'i'], "hi", Trail())
+
+
 class TestSegStringOccursCheck:
     """SegString __occurs_check__."""
 

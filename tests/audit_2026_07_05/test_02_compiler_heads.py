@@ -265,14 +265,19 @@ def collect(mod, name, *args, outv=()):
 
 
 class TestF001IndexedDispatchPartialTerms:
-    # controls: the linear-scan twins find these solutions
-    def test_control_partial_charlist_unindexed(self, mod):
+    # P3-1 Task 5 (§1b): the cons rule this class's "charlist"/"empty str vs
+    # empty list" controls exercised is RETIRED — a list caller (even a
+    # PARTIAL one, containing a Var) no longer reaches a str-literal head
+    # at all; the retirement happens before any partial-key indexing
+    # question is reached. All four "charlist"/"empty" controls below now
+    # return [], not their historical (pre-retirement) solutions.
+    def test_control_partial_charlist_no_longer_reaches_str_head(self, mod):
         X, R = Var(), Var()
-        assert collect(mod, "strs3", [X, "b", "c"], R, outv=[X, R]) == [("a", "A")]
+        assert collect(mod, "strs3", [X, "b", "c"], R, outv=[X, R]) == []
 
-    def test_control_empty_list_vs_empty_str_unindexed(self, mod):
+    def test_control_empty_list_vs_empty_str_retired(self, mod):
         R = Var()
-        assert collect(mod, "emp3", [], R, outv=[R]) == [("empty",)]
+        assert collect(mod, "emp3", [], R, outv=[R]) == []
 
     def test_control_partial_codelist_unindexed(self, mod):
         X, R = Var(), Var()
@@ -287,13 +292,13 @@ class TestF001IndexedDispatchPartialTerms:
         R = Var()
         assert collect(mod, "kind3", Decimal(1), R, outv=[R]) == [("one",)]
 
-    def test_partial_charlist_indexed(self, mod):
+    def test_partial_charlist_indexed_no_longer_reaches_str_head(self, mod):
         X, R = Var(), Var()
-        assert collect(mod, "strs4", [X, "b", "c"], R, outv=[X, R]) == [("a", "A")]
+        assert collect(mod, "strs4", [X, "b", "c"], R, outv=[X, R]) == []
 
-    def test_empty_list_vs_empty_str_indexed(self, mod):
+    def test_empty_list_vs_empty_str_indexed_retired(self, mod):
         R = Var()
-        assert collect(mod, "emp4", [], R, outv=[R]) == [("empty",)]
+        assert collect(mod, "emp4", [], R, outv=[R]) == []
 
     def test_partial_codelist_indexed(self, mod):
         X, R = Var(), Var()
@@ -308,23 +313,20 @@ class TestF001IndexedDispatchPartialTerms:
         R = Var()
         assert collect(mod, "kind4", Decimal(1), R, outv=[R]) == [("one",)]
 
-    def test_joint_partial_container(self, mod):
+    def test_joint_partial_container_no_longer_reaches_str_head(self, mod):
         X, R = Var(), Var()
-        assert collect(mod, "jnt2", [X, "a"], 2, R, outv=[X, R]) == [("a", ["a2"])]
+        assert collect(mod, "jnt2", [X, "a"], 2, R, outv=[X, R]) == []
 
-    def test_secondary_partial_container(self, mod):
-        # [X] is a *partial* charlist at the level-0 position: its index key is
-        # uncomputable, so dispatch must scan ALL clauses. [X] unifies with
-        # every single-char first arg ("a".."d"), and second arg 1 matches the
-        # =1 and var-second clauses — i.e. the full linear-scan result. (The
-        # original expected [("a",["sa1"]),("a",["sav"])] was the answer for a
-        # *ground* "a" at level 0, not [X]; forcing it would drop 6 valid
-        # solutions — the very F001 bug.)
+    def test_secondary_partial_container_no_longer_reaches_str_heads(self, mod):
+        # P3-1 Task 5 (§1b): [X] (a partial 1-element list) no longer
+        # unifies with any single-char str-literal first arg ("a".."d") —
+        # the cons rule that made this cross-type match possible is
+        # retired, so the indexing/partial-key question this test used to
+        # probe is moot: nothing reaches these str-literal heads from a
+        # list caller at all. (Formerly ``test_secondary_partial_container``,
+        # asserting the full 8-solution linear-scan result.)
         X, R = Var(), Var()
-        assert collect(mod, "sec2", [X], 1, R, outv=[X, R]) == [
-            ("a", ["sa1"]), ("b", ["sb1"]), ("c", ["sc1"]), ("d", ["sd1"]),
-            ("a", ["sav"]), ("b", ["sbv"]), ("c", ["scv"]), ("d", ["sdv"]),
-        ]
+        assert collect(mod, "sec2", [X], 1, R, outv=[X, R]) == []
 
 
 # ── A02-F001 follow-up: the TRO trampoline dispatch variants (joint inline
@@ -366,20 +368,22 @@ class TestF001TrampolineTRODispatchUncomputableKeys:
         R = Var()
         assert collect(mod, "acc4", Decimal(2), 0, R, outv=[R]) == [(2,)]
 
-    def test_single_plan_partial_charlist(self, mod):
+    def test_single_plan_partial_charlist_no_longer_reaches_str_heads(self, mod):
+        # P3-1 Task 5 (§1b): [X] no longer unifies with any str-literal
+        # first arg. (Formerly asserting the full 3-solution linear-scan
+        # result under the retired cons rule.)
         X, R = Var(), Var()
-        assert collect(mod, "sgl4", [X], R, outv=[X, R]) == [
-            ("a", ["aye"]), ("b", ["bee"]), ("c", ["cee"])]
+        assert collect(mod, "sgl4", [X], R, outv=[X, R]) == []
 
     # multi-plan TRO loop
     def test_multi_plan_decimal_key(self, mod):
         R = Var()
         assert collect(mod, "mp5", Decimal(2), R, outv=[R]) == [("two",)]
 
-    def test_multi_plan_partial_charlist(self, mod):
+    def test_multi_plan_partial_charlist_no_longer_reaches_str_heads(self, mod):
+        # P3-1 Task 5 (§1b): retired, same rationale as the single-plan case.
         X, R = Var(), Var()
-        assert collect(mod, "str5", [X], R, outv=[X, R]) == [
-            ("a", "A"), ("b", "B"), ("c", "C"), ("d", "D")]
+        assert collect(mod, "str5", [X], R, outv=[X, R]) == []
 
     def test_multi_plan_decimal_tro_restart_from_fallback(self, mod):
         # the fallback is compiled in SIGNAL mode: a tail call fired from its
@@ -389,19 +393,21 @@ class TestF001TrampolineTRODispatchUncomputableKeys:
 
     # joint TRO inline body: one component uncomputable → degrade to the
     # single-position dispatch on the other; both → full scan
-    def test_joint_partial_charlist_component(self, mod):
+    def test_joint_partial_charlist_component_no_longer_reaches_str_heads(self, mod):
+        # P3-1 Task 5 (§1b): retired, same rationale as above.
         X, R = Var(), Var()
-        assert collect(mod, "jt3", [X], 2, R, outv=[X, R]) == [
-            ("a", ["ja2"]), ("b", ["jb2"])]
+        assert collect(mod, "jt3", [X], 2, R, outv=[X, R]) == []
 
     def test_joint_decimal_component(self, mod):
         R = Var()
         assert collect(mod, "jt3", "a", Decimal(2), R, outv=[R]) == [(["ja2"],)]
 
-    def test_joint_both_components_uncomputable(self, mod):
+    def test_joint_both_components_uncomputable_no_longer_reaches_str_heads(self, mod):
+        # P3-1 Task 5 (§1b): retired, same rationale as above (the Decimal
+        # second component being uncomputable is orthogonal — the str
+        # component's cross-type reach is what this test now pins as gone).
         X, R = Var(), Var()
-        assert collect(mod, "jt3", [X], Decimal(2), R, outv=[X, R]) == [
-            ("a", ["ja2"]), ("b", ["jb2"])]
+        assert collect(mod, "jt3", [X], Decimal(2), R, outv=[X, R]) == []
 
     def test_joint_decimal_tro_restart_through_single_dispatch(self, mod):
         # Decimal at the (more selective) int column degrades to the str
@@ -552,9 +558,11 @@ class TestIndexedDispatchGuards:
         R = Var()
         assert collect(mod, "kind4", 1.0, R, outv=[R]) == [("one",)]
 
-    def test_ground_charlist_reaches_str_bucket(self, mod):
+    def test_ground_charlist_no_longer_reaches_str_bucket(self, mod):
+        # P3-1 Task 5 (§1b): a GROUND char-list caller no longer reaches
+        # a str-literal head either (formerly asserting [("A",)]).
         R = Var()
-        assert collect(mod, "strs4", ["a", "b", "c"], R, outv=[R]) == [("A",)]
+        assert collect(mod, "strs4", ["a", "b", "c"], R, outv=[R]) == []
 
     def test_ground_codelist_reaches_bytes_bucket(self, mod):
         R = Var()
@@ -572,17 +580,35 @@ class TestIndexedDispatchGuards:
             ("s1",), ("v1",), ("s2",), ("other",), ("v2",), ("s3",),
         ]
 
-    def test_str_charlist_heads_coalesce_to_one_bucket(self, mod):
+    def test_str_charlist_heads_no_longer_coalesce_for_list_caller(self, mod):
+        """P3-1 Task 5 (§1b): ``coll`` has BOTH a str-literal fact
+        (``coll("abc", "s")``) and a list-literal fact
+        (``coll(["a","b","c"], "l")``).
+
+        The str caller still reaches BOTH (a pre-existing, unexplained
+        asymmetry in fact indexing/elaboration — parked, see
+        ``todo/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md``
+        — NOT the retired cons rule itself, since a direct
+        ``unify("abc", [...], trail)`` is confirmed False). The list
+        caller now reaches ONLY the list-literal fact — the str-literal
+        fact is correctly unreachable, matching §1b.
+
+        (Formerly ``test_str_charlist_heads_coalesce_to_one_bucket``,
+        asserting BOTH callers reached both facts.)
+        """
         R = Var()
         assert collect(mod, "coll", "abc", R, outv=[R]) == [("s",), ("l",)]
         R = Var()
-        assert collect(mod, "coll", ["a", "b", "c"], R, outv=[R]) == [("s",), ("l",)]
+        assert collect(mod, "coll", ["a", "b", "c"], R, outv=[R]) == [("l",)]
 
     def test_call_site_specialisation(self, mod):
         R = Var()
         assert collect(mod, "usek", R, outv=[R]) == [("one",)]
+        # P3-1 Task 5 (§1b): usekl's body calls kind4(["x"], UR2) -- a
+        # 1-element list caller against kind4's str-literal head "x".
+        # Retired: no longer matches (formerly [("ex",)]).
         R = Var()
-        assert collect(mod, "usekl", R, outv=[R]) == [("ex",)]
+        assert collect(mod, "usekl", R, outv=[R]) == []
 
     def test_binding_not_leaked_by_failed_bucket_clause(self, mod):
         solve_mod._query_cache.clear()
@@ -684,9 +710,15 @@ class TestHeadPatternGuards:
         X, R = Var(), Var()
         assert collect(mod, "negr", X, R, outv=[X, R]) == [(-7, "rok")]
 
-    def test_str_rule_head_honours_strings_as_lists(self, mod):
+    def test_str_rule_head_no_longer_honours_strings_as_lists(self, mod):
+        """P3-1 Task 5 (§1b): ``shr("abc", SR) <- (SR is 1)`` is a RULE
+        with a str-literal head. A list caller no longer matches
+        (formerly [(1,)] under the retired cons rule); output-mode
+        construction (an unbound caller binding to "abc") is unaffected
+        — that's same-type reconstruction, not cross-type unification.
+        """
         R = Var()
-        assert collect(mod, "shr", ["a", "b", "c"], R, outv=[R]) == [(1,)]
+        assert collect(mod, "shr", ["a", "b", "c"], R, outv=[R]) == []
         X, R = Var(), Var()
         assert collect(mod, "shr", X, R, outv=[X, R]) == [("abc", 1)]
 

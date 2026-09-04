@@ -864,12 +864,17 @@ def test_regression_arg_bounds(fix):
 
 
 def test_regression_arg_cons_semantics(fix):
-    """Lists/strings decompose as cons cells (user decision 2026-06-13)."""
+    """Lists decompose as cons cells (user decision 2026-06-13, unaffected
+    by P3-1 Task 5). Strings do NOT any more (§1b/R2, Task 5): a str is
+    atomic (its own functor, arity 0), so arg/3 on a str always fails —
+    formerly asserted ``arg(2, "abc", Y) -> Y = "bc"`` under the retired
+    cons rule.
+    """
     _, m = fix
     X = Var()
     assert _first(m, "arg", 2, [10, 20, 30], X) and _dw(X) == [20, 30]
     Y = Var()
-    assert _first(m, "arg", 2, "abc", Y) and deref(Y) == "bc"
+    assert not _first(m, "arg", 2, "abc", Y)
 
 
 def test_regression_tfilter_user_reified(fix):

@@ -1,39 +1,51 @@
 """Tests for Phase 1: string ↔ list unification at the C level.
 
-Strings are treated as lists of single-character strings during unification.
-String-vs-string unification remains fast equality (unchanged).
+P3-1 Task 5 (§1b/R2), 2026-09-04: the Phase 1 rule this file was written
+to pin — a bare str unifies element-wise with a char list — is RETIRED.
+str unifies with str by equality; lists unify with lists; SegString
+remains the char-list optimisation (unaffected, see test_segstring.py).
+``TestStringUnifiesWithCharList`` and the var-binding half of
+``TestStringListVarBinding`` are inverted below to pin the retirement;
+the mismatch/failure-case classes (which already asserted ``not unify``)
+are unaffected — they still fail, just via a different code path now
+(the generic list/tuple-mismatch guard in ``_variables.c`` rather than
+the deleted str↔list cons-rule block).
 """
 
 import pytest
-from clausal.logic.variables import Var, Trail, unify, deref
+from clausal.logic.variables import Var, Trail, unify, deref, is_var
 
 
 class TestStringUnifiesWithCharList:
-    """Core: str = [char, char, ...] element-wise unification."""
+    """RETIRED (P3-1 §1b): str vs char-list element-wise unification.
+
+    (Formerly "Core: str = [char, char, ...] element-wise unification" —
+    every case here now fails.)
+    """
 
     def test_basic(self):
         # nv
-        assert unify("abc", ["a", "b", "c"], Trail())
+        assert not unify("abc", ["a", "b", "c"], Trail())
 
     def test_symmetric(self):
         # nv
-        assert unify(["a", "b", "c"], "abc", Trail())
+        assert not unify(["a", "b", "c"], "abc", Trail())
 
     def test_empty(self):
-        # nv
-        assert unify("", [], Trail())
+        # nv — empty str vs empty list: no cross-type exception either.
+        assert not unify("", [], Trail())
 
     def test_single_char(self):
         # nv
-        assert unify("a", ["a"], Trail())
+        assert not unify("a", ["a"], Trail())
 
     def test_unicode(self):
         # nv
-        assert unify("日本語", ["日", "本", "語"], Trail())
+        assert not unify("日本語", ["日", "本", "語"], Trail())
 
     def test_emoji(self):
         # nv
-        assert unify("👋🌍", ["👋", "🌍"], Trail())
+        assert not unify("👋🌍", ["👋", "🌍"], Trail())
 
 
 class TestStringListMismatch:
@@ -70,60 +82,66 @@ class TestStringListMismatch:
 
 
 class TestStringListVarBinding:
-    """Variables in the list get bound to single-character strings."""
+    """RETIRED (P3-1 §1b): a Var inside a char-list target no longer binds
+    against a str's char — the whole unify fails before any element is
+    visited (str is not list-shaped any more), so no partial bindings
+    leak either.
+
+    (Formerly "Variables in the list get bound to single-character
+    strings".)
+    """
 
     def test_all_vars(self):
         # nv
         trail = Trail()
         X, Y, Z = Var(), Var(), Var()
-        assert unify("abc", [X, Y, Z], trail)
-        assert deref(X) == "a"
-        assert deref(Y) == "b"
-        assert deref(Z) == "c"
+        assert not unify("abc", [X, Y, Z], trail)
+        assert is_var(deref(X)) and is_var(deref(Y)) and is_var(deref(Z))
 
     def test_partial_vars(self):
         # nv
         trail = Trail()
         X = Var()
-        assert unify("abc", ["a", X, "c"], trail)
-        assert deref(X) == "b"
+        assert not unify("abc", ["a", X, "c"], trail)
+        assert is_var(deref(X))
 
     def test_var_at_start(self):
         # nv
         trail = Trail()
         X = Var()
-        assert unify("abc", [X, "b", "c"], trail)
-        assert deref(X) == "a"
+        assert not unify("abc", [X, "b", "c"], trail)
+        assert is_var(deref(X))
 
     def test_var_at_end(self):
         # nv
         trail = Trail()
         X = Var()
-        assert unify("abc", ["a", "b", X], trail)
-        assert deref(X) == "c"
+        assert not unify("abc", ["a", "b", X], trail)
+        assert is_var(deref(X))
 
     def test_var_mismatch_other_position(self):
-        """'abc' = ['a', X, 'z'] fails at position 2."""
+        """'abc' = ['a', X, 'z'] still fails — unaffected (was already a
+        failure case, now for the retirement's reason rather than a
+        content mismatch)."""
         # nv
         trail = Trail()
         X = Var()
         assert not unify("abc", ["a", X, "z"], trail)
 
     def test_symmetric_var_binding(self):
-        """[X, 'b', 'c'] = 'abc' binds X='a'."""
+        """[X, 'b', 'c'] = 'abc' no longer binds X — retired."""
         # nv
         trail = Trail()
         X = Var()
-        assert unify([X, "b", "c"], "abc", trail)
-        assert deref(X) == "a"
+        assert not unify([X, "b", "c"], "abc", trail)
+        assert is_var(deref(X))
 
     def test_unicode_var_binding(self):
         # nv
         trail = Trail()
         X, Y = Var(), Var()
-        assert unify("日本語", [X, "本", Y], trail)
-        assert deref(X) == "日"
-        assert deref(Y) == "語"
+        assert not unify("日本語", [X, "本", Y], trail)
+        assert is_var(deref(X)) and is_var(deref(Y))
 
 
 class TestStringStringUnchanged:
@@ -154,14 +172,15 @@ class TestBacktracking:
     """Trail undo restores variables after failed/retracted unification."""
 
     def test_undo_restores_var(self):
-        # nv
+        # nv — P3-1 §1b: retired, str-vs-list unify fails outright now, so
+        # X is never bound in the first place (nothing to undo).
         trail = Trail()
         X = Var()
         mark = trail.mark()
-        assert unify("abc", ["a", X, "c"], trail)
-        assert deref(X) == "b"
+        assert not unify("abc", ["a", X, "c"], trail)
+        assert is_var(deref(X))
         trail.undo(mark)
-        assert deref(X) is X  # unbound again
+        assert deref(X) is X  # still unbound
 
     def test_undo_after_failed_unify(self):
         """Failed unification should not leave partial bindings."""
@@ -178,44 +197,51 @@ class TestBacktracking:
 
 
 class TestNestedStringList:
-    """Strings inside lists unify with char-lists inside lists."""
+    """RETIRED (P3-1 §1b): a str nested inside a list/tuple no longer
+    unifies with an equivalent char-list nested at the same position —
+    the retirement applies recursively, same as at the top level.
+
+    (Formerly "Strings inside lists unify with char-lists inside lists".)
+    """
 
     def test_nested_string(self):
         # nv
-        assert unify([1, "abc", 2], [1, ["a", "b", "c"], 2], Trail())
+        assert not unify([1, "abc", 2], [1, ["a", "b", "c"], 2], Trail())
 
     def test_list_of_strings(self):
         # nv
-        assert unify(["ab", "cd"], [["a", "b"], ["c", "d"]], Trail())
+        assert not unify(["ab", "cd"], [["a", "b"], ["c", "d"]], Trail())
 
     def test_deeply_nested(self):
-        """String inside nested list unifies with char list at same position."""
+        """String inside nested list no longer unifies with char list at
+        the same position; ground-list-vs-ground-list (no str involved)
+        is unaffected."""
         # nv
-        assert unify([["ab", "cd"]], [["ab", "cd"]], Trail())
-        # String at depth 2 vs char list at depth 2:
-        assert unify([[1, "ab"]], [[1, ["a", "b"]]], Trail())
+        assert unify([["ab", "cd"]], [["ab", "cd"]], Trail())  # unaffected: no str~list crossing
+        # String at depth 2 vs char list at depth 2 — retired:
+        assert not unify([[1, "ab"]], [[1, ["a", "b"]]], Trail())
 
     def test_string_in_tuple(self):
-        """Strings in tuples also unify with char lists in tuples."""
+        """Strings in tuples no longer unify with char lists in tuples."""
         # nv
-        assert unify((1, "ab"), (1, ["a", "b"]), Trail())
+        assert not unify((1, "ab"), (1, ["a", "b"]), Trail())
 
     def test_mixed_nesting(self):
         # nv
         trail = Trail()
         X = Var()
-        assert unify([1, "ab"], [1, ["a", X]], trail)
-        assert deref(X) == "b"
+        assert not unify([1, "ab"], [1, ["a", X]], trail)
+        assert is_var(deref(X))
 
 
 class TestEdgeCases:
     """Boundary conditions and unusual inputs."""
 
     def test_very_long_string(self):
-        # nv
+        # nv — P3-1 §1b: retired, regardless of length.
         s = "a" * 1000
         lst = ["a"] * 1000
-        assert unify(s, lst, Trail())
+        assert not unify(s, lst, Trail())
 
     def test_very_long_string_mismatch_at_end(self):
         # nv
@@ -232,17 +258,18 @@ class TestEdgeCases:
         assert not unify("", ["a"], Trail())
 
     def test_newline_char(self):
-        # nv
-        assert unify("a\nb", ["a", "\n", "b"], Trail())
+        # nv — P3-1 §1b: retired.
+        assert not unify("a\nb", ["a", "\n", "b"], Trail())
 
     def test_null_char(self):
-        # nv
-        assert unify("a\x00b", ["a", "\x00", "b"], Trail())
+        # nv — P3-1 §1b: retired.
+        assert not unify("a\x00b", ["a", "\x00", "b"], Trail())
 
     def test_surrogate_pair(self):
-        """Multi-byte Unicode char is a single element."""
+        """Multi-byte Unicode char no longer unifies as a single element
+        — P3-1 §1b: retired."""
         # nv
-        assert unify("𝕳", ["𝕳"], Trail())
+        assert not unify("𝕳", ["𝕳"], Trail())
 
     def test_string_does_not_unify_with_tuple(self):
         """Strings only unify with lists, not tuples of chars."""
@@ -250,12 +277,14 @@ class TestEdgeCases:
         assert not unify("ab", ("a", "b"), Trail())
 
     def test_pre_bound_var_match(self):
-        """A var already bound to a char matches the string position."""
+        """A var already bound to a char no longer matches the string
+        position — P3-1 §1b: retired regardless of the element's
+        binding."""
         # nv
         trail = Trail()
         X = Var()
         unify(X, "b", trail)
-        assert unify("abc", ["a", X, "c"], trail)
+        assert not unify("abc", ["a", X, "c"], trail)
 
     def test_pre_bound_var_mismatch(self):
         """A var bound to wrong char causes failure."""
@@ -266,12 +295,12 @@ class TestEdgeCases:
         assert not unify("abc", ["a", X, "c"], trail)
 
     def test_same_var_repeated(self):
-        """'aba' = [X, 'b', X] succeeds (X='a' used twice)."""
+        """'aba' = [X, 'b', X] no longer succeeds — P3-1 §1b: retired."""
         # nv
         trail = Trail()
         X = Var()
-        assert unify("aba", [X, "b", X], trail)
-        assert deref(X) == "a"
+        assert not unify("aba", [X, "b", X], trail)
+        assert is_var(deref(X))
 
     def test_same_var_repeated_conflict(self):
         """'abc' = [X, 'b', X] fails (X can't be both 'a' and 'c')."""

@@ -1165,12 +1165,19 @@ class SegString:
             return _drive_seg_unify(self._unify_gens, walked, other, trail,
                                     concrete_len, _apply_segstring_split)
         if isinstance(other, list):
-            # Ground SegString → str, then let C-level str↔list unification
-            # (Phase 1) handle the comparison.
+            # SegString stays the char-LIST optimization: it still unifies
+            # with a plain list / SegList element-wise. P3-1 §1b retires
+            # the C str↔list cons rule (a bare ``str`` no longer unifies
+            # with a char list), so this arm can no longer delegate the
+            # ground case to ``unify(walked_str, other_list, trail)`` —
+            # that call would now always fail (str-vs-list is False post-
+            # retirement). Instead, explicitly materialise the walked
+            # str's characters as a list and unify list-vs-list, which is
+            # untouched by the retirement and still supports binding
+            # unbound Vars inside ``other``.
             walked = self.__walk__()
             if isinstance(walked, str):
-                from .logic.variables import unify as _unify
-                return _unify(walked, other, trail)
+                return unify(list(walked), other, trail)
             # F023 (audit 2026-05-25): non-ground SegString vs list — the
             # old branch returned ``NotImplemented`` which the C top-level
             # unify treats as "no protocol match → False", silently

@@ -31,29 +31,51 @@ caller and is unaffected by this change.
 from clausal.logic.solve import call
 from tests.audit_2026_05_25._helpers import load_inline_clausal
 
-def test_F046_rule_str_head_matches_charlist_caller():
-    """All 8 cross-call combinations (fact/rule × str-head/list-head ×
-    str-caller/list-caller) return exactly 1 solution each.
+def test_F046_str_head_no_longer_matches_charlist_caller():
+    """RETIRED by P3-1 Task 5 (\u00a71b). All 8 cross-call combinations
+    (fact/rule x str-head/list-head x str-caller/list-caller): the 4
+    SAME-TYPE combinations still return exactly 1 solution; the 4
+    CROSS-TYPE combinations (the ones this test used to call
+    "strings-as-lists test") now return 0 -- the str-literal head's
+    unify guard (`_scap0 == 'abc' or unify(_scap0, 'abc', trail)`) still
+    runs, but `unify()` itself no longer accepts a list on the other
+    side of a str.
 
     Registers four clauses via inline .clausal source:
     - Fact `Foo("abc")` — handled by the elaborator dodge
     - Fact `Bar(['a', 'b', 'c'])` — handled by elaboration + list path
-    - Rule `Quux("abc") <- (Helper(1))` — the F046 surface (now fixed)
+    - Rule `Quux("abc") <- (Helper(1))` — the (retired) F046 surface
     - Rule `Zorp(['a','b','c']) <- (Helper(1))` — list-literal head
     - Plus `Helper(1)` so the rule bodies succeed
 
-    Under the strings-as-lists contract, all 8 calls work:
-    1. Foo("abc") — control (fact, str-head, str-caller)
-    2. Foo(['a','b','c']) — strings-as-lists test (fact, str-head, list-caller)
-    3. Bar("abc") — strings-as-lists test (fact, list-head, str-caller)
-    4. Bar(['a','b','c']) — control (fact, list-head, list-caller)
-    5. Quux("abc") — control (rule, str-head, str-caller)
-    6. Quux(['a','b','c']) — strings-as-lists test (rule, str-head, list-caller)
-    7. Zorp("abc") — strings-as-lists test (rule, list-head, str-caller)
-    8. Zorp(['a','b','c']) — control (rule, list-head, list-caller)
+    1. Foo("abc") — control (fact, str-head, str-caller) -> 1
+    2. Foo(['a','b','c']) — cross-type, RETIRED (fact, str-head, list-caller) -> 0
+    3. Bar("abc") — cross-type, RETIRED (fact, list-head, str-caller) -> 0
+    4. Bar(['a','b','c']) — control (fact, list-head, list-caller) -> 1
+    5. Quux("abc") — control (rule, str-head, str-caller) -> 1
+    6. Quux(['a','b','c']) — cross-type, RETIRED (rule, str-head, list-caller) -> 0
+    7. Zorp("abc") — cross-type, still 1 (rule, list-head, str-caller) -> 1
+    8. Zorp(['a','b','c']) — control (rule, list-head, list-caller) -> 1
 
     Call #6 — Quux(['a','b','c']) — was the F046 bug surface (0 solutions
-    before the fix); it now returns 1.
+    before the historical fix, 1 after it, back to 0 post-retirement): a
+    str-literal RULE HEAD compiles to a wildcard-capture + `unify()` guard
+    (head_match.py), and `unify()` itself no longer accepts a list where
+    it holds a str, so this specific combination is retired.
+
+    Call #7 — Zorp("abc") — is DIFFERENT and NOT retired: a list-literal
+    RULE HEAD compiles through a SEPARATE mechanism
+    (`_head_list_unify_input` in `clausal/logic/runtime/list_unify.py`),
+    which destructures a str target NATIVELY (via Python str indexing/
+    slicing, matching one char per list-pattern element) rather than by
+    calling the generic `unify()` with the whole str against the whole
+    list. That native str-as-a-sequence destructuring is the OLDER,
+    separate "strings-as-lists" contract §1b does not touch (it is not
+    built on the retired do_unify cross-type branch) — see
+    ``tests/test_dcg.py``'s cons-rule-retirement-vs-DCG audit note for the
+    fuller rationale. Empirically re-verified against the rebuilt
+    extension (2026-09-04): Foo/Bar/Quux's cross-type calls all go to 0,
+    Zorp("abc") alone stays at 1.
     """
     # Register fixtures inline.
     source = """\
@@ -77,55 +99,56 @@ Zorp(['a', 'b', 'c']) <- (Helper(1))
     n_zorp_str = sum(1 for _ in call("Zorp", "abc", module=mod))
     n_zorp_list = sum(1 for _ in call("Zorp", ["a", "b", "c"], module=mod))
 
-    # Assert all 8 return exactly 1 solution.
+    # P3-1 \u00a71b: same-type combinations still return 1; cross-type
+    # (str-head/list-caller or list-head/str-caller) now return 0.
     assert n_foo_str == 1, (
         f"Fact Foo(\"abc\") called with \"abc\" returned {n_foo_str} "
-        f"solutions; expected 1 (control)"
+        f"solutions; expected 1 (control, same-type)"
     )
-    assert n_foo_list == 1, (
+    assert n_foo_list == 0, (
         f"Fact Foo(\"abc\") called with ['a','b','c'] returned "
-        f"{n_foo_list} solutions; expected 1 (strings-as-lists test, "
-        f"handled by elaborator dodge)"
+        f"{n_foo_list} solutions; expected 0 (cross-type, RETIRED by \u00a71b)"
     )
-    assert n_bar_str == 1, (
+    assert n_bar_str == 0, (
         f"Fact Bar(['a','b','c']) called with \"abc\" returned {n_bar_str} "
-        f"solutions; expected 1 (strings-as-lists test)"
+        f"solutions; expected 0 (cross-type, RETIRED by \u00a71b)"
     )
     assert n_bar_list == 1, (
         f"Fact Bar(['a','b','c']) called with ['a','b','c'] returned "
-        f"{n_bar_list} solutions; expected 1 (control)"
+        f"{n_bar_list} solutions; expected 1 (control, same-type)"
     )
     assert n_quux_str == 1, (
         f"Rule Quux(\"abc\") <- Helper(1) called with \"abc\" returned "
-        f"{n_quux_str} solutions; expected 1 (control)"
+        f"{n_quux_str} solutions; expected 1 (control, same-type)"
     )
-    assert n_quux_list == 1, (
+    assert n_quux_list == 0, (
         f"Rule Quux(\"abc\") <- Helper(1) called with ['a','b','c'] "
-        f"returned {n_quux_list} solutions; expected 1 (strings-as-lists "
-        f"test — the F046 surface: str-literal head now emits a wildcard "
-        f"capture + unify guard instead of MatchValue, so the char-list "
-        f"caller matches)"
+        f"returned {n_quux_list} solutions; expected 0 (cross-type, "
+        f"RETIRED by \u00a71b — the str-literal head's unify guard still "
+        f"runs unify(_scap0, 'abc', trail), which now declines a list)"
     )
     assert n_zorp_str == 1, (
         f"Rule Zorp(['a','b','c']) <- Helper(1) called with \"abc\" "
-        f"returned {n_zorp_str} solutions; expected 1 (strings-as-lists "
-        f"test, list-literal heads work via wildcard+runtime-unify)"
+        f"returned {n_zorp_str} solutions; expected 1 -- list-literal "
+        f"RULE heads destructure a str target natively via "
+        f"_head_list_unify_input (a separate, untouched mechanism from "
+        f"the retired do_unify cross-type branch)"
     )
     assert n_zorp_list == 1, (
         f"Rule Zorp(['a','b','c']) <- Helper(1) called with "
         f"['a','b','c'] returned {n_zorp_list} solutions; expected 1 "
-        f"(control)"
+        f"(control, same-type)"
     )
 
 
-def test_F046_str_literal_dispatch_table_via_charlist():
-    """A multi-clause str-literal dispatch table reached by a char-list caller.
+def test_F046_str_literal_dispatch_table_charlist_caller_retired():
+    """RETIRED by P3-1 Task 5 (\u00a71b): a multi-clause str-literal
+    dispatch table is no longer reachable by a char-list caller — every
+    char-list call now returns 0, str callers (same-type) still match.
 
-    Exercises the first-arg indexing layer (F095 canonicalisation buckets the
-    char-list caller with the str-literal head) together with the converted
-    head guard. Each char-list caller must match exactly its corresponding
-    clause and no other; a non-matching char-list must match nothing (the
-    wildcard capture must NOT degrade into match-anything).
+    (Formerly ``test_F046_str_literal_dispatch_table_via_charlist``,
+    which asserted the char-list caller matched its corresponding
+    clause; that was the retired cross-type behaviour.)
     """
     source = """\
 Helper(1),
@@ -136,15 +159,14 @@ Color("blue") <- (Helper(1))
 """
     mod = load_inline_clausal("c04_f046_dispatch", source).__dict__["$module"]
 
-    # char-list callers land in the right bucket and match their clause.
-    assert sum(1 for _ in call("Color", list("red"), module=mod)) == 1
-    assert sum(1 for _ in call("Color", list("green"), module=mod)) == 1
-    assert sum(1 for _ in call("Color", list("blue"), module=mod)) == 1
-    # str callers (control) still match.
+    # P3-1 \u00a71b: char-list callers no longer match a str-literal head.
+    assert sum(1 for _ in call("Color", list("red"), module=mod)) == 0
+    assert sum(1 for _ in call("Color", list("green"), module=mod)) == 0
+    assert sum(1 for _ in call("Color", list("blue"), module=mod)) == 0
+    # str callers (control, same-type) still match.
     assert sum(1 for _ in call("Color", "red", module=mod)) == 1
     assert sum(1 for _ in call("Color", "green", module=mod)) == 1
-    # A char-list with no matching clause matches nothing — the guard
-    # discriminates; it does not match every caller.
+    # A char-list still matches nothing for a non-matching clause either.
     assert sum(1 for _ in call("Color", list("purple"), module=mod)) == 0
     assert sum(1 for _ in call("Color", ["x"], module=mod)) == 0
 

@@ -54,19 +54,17 @@ class TestFunctor:
         assert result is not None
         assert result == ("f", 2)
 
-    def test_decompose_str_cons_cell(self):
-        """ISO cons-cell on str: functor("a", F, A) → F = '.', A = 2.
-
-        F089 (audit 2026-06-13): user decision — ISO-named inspection
-        predicates follow ISO cons-cell semantics; str ↔ list Liskov
-        symmetry applies. A non-empty str decomposes as a cons-cell
-        with head and tail args.
+    def test_decompose_str_is_its_own_atom_functor(self):
+        """P3-1 Task 5 (\u00a71b/R2): the cons rule is retired -- functor("a", F, A)
+        -> F = "a", A = 0 (a str is its own atom functor, arity 0), NOT the
+        ISO cons-cell ('.', 2) reading this test pinned pre-pivot (formerly
+        ``test_decompose_str_cons_cell``).
         """
         # nv
         name, arity = Var(), Var()
         result = _call_binding("functor", "a", name, arity)
         assert result is not None
-        assert result == (".", 2)
+        assert result == ("a", 0)
 
     def test_decompose_arity1(self):
         """functor(f(x), Name, Arity) → Name = f, Arity = 1."""
@@ -183,18 +181,17 @@ class TestUniv:
         assert result is not None
         assert result[0] == ["f", "a", "b"]
 
-    def test_decompose_str_cons_cell(self):
-        """ISO cons-cell on str: "a" =.. X → X = ['.', 'a', ''].
-
-        F088/F089/F090 (audit 2026-06-13): under ISO cons-cell, a
-        non-empty str decomposes as the cons-cell `[".", head, tail]`
-        where head is the 1-char str and tail is the substring rest.
+    def test_decompose_str_is_its_own_atom_functor(self):
+        """P3-1 Task 5 (\u00a71b/R2): the cons rule is retired -- "a" =.. X ->
+        X = ["a"] (a str is its own atom, univ gives [atom]), NOT the ISO
+        cons-cell [".", "a", ""] reading this test pinned pre-pivot
+        (formerly ``test_decompose_str_cons_cell``).
         """
         # nv
         x = Var()
         result = _call_binding("unpack", "a", x)
         assert result is not None
-        assert result[0] == [".", "a", ""]
+        assert result[0] == ["a"]
 
     def test_decompose_arity1(self):
         """f(x) =.. L → L = [f, x]."""

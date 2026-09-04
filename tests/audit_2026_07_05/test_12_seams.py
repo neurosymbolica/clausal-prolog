@@ -1191,9 +1191,18 @@ h([_, _, _, *_], R) <- (R is "many")
 
     @pytest.mark.parametrize("probe,expected", [
         (["a", "b"], ["two"]),
-        ("ab", ["two"]),
+        # P3-1 Task 5 (§1b): a body ``Is``-goal against a STAR-FREE list
+        # literal (``L is [_, _]``, ``L is []``) compiles to a plain
+        # ``unify(L, [...], trail)`` call — the retired do_unify cross-type
+        # branch — so a str probe no longer reaches it (formerly ["two"]).
+        # Contrast with a star-containing pattern (``[_, _, _, *_]``,
+        # the "abc" case below) or ANY clause-HEAD list pattern
+        # (``test_head_pattern_parity``), both of which route through the
+        # separate, untouched ``_head_list_unify_input`` str-native
+        # destructuring and are unaffected.
+        ("ab", []),
         ([], ["empty"]),
-        ("", ["empty"]),
+        ("", []),
         ("abc", ["many"]),
     ])
     def test_guard_form_parity(self, load, probe, expected):

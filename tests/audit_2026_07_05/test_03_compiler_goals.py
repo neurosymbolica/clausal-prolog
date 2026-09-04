@@ -306,14 +306,23 @@ class TestF001TroNondetPrefix:
         assert sorted(sols(mod, mod.tri(1, 0, O), O)) == [(5,), (7,)]
 
     def test_atom_concat_prefix_all_solutions(self, mod):
-        # atom_concat(P,Q,"ab") is nondet (3 splits), so TRO is off and all
-        # three prefix solutions survive. The P="a" accumulator ["a"] is
-        # promoted to the str "a" by the F018 Liskov strings-as-lists rule
-        # (a 1-char-string list ≡ the string); [""] and ["ab"] don't promote.
-        # sort by repr since the rows mix str and list.
+        """atom_concat(P,Q,"ab") is nondet (3 splits), so TRO is off and all
+        three prefix solutions survive.
+
+        P3-1 Task 5 (§1b): ``ACC1 is [P, *ACC]`` compiles through
+        ``_head_list_unify_output`` (construction mode, ACC1 unbound).
+        The P="a" accumulator ``["a"]`` used to be promoted to the str
+        "a" by the (now-source-gated) ``maybe_promote_to_str`` — that
+        promotion fired unconditionally there regardless of whether a
+        str actually contributed. The star position here (``*ACC``) is
+        bound to ``[]`` (a plain LIST, not a str/SegString), so under
+        the ``star_was_str`` gate (list_unify.py, this task) it no
+        longer promotes: all three rows now stay LISTS. (Formerly
+        asserting the P="a" row promoted to the bare str "a".)
+        """
         O = Var()
         assert sorted(sols(mod, mod.tac(1, [], O), O), key=repr) == sorted(
-            [([""],), ("a",), (["ab"],)], key=repr
+            [([""],), (["a"],), (["ab"],)], key=repr
         )
 
     # controls / oracle

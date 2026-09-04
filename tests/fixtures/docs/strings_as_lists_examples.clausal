@@ -1,13 +1,25 @@
 # Doc snippet fixtures for docs/strings_as_lists.md
 
 # --8<-- [start:unification]
-Test("string = char list") <- ("abc" is ["a", "b", "c"])  # nv
-Test("with vars") <- ("abc" is [X, Y, Z], X == "a", Y == "b", Z == "c")  # nv
-Test("partial") <- ("hello" is ["h", "e", X, Y, "o"], X == "l", Y == "l")  # nv
+# P3-1 Task 5 (§1b/R2): the str~char-list cons rule is RETIRED. A bare
+# str no longer unifies with a char-list LITERAL via a direct body
+# ``is``/unify (no star) -- str unifies with str by equality, lists
+# with lists. See todo/docs-strings-as-lists-md-stale-after-cons-rule-
+# retirement-2026-09-04.md for the docs/strings_as_lists.md prose
+# rewrite this implies (Task 8 close-out scope). The three tests below
+# now pin the RETIRED behaviour (formerly asserting the str/char-list
+# equivalence). Star-containing / head-position patterns are UNAFFECTED
+# — see the pattern_matching section below, which still works.
+Test("string no longer equals char list") <- (not ("abc" is ["a", "b", "c"]))  # nv
+Test("with vars no longer unifies") <- (not ("abc" is [X_UNUSED, Y_UNUSED, Z_UNUSED]))  # nv
+Test("partial no longer unifies") <- (not ("hello" is ["h", "e", X_UNUSED, Y_UNUSED, "o"]))  # nv
 # --8<-- [end:unification]
 
 # --8<-- [start:empty_string]
-Test("empty") <- ("" is [])  # nv
+# P3-1 Task 5 (§1b): empty str and empty list are DIFFERENT types now too
+# — no cross-type exception for the empty case (formerly asserting they
+# unified).
+Test("empty no longer unifies") <- (not ("" is []))  # nv
 # --8<-- [end:empty_string]
 
 # --8<-- [start:pattern_matching]

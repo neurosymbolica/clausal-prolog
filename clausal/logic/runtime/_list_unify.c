@@ -363,6 +363,13 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
     Py_ssize_t n_before = PyList_GET_SIZE(var_vals);
     Py_ssize_t n_after  = PyList_GET_SIZE(after_vals);
     int has_star = (star_val != Py_None);
+    /* P3-1 §1b: only the str-star branch below sets this to 1 — mirrors
+     * the Python _head_list_unify_output_py gate. maybe_promote_to_str
+     * at the tail of this function must NOT fire unconditionally (that
+     * would reintroduce the retired str~list cons identity via result-
+     * type "promotion" whenever the constructed list happens to be all
+     * 1-char strs — which is now common, since atoms are plain strs). */
+    int star_was_str = 0;
 
     PyObject *result = PyList_New(0);
     if (!result) { Py_DECREF(d); return NULL; }
@@ -397,7 +404,10 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
             /* Liskov "strings-as-lists" rule: a str-bound star is
              * treated as a list of 1-char strs. Splat its chars into
              * the result; the final ``maybe_promote_to_str`` will
-             * re-promote when every element is a 1-char str. */
+             * re-promote when every element is a 1-char str. Legitimate
+             * (unlike the plain-list branch above): the star itself WAS
+             * a str, so preserving that shape is type-preservation. */
+            star_was_str = 1;
             Py_ssize_t slen = PyUnicode_GET_LENGTH(s);
             for (Py_ssize_t i = 0; i < slen; i++) {
                 PyObject *ch = PyUnicode_Substring(s, i, i + 1);
@@ -683,10 +693,18 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
 
     /* unify(d, result, trail) */
     {
-        /* F033: promote list-of-1-char-strs back to str under the Liskov
-         * "strings-as-lists" rule. */
-        PyObject *promoted = maybe_promote_to_str(result);
-        if (!promoted) { Py_DECREF(d); Py_DECREF(result); return NULL; }
+        /* P3-1 §1b: only promote when star_was_str (a genuine str source
+         * contributed the star portion) — no star, a list-bound star, or
+         * a generic scalar star all keep the plain list. See the
+         * star_was_str declaration above for the rationale. */
+        PyObject *promoted;
+        if (star_was_str) {
+            promoted = maybe_promote_to_str(result);
+            if (!promoted) { Py_DECREF(d); Py_DECREF(result); return NULL; }
+        } else {
+            promoted = result;
+            Py_INCREF(promoted);
+        }
         int ok = call_unify(d, promoted, trail);
         Py_DECREF(promoted);
         Py_DECREF(d);

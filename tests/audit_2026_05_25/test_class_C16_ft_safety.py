@@ -15,16 +15,19 @@ import threading
 from clausal.logic.variables import Trail, unify
 
 
-def test_F011_str_list_unify_ft_smoke():
-    """Smoke-test concurrent str↔list unify under Python threads.
+def test_F011_str_list_unify_retired_ft_smoke_no_crash():
+    """P3-1 Task 5 (§1b): the str↔list cons-rule unification block this
+    test smoke-tested is now DELETED from ``_variables.c`` — there is no
+    ``PyList_GET_ITEM``-in-the-str↔list-path code left to race on. The
+    concurrency concern is retargeted: str-vs-list unify must still be
+    thread-safe (no crash, no exception) under concurrent free-threaded
+    access, even though it now deterministically returns False (it falls
+    to the ``__unify__``-protocol probe, then the list/tuple-mismatch
+    guard — never touching a list element at all).
 
-    On a GIL-enabled build this is uninformative; on a free-threaded
-    build, a missing critical section around PyList_GET_ITEM in the
-    str↔list path could produce a segfault or wrong result.
-
-    Post-fix (Phase 2 Task 4): the C-level accessor is PyList_GetItemRef
-    which takes the appropriate critical section on FT builds, so this
-    test is expected to pass reliably on both GIL and FT builds.
+    (Formerly ``test_F011_str_list_unify_ft_smoke``, which asserted
+    ``unify("hello", chars, t)`` succeeded; that was the retired
+    cross-type unification.)
     """
     errors = []
     n_iters = 10_000
@@ -34,8 +37,8 @@ def test_F011_str_list_unify_ft_smoke():
             chars = ["h", "e", "l", "l", "o"]
             try:
                 t = Trail()
-                if not unify("hello", chars, t):
-                    errors.append(("unify returned False unexpectedly",))
+                if unify("hello", chars, t):
+                    errors.append(("unify returned True unexpectedly (cons rule retired)",))
             except Exception as e:
                 errors.append((type(e).__name__, str(e)))
 

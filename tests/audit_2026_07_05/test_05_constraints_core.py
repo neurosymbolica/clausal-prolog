@@ -253,10 +253,15 @@ class TestF003StructuralEqInconsistencies:
         ss = SegString(["ab"])
         assert structural_eq("ab", ss) == structural_eq(ss, "ab")
 
-    def test_str_charlist_consistent_with_reify_eq(self):
+    def test_str_charlist_retired_consistent_with_reify_eq(self):
+        """P3-1 Task 5 (§1b): the str~char-list cons rule is retired --
+        ``reify_eq``/``structural_eq`` must stay CONSISTENT with each
+        other (the invariant this class asserts), now both False.
+        (Formerly asserting both True.)
+        """
         t = Trail()
-        assert reify_eq("ab", ["a", "b"], t) is True   # identical, no bindings
-        assert structural_eq("ab", ["a", "b"]) is True
+        assert reify_eq("ab", ["a", "b"], t) is False
+        assert structural_eq("ab", ["a", "b"]) is False
 
     def test_ground_seglist_vs_list(self):
         sl = SegList([ConcreteSeg([1, 2])])

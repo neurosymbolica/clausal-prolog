@@ -286,30 +286,34 @@ class TestCellUnificationBoundary:
         assert unify(make_cell("f", 1, 2), make_cell("f", 1, 3), trail) is False
 
 
-# ── Phase 3 deferral: str functor vs char-list cons-rule interaction ─────────
+# ── Phase 3 Task 5: str functor vs char-list cons-rule interaction — RETIRED ──
 
 
 class TestConsRuleBoundaryDeferral:
-    """Documents the boundary between a cell's str functor and the engine's
-    str~char-list cons-rule unification (``do_unify``'s
-    ``PyUnicode_Check(t1) && PyList_Check(t2)`` branch in
-    ``_variables.c``), per the Phase 2 bridge plan's BRIDGE-ENTRY RULINGS:
-    "the str~char-list cons-rule interaction is DEFERRED to Phase 3 — Task
-    1 ships a guard test documenting the boundary instead."
+    """Documents the (former) boundary between a cell's str functor and the
+    engine's str~char-list cons-rule unification, per the Phase 2 bridge
+    plan's BRIDGE-ENTRY RULINGS: "the str~char-list cons-rule interaction is
+    DEFERRED to Phase 3 — Task 1 ships a guard test documenting the boundary
+    instead."
+
+    RESOLVED by P3-1 Task 5 (§1b): the cons rule itself is retired —
+    ``do_unify``'s ``PyUnicode_Check(t1) && PyList_Check(t2)`` /
+    ``PyList_Check(t1) && PyUnicode_Check(t2)`` branches in ``_variables.c``
+    are deleted. A bare str no longer unifies with a char list in EITHER
+    direction, cell-adjacent or not, so the deferred question this class
+    posed ("what happens when a cell's str functor meets the char-list
+    rule") no longer has a live answer to defer: there is no char-list rule
+    left to meet. Both tests below are inverted to pin the retirement
+    directly (class kept, name kept, for the historical cross-reference from
+    the Phase 2 bridge plan).
 
     A str-functor cell's slot 0 is a bare ``str`` element inside a tuple
     being unified element-wise; it is unified against whatever occupies
     the peer cell's slot 0 (another str, by construction — see the
-    slot-0 ruling). It NEVER meets the list-shaped char-list unification
-    path, because that path only fires when one side of a *direct* unify
-    call is a ``str`` and the other a ``list`` — and a cell's slot 0 is
-    never unified against a bare list directly by anything built in this
-    task's corpus (only against another cell's slot 0, i.e. another str /
-    TUPLE_TAG / Var). This test exists to PIN that absence for the shapes
-    Task 1 constructs, not to prove it is impossible in general — a future
-    stage could hand-construct ``(["p", "o", "i", "n", "t"], 1)`` and unify
-    it against a str-functor cell, and Phase 3 is where that gets a real
-    ruling.
+    slot-0 ruling). It never meets a list directly in this task's corpus
+    (only against another cell's slot 0, i.e. another str / TUPLE_TAG /
+    Var) — that fact is pinned below same as before; it is simply no
+    longer load-bearing now that the cross-type rule is gone.
     """
 
     def test_str_functor_cell_slot0_never_meets_a_charlist_in_this_corpus(self):
@@ -319,15 +323,14 @@ class TestConsRuleBoundaryDeferral:
         trail = Trail()
         assert unify(make_cell("point", 1, 2), make_cell("point", 1, 2), trail) is True
 
-    def test_str_vs_list_charlist_unification_is_a_different_call_shape(self):
-        # nv — documents what the deferred interaction WOULD look like if a
-        # cell's functor string were ever unified bare against a list: the
-        # engine's str~char-list rule fires for a *direct* str/list unify
-        # call, independent of cells entirely. This is existing, unrelated
-        # behavior (not part of this task's corpus) shown here only so the
-        # boundary this task defers is concrete rather than hypothetical.
+    def test_str_vs_list_charlist_unification_is_retired(self):
+        # nv — P3-1 Task 5 (§1b): the cons rule is retired. A direct
+        # str/list unify call — independent of cells entirely — now FAILS;
+        # lists unify with lists, strs unify with strs by equality only.
+        # (Formerly ``test_str_vs_list_charlist_unification_is_a_different_
+        # call_shape``, asserting ``unify("ab", ["a","b"], trail) is True``.)
         trail = Trail()
-        assert unify("ab", ["a", "b"], trail) is True
+        assert unify("ab", ["a", "b"], trail) is False
 
 
 # ── intern_cell / interning table (Task 4) ────────────────────────────────

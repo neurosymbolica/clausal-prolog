@@ -19,16 +19,15 @@ Findings tested here:
 import pytest
 
 
-def test_F012_var_bound_to_segstring_is_char_in_list():
-    """`unify("a", [v])` where `v` is bound to `SegString("a")` should succeed.
-
-    Inside the C unify loop the per-element check is
-    `PyUnicode_Check(elem) && PyUnicode_GET_LENGTH(elem) == 1`. After
-    `var_deref(v)` the element is the SegString instance — not a
-    `str` subclass — so the fast path's `PyUnicode_Check` rejects it
-    and the loop falls to ``return 0`` at `_variables.c:1149/1175`.
-    Semantically the SegString IS the 1-char string ``"a"``, so the
-    unify should succeed.
+def test_F012_bare_str_vs_list_is_retired_segstring_var_binding_still_works():
+    """RETIRED by P3-1 Task 5 (\u00a71b): `unify("a", [v])` was a direct bare
+    str-vs-list unify (the exact C block cited below, `_variables.c:1149/
+    1175`, is now DELETED entirely) -- it fails post-retirement regardless
+    of what `v` is bound to, so the original F012 "SegString not
+    recognised as a char in a bare-str-vs-list unify" finding is moot: the
+    bare-str-vs-list call shape it was about no longer succeeds for ANY
+    list element type, str or SegString. The control assertion (binding a
+    Var to a SegString) is unaffected and still pinned below.
     """
     from clausal.logic.variables import Trail, Var, unify
     from clausal.terms import SegString
@@ -42,11 +41,9 @@ def test_F012_var_bound_to_segstring_is_char_in_list():
     )
 
     ok = unify("a", [v], t)
-    assert ok is True, (
-        f"unify('a', [v]) where v is bound to SegString('a') should "
-        f"succeed (the bound value is semantically the char 'a'); "
-        f"got {ok!r}. The C path's PyUnicode_Check excludes SegString "
-        f"and the per-element loop returns 0 at _variables.c:1149/1175."
+    assert ok is False, (
+        f"unify('a', [v]) is a bare str-vs-list unify -- retired by P3-1 "
+        f"\u00a71b regardless of what v is bound to; got {ok!r}"
     )
 
 

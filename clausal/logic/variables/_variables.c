@@ -1165,119 +1165,18 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         }
     }
 
-    /* ---- String ↔ List unification ----
-     * Treat a Python str as a list of single-character strings.
-     * "abc" unifies element-wise with ['a', 'b', 'c'].
-     * String-vs-string still falls through to PyObject_RichCompareBool below.
-     *
-     * Fast path: when the list element is a ground single-char string, compare
-     * code points directly (no allocation).  Only allocate a PyUnicode when
-     * binding an unbound Var.
+    /* ---- String ↔ List unification: RETIRED (P3-1 §1b) ----
+     * A Python str no longer unifies with a list of single-character
+     * strings ("abc" vs ['a','b','c']) in either direction. Per §1b,
+     * str unifies with str by equality; lists unify with lists. A str
+     * that needs list-shaped char-by-char unification is expressed as an
+     * explicit SegString (clausal/terms.py) or an explicit char list.
+     * str-vs-list now falls to the __unify__-protocol probe just below
+     * (str has no __unify__, so it declines) and then hits the
+     * "either side is a list/tuple with no match" guard, which returns 0 —
+     * it never reaches PyObject_RichCompareBool (str == list is always
+     * False in Python anyway, so the observable result is identical).
      */
-    if (PyUnicode_Check(t1) && PyList_Check(t2)) {
-        Py_ssize_t n = PyUnicode_GET_LENGTH(t1);
-        if (n != PyList_GET_SIZE(t2)) return 0;
-        if (n == 0) return 1;
-        int kind = PyUnicode_KIND(t1);
-        void *data = PyUnicode_DATA(t1);
-        for (Py_ssize_t i = 0; i < n; i++) {
-            Py_UCS4 c1 = PyUnicode_READ(kind, data, i);
-            /* FT-safe element access: PyList_GetItemRef returns a new
-             * strong reference (NULL on error); must Py_DECREF on every
-             * exit path including error returns. */
-            PyObject *elem_raw = PyList_GetItemRef(t2, i);
-            if (elem_raw == NULL) return -1;
-            PyObject *elem = var_deref(elem_raw);
-            if (Var_Check(elem)) {
-                /* Unbound var — allocate char string and unify (binds the var) */
-                PyObject *ch = PyUnicode_Substring(t1, i, i + 1);
-                if (!ch) {
-                    Py_DECREF(elem_raw);
-                    return -1;
-                }
-                int r = do_unify(ch, elem, trail, depth + 1, oc);
-                Py_DECREF(ch);
-                Py_DECREF(elem_raw);
-                if (r != 1) return r;
-            } else if (PyUnicode_Check(elem)
-                       && PyUnicode_GET_LENGTH(elem) == 1
-                       && PyUnicode_READ_CHAR(elem, 0) == c1) {
-                /* Ground single-char match — no allocation */
-                Py_DECREF(elem_raw);
-                continue;
-            } else if (PyUnicode_Check(elem)) {
-                /* str of length != 1 — never matches a single codepoint. */
-                Py_DECREF(elem_raw);
-                return 0;
-            } else {
-                /* F012 (C3 audit): not a Var, not a plain str — could be a
-                 * SegString or other custom term that knows how to unify
-                 * with a single-char str. Allocate the single codepoint and
-                 * delegate to do_unify, which routes through the __unify__
-                 * protocol. Keeps the hot fast path above intact. */
-                PyObject *ch = PyUnicode_Substring(t1, i, i + 1);
-                if (!ch) {
-                    Py_DECREF(elem_raw);
-                    return -1;
-                }
-                int r = do_unify(ch, elem, trail, depth + 1, oc);
-                Py_DECREF(ch);
-                Py_DECREF(elem_raw);
-                if (r != 1) return r;
-            }
-        }
-        return 1;
-    }
-    if (PyList_Check(t1) && PyUnicode_Check(t2)) {
-        /* Symmetric: list on left, string on right — delegate with swapped args */
-        Py_ssize_t n = PyUnicode_GET_LENGTH(t2);
-        if (PyList_GET_SIZE(t1) != n) return 0;
-        if (n == 0) return 1;
-        int kind = PyUnicode_KIND(t2);
-        void *data = PyUnicode_DATA(t2);
-        for (Py_ssize_t i = 0; i < n; i++) {
-            Py_UCS4 c2 = PyUnicode_READ(kind, data, i);
-            /* FT-safe element access: PyList_GetItemRef returns a new
-             * strong reference (NULL on error); must Py_DECREF on every
-             * exit path including error returns. */
-            PyObject *elem_raw = PyList_GetItemRef(t1, i);
-            if (elem_raw == NULL) return -1;
-            PyObject *elem = var_deref(elem_raw);
-            if (Var_Check(elem)) {
-                PyObject *ch = PyUnicode_Substring(t2, i, i + 1);
-                if (!ch) {
-                    Py_DECREF(elem_raw);
-                    return -1;
-                }
-                int r = do_unify(elem, ch, trail, depth + 1, oc);
-                Py_DECREF(ch);
-                Py_DECREF(elem_raw);
-                if (r != 1) return r;
-            } else if (PyUnicode_Check(elem)
-                       && PyUnicode_GET_LENGTH(elem) == 1
-                       && PyUnicode_READ_CHAR(elem, 0) == c2) {
-                Py_DECREF(elem_raw);
-                continue;
-            } else if (PyUnicode_Check(elem)) {
-                Py_DECREF(elem_raw);
-                return 0;
-            } else {
-                /* F012 (C3 audit): symmetric to the t1/t2-swapped case
-                 * above — delegate to do_unify so custom terms (e.g.
-                 * SegString) can unify with a single codepoint. */
-                PyObject *ch = PyUnicode_Substring(t2, i, i + 1);
-                if (!ch) {
-                    Py_DECREF(elem_raw);
-                    return -1;
-                }
-                int r = do_unify(elem, ch, trail, depth + 1, oc);
-                Py_DECREF(ch);
-                Py_DECREF(elem_raw);
-                if (r != 1) return r;
-            }
-        }
-        return 1;
-    }
 
     /* ---- Bytes ↔ List unification (codes model) ----
      * Treat a Python bytes as a list of ints in [0, 255]:
@@ -2413,14 +2312,22 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
         else
             return PyUnicode_FromString(".");
     }
-    /* Str — Liskov-symmetric with list under strings-as-lists. */
+    /* Str — RETIRED cons-cell decomposition (P3-1 §1b/R2): a str is now
+     * always an atom (runtime str = atom), so it is its own functor name
+     * with arity 0, like any other atomic constant — not a "."/2 cons
+     * cell. The empty string keeps the ISO nil-atom spelling "[]" (same
+     * spelling the empty-list case above answers; ISO's [] is the nil
+     * atom regardless of which literal denotes it, and this is the one
+     * str value that legitimately reads as a list-shaped atom). */
     if (PyUnicode_Check(term)) {
         if (PyUnicode_GET_LENGTH(term) == 0)
             return PyUnicode_FromString("[]");
-        else
-            return PyUnicode_FromString(".");
+        Py_INCREF(term);
+        return term;
     }
-    /* Bytes — codes-model cons-cell, symmetric with str/list. */
+    /* Bytes — codes-model cons-cell, untouched by the str~list retirement
+     * (§1b: "the adjacent bytes<->list block is KEPT — codes model
+     * untouched"). */
     if (PyBytes_Check(term)) {
         if (PyBytes_GET_SIZE(term) == 0)
             return PyUnicode_FromString("[]");
@@ -2512,9 +2419,10 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
     if (PyList_Check(term)) {
         return PyLong_FromLong(PyList_GET_SIZE(term) == 0 ? 0 : 2);
     }
-    /* Str — Liskov-symmetric cons-cell. */
+    /* Str — RETIRED cons-cell decomposition (P3-1 §1b/R2): a str is
+     * always atomic (arity 0) now, whether empty or not. */
     if (PyUnicode_Check(term)) {
-        return PyLong_FromLong(PyUnicode_GET_LENGTH(term) == 0 ? 0 : 2);
+        return PyLong_FromLong(0);
     }
     /* Bytes — codes-model cons-cell. */
     if (PyBytes_Check(term)) {
@@ -2660,21 +2568,10 @@ py_nth_arg(PyObject *Py_UNUSED(module), PyObject *args)
         }
         return raise_arg_index_error(n, term);
     }
-    /* Str — Liskov-symmetric cons-cell: n=1 → 1-char str head,
-     * n=2 → substring tail. Both preserve str type. */
-    if (PyUnicode_Check(term)) {
-        Py_ssize_t len = PyUnicode_GET_LENGTH(term);
-        if (len == 0) {
-            return raise_arg_index_error(n, term);
-        }
-        if (n == 1) {
-            return PyUnicode_Substring(term, 0, 1);
-        }
-        if (n == 2) {
-            return PyUnicode_Substring(term, 1, len);
-        }
-        return raise_arg_index_error(n, term);
-    }
+    /* Str: RETIRED cons-cell decomposition (P3-1 §1b/R2) — a str is
+     * always atomic (arity 0) now, so every index is out of range.
+     * Falls through to the bytes check (never matches) and the final
+     * ``raise_arg_index_error`` below. */
     /* Bytes — codes-model cons-cell: n=1 → int head (b[0] is an int, no
      * fixed point), n=2 → bytes tail (type preserved). */
     if (PyBytes_Check(term)) {
@@ -2767,24 +2664,10 @@ py_args_list(PyObject *Py_UNUSED(module), PyObject *term)
         PyList_SET_ITEM(result, 1, tail);  /* steals tail's reference */
         return result;
     }
-    /* Str — Liskov-symmetric cons-cell: non-empty → [head, tail] with
-     * head as 1-char str and tail as substring (both preserve str type);
-     * empty → []. */
-    if (PyUnicode_Check(term)) {
-        Py_ssize_t len = PyUnicode_GET_LENGTH(term);
-        if (len == 0) {
-            return PyList_New(0);
-        }
-        PyObject *head = PyUnicode_Substring(term, 0, 1);
-        if (!head) return NULL;
-        PyObject *tail = PyUnicode_Substring(term, 1, len);
-        if (!tail) { Py_DECREF(head); return NULL; }
-        PyObject *result = PyList_New(2);
-        if (!result) { Py_DECREF(head); Py_DECREF(tail); return NULL; }
-        PyList_SET_ITEM(result, 0, head);  /* steals */
-        PyList_SET_ITEM(result, 1, tail);  /* steals */
-        return result;
-    }
+    /* Str: RETIRED cons-cell decomposition (P3-1 §1b/R2) — a str is
+     * always atomic (arity 0) now, so it has no arguments. Falls through
+     * to the bytes check (never matches) and the final "empty list"
+     * default below. */
     /* Bytes — codes-model cons-cell: non-empty → [int_head, bytes_tail];
      * empty → []. Head is an int (no fixed point); tail preserves bytes. */
     if (PyBytes_Check(term)) {

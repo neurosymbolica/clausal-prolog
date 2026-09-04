@@ -34,12 +34,19 @@ def _collect(name, arity, *args, snap):
 
 
 def test_F088_unpack_on_list_uses_cons_cell():
-    """``unpack(["a","b","c"], L)`` follows ISO cons-cell decomposition.
+    """``unpack(["a","b","c"], L)`` follows ISO cons-cell decomposition
+    on a LIST (unaffected by P3-1 Task 5).
 
     User decision 2026-06-13: ISO-named inspection predicates follow
     ISO Prolog semantics. ``=..`` on a non-empty list returns the
     cons-cell shape ``[".", head, tail]`` where ``tail`` is the rest
-    of the list. Liskov-symmetric on str inputs (tail is a substring).
+    of the list.
+
+    P3-1 Task 5 (\u00a71b/R2): the str~list cons rule is RETIRED, so
+    the str case is NO LONGER Liskov-symmetric with list -- a str is
+    now atomic, so ``unpack("abc", L)`` gives ``["abc"]``, not the
+    cons-cell shape (formerly asserted here as
+    ``[".", "a", "bc"]``).
     """
     L = Var()
     sols = _collect(
@@ -50,15 +57,14 @@ def test_F088_unpack_on_list_uses_cons_cell():
         f'[".", "a", ["b","c"]] under ISO cons-cell.'
     )
 
-    # Liskov symmetry on str input.
+    # P3-1 \u00a71b/R2: str is atomic -- unpack gives [self], not a cons cell.
     L2 = Var()
     sols2 = _collect(
         "unpack", 2, "abc", L2, snap=lambda L=L2: deref(L)
     )
-    assert sols2 == [[".", "a", "bc"]], (
-        f'unpack("abc", L) bound L={sols2!r}; expected '
-        f'[".", "a", "bc"] — str preserves str type on both head '
-        f'(1-char str) and tail (substring).'
+    assert sols2 == [["abc"]], (
+        f'unpack("abc", L) bound L={sols2!r}; expected ["abc"] -- a str '
+        f'is its own atom under the retired cons rule (\u00a71b/R2).'
     )
 
     # Empty cases — nil atom.
@@ -74,12 +80,13 @@ def test_F088_unpack_on_list_uses_cons_cell():
     )
 
 
-def test_F089_functor_and_univ_agree_on_str_vs_list():
-    """``functor/3`` and ``unpack/2`` (=..) produce Liskov-symmetric
-    shapes for str and list inputs under the strings-as-lists contract.
-
-    User decision 2026-06-13: ISO cons-cell across both. The cons-cell
-    answer is the same modulo str-vs-list type on head/tail.
+def test_F089_functor_and_univ_no_longer_agree_on_str_vs_list():
+    """P3-1 Task 5 (\u00a71b/R2): the str~list cons rule is RETIRED, so
+    ``functor/3`` on str vs list is NO LONGER Liskov-symmetric -- a str
+    is atomic (its own functor, arity 0); a list still decomposes as
+    the ISO cons cell (unaffected). (Formerly
+    ``test_F089_functor_and_univ_agree_on_str_vs_list``, which asserted
+    both gave ``(".", 2)`` and were equal.)
     """
     F1, A1 = Var(), Var()
     sols_str = _collect(
@@ -91,21 +98,24 @@ def test_F089_functor_and_univ_agree_on_str_vs_list():
         "functor", 3, ["a", "b", "c"], F2, A2,
         snap=lambda F=F2, A=A2: (deref(F), deref(A)),
     )
-    assert sols_str == [(".", 2)], (
+    assert sols_str == [("abc", 0)], (
         f'functor("abc", F, A) returned {sols_str!r}; expected '
-        f'[(".", 2)] under ISO cons-cell.'
+        f'[("abc", 0)] -- a str is its own atom functor under the '
+        f'retired cons rule (\u00a71b/R2).'
     )
     assert sols_lst == [(".", 2)], (
         f'functor(["a","b","c"], F, A) returned {sols_lst!r}; '
-        f'expected [(".", 2)] under ISO cons-cell.'
+        f'expected [(".", 2)] under ISO cons-cell (list unaffected).'
     )
-    assert sols_str == sols_lst, (
-        f"functor/3 must give the same (Name, Arity) for str and "
-        f"equivalent list inputs under Liskov-symmetric "
-        f"strings-as-lists. Got str={sols_str!r}, list={sols_lst!r}."
+    assert sols_str != sols_lst, (
+        f"str and list functor/3 results must now DIVERGE (the retired "
+        f"rule was what made them agree). Got str={sols_str!r}, "
+        f"list={sols_lst!r}."
     )
 
-    # Empty cases — nil atom on both shapes.
+    # Empty cases — nil atom on both shapes (unaffected: the empty str
+    # is the one str value that legitimately reads as the list-shaped
+    # nil atom).
     F3, A3 = Var(), Var()
     sols_empty_str = _collect(
         "functor", 3, "", F3, A3,
@@ -126,32 +136,33 @@ def test_F089_functor_and_univ_agree_on_str_vs_list():
     )
 
 
-def test_F090_arg_on_str_uses_cons_cell():
-    """``arg(N, "abc", X)`` follows ISO cons-cell symmetry on str input.
-
-    User decision 2026-06-13: strings-as-lists Liskov symmetry — str
-    decomposes as cons-cell with str-typed head (1-char str) and tail
-    (substring).
+def test_F090_arg_on_str_is_retired_str_is_atomic():
+    """P3-1 Task 5 (\u00a71b/R2): ``arg(N, "abc", X)`` no longer follows
+    ISO cons-cell symmetry -- a str is atomic (arity 0), so EVERY index
+    fails, including n=1 and n=2 (formerly asserted to bind the head
+    char / tail substring under the retired cons rule).
     """
-    # n=1 → head (1-char str).
+    # n=1 → no longer the head; str is atomic (arity 0), so this fails.
     X = Var()
     sols = _collect("arg", 3, 1, "abc", X, snap=lambda X=X: deref(X))
-    assert sols == ["a"], (
-        f'arg(1, "abc", X) bound X={sols!r}; expected ["a"].'
+    assert sols == [], (
+        f'arg(1, "abc", X) bound X={sols!r}; expected [] -- a str is '
+        f'atomic under the retired cons rule (\u00a71b/R2), so it has '
+        f'no arguments.'
     )
-    # n=2 → tail (substring).
+    # n=2 → likewise no longer the tail.
     X = Var()
     sols = _collect("arg", 3, 2, "abc", X, snap=lambda X=X: deref(X))
-    assert sols == ["bc"], (
-        f'arg(2, "abc", X) bound X={sols!r}; expected ["bc"] — '
-        f"cons-cell tail preserves str type."
+    assert sols == [], (
+        f'arg(2, "abc", X) bound X={sols!r}; expected [] -- same '
+        f'rationale as n=1.'
     )
-    # n=3 → fail (arity is 2).
+    # n=3 → still fails (was already out of range; still is).
     X = Var()
     sols = _collect("arg", 3, 3, "abc", X, snap=lambda X=X: deref(X))
     assert sols == [], (
         f'arg(3, "abc", X) bound X={sols!r}; expected [] '
-        f"(cons-cell arity is 2)."
+        f"(str is arity 0, unchanged conclusion)."
     )
 
 

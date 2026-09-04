@@ -56,10 +56,12 @@ Test("phrase/2 exists") <- phrase(greet_dcg, ["hi"])  # nv
 # ── Term Inspection ──────────────────────────────────────────────────────────
 
 Test("functor exists") <- (
-    # F089 (audit 2026-06-13): ISO cons-cell on str.
+    # P3-1 Task 5 (§1b/R2): the str~char-list cons rule is retired -- a
+    # str is now its own atom functor, arity 0 (formerly ISO cons-cell
+    # on str: F089, audit 2026-06-13).
     functor("hello", NAME, ARITY),
-    NAME == ".",
-    ARITY == 2
+    NAME == "hello",
+    ARITY == 0
 )  # nv
 
 Test("arg exists") <- (

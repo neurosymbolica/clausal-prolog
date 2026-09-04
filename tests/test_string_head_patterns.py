@@ -107,9 +107,13 @@ class TestExactlyTwoString:
 
 
 class TestIsEmptyString:
-    def test_empty_string(self, edge_mod):
-        # nv
-        assert list(call("IsEmpty", "", module=edge_mod)) != []
+    def test_empty_string_no_longer_matches_empty_list_head(self, edge_mod):
+        # nv — P3-1 Task 5 (§1b): IsEmpty's fact head is the literal empty
+        # LIST `[]`, called here with the empty STR "". Empty str and
+        # empty list are different types now too (no cross-type
+        # exception for the empty case), so this no longer matches.
+        # (Formerly ``test_empty_string``, asserting it DID match.)
+        assert list(call("IsEmpty", "", module=edge_mod)) == []
 
     def test_nonempty_string_fails(self, edge_mod):
         # nv
