@@ -122,6 +122,27 @@ grow a second reader.
 
 ## 1c. Phase 3 parser output interface (recorded 2026-09-03; parser is USER-OWNED work)
 
+> **STATUS 2026-09-04: L0+L1+L2 IMPLEMENTED (ownership transferred to Claude by the
+> user).** L0: the toklex generated tokenizer (`clausal/tools/toklex/`, spec-driven,
+> incremental, regex-accelerated — see `toklex-token-formalism-design.md`). L1+L2:
+> `clausal/tools/prolog_reader.py` — `PrologReader.feed()/read_term() ->
+> ReaderItem | NEED_MORE | EOF` on the existing Pratt core, per-item resumability,
+> persistent exposed `op_table` with op/3 auto-application, SyntaxIssue +
+> resync-to-`end` recovery; verified over the Scryer lib corpus (41/60 files clean,
+> the rest documented dialect gaps with clean resync; full-suite name-diff empty).
+> Concrete realizations of this contract (recorded in
+> `prolog-reader-l1l2-plan.md`'s locked-decisions list): spans are character-offset
+> pairs; span-tree shapes — compound `((s,e), spans...)`, Python-list
+> `((s,e), [spans])`, char-list a LEAF `(s,e)` (so a list-valued cell has two
+> possible span shapes — lockstep walkers must handle both); `Clause.term` is the
+> whole item term (`(':-', H, B)` for rules); `var_names` on every item kind.
+> CAVEAT: point 2's "hashable" does not hold for cell trees containing Python
+> lists (the proper-list ruling wins; interning would need a tuple-view). Parked:
+> unclosed-`/*`-at-EOF silent swallow (L0 parity choice) and `:- .` leniency —
+> `todo/toklex-unclosed-block-comment-silent-eof-2026-09-04.md`; module-embedded
+> op/3 exports — `todo/reader-module-embedded-op-declarations-2026-09-04.md`.
+> The Phase 3 compiler can now consume ReaderItems.
+
 The surface parser is being built by the author separately, on the existing Pratt stack:
 `clausal/tools/prolog_parser.py` (446 ln, precedence-climbing over a mutable
 `OperatorTable`), `prolog_tokenizer.py` (487 ln, batch), `prolog_operators.py` (ISO op/3
