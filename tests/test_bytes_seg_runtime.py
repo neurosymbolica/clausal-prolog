@@ -5,7 +5,7 @@ from clausal.logic.runtime.list_unify import (
 from clausal.logic.runtime.body_star_unify import (
     _body_star_unify, _build_star_list, _body_multi_star_unify,
 )
-from clausal.terms import SegBytes, VarSeg, ConcreteSeg
+from clausal.terms import SegBytes, SegList, VarSeg, ConcreteSeg
 
 
 class TestBytesInputPy:
@@ -108,3 +108,69 @@ class TestBodyStarBytes:
         unify(Ys, b"\x14\x1e", Trail())
         out = _build_multi_star_list([("fixed", [10]), ("star", Ys)])
         assert out == b"\n\x14\x1e" and type(out) is bytes
+
+
+class TestGroundSegListOfCharsOutputPy:
+    """Review fix (Task 5 fix round 1): SegList.__walk__ (terms.py)
+    applies maybe_promote_to_str to a fully-ground result, so a ground
+    SegList whose elements are all 1-char strs walks to a STR, not a
+    list. _head_list_unify_output_py's SegList-star branch used to only
+    handle ``isinstance(walked, list)`` and otherwise assumed
+    ``walked.segments`` (the non-ground-SegList shape) — a str has no
+    ``.segments``, so this raised AttributeError. The C twin
+    (_list_unify.c, ``PyList_Check(walked) || PyUnicode_Check(walked)``)
+    already handled both shapes; the Python fallback is now fixed to
+    match it exactly (twin agreement, not independent judgment).
+    """
+
+    def test_ground_seglist_of_chars_star_promotes_via_python_fallback(self):
+        # nv — repro: SegList([ConcreteSeg(['a','b'])]) as a star source,
+        # driven through the _py-suffixed function directly (bypasses the
+        # C extension, forcing the Python fallback path per the
+        # established pattern in this file).
+        trail = Trail()
+        target = Var()
+        S = Var()
+        sl = SegList([ConcreteSeg(["a", "b"])])
+        unify(S, sl, trail)
+        ok = _head_list_unify_output_py(target, [], S, [], trail)
+        assert ok is True
+        assert deref(target) == "ab"
+        assert type(deref(target)) is str
+
+    def test_ground_seglist_of_chars_matches_c_twin(self):
+        # nv — same input through the C-accelerated function: the Python
+        # fallback and the C twin must agree exactly.
+        from clausal.logic.runtime._list_unify import _head_list_unify_output
+
+        trail_py = Trail()
+        target_py = Var()
+        S_py = Var()
+        unify(S_py, SegList([ConcreteSeg(["a", "b"])]), trail_py)
+        ok_py = _head_list_unify_output_py(target_py, [], S_py, [], trail_py)
+
+        trail_c = Trail()
+        target_c = Var()
+        S_c = Var()
+        unify(S_c, SegList([ConcreteSeg(["a", "b"])]), trail_c)
+        ok_c = _head_list_unify_output(target_c, [], S_c, [], trail_c)
+
+        assert ok_py == ok_c is True
+        assert deref(target_py) == deref(target_c) == "ab"
+        assert type(deref(target_py)) is type(deref(target_c)) is str
+
+    def test_ground_seglist_of_non_chars_stays_list_via_python_fallback(self):
+        # nv — control: a ground SegList with non-1-char elements does
+        # NOT promote (maybe_promote_to_str declines), and must still
+        # hit the ``isinstance(walked, (list, str))`` branch as a list —
+        # unaffected by the fix, still a regression guard against
+        # re-narrowing the isinstance check.
+        trail = Trail()
+        target = Var()
+        S = Var()
+        sl = SegList([ConcreteSeg([1, 2, 3])])
+        unify(S, sl, trail)
+        ok = _head_list_unify_output_py(target, [], S, [], trail)
+        assert ok is True
+        assert deref(target) == [1, 2, 3]
+        assert type(deref(target)) is list

@@ -234,9 +234,18 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
                     segs.append(ConcreteSeg(after_result))
                 return unify(d, SegList(segs), trail)
         elif isinstance(s, SegList):
-            # Star derefs to a SegList — walk it first
+            # Star derefs to a SegList — walk it first.
+            # Review fix (fix round 1): SegList.__walk__ itself applies
+            # maybe_promote_to_str to a fully-ground result (terms.py),
+            # so a ground SegList of all 1-char strs walks to a STR, not
+            # a list — mirror the C twin's ``PyList_Check(walked) ||
+            # PyUnicode_Check(walked)`` gate exactly (_list_unify.c, the
+            # SegList/SegString ground-walk branch) rather than only
+            # handling ``list``. ``result.extend(walked)`` already does
+            # the right thing for a str (iterates its chars, matching
+            # the C twin's per-char ``PyUnicode_Substring`` splice).
             walked = s.__walk__()
-            if isinstance(walked, list):
+            if isinstance(walked, (list, str)):
                 result.extend(walked)
                 result.extend(deref(v) for v in after_vals)
                 # F033: promote list-of-1-char-strs back to str under the
