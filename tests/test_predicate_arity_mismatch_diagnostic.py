@@ -30,6 +30,8 @@ import pytest
 
 from clausal.logic.database import Clause
 from clausal.logic.predicate import make_atom, make_predicate
+from clausal.logic.solve import call
+from clausal.logic.variables import Var, deref, walk
 from clausal.predicate_diagnostics import (
     PredicateArityMismatchError,
     describe_arity_mismatch,
@@ -389,21 +391,49 @@ class TestTermConstructionUnaffected:
         """)
         assert "PASSED" in out
 
-    def test_atom_vocabulary_then_predicate(self):
+    def test_atom_vocabulary_then_predicate_local_name_call(self):
         """A 0-arity imported atom re-minted as a /2 predicate (Phenomenon A).
 
-        ``_arity`` stays 0 on the shared class while the clauses on it are
-        already at /2, so the cheap check in ``_get_dispatch`` fires and the
-        clause-head confirmation has to clear it.  Behaviour is pinned in
-        ``tests/test_functor_import_ordering.py``; this asserts the property
-        the confirmation relies on.
+        P3-1 Task 2 fix round 1 (controller ruling, 2026-09-04): atoms are
+        plain strs post-pivot (§1b/R2), so there is no shared CLASS object
+        any more whose stale ``_arity``/live ``_clause_arity()`` the old
+        ``_get_dispatch`` confirmation reconciled — that mechanism was
+        class-identity machinery this pivot retires.  What survives: the
+        re-defined predicate is fully registered and callable by its bare
+        LOCAL name.  See ``tests/test_functor_import_ordering.py``'s
+        ``TestZeroArityAtomThenPredicate`` for the matching (a)/(b) split and
+        the dotted-owner-path clean-error half.
         """
         use = load_clausal_module(
             os.path.join(FIXTURES, "impord_atom_then_pred.clausal"))
-        shared = use.impord_qd               # the imported atom's class
-        assert shared._arity == 0            # stale
-        assert shared._clause_arity() == 2   # the truth
-        shared._refuse_call_at(2)            # must not raise
+        lm = use.__dict__["$module"]
+        k, v = Var(), Var()
+        results = sorted(
+            (walk(deref(k)), walk(deref(v)))
+            for _ in call("impord_qd", k, v, module=lm)
+        )
+        assert results == [("a", 1), ("b", 2)]
+
+    def test_atom_vocabulary_then_predicate_dotted_path_raises_cleanly(self):
+        """(b) half of the same shape: the dotted owner-path reference to
+        ``impord_qd`` (``impord_atp_lookup``'s body, via ``-import_from``'s
+        dotted remap) still finds the OWNER's plain str atom -- calling it
+        must raise a clean, positioned LogicException/existence_error, never
+        a raw AttributeError."""
+        from clausal.logic.exceptions import LogicException
+
+        use = load_clausal_module(
+            os.path.join(FIXTURES, "impord_atom_then_pred.clausal"))
+        lm = use.__dict__["$module"]
+        k, v = Var(), Var()
+        with pytest.raises(LogicException) as exc_info:
+            list(call("impord_atp_lookup", k, v, module=lm))
+        term = exc_info.value.term
+        indicator = term.args[0].args[1]
+        assert str(term.args[0].args[0]) == "procedure"
+        assert indicator.functor == "/"
+        assert indicator.args == ("impord_qd", 2)
+        assert "not callable at arity 2" in term.args[1]
 
 
 class TestCorrectCallsUnaffected:
@@ -857,6 +887,48 @@ class TestZeroArityFactAtomHead:
             list(call("arcm_flag_use", Var(), module=mod.__dict__["$module"]))
         assert "arcm_flag takes 0 arguments, but this call passes 1" in str(exc.value)
         assert "dataclass" not in str(exc.value)
+
+    def test_calling_a_pure_atom_as_a_goal_across_modules_raises_cleanly(
+        self, tmp_path, monkeypatch,
+    ):
+        """Cross-module analogue of the ``impord_atom_then_pred`` split
+        (P3-1 Task 2 fix round 1, controller ruling, 2026-09-04): an atom
+        that is declared but NEVER defined as a predicate anywhere (no
+        bodyless fact, no clauses -- unlike ``arcm_flag`` above, which
+        re-mints into a real predicate class via its own same-file fact) is
+        imported into another module and called there as a goal.
+        ``_dispatch_at`` (``clausal/logic/predicate.py``) now receives the
+        plain str atom directly and must raise a clean, positioned
+        ``LogicException``/``existence_error("procedure", ...)`` -- never the
+        raw ``AttributeError: 'str' object has no attribute '_get_dispatch'``
+        this used to be before the fix.
+        """
+        from clausal.import_hook import _load_module
+        from clausal.logic.exceptions import LogicException
+        from clausal.logic.solve import call
+        from clausal.logic.variables import Var
+
+        monkeypatch.syspath_prepend(str(tmp_path))
+        write(tmp_path, "arcmpurelib.clausal", """
+            -module(arcmpurelib, [arcm_pure_tag])
+
+            arcm_pure_marker(arcm_pure_tag),
+        """)
+        use = write(tmp_path, "arcmpureuse.clausal", """
+            -import_from(arcmpurelib, [arcm_pure_tag])
+
+            arcm_pure_use(X) <- arcm_pure_tag(X)
+        """)
+        mod = _load_module("_arcmpureuse", str(use))
+        with pytest.raises(LogicException) as exc_info:
+            list(call("arcm_pure_use", Var(), module=mod.__dict__["$module"]))
+        term = exc_info.value.term
+        indicator = term.args[0].args[1]
+        assert str(term.args[0].args[0]) == "procedure"
+        assert indicator.functor == "/"
+        assert indicator.args == ("arcm_pure_tag", 1)
+        assert "not callable at arity 1" in term.args[1]
+        assert "AttributeError" not in term.args[1]
 
 
 class TestCompoundHead:

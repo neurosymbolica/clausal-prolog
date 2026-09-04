@@ -193,18 +193,62 @@ class TestImportThenDeclare:
 
 class TestZeroArityAtomThenPredicate:
     """The shape ``tests/fixtures/impord_atom_then_pred.clausal`` pins: import
-    a 0-arity vocabulary atom and then define a same-named predicate, relying
-    on the clause-head class block re-minting over the import."""
+    a 0-arity vocabulary atom and then define a same-named predicate.
 
-    def test_the_predicate_still_re_mints_over_the_imported_atom(self):
-        vocab = _load_fixture("impord_atomvocab")
+    P3-1 Task 2 fix round 1 (controller ruling, 2026-09-04): pre-pivot, the
+    clause-head class block re-minted a class that a DOTTED owner-path
+    reference (``tests.fixtures.impord_atomvocab.impord_qd``) also happened
+    to reach — a quirk of class re-minting, never a contract. Post-pivot
+    (§1b/R2, atoms are plain strs, no class to re-mint), the split is:
+    (a) the re-defined predicate IS registered in the importing module's own
+    database and fully callable by its bare LOCAL name; (b) a reference that
+    goes through the dotted OWNER path still finds the owner's atom (a str,
+    never redefined there) and calling it is a genuine error — but a clean,
+    positioned ``LogicException``/``existence_error``, never a raw
+    ``AttributeError``. Routing a qualified goal to the local predicate
+    instead is P3-3's qualified-goal design, not this ruling's job.
+    """
+
+    def test_local_name_call_reaches_the_redefined_predicate(self):
+        """(a) ``impord_qd`` by its bare local name is the re-minted /2
+        predicate, registered in ``impord_atom_then_pred``'s own database —
+        independent of whatever the module ATTRIBUTE ``impord_qd`` (the
+        atom's own spelling, unaffected by the local redefinition) holds."""
+        _load_fixture("impord_atomvocab")
         use = _load_fixture("impord_atom_then_pred")
-        # The exported binding stays the 0-arity atom (unchanged behaviour);
-        # the predicate's clauses live on the class the first clause re-minted,
-        # and goals over it still resolve.
-        assert use.impord_qd is vocab.impord_qd
-        assert use.impord_qd._fields == ()
-        assert _solutions(use.impord_atp_lookup, 2) == [("a", "1"), ("b", "2")]
+        lm = use.__dict__["$module"]
+        k, v = Var(), Var()
+        results = sorted(
+            (walk(deref(k)), walk(deref(v)))
+            for _ in call("impord_qd", k, v, module=lm)
+        )
+        assert results == [("a", 1), ("b", 2)]
+
+    def test_dotted_owner_path_call_raises_a_clean_existence_error(self):
+        """(b) ``impord_atp_lookup`` calls ``impord_qd`` via the dotted
+        owner-qualified path (``-import_from`` remaps a body call to the
+        FULL dotted name so local code can't accidentally clobber the
+        import) — the owner never redefines ``impord_qd`` as a predicate, so
+        that path still finds the plain str atom. Calling it must raise a
+        clean, positioned LogicException/existence_error("procedure", ...),
+        never a raw AttributeError."""
+        from clausal.logic.exceptions import LogicException
+
+        _load_fixture("impord_atomvocab")
+        use = _load_fixture("impord_atom_then_pred")
+        lm = use.__dict__["$module"]
+        k, v = Var(), Var()
+        with pytest.raises(LogicException) as exc_info:
+            list(call("impord_atp_lookup", k, v, module=lm))
+        term = exc_info.value.term
+        indicator = term.args[0].args[1]
+        assert str(term.args[0].args[0]) == "procedure"
+        assert indicator.functor == "/"
+        assert indicator.args == ("impord_qd", 2)
+        msg = term.args[1]
+        assert "impord_qd" in msg
+        assert "not callable at arity 2" in msg
+        assert "data reference" in msg
 
 
 class TestGenuineArityDisagreementStillRaises:
