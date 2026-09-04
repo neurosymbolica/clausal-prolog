@@ -254,6 +254,24 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
         if _carries_an_uninjected_head_literal(lift_term):
             return clause
 
+    # A RAW CELL as the lifted term, carrying an opaque value in a slot.
+    #
+    # Fix round 1, third instance of the same fault.  The head-walker fix in
+    # ``globals_env._walk_head`` injects a ``$headlit_<id>`` per opaque slot
+    # of a cell it finds in a HEAD -- but a lifted cell was in the BODY when
+    # the collector ran, so the walker never saw it and the gate is what has
+    # to cover it, exactly as for the ``Call`` case above.
+    #
+    # Unreachable today, and measured so rather than assumed:
+    # ``arg_index._arg_to_index_key`` does not key a raw cell, so a
+    # cell-valued position builds no buckets at all and nothing calls the
+    # lift on one.  It goes live the moment a producer or Task 4 changes
+    # that, which is why the gate is here now instead of in a todo.
+    if type(lift_term) is tuple and lift_term and (
+            isinstance(lift_term[0], str) or lift_term[0] is TUPLE_TAG):
+        if _carries_an_uninjected_head_literal(lift_term):
+            return clause
+
     # Rebuild head with lift_term at pos
     if isinstance(head, Compound):
         new_args = list(head.args)

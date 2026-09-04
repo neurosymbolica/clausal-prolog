@@ -31,6 +31,8 @@ from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
 )
 
+from clausal.logic.cells import TUPLE_TAG
+
 from ._ast_helpers import _name, _call, _assign
 from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import (
@@ -347,6 +349,33 @@ def _collect_globals_info(
             cls = _record_term_type(types, term)
             for name in term_field_names(term):
                 _walk_head(getattr(term, name))
+        elif type(term) is tuple and term and (
+                isinstance(term[0], str) or term[0] is TUPLE_TAG):
+            # A CELL.  P3-2 Task 3 fix round 1: this walker and
+            # ``head_match``'s live-cell branch have to agree about what a
+            # cell IS, and they did not.  The walker treated a ground cell as
+            # a LEAF and injected one ``$headlit_<id(whole cell)>``; the head
+            # branch matches a cell STRUCTURALLY and asks instead for a
+            # ``$headlit_<id(inner value)>`` per opaque slot — which nothing
+            # injected, so a head arg like ``pt(1, <a date>)`` compiled to an
+            # arm that raised ``NameError`` on its first caller (the
+            # ``Compound`` twin, which this walker has always recursed into,
+            # answered correctly — that asymmetry WAS the bug).
+            #
+            # So: recurse into the slots, mirroring the ``Compound`` branch
+            # above, on exactly the tags ``head_match``'s branch claims (str
+            # or ``TUPLE_TAG``, slot 0 read raw).
+            for e in term[1:]:
+                _walk_head(e)
+            # ... AND keep the whole-cell entry, because two shapes still
+            # reach the opaque-literal capture below rather than the cell
+            # pattern: a ``TUPLE_TAG`` cell compiled where ``$cells`` was not
+            # injected, and a cell whose functor slot is a BOUND Var (read
+            # raw, so head_match cannot see a str there — the T3-to-T5
+            # window).  An unused entry costs one dict slot; a missing one is
+            # a NameError, so both are injected rather than guessed between.
+            if _is_opaque_head_literal(term):
+                types[headlit_global_key(term)] = term
         elif _is_opaque_head_literal(term):
             # A02-F003: inject opaque ground head literals (date, Decimal,
             # tuple, set, …) so head_to_match_pattern's capture+unify guard can

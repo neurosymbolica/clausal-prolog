@@ -973,6 +973,28 @@ def _case_lines(src: str) -> list[str]:
     return [l.strip() for l in src.splitlines() if l.lstrip().startswith("case ")]
 
 
+#: ``assertz`` of a fact whose CELL head arg carries an opaque literal -- the
+#: route on which finding 2 was reported, spelled in ``.clausal`` rather than
+#: through the Python API.  ``q/2`` and ``n/2`` are -dynamic, so their heads
+#: are predicate instances and ``_normalize_fact_clause`` passes them through
+#: unhoisted: the cell sits in the head from the start.
+_OPAQUE_ASSERTZ_SRC = """
+-allow_singletons
+-import_from(date_time, [date])
+-module(_tt_opaque_assertz, [pt(X, Y), q(S, K), n(S, K)])
+-dynamic(q/2)
+-dynamic(n/2)
+
+setup <- (
+    date(2020, 1, 1, D),
+    assertz(q(pt(1, D), "yes")),
+    assertz(q(_Any, "catchall")),
+    assertz(n(pt(1, pt(2, D)), "yes")),
+    assertz(n(_Any2, "catchall"))
+)
+"""
+
+
 #: Six ``kind/2`` clauses -- over ``_INDEX_THRESHOLD`` -- whose position-0
 #: buckets the lift reaches, one of them carrying a ``PyThunk`` (the f-string)
 #: nested inside the compound reference.  See
@@ -1306,13 +1328,21 @@ class TestLiveCellHeadArg:
 
     def test_a_var_functor_cell_head_arg_stays_a_wildcard(self):
         """Nothing can be decided statically about ``(X, 1, 2)`` -- the same
-        answer the ``Compound`` branch gives a var-functor Compound."""
+        answer the ``Compound`` branch gives a var-functor Compound.
+
+        The SINK has to come back empty too.  Recursing into the slots before
+        deciding the tag left their guards behind in ``list_guards`` while the
+        pattern that would have bound their captures was discarded, so the
+        arm ran ``_ncap1 == 2`` against a name no pattern binds (fix round 1,
+        finding 1).  Asserting only the pattern is what let that through.
+        """
         from clausal.logic.compiler.head_match import head_to_match_pattern
 
         vc, lg = {}, []
         got = _unparse_pattern(head_to_match_pattern(
             (Var(), 1, 2), vc, [], lg, None, globals_={}))
         assert got == "case _:"
+        assert lg == [], f"guards leaked for a pattern that was discarded: {lg}"
 
     def test_a_tuple_data_cell_head_arg_matches_on_the_dotted_tag(self):
         """Spec section 4: ``(tuple, e1, ...)`` tags slot 0 with the ``tuple``
@@ -1347,9 +1377,179 @@ class TestLiveCellHeadArg:
         from clausal.logic.cells import make_tuple_cell
         from clausal.logic.compiler.head_match import head_to_match_pattern
 
+        sink = []
         got = _unparse_pattern(head_to_match_pattern(
-            make_tuple_cell(1, Var()), {}, [], [], None, globals_={}))
+            make_tuple_cell(1, Var()), {}, [], sink, None, globals_={}))
         assert got == "case _:"
+        assert sink == [], f"guards leaked for a discarded pattern: {sink}"
+
+        # ... and the GROUND tuple-data cell that legitimately falls through
+        # to that capture leaves exactly the one guard it is supposed to.
+        ground_sink = []
+        got_ground = _unparse_pattern(head_to_match_pattern(
+            make_tuple_cell(1, 2), {}, [], ground_sink, None, globals_={}))
+        assert got_ground == "case _xcap0:"
+        assert [e[0] for e in ground_sink] == ["headlit"]
+
+
+class TestCellHeadGuardLeaks:
+    """Fix round 1, finding 1: a discarded cell pattern must discard its
+    guards with it.
+
+    ``head_to_match_pattern``'s slot recursion appends to the ``list_guards``
+    sink as a side effect.  The live-cell branch used to recurse BEFORE
+    testing the tag, so when the tag test failed the pattern was thrown away
+    and the guards were not -- the compiled arm then ran a guard against a
+    capture name no pattern binds.  These drive the two shapes end to end;
+    the sink-level assertions live on the two degradation tests above.
+    """
+
+    def _module(self, arg):
+        from clausal.logic.database import Clause, Database, Module
+        from clausal.logic.predicate import make_predicate
+        from clausal.logic.compiler import predicate as predicate_mod
+
+        Q = make_predicate("gg", ("S", "K"))
+        db = Database()
+        db.assertz(Clause(head=Q(S=arg, K="yes"), body=[]))
+        db.assertz(Clause(head=Q(S=Var(), K="catchall"), body=[]))
+        predicate_mod.compile_predicate_trampoline(
+            "gg", 2, db.clauses_for("gg", 2), db, globals_={"gg": Q})
+        m = Module("_tt_guard_leak")
+        m.db = db
+        return m
+
+    def _ask(self, m, probe):
+        K = Var()
+        return [deref(K) for _t in call("gg", probe, K, module=m)]
+
+    def test_an_unbound_var_functor_cell_head_arg_does_not_crash(self):
+        """`NameError: name '_ncap1' is not defined` before the fix."""
+        m = self._module((Var(), 1, 2))
+        # A var-functor cell decides nothing statically, so the clause is a
+        # wildcard and fires -- the same answer a var-functor Compound gets
+        # (A01-D004).  What matters here is that it ANSWERS.
+        assert self._ask(m, 42) == ["yes", "catchall"]
+        assert self._ask(m, ("pt", 1, 2)) == ["yes", "catchall"]
+
+    def test_a_bound_var_functor_cell_head_arg_does_not_crash(self):
+        """The T3-to-T5 window shape the pre-flight scan predicted would
+        reach the capture-and-unify guard.  It does -- and before the fix it
+        crashed there, because the leaked scalar guards ran right after the
+        headlit guard passed, so only a MATCHING caller reached them."""
+        from clausal.logic.variables import Trail, unify
+
+        bound = Var()
+        unify(bound, "pt", Trail())
+        m = self._module((bound, 1, 2))
+        assert self._ask(m, ("pt", 1, 2)) == ["yes", "catchall"]
+        assert self._ask(m, 42) == ["catchall"]
+
+
+class TestCellHeadArgOpaqueSlots:
+    """Fix round 1, finding 2: the head-walker and the head-pattern branch
+    have to agree about what a cell IS.
+
+    ``_collect_globals_info._walk_head`` treated a ground cell as a LEAF and
+    injected one ``$headlit_<id(whole cell)>``; the live-cell branch matches
+    structurally and asks for ``$headlit_<id(inner value)>`` per opaque slot.
+    Nothing injected those, so the arm raised ``NameError`` on its first
+    caller -- while the ``Compound`` twin, which the walker has always
+    recursed into, answered correctly.  That asymmetry is the bug, and the
+    parity assertion below is the test for it.
+    """
+
+    #: One representative per opaque-head-literal class the walker can meet
+    #: inside a cell slot.  ``nested cell`` is the recursive case.
+    def _opaque_values(self):
+        import datetime
+        from decimal import Decimal
+
+        return {
+            "date": datetime.date(2020, 1, 1),
+            "Decimal": Decimal("1.25"),
+            "frozenset": frozenset({1, 2}),
+            "nested cell": ("inner", datetime.date(2021, 2, 3)),
+        }
+
+    def _module(self, functor, arg):
+        from clausal.logic.database import Clause, Database, Module
+        from clausal.logic.predicate import make_predicate
+        from clausal.logic.compiler import predicate as predicate_mod
+
+        Q = make_predicate(functor, ("S", "K"))
+        db = Database()
+        db.assertz(Clause(head=Q(S=arg, K="yes"), body=[]))
+        db.assertz(Clause(head=Q(S=Var(), K="catchall"), body=[]))
+        predicate_mod.compile_predicate_trampoline(
+            functor, 2, db.clauses_for(functor, 2), db, globals_={functor: Q})
+        m = Module("_tt_opaque_slot")
+        m.db = db
+        return m
+
+    def _ask(self, m, functor, probe):
+        K = Var()
+        return [deref(K) for _t in call(functor, probe, K, module=m)]
+
+    @pytest.mark.parametrize("kind", ["date", "Decimal", "frozenset",
+                                      "nested cell"])
+    def test_an_opaque_value_in_a_cell_slot_answers_like_its_compound_twin(
+            self, kind):
+        from clausal.terms import Compound
+
+        value = self._opaque_values()[kind]
+        cell_mod = self._module("oc", ("pt", 1, value))
+        comp_mod = self._module("od", Compound("pt", (1, value)))
+
+        assert self._ask(cell_mod, "oc", ("pt", 1, value)) == \
+            self._ask(comp_mod, "od", Compound("pt", (1, value))) == \
+            ["yes", "catchall"]
+        assert self._ask(cell_mod, "oc", 42) == \
+            self._ask(comp_mod, "od", 42) == ["catchall"]
+        # ... and a DIFFERENT value in the slot is rejected, so the guard is
+        # really testing the value rather than accepting anything.
+        assert self._ask(cell_mod, "oc", ("pt", 1, "other")) == ["catchall"]
+
+    def test_the_clausal_assertz_repro(self):
+        """The reviewer's repro, from source rather than from the Python API:
+        ``assertz`` of a fact whose cell head arg carries a date."""
+        import datetime
+
+        mod = _load_inline("_tt_opaque_assertz", _OPAQUE_ASSERTZ_SRC)
+        lm = mod.__dict__["$module"]
+        list(call("setup", module=lm))
+        d = datetime.date(2020, 1, 1)
+        K = Var()
+        assert [deref(K) for _t in call("q", ("pt", 1, d), K, module=lm)] \
+            == ["yes", "catchall"]
+        K2 = Var()
+        assert [deref(K2) for _t in call("q", 42, K2, module=lm)] == ["catchall"]
+        # the nested-cell variant of the same shape
+        K3 = Var()
+        assert [deref(K3) for _t in
+                call("n", ("pt", 1, ("pt", 2, d)), K3, module=lm)] \
+            == ["yes", "catchall"]
+
+    def test_the_walker_records_a_cells_inner_literals(self):
+        """Directly, at the seam that was inconsistent: the head walker must
+        report a global for the value INSIDE the cell, not only for the cell.
+        """
+        import datetime
+
+        from clausal.logic.compiler.globals_env import _collect_globals_info
+        from clausal.logic.compiler.terms_to_ast import headlit_global_key
+        from clausal.logic.database import Clause
+        from clausal.logic.predicate import make_predicate
+
+        d = datetime.date(2020, 1, 1)
+        cell = ("pt", 1, d)          # keyed by id(), so hold the ONE object
+        Q = make_predicate("ww", ("S", "K"))
+        types, _thunks, _targets = _collect_globals_info(
+            [Clause(head=Q(S=cell, K="yes"), body=[])])
+        assert headlit_global_key(d) in types, sorted(types)
+        # The whole-cell entry stays too -- a TUPLE_TAG cell compiled without
+        # $cells, and a bound-Var-functor cell, still reach the capture.
+        assert headlit_global_key(cell) in types
 
 
 class TestStructuralHeadValue:

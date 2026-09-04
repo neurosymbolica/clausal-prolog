@@ -776,15 +776,24 @@ def head_to_match_pattern(
     # ``Compound`` branch also returns.  ``type(...) is tuple`` matches
     # ``cells.is_cell``'s own domain — a tuple SUBCLASS (a namedtuple) is
     # opaque data, not a cell (the exact-type ruling of Task 2C).
+    #
+    # The tag test comes FIRST and the slots are recursed into only inside a
+    # branch that RETURNS.  Recursing before deciding leaks: the recursion
+    # appends to ``list_guards`` as a side effect (the scalar, str/bytes,
+    # list, dict and set branches all do), so a slot pattern built and then
+    # discarded because the tag test failed leaves its guard behind in the
+    # sink, and the compiled arm runs a guard against a capture name no
+    # pattern binds -- ``NameError: name '_ncap1' is not defined`` on the
+    # first caller that reaches it.  Every early return in this cascade owns
+    # its own recursion for the same reason.
     if type(term) is tuple and term:
         _tag = term[0]
-        _slots = [
-            head_to_match_pattern(a, var_context, dup_guards, list_guards,
-                                  _list_reg_ids, globals_=globals_)
-            for a in term[1:]
-        ]
         if isinstance(_tag, str):
-            return _cell_match_pattern(_tag, _slots)
+            return _cell_match_pattern(_tag, [
+                head_to_match_pattern(a, var_context, dup_guards, list_guards,
+                                      _list_reg_ids, globals_=globals_)
+                for a in term[1:]
+            ])
         # Tuple DATA — ``(tuple, e1, …)``, slot 0 is the ``tuple`` TYPE object
         # (spec section 4).  A bare ``tuple`` written in a pattern is a
         # CAPTURE, so the tag has to be a DOTTED value pattern.  It is rooted
@@ -798,7 +807,12 @@ def head_to_match_pattern(
                 and CELLS_NAMESPACE_KEY in globals_:
             return ast.MatchSequence(patterns=[
                 ast.MatchValue(value=_attr(CELLS_NAMESPACE_KEY, "TUPLE_TAG")),
-                *_slots,
+                *[
+                    head_to_match_pattern(a, var_context, dup_guards,
+                                          list_guards, _list_reg_ids,
+                                          globals_=globals_)
+                    for a in term[1:]
+                ],
             ])
 
     # A02-F003: a ground head literal with no dedicated branch above (date,
