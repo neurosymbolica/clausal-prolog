@@ -29,7 +29,7 @@ import pathlib
 
 import pytest
 
-from clausal.logic.variables import Var, deref
+from clausal.logic.variables import Var, deref, is_var
 from clausal.logic.solve import call
 
 from tests.tagged_terms_support import (
@@ -752,25 +752,30 @@ class TestHeadPatterns:
                             globals_=other.__dict__)
         assert got.startswith("case ['point', ")
 
-    def test_no_tuple_data_tag_is_emitted_in_this_stage(self):
-        """The ``(tuple, ...)`` tuple-DATA pattern is NOT implemented here.
+    def test_the_tuple_data_tag_is_now_emitted_as_a_dotted_value_pattern(self):
+        """P3-2 Task 3.  Inverts ``test_no_tuple_data_tag_is_emitted_in_this
+        _stage``, which recorded the tuple-DATA arm's deliberate absence and
+        the constraint any future one would have to meet: a DOTTED value
+        pattern, because a bare ``tuple`` in a pattern is a capture.
 
-        Recorded as a test so the absence is deliberate rather than an
-        oversight: this stage's corpus reaches no tuple-data head pattern.  If
-        one is ever added it must use the dotted ``builtins.tuple`` value
-        pattern -- a bare ``tuple`` in a pattern is a capture, and
-        ``__builtins__`` is a dict inside an imported module.
+        The arm exists now, and it is rooted at ``$cells`` rather than at
+        ``builtins`` -- see ``cells.CELLS_NAMESPACE_KEY``.  A str-functor cell
+        still tags slot 0 with the plain spelling.
         """
         from clausal.logic.compiler import head_match
 
-        # The only cell pattern this stage emits tags slot 0 with a functor
-        # STRING; nothing here needs the ``tuple`` type object, so the
-        # ``builtins.tuple`` value pattern is not emitted and cannot be
-        # mis-spelled as a bare ``tuple`` capture.
-        assert not hasattr(head_match, "TUPLE_TAG")
         pattern = head_match._cell_match_pattern("point", [])
         assert isinstance(pattern.patterns[0], ast.MatchValue)
         assert pattern.patterns[0].value.value == "point"
+        # The tuple-DATA tag never becomes a bare name (that would CAPTURE).
+        # ``$cells`` is what a compiled predicate's base_globals carries; the
+        # fixture module's own namespace does not, so it is supplied here.
+        from clausal.logic.cells import CELLS_NAMESPACE_KEY
+
+        g = dict(self._module_globals())
+        g[CELLS_NAMESPACE_KEY] = None
+        got = self._pattern((head_match.TUPLE_TAG, 1), globals_=g)
+        assert got == "case [$cells.TUPLE_TAG, _ncap0]:"
 
 
 class TestBucketPatternIntegration:
@@ -784,11 +789,16 @@ class TestBucketPatternIntegration:
     so a live term instance -- the shape this used to build its clauses from,
     because it is the shape ``_lift_clause_at_pos`` lifts -- now yields a
     CLASS pattern.  The clauses are built from cells instead, which is what
-    the compiler produces for source-written data.  What that costs is
-    recorded in ``test_the_lift_does_not_yet_reach_a_cell_pattern`` below:
-    the lift does not recognise a cell, so dispatch stays correct but goes
-    through the capture-and-unify path rather than a sequence pattern.  Task
-    3 is where the lift learns cells.
+    the compiler produces for source-written data.
+
+    P3-2 Task 3 closed the gap this class used to record: a cell head arg now
+    has its own branch in ``head_to_match_pattern`` and matches as a sequence.
+    Note the clauses here are asserted straight into a ``Database`` with a
+    ``Compound`` head, which is the ONE route that runs no hoist at all --
+    neither ``Module.define_predicate`` nor ``database_ops``' fact
+    normalisation -- so the cell sits in the head from the start and there is
+    nothing for the bucket lift to lift.  The lift's own reach is covered by
+    ``TestCellHeadReachability``.
     """
 
     #: Head functor for the probe predicate.  A ``Compound`` head under a
@@ -830,23 +840,23 @@ class TestBucketPatternIntegration:
             predicate_mod.functiondef_to_function = original
         return db, "\n".join(captured)
 
-    def test_the_lift_does_not_yet_reach_a_cell_pattern(self):
-        """Recorded finding, not an endorsement (Task 3 closes it).
+    def test_a_cell_head_arg_reaches_a_sequence_pattern(self):
+        """P3-2 Task 3.  Inverts ``test_the_lift_does_not_yet_reach_a_cell
+        _pattern``, which recorded the Task-2 state: a cell head arg had no
+        branch in ``head_to_match_pattern``, so a GROUND one was captured and
+        unified against a ``$headlit`` global (correct, unindexed) and a
+        NON-GROUND one fell to the accept-all wildcard (wrong -- Task 2 report
+        section 12).
 
-        ``list_dispatch._lift_clause_at_pos`` recognises ``Compound`` and
-        term-instance head args; a CELL is a plain tuple, so it is not
-        lifted into a sequence pattern.  The clause still dispatches
-        correctly -- the ground cell is captured and unified against a
-        ``$headlit`` global, the value-rejecting path every other opaque
-        ground literal takes -- which is why
-        ``test_cell_callers_select_the_right_clause`` below passes.  What is
-        missing is the INDEXED pattern, not the answer.
+        The live-cell branch decides both, structurally: a cell is matched the
+        way its ``Compound`` analog is matched.
         """
         _db, src = self._compile_cell_headed_kind()
-        assert "case [['point', _ncap0, _ncap1]," not in src
+        assert "case [['point', _ncap0, _ncap1]," in src
+        assert "case [['seg', " in src
         assert "case [point(" not in src
-        # ... and the ground cells reach the clause bodies as head literals.
-        assert "$headlit_" in src
+        # ... and no cell is left riding the opaque-literal capture.
+        assert "$headlit_" not in src
 
     @pytest.mark.parametrize(
         "shape, expected",
@@ -934,6 +944,181 @@ class TestHeadPatternReachability:
         # live code, and still tested.
         assert arg_index._runtime_arg_key(
             _python_minted("point", ("X", "Y"), 3, 4)) == ("point", 2)
+
+
+class TestLiveCellHeadArg:
+    """A live CELL sitting in a clause head -- the ``assertz`` path.
+
+    ``head_to_match_pattern`` had no tuple branch, so a cell head arg fell
+    through: a GROUND one to the A02-F003 opaque-literal capture, and a
+    NON-GROUND one to the accept-all wildcard, which fired on every caller
+    (Task 2 report section 12).  The rule is the one the whole flip is held
+    to: answer exactly what the ``Compound`` analog answers.
+    """
+
+    def _fact_module(self, arg):
+        from clausal.logic.database import Clause, Database, Module
+        from clausal.logic.predicate import make_predicate
+        from clausal.logic.compiler import predicate as predicate_mod
+
+        Q = make_predicate("qq", ("S", "K"))
+        db = Database()
+        db.assertz(Clause(head=Q(S=arg, K="yes"), body=[]))
+        db.assertz(Clause(head=Q(S=Var(), K="catchall"), body=[]))
+        predicate_mod.compile_predicate_trampoline(
+            "qq", 2, db.clauses_for("qq", 2), db, globals_={"qq": Q})
+        m = Module("_tt_live_cell")
+        m.db = db
+        return m
+
+    def _ask(self, m, probe):
+        K = Var()
+        return [deref(K) for _t in call("qq", probe, K, module=m)]
+
+    def test_a_non_ground_cell_head_arg_no_longer_fires_on_everything(self):
+        """The section-12 repro."""
+        m = self._fact_module(("pt", 1, Var()))
+        assert self._ask(m, 42) == ["catchall"]
+        assert self._ask(m, ("other", 1, 2)) == ["catchall"]
+        assert self._ask(m, ("pt", 1, 2)) == ["yes", "catchall"]
+
+    def test_a_non_ground_cell_answers_what_its_compound_twin_answers(self):
+        from clausal.terms import Compound
+
+        cell = self._fact_module(("pt", 1, Var()))
+        comp = self._fact_module(Compound("pt", (1, Var())))
+        assert self._ask(cell, 42) == self._ask(comp, 42)
+        assert self._ask(cell, ("pt", 1, 2)) == self._ask(
+            comp, Compound("pt", (1, 2)))
+
+    def test_the_inner_var_is_fresh_per_invocation(self):
+        """A captured literal cannot carry an inner Var -- it would be SHARED
+        across invocations.  The sequence pattern captures into per-call
+        locals instead, so a first caller binding the slot cannot leak into
+        a second."""
+        m = self._fact_module(("pt", 1, Var()))
+        assert self._ask(m, ("pt", 1, "a")) == ["yes", "catchall"]
+        assert self._ask(m, ("pt", 1, "b")) == ["yes", "catchall"]
+
+    def test_a_ground_cell_head_arg_still_selects_correctly(self):
+        m = self._fact_module(("pt", 1, 2))
+        assert self._ask(m, ("pt", 1, 2)) == ["yes", "catchall"]
+        assert self._ask(m, 42) == ["catchall"]
+        assert self._ask(m, ("pt", 1, 3)) == ["catchall"]
+
+    def test_the_cell_and_compound_rows_agree_in_every_argument_mode(self):
+        """The parity table, asserted rather than argued.
+
+        For each of the four head-arg shapes, what the clause accepts, what it
+        rejects, and whether an unbound caller gets an answer.  Cells answer
+        what their ``Compound`` analog answers -- including the part nobody
+        likes, that a structural head arg asserted through ``assertz`` has no
+        output mode (the hoist that provides one runs on the ``.clausal``
+        loading path, not here, and it has never run for ``Compound`` either).
+        """
+        from clausal.terms import Compound
+
+        def row(arg, self_shaped):
+            m = self._fact_module(arg)
+            S, K = Var(), Var()
+            return (
+                self._ask(m, 42),
+                self._ask(m, self_shaped),
+                [deref(K) for _t in call("qq", S, K, module=m)],
+            )
+
+        comp_ground = row(Compound("pt", (1, 2)), Compound("pt", (1, 2)))
+        comp_open = row(Compound("pt", (1, Var())), Compound("pt", (1, 2)))
+        cell_ground = row(("pt", 1, 2), ("pt", 1, 2))
+        cell_open = row(("pt", 1, Var()), ("pt", 1, 2))
+
+        assert cell_ground == comp_ground
+        assert cell_open == comp_open
+        assert comp_ground == (["catchall"], ["yes", "catchall"], ["catchall"])
+
+    def test_a_var_functor_cell_head_arg_stays_a_wildcard(self):
+        """Nothing can be decided statically about ``(X, 1, 2)`` -- the same
+        answer the ``Compound`` branch gives a var-functor Compound."""
+        from clausal.logic.compiler.head_match import head_to_match_pattern
+
+        vc, lg = {}, []
+        got = _unparse_pattern(head_to_match_pattern(
+            (Var(), 1, 2), vc, [], lg, None, globals_={}))
+        assert got == "case _:"
+
+    def test_a_tuple_data_cell_head_arg_matches_on_the_dotted_tag(self):
+        """Spec section 4: ``(tuple, e1, ...)`` tags slot 0 with the ``tuple``
+        TYPE OBJECT, so the pattern needs a DOTTED value pattern -- a bare
+        ``tuple`` in a pattern is a capture."""
+        from clausal.logic.cells import make_tuple_cell
+
+        m = self._fact_module(make_tuple_cell(1, Var()))
+        assert self._ask(m, make_tuple_cell(1, 2)) == ["yes", "catchall"]
+        assert self._ask(m, make_tuple_cell(9, 9)) == ["catchall"]
+        # ... and it is NOT confused with plain tuple data, nor with a
+        # str-functor cell of the same length.
+        assert self._ask(m, (1, 2)) == ["catchall"]
+        assert self._ask(m, ("pt", 1, 2)) == ["catchall"]
+
+    def test_the_tuple_data_tag_is_rooted_at_the_cells_namespace(self):
+        """Never a bare ``tuple`` (a capture), never ``builtins`` (a name a
+        user module can rebind), never ``__builtins__`` (a dict inside an
+        imported module)."""
+        from clausal.logic.cells import CELLS_NAMESPACE_KEY, make_tuple_cell
+        from clausal.logic.compiler.head_match import head_to_match_pattern
+
+        got = _unparse_pattern(head_to_match_pattern(
+            make_tuple_cell(1, 2), {}, [], [], None,
+            globals_={CELLS_NAMESPACE_KEY: None}))
+        assert got == "case [$cells.TUPLE_TAG, _ncap0, _ncap1]:"
+
+    def test_without_the_cells_namespace_the_tag_degrades_to_a_wildcard(self):
+        """A compilation path that does not inject ``$cells`` must not emit a
+        pattern that would ``NameError`` at MATCH time.  A ground tuple-data
+        cell still reaches the A02-F003 opaque-literal capture below it."""
+        from clausal.logic.cells import make_tuple_cell
+        from clausal.logic.compiler.head_match import head_to_match_pattern
+
+        got = _unparse_pattern(head_to_match_pattern(
+            make_tuple_cell(1, Var()), {}, [], [], None, globals_={}))
+        assert got == "case _:"
+
+
+class TestStructuralHeadValue:
+    """``database._is_structural_head_value`` -- the hoist's admission test.
+
+    A cell containing a Var is exactly the shape whose inner vars have to
+    couple to the clause's body, which is the reason ``Compound`` is on the
+    list.  Cells join it.
+    """
+
+    def test_a_cell_is_structural(self):
+        from clausal.logic.database import _is_structural_head_value
+
+        assert _is_structural_head_value(("pt", 1, Var()))
+        assert _is_structural_head_value(("pt", 1, 2))
+
+    def test_a_plain_data_tuple_is_not_structural(self):
+        from clausal.logic.database import _is_structural_head_value
+
+        assert not _is_structural_head_value((1, 2))
+
+    def test_a_cell_nested_in_a_head_list_is_found(self):
+        from clausal.logic.database import _contains_structural_head_value
+
+        assert _contains_structural_head_value([("pt", 1, Var())])
+
+    def test_the_hoist_moves_a_cell_head_arg_into_the_body(self):
+        from clausal.logic.database import _normalize_structural_head_args
+        from clausal.logic.predicate import make_predicate
+        from clausal.terms import Unify
+
+        Q = make_predicate("qq", ("S", "K"))
+        head, body = _normalize_structural_head_args(
+            Q(S=("pt", 1, Var()), K="yes"), [True])
+        assert is_var(deref(head.S))
+        assert isinstance(body[0], Unify)
+        assert body[0].right == ("pt", 1, body[0].right[2])
 
 
 class TestNormalizer:

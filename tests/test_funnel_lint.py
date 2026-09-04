@@ -272,7 +272,11 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
                "from _functor_name (see task-3-report.md determination)"),
     # task-2-report.md / plan Task 2 text: "leave head_key itself as-is (it
     # is the canonical pair function; do not rewrite it this phase)".
-    AllowEntry("clausal/logic/database.py", (524, 556),
+    # Range shifted 524-556 -> 541-573 by P3-2 task-3's cell branch in
+    # ``_is_structural_head_value`` earlier in the same file (a mechanical
+    # line-count shift, not a semantic change -- see
+    # .superpowers/sdd/p32-cell-default-flip/task-3-report.md).
+    AllowEntry("clausal/logic/database.py", (541, 573),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list)"),
 

@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 from clausal.terms import And, Call, Compound, KWTerm, LoadName, PyThunk
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
+from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.predicate import (
     PredicateMeta,
     describe_term_identity_mismatch,
@@ -445,10 +446,11 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
 
 def _is_structural_head_value(val: Any) -> bool:
     """True if val is a structural term that head_to_match_pattern would compile
-    to a value-rejecting MatchClass (Compound / Call(LoadName) / functor
-    instance). Such head args must be hoisted into a Var + Unify body goal so an
-    unbound caller binds in output mode. Atomics, Vars, StarUnpack and lists are
-    handled by other compiler paths and must NOT be normalized here."""
+    to a value-rejecting MatchClass or sequence pattern (Compound /
+    Call(LoadName) / functor instance / CELL). Such head args must be hoisted
+    into a Var + Unify body goal so an unbound caller binds in output mode.
+    Atomics, Vars, StarUnpack and lists are handled by other compiler paths and
+    must NOT be normalized here."""
     from clausal.logic.variables import is_var
     if is_var(val) or isinstance(val, (StarUnpack, list, KWTerm)):
         return False
@@ -457,6 +459,21 @@ def _is_structural_head_value(val: Any) -> bool:
     if isinstance(val, Call):
         return isinstance(val.func, LoadName)
     if is_term_instance(val):
+        return True
+    # A live CELL — ``("point", 1, X)``.  P3-2 Task 3: post-flip this is the
+    # compiled representation of the very same term ``Compound`` is on this
+    # list for, and it needs hoisting for the identical reason.  A cell
+    # containing a Var is the sharp case: its inner Var has to couple to the
+    # clause's body, and a head pattern captures into per-call locals while
+    # the hoisted ``Unify`` also freshens it (``_preallocate_body_vars``) —
+    # whereas leaving it in the head unhoisted costs output-mode binding, so
+    # an unbound caller gets no answer where the pre-flip class program bound
+    # one.  Slot 0 is read RAW (no deref), matching the head-pattern branch
+    # this decision feeds; ``type(...) is tuple`` matches ``cells.is_cell``'s
+    # own domain, so a tuple SUBCLASS stays opaque data (Task 2C's exact-type
+    # ruling), and a plain data tuple ``(1, 2)`` is not structural either.
+    if type(val) is tuple and val and (
+            isinstance(val[0], str) or val[0] is TUPLE_TAG):
         return True
     # A deferred Python expression (quantity/currency literal `5(m)`,
     # f-string, `++()` escape) in a head arg: nothing on the head-match path

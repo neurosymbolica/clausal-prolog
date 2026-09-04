@@ -35,6 +35,7 @@ from clausal.pythonic_ast.nodes import (
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, term_field_names_of_class, PredicateMeta,
 )
+from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY
 
 from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -743,6 +744,62 @@ def head_to_match_pattern(
                 for name in fields
             ],
         )
+
+    # A LIVE CELL in the head — a raw tuple, not the ``Call(LoadName)`` a
+    # ``.clausal`` source reference is.  It arrives two ways: from the
+    # argument-index lift (P3-2 Task 3, which restores a hoisted body ``Unify``
+    # into the head of a bucket clause), and from ``assertz`` of a fact whose
+    # argument a Python or ``.clausal`` caller had already built.
+    #
+    # A cell is STRUCTURAL, exactly as a ``Compound`` is, so it matches the way
+    # a ``Compound`` does: a pattern that discriminates the functor and the
+    # arity and captures the arguments into per-call locals.  Two reasons this
+    # is the branch rather than the A02-F003 opaque-literal capture below:
+    #
+    # * A cell containing a Var CANNOT be captured-and-unified.  The captured
+    #   literal is one object shared by every invocation of the clause, so its
+    #   inner Var would be shared too — which is why ``_is_opaque_head_literal``
+    #   refuses a non-ground container, leaving it to the accept-all wildcard
+    #   that fired on every caller (Task 2 report section 12).  Recursing into
+    #   the slots registers each inner Var in ``var_context``, giving it a
+    #   fresh per-call binding, which is what the ``Compound`` branch above
+    #   does with ``term.args``.
+    # * The two representations of the same term must answer alike.  Under this
+    #   branch a cell head arg accepts and rejects exactly what its ``Compound``
+    #   analog accepts and rejects, in every argument mode.  Output-mode
+    #   BINDING for a structural head arg comes from the hoist
+    #   (``database._is_structural_head_value``), not from the pattern — for
+    #   cells and Compounds alike.
+    #
+    # Slot 0 is read RAW, not deref'd: a bound-Var functor is not a shape this
+    # can decide, and it falls through to the wildcard the var-functor
+    # ``Compound`` branch also returns.  ``type(...) is tuple`` matches
+    # ``cells.is_cell``'s own domain — a tuple SUBCLASS (a namedtuple) is
+    # opaque data, not a cell (the exact-type ruling of Task 2C).
+    if type(term) is tuple and term:
+        _tag = term[0]
+        _slots = [
+            head_to_match_pattern(a, var_context, dup_guards, list_guards,
+                                  _list_reg_ids, globals_=globals_)
+            for a in term[1:]
+        ]
+        if isinstance(_tag, str):
+            return _cell_match_pattern(_tag, _slots)
+        # Tuple DATA — ``(tuple, e1, …)``, slot 0 is the ``tuple`` TYPE object
+        # (spec section 4).  A bare ``tuple`` written in a pattern is a
+        # CAPTURE, so the tag has to be a DOTTED value pattern.  It is rooted
+        # at ``$cells`` rather than at ``builtins``: the ``$`` prefix cannot
+        # collide with a module-level name (``base_globals`` is updated FROM
+        # the module namespace), whereas a module binding called ``builtins``
+        # would silently break the pattern.  Emitted only when that entry is
+        # actually present, so a compilation path that does not inject it
+        # degrades to the wildcard rather than to a match-time ``NameError``.
+        if _tag is TUPLE_TAG and globals_ is not None \
+                and CELLS_NAMESPACE_KEY in globals_:
+            return ast.MatchSequence(patterns=[
+                ast.MatchValue(value=_attr(CELLS_NAMESPACE_KEY, "TUPLE_TAG")),
+                *_slots,
+            ])
 
     # A02-F003: a ground head literal with no dedicated branch above (date,
     # Decimal, Fraction, tuple, set, Path, …) previously fell through to a bare

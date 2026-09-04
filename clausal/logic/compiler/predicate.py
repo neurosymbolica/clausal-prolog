@@ -20,6 +20,8 @@ from typing import Any, Callable
 
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.logic.trampoline import Step, DONE, StepGenerator, _drive_until_yield
+from clausal.logic import cells as _cells_module
+from clausal.logic.cells import CELLS_NAMESPACE_KEY as _CELLS_NAMESPACE_KEY
 from clausal.terms import (
     Compound,
     Call, LoadName, LoadAttr,
@@ -791,6 +793,13 @@ def _compile_predicate_trampoline_impl(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
+        # The cells module itself, so a head pattern can name the
+        # tuple-DATA tag as the dotted value pattern
+        # ``$cells.TUPLE_TAG`` -- a bare name in a ``match`` pattern is
+        # a capture, not a value test.  See
+        # ``cells.CELLS_NAMESPACE_KEY`` for why the root is ``$cells``
+        # and not ``builtins``.
+        _CELLS_NAMESPACE_KEY: _cells_module,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn
@@ -1574,6 +1583,13 @@ def _compile_predicate_shallow_impl(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
+        # The cells module itself, so a head pattern can name the
+        # tuple-DATA tag as the dotted value pattern
+        # ``$cells.TUPLE_TAG`` -- a bare name in a ``match`` pattern is
+        # a capture, not a value test.  See
+        # ``cells.CELLS_NAMESPACE_KEY`` for why the root is ``$cells``
+        # and not ``builtins``.
+        _CELLS_NAMESPACE_KEY: _cells_module,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn_s

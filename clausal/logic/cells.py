@@ -59,6 +59,7 @@ from clausal.logic.variables import deref, is_var
 
 __all__ = [
     "FUNCTOR_SIGNATURES_KEY",
+    "CELLS_NAMESPACE_KEY",
     "TUPLE_TAG",
     "make_cell",
     "make_tuple_cell",
@@ -106,6 +107,20 @@ TUPLE_TAG = tuple
 # registry becomes the sole source of truth for a functor's declared field
 # names.
 FUNCTOR_SIGNATURES_KEY = "__clausal_functor_signatures__"
+
+
+# The key under which a compiled predicate's ``base_globals`` holds THIS
+# module, so emitted code can name ``TUPLE_TAG`` as a DOTTED value pattern
+# (``$cells.TUPLE_TAG``).  A ``match`` pattern cannot test a bare name -- that
+# is a capture, not a value test -- so the tuple-DATA tag needs an attribute
+# access, and this is its root.  The ``$`` prefix is what makes it safe: no
+# Python identifier can collide with it, whereas rooting the pattern at
+# ``builtins`` would break in any module that happens to bind that name
+# (``base_globals`` is updated FROM the module namespace).  Injected by
+# ``clausal/logic/compiler/predicate.py`` and read by
+# ``head_match.head_to_match_pattern``'s live-cell branch, which emits the
+# tuple-DATA arm only when the entry is actually present.
+CELLS_NAMESPACE_KEY = "$cells"
 
 
 def _valid_functor_slot(resolved_slot0: Any) -> bool:
