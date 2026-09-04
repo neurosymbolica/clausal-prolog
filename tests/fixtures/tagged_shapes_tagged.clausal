@@ -8,7 +8,6 @@
 # here.  Compound DATA never crosses a module boundary (see the
 # ``-tagged_terms`` directive docstring — the bridge does not support that).
 -allow_singletons
--tagged_terms
 -module(tagged_shapes_tagged, [
     point(X, Y),
     circle(C, R),

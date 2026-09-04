@@ -1,17 +1,25 @@
-"""Phase 2 bridge, Task 2 -- the ``-tagged_terms`` module flag.
+"""Cells as the compiled representation of compound data.
 
-Spec: ``docs/superpowers/plans/2026-09-03-phase2-bridge.md`` Task 2;
-design: ``implementation_plans/tagged-tuple-term-representation.md``.
+Spec: ``docs/superpowers/plans/2026-09-03-phase2-bridge.md`` (the bridge
+that introduced cells behind the ``-tagged_terms`` flag) and
+``.superpowers/sdd/p32-cell-default-flip/`` (P3-2, which DELETED that flag
+and made cells unconditional); design:
+``implementation_plans/tagged-tuple-term-representation.md``.
 
-Three groups of tests, in the order they were written:
+Four groups of tests:
 
-1. ``TestDefaultPathGolden`` -- the DEFAULT-PATH INVARIANT.  Modules WITHOUT
-   the directive must compile to byte-identical Python.  Written and its
-   golden captured BEFORE any compiler change, so a regression in the
-   flag-off path shows up as a diff against code that predates the feature.
-2. ``TestDirective`` -- ``-tagged_terms`` parsing and threading.
-3. ``TestCellEmission`` / ``TestHeadPatterns`` / ``TestParity`` -- what the
-   flag actually does.
+1. ``TestDefaultPathGolden`` -- the codegen pin.  Five fixtures' full
+   generated Python, captured under ``tests/golden/``, so any change to the
+   emission path shows up as a reviewable diff rather than as a behavioural
+   surprise.  (Pre-flip this pinned the FLAG-OFF path against code that
+   predated cells; post-flip there is only one path, and the golden pins
+   it.)
+2. ``TestRetiredDirective`` -- ``-tagged_terms`` is gone: writing it is a
+   SyntaxError like any other unknown directive (R9).
+3. ``TestFunctorSignatureRegistry`` -- the declared-signature registry the
+   cell resolvers read.
+4. ``TestCellEmission`` / ``TestHeadPatterns`` / ``TestParity`` and friends
+   -- what cells actually compile to, and that the answers are unchanged.
 """
 
 from __future__ import annotations
@@ -21,7 +29,6 @@ import pathlib
 
 import pytest
 
-from clausal.logic.cells import TAGGED_TERMS_FLAG
 from clausal.logic.variables import Var, deref
 from clausal.logic.solve import call
 
@@ -32,7 +39,7 @@ from tests.tagged_terms_support import (
 
 _GOLDEN_DIR = pathlib.Path(__file__).parent / "golden"
 
-# Unflagged fixtures whose codegen the DEFAULT-PATH golden pins.  Chosen to
+# Fixtures whose codegen the golden pins.  Chosen to
 # span the branches Task 2 touches: declared-functor construction from source
 # (``Call(LoadName)``), recursion, atoms as values, str/int head literals,
 # argument indexing with compound buckets, and list/compound head mixing.
@@ -50,17 +57,19 @@ def _golden_path(module_name: str) -> pathlib.Path:
 
 
 class TestDefaultPathGolden:
-    """Flag off => byte-identical compilation.
+    """The codegen pin: five fixtures' generated Python, byte for byte.
 
     METHOD.  ``capture_predicate_codegen`` re-drives each predicate's real
     ``_lazy_recompile`` closure (same globals, same strategy, same indexing)
     and ``ast.unparse``\\ s every ``FunctionDef`` the compiler emits --
     the predicate function plus every index bucket, per-position default and
-    all-clauses fallback.  The text was captured from the compiler as it
-    stood at the commit BEFORE ``-tagged_terms`` existed and committed under
-    ``tests/golden/``.  Any change to the flag-OFF emission path -- a
-    reordered branch, an extra guard, a renamed local -- produces a diff
-    here.
+    all-clauses fallback.  The text lives under ``tests/golden/``.  Any
+    change to the emission path -- a reordered branch, an extra guard, a
+    renamed local -- produces a diff here.
+
+    P3-2 Task 2 (THE FLIP) regenerated these: compound data that used to
+    emit class constructions now emits cell literals.  That was the WHOLE
+    point of the commit, and the diff was read before it landed.
 
     Regenerate deliberately (never to make a red test green without reading
     the diff) with::
@@ -69,7 +78,7 @@ class TestDefaultPathGolden:
     """
 
     @pytest.mark.parametrize("module_name", _GOLDEN_MODULES)
-    def test_unflagged_codegen_unchanged(self, module_name):
+    def test_codegen_unchanged(self, module_name):
         import os
 
         actual = capture_predicate_codegen(module_name)
@@ -83,9 +92,9 @@ class TestDefaultPathGolden:
         )
         expected = path.read_text()
         assert actual == expected, (
-            f"{module_name}: flag-off codegen changed -- the DEFAULT-PATH "
-            f"INVARIANT is broken (or the change is intended and the golden "
-            f"needs regenerating after review)."
+            f"{module_name}: codegen changed -- either a regression, or the "
+            f"change is intended and the golden needs regenerating after "
+            f"the diff has been READ."
         )
 
     def test_golden_capture_is_deterministic(self):
@@ -122,41 +131,58 @@ def _load_inline(name: str, source: str):
         return _load_module(name, path)
 
 
-class TestDirective:
-    def test_bare_directive_sets_module_flag(self):
-        m = _load_inline(
-            "_tt_bare",
-            "-tagged_terms\n-module(_tt_bare, [pt(X, Y), p(A)])\np(pt(1, 2)),\n",
-        )
-        assert m.__dict__[TAGGED_TERMS_FLAG] is True
+class TestRetiredDirective:
+    """``-tagged_terms`` is gone (P3-2 Task 2, R9).
 
-    def test_parenthesised_directive_sets_module_flag(self):
-        m = _load_inline(
-            "_tt_paren",
-            "-tagged_terms()\n-module(_tt_paren, [pt(X, Y), p(A)])\np(pt(1, 2)),\n",
-        )
-        assert m.__dict__[TAGGED_TERMS_FLAG] is True
+    Cells are how compound data compiles, full stop -- there is no per-file
+    opt-in left to spell, so the directive is unknown exactly like any other
+    misspelling.  Inverts the four ``TestDirective`` tests that pinned the
+    flag's parsing and threading: the SyntaxError IS the behaviour now.
+    """
 
-    def test_directive_rejects_arguments(self):
-        with pytest.raises(SyntaxError, match="takes no arguments"):
+    _MESSAGE = "Unknown directive: -tagged_terms"
+
+    def test_bare_form_is_an_unknown_directive(self):
+        # R9: the flag is deleted, so the bare marker form is a plain
+        # unknown-directive SyntaxError (inverts
+        # ``test_bare_directive_sets_module_flag``).
+        with pytest.raises(SyntaxError, match=self._MESSAGE):
+            _load_inline(
+                "_tt_bare",
+                "-tagged_terms\n-module(_tt_bare, [pt(X, Y), p(A)])\np(pt(1, 2)),\n",
+            )
+
+    def test_parenthesised_form_is_an_unknown_directive(self):
+        # R9 (inverts ``test_parenthesised_directive_sets_module_flag``).
+        with pytest.raises(SyntaxError, match=self._MESSAGE):
+            _load_inline(
+                "_tt_paren",
+                "-tagged_terms()\n-module(_tt_paren, [pt(X, Y), p(A)])\np(pt(1, 2)),\n",
+            )
+
+    def test_argument_form_is_an_unknown_directive_too(self):
+        """Not a "takes no arguments" complaint any more -- the name itself
+        is unknown, so the argument form gets the same message as the other
+        two."""
+        # R9 (inverts ``test_directive_rejects_arguments``, which pinned the
+        # marker directive's own arity check).
+        with pytest.raises(SyntaxError, match=self._MESSAGE):
             _load_inline(
                 "_tt_args",
                 "-tagged_terms(1)\n-module(_tt_args, [p(A)])\np(1),\n",
             )
 
-    def test_unflagged_module_has_no_flag(self):
-        m = _load_inline(
-            "_tt_off",
-            "-module(_tt_off, [pt(X, Y), p(A)])\np(pt(1, 2)),\n",
-        )
-        assert TAGGED_TERMS_FLAG not in m.__dict__
-
-    def test_unknown_directive_message_lists_tagged_terms(self):
-        with pytest.raises(SyntaxError, match="tagged_terms"):
+    def test_unknown_directive_message_no_longer_lists_tagged_terms(self):
+        """The known-directive list must not advertise a deleted directive."""
+        # R9 (inverts ``test_unknown_directive_message_lists_tagged_terms``).
+        with pytest.raises(SyntaxError) as excinfo:
             _load_inline(
                 "_tt_unknown",
                 "-no_such_directive(1)\n-module(_tt_unknown, [p(A)])\np(1),\n",
             )
+        message = str(excinfo.value)
+        assert "known directives:" in message
+        assert "tagged_terms" not in message
 
 
 class TestFunctorSignatureRegistry:
@@ -164,10 +190,10 @@ class TestFunctorSignatureRegistry:
     ``-module``/``-private`` rewrite emits, and ``-import_from`` copies
     across a module boundary.
 
-    Unconditional -- unlike ``-tagged_terms`` itself, the registry is
-    emitted whether or not the file carries the flag, since it is what a
-    LATER task's flip makes load-bearing everywhere, not just in a flagged
-    module.
+    Emitted by every ``-module``/``-private`` directive, and load-bearing
+    everywhere since P3-2 Task 2 (THE FLIP): it is where a functor's slot
+    layout comes from when its declaration mints no class to read
+    ``_fields`` off.
     """
 
     def test_module_directive_registers_field_carrying_entries(self):
@@ -244,6 +270,12 @@ class TestFunctorSignatureRegistry:
 # ── Cell emission ────────────────────────────────────────────────────────────
 
 
+# The fixture PAIR.  Pre-flip these differed by one line (``-tagged_terms``
+# on the ``_tagged`` half); post-flip they are the same program under two
+# module names, compiled identically.  The pair is kept because its recorded
+# ANSWERS are a class-era regression anchor -- two independent module
+# universes that must still agree, and still agree with what the class
+# representation answered before the flip.
 _PLAIN = "tests.fixtures.tagged_shapes"
 _TAGGED = "tests.fixtures.tagged_shapes_tagged"
 
@@ -259,22 +291,28 @@ def _logic_module(mod):
 
 
 class TestCellEmission:
-    def test_flagged_module_constructs_cells(self):
+    def test_a_module_constructs_cells(self):
         """A saturated declared-functor construction lowers to a tuple."""
         src = capture_predicate_codegen(_TAGGED, ["kind"])
         assert "('point', _v2, _v3)" in src
         assert "('seg', _v10, _v11, _v12)" in src
         assert "point(_v" not in src
 
-    def test_unflagged_sibling_constructs_class_terms(self):
+    def test_the_sibling_module_constructs_cells_too(self):
+        """P3-2 Task 2 (THE FLIP, R5): no opt-in left.  Inverts
+        ``test_unflagged_sibling_constructs_class_terms``, which pinned the
+        flag-era rule that a module without the directive kept class
+        emission -- the sibling fixture carries no directive (none exists)
+        and compiles to the identical cells."""
         src = capture_predicate_codegen(_PLAIN, ["kind"])
-        assert "point(_v2, _v3)" in src
-        assert "('point'," not in src
+        assert "('point', _v2, _v3)" in src
+        assert "point(_v" not in src
 
-    def test_atoms_lower_to_str_constants_even_in_a_flagged_module(self):
+    def test_atoms_lower_to_str_constants_not_to_cells(self):
         """P3-1 atom pivot (§1b): a 0-arity reference is a Constant str, not a
-        class, in EITHER path -- ``-tagged_terms`` only changes how compound
-        (arity >= 1) functor references lower. Inverts the pre-pivot pin
+        class -- cells are how COMPOUND (arity >= 1) data compiles; an atom
+        was already a str before the flip and still is. Inverts the pre-pivot
+        pin
         that atoms "stay class atoms" (phase3-decomposition-and-p31-atom-pivot
         Task 7 work item 1)."""
         src = capture_predicate_codegen(_TAGGED, ["kind"])
@@ -292,7 +330,6 @@ class TestCellEmission:
         """
         m = _load_inline(
             "_tt_kw",
-            "-tagged_terms\n"
             "-module(_tt_kw, [pt(X, Y), p(A)])\n"
             "p(pt(X=1)),\n",
         )
@@ -309,7 +346,6 @@ class TestCellEmission:
         """
         _load_inline(
             "_tt_dyn",
-            "-tagged_terms\n"
             "-module(_tt_dyn, [d(A, B), p(X, Y)])\n"
             "-dynamic(d/2)\n"
             "p(X, d(X, 1)),\n",
@@ -322,7 +358,6 @@ class TestCellEmission:
         class so ``call/1`` and dispatch keep working on it."""
         m = _load_inline(
             "_tt_pred",
-            "-tagged_terms\n"
             "-module(_tt_pred, [q(A), r(A), s(A)])\n"
             "q(1),\n"
             "r(X) <- call(q(X)),\n"
@@ -334,8 +369,7 @@ class TestCellEmission:
 
 class TestSignatureConstruction:
     """P3-2 Task 1 (cell-default-flip bridge): kwarg placement + Var
-    backfill for cell CONSTRUCTION.  Still flag-gated -- additive inside
-    ``-tagged_terms``, before a later task makes it load-bearing.
+    backfill for cell CONSTRUCTION.  Unconditional since Task 2's flip.
 
     Positional args fill leading declared slots, keyword args fill their
     named slots, and every slot neither reaches backfills with a fresh
@@ -344,7 +378,6 @@ class TestSignatureConstruction:
     """
 
     _MODULE_TEMPLATE = (
-        "-tagged_terms\n"
         "-module({name}, [point(x, y), p(A)])\n"
         "p({goal}),\n"
     )
@@ -383,10 +416,12 @@ class TestSignatureConstruction:
         with pytest.raises(SyntaxError, match=r"point/2"):
             self._compile("_tt_sig_dup", "point(1, x=2)")
 
-    def test_unflagged_twin_builds_class_instances_slot_for_slot(self):
-        """Same constructions, unflagged: class instances, same field
-        values in the same slots -- signature placement changes ONLY what
-        a flagged module's constructions lower to, not what they mean."""
+    def test_the_runtime_constructor_places_slots_the_same_way(self):
+        """The same constructions through ``PredicateMeta.__call__`` (the
+        RUNTIME placer a Python caller still reaches): same field values in
+        the same slots.  Signature placement changed what a construction
+        lowers TO, never what it means -- the compile-time placer and the
+        runtime one must keep agreeing."""
         m = _load_inline(
             "_tt_sig_plain",
             "-module(_tt_sig_plain, [point(x, y)])\n",
@@ -405,18 +440,18 @@ class TestHeadSignaturePlacement:
     (binding nothing), not a fallback to class matching.
     """
 
-    def _flagged_globals(self):
+    def _module_globals(self):
         return _fixture(_TAGGED).__dict__
 
     def _pattern_for(self, term):
+        # ``head_match`` resolves against the ``globals_`` it is handed, so
+        # no compile scope is needed here (nor available: this calls the
+        # pattern builder directly, not a compile entrypoint).
         from clausal.logic.compiler.head_match import head_to_match_pattern
-        from clausal.logic.compiler.terms_to_ast import tagged_terms_lowering
 
-        g = self._flagged_globals()
-        with tagged_terms_lowering(g):
-            return _unparse_pattern(head_to_match_pattern(
-                term, {}, [], [], None, globals_=g,
-            ))
+        return _unparse_pattern(head_to_match_pattern(
+            term, {}, [], [], None, globals_=self._module_globals(),
+        ))
 
     @staticmethod
     def _kw_compound(name, positional_n, kw_names):
@@ -537,22 +572,25 @@ class TestCellHeadDispatch:
             for _t in call("kind", shape(mod), K, module=_logic_module(mod))
         ]
 
+    # P3-2 Task 2 (THE FLIP, R6): one shape column, not two.  Pre-flip the
+    # plain half was queried with CLASS instances (``m.point(1, 2)``) because
+    # that is what its clauses built; both halves build cells now, so both
+    # are queried with the cell -- the class-instance column would test the
+    # no-solutions trap, not dispatch.  (That trap keeps its own test below.)
     @pytest.mark.parametrize(
-        "shape_tagged, shape_plain, expected",
+        "shape, expected",
         [
-            (lambda m: ("point", 1, 2), lambda m: m.point(1, 2), ["pt"]),
-            (lambda m: ("circle", 0, 5), lambda m: m.circle(0, 5), ["circ"]),
-            (lambda m: ("seg", 1, 2, 3), lambda m: m.seg(1, 2, 3), ["seg3"]),
-            (lambda m: m.nil, lambda m: m.nil, ["empty"]),
-            (lambda m: 42, lambda m: 42, ["num"]),
-            (lambda m: "s", lambda m: "s", ["str"]),
+            (lambda m: ("point", 1, 2), ["pt"]),
+            (lambda m: ("circle", 0, 5), ["circ"]),
+            (lambda m: ("seg", 1, 2, 3), ["seg3"]),
+            (lambda m: m.nil, ["empty"]),
+            (lambda m: 42, ["num"]),
+            (lambda m: "s", ["str"]),
         ],
     )
-    def test_functor_and_arity_discrimination(
-        self, shape_tagged, shape_plain, expected,
-    ):
-        assert self._kind_of(_TAGGED, shape_tagged) == expected
-        assert self._kind_of(_PLAIN, shape_plain) == expected
+    def test_functor_and_arity_discrimination(self, shape, expected):
+        assert self._kind_of(_TAGGED, shape) == expected
+        assert self._kind_of(_PLAIN, shape) == expected
 
     def test_wrong_arity_cell_matches_no_clause(self):
         """``point/3`` is not ``point/2``: arity is part of the discriminator."""
@@ -561,17 +599,28 @@ class TestCellHeadDispatch:
     def test_unknown_functor_cell_matches_no_clause(self):
         assert self._kind_of(_TAGGED, lambda m: ("square", 1, 2)) == []
 
-    def test_the_flagged_modules_own_class_constructor_matches_nothing(self):
-        """The trap this bridge cannot remove, pinned on the real path.
+    def test_a_declared_data_functors_class_constructor_matches_nothing(self):
+        """The trap the flip does not close, pinned on the real path.
 
-        ``-tagged_terms`` changes what the module's clauses BUILD; it does not
-        remove the generated ``point`` class, which is still importable and
-        still callable.  A caller that reaches for it gets a value that
-        unifies with nothing in the flagged module -- silently, as no
-        solutions rather than as an error.  Asserted here so the behaviour is
-        a decision on record rather than a surprise.
+        P3-2 Task 2 (R6) stops ``compiler_v2._process_declarations`` minting
+        a class for a declared functor -- but that was never the only minting
+        site: ``-module``/``-private`` ALSO emit a
+        ``term_rewriting._make_functor_class_ast`` block that runs at exec
+        time, so ``m.point`` is still a live, callable class.  What the flip
+        DID change is what the module's clauses build and match: cells.  So a
+        Python caller that reaches for the constructor gets a value that
+        unifies with nothing -- silently, as no solutions rather than as an
+        error.  Both halves asserted here, so the residual minting site is on
+        record rather than a surprise; a later task that removes it should
+        find this test and invert it.
         """
+        from clausal.logic.predicate import PredicateMeta
+
+        mod = _fixture(_TAGGED)
+        assert isinstance(mod.point, PredicateMeta)   # still minted
         assert self._kind_of(_TAGGED, lambda m: m.point(1, 2)) == []
+        # ... while the cell of the same shape selects its clause.
+        assert self._kind_of(_TAGGED, lambda m: ("point", 1, 2)) == ["pt"]
 
 
 # ── Head patterns ────────────────────────────────────────────────────────────
@@ -594,7 +643,7 @@ def _unparse_pattern(pattern) -> str:
 
 
 class TestHeadPatterns:
-    """A flagged module's compound head args match as SEQUENCE literals.
+    """Compound head args match as SEQUENCE literals.
 
     ``head_to_match_pattern`` is exercised directly because the compound
     MatchClass sites it feeds are, in this stage, reached only from the
@@ -605,23 +654,17 @@ class TestHeadPatterns:
     what any such follow-up would rely on.
     """
 
-    def _flagged_globals(self):
+    def _module_globals(self):
         return _fixture(_TAGGED).__dict__
 
-    def _pattern(self, term, flagged, globals_=None):
+    def _pattern(self, term, globals_=None):
         from clausal.logic.compiler.head_match import head_to_match_pattern
-        from clausal.logic.compiler.terms_to_ast import tagged_terms_lowering
 
-        g = globals_ if globals_ is not None else self._flagged_globals()
+        g = globals_ if globals_ is not None else self._module_globals()
         var_context, dup_guards, list_guards = {}, [], []
-        if not flagged:
-            return _unparse_pattern(head_to_match_pattern(
-                term, var_context, dup_guards, list_guards, None, globals_=g,
-            ))
-        with tagged_terms_lowering(g):
-            return _unparse_pattern(head_to_match_pattern(
-                term, var_context, dup_guards, list_guards, None, globals_=g,
-            ))
+        return _unparse_pattern(head_to_match_pattern(
+            term, var_context, dup_guards, list_guards, None, globals_=g,
+        ))
 
     def _source_compound(self, name, n):
         """The term shape a compound written in ``.clausal`` source has."""
@@ -631,7 +674,7 @@ class TestHeadPatterns:
                      args=[Var() for _ in range(n)], kwargs=[])
 
     def test_source_compound_becomes_a_sequence_pattern(self):
-        got = self._pattern(self._source_compound("point", 2), flagged=True)
+        got = self._pattern(self._source_compound("point", 2))
         # ``ast.unparse`` renders every ``MatchSequence`` with brackets; a
         # tuple-literal and a list-literal pattern are the SAME node in
         # Python's grammar, and both match any sequence.  So this IS the
@@ -641,14 +684,10 @@ class TestHeadPatterns:
         assert got.startswith("case ['point', ")
         assert "point(" not in got
 
-    def test_source_compound_unflagged_stays_a_class_pattern(self):
-        got = self._pattern(self._source_compound("point", 2), flagged=False)
-        assert got.startswith("case point(")
-
     def test_arity_is_part_of_the_pattern(self):
         """``seg/3`` and ``point/2`` differ in sequence LENGTH as well as tag."""
-        two = self._pattern(self._source_compound("point", 2), flagged=True)
-        three = self._pattern(self._source_compound("seg", 3), flagged=True)
+        two = self._pattern(self._source_compound("point", 2))
+        three = self._pattern(self._source_compound("seg", 3))
         assert two.count(",") == 2      # tag + 2 args
         assert three.count(",") == 3    # tag + 3 args
         assert three.startswith("case ['seg', ")
@@ -660,32 +699,32 @@ class TestHeadPatterns:
         ``('point', <p0>, _)``, not a class pattern.  Supersedes
         ``test_partial_construction_keeps_the_class_pattern``, which pinned
         the PRE-Task-1 behaviour this test inverts."""
-        got = self._pattern(self._source_compound("point", 1), flagged=True)
+        got = self._pattern(self._source_compound("point", 1))
         assert got.startswith("case ['point', ")
         assert got.endswith(", _]:")
 
     def test_a_predicate_reference_keeps_the_class_pattern(self):
         """``kind/2`` has clauses -- it is a predicate, not a data functor."""
-        got = self._pattern(self._source_compound("kind", 2), flagged=True)
+        got = self._pattern(self._source_compound("kind", 2))
         assert got.startswith("case kind(")
 
     def test_live_instance_becomes_a_sequence_pattern(self):
         mod = _fixture(_TAGGED)
-        got = self._pattern(mod.point(1, 2), flagged=True)
+        got = self._pattern(mod.point(1, 2))
         assert got.startswith("case ['point', ")
 
-    def test_live_instance_unflagged_stays_a_class_pattern(self):
-        mod = _fixture(_TAGGED)
-        got = self._pattern(mod.point(1, 2), flagged=False)
-        assert got.startswith("case point(")
+    def test_another_modules_functor_matches_as_a_cell_too(self):
+        """P3-2 Task 2 (THE FLIP, R5): the own-module gate is deleted.
 
-    def test_another_modules_functor_keeps_the_class_pattern(self):
-        """Compound data does not cross the flag boundary: a functor owned by
-        a different module keeps class construction, so it must keep class
-        matching too."""
+        Inverts ``test_another_modules_functor_keeps_the_class_pattern``,
+        which pinned the flag-era rule that compound data did not cross the
+        module boundary.  Both modules build cells now, so a functor owned
+        by a different module must MATCH as a cell -- keeping the class
+        pattern here is what would produce a clause that can never fire.
+        """
         other = _fixture(_PLAIN)
-        got = self._pattern(other.point(1, 2), flagged=True)
-        assert got.startswith("case point(")
+        got = self._pattern(other.point(1, 2))
+        assert got.startswith("case ['point', ")
 
     def test_no_tuple_data_tag_is_emitted_in_this_stage(self):
         """The ``(tuple, ...)`` tuple-DATA pattern is NOT implemented here.
@@ -714,7 +753,7 @@ class TestBucketPatternIntegration:
     Clauses whose head arg is a live term instance are the shape that
     ``_lift_clause_at_pos`` will lift into the head, which is what puts a
     compound in front of ``head_to_match_pattern``.  Compiling five of them
-    against a flagged module's namespace therefore exercises index
+    against a real module's namespace therefore exercises index
     partitioning, the lift, and cell pattern emission together.
     """
 
@@ -786,12 +825,14 @@ class TestBucketPatternIntegration:
         assert got == expected
 
     def test_a_class_instance_caller_finds_nothing(self):
-        """The documented cross-boundary limit, asserted rather than assumed.
+        """The documented representation limit, asserted rather than assumed.
 
-        In a flagged module every compound is a cell, so a caller that hands
-        in a class INSTANCE simply does not unify -- it is not an error, it
-        is no solutions.  This is why the parity corpus keeps fixtures
-        self-contained.
+        Every compound compiles to a cell now (P3-2 Task 2, R6), so a caller
+        that hands in a class INSTANCE built from the still-minted
+        constructor simply does not unify -- it is not an error, it is no
+        solutions.  Same finding as
+        ``TestCellHeadDispatch.test_a_declared_data_functors_class_
+        constructor_matches_nothing``, here through the bucket path.
         """
         from clausal.logic.database import Module
 
@@ -817,9 +858,9 @@ class TestHeadPatternReachability:
         """A compound written in ``.clausal`` source is a ``Call(LoadName)``
         term, and ``list_dispatch._lift_clause_at_pos`` refuses to lift those
         into a head (the class may not be in the bucket's globals).  So a
-        flagged module compiled from source emits its compounds ONLY as cell
+        module compiled from source emits its compounds ONLY as cell
         literals in body ``Unify`` goals -- the head arms stay plain arg
-        captures, exactly as they do without the flag.
+        captures.  (Closing that is P3-2 Task 3's job, not this one's.)
         """
         src = capture_predicate_codegen(_TAGGED)
         case_lines = [l for l in src.splitlines() if l.lstrip().startswith("case ")]
@@ -833,28 +874,31 @@ class TestHeadPatternReachability:
         argument keys as ``_INDEX_VAR`` and dispatch takes the all-clauses
         fallback (correct, and unindexed).
 
-        Giving it one is NOT a flag-gated change -- the key function runs at
-        dispatch time with no module context -- and it would alter routing
-        for plain data tuples in UNFLAGGED modules, which the bridge's
-        opt-in-only constraint forbids.  Making bucket dispatch cell-aware
-        therefore needs the dispatch key function parameterised per
-        predicate; that is a restructuring, deliberately left to a later
-        stage.
+        The key function runs at dispatch time with no module context, so
+        teaching it about cells changes routing for every plain data tuple
+        too -- a decision this task does not take.  P3-2 Task 4 is where the
+        cell key lands; until then this test records that cells are
+        UNINDEXED but correct, and it is expected to be inverted there.
         """
         from clausal.logic.compiler import arg_index
 
         mod = _fixture(_TAGGED)
         assert arg_index._runtime_arg_key(("point", 3, 4)) is arg_index._INDEX_VAR
-        # ... while the equivalent class term keys, and indexes, normally.
+        # ... while a class INSTANCE of the same functor keys, and indexes,
+        # normally.  Post-flip no compiled clause builds one (the module's
+        # own constructions are cells), but the constructor is still minted
+        # and a Python caller can still hand one in -- so the class branch of
+        # the key function is still live code, and still tested.
         assert arg_index._runtime_arg_key(mod.point(3, 4)) == ("point", 2)
 
 
 class TestNormalizer:
-    """The representation normalizer Task 3's parity corpus imports.
+    """The representation normalizer the parity corpus imports.
 
-    Its whole job is to make one assertion possible: that the two halves of a
-    fixture pair produced the SAME TERM, without the assertion caring which
-    representation carried it.
+    Its whole job is to make one assertion possible: that two runs produced
+    the SAME TERM, without the assertion caring which representation carried
+    it.  Still load-bearing after the flip -- it is what lets the recorded
+    class-era answers stay the regression anchor for cell-era results.
     """
 
     def test_cell_and_class_term_canonicalise_alike(self):
@@ -913,7 +957,6 @@ class TestGateSymmetry:
     """
 
     _POS_SRC = (
-        "-tagged_terms\n"
         "-module(_tt_pos, [rec(position, x), p(A)])\n"
         "p(rec(1, 2)),\n"
     )
@@ -928,7 +971,8 @@ class TestGateSymmetry:
     def test_position_field_functor_constructs_as_a_class(self):
         """``term_to_ast_expr``'s keyword slow path DROPS a ``position``
         field, so a positional cell cannot reproduce it -- such a functor
-        keeps class construction even in a flagged module."""
+        keeps class construction, which is why the exclusion survives the
+        flip inside ``predicate.is_data_functor``."""
         self._pos_module()
         src = capture_predicate_codegen("_tt_pos", ["p"])
         assert "('rec'," not in src
@@ -936,40 +980,45 @@ class TestGateSymmetry:
 
     def test_position_field_functor_matches_as_a_class(self):
         """... and therefore must keep class MATCHING too.  A cell pattern
-        here could never match the class term the other half builds."""
+        here could never match the class term the construction half builds."""
         from clausal.logic.compiler.head_match import head_to_match_pattern
-        from clausal.logic.compiler.terms_to_ast import tagged_terms_lowering
 
         mod = self._pos_module()
-        with tagged_terms_lowering(mod.__dict__):
-            pattern = head_to_match_pattern(
-                mod.rec(1, 2), {}, [], [], None, globals_=mod.__dict__,
-            )
+        pattern = head_to_match_pattern(
+            mod.rec(1, 2), {}, [], [], None, globals_=mod.__dict__,
+        )
         assert _unparse_pattern(pattern).startswith("case rec(")
 
     def test_the_cell_branch_resolves_names_where_its_fallback_does(self):
-        """``cell_functor_for_name`` looks the name up in the ``globals_``
+        """``cell_signature_for_name`` looks the name up in the ``globals_``
         argument -- the same dict ``_resolve_loadname`` just used to pin
-        ``fields`` for the MatchClass beside it.  Resolving in the SCOPE's
-        namespace instead would let the two branches disagree about which
-        class a name means.
+        ``fields`` for the MatchClass beside it.  Resolving in the open
+        compile SCOPE instead would let the two branches disagree about what
+        a name means.
 
-        Constructed so the two answers differ: ``globals_`` binds ``point`` to
-        the UNFLAGGED sibling's class (another module's functor -> class
-        pattern), while the open scope binds the same name to the flagged
-        module's own (-> cell pattern).  Only globals_-resolution gives the
-        class pattern, which is the one that agrees with its own fallback.
+        Constructed so the two answers differ: ``globals_`` binds ``point``
+        to a PREDICATE (a class with clauses -> class pattern), while the
+        open scope binds the same name to a data functor (-> cell pattern).
+        Only globals_-resolution gives the class pattern, which is the one
+        that agrees with its own fallback.
+
+        (Pre-flip the discriminator was another MODULE's data functor, which
+        the deleted own-module gate refused; R5 removed that gate, so the
+        premise is re-cast on the data/predicate split, which is what the
+        resolver keys on now.)
         """
         from clausal.logic.compiler.head_match import head_to_match_pattern
-        from clausal.logic.compiler.terms_to_ast import tagged_terms_lowering
+        from clausal.logic.compiler.terms_to_ast import lowering_scope
+        from clausal.logic.predicate import is_data_functor
 
-        plain, tagged = _fixture(_PLAIN), _fixture(_TAGGED)
-        assert plain.point is not tagged.point      # the premise
+        tagged = _fixture(_TAGGED)
+        assert is_data_functor(tagged.point)          # the premise ...
+        assert not is_data_functor(tagged.kind)       # ... both halves of it
         term = self._source_compound_for("point", 2)
-        with tagged_terms_lowering(tagged.__dict__):
+        with lowering_scope(tagged.__dict__):
             pattern = head_to_match_pattern(
                 term, {}, [], [], None,
-                globals_={"__name__": tagged.__name__, "point": plain.point},
+                globals_={"__name__": tagged.__name__, "point": tagged.kind},
             )
         assert _unparse_pattern(pattern).startswith("case point(")
 
@@ -980,37 +1029,33 @@ class TestGateSymmetry:
         return TCall(func=LoadName(name=name),
                      args=[Var() for _ in range(n)], kwargs=[])
 
-    def test_an_unflagged_compile_inside_a_flagged_scope_emits_no_cells(self):
-        """The lowering scope must be SEALED, not merely unset.
+    def test_a_nested_compile_scope_resolves_against_its_own_namespace(self):
+        """The compile scope is a STACK whose top wins, not a global setting.
 
-        An unflagged compile that pushes nothing would inherit whatever scope
-        happens to be open and silently emit cells into a module that never
-        asked for them.  No path reaches that today; the invariant is
-        absolute anyway.
+        Replaces ``test_an_unflagged_compile_inside_a_flagged_scope_emits_no_
+        cells``, which pinned the same structural property through the
+        deleted flag ("an unflagged compile inside a flagged scope emits no
+        cells").  There is no flag to seal against any more, but the reason
+        the stack is a stack survives it: an inner compile must resolve
+        names against ITS namespace, never against whatever an outer compile
+        left open -- and a compile handed no namespace must resolve nothing
+        rather than borrow one.
         """
-        from clausal.logic.compiler import predicate as predicate_mod
-        from clausal.logic.compiler.terms_to_ast import tagged_terms_lowering
+        from clausal.logic.compiler.terms_to_ast import (
+            cell_signature_for_name, lowering_globals, lowering_scope,
+        )
 
-        plain = _fixture(_PLAIN)
         tagged = _fixture(_TAGGED)
-        db = _logic_module(plain).db
-        captured = []
-        original = predicate_mod.functiondef_to_function
-
-        def _spy(func_def, globals_=None, **kwargs):
-            captured.append(ast.unparse(func_def))
-            return original(func_def, globals_=globals_, **kwargs)
-
-        predicate_mod.functiondef_to_function = _spy
-        try:
-            with tagged_terms_lowering(tagged.__dict__):
-                predicate_mod.compile_predicate_trampoline(
-                    "kind", 2, db.clauses_for("kind", 2), db,
-                    globals_=plain.__dict__,
-                )
-        finally:
-            predicate_mod.functiondef_to_function = original
-
-        src = "\n".join(captured)
-        assert "('point'," not in src
-        assert "point(" in src
+        empty: dict = {"__name__": "_tt_empty"}
+        assert lowering_globals() is None
+        with lowering_scope(tagged.__dict__):
+            assert cell_signature_for_name("point") == ("point", ("X", "Y"))
+            with lowering_scope(empty):
+                # Inner namespace knows no ``point``: resolves nothing,
+                # rather than inheriting the outer scope's answer.
+                assert lowering_globals() is empty
+                assert cell_signature_for_name("point") is None
+                with lowering_scope(None):
+                    assert cell_signature_for_name("point") is None
+            assert cell_signature_for_name("point") == ("point", ("X", "Y"))
+        assert lowering_globals() is None

@@ -14,7 +14,6 @@
 # exists to regression-test is unaffected by the flag.
 #
 # Self-contained: every functor it constructs or matches is declared here.
--tagged_terms
 -private([item2(S), pair(A, B), c(X), d(Y)])
 
 prov(K, V) <- (K is "x", V is "met")

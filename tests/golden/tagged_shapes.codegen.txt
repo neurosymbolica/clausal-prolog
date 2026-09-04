@@ -29,7 +29,7 @@ def depth__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v5 = Var()
                 _v6 = Var()
                 _m2 = trail.mark()
-                if $unify(_v2, point(_v4, _v5), trail):
+                if $unify(_v2, ('point', _v4, _v5), trail):
                     _gen0 = StepGenerator($dispatch_at(depth, 2), this_generator, this_generator, this_generator, _v5, _v6, trail)
                     _st0 = (yield (_gen0, None))
                     while _st0 is not $DONE:
@@ -58,7 +58,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v9 = Var()
                 _v10 = Var()
                 _m3 = trail.mark()
-                if $unify(_v7, point(_v9, _v10), trail):
+                if $unify(_v7, ('point', _v9, _v10), trail):
                     _m4 = trail.mark()
                     if $unify(_v8, 'pt', trail):
                         yield (_proceed, None)
@@ -78,7 +78,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v13 = Var()
                 _v14 = Var()
                 _m5 = trail.mark()
-                if $unify(_v11, circle(_v13, _v14), trail):
+                if $unify(_v11, ('circle', _v13, _v14), trail):
                     _m6 = trail.mark()
                     if $unify(_v12, 'circ', trail):
                         yield (_proceed, None)
@@ -99,7 +99,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v18 = Var()
                 _v19 = Var()
                 _m7 = trail.mark()
-                if $unify(_v15, seg(_v17, _v18, _v19), trail):
+                if $unify(_v15, ('seg', _v17, _v18, _v19), trail):
                     _m8 = trail.mark()
                     if $unify(_v16, 'seg3', trail):
                         yield (_proceed, None)
@@ -176,7 +176,7 @@ def kind__p0_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
             _v9 = Var()
             _v10 = Var()
             _m15 = trail.mark()
-            if $unify(_v7, point(_v9, _v10), trail):
+            if $unify(_v7, ('point', _v9, _v10), trail):
                 _m16 = trail.mark()
                 if $unify(_v8, 'pt', trail):
                     yield (_proceed, None)
@@ -193,7 +193,7 @@ def kind__p0_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
             _v13 = Var()
             _v14 = Var()
             _m17 = trail.mark()
-            if $unify(_v11, circle(_v13, _v14), trail):
+            if $unify(_v11, ('circle', _v13, _v14), trail):
                 _m18 = trail.mark()
                 if $unify(_v12, 'circ', trail):
                     yield (_proceed, None)
@@ -211,7 +211,7 @@ def kind__p0_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
             _v18 = Var()
             _v19 = Var()
             _m19 = trail.mark()
-            if $unify(_v15, seg(_v17, _v18, _v19), trail):
+            if $unify(_v15, ('seg', _v17, _v18, _v19), trail):
                 _m20 = trail.mark()
                 if $unify(_v16, 'seg3', trail):
                     yield (_proceed, None)
@@ -277,7 +277,7 @@ def kind__p1_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
             _v9 = Var()
             _v10 = Var()
             _m26 = trail.mark()
-            if $unify(_v7, point(_v9, _v10), trail):
+            if $unify(_v7, ('point', _v9, _v10), trail):
                 _m27 = trail.mark()
                 if $unify(_v8, 'pt', trail):
                     yield (_proceed, None)
@@ -294,7 +294,7 @@ def kind__p1_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
             _v13 = Var()
             _v14 = Var()
             _m28 = trail.mark()
-            if $unify(_v11, circle(_v13, _v14), trail):
+            if $unify(_v11, ('circle', _v13, _v14), trail):
                 _m29 = trail.mark()
                 if $unify(_v12, 'circ', trail):
                     yield (_proceed, None)
@@ -312,7 +312,7 @@ def kind__p1_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
             _v18 = Var()
             _v19 = Var()
             _m30 = trail.mark()
-            if $unify(_v15, seg(_v17, _v18, _v19), trail):
+            if $unify(_v15, ('seg', _v17, _v18, _v19), trail):
                 _m31 = trail.mark()
                 if $unify(_v16, 'seg3', trail):
                     yield (_proceed, None)
@@ -401,7 +401,7 @@ def mk__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v30 = Var()
                 _v31 = Var()
                 _m2 = trail.mark()
-                if $unify(_v29, point(_v28, _v30), trail):
+                if $unify(_v29, ('point', _v28, _v30), trail):
                     if $fd_gt(_v28, 0, trail):
                         if $fd_eq(_v31, Sub(left=_v28, right=1), trail):
                             _gen0 = StepGenerator($dispatch_at(mk, 2), _proceed, this_generator, this_generator, _v31, _v30, trail)
@@ -429,7 +429,7 @@ def pair_up__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trai
             _mark_cl = False
             try:
                 _m38 = trail.mark()
-                if $unify(_v34, seg(_v32, _v33, 'nil'), trail):
+                if $unify(_v34, ('seg', _v32, _v33, 'nil'), trail):
                     yield (_proceed, None)
                 trail.undo(_m38)
             except GeneratorExit:

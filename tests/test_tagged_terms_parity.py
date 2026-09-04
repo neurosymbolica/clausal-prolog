@@ -3,7 +3,7 @@
 Spec: ``docs/superpowers/plans/2026-09-03-phase2-bridge.md`` Task 3; design:
 ``implementation_plans/tagged-tuple-term-representation.md``.
 
-Task 2 (``tests/test_tagged_terms.py``) proved the ``-tagged_terms`` flag's
+Task 2 (``tests/test_tagged_terms.py``) proved the cell representation's
 MECHANISM correct on one fixture pair (``tagged_shapes`` / ``tagged_shapes_
 tagged``).  This module is the wider CORPUS: three fixture pairs chosen to
 span the categories the brief calls out --
@@ -29,15 +29,23 @@ class term ``f(A=a, B=b)`` to the same tuple -- so an assertion here is about
 the TERM two representations produced, not about which representation
 produced it.  Per each fixture pair there is also one MUST-FAIL query,
 asserted to fail on both halves (parity of failure is as load-bearing as
-parity of success -- a bridge that only agreed on the happy path would be
+parity of success -- a corpus that only agreed on the happy path would be
 unsound).
 
-The two halves of each pair are queried through independent module
-universes (``importlib.import_module`` of the plain and the ``_tagged``
-dotted names) -- never by handing a class instance from one into the other,
-per Task 2's pinned finding that a flagged module's own class constructor
-matches nothing in its own clauses, and cross-module compound data is out of
-scope for this bridge stage.
+WHAT THE PAIRS MEAN AFTER THE FLIP (P3-2 Task 2).  ``-tagged_terms`` is
+deleted and cells are unconditional, so the two halves of each pair are now
+the same program under two module names and compile identically.  The pair
+is KEPT, and this module keeps running, because the EXPECTED VALUES here
+were recorded while the plain half still used the class representation:
+they are the old-golden-vs-new-default anchor for the flip.  A cell-era
+answer that differs from what the class era produced fails here, which is
+exactly the regression this file exists to catch.
+
+The two halves are still queried through independent module universes
+(``importlib.import_module`` of the plain and the ``_tagged`` dotted names),
+and still never by handing one half's class instance to the other -- per
+Task 2's pinned finding that a declared functor's still-minted class
+constructor matches nothing in its own module's clauses.
 """
 
 from __future__ import annotations
@@ -128,11 +136,17 @@ class TestStructTablingParity:
 
     def test_nats_ground_query_success_parity(self):
         """A caller-supplied, already-built matching chain succeeds on both
-        halves -- built with each module's OWN constructors (a class chain
-        for the plain half, a cell chain for the tagged half), per the
-        self-contained-fixture rule."""
+        halves.
+
+        P3-2 Task 2 (THE FLIP, R6): the plain half's chain is a CELL chain
+        now.  It used to be built from that module's ``cons`` class, because
+        that is what its clauses built; post-flip both modules build cells,
+        and the class constructor (still minted by the ``-module`` rewrite)
+        would match nothing -- see ``test_tagged_terms.py``'s
+        ``test_a_declared_data_functors_class_constructor_matches_nothing``.
+        """
         plain_mod = _fixture(_ST_PLAIN)
-        chain = plain_mod.cons(3, plain_mod.cons(2, plain_mod.cons(1, plain_mod.nil)))
+        chain = ("cons", 3, ("cons", 2, ("cons", 1, plain_mod.nil)))
         assert len(list(call("Nats", 3, chain, module=_logic_module(plain_mod)))) == 1
 
         tagged_mod = _fixture(_ST_TAGGED)
@@ -142,7 +156,8 @@ class TestStructTablingParity:
     def test_nats_ground_query_failure_parity(self):
         """A caller-supplied chain with the wrong head value fails on both."""
         plain_mod = _fixture(_ST_PLAIN)
-        bad_chain = plain_mod.cons(99, plain_mod.cons(2, plain_mod.cons(1, plain_mod.nil)))
+        # R6: a cell chain on this half too -- see the success twin above.
+        bad_chain = ("cons", 99, ("cons", 2, ("cons", 1, plain_mod.nil)))
         assert list(call("Nats", 3, bad_chain, module=_logic_module(plain_mod))) == []
 
         tagged_mod = _fixture(_ST_TAGGED)
@@ -263,12 +278,16 @@ class TestHeadListCompoundParity:
         Test/1 wrapper -- answers the same value both halves.
 
         ev_deep/1's single arg is [c(d(S))] -- a LIST containing a nested
-        compound.  Each half builds that list with its OWN construction: the
-        plain half via its ``c``/``d`` classes, the tagged half via the
-        equivalent cell literals ``("c", ("d", S))`` -- the same shape the
-        fixture's own Test/1 clauses exercise, queried directly here (S
-        open) so the assertion is on the *answer*, not just the pass/fail
-        Test/1 wrapper above.
+        compound, built as the cell literals ``("c", ("d", S))``: the same
+        shape the fixture's own Test/1 clauses exercise, queried directly
+        here (S open) so the assertion is on the *answer*, not just the
+        pass/fail Test/1 wrapper above.
+
+        P3-2 Task 2 (THE FLIP, R6): the plain half used to build that list
+        through its ``c``/``d`` CLASSES.  Both halves compile to cells now,
+        so both are queried with cells; the recorded answer ("met") is
+        unchanged from the class era, which is the point of keeping this
+        test.
         """
         for module_name in (_HLC_PLAIN, _HLC_TAGGED):
             mod = _fixture(module_name)
@@ -276,8 +295,7 @@ class TestHeadListCompoundParity:
             S = Var()
             got = [
                 normalize_term(S)
-                for _t in call("ev_deep", [mod.c(mod.d(S))] if module_name == _HLC_PLAIN
-                                else [("c", ("d", S))], module=lm)
+                for _t in call("ev_deep", [("c", ("d", S))], module=lm)
             ]
             assert got == ["met"], module_name
 
@@ -285,10 +303,8 @@ class TestHeadListCompoundParity:
         for module_name in (_HLC_PLAIN, _HLC_TAGGED):
             mod = _fixture(module_name)
             lm = _logic_module(mod)
-            if module_name == _HLC_PLAIN:
-                arg = [mod.c(mod.d("no"))]
-            else:
-                arg = [("c", ("d", "no"))]
+            # R6: cells on both halves -- see the success twin above.
+            arg = [("c", ("d", "no"))]
             assert list(call("ev_deep", arg, module=lm)) == [], module_name
 
 

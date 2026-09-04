@@ -10,7 +10,6 @@
 # pivot, not this bridge).
 #
 # Self-contained: every functor it constructs or matches is declared here.
--tagged_terms
 -module(struct_tabling_tagged, [
     cons(H, T),
     nil,
