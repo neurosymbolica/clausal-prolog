@@ -152,6 +152,18 @@ lists, `-hide`) is being built by the author separately, on the Pratt parser alr
 in the translation machinery — Phase 3's compiler work should consume its output rather than
 grow a second reader.
 
+**Surface literal rulings (user, 2026-09-04, re-confirmed during P3-2 ruling review):**
+ISO alignment for the future reader surface — SINGLE quotes are quoted atoms (`'abc'`,
+`'hello world'`), as in Prolog; DOUBLE quotes are strings-as-char-lists: `"abc"`
+tokenizes AS `['a','b','c']`, each char an atom (runtime shape post-R2: a list of
+1-char strs), so `"abc"` unifies with `['a','b','c']` by IDENTITY — no runtime
+str~list rule is needed or reinstated. `b"..."` is a bytes/codes literal denoting a
+LIST OF INTS (the codes model whose bytes~list unification P3-1 deliberately kept);
+`b'...'` (a "byte atom") is meaningless and rejected. Quoted atoms still refuse the
+⟨SEP⟩ codepoint U+E000 (R1), quoted or not. Whether Python `bytes` objects keep
+unifying with int lists once `b"..."` denotes the list directly is a surface-phase
+question, parked — same shape as the retired str~list bridge, NOT a Phase 3 concern.
+
 ## 1c. Phase 3 parser output interface (recorded 2026-09-03; parser is USER-OWNED work)
 
 > **STATUS 2026-09-04: L0+L1+L2 IMPLEMENTED (ownership transferred to Claude by the
