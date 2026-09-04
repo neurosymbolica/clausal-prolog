@@ -45,7 +45,6 @@ from .terms_to_ast import (
     term_to_ast_expr,
     _is_star_list, _parse_star_segments, _count_stars,
     _is_opaque_head_literal, headlit_global_key,
-    cell_functor_for_instance,
     cell_signature_for_name, _place_signature_slots,
 )
 # Runtime helpers (``_head_list_unify_input`` / ``_head_list_unify_output``
@@ -643,9 +642,9 @@ def head_to_match_pattern(
         #
         # P3-2 Task 1 (controller ruling extending the construction-side
         # brief to this, the matching half of the same symmetry --
-        # ``predicate.is_data_functor``'s own docstring: a check applied to
-        # construction but not to matching yields a clause that builds
-        # one shape and matches another, one that can never fire):
+        # a check applied to construction but not to matching yields a
+        # clause that builds one shape and matches another, one that can
+        # never fire):
         # signature PLACEMENT applies here too -- positional args fill
         # leading slots, keyword args fill named slots, and every
         # omitted slot becomes a WILDCARD pattern (an omitted head slot
@@ -729,24 +728,12 @@ def head_to_match_pattern(
     if is_term_instance(term):
         cls_name = type(term).__name__
         fields = _matched_field_names(term)
-        # The matching half of the term-instance emission branch in
-        # ``term_to_ast_expr``.  ``_matched_field_names`` returns
-        # ``_fields`` verbatim for a PredicateMeta term (every declared
-        # argument of a user functor is semantic), and cell eligibility
-        # requires PredicateMeta -- so the sequence pattern's positions line
-        # up with the cell's slots exactly.
-        _cell_f = cell_functor_for_instance(term)
-        if _cell_f is not None:
-            return _cell_match_pattern(
-                _cell_f,
-                [
-                    head_to_match_pattern(
-                        getattr(term, name), var_context, dup_guards,
-                        list_guards, _list_reg_ids, globals_=globals_,
-                    )
-                    for name in fields
-                ],
-            )
+        # A live INSTANCE always matches as a class -- the matching half of
+        # ``term_to_ast_expr``'s instance branch, which always CONSTRUCTS one
+        # (P3-2 Task 2, controller ruling: cell-vs-class is decided on the
+        # binding, and an instance's producer is by definition class-world).
+        # Symmetry is the whole point: whatever the two sides answer, they
+        # have to answer it the same way.
         return ast.MatchClass(
             cls=_name(cls_name),
             patterns=[],

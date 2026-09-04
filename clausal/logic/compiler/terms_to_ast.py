@@ -38,7 +38,7 @@ from clausal.pythonic_ast.nodes import (
     SetLiteral as _SetLiteral_t,
 )
 from clausal.logic.predicate import (
-    PredicateMeta, is_atom, is_data_functor, is_term_instance,
+    PredicateMeta, is_atom, is_term_instance,
     term_field_names, term_field_names_of_class,
 )
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
@@ -204,12 +204,14 @@ def lowering_globals() -> "dict | None":
     return _LOWERING_SCOPE_STACK[-1] if _LOWERING_SCOPE_STACK else None
 
 
-# The data-functor gate now lives in ``clausal.logic.predicate`` beside
-# ``is_term_instance`` (the runtime and the compiler must share ONE
-# definition of "data functor"; see :func:`~clausal.logic.predicate.
-# is_data_functor` for the gate's own reasoning).  The local alias is kept so
-# ``head_match``'s import path stays one hop.
-_is_cell_functor_class = is_data_functor
+# (The class-shaped data-functor gate that used to live here --
+# ``_is_cell_functor_class``, briefly ``predicate.is_data_functor`` -- is
+# DELETED.  Cell-vs-class is decided on the BINDING now (R6): a name bound to
+# a ``PredicateMeta`` is a predicate/class reference, a name bound to its
+# interned spelling with a signature-registry entry is data.  Nothing asks the
+# question of a CLASS any more -- a live instance always keeps class emission
+# -- so a gate that inspected ``_fields``/``_clauses``/``_dynamic_arities``/
+# ``position`` had no callers left.)
 
 
 def _resolve_functor_binding(
@@ -494,20 +496,50 @@ def _place_signature_slots(fields, positional, keywords, *, functor, missing):
     return [missing() if slot is _UNSET else slot for slot in slots]
 
 
-def cell_functor_for_instance(term: Any) -> "str | None":
-    """Resolve a live term INSTANCE to its cell functor, or None.
+def unnameable_instance_cell_functor(term: Any) -> "str | None":
+    """A live INSTANCE whose class cannot be named here → its cell functor.
 
-    ``type(term)`` plus :func:`~clausal.logic.predicate.is_data_functor` is
-    the whole test — the same gate :func:`cell_signature_for_name` applies to
-    a NAME, so construction and matching cannot disagree about a functor.  No
-    name resolution is involved (the class is the term's own type), and so no
-    namespace is needed either: unlike the name path this answers the same
-    way inside and outside a compile scope.
+    P3-2 Task 2.  A live ``PredicateMeta`` instance normally keeps CLASS
+    emission (the controller's ruling on the gate asymmetry: cell-vs-class is
+    decided on the BINDING, and an instance's producer is class-world).  That
+    rests on a premise with one hole in it: post-R6 a ``.clausal`` data
+    functor's name binds its interned spelling, but the ``-module`` rewrite's
+    class block runs at EXEC time, before ``_process_declarations`` rebinds
+    the name -- so a ``-constants`` right-hand side (``-constants(_ORIGIN_ =
+    Point(0, 0))``) is evaluated through the class and yields exactly the
+    instance the ruling says cannot exist.
+
+    Emitting a class construction for it produces code that cannot run: the
+    only spelling available is ``Point``, and ``Point`` is the str.  So the
+    binding question is asked HERE too, and the answer is the same one the
+    NAME side gives -- which is the whole point, since a construction that
+    disagreed with its own matching half is the hazard the ruling exists to
+    remove:
+
+    * the compile scope binds this class under its own name -> nameable,
+      class emission (every Python-minted functor: ``clausal.reflection``'s
+      ``Goal``, ``clpb``'s ``BoolEq``).  Returns None.
+    * the name resolves as DATA (str binding + signature registry) and the
+      registry's slot layout is this class's own -> a cell, the identical
+      shape every other reference to that functor in this module compiles to.
+    * anything else -> None; class emission, unchanged.
     """
     cls = type(term)
-    if not is_data_functor(cls):
+    if not isinstance(cls, PredicateMeta):
         return None
-    return cls.__name__
+    scope = lowering_globals()
+    if scope is None:
+        return None
+    name = cls.__name__
+    if scope.get(name) is cls:
+        return None
+    signature = cell_signature_for_name(name)
+    if signature is None:
+        return None
+    functor, fields = signature
+    if tuple(fields) != tuple(getattr(cls, "_fields", ())):
+        return None
+    return functor
 
 
 def cell_literal_ast(functor: str, arg_exprs: list[ast.expr]) -> ast.Tuple:
@@ -991,17 +1023,25 @@ def term_to_ast_expr(
         cls = type(term)
         cls_name = cls.__name__
         fields = term_field_names(term)
-        # A live instance of a DATA functor lowers to a cell literal, matching
-        # what source-level constructions of the same functor compile to (the
-        # ``Call(LoadName)`` branch above).  The reachable producer of such an
-        # instance is the query compiler, so a query argument built as
-        # ``m.point(1, 2)`` by a Python caller still meets the compiled
-        # clauses' cells.
+        # A live term INSTANCE ALWAYS keeps class emission (P3-2 Task 2,
+        # controller ruling on the gate asymmetry).  Cell-vs-class is decided
+        # on the BINDING (R6): a declared data functor binds its interned
+        # spelling, so post-flip no ``.clausal`` module can produce an
+        # instance of one at all.  Every instance that still reaches here was
+        # minted in PYTHON (``clausal.reflection``'s ``Goal``/``Clause``,
+        # ``clpb``'s ``BoolEq``) and belongs to the class world: those
+        # producers build instances at runtime, and lowering them to cells
+        # here would emit a shape the NAME side of the same functor compiles a
+        # class pattern for -- "builds one shape, matches another", the clause
+        # that can never fire.  Answering uniformly at the class instead of
+        # per site also retires the ``_position``/``position`` exclusion that
+        # the old instance gate needed.
         #
-        # The ``_position``/``position`` exclusion that used to sit here lives
-        # in ``predicate.is_data_functor``, so ``head_match``'s pattern branch
-        # inherits the same answer — see that gate's docstring.
-        _cell_f = cell_functor_for_instance(term)
+        # The one exception is an instance whose class this compile cannot
+        # NAME -- see ``unnameable_instance_cell_functor``, which asks the
+        # same binding question the name side asks and therefore cannot
+        # disagree with it.
+        _cell_f = unnameable_instance_cell_functor(term)
         if _cell_f is not None:
             return cell_literal_ast(
                 _cell_f,
