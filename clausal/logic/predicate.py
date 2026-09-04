@@ -611,9 +611,15 @@ class PredicateMeta(type):
         # per-module atom-identity class machinery that used to live here
         # (CLAUSAL_WARN_ATOM_IDENTITY / _make_atom_identity_unify) is deleted
         # — there is no more "same spelling, different owning module" case for
-        # a real atom to warn about. Zero-field PredicateMeta classes remain
-        # only as an internal transitional shape; see predicate.py module
-        # docstring.)
+        # a real atom to warn about. Zero-field PredicateMeta classes are NOT
+        # a retireable pre-pivot straggler, per the Task 7 sweep
+        # (phase3-decomposition-and-p31-atom-pivot.md): the compiler no
+        # longer mints one for a plain atom, but a 0-arity PREDICATE
+        # declared with explicit call syntax — ``-module(m, [p()])``, as
+        # opposed to the bare-Name atom syntax ``-module(m, [p])`` — still
+        # legitimately mints one, and ``make_atom``/``make_predicate(n, [])``
+        # remain a general-purpose, still-tested construction API. This
+        # zero-field fast path stays permanently, not just transitionally.)
 
         # Where this class was registered, for the field-name mismatch
         # diagnostic.  Frame 1 is the .clausal module body running the

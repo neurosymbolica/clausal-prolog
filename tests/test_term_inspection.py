@@ -727,21 +727,25 @@ class TestGlobalAtom:
     # process-wide predicate_builtins dict.
 
     def test_mint_on_demand(self):
-        """(+name, -atom) — fresh name mints a new PredicateMeta arity-0 class."""
+        """(+name, -atom) — fresh name installs the interned SPELLING itself.
+
+        P3-1 atom pivot (§1b/R2): no class is minted -- an atom IS the str.
+        Inverts the pre-pivot pin that this builtin returned a PredicateMeta
+        arity-0 class; see phase3-decomposition-and-p31-atom-pivot.md Task 7
+        work item 4 (the sweep found this builtin was the last live,
+        user-reachable atom-class-construction path)."""
         # nv
         from clausal.import_hook import predicate_builtins
-        from clausal.logic.predicate import PredicateMeta
         name = "_test_global_atom_mint_xyz"
         assert name not in predicate_builtins  # sanity: fresh
         atom = Var()
         results = _global_atom_call(name, atom)
         assert len(results) == 1
-        _, cls = results[0]
-        assert isinstance(cls, PredicateMeta)
-        assert cls._fields == ()
-        assert cls.__name__ == name
+        _, val = results[0]
+        assert val == name
+        assert isinstance(val, str)
         # Side-effect: it is now in the global dict.
-        assert predicate_builtins.get(name) is cls
+        assert predicate_builtins.get(name) is val
 
     def test_idempotent_mint(self):
         """(+name, -atom) twice yields the same class object (identity)."""
@@ -813,25 +817,37 @@ class TestGlobalAtom:
         assert results == []
 
     def test_enumerate_yields_minted_atoms(self):
-        """(-name, -atom) — enumerates global atoms; minted one appears."""
+        """(-name, -atom) — enumerates global atoms; minted one appears.
+
+        P3-1 atom pivot (§1b/R2): a registered atom is the interned str
+        (self-mapped: key == value), not a PredicateMeta -- see Task 7 work
+        item 4. A legacy 0-arity PredicateMeta (``make_atom``'s pre-pivot
+        shape) is still accepted by the reader if anything installs one
+        manually, so the enumerate assertion below allows either shape.
+        """
         # nv
         from clausal.import_hook import predicate_builtins
         from clausal.logic.predicate import PredicateMeta
         name = "_test_global_atom_enumerate_xyz"
         # Mint to ensure presence.
         _global_atom_call(name, Var())
-        cls = predicate_builtins[name]
+        val = predicate_builtins[name]
+        assert val == name and isinstance(val, str)
         # Enumerate.
         n_out = Var()
         a_out = Var()
         results = _global_atom_call(n_out, a_out)
         # Our minted entry must appear.
-        assert (name, cls) in results
-        # All yielded pairs must be (str, PredicateMeta with arity 0).
-        for n, c in results:
+        assert (name, val) in results
+        # Every yielded pair is (str, str-that-equals-its-name) or, for
+        # backward compatibility, (str, 0-arity PredicateMeta).
+        for n, v in results:
             assert isinstance(n, str)
-            assert isinstance(c, PredicateMeta)
-            assert c._fields == ()
+            if isinstance(v, str):
+                assert v == n
+            else:
+                assert isinstance(v, PredicateMeta)
+                assert v._fields == ()
 
     def test_round_trip(self):
         """Mint with (+name, -atom); reverse-lookup with (-name, +atom) returns name."""

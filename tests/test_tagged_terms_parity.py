@@ -102,11 +102,16 @@ class TestStructTablingParity:
         assert len(plain) == 1
 
     def test_nats_chain_shape_is_canonical(self):
-        """Nats(3, L) => cons(3, cons(2, cons(1, nil))) in both halves."""
+        """Nats(3, L) => cons(3, cons(2, cons(1, nil))) in both halves.
+
+        P3-1 atom pivot (§1b): the chain's tail ``nil`` is the interned str
+        "nil" in both halves, not a wrapped ("nil",) atom-class shape --
+        see phase3-decomposition-and-p31-atom-pivot.md Task 7 work item 1.
+        """
         def build(mod):
             return (3, Var())
 
-        expected = ("cons", 3, ("cons", 2, ("cons", 1, ("nil",))))
+        expected = ("cons", 3, ("cons", 2, ("cons", 1, "nil")))
         plain = _answers(_ST_PLAIN, "Nats", build, [1])
         tagged = _answers(_ST_TAGGED, "Nats", build, [1])
         assert plain == [(expected,)]

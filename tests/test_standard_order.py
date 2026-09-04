@@ -182,9 +182,13 @@ class TestAtomKeyCollapse:
     Pre-pivot, a str and a same-spelled zero-arity declared-class atom got
     DIFFERENT keys (``(_ORD_ATOM, name, 0)`` vs. ``(_ORD_ATOM, name, 1)``) so
     ties broke str-first.  Post-pivot (§1b/R2: a str IS the atom), there is
-    one shape: ``(_ORD_ATOM, name)``.  A class atom is a transitional
-    straggler (until Task 7's sweep) that must key IDENTICALLY to the same-
-    spelled str, not merely adjacently.
+    one shape: ``(_ORD_ATOM, name)``.  ``make_atom`` still legitimately
+    produces a zero-arity ``PredicateMeta`` class (a general-purpose test/
+    infra helper, and the same class shape a bare 0-arity PREDICATE
+    declared with call syntax -- ``-module(m, [p()])`` -- mints for real;
+    the Task 7 sweep confirmed this is not a retireable pre-pivot
+    straggler), so it must key IDENTICALLY to the same-spelled str, not
+    merely adjacently.
     """
 
     def test_str_atom_key_shape_has_no_discriminator(self):

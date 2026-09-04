@@ -76,14 +76,34 @@ class TestCommaOptionalWhenDeclared:
 
 class TestUndeclaredDiagnostic:
     def test_undeclared_bare_fact_hints_comma(self, tmp_path):
-        # p undeclared, no -module: functor name is undefined.
-        src = "-strict_atoms\np(_ATOM, 1)\n"
+        # Functor undeclared, no -module: functor name is undefined.
+        #
+        # The functor name is deliberately obscure (same rationale as
+        # test_declared_later_does_not_apply above) to avoid colliding with
+        # globally-registered atoms from OTHER test modules: post-P3-1,
+        # atoms are interned by spelling into the process-wide
+        # predicate_builtins dict FOREVER (§1b/R2's global-by-spelling
+        # design), so a single-letter name like the `p` this test used to
+        # use collides with e.g. tests/test_operator_head_indexed_dispatch.py's
+        # -private([p, ...]) -- whichever test runs first wins the name, and
+        # once `p` is a known atom the try/except NameError guard this test
+        # exercises no longer sees an undefined name, so it silently takes
+        # the "legitimate call" branch instead of raising the "bodyless
+        # fact" diagnostic. Root-caused in
+        # phase3-decomposition-and-p31-atom-pivot.md Task 7 work item 3
+        # (order-dependent flake); a per-test predicate_builtins reset was
+        # considered and rejected as disproportionate -- that dict's
+        # whole-process persistence is the deliberate global-atom-identity
+        # design (other tests pin `mod.x is predicate_builtins["x"]`-shaped
+        # object identity), so resetting it here would just move the
+        # fragility onto those tests instead of removing it.
+        src = "-strict_atoms\n_t3_undeclared_pred_(_ATOM, 1)\n"
         with pytest.raises(NameError) as ei:
             load_src(tmp_path, "t3_undecl", src)
         msg = str(ei.value)
         assert "bodyless fact" in msg
         assert "trailing" in msg
-        assert "p" in msg
+        assert "_t3_undeclared_pred_" in msg
 
     def test_legit_undeclared_call_still_runs(self, tmp_path, capsys):
         # `print` resolves (a real callable), so the else-branch runs it: no error.

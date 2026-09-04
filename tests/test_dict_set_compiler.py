@@ -361,9 +361,14 @@ class TestDictSetFixture:
         # nv
         assert self._query_test(mod, logic_mod, "atom key delete")
 
-    def test_atom_key_distinct_from_string(self, mod, logic_mod):
+    def test_atom_key_same_as_string(self, mod, logic_mod):
         # nv
-        assert self._query_test(mod, logic_mod, "atom key distinct from string")
+        # P3-1 atom pivot (§1b/R2): atom(X) collapses onto every str, so an
+        # atom key `foo` and a string key "foo" are the SAME key. Inverted
+        # from the pre-pivot "distinct" pin; see
+        # phase3-decomposition-and-p31-atom-pivot.md Task 7 work item 2.
+        # The broader dict/set-vs-atom audit stays Phase 4 scope.
+        assert self._query_test(mod, logic_mod, "atom key same as string")
 
     # ── dot attribute-access sugar: P.key ≡ P[key] ──
 

@@ -218,11 +218,15 @@ Test("atom key in") <- (foo in {foo: 1, bar: 2})  # nv
 Test("atom key unify") <- ({foo: 1, bar: 2} is {foo: 1, bar: 2})  # nv
 Test("atom key merge") <- (P2 is {**{foo: 1}, bar: 2}, P2 is {foo: 1, bar: 2})  # nv
 Test("atom key delete") <- (delete({foo: 1, bar: 2}, foo, P2), P2 is {bar: 2})  # nv
-# atom key `foo` and string key "foo" are DISTINCT (atoms don't unify with strings)
-Test("atom key distinct from string") <- (
+# P3-1 atom pivot (§1b/R2): atom(X) collapses onto every str -- an atom key
+# `foo` and a string key "foo" are now the SAME key (R2's atom/string
+# collapse, not a dict-specific rule). Inverted from the pre-pivot pin that
+# they were distinct; see phase3-decomposition-and-p31-atom-pivot.md Task 7
+# work item 2. The broader dict/set-vs-atom audit stays Phase 4 scope.
+Test("atom key same as string") <- (
     D is {foo: 1},
-    not get(D, "foo", _),
-    get(D, foo, V), V is 1,
+    get(D, "foo", V1), V1 is 1,
+    get(D, foo, V2), V2 is 1,
 )  # nv
 
 # ── Dot attribute-access sugar: P.key ≡ P[key] ──

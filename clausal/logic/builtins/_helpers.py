@@ -550,14 +550,21 @@ def _standard_order_key(term: Any) -> tuple:
     if isinstance(term, str):
         return (_ORD_ATOM, term)
     if is_atom(term):
-        # P3-1 Task 4 (standard-order collapse): a zero-arity declared class
-        # atom is a straggler of the pre-pivot atom-class representation —
-        # transiently possible until Task 7's sweep retires the class-atom
-        # path entirely, per §1b/R2 a class atom and the same-spelled str are
-        # the SAME atom, so this key must not be distinguishable from the str
-        # key above.  No trailing discriminator: ``(_ORD_ATOM, "work")`` for
-        # both ``"work"`` and ``make_atom("work")``, so they sort adjacent-
-        # equal rather than the old (str-wins-ties) ordering.
+        # P3-1 Task 4 (standard-order collapse), status corrected by the
+        # Task 7 sweep: NOT a transient pre-pivot straggler after all. The
+        # compiler stopped minting atom-shaped classes in Task 2, and the
+        # last live production atom-class-construction path
+        # (``global_atom/2``'s mint-on-demand mode) was fixed in Task 7 to
+        # install the interned str instead — but a bare 0-arity PREDICATE
+        # declared with explicit call syntax (``-module(m, [p()])``, as
+        # opposed to the bare-Name atom syntax ``-module(m, [p])``) still
+        # legitimately mints a real ``PredicateMeta`` class with no fields,
+        # and a reference to that predicate BY NAME (not called) reaches
+        # here as a live term value. Per §1b/R2 that class and a
+        # same-spelled str are still the SAME atom for ordering purposes,
+        # so this key must not be distinguishable from the str key above:
+        # no trailing discriminator, ``(_ORD_ATOM, "work")`` for both
+        # ``"work"`` and a 0-arity predicate class named ``work``.
         return (_ORD_ATOM, term.__name__)
     if isinstance(term, bytes):
         return (_ORD_BYTES, term)

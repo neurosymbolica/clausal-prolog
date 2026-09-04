@@ -189,11 +189,15 @@ class TestCellEmission:
         assert "point(_v2, _v3)" in src
         assert "('point'," not in src
 
-    def test_atoms_stay_class_atoms_in_a_flagged_module(self):
-        """Phase 3 does the atom pivot; a 0-arity reference is still a class."""
+    def test_atoms_lower_to_str_constants_even_in_a_flagged_module(self):
+        """P3-1 atom pivot (§1b): a 0-arity reference is a Constant str, not a
+        class, in EITHER path -- ``-tagged_terms`` only changes how compound
+        (arity >= 1) functor references lower. Inverts the pre-pivot pin
+        that atoms "stay class atoms" (phase3-decomposition-and-p31-atom-pivot
+        Task 7 work item 1)."""
         src = capture_predicate_codegen(_TAGGED, ["kind"])
-        assert "$unify(_v13, nil, trail)" in src
-        assert "('nil'" not in src
+        assert "$unify(_v13, 'nil', trail)" in src
+        assert "$unify(_v13, nil, trail)" not in src
 
     def test_keyword_construction_keeps_class_emission(self):
         """A cell is positional and total: no field names, no Var-backfill."""
@@ -640,11 +644,15 @@ class TestNormalizer:
         assert normalize_term(tagged.point(1, 2)) == ("point", 1, 2)
 
     def test_nesting_is_canonicalised_all_the_way_down(self):
+        """P3-1 atom pivot (§1b): ``plain.nil`` is the interned str "nil",
+        not a 0-arity class, so it canonicalises to itself -- no ("nil",)
+        wrapping (phase3-decomposition-and-p31-atom-pivot Task 7 work item
+        1)."""
         plain = _fixture(_PLAIN)
         chain = plain.point(3, plain.point(2, plain.nil))
-        assert normalize_term(chain) == ("point", 3, ("point", 2, ("nil",)))
+        assert normalize_term(chain) == ("point", 3, ("point", 2, "nil"))
         assert normalize_term(("point", 3, ("point", 2, plain.nil))) \
-            == ("point", 3, ("point", 2, ("nil",)))
+            == ("point", 3, ("point", 2, "nil"))
 
     def test_different_functors_stay_different(self):
         plain = _fixture(_PLAIN)
@@ -658,16 +666,22 @@ class TestNormalizer:
         assert normalize_term(Var()) == normalize_term(Var()) == ("$var",)
 
     def test_lists_and_scalars_pass_through(self):
+        """P3-1 atom pivot (§1b): ``plain.nil`` is already the plain str
+        "nil" -- it passes through like any other scalar, same as before
+        the pivot an atom would have needed ("nil",) wrapping (Task 7 work
+        item 1)."""
         plain = _fixture(_PLAIN)
-        assert normalize_term([1, "a", plain.nil]) == [1, "a", ("nil",)]
+        assert normalize_term([1, "a", plain.nil]) == [1, "a", "nil"]
         assert normalize_term(42) == 42
 
     def test_normalize_answers_handles_binding_dicts_and_bare_terms(self):
+        """P3-1 atom pivot (§1b): no ("nil",) wrapping -- see Task 7 work
+        item 1."""
         plain = _fixture(_PLAIN)
         rows = [{"T": plain.point(1, plain.nil)}, ("point", 1, plain.nil)]
         assert normalize_answers(rows) == [
-            {"T": ("point", 1, ("nil",))},
-            ("point", 1, ("nil",)),
+            {"T": ("point", 1, "nil")},
+            ("point", 1, "nil"),
         ]
 
 

@@ -54,7 +54,11 @@ def normalize_term(value: Any) -> Any:
     ==============================  ==========================================
     cell ``("f", a, b)``            ``("f", norm(a), norm(b))``
     class term ``f(A=a, B=b)``      ``("f", norm(a), norm(b))``
-    atom class ``nil``              ``("nil",)``
+    atom ``nil``                    ``"nil"``  (P3-1 atom pivot: an atom IS
+                                     the interned str; no wrapping needed --
+                                     both halves already produce the same
+                                     value.  See phase3-decomposition-and-
+                                     p31-atom-pivot.md Task 7 work item 1.)
     unbound ``Var``                 ``("$var",)``  (identity is not comparable)
     ``list``                        ``["norm", ...]``
     plain ``tuple``                 unchanged shape, elements normalised
@@ -75,9 +79,14 @@ def normalize_term(value: Any) -> Any:
     value = deref(value)
     if is_var(value):
         return ("$var",)
-    # A 0-arity predicate class used as a value IS the atom.
-    if isinstance(value, type) and isinstance(value, PredicateMeta):
-        return (value.__name__,)
+    # Pre-P3-1, a 0-arity predicate class used as a value WAS the atom, and
+    # needed wrapping to ("name",) so it would compare equal to a cell's
+    # str-headed 0-arity shape. The atom pivot (§1b) makes every atom an
+    # interned str directly -- both the plain-class half and the
+    # -tagged_terms half already emit the identical value, so there is
+    # nothing left to normalise here. No 0-arity PredicateMeta atom classes
+    # are minted post-pivot (str falls through to the final `return value`
+    # below); see phase3-decomposition-and-p31-atom-pivot.md Task 7.
     if is_cell(value):
         f = cell_functor(value)
         if isinstance(f, str):
