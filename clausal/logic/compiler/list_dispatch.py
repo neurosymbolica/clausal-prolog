@@ -30,14 +30,26 @@ from .head_match import (
     head_to_match_pattern, compile_head_to_match_case, _head_arg_patterns,
     _wrap_yields_with_output_guards,
 )
-from .terms_to_ast import term_to_ast_expr  # noqa: F401
+from .terms_to_ast import (  # noqa: F401
+    term_to_ast_expr, cell_signature_for_name, _is_opaque_head_literal,
+)
+from clausal.logic.cells import TUPLE_TAG
 
 
 # ── Phase 5: deep structural indexing helpers ──────────────────────────────────
 
 
 def _get_head_arg(clause: Clause, pos: int) -> Any:
-    """Return the argument at position *pos* from the clause head (or None)."""
+    """Return the argument at position *pos* from the clause head (or None).
+
+    No cell branch, deliberately (P3-2 Task 3, plan claim verified rather than
+    assumed): this reads the HEAD TERM, and in P3-2 a head is still a predicate
+    instance or a ``Compound`` — never a cell.  ``database.head_key`` raises on
+    a tuple head and ``database_ops._reject_cell_head`` turns an ``assertz`` of
+    one into ``permission_error(modify, static_procedure, f/N)``, so no cell
+    can reach here as a *head*.  Cell head ARGUMENTS are a different question
+    and are handled by the callers below.  Cell heads are P3-3.
+    """
     head = clause.head
     if isinstance(head, Compound):
         return head.args[pos] if pos < len(head.args) else None
@@ -47,7 +59,57 @@ def _get_head_arg(clause: Clause, pos: int) -> Any:
     return None
 
 
-def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
+def _carries_an_uninjected_head_literal(term: Any) -> bool:
+    """True if lifting *term* into a head would emit a pattern naming a
+    ``$headlit_<id>`` global that nothing injected.
+
+    P3-2 Task 3, found by driving a lifted bucket rather than by reading it.
+    ``_collect_globals_info`` walks the PRE-lift clauses, and only its HEAD
+    walker records ``$headlit_<id>`` entries — a body walk records call
+    targets and ``_pyt_<id>`` thunks instead.  So a value that
+    ``head_to_match_pattern`` compiles to an opaque-literal capture is
+    reachable from a body ``Unify`` but has no global if the lift moves it
+    into the head afterwards, and the bucket raises ``NameError`` the first
+    time it is entered.
+
+    A nested ``PyThunk`` (a quantity/currency literal, an f-string, a ``++()``
+    escape) is the reachable case from ``.clausal`` source, and it is also
+    WRONG on its own terms — the same reason the top-level ``PyThunk`` skip
+    above exists: nothing on the head-match path evaluates a thunk, so the
+    pattern would guard against the thunk OBJECT and the clause could never
+    fire.  This is that skip, applied one level down.
+
+    Deliberately scoped to the ``Call`` branch that Task 3 opened.  The same
+    hazard exists in principle for a lifted ``Compound`` carrying a nested
+    ``date``, but that lift predates this task and changing it would change
+    answers outside Task 3's remit; it is recorded in the report instead.
+
+    A CELL nested inside the reference is recursed INTO rather than treated
+    as a leaf: the live-cell branch of ``head_to_match_pattern`` matches it
+    structurally, above the opaque-literal capture, so it needs no injected
+    global of its own (the tuple-DATA tag names ``$cells``, which the
+    compilation injects unconditionally).
+    """
+    if isinstance(term, PyThunk):
+        return True
+    if isinstance(term, Call):
+        return (
+            any(_carries_an_uninjected_head_literal(a) for a in term.args)
+            or any(_carries_an_uninjected_head_literal(kw.value)
+                   for kw in (term.kwargs or []))
+        )
+    if isinstance(term, Compound):
+        return any(_carries_an_uninjected_head_literal(a) for a in term.args)
+    if isinstance(term, list):
+        return any(_carries_an_uninjected_head_literal(e) for e in term)
+    if type(term) is tuple and term and (
+            isinstance(term[0], str) or term[0] is TUPLE_TAG):
+        return any(_carries_an_uninjected_head_literal(e) for e in term[1:])
+    return _is_opaque_head_literal(term)
+
+
+def _lift_clause_at_pos(clause: Clause, pos: int,
+                        globals_: dict | None = None) -> Clause:
     """Phase 8: lift the body Unify for head position *pos* into the head.
 
     in_ bucket compilation contexts the indexed argument is already guaranteed
@@ -69,6 +131,11 @@ def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
       keyed under ``"abc"``).  Leaving str/bytes unlifted keeps the body
       ``Unify`` in place where runtime ``unify`` correctly handles the
       str↔list duality.
+
+    *globals_* is the namespace the lifted head will be MATCHED against —
+    pass the same dict ``head_to_match_pattern`` will get (the compilation's
+    ``base_globals``), so the two halves cannot disagree about what a name
+    means.  It is what decides the ``Call(LoadName)`` case below.
 
     Only called from the indexed bucket path — the fallback function always
     uses the original unlifted clauses.
@@ -142,23 +209,50 @@ def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
     if isinstance(lift_term, (LoadName, LoadAttr)):
         return clause
 
-    # Skip the lift when the lifted term is an unresolved compound reference
-    # built from an imported/qualified functor (``Call(LoadName('mod.Wrap'),
-    # …)`` / ``Call(LoadAttr(...))``) — the one-level-up analogue of the bare
-    # ``LoadName``/``LoadAttr`` case above.  In the indexed bucket path the
-    # imported functor class is NOT in the bucket's globals:
-    # ``_collect_globals_info`` ran on the pre-lift clauses, where the functor
-    # lived in a body ``Unify`` and was recorded as a call *target*, not as a
-    # head term *class*.  ``head_to_match_pattern`` therefore cannot resolve the
-    # ``LoadName`` and falls back to ``MatchClass(Call, …)`` — a pattern no
-    # runtime term instance matches, so the bucket yields nothing.  Leaving the
-    # body ``Unify`` in place lets the runtime resolve the imported functor and
-    # unify it, exactly as the non-indexed fallback path already does; bucket
-    # SELECTION still keys the clause correctly via ``arg_index._arg_to_index_key``.
+    # A compound reference (``Call(LoadName('point'), …)`` — the shape every
+    # compound written in ``.clausal`` source has).  Whether it may be lifted
+    # is decided HERE, once, by asking what the name means.
+    #
+    # P3-2 Task 3.  Pre-flip this was an unconditional refusal, and the reason
+    # given was about the bucket's globals: ``_collect_globals_info`` ran on
+    # the pre-lift clauses, where the functor lived in a body ``Unify`` and was
+    # recorded as a call *target*, not as a head term *class*, so
+    # ``head_to_match_pattern`` could not resolve the ``LoadName`` and fell
+    # back to ``MatchClass(Call, …)`` — a pattern no runtime term matches, so
+    # the bucket yielded nothing.
+    #
+    # A DATA functor reference dissolves that reason entirely: it compiles to
+    # a cell, and a cell pattern is a plain sequence LITERAL —
+    # ``case ('point', x, y)`` resolves nothing at match time.  The only
+    # resolution left is the one done right here, at LIFT time, and it reads
+    # the full module namespace rather than the bucket's collected globals.
+    #
+    # Still refused, for the same reason as before:
+    # * a name bound to a ``PredicateMeta`` (R6b: a ``name/arity`` export
+    #   declares a predicate, and a predicate reference has no cell pattern),
+    # * a name nothing resolves — no namespace, no registry entry, no class,
+    # * a ``Call(LoadAttr(...))`` chain: ``head_to_match_pattern`` has a
+    #   ``Call(LoadName)`` branch and no ``LoadAttr`` one, so lifting one would
+    #   re-create exactly the dead ``MatchClass(Call, …)`` this refusal
+    #   existed to avoid.  (A module-qualified reference reaches the term world
+    #   as a single DOTTED ``LoadName`` — see ``_resolve_functor_binding`` —
+    #   so R5's cross-module case goes through the branch above, not here.)
+    # * a reference with an OPAQUE value nested anywhere inside it — see
+    #   ``_carries_an_uninjected_head_literal``.
+    #
+    # In every refused case the body ``Unify`` stays where it is and the
+    # runtime resolves the reference, exactly as the non-indexed fallback path
+    # does; bucket SELECTION still keys the clause correctly via
+    # ``arg_index._arg_to_index_key``.
     if isinstance(lift_term, Call) and isinstance(
         lift_term.func, (LoadName, LoadAttr)
     ):
-        return clause
+        if not isinstance(lift_term.func, LoadName):
+            return clause
+        if cell_signature_for_name(lift_term.func.name, globals_) is None:
+            return clause
+        if _carries_an_uninjected_head_literal(lift_term):
+            return clause
 
     # Rebuild head with lift_term at pos
     if isinstance(head, Compound):

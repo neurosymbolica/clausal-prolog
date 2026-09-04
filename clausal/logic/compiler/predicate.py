@@ -919,7 +919,8 @@ def _compile_predicate_trampoline_impl(
                     # ground (guaranteed by dispatch), so the removed Unify
                     # would always succeed — lifting is semantically safe.
                     lifted_bucket = [
-                        _lift_clause_at_pos(cl, pos) for cl in bucket_clauses
+                        _lift_clause_at_pos(cl, pos, base_globals)
+                        for cl in bucket_clauses
                     ]
                     # No extra globals update needed: any compound type that
                     # appears in the lifted head was already in the original
@@ -927,6 +928,15 @@ def _compile_predicate_trampoline_impl(
                     # above.  Calling it again on lifted_bucket would
                     # re-collect term-node classes (Unify, in_, …) and
                     # clobber predicate entries set by _inject_resolved_targets.
+                    # P3-2 Task 3 keeps that true for the cell references it
+                    # newly lifts: their pattern is a sequence LITERAL, which
+                    # names nothing at match time — see the ``Call`` case in
+                    # ``_lift_clause_at_pos``, which is exactly why the old
+                    # refusal (grounded in the bucket's missing globals) could
+                    # be dropped.  ``base_globals`` is passed to the lift only
+                    # so the LIFT-TIME question ("is this name a data
+                    # functor?") is asked of the same dict
+                    # ``head_to_match_pattern`` will use.
                     bname = f"{functor}__p{pos}_b{len(idx_dict)}"
                     # Map TRO indices from original clauses to this bucket's clauses.
                     _b_tro = None
@@ -995,8 +1005,9 @@ def _compile_predicate_trampoline_impl(
                                     for kj, bkt in l1_buckets.items():
                                         lifted = [
                                             _lift_clause_at_pos(
-                                                _lift_clause_at_pos(cl, pos_i),
-                                                pos_j)
+                                                _lift_clause_at_pos(
+                                                    cl, pos_i, base_globals),
+                                                pos_j, base_globals)
                                             for cl in bkt
                                         ]
                                         bname = (
@@ -1014,7 +1025,8 @@ def _compile_predicate_trampoline_impl(
                                             bdef, globals_=base_globals)
                                     # level-1 default: clauses with var at pos_j
                                     l1d_lifted = [
-                                        _lift_clause_at_pos(cl, pos_i)
+                                        _lift_clause_at_pos(
+                                            cl, pos_i, base_globals)
                                         for cl in l1_defaults
                                     ]
                                     l1dname = (
@@ -1035,7 +1047,8 @@ def _compile_predicate_trampoline_impl(
                                 else:
                                     # sub-bucket too small for level-1 index
                                     lifted = [
-                                        _lift_clause_at_pos(cl, pos_i)
+                                        _lift_clause_at_pos(
+                                            cl, pos_i, base_globals)
                                         for cl in l1_defaults
                                     ]
                                     bname = (
@@ -1081,7 +1094,8 @@ def _compile_predicate_trampoline_impl(
                         for jk, bkt in joint_info["buckets"].items():
                             lifted = [
                                 _lift_clause_at_pos(
-                                    _lift_clause_at_pos(cl, pos_i), pos_j)
+                                    _lift_clause_at_pos(cl, pos_i, base_globals),
+                                    pos_j, base_globals)
                                 for cl in bkt
                             ]
                             jbname = (

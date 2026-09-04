@@ -908,19 +908,25 @@ class TestHeadPatternReachability:
     changes any of it gets a failing test rather than a stale comment.
     """
 
-    def test_source_written_compounds_never_reach_a_head_pattern(self):
-        """A compound written in ``.clausal`` source is a ``Call(LoadName)``
-        term, and ``list_dispatch._lift_clause_at_pos`` refuses to lift those
-        into a head (the class may not be in the bucket's globals).  So a
-        module compiled from source emits its compounds ONLY as cell
-        literals in body ``Unify`` goals -- the head arms stay plain arg
-        captures.  (Closing that is P3-2 Task 3's job, not this one's.)
+    def test_source_written_compounds_reach_a_head_pattern(self):
+        """P3-2 Task 3 (the crux).  Inverts
+        ``test_source_written_compounds_never_reach_a_head_pattern``, which
+        pinned the Task-2 state: ``_lift_clause_at_pos`` refused every
+        ``Call(LoadName)`` because the pattern emitter needed the functor
+        CLASS in the bucket's globals, so a module compiled from source
+        emitted its compounds ONLY as cell literals in body ``Unify`` goals.
+
+        A cell pattern is a sequence LITERAL -- it resolves nothing at match
+        time -- so that refusal had nothing left to protect.  The lift asks
+        the one question that remains, at LIFT time, of the full module
+        namespace: is this name a DATA functor?
         """
         src = capture_predicate_codegen(_TAGGED)
         case_lines = [l for l in src.splitlines() if l.lstrip().startswith("case ")]
         assert case_lines, "the capture found no match arms at all"
-        assert not [l for l in case_lines if "'point'" in l or "'seg'" in l]
-        # ... while the cell literals themselves are all over the bodies.
+        assert [l for l in case_lines if "'point'" in l or "'seg'" in l]
+        # ... while the UNLIFTED fallback still carries the cell literals in
+        # body Unify goals, which is what keeps output mode working.
         assert "('point', " in src and "('seg', " in src
 
     def test_index_dispatch_routes_every_cell_to_the_all_clauses_fallback(self):
@@ -944,6 +950,268 @@ class TestHeadPatternReachability:
         # live code, and still tested.
         assert arg_index._runtime_arg_key(
             _python_minted("point", ("X", "Y"), 3, 4)) == ("point", 2)
+
+
+# ── P3-2 Task 3: head-pattern reachability ───────────────────────────────────
+
+
+def _named_function(src: str, name: str) -> str:
+    """Slice the ``def <name>(...)`` block out of a captured codegen dump."""
+    out, keeping = [], False
+    for line in src.splitlines():
+        if line.startswith(f"def {name}("):
+            keeping = True
+        elif keeping and line.startswith("def "):
+            break
+        if keeping:
+            out.append(line)
+    assert out, f"no function {name} in the capture"
+    return "\n".join(out)
+
+
+def _case_lines(src: str) -> list[str]:
+    return [l.strip() for l in src.splitlines() if l.lstrip().startswith("case ")]
+
+
+#: Six ``kind/2`` clauses -- over ``_INDEX_THRESHOLD`` -- whose position-0
+#: buckets the lift reaches, one of them carrying a ``PyThunk`` (the f-string)
+#: nested inside the compound reference.  See
+#: ``test_a_reference_carrying_a_nested_thunk_is_not_lifted``.
+_NESTED_THUNK_SRC = """
+-allow_singletons
+-module(_tt_nested_thunk, [pt(X, Y), wrap(V), kind(S, K)])
+
+kind(pt(1, _A), "a") <- (true),
+kind(pt(2, _B), "b") <- (true),
+kind(pt(3, f"x{1}"), "fs") <- (true),
+kind(wrap("s"), "w") <- (true),
+kind(42, "num") <- (true),
+kind(_Other, "fallback") <- (true),
+"""
+
+
+class TestTheBucketLift:
+    """``_lift_clause_at_pos`` decides, per clause, whether a hoisted body
+    ``Unify`` may go back into the head.
+
+    P3-2 Task 3.  Pre-flip it refused every ``Call(LoadName)`` because the
+    pattern emitter needed the functor CLASS in the bucket's globals.  A cell
+    pattern is a plain sequence literal -- it resolves nothing at match time
+    -- so the only question left is the one asked at LIFT time: is this name
+    a DATA functor?  These pin both answers.
+    """
+
+    def _clause(self, arg_term):
+        from clausal.logic.database import Clause
+        from clausal.terms import Compound, Unify
+
+        v = Var()
+        return Clause(head=Compound("p", (v, "k")),
+                      body=[Unify(left=v, right=arg_term)])
+
+    def _call(self, name, n_args=2, kwargs=None):
+        from clausal.terms import Call as TCall, LoadName
+        from clausal.pythonic_ast.nodes import Keyword
+
+        return TCall(func=LoadName(name=name),
+                     args=[Var() for _ in range(n_args)],
+                     kwargs=[Keyword(name=k, value=v)
+                             for k, v in (kwargs or {}).items()])
+
+    def _lift(self, term, globals_=None):
+        from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
+
+        g = globals_ if globals_ is not None else _fixture(_TAGGED).__dict__
+        return _lift_clause_at_pos(self._clause(term), 0, g)
+
+    def test_a_data_functor_reference_is_lifted_into_the_head(self):
+        from clausal.terms import Call as TCall
+
+        out = self._lift(self._call("point", 2))
+        assert isinstance(out.head.args[0], TCall)
+        assert out.body == [], "the lifted Unify must leave the body"
+
+    def test_a_partial_data_functor_reference_is_lifted_too(self):
+        """Signature PLACEMENT backfills the omitted slot with a wildcard on
+        the pattern side (Task 1's ruling), so a partial reference is as
+        liftable as a saturated one."""
+        out = self._lift(self._call("point", 1))
+        assert out.body == []
+
+    def test_a_keyword_data_functor_reference_is_lifted_too(self):
+        out = self._lift(self._call("point", 0, {"Y": Var()}))
+        assert out.body == []
+
+    def test_a_predicate_functor_reference_is_still_refused(self):
+        """R6b: a name bound to a ``PredicateMeta`` is a PREDICATE, and a
+        predicate reference in a head arg has no cell pattern -- the lift
+        must leave the body ``Unify`` where the runtime can resolve it."""
+        out = self._lift(self._call("kind", 2))
+        assert len(out.body) == 1
+        assert is_var(deref(out.head.args[0]))
+
+    def test_an_unresolvable_name_is_still_refused(self):
+        out = self._lift(self._call("no_such_functor_anywhere", 2))
+        assert len(out.body) == 1
+
+    def test_with_no_namespace_at_all_the_lift_is_refused(self):
+        """No namespace, nothing to resolve against, no lift -- the resolver
+        answers ``None`` and the old refusal stands."""
+        out = self._lift(self._call("point", 2), globals_={})
+        assert len(out.body) == 1
+
+    def test_a_loadattr_call_is_still_refused(self):
+        """``head_to_match_pattern`` has a ``Call(LoadName)`` branch and no
+        ``Call(LoadAttr)`` one, so lifting a LoadAttr chain would emit a
+        ``MatchClass(Call, ...)`` no runtime term matches.  Dotted references
+        reach the term world as a single dotted ``LoadName`` anyway."""
+        from clausal.terms import Call as TCall, LoadName, LoadAttr
+
+        term = TCall(func=LoadAttr(object=LoadName(name="other"), attr="point"),
+                     args=[Var(), Var()], kwargs=[])
+        out = self._lift(term)
+        assert len(out.body) == 1
+
+
+class TestCellHeadReachability:
+    """A compound written in ``.clausal`` source now reaches a head pattern.
+
+    P3-2 Task 3 (the crux).  ``_normalize_structural_head_args`` hoists the
+    head arg to ``Var`` + body ``Unify`` at assert time so an unbound caller
+    binds in output mode; the argument-index bucket -- where dispatch has
+    already guaranteed the argument ground -- lifts it back, and the pattern
+    is a cell sequence literal.
+    """
+
+    def _kind_src(self):
+        return capture_predicate_codegen(_TAGGED, ["kind"])
+
+    def test_the_bucket_arm_is_a_cell_sequence_pattern(self):
+        src = self._kind_src()
+        arms = _case_lines(_named_function(src, "kind__p0_b0__2"))
+        assert any(a.startswith("case [['point', ") for a in arms), arms
+
+    def test_every_source_compound_bucket_gets_its_own_arm(self):
+        src = self._kind_src()
+        assert "case [['point', " in src
+        assert "case [['circle', " in src
+        assert "case [['seg', " in src
+
+    def test_the_lifted_positions_body_unify_is_gone(self):
+        """The whole point of the lift: one ``trail.mark()`` + ``unify`` +
+        ``undo`` triple per clause per invocation, deleted.
+
+        ``ast.unparse`` renders the cell PATTERN with brackets
+        (``['point', ...]``) and the cell TERM with parentheses
+        (``('point', ...)``), so the absence of the parenthesised form is
+        exactly the absence of the body ``Unify``.
+        """
+        bucket = _named_function(self._kind_src(), "kind__p0_b0__2")
+        assert "('point'," not in bucket
+        assert "$unify" in bucket, "the second arg still unifies"
+
+    def test_the_all_clauses_fallback_keeps_its_unify(self):
+        """Output mode lives in the fallback, which is NOT lifted -- an
+        unbound caller reaches it and the body ``Unify`` binds."""
+        fallback = _named_function(self._kind_src(), "kind__all__2")
+        assert "('point'," in fallback.replace(" ", "")
+        assert not [a for a in _case_lines(fallback) if "'point'" in a]
+
+    def test_the_lifted_bucket_function_matches_a_real_cell(self):
+        """Drive the compiled bucket directly.
+
+        Runtime dispatch still routes a cell argument to the all-clauses
+        fallback (``arg_index._runtime_arg_key`` learns cells in Task 4), so
+        the lifted bucket is not yet SELECTED -- but it is compiled, and it
+        has to be right when Task 4 turns it on.  Calling it is the evidence.
+        """
+        fn = _capture_bucket_functions(_TAGGED, "kind")["kind__p0_b0__2"]
+        K = Var()
+        assert _drive_bucket(fn, ("point", 1, 2), K) == ["pt"]
+        # ... and it rejects every other shape.
+        for other in [("circle", 1, 2), ("point", 1, 2, 3), 42, "point"]:
+            assert _drive_bucket(fn, other, Var()) == [], other
+
+    def test_ground_cell_callers_still_get_the_right_answers(self):
+        mod = _fixture(_TAGGED)
+        lm = _logic_module(mod)
+        for shape, expected in [
+            (("point", 1, 2), ["pt"]),
+            (("circle", 1, 2), ["circ"]),
+            (("seg", 1, 2, 3), ["seg3"]),
+            (42, ["num"]),
+            (("square", 1, 2), []),
+        ]:
+            K = Var()
+            assert [deref(K) for _t in call("kind", shape, K, module=lm)] \
+                == expected, shape
+
+    def test_an_unbound_caller_still_enumerates_every_clause(self):
+        """Output mode is unbroken: the lift only touches bucket functions,
+        and an unbound argument never reaches one."""
+        mod = _fixture(_TAGGED)
+        lm = _logic_module(mod)
+        S, K = Var(), Var()
+        got = [(normalize_term(deref(S)), deref(K))
+               for _t in call("kind", S, K, module=lm)]
+        assert [k for _s, k in got] == ["pt", "circ", "seg3", "empty",
+                                        "num", "str"]
+        assert got[0][0] == ("point", ("$var",), ("$var",))
+
+    def test_a_reference_carrying_a_nested_thunk_is_not_lifted(self):
+        """Found by DRIVING a lifted bucket, not by reading it.
+
+        ``_collect_globals_info`` walks the pre-lift clauses, and only its
+        HEAD walker records ``$headlit_<id>`` entries.  Lifting a reference
+        whose slot holds a ``PyThunk`` (here an f-string) therefore emitted a
+        bucket arm naming a global nothing injected -- ``NameError`` the first
+        time the bucket was entered -- and the pattern would have been wrong
+        anyway, guarding against the thunk OBJECT.  It is the top-level
+        ``PyThunk`` skip's own reason, one level down.
+
+        The bucket is entered directly because runtime dispatch still routes
+        a cell to the fallback until Task 4 -- which is exactly why reading
+        the codegen would not have caught this.
+        """
+        mod = _load_inline("_tt_nested_thunk", _NESTED_THUNK_SRC)
+        fns = _capture_bucket_functions("_tt_nested_thunk", "kind")
+        bucket = fns["kind__p0_b0__2"]
+        # The bucket also holds the var-headed catch-all, which matches
+        # anything -- so "fallback" trails every answer here.
+        assert _drive_bucket(bucket, ("pt", 3, "x1"), Var()) == ["fs", "fallback"]
+        assert _drive_bucket(bucket, ("pt", 1, 9), Var()) == ["a", "fallback"]
+        assert _drive_bucket(bucket, ("wrap", "s"), Var()) == ["fallback"]
+        # The two thunk-free clauses ARE lifted; the thunk one keeps its
+        # body Unify, which is where the thunk gets evaluated.
+        src = capture_predicate_codegen("_tt_nested_thunk", ["kind"])
+        bucket_src = _named_function(src, "kind__p0_b0__2")
+        assert bucket_src.count("case [['pt', ") == 2
+        assert "_pyt_" in bucket_src
+        del mod
+
+    def test_an_imported_functor_head_arg_lifts_too(self):
+        """R5: compound data crosses module boundaries as cells, so the
+        pre-P3-2 refusal reason -- 'the imported functor class is NOT in the
+        bucket's globals' -- has nothing left to protect.  A literal pattern
+        resolves nothing at match time.
+        """
+        importer = _load_head_compound_importer()
+        src = capture_predicate_codegen(
+            "tests.fixtures.head_compound_importer", ["CheckIndexed"])
+        assert "case [['Wrap', " in src, src
+        assert "case [['Item', " in src, src
+        del importer
+
+    def test_the_imported_functor_answers_are_unchanged(self):
+        importer = _load_head_compound_importer()
+        lm = importer.__dict__["$module"]
+        R = Var()
+        assert [deref(R) for _t in
+                call("CheckIndexed", ("Wrap", "direct"), R, module=lm)] \
+            == ["first", "second", "fallback"]
+        R2 = Var()
+        assert [deref(R2) for _t in
+                call("CheckIndexed", 42, R2, module=lm)] == ["fallback"]
 
 
 class TestLiveCellHeadArg:
@@ -1119,6 +1387,64 @@ class TestStructuralHeadValue:
         assert is_var(deref(head.S))
         assert isinstance(body[0], Unify)
         assert body[0].right == ("pt", 1, body[0].right[2])
+
+
+def _capture_bucket_functions(module_name: str, pred_name: str) -> dict:
+    """Compile *pred_name* and return every emitted function by name."""
+    import importlib
+    from clausal.logic.compiler import predicate as predicate_mod
+
+    module = importlib.import_module(module_name)
+    out: dict = {}
+    original = predicate_mod.functiondef_to_function
+
+    def _spy(func_def, globals_=None, **kwargs):
+        fn = original(func_def, globals_=globals_, **kwargs)
+        out[func_def.name] = fn
+        return fn
+
+    predicate_mod.functiondef_to_function = _spy
+    try:
+        pred = getattr(module, pred_name)
+        pred._dispatch_fn = None
+        pred._get_dispatch()
+    finally:
+        predicate_mod.functiondef_to_function = original
+    return out
+
+
+def _drive_bucket(bucket_fn, *args) -> list:
+    """Drive an index-BUCKET function directly and collect its answers.
+
+    A bucket is compiled with ``emit_done=False`` -- its outer dispatch
+    wrapper emits the terminal ``yield (parent, DONE)`` -- so it cannot be
+    handed to ``_drive_trampoline`` unwrapped.  This supplies the missing
+    final yield, nothing else.  The last argument is the answer Var.
+    """
+    from clausal.logic.solve import _drive_trampoline
+    from clausal.logic.trampoline import DONE
+    from clausal.logic.variables import Trail
+
+    def _wrapped(this_generator, _proceed, _fail, _catcher, *rest):
+        trail = rest[-1]
+        yield from bucket_fn(this_generator, _proceed, _fail, _catcher, *rest)
+        yield (_fail, DONE)
+        del trail
+
+    out_var = args[-1]
+    return [deref(out_var) for _t in _drive_trampoline(_wrapped, Trail(), *args)]
+
+
+def _load_head_compound_importer():
+    """The imported-compound fixture pair (R5), loaded owner-first."""
+    import os
+    from clausal.import_hook import _load_module
+
+    here = os.path.join(os.path.dirname(__file__), "fixtures")
+    _load_module("tests.fixtures.head_compound_owner",
+                 os.path.join(here, "head_compound_owner.clausal"))
+    return _load_module("tests.fixtures.head_compound_importer",
+                        os.path.join(here, "head_compound_importer.clausal"))
 
 
 class TestNormalizer:
