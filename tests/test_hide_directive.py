@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import io as _io
 import os
+import re
 import sys as _sys
 import tempfile
 
@@ -79,6 +80,17 @@ def _load_inline_clausal(name: str, source: str):
 
 
 class TestMangleHelpers:
+    def test_hidden_sep_is_u_plus_e000(self):
+        """Numeric lockstep pin (fix round): a drift in
+        clausal/logic/atoms.py's HIDDEN_SEP value must fail a TEST, not
+        just go unnoticed in documentation.  R1 fixes this at U+E000 --
+        clausal/tools/toklex/specs/clausal.toklex.pl's `reserved` class
+        (`class(reserved, ['\xe000\'])`) is a SEPARATE textual copy of the
+        SAME codepoint that this module cannot import into (see both
+        modules' own docstrings) -- the two must be kept in lockstep by
+        hand, and this assertion is the tripwire on the Python side."""
+        assert ord(HIDDEN_SEP) == 0xE000
+
     def test_mangle_embeds_hidden_sep(self):
         mangled = mangle("m", "foo")
         assert mangled == f"m{HIDDEN_SEP}foo"
@@ -350,6 +362,91 @@ def test_hide_entries_must_be_bare_atoms():
     )
     with pytest.raises(SyntaxError, match="-hide entries must be bare atoms"):
         _load_inline_clausal("_hide_bad_shape_test", source)
+
+
+# ── -hide vs. a same-spelled predicate functor: rejected, both orders ───────
+#
+# P3-1 Task 6 fix round: an ordinary -private/-module ATOM entry peacefully
+# loses to a same-named predicate at exec time (Phenomenon A,
+# compiler_v2._process_declarations).  A -hide'd atom cannot use that same
+# resolution -- its substitution happens at COMPILE TIME, at every bare
+# occurrence INCLUDING a call-target position, so one spelling cannot mean
+# both a hidden atom and a predicate functor.  Both declaration orders are
+# rejected with a positioned SyntaxError naming both roles.
+
+
+def test_hide_then_clause_with_same_spelling_is_rejected():
+    """-hide([tagx]) declared BEFORE a clause tagx(1), for the same
+    spelling: without this check, tagx(1) at the top level compiles fine
+    (the clause-head path builds its own AST directly) but a genuine BODY
+    call through the spelling `tagx` would compile to calling a plain str
+    -- caught here at compile time instead, with both sites named."""
+    source = (
+        "-module(hide_collide_a_test, [])\n"
+        "-hide([hide_collide_tagx])\n"
+        "\n"
+        "hide_collide_tagx(1),\n"
+    )
+    with pytest.raises(SyntaxError) as excinfo:
+        _load_inline_clausal("_hide_collide_a_test", source)
+    message = str(excinfo.value)
+    assert "hide_collide_tagx" in message
+    assert "-hide" in message
+    assert "predicate functor" in message
+    # Both sites named and positioned (line 2 = -hide, line 4 = the clause).
+    assert re.search(r":2\b", message), message
+    assert re.search(r":4\b", message), message
+
+
+def test_clause_then_hide_with_same_spelling_is_rejected():
+    """The MIRROR declaration order: a clause tagz(1), defined BEFORE
+    -hide([tagz]) lists the same spelling.  Caught at the -hide directive
+    itself (the functor was already registered by the earlier clause)."""
+    source = (
+        "-module(hide_collide_c_test, [])\n"
+        "\n"
+        "hide_collide_tagz(1),\n"
+        "\n"
+        "-hide([hide_collide_tagz])\n"
+    )
+    with pytest.raises(SyntaxError) as excinfo:
+        _load_inline_clausal("_hide_collide_c_test", source)
+    message = str(excinfo.value)
+    assert "hide_collide_tagz" in message
+    assert "predicate functor" in message
+
+
+def test_hide_and_module_export_predicate_same_spelling_is_rejected():
+    """The reported SILENT case: a predicate declared in -module's export
+    list (arity form, ``tagy(X)``) AND -hide'd under the same spelling
+    used to load with no error at all -- one spelling meaning two things
+    (calls dispatch the predicate via the early class-minting at the
+    -module directive's own position; a data reference compiles to the
+    mangled atom instead).  Now rejected at compile time."""
+    source = (
+        "-module(hide_collide_b_test, [hide_collide_tagy(X)])\n"
+        "-hide([hide_collide_tagy])\n"
+        "\n"
+        "hide_collide_tagy(1),\n"
+    )
+    with pytest.raises(SyntaxError) as excinfo:
+        _load_inline_clausal("_hide_collide_b_test", source)
+    message = str(excinfo.value)
+    assert "hide_collide_tagy" in message
+    assert "predicate functor" in message
+    assert "-module export list" in message
+
+
+def test_hide_without_functor_collision_still_works():
+    """Negative control: a -hide'd atom with NO same-spelled functor
+    anywhere in the file is unaffected by the new check (already covered
+    by every other test in this file, but pinned explicitly here as the
+    control for the three collision tests above)."""
+    mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
+    out = Var()
+    vals = [deref(out) for _ in mod.holds(out)]
+    assert len(vals) == 1
+    assert is_mangled(vals[0])
 
 
 # ── Strictness interplay: -hide entries count as declared ───────────────────

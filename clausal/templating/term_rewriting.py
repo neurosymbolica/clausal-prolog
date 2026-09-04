@@ -3546,6 +3546,11 @@ class EmbedTransformer(NodeTransformer):
         # what ``visit_Name``'s atom branch checks FIRST to decide whether
         # to substitute the mangled ``Constant`` instead of the plain one.
         transformer._hidden_atoms: set[str] = set()
+        # name -> the ``-hide(...)`` directive's own lineno that declared
+        # it hidden -- used only to POSITION the hide/functor-collision
+        # diagnostic (``_reject_hide_functor_collision``); every hidden
+        # name in ``_hidden_atoms`` has an entry here.
+        transformer._hidden_atom_decl_site: dict[str, int] = {}
         # Names bound by -constants (Task 5) so far in this file — a plain
         # module global holding a ground value, threaded into every
         # per-clause TermTransformer by _make_term_transformer. Task 6 also
@@ -3590,12 +3595,72 @@ class EmbedTransformer(NodeTransformer):
         # attribute only records that the directive was seen.
         transformer._tagged_terms = False
 
+    def _reject_hide_functor_collision(transformer, functor_name,
+                                       hide_lineno, functor_lineno,
+                                       functor_kind):
+        """Raise: *functor_name* is both ``-hide``-en (a hidden ATOM) and a
+        predicate functor in the same file (P3-1 Task 6 fix round).
+
+        An ordinary ``-private``/``-module`` ATOM entry peacefully loses to
+        a same-named predicate at exec time (Phenomenon A,
+        ``compiler_v2._process_declarations`` — "the predicate wins, do
+        not clobber it back to a plain str").  A ``-hide``-en atom cannot
+        use that same graceful resolution: its substitution
+        (``visit_Name``) happens at COMPILE TIME, at every bare-spelling
+        occurrence, INCLUDING a call-target position (``_visit_call_func``
+        suppresses bare-atom *collection* but still runs the same
+        hidden-atom substitution) — so a predicate call through this
+        spelling compiles to calling a plain ``str`` (an opaque
+        ``TypeError: 'str' object is not callable`` at the FIRST body-level
+        call site, not the declaration), while any other occurrence of the
+        bare spelling compiles to the mangled atom instead of dispatching
+        the predicate at all. There is no runtime shape where one bare
+        spelling correctly means both — reject at compile time, in EITHER
+        declaration order (``-hide`` before the functor, or after).
+        """
+        hide_src = transformer._source_snippet(hide_lineno)
+        functor_src = transformer._source_snippet(functor_lineno)
+        where_hide = transformer._site(hide_lineno)
+        where_functor = transformer._site(functor_lineno)
+        where = (
+            f"  -hide:     {where_hide}"
+            + (f" — {hide_src}" if hide_src else "")
+            + f"\n  {functor_kind}: {where_functor}"
+            + (f" — {functor_src}" if functor_src else "")
+        )
+        raise SyntaxError(
+            f"`{functor_name}` is both -hide'd (a module-private ATOM) and "
+            f"a predicate functor in the same file\n{where}\n"
+            f"A -hide'd atom's every bare-spelling occurrence compiles to "
+            f"its mangled spelling — including a call-target position, "
+            f"where calling the resulting str raises an opaque runtime "
+            f"TypeError ('str' object is not callable) instead of "
+            f"dispatching the predicate; a non-call occurrence silently "
+            f"means the hidden atom instead of the predicate. One bare "
+            f"spelling cannot mean both.\n"
+            f"  remedy: rename the atom (edit the -hide entry and its "
+            f"reference sites to a different spelling), or drop "
+            f"`{functor_name}` from -hide if it was only ever meant as a "
+            f"predicate name."
+        )
+
     def _register_functor(transformer, functor_name, field_names, node, kind):
         """Record *functor_name*'s signature and where it was fixed.
 
         Every site that writes ``_seen_functors`` goes through here so the
-        arity-conflict error can attribute the *first* declaration.
+        arity-conflict error can attribute the *first* declaration —
+        AND (P3-1 Task 6 fix round) so a functor registered AFTER its name
+        was already ``-hide``-en is caught here too (the mirror-image check
+        lives in ``_handle_hide_directive``, for the OTHER declaration
+        order — a functor registered BEFORE its name is ``-hide``-en).
         """
+        if functor_name in transformer._hidden_atoms:
+            transformer._reject_hide_functor_collision(
+                functor_name,
+                transformer._hidden_atom_decl_site.get(functor_name, 0),
+                getattr(node, "lineno", 0),
+                kind,
+            )
         transformer._seen_functors[functor_name] = field_names
         transformer._functor_decl_site[functor_name] = (
             getattr(node, "lineno", 0), kind,
@@ -4847,9 +4912,23 @@ class EmbedTransformer(NodeTransformer):
                 raise SyntaxError(
                     f"-hide cannot list constant `{atom_name}`: constants "
                     f"are public module globals — declare with -constants")
+            hide_lineno = getattr(expr_stmt, "lineno", 0)
+            if atom_name in transformer._seen_functors:
+                # Mirror-image of the check in ``_register_functor`` — this
+                # is the OTHER declaration order: a functor already
+                # registered (an earlier clause, or an earlier -module/
+                # -private declaration) before THIS -hide entry is
+                # processed. See ``_reject_hide_functor_collision``.
+                functor_lineno, functor_kind = (
+                    transformer._functor_decl_site.get(atom_name, (0, "a "
+                    "predicate declaration"))
+                )
+                transformer._reject_hide_functor_collision(
+                    atom_name, hide_lineno, functor_lineno, functor_kind)
             mangled = mangle(transformer._module_name, atom_name)
             transformer._atoms.add(atom_name)
             transformer._hidden_atoms.add(atom_name)
+            transformer._hidden_atom_decl_site[atom_name] = hide_lineno
             hidden_names.append(atom_name)
             statements.append(
                 _make_atom_str_assign_ast(atom_name, expr_stmt, value=mangled)
