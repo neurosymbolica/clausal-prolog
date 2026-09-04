@@ -76,8 +76,7 @@ from ._ast_helpers import (
 )
 from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
-from .terms_to_ast import tagged_terms_lowering
-from clausal.logic.cells import TAGGED_TERMS_FLAG
+from .terms_to_ast import lowering_scope
 from .terms_to_goalop import BareGoalVariableError, BareGoalUndefinedError
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup,
@@ -1252,29 +1251,24 @@ def _compile_predicate_trampoline_impl(
 def compile_predicate_trampoline(*args, **kwargs) -> Callable:
     """Compile all clauses into a trampoline tuple-protocol generator.
 
-    Thin wrapper: opens the ``-tagged_terms`` cell-lowering scope when the
-    ``globals_`` namespace this compile targets carries the flag, then
-    delegates to :func:`_compile_predicate_trampoline_impl` (which holds the real implementation
+    Thin wrapper: opens the compile scope over the ``globals_`` namespace
+    this compile targets, then delegates to
+    :func:`_compile_predicate_trampoline_impl` (which holds the real implementation
     and its documentation).
 
-    The flag is read off the module namespace rather than threaded as a
+    The namespace reaches the lowering through a scope rather than a
     parameter because ``term_to_ast_expr`` and ``head_to_match_pattern`` are
     reached from ~56 call sites across the compiler; the scope covers exactly
-    one predicate's compilation, mirroring how a similarly-scoped
-    context manager elsewhere in the compiler brackets a single compile.  An unflagged compile pushes ``None``
-    rather than nothing, so it is sealed against an outer flagged scope; with
-    ``None`` on top the emission and pattern branches are never consulted and
-    the generated AST is byte-identical to the pre-bridge compiler (the
-    DEFAULT-PATH INVARIANT, pinned by ``tests/golden/*.codegen.txt``).
+    one predicate's compilation, mirroring how a similarly-scoped context
+    manager elsewhere in the compiler brackets a single compile.  A compile
+    handed no ``globals_`` pushes ``None`` rather than nothing, so it resolves
+    against nothing instead of inheriting whatever scope an outer compile left
+    open (``clausal.logic.compiler.terms_to_ast.lowering_scope``).
     """
     globals_ = kwargs.get("globals_")
     if globals_ is None and len(args) > 5:
         globals_ = args[5]
-    flagged = globals_ if (globals_ or {}).get(TAGGED_TERMS_FLAG) else None
-    # ALWAYS enter the scope -- with ``None`` when unflagged.  Pushing nothing
-    # would let this compile inherit an outer flagged scope and emit cells into
-    # a module that never asked for them; the stack is the seal, not the flag.
-    with tagged_terms_lowering(flagged):
+    with lowering_scope(globals_):
         return _compile_predicate_trampoline_impl(*args, **kwargs)
 
 
@@ -1290,11 +1284,13 @@ def compile_predicate_trampoline_ast(
     Identical to ``compile_predicate_trampoline`` but returns the AST node
     instead of executing it.  Does *not* install anything in the database.
 
-    Takes no ``globals_``, so it bypasses the ``-tagged_terms`` wrapper: the
-    visualiser (``clausal.tools.visualize``) renders a flagged module's
-    predicates with CLASS emission, not cells.  Intentional — this entrypoint
-    has no module namespace to read the flag from, and inventing one would
-    make the rendering depend on the caller rather than on the module.
+    Takes no ``globals_``, so it opens no compile scope: the visualiser
+    (``clausal.tools.visualize``) renders a SOURCE-written compound with
+    class emission rather than as a cell, because with no namespace there is
+    nothing to resolve the functor name against (a live term INSTANCE still
+    renders as a cell — that answer needs no namespace).  Intentional; this
+    entrypoint has no module namespace, and inventing one would make the
+    rendering depend on the caller rather than on the module.
     """
     if body_compiler is None:
         body_compiler = _make_body_compiler_trampoline(db)
@@ -1822,29 +1818,24 @@ def _compile_predicate_shallow_impl(
 def compile_predicate_shallow(*args, **kwargs) -> Callable:
     """Compile all clauses into a shallow (short-stack) generator.
 
-    Thin wrapper: opens the ``-tagged_terms`` cell-lowering scope when the
-    ``globals_`` namespace this compile targets carries the flag, then
-    delegates to :func:`_compile_predicate_shallow_impl` (which holds the real implementation
+    Thin wrapper: opens the compile scope over the ``globals_`` namespace
+    this compile targets, then delegates to
+    :func:`_compile_predicate_shallow_impl` (which holds the real implementation
     and its documentation).
 
-    The flag is read off the module namespace rather than threaded as a
+    The namespace reaches the lowering through a scope rather than a
     parameter because ``term_to_ast_expr`` and ``head_to_match_pattern`` are
     reached from ~56 call sites across the compiler; the scope covers exactly
-    one predicate's compilation, mirroring how a similarly-scoped
-    context manager elsewhere in the compiler brackets a single compile.  An unflagged compile pushes ``None``
-    rather than nothing, so it is sealed against an outer flagged scope; with
-    ``None`` on top the emission and pattern branches are never consulted and
-    the generated AST is byte-identical to the pre-bridge compiler (the
-    DEFAULT-PATH INVARIANT, pinned by ``tests/golden/*.codegen.txt``).
+    one predicate's compilation, mirroring how a similarly-scoped context
+    manager elsewhere in the compiler brackets a single compile.  A compile
+    handed no ``globals_`` pushes ``None`` rather than nothing, so it resolves
+    against nothing instead of inheriting whatever scope an outer compile left
+    open (``clausal.logic.compiler.terms_to_ast.lowering_scope``).
     """
     globals_ = kwargs.get("globals_")
     if globals_ is None and len(args) > 5:
         globals_ = args[5]
-    flagged = globals_ if (globals_ or {}).get(TAGGED_TERMS_FLAG) else None
-    # ALWAYS enter the scope -- with ``None`` when unflagged.  Pushing nothing
-    # would let this compile inherit an outer flagged scope and emit cells into
-    # a module that never asked for them; the stack is the seal, not the flag.
-    with tagged_terms_lowering(flagged):
+    with lowering_scope(globals_):
         return _compile_predicate_shallow_impl(*args, **kwargs)
 
 
@@ -1884,8 +1875,8 @@ def compile_predicate_shallow_ast(
     """Return the ``ast.FunctionDef`` for a shallow-mode compiled predicate.
 
     Like ``compile_predicate_trampoline_ast``, this takes no ``globals_`` and
-    so bypasses the ``-tagged_terms`` wrapper — the visualiser renders a
-    flagged module with class emission.  Intentional; see that function.
+    so opens no compile scope — the visualiser renders source-written
+    compounds with class emission.  Intentional; see that function.
 
     Identical to ``compile_predicate_shallow`` but returns the AST node
     instead of executing it.  Useful for inspecting or pretty-printing

@@ -16,6 +16,7 @@ compilation, tabling wraps, and locking in a single pass.
 from __future__ import annotations
 
 import importlib
+import sys
 import warnings
 from typing import Any
 
@@ -131,7 +132,15 @@ def compile_module(
     _process_directives(module_items, db)
 
     # ── Step 3: Process module/private declarations ──────────────────────
-    _process_declarations(module_items, module_dict)
+    #    Needs to know which declared functors are PREDICATES (P3-2 Task 2 /
+    #    R6): a predicate keeps its class, a data functor binds its interned
+    #    spelling.  "Has clauses" cannot be read off the class here -- Step 4
+    #    is what attaches them -- so it is read off the clause nodes and the
+    #    predicate-shaped directives instead.
+    _process_declarations(
+        module_items, module_dict,
+        _predicate_functor_names(predicate_nodes, module_items),
+    )
 
     # ── Step 3b: Auto-mint undeclared bare atom references ───────────────
     #    Phase 2 of GLOBAL_ATOMS_DEFAULT.md.  Must run AFTER declarations
@@ -1046,11 +1055,40 @@ def _build_strict_atoms_diagnostic(names: list[str], module_name: str) -> str:
     return "\n".join(lines)
 
 
-def _process_declarations(module_items: list, module_dict: dict) -> None:
-    """Process -module and -private declarations: bind atoms, mint predicate
-    classes.
+def _predicate_functor_names(predicate_nodes: list, module_items: list) -> set:
+    """Functor names this file defines as PREDICATES rather than as data.
 
-    Two shapes, two different treatments (§1b/R2 — the atom pivot):
+    Three sources, all of them "this name will have (or may later be given)
+    clauses", which is what makes a functor a predicate:
+
+    * a clause in this file -- the head functor of any ``predicate_nodes``
+      entry;
+    * a ``-dynamic``/``-table``/``-discontiguous``/``-shallow`` directive --
+      the ISO declare-then-assertz pattern leaves a predicate clause-free at
+      load time, and misreading it as data would compile its references to
+      cells the later-asserted clauses could never match (R6 names
+      ``-dynamic`` explicitly);
+    * a ``-specialize`` alias -- ``_preregister_specializations`` mints an
+      empty predicate class for it, for exactly the same reason.
+
+    Read at Step 3, BEFORE Step 4 attaches clauses to classes, so the class's
+    own ``_clauses`` cannot answer this question yet.
+    """
+    names = {head_key(node.head)[0] for node in predicate_nodes}
+    for item in module_items:
+        if isinstance(item, DirectiveItem):
+            names.update(functor for functor, _arity in item.specs)
+        elif isinstance(item, SpecializeItem):
+            names.add(item.new_name)
+    return names
+
+
+def _process_declarations(module_items: list, module_dict: dict,
+                          predicate_functors: set = frozenset()) -> None:
+    """Process -module and -private declarations: bind declared names.
+
+    Two shapes, ONE treatment each post-flip — neither mints a class
+    (§1b/R2, the atom pivot, and P3-2 Task 2, the cell flip):
 
     * **Bare entry** (a ``str`` — a zero-arity ATOM): no class is minted.
       Atoms are global by spelling, so there is nothing module-local to
@@ -1064,15 +1102,17 @@ def _process_declarations(module_items: list, module_dict: dict) -> None:
       ``predicate_builtins`` pool ``_process_bare_atom_refs``/
       ``$intern_atom`` use, so the identical str object backs the name
       everywhere.
-    * **Tuple entry** (``(name, field_names)`` — a PREDICATE with fields):
-      unchanged from before the pivot — always gets a fresh module-local
-      class, even when a global-default class for the same name already
-      sits in ``module_dict`` (placed there by
-      ``module_dict.update(predicate_builtins)`` at exec start).  To avoid
-      clobbering a class minted by ``_make_functor_class_ast`` for an
-      in-file predicate clause (which runs before this pass), we only
-      override when the existing entry is the *global* class for that name
-      — i.e. when ``module_dict[name] is predicate_builtins.get(name)``.
+    * **Tuple entry** (``(name, field_names)`` — a functor with fields):
+      no class is minted either, post-flip (P3-2 Task 2 / R6 revised).
+      Compound DATA is cells now — a tuple ``("point", 1, 2)`` whose shape
+      the module's ``__clausal_functor_signatures__`` registry describes —
+      so a data functor needs no class to construct through, and the plain
+      interned spelling is bound instead, exactly as a bare atom entry is.
+      The don't-clobber guard is what keeps PREDICATES as classes: a
+      predicate with in-file clauses already has a real ``PredicateMeta``
+      in ``module_dict`` (minted by ``_make_functor_class_ast``, which runs
+      during exec, before this pass), and a class that is there is never
+      overwritten.
 
     P3-1 §1b/R2: atoms are global-by-spelling interned strs, so a local
     ``-module``/``-private`` atom declaration and an ``-import_from`` of the
@@ -1111,25 +1151,47 @@ def _process_declarations(module_items: list, module_dict: dict) -> None:
                     name, field_names = entry
                 else:
                     continue
+                # P3-2 Task 2 (THE FLIP, R6 revised): mint nothing.  A
+                # declared functor's SHAPE is recorded in the module's
+                # ``__clausal_functor_signatures__`` registry and its data
+                # is compiled to cells, so there is no class to create --
+                # bind the interned spelling, the same shape the bare-atom
+                # branch above uses (and through the same process-wide
+                # ``predicate_builtins`` pool, so one str object backs the
+                # name everywhere).
+                #
+                # The guard is the whole predicate/data split at this site.
+                # It cannot be "is there a class?": the ``-module``/
+                # ``-private`` REWRITE emits a ``_make_functor_class_ast``
+                # block for every field-carrying export, so by the time this
+                # runs EVERY declared functor has one, predicate and data
+                # alike.  *predicate_functors* is the real question --
+                # will this name have clauses? -- answered from the clause
+                # nodes and the predicate-shaped directives (see
+                # ``_predicate_functor_names``).  A predicate keeps its
+                # class (Phenomenon A: the predicate wins, do not clobber it
+                # back to a str); a data functor's class is unbound here and
+                # becomes unreachable by name, which is what makes the
+                # BINDING SHAPE decide data-vs-predicate at every reference
+                # site (R6).
+                #
+                # An already-clause-carrying class is kept too: that is an
+                # imported predicate this module re-exports, not data.
                 existing = module_dict.get(name)
-                # Create a fresh local class when:
-                # * no class exists, or
-                # * the existing class is the global-default class for this
-                #   name (declarations are explicit opt-in to module-local
-                #   identity, so they must shadow the global default).
-                global_cls = predicate_builtins.get(name)
-                if (
-                    not isinstance(existing, PredicateMeta)
-                    or (existing is global_cls and global_cls is not None)
-                ):
-                    cls = make_predicate(name, field_names)
-                    # Attribute the declared class to its *owning* clausal
-                    # module (make_predicate() otherwise stamps __module__ with
-                    # clausal.logic.predicate, its defining frame).  Used by
-                    # the field-name mismatch diagnostic (predicate.py); the
-                    # per-module atom-identity diagnostic this comment used
-                    # to also mention is deleted (§1b/R2 — atoms are global).
-                    owner = module_dict.get("__name__")
-                    if owner:
-                        cls.__module__ = owner
-                    module_dict[name] = cls
+                if name in predicate_functors:
+                    continue
+                if isinstance(existing, PredicateMeta) and existing._clauses:
+                    continue
+                # Bound in THIS module's namespace only -- deliberately NOT
+                # through the process-wide ``predicate_builtins`` pool the
+                # bare-atom branch above shares.  That pool is the ATOM
+                # vocabulary: an entry in it makes the spelling a
+                # resolvable atom for every later-loaded module, which
+                # would let a functor name silently satisfy another file's
+                # strict-atoms check (and did -- it turned
+                # ``tests/test_undefined_name_sibling_diagnostic.py`` green
+                # by accident when this went through the pool).  Cells
+                # compare slot 0 with ``==``, never ``is``, so a functor
+                # spelling needs no shared identity; ``sys.intern`` is kept
+                # for the cheap compares, not for identity.
+                module_dict[name] = sys.intern(name)

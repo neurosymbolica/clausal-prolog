@@ -629,35 +629,44 @@ def head_to_match_pattern(
     # (_normalize_structural_head_args), so this MatchClass only ever sees a
     # ground (input-mode) caller; output-mode binding is handled by the Unify.
     if isinstance(term, Call) and isinstance(term.func, LoadName):
-        resolved = _resolve_loadname(term.func.name, globals_)
-        fields = _resolved_field_names(resolved)
+        # P3-2 Task 2 (THE FLIP): a DATA-functor reference builds a CELL (see
+        # the Call(LoadName) branch of ``term_to_ast_expr``), so the pattern
+        # that matches it is a sequence literal ``case ('point', x, y)`` -- a
+        # MatchClass would test for a class instance nothing constructs.
+        #
+        # The cell question is asked FIRST, and it is asked of the SIGNATURE
+        # resolver rather than of a resolved class: post-flip a declared data
+        # functor's name binds its interned spelling str, not a class (R6), so
+        # ``_resolved_field_names`` answers None for exactly the functors that
+        # most need a pattern.  Its answer still governs the MatchClass
+        # fallback below, which needs a real class to name.
+        #
+        # P3-2 Task 1 (controller ruling extending the construction-side
+        # brief to this, the matching half of the same symmetry --
+        # ``predicate.is_data_functor``'s own docstring: a check applied to
+        # construction but not to matching yields a clause that builds
+        # one shape and matches another, one that can never fire):
+        # signature PLACEMENT applies here too -- positional args fill
+        # leading slots, keyword args fill named slots, and every
+        # omitted slot becomes a WILDCARD pattern (an omitted head slot
+        # binds nothing, exactly as a bare ``_`` argument would), so a
+        # partial head reference ``point(x=1)`` compiles to the pattern
+        # ``('point', 1, _)``.  Resolve against ``globals_`` -- the very
+        # dict ``_resolve_loadname`` uses for ``fields``, so the cell branch
+        # and the MatchClass fallback beside it cannot disagree about what
+        # ``term.func.name`` means.
+        _sig = cell_signature_for_name(term.func.name, globals_)
+        if _sig is None:
+            resolved = _resolve_loadname(term.func.name, globals_)
+            fields = _resolved_field_names(resolved)
+        else:
+            fields = None
         # We only emit a MatchClass/cell pattern when we can pin the
         # field-name list at compile time; otherwise (resolution failed, or
         # the resolved value isn't a term-shaped class) we MUST fall through
         # to the value-rejecting branches below — the previous wildcard
         # fallback at the end is what masked this whole class of bug.
-        if fields is not None:
-            # ``-tagged_terms``: in a flagged module this reference builds a
-            # CELL (see the Call(LoadName) branch of ``term_to_ast_expr``), so
-            # the pattern that matches it is a sequence literal
-            # ``case ('point', x, y)`` -- a MatchClass would test for a class
-            # instance that the flagged module never constructs.
-            #
-            # P3-2 Task 1 (controller ruling extending the construction-side
-            # brief to this, the matching half of the same symmetry --
-            # ``_is_cell_functor_class``'s own docstring: a check applied to
-            # construction but not to matching yields a clause that builds
-            # one shape and matches another, one that can never fire):
-            # signature PLACEMENT applies here too -- positional args fill
-            # leading slots, keyword args fill named slots, and every
-            # omitted slot becomes a WILDCARD pattern (an omitted head slot
-            # binds nothing, exactly as a bare ``_`` argument would), so a
-            # partial head reference ``point(x=1)`` compiles to the pattern
-            # ``('point', 1, _)``.  Resolve against ``globals_`` -- the very
-            # dict ``_resolve_loadname`` just used for ``fields``, so the
-            # cell branch and the MatchClass fallback beside it cannot
-            # disagree about which class ``term.func.name`` names.
-            _sig = cell_signature_for_name(term.func.name, globals_)
+        if fields is not None or _sig is not None:
             if _sig is not None:
                 _functor, _cell_fields = _sig
                 _positional = [
@@ -720,8 +729,8 @@ def head_to_match_pattern(
     if is_term_instance(term):
         cls_name = type(term).__name__
         fields = _matched_field_names(term)
-        # ``-tagged_terms``: the matching half of the term-instance emission
-        # branch in ``term_to_ast_expr``.  ``_matched_field_names`` returns
+        # The matching half of the term-instance emission branch in
+        # ``term_to_ast_expr``.  ``_matched_field_names`` returns
         # ``_fields`` verbatim for a PredicateMeta term (every declared
         # argument of a user functor is semantic), and cell eligibility
         # requires PredicateMeta -- so the sequence pattern's positions line

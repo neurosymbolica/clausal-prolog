@@ -25,10 +25,11 @@ from clausal.pythonic_ast.nodes import (
     TranslationsDirective as TranslationsItem,
 )
 
-# The module-namespace key the ``-tagged_terms`` directive assigns.  Single
-# source of truth lives with the cell primitives it opts into.
 from clausal.logic.atoms import mangle
-from clausal.logic.cells import TAGGED_TERMS_FLAG, FUNCTOR_SIGNATURES_KEY
+# The module-namespace key the ``-module``/``-private`` rewrite emits a
+# functor-signature registry under.  Single source of truth lives with the
+# cell primitives that registry feeds.
+from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
 
 load = Load()
 store = Store()
@@ -3672,11 +3673,6 @@ class EmbedTransformer(NodeTransformer):
         transformer._edcg_preds: dict[str, tuple[int, list[str]]] = {}  # pred → (visible_arity, [acc/pass names])
         # Per-file opt-out for ClausalSingletonWarning, set by -allow_singletons.
         transformer._allow_singletons = False
-        # Per-file opt-IN to the tagged-cell term representation, set by
-        # -tagged_terms (EXPERIMENTAL — Phase 2 bridge).  The compiler reads
-        # the flag off the module namespace, not off the transformer; this
-        # attribute only records that the directive was seen.
-        transformer._tagged_terms = False
 
     def _reject_hide_functor_collision(transformer, functor_name,
                                        hide_lineno, functor_lineno,
@@ -4744,15 +4740,13 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_allow_singletons_directive(args, expr_stmt)
         if name == "constants":
             return transformer._handle_constants_directive(args, expr_stmt)
-        if name == "tagged_terms":
-            return transformer._handle_tagged_terms_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
             f"(known directives: -module, -private, -hide, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
             f"-strict_atoms, -implicit_atoms, -allow_singletons, "
-            f"-constants, -tagged_terms)"
+            f"-constants)"
         )
 
     def _handle_module_directive(transformer, args, expr_stmt):
@@ -5074,91 +5068,6 @@ class EmbedTransformer(NodeTransformer):
             )
         transformer._module_items.append(ImplicitAtomsItem())
         return replace(Pass(), expr_stmt)
-
-    def _handle_tagged_terms_directive(transformer, args, expr_stmt):
-        """Process ``-tagged_terms`` — EXPERIMENTAL, Phase 2 bridge.
-
-        Marker directive — no arguments.  Accepts the bare form
-        ``-tagged_terms`` and the parenthesised ``-tagged_terms()``.
-
-        Opts this file into the *tagged-cell* term representation: a
-        saturated construction of a functor this module declares compiles to
-        a plain tuple ``("point", X, Y)`` — a CELL — instead of an instance
-        of the generated ``point`` class.  Cells unify, walk and copy through
-        the engine's existing C tuple branches, so nothing else changes; see
-        ``clausal/logic/cells.py`` and
-        ``implementation_plans/tagged-tuple-term-representation.md``.
-
-        Compiles to a module-level ``__clausal_tagged_terms__ = True``
-        assignment.  The compiler entrypoints read that key back off the
-        module namespace they are handed as ``globals_``; an assignment
-        (rather than a module item) is used so the flag survives the
-        ``.pyc``-cached load path unchanged.  See
-        ``clausal.logic.cells.TAGGED_TERMS_FLAG``.
-
-        WHAT THE FLAG DOES NOT COVER (all deliberate for this bridge stage):
-
-        - **Cross-module compound data is out of scope.**  A flagged
-          module's predicates may be CALLED from anywhere — goal arguments
-          are flattened into positional parameters, which is
-          representation-neutral — but a compound VALUE handed across the
-          boundary keeps whichever representation its producer built.  Pass
-          a ``point`` instance into a flagged module (or a cell into an
-          unflagged one) and it simply will not unify with the callee's
-          clause heads.  Keep flagged modules self-contained.
-        - **The module's own generated classes still exist, and still match
-          nothing.**  ``-tagged_terms`` changes what the module's clauses
-          BUILD; it does not remove the ``point`` class the declaration
-          generates.  That class remains importable and callable, so
-          ``m.point(1, 2)`` from a test or a Python caller yields a value
-          that unifies with nothing in ``m`` — SILENTLY, as no solutions
-          rather than as an error.  Query a flagged module with cells
-          (``("point", 1, 2)``), not with its constructors.
-        - **Partial and keyword construction build a cell too (P3-2 Task
-          1).**  ``point(X=1)`` places ``X`` in its declared slot and
-          backfills every other slot with a fresh ``Var()`` — signature
-          PLACEMENT, the same "missing field -> fresh Var()" rule
-          ``PredicateMeta.__call__`` already applies to class construction
-          (see ``clausal.logic.compiler.terms_to_ast._place_signature_slots``).
-          An over-arity or unknown-field construction raises a compile-time
-          error naming the functor and its declared fields, rather than
-          falling through to class emission.
-        - **Atoms stay class atoms.**  A 0-arity reference is still the
-          generated class object; only arity >= 1 constructions become
-          cells.
-        - **A functor with a ``position`` / ``_position`` field keeps class
-          emission.**  The instance construction path drops those fields,
-          and a positional cell cannot reproduce a dropped field.
-        - **"Data functor" is inferred from having no clauses**, so a
-          PREDICATE that happens to be clause-free where this module can see
-          it is misread as data and its references compile to cells that its
-          real clauses can never match.  ``-dynamic`` is gated against
-          explicitly; the remaining shapes — a ``-discontiguous`` or
-          ``-table`` declaration whose clauses arrive later, a multifile
-          predicate whose clauses all live in another file, or any predicate
-          not yet locked when this module compiles — are NOT, and are a
-          known limitation of the experiment rather than a supported
-          configuration.
-        - **Single-character functors are ambiguous.**  A cell whose
-          functor and every argument are 1-character strings — ``("a",
-          "b")`` — is indistinguishable from a character list, which the
-          engine canonicalises to ``"ab"``.  The str/char-list interaction
-          is deferred to Phase 3; avoid 1-character functors in a flagged
-          module.
-        """
-        if args:
-            raise SyntaxError(
-                "-tagged_terms takes no arguments: use bare "
-                "`-tagged_terms` or `-tagged_terms()`"
-            )
-        transformer._tagged_terms = True
-        return replace(
-            Assign(
-                targets=[Name(id=TAGGED_TERMS_FLAG, ctx=store)],
-                value=Constant(value=True),
-            ),
-            expr_stmt,
-        )
 
     def _handle_allow_singletons_directive(transformer, args, expr_stmt):
         """Process ``-allow_singletons`` directive.

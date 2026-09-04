@@ -39,8 +39,8 @@ it: ``is_cell`` answers ``True`` for such a tuple, and the funnel
 accessors in ``clausal/logic/builtins/_helpers.py`` therefore treat it as
 a cell too. Callers that need a real disambiguation between "cell" and
 "plain tuple that happens to start with a str" must gate on something
-other than shape -- a flagged module (Task 2's ``-tagged_terms``
-directive), or an explicit call site -- not on ``is_cell`` alone.
+other than shape -- an explicit call site, or a compile-time signature --
+not on ``is_cell`` alone.
 
 Cells ride the *existing* C unify/walk tuple branches unchanged (they are
 just tuples): this module adds no C code and no new representation
@@ -58,7 +58,6 @@ from typing import Any
 from clausal.logic.variables import deref, is_var
 
 __all__ = [
-    "TAGGED_TERMS_FLAG",
     "FUNCTOR_SIGNATURES_KEY",
     "TUPLE_TAG",
     "make_cell",
@@ -84,20 +83,6 @@ __all__ = [
 TUPLE_TAG = tuple
 
 
-# The module-namespace key a ``-tagged_terms`` module carries.  The directive
-# (clausal/templating/term_rewriting.py, ``_handle_tagged_terms_directive``)
-# compiles to a plain module-level ``__clausal_tagged_terms__ = True``
-# assignment, and the compiler entrypoints
-# (clausal/logic/compiler/predicate.py) read it back off the ``globals_`` they
-# are handed -- which for a ``.clausal`` module IS that module's ``__dict__``.
-#
-# A module-namespace flag rather than a ``module_items`` entry, deliberately:
-# module items are recovered separately when a module loads from its ``.pyc``
-# cache, whereas an assignment is part of the cached bytecode and therefore
-# cannot go missing on the cached path.
-TAGGED_TERMS_FLAG = "__clausal_tagged_terms__"
-
-
 # The module-namespace key holding a module's functor-signature registry:
 # ``{"point": ("x", "y"), ...}``, one entry per ``(name, fields)`` the
 # ``-module``/``-private`` rewrite saw -- predicates included, since the
@@ -106,17 +91,20 @@ TAGGED_TERMS_FLAG = "__clausal_tagged_terms__"
 # ``clausal/templating/term_rewriting.py``'s ``_handle_module_directive`` /
 # ``_handle_private_directive`` as a module-level
 # ``__clausal_functor_signatures__ = {...}`` assignment (accumulated via
-# ``dict.update`` across multiple directives in the same file, the same
-# "assignment, not a module item" reasoning as ``TAGGED_TERMS_FLAG`` above);
+# ``dict.update`` across multiple directives in the same file -- an
+# assignment rather than a ``module_items`` entry, deliberately: module items
+# are recovered separately when a module loads from its ``.pyc`` cache,
+# whereas an assignment is part of the cached bytecode and therefore cannot
+# go missing on the cached path);
 # ``-import_from`` copies the imported names' entries into the importer's
 # dict under their LOCAL spelling.
 #
 # ``clausal/logic/compiler/terms_to_ast.py``'s ``functor_signature_for``
 # consults this registry FIRST, falling back to a resolved class's
-# ``_fields`` while generated functor classes still exist (P3-2 Task 1 of
-# the cell-default-flip bridge).  Once a later task removes those classes,
-# this registry becomes the sole source of truth for a functor's declared
-# field names.
+# ``_fields`` while generated functor classes still exist (P3-2 Tasks 1-2 of
+# the cell-default flip).  Once a later task removes those classes, this
+# registry becomes the sole source of truth for a functor's declared field
+# names.
 FUNCTOR_SIGNATURES_KEY = "__clausal_functor_signatures__"
 
 

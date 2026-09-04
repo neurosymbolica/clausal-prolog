@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import datetime
+import sys
 
 from contextlib import contextmanager
 from fractions import Fraction
@@ -37,8 +38,8 @@ from clausal.pythonic_ast.nodes import (
     SetLiteral as _SetLiteral_t,
 )
 from clausal.logic.predicate import (
-    PredicateMeta, is_atom, is_term_instance, term_field_names,
-    term_field_names_of_class,
+    PredicateMeta, is_atom, is_data_functor, is_term_instance,
+    term_field_names, term_field_names_of_class,
 )
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
 from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
@@ -151,107 +152,130 @@ class PredicateAsTermError(Exception):
 # all, so the hazard this machinery guarded against cannot occur any more.)
 
 
-# ── ``-tagged_terms``: the Phase 2 bridge's per-module cell lowering ─────────
+# ── The compile scope: which namespace resolves a bare functor name ─────────
 #
-# EXPERIMENTAL.  A module carrying the ``-tagged_terms`` directive compiles
-# saturated constructions of the functors it declares to CELL literals --
-# ``("point", x, y)`` -- instead of ``point(...)`` / ``point._clausal_new(...)``
-# class instances.  See ``clausal/logic/cells.py`` and the directive's
-# docstring in ``clausal/templating/term_rewriting.py``.
+# Lowering a source-written compound ``point(1, 2)`` requires answering what
+# the name ``point`` MEANS in the module being compiled: a DATA functor
+# lowers to a cell literal ``("point", 1, 2)``, a PREDICATE stays a class
+# construction (calling it is a goal, and ``call/1`` dispatches on the
+# class).  That answer lives in the namespace the compile targets, and this
+# stack is how that namespace reaches the lowering: ``term_to_ast_expr`` is
+# reached from ~56 call sites across the compiler, and threading ``globals_``
+# through every one of them would be a signature change for no benefit.
 #
-# The flag reaches this module via a module-level stack rather than a new
-# parameter on ``term_to_ast_expr``,
-# which has 56 call sites across the compiler and one signature every one of
-# them would have to grow.  The stack holds the flagged module's namespace so
-# the emission gate can resolve a functor NAME to the class it names; a
-# ``compile_predicate_*`` entrypoint pushes exactly one entry for the duration
-# of one predicate's compilation.
-#
-# The stack is SEALING, not merely settable: an UNFLAGGED compile pushes
-# ``None``, it does not push nothing.  Only the TOP entry is ever consulted, so
-# a compile that targets an unflagged namespace cannot inherit a flagged scope
-# an outer compile happens to have left open and start emitting cells into a
-# module that never asked for them.  No path reaches that nesting today, which
-# is exactly why it has to be structural rather than a convention -- see
-# ``TestGateSymmetry.test_an_unflagged_compile_inside_a_flagged_scope_emits_no_cells``.
-_TAGGED_TERMS_STACK: "list[dict | None]" = []
+# A ``compile_predicate_*`` entrypoint pushes exactly one entry for the
+# duration of one predicate's compilation.  Only the TOP entry is consulted,
+# so a nested compile resolves against ITS OWN namespace: a compile handed no
+# namespace pushes ``None`` and resolves nothing, rather than inheriting
+# whatever scope an outer compile happens to have left open.
+_LOWERING_SCOPE_STACK: "list[dict | None]" = []
 
 
 @contextmanager
-def tagged_terms_lowering(module_globals: "dict | None"):
-    """Scope the cell lowering for the duration of one predicate's compile.
+def lowering_scope(module_globals: "dict | None"):
+    """Scope name resolution for the duration of one predicate's compile.
 
-    *module_globals* is the flagged module's namespace — the same dict the
-    compile entrypoint received as ``globals_`` — used to resolve a functor
-    name to the class it refers to, and to answer "does this functor belong to
-    the flagged module?".
+    *module_globals* is the namespace this compile targets — the same dict
+    the compile entrypoint received as ``globals_`` — used to resolve a
+    functor name to what it refers to (a declared data functor's signature,
+    or a predicate class).
 
-    ``None`` opens an explicitly UNFLAGGED scope: the block emits no cells even
-    if an outer block left a flagged scope open.  Both
+    ``None`` opens a scope that resolves NOTHING: with no namespace there is
+    no way to tell a data functor from a predicate, so every name-resolved
+    question answers ``None`` (a caller that passes its own
+    ``resolve_globals`` is unaffected).  Both
     :func:`clausal.logic.compiler.predicate.compile_predicate_trampoline` and
-    ``compile_predicate_shallow`` always enter this manager — with the
-    namespace when it carries :data:`clausal.logic.cells.TAGGED_TERMS_FLAG`,
-    with ``None`` when it does not — so "unflagged" is a state the stack
-    records, never merely the absence of one.
+    ``compile_predicate_shallow`` always enter this manager, so "no
+    namespace" is a state the stack records, never merely the absence of one.
     """
-    _TAGGED_TERMS_STACK.append(module_globals)
+    _LOWERING_SCOPE_STACK.append(module_globals)
     try:
         yield
     finally:
-        _TAGGED_TERMS_STACK.pop()
+        _LOWERING_SCOPE_STACK.pop()
 
 
-def tagged_terms_globals() -> "dict | None":
-    """The flagged module's namespace, or None outside a flagged compile.
+def lowering_globals() -> "dict | None":
+    """The namespace the innermost open compile targets, or None.
 
-    Reads only the TOP of the stack: an unflagged compile nested inside a
-    flagged one answers ``None``, because it pushed ``None``.
+    Reads only the TOP of the stack: a compile nested inside another answers
+    with its own namespace, because that is what it pushed.
     """
-    return _TAGGED_TERMS_STACK[-1] if _TAGGED_TERMS_STACK else None
+    return _LOWERING_SCOPE_STACK[-1] if _LOWERING_SCOPE_STACK else None
 
 
-def _is_cell_functor_class(cls: Any) -> bool:
-    """True if *cls* is a DATA functor whose instances lower to cells.
+# The data-functor gate now lives in ``clausal.logic.predicate`` beside
+# ``is_term_instance`` (the runtime and the compiler must share ONE
+# definition of "data functor"; see :func:`~clausal.logic.predicate.
+# is_data_functor` for the gate's own reasoning).  The local alias is kept so
+# ``head_match``'s import path stays one hop.
+_is_cell_functor_class = is_data_functor
 
-    A data functor is a :class:`PredicateMeta` class with at least one field
-    and NO clauses: the module declared it (``-module`` export list,
-    ``-private``, or first use) purely to build terms with.  A class that has
-    clauses is a predicate — calling it is a goal, and ``call/1`` and friends
-    dispatch on the class — so its instances keep class emission even in a
-    flagged module.
 
-    Arity 0 is excluded: a 0-arity reference is an ATOM and stays the class
-    object itself (Phase 3 does the atom pivot, not this bridge).
+def _resolve_functor_binding(
+    name: str, namespace: dict
+) -> "tuple[Any, str, Any] | None":
+    """Resolve *name* — bare or DOTTED — against *namespace*.
 
-    A ``-dynamic`` declaration also disqualifies: the ISO declare-then-assertz
-    pattern leaves a predicate clause-free at compile time and fills it in
-    later, so "no clauses" alone would misread it as data and compile its
-    references to cells that the clauses asserted afterwards could never
-    match.  ``_dynamic_arities`` is ``None`` on every class the compiler did
-    not stamp, so ordinary data functors are unaffected.
+    Returns ``(binding, leaf_name, leaf_namespace)``:
 
-    So does a ``_position`` / ``position`` field.  ``term_to_ast_expr``'s
-    keyword slow path DROPS those fields when it constructs a term instance,
-    and a positional cell cannot reproduce a dropped field — the two
-    representations of such a functor are not interchangeable.  The exclusion
-    lives HERE, in the gate that both :func:`cell_functor_for_name` and
-    :func:`cell_functor_for_instance` go through, rather than at one emission
-    site: a check applied to construction but not to matching (or to instances
-    but not to source references) yields a clause that builds one shape and
-    matches another — one that can never fire.  Whatever the answer is for a
-    given functor, every site has to give the same one.
+    * *binding* is what the name is bound to, or ``None`` when nothing of
+      that spelling is bound — the signature registry may still know the
+      functor, so an unbound name is not on its own a refusal.
+    * *leaf_name* is the last dotted component (``other.Wrap`` → ``Wrap``),
+      the spelling *leaf_namespace*'s registry records it under.
+    * *leaf_namespace* is the namespace that directly contains the leaf:
+      *namespace* itself for a bare name, and the OWNING module's
+      ``__dict__`` for a dotted one — so ``other.Wrap`` reads ``other``'s
+      registry, not the referring module's.
+
+    Returns ``None`` only when a dotted prefix does not resolve to anything
+    with a namespace (there is nothing to consult at all).
+
+    A dotted name reaching here is module-qualified: it is what
+    ``_dotted_name_from_loadattr`` built from a ``LoadAttr`` chain, or what
+    the import machinery rewrote an imported functor reference into
+    (``tests.fixtures.owner.Wrap`` — note that the generated code carries
+    that whole string as ONE ``ast.Name`` id, a single global lookup, not an
+    attribute walk).  So the prefix is resolved as a module path: by walking
+    attributes from *namespace* when its head is bound there, and otherwise
+    through ``sys.modules``, which is where a fully-qualified rewrite's
+    target lives.
     """
-    return (
-        isinstance(cls, type)
-        and isinstance(cls, PredicateMeta)
-        and bool(getattr(cls, "_fields", ()))
-        and not getattr(cls, "_clauses", None)
-        and not getattr(cls, "_dynamic_arities", None)
-        and not any(
-            name in ("_position", "position")
-            for name in getattr(cls, "_fields", ())
-        )
-    )
+    if "." not in name:
+        return namespace.get(name), name, namespace
+    prefix, _, leaf = name.rpartition(".")
+    owner = _resolve_module_path(prefix, namespace)
+    if owner is None:
+        return None
+    leaf_namespace = getattr(owner, "__dict__", None)
+    if leaf_namespace is None:
+        return None
+    binding = leaf_namespace.get(leaf)
+    if binding is None:
+        # The referring namespace may bind the whole dotted spelling as one
+        # key (the qualified-rewrite shape described above).
+        binding = namespace.get(name)
+    return binding, leaf, leaf_namespace
+
+
+def _resolve_module_path(prefix: str, namespace: dict) -> Any:
+    """The object a dotted *prefix* names, or None.
+
+    Walks attributes from *namespace* first (an ``-import_module`` binds the
+    module object under its head component), then falls back to
+    ``sys.modules`` (a fully-qualified reference names a module that is
+    loaded but not necessarily bound in the referring namespace).
+    """
+    parts = prefix.split(".")
+    obj = namespace.get(parts[0])
+    for attr in parts[1:]:
+        if obj is None:
+            break
+        obj = getattr(obj, attr, None)
+    if obj is not None:
+        return obj
+    return sys.modules.get(prefix)
 
 
 def functor_signature_for(name: str, namespace: "dict | None") -> "tuple[str, ...] | None":
@@ -281,75 +305,98 @@ def functor_signature_for(name: str, namespace: "dict | None") -> "tuple[str, ..
 def cell_signature_for_name(
     name: str, resolve_globals: "dict | None" = None
 ) -> "tuple[str, tuple[str, ...]] | None":
-    """Resolve *name* to ``(functor, fields)`` for a DATA functor this
-    flagged module owns, regardless of arity saturation.
+    """Resolve *name* to ``(functor, fields)`` for a DATA functor, or None.
 
-    Returns ``None`` under the same conditions :func:`cell_functor_for_name`
-    used to gate on — no flagged scope is open, the name does not resolve,
-    resolves to something that is not a data functor, or belongs to another
-    module (compound data does not cross the flag boundary; see the
-    directive docstring) — MINUS the arity check: this is the arity-agnostic
-    primitive both Site A's construction placer and ``head_match``'s
-    pattern placer route through, since signature PLACEMENT (positional args
-    fill leading slots, keyword args fill named slots, an omitted slot
-    backfills) has replaced "saturated arity or fall back to class emission"
-    as the eligibility test.
+    Cells are the compiled representation of compound DATA (P3-2 Task 2, the
+    flip): a saturated, partial or keyword-shaped reference to a data functor
+    lowers to a cell literal, whatever module declared it.  This is the
+    arity-agnostic primitive both ``term_to_ast_expr``'s construction placer
+    and ``head_match``'s pattern placer route through, since signature
+    PLACEMENT (positional args fill leading slots, keyword args fill named
+    slots, an omitted slot backfills) has replaced "saturated arity or fall
+    back to class emission" as the eligibility test.
 
-    *resolve_globals* is the namespace to look *name* up in — see
-    :func:`cell_functor_for_name`'s docstring for why call sites with one
-    (``head_match``) must pass it rather than let this resolve in the open
-    scope.
+    Returns ``None`` when:
 
-    A dotted name (``other.Wrap``) always returns None: it is by definition
-    another module's functor.
-    """
-    scope = tagged_terms_globals()
-    if scope is None or "." in name:
-        return None
-    namespace = resolve_globals if resolve_globals is not None else scope
-    cls = namespace.get(name)
-    if not _is_cell_functor_class(cls):
-        return None
-    # Own-module gate: the flagged module's ``__name__`` must be the class's
-    # defining module.  An imported functor keeps class emission so that data
-    # built here still matches the owner's clause heads.
-    owner = getattr(cls, "__module__", None)
-    here = scope.get("__name__")
-    if owner is not None and here is not None and owner != here:
-        return None
-    fields = functor_signature_for(name, namespace)
-    if fields is None:
-        fields = cls._fields
-    return cls.__name__, fields
-
-
-def cell_functor_for_name(name: str, arity: int,
-                          resolve_globals: "dict | None" = None) -> "str | None":
-    """Resolve *name* to a cell functor for a saturated *arity* construction.
-
-    Returns the functor string to put in slot 0, or None when the reference
-    must keep class emission — no flagged scope is open, the name does not
-    resolve, resolves to something that is not a data functor, is not
-    saturated at *arity*, or belongs to another module (compound data does not
-    cross the flag boundary; see the directive docstring).
+    * there is no namespace to resolve against (no *resolve_globals* and no
+      open :func:`lowering_scope` — nothing can be decided, so nothing is);
+    * a dotted prefix does not resolve;
+    * the name is bound to a ``PredicateMeta`` CLASS.  Post-flip (R6) the
+      BINDING SHAPE is what decides data-vs-predicate at a reference site:
+      a declared data functor binds its interned spelling str
+      (``compiler_v2._process_declarations``) and a predicate keeps its
+      class, so "resolves to a class" means "not data".  This is also what
+      keeps a functor minted in PYTHON and imported into a ``.clausal`` file
+      (``clausal.reflection``'s ``Goal``/``Clause``, ``clpb``'s ``BoolEq``)
+      on class construction: its Python producers build instances at
+      runtime, and a cell-compiled clause could never match one;
+    * no signature is known for it — neither the module's
+      ``__clausal_functor_signatures__`` registry nor a resolved class's
+      ``_fields`` names its fields, so there is no slot layout to place
+      arguments into.
 
     *resolve_globals* is the namespace to look *name* up in.  Call sites that
     have one pass it, so the name resolves against the SAME dict the
     class-emission branch beside it uses — in ``head_match`` that is
     ``_resolve_loadname(name, globals_)``, and a cell branch resolving
     somewhere else could disagree with its own fallback about what ``name``
-    means.  When omitted, the flagged module's own namespace is used.  Either
-    way the OWNERSHIP question is answered against the flagged scope, the only
-    namespace that can say what "this module" is.
+    means.  When omitted, the open compile scope's namespace is used.
 
-    A dotted name (``other.Wrap``) always returns None: it is by definition
-    another module's functor.
+    A DOTTED name (``other.Wrap``) resolves by walking attributes from the
+    namespace root, and answers with the BASE functor's spelling — ``Wrap``,
+    never ``other.Wrap``, since slot 0 of the cell the owning module builds
+    holds the bare functor (R5: compound data crosses module boundaries as
+    cells now, so both sides must agree on slot 0).  Its fields come from the
+    OWNER's registry, for the same reason.
+    """
+    namespace = resolve_globals if resolve_globals is not None else lowering_globals()
+    if namespace is None:
+        return None
+    resolved = _resolve_functor_binding(name, namespace)
+    if resolved is None:
+        return None
+    binding, leaf, leaf_namespace = resolved
+    if isinstance(binding, PredicateMeta):
+        return None
+    fields = functor_signature_for(leaf, leaf_namespace)
+    if fields is None:
+        return None
+    return _functor_spelling(binding, leaf), fields
+
+
+def _functor_spelling(binding: Any, leaf: str) -> str:
+    """The functor string slot 0 carries for a name bound to *binding*.
+
+    A CLASS answers with its own ``__name__``: an ``-import_from`` alias
+    (``pt as local_pt``) binds the owner's class, and the cell the owner
+    builds is tagged ``"pt"`` — matching the alias's local spelling instead
+    would build a term the owner's clauses can never match.
+
+    A plain STR answers with itself, for exactly the same reason: post-flip a
+    declared data functor whose class was never minted binds the interned
+    spelling (``compiler_v2._process_declarations``), and an aliased import of
+    one binds the OWNER's spelling under the local name.
+
+    Anything else (nothing bound, some unrelated value) falls back to the
+    leaf name — the only spelling available, and the right one whenever the
+    registry entry is the module's own declaration.
+    """
+    if isinstance(binding, type):
+        return binding.__name__
+    if isinstance(binding, str):
+        return binding
+    return leaf
+
+
+def cell_functor_for_name(name: str, arity: int,
+                          resolve_globals: "dict | None" = None) -> "str | None":
+    """Resolve *name* to a cell functor for a saturated *arity* construction.
 
     A thin, arity-checked wrapper over :func:`cell_signature_for_name` —
-    kept for callers that only want the old "exact saturation or nothing"
-    answer; ``head_match`` and Site A now route through the unwrapped
-    signature instead so they can PLACE a partial/keyword construction
-    rather than reject it.
+    kept for callers that only want the "exact saturation or nothing"
+    answer; ``head_match`` and ``term_to_ast_expr``'s construction site route
+    through the unwrapped signature instead so they can PLACE a
+    partial/keyword construction rather than reject it.
     """
     result = cell_signature_for_name(name, resolve_globals)
     if result is None:
@@ -450,20 +497,15 @@ def _place_signature_slots(fields, positional, keywords, *, functor, missing):
 def cell_functor_for_instance(term: Any) -> "str | None":
     """Resolve a live term INSTANCE to its cell functor, or None.
 
-    Same gates as :func:`cell_functor_for_name` — including the
-    ``_position``/``position`` exclusion both inherit from
-    :func:`_is_cell_functor_class` — applied to ``type(term)``.  No name
-    resolution is involved: the class is the term's own type.
+    ``type(term)`` plus :func:`~clausal.logic.predicate.is_data_functor` is
+    the whole test — the same gate :func:`cell_signature_for_name` applies to
+    a NAME, so construction and matching cannot disagree about a functor.  No
+    name resolution is involved (the class is the term's own type), and so no
+    namespace is needed either: unlike the name path this answers the same
+    way inside and outside a compile scope.
     """
-    scope = tagged_terms_globals()
-    if scope is None:
-        return None
     cls = type(term)
-    if not _is_cell_functor_class(cls):
-        return None
-    owner = getattr(cls, "__module__", None)
-    here = scope.get("__name__")
-    if owner is not None and here is not None and owner != here:
+    if not is_data_functor(cls):
         return None
     return cls.__name__
 
@@ -898,14 +940,17 @@ def term_to_ast_expr(
             )
             for kw in (term.kwargs or [])
         ]
-        # ``-tagged_terms``: a construction of a functor this flagged module
-        # declares becomes a cell literal.  This is the branch that matters
-        # for ``.clausal`` source — a compound written in a clause
-        # (``cons(N, T)``) reaches the compiler as ``Call(LoadName('cons'),
-        # …)``, not as a live instance.
+        # P3-2 Task 2 (THE FLIP): a construction of a DATA functor becomes a
+        # cell literal, unconditionally — cells are the compiled
+        # representation of compound data, not an opt-in.  This is the branch
+        # that matters for ``.clausal`` source: a compound written in a
+        # clause (``cons(N, T)``) reaches the compiler as
+        # ``Call(LoadName('cons'), …)``, not as a live instance.  A PREDICATE
+        # reference resolves to None here and keeps class emission, because
+        # calling it is a goal (P3-3 does that half).
         #
-        # P3-2 Task 1 (cell-default-flip bridge, signature-resolved
-        # construction): positional args fill leading declared slots,
+        # P3-2 Task 1 (signature-resolved construction): positional args fill
+        # leading declared slots,
         # keyword args fill their named slots, and every slot neither
         # reaches backfills with a fresh ``Var()`` — the same "missing field
         # -> fresh Var()" rule ``PredicateMeta.__call__`` applies to class
@@ -946,18 +991,15 @@ def term_to_ast_expr(
         cls = type(term)
         cls_name = cls.__name__
         fields = term_field_names(term)
-        # ``-tagged_terms``: a live instance of a functor this flagged module
-        # declares lowers to a cell literal, matching what the module's own
-        # source-level constructions compile to (the ``Call(LoadName)`` branch
-        # above).  The reachable producer of such an instance is the query
-        # compiler, whose template globals ARE the callee module's namespace
-        # — so a query argument built as ``m.point(1, 2)`` still meets the
-        # flagged module's cells.
+        # A live instance of a DATA functor lowers to a cell literal, matching
+        # what source-level constructions of the same functor compile to (the
+        # ``Call(LoadName)`` branch above).  The reachable producer of such an
+        # instance is the query compiler, so a query argument built as
+        # ``m.point(1, 2)`` by a Python caller still meets the compiled
+        # clauses' cells.
         #
-        # The scope check comes FIRST (one list-index test outside a flagged
-        # compile, ahead of any per-field work).  The ``_position``/
-        # ``position`` exclusion that used to sit here now lives in
-        # ``_is_cell_functor_class``, so ``head_match``'s pattern branch
+        # The ``_position``/``position`` exclusion that used to sit here lives
+        # in ``predicate.is_data_functor``, so ``head_match``'s pattern branch
         # inherits the same answer — see that gate's docstring.
         _cell_f = cell_functor_for_instance(term)
         if _cell_f is not None:

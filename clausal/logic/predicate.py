@@ -1165,6 +1165,56 @@ def is_atom_value(obj: Any) -> bool:
     return isinstance(obj, str) or is_atom(obj)
 
 
+def is_data_functor(cls: Any) -> bool:
+    """True if *cls* is a DATA functor: a compound-term shape, not a predicate.
+
+    A data functor is a :class:`PredicateMeta` class with at least one field
+    and NO clauses: the module declared it (``-module`` export list,
+    ``-private``, or first use) purely to build terms with.  A class that has
+    clauses is a PREDICATE — calling it is a goal, and ``call/1`` and friends
+    dispatch on the class — so its references keep class emission (P3-3 does
+    the predicate half of the pivot, not this bridge).
+
+    Arity 0 is excluded: a 0-arity reference is an ATOM and is a plain
+    global-by-spelling str (P3-1 §1b/R2).
+
+    A ``-dynamic`` declaration also disqualifies: the ISO declare-then-assertz
+    pattern leaves a predicate clause-free at compile time and fills it in
+    later, so "no clauses" alone would misread it as data and compile its
+    references to cells that the clauses asserted afterwards could never
+    match.  ``_dynamic_arities`` is ``None`` on every class the compiler did
+    not stamp, so ordinary data functors are unaffected.
+
+    So does a ``_position`` / ``position`` field.  ``term_to_ast_expr``'s
+    keyword slow path DROPS those fields when it constructs a term instance,
+    and a positional cell cannot reproduce a dropped field — the two
+    representations of such a functor are not interchangeable.  The exclusion
+    lives HERE, in the gate every cell-eligibility question goes through
+    (``terms_to_ast.cell_signature_for_name`` for a NAME,
+    ``cell_functor_for_instance`` for a live instance, and ``head_match``
+    through both), rather than at one emission site: a check applied to
+    construction but not to matching (or to instances but not to source
+    references) yields a clause that builds one shape and matches another —
+    one that can never fire.  Whatever the answer is for a given functor,
+    every site has to give the same one.
+
+    Lives here rather than in the compiler so the runtime and the compiler
+    share one definition of "data functor"; ``terms_to_ast`` keeps a local
+    alias so ``head_match``'s import path is one hop.
+    """
+    return (
+        isinstance(cls, type)
+        and isinstance(cls, PredicateMeta)
+        and bool(getattr(cls, "_fields", ()))
+        and not getattr(cls, "_clauses", None)
+        and not getattr(cls, "_dynamic_arities", None)
+        and not any(
+            name in ("_position", "position")
+            for name in getattr(cls, "_fields", ())
+        )
+    )
+
+
 def _class_origin(cls: type) -> str:
     """Best-effort ``file:line`` for where *cls*'s methods were compiled.
 
@@ -1272,7 +1322,7 @@ def make_atom(name: str) -> "PredicateMeta":
 
 
 __all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "is_atom",
-           "is_atom_value",
+           "is_atom_value", "is_data_functor",
            "term_field_names", "term_field_names_of_class",
            "term_field_values", "term_field_dict",
            "make_predicate", "make_atom"]
