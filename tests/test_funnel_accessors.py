@@ -195,9 +195,18 @@ class TestFunctorArity:
     def test_non_term_values_are_none(self):
         # nv
         assert functor_arity([1, 2]) is None
-        assert functor_arity("abc") is None
         assert functor_arity(42) is None
         assert functor_arity(None) is None
+
+    def test_str_is_atom_value(self):
+        # P3-1 Task 1 (R2, str-as-atom acceptance): a plain str is now an
+        # atom VALUE for functor_arity — it IS its own functor, arity 0 —
+        # same shape as test_predicate_meta_atom_class above. This inverts
+        # the pre-P3-1 "strings are out of functor_arity's domain" behavior
+        # (formerly asserted here as ``functor_arity("abc") is None``);
+        # see ``clausal/logic/predicate.py::is_atom_value``.
+        assert functor_arity("abc") == ("abc", 0)
+        assert functor_arity("") == ("", 0)
 
     @pytest.mark.parametrize(
         "term",

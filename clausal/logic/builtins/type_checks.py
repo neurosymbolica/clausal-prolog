@@ -5,7 +5,9 @@ must_be/2, can_be/2."""
 from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var
-from clausal.logic.predicate import PredicateMeta, is_atom, is_term_instance, term_field_names
+from clausal.logic.predicate import (
+    PredicateMeta, is_atom, is_atom_value, is_term_instance, term_field_names,
+)
 from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
@@ -65,9 +67,15 @@ def _string__1(x, trail, k):
 
 @_builtin("atom", 1)
 def _is_atom__1(x, trail, k):
-    """atom(X) — succeeds if X is a zero-arity PredicateMeta (a declared atom)."""
+    """atom(X) — succeeds if X is a plain str or a zero-arity PredicateMeta
+    (a declared atom).
+
+    R2 (P3-1 Task 1, str-as-atom acceptance): every ``str`` is an atom now,
+    co-extensional with ``string/1``; the zero-arity class case is the
+    transitional dual-accept path, retired in Task 2/3.
+    """
     x_val = deref(x)
-    if not is_var(x_val) and is_atom(x_val):
+    if not is_var(x_val) and is_atom_value(x_val):
         yield None
 
 

@@ -13,7 +13,7 @@ from numbers import Real as _Real
 from typing import Any
 
 from clausal.logic.variables import deref, is_var
-from clausal.logic.predicate import is_atom, is_term_instance, term_field_names
+from clausal.logic.predicate import is_atom, is_atom_value, is_term_instance, term_field_names
 from clausal.terms import (
     Compound, KWTerm, DictTerm, SetTerm,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
@@ -375,17 +375,27 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
 
     Deliberately narrower than ``_functor_name``/``_arity`` composed: it only
     covers structural/term shapes (a well-formed, str-functor ``Compound``, a
-    term instance, or a ``PredicateMeta`` atom class), returning None for
-    everything else — including ``KWTerm``, lists, strings and numbers, which
-    the composed pair *does* resolve. Where both are defined, they must agree
-    (see ``tests/test_funnel_accessors.py::TestFunctorArity``); this function
+    term instance, a plain ``str`` atom value, or a ``PredicateMeta`` atom
+    class), returning None for everything else — including ``KWTerm``, lists
+    and numbers, which the composed pair *does* resolve. Where both are
+    defined for a shape they cover in common, they must agree (see
+    ``tests/test_funnel_accessors.py::TestFunctorArity``); this function
     exists so callers who already know they hold a term shape (the common
     case in the compiler/inspection funnels) don't pay for two walks.
 
+    P3-1 Task 1 (R2, str-as-atom acceptance): a plain ``str`` is now an
+    atom VALUE here — ``functor_arity("red") == ("red", 0)`` — which is
+    deliberately NOT the ISO cons-cell (str-as-char-list) reading that
+    ``_functor_name``/``_arity`` give a non-empty str (functor ``"."``,
+    arity 2); those two accessor families answer different questions
+    (structural/term-shape vs. ISO ``functor/3`` decomposition) and were
+    already documented as diverging on strings before this change — see
+    ``is_atom_value`` in ``clausal/logic/predicate.py``.
+
     The functor slot is ``str`` for a ``Compound``/term instance, but for a
-    zero-arity atom class it is the atom class itself (``_functor_name_py``'s
-    own contract: an atomic constant IS its own functor name), so the type
-    is ``Any``, not ``str``.
+    plain str atom value or a zero-arity atom class it is the value/class
+    itself (``_functor_name_py``'s own contract: an atomic constant IS its
+    own functor name), so the type is ``Any``, not ``str``.
 
     Caller warning: any ``is_term_instance`` guard admits ``Compound`` (it is
     a dataclass), and ``functor_arity`` will answer for the *Compound*, not
@@ -414,10 +424,11 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
         return (term.functor, len(term.args))
     if is_term_instance(term):
         return (type(term).__name__, len(term_field_names(term)))
-    if is_atom(term):
-        # Mirrors _functor_name_py: the atom class IS its own functor
-        # value (ISO: functor(3, N, A) -> N=3 for numbers; an atom class
-        # is the same story), not its __name__ string.
+    if is_atom_value(term):
+        # Mirrors _functor_name_py: the atom (str value or zero-arity
+        # class) IS its own functor value (ISO: functor(3, N, A) -> N=3
+        # for numbers; an atom is the same story), not its __name__
+        # string. R2 (P3-1 Task 1): a plain str counts here too.
         return (term, 0)
     return None
 

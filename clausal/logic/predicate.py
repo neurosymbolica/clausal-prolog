@@ -1174,6 +1174,27 @@ else:
         term_field_names = _term_field_names_py
 
 
+def is_atom_value(obj: Any) -> bool:
+    """True if obj is an atom-shaped VALUE: a plain str, or a zero-arity
+    PredicateMeta class (a declared atom).
+
+    P3-1 Task 1 (str-as-atom acceptance, dual-accept transitional): this is
+    the runtime-reader-facing widening of ``is_atom`` -- R2 rules that
+    ``atom(X)`` is true for every ``str``, but ``is_atom`` itself is left
+    untouched here because several COMPILER call sites (``terms_to_ast.py``,
+    ``_lower_goalop_shared.py``) key off "is this a zero-field atom CLASS"
+    to decide identity-lowering / bare-Name-reference behavior, and a str
+    reaching those branches would be lowered wrong (as a class reference
+    rather than a literal). Those call sites are guarded today (a plain str
+    is intercepted by an earlier literal/scalar branch before any ``is_atom``
+    check in each of them), so they don't yet MISBEHAVE, but flipping
+    ``is_atom``'s global semantics is Task 2's deliberate, reviewed move —
+    not an accidental side effect of Task 1. Runtime readers (``atom/1``,
+    ``functor_arity``) use this helper instead.
+    """
+    return isinstance(obj, str) or is_atom(obj)
+
+
 def _class_origin(cls: type) -> str:
     """Best-effort ``file:line`` for where *cls*'s methods were compiled.
 
@@ -1317,6 +1338,7 @@ def make_atom(name: str) -> "PredicateMeta":
 
 
 __all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "is_atom",
+           "is_atom_value",
            "term_field_names", "term_field_names_of_class",
            "term_field_values", "term_field_dict",
            "make_predicate", "make_atom",

@@ -31,7 +31,10 @@ import pytest
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal import Var
 from clausal.import_hook import _load_module, predicate_builtins
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.predicate import PredicateMeta, is_atom, is_atom_value, make_atom, make_predicate
+from clausal.logic.variables import Trail, deref, unify
+from clausal.logic.solve import call
+from clausal.logic.builtins._helpers import functor_arity
 
 
 def _fixture_path(filename: str) -> str:
@@ -362,3 +365,174 @@ def test_private_names_are_importable_and_share_identity():
     assert private_warnings == [], (
         f"importing a -private name must not warn; got {private_warnings}"
     )
+
+
+# ── P3-1 Task 1: str-as-atom acceptance (runtime readers, dual-accept) ──────
+#
+# R2 (implementation_plans/phase3-decomposition-and-p31-atom-pivot.md):
+# ``atom(X)`` becomes true for every ``str`` -- co-extensional with
+# ``string/1`` -- while zero-field PredicateMeta atom classes keep working
+# (transitional dual-accept; the lowering flip that stops MINTING classes is
+# Task 2). This section pins the READER-side acceptance: the ``atom/1`` and
+# ``atomic/1`` builtins, ``functor_arity``, unification, and the
+# ``atom_chars``/``atom_codes`` round trips all treat a plain str as an atom
+# value. Strictly additive -- nothing here inverts a previously-true
+# assertion except the ``functor_arity("abc") is None`` pin in
+# ``test_funnel_accessors.py`` (moved/inverted there, cited to this ruling).
+
+
+def _atoms_mod(name):
+    """A throwaway compiled module, just to give ``call()`` a database to
+    resolve builtins against (mirrors ``tests/test_bytes_type_checks.py``'s
+    ``_mod`` helper)."""
+    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+        f.write("noop(1),\n")
+        f.flush()
+        path = f.name
+    try:
+        return _load_module(name, path).__dict__["$module"]
+    finally:
+        os.unlink(path)
+
+
+def _succeeds(pred, *args, mod):
+    return sum(1 for _ in call(pred, *args, module=mod)) >= 1
+
+
+class TestStrAtomAcceptance:
+    """atom/1, atomic/1, string/1 co-extension for plain strs (R2)."""
+
+    def test_atom_true_for_plain_str(self):
+        mod = _atoms_mod("tsaa_atom_str")
+        assert _succeeds("atom", "red", mod=mod)
+
+    def test_atom_true_for_empty_str(self):
+        # The empty str is still a str, hence still an atom value under R2
+        # -- no special-casing to the "[]" nil atom here (that's the ISO
+        # cons-cell reading, a different accessor family; see functor_arity
+        # tests below).
+        mod = _atoms_mod("tsaa_atom_empty")
+        assert _succeeds("atom", "", mod=mod)
+
+    def test_atom_still_true_for_zero_field_class(self):
+        # Transitional dual-accept: the class route keeps working until
+        # Task 2/3 retire atom-minting.
+        atom_cls = make_atom("tsaa_class_atom")
+        mod = _atoms_mod("tsaa_atom_class")
+        assert _succeeds("atom", atom_cls, mod=mod)
+
+    def test_atom_false_for_int_var_compound_and_1field_class(self):
+        mod = _atoms_mod("tsaa_atom_neg")
+        assert not _succeeds("atom", 42, mod=mod)
+        assert not _succeeds("atom", Var(), mod=mod)
+        pt = make_predicate("tsaa_pt", ["x"])
+        assert not _succeeds("atom", pt(x=1), mod=mod)
+
+    def test_atomic_true_for_plain_str(self):
+        # Already-true behavior (F082) -- pinned here alongside atom/1 per
+        # the task brief.
+        mod = _atoms_mod("tsaa_atomic_str")
+        assert _succeeds("atomic", "red", mod=mod)
+
+    def test_string_still_true_for_plain_str(self):
+        # R2: atom/1 and string/1 end up co-extensional for strings; both
+        # must be true for the same str.
+        mod = _atoms_mod("tsaa_string_str")
+        assert _succeeds("string", "red", mod=mod)
+        assert _succeeds("atom", "red", mod=mod)
+
+
+class TestIsAtomValueHelper:
+    """Unit checks for ``clausal.logic.predicate.is_atom_value`` -- the
+    runtime-reader-facing widening of ``is_atom`` that Task 1 introduces
+    (see the DECISION RULE in the task brief: ``is_atom`` itself is left
+    untouched because some compiler call sites key off "zero-field CLASS,
+    not str" -- this new helper is what the runtime readers use instead)."""
+
+    def test_true_for_plain_str(self):
+        assert is_atom_value("red") is True
+        assert is_atom_value("") is True
+
+    def test_true_for_zero_field_class(self):
+        atom_cls = make_atom("tiav_class_atom")
+        assert is_atom_value(atom_cls) is True
+        # and the pre-existing is_atom agrees on this shape
+        assert is_atom(atom_cls) is True
+
+    def test_false_for_int_float_none_bytes(self):
+        assert is_atom_value(42) is False
+        assert is_atom_value(3.14) is False
+        assert is_atom_value(None) is False
+        assert is_atom_value(b"red") is False
+
+    def test_false_for_unbound_var(self):
+        assert is_atom_value(Var()) is False
+
+    def test_false_for_compound_and_1field_class_instance(self):
+        from clausal.terms import Compound
+        assert is_atom_value(Compound("f", (1, 2))) is False
+        pt = make_predicate("tiav_pt", ["x"])
+        assert is_atom_value(pt(x=1)) is False
+        # ...but the zero-field CLASS itself (not an instance) is an atom.
+        assert is_atom_value(pt) is False  # 1-field class is not an atom
+
+
+class TestFunctorArityStrAtom:
+    """functor_arity("red") == ("red", 0) -- the str-atom-value reading,
+    documented in _helpers.py as deliberately distinct from the ISO
+    cons-cell reading _functor_name/_arity give a non-empty str (functor
+    ".", arity 2). See tests/test_funnel_accessors.py::TestFunctorArity for
+    the primary pin; this class covers the P3-1-specific framing."""
+
+    def test_functor_arity_plain_str(self):
+        assert functor_arity("red") == ("red", 0)
+
+    def test_functor_arity_empty_str(self):
+        assert functor_arity("") == ("", 0)
+
+    def test_functor_arity_matches_zero_field_class_shape(self):
+        atom_cls = make_atom("tfasa_class_atom")
+        assert functor_arity(atom_cls) == (atom_cls, 0)
+        assert functor_arity("tfasa_class_atom")[1] == functor_arity(atom_cls)[1] == 0
+
+
+class TestStrAtomUnification:
+    """Plain str unification -- pinning already-true C rich-compare
+    behavior, per the task brief ('no code change expected')."""
+
+    def test_equal_strs_unify(self):
+        trail = Trail()
+        assert unify("red", "red", trail)
+
+    def test_different_strs_do_not_unify(self):
+        trail = Trail()
+        assert not unify("red", "blue", trail)
+
+    def test_str_unifies_with_unbound_var(self):
+        trail = Trail()
+        v = Var()
+        assert unify(v, "red", trail)
+
+
+class TestAtomCharsRoundTrip:
+    """atom_chars/2 (and atom_codes/2) round trip a plain str both
+    directions -- ``_atom_to_str`` already accepts strs (chars.py), pinned
+    here per the task brief."""
+
+    def test_atom_chars_atom_to_chars(self):
+        mod = _atoms_mod("tacrt_a2c")
+        out = Var()
+        results = [deref(out) for _ in call("atom_chars", "ab", out, module=mod)]
+        assert results == [["a", "b"]]
+
+    def test_atom_chars_chars_to_atom(self):
+        mod = _atoms_mod("tacrt_c2a")
+        out = Var()
+        results = [deref(out) for _ in call("atom_chars", out, ["a", "b"], module=mod)]
+        assert results == ["ab"]
+
+    def test_atom_codes_round_trip(self):
+        mod = _atoms_mod("tacrt_codes")
+        out = Var()
+        results = [deref(out) for _ in call("atom_codes", "ab", out, module=mod)]
+        assert results == [[97, 98]]
