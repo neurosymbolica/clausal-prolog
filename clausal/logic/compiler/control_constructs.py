@@ -656,22 +656,30 @@ def _catcher_to_structural(term: Any) -> Any:
 def _lower_catcher(ctx: CompilationContext, catcher: Any) -> ast.expr:
     """Lower a catch/3 catcher so it matches the THROW form (A03-F004).
 
-    A functor whose name resolves to a module term class (e.g. one declared
-    in ``-private([kab(KA)])``) is thrown as a class *instance* — the throw
-    site lowers it with ``term_to_ast_expr``, which emits ``kab(N)``
-    construction. The catcher must construct the same instance, or
-    ``unify(Compound('kab',(N,)), kab(7))`` is False and the catcher never
-    matches. Only names with no term class (builtin ``error(...)`` terms,
-    thrown as ``Compound``) fall back to ``_catcher_to_structural``.
+    A functor whose name the throw site lowers to a TERM — a class instance
+    for a predicate/Python-minted functor, a CELL for a declared data functor
+    (P3-2 Task 2) — must be lowered the same way here, or the catcher never
+    matches what was thrown: ``unify(Compound('kab',(N,)), kab(7))`` is False,
+    and so is ``unify(Compound('kab',(N,)), ('kab', 7))``.  Only names the
+    throw site does NOT lower to a term (builtin ``error(...)`` terms, thrown
+    as ``Compound``) fall back to ``_catcher_to_structural``.
+
+    Both halves of the test are the throw site's own questions, asked in the
+    throw site's own way: ``PredicateMeta`` binding -> class construction,
+    ``cell_signature_for_name`` answers -> cell literal.  Either way the
+    answer is produced by handing the catcher term to ``term_to_ast_expr``,
+    which is literally the function the throw site uses.
     """
     from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+    from .terms_to_ast import cell_signature_for_name  # noqa: PLC0415
     if (isinstance(catcher, Call) and isinstance(catcher.func, LoadName)
             and not catcher.kwargs):
         env = ctx.base_globals or {}
         resolved = env.get(catcher.func.name)
-        if isinstance(resolved, PredicateMeta):
-            # Known term class → construct the instance, exactly as the throw
-            # site does (term_to_ast_expr recurses into nested args too).
+        if (isinstance(resolved, PredicateMeta)
+                or cell_signature_for_name(catcher.func.name) is not None):
+            # The throw site builds a term for this name → build the same
+            # term here (term_to_ast_expr recurses into nested args too).
             return term_to_ast_expr(catcher, ctx.var_context, eval_arith=False)
     return term_to_ast_expr(
         _catcher_to_structural(catcher), ctx.var_context, eval_arith=False

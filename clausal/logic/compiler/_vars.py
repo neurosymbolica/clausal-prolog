@@ -86,6 +86,21 @@ def _collect_vars(term: Any, seen: set[int] | None = None,
             result.extend(_collect_vars(e, seen, include_bound))
         return result
 
+    if type(term) is tuple:
+        # A CELL -- ``("point", X, Y)``.  Post-P3-2 (THE FLIP) this is how
+        # every compound data term is represented, so a query goal's cell
+        # argument carries the caller's Vars and the query compiler has to
+        # register them: without this the template's tuple lowers with a
+        # FRESH var per slot (``term_to_ast_expr``'s tuple branch, which does
+        # recurse), the caller's Var is never in ``var_context``, and the
+        # answer comes back unbound.  ``type(...) is tuple``, matching
+        # ``cells.is_cell``'s own domain and the copy_term branch in
+        # ``builtins/inspection.py``.
+        result = pre
+        for e in term:
+            result.extend(_collect_vars(e, seen, include_bound))
+        return result
+
     if isinstance(term, dict):
         result = pre
         for k, v in term.items():

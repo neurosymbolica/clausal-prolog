@@ -804,9 +804,23 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
                 continue
             arity = len(compound.args)
             declared = namespace.get(functor)
-            if not (isinstance(declared, PredicateMeta)
-                    and len(declared._fields or ()) == arity):
-                continue
+            if isinstance(declared, PredicateMeta):
+                if len(declared._fields or ()) != arity:
+                    continue
+            else:
+                # P3-2 Task 2 (THE FLIP, R6): a declared DATA functor binds
+                # its interned spelling, not a class, and the term this
+                # module constructs for it is the cell ``("cite", _)``.  The
+                # confusion this note exists for is unchanged -- a generic
+                # ``Compound("cite", (_,))`` still renders identically and
+                # still never unifies -- so the declaredness test reads the
+                # signature registry when the binding is a spelling.
+                from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+                registry = namespace.get(FUNCTOR_SIGNATURES_KEY) or {}
+                fields = registry.get(functor)
+                if not (declared == functor and fields is not None
+                        and len(fields) == arity):
+                    continue
             key = f"{functor}/{arity}"
             if key in seen:
                 continue
@@ -1595,6 +1609,18 @@ def _reify_value(value, depth: int = 0, path=None):
         return value
     if isinstance(value, list):
         return [_reify_value(v, depth + 1, path) for v in value]
+    if type(value) is tuple and value and isinstance(value[0], str):
+        # A CELL -- ``("cite", art52)``.  P3-2 Task 2 (THE FLIP): this is how
+        # a compound term is represented, so it reifies as a ``Goal`` and
+        # prints as ``cite(art52)``, exactly as the ``Compound`` branch below
+        # does for the generic shape.  Rendering it as a bare Python tuple
+        # would show the reader a representation detail instead of the term
+        # they wrote.  (A tuple whose slot 0 is not a str -- ordinary tuple
+        # data, or the ``(tuple, ...)`` data tag -- keeps the tuple form.)
+        return Goal(name=value[0],
+                    args=[_reify_value(v, depth + 1, path)
+                          for v in value[1:]],
+                    kwargs=[])
     if isinstance(value, tuple):
         return tuple(_reify_value(v, depth + 1, path) for v in value)
     if isinstance(value, type) and isinstance(value, PredicateMeta):
