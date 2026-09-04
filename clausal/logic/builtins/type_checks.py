@@ -232,6 +232,26 @@ def _callable__1_factory(db):
         if is_term_instance(x_val):
             yield None
             return
+        if _is_compound(x_val):
+            # P3-2 Task 2 (THE FLIP): a CELL is a compound term, so it is
+            # callable for exactly the reason a Compound is.  This was the
+            # second type check in this file found blind to cells (after
+            # ``compound/1``), and the review probe that missed it did so
+            # because it called the predicate ``callable`` — the ISO name —
+            # while it is REGISTERED as ``callable_``, so both halves of the
+            # comparison raised the same KeyError and compared equal.
+            #
+            # No arity gate here, deliberately: the ``Compound``/``KWTerm``
+            # branch above yields for a 0-arity Compound too, and this branch
+            # mirrors the branch it is the cell twin OF, not ``compound/1``'s
+            # (which does gate, because its Compound branch does).
+            #
+            # ``_is_compound`` is the funnel's shared definition, so a
+            # ``(tuple, ...)`` tuple-DATA cell is NOT compound and does not
+            # reach here — matching a plain Python tuple, which is what
+            # tuple-data IS and which is likewise not callable.
+            yield None
+            return
         if isinstance(x_val, type) and isinstance(x_val, PredicateMeta):
             yield None
             return

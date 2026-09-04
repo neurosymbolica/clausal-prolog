@@ -1172,3 +1172,109 @@ class TestCellsAtTheBuiltinSurface:
         # Tuple DATA and an unbound functor slot are NOT compounds: they keep
         # the ordinary tuple rendering rather than inventing a functor.
         assert term_str((1, 2)).startswith("(")
+
+
+class TestCallableAndTheTupleDataEdge:
+    """``callable_/1`` (ISO ``callable``) — fix round 2.
+
+    The second type check in ``type_checks.py`` found blind to cells, and the
+    one my own sweep MISSED: the probe called it ``callable``, the ISO name,
+    while it is REGISTERED as ``callable_``, so both halves of the comparison
+    raised the same ``KeyError`` and compared equal.  Every probe in this
+    class therefore asserts the predicate is registered first, and asserts the
+    cell and its twin SIDE BY SIDE rather than against a hard-coded expected
+    value — a divergence is the failure, whichever way it points.
+    """
+
+    def _module(self):
+        from clausal.logic.database import Module
+
+        return Module("_tt_callable_edge")
+
+    def _nsol(self, goal, arg):
+        from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
+
+        assert (goal, 1) in _BUILTINS or (goal, 1) in _DB_BUILTINS, (
+            f"{goal}/1 is not registered — a probe against it would compare "
+            f"two identical KeyErrors and call that agreement"
+        )
+        return len(list(call(goal, arg, module=self._module())))
+
+    def test_a_str_functor_cell_is_callable_like_its_compound_twin(self):
+        from clausal.terms import Compound
+
+        assert self._nsol("callable_", ("pt", 1, 2)) == 1
+        assert (self._nsol("callable_", ("pt", 1, 2))
+                == self._nsol("callable_", Compound("pt", (1, 2))))
+        # ... and like the class twin, the only other producer left post-R6.
+        assert (self._nsol("callable_", ("pt", 1, 2))
+                == self._nsol(
+                    "callable_", _python_minted("pt", ("a", "b"), 1, 2)))
+
+    def test_a_var_functor_cell_is_callable_like_its_compound_twin(self):
+        """``_is_compound`` counts an unbound-Var functor as compound, and so
+        does ``Compound`` — the two must agree here too."""
+        from clausal.terms import Compound
+
+        v = Var()
+        assert (self._nsol("callable_", (v, 1, 2))
+                == self._nsol("callable_", Compound(v, (1, 2))) == 1)
+
+    def test_a_zero_arity_cell_is_callable_like_its_compound_twin(self):
+        """``callable_`` yields for a 0-arity Compound, so its cell branch
+        carries no arity gate — unlike ``compound/1``'s, whose Compound branch
+        does gate.  Each cell branch mirrors the branch it is the twin OF."""
+        from clausal.terms import Compound
+
+        assert (self._nsol("callable_", ("f",))
+                == self._nsol("callable_", Compound("f", ())) == 1)
+
+    def test_tuple_data_matches_a_plain_tuple_not_a_tagged_compound(self):
+        """The tuple-DATA tag's analog is a plain Python tuple, and both
+        answers are pinned side by side.
+
+        ``(tuple, 1, 2)`` means "the Python tuple (1, 2) as term data" —
+        ``cells.py`` is explicit that it is NOT a compound — so its class-world
+        analog is ``(1, 2)``, not ``Compound(TUPLE_TAG, (1, 2))``, which
+        nothing constructs.  Under the plain-tuple analog every predicate
+        agrees; under the tagged-Compound one, three disagree — INCLUDING
+        ``ground/1``, whose cell branch was reviewed and accepted as correct.
+        That is the evidence the tagged Compound is the wrong analog rather
+        than a real defect: ``Compound`` treats ANY non-str functor as
+        non-ground (``_is_ground_py``'s Compound branch tests
+        ``isinstance(term.functor, str)``), which predates cells entirely.
+        """
+        from clausal.logic.cells import TUPLE_TAG
+        from clausal.terms import Compound
+
+        data = (TUPLE_TAG, 1, 2)
+        plain = (1, 2)
+        tagged_compound = Compound(TUPLE_TAG, (1, 2))
+
+        # The real analog: tuple data behaves as the tuple it denotes.
+        for name in ("callable_", "compound", "ground"):
+            assert self._nsol(name, data) == self._nsol(name, plain), name
+
+        # The tagged Compound, pinned side by side so the divergence is on
+        # record rather than silent -- and so a future change to either side
+        # shows up here.
+        assert self._nsol("callable_", tagged_compound) == 1
+        assert self._nsol("compound", tagged_compound) == 1
+        assert self._nsol("ground", tagged_compound) == 0     # the quirk
+        assert self._nsol("ground", Compound(123, (1, 2))) == 0  # ... general
+
+    def test_compound_1_still_gates_on_arity_and_diverges_at_zero(self):
+        """A pre-existing wart, pinned rather than copied.
+
+        ``compound(Compound("f", ()))`` answers TRUE — not through the
+        Compound branch (which requires ``len(args) > 0``) but through the
+        ``is_term_instance`` branch, since ``Compound`` is itself a dataclass
+        with two fields.  ISO says a 0-arity term is an atom, not a compound,
+        so the cell branch deliberately does NOT reproduce that: it gates on
+        arity, as its own Compound branch means to.  Recorded here so the
+        difference is a decision on record, not an oversight.
+        """
+        from clausal.terms import Compound
+
+        assert self._nsol("compound", ("f",)) == 0
+        assert self._nsol("compound", Compound("f", ())) == 1
