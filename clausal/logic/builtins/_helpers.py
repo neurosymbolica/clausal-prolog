@@ -539,11 +539,17 @@ def _standard_order_key(term: Any) -> tuple:
     if isinstance(term, (bool, int, float, _Fraction, _Decimal, _Real)):
         return (_ORD_NUM, term)
     if isinstance(term, str):
-        return (_ORD_ATOM, term, 0)
+        return (_ORD_ATOM, term)
     if is_atom(term):
-        # A zero-arity declared class IS an atom; order it by its name,
-        # next to the plain str of the same name rather than among classes.
-        return (_ORD_ATOM, term.__name__, 1)
+        # P3-1 Task 4 (standard-order collapse): a zero-arity declared class
+        # atom is a straggler of the pre-pivot atom-class representation —
+        # transiently possible until Task 7's sweep retires the class-atom
+        # path entirely, per §1b/R2 a class atom and the same-spelled str are
+        # the SAME atom, so this key must not be distinguishable from the str
+        # key above.  No trailing discriminator: ``(_ORD_ATOM, "work")`` for
+        # both ``"work"`` and ``make_atom("work")``, so they sort adjacent-
+        # equal rather than the old (str-wins-ties) ordering.
+        return (_ORD_ATOM, term.__name__)
     if isinstance(term, bytes):
         return (_ORD_BYTES, term)
     if isinstance(term, (list, tuple)):

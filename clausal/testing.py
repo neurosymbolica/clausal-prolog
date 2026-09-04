@@ -485,7 +485,7 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
                     return
                 named = _collect_named(
                     prefix, reified and reified[:failing - 1])
-                _report_bindings(diag, prefix, named, failing)
+                _report_bindings(diag, prefix, named, failing, path)
                 _note_generic_compound_confusion(diag, mod.__dict__, named)
                 _report_nearest(diag, goal, reified_goal, logic_module, deadline, path)
                 _report_wrong_value(
@@ -565,6 +565,73 @@ def _reified_goals(path, clause, arity):
     except Exception:  # noqa: BLE001
         return None
     return goals if len(goals) == arity else None
+
+
+#: Same key/eviction discipline as ``_REIFY_CACHE`` (indeed, shares its
+#: underlying ``reify_file`` call and file-content cache) — see
+#: :func:`_declared_atoms`.
+_DECLARED_ATOMS_CACHE: dict[str, frozenset] = {}
+
+
+def _declared_atoms(path) -> frozenset:
+    """Atom names declared via ``-module(...)``/``-private([...])`` in the
+    source file at *path*, parsed straight from that file's own text.
+
+    P3-1 Task 4 (atom-aware near-miss rendering): a declared atom compiles
+    to a plain ``ast.Constant(str)`` (Task 2's lowering flip), so the
+    reifier can no longer distinguish a former bare-atom reference from a
+    genuine quoted string literal of the same spelling by TERM SHAPE alone
+    — see the note above ``_atomize_declared_atoms``.  The process-global
+    ``predicate_builtins`` pool (and every module's own ``module_dict``,
+    which is seeded FROM that pool at exec start — confirmed empirically)
+    is *not* usable to disambiguate: any module's ``-private``/``-module``
+    declaration anywhere in the process registers there, so a genuine
+    string literal that happens to share a spelling some unrelated,
+    earlier-loaded module declared as an atom would be misclassified —
+    order-dependent, not a real fix.  This file's OWN ``-module``/
+    ``-private`` directives (also already reified and cached by
+    :func:`_reified_clause`'s ``_REIFY_CACHE``, reused here) are the one
+    signal that is both accurate AND immune to cross-test/cross-module
+    pollution: it says exactly what THIS source text declared.
+    """
+    if path is None:
+        return frozenset()
+    try:
+        from clausal.reflection import ModuleDirective, reify_file
+
+        key = str(path)
+        cached = _DECLARED_ATOMS_CACHE.get(key)
+        if cached is not None:
+            return cached
+        items = _REIFY_CACHE.get(key)
+        if items is None:
+            items = list(reify_file(key))
+            if len(_REIFY_CACHE) >= _REIFY_CACHE_MAX:
+                _REIFY_CACHE.pop(next(iter(_REIFY_CACHE)), None)
+            _REIFY_CACHE[key] = items
+        names: set = set()
+        for item in items:
+            if not isinstance(item, ModuleDirective):
+                continue
+            # ``-private([...])`` reifies args=[items, constants]; the export
+            # list is args[0].  ``-module(name, [...])`` reifies
+            # args=[module_name, exports] — the export list is args[1], NOT
+            # args[0] (that slot holds the module's own name, a str — do not
+            # iterate its characters as if it were the export list).
+            if item.name == "private" and item.args:
+                exports = item.args[0]
+            elif item.name == "module" and len(item.args) > 1:
+                exports = item.args[1]
+            else:
+                continue
+            names.update(e for e in exports if isinstance(e, str))
+        result = frozenset(names)
+        if len(_DECLARED_ATOMS_CACHE) >= _REIFY_CACHE_MAX:
+            _DECLARED_ATOMS_CACHE.pop(next(iter(_DECLARED_ATOMS_CACHE)), None)
+        _DECLARED_ATOMS_CACHE[key] = result
+        return result
+    except Exception:  # noqa: BLE001 - best-effort rendering aid, never fatal
+        return frozenset()
 
 
 def _goal_sources(body, reified) -> list[str]:
@@ -671,7 +738,7 @@ def _collect_named(goals, reified) -> list[tuple[str, object]] | None:
     return named
 
 
-def _report_bindings(diag, prefix, named, failing) -> None:
+def _report_bindings(diag, prefix, named, failing, path=None) -> None:
     from clausal.logic.variables import deref, is_var
 
     if named is None:
@@ -688,7 +755,7 @@ def _report_bindings(diag, prefix, named, failing) -> None:
         value = deref(var)
         if is_var(value):
             continue
-        diag.bindings.append((name, _render_value(value)))
+        diag.bindings.append((name, _render_value(value, path)))
     if not diag.bindings:
         span = "goal 1" if failing == 2 else f"goals 1..{failing - 1}"
         diag.bindings_note = f"(none from {span})"
@@ -986,7 +1053,8 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
             f"the predicate DID have a solution, which did not unify "
             f"({label} differs):"
         )
-        diag.nearest = _render_nearest(goal, reified_goal, kind, i, value)
+        diag.nearest = _render_nearest(
+            goal, reified_goal, kind, i, value, path)
         wanted = args[i] if kind == "arg" else kwargs[i].value
         return _arith_vs_number_note(label, wanted, value)
 
@@ -1056,7 +1124,8 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
             if not any_concrete and _value_is_concrete(
                     [*holes, *(k.value for k in kw_holes)]):
                 any_concrete = True
-            rendered = _render_probe_solution(goal, reified_goal, holes, kw_holes)
+            rendered = _render_probe_solution(
+                goal, reified_goal, holes, kw_holes, path)
             if rendered not in examples:
                 examples.append(rendered)
     except (_DiagBudgetExceeded, RecursionError, *_FATAL):
@@ -1295,7 +1364,8 @@ def _first_binding(probe, hole, logic_module):
         _undo(trail)
 
 
-def _render_probe_solution(goal, reified_goal, holes, kw_holes) -> str:
+def _render_probe_solution(goal, reified_goal, holes, kw_holes,
+                            path=None) -> str:
     """One all-holes solution as surface text, holes replaced by their values."""
     from clausal.logic.solve import _deref_walk_py
     from clausal.reflection import Goal, render_source
@@ -1306,19 +1376,21 @@ def _render_probe_solution(goal, reified_goal, holes, kw_holes) -> str:
         try:
             return render_source(Goal(
                 name=reified_goal.name,
-                args=[_reify_value(v) for v in values],
-                kwargs=[[n, _reify_value(v)] for n, v in kw_values],
+                args=[_reify_value(v, path=path) for v in values],
+                kwargs=[[n, _reify_value(v, path=path)]
+                        for n, v in kw_values],
             ))
         except Exception:  # noqa: BLE001
             pass
     func = getattr(goal, "func", None)
     name = str(func.name) if hasattr(func, "name") else "the predicate"
-    parts = [_render_value(v) for v in values]
-    parts += [f"{n}={_render_value(v)}" for n, v in kw_values]
+    parts = [_render_value(v, path) for v in values]
+    parts += [f"{n}={_render_value(v, path)}" for n, v in kw_values]
     return f"{name}({', '.join(parts)})"
 
 
-def _render_nearest(goal, reified_goal, kind, index, value) -> str:
+def _render_nearest(goal, reified_goal, kind, index, value,
+                     path=None) -> str:
     """The failing goal with the differing argument replaced by what was computed.
 
     Preferred form splices the computed value into the *reified* goal and hands
@@ -1330,11 +1402,11 @@ def _render_nearest(goal, reified_goal, kind, index, value) -> str:
 
     if isinstance(reified_goal, Goal):
         try:
-            reified_value = _reify_value(value)
+            reified_value = _reify_value(value, path=path)
             # Show the goal's *other* variables at the values the prefix gave
             # them, so the printed near-miss is a concrete term the reader can
             # diff against the assertion rather than a half-open pattern.
-            bound = _bound_reified(goal, reified_goal)
+            bound = _bound_reified(goal, reified_goal, path)
             args = [_substitute_bound(a, bound)
                     for a in (reified_goal.args or ())]
             kwargs = [[k[0], _substitute_bound(k[1], bound)]
@@ -1350,10 +1422,10 @@ def _render_nearest(goal, reified_goal, kind, index, value) -> str:
         except Exception:  # noqa: BLE001
             pass
     label = f"argument {index + 1}" if kind == "arg" else "keyword argument"
-    return f"({label} was actually: {_render_value(value)})"
+    return f"({label} was actually: {_render_value(value, path)})"
 
 
-def _bound_reified(goal, reified_goal) -> dict[str, object]:
+def _bound_reified(goal, reified_goal, path=None) -> dict[str, object]:
     """Source-variable name → reified form of its current binding."""
     from clausal.logic.variables import deref, is_var
 
@@ -1364,7 +1436,7 @@ def _bound_reified(goal, reified_goal) -> dict[str, object]:
         if is_var(value):
             continue
         try:
-            bound[name] = _reify_value(value)
+            bound[name] = _reify_value(value, path=path)
         except Exception:  # noqa: BLE001
             pass
     return bound
@@ -1390,12 +1462,83 @@ def _substitute_bound(reified, bound):
     return reified
 
 
-def _render_value(value) -> str:
+# ── P3-1 Task 4: atom-aware near-miss rendering ───────────────────────────
+#
+# Before the atom pivot, a bound atom was a zero-arity ``PredicateMeta``
+# class, and every reified/render path had a distinct case for it: the
+# reifier's ``ast.Name``/``LoadName`` branches wrapped it as ``Atom(name=...)``
+# (``clausal/reflection.py``), and the renderer printed an ``Atom`` bare
+# while quoting a plain ``str`` — so runtime atoms and runtime strings
+# already rendered differently at the type level.
+#
+# Post-pivot an atom just IS a ``str`` (§1b/R2), and Task 2's lowering flip
+# means a declared/module atom (``-module``/``-private``) now compiles to a
+# plain ``ast.Constant(str)`` (``term_rewriting.py``'s ``visit_Name``,
+# ``if identifier in transformer.atoms: return replace(Constant(...))``)
+# instead of a Name reference resolving through ``atom_identity_expr`` — so
+# the reifier's ``ast.Constant`` branch (``reflection.py``'s
+# ``_ClauseReifier.term``) hands back an indistinguishable plain ``str`` for
+# both a former bare atom and a genuine quoted string literal of the same
+# spelling.  The renderer (``_ClauseRenderer.term``, same module) still only
+# renders an ``Atom`` bare; every plain ``str`` is quoted via
+# ``ast.Constant`` — so a bound atom now prints as ``'work'`` instead of
+# ``work``.
+#
+# A LEXICAL-SHAPE guess ("lowercase identifier -> bare") is NOT enough: a
+# genuine quoted string with that same shape (``gpair("a", 1)``,
+# ``chain_subject("simple")``) is common in these fixtures too, and would be
+# wrongly un-quoted by shape alone (verified: breaks
+# ``test_ground_fact_near_miss_keeps_rung_1`` et al).  A per-module registry
+# check is not enough EITHER: the process-global ``predicate_builtins`` pool
+# (and every module's own ``module_dict``, which is seeded FROM that pool at
+# exec start — confirmed empirically) would misclassify an unrelated
+# same-spelled string the moment ANY module loaded earlier in the *same
+# process* happened to declare that spelling as an atom (confirmed
+# empirically: ``-private([a, b, ...])`` in one test's fixture pollutes
+# ``predicate_builtins["a"]``, and every later-loaded module's
+# ``module_dict``, for the rest of the session — order-dependent, not a
+# real fix).  The one signal that is both accurate AND immune to
+# cross-test/cross-module pollution is *this source file's own*
+# ``-module``/``-private`` directives — see :func:`_declared_atoms`.
+
+def _atomize_declared_atoms(reified, path):
+    """Recursively rewrap ``str`` leaves that :func:`_declared_atoms` says
+    *path* declared as atoms into ``Atom`` so
+    :func:`clausal.reflection.render_source` prints them unquoted — the same
+    treatment it already gives a reified ``Atom``.  Applied to reified terms
+    that came straight from :func:`clausal.reflection.reify_file` (clause
+    heads / leaf goals), which never pass through :func:`_reify_value` and so
+    would otherwise keep their post-pivot plain-``str`` shape all the way to
+    the renderer.  See the module-level note above."""
+    from clausal.reflection import Atom, Goal
+
+    declared = _declared_atoms(path)
+    if isinstance(reified, str):
+        return Atom(name=reified) if reified in declared else reified
+    if isinstance(reified, Goal):
+        return Goal(
+            name=reified.name,
+            args=[_atomize_declared_atoms(a, path)
+                  for a in (reified.args or ())],
+            kwargs=[[k[0], _atomize_declared_atoms(k[1], path)]
+                    for k in (reified.kwargs or ())],
+        )
+    if isinstance(reified, list):
+        return [_atomize_declared_atoms(v, path) for v in reified]
+    if isinstance(reified, tuple):
+        return tuple(_atomize_declared_atoms(v, path) for v in reified)
+    if isinstance(reified, dict):
+        return {_atomize_declared_atoms(k, path): _atomize_declared_atoms(v, path)
+                for k, v in reified.items()}
+    return reified
+
+
+def _render_value(value, path=None) -> str:
     """A computed runtime value as ``.clausal`` surface text."""
     try:
         from clausal.reflection import render_source
 
-        return render_source(_reify_value(value))
+        return render_source(_reify_value(value, path=path))
     except Exception:  # noqa: BLE001
         from clausal.terms import term_str
 
@@ -1405,7 +1548,7 @@ def _render_value(value) -> str:
             return repr(value)
 
 
-def _reify_value(value, depth: int = 0):
+def _reify_value(value, depth: int = 0, path=None):
     """Runtime term → reified vocabulary, so ``render_source`` can print it.
 
     ``reify_*`` maps *source* to reified terms; a value computed at run time
@@ -1425,29 +1568,35 @@ def _reify_value(value, depth: int = 0):
     value = deref(value)
     if is_var(value):
         return Variable(name="_")
-    if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
+    if isinstance(value, str):
+        # P3-1 Task 4: a bound atom is a plain str post-pivot, same as a
+        # bound string value — see the module note above ``_declared_atoms``.
+        return Atom(name=value) if value in _declared_atoms(path) else value
+    if value is None or isinstance(value, (bool, int, float, complex, bytes)):
         return value
     if isinstance(value, list):
-        return [_reify_value(v, depth + 1) for v in value]
+        return [_reify_value(v, depth + 1, path) for v in value]
     if isinstance(value, tuple):
-        return tuple(_reify_value(v, depth + 1) for v in value)
+        return tuple(_reify_value(v, depth + 1, path) for v in value)
     if isinstance(value, type) and isinstance(value, PredicateMeta):
         return Atom(name=value.__name__)
     if isinstance(value, Compound):
         return Goal(name=str(value.functor),
-                    args=[_reify_value(a, depth + 1) for a in value.args],
+                    args=[_reify_value(a, depth + 1, path)
+                          for a in value.args],
                     kwargs=[])
     if isinstance(value, KWTerm):
         return Goal(name=str(value.functor), args=[],
-                    kwargs=[[k, _reify_value(v, depth + 1)]
+                    kwargs=[[k, _reify_value(v, depth + 1, path)]
                             for k, v in value.items()])
     if is_term_instance(value):
         return Goal(name=type(value).__name__,
-                    args=[_reify_value(getattr(value, f), depth + 1)
+                    args=[_reify_value(getattr(value, f), depth + 1, path)
                           for f in term_field_names(value)],
                     kwargs=[])
     if isinstance(value, dict):
-        return {k: _reify_value(v, depth + 1) for k, v in value.items()}
+        return {k: _reify_value(v, depth + 1, path)
+                for k, v in value.items()}
     raise _Unrenderable(f"no surface form for {type(value).__name__}")
 
 
@@ -1608,8 +1757,9 @@ def _findall_collapse_finding(goal, logic_module, path, deadline,
                 # Prefix unsatisfiable on the isolated re-run — still name the
                 # body goal, just without live bindings.
                 reified_leaf = None
-        lines.append(f"  {_descent_leaf_line(leaf, reified_leaf, _NO_CLAUSE, path)}")
-        for name, value in _leaf_bindings(leaf, reified_leaf):
+        lines.append(
+            f"  {_descent_leaf_line(leaf, reified_leaf, _NO_CLAUSE, path)}")
+        for name, value in _leaf_bindings(leaf, reified_leaf, path):
             lines.append(f"    {name} = {value}")
         # The failing body conjunct may be a call whose own failing route lies
         # deeper (the measured chain: stay_is_valid_for_length → its inner
@@ -2128,7 +2278,7 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
                 # A head listing beneath this parent leaf is ONE finding: the
                 # parent conjunct, its bindings, and the heads, all one group.
                 lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
-                for name, value in _leaf_bindings(leaf, reified_leaf):
+                for name, value in _leaf_bindings(leaf, reified_leaf, path):
                     lines.append(f"    {name} = {value}")
                 lines.append("    no clause head unifies with these arguments; "
                              "the heads are:")
@@ -2136,7 +2286,7 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
                 return [lines], "leaves"
             # "none" falls through to render this conjunct as the leaf.
         lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
-        for name, value in _leaf_bindings(leaf, reified_leaf):
+        for name, value in _leaf_bindings(leaf, reified_leaf, path):
             lines.append(f"    {name} = {value}")
         # A failing leaf that CONSUMES a collapsed findall's bag (`length(
         # VALID_DAYS, LENGTH)` with `VALID_DAYS = []`) is only the symptom;
@@ -2208,7 +2358,7 @@ def _head_listing(cls, clauses, path) -> list[str]:
             try:
                 from clausal.reflection import render_source
 
-                text = render_source(reified.head)
+                text = render_source(_atomize_declared_atoms(reified.head, path))
             except Exception:  # noqa: BLE001
                 text = None
         if text is None:
@@ -2231,7 +2381,7 @@ def _descent_leaf_line(leaf, reified_leaf, clause, path) -> str:
         try:
             from clausal.reflection import render_source
 
-            text = render_source(reified_leaf)
+            text = render_source(_atomize_declared_atoms(reified_leaf, path))
         except Exception:  # noqa: BLE001
             text = None
     if text is None:
@@ -2251,7 +2401,7 @@ def _descent_leaf_line(leaf, reified_leaf, clause, path) -> str:
     return f"{label}:{line}  {text}" if line is not None else f"{label}  {text}"
 
 
-def _leaf_bindings(leaf, reified_leaf) -> list[tuple[str, str]]:
+def _leaf_bindings(leaf, reified_leaf, path=None) -> list[tuple[str, str]]:
     """Up to DIAG_MAX_DESCENT_BINDINGS named, bound variables of the leaf."""
     from clausal.logic.variables import deref, is_var
 
@@ -2268,7 +2418,7 @@ def _leaf_bindings(leaf, reified_leaf) -> list[tuple[str, str]]:
         if is_var(value):
             continue
         try:
-            out.append((name, _render_value(value)))
+            out.append((name, _render_value(value, path)))
         except Exception:  # noqa: BLE001
             continue
         if len(out) >= DIAG_MAX_DESCENT_BINDINGS:

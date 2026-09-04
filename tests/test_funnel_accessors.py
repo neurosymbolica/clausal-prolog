@@ -266,9 +266,13 @@ class TestIsAtomAdoptionRegression:
         assert is_atom(bar) is False
 
     def test_standard_order_key_of_atom_class(self):
-        # nv — _standard_order_key line ~368
+        # nv — _standard_order_key line ~368.  P3-1 Task 4 (standard-order
+        # collapse, §1b/R2): the trailing 0/1 discriminator that used to
+        # break str-vs-same-spelled-class ties is gone — a class atom keys
+        # IDENTICALLY to the same-spelled str now, since post-pivot they are
+        # the same atom.
         key = _standard_order_key(foo_atom)
-        assert key == (2, "foo", 1)  # (_ORD_ATOM, name, 1)
+        assert key == (2, "foo")  # (_ORD_ATOM, name)
 
     def test_standard_order_key_atom_sorts_adjacent_to_same_named_str(self):
         # nv — atoms and same-named strings interleave in standard order

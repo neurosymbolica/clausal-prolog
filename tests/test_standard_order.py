@@ -19,7 +19,7 @@ from fractions import Fraction
 
 import pytest
 
-from clausal.logic.builtins._helpers import _standard_order_key
+from clausal.logic.builtins._helpers import _ORD_ATOM, _standard_order_key
 from clausal.logic.builtins.lists import _sort__2, _msort__2
 from clausal.logic.compiler.globals_env import _set_of_sort_dedup
 from clausal.logic.trampoline import DONE
@@ -172,6 +172,47 @@ class TestStandardOrderShape:
     def test_repeated_calls_are_stable(self):
         items = [_c("f", 15), _c("f", 2), _c("f", 9)]
         assert _key_sorted(items) == _key_sorted(list(reversed(items)))
+
+
+# ── P3-1 Task 4: standard-order collapse (atom key shape) ────────────────
+
+class TestAtomKeyCollapse:
+    """``_standard_order_key``'s atom branch after the collapse.
+
+    Pre-pivot, a str and a same-spelled zero-arity declared-class atom got
+    DIFFERENT keys (``(_ORD_ATOM, name, 0)`` vs. ``(_ORD_ATOM, name, 1)``) so
+    ties broke str-first.  Post-pivot (§1b/R2: a str IS the atom), there is
+    one shape: ``(_ORD_ATOM, name)``.  A class atom is a transitional
+    straggler (until Task 7's sweep) that must key IDENTICALLY to the same-
+    spelled str, not merely adjacently.
+    """
+
+    def test_str_atom_key_shape_has_no_discriminator(self):
+        assert _standard_order_key("work") == (_ORD_ATOM, "work")
+
+    def test_class_atom_key_matches_same_spelled_str_key(self):
+        from clausal.logic.predicate import make_atom
+
+        atom_cls = make_atom("work")
+        assert _standard_order_key(atom_cls) == _standard_order_key("work")
+        assert _standard_order_key(atom_cls) == (_ORD_ATOM, "work")
+
+    def test_same_spelled_str_and_class_atom_sort_adjacent_equal(self):
+        from clausal.logic.predicate import make_atom
+
+        atom_cls = make_atom("work")
+        # Neither is ordered strictly before the other by the key.
+        ordered = _key_sorted(["work", atom_cls])
+        assert {_standard_order_key(x) for x in ordered} == {(_ORD_ATOM, "work")}
+
+    def test_mixed_atoms_strings_numbers_compounds_key_shape(self):
+        """A representative mixed list: each rank keeps its own key shape."""
+        items = [_c("f", 1), "zeta", "alpha", 3, Var(), 1.5]
+        ordered = _key_sorted(items)
+        ranks = [_standard_order_key(x)[0] for x in ordered]
+        # Var < Number < Atom < ... < Compound, and stable within a rank.
+        assert ranks == sorted(ranks)
+        assert ordered[-1] == _c("f", 1)
 
 
 # ── Paths that were already correct must stay correct ────────────────────
