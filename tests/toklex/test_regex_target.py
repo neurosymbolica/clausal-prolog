@@ -95,6 +95,26 @@ class TestIncremental:
                 assert out == want, (text, cuts)
 
 
+class TestRendererHardening:
+    def test_nested_quantifiers_render_valid_regex(self):
+        # Star(Plus(x)) must group the inner quantifier ("(?:a+)*", not "a+*")
+        import re as _re
+        from clausal.tools.toklex.charset import CharSet
+        from clausal.tools.toklex.regex_target import _expr_re
+        from clausal.tools.toklex.spec import Lit, Plus, Star
+        pat = _expr_re(Star(Plus(Lit(CharSet.from_chars("a")))))
+        _re.compile(pat)  # must not raise
+        assert _re.fullmatch(pat, "aaa") and _re.fullmatch(pat, "")
+
+    def test_unrenderable_spec_raises_spec_error_not_re_error(self):
+        # empty character class -> SpecError (so the shim's fallback engages)
+        from clausal.tools.toklex.charset import CharSet
+        from clausal.tools.toklex.regex_target import _class_re
+        from clausal.tools.toklex.spec import SpecError
+        with pytest.raises(SpecError):
+            _class_re(CharSet.empty())
+
+
 class TestShimIntegration:
     def test_public_tokenize_uses_regex_target(self):
         # the shim's chars-mode batch path should ride the fast target;

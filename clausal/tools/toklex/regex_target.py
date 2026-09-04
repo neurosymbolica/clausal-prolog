@@ -32,8 +32,12 @@ remains the authority:
   next token is produced by running the reference ``IncrementalLexer``
   on the remaining tail and rebasing its span — commit-region /
   unterminated / no_token semantics are therefore *inherited*, never
-  duplicated. The delegated region is at most the doomed tail of the
-  input, so the fast path keeps the bulk.
+  duplicated. Note the scope honestly: once delegation starts it drains
+  the WHOLE remaining input on the table driver (correct — delegation
+  only starts in closed mode, where the table driver is definitionally
+  right). For well-formed input that region is empty; for input with an
+  early lexical error followed by lots of valid text, the remainder
+  runs at table-driver speed rather than regex speed.
 - **Nested comments** are non-regular and keep the sub-scan (depth
   counter + ``str.find`` fast-skip), driven by the rendered open/close
   patterns.
@@ -57,8 +61,20 @@ _FULL_IVS = ((0, 0x10FFFF),)
 # ── RE IR -> re pattern text ─────────────────────────────────────────
 
 
+def _compile(pattern: str, what: str):
+    """re.compile with renderer errors surfaced as SpecError, so the
+    shim's fallback-to-table-driver catches ANY unrenderable spec, not
+    only shapes the renderer knows to reject up front."""
+    try:
+        return re.compile(pattern)
+    except re.error as exc:
+        raise SpecError("regex target could not compile %s: %s" % (what, exc)) from exc
+
+
 def _class_re(cs) -> str:
     """A CharSet as a regex character class (or single escaped char)."""
+    if not cs.ivs:
+        raise SpecError("regex target: empty character class is unrenderable")
     if cs.ivs == _FULL_IVS:
         return r"[\s\S]"
     parts = []
@@ -76,7 +92,10 @@ def _class_re(cs) -> str:
 
 
 def _needs_group(node) -> bool:
-    return isinstance(node, (Seq, Alt, ButNot))
+    # Star/Plus/Opt included: quantifying an already-quantified operand
+    # without a group renders invalid syntax ("a+*" -> re.error) -- the
+    # Star(Plus(...)) shape is reachable through def-composition.
+    return isinstance(node, (Seq, Alt, ButNot, Star, Plus, Opt))
 
 
 def _expr_re(node) -> str:
@@ -235,8 +254,8 @@ def _render(lexer) -> _Compiled:
             add("nest", tr.name, body, body)
             c.nest_rules[tr.name] = tr
             c.nest_pat[tr.name] = (
-                re.compile(_expr_re(tr.expr)),
-                re.compile(_expr_re(tr.nest_close)),
+                _compile(_expr_re(tr.expr), "nest open %r" % tr.name),
+                _compile(_expr_re(tr.nest_close), "nest close %r" % tr.name),
             )
             ml_open = _expr_maxlen(tr.expr)
             ml_close = _expr_maxlen(tr.nest_close)
@@ -269,8 +288,8 @@ def _render(lexer) -> _Compiled:
             add("token", tok.name, body, body)
         seen.add(tok.name)
 
-    c.master_open = re.compile("|".join(alts_open))
-    c.master_closed = re.compile("|".join(alts_closed))
+    c.master_open = _compile("|".join(alts_open), "master pattern (open mode)")
+    c.master_closed = _compile("|".join(alts_closed), "master pattern (closed mode)")
     c.commit_trigger, c.extend_syms = _commit_triggers(lexer)
     return c
 
@@ -483,7 +502,12 @@ class RegexLexer:
         m = close_pat.match(text, pos)
         if m is not None:
             if not self._closed and m.end() + self.lexer.max_backup >= n:
-                return NEED_MORE  # boundary margin, same rule as the main loop
+                # over-cautious hold: with bounded-length delimiters the
+                # nest_maxlen guard above already guarantees visibility,
+                # so this margin is not strictly required — kept because
+                # over-holding is always safe (chunk-insensitive) and it
+                # costs at most one extra NEED_MORE round near an edge
+                return NEED_MORE
             self._pos = m.end()
             self._nest["depth"] -= 1
             if self._nest["depth"] == 0:
