@@ -2188,6 +2188,25 @@ c_is_ground(PyObject *term, int depth)
         }
         return 1;
     }
+    /* Cell — a plain tuple (see the branch in ``c_copy_term``).  Without this
+     * a cell fell through the "unknown shape -> ground" tail, so
+     * ``ground(pt(1, Y))`` answered TRUE and ``_findall_copy_row``
+     * (``compiler/globals_env.py``) skipped the ISO per-solution copy for a
+     * cell row, sharing the caller's Var (A03-F006 for cell rows).
+     *
+     * PyTuple_Check, NOT the exact check its copy/collect siblings use: this
+     * branch only READS, and a tuple subclass holding a free Var is not ground
+     * either — which is exactly the choice the Python twin makes with
+     * ``isinstance(term, tuple)`` (``_is_ground_py``, ``builtins/_helpers.py``).
+     * PyTuple_GET_ITEM is valid on a subclass instance. */
+    if (PyTuple_Check(term)) {
+        Py_ssize_t n = PyTuple_GET_SIZE(term);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            int r = c_is_ground(PyTuple_GET_ITEM(term, i), depth + 1);
+            if (r <= 0) return r;
+        }
+        return 1;
+    }
     /* Compound */
     if (Compound_type) {
         int r = PyObject_IsInstance(term, Compound_type);
@@ -2791,6 +2810,50 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         return result;
     }
 
+    /* Cell — a plain tuple.  P3-2 Task 2 (THE FLIP) makes ``("pt", X, Y)`` how
+     * every compound DATA term is represented, so a tuple can no longer fall
+     * through to the "unknown term type: return as-is" tail: that handed the
+     * caller a "copy" still sharing the ORIGINAL's variables.  A
+     * meta-interpreter's ``copy_term(CLAUSE, [HEAD, BODY])`` then bound the
+     * PROGRAM's variables on the first resolution step and ``Solve/2``
+     * enumerated forever (``clausal/examples/metainterpreters.clausal``).
+     *
+     * PyTuple_CheckEXACT, not PyTuple_Check, because that is what the Python
+     * twin's ``type(term) is tuple`` decides (``_copy_term_py``,
+     * ``builtins/inspection.py``): a namedtuple or other tuple subclass would
+     * lose its type through the rebuild, and rebuilding one is not this
+     * function's business.  Its sibling in ``c_is_ground`` uses the inclusive
+     * check because that one only READS.
+     *
+     * Slot 0 needs no special case: a str functor and the TUPLE_TAG type
+     * object both contain no Vars and are returned by identity, while an
+     * unbound functor Var must be freshened like any other — the same
+     * reasoning as the A01-F003 functor recursion in the Compound branch
+     * below, but for free.
+     *
+     * The reuse-if-unchanged tail mirrors the twin's identity short-circuit
+     * (``if all(new is old ...): return term``), so a GROUND cell — the
+     * overwhelmingly common case — stays allocation-free. */
+    if (PyTuple_CheckExact(term)) {
+        Py_ssize_t n = PyTuple_GET_SIZE(term);
+        PyObject *result = PyTuple_New(n);
+        if (!result) return NULL;
+        int changed = 0;
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *slot = PyTuple_GET_ITEM(term, i);  /* borrowed */
+            PyObject *copied = c_copy_term(slot, var_map, depth + 1);
+            if (!copied) { Py_DECREF(result); return NULL; }
+            if (copied != slot) changed = 1;
+            PyTuple_SET_ITEM(result, i, copied);  /* steals ref */
+        }
+        if (!changed) {
+            Py_DECREF(result);
+            Py_INCREF(term);
+            return term;
+        }
+        return result;
+    }
+
     /* Compound: copy args tuple, construct new Compound(functor, new_args) */
     if (Compound_type) {
         int r = PyObject_IsInstance(term, Compound_type);
@@ -3102,6 +3165,24 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
         Py_ssize_t n = PyList_GET_SIZE(term);
         for (Py_ssize_t i = 0; i < n; i++) {
             if (c_collect_vars(PyList_GET_ITEM(term, i), seen, result, depth + 1) < 0)
+                return -1;
+        }
+        return 0;
+    }
+
+    /* Cell — a plain tuple (see the branch in ``c_copy_term`` for why a tuple
+     * is no longer a leaf).  Without this, ``term_variables/2`` and
+     * ``numbervars/3`` missed every variable inside a cell.
+     *
+     * Slot 0 is walked like any other slot: an unbound functor Var IS a
+     * variable of the term, and a str functor / the TUPLE_TAG type object
+     * collects nothing.  PyTuple_CheckEXACT keeps this in step with the
+     * Python twin's ``type(term) is tuple`` (``_collect_vars_py``), for which
+     * a namedtuple stays a leaf. */
+    if (PyTuple_CheckExact(term)) {
+        Py_ssize_t n = PyTuple_GET_SIZE(term);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            if (c_collect_vars(PyTuple_GET_ITEM(term, i), seen, result, depth + 1) < 0)
                 return -1;
         }
         return 0;

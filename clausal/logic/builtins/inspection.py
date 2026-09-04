@@ -188,42 +188,36 @@ try:
     # as-is" for ``copy_term`` (aliasing the original) and "leaf" for
     # ``term_variables`` (missing VarSegs).  Both types are absent
     # from ``_register_term_types`` (which only knows ``Compound`` and
-    # ``KWTerm``).  The historical fix short-circuited those two shapes
-    # in Python and delegated everything else to C.
+    # ``KWTerm``).  Short-circuit Seg* shapes in Python (same pattern
+    # used by ``_is_ground`` for [[F083]]) and delegate every other
+    # shape to the C fast path.  Within the Python branch we still
+    # recurse via ``_copy_term_py`` / ``_collect_vars_py`` so any
+    # nested Seg* container is handled too.
     #
-    # P3-2 Task 2 (THE FLIP): the accelerators are blind to plain TUPLES in
-    # exactly the same way, and a tuple is now a CELL — how every compound
-    # data term is represented.  ``c_copy_term`` returns a tuple as-is, so
-    # the "copy" keeps the original's variables (proved: with the C path,
-    # ``clausal/examples/metainterpreters.clausal``'s
-    # ``copy_term(CLAUSE, [HEAD, BODY])`` hands back a clause still sharing
-    # the program's variables, the first resolution step binds them for good,
-    # and Solve/2 enumerates forever instead of answering); ``c_collect_vars``
-    # treats one as a leaf, so ``term_variables``/``numbervars`` miss every
-    # variable inside a cell.
-    #
-    # Unlike Seg*, a cell cannot be short-circuited by inspecting the TOP of
-    # the term: the shapes that matter are cells nested inside lists and
-    # Compounds (a meta-interpreter program is a list of lists of cells), and
-    # the C recursion reaches those without ever coming back to Python.
-    # Deciding "does this term contain a tuple?" costs a full walk — the same
-    # walk as the copy — so there is no cheap gate to write, and the Python
-    # implementations are used unconditionally.
-    #
-    # MEASURED COST: ~3.4x on a term containing no cells at all (30-deep
-    # Compound chain, 5000 copies: 0.094s C vs 0.341s Python).  On a term
-    # that DOES contain cells the C path is not faster, it is wrong.
-    #
-    # FOLLOW-UP (small, deliberately not taken here — this task is barred
-    # from touching ``.c`` files): give ``c_copy_term`` and ``c_collect_vars``
-    # in ``clausal/logic/variables/_variables.c`` the same ``PyTuple_Check``
-    # branch ``do_walk`` (:1545) already has, then restore the delegation
-    # below to the Seg*-only short-circuit.
+    # P3-2 Task 2 (THE FLIP) briefly made these Python-only: the C twins had
+    # no tuple branch, and a tuple is now a CELL — how every compound data
+    # term is represented — so ``c_copy_term`` returned a cell as-is and the
+    # "copy" kept the ORIGINAL's variables, while ``c_collect_vars`` treated
+    # one as a leaf.  Task 2C gave ``c_copy_term`` / ``c_collect_vars`` the
+    # ``PyTuple_CheckExact`` branch (matching the ``type(x) is tuple`` gate in
+    # the twins above, namedtuples included) and this delegation is back to
+    # the Seg*-only short-circuit.  The parity corpus that keeps the two
+    # implementations honest is
+    # ``tests/test_python_fallbacks.py::TestCell*TwinParity``; a cell nested
+    # inside a Seg* container is still reached, because the Python branch
+    # recurses through the same twins.
     def _copy_term_impl(term: Any, var_map: dict) -> Any:
-        return _copy_term_py(deref(term), var_map)
+        t = deref(term)
+        if isinstance(t, (SegList, SegString)):
+            return _copy_term_py(t, var_map)
+        return _c_copy_term_impl(t, var_map)
 
     def _collect_vars_impl(term: Any, result: list) -> None:
-        _collect_vars_py(deref(term), result)
+        t = deref(term)
+        if isinstance(t, (SegList, SegString)):
+            _collect_vars_py(t, result)
+            return
+        _c_collect_vars_impl(t, result)
 except ImportError:
     pass
 

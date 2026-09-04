@@ -266,22 +266,19 @@ try:
     # unknown container. Short-circuit the Seg* shapes in Python so a
     # SegList / SegString / SegBytes that still holds an unbound ``VarSeg``
     # reports *not* ground. Other shapes still go through the fast C path.
-    # P3-2 Task 2 (THE FLIP): ``c_is_ground`` (``_variables.c``, ~:2160) has
-    # no ``PyTuple_Check`` branch either, so a bare tuple falls through its
-    # tail to "ground" -- and a CELL is a bare tuple.  Unlike Seg*, a cell
-    # cannot be short-circuited by inspecting the TOP of the term: the shapes
-    # that matter are cells nested inside lists and Compounds, which the C
-    # recursion reaches without ever coming back to Python, and deciding
-    # "does this contain a tuple?" costs the same walk as the predicate
-    # itself.  So the Python implementation is used unconditionally, exactly
-    # as ``copy_term``/``term_variables`` now are (see
-    # ``builtins/inspection.py`` for the measurement and the same follow-up).
-    #
-    # FOLLOW-UP for the ``.c``-touching task: give ``c_is_ground`` the
-    # ``PyTuple_Check`` branch ``do_walk`` (:1545) already has, then restore
-    # the Seg*-only short-circuit below.
+    # P3-2 Task 2 (THE FLIP) briefly made this Python-only: ``c_is_ground``
+    # had no tuple branch, so a CELL -- a bare tuple, and post-flip how every
+    # compound data term is represented -- fell through its tail to "ground"
+    # and ``ground(pt(1, Y))`` answered TRUE.  Task 2C gave ``c_is_ground``
+    # the branch (``PyTuple_Check``, the inclusive check, because like
+    # ``_is_ground_py``'s it only READS) and this dispatch is back to the
+    # Seg*-only short-circuit.  Twin parity is pinned by
+    # ``tests/test_python_fallbacks.py::TestCellIsGroundTwinParity``.
     def _is_ground(term: Any) -> bool:
-        return _is_ground_py(deref(term))
+        t = deref(term)
+        if isinstance(t, (SegList, SegString, SegBytes)):
+            return _is_ground_py(t)
+        return _c_is_ground(t)
 except ImportError:
     pass
 

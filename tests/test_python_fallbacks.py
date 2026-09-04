@@ -415,3 +415,439 @@ class TestCollectVarsFallback:
         c_result = []
         _collect_vars_impl(c, c_result)
         assert len(py_result) == len(c_result) == 2
+
+
+# ── P3-2 Task 2C: cells (plain tuples) through the C twins ───────────────────
+#
+# THE FLIP (Task 2) made a plain tuple — a CELL — the representation of every
+# compound data term, and the three C walkers behind ``copy_term/2``,
+# ``term_variables/2`` and ``ground/1`` had no tuple branch: a cell was an
+# opaque leaf, so a "copy" kept the ORIGINAL's variables, ``term_variables``
+# saw none of them, and ``ground/1`` said yes to a term holding a free Var.
+# Task 2 bought correctness by running the Python twins unconditionally at a
+# measured ~3.4x cost; Task 2C gave the C functions the branch and restored
+# the dispatch.
+#
+# C/Python twin drift is silent corruption rather than an error, so these
+# tests compare the RAW C entry points against the Python twins over a corpus
+# of shapes, and separately pin the wrapper (which is what the engine calls).
+
+from typing import NamedTuple
+
+from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.predicate import term_field_names as _tfn
+from clausal.terms import SegList, SegString, VarSeg, ConcreteSeg
+
+try:
+    from clausal.logic.variables._variables import (
+        _copy_term_impl as _c_copy_raw,
+        _collect_vars_impl as _c_collect_raw,
+        _is_ground as _c_is_ground_raw,
+    )
+    _HAVE_C = True
+except ImportError:  # pragma: no cover — pure-Python build
+    _HAVE_C = False
+
+requires_c = pytest.mark.skipif(not _HAVE_C, reason="C accelerator not built")
+
+
+class _NT(NamedTuple):
+    """A tuple SUBCLASS — deliberately NOT a cell.
+
+    ``_copy_term_py`` / ``_collect_vars_py`` gate their cell branch on
+    ``type(x) is tuple`` precisely so a namedtuple is not silently rebuilt as
+    a plain tuple; ``_is_ground_py`` uses ``isinstance`` because it only
+    reads.  The C twins must make the same two different choices.
+    """
+
+    a: object
+    b: object
+
+
+def _corpus():
+    """(name, term) pairs, rebuilt on every call so the Vars are fresh.
+
+    Excludes ``Seg*``: those are short-circuited to Python by the wrapper on
+    purpose (F092/F093 — the C twins have never known about them), so raw-C
+    parity is not claimed for them.  They are covered through the wrapper by
+    the ``TestWrapperUsesTheCPathAgain`` Seg* tests below.
+    """
+    X, Y, Z = Var(), Var(), Var()
+    bound = Var()
+    unify(bound, ("pt", 1, 2), Trail())
+    return [
+        # --- pre-cell shapes: these must not move ---
+        ("int", 42),
+        ("str", "abc"),
+        ("float", 1.5),
+        ("bytes", b"xy"),
+        ("none", None),
+        ("bool", True),
+        ("var", X),
+        ("bound_var_to_cell", bound),
+        ("list", [1, X, 2]),
+        ("compound", Compound("f", (1, X))),
+        ("compound_var_functor", Compound(X, (1, 2))),
+        ("kwterm", KWTerm("r", a=X, b=2)),
+        ("instance", Pt(x=X, y=2)),
+        ("atom_class", Atom),
+        ("class_with_fields", Pt),
+        # --- cells ---
+        ("cell_ground", ("pt", 1, 2)),
+        ("cell_with_var", ("pt", 1, X)),
+        ("cell_zero_arity", ("pt",)),
+        ("cell_empty_tuple", ()),
+        ("cell_shared_var", ("pt", X, X)),
+        ("cell_var_functor", (X, 1, 2)),
+        ("cell_nested", ("outer", ("inner", X), Y)),
+        ("cell_deep_nested", ("a", ("b", ("c", ("d", X))))),
+        ("tuple_data_cell", (TUPLE_TAG, 1, X)),
+        ("tuple_data_nested", (TUPLE_TAG, ("pt", X), Y)),
+        # --- cells reached only through another container ---
+        ("cell_in_list", [("pt", X), ("pt", Y)]),
+        ("cell_in_list_in_cell", ("f", [("g", X)], Y)),
+        ("cell_in_compound", Compound("f", (("g", X), 2))),
+        ("cell_in_kwterm", KWTerm("r", a=("g", X))),
+        ("cell_in_instance", Pt(x=("g", X), y=2)),
+        ("instance_in_cell", ("f", Pt(x=X, y=2))),
+        ("compound_in_cell", ("f", Compound("g", (X,)))),
+        ("list_of_lists_of_cells", [[("p", X)], [("q", Y), ("r", Z)]]),
+        # --- shared structure across two cells ---
+        ("cell_pair_sharing", ("f", ("g", X), ("h", X))),
+        # --- tuple SUBCLASS: not a cell for copy/collect, ground reads it ---
+        ("namedtuple", _NT(a=1, b=X)),
+        ("namedtuple_ground", _NT(a=1, b=2)),
+        ("namedtuple_in_cell", ("f", _NT(a=1, b=X))),
+    ]
+
+
+# A PRE-EXISTING twin divergence this corpus turned up, unrelated to cells and
+# deliberately not "fixed" by Task 2C (a non-cell answer change is exactly what
+# this phase's invariant forbids): A01-F003 taught the C twins to visit a
+# ``Compound``'s FUNCTOR slot — an unbound functor Var is a variable of the
+# term — but the Python twins in ``inspection.py`` still walk ``term.args``
+# only.  ``c_is_ground`` and ``_is_ground_py`` DO agree here (both reject a
+# non-str functor), so only the copy/collect pair diverges.  Pinned below by
+# ``test_a_var_functor_compound_is_a_known_twin_divergence`` so the drift is on
+# record rather than silent.
+_KNOWN_COMPOUND_FUNCTOR_DIVERGENCE = {"compound_var_functor"}
+
+
+def _shape(term):
+    """Structural fingerprint: fresh Vars compare by FIRST-OCCURRENCE POSITION.
+
+    Two copies made by two implementations can never share Var identity, so
+    identity is normalised away and everything else is compared exactly —
+    including the concrete container type, which is the whole point (a cell
+    rebuilt as a list, or a namedtuple flattened to a plain tuple, must show
+    up as a difference).
+    """
+    seen: dict = {}
+
+    def go(t):
+        t = deref(t)
+        if is_var(t):
+            return seen.setdefault(id(t), "V%d" % len(seen))
+        if t is None or isinstance(t, (bool, int, float, str, bytes)):
+            return ("lit", type(t).__name__, t)
+        if isinstance(t, type):
+            return ("type", t.__module__, t.__qualname__)
+        if isinstance(t, list):
+            return ("list", [go(e) for e in t])
+        if type(t) is tuple:
+            return ("cell", [go(e) for e in t])
+        if isinstance(t, tuple):  # tuple SUBCLASS (namedtuple, ...)
+            return ("tuple_subclass", type(t).__qualname__, [go(e) for e in t])
+        if isinstance(t, Compound):
+            return ("compound", go(t.functor), [go(a) for a in t.args])
+        if isinstance(t, KWTerm):
+            return ("kwterm", t.functor, [(k, go(v)) for k, v in t.items()])
+        if isinstance(t, SegList):
+            return ("seglist", [go(s) for s in t.segments])
+        if isinstance(t, SegString):
+            return ("segstring", [go(s) for s in t.segments])
+        if isinstance(t, ConcreteSeg):
+            return ("concreteseg", [go(e) for e in t.elements])
+        if isinstance(t, VarSeg):
+            return ("varseg", go(t.var))
+        if is_term_instance(t):
+            return ("inst", type(t).__qualname__,
+                    [(n, go(getattr(t, n))) for n in _tfn(t)])
+        return ("opaque", repr(t))
+
+    return go(term)
+
+
+@requires_c
+class TestCellCopyTermTwinParity:
+    """``c_copy_term`` vs ``_copy_term_py`` over the whole corpus."""
+
+    @pytest.mark.parametrize("name", [n for n, _ in _corpus()])
+    def test_copy_is_structurally_identical(self, name):
+        # nv
+        term_py = dict(_corpus())[name]
+        term_c = dict(_corpus())[name]
+        assert _shape(term_py) == _shape(term_c), "corpus builder is not deterministic"
+        assert _shape(_copy_term_py(term_py, {})) == _shape(_c_copy_raw(term_c, {}))
+
+    @pytest.mark.parametrize("name", [n for n, _ in _corpus()])
+    def test_copy_shares_no_variable_with_the_original(self, name):
+        """The bug: a cell "copy" that handed back the original's Vars."""
+        # nv
+        for impl in (lambda t: _copy_term_py(t, {}), lambda t: _c_copy_raw(t, {})):
+            term = dict(_corpus())[name]
+            originals: list = []
+            _collect_vars_py(term, originals)
+            copied: list = []
+            _collect_vars_py(impl(term), copied)
+            assert len(copied) == len(originals)
+            assert not ({id(v) for v in copied} & {id(v) for v in originals})
+
+    def test_a_ground_cell_is_returned_unchanged_by_identity(self):
+        """Reuse-if-unchanged: the twin's allocation-free path, mirrored in C."""
+        # nv
+        cell = ("pt", 1, ("q", 2))
+        assert _copy_term_py(cell, {}) is cell
+        assert _c_copy_raw(cell, {}) is cell
+        # ... and the nested slot is not rebuilt either
+        assert _c_copy_raw(cell, {})[2] is cell[2]
+
+    def test_a_cell_with_a_var_is_a_new_tuple(self):
+        # nv
+        x = Var()
+        cell = ("pt", 1, x)
+        for out in (_copy_term_py(cell, {}), _c_copy_raw(cell, {})):
+            assert out is not cell
+            assert type(out) is tuple
+            assert out[0] == "pt" and out[1] == 1
+            assert is_var(out[2]) and out[2] is not x
+
+    def test_sharing_inside_a_cell_is_preserved(self):
+        # nv
+        x = Var()
+        cell = ("f", ("g", x), ("h", x))
+        for out in (_copy_term_py(cell, {}), _c_copy_raw(cell, {})):
+            assert out[1][1] is out[2][1]
+            assert out[1][1] is not x
+
+    def test_a_var_functor_slot_is_freshened(self):
+        """Slot 0 needs no special case: the generic recursion freshens it."""
+        # nv
+        x = Var()
+        cell = (x, 1)
+        for out in (_copy_term_py(cell, {}), _c_copy_raw(cell, {})):
+            assert is_var(out[0]) and out[0] is not x
+
+    def test_a_str_functor_slot_keeps_its_identity(self):
+        # nv
+        functor = "pt"
+        cell = (functor, Var())
+        assert _c_copy_raw(cell, {})[0] is functor
+
+    def test_the_tuple_tag_survives_a_copy(self):
+        """``TUPLE_TAG`` is the ``tuple`` TYPE — it must not be rebuilt."""
+        # nv
+        cell = (TUPLE_TAG, 1, Var())
+        for out in (_copy_term_py(cell, {}), _c_copy_raw(cell, {})):
+            assert out[0] is TUPLE_TAG
+
+    def test_a_namedtuple_is_not_flattened_into_a_cell(self):
+        """``type(x) is tuple``, not ``isinstance`` — both twins agree."""
+        # nv
+        nt = _NT(a=1, b=Var())
+        assert type(_copy_term_py(nt, {})) is _NT
+        assert type(_c_copy_raw(nt, {})) is _NT
+        # ... and, being an unknown shape to both, it is returned as-is
+        assert _copy_term_py(nt, {}) is nt
+        assert _c_copy_raw(nt, {}) is nt
+
+    def test_a_shared_var_map_threads_across_two_calls(self):
+        """Sharing survives when one map copies two terms — as clause copying does."""
+        # nv
+        x = Var()
+        shared: dict = {}
+        a = _c_copy_raw(("head", x), shared)
+        b = _c_copy_raw(("body", x), shared)
+        assert a[1] is b[1] and a[1] is not x
+
+    def test_a_deeply_nested_cell_chain_copies(self):
+        """200 levels of cell — well inside both twins' recursion budgets."""
+        # nv
+        x = Var()
+        term: object = x
+        for _ in range(200):
+            term = ("f", term)
+        for out in (_copy_term_py(term, {}), _c_copy_raw(term, {})):
+            probe = out
+            for _ in range(200):
+                probe = probe[1]
+            assert is_var(probe) and probe is not x
+
+
+@requires_c
+class TestCellCollectVarsTwinParity:
+    """``c_collect_vars`` vs ``_collect_vars_py`` over the whole corpus."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [n for n, _ in _corpus() if n not in _KNOWN_COMPOUND_FUNCTOR_DIVERGENCE],
+    )
+    def test_same_variables_in_the_same_order(self, name):
+        # nv
+        term = dict(_corpus())[name]
+        py_result: list = []
+        _collect_vars_py(term, py_result)
+        c_result: list = []
+        _c_collect_raw(term, c_result)
+        # These walk the SAME term, so identity comparison is exact.
+        assert [id(v) for v in py_result] == [id(v) for v in c_result]
+
+    def test_a_var_inside_a_cell_is_found(self):
+        # nv
+        x = Var()
+        result: list = []
+        _c_collect_raw(("pt", 1, x), result)
+        assert result == [x]
+
+    def test_a_functor_slot_var_is_found_first(self):
+        # nv
+        f, x = Var(), Var()
+        result: list = []
+        _c_collect_raw((f, x), result)
+        assert result == [f, x]
+
+    def test_dedup_across_nested_cells(self):
+        # nv
+        x = Var()
+        result: list = []
+        _c_collect_raw(("f", ("g", x), ("h", x)), result)
+        assert result == [x]
+
+    def test_a_namedtuple_is_a_leaf_for_both_twins(self):
+        # nv
+        nt = _NT(a=1, b=Var())
+        py_result: list = []
+        _collect_vars_py(nt, py_result)
+        c_result: list = []
+        _c_collect_raw(nt, c_result)
+        assert py_result == c_result == []
+
+    def test_a_deeply_nested_cell_chain_is_walked(self):
+        # nv
+        x = Var()
+        term: object = x
+        for _ in range(200):
+            term = ("f", term)
+        result: list = []
+        _c_collect_raw(term, result)
+        assert result == [x]
+
+    def test_a_var_functor_compound_is_a_known_twin_divergence(self):
+        """Pre-existing, not a cell question — see the note at
+        ``_KNOWN_COMPOUND_FUNCTOR_DIVERGENCE``.  The C twin visits the functor
+        slot (A01-F003), the Python twin does not.  Recorded, not fixed."""
+        # nv
+        f = Var()
+        term = Compound(f, (1, 2))
+        py_result: list = []
+        _collect_vars_py(term, py_result)
+        c_result: list = []
+        _c_collect_raw(term, c_result)
+        assert py_result == []
+        assert c_result == [f]
+        # The CELL analogue has no such split: both twins walk slot 0.
+        cell_py: list = []
+        _collect_vars_py((f, 1, 2), cell_py)
+        cell_c: list = []
+        _c_collect_raw((f, 1, 2), cell_c)
+        assert cell_py == cell_c == [f]
+
+
+@requires_c
+class TestCellIsGroundTwinParity:
+    """``c_is_ground`` vs ``_is_ground_py`` over the whole corpus."""
+
+    @pytest.mark.parametrize("name", [n for n, _ in _corpus()])
+    def test_same_answer(self, name):
+        # nv
+        term = dict(_corpus())[name]
+        assert _is_ground_py(term) == bool(_c_is_ground_raw(term))
+
+    def test_a_cell_holding_a_free_var_is_not_ground(self):
+        """The bug: ``ground(pt(1, Y))`` answered TRUE."""
+        # nv
+        assert _c_is_ground_raw(("pt", 1, Var())) is False
+        assert _c_is_ground_raw(("pt", 1, 2)) is True
+
+    def test_a_cell_nested_in_a_compound_is_reached(self):
+        # nv
+        assert _c_is_ground_raw(Compound("f", (("pt", Var()),))) is False
+
+    def test_a_namedtuple_is_read_through_by_both_twins(self):
+        """``isinstance``, not ``type(...) is``: this branch only READS."""
+        # nv
+        nt = _NT(a=1, b=Var())
+        assert _is_ground_py(nt) is False
+        assert _c_is_ground_raw(nt) is False
+
+    def test_a_deeply_nested_cell_chain_is_walked(self):
+        # nv
+        term: object = Var()
+        for _ in range(200):
+            term = ("f", term)
+        assert _is_ground_py(term) is False
+        assert _c_is_ground_raw(term) is False
+
+
+class TestWrapperUsesTheCPathAgain:
+    """The dispatch Task 2 bypassed, restored — and Seg* still short-circuited."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [n for n, _ in _corpus() if n not in _KNOWN_COMPOUND_FUNCTOR_DIVERGENCE],
+    )
+    def test_wrapper_agrees_with_the_python_twin(self, name):
+        # nv
+        term_a = dict(_corpus())[name]
+        term_b = dict(_corpus())[name]
+        assert _shape(_copy_term_py(term_a, {})) == _shape(_copy_term_impl(term_b, {}))
+
+        py_result: list = []
+        _collect_vars_py(term_a, py_result)
+        c_result: list = []
+        _collect_vars_impl(term_a, c_result)
+        assert [id(v) for v in py_result] == [id(v) for v in c_result]
+
+        assert _is_ground_py(term_a) == _is_ground(term_a)
+
+    def test_seg_list_still_gets_an_independent_copy(self):
+        """F092: the C twins are Seg*-blind; the wrapper must keep routing them."""
+        # nv
+        x = Var()
+        seg = SegList([ConcreteSeg([1]), VarSeg(x)])
+        copied = _copy_term_impl(seg, {})
+        assert isinstance(copied, SegList)
+        assert copied.segments[1].var is not x
+
+    def test_seg_list_vars_are_still_collected(self):
+        """F093."""
+        # nv
+        x = Var()
+        seg = SegList([ConcreteSeg([1]), VarSeg(x)])
+        result: list = []
+        _collect_vars_impl(seg, result)
+        assert result == [x]
+
+    def test_seg_string_with_a_free_varseg_is_still_not_ground(self):
+        """F083."""
+        # nv
+        assert _is_ground(SegString([VarSeg(Var())])) is False
+
+    def test_a_cell_inside_a_seg_list_is_reached_through_the_python_route(self):
+        # nv
+        x = Var()
+        seg = SegList([ConcreteSeg([("pt", x)])])
+        result: list = []
+        _collect_vars_impl(seg, result)
+        assert result == [x]
+        assert _is_ground(seg) is False
