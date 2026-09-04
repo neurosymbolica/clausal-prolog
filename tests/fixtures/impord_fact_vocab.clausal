@@ -3,4 +3,4 @@
 # imported functor replaces its clause list" behaviour (unchanged by the
 # positional-head fix; verified identical on main) cannot confuse the
 # assertion.
--module(impord_fact_vocab, [impord_fverdict(OUTCOME, CITES)])
+-module(impord_fact_vocab, [impord_fverdict/2])

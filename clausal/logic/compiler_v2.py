@@ -860,6 +860,12 @@ def _locally_declared_names(module_items: list) -> frozenset[str]:
                     names.add(entry)
                 elif isinstance(entry, tuple):
                     names.add(entry[0])
+        elif isinstance(item, DirectiveItem) and item.name == "predicate_export":
+            # An ISO ``name/arity`` entry in a -module/-private list (R6b):
+            # declared vocabulary just like the field-carrying form, recorded
+            # as a directive item rather than an export tuple because it
+            # declares a PREDICATE, not a data functor's slot layout.
+            names.update(functor for functor, _arity in item.specs)
         elif isinstance(item, HideDeclItem):
             names.update(item.items)
         elif isinstance(item, ImportFromItem):
@@ -1069,7 +1075,11 @@ def _predicate_functor_names(predicate_nodes: list, module_items: list) -> set:
       cells the later-asserted clauses could never match (R6 names
       ``-dynamic`` explicitly);
     * a ``-specialize`` alias -- ``_preregister_specializations`` mints an
-      empty predicate class for it, for exactly the same reason.
+      empty predicate class for it, for exactly the same reason;
+    * an ISO ``name/arity`` entry in a ``-module``/``-private`` export list
+      (R6b) -- the explicit spelling for "predicate export, clauses may live
+      downstream", recorded by the rewrite as a ``predicate_export``
+      directive item and picked up by the generic directive scan below.
 
     Read at Step 3, BEFORE Step 4 attaches clauses to classes, so the class's
     own ``_clauses`` cannot answer this question yet.

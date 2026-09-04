@@ -154,7 +154,11 @@ def test_symlinked_package_is_the_same_package(tmp_path):
         real = importlib.import_module("pkg.soledom")
         via_link = importlib.import_module("alias.soledom")
         assert real is via_link
-        assert real.sole_verdict is via_link.sole_verdict
+        # P3-2 Task 2 (R6): the identity probe reads a PREDICATE class.
+        # ``sole_verdict`` is a data functor now, so its binding is the
+        # interned spelling -- identical across independent compilations by
+        # construction, which makes it useless as an identity witness.
+        assert real.decide_sole is via_link.decide_sole
     finally:
         sys.path[:] = saved_path
         for n in names:
@@ -175,7 +179,10 @@ def test_load_module_helper_does_not_claim_the_path(two_paths):
     try:
         imported = importlib.import_module("soledom")
         assert imported is not private
-        assert imported.sole_verdict is not private.sole_verdict
+        # R6, as above: a data functor's binding is the interned spelling and
+        # cannot witness two separate compilations apart.  ``decide_sole``
+        # has clauses, so it is still a per-compilation class.
+        assert imported.decide_sole is not private.decide_sole
         # The dotted import still owns the path for every other dotted name.
         assert importlib.import_module("pkg.soledom") is imported
     finally:

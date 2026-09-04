@@ -2407,6 +2407,40 @@ def _resolve_import_path(module_path: str) -> str:
     return module_path
 
 
+def _predicate_export_spec(node):
+    """``name/arity`` in a ``-module``/``-private`` export list → (name, arity).
+
+    P3-2 Task 2, ruling R6b.  Post-flip a field-carrying export entry
+    (``verdict(OUTCOME, CITES)``) declares a DATA functor: it binds its
+    interned spelling and its references compile to cells.  That leaves the
+    "vocabulary module" idiom — export a PREDICATE here, supply its clauses in
+    a downstream module — with no way to say so, since a declaration-only
+    predicate is locally indistinguishable from data.
+
+    The ISO export spelling is that way to say it: module exports in ISO
+    Prolog ARE ``name/arity``, which is the compatibility direction this whole
+    program serves.  Such an entry means "predicate export; clauses may live
+    elsewhere" — the class is minted exactly as before the flip, no
+    functor-signature registry entry is emitted, and the binding stays a
+    class, which is all the binding-shape rule needs to keep treating every
+    reference to it as a predicate.
+
+    Returns ``None`` for any other node shape, so the caller falls through to
+    its existing branches.  Same node shape ``_parse_pred_arity_args`` accepts
+    for ``-dynamic``/``-table``/``-discontiguous``/``-shallow``.
+    """
+    if (
+        isinstance(node, BinOp)
+        and isinstance(node.op, Div)
+        and isinstance(node.left, Name)
+        and isinstance(node.right, Constant)
+        and isinstance(node.right.value, int)
+        and node.right.value >= 0
+    ):
+        return node.left.id, node.right.value
+    return None
+
+
 def _parse_pred_arity_args(args, directive_name):
     """Parse ``pred/arity, ...`` arguments from a directive AST.
 
@@ -4749,6 +4783,37 @@ class EmbedTransformer(NodeTransformer):
             f"-constants)"
         )
 
+    def _declare_predicate_export(transformer, spec, entry_node, expr_stmt,
+                                  statements, source_label):
+        """Mint the class for a ``name/arity`` export entry (R6b).
+
+        Mirrors the ``-dynamic`` treatment exactly — synthesized ``arg_i``
+        field names, registered in ``_seen_functors`` and marked
+        ``_directive_minted_functors`` so a later real clause in this file
+        unseats the placeholder names in favour of its own head vars — because
+        it is the same situation: a predicate that is declared here and may
+        get its clauses somewhere else (or later).
+
+        Deliberately emits NO functor-signature registry entry: the registry
+        is the slot layout of a functor whose data compiles to cells, and this
+        entry says the opposite.  The name is recorded as a
+        ``predicate_export`` directive item so ``compiler_v2``'s Step 3 sees a
+        PREDICATE (and therefore leaves the class alone) rather than a
+        clause-free declaration it would rebind to a str.
+        """
+        functor, arity = spec
+        if functor not in transformer._seen_functors:
+            field_names = [f"arg_{i}" for i in range(arity)]
+            transformer._register_functor(
+                functor, field_names, entry_node, source_label)
+            transformer._directive_minted_functors.add(functor)
+            statements.append(
+                _make_functor_class_ast(functor, field_names, expr_stmt)
+            )
+        transformer._module_items.append(
+            DirectiveItem(name="predicate_export", specs=[(functor, arity)])
+        )
+
     def _handle_module_directive(transformer, args, expr_stmt):
         """Process ``-module(Name, [export1(A,B), export2(X,Y)])`` directive.
 
@@ -4793,6 +4858,12 @@ class EmbedTransformer(NodeTransformer):
                 reserved = _reserved_truth_decl_name(export)
                 if reserved is not None:
                     _raise_reserved_truth_decl(reserved, "-module")
+                _pred_export = _predicate_export_spec(export)
+                if _pred_export is not None:
+                    transformer._declare_predicate_export(
+                        _pred_export, export, expr_stmt, statements,
+                        "-module export list (name/arity)")
+                    continue
                 if isinstance(export, Name) and _is_constant_name(export.id):
                     raise SyntaxError(
                         f"-module cannot list constant `{export.id}`: "
@@ -4839,9 +4910,10 @@ class EmbedTransformer(NodeTransformer):
                                 functor_name, field_names, expr_stmt
                             )
                         )
-                # Other item shapes (e.g. the ISO ``foo/2`` arity form, a
-                # BinOp) are not pre-registered here — the signature is taken
-                # from the first clause — but the list itself is well-formed.
+                # Other item shapes are not pre-registered here — the
+                # signature is taken from the first clause — but the list
+                # itself is well-formed.  (The ISO ``foo/2`` arity form IS
+                # handled, above: R6b, a PREDICATE export.)
         transformer._module_items.append(
             ModuleDeclItem(module_name=module_name, exports=exports_info)
         )
@@ -4879,6 +4951,14 @@ class EmbedTransformer(NodeTransformer):
             reserved = _reserved_truth_decl_name(item)
             if reserved is not None:
                 _raise_reserved_truth_decl(reserved, "-private")
+            _pred_export = _predicate_export_spec(item)
+            if _pred_export is not None:
+                # ISO ``name/arity``: a PREDICATE entry (R6b) — see
+                # ``_declare_predicate_export``.
+                transformer._declare_predicate_export(
+                    _pred_export, item, expr_stmt, statements,
+                    "-private declaration (name/arity)")
+                continue
             if isinstance(item, Name) and _is_constant_name(item.id):
                 # Documentation-only: visibility is advisory throughout, so a
                 # constant listing just records "implementation detail" — no
@@ -4914,8 +4994,9 @@ class EmbedTransformer(NodeTransformer):
                             functor_name, field_names, expr_stmt
                         )
                     )
-            # Other item shapes (e.g. the ISO ``foo/2`` arity form) are not
-            # pre-registered here; the list itself is still well-formed.
+            # Other item shapes are not pre-registered here; the list itself
+            # is still well-formed.  (The ISO ``foo/2`` arity form IS handled,
+            # above: R6b, a PREDICATE entry.)
         transformer._module_items.append(
             PrivateDeclItem(items=private_info, constants=private_constants))
         sig_stmt = _make_functor_signatures_update_ast(signature_entries, expr_stmt)
