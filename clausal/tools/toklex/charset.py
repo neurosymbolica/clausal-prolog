@@ -166,9 +166,14 @@ class Partition:
         last cell). Additive accessor for interchange dumps that need cell
         bounds without reaching into ``starts`` directly.
         """
+        cached = getattr(self, "_cells", None)
+        if cached is not None:
+            return cached
         out = []
         n = len(self.starts)
         for i, lo in enumerate(self.starts):
             hi = self.starts[i + 1] - 1 if i + 1 < n else _MAX
             out.append((lo, hi))
-        return tuple(out)
+        result = tuple(out)
+        object.__setattr__(self, "_cells", result)  # frozen dataclass, cf. ascii_table
+        return result

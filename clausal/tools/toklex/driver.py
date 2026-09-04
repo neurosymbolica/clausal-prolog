@@ -83,7 +83,15 @@ class IncrementalLexer:
         self._closed = False
         self._eof_returned = False
         self._ascii_syms = self.partition.ascii_table()
-        self._nest_skip_cache: dict = {}
+        # nest fast-skip strings depend only on the (immutable, shared)
+        # compiled Lexer, so the cache lives there: one IncrementalLexer
+        # is created per tokenize() call, and per-instance caching would
+        # redo the derivation for every file (perf-review finding).
+        cache = getattr(lexer, "_nest_skip_cache", None)
+        if cache is None:
+            cache = {}
+            object.__setattr__(lexer, "_nest_skip_cache", cache)  # frozen dataclass
+        self._nest_skip_cache = cache
 
         # attempt state (kept as instance state so NEED_MORE can resume
         # a token attempt anywhere it left off):
