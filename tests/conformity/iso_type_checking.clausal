@@ -54,7 +54,12 @@ Test("nonvar: list succeeds") <- nonvar([1, 2])  # nv
 
 Test("atom: declared atom succeeds") <- atom(Hello)  # nv
 Test("atom: declared atom Abc") <- atom(Abc)  # nv
-Test("atom: string fails") <- (not atom("hello"))  # nv
+# R2 (P3-1 atom pivot, 2026-09-04): atom/1 is true for every str in the
+# current Python surface; ISO conformity is preserved under the future
+# reader surface where double-quoted literals are char lists (R3) —
+# atom(['a','b','c']) remains false.
+Test("atom: string succeeds") <- atom("hello")  # nv
+Test("atom: char list fails") <- (not atom(["h", "e", "l", "l", "o"]))  # nv
 Test("atom: integer fails") <- (not atom(1))  # nv
 Test("atom: unbound var fails") <- (not atom(_x_UNUSED))  # nv
 

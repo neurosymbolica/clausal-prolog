@@ -26,7 +26,9 @@ Test('atom: declared atom succeeds') <- (atom(hello))
 
 Test('atom: declared atom Abc') <- (atom(abc))
 
-Test('atom: string fails') <- (not atom('hello'))
+Test('atom: string succeeds') <- (atom('hello'))
+
+Test('atom: char list fails') <- (not atom(['h', 'e', 'l', 'l', 'o']))
 
 Test('atom: integer fails') <- (not atom(1))
 

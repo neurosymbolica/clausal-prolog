@@ -39,8 +39,11 @@ test("atom: declared atom succeeds") :-
 test("atom: declared atom Abc") :-
     atom(abc).
 
-test("atom: string fails") :-
-    \+ atom("hello").
+test("atom: string succeeds") :-
+    atom("hello").
+
+test("atom: char list fails") :-
+    \+ atom(["h", "e", "l", "l", "o"]).
 
 test("atom: integer fails") :-
     \+ atom(1).
