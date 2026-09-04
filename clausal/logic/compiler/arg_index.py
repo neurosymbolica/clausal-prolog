@@ -22,6 +22,7 @@ from clausal.terms import (
     Compound,
     Call, LoadName, LoadAttr,
     Unify,
+    DictTerm, SetTerm, KWTerm, SegList,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.predicate import is_term_instance, term_field_names, PredicateMeta  # noqa: F401
@@ -137,6 +138,28 @@ def _arg_to_index_key(arg: Any) -> Any:
     return _INDEX_VAR
 
 
+# Small, constant node budget for the deep-groundness walk below.
+#
+# Fix round 1 (reviewer Important-1): the walk was unbounded — measured at
+# 1.42ms for a 10k-node argument, PER DISPATCH CALL. A recursive predicate
+# that carries its own structure in an indexed argument calls this once per
+# recursive step, so an unbounded walk goes quadratic in the structure's
+# size. 64 is chosen to comfortably cover ordinary fact/rule shapes (a
+# handful of fields, maybe one level of nesting — a few dozen nodes at
+# most; e.g. a 4-ary compound of 4-ary compounds is 16 nodes, doubled for
+# margin) while bounding the pathological case to O(64) work regardless of
+# the argument's actual size.
+#
+# On exhaustion the walk returns False — "not proven ground within budget"
+# — rather than True. This is correct BY DIRECTION: the caller (
+# :func:`_runtime_arg_key`) degrades a False to ``_INDEX_VAR``, i.e. a full
+# scan, never to a falsely-selected exact-match bucket. A large GROUND
+# argument pays the cost of a full scan instead of an O(1) bucket lookup —
+# a performance cost, not a correctness one — while a large NON-ground
+# argument was always going to need the full scan anyway.
+_GROUNDNESS_WALK_BUDGET = 64
+
+
 def _is_deeply_ground(val: Any) -> bool:
     """True if *val* — dereferenced, recursively — contains no unbound Var.
 
@@ -157,21 +180,93 @@ def _is_deeply_ground(val: Any) -> bool:
     branch below makes reachable for the first time — a caller passing a
     partially-ground cell (e.g. ``("Wrap", Var())``) against a fact whose
     matching slot is a ground atom (``Wrap(direct)``) got zero solutions
-    where the fallback gives the right answer. The SAME gap already existed
-    for the ``is_term_instance`` branch (a class instance with an unbound
-    field), pre-dating this task; fixed here too since the mechanism and
-    the fix are identical.
+    where the fallback gives the right answer.
+
+    Fix round 1 (reviewer Minor-3, bundled with Important-1 since the walk
+    itself doesn't change shape): the walk is now BOUNDED (see
+    ``_GROUNDNESS_WALK_BUDGET``) and recurses into every term shape a cell
+    slot can actually hold, not just tuple/list/term-instance:
+
+    - A nested tuple is only treated as a CELL (whose slot 0 is a functor
+      tag to skip) when its own slot 0 is actually a ``str`` or
+      ``TUPLE_TAG`` — matching :func:`_runtime_arg_key`'s own cell test.
+      Previously ANY tuple unconditionally skipped element 0, so a nested
+      var-functor tuple like ``("W", (Var(), 1))`` read as ground (the
+      inner tuple's slot 0, the Var, was never even looked at).
+    - ``Compound``, ``DictTerm``, ``KWTerm``, ``SetTerm`` and ``SegList``
+      previously fell through to the final ``return True`` (unconditional
+      ground) the moment they were reached, regardless of what Vars they
+      carried — ``("W", DictTerm(...Var...))`` and
+      ``("W", Compound("g", (Var(),)))`` both wrongly keyed into a bucket.
     """
+    return _is_deeply_ground_walk(val, [_GROUNDNESS_WALK_BUDGET])
+
+
+def _is_deeply_ground_walk(val: Any, _budget: list[int]) -> bool:
+    """Budgeted recursive step for :func:`_is_deeply_ground`.
+
+    *_budget* is a 1-element list (a mutable cell) shared across the WHOLE
+    walk from one :func:`_is_deeply_ground` call, decremented once per node
+    visited; hitting zero short-circuits every remaining branch to False.
+    """
+    if _budget[0] <= 0:
+        return False
+    _budget[0] -= 1
     val = deref(val)
+    # Fast path: the overwhelming common case is a scalar leaf (an int,
+    # str, float, bool, bytes or None field of an otherwise-structured
+    # cell/instance). Checking this FIRST, before any of the isinstance
+    # checks below, avoids paying for all five of them on every leaf --
+    # a scalar is never a Var, so returning True here is safe without
+    # even reaching the is_var check.  Measured: this fast path alone
+    # brings ('point', 1, 2)'s key cost back down near its pre-completeness-
+    # fix baseline (see task4-bench.txt, PART C).
+    if isinstance(val, _INDEXABLE_TYPES):
+        return True
     if is_var(val):
         return False
     if type(val) is tuple:
-        return all(_is_deeply_ground(e) for e in val[1:]) if val else True
+        if not val:
+            return True
+        slot0 = val[0]
+        # Only a genuine CELL (slot 0 a str functor or the TUPLE_TAG data
+        # marker — the same test _runtime_arg_key itself uses) skips slot
+        # 0; any other tuple shape (e.g. a var-functor tuple, deprecated by
+        # §1b but still representable) must check every element.
+        start = 1 if (type(slot0) is str or slot0 is TUPLE_TAG) else 0
+        for e in val[start:]:
+            if not _is_deeply_ground_walk(e, _budget):
+                return False
+        return True
     if isinstance(val, list):
-        return all(_is_deeply_ground(e) for e in val)
+        for e in val:
+            if not _is_deeply_ground_walk(e, _budget):
+                return False
+        return True
+    if isinstance(val, Compound):
+        return (
+            _is_deeply_ground_walk(val.functor, _budget)
+            and all(_is_deeply_ground_walk(e, _budget) for e in val.args)
+        )
+    if isinstance(val, DictTerm):
+        # Keys must already be ground by DictTerm's own contract; only
+        # values can carry a Var.
+        return all(_is_deeply_ground_walk(v, _budget) for v in val.values())
+    if isinstance(val, KWTerm):
+        return all(_is_deeply_ground_walk(v, _budget) for v in val.values())
+    if isinstance(val, SetTerm):
+        # Elements must already be ground by SetTerm's own contract
+        # (frozenset-backed); checked anyway, defensively and cheaply,
+        # for the same reason DictTerm's values are.
+        return all(_is_deeply_ground_walk(e, _budget) for e in val.elements)
+    if isinstance(val, SegList):
+        walked = val.__walk__()
+        if isinstance(walked, SegList):
+            return False  # still has an unbound VarSeg hole
+        return _is_deeply_ground_walk(walked, _budget)
     if is_term_instance(val):
         return all(
-            _is_deeply_ground(getattr(val, name))
+            _is_deeply_ground_walk(getattr(val, name), _budget)
             for name in term_field_names(val)
         )
     return True
@@ -217,9 +312,7 @@ def _runtime_arg_key(a: Any) -> Any:
         return (a.__name__, 0)
     if is_term_instance(a):
         cls = type(a)
-        if _is_deeply_ground(a):
-            return (cls.__name__, len(term_field_names(a)))
-        return _INDEX_VAR
+        return (cls.__name__, len(term_field_names(a)))
     return _INDEX_VAR
 
 

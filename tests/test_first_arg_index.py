@@ -242,11 +242,11 @@ class TestCellIndexKey:
         assert _runtime_arg_key(("Wrap", v)) is _INDEX_VAR
         # Nested one level deeper: the Var is inside an inner cell.
         assert _runtime_arg_key(("Item", "r", ("Met", v), "d")) is _INDEX_VAR
-        # Same gap, same fix, for a class-instance argument (pre-existing,
-        # not cell-specific -- the mechanism and the fix are identical).
-        from clausal.logic.predicate import make_predicate
-        Wrap = make_predicate("Wrap", ["sub"])
-        assert _runtime_arg_key(Wrap(sub=Var())) is _INDEX_VAR
+        # NOTE: the class-instance (``is_term_instance``) analog of this gap
+        # is DELIBERATELY left unfixed (fix round 1, controller ruling): a
+        # pre-existing bug, not exercised by the cell repro that forced this
+        # gate, and the branch is exactly O(1) today -- see
+        # todo/first-arg-index-partially-ground-instance-keys-into-bucket-2026-09-05.md.
 
     def test_a_fully_ground_cell_still_keys_normally(self):
         """Regression for the fix above: a cell with no unbound Var
@@ -255,9 +255,163 @@ class TestCellIndexKey:
         from clausal.logic.compiler.arg_index import _runtime_arg_key
         assert _runtime_arg_key(("Wrap", "direct")) == ("Wrap", 1)
         assert _runtime_arg_key(("Item", "r", ("Met", "direct"), "d")) == ("Item", 3)
-        from clausal.logic.predicate import make_predicate
-        Wrap = make_predicate("Wrap", ["sub"])
-        assert _runtime_arg_key(Wrap(sub="direct")) == ("Wrap", 1)
+
+
+class TestGroundnessWalkCompleteness:
+    """Fix round 1 (reviewer Important-1 + Minor-3): the deep-groundness
+    walk (``_is_deeply_ground`` / ``_is_deeply_ground_walk`` in
+    arg_index.py) must be BOUNDED (a node budget) and must recurse into
+    every term shape a cell slot can actually hold, not just
+    tuple/list/term-instance.
+    """
+
+    def test_nested_var_functor_tuple_is_not_ground(self):
+        """A nested tuple whose OWN slot 0 is not a str/TUPLE_TAG functor
+        tag is not a cell -- every element, INCLUDING element 0, must be
+        checked.  Before the fix, ANY tuple unconditionally skipped
+        element 0 (assuming it was always a functor slot), so
+        ``("W", (Var(), 1))`` read as ground -- the inner tuple's slot 0,
+        the Var, was never even looked at."""
+        from clausal.logic.compiler.arg_index import _is_deeply_ground
+        v = Var()
+        assert _is_deeply_ground(("W", (v, 1))) is False
+        assert _is_deeply_ground(("W", (1, 2))) is True
+
+    def test_nested_dictterm_with_a_var_value_is_not_ground(self):
+        from clausal.logic.compiler.arg_index import _is_deeply_ground
+        from clausal.terms import DictTerm
+        v = Var()
+        assert _is_deeply_ground(("W", DictTerm({"a": v}))) is False
+        assert _is_deeply_ground(("W", DictTerm({"a": 1}))) is True
+
+    def test_nested_kwterm_with_a_var_field_is_not_ground(self):
+        from clausal.logic.compiler.arg_index import _is_deeply_ground
+        from clausal.terms import KWTerm
+        v = Var()
+        assert _is_deeply_ground(("W", KWTerm("k", x=v))) is False
+        assert _is_deeply_ground(("W", KWTerm("k", x=1))) is True
+
+    def test_nested_compound_with_a_var_arg_is_not_ground(self):
+        from clausal.logic.compiler.arg_index import _is_deeply_ground
+        v = Var()
+        assert _is_deeply_ground(("W", Compound("g", (v,)))) is False
+        assert _is_deeply_ground(("W", Compound("g", (1,)))) is True
+
+    def test_nested_seglist_with_an_open_hole_is_not_ground(self):
+        from clausal.logic.compiler.arg_index import _is_deeply_ground
+        from clausal.terms import SegList, ConcreteSeg, VarSeg
+        assert _is_deeply_ground(
+            ("W", SegList([ConcreteSeg([1, 2]), VarSeg(Var())]))
+        ) is False
+        assert _is_deeply_ground(("W", SegList([ConcreteSeg([1, 2])]))) is True
+
+    def test_setterm_is_ground(self):
+        """SetTerm's own contract requires ground (hashable) elements;
+        checked anyway, defensively and cheaply, for consistency with
+        DictTerm's values."""
+        from clausal.logic.compiler.arg_index import _is_deeply_ground
+        from clausal.terms import SetTerm
+        assert _is_deeply_ground(("W", SetTerm({1, 2, 3}))) is True
+
+    def test_the_walk_is_budgeted(self):
+        """A large, fully-ground argument must not cost O(argument size) --
+        the walk gives up (returns False, degrading to a full scan) once
+        its node budget is exhausted rather than walking the whole thing.
+        """
+        from clausal.logic.compiler import arg_index
+
+        big_ground = ("point",) + tuple(range(10_000))
+        assert arg_index._is_deeply_ground(big_ground) is False
+        # A structure comfortably within budget is still read correctly.
+        small_ground = ("point",) + tuple(range(10))
+        assert arg_index._is_deeply_ground(small_ground) is True
+
+    def test_budget_exhaustion_degrades_key_to_index_var_not_a_wrong_bucket(self):
+        """Driven at the ``_runtime_arg_key`` level: budget exhaustion on a
+        large ground cell must route to the safe ``_INDEX_VAR`` fallback,
+        never to a bucket lookup that then silently drops the cell's own
+        actual (ground, just large) content."""
+        from clausal.logic.compiler.arg_index import _runtime_arg_key, _INDEX_VAR
+        big_ground = ("point",) + tuple(range(10_000))
+        assert _runtime_arg_key(big_ground) is _INDEX_VAR
+
+    def test_driven_nested_dictterm_var_reaches_the_fallback_and_binds(self):
+        """End-to-end: a >threshold predicate with a DictTerm-carrying cell
+        fact, queried with an unbound Var nested inside the caller's
+        DictTerm value, must still find the fact (via the un-indexed
+        fallback's full ``unify()``) -- not silently miss it because the
+        caller's cell key wrongly routed to an exact-match bucket.
+        """
+        from clausal.logic.compiler import predicate as predicate_mod
+        from clausal.logic.database import Clause, Database, Module
+        from clausal.logic.solve import call
+        from clausal.terms import DictTerm
+
+        db = Database()
+        # Four pad clauses (distinct scalar keys) + one DictTerm-carrying
+        # cell fact, to cross _INDEX_THRESHOLD and give the cell fact's
+        # functor its own bucket.
+        for i in range(4):
+            db.assertz(Clause(head=Compound("Probe", (i, "pad")), body=[True]))
+        db.assertz(Clause(
+            head=Compound("Probe", (("Box", DictTerm({"a": 1})), "boxed")),
+            body=[True],
+        ))
+        predicate_mod.compile_predicate_trampoline(
+            "Probe", 2, db.clauses_for("Probe", 2), db, globals_={},
+        )
+        lm = Module("_t4r1_dictterm_probe")
+        lm.db = db
+
+        K = Var()
+        v = Var()
+        got = [
+            deref(K)
+            for _t in call("Probe", ("Box", DictTerm({"a": v})), K, module=lm)
+        ]
+        assert got == ["boxed"], got
+
+    def test_driven_deep_cons_chain_in_the_indexed_argument_is_correct_and_bounded(self):
+        """End-to-end regression for the reviewer's exact scenario: a
+        NON-tabled predicate that recurses over a cons-cell chain carried
+        in its OWN indexed (position-0) argument
+        (tests/fixtures/gate_microbench.clausal, also used by the
+        fix-round-1 bench transcript, task4-bench.txt).  Correctness (the
+        depth comes back right) and boundedness (it completes quickly for
+        a chain far deeper than the walk's node budget) in one test.
+        """
+        import os
+        import time
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+
+        fixture = os.path.join(
+            os.path.dirname(__file__), "fixtures", "gate_microbench.clausal"
+        )
+        mod = _load_module("tests.fixtures.gate_microbench_regress", fixture)
+        lm = mod.__dict__["$module"]
+
+        def build_chain(n):
+            c = "nil"
+            for i in range(n):
+                c = ("cons", i, c)
+            return c
+
+        depth = 2000  # far past the groundness walk's node budget (64)
+        chain = build_chain(depth)
+        N = Var()
+        t0 = time.perf_counter()
+        got = [deref(N) for _t in call("Depth", chain, N, module=lm)]
+        elapsed = time.perf_counter() - t0
+        assert got == [depth], got
+        # Generous bound (this runs in ~0.01-0.1s on ordinary hardware) --
+        # the point is ruling out quadratic blowup, not pinning a tight
+        # perf number in a functional test.
+        assert elapsed < 5.0, (
+            f"depth-{depth} recursion over its own indexed argument took "
+            f"{elapsed:.2f}s -- looks like the groundness gate's node "
+            f"budget stopped bounding its cost."
+        )
 
 
 class TestLiftClauseAtPos:
