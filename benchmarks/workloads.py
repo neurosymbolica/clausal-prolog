@@ -184,6 +184,7 @@ def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
     from clausal.testing import load_clausal_module
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, Trail, deref
+    from clausal.logic.cells import cell_args, is_cell
 
     fixture = os.path.join(_FIXTURES, "struct_tabling.clausal")
     length = 0
@@ -198,7 +199,11 @@ def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
             node = deref(L)
             while node is not nil:
                 length += 1
-                node = deref(node.T)
+                # P3-2 Task 2 (THE FLIP): ``cons`` is a data functor, so a
+                # chain link is the cell ``("cons", H, T)`` -- the tail is a
+                # slot, not an attribute.  Same shape the cell twin below
+                # has always used; both halves read it the same way now.
+                node = deref(cell_args(node)[1]) if is_cell(node) else deref(node.T)
             break
         else:
             raise RuntimeError(f"Nats({n}) produced no solutions")

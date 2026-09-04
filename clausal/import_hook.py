@@ -39,7 +39,11 @@ from .import_diagnostics import exec_with_import_diagnostics
 from .syntax_diagnostics import clausal_syntax_diagnostics
 from .templating.term_rewriting import EmbedTransformer, TermTransformer
 from .logic.database import Module as LogicModule
-from .logic.constants import check_constant_ground, register_module_constant
+from .logic.constants import (
+    check_constant_ground,
+    constant_functor_term,
+    register_module_constant,
+)
 from .logic.variables import Var, Trail, unify, deref, walk
 from .terms import Compound, KWTerm, DictTerm, SetTerm
 
@@ -178,6 +182,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
         lambda term: predicate_nodes.append(_fact_to_predicate_node(term))
     )
     module_dict["$check_constant_ground"] = check_constant_ground
+    module_dict["$constant_functor_term"] = constant_functor_term
     module_dict["$register_module_constant"] = register_module_constant
     code = loader.get_code(module.__name__)
 
@@ -295,7 +300,15 @@ def _preseed_py_submodules(module_items) -> None:
 # bytecode live until the source file itself changes. Fold this tag into the
 # reported mtime so a clausal upgrade invalidates every cached .clausal/.pl
 # .pyc. BUMP THIS whenever EmbedTransformer / the codegen output changes.
-CLAUSAL_BYTECODE_TAG = 7
+#
+# 7 -> 8 (P3-2 Task 2, THE FLIP): the transformer's output changed three ways
+# -- ``-tagged_terms`` is no longer a directive it accepts, ``-module``/
+# ``-private`` accept ISO ``name/arity`` entries and mint a class for them
+# (R6b), and a declared data functor's name binds its interned spelling
+# instead of a generated class.  A stale pre-flip ``.pyc`` against the new
+# runtime calls that spelling: ``TypeError: 'str' object is not callable``
+# from inside generated code.
+CLAUSAL_BYTECODE_TAG = 8
 
 
 # ── One source file → one compilation ────────────────────────────────────────
@@ -793,6 +806,7 @@ _simple_ast_builtins["$assert_fact"] = _ipython_facts.append
 # a module-backed reference exec'd in an IPython namespace (e.g. copy-pasted
 # compiled output) does not raise a bare NameError.
 _simple_ast_builtins["$check_constant_ground"] = check_constant_ground
+_simple_ast_builtins["$constant_functor_term"] = constant_functor_term
 _simple_ast_builtins["$register_module_constant"] = register_module_constant
 
 from clausal.repl import Solutions as _Solutions, _run_ipython_goal as _run_ipython_goal
