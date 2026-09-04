@@ -96,7 +96,7 @@ See [Import System](import.md) for full details. For importing Prolog `.pl` file
 
 ## Atom-Identity Directives
 
-These directives control atom identity resolution as specified by the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md). The short version: strict resolution is the default — an undeclared bare atom reference is a compile-time `NameError`; `-implicit_atoms` opts a file out of strict and restores Prolog-style auto-minting; `-overwrites` silences the shadowing warning emitted when an import collides with a local declaration.
+These directives control atom resolution and scope. Atoms are **global by spelling** — `red` denotes the same atom everywhere in a process, there is no per-module atom identity to shadow or overwrite (see [Import System](import.md#atoms-are-global-by-spelling) for the full story and its history). The short version: strict resolution is the default — an undeclared bare atom reference is a compile-time `NameError`; `-implicit_atoms` opts a file out of strict and restores Prolog-style auto-minting; `-hide` gives a module a private, compiler-renamed atom namespace other modules cannot spell.
 
 Upgrading an existing codebase from the old auto-mint default? See the [strict-atoms migration guide](strict-atoms-migration.md).
 
@@ -149,19 +149,23 @@ not carry both (doing so is a compile error).
 
 The REPL uses this mode implicitly so interactive queries keep auto-minting.
 
-### -overwrites
+### -hide
 
-**Problem**: When a module both `-import_from`s an atom *and* declares the same name in its own `-module` / `-private`, the two declarations describe **distinct** `PredicateMeta` classes. This is almost always unintentional (a typo, a forgotten cleanup after a refactor) and triggers `ClausalAtomShadowingWarning`. But occasionally it is deliberate — the module needs both the imported class and a separate local one with the same spelling.
+**Problem**: Atoms are global by spelling — any module can write `red` and reach the same atom every other module declaring `red` reaches. That is almost always what you want (see [Import System](import.md#atoms-are-global-by-spelling)), but a module occasionally needs a truly private symbol: an internal sentinel or tag value that other modules must not be able to spell, read, or accidentally collide with.
 
 ```clausal
---8<-- "tests/fixtures/docs/directives_sigs.txt:overwrites"
+--8<-- "tests/fixtures/docs/directives_sigs.txt:hide"
 ```
 
-`-overwrites([...])` silences `ClausalAtomShadowingWarning` for the listed atom names. The list contains **atom names only** — predicate functors are not affected because predicate-functor shadowing is the existing per-module convention, not the new atom-identity confusion the warning is meant to catch.
+`-hide([...])` takes a list of **bare atom names only** (a predicate signature entry like `foo(A, B)` is a compile error — predicates are already module-local through Python's own module scoping, so hiding is purely an atom concern). Every reference to a hidden atom *within its owning module* compiles to the SAME compiler-renamed spelling, so they unify with each other exactly like an ordinary declared atom would; a different module's bare use of the same spelling resolves to the ordinary GLOBAL atom instead — it simply cannot reach the hidden one, because it cannot type the renamed spelling.
 
-If an `-overwrites` entry does not actually correspond to an imported atom shadowed by a local declaration, the compiler emits `ClausalUnusedOverwritesWarning` for that entry. Unused entries typically indicate a stale import or a typo in the `-overwrites` list itself; the warning gives the author a chance to clean up.
+**Requires a preceding `-module(...)`** in the same file: the renamed spelling embeds the owning module's name, so there is no principled identity to rename into without one. `-hide` before `-module` (or with no `-module` at all) is a compile error.
 
-See [Atoms](syntax.md#atoms) for the resolution-order context and the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md) for the full warning-trigger semantics.
+**Mechanism — compiler rename, not encryption.** The compiler renames a hidden atom to `module⟨SEP⟩name`, where `⟨SEP⟩` is a reserved private-use codepoint (U+E000) the Clausal reader refuses inside any atom token, quoted or not — so the renamed spelling cannot be typed by hand in ordinary source. **The guarantee this provides is uniqueness and analysis soundness, not runtime security** — the same stance Ciao's `:- hide` and Python's `__name` mangling both take. Runtime construction of the renamed spelling piece-by-piece (`atom_chars/2` and similar) CAN forge it; this is documented out-of-warranty behavior, not blocked.
+
+**Printing renders the human form.** `write/1`, `term_str`, and the reified-term renderer all display a hidden atom as `module.name` (the dotted, human-readable form) rather than leaking the raw `⟨SEP⟩` codepoint. This is display-only — reading `module.name` back through the parser does NOT reconstruct the hidden atom; round-tripping a hidden atom through text is not a supported operation.
+
+**Relationship to `-private`**: `-private([...])` remains visibility-advisory only — a `-private` atom is still a full GLOBAL atom by spelling, indistinguishable at runtime from one declared via `-module`. `-hide` is the stronger tool: reach for it when a different module accidentally (or deliberately) spelling the same identifier must not be able to observe or construct your value.
 
 ---
 

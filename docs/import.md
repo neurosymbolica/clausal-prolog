@@ -422,16 +422,15 @@ higher-order builtins](higher_order.md) and [lambdas](lambdas.md) rely on.
 > names *in its own file*, never the caller's. Need it to call something the
 > caller owns? Pass that predicate in as a goal argument.
 
-### Same-name declared atoms do not unify across modules
+### Atoms are global by spelling
 
-The lexical rule applies to **declared atoms** too, and this is the sharpest
-edge. Listing an atom in `-module(...)` / `-private([...])` gives it a
-**module-local identity** — a distinct class per declaring module. Two modules
-that each *declare* the same atom therefore hold **different** objects, and
-unifying a value carrying one against a value carrying the other **fails
-silently**: no error, just *no solution*. This is intended scoping (it is what
-lets a module own its own atoms), but the failure is easy to misdiagnose as a
-legitimately-unsatisfiable query.
+Unlike predicates, **atoms are not lexically scoped.** An atom is an interned
+Python `str`; its identity IS its spelling, everywhere in the process. Listing
+an atom in `-module(...)` / `-private([...])` declares that this file is
+allowed to reference the spelling (undeclared bare atoms are a compile-time
+error — see [`-strict_atoms`](directives.md#-strict_atoms)) — it does **not**
+create a module-local variant of it. Two modules that each declare the same
+atom hold the exact same value.
 
 ```clausal
 # lib.clausal — declares its own `approved`
@@ -441,33 +440,36 @@ Check(approved),
 ```
 
 ```clausal
-# caller.clausal — RE-declares `approved` (a separate class!)
+# caller.clausal — separately declares the SAME spelling `approved`
 -import_from(lib, [Check])
 -private([approved])
 
-Ask() <- Check(approved)          # NO SOLUTION: caller's `approved`
-                                  # ≠ lib's `approved`
+Ask() <- Check(approved)          # SUCCEEDS: `approved` is the same atom
+                                  # everywhere, whichever file declares it
 ```
 
-`Ask()` yields nothing: `Check`'s clause head carries **lib's** `approved`,
-while the goal `Check(approved)` passes **caller's** `approved`. They have the
-same name but different identity, so unification fails.
+`Ask()` succeeds: `Check`'s clause head and the goal `Check(approved)` both
+carry the identical interned str `"approved"` — there is nothing to
+re-import for agreement's sake. (Importing it anyway, `-import_from(lib,
+[Check, approved])`, still works and is a reasonable style choice — it just
+is not REQUIRED the way it used to be.)
 
-**Remedy — import the atom instead of re-declaring it.** Share one definition so
-both modules refer to the *same* class:
+**This used to be the sharpest edge in Clausal's scoping model** — atoms
+previously carried per-module identity (a distinct class per declaring
+module), so the SAME example above silently failed instead of succeeding, a
+trap easy to misdiagnose as a legitimately-unsatisfiable query. That design
+is gone: atoms are global by spelling now, matching standard Prolog/Ciao
+semantics, and the module-local-identity failure mode described above cannot
+happen any more.
 
-```clausal
-# caller.clausal — import `approved`, do NOT re-declare it
--import_from(lib, [Check, approved])
-
-Ask() <- Check(approved)          # succeeds: same `approved` as lib
-```
-
-**Diagnosing it.** Set `CLAUSAL_WARN_ATOM_IDENTITY=1` to make unification emit a
-one-shot `ClausalAtomIdentityMismatchWarning` (a `ClausalAtomShadowingWarning`
-subclass) naming both owning modules whenever two same-named atoms of different
-identity are compared. The flag is opt-in and off by default — with it off the
-comparison hook is not installed at all, so the unify hot path is unaffected.
+**Need genuine privacy instead?** Occasionally a module wants a symbol other
+modules truly cannot spell, read, or collide with — an internal sentinel, a
+tag value that must not leak. That is what
+[`-hide`](directives.md#-hide) is for: it compiler-renames the atom into a
+namespace keyed by the owning module, using a codepoint the reader refuses
+elsewhere. `-private([...])` alone does **not** provide this — a private atom
+is visibility-advisory only, and (per the above) is still the same global
+value any other module reaches by spelling it.
 
 ### Field names are local; arity is the contract
 

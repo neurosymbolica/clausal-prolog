@@ -107,44 +107,50 @@ Iterate file-by-file until the file loads clean. Keep `-implicit_atoms` on
 files where loose behavior is genuinely wanted — prototypes, data-heavy
 fixtures, or code that deliberately relies on ceremony-free tag atoms.
 
-#### Do not reach for `-private` when two files must agree
+#### `-private` is fine even when two files must agree
 
-This is the one migration step that can leave you *worse off than the error
-did*. Auto-minting put every undeclared `red` in one global class, so two files
-that both said `red` were talking about the same atom. `-private([red])` in each
-of them mints **two** classes, and atoms unify by identity — so the load error
-goes away and is replaced by a query that silently has no solution. The compiler
-cannot warn about this: two modules each declaring their own private atom is
-exactly what `-private` is for.
+> **Updated 2026-09-04 (P3-1 atom pivot):** this used to be the one migration
+> step that could leave you worse off than the error did — declaring the same
+> atom `-private` in two files used to mint two DIFFERENT classes, so a query
+> comparing one against the other silently had no solution. That failure mode
+> is gone. Atoms are now global by spelling: `-module`, `-private`, and an
+> `-import_from` of the same spelling all resolve to the identical interned
+> `str`, so there is nothing left to disagree about (see [Import System §
+> Atoms are global by spelling](import.md#atoms-are-global-by-spelling)).
 
-The rule of thumb: **declare an atom where it is owned, and import it
-everywhere else.** If the atom crosses a module boundary — a status tag a caller
-compares against, a profile key one file writes and another reads, a verdict
-vocabulary two predicates draw from — give it a home in the owning module's
-`-module(owner, [..., red])` and use `-import_from(owner, [red])` in the rest.
-Reserve `-private` for atoms that genuinely never leave their file, and for
-atoms that are *deliberately* distinct from a similarly-spelled one elsewhere.
+Two files that each independently declare `-private([red])` (or one declares
+it via `-module` and the other via `-private`) refer to the exact same atom —
+declaring it twice is redundant, not conflicting. You may still prefer to
+**declare an atom where it is owned, and import it everywhere else** for
+readability (a status tag a caller compares against, a profile key one file
+writes and another reads, a verdict vocabulary two predicates draw from) —
+`-module(owner, [..., red])` plus `-import_from(owner, [red])` documents the
+ownership relationship for a reader even though it makes no runtime
+difference. `-import_from` also remains the only way to reach an atom another
+module declared `-private` *without* re-declaring it yourself.
 
-If the owning file has no `-module(...)` export list — a generated or `tmp_path`
-fixture, say — you do not need to invent one: `-import_from(owner, [red])`
-reaches a `-private` atom too, and binds the owner's class, so identity is
-preserved either way. `-private` marks a name as internal; it does not make it
-unreachable (see [Directives § `-private`](directives.md#-private)). Prefer
-`-module` when the name really is part of the file's surface, because that is
-what the listing tells a reader — but reach for the import, not a second
-`-private`, whenever two files must agree.
+**Need a spelling two files genuinely must NOT agree on?** Global-by-spelling
+means `-private` cannot give you that any more — reach for
+[`-hide`](directives.md#-hide) instead. `-hide([red])` compiler-renames the
+atom into a namespace only its own file can spell, so a different module's
+`red` (declared any way at all) is guaranteed to be a genuinely different
+value, not a same-spelling collision to avoid.
 
-Symptom to watch for while migrating: a file that now loads, in a suite that now
-fails an assertion it used to pass. Loading was never the goal; the atoms have
-to be the *same* atoms. If you are unsure whether a name crosses a boundary,
-`global_atom("red", R)` in both places is a safe intermediate — it is the same
-process-wide class the old auto-mint gave you.
+If you are unsure whether a name crosses a boundary, `global_atom("red", R)`
+in both places is a safe way to confirm — it is the same process-wide value
+the old auto-mint gave you, and (post-pivot) the same value any declaration
+route gives you too.
 
 ## Reference
 
 - Directives: [`-implicit_atoms`](directives.md#-implicit_atoms),
   [`-strict_atoms`](directives.md#-strict_atoms) (deprecated),
-  `-module` / `-private` / `-import_from`.
+  `-module` / `-private` / `-import_from` /
+  [`-hide`](directives.md#-hide) (module-private atoms, since the
+  atom pivot).
 - Reflection hatch: [`global_atom/2`](builtins.md#global_atom2).
-- Atom model overview: [Atoms](syntax.md#atoms).
-- Design rationale: `docs/superpowers/specs/2026-07-24-strict-atoms-default-design.md`.
+- Atom model overview: [Atoms](syntax.md#atoms),
+  [Import System § Atoms are global by spelling](import.md#atoms-are-global-by-spelling).
+- Design rationale: `docs/superpowers/specs/2026-07-24-strict-atoms-default-design.md`,
+  `implementation_plans/tagged-tuple-term-representation.md` §1a/§1b (the atom
+  pivot that made atoms global by spelling and added `-hide`).

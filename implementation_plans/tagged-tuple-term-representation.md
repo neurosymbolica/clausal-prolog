@@ -49,6 +49,38 @@ by `PredicateMeta` — with plain Python tuples under a **uniform tagged-cell di
 
 ## 1a. Atoms: global strings + `-hide`, replacing per-module class identity
 
+> **STATUS 2026-09-04: ATOM PIVOT IMPLEMENTED** on branch `feat/p31-atom-pivot`
+> (P3-1, `implementation_plans/phase3-decomposition-and-p31-atom-pivot.md` --
+> Tasks 0-8; full task-by-task detail and the reconciled-inversion list live
+> there, this note is a pointer + summary). Atoms are interned global Python
+> strs (identity = spelling); the per-module atom-identity machinery
+> (`register_atom_identity`/`atom_by_id`, `CLAUSAL_WARN_ATOM_IDENTITY`,
+> `ClausalAtomShadowingWarning`) and the `-overwrites` acknowledgement
+> directive are deleted. The C str~char-list cons rule is retired
+> (`_variables.c`; the bytes~list codes model is UNTOUCHED, kept on purpose --
+> §1b's coded-character contract is a separate concern). `-hide` shipped:
+> compiler-side mangling with the U+E000 private-use separator (ruling R1);
+> the writer renders the human `module.name` form for mangled atoms
+> (display-only -- round-tripping a mangled atom back through the reader is
+> explicitly NOT promised). `atom(X)` is true for every `str` (ruling R2);
+> `string/1` stays a compatibility alias. Strict-atoms' "undeclared bare atom
+> is a compile-time error" promise is preserved and is genuinely PER-MODULE --
+> a Task 7 re-review found the first implementation let a name declared in one
+> module silently satisfy another, undeclared module's own strictness check
+> (an artifact of the process-wide `predicate_builtins` pool seeding every
+> module's globals, conflated with per-module declaredness); fixed and covered
+> by regression tests exercising both load orders
+> (`tests/test_strict_atoms_default.py::TestDeclarednessIsPerModuleNotProcessWide`).
+> A second, narrower instance of the same class of issue (interpreter-internal
+> `simple_ast.__all__` names pool-seeded at bootstrap, also resolving as bare
+> atoms with zero declaration) was found in the same re-review and is tracked
+> separately, not blocking:
+> `todo/pythonic-ast-names-leak-into-strict-atom-namespace-2026-09-04.md`.
+> Final full-suite reconciliation: EMPTY name-diff vs the pre-P3-1 baseline,
+> reproduced on two consecutive runs. Perf (interleaved A/B, base `523ae9ef` vs
+> branch head): `bench_fib` -6.0%, `bench_struct_tabling` -5.3% -- both faster,
+> no regression.
+
 Standard-Prolog / Ciao model: **predicate names are module-local; atom/functor names in data
 are shared globally** (Ciao module-system docs, Cabeza & Hermenegildo 1999/2000). Atoms lower
 to interned Python strings. Module-local symbols become **opt-in** via a Ciao-style `-hide`
@@ -344,6 +376,14 @@ workload — bench_tabling is broken two ways; see todo/bench-tabling-overflow-o
   clausify-domains string→atom profile-key migration (R8 allowlist etc.) becomes semantically
   moot. Standard order changes observably (atoms currently sort via the compound branch;
   they'd sort as strings) — affects `sort/2`, `setof`, existing golden outputs.
+  [CORRECTION 2026-09-04, P3-1 Task 8 close-out: this claim was already STALE when
+  written -- the atom/string standard-order collapse actually landed earlier, in
+  Phase 1 commit `f0d68d2f` (recon-traced during P3-1 Task 4). P3-1 Task 4
+  (`phase3-decomposition-and-p31-atom-pivot.md`) finished the collapse by dropping
+  `_helpers.py`'s remaining `is_atom` class branch + 0/1 discriminator, leaving one
+  `_ORD_ATOM` str path -- so by the time Phase 3 ran, atoms were ALREADY sorting as
+  strings, not via the compound branch; the only observable Task 4 change was the
+  str-vs-same-spelled-class TIE edge, which no longer exists post-pivot anyway.]
 - **The cons rule leaks into atoms** (verified, `_variables.c` "String ↔ List unification",
   ~:1166–1284): a str unifies element-wise with a same-length list of single-char strings, so
   `red` would unify with `['r','e','d']` under `unify()` — class atoms never did. Match

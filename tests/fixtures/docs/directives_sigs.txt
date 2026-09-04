@@ -56,8 +56,7 @@
 -import_from(atoms, [ok, error, pending])
 --8<-- [end:strict_atoms]
 
---8<-- [start:overwrites]
--import_from(palette, [red])
--private([red])
--overwrites([red])
---8<-- [end:overwrites]
+--8<-- [start:hide]
+-module(vault, [Check(X)])
+-hide([vault_secret])
+--8<-- [end:hide]
