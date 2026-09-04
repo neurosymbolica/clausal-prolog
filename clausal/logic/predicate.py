@@ -335,70 +335,6 @@ def _term_arity_error(
     )
 
 
-def _warn_atom_identity_enabled() -> bool:
-    """True when the opt-in atom-identity diagnostic is on.
-
-    Gated on ``CLAUSAL_WARN_ATOM_IDENTITY`` (``1``/``true``/``yes``/``on``).
-    Read live at *class-creation* time only — never on the unify hot path —
-    so the diagnostic ``__unify__`` is installed on an atom class only when
-    the flag was set as that class was minted.  When off, zero-field atom
-    classes carry no ``__unify__`` at all and the hot path is unchanged.
-    """
-    return os.environ.get("CLAUSAL_WARN_ATOM_IDENTITY", "").strip().lower() in (
-        "1", "true", "yes", "on",
-    )
-
-
-# One-shot dedup of (name, owner_a, owner_b) triples already warned about.
-_atom_identity_warned: set = set()
-
-
-def _make_atom_identity_unify(cls):
-    """Build a diagnostic ``__unify__`` for a zero-field (atom) class.
-
-    Installed only when ``CLAUSAL_WARN_ATOM_IDENTITY`` is set.  Semantics are
-    identity-preserving — it never changes *whether* unification succeeds:
-
-      * ``other is cls`` → succeed (same behaviour as the default identity
-        comparison the C unifier would otherwise apply to atoms).
-      * ``other`` is a *different* zero-field atom class with the *same*
-        ``__name__`` → emit a one-shot ``ClausalAtomIdentityMismatchWarning``
-        naming both owning modules, then fail (unchanged behaviour, now
-        diagnosable).
-      * anything else → ``NotImplemented`` so the C unifier's normal fallback
-        (symmetric ``__unify__`` / identity compare) decides.
-    """
-    def __unify__(other, trail):  # noqa: N807 — invoked as cls.__unify__(t2, trail)
-        if other is cls:
-            return True
-        if isinstance(other, PredicateMeta) and not other._fields \
-                and other.__name__ == cls.__name__ and other is not cls:
-            owner_a = getattr(cls, "__module__", "<unknown>")
-            owner_b = getattr(other, "__module__", "<unknown>")
-            key = (cls.__name__, owner_a, owner_b) if owner_a <= owner_b \
-                else (cls.__name__, owner_b, owner_a)
-            if key not in _atom_identity_warned:
-                _atom_identity_warned.add(key)
-                import warnings  # noqa: PLC0415
-                from clausal.logic.compiler_v2 import (  # noqa: PLC0415
-                    ClausalAtomIdentityMismatchWarning,
-                )
-                warnings.warn(
-                    f"atom `{cls.__name__}` compared across modules with "
-                    f"distinct module-local identity: `{owner_a}` vs "
-                    f"`{owner_b}`.  These are separate classes and do not "
-                    f"unify (query will have no solution).  Share one "
-                    f"definition via -import_from(defining_module, "
-                    f"[{cls.__name__}]) instead of re-declaring it.",
-                    ClausalAtomIdentityMismatchWarning,
-                    stacklevel=2,
-                )
-            return False
-        return NotImplemented
-    return __unify__
-
-
-
 _init_cache: dict[tuple[str, ...], Callable] = {}
 
 
@@ -670,13 +606,14 @@ class PredicateMeta(type):
         # value* — a bare functor name — reaches the same answer through the
         # ``_CLASS_CALL`` branch of the hooks above rather than by having no
         # hook, since it still needs the instance form for its instances.
-        elif _warn_atom_identity_enabled():
-            # Opt-in diagnostic only (CLAUSAL_WARN_ATOM_IDENTITY): install a
-            # __unify__ that warns when this atom is compared against a
-            # same-named atom of a different owning module.  Identity-preserving
-            # (see _make_atom_identity_unify).  Guarded so the flag-off hot path
-            # installs nothing and is byte-for-byte the original behaviour.
-            cls.__unify__ = _make_atom_identity_unify(cls)
+        #
+        # (P3-1 §1b/R2: atoms are now global-by-spelling interned strs; the
+        # per-module atom-identity class machinery that used to live here
+        # (CLAUSAL_WARN_ATOM_IDENTITY / _make_atom_identity_unify) is deleted
+        # — there is no more "same spelling, different owning module" case for
+        # a real atom to warn about. Zero-field PredicateMeta classes remain
+        # only as an internal transitional shape; see predicate.py module
+        # docstring.)
 
         # Where this class was registered, for the field-name mismatch
         # diagnostic.  Frame 1 is the .clausal module body running the
@@ -1303,42 +1240,6 @@ def _describe_term_identity_mismatch(obj: Any) -> str:
     )
 
 
-# ── By-identity atom references from generated code ──────────────────────────
-#
-# An atom is a class, so the natural way for generated code to name one is a
-# bare ``Name`` resolved in the compiled function's globals.  That is wrong for
-# an atom the compiler received as a live OBJECT (a ``DictTerm`` key/value built
-# in Python or in another module and then baked into a query template): the
-# template's globals are the *callee's* namespace, where the same spelling is
-# very often bound to something else — under the snake_case convention, a
-# same-named predicate.  The lookup then silently substitutes that other object.
-# See ``todo/query-template-rebinds-atom-dict-keys.md``.
-#
-# ``register_atom_identity`` (compile time) + ``atom_by_id`` (run time, injected
-# into every compiled predicate's globals as ``$atom``) pin such an atom by
-# identity instead.  The table's strong reference is deliberate: it keeps the
-# atom — and therefore its ``id`` — alive for the life of the process, so a
-# token embedded in generated code can never be recycled onto another object.
-# It is bounded by the number of distinct atoms ever lowered this way, and
-# atoms are module-level classes that outlive compilation regardless.
-_ATOM_IDENTITY_TABLE: dict[int, Any] = {}
-
-
-def register_atom_identity(atom: Any) -> int:
-    """Register *atom* for by-identity reference; return its token.
-
-    Idempotent — the same atom always yields the same token.
-    """
-    token = id(atom)
-    _ATOM_IDENTITY_TABLE[token] = atom
-    return token
-
-
-def atom_by_id(token: int) -> Any:
-    """Return the atom registered under *token* (generated code: ``$atom``)."""
-    return _ATOM_IDENTITY_TABLE[token]
-
-
 def make_predicate(name: str, fields: list[str]) -> "PredicateMeta":
     """Dynamically create a PredicateMeta class.
 
@@ -1368,5 +1269,4 @@ __all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "is_atom",
            "is_atom_value",
            "term_field_names", "term_field_names_of_class",
            "term_field_values", "term_field_dict",
-           "make_predicate", "make_atom",
-           "register_atom_identity", "atom_by_id"]
+           "make_predicate", "make_atom"]

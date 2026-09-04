@@ -184,21 +184,24 @@ def test_module_internal_atom_reads_still_work(mods):
 
 
 def test_same_named_atom_from_a_second_load_is_not_conflated(tmp_path):
-    """The by-identity token is baked into the CACHED query template, so the
-    cache must still tell two same-named-but-distinct atoms apart.
+    """P3-1 §1b/R2 INVERSION: atoms are global-by-spelling interned strs, so
+    there is no more by-identity token baked into the cached query template
+    to tell apart — a "second load" of the same module mints nothing new at
+    all, it just reads the SAME global ``query_date`` str a second time.
 
-    Loading the owning module twice mints two ``query_date`` atom objects.  A
-    dict keyed by the *other* load's atom is genuinely a different key and must
-    miss — not silently reuse the first template's atom.
+    Pre-pivot, loading the owning module twice minted two distinct
+    ``query_date`` atom CLASS objects, and a dict keyed by the second load's
+    atom was a genuinely different key that had to miss.  Post-pivot both
+    loads observe the identical str, so both dict reads must hit.
     """
     atoms = _load(tmp_path, "qk_atoms", ATOMS_SRC)
     reader = _load(tmp_path, "qk_reader", READER_SRC)
     other = _load_module("qk_atoms_second", str(tmp_path / "qk_atoms.clausal"))
-    assert other.query_date is not atoms.query_date
+    assert other.query_date is atoms.query_date
 
     assert _one(lambda V: reader.soft_read(DictTerm({atoms.query_date: 5}), V)) == 5
-    assert _one(lambda V: reader.soft_read(DictTerm({other.query_date: 5}), V)) is None
-    # ...and back again, in case the second call poisoned the entry.
+    assert _one(lambda V: reader.soft_read(DictTerm({other.query_date: 5}), V)) == 5
+    # ...and back again, for good measure.
     assert _one(lambda V: reader.soft_read(DictTerm({atoms.query_date: 5}), V)) == 5
 
 

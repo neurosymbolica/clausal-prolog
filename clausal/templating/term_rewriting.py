@@ -16,7 +16,6 @@ from clausal.pythonic_ast.nodes import (
     ImportFromDirective as ImportFromItem,
     ImportModuleDirective as ImportModuleItem,
     ModuleDeclaration as ModuleDeclItem,
-    OverwritesDeclaration as OverwritesDeclItem,
     PrivateDeclaration as PrivateDeclItem,
     Predicate as PredicateItem,
     SpecializeDirective as SpecializeItem,
@@ -4538,8 +4537,6 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_strict_atoms_directive(args, expr_stmt)
         if name == "implicit_atoms":
             return transformer._handle_implicit_atoms_directive(args, expr_stmt)
-        if name == "overwrites":
-            return transformer._handle_overwrites_directive(args, expr_stmt)
         if name == "allow_singletons":
             return transformer._handle_allow_singletons_directive(args, expr_stmt)
         if name == "constants":
@@ -4551,7 +4548,7 @@ class EmbedTransformer(NodeTransformer):
             f"(known directives: -module, -private, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
-            f"-strict_atoms, -implicit_atoms, -overwrites, -allow_singletons, "
+            f"-strict_atoms, -implicit_atoms, -allow_singletons, "
             f"-constants, -tagged_terms)"
         )
 
@@ -5123,39 +5120,6 @@ class EmbedTransformer(NodeTransformer):
                     keywords=[],
                 ), key)
         return transformer._transform_constant_rhs(key, ident)
-
-    def _handle_overwrites_directive(transformer, args, expr_stmt):
-        """Process ``-overwrites([atom1, atom2, ...])`` directive (Phase 4 of
-        GLOBAL_ATOMS_DEFAULT.md).
-
-        Records atom names whose shadowing of an imported name is intentional.
-        No PredicateMeta classes are created here; this directive is purely a
-        declarative acknowledgement consumed by ``_process_declarations`` (in
-        ``clausal/logic/compiler_v2.py``) to suppress
-        ``ClausalAtomShadowingWarning``.
-
-        The narrowed Phase-4 trigger means only atom-name shadowing produces
-        the warning, so the entries here are bare ``Name`` nodes — a
-        predicate-functor call like ``Foo(X)`` is not accepted here and would
-        not silence any warning even if it were.
-        """
-        if not args or not isinstance(args[0], List):
-            raise SyntaxError(
-                "-overwrites requires a list of bare names, e.g. "
-                "-overwrites([red, ok])."
-            )
-        items_info: list[str] = []
-        for elt in args[0].elts:
-            if isinstance(elt, Name):
-                items_info.append(elt.id)
-            else:
-                raise SyntaxError(
-                    "-overwrites requires a list of bare names (atom names "
-                    "only), e.g. -overwrites([red, ok]).  Got a non-Name "
-                    "element."
-                )
-        transformer._module_items.append(OverwritesDeclItem(items=items_info))
-        return replace(Pass(), expr_stmt)
 
     def _handle_predspec_directive(transformer, method_name, args, expr_stmt):
         """Process a directive that takes ``pred/arity, ...`` arguments.

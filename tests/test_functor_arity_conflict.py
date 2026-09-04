@@ -33,6 +33,9 @@ from clausal.logic.predicate import (
     make_atom,
     make_predicate,
 )
+from clausal.logic.solve import call
+from clausal.logic.variables import deref
+from clausal import Var
 
 
 # ── Run time: positional overflow ──────────────────────────────────────────
@@ -432,18 +435,31 @@ class TestTheRemedyPrintsTheTemplateEdit:
         """
         return _load(tmp_path, name, text)
 
-    def test_private_declaration_gets_the_private_list_wording(self, tmp_path):
-        msg = self._msg(tmp_path, "remedy_priv", """
+    def test_private_declaration_atom_then_predicate_compiles(self, tmp_path):
+        """P3-1 §3a/§1b/R2 INVERSION: ``-private([max_retries])`` declares
+        ``max_retries`` as a 0-arity atom, and the fact ``max_retries(3),``
+        then constructs it as an arity-1 predicate.  Pre-pivot, atoms
+        reserved their arity-0 slot in ``_seen_functors`` and this was a
+        compile-time ``SyntaxError`` with a remedy message.  Atoms no longer
+        reserve a functor slot at all (Phenomenon A dies outright, §3a): the
+        module compiles cleanly and the predicate simply wins, exactly as it
+        does for an in-file bare-atom-then-predicate collision that never
+        went through ``-private`` at all.
+        """
+        mod = self._loads(tmp_path, "remedy_priv", """
             -private([max_retries])
 
             max_retries(3),
         """)
-        assert "remedy:" in msg
-        assert "`max_retries(ARG_0)`" in msg
-        assert "-private([...])" in msg
-        # it must not send the reader to a list this file does not have
-        assert "-module(" not in msg
-        assert "an earlier clause" not in msg
+        assert isinstance(mod.max_retries, PredicateMeta)
+        assert mod.max_retries._fields == ("arg_0",)
+        v = Var()
+        results = [
+            deref(v) for _ in call(
+                "max_retries", v, module=mod.__dict__["$module"],
+            )
+        ]
+        assert results == [3]
 
     def test_module_export_list_gets_the_module_wording(self, tmp_path):
         msg = self._msg(tmp_path, "remedy_mod", """
@@ -483,31 +499,47 @@ class TestTheRemedyPrintsTheTemplateEdit:
         """)
         assert "`verdict(STATUS, CITES)`" in msg
 
-    @pytest.mark.parametrize("head, template", [
-        ("f(1)", "f(ARG_0)"),
-        ("f(1, 2)", "f(ARG_0, ARG_1)"),
-        ("f(1, 2, 3)", "f(ARG_0, ARG_1, ARG_2)"),
+    @pytest.mark.parametrize("head, arity", [
+        ("f(1)", 1),
+        ("f(1, 2)", 2),
+        ("f(1, 2, 3)", 3),
     ])
-    def test_the_template_is_read_off_the_head_not_hard_coded(
-        self, tmp_path, head, template,
+    def test_atom_then_predicate_of_any_arity_compiles(
+        self, tmp_path, head, arity,
     ):
-        msg = self._msg(tmp_path, f"remedy_ar{len(template)}", f"""
+        """P3-1 §3a/§1b/R2 INVERSION of
+        ``test_the_template_is_read_off_the_head_not_hard_coded``: an atom
+        declared via ``-private([f])`` followed by a clause head of any
+        arity no longer conflicts (Phenomenon A dies outright) — the
+        predicate simply wins, at whatever arity its head carries."""
+        mod = self._loads(tmp_path, f"remedy_ar{arity}", f"""
             -private([f])
 
             {head},
         """)
-        assert f"`{template}`" in msg
+        assert isinstance(mod.f, PredicateMeta)
+        assert len(mod.f._fields) == arity
 
-    def test_the_alternative_edit_is_offered_too(self, tmp_path):
-        """Declaring at the head's arity is one of two repairs, not the only one."""
-        msg = self._msg(tmp_path, "remedy_alt", """
+    def test_the_predicate_wins_and_is_queryable(self, tmp_path):
+        """P3-1 §3a/§1b/R2 INVERSION of
+        ``test_the_alternative_edit_is_offered_too``: this used to be a
+        second wording check on the same conflict message (an alternative
+        remedy: drop the surplus argument instead of redeclaring). With the
+        conflict gone, there is nothing left to offer a remedy for — the
+        module simply compiles and the fact is queryable."""
+        mod = self._loads(tmp_path, "remedy_alt", """
             -private([max_retries])
 
             max_retries(3),
         """)
-        flat = " ".join(msg.split())
-        assert "drop the argument" in flat
-        assert "every clause head" in flat
+        assert isinstance(mod.max_retries, PredicateMeta)
+        v = Var()
+        results = [
+            deref(v) for _ in call(
+                "max_retries", v, module=mod.__dict__["$module"],
+            )
+        ]
+        assert results == [3]
 
     def test_the_drop_alternative_names_the_declared_shape(self, tmp_path):
         """A non-zero declaration: "drop the surplus" needs a target to hit.

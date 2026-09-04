@@ -197,9 +197,11 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     AllowEntry("clausal/logic/compiler_v2.py", (776, 860),
                "plan exclusion #8: class-registry op, not a term probe "
                "(_run_specialization)"),
-    AllowEntry("clausal/logic/compiler_v2.py", (984, 1049),
+    AllowEntry("clausal/logic/compiler_v2.py", (940, 1026),
                "plan exclusion #8: class-registry op, not a term probe "
-               "(_process_declarations)"),
+               "(_process_declarations). P3-1 Task 3 shrank the file: "
+               "_check_atom_shadowing (which used to follow this function) "
+               "is deleted, so _process_declarations now runs to EOF."),
     AllowEntry("clausal/logic/compiler/predicate.py", None,
                "plan exclusion #8/#9: class-registry op / CPython-ast site"),
     # 9. CPython-`ast` sites.

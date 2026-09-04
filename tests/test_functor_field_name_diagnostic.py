@@ -136,37 +136,32 @@ class TestDirectiveMintedPlaceholderMismatch:
 
 
 class TestAtomShadowsPredicate:
-    """``-module(m, [key(A, B)])`` + ``-import_from(v, [key])`` binds the atom
-    last, so ``key(A, B)`` constructs the 0-arity atom.
+    """P3-1 §3a/§1b/R2 INVERSION: "Phenomenon A" (a same-named 0-arity atom
+    import colliding with an N-arity predicate export, import binding last)
+    dies outright rather than being diagnosed.
 
-    Since heads for an imported functor are emitted positionally, this arrives
-    through the positional-overflow check rather than the keyword path — an
-    ARITY disagreement, which is exactly what a genuine cross-module conflict
-    reduces to.  The attribution and the Phenomenon-A hint are unchanged.
+    Pre-pivot, the import bound the name to a zero-field ``PredicateMeta``
+    atom CLASS, and calling it with keyword arguments raised a
+    ``ClausalTermConstructionError`` naming the "0-arity atom shadows a
+    predicate" cause specifically (``PredicateMeta.__call__``'s
+    Phenomenon-A hint).  Atoms are now global-by-spelling interned strs: the
+    import binds the name to the plain str ``"ash_query_key"``, and the
+    clause head's attempted construction ``ash_query_key(P, V)`` is just
+    calling a str, which raises Python's own ``TypeError`` — there is no
+    ``PredicateMeta.__call__`` in the picture at all any more to attribute a
+    custom diagnostic to.
     """
 
-    def test_loading_the_pair_names_the_atom_shadowing_cause(self):
+    def test_loading_the_pair_raises_a_plain_type_error(self):
         _load_module(
             "tests.fixtures.atomshadow_schema",
             os.path.join(FIXTURES, "atomshadow_schema.clausal"),
         )
-        with pytest.raises(ClausalTermConstructionError) as exc_info:
+        with pytest.raises(TypeError, match="'str' object is not callable"):
             _load_module(
                 "tests.fixtures.atomshadow_use",
                 os.path.join(FIXTURES, "atomshadow_use.clausal"),
             )
-        msg = str(exc_info.value)
-        assert "ash_query_key/0" in msg
-        assert "2 positional argument(s)" in msg
-        assert "0 field(s) ()" in msg
-        assert "atomshadow_schema.clausal:" in msg
-        assert "atomshadow_use.clausal:" in msg
-        # which class of mistake — named explicitly, with a remedy
-        assert "0-arity atom" in msg
-        assert "shadow" in msg
-        assert "un-export" in msg
-        # and it is NOT diagnosed as the placeholder case
-        assert "-dynamic" not in msg
 
     def test_atom_cause_is_detected_at_unit_level_too(self):
         atom = make_predicate("fnd_bare_atom", [])

@@ -32,7 +32,7 @@ from clausal.terms import (
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import (
-    PredicateMeta, atom_by_id as _atom_by_id, _dispatch_at,
+    PredicateMeta, _dispatch_at,
 )
 from clausal.codegen import functiondef_to_function
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
@@ -310,11 +310,6 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "$deref": deref,
     "$unify": unify,
     "$ast": ast,
-    # By-identity atom reference (``$atom(<token>)``): an atom that reached the
-    # compiler as a live object must NOT be re-resolved by name in whatever
-    # globals the generated code runs under.  See
-    # ``terms_to_ast.atom_identity_expr``.
-    "$atom": _atom_by_id,
 }
 
 
@@ -1265,8 +1260,8 @@ def compile_predicate_trampoline(*args, **kwargs) -> Callable:
     The flag is read off the module namespace rather than threaded as a
     parameter because ``term_to_ast_expr`` and ``head_to_match_pattern`` are
     reached from ~56 call sites across the compiler; the scope covers exactly
-    one predicate's compilation, mirroring how ``atom_identity_lowering``
-    scopes query-template atom lowering.  An unflagged compile pushes ``None``
+    one predicate's compilation, mirroring how a similarly-scoped
+    context manager elsewhere in the compiler brackets a single compile.  An unflagged compile pushes ``None``
     rather than nothing, so it is sealed against an outer flagged scope; with
     ``None`` on top the emission and pattern branches are never consulted and
     the generated AST is byte-identical to the pre-bridge compiler (the
@@ -1835,8 +1830,8 @@ def compile_predicate_shallow(*args, **kwargs) -> Callable:
     The flag is read off the module namespace rather than threaded as a
     parameter because ``term_to_ast_expr`` and ``head_to_match_pattern`` are
     reached from ~56 call sites across the compiler; the scope covers exactly
-    one predicate's compilation, mirroring how ``atom_identity_lowering``
-    scopes query-template atom lowering.  An unflagged compile pushes ``None``
+    one predicate's compilation, mirroring how a similarly-scoped
+    context manager elsewhere in the compiler brackets a single compile.  An unflagged compile pushes ``None``
     rather than nothing, so it is sealed against an outer flagged scope; with
     ``None`` on top the emission and pattern branches are never consulted and
     the generated AST is byte-identical to the pre-bridge compiler (the

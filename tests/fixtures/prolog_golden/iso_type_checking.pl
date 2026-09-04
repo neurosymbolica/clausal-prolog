@@ -57,8 +57,8 @@ test("str: plain string succeeds") :-
 test("str: empty string succeeds") :-
     atom("").
 
-test("str: declared atom fails") :-
-    \+ atom(hello).
+test("str: declared atom now succeeds") :-
+    atom(hello).
 
 test("str: integer fails") :-
     \+ atom(1).
@@ -96,8 +96,8 @@ test("number: string fails") :-
 test("number: var fails") :-
     \+ number(X_UNUSED).
 
-test("callable: declared atom") :-
-    callable(hello).
+test("callable: declared atom now fails") :-
+    \+ callable(hello).
 
 test("callable: registered predicate name") :-
     callable("is_bound_number").
@@ -120,8 +120,8 @@ test("is_list: empty") :-
 test("is_list: nested") :-
     is_list([[1], [2]]).
 
-test("is_list: string fails") :-
-    \+ is_list(hello).
+test("is_list: declared atom now a string list") :-
+    is_list(hello).
 
 test("is_list: int fails") :-
     \+ is_list(42).

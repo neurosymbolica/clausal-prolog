@@ -38,7 +38,7 @@ Test('str: plain string succeeds') <- (atom('hello'))
 
 Test('str: empty string succeeds') <- (atom(''))
 
-Test('str: declared atom fails') <- (not atom(hello))
+Test('str: declared atom now succeeds') <- (atom(hello))
 
 Test('str: integer fails') <- (not atom(1))
 
@@ -64,7 +64,7 @@ Test('number: string fails') <- (not number('42'))
 
 Test('number: var fails') <- (not number(_x_unused))
 
-Test('callable: declared atom') <- (callable_(hello))
+Test('callable: declared atom now fails') <- (not callable_(hello))
 
 Test('callable: registered predicate name') <- (callable_('is_bound_number'))
 
@@ -80,7 +80,7 @@ Test('is_list: empty') <- (is_list([]))
 
 Test('is_list: nested') <- (is_list([[1], [2]]))
 
-Test('is_list: string fails') <- (not is_list(hello))
+Test('is_list: declared atom now a string list') <- (is_list(hello))
 
 Test('is_list: int fails') <- (not is_list(42))
 

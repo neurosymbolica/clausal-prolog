@@ -38,7 +38,6 @@ from clausal.pythonic_ast.nodes import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, is_atom, is_term_instance, term_field_names,
-    register_atom_identity,
 )
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
 
@@ -116,10 +115,10 @@ class PredicateAsTermError(Exception):
     also the name of a predicate in the same module resolves to the
     **predicate class**, which is not a term value.
 
-    A predicate object is neither identical nor equal to the same-named atom,
-    so accepting it here would replace a load-time crash with a dict whose key
-    can never be read back — exactly the silent-mismatch class of bug this
-    module's ``atom_identity_expr`` exists to prevent.  It stays an error;
+    A predicate object is neither identical nor equal to the same-named atom
+    (atoms are global-by-spelling interned strs, §1b/R2; predicates stay
+    module-local classes), so accepting it here would replace a load-time
+    crash with a dict whose key can never be read back.  It stays an error;
     only the diagnostic is improved.
     """
 
@@ -139,59 +138,15 @@ class PredicateAsTermError(Exception):
         )
 
 
-# Depth counter for ``atom_identity_lowering()`` (a plain int is enough — the
-# compiler is single-threaded and reentrancy is handled by the counter).
-_ATOM_IDENTITY_DEPTH = 0
-
-
-@contextmanager
-def atom_identity_lowering():
-    """Lower 0-arity atoms BY IDENTITY inside this block.
-
-    An atom is a class, so the natural lowering is a bare ``Name`` resolved, at
-    run time, in the compiled function's globals.  For a clause compiled from a
-    module's own source that is right (and one ``LOAD_GLOBAL`` rather than a
-    call): the atom came from that very namespace, so the name is guaranteed to
-    resolve back to the same object.
-
-    It is *wrong* for a term the compiler received as a live OBJECT from
-    somewhere else.  The query compiler bakes the arguments of
-    ``solve(m.pred(profile, …))`` into a query template whose globals are the
-    **callee's** module namespace.  A ``DictTerm`` key that is an atom was then
-    re-looked-up there by name — and under the snake_case convention that name
-    is very often bound to a same-named *predicate*, so the template silently
-    substituted that other object as the key and every read missed: ``get/3``
-    failed, ``get/4`` returned the default, ``P[key]`` raised a bogus
-    ``existence_error``.  Where the name was simply unbound it was a raw
-    ``NameError`` inside ``<template>``.
-
-    Inside this block such atoms lower to ``$atom(<token>)`` instead, which
-    resolves the registered object itself — giving atom keys the same immunity
-    string keys have always had from lowering to ``ast.Constant``.
-
-    See ``todo/query-template-rebinds-atom-dict-keys.md`` and
-    ``implementation_plans/dict-atom-keys-vs-predicates.md`` (option 2).
-    """
-    global _ATOM_IDENTITY_DEPTH
-    _ATOM_IDENTITY_DEPTH += 1
-    try:
-        yield
-    finally:
-        _ATOM_IDENTITY_DEPTH -= 1
-
-
-def atom_identity_expr(term: Any) -> ast.expr | None:
-    """Return the by-identity lowering of *term*, or None to lower normally.
-
-    None means either "not an atom" or "not inside
-    :func:`atom_identity_lowering`" — both fall back to the bare-Name lowering.
-    """
-    if _ATOM_IDENTITY_DEPTH and is_atom(term):
-        return _call(
-            _name("$atom"),
-            ast.Constant(value=register_atom_identity(term)),
-        )
-    return None
+# (P3-1 §1b/R2: atoms are global-by-spelling interned strs. The by-identity
+# atom lowering that used to live here — ``atom_identity_lowering()`` /
+# ``atom_identity_expr()`` / ``$atom(<token>)`` — existed to stop a live
+# atom-CLASS object from being silently re-resolved onto a same-named
+# predicate in the callee namespace (see the retired
+# ``todo/query-template-rebinds-atom-dict-keys.md``). A plain str atom
+# lowers to an ``ast.Constant`` unconditionally (below, and in the
+# ``is_atom(term)`` branch further down) and is never looked up by name at
+# all, so the hazard this machinery guarded against cannot occur any more.)
 
 
 # ── ``-tagged_terms``: the Phase 2 bridge's per-module cell lowering ─────────
@@ -202,8 +157,8 @@ def atom_identity_expr(term: Any) -> ast.expr | None:
 # class instances.  See ``clausal/logic/cells.py`` and the directive's
 # docstring in ``clausal/templating/term_rewriting.py``.
 #
-# The flag reaches this module the same way ``atom_identity_lowering`` does:
-# a module-level stack rather than a new parameter on ``term_to_ast_expr``,
+# The flag reaches this module via a module-level stack rather than a new
+# parameter on ``term_to_ast_expr``,
 # which has 56 call sites across the compiler and one signature every one of
 # them would have to grow.  The stack holds the flagged module's namespace so
 # the emission gate can resolve a functor NAME to the class it names; a
@@ -639,11 +594,11 @@ def term_to_ast_expr(
         # get(OUT, <value>, _) misses silently.  $dict_key derefs (and raises a
         # catchable instantiation_error on a never-bound key).
         #
-        # Atom keys/values need no special handling here: under
-        # ``atom_identity_lowering()`` — which the query compiler holds open
-        # while lowering caller-supplied terms — the recursive call below emits
-        # an atom by identity, so a key atom cannot be re-resolved onto a
-        # same-named binding of the namespace the generated code runs in.
+        # Atom keys/values need no special handling here: an atom is a
+        # global-by-spelling interned str (§1b/R2), so the recursive call
+        # below emits it as a plain ``ast.Constant`` — never a name looked up
+        # in the generated code's namespace — and it cannot be re-resolved
+        # onto a same-named binding there.
         def _dictterm_key(k):
             expr = term_to_ast_expr(k, var_context, eval_arith=eval_arith)
             return _call(_name("$dict_key"), expr) if is_var(k) else expr
@@ -813,11 +768,12 @@ def term_to_ast_expr(
     # (another package, a test) constructing one directly, so this branch
     # stays as a compatibility lowering: emit the class's NAME as a str
     # Constant (the identical literal a bare atom of that spelling would
-    # produce), not a bare Name reference into a namespace — except under
-    # ``atom_identity_lowering()`` (query templates), which still applies
-    # for the rare live-class-atom case.  See that helper.
+    # produce), not a bare Name reference into a namespace.  There is no
+    # by-identity special case any more (that machinery is deleted, §1b/R2)
+    # — a plain-str atom and a live zero-field class of the same spelling
+    # both lower to the identical ``ast.Constant``.
     if is_atom(term):
-        return atom_identity_expr(term) or ast.Constant(value=term.__name__)
+        return ast.Constant(value=term.__name__)
 
     if is_term_instance(term):
         cls = type(term)

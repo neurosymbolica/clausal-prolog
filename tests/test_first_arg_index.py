@@ -598,8 +598,16 @@ class TestAtomInListHead:
         list-last heads.  The combination forces indexing on a position whose
         bucket re-includes the list-pattern clauses; the list pattern
         ``[usd, 50000]`` then carries the ``usd`` atom into the head-match
-        AST, where it must be lowered as a ``Name`` reference rather than
-        embedded into an ``ast.Constant``.
+        AST.
+
+        P3-1 §1b/R2 INVERSION: pre-pivot, the atom had to be lowered as a
+        ``Name`` reference rather than embedded into an ``ast.Constant`` (a
+        live zero-field ``PredicateMeta`` class is not a valid ``ast.Constant``
+        value).  Atoms are now global-by-spelling interned strs, so the SAME
+        compatibility lowering that used to be the bug fix (emit an
+        ``ast.Constant`` of the class's ``__name__``) is simply the atom's
+        normal, unconditional lowering — the round-tripped last arg comes
+        back as the plain str ``'usd'``, not the ``usd`` class object.
         """
         # nv
         usd = make_atom("usd")
@@ -639,6 +647,8 @@ class TestAtomInListHead:
         results = _simple_solutions(fn, [a, b, c, d], trail)
         assert len(results) == 4
         # The list-pattern clauses round-trip the atom-bearing last arg.
+        # The atom comes back as the plain str 'usd' (§1b/R2), not the
+        # `usd` PredicateMeta class object passed in as a compile-time value.
         last_args = [r[3] for r in results]
-        assert [usd, 50000] in last_args
-        assert [usd, 100000] in last_args
+        assert ["usd", 50000] in last_args
+        assert ["usd", 100000] in last_args

@@ -113,10 +113,11 @@ def _is_const_element(term) -> bool:
     """True if *term* is a scalar literal, a zero-arity atom, or a global name.
 
     All three render to an expression whose value is fixed for the lifetime
-    of the compiled function — an ``ast.Constant``, an ``$atom(token)``
-    identity call, or a ``Name`` read from the function's globals — which is
-    what lets the frozenset be built once and memoised.  A Var, a nested
-    list/dict, a compound term, a call, a splat: all excluded.
+    of the compiled function — an ``ast.Constant`` (atoms are global-by-
+    spelling interned strs, §1b/R2) or a ``Name`` read from the function's
+    globals — which is what lets the frozenset be built once and memoised.
+    A Var, a nested list/dict, a compound term, a call, a splat: all
+    excluded.
     """
     term = deref(term)
     if is_var(term):

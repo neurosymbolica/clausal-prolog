@@ -72,9 +72,14 @@ def test_bare_atoms_share_identity_across_modules():
 
 
 def test_private_shadows_global():
-    """A module that declares ``-private([phase2priv_orange])`` owns a
-    distinct private class; a sibling that bare-references the same name
-    must auto-mint the global, separate from the private class."""
+    """P3-1 §1b/R2 INVERSION: a module that declares
+    ``-private([phase2priv_orange])`` no longer owns a distinct private
+    class — atoms are global-by-spelling interned strs, so the "private"
+    declaration and a sibling's bare reference to the same name resolve to
+    the identical global object.  (Pre-pivot this pinned the opposite:
+    ``mod_a.phase2priv_orange is not mod_b.phase2priv_orange``.
+    ``-private`` still has its module-local-identity story rewritten by
+    ``-hide`` in Task 6; until then it is advisory only.)"""
     mod_a = _load_fixture(
         "global_atoms_priv_a.clausal",
         "tests.fixtures.global_atoms_priv_a",
@@ -83,9 +88,9 @@ def test_private_shadows_global():
         "global_atoms_priv_b.clausal",
         "tests.fixtures.global_atoms_priv_b",
     )
-    assert isinstance(mod_a.phase2priv_orange, PredicateMeta)
-    assert isinstance(mod_b.phase2priv_orange, PredicateMeta)
-    assert mod_a.phase2priv_orange is not mod_b.phase2priv_orange
+    assert isinstance(mod_a.phase2priv_orange, str)
+    assert isinstance(mod_b.phase2priv_orange, str)
+    assert mod_a.phase2priv_orange is mod_b.phase2priv_orange
     assert mod_b.phase2priv_orange is predicate_builtins["phase2priv_orange"]
 
 
@@ -113,9 +118,12 @@ def test_import_wins_over_global():
 
 
 def test_module_decl_atom_is_not_global():
-    """A module that declares ``-module(M, [phase2declonly_green])`` keeps
-    a local class.  Another module that bare-references the same name
-    without importing must auto-mint a separate global class."""
+    """P3-1 §1b/R2 INVERSION: a module that declares
+    ``-module(M, [phase2declonly_green])`` no longer keeps a distinct local
+    class.  Another module that bare-references the same name without
+    importing now resolves to the SAME global str.  (Pre-pivot this pinned
+    the opposite: ``mod_a.phase2declonly_green is not
+    mod_b.phase2declonly_green``.)"""
     mod_a = _load_fixture(
         "global_atoms_decl_only_a.clausal",
         "tests.fixtures.global_atoms_decl_only_a",
@@ -124,9 +132,9 @@ def test_module_decl_atom_is_not_global():
         "global_atoms_decl_only_b.clausal",
         "tests.fixtures.global_atoms_decl_only_b",
     )
-    assert isinstance(mod_a.phase2declonly_green, PredicateMeta)
-    assert isinstance(mod_b.phase2declonly_green, PredicateMeta)
-    assert mod_a.phase2declonly_green is not mod_b.phase2declonly_green
+    assert isinstance(mod_a.phase2declonly_green, str)
+    assert isinstance(mod_b.phase2declonly_green, str)
+    assert mod_a.phase2declonly_green is mod_b.phase2declonly_green
     assert mod_b.phase2declonly_green is predicate_builtins["phase2declonly_green"]
 
 
@@ -220,15 +228,15 @@ def test_non_strict_atom_dict_key_interns():
 def test_strict_atoms_private_atom_compiles():
     """A file with ``-strict_atoms`` and a bare reference to an atom listed
     in ``-private([...])`` must compile successfully — the private listing
-    satisfies strict mode and the resulting class is module-local."""
+    satisfies strict mode.  P3-1 §1b/R2 INVERSION: the resulting value is now
+    the same global-by-spelling str as the process-wide pool, not a distinct
+    module-local class (pre-pivot this pinned ``is not``)."""
     mod = _load_fixture(
         "strict_atoms_private.clausal",
         "tests.fixtures.strict_atoms_private",
     )
-    assert isinstance(mod.phase3strict_private_orange, PredicateMeta)
-    # Private declaration installs a module-local class distinct from the
-    # process-wide global dict.
-    assert mod.phase3strict_private_orange is not predicate_builtins.get(
+    assert isinstance(mod.phase3strict_private_orange, str)
+    assert mod.phase3strict_private_orange is predicate_builtins.get(
         "phase3strict_private_orange"
     )
 
@@ -332,6 +340,13 @@ def test_private_names_are_importable_and_share_identity():
     list as its identity-preserving route across a file boundary.  If a
     future change starts rejecting or warning on this, it breaks that
     pattern — so the behaviour is pinned here rather than left to drift.
+
+    P3-1 §1b/R2 INVERSION: pre-pivot, the private atom crossing the import
+    boundary was a distinct module-local class (``is not
+    predicate_builtins.get(...)``).  Atoms are now global-by-spelling
+    interned strs, so "shares identity with the owner" is trivially true —
+    it also shares identity with the process-wide global of the same
+    spelling, which the assertion below restates.
     """
     owner = _load_fixture(
         "private_import_owner.clausal",
@@ -344,11 +359,12 @@ def test_private_names_are_importable_and_share_identity():
             "tests.fixtures.private_import_consumer",
         )
 
-    # The private *atom* crossed the boundary, and it is the same class.
-    assert isinstance(owner.privimp_tag, PredicateMeta)
+    # The private *atom* crossed the boundary, and it is the same object.
+    assert isinstance(owner.privimp_tag, str)
     assert consumer.privimp_tag is owner.privimp_tag
-    # ...and it is module-local, not the process-wide global atom.
-    assert owner.privimp_tag is not predicate_builtins.get("privimp_tag")
+    # ...and it is ALSO the process-wide global atom of the same spelling
+    # (§1b/R2 — there is no more module-local atom identity to distinguish).
+    assert owner.privimp_tag is predicate_builtins.get("privimp_tag")
 
     # The private *predicate* crossed the boundary too.
     assert consumer.PrivImpHelper is owner.PrivImpHelper

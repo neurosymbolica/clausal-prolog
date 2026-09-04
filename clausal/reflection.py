@@ -966,7 +966,6 @@ _DIRECTIVE_NAMES = {
     "ModuleDeclaration": "module",
     "PrivateDeclaration": "private",
     "StrictAtomsDeclaration": "strict_atoms",
-    "OverwritesDeclaration": "overwrites",
     "TranslationsDirective": "translations",
     "SpecializeDirective": "specialize",
     "EdcgAccDecl": "edcg_acc",
