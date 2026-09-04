@@ -1783,9 +1783,22 @@ class TermTransformer(NodeTransformer):
                 ),
                 name,
             )
-        # Atom: declared in -module(...) export list — keep as plain Name reference.
+        # Atom: declared in -module(...)/-private([...]).  Atoms are global
+        # by spelling (design doc §1b/§5, R2 — no per-module identity, no
+        # minted class): emit a compile-time str Constant directly rather
+        # than a Name load that used to resolve a module-local class in
+        # ``module_dict``.  Declaration only matters for STRICTNESS (this
+        # name is never collected into ``_bare_atom_refs`` below, so
+        # ``-strict_atoms``/the default-strict mode never flags it as
+        # undeclared) — see ``_handle_module_directive``/
+        # ``_handle_private_directive`` (no longer mint a zero-field class)
+        # and ``compiler_v2._process_declarations`` (binds the plain str
+        # into ``module_dict`` so ``-import_from`` of a declared atom still
+        # works).  The truth-value spellings (``true``/``false``/
+        # ``undefined``) are NOT atoms — the ``_TRUTH_ALIASES`` fold above
+        # intercepts them first, ahead of this branch.
         if identifier in transformer.atoms:
-            return replace(Name(id=identifier, ctx=load), name)
+            return replace(Constant(value=identifier), name)
         # Imported predicate: remap to full dotted path so Python code in the
         # .clausal file cannot accidentally clobber the predicate reference.
         dotted = transformer._import_remap.get(identifier)
@@ -2431,6 +2444,18 @@ def _make_functor_class_ast(functor_name, field_names, source):
     Without the arity check, that 0-arity class would silently shadow this
     file's intended N-arity predicate.
 
+    P3-1 Task 2 (§1b/R2): a bare atom no longer mints a class at all — an
+    earlier file's auto-accepted or declared atom of this exact spelling
+    sits in ``predicate_builtins``/this module's globals as the plain str
+    ``functor_name`` itself.  That shape gets the same re-raise-and-mint
+    treatment as the old arity-mismatched class: an atom placeholder of the
+    SAME spelling is exactly as safe to override as the old 0-arity class
+    was, and for the same reason (Phenomenon A — an atom name and an
+    N-arity predicate of the same spelling can coexist across files; the
+    predicate wins in the file that actually declares it).  A str binding
+    that is NOT equal to ``functor_name`` (some unrelated user value) is
+    left alone, same as any other non-``PredicateMeta`` binding.
+
     The guard is deliberately narrowed to ``isinstance(.., PredicateMeta)``:
     a non-``PredicateMeta`` binding of the same name (e.g. a user-defined
     ``def Foo(...)`` in the .clausal file) is left alone and the predicate
@@ -2455,6 +2480,9 @@ def _make_functor_class_ast(functor_name, field_names, source):
         f"    if isinstance({functor_name}, PredicateMeta) and getattr(",
         f"            {functor_name}, '_fields', None) != {fields_tuple}:",
         "        raise NameError",
+        f"    if isinstance({functor_name}, str) and "
+        f"{functor_name} == {functor_name!r}:",
+        "        raise NameError",
         "except NameError:",
         f"    class {functor_name}(metaclass=PredicateMeta):",
         f"        _fields = {fields_tuple}",
@@ -2466,6 +2494,50 @@ def _make_functor_class_ast(functor_name, field_names, source):
     # snippet's own line 7 and any traceback through it (notably the
     # field-name mismatch diagnostic's "registered by:") points at a line that
     # has nothing to do with the declaration.
+    for node in walk(block):
+        copy_location(node, source)
+    return block
+
+
+def _make_atom_str_assign_ast(atom_name, source):
+    """Generate a guarded statement binding a declared atom's SPELLING at
+    the ``-module``/``-private`` directive's OWN position in the generated
+    code (P3-1 Task 2, §1b/R2).
+
+    Bare atoms mint no class any more, so at first glance the declaration
+    site needs no exec-time statement at all — ``compiler_v2.
+    _process_declarations`` binds ``module_dict[name] = name`` AFTER the
+    whole file has exec'd, which is enough for every ordinary reference
+    (they compile to a literal ``Constant`` now, not a lookup).  But one
+    consumer runs mid-exec, at the directive's own file position, and reads
+    ``module_dict`` directly: a dict-literal atom key (``{foo: 1}``) is
+    resolved by ``import_hook._make_intern_atom``'s ``$intern_atom`` helper
+    EAGERLY, because dict literals build during ``exec`` — before
+    ``_process_declarations`` (or even ``_process_bare_atom_refs``) ever
+    runs.  Without a statement here, ``-private([foo])`` followed later in
+    the same file by ``{foo: 1}`` wrongly hits ``$intern_atom``'s
+    undeclared-atom strict check, even though ``foo`` genuinely is
+    declared — a real regression (not a ruled inversion), caught via
+    ``tests/test_dict_set_compiler.py``.
+
+    Generated code (example for ``foo``)::
+
+        if not isinstance(globals().get('foo'), PredicateMeta):
+            foo = 'foo'
+
+    The guard mirrors ``_make_functor_class_ast``'s spirit: a name already
+    bound to a genuine ``PredicateMeta`` (a real predicate, minted by an
+    earlier clause/import in this same file) is left alone rather than
+    clobbered by the atom placeholder; any other existing value (unbound,
+    or a stale str from the process-wide ``predicate_builtins`` preseed) is
+    safely overwritten with this atom's own spelling.
+    """
+    lines = [
+        f"if not isinstance(globals().get({atom_name!r}), PredicateMeta):",
+        f"    {atom_name} = {atom_name!r}",
+    ]
+    tree = parse("\n".join(lines))
+    block = tree.body[0]
     for node in walk(block):
         copy_location(node, source)
     return block
@@ -4383,7 +4455,19 @@ class EmbedTransformer(NodeTransformer):
                 and not _is_logic_var_name(functor_name)
                 and transformer._is_module_compile()
             ):
-                if functor_name in transformer._seen_functors:
+                if (
+                    functor_name in transformer._seen_functors
+                    # P3-1 Task 2 (§1b/R2): a declared atom never enters
+                    # ``_seen_functors`` any more (no class minted, no
+                    # arity reserved), but a bare ``flag`` statement with
+                    # NO trailing comma is still the comma-optional
+                    # bodyless-fact spelling when the name is a known
+                    # declared atom -- without this it silently fell
+                    # through to ``_guard_bare_call``'s harmless-looking
+                    # "resolve and discard" no-op (the atom IS resolvable,
+                    # so no error either) and the fact was never asserted.
+                    or functor_name in transformer._atoms
+                ):
                     return transformer._build_zero_arity_fact_statements(
                         functor_name, expr_stmt.value, expr_stmt,
                     )
@@ -4478,6 +4562,9 @@ class EmbedTransformer(NodeTransformer):
         ``_make_functor_class_ast`` definitions for each, pre-registering
         them in ``_seen_functors`` so that subsequent clauses use the
         declared field names rather than inferring them from the first clause.
+        Bare (zero-arity) entries are ATOMS — global by spelling (§1b/R2) —
+        and mint no class at all; only predicate (field-carrying) entries
+        go through the class-minting path described above.
         """
         statements = []
         exports_info = []  # for ModuleAST accumulation
@@ -4508,15 +4595,25 @@ class EmbedTransformer(NodeTransformer):
                         f"with -constants and import with -import_from; no "
                         f"export listing is needed")
                 if isinstance(export, Name):
-                    # Bare atom: generate zero-arity PredicateMeta class
+                    # Bare atom: global by spelling (§1b/R2) — no class is
+                    # minted any more (no ``_register_functor``/
+                    # ``_make_functor_class_ast`` statement).  Record the
+                    # name for ``visit_Name``'s strictness check
+                    # (``transformer.atoms``) and for the ModuleAST info
+                    # ``compiler_v2._process_declarations`` reads (rebinds
+                    # the plain str into ``module_dict`` after the whole
+                    # file execs, so an ``-import_from`` of this atom still
+                    # works).  A guarded assignment ALSO runs right here,
+                    # at the directive's own position, so a mid-file
+                    # exec-time consumer of ``module_dict`` (a dict-literal
+                    # atom key via ``$intern_atom`` — see
+                    # ``_make_atom_str_assign_ast``) sees the atom without
+                    # waiting for post-exec processing.
                     transformer._atoms.add(export.id)
                     exports_info.append(export.id)
-                    if export.id not in transformer._seen_functors:
-                        transformer._register_functor(
-                            export.id, [], export, "-module export list")
-                        statements.append(
-                            _make_functor_class_ast(export.id, [], expr_stmt)
-                        )
+                    statements.append(
+                        _make_atom_str_assign_ast(export.id, expr_stmt)
+                    )
                 elif isinstance(export, Call) and isinstance(export.func, Name):
                     functor_name = export.func.id
                     # Use raw Name ids as field names (not lowercased) so they
@@ -4551,9 +4648,11 @@ class EmbedTransformer(NodeTransformer):
 
         Declares atoms and predicate signatures that are internal to the
         module.  Has the same compilation effect as ``-module`` exports
-        (atom assignments, functor class generation, pre-registration in
-        ``_seen_functors``) but communicates that these names are not part
-        of the module's public API.
+        (atom registration for strictness, predicate functor class
+        generation + pre-registration in ``_seen_functors``) but
+        communicates that these names are not part of the module's public
+        API.  Bare (zero-arity) entries are ATOMS — global by spelling
+        (§1b/R2) — and mint no class; see ``_handle_module_directive``.
         """
         statements = []
         private_info = []  # for ModuleAST accumulation
@@ -4578,15 +4677,15 @@ class EmbedTransformer(NodeTransformer):
                 private_constants.append(item.id)
                 continue
             if isinstance(item, Name):
-                # Bare atom: generate zero-arity PredicateMeta class
+                # Bare atom: global by spelling (§1b/R2) — no class minted;
+                # a guarded assignment runs at this position instead (mid-
+                # file exec-time consumers, e.g. a dict-literal atom key);
+                # see the matching comment in ``_handle_module_directive``.
                 transformer._atoms.add(item.id)
                 private_info.append(item.id)
-                if item.id not in transformer._seen_functors:
-                    transformer._register_functor(
-                        item.id, [], item, "-private declaration")
-                    statements.append(
-                        _make_functor_class_ast(item.id, [], expr_stmt)
-                    )
+                statements.append(
+                    _make_atom_str_assign_ast(item.id, expr_stmt)
+                )
             elif isinstance(item, Call) and isinstance(item.func, Name):
                 functor_name = item.func.id
                 field_names = [

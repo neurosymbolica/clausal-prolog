@@ -1,0 +1,11 @@
+# P3-1 Task 2 fixture (§1b/R2 — the atom pivot's central lowering flip).
+# Declares the bare atom `atompivot_cross_tag` via -module.  The sibling
+# fixture `atompivot_private_b.clausal` declares the SAME spelling via
+# -private in a DIFFERENT module.  Pre-pivot these were distinct minted
+# classes that never unified; post-pivot both are the plain interned str
+# `"atompivot_cross_tag"` — see
+# test_global_atoms_default.py::test_declared_atoms_unify_across_module_and_private.
+
+-module(atompivot_module_a, [atompivot_cross_tag])
+
+TagFromModuleDecl(atompivot_cross_tag),

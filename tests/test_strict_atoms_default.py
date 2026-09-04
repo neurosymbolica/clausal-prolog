@@ -38,8 +38,13 @@ def _load_inline_clausal(name: str, source: str):
 
 
 def test_implicit_atoms_mints_undeclared_bare_atom():
-    """`-implicit_atoms` opts into loose auto-mint: an undeclared bare
-    atom is minted into the global dict (today's default behavior)."""
+    """`-implicit_atoms` opts into loose auto-accept: an undeclared bare
+    atom is accepted into the global dict (today's default behavior).
+
+    P3-1 Task 2 (§1b/R2): the accepted value is now the plain interned str
+    itself, not a minted ``PredicateMeta`` class -- the shared-identity
+    claim (``mod.x is predicate_builtins[x]``) is unaffected.
+    """
     assert "sad_implicit_red" not in predicate_builtins
     source = (
         "-implicit_atoms\n"
@@ -47,7 +52,7 @@ def test_implicit_atoms_mints_undeclared_bare_atom():
         "ColorImplicit(sad_implicit_red),\n"
     )
     mod = _load_inline_clausal("_sad_implicit_mints", source)
-    assert isinstance(predicate_builtins["sad_implicit_red"], PredicateMeta)
+    assert isinstance(predicate_builtins["sad_implicit_red"], str)
     assert mod.sad_implicit_red is predicate_builtins["sad_implicit_red"]
 
 
@@ -59,7 +64,8 @@ def test_implicit_atoms_parenthesised_form():
         "ColorImplicitParen(sad_implicit_paren_blue),\n"
     )
     mod = _load_inline_clausal("_sad_implicit_paren", source)
-    assert isinstance(mod.sad_implicit_paren_blue, PredicateMeta)
+    # P3-1 Task 2 (§1b/R2): accepted atoms are plain strs, not classes.
+    assert isinstance(mod.sad_implicit_paren_blue, str)
 
 
 def test_implicit_atoms_rejects_arguments():
@@ -128,10 +134,13 @@ def test_undeclared_bare_atom_raises_by_default():
 
 
 def test_implicit_atoms_still_mints_after_flip():
-    """`-implicit_atoms` remains the loose escape hatch after the flip."""
+    """`-implicit_atoms` remains the loose escape hatch after the flip.
+
+    P3-1 Task 2 (§1b/R2): accepted atoms are plain strs, not classes.
+    """
     source = "-implicit_atoms\nColorStill(sad_still_green),\n"
     mod = _load_inline_clausal("_sad_still_mints", source)
-    assert isinstance(mod.sad_still_green, PredicateMeta)
+    assert isinstance(mod.sad_still_green, str)
 
 
 def test_strict_atoms_deprecation_warns_once_per_process():

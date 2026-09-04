@@ -289,7 +289,8 @@ class TestQualifiedValueAtoms:
         # Binding is only live during iteration, so re-run with next() to read it.
         y2 = Var()
         next(call("QualifiedMatchesImported", y2, module=logic_mod))
-        assert deref(y2).__name__ == "ok"
+        # P3-1 Task 2 (§1b/R2): atoms are plain strs now, not classes.
+        assert deref(y2) == "ok"
 
     def test_qualified_atom_in_head_position_constructs_real_atom(self):
         # nv

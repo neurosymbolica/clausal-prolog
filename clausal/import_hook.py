@@ -67,19 +67,23 @@ def _make_intern_atom(module_dict, module_items, module_name):
     """Build the ``$intern_atom`` helper for a module load.
 
     A bare-atom dict-literal key (``{filing_status: V}``) is resolved to its
-    interned atom **at construction time**, because dict literals are built
-    eagerly during ``exec`` — before the bare-atom mint pass runs — so the key
-    cannot rely on a later module-global binding.  ``setdefault`` into the
-    process-wide ``predicate_builtins`` yields the *same* ``PredicateMeta`` the
-    mint pass would produce, so an atom key and any value-position use of the
-    atom are the identical object (``{foo: 1}[foo]`` matches).
+    atom **at construction time**, because dict literals are built eagerly
+    during ``exec`` — before the bare-atom auto-accept pass runs — so the key
+    cannot rely on a later module-global binding.  Atoms are global by
+    spelling and mint no class any more (§1b/R2): the helper simply returns
+    the str itself, ``setdefault``-shared through the process-wide
+    ``predicate_builtins`` pool with ``compiler_v2._process_bare_atom_refs``/
+    ``_process_declarations`` purely so the identical str object backs the
+    name everywhere (a fresh literal would already compare equal — sharing
+    the object keeps ``{foo: 1}[foo]``-shaped pins that check ``is`` true
+    too).
 
-    Strict atom resolution is the default: an undeclared bare atom must NOT be
-    silently minted (that would pollute ``predicate_builtins`` and defeat the
-    strict check), so the helper refuses to mint a name that is not already
-    available, mirroring ``compiler_v2._process_bare_atom_refs``' own
-    ``effective_strict = not implicit_mode`` rule.  Only files carrying
-    ``-implicit_atoms`` disable strict mode and allow auto-minting, so a
+    Strict atom resolution is the default: an undeclared bare atom must NOT
+    be silently accepted (that would pollute ``predicate_builtins`` and
+    defeat the strict check), so the helper refuses to accept a name that is
+    not already available, mirroring ``compiler_v2._process_bare_atom_refs``'
+    own ``effective_strict = not implicit_mode`` rule.  Only files carrying
+    ``-implicit_atoms`` disable strict mode and allow auto-accept, so a
     dict-key atom and a value-position atom now resolve under the *same*
     default.  (Atom keys whose atom is declared post-exec via
     ``-module``/``-private`` are a known limitation in strict files —
@@ -87,10 +91,9 @@ def _make_intern_atom(module_dict, module_items, module_name):
     string keys or a declared/imported atom; non-strict files, including the
     profile surface, are unaffected.)
     """
-    from clausal.logic.predicate import make_predicate
     from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
 
-    # Strict is the default; only ``-implicit_atoms`` re-enables auto-minting.
+    # Strict is the default; only ``-implicit_atoms`` re-enables auto-accept.
     # Mirrors ``compiler_v2._process_bare_atom_refs``' ``effective_strict``.
     strict = not any(
         isinstance(it, ImplicitAtomsDeclaration) for it in module_items
@@ -111,7 +114,7 @@ def _make_intern_atom(module_dict, module_items, module_name):
             raise NameError(
                 "\n".join([message, *truth_literal_hint_lines([name])])
             )
-        return predicate_builtins.setdefault(name, make_predicate(name, []))
+        return predicate_builtins.setdefault(name, name)
 
     return _intern_atom
 

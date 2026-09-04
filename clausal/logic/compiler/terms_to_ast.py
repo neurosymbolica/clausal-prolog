@@ -807,12 +807,17 @@ def term_to_ast_expr(
             keywords=kw_exprs,
         )
 
-    # Zero-arity PredicateMeta class: the class IS the atom value.
-    # Emit a bare Name reference so the compiled code loads the class directly
-    # — except under ``atom_identity_lowering()`` (query templates), where the
-    # name would be re-resolved in a foreign namespace.  See that helper.
+    # Zero-arity PredicateMeta class reaching the compiler as a live term
+    # object.  Atoms are global strs post-pivot (§1b/R2) — no module mints
+    # this class any more, but one can still ARRIVE here from old code
+    # (another package, a test) constructing one directly, so this branch
+    # stays as a compatibility lowering: emit the class's NAME as a str
+    # Constant (the identical literal a bare atom of that spelling would
+    # produce), not a bare Name reference into a namespace — except under
+    # ``atom_identity_lowering()`` (query templates), which still applies
+    # for the rare live-class-atom case.  See that helper.
     if is_atom(term):
-        return atom_identity_expr(term) or _name(term.__name__)
+        return atom_identity_expr(term) or ast.Constant(value=term.__name__)
 
     if is_term_instance(term):
         cls = type(term)

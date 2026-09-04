@@ -863,19 +863,25 @@ def _process_bare_atom_refs(
     module_dict: dict,
     module_name: str = "<module>",
 ) -> None:
-    """Auto-mint undeclared bare atom references into the process-wide
-    ``predicate_builtins`` dict, then assign each result into ``module_dict``.
+    """Auto-accept undeclared bare atom references, binding the SPELLING
+    itself (a plain ``str``, not a minted class — §1b/R2) into
+    ``module_dict``, keyed the same way in the process-wide
+    ``predicate_builtins`` pool so repeated auto-accepts of the same
+    spelling (in this or another module) return the identical object.
 
     Implements rule 1.4 (global fallthrough) of GLOBAL_ATOMS_DEFAULT.md.
     Every bare ``LoadName`` fallthrough collected by the term-rewriting walker
     arrives here as a ``BareAtomRefs`` module item.  A name is skipped (left
-    unminted) when any higher-precedence resolution rule already supplies it:
+    untouched) when any higher-precedence resolution rule already supplies
+    it:
 
     * already bound in ``module_dict`` — by imports (Step 0), declarations
-      (Step 3), or by an in-file ``_make_functor_class_ast`` exec-time block;
+      (Step 3), or by an in-file ``_make_functor_class_ast`` exec-time block
+      (a real predicate class — this atom-acceptance pass never touches a
+      name that already resolves to something);
     * registered as a builtin in ``_BUILTINS`` / ``_DB_BUILTINS`` under any
       arity — these resolve through ``get_builtin_predicate`` later in the
-      pipeline, and minting them as 0-arity classes would shadow that lookup.
+      pipeline, and binding them here would shadow that lookup.
 
     The collected set is naturally over-broad (it also contains predicate
     functor names and imported-utility names), but that over-collection is
@@ -883,12 +889,12 @@ def _process_bare_atom_refs(
     genuinely undeclared bare-atom one.
 
     Phase 3 of GLOBAL_ATOMS_DEFAULT.md: if a ``StrictAtomsItem`` is present
-    in ``module_items``, the global-fallthrough mint is disabled.  Names that
-    would otherwise have been minted are instead collected and reported as
-    a single ``NameError`` with a diagnostic naming each offending atom and
-    the file, and suggesting the five legitimate ways to declare or reach
-    it (``-module``, ``-private``, ``-import_from``, qualified reference,
-    ``global_atom/2``).
+    in ``module_items``, the global-fallthrough accept is disabled.  Names
+    that would otherwise have been accepted are instead collected and
+    reported as a single ``NameError`` with a diagnostic naming each
+    offending atom and the file, and suggesting the five legitimate ways to
+    declare or reach it (``-module``, ``-private``, ``-import_from``,
+    qualified reference, ``global_atom/2``).
 
     Lazy import of ``predicate_builtins`` — ``clausal.import_hook`` depends
     transitively on this package, so a top-level import would create a cycle
@@ -932,10 +938,13 @@ def _process_bare_atom_refs(
             if effective_strict:
                 undeclared.append(name)
                 continue
-            cls = predicate_builtins.setdefault(
-                name, make_predicate(name, [])
-            )
-            module_dict[name] = cls
+            # Accept the spelling — no class is minted (§1b/R2).  Shared via
+            # ``predicate_builtins`` (the same pool ``$intern_atom`` and
+            # ``_process_declarations`` use) purely so the SAME str object
+            # backs the name everywhere it is auto-accepted; a fresh literal
+            # would already compare equal, but sharing the object keeps
+            # today's ``mod.x is predicate_builtins["x"]``-shaped pins true.
+            module_dict[name] = predicate_builtins.setdefault(name, name)
 
     if undeclared:
         raise NameError(
@@ -982,24 +991,36 @@ def _build_strict_atoms_diagnostic(names: list[str], module_name: str) -> str:
 
 
 def _process_declarations(module_items: list, module_dict: dict) -> None:
-    """Process -module and -private declarations: create PredicateMeta classes
-    and atom assignments.
+    """Process -module and -private declarations: bind atoms, mint predicate
+    classes.
 
-    A declared atom or predicate always gets a module-local class — even when
-    a global-default class for the same name already sits in ``module_dict``
-    (placed there by ``module_dict.update(predicate_builtins)`` at exec
-    start).  This implements the spec rules of GLOBAL_ATOMS_DEFAULT.md:
-    listing in ``-module`` or ``-private`` opts the name into module-local
-    identity, distinct from the global default.
+    Two shapes, two different treatments (§1b/R2 — the atom pivot):
 
-    To avoid clobbering a class minted by ``_make_functor_class_ast`` for an
-    in-file predicate clause (which runs before this pass), we only override
-    when the existing entry is the *global* class for that name — i.e. when
-    ``module_dict[name] is predicate_builtins.get(name)``.
+    * **Bare entry** (a ``str`` — a zero-arity ATOM): no class is minted.
+      Atoms are global by spelling, so there is nothing module-local to
+      create; the plain str is bound into ``module_dict`` under its own
+      name (idempotent — every module binds the identical spelling) purely
+      so an ``-import_from`` of a declared/private atom still finds an
+      attribute to import (Python's ``from mod import name`` needs
+      ``mod.name`` to exist) and so a runtime ``LoadName`` reference to it
+      (the auto-accept fallthrough path, before this pass distinguished it
+      as declared) resolves.  Shared with the same process-wide
+      ``predicate_builtins`` pool ``_process_bare_atom_refs``/
+      ``$intern_atom`` use, so the identical str object backs the name
+      everywhere.
+    * **Tuple entry** (``(name, field_names)`` — a PREDICATE with fields):
+      unchanged from before the pivot — always gets a fresh module-local
+      class, even when a global-default class for the same name already
+      sits in ``module_dict`` (placed there by
+      ``module_dict.update(predicate_builtins)`` at exec start).  To avoid
+      clobbering a class minted by ``_make_functor_class_ast`` for an
+      in-file predicate clause (which runs before this pass), we only
+      override when the existing entry is the *global* class for that name
+      — i.e. when ``module_dict[name] is predicate_builtins.get(name)``.
 
-    Phase 4 of GLOBAL_ATOMS_DEFAULT.md: after building the local classes,
-    cross-check ``-import_from`` bindings against local *atom* declarations
-    and emit ``ClausalAtomShadowingWarning`` for the intersection, modulo
+    Phase 4 of GLOBAL_ATOMS_DEFAULT.md: after processing, cross-check
+    ``-import_from`` bindings against local *atom* declarations and emit
+    ``ClausalAtomShadowingWarning`` for the intersection, modulo
     ``-overwrites([...])`` entries.  Names listed in ``-overwrites`` but not
     shadowing an imported atom earn ``ClausalUnusedOverwritesWarning``.  The
     trigger is narrowed to atoms because predicate functors are already
@@ -1015,8 +1036,23 @@ def _process_declarations(module_items: list, module_dict: dict) -> None:
             exports = item.exports if isinstance(item, ModuleDeclItem) else item.items
             for entry in exports:
                 if isinstance(entry, str):
-                    name = entry
-                    field_names: tuple | list = ()
+                    # Atom: bind the spelling, mint nothing -- UNLESS a
+                    # same-named real predicate already exists in
+                    # module_dict (Phenomenon A: an in-file 0-arity fact
+                    # statement or an N-arity clause re-minted a genuine
+                    # PredicateMeta class over this atom's own -module/
+                    # -private line, exec-time, via the guarded block in
+                    # ``_make_functor_class_ast``/``_build_zero_arity_fact_
+                    # statements``).  The predicate wins -- do not clobber
+                    # it back to a plain str; see
+                    # ``_make_atom_str_assign_ast``'s docstring for the
+                    # matching guard on the OTHER direction (a str must
+                    # not clobber a real predicate either).
+                    if not isinstance(module_dict.get(entry), PredicateMeta):
+                        module_dict[entry] = predicate_builtins.setdefault(
+                            entry, entry
+                        )
+                    continue
                 elif isinstance(entry, tuple):
                     name, field_names = entry
                 else:

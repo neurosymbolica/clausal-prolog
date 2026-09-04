@@ -59,7 +59,11 @@ def test_bare_atoms_share_identity_across_modules():
         "global_atoms_b.clausal",
         "tests.fixtures.global_atoms_b",
     )
-    assert isinstance(mod_a.phase2red, PredicateMeta)
+    # P3-1 Task 2 (§1b/R2): a bare atom lowers to an interned str, not a
+    # minted class — the shared-identity claim below is unaffected (both
+    # modules bind the SAME str object via the process-wide
+    # ``predicate_builtins`` pool).
+    assert isinstance(mod_a.phase2red, str)
     assert mod_a.phase2red is mod_b.phase2red
     assert mod_a.phase2red is predicate_builtins["phase2red"]
 
@@ -100,7 +104,8 @@ def test_import_wins_over_global():
         "global_atoms_importer.clausal",
         "tests.fixtures.global_atoms_importer",
     )
-    assert isinstance(mod_owner.phase2import_yellow, PredicateMeta)
+    # P3-1 Task 2 (§1b/R2): the declared atom is now a str, not a class.
+    assert isinstance(mod_owner.phase2import_yellow, str)
     assert mod_importer.phase2import_yellow is mod_owner.phase2import_yellow
 
 
@@ -235,7 +240,8 @@ def test_strict_atoms_module_decl_atom_compiles():
         "strict_atoms_module_decl.clausal",
         "tests.fixtures.strict_atoms_module_decl",
     )
-    assert isinstance(mod.phase3strict_module_green, PredicateMeta)
+    # P3-1 Task 2 (§1b/R2): a declared atom is now a str, not a class.
+    assert isinstance(mod.phase3strict_module_green, str)
 
 
 def test_strict_atoms_imported_atom_compiles():
@@ -250,8 +256,9 @@ def test_strict_atoms_imported_atom_compiles():
         "strict_atoms_import.clausal",
         "tests.fixtures.strict_atoms_import",
     )
-    assert isinstance(mod_owner.phase3strict_import_yellow, PredicateMeta)
-    # The importer's bare reference resolves to the same class as the
+    # P3-1 Task 2 (§1b/R2): a declared atom is now a str, not a class.
+    assert isinstance(mod_owner.phase3strict_import_yellow, str)
+    # The importer's bare reference resolves to the same object as the
     # owner's declaration.
     assert (
         mod_importer.phase3strict_import_yellow
@@ -536,3 +543,114 @@ class TestAtomCharsRoundTrip:
         out = Var()
         results = [deref(out) for _ in call("atom_codes", "ab", out, module=mod)]
         assert results == [[97, 98]]
+
+
+# ── P3-1 Task 2: the lowering flip (bare atoms -> interned str Constants) ───
+#
+# Task 1 (above) taught the READERS to accept a plain str as an atom while
+# class atoms still existed (transitional dual-accept).  Task 2 flips the
+# WRITER: ``visit_Name``'s atom branch now emits a str ``Constant`` instead
+# of a ``Name`` reference to a minted per-module class, and
+# ``-module``/``-private`` stop minting zero-field atom classes at all.  The
+# central, deliberate behavioral inversion: two modules declaring the SAME
+# atom spelling (whether by bare fallthrough, ``-module``, or ``-private``)
+# now unify with each other -- see
+# implementation_plans/phase3-decomposition-and-p31-atom-pivot.md Task 2 and
+# implementation_plans/tagged-tuple-term-representation.md §1b/§5 (rulings
+# R2/R3).  Cross-module IDENTITY-shaped pins that this directly contradicts
+# (module-decl/-private atoms no longer distinct) are Task 3's job to
+# invert -- NOT touched here; see task-2-report.md's expected-red ledger.
+
+
+def test_declared_atoms_unify_across_module_and_private():
+    """A bare atom declared via ``-module`` in one module and via
+    ``-private`` in a completely different, unrelated module now UNIFY.
+
+    Pre-pivot this failed: ``-module``/``-private`` each minted a distinct
+    per-module ``PredicateMeta`` class for the same spelling, so the two
+    values were different objects that never unified.  Post-pivot both
+    lower to the identical interned str ``"atompivot_cross_tag"`` -- atoms
+    are global by spelling, with no per-module identity (§1b/R2).
+    """
+    mod_a = _load_fixture(
+        "atompivot_module_a.clausal",
+        "tests.fixtures.atompivot_module_a",
+    )
+    mod_b = _load_fixture(
+        "atompivot_private_b.clausal",
+        "tests.fixtures.atompivot_private_b",
+    )
+    lm_a = mod_a.__dict__["$module"]
+    lm_b = mod_b.__dict__["$module"]
+    out_a, out_b = Var(), Var()
+    # deref INSIDE the loop -- call()'s generator undoes trail bindings on
+    # backtrack past the last yield, so reading the Var after the generator
+    # is exhausted (list(...) then deref) sees it unbound again.
+    vals_a = [deref(out_a) for _ in call("TagFromModuleDecl", out_a, module=lm_a)]
+    vals_b = [deref(out_b) for _ in call("TagFromPrivateDecl", out_b, module=lm_b)]
+    assert len(vals_a) == 1 and len(vals_b) == 1
+    val_a, val_b = vals_a[0], vals_b[0]
+    assert val_a == "atompivot_cross_tag"
+    assert val_b == "atompivot_cross_tag"
+    # Not just equal -- the SAME interned object, and they actually unify.
+    assert val_a is val_b
+    trail = Trail()
+    assert unify(val_a, val_b, trail)
+
+
+def test_bare_atom_arrives_as_plain_str_at_python_seam():
+    """The value a solved query binds for a bare atom is the plain str
+    itself -- not a ``PredicateMeta`` instance -- at the actual Python seam
+    (the object a caller of ``solve``/``call`` gets back after ``deref``)."""
+    source = (
+        "-module(atompivot_seam_test, [Seam(X), atompivot_seam_red])\n"
+        "\n"
+        "Seam(atompivot_seam_red),\n"
+    )
+    mod = _load_inline_clausal("_atompivot_seam", source)
+    lm = mod.__dict__["$module"]
+    out = Var()
+    results = [deref(out) for _ in call("Seam", out, module=lm)]
+    assert len(results) == 1
+    val = results[0]
+    assert val == "atompivot_seam_red"
+    assert type(val) is str
+
+
+def test_strictness_preserved_across_the_lowering_flip():
+    """The lowering flip changes WHAT a bare atom compiles to (a str, not a
+    class) but not WHETHER an undeclared one is allowed: strict-by-default
+    still raises ``NameError``, and ``-implicit_atoms`` still lifts it --
+    now producing a plain str rather than a minted class."""
+    with pytest.raises(NameError):
+        _load_inline_clausal(
+            "_atompivot_strict_still_raises",
+            "Seam(atompivot_undeclared_atom),\n",
+        )
+    mod = _load_inline_clausal(
+        "_atompivot_implicit_lifts",
+        "-implicit_atoms\n\nSeamImplicit(atompivot_implicit_atom),\n",
+    )
+    assert isinstance(mod.atompivot_implicit_atom, str)
+
+
+def test_true_lowers_to_truth_value_not_atom():
+    """The ``_TRUTH_ALIASES`` Kleene fold in ``visit_Name`` must stay AHEAD
+    of the atom-lowering branch -- ``true``/``false``/``undefined`` are NOT
+    atoms.  Pins that ``true`` still compiles to the Python bool ``True``,
+    never the str ``"true"`` (which the atom branch would otherwise
+    produce now that atoms lower to str Constants too -- the two branches
+    must stay distinguishable)."""
+    source = (
+        "-module(atompivot_truth_test, [TruthProbe(X)])\n"
+        "\n"
+        "TruthProbe(true),\n"
+    )
+    mod = _load_inline_clausal("_atompivot_truth", source)
+    lm = mod.__dict__["$module"]
+    out = Var()
+    results = [deref(out) for _ in call("TruthProbe", out, module=lm)]
+    assert len(results) == 1
+    val = results[0]
+    assert val is True
+    assert val != "true"
