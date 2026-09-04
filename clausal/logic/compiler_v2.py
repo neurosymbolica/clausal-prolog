@@ -32,6 +32,7 @@ from clausal.logic.predicate import (
 from clausal.pythonic_ast.nodes import (
     BareAtomRefs as BareAtomRefsItem,
     Directive as DirectiveItem,
+    HideDeclaration as HideDeclItem,
     ImportFromDirective as ImportFromItem,
     ImportModuleDirective as ImportModuleItem,
     ModuleDeclaration as ModuleDeclItem,
@@ -41,6 +42,10 @@ from clausal.pythonic_ast.nodes import (
     StrictAtomsDeclaration as StrictAtomsItem,
 )
 
+
+# Sentinel distinguishing "not present" from a legitimately-bound None/False
+# in module_dict -- see _process_bare_atom_refs (P3-1 Task 7 fix round 1).
+_MISSING = object()
 
 _strict_atoms_deprecation_emitted = False
 
@@ -805,6 +810,60 @@ def _run_specialization(
         # predicate_nodes — it's already fully compiled.
 
 
+def _locally_declared_names(module_items: list) -> frozenset[str]:
+    """Names THIS module's own -module/-private/-hide/-import_from/
+    -import_module directives legitimately bind.
+
+    P3-1 Task 7 fix round 1 (Critical, review-caught): the strictness
+    consumers below (and ``import_hook._make_intern_atom``'s dict-key
+    path) used to treat ANY name already present in ``module_dict`` as
+    "already resolved" -- but ``module_dict`` is pre-seeded at exec start
+    (``module_dict.update(predicate_builtins)``, import_hook.py) with the
+    ENTIRE process-wide atom pool, which accumulates every atom any
+    earlier-loaded module in the same process ever declared or
+    auto-accepted. That let strictness silently pass for a genuinely
+    undeclared atom whenever ANY earlier module happened to share its
+    spelling. Declaredness is a per-module compiler lint against THIS
+    module's own declared vocabulary (§1b: "a pure compiler lint against
+    the declared vocabulary — it no longer rides on Python name
+    resolution") -- separate from, and not satisfied by, atom UNIFICATION
+    identity being global by spelling (§1b/R2, deliberate, unchanged).
+    This positive set is the fix: built from what THIS module's own
+    ``module_items`` say, not from ``module_dict``'s ambient state, so a
+    same-spelling declaration in a different module can no longer stand
+    in for this module's own.
+
+    ``global_atom/2``'s mint-on-demand mode (``clausal/logic/builtins/
+    inspection.py``) also writes into the ``predicate_builtins`` pool, but
+    at RUNTIME (inside a query), not at compile time -- irrelevant here on
+    purpose: this set is built from module_items alone, so a pool write
+    from a running query can never retroactively satisfy another module's
+    compile-time strictness check either.
+    """
+    names: set[str] = set()
+    for item in module_items:
+        if isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
+            exports = (
+                item.exports if isinstance(item, ModuleDeclItem) else item.items
+            )
+            for entry in exports:
+                if isinstance(entry, str):
+                    names.add(entry)
+                elif isinstance(entry, tuple):
+                    names.add(entry[0])
+        elif isinstance(item, HideDeclItem):
+            names.update(item.items)
+        elif isinstance(item, ImportFromItem):
+            for name_spec in item.names:
+                if isinstance(name_spec, tuple):
+                    names.add(name_spec[1])  # local alias
+                else:
+                    names.add(name_spec)
+        elif isinstance(item, ImportModuleItem):
+            names.add(item.module.split(".")[0])
+    return frozenset(names)
+
+
 def _process_bare_atom_refs(
     module_items: list,
     module_dict: dict,
@@ -822,13 +881,42 @@ def _process_bare_atom_refs(
     untouched) when any higher-precedence resolution rule already supplies
     it:
 
-    * already bound in ``module_dict`` — by imports (Step 0), declarations
-      (Step 3), or by an in-file ``_make_functor_class_ast`` exec-time block
-      (a real predicate class — this atom-acceptance pass never touches a
-      name that already resolves to something);
+    * a genuine ``PredicateMeta`` class already sits in ``module_dict`` —
+      an in-file ``_make_functor_class_ast`` exec-time block (a real
+      predicate class, whether declared with fields or clause-head-only)
+      never leaks cross-module the way a plain atom str does (see below),
+      so trusting ``module_dict`` for this shape is safe;
+    * an already-bound object that is NOT the process-pool's exact
+      self-mapped atom str for this name — a genuine Python import (Step
+      0) or any other legitimately-bound value is trusted as before;
+    * THIS module's own declared/imported vocabulary — see
+      ``_locally_declared_names`` (P3-1 Task 7 fix round 1: -module,
+      -private, -hide, -import_from, -import_module);
     * registered as a builtin in ``_BUILTINS`` / ``_DB_BUILTINS`` under any
       arity — these resolve through ``get_builtin_predicate`` later in the
       pipeline, and binding them here would shadow that lookup.
+
+    P3-1 Task 7 fix round 1 (Critical, review-caught): a BLANKET
+    ``if name in module_dict: continue`` used to stand in for all four
+    reasons above at once — which was wrong for the plain-str atom shape
+    specifically, because ``module_dict`` is pre-seeded at exec start with
+    the ENTIRE process-wide ``predicate_builtins`` pool
+    (``import_hook.py``), so an atom some OTHER, earlier-loaded module
+    declared (and therefore ``setdefault``-installed into that pool) was
+    indistinguishable from one THIS module legitimately declared itself.
+    §1b is explicit that declaredness is "a pure compiler lint against the
+    declared vocabulary — it no longer rides on Python name resolution" —
+    separate from, and unaffected by, atom UNIFICATION identity being
+    global by spelling (§1b/R2, deliberate, unchanged: the process-pool
+    seed itself STAYS, it backs global predicate-class/atom-object
+    resolution). The fix narrows the blanket check to the ONE shape that
+    can actually carry pool leakage — a plain str equal to its own name
+    AND still identical to the pool's current entry for that name — and
+    requires THIS module's own declared/imported set to vouch for that
+    shape; every other already-bound object (a real class, a Python
+    import) is unaffected. ``global_atom/2``'s mint-on-demand mode also
+    writes the pool, but only at query RUNTIME, long after this
+    compile-time check — irrelevant here by construction.
 
     The collected set is naturally over-broad (it also contains predicate
     functor names and imported-utility names), but that over-collection is
@@ -853,6 +941,8 @@ def _process_bare_atom_refs(
     builtin_names = {name for (name, _arity) in _BUILTINS}
     builtin_names.update(name for (name, _arity) in _DB_BUILTINS)
 
+    local_names = _locally_declared_names(module_items)
+
     strict_mode = any(
         isinstance(item, StrictAtomsItem) for item in module_items
     )
@@ -876,8 +966,28 @@ def _process_bare_atom_refs(
         if not isinstance(item, BareAtomRefsItem):
             continue
         for name in item.names:
-            if name in module_dict:
-                # Higher-precedence rule already supplied this name.
+            existing = module_dict.get(name, _MISSING)
+            if existing is not _MISSING:
+                # A leaked-pool-atom shape is a plain str equal to its own
+                # name that is STILL the identical object the process pool
+                # holds for that name right now — exactly what this
+                # function's own auto-mint branch below,
+                # ``_process_declarations``, and ``global_atom/2`` all
+                # install. Anything else already bound (a real
+                # PredicateMeta class, a Python import, any other object)
+                # is trusted unconditionally, same as before this fix.
+                leaked_pool_atom = (
+                    isinstance(existing, str)
+                    and existing == name
+                    and predicate_builtins.get(name) is existing
+                )
+                if not leaked_pool_atom or name in local_names:
+                    continue
+            if name in local_names:
+                # This module's own declared/imported vocabulary — no
+                # module_dict entry needed to trust it (covers a name
+                # declared via -module/-private but not yet reflected in
+                # module_dict at this point in the pipeline, if any).
                 continue
             if name in builtin_names:
                 # Builtin under any arity — resolved by get_builtin_predicate.
@@ -897,7 +1007,6 @@ def _process_bare_atom_refs(
         raise NameError(
             _build_strict_atoms_diagnostic(undeclared, module_name)
         )
-
 
 def _build_strict_atoms_diagnostic(names: list[str], module_name: str) -> str:
     """Build the multi-line diagnostic for ``-strict_atoms`` violations.

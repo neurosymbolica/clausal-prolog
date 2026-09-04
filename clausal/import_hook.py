@@ -90,7 +90,23 @@ def _make_intern_atom(module_dict, module_items, module_name):
     declarations are processed after ``exec`` — so strict files should use
     string keys or a declared/imported atom; non-strict files, including the
     profile surface, are unaffected.)
+
+    P3-1 Task 7 fix round 1 (Critical, review-caught): ``existing = module_dict.
+    get(name)`` used to trust ANY already-bound name, including one present
+    ONLY because ``module_dict`` was pre-seeded at exec start with the
+    entire process-wide ``predicate_builtins`` pool -- so a dict-key atom
+    undeclared in THIS module silently resolved whenever some OTHER,
+    earlier-loaded module had declared (or auto-accepted) the same
+    spelling.  Same defect, same fix, as ``compiler_v2._process_bare_atom_
+    refs``: trust an already-bound value UNLESS it is specifically the
+    leaked-pool-atom shape (a plain str equal to its own name, still
+    identical to the pool's live entry) that THIS module's own declared/
+    imported vocabulary (``compiler_v2._locally_declared_names``) does not
+    vouch for.  ``global_atom/2``'s mint-on-demand mode also writes the
+    pool, but only at query runtime -- irrelevant to this compile-time
+    check, same reasoning as the sibling fix.
     """
+    from clausal.logic.compiler_v2 import _locally_declared_names
     from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
 
     # Strict is the default; only ``-implicit_atoms`` re-enables auto-accept.
@@ -98,11 +114,24 @@ def _make_intern_atom(module_dict, module_items, module_name):
     strict = not any(
         isinstance(it, ImplicitAtomsDeclaration) for it in module_items
     )
+    local_names = _locally_declared_names(module_items)
 
     def _intern_atom(name):
         existing = module_dict.get(name)
         if existing is not None:
-            return existing
+            leaked_pool_atom = (
+                isinstance(existing, str)
+                and existing == name
+                and predicate_builtins.get(name) is existing
+            )
+            if not leaked_pool_atom or name in local_names:
+                return existing
+        elif name in local_names:
+            # Declared/imported by this module but not yet reflected in
+            # module_dict at this point in exec (e.g. a -module/-private
+            # atom whose guarded assignment has not run yet).  Resolve it
+            # the same way the auto-mint branch below would.
+            return predicate_builtins.setdefault(name, name)
         if strict:
             message = (
                 f"strict_atoms: undeclared atom {name!r} used as a dict key in "

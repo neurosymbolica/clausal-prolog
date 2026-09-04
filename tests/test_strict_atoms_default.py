@@ -188,3 +188,144 @@ def test_runtime_dict_key_intern_implicit_still_mints():
     )
     mod = _load_inline_clausal("_sad_rtkey_implicit", source)
     assert mod.sad_rtkey_amber is predicate_builtins["sad_rtkey_amber"]
+
+
+class TestDeclarednessIsPerModuleNotProcessWide:
+    """P3-1 Task 7 fix round 1 (Critical, review-caught) regression tests.
+
+    ``_process_bare_atom_refs``/``_make_intern_atom`` used to treat a name
+    already present in ``module_dict`` as "already resolved" for
+    STRICTNESS purposes -- but ``module_dict`` is pre-seeded at exec start
+    with the entire process-wide ``predicate_builtins`` pool, so an atom
+    some OTHER, earlier-loaded module declared (which installs it into
+    that pool) silently satisfied a DIFFERENT module's own undeclared bare
+    reference, regardless of that second module ever declaring/importing
+    it itself. §1b is explicit that declaredness is a per-module compiler
+    lint against the declared vocabulary -- separate from, and unaffected
+    by, atom UNIFICATION identity being global by spelling (§1b/R2,
+    deliberate, unchanged). These tests reproduce the reviewer's exact
+    probe shape for both the bare-atom-reference path
+    (``compiler_v2._process_bare_atom_refs``) and the dict-key path
+    (``import_hook._make_intern_atom``), in both load orders, plus a
+    control confirming the legitimate (declare-then-use) case still works.
+    """
+
+    def test_bare_atom_raises_even_though_another_module_declared_it_first(self):
+        """Module A privately declares an atom; module B references the
+        SAME spelling bare, undeclared. B must NameError -- A's declaration
+        (and the process-pool entry it created) must not silently satisfy
+        B's own strictness check."""
+        _load_inline_clausal(
+            "_t7leak_ab_owner",
+            "-module(t7leak_ab_owner, [P(X)])\n"
+            "-private([t7leak_ab_atom])\n"
+            "P(t7leak_ab_atom),\n",
+        )
+        assert "t7leak_ab_atom" in predicate_builtins  # sanity: A did declare it
+        with pytest.raises(NameError) as exc_info:
+            _load_inline_clausal(
+                "_t7leak_ab_user",
+                "-module(t7leak_ab_user, [Q(X)])\n"
+                "Q(X) <- (X == t7leak_ab_atom)\n",
+            )
+        msg = str(exc_info.value)
+        assert "strict_atoms" in msg
+        assert "t7leak_ab_atom" in msg
+
+    def test_bare_atom_raises_regardless_of_load_order(self):
+        """Same atom spelling, reversed timing: the undeclared module fails
+        BEFORE anything has declared it, a LEGITIMATE declaration then
+        succeeds, and a THIRD, still-undeclared module fails AFTER the
+        pool already carries the spelling -- proving the fix is not merely
+        "first loader wins" but genuinely per-module."""
+        with pytest.raises(NameError):
+            _load_inline_clausal(
+                "_t7leak_ba_user_before",
+                "-module(t7leak_ba_user_before, [Q(X)])\n"
+                "Q(X) <- (X == t7leak_ba_atom)\n",
+            )
+        mod_owner = _load_inline_clausal(
+            "_t7leak_ba_owner",
+            "-module(t7leak_ba_owner, [P(X)])\n"
+            "-private([t7leak_ba_atom])\n"
+            "P(t7leak_ba_atom),\n",
+        )
+        assert isinstance(mod_owner.t7leak_ba_atom, str)
+        with pytest.raises(NameError) as exc_info:
+            _load_inline_clausal(
+                "_t7leak_ba_user_after",
+                "-module(t7leak_ba_user_after, [R(X)])\n"
+                "R(X) <- (X == t7leak_ba_atom)\n",
+            )
+        msg = str(exc_info.value)
+        assert "strict_atoms" in msg
+        assert "t7leak_ba_atom" in msg
+
+    def test_bare_atom_control_declaring_it_locally_compiles(self):
+        """Control: a module that declares the atom itself compiles fine
+        (the fix does not break the legitimate, intended case)."""
+        mod = _load_inline_clausal(
+            "_t7leak_ctrl",
+            "-module(t7leak_ctrl, [P(X)])\n"
+            "-private([t7leak_ctrl_atom])\n"
+            "P(t7leak_ctrl_atom),\n",
+        )
+        assert isinstance(mod.t7leak_ctrl_atom, str)
+
+    def test_dict_key_atom_raises_even_though_another_module_declared_it_first(self):
+        """Dict-key path (``import_hook._make_intern_atom``) counterpart of
+        ``test_bare_atom_raises_even_though_another_module_declared_it_first``."""
+        _load_inline_clausal(
+            "_t7leakd_ab_owner",
+            "-module(t7leakd_ab_owner, [P(X)])\n"
+            "-private([t7leakd_ab_atom])\n"
+            "P(t7leakd_ab_atom),\n",
+        )
+        assert "t7leakd_ab_atom" in predicate_builtins  # sanity
+        with pytest.raises(NameError) as exc_info:
+            _load_inline_clausal(
+                "_t7leakd_ab_user",
+                "-module(t7leakd_ab_user, [Q(X)])\n"
+                "Q(X) <- (X == {t7leakd_ab_atom: 1}[t7leakd_ab_atom])\n",
+            )
+        msg = str(exc_info.value)
+        assert "strict_atoms" in msg
+        assert "t7leakd_ab_atom" in msg
+        assert "dict key" in msg
+
+    def test_dict_key_atom_raises_regardless_of_load_order(self):
+        """Dict-key path counterpart of
+        ``test_bare_atom_raises_regardless_of_load_order``."""
+        with pytest.raises(NameError):
+            _load_inline_clausal(
+                "_t7leakd_ba_user_before",
+                "-module(t7leakd_ba_user_before, [Q(X)])\n"
+                "Q(X) <- (X == {t7leakd_ba_atom: 1}[t7leakd_ba_atom])\n",
+            )
+        mod_owner = _load_inline_clausal(
+            "_t7leakd_ba_owner",
+            "-module(t7leakd_ba_owner, [P(X)])\n"
+            "-private([t7leakd_ba_atom])\n"
+            "P(t7leakd_ba_atom),\n",
+        )
+        assert isinstance(mod_owner.t7leakd_ba_atom, str)
+        with pytest.raises(NameError) as exc_info:
+            _load_inline_clausal(
+                "_t7leakd_ba_user_after",
+                "-module(t7leakd_ba_user_after, [R(X)])\n"
+                "R(X) <- (X == {t7leakd_ba_atom: 1}[t7leakd_ba_atom])\n",
+            )
+        msg = str(exc_info.value)
+        assert "strict_atoms" in msg
+        assert "t7leakd_ba_atom" in msg
+
+    def test_dict_key_control_declaring_it_locally_compiles(self):
+        """Control: dict-key path counterpart -- a module that declares the
+        atom itself compiles fine."""
+        mod = _load_inline_clausal(
+            "_t7leakd_ctrl",
+            "-module(t7leakd_ctrl, [P(X)])\n"
+            "-private([t7leakd_ctrl_atom])\n"
+            "P(X) <- (X == {t7leakd_ctrl_atom: 1}[t7leakd_ctrl_atom])\n",
+        )
+        assert mod.P is not None
