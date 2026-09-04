@@ -13,6 +13,7 @@ from clausal.pythonic_ast.nodes import (
     EdcgAccDecl,
     EdcgPassDecl,
     EdcgPredDecl,
+    HideDeclaration as HideDeclItem,
     ImportFromDirective as ImportFromItem,
     ImportModuleDirective as ImportModuleItem,
     ModuleDeclaration as ModuleDeclItem,
@@ -26,6 +27,7 @@ from clausal.pythonic_ast.nodes import (
 
 # The module-namespace key the ``-tagged_terms`` directive assigns.  Single
 # source of truth lives with the cell primitives it opts into.
+from clausal.logic.atoms import mangle
 from clausal.logic.cells import TAGGED_TERMS_FLAG
 
 load = Load()
@@ -1176,7 +1178,7 @@ class TermTransformer(NodeTransformer):
     def __init__(transformer, atoms=frozenset(), import_remap=None,
                  source_lines=None, bare_atom_refs=None,
                  logic_var_refs=None, constants=frozenset(), filename=None,
-                 reify=False):
+                 reify=False, hidden_atoms=frozenset(), module_name=None):
         transformer.seen_vars = set()
         # Reflection models MORE than compiles: ``reify_source`` reuses this
         # transformer but must keep accepting shapes the compiler refuses —
@@ -1193,6 +1195,14 @@ class TermTransformer(NodeTransformer):
         transformer._logic_var_refs = (
             logic_var_refs if logic_var_refs is not None else {})
         transformer.atoms = atoms
+        # P3-1 Task 6 (§1a/§1b R1): the current file's ``-hide``-en bare
+        # spellings and its own declared module name, threaded through from
+        # ``EmbedTransformer`` by ``_make_term_transformer`` — see
+        # ``visit_Name``'s atom branch, which checks ``_hidden_atoms``
+        # BEFORE the general ``atoms`` membership check so a hidden name
+        # substitutes the mangled ``Constant`` instead of the plain one.
+        transformer._hidden_atoms = hidden_atoms
+        transformer._module_name = module_name
         # -constants (Task 5): names bound to a ground value before any
         # clause statement executes. A plain Name reference to one embeds
         # the value in the clause term — see visit_Name.
@@ -1796,6 +1806,22 @@ class TermTransformer(NodeTransformer):
         # works).  The truth-value spellings (``true``/``false``/
         # ``undefined``) are NOT atoms — the ``_TRUTH_ALIASES`` fold above
         # intercepts them first, ahead of this branch.
+        # Hidden atom (P3-1 Task 6, ``-hide``, §1a/§1b R1): checked BEFORE
+        # the general ``atoms`` membership below so a hidden spelling
+        # substitutes the compiler-mangled Constant instead of the plain
+        # one.  ``_hidden_atoms`` is per-file transformer state (never
+        # populated from another module's declarations), so any match here
+        # is by construction a reference from WITHIN the owning module —
+        # every such reference compiles to the SAME interned mangled str
+        # (``clausal.logic.atoms.mangle``), so they unify with each other;
+        # a different module's bare use of the same spelling never reaches
+        # this branch and resolves to the plain global atom instead (§1b:
+        # "other modules simply can't spell it").
+        if identifier in transformer._hidden_atoms:
+            return replace(
+                Constant(value=mangle(transformer._module_name, identifier)),
+                name,
+            )
         if identifier in transformer.atoms:
             return replace(Constant(value=identifier), name)
         # Imported predicate: remap to full dotted path so Python code in the
@@ -2498,10 +2524,20 @@ def _make_functor_class_ast(functor_name, field_names, source):
     return block
 
 
-def _make_atom_str_assign_ast(atom_name, source):
+def _make_atom_str_assign_ast(atom_name, source, value=None):
     """Generate a guarded statement binding a declared atom's SPELLING at
     the ``-module``/``-private`` directive's OWN position in the generated
     code (P3-1 Task 2, §1b/R2).
+
+    *value* defaults to ``atom_name`` itself (the ordinary global-atom
+    case).  P3-1 Task 6 (``-hide``) passes the atom's MANGLED spelling
+    instead — binding the bare Python name, in THIS module's own
+    namespace only (never the process-wide ``predicate_builtins`` pool),
+    to the mangled str.  This is what makes a hidden atom used as a
+    dict-literal key (``{secret: 1}``, resolved eagerly by
+    ``import_hook._make_intern_atom``'s ``$intern_atom`` — see below) see
+    the correctly mangled value instead of tripping the undeclared-atom
+    strict check or, worse, silently registering the BARE spelling.
 
     Bare atoms mint no class any more, so at first glance the declaration
     site needs no exec-time statement at all — ``compiler_v2.
@@ -2531,9 +2567,11 @@ def _make_atom_str_assign_ast(atom_name, source):
     or a stale str from the process-wide ``predicate_builtins`` preseed) is
     safely overwritten with this atom's own spelling.
     """
+    if value is None:
+        value = atom_name
     lines = [
         f"if not isinstance(globals().get({atom_name!r}), PredicateMeta):",
-        f"    {atom_name} = {atom_name!r}",
+        f"    {atom_name} = {value!r}",
     ]
     tree = parse("\n".join(lines))
     block = tree.body[0]
@@ -3495,6 +3533,19 @@ class EmbedTransformer(NodeTransformer):
         # can name the declaration it disagrees with.
         transformer._functor_decl_site: dict[str, tuple[int, str]] = {}
         transformer._atoms: set[str] = set()
+        # P3-1 Task 6 (§1a/§1b, ruling R1): this file's OWN ``-module(...)``
+        # name, set by ``_handle_module_directive`` the moment that
+        # directive is seen.  ``-hide`` mangling is keyed by this identity
+        # (there is no principled name to mangle into without one — a
+        # ``-hide`` before any ``-module`` in the same file is a compile
+        # error, see ``_handle_hide_directive``).
+        transformer._module_name: str | None = None
+        # Bare (unmangled) spellings declared ``-hide``-en in THIS file so
+        # far.  A member here is ALSO added to ``transformer._atoms``
+        # (strictness — see ``_handle_hide_directive``); this second set is
+        # what ``visit_Name``'s atom branch checks FIRST to decide whether
+        # to substitute the mangled ``Constant`` instead of the plain one.
+        transformer._hidden_atoms: set[str] = set()
         # Names bound by -constants (Task 5) so far in this file — a plain
         # module global holding a ground value, threaded into every
         # per-clause TermTransformer by _make_term_transformer. Task 6 also
@@ -3925,6 +3976,8 @@ class EmbedTransformer(NodeTransformer):
             constants=frozenset(transformer._constants),
             filename=transformer._filename,
             reify=transformer._reify,
+            hidden_atoms=transformer._hidden_atoms,
+            module_name=transformer._module_name,
         )
 
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
@@ -4479,6 +4532,8 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_module_directive(args, expr_stmt)
         if name == "private":
             return transformer._handle_private_directive(args, expr_stmt)
+        if name == "hide":
+            return transformer._handle_hide_directive(args, expr_stmt)
         if name == "dynamic":
             specs = _parse_pred_arity_args(args, "dynamic")
             transformer._module_items.append(DirectiveItem(name="dynamic", specs=specs))
@@ -4545,7 +4600,7 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_tagged_terms_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
-            f"(known directives: -module, -private, -dynamic, -discontiguous, "
+            f"(known directives: -module, -private, -hide, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
             f"-strict_atoms, -implicit_atoms, -allow_singletons, "
@@ -4574,6 +4629,10 @@ class EmbedTransformer(NodeTransformer):
                 f"{', '.join(unparse(a) for a in args)}) — a dotted "
                 "package path is not a valid module name")
         module_name = args[0].id
+        # P3-1 Task 6: record the declared module name for ``-hide`` keying
+        # (must be set before any ``-hide`` directive later in this file —
+        # see ``_handle_hide_directive``).
+        transformer._module_name = module_name
         if len(args) == 2 and not isinstance(args[1], List):
             raise SyntaxError(
                 "-module requires a name and an export list: "
@@ -4704,6 +4763,98 @@ class EmbedTransformer(NodeTransformer):
             # pre-registered here; the list itself is still well-formed.
         transformer._module_items.append(
             PrivateDeclItem(items=private_info, constants=private_constants))
+        if not statements:
+            return replace(Pass(), expr_stmt)
+        return statements if len(statements) > 1 else statements[0]
+
+    def _handle_hide_directive(transformer, args, expr_stmt):
+        """Process ``-hide([atom1, atom2, ...])`` directive (P3-1 Task 6,
+        design doc §1a/§1b, ruling R1).
+
+        Compiler-renames each listed atom into a reader-unwritable,
+        module-scoped spelling (``clausal.logic.atoms.mangle`` — a single
+        ``HIDDEN_SEP`` = U+E000 codepoint the surface reader refuses inside
+        any atom token, R1).  Every reference to the atom WITHIN the
+        owning module compiles to the identical mangled ``Constant``
+        (``visit_Name``'s atom branch, extended for this directive), so
+        such references unify with each other exactly as an ordinary
+        global atom's references do; a bare same-spelling reference in a
+        DIFFERENT module resolves to the plain (unmangled, or
+        differently-mangled) global atom instead and never unifies with
+        this one — "other modules simply can't spell it" (§1b).
+
+        **The guarantee is uniqueness + analysis soundness, NOT runtime
+        security** (§1b, the Ciao/Python-name-mangling stance): the mangled
+        spelling embeds the module name and is entirely deterministic, so
+        ``atom_chars/2``/``atom_codes/2`` and similar character-level
+        builtins CAN forge it from its known pieces (a module name and a
+        bare atom spelling an attacker/author already knows). This is
+        documented out-of-warranty, not blocked — the same stance §1b
+        already takes for the general str-atom domain.
+
+        **Requires a preceding ``-module(name, [...])`` in the same file.**
+        The mangled spelling embeds the module name, so a ``-hide`` before
+        any ``-module`` (or in a module-less file) has no principled
+        identity to mangle into; rather than inventing an implicit/
+        anonymous namespace (which would silently stop being module-scoped
+        the moment the file gained a real ``-module`` later, or collide
+        across separately-loaded module-less files), this is a compile-
+        time ``SyntaxError`` — the simplest sound rule.
+
+        Entries are bare atoms ONLY (unlike ``-private``, no ``foo(A, B)``
+        predicate-signature shape): predicate names are already
+        module-local through Python's own module/``PredicateMeta`` scoping
+        — hiding is purely an ATOM concern.
+
+        Each entry registers in ``transformer._atoms`` (so
+        ``-strict_atoms``/the default-strict mode treats it as declared —
+        a hidden atom counts as declared for strictness purposes even
+        though its OWN mangled spelling is what actually compiles in) AND
+        in ``transformer._hidden_atoms`` (consulted by ``visit_Name``
+        ahead of the general ``atoms`` check, so the mangled Constant wins
+        over the plain one).
+
+        ``-private`` relationship: ``-private`` keeps its current
+        (visibility-advisory, now-global-identity, §1b/R2) meaning
+        unchanged by this task; ``-hide`` is the new, STRONGER tool
+        (compiler-enforced uniqueness, not just documentation) — the two
+        directives are independent and a name may appear in either, both,
+        or neither. Full migration guidance is Task 8 (docs close-out).
+        """
+        if transformer._module_name is None:
+            raise SyntaxError(
+                "-hide requires a preceding -module(name, [...]) "
+                "declaration in the same file: the mangled spelling "
+                "embeds the module name, so there is no owning module to "
+                "hide atoms into without one")
+        if len(args) != 1 or not isinstance(args[0], List):
+            raise SyntaxError(
+                "-hide requires a single list of bare atoms: "
+                "-hide([atom1, atom2, ...])")
+        statements = []
+        hidden_names = []
+        for item in args[0].elts:
+            reserved = _reserved_truth_decl_name(item)
+            if reserved is not None:
+                _raise_reserved_truth_decl(reserved, "-hide")
+            if not isinstance(item, Name):
+                raise SyntaxError(
+                    "-hide entries must be bare atoms (predicates are "
+                    "already module-local, so hiding does not apply to "
+                    f"them): got `{unparse(item)}`")
+            atom_name = item.id
+            if _is_constant_name(atom_name):
+                raise SyntaxError(
+                    f"-hide cannot list constant `{atom_name}`: constants "
+                    f"are public module globals — declare with -constants")
+            mangled = mangle(transformer._module_name, atom_name)
+            transformer._atoms.add(atom_name)
+            transformer._hidden_atoms.add(atom_name)
+            hidden_names.append(atom_name)
+            statements.append(
+                _make_atom_str_assign_ast(atom_name, expr_stmt, value=mangled)
+            )
+        transformer._module_items.append(HideDeclItem(items=hidden_names))
         if not statements:
             return replace(Pass(), expr_stmt)
         return statements if len(statements) > 1 else statements[0]

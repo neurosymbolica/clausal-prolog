@@ -1,0 +1,19 @@
+# P3-1 Task 6 fixture (-hide, "another module simply can't spell it" even
+# when it imports the hiding module -- §1a/§1b R1).
+#
+# Imports `holds/1` from `hide_owner.clausal` (the module that hides
+# `hide_secret`) -- so this module CAN receive the mangled value as an
+# opaque bound argument via `imported_secret/1`.  It also independently
+# declares its OWN bare `hide_secret` (via `-private`, an ordinary global
+# atom, unrelated to `hide_owner`'s hidden one) and binds it via
+# `local_secret/1`.  The two must differ: importing the predicate that
+# PRODUCES the hidden value does not grant this module the ability to
+# SPELL that value itself -- see
+# tests/test_hide_directive.py::test_importer_cannot_spell_hidden_atom.
+
+-module(hide_importer, [imported_secret/1, local_secret/1])
+-import_from(tests.fixtures.hide_owner, [holds])
+-private([hide_secret])
+
+imported_secret(X) <- holds(X),
+local_secret(hide_secret),

@@ -1510,11 +1510,21 @@ def _atomize_declared_atoms(reified, path):
     heads / leaf goals), which never pass through :func:`_reify_value` and so
     would otherwise keep their post-pivot plain-``str`` shape all the way to
     the renderer.  See the module-level note above."""
+    from clausal.logic.atoms import is_mangled
     from clausal.reflection import Atom, Goal
 
     declared = _declared_atoms(path)
     if isinstance(reified, str):
-        return Atom(name=reified) if reified in declared else reified
+        # P3-1 Task 6: a hidden (``-hide``) atom's mangled spelling is
+        # never a member of ``_declared_atoms`` (that set holds only the
+        # BARE names parsed from ``-module``/``-private`` — a hidden
+        # atom's Constant, per ``visit_Name``, already carries the
+        # MANGLED string by the time it reaches source reification) — so
+        # check ``is_mangled`` too; ``_ClauseRenderer``'s Atom branch then
+        # renders the human ``module.name`` form for it (same helper the
+        # module-level docstring above references).
+        return (Atom(name=reified)
+                if reified in declared or is_mangled(reified) else reified)
     if isinstance(reified, Goal):
         return Goal(
             name=reified.name,
@@ -1571,7 +1581,16 @@ def _reify_value(value, depth: int = 0, path=None):
     if isinstance(value, str):
         # P3-1 Task 4: a bound atom is a plain str post-pivot, same as a
         # bound string value — see the module note above ``_declared_atoms``.
-        return Atom(name=value) if value in _declared_atoms(path) else value
+        # P3-1 Task 6: a hidden atom's runtime str is never itself in
+        # ``_declared_atoms`` (that set holds bare spellings only) — check
+        # ``is_mangled`` too so a hidden atom's bound value also renders
+        # via ``Atom`` (the reflection renderer then demangles it to the
+        # human ``module.name`` form).
+        from clausal.logic.atoms import is_mangled
+
+        return (Atom(name=value)
+                if value in _declared_atoms(path) or is_mangled(value)
+                else value)
     if value is None or isinstance(value, (bool, int, float, complex, bytes)):
         return value
     if isinstance(value, list):

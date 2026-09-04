@@ -260,9 +260,10 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # task-3-report.md: testing.py's clause-leaves diagnostic head-name
     # fallback semantics diverge from _functor_name and must stay hand-rolled.
     # Range shifted 2046-2160 -> 2196-2310 by task-4's atom-aware near-miss
-    # rendering additions earlier in the file (mechanical line-count shift,
-    # not a semantic change -- see task-4-report.md).
-    AllowEntry("clausal/testing.py", (2196, 2310),
+    # rendering additions earlier in the file, then -> 2215-2329 by task-6's
+    # -hide is_mangled additions earlier still (mechanical line-count
+    # shifts, not semantic changes -- see task-4-report.md/task-6-report.md).
+    AllowEntry("clausal/testing.py", (2215, 2329),
                "task-3 skip: diagnostic head-name fallback, semantics diverge "
                "from _functor_name (see task-3-report.md determination)"),
     # task-2-report.md / plan Task 2 text: "leave head_key itself as-is (it
@@ -481,7 +482,7 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
     """A dotted receiver (``clause.head``, not a bare name) must still be
     caught -- the regex's receiver group must be [\\w.]+, not \\w+. This is
     the exact shape of the real, previously-invisible occurrence at
-    clausal/testing.py:2241 (2091 pre-task-4)."""
+    clausal/testing.py:2260 (2241 pre-task-6, 2091 pre-task-4)."""
     bad_file = tmp_path / "sneaky_dotted.py"
     bad_file.write_text(_BAD_FUNCTOR_FALLBACK_DOTTED_SNIPPET, encoding="utf-8")
 
@@ -494,11 +495,12 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2241 has a real ``getattr(clause.head, "functor",
+    """clausal/testing.py:2260 has a real ``getattr(clause.head, "functor",
     None) or type(clause.head).__name__`` occurrence -- now that the
     receiver group is dotted-aware, the task-3 ALLOWLIST range for
-    testing.py (2196-2310, shifted from 2046-2160 by task-4's additions
-    earlier in the file) is doing real exemption work, not sitting on an
+    testing.py (2215-2329, shifted from 2196-2310 by task-6's -hide
+    additions earlier in the file, itself shifted from 2046-2160 by
+    task-4's additions) is doing real exemption work, not sitting on an
     already-invisible site."""
     entries_without_testing = tuple(
         e for e in ALLOWLIST if e.path != "clausal/testing.py"
@@ -513,7 +515,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2241
+        v.pattern == "functor_fallback" and v.line == 2260
         for v in testing_violations
     ), testing_violations
 

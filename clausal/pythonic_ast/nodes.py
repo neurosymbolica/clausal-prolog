@@ -1095,6 +1095,20 @@ class PrivateDeclaration(Node):
     constants: list = field(default_factory=list)
 
 @node_class
+class HideDeclaration(Node):
+    """Module-level -hide([atom1, atom2, ...]) directive (P3-1 Task 6,
+    design doc §1a/§1b, ruling R1).
+
+    Bare-atom-only (predicates are already module-local through Python's
+    own module scoping — hiding is an ATOM concern).  ``items`` holds the
+    declared (unmangled, human) spellings; the compiler-side mangling
+    (``clausal.logic.atoms.mangle``) is keyed by the file's own
+    ``-module(...)`` name and applied at every reference site
+    (``term_rewriting.py``'s ``visit_Name``), not stored here.
+    """
+    items: list = field(default_factory=list)
+
+@node_class
 class StrictAtomsDeclaration(Node):
     """Module item: ``-strict_atoms`` directive marker.
 

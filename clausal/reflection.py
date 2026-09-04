@@ -560,7 +560,13 @@ class _ClauseRenderer:
             display = "_" if name.startswith("#") else name
             return ast.Name(id=display, ctx=ast.Load())
         if isinstance(value, Atom):
-            return self._name_ast(value.name)
+            # P3-1 Task 6 (§1b): a hidden atom's runtime str carries
+            # HIDDEN_SEP; the writer renders the human ``module.name``
+            # form (matching how a qualified predicate reference already
+            # prints via ``_name_ast``'s dotted-chain support) while the
+            # RAW str keeps the separator everywhere else.
+            from clausal.logic.atoms import demangle_for_display
+            return self._name_ast(demangle_for_display(value.name))
         if isinstance(value, Goal):
             return self._goal_ast(value)
         if value is None or value is Ellipsis:
@@ -965,6 +971,7 @@ _DIRECTIVE_NAMES = {
     "ImportModuleDirective": "import_module",
     "ModuleDeclaration": "module",
     "PrivateDeclaration": "private",
+    "HideDeclaration": "hide",
     "StrictAtomsDeclaration": "strict_atoms",
     "TranslationsDirective": "translations",
     "SpecializeDirective": "specialize",

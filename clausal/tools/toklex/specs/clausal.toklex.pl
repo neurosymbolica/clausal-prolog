@@ -4,10 +4,18 @@
 % Deltas applied to the ISO base (see iso.toklex.pl for everything else,
 % copied verbatim below):
 %
-%   1. class(reserved, ['\x1\']) — placeholder codepoint U+0001, standing
-%      in for the not-yet-ruled ⟨SEP⟩ codepoint (U+0000 is awkward as a
-%      literal in a spec file; this is a one-line change once §9 lands).
-%      `reserved` is then SUBTRACTED from every class/def position in the
+%   1. class(reserved, ['\xe000\']) — U+E000, the first Unicode private-use
+%      codepoint, ruled as ⟨SEP⟩ by R1 (P3-1 atom-pivot plan,
+%      implementation_plans/phase3-decomposition-and-p31-atom-pivot.md;
+%      design doc §1b — "a character the Clausal reader refuses inside any
+%      atom token, QUOTED OR NOT"). Not NUL: NUL renders invisibly and
+%      confuses debuggers/terminals, while U+E000 renders visibly. This is
+%      the codepoint ``clausal.logic.atoms.HIDDEN_SEP`` names on the Python
+%      side (single source of truth there; this spec file is a standalone
+%      Prolog-DCG source that cannot import it, so keep the two literals in
+%      lockstep by hand — see that module's own docstring for the
+%      cross-reference back here). `reserved` is then SUBTRACTED from every
+%      class/def position in the
 %      ISO base that contained `any`, so the reserved char belongs to NO
 %      class anywhere the DFA looks -> a lexical error wherever it
 %      appears in normal token content:
@@ -65,8 +73,8 @@ class(bslash,    ['\\']).
 class(nl,        ['\n']).
 class(sign,      ['+', '-']).
 
-% U+0001 placeholder for the not-yet-ruled ⟨SEP⟩ reserved codepoint (§9).
-class(reserved,  ['\x1\']).
+% ⟨SEP⟩ reserved codepoint (§9/R1): U+E000 — see the header comment above.
+class(reserved,  ['\xe000\']).
 
 % `escape` (unlooped, combined octal/hex/simple form) is kept ONLY for
 % char_code's `0'\...` construct, where the driver's ordinary longest-match
