@@ -9,49 +9,66 @@ All nodes are frozen dataclasses. The module also provides:
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterator, Union
 
 
 # ── Terms ──────────────────────────────────────────────────────────────
+#
+# Each term node carries a `span` field: a (start_offset, end_offset)
+# character-offset tuple over the source text, or None when unavailable.
+# `span` is excluded from equality/repr (compare=False) so existing
+# equality-based tests are unaffected, and it is always the LAST field so
+# positional construction (PAtom("foo"), PCompound("f", (...,))) keeps
+# working unchanged. Spans are populated by prolog_parser.py and are only
+# meaningful when the underlying tokens carry real offsets (>= 0); on the
+# bootstrap path (toklex spec loader), offsets are -1 and spans come out
+# as garbage negative tuples — harmless since nothing reads them there.
 
 @dataclass(frozen=True, slots=True)
 class PAtom:
     """Atom: foo, 'hello world', +, =.."""
     name: str
     quoted: bool = False
+    span: tuple | None = field(default=None, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PVar:
     """Variable: X, _Y, _"""
     name: str  # "_" for anonymous
+    span: tuple | None = field(default=None, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PNumber:
     """Integer or float literal."""
     value: int | float
+    span: tuple | None = field(default=None, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PString:
     """Double-quoted string (SWI: string; Scryer: char list)."""
     value: str
+    span: tuple | None = field(default=None, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PCompound:
     """f(a, b, c) — also used for operators: +(1, 2)"""
     functor: str
     args: tuple[PTerm, ...]
+    span: tuple | None = field(default=None, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PList:
     """[H|T] or [a, b, c]"""
     elements: tuple[PTerm, ...]
     tail: PTerm | None = None  # None means proper list
+    span: tuple | None = field(default=None, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PCurly:
     """{Goal} — DCG inline goals, set notation."""
     body: PTerm
+    span: tuple | None = field(default=None, compare=False)
 
 
 PTerm = Union[PAtom, PVar, PNumber, PString, PCompound, PList, PCurly]

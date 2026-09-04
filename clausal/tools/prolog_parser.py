@@ -13,6 +13,8 @@ The parser produces the same AST nodes as ``prolog_ast.py``.
 
 from __future__ import annotations
 
+import dataclasses
+
 from clausal.tools.prolog_tokenizer import Token, TokenType, tokenize
 from clausal.tools.prolog_ast import (
     PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
@@ -21,6 +23,34 @@ from clausal.tools.prolog_ast import (
 )
 from clausal.tools.prolog_operators import OperatorTable, OpEntry
 from clausal.tools.prolog_dialect import Dialect
+
+
+def _span_join(*items) -> tuple | None:
+    """Combine spans from a mix of PTerm nodes, Tokens, (start, end) tuples,
+    and Nones into a single (min start, max end) tuple.
+
+    Items that contribute no span (None, or a node/tuple that is None) are
+    ignored. Returns None if none of the items contribute a span.
+    """
+    starts: list[int] = []
+    ends: list[int] = []
+    for item in items:
+        if item is None:
+            continue
+        if isinstance(item, tuple):
+            start, end = item
+        elif isinstance(item, Token):
+            start, end = item.offset, item.end_offset
+        else:
+            span = getattr(item, "span", None)
+            if span is None:
+                continue
+            start, end = span
+        starts.append(start)
+        ends.append(end)
+    if not starts:
+        return None
+    return (min(starts), max(ends))
 
 
 class ParseError(Exception):
@@ -215,14 +245,15 @@ class PrologParser:
                 )
 
             if entry.specifier in ("xfx", "xfy", "yfx"):
-                self._advance()
+                op_tok = self._advance()
                 r_prec = self._right_prec(entry)
                 right = self._parse_term(r_prec)
-                left = PCompound(entry.name, (left, right))
+                left = PCompound(entry.name, (left, right),
+                                 span=_span_join(left, op_tok, right))
                 left_prec = entry.precedence
             elif entry.specifier in ("xf", "yf"):
-                self._advance()
-                left = PCompound(entry.name, (left,))
+                op_tok = self._advance()
+                left = PCompound(entry.name, (left,), span=_span_join(left, op_tok))
                 left_prec = entry.precedence
             else:
                 break
@@ -235,19 +266,19 @@ class PrologParser:
 
         if tok.type == TokenType.INTEGER:
             self._advance()
-            return PNumber(tok.value)
+            return PNumber(tok.value, span=(tok.offset, tok.end_offset))
 
         if tok.type == TokenType.FLOAT:
             self._advance()
-            return PNumber(tok.value)
+            return PNumber(tok.value, span=(tok.offset, tok.end_offset))
 
         if tok.type == TokenType.STRING:
             self._advance()
-            return PString(tok.value)
+            return PString(tok.value, span=(tok.offset, tok.end_offset))
 
         if tok.type == TokenType.VAR:
             self._advance()
-            return PVar(tok.value)
+            return PVar(tok.value, span=(tok.offset, tok.end_offset))
 
         if tok.type == TokenType.LPAREN:
             return self._parse_parenthesized()
@@ -283,7 +314,7 @@ class PrologParser:
         # Check if followed by '(' with no space → compound term
         nxt = self._peek()
         if nxt.type == TokenType.LPAREN and self._is_functor_paren(tok, nxt):
-            return self._parse_compound_args(name, tok.line, tok.col)
+            return self._parse_compound_args(name, tok)
 
         # Check for prefix operator
         prefix_entry = self._ops.lookup_prefix(name)
@@ -299,14 +330,14 @@ class PrologParser:
                         and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)
                         and self._adjacent(tok, nxt)):
                     self._advance()
-                    return PNumber(-nxt.value)
+                    return PNumber(-nxt.value, span=_span_join(tok, nxt))
                 r_prec = self._prefix_right_prec(prefix_entry)
                 operand = self._parse_term(r_prec)
-                return PCompound(name, (operand,))
+                return PCompound(name, (operand,), span=_span_join(tok, operand))
 
-        return PAtom(name, quoted=tok.quoted)
+        return PAtom(name, quoted=tok.quoted, span=(tok.offset, tok.end_offset))
 
-    def _parse_compound_args(self, functor: str, line: int, col: int) -> PCompound:
+    def _parse_compound_args(self, functor: str, functor_tok: Token) -> PCompound:
         """Parse f(arg1, arg2, ...) after the functor name."""
         self._advance()  # consume (
         args: list[PTerm] = []
@@ -315,22 +346,24 @@ class PrologParser:
             while self._peek().type == TokenType.COMMA:
                 self._advance()  # consume ,
                 args.append(self._parse_term(999))
-        self._expect(TokenType.RPAREN)
-        return PCompound(functor, tuple(args))
+        rparen_tok = self._expect(TokenType.RPAREN)
+        return PCompound(functor, tuple(args),
+                          span=(functor_tok.offset, rparen_tok.end_offset))
 
     def _parse_parenthesized(self) -> PTerm:
-        """Parse ( term )."""
-        self._advance()  # consume (
+        """Parse ( term ). The span is attributed to the parens themselves,
+        not the inner term's own extent (`(a)` spans '(' through ')')."""
+        lparen_tok = self._advance()  # consume (
         term = self._parse_term(1200)
-        self._expect(TokenType.RPAREN)
-        return term
+        rparen_tok = self._expect(TokenType.RPAREN)
+        return dataclasses.replace(term, span=(lparen_tok.offset, rparen_tok.end_offset))
 
     def _parse_list(self) -> PTerm:
         """Parse [elem1, elem2, ... | tail] or []."""
-        self._advance()  # consume [
+        lbracket_tok = self._advance()  # consume [
         if self._peek().type == TokenType.RBRACKET:
-            self._advance()
-            return PList((), None)
+            rbracket_tok = self._advance()
+            return PList((), None, span=(lbracket_tok.offset, rbracket_tok.end_offset))
 
         elements: list[PTerm] = []
         elements.append(self._parse_term(999))
@@ -346,18 +379,19 @@ class PrologParser:
             self._advance()  # consume |
             tail = self._parse_term(999)
 
-        self._expect(TokenType.RBRACKET)
-        return PList(tuple(elements), tail)
+        rbracket_tok = self._expect(TokenType.RBRACKET)
+        return PList(tuple(elements), tail,
+                     span=(lbracket_tok.offset, rbracket_tok.end_offset))
 
     def _parse_curly(self) -> PTerm:
         """Parse {term} (DCG inline goal or set notation)."""
-        self._advance()  # consume {
+        lcurly_tok = self._advance()  # consume {
         if self._peek().type == TokenType.RCURLY:
-            self._advance()
-            return PAtom("{}")
+            rcurly_tok = self._advance()
+            return PAtom("{}", span=(lcurly_tok.offset, rcurly_tok.end_offset))
         body = self._parse_term(1200)
-        self._expect(TokenType.RCURLY)
-        return PCurly(body)
+        rcurly_tok = self._expect(TokenType.RCURLY)
+        return PCurly(body, span=(lcurly_tok.offset, rcurly_tok.end_offset))
 
     def _parse_prefix(self, entry: OpEntry) -> PTerm:
         """Parse a prefix operator application."""
@@ -371,11 +405,11 @@ class PrologParser:
                 and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)
                 and self._adjacent(tok, nxt)):
             self._advance()
-            return PNumber(-nxt.value)
+            return PNumber(-nxt.value, span=_span_join(tok, nxt))
 
         r_prec = self._prefix_right_prec(entry)
         operand = self._parse_term(r_prec)
-        return PCompound(name, (operand,))
+        return PCompound(name, (operand,), span=_span_join(tok, operand))
 
     @staticmethod
     def _adjacent(left: Token, right: Token) -> bool:

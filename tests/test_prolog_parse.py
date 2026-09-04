@@ -641,3 +641,46 @@ class TestParseEdgeCases:
         t = parse_term("foo/2")
         assert isinstance(t, PCompound) and t.functor == "/"
         assert t.args == (PAtom("foo"), PNumber(2))
+
+
+class TestSpans:
+    def _term(self, src):
+        from clausal.tools.prolog_parser import parse_term
+        return parse_term(src)
+
+    def test_atom_number_var_spans(self):
+        t = self._term("foo")
+        assert t.span == (0, 3)
+        assert self._term("42").span == (0, 2)
+        assert self._term("Xyz").span == (0, 3)
+
+    def test_compound_and_arg_spans(self):
+        t = self._term("foo(bar, 12)")
+        assert t.span == (0, 12)
+        assert t.args[0].span == (4, 7)
+        assert t.args[1].span == (9, 11)
+
+    def test_operator_compound_spans(self):
+        t = self._term("a + b * c")
+        assert t.span == (0, 9)          # the whole +
+        assert t.args[0].span == (0, 1)  # a
+        assert t.args[1].span == (4, 9)  # b * c
+
+    def test_list_and_curly_spans(self):
+        t = self._term("[a, b | T]")
+        assert t.span == (0, 10)
+        assert t.elements[1].span == (4, 5)
+        assert t.tail.span == (8, 9)
+        assert self._term("{x}").span == (0, 3)
+
+    def test_parenthesized_span_covers_parens(self):
+        t = self._term("( a )")
+        assert t.span == (0, 5)
+
+    def test_quoted_atom_span(self):
+        t = self._term("'a b'")
+        assert t.span == (0, 5)
+
+    def test_equality_unaffected(self):
+        from clausal.tools.prolog_ast import PAtom
+        assert self._term("foo") == PAtom("foo")
