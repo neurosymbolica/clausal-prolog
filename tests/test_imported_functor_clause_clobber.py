@@ -207,17 +207,50 @@ class TestOneFileLoadedTwiceUnderTwoNames:
 
     def test_the_atom_vocabulary_shape_survives_both_load_routes(self):
         """``impord_atom_then_pred`` is the live corpus shape: import a
-        0-arity vocabulary atom, then define a
-        same-named predicate.  Reached by both routes in the real suite."""
+        0-arity vocabulary atom, then define a same-named predicate.
+        Reached by both routes in the real suite -- so the property under
+        test is that BOTH routes behave IDENTICALLY, not merely that both
+        happen to succeed.
+
+        P3-1 Task 2 fix round 1 (controller ruling, 2026-09-04): atoms are
+        plain strs post-pivot (§1b/R2); there is no shared re-minted class
+        left for a dotted owner-path reference to land on (that was a quirk
+        of class re-minting, never a contract -- see
+        ``tests/test_functor_import_ordering.py::TestZeroArityAtomThenPredicate``
+        for the same split on the single-load-route sibling). In EACH load
+        route independently: the re-defined predicate is fully registered
+        and callable by its bare LOCAL name (ownership keyed on source, not
+        name, still holds); the dotted owner-path call
+        (``impord_atp_lookup``'s body, via ``-import_from``'s dotted remap)
+        still finds the OWNER's plain str atom and raises the same clean,
+        positioned ``LogicException``/``existence_error("procedure", ...)``
+        -- never a raw ``AttributeError``, and never load-route-dependent.
+        """
         dotted = _load_module(
             "tests.fixtures.impord_atom_then_pred",
             _fixture_path("impord_atom_then_pred"),
         )
         private = load_clausal_module(_fixture_path("impord_atom_then_pred"))
-        assert sorted(_solutions(dotted.impord_atp_lookup, 2)) == [
-            ("a", "1"), ("b", "2")]
-        assert sorted(_solutions(private.impord_atp_lookup, 2)) == [
-            ("a", "1"), ("b", "2")]
+
+        for mod in (dotted, private):
+            lm = mod.__dict__["$module"]
+
+            k, v = Var(), Var()
+            results = sorted(
+                (walk(deref(k)), walk(deref(v)))
+                for _ in call("impord_qd", k, v, module=lm)
+            )
+            assert results == [("a", 1), ("b", 2)]
+
+            k2, v2 = Var(), Var()
+            with pytest.raises(LogicException) as exc_info:
+                list(call("impord_atp_lookup", k2, v2, module=lm))
+            term = exc_info.value.term
+            indicator = term.args[0].args[1]
+            assert str(term.args[0].args[0]) == "procedure"
+            assert indicator.functor == "/"
+            assert indicator.args == ("impord_qd", 2)
+            assert "not callable at arity 2" in term.args[1]
 
 
 class TestRuntimeAssertzIsAlreadySafe:

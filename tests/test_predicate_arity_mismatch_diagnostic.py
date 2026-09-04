@@ -756,9 +756,14 @@ def _stale_predicate(name, n_clauses):
     heads at /2.
 
     Real code gets here by importing a 0-arity vocabulary atom and then
-    defining a same-named predicate;
-    ``TestTermConstructionUnaffected.test_atom_vocabulary_then_predicate`` pins
-    that ``tests/fixtures/impord_atom_then_pred.clausal`` really is that shape.
+    defining a same-named predicate; ``TestTermConstructionUnaffected.
+    test_atom_vocabulary_then_predicate_local_name_call`` (and its dotted-path
+    sibling ``..._dotted_path_raises_cleanly``) pin that
+    ``tests/fixtures/impord_atom_then_pred.clausal`` really is that shape
+    (split in two by the P3-1 Task 2 fix round 1 ruling -- see
+    ``task-2-report.md``; this helper's hand-built stale-arity shape is
+    orthogonal to that ruling, since it builds a live ``PredicateMeta`` atom
+    directly via ``make_atom``, never a str).
     Built by hand here so the clause count can be a fact table's, and so no
     shared fixture class is mutated.
     """
