@@ -38,8 +38,10 @@ from clausal.pythonic_ast.nodes import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, is_atom, is_term_instance, term_field_names,
+    term_field_names_of_class,
 )
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
+from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
 
 from ._ast_helpers import _name, _call, _attr
 from ._vars import _var_python_name
@@ -252,6 +254,75 @@ def _is_cell_functor_class(cls: Any) -> bool:
     )
 
 
+def functor_signature_for(name: str, namespace: "dict | None") -> "tuple[str, ...] | None":
+    """Resolve *name*'s declared field-name tuple against *namespace*.
+
+    Consults *namespace*'s ``__clausal_functor_signatures__`` registry
+    FIRST — the dict the ``-module``/``-private`` rewrite emits (Task 1 of
+    the cell-default-flip bridge; see ``clausal.logic.cells.
+    FUNCTOR_SIGNATURES_KEY``), which ``-import_from`` also copies entries
+    into under their local spelling.  Falls back to a resolved class's
+    declared fields (``term_field_names_of_class``, the same class-cases
+    ``head_match._resolved_field_names`` covers) while generated functor
+    classes still exist — a later task removes them, at which point the
+    registry becomes the only source of truth.
+
+    Returns ``None`` when *namespace* is ``None``, *name* is not in the
+    registry, and *name* does not resolve to a term-shaped class either.
+    """
+    if namespace is None:
+        return None
+    registry = namespace.get(FUNCTOR_SIGNATURES_KEY)
+    if registry is not None and name in registry:
+        return registry[name]
+    return term_field_names_of_class(namespace.get(name))
+
+
+def cell_signature_for_name(
+    name: str, resolve_globals: "dict | None" = None
+) -> "tuple[str, tuple[str, ...]] | None":
+    """Resolve *name* to ``(functor, fields)`` for a DATA functor this
+    flagged module owns, regardless of arity saturation.
+
+    Returns ``None`` under the same conditions :func:`cell_functor_for_name`
+    used to gate on — no flagged scope is open, the name does not resolve,
+    resolves to something that is not a data functor, or belongs to another
+    module (compound data does not cross the flag boundary; see the
+    directive docstring) — MINUS the arity check: this is the arity-agnostic
+    primitive both Site A's construction placer and ``head_match``'s
+    pattern placer route through, since signature PLACEMENT (positional args
+    fill leading slots, keyword args fill named slots, an omitted slot
+    backfills) has replaced "saturated arity or fall back to class emission"
+    as the eligibility test.
+
+    *resolve_globals* is the namespace to look *name* up in — see
+    :func:`cell_functor_for_name`'s docstring for why call sites with one
+    (``head_match``) must pass it rather than let this resolve in the open
+    scope.
+
+    A dotted name (``other.Wrap``) always returns None: it is by definition
+    another module's functor.
+    """
+    scope = tagged_terms_globals()
+    if scope is None or "." in name:
+        return None
+    namespace = resolve_globals if resolve_globals is not None else scope
+    cls = namespace.get(name)
+    if not _is_cell_functor_class(cls):
+        return None
+    # Own-module gate: the flagged module's ``__name__`` must be the class's
+    # defining module.  An imported functor keeps class emission so that data
+    # built here still matches the owner's clause heads.
+    owner = getattr(cls, "__module__", None)
+    here = scope.get("__name__")
+    if owner is not None and here is not None and owner != here:
+        return None
+    fields = functor_signature_for(name, namespace)
+    if fields is None:
+        fields = cls._fields
+    return cls.__name__, fields
+
+
 def cell_functor_for_name(name: str, arity: int,
                           resolve_globals: "dict | None" = None) -> "str | None":
     """Resolve *name* to a cell functor for a saturated *arity* construction.
@@ -273,24 +344,107 @@ def cell_functor_for_name(name: str, arity: int,
 
     A dotted name (``other.Wrap``) always returns None: it is by definition
     another module's functor.
+
+    A thin, arity-checked wrapper over :func:`cell_signature_for_name` —
+    kept for callers that only want the old "exact saturation or nothing"
+    answer; ``head_match`` and Site A now route through the unwrapped
+    signature instead so they can PLACE a partial/keyword construction
+    rather than reject it.
     """
-    scope = tagged_terms_globals()
-    if scope is None or "." in name:
+    result = cell_signature_for_name(name, resolve_globals)
+    if result is None:
         return None
-    namespace = resolve_globals if resolve_globals is not None else scope
-    cls = namespace.get(name)
-    if not _is_cell_functor_class(cls):
+    functor, fields = result
+    if len(fields) != arity:
         return None
-    if len(cls._fields) != arity:
-        return None
-    # Own-module gate: the flagged module's ``__name__`` must be the class's
-    # defining module.  An imported functor keeps class emission so that data
-    # built here still matches the owner's clause heads.
-    owner = getattr(cls, "__module__", None)
-    here = scope.get("__name__")
-    if owner is not None and here is not None and owner != here:
-        return None
-    return cls.__name__
+    return functor
+
+
+_UNSET = object()  # sentinel: a signature slot no positional/keyword arg filled
+
+
+def _cell_arity_error(functor: str, fields: "tuple[str, ...]", n_args: int) -> SyntaxError:
+    """Compile-time over-arity error for a cell construction/head reference.
+
+    Mirrors ``clausal.logic.predicate._term_arity_error``'s wording (functor,
+    declared arity, declared field tuple) — that function builds the RUNTIME
+    twin of this same mistake (``PredicateMeta.__call__`` passed too many
+    positional arguments); this is the compile-time one, raised while
+    lowering a ``.clausal`` source reference instead of while calling a live
+    class.
+    """
+    return SyntaxError(
+        f"functor {functor}/{len(fields)} was constructed with {n_args} "
+        f"positional argument(s) but its class was registered with "
+        f"{len(fields)} field(s) {fields!r}"
+    )
+
+
+def _cell_field_error(functor: str, fields: "tuple[str, ...]", bad_name: str) -> SyntaxError:
+    """Compile-time unknown-field error for a cell construction/head reference.
+
+    Mirrors ``clausal.logic.predicate._term_construction_error``'s wording
+    (functor, declared field tuple, the offending name) — the compile-time
+    twin of that function's runtime ``__init__`` ``TypeError`` re-raise.
+    """
+    return SyntaxError(
+        f"functor {functor}/{len(fields)} was constructed with field name "
+        f"{bad_name!r} but its class was registered with fields {fields!r}"
+    )
+
+
+def _cell_duplicate_slot_error(functor: str, fields: "tuple[str, ...]", name: str) -> SyntaxError:
+    """Compile-time error: *name* was supplied both positionally and by
+    keyword in the same construction/head reference — no such runtime shape
+    exists (``PredicateMeta.__call__`` never sees the same conflict; a
+    keyword there is applied over a plain-dict positional fill with no
+    duplicate-detection at all), so this check exists only at compile time,
+    where the two forms are still distinguishable expressions rather than
+    one dict.
+    """
+    return SyntaxError(
+        f"functor {functor}/{len(fields)} was constructed with both a "
+        f"positional argument and keyword `{name}=` for the same field "
+        f"{fields!r}"
+    )
+
+
+def _place_signature_slots(fields, positional, keywords, *, functor, missing):
+    """Place *positional* values and *keywords* ``(name, value)`` pairs
+    against declared *fields*, returning a list of length ``len(fields)``.
+
+    Positional entries fill leading slots in order.  Each keyword fills the
+    slot its field name names.  Any slot neither reaches is filled by calling
+    ``missing()`` (once PER omitted slot — not memoised — since a Site A
+    placement needs a fresh ``Var()`` expression per omitted slot, not one
+    shared expression evaluated once).
+
+    Compile-time errors, mirroring the runtime construction errors
+    ``clausal.logic.predicate`` raises for the same three mistakes: too many
+    positional arguments (:func:`_cell_arity_error`), an unknown field name
+    (:func:`_cell_field_error`), and — a check the runtime path does not
+    make, since a keyword there just overwrites the positional fill in the
+    same dict — a field supplied both positionally and by keyword
+    (:func:`_cell_duplicate_slot_error`).
+
+    *positional*/*keywords* are representation-agnostic: Site A passes AST
+    expressions, ``head_match`` passes AST patterns, and this function does
+    not inspect either beyond placing them.
+    """
+    n_fields = len(fields)
+    if len(positional) > n_fields:
+        raise _cell_arity_error(functor, fields, len(positional))
+    slots = [_UNSET] * n_fields
+    for i, value in enumerate(positional):
+        slots[i] = value
+    for name, value in keywords:
+        if name not in fields:
+            raise _cell_field_error(functor, fields, name)
+        idx = fields.index(name)
+        if slots[idx] is not _UNSET:
+            raise _cell_duplicate_slot_error(functor, fields, name)
+        slots[idx] = value
+    return [missing() if slot is _UNSET else slot for slot in slots]
 
 
 def cell_functor_for_instance(term: Any) -> "str | None":
@@ -744,18 +898,31 @@ def term_to_ast_expr(
             )
             for kw in (term.kwargs or [])
         ]
-        # ``-tagged_terms``: a SATURATED, keyword-free construction of a
-        # functor this flagged module declares becomes a cell literal.  This
-        # is the branch that matters for ``.clausal`` source — a compound
-        # written in a clause (``cons(N, T)``) reaches the compiler as
-        # ``Call(LoadName('cons'), …)``, not as a live instance.  Keyword or
-        # partial construction falls through to the class call below: a cell
-        # is positional and total, with no field names to attach and no
-        # Var-backfill for the fields left out.
-        if not kw_exprs:
-            _cell_f = cell_functor_for_name(fname, len(arg_exprs))
-            if _cell_f is not None:
-                return cell_literal_ast(_cell_f, arg_exprs)
+        # ``-tagged_terms``: a construction of a functor this flagged module
+        # declares becomes a cell literal.  This is the branch that matters
+        # for ``.clausal`` source — a compound written in a clause
+        # (``cons(N, T)``) reaches the compiler as ``Call(LoadName('cons'),
+        # …)``, not as a live instance.
+        #
+        # P3-2 Task 1 (cell-default-flip bridge, signature-resolved
+        # construction): positional args fill leading declared slots,
+        # keyword args fill their named slots, and every slot neither
+        # reaches backfills with a fresh ``Var()`` — the same "missing field
+        # -> fresh Var()" rule ``PredicateMeta.__call__`` applies to class
+        # construction (see ``_place_signature_slots``), so a kwarg/partial
+        # reference now builds a cell too instead of falling back to class
+        # emission.
+        _sig = cell_signature_for_name(fname)
+        if _sig is not None:
+            _functor, _fields = _sig
+            _placed = _place_signature_slots(
+                _fields,
+                arg_exprs,
+                [(kw.arg, kw.value) for kw in kw_exprs],
+                functor=_functor,
+                missing=lambda: _call(_name("Var")),
+            )
+            return cell_literal_ast(_functor, _placed)
         return ast.Call(
             func=_name(fname),
             args=arg_exprs,

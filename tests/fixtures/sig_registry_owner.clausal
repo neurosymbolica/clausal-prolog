@@ -1,0 +1,7 @@
+# Owner half of the ``__clausal_functor_signatures__`` registry-copy test
+# (tests/test_tagged_terms.py, TestFunctorSignatureRegistry). Declares a
+# data functor (with fields, so it gets a registry entry) and a bare atom
+# (no fields, so it does NOT) for ``-import_from`` on the importer side to
+# copy across the module boundary.
+-module(sig_registry_owner, [pt(x, y), ao])
+pt(1, 2),

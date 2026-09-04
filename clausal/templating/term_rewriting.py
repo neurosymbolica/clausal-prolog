@@ -28,7 +28,7 @@ from clausal.pythonic_ast.nodes import (
 # The module-namespace key the ``-tagged_terms`` directive assigns.  Single
 # source of truth lives with the cell primitives it opts into.
 from clausal.logic.atoms import mangle
-from clausal.logic.cells import TAGGED_TERMS_FLAG
+from clausal.logic.cells import TAGGED_TERMS_FLAG, FUNCTOR_SIGNATURES_KEY
 
 load = Load()
 store = Store()
@@ -2580,6 +2580,89 @@ def _make_atom_str_assign_ast(atom_name, source, value=None):
     return block
 
 
+def _make_functor_signatures_update_ast(entries, source):
+    """Generate a module-level update to the functor-signature registry.
+
+    *entries* is a list of ``(functor_name, field_names)`` pairs -- the same
+    tuple shape ``-module``/``-private`` already accumulate into their
+    ``exports_info``/``private_info`` lists for the pipeline-split
+    ``ModuleAST``.  Predicates are included alongside data functors
+    (harmless: the data/predicate split is decided by binding shape --
+    whether the functor has clauses -- not by anything this registry
+    records).
+
+    ``globals().setdefault(KEY, {}).update({...})`` rather than a plain
+    ``KEY = {...}`` assignment: a file may carry more than one ``-module``/
+    ``-private`` directive (or an ``-import_from`` copying entries in
+    between them -- see ``_make_import_signatures_update_ast``), and each
+    directive's generated statement must ADD to the registry, not clobber
+    an earlier one's entries.
+
+    Returns ``None`` when *entries* is empty (an all-atom ``-module``/
+    ``-private`` list has nothing to register).
+    """
+    if not entries:
+        return None
+    dict_text = ", ".join(
+        f"{name!r}: {tuple(fields)!r}" for name, fields in entries
+    )
+    lines = [
+        f"globals().setdefault({FUNCTOR_SIGNATURES_KEY!r}, {{}})"
+        f".update({{{dict_text}}})",
+    ]
+    tree = parse("\n".join(lines))
+    block = tree.body[0]
+    for node in walk(block):
+        copy_location(node, source)
+    return block
+
+
+def _make_import_signatures_update_ast(resolved_module, name_pairs, source):
+    """Copy an ``-import_from``'s imported names' registry entries across.
+
+    *name_pairs* is a list of ``(local_name, orig_name)`` pairs -- keyed by
+    the LOCAL name (the identifier this file actually binds and calls),
+    matching Python's own ``from X import a, b as a`` shadowing rule: two
+    different originals bound to the same local name, last one wins, is a
+    user mistake this mirrors rather than tries to fix.
+
+    This can only run at RUNTIME, after the ``from resolved_module import
+    ...`` statement immediately before it has executed and loaded the owner
+    module -- ``_handle_import_from_directive`` runs at AST-rewrite time,
+    before either module has executed, so it cannot read the owner's
+    registry directly.  ``__import__(resolved_module, fromlist=[...])`` is
+    the same mechanism ``from resolved_module import ...`` itself uses to
+    reach the (by now already-loaded, already-registered) owner module
+    object for a dotted path -- reused here (twice: the dict access and the
+    membership test each need it) rather than binding a new name into the
+    importer's namespace.
+
+    A name with no entry in the owner's registry (a constant, an atom, or a
+    functor the owner declared with no fields) is silently skipped -- the
+    dict comprehension's ``if`` clause -- rather than treated as an error;
+    only functor names ever have registry entries, and this list mixes them
+    with every other kind of ``-import_from`` name.
+
+    Returns ``None`` when *name_pairs* is empty.
+    """
+    if not name_pairs:
+        return None
+    pairs_text = repr({local: orig for local, orig in name_pairs})
+    lines = [
+        f"globals().setdefault({FUNCTOR_SIGNATURES_KEY!r}, {{}}).update("
+        f"{{_cs_local: __import__({resolved_module!r}, fromlist=['_'])."
+        f"__dict__.get({FUNCTOR_SIGNATURES_KEY!r}, {{}})[_cs_orig] "
+        f"for _cs_local, _cs_orig in {pairs_text}.items() "
+        f"if _cs_orig in __import__({resolved_module!r}, fromlist=['_'])."
+        f"__dict__.get({FUNCTOR_SIGNATURES_KEY!r}, {{}})}})",
+    ]
+    tree = parse("\n".join(lines))
+    block = tree.body[0]
+    for node in walk(block):
+        copy_location(node, source)
+    return block
+
+
 def _make_define_stmt(predicate_ast, expr_stmt):
     """Wrap a Predicate node in a ``$define_predicate(pred, $module)`` stmt."""
     return replace(
@@ -4682,9 +4765,16 @@ class EmbedTransformer(NodeTransformer):
         Bare (zero-arity) entries are ATOMS — global by spelling (§1b/R2) —
         and mint no class at all; only predicate (field-carrying) entries
         go through the class-minting path described above.
+
+        Also emits a module-level ``__clausal_functor_signatures__ = {...}``
+        registry update (``_make_functor_signatures_update_ast``) covering
+        every field-carrying entry — predicates included, since the
+        data/predicate split is decided by binding shape, not by this
+        registry.  See ``clausal.logic.cells.FUNCTOR_SIGNATURES_KEY``.
         """
         statements = []
         exports_info = []  # for ModuleAST accumulation
+        signature_entries = []  # (name, fields) pairs -- see _make_functor_signatures_update_ast
         # A10-F012: validate shape instead of silently dropping malformed
         # parts (every other directive raises on bad args).
         if len(args) < 1 or len(args) > 2 or not isinstance(args[0], Name):
@@ -4745,6 +4835,7 @@ class EmbedTransformer(NodeTransformer):
                     ]
                     field_names += [kw.arg for kw in export.keywords]
                     exports_info.append((functor_name, field_names))
+                    signature_entries.append((functor_name, field_names))
                     if functor_name not in transformer._seen_functors:
                         transformer._register_functor(
                             functor_name, field_names, export,
@@ -4760,6 +4851,9 @@ class EmbedTransformer(NodeTransformer):
         transformer._module_items.append(
             ModuleDeclItem(module_name=module_name, exports=exports_info)
         )
+        sig_stmt = _make_functor_signatures_update_ast(signature_entries, expr_stmt)
+        if sig_stmt is not None:
+            statements.append(sig_stmt)
         if not statements:
             return replace(Pass(), expr_stmt)
         return statements if len(statements) > 1 else statements[0]
@@ -4778,6 +4872,7 @@ class EmbedTransformer(NodeTransformer):
         statements = []
         private_info = []  # for ModuleAST accumulation
         private_constants = []  # documentation-only constant listings
+        signature_entries = []  # (name, fields) pairs -- see _make_functor_signatures_update_ast
         # A10-F012: a missing/malformed list (e.g. -private(helper(X))) used to
         # silently become a no-op, so the predicate signature was later
         # inferred from the first clause with no warning. Raise instead.
@@ -4815,6 +4910,7 @@ class EmbedTransformer(NodeTransformer):
                 ]
                 field_names += [kw.arg for kw in item.keywords]
                 private_info.append((functor_name, field_names))
+                signature_entries.append((functor_name, field_names))
                 if functor_name not in transformer._seen_functors:
                     transformer._register_functor(
                         functor_name, field_names, item,
@@ -4828,6 +4924,9 @@ class EmbedTransformer(NodeTransformer):
             # pre-registered here; the list itself is still well-formed.
         transformer._module_items.append(
             PrivateDeclItem(items=private_info, constants=private_constants))
+        sig_stmt = _make_functor_signatures_update_ast(signature_entries, expr_stmt)
+        if sig_stmt is not None:
+            statements.append(sig_stmt)
         if not statements:
             return replace(Pass(), expr_stmt)
         return statements if len(statements) > 1 else statements[0]
@@ -5015,9 +5114,15 @@ class EmbedTransformer(NodeTransformer):
           that unifies with nothing in ``m`` — SILENTLY, as no solutions
           rather than as an error.  Query a flagged module with cells
           (``("point", 1, 2)``), not with its constructors.
-        - **Partial and keyword construction keep class emission**, even
-          here: ``point(X=1)`` names its fields and leaves the rest to be
-          back-filled, which a positional tuple cannot express.
+        - **Partial and keyword construction build a cell too (P3-2 Task
+          1).**  ``point(X=1)`` places ``X`` in its declared slot and
+          backfills every other slot with a fresh ``Var()`` — signature
+          PLACEMENT, the same "missing field -> fresh Var()" rule
+          ``PredicateMeta.__call__`` already applies to class construction
+          (see ``clausal.logic.compiler.terms_to_ast._place_signature_slots``).
+          An over-arity or unknown-field construction raises a compile-time
+          error naming the functor and its declared fields, rather than
+          falling through to class emission.
         - **Atoms stay class atoms.**  A 0-arity reference is still the
           generated class object; only arity >= 1 constructions become
           cells.
@@ -5394,6 +5499,11 @@ class EmbedTransformer(NodeTransformer):
         Emits a Python ``from dotted.module import Pred1, Pred2 as Local``
         statement.  The imported names land in module globals where the
         compiler's ``_inject_call_targets`` picks them up.
+
+        Also emits a runtime copy of the imported names' functor-signature
+        registry entries into this file's own registry (see
+        ``_make_import_signatures_update_ast``), keyed by their LOCAL
+        spelling.
         """
         if len(args) < 2:
             raise SyntaxError(
@@ -5524,7 +5634,17 @@ class EmbedTransformer(NodeTransformer):
             expr_stmt,
         )
         fix_missing_locations(stmt)
-        return stmt
+        # Copy the imported names' functor-signature registry entries into
+        # this file's own registry, keyed by the LOCAL spelling (mirroring
+        # Python's own ``from X import a, b as a`` shadowing rule: the
+        # constant branches above also land here, harmlessly -- a name with
+        # no registry entry in the owner is silently skipped, see
+        # ``_make_import_signatures_update_ast``).
+        name_pairs = [(a.asname or a.name, a.name) for a in aliases]
+        sig_stmt = _make_import_signatures_update_ast(resolved, name_pairs, expr_stmt)
+        if sig_stmt is None:
+            return stmt
+        return [stmt, sig_stmt]
 
     def _handle_import_module_directive(transformer, args, expr_stmt):
         """Process ``-import_module(dotted.module)`` directive.

@@ -1,0 +1,6 @@
+# Importer half of the ``__clausal_functor_signatures__`` registry-copy
+# test (tests/test_tagged_terms.py, TestFunctorSignatureRegistry).
+# ``-import_from`` must copy ``pt``'s registry entry across, under its
+# LOCAL spelling (``local_pt``); ``ao`` is a bare atom and has no entry to
+# copy, which must be silently harmless.
+-import_from(tests.fixtures.sig_registry_owner, [alias(pt, local_pt), ao])

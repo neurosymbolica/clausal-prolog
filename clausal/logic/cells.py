@@ -59,6 +59,7 @@ from clausal.logic.variables import deref, is_var
 
 __all__ = [
     "TAGGED_TERMS_FLAG",
+    "FUNCTOR_SIGNATURES_KEY",
     "TUPLE_TAG",
     "make_cell",
     "make_tuple_cell",
@@ -95,6 +96,28 @@ TUPLE_TAG = tuple
 # cache, whereas an assignment is part of the cached bytecode and therefore
 # cannot go missing on the cached path.
 TAGGED_TERMS_FLAG = "__clausal_tagged_terms__"
+
+
+# The module-namespace key holding a module's functor-signature registry:
+# ``{"point": ("x", "y"), ...}``, one entry per ``(name, fields)`` the
+# ``-module``/``-private`` rewrite saw -- predicates included, since the
+# data/predicate split is decided by binding shape (whether a functor has
+# clauses), not by anything the registry itself records.  Emitted by
+# ``clausal/templating/term_rewriting.py``'s ``_handle_module_directive`` /
+# ``_handle_private_directive`` as a module-level
+# ``__clausal_functor_signatures__ = {...}`` assignment (accumulated via
+# ``dict.update`` across multiple directives in the same file, the same
+# "assignment, not a module item" reasoning as ``TAGGED_TERMS_FLAG`` above);
+# ``-import_from`` copies the imported names' entries into the importer's
+# dict under their LOCAL spelling.
+#
+# ``clausal/logic/compiler/terms_to_ast.py``'s ``functor_signature_for``
+# consults this registry FIRST, falling back to a resolved class's
+# ``_fields`` while generated functor classes still exist (P3-2 Task 1 of
+# the cell-default-flip bridge).  Once a later task removes those classes,
+# this registry becomes the sole source of truth for a functor's declared
+# field names.
+FUNCTOR_SIGNATURES_KEY = "__clausal_functor_signatures__"
 
 
 def _valid_functor_slot(resolved_slot0: Any) -> bool:

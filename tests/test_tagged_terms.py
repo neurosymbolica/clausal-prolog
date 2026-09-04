@@ -159,6 +159,88 @@ class TestDirective:
             )
 
 
+class TestFunctorSignatureRegistry:
+    """P3-2 Task 1: the ``__clausal_functor_signatures__`` registry the
+    ``-module``/``-private`` rewrite emits, and ``-import_from`` copies
+    across a module boundary.
+
+    Unconditional -- unlike ``-tagged_terms`` itself, the registry is
+    emitted whether or not the file carries the flag, since it is what a
+    LATER task's flip makes load-bearing everywhere, not just in a flagged
+    module.
+    """
+
+    def test_module_directive_registers_field_carrying_entries(self):
+        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+
+        m = _load_inline(
+            "_tt_sigreg_mod",
+            "-module(_tt_sigreg_mod, [pt(x, y), solo])\n",
+        )
+        registry = m.__dict__[FUNCTOR_SIGNATURES_KEY]
+        assert registry["pt"] == ("x", "y")
+        assert "solo" not in registry  # bare atom: no fields to register
+
+    def test_private_directive_registers_field_carrying_entries(self):
+        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+
+        m = _load_inline(
+            "_tt_sigreg_priv",
+            "-private([pt(x, y), solo])\n",
+        )
+        registry = m.__dict__[FUNCTOR_SIGNATURES_KEY]
+        assert registry["pt"] == ("x", "y")
+        assert "solo" not in registry
+
+    def test_predicates_are_registered_too(self):
+        """A functor WITH clauses (a predicate) still gets a registry entry
+        -- the data/predicate split is decided by binding shape, not by
+        this registry (see the ``-module`` docstring)."""
+        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+
+        m = _load_inline(
+            "_tt_sigreg_pred",
+            "-module(_tt_sigreg_pred, [q(A)])\nq(1),\n",
+        )
+        assert m.__dict__[FUNCTOR_SIGNATURES_KEY]["q"] == ("A",)
+
+    def test_multiple_directives_accumulate_rather_than_clobber(self):
+        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+
+        m = _load_inline(
+            "_tt_sigreg_multi",
+            "-module(_tt_sigreg_multi, [pt(x, y)])\n"
+            "-private([helper(a, b)])\n",
+        )
+        registry = m.__dict__[FUNCTOR_SIGNATURES_KEY]
+        assert registry["pt"] == ("x", "y")
+        assert registry["helper"] == ("a", "b")
+
+    def test_import_from_copies_entries_under_the_local_spelling(self):
+        """Cross-module fixture pair: ``sig_registry_owner`` declares
+        ``pt(x, y)`` and a bare atom ``ao``; ``sig_registry_importer``
+        imports ``pt`` under the alias ``local_pt`` and imports ``ao``
+        plain.  Only ``pt``'s entry exists to copy -- ``ao`` has none, and
+        that must be silently harmless."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+
+        fixtures_dir = pathlib.Path(__file__).parent / "fixtures"
+        owner = _load_module(
+            "tests.fixtures.sig_registry_owner",
+            str(fixtures_dir / "sig_registry_owner.clausal"),
+        )
+        importer = _load_module(
+            "tests.fixtures.sig_registry_importer",
+            str(fixtures_dir / "sig_registry_importer.clausal"),
+        )
+        assert owner.__dict__[FUNCTOR_SIGNATURES_KEY]["pt"] == ("x", "y")
+        registry = importer.__dict__[FUNCTOR_SIGNATURES_KEY]
+        assert registry["local_pt"] == ("x", "y")
+        assert "ao" not in registry
+        assert "pt" not in registry  # only the LOCAL spelling is copied
+
+
 # ── Cell emission ────────────────────────────────────────────────────────────
 
 
@@ -199,8 +281,15 @@ class TestCellEmission:
         assert "$unify(_v13, 'nil', trail)" in src
         assert "$unify(_v13, nil, trail)" not in src
 
-    def test_keyword_construction_keeps_class_emission(self):
-        """A cell is positional and total: no field names, no Var-backfill."""
+    def test_keyword_construction_places_by_field_name(self):
+        """P3-2 Task 1: signature placement, not a class fallback.
+
+        ``pt(X=1)`` places ``1`` in ``pt``'s declared ``X`` slot and
+        backfills the omitted ``Y`` slot with a fresh ``Var()`` -- see
+        ``TestSignatureConstruction`` for the fuller placement coverage.
+        Superseded ``test_keyword_construction_keeps_class_emission``,
+        which pinned the PRE-Task-1 behaviour this test inverts.
+        """
         m = _load_inline(
             "_tt_kw",
             "-tagged_terms\n"
@@ -208,8 +297,8 @@ class TestCellEmission:
             "p(pt(X=1)),\n",
         )
         src = capture_predicate_codegen("_tt_kw", ["p"])
-        assert "pt(X=1)" in src
-        assert "('pt'," not in src
+        assert "('pt', 1, Var())" in src
+        assert "pt(X=1)" not in src
 
     def test_a_dynamic_declaration_is_not_a_data_functor(self):
         """``-dynamic`` leaves a predicate clause-free at compile time.
@@ -241,6 +330,130 @@ class TestCellEmission:
         )
         src = capture_predicate_codegen("_tt_pred", ["r"])
         assert "('q'," not in src
+
+
+class TestSignatureConstruction:
+    """P3-2 Task 1 (cell-default-flip bridge): kwarg placement + Var
+    backfill for cell CONSTRUCTION.  Still flag-gated -- additive inside
+    ``-tagged_terms``, before a later task makes it load-bearing.
+
+    Positional args fill leading declared slots, keyword args fill their
+    named slots, and every slot neither reaches backfills with a fresh
+    ``Var()`` -- the same rule ``PredicateMeta.__call__`` already applies to
+    class construction, now applied to cell construction too.
+    """
+
+    _MODULE_TEMPLATE = (
+        "-tagged_terms\n"
+        "-module({name}, [point(x, y), p(A)])\n"
+        "p({goal}),\n"
+    )
+
+    def _compile(self, name, goal):
+        return _load_inline(name, self._MODULE_TEMPLATE.format(name=name, goal=goal))
+
+    def test_keyword_args_place_by_field_name_regardless_of_order(self):
+        self._compile("_tt_sig_kw", "point(y=2, x=1)")
+        src = capture_predicate_codegen("_tt_sig_kw", ["p"])
+        assert "('point', 1, 2)" in src
+
+    def test_partial_positional_backfills_the_omitted_slot(self):
+        """``point(1)`` supplies ``x`` only; ``y`` backfills with a fresh
+        ``Var()`` -- asserted by TEXT (var-ness), not by identity, since a
+        fresh Var's id is not a meaningful thing to pin."""
+        self._compile("_tt_sig_partial", "point(1)")
+        src = capture_predicate_codegen("_tt_sig_partial", ["p"])
+        assert "('point', 1, Var())" in src
+
+    def test_empty_construction_backfills_both_slots(self):
+        self._compile("_tt_sig_empty", "point()")
+        src = capture_predicate_codegen("_tt_sig_empty", ["p"])
+        assert "('point', Var(), Var())" in src
+
+    def test_over_arity_raises_naming_the_functor(self):
+        with pytest.raises(SyntaxError, match=r"point/2"):
+            self._compile("_tt_sig_overarity", "point(1, 2, 3)")
+
+    def test_unknown_keyword_field_raises_naming_the_functor(self):
+        with pytest.raises(SyntaxError, match=r"point/2"):
+            self._compile("_tt_sig_badfield", "point(z=1)")
+
+    def test_duplicate_slot_raises(self):
+        """The same field supplied both positionally and by keyword."""
+        with pytest.raises(SyntaxError, match=r"point/2"):
+            self._compile("_tt_sig_dup", "point(1, x=2)")
+
+    def test_unflagged_twin_builds_class_instances_slot_for_slot(self):
+        """Same constructions, unflagged: class instances, same field
+        values in the same slots -- signature placement changes ONLY what
+        a flagged module's constructions lower to, not what they mean."""
+        m = _load_inline(
+            "_tt_sig_plain",
+            "-module(_tt_sig_plain, [point(x, y)])\n",
+        )
+        assert normalize_term(m.point(y=2, x=1)) == ("point", 1, 2)
+        kw_only = m.point(x=1)
+        assert normalize_term(kw_only)[:2] == ("point", 1)
+        assert normalize_term(kw_only)[2] == ("$var",)
+
+
+class TestHeadSignaturePlacement:
+    """P3-2 Task 1, controller ruling: the MATCHING half of the same
+    symmetry.  A cell pattern gets the identical signature placement a cell
+    construction gets -- positional args fill leading slots, keyword args
+    fill named slots, and every omitted slot becomes a WILDCARD pattern
+    (binding nothing), not a fallback to class matching.
+    """
+
+    def _flagged_globals(self):
+        return _fixture(_TAGGED).__dict__
+
+    def _pattern_for(self, term):
+        from clausal.logic.compiler.head_match import head_to_match_pattern
+        from clausal.logic.compiler.terms_to_ast import tagged_terms_lowering
+
+        g = self._flagged_globals()
+        with tagged_terms_lowering(g):
+            return _unparse_pattern(head_to_match_pattern(
+                term, {}, [], [], None, globals_=g,
+            ))
+
+    @staticmethod
+    def _kw_compound(name, positional_n, kw_names):
+        from clausal.terms import Call as TCall, LoadName
+        from clausal.pythonic_ast.nodes import Keyword
+
+        return TCall(
+            func=LoadName(name=name),
+            args=[Var() for _ in range(positional_n)],
+            kwargs=[Keyword(name=n, value=Var()) for n in kw_names],
+        )
+
+    # ``tagged_shapes_tagged.clausal`` declares ``point(X, Y)`` -- the
+    # fixture's field names are uppercase, so kwarg-shaped head references
+    # against it must use the same spelling.
+
+    def test_keyword_head_arg_places_by_field_name(self):
+        got = self._pattern_for(self._kw_compound("point", 0, ["Y", "X"]))
+        assert got.startswith("case ['point', ")
+        assert not got.endswith(", _]:")  # both slots filled, neither omitted
+
+    def test_partial_keyword_head_arg_wildcards_the_omitted_slot(self):
+        got = self._pattern_for(self._kw_compound("point", 0, ["X"]))
+        assert got.startswith("case ['point', ")
+        assert got.endswith(", _]:")
+
+    def test_over_arity_head_reference_raises_naming_the_functor(self):
+        with pytest.raises(SyntaxError, match=r"point/2"):
+            self._pattern_for(self._kw_compound("point", 3, []))
+
+    def test_unknown_keyword_field_head_reference_raises(self):
+        with pytest.raises(SyntaxError, match=r"point/2"):
+            self._pattern_for(self._kw_compound("point", 0, ["z"]))
+
+    def test_duplicate_slot_head_reference_raises(self):
+        with pytest.raises(SyntaxError, match=r"point/2"):
+            self._pattern_for(self._kw_compound("point", 1, ["X"]))
 
 
 class TestParity:
@@ -440,10 +653,16 @@ class TestHeadPatterns:
         assert three.count(",") == 3    # tag + 3 args
         assert three.startswith("case ['seg', ")
 
-    def test_partial_construction_keeps_the_class_pattern(self):
-        """Unsaturated: no positional cell can express the missing field."""
+    def test_partial_construction_gets_a_wildcard_for_the_missing_slot(self):
+        """P3-2 Task 1 (controller ruling): the matching half of signature
+        placement.  A partial reference now builds a cell PATTERN too, with
+        a wildcard for the field it omits -- ``point(V)`` matches
+        ``('point', <p0>, _)``, not a class pattern.  Supersedes
+        ``test_partial_construction_keeps_the_class_pattern``, which pinned
+        the PRE-Task-1 behaviour this test inverts."""
         got = self._pattern(self._source_compound("point", 1), flagged=True)
-        assert got.startswith("case point(")
+        assert got.startswith("case ['point', ")
+        assert got.endswith(", _]:")
 
     def test_a_predicate_reference_keeps_the_class_pattern(self):
         """``kind/2`` has clauses -- it is a predicate, not a data functor."""
