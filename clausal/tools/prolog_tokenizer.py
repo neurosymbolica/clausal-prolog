@@ -127,9 +127,19 @@ def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
     # circular. By the time tokenize() is first called this module is
     # already fully initialized, so the cycle resolves fine.
     from clausal.tools.toklex import IncrementalLexer, load_lexer
+    from clausal.tools.toklex.regex_target import RegexLexer
+    from clausal.tools.toklex.spec import SpecError
 
     lexer = load_lexer()
-    inc = IncrementalLexer(lexer, nested_comments=nested_comments)
+    try:
+        # fast path: the spec rendered as one `re` master pattern (the
+        # per-char loop runs in C); parity with the table driver is
+        # enforced by tests/toklex/test_regex_target.py's differentials.
+        inc = RegexLexer(lexer, nested_comments=nested_comments)
+    except SpecError:
+        # a spec using constructs the regex renderer can't express
+        # (general but_not) falls back to the reference table driver
+        inc = IncrementalLexer(lexer, nested_comments=nested_comments)
     toks = inc.run(source)
 
     result: list[Token] = []
