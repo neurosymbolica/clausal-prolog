@@ -218,7 +218,10 @@ def test_structured_rhs_nesting_and_mixing(tmp_path):
     [result] = [deref(v) for _ in call("got", v, module=m.__dict__["$module"])]
     assert result[0] == 20
     assert result[1] is m.__dict__["tag"]
-    assert result[2].X == 1 and result[2].Y == 2
+    # P3-2 Task 2 (THE FLIP, R6): ``Point`` is a data functor, so the
+    # constant's functor value is the cell ``("Point", 1, 2)`` -- slots, not
+    # attributes.
+    assert result[2] == ("Point", 1, 2)
     assert result[3] == [3, 4]
 
 
@@ -233,7 +236,8 @@ def test_structured_functor_constant_declared_above_works(tmp_path):
     """)
     v = Var()
     [result] = [deref(v) for _ in call("origin", v, module=m.__dict__["$module"])]
-    assert result.X == 0 and result.Y == 0
+    # R6: a cell, as in test_structured_rhs_nesting_and_mixing above.
+    assert result == ("Point", 0, 0)
 
 
 def test_structured_functor_constant_undeclared_functor_is_syntax_error(tmp_path):

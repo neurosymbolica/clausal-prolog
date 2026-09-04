@@ -938,7 +938,8 @@ class TestF005UnhashableAnswers:
         m = load("f005c", TW_TERM_SRC)
         V = Var()
         got = answers(call("tw", V, module=m), V)
-        assert len(got) == 1 and type(got[0][0]).__name__ == "wrap"
+        # R6: the answer is a cell -- slot 0 is the functor.
+        assert len(got) == 1 and got[0][0][0] == "wrap"
 
 
 # ══ A04-F006: cross-type variant/answer conflation ════════════════════════════

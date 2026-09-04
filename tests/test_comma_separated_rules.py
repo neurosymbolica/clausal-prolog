@@ -55,10 +55,12 @@ def test_compound_list_heads_with_commas_between_rules(tmp_path):
     )
     mod = _load(tmp_path, src, "csr_compound")
     logic_mod = _module(mod)
-    pair = mod.__dict__["pair"]
+    # P3-2 Task 2 (THE FLIP, R6): ``pair`` is a data functor -- the caller
+    # hands in the cells the clause heads match.
+    assert mod.__dict__["pair"] == "pair"
     # pairs with A==1 contribute B; A!=1 contribute 0.
     # [pair(1,10), pair(0,99), pair(1,5)] -> 10 + 5 = 15
-    lst = [pair(1, 10), pair(0, 99), pair(1, 5)]
+    lst = [("pair", 1, 10), ("pair", 0, 99), ("pair", 1, 5)]
     sols = list(call("q", lst, 15, module=logic_mod))
     assert len(sols) >= 1
 

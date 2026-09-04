@@ -487,19 +487,32 @@ class TestF004CatchFunctorCatcher:
         R = Var()
         assert sols(mod, mod.cstr(R), R) == [("caught",)]
 
-    def test_instance_catcher_via_variable_arg_catches(self, mod):
-        """Passing a pre-built functor instance as the catcher works —
-        the compile-time Compound conversion is what breaks cfun."""
-        N, R = Var(), Var()
-        assert sols(mod, mod.targ(mod.kab(N), R), N, R) == [(7, "caught")]
+    def test_prebuilt_catcher_via_variable_arg_catches(self, mod):
+        """Passing a pre-built catcher TERM through a variable works — the
+        compile-time Compound conversion is what breaks cfun.
 
-    def test_compound_vs_instance_unify_is_the_root_cause(self, mod):
+        P3-2 Task 2 (THE FLIP, R6): ``kab`` is a data functor, so the
+        pre-built term is the cell ``("kab", N)``, which is exactly what the
+        throw site builds.  (Was ``mod.kab(N)``; the name binds the interned
+        spelling now, so there is no constructor to call.)
+        """
+        N, R = Var(), Var()
+        assert sols(mod, mod.targ(("kab", N), R), N, R) == [(7, "caught")]
+
+    def test_compound_vs_cell_unify_is_the_root_cause(self, mod):
+        """A ``Compound`` catcher cannot match the thrown term — the reason
+        ``_lower_catcher`` must lower a catcher the way the throw site does.
+
+        R6: the thrown term is a cell now rather than a class instance; the
+        mismatch it demonstrates is the same one, one representation later.
+        """
         from clausal.logic.variables import Trail, unify
         from clausal.terms import Compound
-        inst = mod.kab(7)
-        ok = unify(Compound("kab", (Var(),)), inst, Trail())
+        thrown = ("kab", 7)
+        ok = unify(Compound("kab", (Var(),)), thrown, Trail())
         if not ok:
-            pytest.xfail("A03-F004: unify(Compound('kab',(N,)), kab(7)) is False")
+            pytest.xfail(
+                "A03-F004: unify(Compound('kab',(N,)), ('kab', 7)) is False")
 
     def test_rethrow_on_catcher_mismatch(self, mod):
         from clausal.logic.exceptions import LogicException

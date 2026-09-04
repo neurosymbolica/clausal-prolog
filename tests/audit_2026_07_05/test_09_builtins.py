@@ -175,7 +175,9 @@ def test_F002_filter_map_inner_bindings(fix):
     assert _first(m, "fmprobe", R)
     out = _dw(R)
     assert len(out) == 1
-    inner = deref(out[0].B)  # pair(A=5, B=?) — B must be 1, not unbound
+    # R6 (P3-2 Task 2): ``pair`` is a data functor, so the answer is the cell
+    # ``("pair", 5, B)`` -- B is slot 2, not an attribute.
+    inner = deref(out[0][2])  # pair(A=5, B=?) — B must be 1, not unbound
     assert not is_var(inner) and inner == 1
 
 
@@ -890,7 +892,8 @@ def test_regression_dr_alias_guard(fix):
     _, m = fix
     P, R = Var(), Var()
     assert _first(m, "drprobe", P, R)
-    inner = deref(deref(P).A)  # the list captured in pair(A, 0)
+    # R6: pair(A, 0) is the cell ("pair", A, 0) -- A is slot 1.
+    inner = deref(deref(P)[1])  # the list captured in pair(A, 0)
     assert len(inner) == 1  # DR extend would have made it [_, 3]
 
 

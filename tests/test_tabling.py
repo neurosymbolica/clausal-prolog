@@ -541,9 +541,11 @@ class TestStructTabling:
             break
         node = results[0]
         values = []
-        while node is not m.nil:
-            values.append(node.H)
-            node = deref(node.T)
+        # P3-2 Task 2 (THE FLIP, R6): ``cons`` is a data functor, so a chain
+        # link is the cell ``("cons", H, T)`` -- slots, not attributes.
+        while node != m.nil:
+            values.append(node[1])
+            node = deref(node[2])
         assert values == [3, 2, 1]
 
     def test_nats_open_query_determinism(self):
@@ -599,16 +601,18 @@ class TestStructTabling:
         assert len(results) == 1
         node = results[0]
         length = 0
-        while node is not m.nil:
+        # R6: cell slots, as in test_nats_chain_shape above.
+        while node != m.nil:
             length += 1
-            node = deref(node.T)
+            node = deref(node[2])
         assert length == 5
 
     def test_nats_ground_query_success(self):
         """Nats(3, cons(3, cons(2, cons(1, nil)))) should succeed."""
         # nv
         m = _load("struct_tabling")
-        chain = m.cons(3, m.cons(2, m.cons(1, m.nil)))
+        # R6: the caller hands in the CELL chain the module's clauses build.
+        chain = ("cons", 3, ("cons", 2, ("cons", 1, m.nil)))
         results = list(call("Nats", 3, chain, module=_module(m)))
         assert len(results) == 1
 
@@ -616,7 +620,8 @@ class TestStructTabling:
         """Nats(3, cons(99, ...)) should fail (wrong head value)."""
         # nv
         m = _load("struct_tabling")
-        chain = m.cons(99, m.cons(2, m.cons(1, m.nil)))
+        # R6: cell chain, as in the success twin above.
+        chain = ("cons", 99, ("cons", 2, ("cons", 1, m.nil)))
         results = list(call("Nats", 3, chain, module=_module(m)))
         assert len(results) == 0
 

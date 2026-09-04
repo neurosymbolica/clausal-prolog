@@ -1,25 +1,27 @@
-"""Shared helpers for the Phase 2 bridge's ``-tagged_terms`` tests.
+"""Shared helpers for the cell-representation tests.
 
-Imported by ``tests/test_tagged_terms.py`` (Task 2) and by the parity corpus
-(``tests/test_tagged_terms_parity.py``, Task 3).  Two independent facilities
-live here:
+Imported by ``tests/test_tagged_terms.py`` and by the parity corpus
+(``tests/test_tagged_terms_parity.py``).  Two independent facilities live
+here:
 
 ``normalize_term`` / ``normalize_answers``
-    The *representation normalizer*.  A flagged (``-tagged_terms``) module
-    answers a query with tagged CELLS -- plain tuples ``("point", x, y)`` --
-    where the same module without the flag answers with class-term
+    The *representation normalizer*.  A compiled module answers a query with
+    CELLS -- plain tuples ``("point", x, y)``; a PYTHON-side producer
+    (``clausal.reflection``, ``clausal.logic.clpb``) still builds class-term
     instances ``point(X=x, Y=y)``.  The two are structurally the same term
-    in two representations, so a parity test cannot compare them with
-    ``==``.  ``normalize_term`` maps BOTH to the same canonical Python
-    value: ``("point", <norm x>, <norm y>)``.  Atoms (0-arity predicate
-    classes) canonicalise to ``("<name>",)`` -- a 0-arity compound -- so
-    that an atom is spelled the same way whichever half produced it.
+    in two representations, so a test cannot compare them with ``==``.
+    ``normalize_term`` maps BOTH to the same canonical Python value:
+    ``("point", <norm x>, <norm y>)``.
+
+    Pre-P3-2 the two representations were the two halves of a fixture PAIR,
+    one carrying the ``-tagged_terms`` flag; the flag is deleted and cells
+    are unconditional, so the recorded class-era ANSWERS are what the pair
+    now anchors -- this normalizer is what makes that comparison possible.
 
 ``capture_predicate_codegen``
     Deterministic capture of the Python source a predicate compiles to.
-    Used by the DEFAULT-PATH golden test (flag off => byte-identical
-    codegen) and by the pattern-emission tests.  Compilation of a
-    predicate is lazy and memoised on the class, so the capture clears
+    Used by the codegen golden test and by the pattern-emission tests.
+    Compilation of a predicate is lazy and memoised on the class, so the capture clears
     ``_dispatch_fn`` and re-drives ``_get_dispatch()`` through the
     predicate's own ``_lazy_recompile`` closure -- i.e. it reproduces the
     REAL compile path (same ``globals_``, same strategy, same indexing),
@@ -72,9 +74,9 @@ def normalize_term(value: Any) -> Any:
 
     Note the deliberate collision with a plain data tuple whose slot 0 is a
     ``str``: ``("point", 1, 2)`` as ordinary tuple data normalises like the
-    compound ``point(1, 2)``.  That is the bridge's KNOWN AMBIGUITY (see
-    ``clausal/logic/cells.py``), not a normalizer bug -- the parity fixtures
-    do not use str-headed data tuples.
+    compound ``point(1, 2)``.  That is the representation's KNOWN AMBIGUITY
+    (see ``clausal/logic/cells.py``), not a normalizer bug -- the fixtures do
+    not use str-headed data tuples.
     """
     value = deref(value)
     if is_var(value):
@@ -82,9 +84,9 @@ def normalize_term(value: Any) -> Any:
     # Pre-P3-1, a 0-arity predicate class used as a value WAS the atom, and
     # needed wrapping to ("name",) so it would compare equal to a cell's
     # str-headed 0-arity shape. The atom pivot (§1b) makes every atom an
-    # interned str directly -- both the plain-class half and the
-    # -tagged_terms half already emit the identical value, so there is
-    # nothing left to normalise here. No 0-arity PredicateMeta atom classes
+    # interned str directly -- the cell half and any class half already emit
+    # the identical value, so there is nothing left to normalise here. No
+    # 0-arity PredicateMeta atom classes
     # are minted post-pivot (str falls through to the final `return value`
     # below); see phase3-decomposition-and-p31-atom-pivot.md Task 7.
     if is_cell(value):

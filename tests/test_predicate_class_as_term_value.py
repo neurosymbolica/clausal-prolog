@@ -174,7 +174,16 @@ def _load(tmp_path, name, text):
 class TestClausalSourceRepro:
     """The reduced form of the field failure, run as Clausal."""
 
-    def test_bare_functor_name_compared_to_a_string_just_fails(self, tmp_path):
+    def test_bare_functor_name_now_IS_the_string(self, tmp_path):
+        """P3-2 Task 2 (THE FLIP, R6) RESOLVES the asymmetry this pinned.
+
+        ``functor/3`` names a functor with a string, and a bare reference to
+        a declared DATA functor now IS that string (its name binds the
+        interned spelling, no class), so ``NAME is cite`` with ``NAME =
+        "cite"`` SUCCEEDS.  Inverts the old pin, which recorded the
+        pre-flip behaviour: the bare name resolved to the generated CLASS,
+        which no string could ever equal, so the comparison just failed.
+        """
         mod = _load(tmp_path, "bare_name", """
             -private([cite(KEY), check(NAME)])
 
@@ -183,18 +192,18 @@ class TestClausalSourceRepro:
             ),
         """)
         from clausal.logic.solve import solve
-        # No solution, and — the point of the todo — no exception.
-        assert list(solve(mod.check("cite"))) == []
+        assert len(list(solve(mod.check("cite")))) == 1
 
-    def test_the_field_body_verbatim_fails_instead_of_raising(self, tmp_path):
+    def test_the_field_body_verbatim_now_succeeds(self, tmp_path):
         """``test_load.clausal:57``, reduced to one module.
 
-        ``functor/3`` decomposition yields the functor name as a *string*, so
-        ``NAME is cite`` compares a string against the class and cannot
-        succeed.  Whether that asymmetry is itself right is a separate
-        question (see the todo); what this pins is that the author is told
-        the goal *failed*, with the binding shown, rather than handed a
-        TypeError about a parameter named ``trail``.
+        ``functor/3`` decomposition yields the functor name as a *string*.
+        Pre-flip ``NAME is cite`` compared that string against the generated
+        CLASS and could not succeed -- the todo's asymmetry, pinned here as a
+        clean failure rather than a ``TypeError``.  P3-2 Task 2 (THE FLIP,
+        R6) removes the asymmetry: a declared data functor's bare name IS its
+        spelling, so the whole body now succeeds, which is what the author
+        wrote it expecting.
         """
         mod = _load(tmp_path, "field_body", """
             -private([cite(KEY), art_6_1, cite_term_constructs(OK)])
@@ -208,7 +217,7 @@ class TestClausalSourceRepro:
             ),
         """)
         from clausal.logic.solve import solve
-        assert list(solve(mod.cite_term_constructs(Var()))) == []
+        assert len(list(solve(mod.cite_term_constructs(Var())))) == 1
 
     def test_functor_3_decomposition_names_the_functor_as_a_string(self, tmp_path):
         """What the same body *does* yield, once nothing raises."""

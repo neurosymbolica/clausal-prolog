@@ -446,14 +446,14 @@ class TestRaisingGuardThroughFindAll:
         # silent empty findall (which would make the test *fail* with no error).
         assert isinstance(result.error, LogicException)
         # The thrown term carries the message and the offending culprit term.
-        # A functor declared in ``-private`` throws as a term-class *instance*
-        # (fields, not positional Compound args) under the strict-atoms default.
-        from clausal.logic.predicate import term_field_names
+        # P3-2 Task 2 (THE FLIP, R6): a functor declared in ``-private`` is a
+        # DATA functor, so it throws as a CELL -- slot 0 the functor, the
+        # declared fields positionally after it.  (Was a term-class instance
+        # read through ``term_field_names``.)
         term = result.error.term
-        assert type(term).__name__ == "wf_bad_shape"
-        fields = term_field_names(term)
-        vals = [getattr(term, n) for n in fields]
-        assert vals == ["window_days_used: REF_YMD must be [Y,M,D]", "2020-01-01"]
+        assert term[0] == "wf_bad_shape"
+        assert list(term[1:]) == [
+            "window_days_used: REF_YMD must be [Y,M,D]", "2020-01-01"]
         # The RAISED diagnostic path is taken (verb == "raised"), and it names
         # the findall goal the throw escaped from.
         diag = result.diagnostic

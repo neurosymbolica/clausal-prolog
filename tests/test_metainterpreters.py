@@ -31,9 +31,23 @@ def _module(mod):
 
 
 def _terms(mod):
-    """Return object-level functor classes from the loaded module."""
+    """Cell CONSTRUCTORS for the module's object-level data functors.
+
+    P3-2 Task 2 (THE FLIP, R6): ``Natnum``/``succ``/``Edge``/``Path`` are
+    ``-private`` DATA functors, so the module's own clauses build them as
+    cells and their names bind interned SPELLINGS, not classes -- a Python
+    caller can no longer construct one by calling ``mod.Natnum``.  Returning
+    builders instead of classes keeps every call site below reading as the
+    term it constructs while handing the engine the shape its clauses match.
+    """
     d = mod.__dict__
-    return d["Natnum"], d["succ"], d["Edge"], d["Path"]
+    assert d["Natnum"] == "Natnum"  # R6: the binding IS the spelling
+    return (
+        lambda *args: ("Natnum", *args),
+        lambda *args: ("succ", *args),
+        lambda *args: ("Edge", *args),
+        lambda *args: ("Path", *args),
+    )
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

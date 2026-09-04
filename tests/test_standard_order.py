@@ -278,4 +278,7 @@ def test_msort_of_domain_local_compounds_end_to_end():
     )
     S = Var()
     got = [deref(S) for _ in mod.two_arg(S)]
-    assert got == [[mod.pt(1, 2), mod.pt(1, 9), mod.pt(1, 15)]]
+    # P3-2 Task 2 (THE FLIP, R6): ``pt`` is a data functor, so the sorted
+    # answers are cells.  The ORDER is what this test is about and it is
+    # unchanged.
+    assert got == [[("pt", 1, 2), ("pt", 1, 9), ("pt", 1, 15)]]

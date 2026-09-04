@@ -662,7 +662,10 @@ class TestJointAndSecondaryDispatchGuards:
 
 class TestCompoundAtomIndexGuards:
     def test_compound_key_input_and_partial(self, mod, moddict):
-        fc = moddict["fc"]
+        # P3-2 Task 2 (THE FLIP, R6): ``fc`` is a data functor -- its name
+        # binds the interned spelling, and the term is the cell.
+        assert moddict["fc"] == "fc"
+        fc = lambda *args: ("fc", *args)
         R = Var()
         assert collect(mod, "cmq4", fc(1), R, outv=[R]) == [(["f1"],)]
         X, R = Var(), Var()

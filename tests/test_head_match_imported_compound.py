@@ -14,7 +14,15 @@ never fire.
 Same root cause (no ``Call(func=LoadName, args=...)`` case in
 ``head_to_match_pattern``), opposite manifestation.  The fix is to
 resolve the ``LoadName`` at compile time against the module's globals
-and emit a ``MatchClass`` on the resolved ``PredicateMeta`` class.
+and emit the pattern the reference compiles to.
+
+P3-2 Task 2 (THE FLIP, R6): ``Wrap``/``Item``/``Met`` are DATA functors, so
+they compile to cells and their names bind interned spellings rather than
+classes -- ``mod.Wrap`` is the str ``"Wrap"``, not a constructor.  Every term
+this file used to build with ``Wrap(...)`` is now built as the cell literal
+``("Wrap", ...)``, and the shape assertions read slot 0 instead of
+``type(x).__name__``.  The dispatch questions being asked are unchanged; only
+the representation the caller hands in is.
 """
 
 from __future__ import annotations
@@ -75,8 +83,7 @@ def test_fact_with_imported_compound_head_skips_non_matching_term():
 def test_rule_with_imported_compound_head_fires_on_matching_term():
     """When the caller passes a Wrap term, the rule must match."""
     mod = _load_importer()
-    Wrap = getattr(mod, "Wrap")
-    wrap_term = Wrap("anything")
+    wrap_term = ("Wrap", "anything")
     results = _results(mod, "Check", wrap_term)
     # Both clauses match a Wrap term: the rule yields "matched", the
     # catch-all yields "fallback".
@@ -88,8 +95,7 @@ def test_rule_with_imported_compound_head_fires_on_matching_term():
 def test_rule_with_imported_compound_head_binds_inner_var():
     """SUB inside Wrap(SUB) in the head must bind to the caller's sub-term."""
     mod = _load_importer()
-    Wrap = getattr(mod, "Wrap")
-    wrap_term = Wrap("payload")
+    wrap_term = ("Wrap", "payload")
     results = _results(mod, "CheckMixed", wrap_term)
     assert results == ["payload", "fallback"], (
         f"Expected SUB to be bound to 'payload'. Got {results!r}."
@@ -113,8 +119,7 @@ def test_fact_and_rule_forms_agree_for_non_matching_input():
 
 def test_fact_and_rule_forms_agree_for_matching_input():
     mod = _load_importer()
-    Wrap = getattr(mod, "Wrap")
-    wrap_term = Wrap("x")
+    wrap_term = ("Wrap", "x")
     rule_results = _results(mod, "Check", wrap_term)
     fact_results = _results(mod, "CheckFact", wrap_term)
     assert rule_results == fact_results, (
@@ -130,11 +135,9 @@ def test_nested_imported_compound_head_destructures():
     functors; the head pattern compiles to a nested ``MatchClass``.
     """
     mod = _load_importer()
-    Item = getattr(mod, "Item")
-    Met = getattr(mod, "Met")
     direct = getattr(mod, "direct")
     # Matching shape: Item(REQ_ID, Met(SUB), DETAIL)
-    item_term = Item("req-42", Met(direct), "some-detail")
+    item_term = ("Item", "req-42", ("Met", direct), "some-detail")
     results = _results(mod, "CheckNested", item_term)
     # Rule binds RESULT to REQ_ID ("req-42") and yields; catchall yields "fallback".
     assert results == ["req-42", "fallback"], (
@@ -145,8 +148,7 @@ def test_nested_imported_compound_head_destructures():
 def test_nested_imported_compound_head_rejects_outer_class_mismatch():
     """A Wrap term must NOT match a head expecting Item — different classes."""
     mod = _load_importer()
-    Wrap = getattr(mod, "Wrap")
-    results = _results(mod, "CheckNested", Wrap("x"))
+    results = _results(mod, "CheckNested", ("Wrap", "x"))
     assert results == ["fallback"], (
         f"Nested head matched a Wrap term when expecting Item. Got {results!r}."
     )
@@ -155,9 +157,8 @@ def test_nested_imported_compound_head_rejects_outer_class_mismatch():
 def test_nested_imported_compound_head_rejects_inner_class_mismatch():
     """An Item whose second arg is NOT a Met must fall through to catchall."""
     mod = _load_importer()
-    Item = getattr(mod, "Item")
     # Item present but second arg is a plain string, not Met(_):
-    results = _results(mod, "CheckNested", Item("r", "not-a-met", "d"))
+    results = _results(mod, "CheckNested", ("Item", "r", "not-a-met", "d"))
     assert results == ["fallback"], (
         f"Nested head matched on inner-class mismatch. Got {results!r}."
     )
@@ -170,8 +171,7 @@ def test_indexed_wrap_rule_fires_under_first_arg_index():
     """5 clauses → first-arg indexer engages.  Bucketing must reach
     the Wrap-keyed clauses when the caller passes a Wrap term."""
     mod = _load_importer()
-    Wrap = getattr(mod, "Wrap")
-    results = _results(mod, "CheckIndexed", Wrap("x"))
+    results = _results(mod, "CheckIndexed", ("Wrap", "x"))
     assert results == ["first", "second", "fallback"], (
         f"Indexer bucketing dropped Wrap-keyed rule clauses. Got {results!r}."
     )
@@ -179,10 +179,8 @@ def test_indexed_wrap_rule_fires_under_first_arg_index():
 
 def test_indexed_item_rule_fires_under_first_arg_index():
     mod = _load_importer()
-    Item = getattr(mod, "Item")
-    Met = getattr(mod, "Met")
     direct = getattr(mod, "direct")
-    item_with_met = Item("r", Met(direct), "d")
+    item_with_met = ("Item", "r", ("Met", direct), "d")
     results = _results(mod, "CheckIndexed", item_with_met)
     # Both Item-keyed rule clauses match (the second one further
     # destructures Met(_) which the input satisfies).
@@ -210,10 +208,8 @@ def test_indexed_non_matching_term_only_hits_fallback():
 
 def test_nested_fact_and_rule_agree_on_matching_input():
     mod = _load_importer()
-    Item = getattr(mod, "Item")
-    Met = getattr(mod, "Met")
     direct = getattr(mod, "direct")
-    item_term = Item("req", Met(direct), "d")
+    item_term = ("Item", "req", ("Met", direct), "d")
     rule_results = _results(mod, "CheckNested", item_term)
     fact_results = _results(mod, "CheckNestedFact", item_term)
     # Rule binds RESULT to REQ_ID ("req"); fact binds RESULT to "matched".
@@ -227,9 +223,8 @@ def test_nested_fact_and_rule_agree_on_matching_input():
 
 def test_nested_fact_and_rule_agree_on_outer_mismatch():
     mod = _load_importer()
-    Wrap = getattr(mod, "Wrap")
-    rule_results = _results(mod, "CheckNested", Wrap("x"))
-    fact_results = _results(mod, "CheckNestedFact", Wrap("x"))
+    rule_results = _results(mod, "CheckNested", ("Wrap", "x"))
+    fact_results = _results(mod, "CheckNestedFact", ("Wrap", "x"))
     assert rule_results == fact_results, (
         f"Fact/rule divergence on outer mismatch: "
         f"rule={rule_results!r} fact={fact_results!r}"
@@ -238,9 +233,8 @@ def test_nested_fact_and_rule_agree_on_outer_mismatch():
 
 def test_nested_fact_and_rule_agree_on_inner_mismatch():
     mod = _load_importer()
-    Item = getattr(mod, "Item")
-    rule_results = _results(mod, "CheckNested", Item("r", "no-met", "d"))
-    fact_results = _results(mod, "CheckNestedFact", Item("r", "no-met", "d"))
+    rule_results = _results(mod, "CheckNested", ("Item", "r", "no-met", "d"))
+    fact_results = _results(mod, "CheckNestedFact", ("Item", "r", "no-met", "d"))
     assert rule_results == fact_results, (
         f"Fact/rule divergence on inner mismatch: "
         f"rule={rule_results!r} fact={fact_results!r}"
@@ -263,7 +257,8 @@ def test_rule_structural_head_binds_unbound_caller():
     mod = _load_importer()
     got = _bind_first(mod, "Check", "matched")
     assert len(got) == 1
-    assert type(got[0]).__name__ == "Wrap"
+    # R6: the constructed answer is a cell -- slot 0 IS the functor.
+    assert got[0][0] == "Wrap"
 
 
 def test_rule_matches_fact_in_output_mode():
@@ -272,7 +267,7 @@ def test_rule_matches_fact_in_output_mode():
     rule_got = _bind_first(mod, "Check", "matched")
     fact_got = _bind_first(mod, "CheckFact", "matched")
     assert len(rule_got) == len(fact_got) == 1
-    assert type(rule_got[0]).__name__ == type(fact_got[0]).__name__ == "Wrap"
+    assert rule_got[0][0] == fact_got[0][0] == "Wrap"   # R6: cells
 
 
 def test_indexed_imported_compound_at_second_position_enumerates_all_rows():
@@ -284,14 +279,12 @@ def test_indexed_imported_compound_at_second_position_enumerates_all_rows():
     bucket globals lacked the imported class, so ``head_to_match_pattern``
     emitted ``MatchClass(Call)`` and the Wrap/Item buckets returned nothing."""
     mod = _load_importer()
-    Wrap = getattr(mod, "Wrap")
-    Item = getattr(mod, "Item")
-    wrap_rows = _bind_first(mod, "Tagged", Wrap(Var()))
+    wrap_rows = _bind_first(mod, "Tagged", ("Wrap", Var()))
     assert sorted(wrap_rows) == ["r1", "r3"], (
         f"arg1-indexed Wrap bucket dropped rows. Got {wrap_rows!r}, "
         f"expected ['r1', 'r3']."
     )
-    item_rows = _bind_first(mod, "Tagged", Item(Var(), Var(), Var()))
+    item_rows = _bind_first(mod, "Tagged", ("Item", Var(), Var(), Var()))
     assert sorted(item_rows) == ["r2", "r4"], (
         f"arg1-indexed Item bucket dropped rows. Got {item_rows!r}, "
         f"expected ['r2', 'r4']."
@@ -318,9 +311,12 @@ def test_nested_compound_head_binds_unbound_caller():
     found = []
     for _ in call("CheckNested", X, Var(), module=logic_mod):
         found.append(deref(X))
-    item_solutions = [f for f in found if type(f).__name__ == "Item"]
+    item_solutions = [
+        f for f in found if isinstance(f, tuple) and f and f[0] == "Item"
+    ]
     assert len(item_solutions) == 1
     item = item_solutions[0]
     # The structural head Item(REQ_ID, Met(SUB), _) must be reconstructed with
-    # its STATUS field bound to a Met-shaped sub-term (not a free var / garbage).
-    assert type(deref(item.STATUS)).__name__ == "Met"
+    # its STATUS slot bound to a Met-shaped sub-term (not a free var /
+    # garbage).  R6: STATUS is slot 2 of the cell, not an attribute.
+    assert deref(item[2])[0] == "Met"

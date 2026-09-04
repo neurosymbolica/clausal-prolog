@@ -290,6 +290,22 @@ def _logic_module(mod):
     return mod.__dict__["$module"]
 
 
+def _python_minted(functor, fields, *values):
+    """A live term INSTANCE, minted the way PYTHON producers mint one.
+
+    P3-2 Task 2 (THE FLIP, R6): a ``.clausal`` data functor's name binds its
+    interned spelling, so ``mod.point(1, 2)`` is no longer a construction --
+    ``mod.point`` is the str.  Instances have not gone away, though: modules
+    like ``clausal.reflection`` and ``clausal.logic.clpb`` mint their own
+    functor classes with ``make_predicate`` and build instances at runtime,
+    and those keep CLASS emission everywhere (controller ruling on the gate
+    asymmetry).  Tests that need a live instance mint one the same way.
+    """
+    from clausal.logic.predicate import make_predicate
+
+    return make_predicate(functor, list(fields))(*values)
+
+
 class TestCellEmission:
     def test_a_module_constructs_cells(self):
         """A saturated declared-functor construction lowers to a tuple."""
@@ -422,12 +438,15 @@ class TestSignatureConstruction:
         the same slots.  Signature placement changed what a construction
         lowers TO, never what it means -- the compile-time placer and the
         runtime one must keep agreeing."""
-        m = _load_inline(
-            "_tt_sig_plain",
-            "-module(_tt_sig_plain, [point(x, y)])\n",
-        )
-        assert normalize_term(m.point(y=2, x=1)) == ("point", 1, 2)
-        kw_only = m.point(x=1)
+        from clausal.logic.predicate import make_predicate
+
+        # R6: read through a PYTHON-minted class -- a ``.clausal``
+        # declaration mints none, but ``PredicateMeta.__call__`` is untouched
+        # and is still what every Python-side functor producer constructs
+        # through, so it is still the placer that has to agree.
+        point = make_predicate("point", ["x", "y"])
+        assert normalize_term(point(y=2, x=1)) == ("point", 1, 2)
+        kw_only = point(x=1)
         assert normalize_term(kw_only)[:2] == ("point", 1)
         assert normalize_term(kw_only)[2] == ("$var",)
 
@@ -599,27 +618,21 @@ class TestCellHeadDispatch:
     def test_unknown_functor_cell_matches_no_clause(self):
         assert self._kind_of(_TAGGED, lambda m: ("square", 1, 2)) == []
 
-    def test_a_declared_data_functors_class_constructor_matches_nothing(self):
-        """The trap the flip does not close, pinned on the real path.
+    def test_a_declared_data_functor_binds_its_spelling_not_a_constructor(self):
+        """The trap the flip CLOSES, pinned on the real path (R6).
 
-        P3-2 Task 2 (R6) stops ``compiler_v2._process_declarations`` minting
-        a class for a declared functor -- but that was never the only minting
-        site: ``-module``/``-private`` ALSO emit a
-        ``term_rewriting._make_functor_class_ast`` block that runs at exec
-        time, so ``m.point`` is still a live, callable class.  What the flip
-        DID change is what the module's clauses build and match: cells.  So a
-        Python caller that reaches for the constructor gets a value that
-        unifies with nothing -- silently, as no solutions rather than as an
-        error.  Both halves asserted here, so the residual minting site is on
-        record rather than a surprise; a later task that removes it should
-        find this test and invert it.
+        A declared data functor mints no reachable class any more: the name
+        binds its interned spelling, so a Python caller cannot build a
+        class term that silently unifies with nothing -- reaching for the
+        constructor is a loud ``TypeError`` instead, and the cell is the
+        thing that works.  (The bridge era pinned the opposite here: the
+        constructor existed, was callable, and matched nothing.)
         """
-        from clausal.logic.predicate import PredicateMeta
-
         mod = _fixture(_TAGGED)
-        assert isinstance(mod.point, PredicateMeta)   # still minted
-        assert self._kind_of(_TAGGED, lambda m: m.point(1, 2)) == []
-        # ... while the cell of the same shape selects its clause.
+        assert mod.point == "point"          # the binding IS the spelling
+        with pytest.raises(TypeError):
+            mod.point(1, 2)
+        # ... and the cell of that shape selects its clause.
         assert self._kind_of(_TAGGED, lambda m: ("point", 1, 2)) == ["pt"]
 
 
@@ -708,22 +721,35 @@ class TestHeadPatterns:
         got = self._pattern(self._source_compound("kind", 2))
         assert got.startswith("case kind(")
 
-    def test_live_instance_becomes_a_sequence_pattern(self):
-        mod = _fixture(_TAGGED)
-        got = self._pattern(mod.point(1, 2))
-        assert got.startswith("case ['point', ")
+    def test_live_instance_stays_a_class_pattern(self):
+        """P3-2 Task 2, controller ruling: instance-side cell emission is
+        REMOVED.  A live ``PredicateMeta`` instance always matches as a
+        class, because it always CONSTRUCTS as one -- cell-vs-class is
+        decided on the BINDING, and an instance's producer is by definition
+        class-world (``clausal.reflection``, ``clpb``).  Inverts
+        ``test_live_instance_becomes_a_sequence_pattern``, which pinned the
+        bridge-era instance gate.
+        """
+        got = self._pattern(_python_minted("point", ("X", "Y"), 1, 2))
+        assert got.startswith("case point(")
 
     def test_another_modules_functor_matches_as_a_cell_too(self):
         """P3-2 Task 2 (THE FLIP, R5): the own-module gate is deleted.
 
         Inverts ``test_another_modules_functor_keeps_the_class_pattern``,
         which pinned the flag-era rule that compound data did not cross the
-        module boundary.  Both modules build cells now, so a functor owned
-        by a different module must MATCH as a cell -- keeping the class
-        pattern here is what would produce a clause that can never fire.
+        module boundary.  Both modules build cells now, so a reference
+        resolved against ANOTHER module's namespace must MATCH as a cell --
+        keeping the class pattern here is what would produce a clause that
+        can never fire.
+
+        Asked on the NAME side: post-ruling an INSTANCE is always a class
+        pattern (see the test above), so a name resolved in the other
+        module's namespace is where the cross-module question now lives.
         """
         other = _fixture(_PLAIN)
-        got = self._pattern(other.point(1, 2))
+        got = self._pattern(self._source_compound("point", 2),
+                            globals_=other.__dict__)
         assert got.startswith("case ['point', ")
 
     def test_no_tuple_data_tag_is_emitted_in_this_stage(self):
@@ -748,13 +774,21 @@ class TestHeadPatterns:
 
 
 class TestBucketPatternIntegration:
-    """The cell pattern through the REAL bucket-compilation path.
+    """Cell-headed clauses through the REAL bucket-compilation path.
 
-    Clauses whose head arg is a live term instance are the shape that
-    ``_lift_clause_at_pos`` will lift into the head, which is what puts a
-    compound in front of ``head_to_match_pattern``.  Compiling five of them
-    against a real module's namespace therefore exercises index
-    partitioning, the lift, and cell pattern emission together.
+    Five clauses whose head arg is a CELL, compiled against a real module's
+    namespace: index partitioning, the argument-index lift, and head-pattern
+    emission together.
+
+    P3-2 Task 2, controller ruling: instance-side cell emission is removed,
+    so a live term instance -- the shape this used to build its clauses from,
+    because it is the shape ``_lift_clause_at_pos`` lifts -- now yields a
+    CLASS pattern.  The clauses are built from cells instead, which is what
+    the compiler produces for source-written data.  What that costs is
+    recorded in ``test_the_lift_does_not_yet_reach_a_cell_pattern`` below:
+    the lift does not recognise a cell, so dispatch stays correct but goes
+    through the capture-and-unify path rather than a sequence pattern.  Task
+    3 is where the lift learns cells.
     """
 
     #: Head functor for the probe predicate.  A ``Compound`` head under a
@@ -763,7 +797,7 @@ class TestBucketPatternIntegration:
     #: and silently polluted every later test in the file).
     PROBE = "kind_probe"
 
-    def _compile_instance_headed_kind(self):
+    def _compile_cell_headed_kind(self):
         from clausal.logic.compiler import predicate as predicate_mod
         from clausal.logic.database import Clause, Database
         from clausal.terms import Compound
@@ -771,11 +805,11 @@ class TestBucketPatternIntegration:
         mod = _fixture(_TAGGED)
         db = Database()
         for shape, k in [
-            (mod.point(1, 2), "a"),
-            (mod.point(3, 4), "b"),
-            (mod.circle(0, 5), "c"),
-            (mod.seg(1, 2, 3), "d"),
-            (mod.point(9, 9), "e"),
+            (("point", 1, 2), "a"),
+            (("point", 3, 4), "b"),
+            (("circle", 0, 5), "c"),
+            (("seg", 1, 2, 3), "d"),
+            (("point", 9, 9), "e"),
         ]:
             db.assertz(Clause(head=Compound(self.PROBE, (shape, k)), body=[]))
 
@@ -796,12 +830,23 @@ class TestBucketPatternIntegration:
             predicate_mod.functiondef_to_function = original
         return db, "\n".join(captured)
 
-    def test_buckets_match_cells_by_functor_and_arity(self):
-        _db, src = self._compile_instance_headed_kind()
-        assert "case [['point', _ncap0, _ncap1]," in src
-        assert "case [['circle', _ncap0, _ncap1]," in src
-        assert "case [['seg', _ncap0, _ncap1, _ncap2]," in src
+    def test_the_lift_does_not_yet_reach_a_cell_pattern(self):
+        """Recorded finding, not an endorsement (Task 3 closes it).
+
+        ``list_dispatch._lift_clause_at_pos`` recognises ``Compound`` and
+        term-instance head args; a CELL is a plain tuple, so it is not
+        lifted into a sequence pattern.  The clause still dispatches
+        correctly -- the ground cell is captured and unified against a
+        ``$headlit`` global, the value-rejecting path every other opaque
+        ground literal takes -- which is why
+        ``test_cell_callers_select_the_right_clause`` below passes.  What is
+        missing is the INDEXED pattern, not the answer.
+        """
+        _db, src = self._compile_cell_headed_kind()
+        assert "case [['point', _ncap0, _ncap1]," not in src
         assert "case [point(" not in src
+        # ... and the ground cells reach the clause bodies as head literals.
+        assert "$headlit_" in src
 
     @pytest.mark.parametrize(
         "shape, expected",
@@ -817,7 +862,7 @@ class TestBucketPatternIntegration:
     def test_cell_callers_select_the_right_clause(self, shape, expected):
         from clausal.logic.database import Module
 
-        db, _src = self._compile_instance_headed_kind()
+        db, _src = self._compile_cell_headed_kind()
         lm = Module("_tt_bucket_probe")
         lm.db = db
         K = Var()
@@ -828,22 +873,21 @@ class TestBucketPatternIntegration:
         """The documented representation limit, asserted rather than assumed.
 
         Every compound compiles to a cell now (P3-2 Task 2, R6), so a caller
-        that hands in a class INSTANCE built from the still-minted
-        constructor simply does not unify -- it is not an error, it is no
-        solutions.  Same finding as
-        ``TestCellHeadDispatch.test_a_declared_data_functors_class_
-        constructor_matches_nothing``, here through the bucket path.
+        that hands in a class INSTANCE -- which post-R6 only a Python-side
+        producer can mint -- simply does not unify.  It is not an error, it
+        is no solutions.
         """
         from clausal.logic.database import Module
 
-        mod = _fixture(_TAGGED)
-        db, _src = self._compile_instance_headed_kind()
+        db, _src = self._compile_cell_headed_kind()
         lm = Module("_tt_bucket_probe")
         lm.db = db
         K = Var()
         assert [
             deref(K)
-            for _t in call(self.PROBE, mod.point(3, 4), K, module=lm)
+            for _t in call(self.PROBE,
+                           _python_minted("point", ("X", "Y"), 3, 4),
+                           K, module=lm)
         ] == []
 
 
@@ -882,14 +926,14 @@ class TestHeadPatternReachability:
         """
         from clausal.logic.compiler import arg_index
 
-        mod = _fixture(_TAGGED)
         assert arg_index._runtime_arg_key(("point", 3, 4)) is arg_index._INDEX_VAR
         # ... while a class INSTANCE of the same functor keys, and indexes,
-        # normally.  Post-flip no compiled clause builds one (the module's
-        # own constructions are cells), but the constructor is still minted
-        # and a Python caller can still hand one in -- so the class branch of
-        # the key function is still live code, and still tested.
-        assert arg_index._runtime_arg_key(mod.point(3, 4)) == ("point", 2)
+        # normally.  Post-flip no ``.clausal`` module produces one (R6: a
+        # declared data functor mints no reachable class), but a Python-side
+        # producer still does -- so the class branch of the key function is
+        # live code, and still tested.
+        assert arg_index._runtime_arg_key(
+            _python_minted("point", ("X", "Y"), 3, 4)) == ("point", 2)
 
 
 class TestNormalizer:
@@ -902,9 +946,12 @@ class TestNormalizer:
     """
 
     def test_cell_and_class_term_canonicalise_alike(self):
-        plain, tagged = _fixture(_PLAIN), _fixture(_TAGGED)
-        assert normalize_term(plain.point(1, 2)) == normalize_term(("point", 1, 2))
-        assert normalize_term(tagged.point(1, 2)) == ("point", 1, 2)
+        # R6: the class half is Python-minted now -- which is exactly the
+        # case the normalizer still has to cover, since those are the only
+        # class terms left.
+        instance = _python_minted("point", ("X", "Y"), 1, 2)
+        assert normalize_term(instance) == normalize_term(("point", 1, 2))
+        assert normalize_term(instance) == ("point", 1, 2)
 
     def test_nesting_is_canonicalised_all_the_way_down(self):
         """P3-1 atom pivot (§1b): ``plain.nil`` is the interned str "nil",
@@ -912,14 +959,16 @@ class TestNormalizer:
         wrapping (phase3-decomposition-and-p31-atom-pivot Task 7 work item
         1)."""
         plain = _fixture(_PLAIN)
-        chain = plain.point(3, plain.point(2, plain.nil))
+        chain = _python_minted(
+            "point", ("X", "Y"), 3,
+            _python_minted("point", ("X", "Y"), 2, plain.nil))
         assert normalize_term(chain) == ("point", 3, ("point", 2, "nil"))
         assert normalize_term(("point", 3, ("point", 2, plain.nil))) \
             == ("point", 3, ("point", 2, "nil"))
 
     def test_different_functors_stay_different(self):
-        plain = _fixture(_PLAIN)
-        assert normalize_term(plain.point(1, 2)) != normalize_term(("circle", 1, 2))
+        assert (normalize_term(_python_minted("point", ("X", "Y"), 1, 2))
+                != normalize_term(("circle", 1, 2)))
 
     def test_different_arities_stay_different(self):
         assert normalize_term(("seg", 1, 2, 3)) != normalize_term(("seg", 1, 2))
@@ -941,7 +990,8 @@ class TestNormalizer:
         """P3-1 atom pivot (§1b): no ("nil",) wrapping -- see Task 7 work
         item 1."""
         plain = _fixture(_PLAIN)
-        rows = [{"T": plain.point(1, plain.nil)}, ("point", 1, plain.nil)]
+        rows = [{"T": _python_minted("point", ("X", "Y"), 1, plain.nil)},
+                ("point", 1, plain.nil)]
         assert normalize_answers(rows) == [
             {"T": ("point", 1, "nil")},
             ("point", 1, "nil"),
@@ -968,26 +1018,34 @@ class TestGateSymmetry:
             _load_inline("_tt_pos", self._POS_SRC)
         return sys.modules["_tt_pos"]
 
-    def test_position_field_functor_constructs_as_a_class(self):
-        """``term_to_ast_expr``'s keyword slow path DROPS a ``position``
-        field, so a positional cell cannot reproduce it -- such a functor
-        keeps class construction, which is why the exclusion survives the
-        flip inside ``predicate.is_data_functor``."""
+    def test_position_field_functor_constructs_as_a_cell(self):
+        """P3-2 Task 2, controller ruling: the ``position`` exclusion is GONE.
+
+        It existed because ``term_to_ast_expr``'s keyword slow path DROPS a
+        ``position`` field when it constructs a class instance, so the two
+        representations of such a functor were not interchangeable.  A cell
+        keeps every declared slot, so there is nothing to exclude: a
+        declared ``rec(position, x)`` binds its spelling like any other data
+        functor and its references compile to ``('rec', 1, 2)``.  Inverts
+        ``test_position_field_functor_constructs_as_a_class``.
+        """
         self._pos_module()
         src = capture_predicate_codegen("_tt_pos", ["p"])
-        assert "('rec'," not in src
-        assert "rec(" in src
+        assert "('rec', 1, 2)" in src
 
-    def test_position_field_functor_matches_as_a_class(self):
-        """... and therefore must keep class MATCHING too.  A cell pattern
-        here could never match the class term the construction half builds."""
-        from clausal.logic.compiler.head_match import head_to_match_pattern
+    def test_position_field_functor_has_no_instance_half_any_more(self):
+        """... and the matching half it had to agree with is gone with it.
 
+        The old twin matched a live ``rec`` INSTANCE as a class.  Post-R6 the
+        declaration mints no reachable class, so no such instance exists to
+        match -- the name is the interned spelling, and both sides of the
+        symmetry now answer the same question about the same binding.
+        Inverts ``test_position_field_functor_matches_as_a_class``.
+        """
         mod = self._pos_module()
-        pattern = head_to_match_pattern(
-            mod.rec(1, 2), {}, [], [], None, globals_=mod.__dict__,
-        )
-        assert _unparse_pattern(pattern).startswith("case rec(")
+        assert mod.rec == "rec"
+        with pytest.raises(TypeError):
+            mod.rec(1, 2)
 
     def test_the_cell_branch_resolves_names_where_its_fallback_does(self):
         """``cell_signature_for_name`` looks the name up in the ``globals_``
@@ -1009,11 +1067,11 @@ class TestGateSymmetry:
         """
         from clausal.logic.compiler.head_match import head_to_match_pattern
         from clausal.logic.compiler.terms_to_ast import lowering_scope
-        from clausal.logic.predicate import is_data_functor
+        from clausal.logic.predicate import PredicateMeta
 
         tagged = _fixture(_TAGGED)
-        assert is_data_functor(tagged.point)          # the premise ...
-        assert not is_data_functor(tagged.kind)       # ... both halves of it
+        assert tagged.point == "point"                    # the premise ...
+        assert isinstance(tagged.kind, PredicateMeta)     # ... both halves
         term = self._source_compound_for("point", 2)
         with lowering_scope(tagged.__dict__):
             pattern = head_to_match_pattern(

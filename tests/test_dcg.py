@@ -76,7 +76,11 @@ class TestAtomHeadDispatch:
         mod = _load("r1b", src, tmp_path)
         r = mod.module_dict["r"]
         foo = mod.module_dict["foo"]
-        ve = mod.module_dict["ve"]
+        # P3-2 Task 2 (THE FLIP, R6): ``ve`` is a DATA functor -- the term is
+        # the cell ``("ve", V)``, and the name binds the spelling.  ``r`` is a
+        # predicate and ``foo`` an atom, both unchanged.
+        assert mod.module_dict["ve"] == "ve"
+        ve = lambda *args: ("ve", *args)
         # r(foo) only the atom clause
         assert _succeeds("phrase", r(foo), ["atom"], module=mod)
         assert not _succeeds("phrase", r(foo), ["compound"], module=mod)
@@ -110,7 +114,9 @@ class TestAtomHeadDispatch:
             "r(ve(bar), O) <- (O is 2)\n"
         )
         mod = _load("r1d", src, tmp_path)
-        ve = mod.module_dict["ve"]
+        # R6: a cell constructor, as in test_dcg_atom_head_no_compound_match.
+        assert mod.module_dict["ve"] == "ve"
+        ve = lambda *args: ("ve", *args)
         foo = mod.module_dict["foo"]
         bar = mod.module_dict["bar"]
         out = Var()

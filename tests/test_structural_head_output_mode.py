@@ -39,8 +39,17 @@ def _collect(name, out_vars, *args, module):
 
 
 def _ctor(mod, name):
-    """Fetch a declared term constructor from the module namespace."""
-    return mod.module_dict[name]
+    """A cell CONSTRUCTOR for a declared term functor.
+
+    P3-2 Task 2 (THE FLIP, R6): a declared data functor's name binds its
+    interned spelling, not a class -- ``mod.module_dict["point"]`` is the str
+    ``"point"``, and the module's clauses build and match the cell
+    ``("point", X, Y)``.  Returning a builder keeps every call site below
+    reading as the term it constructs, and the equality assertions compare
+    cells to cells.
+    """
+    assert mod.module_dict[name] == name   # R6: the binding IS the spelling
+    return lambda *args: (name, *args)
 
 
 class TestStructuralHeadOutputMode:
