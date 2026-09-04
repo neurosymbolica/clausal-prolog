@@ -48,10 +48,14 @@ from dataclasses import dataclass
 
 from clausal.tools.prolog_ast import (
     PAtom,
+    PClause,
     PCompound,
     PCurly,
+    PDCGRule,
+    PDirective,
     PList,
     PNumber,
+    PQuery,
     PString,
     PVar,
 )
@@ -196,3 +200,178 @@ def transform_term(pterm) -> tuple[object, object, dict[int, str]]:
     cell = xf.cell(pterm)
     span_tree = xf.span(pterm)
     return cell, span_tree, xf.var_names
+
+
+# ── PrologReader: the incremental L1 core (Task 4) ────────────────────
+#
+# A resumable item-at-a-time reader over the toklex L0 token stream. It
+# owns an L0 lexer (RegexLexer, falling back to IncrementalLexer on a
+# SpecError -- the same policy prolog_tokenizer.tokenize() uses) and its
+# own OperatorTable, which persists across read_term() calls so op/3
+# directives parsed in one item stay in effect for later ones.
+#
+# Deferred imports below mirror prolog_tokenizer.tokenize()'s reason:
+# clausal.tools.toklex.spec parses spec files with prolog_parser, which
+# imports prolog_tokenizer for Token/TokenType/tokenize -- an eager
+# module-level import of the toklex/parser stack here risks the same
+# import-order fragility, so it's deferred to first use instead.
+
+from clausal.tools.toklex import EOF, NEED_MORE  # re-exported
+
+
+def _to_compat_token(t):
+    """One L0 ``Tok`` -> a compat ``Token`` (prolog_tokenizer.Token),
+    reusing the shim's own kind map so the mapping never drifts from
+    tokenize()'s."""
+    from clausal.tools.prolog_tokenizer import Token, _KIND_MAP
+
+    return Token(
+        _KIND_MAP[t.kind], t.value, t.start[1], t.start[2],
+        quoted=(t.kind == "quoted_atom"),
+        end_line=t.end[1], end_col=t.end[2],
+        offset=t.start[0], end_offset=t.end[0],
+    )
+
+
+def _joined_span(a, b):
+    """(start, end) covering P-nodes *a* and *b*, or None if either has
+    no span of its own."""
+    a_span = getattr(a, "span", None)
+    b_span = getattr(b, "span", None)
+    if a_span is None or b_span is None:
+        return None
+    return (a_span[0], b_span[1])
+
+
+def _classify_pitem(pitem):
+    """One parsed ``PItem`` -> the matching ``ReaderItem``. Where an item
+    has two P-subtrees that must share variable numbering (a rule's head
+    and body; a DCG rule's head and body), a synthetic whole-item
+    PCompound is built and transformed ONCE, so ``transform_term``'s
+    first-occurrence numbering runs over both halves together."""
+    if isinstance(pitem, PClause):
+        if pitem.body is None:
+            cell, spans, var_names = transform_term(pitem.head)
+        else:
+            whole = PCompound(":-", (pitem.head, pitem.body),
+                               span=_joined_span(pitem.head, pitem.body))
+            cell, spans, var_names = transform_term(whole)
+        return Clause(cell, spans, var_names)
+    if isinstance(pitem, PDirective):
+        cell, spans, var_names = transform_term(pitem.body)
+        return Directive(cell, spans, var_names)
+    if isinstance(pitem, PQuery):
+        cell, spans, var_names = transform_term(pitem.body)
+        return Query(cell, spans, var_names)
+    if isinstance(pitem, PDCGRule):
+        whole = PCompound("-->", (pitem.head, pitem.body),
+                           span=_joined_span(pitem.head, pitem.body))
+        cell, spans, var_names = transform_term(whole)
+        return DCGRule(cell, spans, var_names)
+    raise TypeError(f"PrologReader: unclassifiable P-item {type(pitem)!r}")
+
+
+class PrologReader:
+    """Resumable item-at-a-time L1 reader over the toklex L0 stream.
+
+    ``op_table`` precedence: explicit > ``dialect.operator_table`` >
+    ``OperatorTable.swi_default()``. The reader owns the table for its
+    lifetime -- ``op/3`` directives parsed by one ``read_term()`` call
+    apply to the SAME table used by later calls, so they persist.
+    """
+
+    def __init__(self, *, op_table=None, dialect=None, nested_comments=True,
+                 lexer=None):
+        from clausal.tools.prolog_operators import OperatorTable
+
+        if op_table is not None:
+            self._op_table = op_table
+        elif dialect is not None:
+            self._op_table = dialect.operator_table
+        else:
+            self._op_table = OperatorTable.swi_default()
+
+        if lexer is not None:
+            self._lexer = lexer
+        else:
+            from clausal.tools.toklex import IncrementalLexer, load_lexer
+            from clausal.tools.toklex.regex_target import RegexLexer
+            from clausal.tools.toklex.spec import SpecError
+
+            l0 = load_lexer()
+            try:
+                self._lexer = RegexLexer(l0, nested_comments=nested_comments)
+            except SpecError:
+                self._lexer = IncrementalLexer(l0, nested_comments=nested_comments)
+
+        self._item_buf: list = []
+        self._eof = False
+
+    def feed(self, text: str) -> None:
+        self._lexer.feed(text)
+
+    def close(self) -> None:
+        self._lexer.close()
+
+    def read_term(self):
+        """-> ReaderItem | NEED_MORE | EOF.
+
+        Pulls L0 tokens into the item buffer until a ``kind == "end"``
+        token completes one item, then parses and classifies it. An L0
+        ``error`` Tok, or EOF with a non-empty buffer (an unterminated
+        trailing item), raises -- Task 5 replaces both with SyntaxIssue
+        handling; this task keeps the wiring simple per the brief.
+        """
+        if self._eof:
+            return EOF
+        while True:
+            t = self._lexer.next_token()
+            if t is NEED_MORE:
+                return NEED_MORE
+            if t is EOF:
+                if not self._item_buf:
+                    self._eof = True
+                    return EOF
+                raise RuntimeError(
+                    "PrologReader: EOF with an unterminated item pending "
+                    "(Task 5 will turn this into a SyntaxIssue)")
+            if t.kind == "error":
+                raise RuntimeError(f"PrologReader: lex error {t.value!r} "
+                                    f"at {t.start} (Task 5 will turn this "
+                                    f"into a SyntaxIssue)")
+            self._item_buf.append(t)
+            if t.kind == "end":
+                return self._finish_item()
+
+    def _finish_item(self):
+        from clausal.tools.prolog_parser import PrologParser
+        from clausal.tools.prolog_tokenizer import Token, TokenType
+
+        end_tok = self._item_buf[-1]
+        tokens = [_to_compat_token(t) for t in self._item_buf]
+        end_off = end_tok.end[0]
+        tokens.append(Token(TokenType.END, "", end_tok.end[1], end_tok.end[2],
+                             end_line=end_tok.end[1], end_col=end_tok.end[2],
+                             offset=end_off, end_offset=end_off))
+        self._item_buf = []
+
+        module = PrologParser(tokens, self._op_table).parse_program()
+        assert len(module.items) == 1, (
+            f"expected exactly one item, got {len(module.items)}")
+        return _classify_pitem(module.items[0])
+
+
+def read_module(source: str, **kw) -> list:
+    """Batch helper: feed the whole *source*, close, and drain every
+    item (``SyntaxIssue``s included, once Task 5 produces them)."""
+    reader = PrologReader(**kw)
+    reader.feed(source)
+    reader.close()
+    items: list = []
+    while True:
+        item = reader.read_term()
+        if item is EOF:
+            return items
+        if item is NEED_MORE:
+            continue
+        items.append(item)
