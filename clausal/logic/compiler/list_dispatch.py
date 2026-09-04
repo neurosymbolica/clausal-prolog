@@ -34,6 +34,7 @@ from .terms_to_ast import (  # noqa: F401
     term_to_ast_expr, cell_signature_for_name, _is_opaque_head_literal,
 )
 from clausal.logic.cells import TUPLE_TAG
+from .arg_index import _bytelist_to_bytes_or_none
 
 
 # ── Phase 5: deep structural indexing helpers ──────────────────────────────────
@@ -123,14 +124,16 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
     - the head arg at *pos* is already a concrete term (not a Var), or
     - no matching ``Unify`` is found in the body's clean prefix (the
       contiguous run of ``Unify`` goals before the first non-``Unify`` goal), or
-    - the lifted term is a ``str``/``bytes`` literal (Phase 2 Task 8 / F095):
-      lifting would emit a ``MatchValue`` pattern that uses ``==`` for the
-      head match, which fails the strings-as-lists contract when the caller
-      arrives via a coalesced str/charlist bucket (e.g. a caller passing
-      ``['a','b','c']`` reaching a bucket containing a clause originally
-      keyed under ``"abc"``).  Leaving str/bytes unlifted keeps the body
-      ``Unify`` in place where runtime ``unify`` correctly handles the
-      str↔list duality.
+    - the lifted term is a ``bytes`` literal (Phase 2 Task 8 / F095, narrowed
+      by R8 — §1b): lifting would emit a ``MatchValue`` pattern that uses
+      ``==`` for the head match, which fails the codes-model contract when
+      the caller arrives via a coalesced bytes/byte-list bucket (e.g. a
+      caller passing ``[97, 98, 99]`` reaching a bucket containing a clause
+      originally keyed under ``b"abc"``).  Leaving bytes unlifted keeps the
+      body ``Unify`` in place where runtime ``unify`` correctly handles the
+      bytes↔codes duality.  The ``str`` half of this skip is RETIRED (R8,
+      P3-2 Task 4): P3-1 retired str~list unification, so a str head arg is
+      no longer coalesced with any char-list bucket and lifting it is safe.
 
     *globals_* is the namespace the lifted head will be MATCHED against —
     pass the same dict ``head_to_match_pattern`` will get (the compilation's
@@ -181,12 +184,71 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
     if unify_idx is None:
         return clause  # no liftable unification found
 
-    # Phase 2 Task 8 (F095): skip the lift when the lifted term is a str
-    # or bytes literal.  See docstring above for the strings-as-lists
-    # rationale — lifting a str would emit a ``MatchValue`` head pattern
-    # that breaks list callers reaching this clause via the coalesced
-    # str/charlist bucket built by ``arg_index._arg_to_index_key``.
-    if isinstance(lift_term, (str, bytes)):
+    # Phase 2 Task 8 (F095), narrowed by R8 (§1b, P3-2 Task 4): skip the
+    # lift when the lifted term is a bytes literal.  See docstring above for
+    # the codes-model rationale — lifting a bytes literal would emit a
+    # ``MatchValue`` head pattern that breaks byte-list callers reaching
+    # this clause via the coalesced bytes/byte-list bucket built by
+    # ``arg_index._arg_to_index_key``.  The str half of this skip is gone:
+    # P3-1 retired str~list unification, so a str head arg is never
+    # coalesced with a char-list bucket and lifting it is correct.
+    if isinstance(lift_term, bytes):
+        return clause
+
+    # Skip the lift when the lifted term is a ground python ``list`` literal.
+    #
+    # NEW finding, made by DRIVING the repro in
+    # todo/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md
+    # after the R8 retirement above, not by reading code: retiring
+    # ``_charlist_to_str_or_none`` does not, by itself, make the todo's str
+    # caller symmetric with its list caller. The mechanism is one level
+    # deeper than the todo's own hypothesis (which pointed at
+    # ``_normalize_dataclass_fact`` hoisting — traced and ruled out: str and
+    # list literal fact heads are hoisted identically, and that is not where
+    # the asymmetry comes from).
+    #
+    # A GROUND list literal fact (``Foo(['a','b','c'])``, no Vars/StarUnpack)
+    # is hoisted to Var + body ``Unify`` by ``_normalize_dataclass_fact``,
+    # exactly like a str literal fact. Once its head key is ``_INDEX_VAR``
+    # (true for any str-content list post-R8 — see ``_arg_to_index_key``),
+    # ``_build_arg_index`` treats it as a "default" clause and MERGES it into
+    # EVERY specific-key bucket, including a same-length str literal's own
+    # bucket (e.g. a 3-char ``"abc"`` bucket also carries the 3-element
+    # ``['a','b','c']`` fact). Lifting the list here turns its head into a
+    # sequence PATTERN (``case [_lcap0]: ... $head_list_unify_input(...)``),
+    # and ``_head_list_unify_input_py``/its C twin still implement the
+    # pre-P3-1 "a string is a list of its chars" contract for HEAD-PATTERN
+    # destructuring (see docs/strings_as_lists.md, "Pattern Matching") — a
+    # SEPARATE code path from the ``_variables.c`` ``do_unify`` cons rule
+    # P3-1 retired, and untouched by that retirement. So the lifted pattern
+    # wrongly accepts a same-length str/bytes caller that reaches this
+    # bucket only because the list was merged in as a "matches anything"
+    # default, giving the str caller a second, spurious solution that the
+    # list caller never gets back (a str-headed clause's own lifted pattern
+    # is a plain ``MatchValue`` — equality-only, no reciprocal leniency).
+    #
+    # Leaving the body ``Unify`` in place uses the real runtime ``unify()``
+    # instead, which correctly enforces §1b ("lists unify with lists, str
+    # unifies with str") — matching what the un-indexed fallback already
+    # does for this same clause. This is deliberately narrow: a genuine
+    # ``[H, *T]``-style pattern (containing a Var or ``StarUnpack``) is never
+    # hoisted by ``_normalize_dataclass_fact`` in the first place (only
+    # GROUND lists are), so it never reaches this function at all — the
+    # documented "Pattern Matching" string-destructuring feature for
+    # written-with-vars list patterns is untouched by this skip.
+    #
+    # Narrowed to lists that are NOT byte-list-coalescible
+    # (``_bytelist_to_bytes_or_none(lift_term) is None``): a list of ints in
+    # [0, 255] keys as the joined ``bytes`` value in ``_arg_to_index_key`` —
+    # a SPECIFIC key, not ``_INDEX_VAR`` — so it is never merged as a
+    # "matches anything" default into a bucket of a different type; the only
+    # caller that can ever reach its bucket is one that already shares that
+    # exact bytes value (the KEPT bytes~codes coalescing), which
+    # ``_head_list_unify_input_py`` implements correctly. Lifting it is safe
+    # and already relied upon (``test_list_dispatch_rebuilds_term_instance_
+    # head_at_pos`` in tests/test_funnel_accessors.py lifts a plain
+    # ``[1, 2, 3]``).
+    if isinstance(lift_term, list) and _bytelist_to_bytes_or_none(lift_term) is None:
         return clause
 
     # Skip the lift when the lifted term is a PyThunk (quantity/currency

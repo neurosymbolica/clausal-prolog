@@ -29,6 +29,7 @@ from clausal.logic.database import Clause
 
 from ._ast_helpers import _name, _call, _assign  # noqa: F401
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
+from clausal.logic.cells import TUPLE_TAG
 
 
 # ── First-argument indexing (V2-1) ────────────────────────────────────────────
@@ -42,36 +43,14 @@ _JOINT_COVERAGE_THRESHOLD = 0.8  # min fraction of clauses needing joint key for
 # ── Phase 9a: key helpers ────────────────────────────────────────────────────
 
 
-def _charlist_to_str_or_none(seq) -> str | None:
-    """Canonicalise a list/tuple of 1-char strings to its joined str equivalent.
-
-    Returns ``None`` when *seq* is empty or contains any non-1-char element
-    (including non-str elements).  Used by the indexer to coalesce the
-    strings-as-lists shape duality: a head ``Foo(['a','b','c'])`` and a
-    head ``Foo("abc")`` produce the same bucket key, and a caller passing
-    either container shape routes to that same bucket.
-
-    F095 fix (Phase 2 Task 8): char-list-of-1-char-strs canonicalises to
-    str at both compile-time (``_arg_to_index_key`` / ``_static_call_key``)
-    and runtime (``_runtime_arg_key``).  Required for F046 (C4) to fully
-    restore the strings-as-lists contract at the dispatch layer — see
-    docs/superpowers/audits/2026-05-25-string-implementation/findings.md.
-    """
-    if not seq:
-        return None
-    for c in seq:
-        if type(c) is not str or len(c) != 1:
-            return None
-    return "".join(seq)
-
-
 def _bytelist_to_bytes_or_none(seq) -> bytes | None:
     """Canonicalise a list/tuple of ints in [0, 255] to its joined bytes.
 
     Returns ``None`` when *seq* is empty or contains any non-int / bool /
-    out-of-range element. The bytes-as-lists analog of
-    ``_charlist_to_str_or_none``: a head ``Foo(b"abc")`` and a caller passing
-    ``[97, 98, 99]`` produce the same bucket key.
+    out-of-range element.  A head ``Foo(b"abc")`` and a caller passing
+    ``[97, 98, 99]`` produce the same bucket key — the codes model (§1b) is
+    kept: bytes and byte-lists still coalesce, unlike str and char-lists
+    (R8 retired that half — see ``_arg_to_index_key``).
     """
     if not seq:
         return None
@@ -86,8 +65,21 @@ def _arg_to_index_key(arg: Any) -> Any:
 
     Returns a hashable key for indexable terms:
     - Scalars (int, float, str, bytes, bool, None) → the value itself
-    - ``list``/``tuple`` of 1-char strings → the joined ``str``
-      (Phase 2 Task 8 — coalesce with the str scalar branch for F095)
+    - A cell (a non-empty ``tuple`` whose slot 0 is a ``str`` functor or the
+      ``TUPLE_TAG`` marker) → ``(functor, len(arg) - 1)`` / ``(TUPLE_TAG,
+      len(arg) - 1)`` (P3-2 Task 4).  Must run BEFORE the generic
+      ``(list, tuple)`` branch — a cell IS a tuple — and produces the same
+      ``(name, arity)`` shape as the ``Compound`` / class-instance / ``Call``
+      branches below, so a cell head and a compile-time ``Compound`` head of
+      the same functor land in ONE bucket regardless of which one wrote it.
+    - ``list``/``tuple`` of ints in [0, 255] → the joined ``bytes`` (the
+      codes model, kept — see :func:`_bytelist_to_bytes_or_none`).  The
+      str/char-list analog (F095) is RETIRED: R8 (P3-2) ruled that
+      co-bucketing a str head with an equal char-list head is wrong now
+      that P3-1 retired str~list unification (§1b: lists unify with lists,
+      str unifies with str) — a list head consequently keys ``_INDEX_VAR``
+      (unindexed, correctly: it was only indexable via the retired
+      coalesce).
     - Compound nodes → ``(functor, arity)`` tuple  (Phase 9a)
     - PredicateMeta instances → ``(class_name, field_count)`` tuple  (Phase 9a)
     - ``Call(LoadName(qn), args)`` (imported-compound head arg) →
@@ -97,14 +89,17 @@ def _arg_to_index_key(arg: Any) -> Any:
       Must run BEFORE the ``is_term_instance`` branch — Call is itself a
       dataclass and would otherwise key as ``('Call', 4)``, which no
       runtime value ever matches.
-    - Anything else (Var, non-charlist list, DictTerm, …) → ``_INDEX_VAR``
+    - Anything else (Var, list, DictTerm, …) → ``_INDEX_VAR``
     """
     if isinstance(arg, _INDEXABLE_TYPES):
         return arg
+    if type(arg) is tuple and arg:
+        slot0 = arg[0]
+        if type(slot0) is str:
+            return (slot0, len(arg) - 1)
+        if slot0 is TUPLE_TAG:
+            return (TUPLE_TAG, len(arg) - 1)
     if isinstance(arg, (list, tuple)):
-        s = _charlist_to_str_or_none(arg)
-        if s is not None:
-            return s
         b = _bytelist_to_bytes_or_none(arg)
         if b is not None:
             return b
@@ -142,6 +137,46 @@ def _arg_to_index_key(arg: Any) -> Any:
     return _INDEX_VAR
 
 
+def _is_deeply_ground(val: Any) -> bool:
+    """True if *val* — dereferenced, recursively — contains no unbound Var.
+
+    Guards the cell and class-instance branches of :func:`_runtime_arg_key`.
+    The bucket a ``(functor, arity)`` key routes to embeds each of the
+    argument's OWN elements as a plain, equality-only ``MatchValue`` pattern
+    whenever the matching clause's corresponding element is a ground
+    literal — ``head_to_match_pattern`` recurses into a cell/term-instance
+    argument's elements with no ``== or $unify`` hybrid fallback (unlike a
+    TOP-level indexed argument, which gets exactly that hybrid). An unbound
+    Var anywhere inside the CALLER's value can therefore never match such a
+    bucket clause, even where the un-indexed fallback's full ``unify()``
+    would happily bind it. A caller like that must key ``_INDEX_VAR`` (full
+    scan) rather than route into a bucket some of whose clauses it can never
+    actually satisfy.
+
+    P3-2 Task 4: found by DRIVING the raw-cell lift route the cell key
+    branch below makes reachable for the first time — a caller passing a
+    partially-ground cell (e.g. ``("Wrap", Var())``) against a fact whose
+    matching slot is a ground atom (``Wrap(direct)``) got zero solutions
+    where the fallback gives the right answer. The SAME gap already existed
+    for the ``is_term_instance`` branch (a class instance with an unbound
+    field), pre-dating this task; fixed here too since the mechanism and
+    the fix are identical.
+    """
+    val = deref(val)
+    if is_var(val):
+        return False
+    if type(val) is tuple:
+        return all(_is_deeply_ground(e) for e in val[1:]) if val else True
+    if isinstance(val, list):
+        return all(_is_deeply_ground(e) for e in val)
+    if is_term_instance(val):
+        return all(
+            _is_deeply_ground(getattr(val, name))
+            for name in term_field_names(val)
+        )
+    return True
+
+
 def _runtime_arg_key(a: Any) -> Any:
     """Runtime: extract the index key from a deref'd argument value.
 
@@ -149,20 +184,27 @@ def _runtime_arg_key(a: Any) -> Any:
     All four dispatch closure factories use this so that compound-term
     buckets (Phase 9a) are reachable without special-casing.
 
-    Phase 2 Task 8 (F095): a ``list``/``tuple`` of 1-char strings is
-    canonicalised to its joined ``str`` so str-headed and charlist-headed
-    clauses share a bucket and a caller of either container shape routes
-    to it.
+    P3-2 Task 4: a cell (a non-empty ``tuple`` whose slot 0 is a ``str``
+    functor or the ``TUPLE_TAG`` marker) keys as ``(functor, len(a) - 1)`` /
+    ``(TUPLE_TAG, len(a) - 1)`` — the same shape ``Compound``/class-instance
+    heads use, so a live cell argument reaches the bucket a source-written
+    compound head of the same functor built.  Must run BEFORE the generic
+    ``(list, tuple)`` branch, which retains only the bytes/byte-list
+    coalesce (the codes model) — R8 retired the str/char-list half (§1b: a
+    list head is unindexed, keys ``_INDEX_VAR``).
     """
     t = type(a)
     if t is int or t is str:
         return a
     if isinstance(a, _INDEXABLE_TYPES):
         return a
+    if type(a) is tuple and a:
+        slot0 = a[0]
+        if type(slot0) is str:
+            return (slot0, len(a) - 1) if _is_deeply_ground(a) else _INDEX_VAR
+        if slot0 is TUPLE_TAG:
+            return (TUPLE_TAG, len(a) - 1) if _is_deeply_ground(a) else _INDEX_VAR
     if isinstance(a, (list, tuple)):
-        s = _charlist_to_str_or_none(a)
-        if s is not None:
-            return s
         b = _bytelist_to_bytes_or_none(a)
         if b is not None:
             return b
@@ -175,7 +217,9 @@ def _runtime_arg_key(a: Any) -> Any:
         return (a.__name__, 0)
     if is_term_instance(a):
         cls = type(a)
-        return (cls.__name__, len(term_field_names(a)))
+        if _is_deeply_ground(a):
+            return (cls.__name__, len(term_field_names(a)))
+        return _INDEX_VAR
     return _INDEX_VAR
 
 
@@ -185,25 +229,23 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
     Mirrors :func:`_runtime_arg_key` for the compile-time call-site analysis
     path.  Returns ``None`` if the argument is a variable or otherwise unknown.
 
-    Phase 2 Task 8 (F095): a literal list/tuple of 1-char string constants
-    canonicalises to its joined ``str`` for the same reason
-    :func:`_runtime_arg_key` does — see :func:`_charlist_to_str_or_none`.
+    A literal list/tuple of int constants in [0, 255] canonicalises to its
+    joined ``bytes`` for the same reason :func:`_runtime_arg_key` does — the
+    codes model (kept).  The str/char-list coalesce (F095) is RETIRED (R8,
+    P3-2): see :func:`_arg_to_index_key`.
     """
     if isinstance(arg_expr, ast.Constant):
         # scalar: int, str, float, bool, None — key is the value itself
         return arg_expr.value
     if isinstance(arg_expr, (ast.List, ast.Tuple)):
-        # literal list/tuple — if every element is a 1-char str constant,
-        # canonicalise to the joined str so dispatch sees the same bucket
-        # as a str caller.  Otherwise, no static key.
+        # literal list/tuple — if every element is an int constant in
+        # [0, 255], canonicalise to the joined bytes so dispatch sees the
+        # same bucket as a bytes caller.  Otherwise, no static key.
         elts = []
         for e in arg_expr.elts:
             if not isinstance(e, ast.Constant):
                 return None
             elts.append(e.value)
-        s = _charlist_to_str_or_none(elts)
-        if s is not None:
-            return s
         return _bytelist_to_bytes_or_none(elts)
     if isinstance(arg_expr, ast.Call):
         # compound term constructor: Dog(_v_name, _v_age) or mod.Dog(...)

@@ -581,23 +581,32 @@ class TestIndexedDispatchGuards:
         ]
 
     def test_str_charlist_heads_no_longer_coalesce_for_list_caller(self, mod):
-        """P3-1 Task 5 (§1b): ``coll`` has BOTH a str-literal fact
-        (``coll("abc", "s")``) and a list-literal fact
+        """P3-1 Task 5 / P3-2 Task 4 (§1b, R8): ``coll`` has BOTH a
+        str-literal fact (``coll("abc", "s")``) and a list-literal fact
         (``coll(["a","b","c"], "l")``).
 
-        The str caller still reaches BOTH (a pre-existing, unexplained
-        asymmetry in fact indexing/elaboration — parked, see
-        ``todo/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md``
-        — NOT the retired cons rule itself, since a direct
-        ``unify("abc", [...], trail)`` is confirmed False). The list
-        caller now reaches ONLY the list-literal fact — the str-literal
-        fact is correctly unreachable, matching §1b.
+        Fully symmetric now: each caller reaches only its own-type fact.
+
+        Until P3-2 Task 4 the str caller ALSO reached the list-literal
+        fact -- a residual asymmetry that survived P3-1 Task 5's retirement
+        of the ``_variables.c`` do_unify cons rule (a direct
+        ``unify("abc", [...], trail)`` was already confirmed False).  Traced
+        (not guessed) to a level deeper: the arg-index default-clause merge
+        put the list-literal fact into the str fact's own bucket (its key is
+        ``_INDEX_VAR`` -- unindexable), and ``_lift_clause_at_pos`` then
+        lifted it into a head sequence PATTERN, whose runtime destructuring
+        helper (``_head_list_unify_input_py`` / its C twin) still implements
+        the pre-P3-1 "a string is a list of its chars" contract for
+        HEAD-PATTERN matching -- untouched by the do_unify retirement.
+        ``_lift_clause_at_pos`` (list_dispatch.py) now also skips lifting a
+        ground list literal, closing this. See
+        ``todo/done/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md``.
 
         (Formerly ``test_str_charlist_heads_coalesce_to_one_bucket``,
         asserting BOTH callers reached both facts.)
         """
         R = Var()
-        assert collect(mod, "coll", "abc", R, outv=[R]) == [("s",), ("l",)]
+        assert collect(mod, "coll", "abc", R, outv=[R]) == [("s",)]
         R = Var()
         assert collect(mod, "coll", ["a", "b", "c"], R, outv=[R]) == [("l",)]
 

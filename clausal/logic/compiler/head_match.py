@@ -25,7 +25,7 @@ from typing import Any
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.terms import (
     Compound,
-    Call, LoadName,
+    Call, LoadName, LoadAttr,
     DictTerm, SetTerm, KWTerm,
     SegList, VarSeg,  # noqa: F401
 )
@@ -47,6 +47,7 @@ from .terms_to_ast import (
     _is_star_list, _parse_star_segments, _count_stars,
     _is_opaque_head_literal, headlit_global_key,
     cell_signature_for_name, _place_signature_slots,
+    _dotted_name_from_loadattr,
 )
 # Runtime helpers (``_head_list_unify_input`` / ``_head_list_unify_output``
 # / ``_head_multi_star_error``) are referenced by name string in the AST
@@ -702,6 +703,52 @@ def head_to_match_pattern(
                         for a in term.args
                     ],
                 )
+
+    # Bare name reference (``LoadName``/``LoadAttr``) reached ANYWHERE a head
+    # pattern is being built for it -- most commonly a nested ATOM argument
+    # of an otherwise-liftable compound reference (the ``Call(LoadName)``
+    # branch just above recurses into ``head_to_match_pattern`` for each of
+    # its args), e.g. the ``direct`` in ``Wrap(direct)``.
+    #
+    # P3-2 Task 4, found by DRIVING a raw-cell-lifted bucket with a
+    # nested-atom-argument compound (arg-index second-position dispatch), not
+    # by reading code: Task 3's cell-lift branch resolves the OUTER functor
+    # reference (``cell_signature_for_name`` above) but nothing taught this
+    # function to resolve an INNER bare-name argument, so it fell all the way
+    # through to ``is_term_instance`` below and built
+    # ``MatchClass(LoadName, kwd_attrs=['name'], kwd_patterns=[...])`` -- a
+    # pattern that requires the runtime value to literally BE a ``LoadName``
+    # AST node, which a real cell argument (a plain resolved atom string,
+    # post-R6) never is.  The bucket compiled cleanly and just returned zero
+    # solutions every time -- latent since Task 3, because before Task 4 a
+    # live-cell caller could never reach an indexed bucket in the first
+    # place (``arg_index`` keyed every cell ``_INDEX_VAR``), so nothing ever
+    # drove this pattern until dispatch could actually select it.
+    #
+    # Resolve at COMPILE TIME (mirroring ``_resolve_loadname``'s use just
+    # above for the outer functor) and bake the resolved value in as an
+    # ``ast.Constant``.  A ``match`` value pattern only accepts a literal or
+    # a dotted attribute lookup (``ast.Attribute`` chain) -- NOT a bare
+    # ``ast.Name``, even one whose ``id`` happens to contain dots the way
+    # ``term_to_ast_expr``'s plain-expression-context ``_name(term.name)``
+    # trick relies on (``compile()`` raises ``ValueError: patterns may only
+    # match literals and attribute lookups`` for that shape here). Baking
+    # the literal in is safe: an atom is a frozen, interned spelling that
+    # never changes identity or content at runtime, so a compile-time
+    # snapshot and a live global lookup are equivalent for it.
+    #
+    # Only fires when the reference resolves to a plain ``str`` (an atom,
+    # R6: atoms are interned strings, not classes, post-pivot).  Anything
+    # else -- unresolved, or resolved to a non-atom -- falls through to the
+    # existing (safe, if incomplete) ``is_term_instance`` dead-pattern
+    # fallback below: it never wrongly matches, it just never fires, exactly
+    # the pre-existing conservative behaviour for a name this function
+    # cannot yet render correctly.
+    if isinstance(term, (LoadName, LoadAttr)):
+        dotted = _dotted_name_from_loadattr(term)
+        resolved = _resolve_loadname(dotted, globals_) if dotted else None
+        if isinstance(resolved, str):
+            return ast.MatchValue(value=ast.Constant(value=resolved))
 
     # PredicateMeta atom (a zero-arity predicate *class* used as a value)
     # → wildcard capture + unify guard. Atoms became class objects in the

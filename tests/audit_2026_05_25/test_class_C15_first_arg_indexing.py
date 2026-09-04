@@ -1,39 +1,42 @@
 """C15 — First-arg indexing on strings.
 
-1 bug finding. The compiler's first-arg index computes different bucket
-keys for str vs char-list head clauses, so a caller with one container
-type misses clauses indexed under the other. Dispatch-time analogue of
-F046 (C4 head-literal mismatch); both must land together for the
-strings-as-lists contract to hold at the dispatch layer.
+Originally 1 bug finding (F095): the compiler's first-arg index computed
+a SHARED bucket key for str vs char-list head clauses ("abc" and
+``['a','b','c']`` coalesced to the same key), so a str caller and a
+char-list caller landed in the same bucket. That coalescing implemented
+the pre-P3-1 strings-as-lists contract at the dispatch layer; P3-1 (§1b)
+retired the underlying cons rule (a str and a char-list no longer unify
+in general), and P3-2 Task 4 (R8) retired the now-wrong coalescing itself
+(``_charlist_to_str_or_none`` in ``arg_index.py``, and the matching lift
+skip in ``list_dispatch.py``). This test now pins the POST-retirement
+semantics: str and char-list heads bucket separately, and each caller
+gets exactly its own-type clause.
 
 Findings tested here:
-- F095 (bug) First-arg indexing routes str vs char-list to different buckets
+- F095 (historical bug, RETIRED — see R8): first-arg indexing routed str
+  and char-list to a shared bucket under the (also since-retired)
+  strings-as-lists unification contract.
 """
 
 def test_F095_first_arg_index_coalesces_str_and_charlist():
-    """The first-arg index routes str and char-list heads to different buckets.
+    """The first-arg index routes str and char-list heads to separate buckets.
 
-    Under the strings-as-lists contract, str and equivalent char-list should
-    unify at the dispatch layer, so:
-    - A caller with unbound Var should enumerate both str and char-list clauses
-    - A caller with str should reach both str-headed and char-list-headed clauses
-    - A caller with char-list should reach both char-list-headed and str-headed clauses
+    Post-retirement (P3-1 §1b + P3-2 R8): "lists unify with lists, str
+    unifies with str" — a str head and an equal-content char-list head are
+    NOT the same term and must not share a bucket or a caller. So:
+    - An unbound Var caller enumerates every clause (indexing never narrows
+      an unbound caller).
+    - A str caller reaches only the str-headed clause: 1 solution.
+    - A char-list caller reaches only the char-list-headed clause: 1 solution.
 
-    Currently, the indexer routes them to separate buckets:
-    - str caller → str-specific bucket (which contains both str-headed and the
-      list-headed default, merged for being < _INDEX_THRESHOLD callers)
-    - list caller → _INDEX_VAR default bucket (which contains only list-headed)
-
-    For facts on the same predicate with ≥4 clauses total, the indexer kicks in
-    (_INDEX_THRESHOLD=4 at arg_index.py:38). We register 5 clauses on a predicate
-    to cross this threshold: 3 scalar "pad" clauses (on ints) + 1 str-headed + 1
-    list-headed. This makes both the str and list heads eligible for bucketing.
-
-    Concrete effect: when called with an unbound Var, the caller enumerates both
-    the str-headed AND list-headed clauses (they are merged into one bucket or
-    both buckets are scanned). But when called with a ['a','b','c'] argument, the
-    list caller routes to the default bucket (_INDEX_VAR), which excludes the
-    str-headed clause, causing it to be silently missed.
+    For facts on the same predicate with ≥4 clauses total, the indexer kicks
+    in (_INDEX_THRESHOLD=4 at arg_index.py:38). We register 5 clauses on a
+    predicate to cross this threshold: 3 scalar "pad" clauses (on ints) + 1
+    str-headed + 1 list-headed. This makes both the str and list heads
+    eligible for bucketing (the list head keys ``_INDEX_VAR`` — unindexed,
+    per R8 — and rides along as a "matches anything until proven otherwise"
+    default clause merged into every specific bucket; see the mechanism note
+    on the assertions below for why that merge does not reopen F095).
     """
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, deref
@@ -53,7 +56,6 @@ TestPred(['a', 'b', 'c']),
     mod = load_inline_clausal("c15_f095_indexing", source).__dict__["$module"]
 
     # Test 1: Unbound Var caller should enumerate all 5 clauses.
-    # (Baseline: both str and char-list clauses are reachable from Var caller.)
     x = Var()
     solutions_from_var = []
     for _ in call("TestPred", x, module=mod):
@@ -62,43 +64,38 @@ TestPred(['a', 'b', 'c']),
 
     assert len(solutions_from_var) == 5, (
         f"TestPred(Var) should enumerate 5 clauses (three ints, one str, one list). "
-        f"Got {len(solutions_from_var)} solutions: {solutions_from_var}. "
-        f"This is the baseline for the C15 bug: if Var caller only returns "
-        f"4 solutions, either the str-headed or list-headed clause is unreachable."
+        f"Got {len(solutions_from_var)} solutions: {solutions_from_var}."
     )
 
-    # P3-1 Task 5 (\u00a71b/R2): the cons rule that made this test's ORIGINAL
-    # premise true (str and char-list callers should reach each other's
-    # clauses "under strings-as-lists") is retired -- cross-type reachability
-    # via runtime unify() is no longer expected at all. Empirically
-    # re-verified against the rebuilt extension (2026-09-04):
-    #
-    # - str caller "abc" -> 2 solutions (str-headed clause via same-type
-    #   unify, PLUS the list-headed clause). The list-headed hit is a
-    #   pre-existing, unexplained asymmetry in the fact-elaboration /
-    #   indexing layer (`_normalize_dataclass_fact` in database.py hoists
-    #   BOTH str and list literal fact heads into a Var-head + body Unify
-    #   goal, which appears to make ground list-literal facts reachable by
-    #   a str caller through a path other than the retired do_unify
-    #   cross-type branch) -- parked as
-    #   todo/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md,
-    #   NOT fixed here (out of Task 5's do_unify-retirement scope; the
-    #   `_variables.c` block this task removes is confirmed uninvolved).
-    # - list caller ['a','b','c'] -> 1 solution (list-headed clause only;
-    #   the str-headed clause is no longer reachable -- THIS half of the
-    #   asymmetry is exactly the retired cons rule's absence, and is the
-    #   expected, correct post-retirement answer).
+    # P3-2 Task 4 (R8, §1b): removing the coalesce alone did NOT make this
+    # symmetric — traced by driving the repro, not by reading code. The
+    # list-headed clause is hoisted to Var-head + body Unify exactly like
+    # the str-headed one (``_normalize_dataclass_fact`` — confirmed NOT the
+    # cause, ruling out the todo's original hypothesis), keys ``_INDEX_VAR``
+    # (R8: a str-content list is unindexable), and is therefore merged as a
+    # "default" clause into EVERY specific bucket including the str clause's
+    # own — so the str caller's bucket still contained both clauses. The
+    # actual residual mechanism was one level deeper: bucket compilation
+    # LIFTS a merged-in ground list literal into a head sequence PATTERN,
+    # and the runtime list-pattern destructuring helper
+    # (``_head_list_unify_input_py`` / its C twin) still implements the
+    # pre-P3-1 "a string is a list of its chars" contract for HEAD-PATTERN
+    # matching (see docs/strings_as_lists.md, "Pattern Matching") — a
+    # separate code path from the ``_variables.c`` ``do_unify`` cons rule
+    # P3-1 retired, and untouched by that retirement. ``_lift_clause_at_pos``
+    # (list_dispatch.py) now also skips lifting a ground list literal, for
+    # exactly this reason — see that function's docstring for the full
+    # trace. Fixed: todo/done/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md.
     n_str_caller = sum(1 for _ in call("TestPred", "abc", module=mod))
-    assert n_str_caller == 2, (
-        f"TestPred('abc') returned {n_str_caller} solutions; expected 2 "
-        f"(same-type str-headed clause, plus the unexplained residual "
-        f"reach into the list-headed clause -- see the todo cited above)."
+    assert n_str_caller == 1, (
+        f"TestPred('abc') returned {n_str_caller} solutions; expected 1 "
+        f"(same-type str-headed clause only; §1b/R8: a str no longer "
+        f"reaches a list-headed clause)."
     )
 
     n_list_caller = sum(1 for _ in call("TestPred", ["a", "b", "c"], module=mod))
     assert n_list_caller == 1, (
         f"TestPred(['a','b','c']) returned {n_list_caller} solutions; "
-        f"expected 1 (same-type list-headed clause only -- the "
-        f"str-headed clause is correctly unreachable now that the cons "
-        f"rule is retired)."
+        f"expected 1 (same-type list-headed clause only; §1b/R8: a list "
+        f"no longer reaches a str-headed clause)."
     )

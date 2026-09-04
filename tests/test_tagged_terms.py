@@ -900,6 +900,91 @@ class TestBucketPatternIntegration:
                            K, module=lm)
         ] == []
 
+    def test_asserted_cell_and_compile_time_compound_share_a_bucket(self):
+        """P3-2 Task 4: bucket-sharing across producers, end to end.
+
+        Mixes clauses from BOTH producers in one predicate: five asserted
+        with a live cell head arg (Python's shape, ``assertz``-style) plus
+        one whose head arg is ``Call(LoadName('point'), (7, 8))`` -- the
+        shape a compound reference written in ``.clausal`` SOURCE actually
+        has (``_lift_clause_at_pos``'s own docstring: "the shape every
+        compound written in .clausal source has"), reached via the Var +
+        body ``Unify`` a structural head arg is hoisted to
+        (``_normalize_structural_head_args``). Both key ``("point", 2)``
+        (``_arg_to_index_key``'s ``Call(LoadName)`` branch matches its
+        ``Compound``/live-cell branches' key shape exactly), so
+        ``_build_arg_index`` puts them in ONE bucket, and a live-cell
+        caller reaches clauses from both origins through that single
+        compiled bucket function.
+        """
+        from clausal.logic.compiler import predicate as predicate_mod
+        from clausal.logic.database import Clause, Database, Module
+        from clausal.terms import Compound, Call, LoadName, Unify
+
+        mod = _fixture(_TAGGED)
+        db = Database()
+        for shape, k in [
+            (("point", 1, 2), "a"),
+            (("point", 3, 4), "b"),
+            (("circle", 0, 5), "c"),
+            (("seg", 1, 2, 3), "d"),
+            (("point", 9, 9), "e"),
+        ]:
+            db.assertz(Clause(head=Compound(self.PROBE, (shape, k)), body=[]))
+        # The sixth clause: a source-shaped compound reference -- Var head
+        # arg + body Unify(Var, Call(LoadName('point'), (7, 8))) -- exactly
+        # what ``_normalize_structural_head_args`` hoists a written
+        # ``kind_probe(point(7, 8), "f")`` fact to.
+        v = Var()
+        db.assertz(Clause(
+            head=Compound(self.PROBE, (v, "f")),
+            body=[Unify(left=v, right=Call(
+                func=LoadName(name="point"), args=[7, 8], kwargs=[]))],
+        ))
+
+        calls = {"bucket": 0, "fallback": 0}
+        original = predicate_mod.functiondef_to_function
+        bucket_name = f"{self.PROBE}__p0_b0"  # 'point' is the first-seen key
+
+        def _counting(name, fn):
+            def wrapped(*a, **kw):
+                calls[name] += 1
+                yield from fn(*a, **kw)
+            wrapped.__name__ = fn.__name__
+            wrapped.__qualname__ = fn.__qualname__
+            return wrapped
+
+        def _spy(func_def, globals_=None, **kwargs):
+            fn = original(func_def, globals_=globals_, **kwargs)
+            if func_def.name.startswith(bucket_name):
+                return _counting("bucket", fn)
+            if func_def.name == f"{self.PROBE}__all":
+                return _counting("fallback", fn)
+            return fn
+
+        predicate_mod.functiondef_to_function = _spy
+        try:
+            predicate_mod.compile_predicate_trampoline(
+                self.PROBE, 2, db.clauses_for(self.PROBE, 2), db,
+                globals_=mod.__dict__,
+            )
+            lm = Module("_tt_bucket_probe_mixed")
+            lm.db = db
+            for shape, expected in [
+                (("point", 1, 2), ["a"]),
+                (("point", 7, 8), ["f"]),   # the Compound-producer clause
+                (("point", 3, 4), ["b"]),
+            ]:
+                K = Var()
+                got = [deref(K) for _t in call(self.PROBE, shape, K, module=lm)]
+                assert got == expected, shape
+        finally:
+            predicate_mod.functiondef_to_function = original
+
+        # Every one of the three calls above keyed "point" and reached the
+        # single 'point' bucket -- never the all-clauses fallback.
+        assert calls == {"bucket": 3, "fallback": 0}, calls
+
 
 class TestHeadPatternReachability:
     """Where cell head patterns are, and are not, reached in this stage.
@@ -929,27 +1014,71 @@ class TestHeadPatternReachability:
         # body Unify goals, which is what keeps output mode working.
         assert "('point', " in src and "('seg', " in src
 
-    def test_index_dispatch_routes_every_cell_to_the_all_clauses_fallback(self):
-        """``arg_index._runtime_arg_key`` has no cell branch, so a cell
-        argument keys as ``_INDEX_VAR`` and dispatch takes the all-clauses
-        fallback (correct, and unindexed).
+    def test_index_dispatch_routes_a_cell_to_its_bucket(self):
+        """``arg_index._runtime_arg_key`` learns cells (P3-2 Task 4): a cell
+        argument now keys as ``(functor, arity)`` -- the same shape the
+        ``Compound``/class-instance branches already used -- so dispatch
+        SELECTS the specific bucket instead of taking the all-clauses
+        fallback.
 
-        The key function runs at dispatch time with no module context, so
-        teaching it about cells changes routing for every plain data tuple
-        too -- a decision this task does not take.  P3-2 Task 4 is where the
-        cell key lands; until then this test records that cells are
-        UNINDEXED but correct, and it is expected to be inverted there.
+        Inverts ``test_index_dispatch_routes_every_cell_to_the_all_clauses_fallback``,
+        whose own docstring named this test as its expected replacement:
+        "P3-2 Task 4 is where the cell key lands ... it is expected to be
+        inverted there."
         """
         from clausal.logic.compiler import arg_index
 
-        assert arg_index._runtime_arg_key(("point", 3, 4)) is arg_index._INDEX_VAR
-        # ... while a class INSTANCE of the same functor keys, and indexes,
-        # normally.  Post-flip no ``.clausal`` module produces one (R6: a
-        # declared data functor mints no reachable class), but a Python-side
-        # producer still does -- so the class branch of the key function is
-        # live code, and still tested.
+        assert arg_index._runtime_arg_key(("point", 3, 4)) == ("point", 2)
+        # ... and a class INSTANCE of the same functor still keys, and
+        # indexes, identically -- the class branch predates this task and
+        # stays live for Python-side producers (R6: no ``.clausal`` module
+        # mints one any more, but ``clausal.reflection`` etc. still do).
         assert arg_index._runtime_arg_key(
             _python_minted("point", ("X", "Y"), 3, 4)) == ("point", 2)
+
+        # Demonstrate the SELECTION, not just the key: instrument the
+        # compiled bucket and fallback functions of a real, >threshold
+        # cell-headed predicate (``kind/2``, 6 clauses -- see
+        # tests/fixtures/tagged_shapes_tagged.clausal) and drive it
+        # end-to-end through ``call()``.  Before this task both counters
+        # would read ``{"bucket": 0, "fallback": 1}`` -- the fallback was
+        # the only reachable route for a cell caller.
+        import importlib
+        from clausal.logic.compiler import predicate as predicate_mod
+
+        module = importlib.import_module(_TAGGED)
+        original = predicate_mod.functiondef_to_function
+        calls = {"bucket": 0, "fallback": 0}
+
+        def _counting(name, fn):
+            def wrapped(*a, **kw):
+                calls[name] += 1
+                yield from fn(*a, **kw)
+            wrapped.__name__ = fn.__name__
+            wrapped.__qualname__ = fn.__qualname__
+            return wrapped
+
+        def _spy(func_def, globals_=None, **kwargs):
+            fn = original(func_def, globals_=globals_, **kwargs)
+            if func_def.name == "kind__p0_b0__2":
+                return _counting("bucket", fn)
+            if func_def.name == "kind__all__2":
+                return _counting("fallback", fn)
+            return fn
+
+        pred = getattr(module, "kind")
+        predicate_mod.functiondef_to_function = _spy
+        try:
+            pred._dispatch_fn = None
+            lm = _logic_module(module)
+            K = Var()
+            got = [deref(K) for _t in call("kind", ("point", 1, 2), K, module=lm)]
+        finally:
+            predicate_mod.functiondef_to_function = original
+            pred._dispatch_fn = None  # don't leak the instrumented closures
+
+        assert got == ["pt"]
+        assert calls == {"bucket": 1, "fallback": 0}, calls
 
 
 # ── P3-2 Task 3: head-pattern reachability ───────────────────────────────────

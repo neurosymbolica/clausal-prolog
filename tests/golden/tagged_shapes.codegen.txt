@@ -208,14 +208,12 @@ def kind__p0_b3__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [_v20, _v21]:
-            _m18 = trail.mark()
-            if $unify(_v20, 'nil', trail):
-                _m19 = trail.mark()
+        case [_scap0, _v21]:
+            if _scap0 == 'nil' or $unify(_scap0, 'nil', trail):
+                _m18 = trail.mark()
                 if $unify(_v21, 'empty', trail):
                     yield (_proceed, None)
-                trail.undo(_m19)
-            trail.undo(_m18)
+                trail.undo(_m18)
 
 # ----
 
@@ -225,10 +223,10 @@ def kind__p0_b4__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [_ncap0, _v23]:
             if _ncap0 == 42 or $unify(_ncap0, 42, trail):
-                _m20 = trail.mark()
+                _m19 = trail.mark()
                 if $unify(_v23, 'num', trail):
                     yield (_proceed, None)
-                trail.undo(_m20)
+                trail.undo(_m19)
 
 # ----
 
@@ -236,14 +234,12 @@ def kind__p0_b5__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [_v24, _v25]:
-            _m21 = trail.mark()
-            if $unify(_v24, 's', trail):
-                _m22 = trail.mark()
+        case [_scap0, _v25]:
+            if _scap0 == 's' or $unify(_scap0, 's', trail):
+                _m20 = trail.mark()
                 if $unify(_v25, 'str', trail):
                     yield (_proceed, None)
-                trail.undo(_m22)
-            trail.undo(_m21)
+                trail.undo(_m20)
 
 # ----
 
@@ -257,16 +253,14 @@ def kind__p1_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [_v7, _v8]:
-            _v9 = Var()
-            _v10 = Var()
-            _m23 = trail.mark()
-            if $unify(_v7, ('point', _v9, _v10), trail):
-                _m24 = trail.mark()
-                if $unify(_v8, 'pt', trail):
+        case [_v7, _scap0]:
+            if _scap0 == 'pt' or $unify(_scap0, 'pt', trail):
+                _v9 = Var()
+                _v10 = Var()
+                _m21 = trail.mark()
+                if $unify(_v7, ('point', _v9, _v10), trail):
                     yield (_proceed, None)
-                trail.undo(_m24)
-            trail.undo(_m23)
+                trail.undo(_m21)
 
 # ----
 
@@ -274,16 +268,14 @@ def kind__p1_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [_v11, _v12]:
-            _v13 = Var()
-            _v14 = Var()
-            _m25 = trail.mark()
-            if $unify(_v11, ('circle', _v13, _v14), trail):
-                _m26 = trail.mark()
-                if $unify(_v12, 'circ', trail):
+        case [_v11, _scap0]:
+            if _scap0 == 'circ' or $unify(_scap0, 'circ', trail):
+                _v13 = Var()
+                _v14 = Var()
+                _m22 = trail.mark()
+                if $unify(_v11, ('circle', _v13, _v14), trail):
                     yield (_proceed, None)
-                trail.undo(_m26)
-            trail.undo(_m25)
+                trail.undo(_m22)
 
 # ----
 
@@ -291,17 +283,15 @@ def kind__p1_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [_v15, _v16]:
-            _v17 = Var()
-            _v18 = Var()
-            _v19 = Var()
-            _m27 = trail.mark()
-            if $unify(_v15, ('seg', _v17, _v18, _v19), trail):
-                _m28 = trail.mark()
-                if $unify(_v16, 'seg3', trail):
+        case [_v15, _scap0]:
+            if _scap0 == 'seg3' or $unify(_scap0, 'seg3', trail):
+                _v17 = Var()
+                _v18 = Var()
+                _v19 = Var()
+                _m23 = trail.mark()
+                if $unify(_v15, ('seg', _v17, _v18, _v19), trail):
                     yield (_proceed, None)
-                trail.undo(_m28)
-            trail.undo(_m27)
+                trail.undo(_m23)
 
 # ----
 
@@ -309,14 +299,12 @@ def kind__p1_b3__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [_v20, _v21]:
-            _m29 = trail.mark()
-            if $unify(_v20, 'nil', trail):
-                _m30 = trail.mark()
-                if $unify(_v21, 'empty', trail):
+        case [_v20, _scap0]:
+            if _scap0 == 'empty' or $unify(_scap0, 'empty', trail):
+                _m24 = trail.mark()
+                if $unify(_v20, 'nil', trail):
                     yield (_proceed, None)
-                trail.undo(_m30)
-            trail.undo(_m29)
+                trail.undo(_m24)
 
 # ----
 
@@ -324,14 +312,12 @@ def kind__p1_b4__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [_v22, _v23]:
-            _m31 = trail.mark()
-            if $unify(_v22, 42, trail):
-                _m32 = trail.mark()
-                if $unify(_v23, 'num', trail):
+        case [_v22, _scap0]:
+            if _scap0 == 'num' or $unify(_scap0, 'num', trail):
+                _m25 = trail.mark()
+                if $unify(_v22, 42, trail):
                     yield (_proceed, None)
-                trail.undo(_m32)
-            trail.undo(_m31)
+                trail.undo(_m25)
 
 # ----
 
@@ -339,14 +325,12 @@ def kind__p1_b5__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [_v24, _v25]:
-            _m33 = trail.mark()
-            if $unify(_v24, 's', trail):
-                _m34 = trail.mark()
-                if $unify(_v25, 'str', trail):
+        case [_v24, _scap0]:
+            if _scap0 == 'str' or $unify(_scap0, 'str', trail):
+                _m26 = trail.mark()
+                if $unify(_v24, 's', trail):
                     yield (_proceed, None)
-                trail.undo(_m34)
-            trail.undo(_m33)
+                trail.undo(_m26)
 
 # ----
 
@@ -412,10 +396,10 @@ def pair_up__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trai
             _mark = trail.mark()
             _mark_cl = False
             try:
-                _m35 = trail.mark()
+                _m27 = trail.mark()
                 if $unify(_v34, ('seg', _v32, _v33, 'nil'), trail):
                     yield (_proceed, None)
-                trail.undo(_m35)
+                trail.undo(_m27)
             except GeneratorExit:
                 _mark_cl = True
                 raise

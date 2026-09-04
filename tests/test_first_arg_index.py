@@ -131,6 +131,135 @@ class TestExtractFirstArgKey:
         assert _extract_first_arg_key(c, 1) == ("Red", 0)
 
 
+class TestCellIndexKey:
+    """P3-2 Task 4: the key functions learn cells.
+
+    ``_arg_to_index_key`` and ``_runtime_arg_key`` both grow a cell branch,
+    ABOVE the generic ``(list, tuple)`` branch (a cell IS a tuple). Same key
+    shape as ``Compound``/class-instance/``Call(LoadName)`` — ``(functor,
+    arity)`` — so all four producers share one bucket.
+    """
+
+    def test_compound_cell_keys_functor_arity(self):
+        from clausal.logic.compiler.arg_index import (
+            _arg_to_index_key, _runtime_arg_key,
+        )
+        assert _arg_to_index_key(("point", 1, 2)) == ("point", 2)
+        assert _runtime_arg_key(("point", 1, 2)) == ("point", 2)
+
+    def test_tuple_data_cell_keys_by_length(self):
+        """A tuple-DATA cell (slot 0 is the ``TUPLE_TAG`` marker) keys as
+        ``(TUPLE_TAG, len - 1)`` — length-keyed, since it has no functor."""
+        from clausal.logic.cells import TUPLE_TAG
+        from clausal.logic.compiler.arg_index import (
+            _arg_to_index_key, _runtime_arg_key,
+        )
+        assert _arg_to_index_key((TUPLE_TAG, 1, 2)) == (TUPLE_TAG, 2)
+        assert _runtime_arg_key((TUPLE_TAG, 1, 2)) == (TUPLE_TAG, 2)
+        # Different lengths key differently.
+        assert _arg_to_index_key((TUPLE_TAG, 1)) == (TUPLE_TAG, 1)
+
+    def test_slot_0_var_tuple_is_unindexable(self):
+        """A slot-0 ``Var`` (higher-order/deprecated functor position, §1b)
+        falls through to ``_INDEX_VAR`` — neither a str functor nor the
+        ``TUPLE_TAG`` marker, so no bucket can be assigned at compile OR
+        runtime without resolving the Var first."""
+        from clausal.logic.compiler.arg_index import (
+            _arg_to_index_key, _runtime_arg_key, _INDEX_VAR,
+        )
+        v = Var()
+        assert _arg_to_index_key((v, 1, 2)) is _INDEX_VAR
+        assert _runtime_arg_key((v, 1, 2)) is _INDEX_VAR
+
+    def test_bytelist_coalescing_regression(self):
+        """R8 retires the STR/char-list coalesce only — the BYTES side
+        (``_bytelist_to_bytes_or_none``) is explicitly KEPT (the codes model)
+        and must still coalesce a byte-list with a ``bytes`` scalar."""
+        from clausal.logic.compiler.arg_index import (
+            _arg_to_index_key, _runtime_arg_key,
+        )
+        assert _arg_to_index_key([97, 98, 99]) == b"abc"
+        assert _runtime_arg_key([97, 98, 99]) == b"abc"
+        assert _runtime_arg_key(b"abc") == b"abc"
+
+    def test_charlist_no_longer_coalesces_with_str(self):
+        """R8: retired.  A char-list key is now ``_INDEX_VAR`` (unindexed),
+        not the joined str — see ``_arg_to_index_key``'s docstring."""
+        from clausal.logic.compiler.arg_index import (
+            _arg_to_index_key, _runtime_arg_key, _INDEX_VAR,
+        )
+        assert _arg_to_index_key(["a", "b", "c"]) is _INDEX_VAR
+        assert _runtime_arg_key(["a", "b", "c"]) is _INDEX_VAR
+
+    def test_bucket_sharing_across_producers(self):
+        """A clause with a live cell arg (``assertz``-style) and one with a
+        compile-time ``Compound`` node in the same argument position select
+        the SAME bucket key — the mechanism ``_build_arg_index`` relies on
+        to merge clauses from different producers into one bucket.
+
+        End-to-end proof (real predicate, real bucket function, driven
+        through ``call()``) lives in
+        ``tests/test_tagged_terms.py::TestBucketPatternIntegration::
+        test_asserted_cell_and_compile_time_compound_share_a_bucket``,
+        which uses the REALISTIC ``.clausal``-source shape for a compound
+        reference (``Call(LoadName('point'), args)``, hoisted to a body
+        ``Unify`` — see ``_lift_clause_at_pos``'s docstring) rather than a
+        bare ``Compound`` object, which no reachable ``.clausal`` clause
+        head carries directly. This unit-level test isolates the KEY
+        function itself against the plain ``Compound`` branch instead.
+        """
+        source_clause = Clause(
+            head=Compound("kind", (Compound("point", (1, 2)), "pt")),
+            body=[True],
+        )
+        asserted_clause = Clause(
+            head=Compound("kind", (("point", 3, 4), "pt2")),
+            body=[True],
+        )
+        source_key = _extract_first_arg_key(source_clause, 2)
+        asserted_key = _extract_first_arg_key(asserted_clause, 2)
+        assert source_key == asserted_key == ("point", 2)
+
+    def test_a_cell_with_an_unbound_slot_is_unindexable(self):
+        """Regression, found by the full-suite gate (not anticipated by the
+        Task 4 brief): a cell that is ground at slot 0 (the functor) but
+        carries an UNBOUND Var deeper inside must key ``_INDEX_VAR``, not
+        ``(functor, arity)``.
+
+        Mechanism: the bucket that key would route to embeds each of a
+        matching clause's own elements as a plain, equality-only
+        ``MatchValue`` when that clause's element is a ground literal (no
+        ``== or $unify`` hybrid fallback the way a TOP-level indexed
+        argument gets) — an unbound Var in the CALLER's slot can never
+        satisfy that literal pattern, where the un-indexed fallback's full
+        ``unify()`` would happily bind it.  See
+        ``tests/test_head_match_imported_compound.py::
+        test_indexed_imported_compound_at_second_position_enumerates_all_rows``
+        for the end-to-end repro this was found from.
+        """
+        from clausal.logic.compiler.arg_index import _runtime_arg_key, _INDEX_VAR
+        v = Var()
+        assert _runtime_arg_key(("Wrap", v)) is _INDEX_VAR
+        # Nested one level deeper: the Var is inside an inner cell.
+        assert _runtime_arg_key(("Item", "r", ("Met", v), "d")) is _INDEX_VAR
+        # Same gap, same fix, for a class-instance argument (pre-existing,
+        # not cell-specific -- the mechanism and the fix are identical).
+        from clausal.logic.predicate import make_predicate
+        Wrap = make_predicate("Wrap", ["sub"])
+        assert _runtime_arg_key(Wrap(sub=Var())) is _INDEX_VAR
+
+    def test_a_fully_ground_cell_still_keys_normally(self):
+        """Regression for the fix above: a cell with no unbound Var
+        anywhere inside it must still key normally -- the deep-groundness
+        gate must not degrade the common case to an unindexed scan."""
+        from clausal.logic.compiler.arg_index import _runtime_arg_key
+        assert _runtime_arg_key(("Wrap", "direct")) == ("Wrap", 1)
+        assert _runtime_arg_key(("Item", "r", ("Met", "direct"), "d")) == ("Item", 3)
+        from clausal.logic.predicate import make_predicate
+        Wrap = make_predicate("Wrap", ["sub"])
+        assert _runtime_arg_key(Wrap(sub="direct")) == ("Wrap", 1)
+
+
 class TestLiftClauseAtPos:
     def test_does_not_lift_loadname_atom(self):
         """A ``LoadName`` atom reference must NOT be lifted into the head.
@@ -151,6 +280,73 @@ class TestLiftClauseAtPos:
         # Unchanged: head still a Var, body Unify retained.
         assert lifted.head.args[0] is v
         assert len(lifted.body) == 1
+
+    def test_str_literal_is_now_lifted(self):
+        """P3-2 Task 4 (R8): the F095 str half of the lift-skip is retired.
+
+        A str-content list is no longer coalesced with a str bucket (§1b),
+        so lifting a str literal into the head no longer risks breaking a
+        list caller reaching this clause via a shared bucket — the bucket
+        is exclusively str-keyed now.
+        """
+        from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
+        v = Var()
+        c = Clause(head=Compound("f", (v,)), body=[Unify(left=v, right="abc")])
+        lifted = _lift_clause_at_pos(c, 0)
+        assert lifted.head.args[0] == "abc"
+        assert lifted.body == []
+
+    def test_bytes_literal_is_still_not_lifted(self):
+        """The bytes half of the F095 skip stays — the codes model (bytes
+        ~ byte-list) is deliberately kept, so a bytes-headed clause must
+        stay reachable via the loose ``_head_list_unify_input_py`` runtime
+        check inside a merged byte-list bucket, exactly as before R8."""
+        from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
+        v = Var()
+        c = Clause(head=Compound("f", (v,)), body=[Unify(left=v, right=b"abc")])
+        lifted = _lift_clause_at_pos(c, 0)
+        assert lifted.head.args[0] is v
+        assert len(lifted.body) == 1
+
+    def test_ground_str_content_list_literal_is_not_lifted(self):
+        """New in Task 4: a ground list literal that is NOT byte-list
+        coalescible (here, a char list) must not be lifted.
+
+        Traced by driving the todo's repro
+        (todo/done/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md):
+        such a list keys ``_INDEX_VAR`` and is merged as a "matches
+        anything" default into every specific-key bucket including a
+        same-length str literal's own bucket; lifting it turns the head
+        into a sequence pattern whose runtime helper
+        (``_head_list_unify_input_py``) still treats a str/bytes target as
+        an indexable list — a residual pre-P3-1 hole untouched by the
+        ``_variables.c`` do_unify retirement. Leaving the body ``Unify`` in
+        place uses strict ``unify()``, which correctly rejects a str
+        caller.
+        """
+        from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
+        v = Var()
+        c = Clause(head=Compound("f", (v,)),
+                   body=[Unify(left=v, right=["a", "b", "c"])])
+        lifted = _lift_clause_at_pos(c, 0)
+        # Unchanged: head still a Var, body Unify retained.
+        assert lifted.head.args[0] is v
+        assert len(lifted.body) == 1
+
+    def test_ground_int_list_literal_is_still_lifted(self):
+        """A ground list of ints in [0, 255] IS byte-list coalescible — it
+        keys as the joined ``bytes`` value (a SPECIFIC key, never merged as
+        a default into an unrelated bucket) — so lifting it stays safe and
+        is unchanged by Task 4.  Regression for
+        ``tests/test_funnel_accessors.py::TestMigrationRegression::
+        test_list_dispatch_rebuilds_term_instance_head_at_pos``, which
+        relies on exactly this."""
+        from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
+        v = Var()
+        c = Clause(head=Compound("f", (v,)), body=[Unify(left=v, right=[1, 2, 3])])
+        lifted = _lift_clause_at_pos(c, 0)
+        assert lifted.head.args[0] == [1, 2, 3]
+        assert lifted.body == []
 
 
 # ── Test _build_first_arg_index ──────────────────────────────────────────────

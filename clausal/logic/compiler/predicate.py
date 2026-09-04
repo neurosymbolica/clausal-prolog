@@ -509,7 +509,43 @@ def _build_predicate_trampoline_funcdef(
             if id(clause) in _tset:
                 # Slice E6d-β: plan was built by ``_sweep_tro_eligible``;
                 # ``id(clause) in _tset`` implies ``plan.eligible`` is True.
-                _plan = _ctx.clause_tro_plans[id(clause)]
+                #
+                # ``_tset`` is built (just above) from THIS function's own
+                # ``clauses`` param -- which, for a bucket, is
+                # ``lifted_bucket`` (predicate.py's plan-building loop),
+                # i.e. POST-``_lift_clause_at_pos``.  ``clause_tro_plans``
+                # was populated by ``_sweep_tro_eligible`` on the PRE-lift
+                # clause objects, keyed by their (different) id. The two
+                # agree whenever the lift was a no-op (same object, same
+                # id) but diverge whenever the lift actually rebuilds the
+                # clause (``Clause(head=new_head, body=new_body)`` is a NEW
+                # object) -- ``.get()`` below is what used to be a bare
+                # ``[...]`` lookup and raised ``KeyError`` the first time a
+                # TRO-eligible bucket clause was also lift-eligible. P3-2
+                # Task 4 (R8) is the first change to hit this: retiring the
+                # F095 str lift-skip makes str-headed clauses liftable, and
+                # some are TRO-eligible list-recursion bodies.
+                #
+                # Recomputing here (rather than reusing a plan keyed to the
+                # OLD body) is required, not just defensive: the lift can
+                # remove a redundant leading body ``Unify`` (the whole
+                # point of lifting), which shifts goal positions the
+                # PRE-lift plan recorded -- reusing it would misplace the
+                # tail-call split. Recompute against the clause's ACTUAL
+                # (post-lift) body, exactly as ``_sweep_tro_eligible`` does
+                # for the first pass, and cache it under the new id so a
+                # second reference (e.g. the default-bucket copy) doesn't
+                # redo the work.
+                _plan = _ctx.clause_tro_plans.get(id(clause))
+                if _plan is None:
+                    from .terms_to_goalop import terms_to_goalop as _tro_ir
+                    from .optimisations.tro import analyse as _tro_analyse_lazy
+                    _body_ir = _tro_ir(clause.body, db=db)
+                    _plan = _tro_analyse_lazy(
+                        _body_ir, clause.head, functor, arity, db=db)
+                    _ctx.clause_tro_plans[id(clause)] = _plan
+                    if _ctx.clause_ir_cache is not None:
+                        _ctx.clause_ir_cache[id(clause)] = _body_ir
                 _prev_plan = _ctx.tro_plan
                 _prev_mode = _ctx.tro_mode
                 _ctx.tro_plan = _plan
