@@ -133,6 +133,19 @@ class Partition:
         idx = bisect.bisect_right(self.starts, cp) - 1
         return idx
 
+    def ascii_table(self) -> list[int]:
+        """``symbol_of`` precomputed for codepoints 0..127 as a direct-index
+        list — the runtime driver's fast path (real Prolog source is
+        overwhelmingly ASCII; the bisect stays as the non-ASCII fallback).
+        Computed once per Partition and cached."""
+        tbl = getattr(self, "_ascii_table", None)
+        if tbl is None:
+            tbl = [self.symbol_of(chr(cp)) for cp in range(128)]
+            # Partition is a frozen dataclass; route the cache through
+            # object.__setattr__ (same trick frozen __post_init__ uses).
+            object.__setattr__(self, "_ascii_table", tbl)
+        return tbl
+
     def symbols_of(self, cs: CharSet) -> frozenset[int]:
         """Get all symbols whose start codepoint is in the CharSet."""
         syms = set()
