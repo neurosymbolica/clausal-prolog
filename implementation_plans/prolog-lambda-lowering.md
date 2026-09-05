@@ -1412,4 +1412,79 @@ ground constants or ground query inputs, where sharing and copy are identical.
    well-defined only once this section is ratified — the capture/body-local
    partition it reports is this section's partition.
 
+### Probe result (2026-09-06): the engine ALREADY implements capture-by-value
+
+Open-item #1 is closed. Two probes against the live engine (`call_goal` on
+lambdas capturing an enclosing clause variable):
+
+- **Unbound capture is fresh per call.** Two lambdas both capturing an unbound
+  `X`, one unifying `X` with `red`, the next with `blue`, then reading `X`:
+  **1 solution, `X` unbound afterward.** If `X` were shared, the second call
+  would unify `blue = red` and fail (0 solutions). It did not — each call bound
+  a fresh copy; the enclosing `X` was untouched.
+- **Bound capture flows its value in.** `X` bound to `red` before a lambda that
+  checks its argument against the captured `X`: **1 solution, value `red`.**
+
+So the designer's proposal DOCUMENTS existing behavior, not a change: ratify and
+the probes become the regression guard. (The partially-bound case — a capture
+bound to `f(A, _)` flowing `f(A, Fresh)` — was not independently probed; it
+follows by `copy_term` composition from the two confirmed halves and should be
+pinned when the semantics test is committed.)
+
+### Explicit sharing (`free(VAR)`) and the monotonicity question
+
+The designer asks: to regain bind-and-return-through-a-capture (which by-value
+forecloses), mark truly-shared variables explicitly — `free(VAR)` / `shared` /
+`nonlocal` — so the compiler keeps them shared instead of copying; term-expanded,
+compile-time-checked to be in the enclosing scope, removed as a no-op goal. And:
+does that subvert monotonicity?
+
+**Mechanically this is exactly `library(yall)`'s `Free/[Params]>>Body` and
+`library(lambda)`'s `+\`** — opt-IN sharing over a copy-by-default lambda. The
+designer's default choice (unmarked = safe/copied, marked = shared) is the
+better of the two conventions, because the *dangerous* thing — sharing — is the
+one made visible, not the safe thing.
+
+**On monotonicity — the honest answer is "no, but it opens the door":**
+
+- A shared unbound capture is NOT inherently non-monotone. `foo(X, a), foo(X, b)`
+  with a shared `X` is just `∃X. foo(X,a) ∧ foo(X,b)` — a legitimate conjunction
+  with a shared existential, fully declarative and monotone. "First binding
+  wins, the rest must unify" is ordinary unification, squarely inside the logical
+  reading. So `free()` does not, by itself, break anything.
+- The real tension is a **quantifier one, not a soundness one**: a lambda's
+  parameters are ∀-like (fresh per application), a shared capture is ∃-like (one
+  witness across all applications). One syntactic scope now carries two quantifier
+  meanings, told apart only by the marker. That is a scoping subtlety, not a
+  monotonicity violation — and making the ∃-set explicit is precisely how yall
+  keeps it legible.
+- Where monotonicity (really: commutativity + the declarative reading) DOES get
+  lost is the **imperative use** the escape hatch enables: a `free(Acc)` threaded
+  as a left-to-right accumulator, bound on one call and extended on the next. That
+  pattern is order-dependent (reorder the elements, change the answer), and it
+  interacts badly with `copy_term`-based HOFs (`findall`/`bagof` copy the closure
+  and silently sever the shared `Acc` — the classic footgun). Such a program is
+  still logically sound (it has an ∃ reading), but its author is thinking
+  imperatively and the two readings diverge. That divergence, not unsoundness, is
+  the cost.
+
+**Recommendations if `free()` is adopted:**
+
+1. Keep it opt-in over the safe default (as proposed) — this is the sound stance.
+2. Prefer a HEAD-position free-set (yall's `Free/...` shape) over a standalone
+   in-body `free(VAR)` goal: head position makes the sharing scope syntactic and
+   order-independent, where an in-body goal invites "does its position matter?".
+   If the Python-surface ergonomics favor a body pragma, fix its scope to the
+   whole lambda regardless of position and say so.
+3. The compile-time check ("`VAR` is actually in the enclosing context") is worth
+   having and catches the typo case the advisory lint targets — a `free(VAR)`
+   naming a variable that is NOT enclosing is almost certainly a mistake; make it
+   an error, not a warning, since the marker is a deliberate act.
+4. The marker is a precise EXPORT signal: a `free()`-marked capture is the one a
+   class-c lift must implement with a genuinely shared argument — or refuse when
+   it flows through a copying HOF, since ISO `findall`/`bagof` will sever it. An
+   unmarked capture stays by-value and exports trivially. So `free()` also draws
+   the line between "liftable today" and "refuse pending analysis" on the export
+   side.
+
 Awaiting operator review.
