@@ -289,7 +289,12 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # the _unminted_clauses field, all earlier in the same file).  ``head_key``
     # itself is byte-identical across all four shifts -- only its line number
     # moved; see .superpowers/sdd/p33-state-relocation/task-2-report.md.
-    AllowEntry("clausal/logic/database.py", (742, 774),
+    # Range shifted 742-774 -> 1011-1043 by P3-3 task-3's mutation gate (the
+    # write policy, ``refusal_error``, ``Database.mutate`` and the author
+    # helpers, all earlier in the same file).  ``head_key`` is byte-identical
+    # across all five shifts -- only its line number moved; see
+    # .superpowers/sdd/p33-state-relocation/task-3-report.md.
+    AllowEntry("clausal/logic/database.py", (1011, 1043),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list)"),
 

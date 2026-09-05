@@ -159,10 +159,14 @@ def test_row_dispatch_fn_reads_through_set_dispatch():
 
 
 def test_row_dispatch_fn_setter_visible_via_get_dispatch():
+    """ADAPTED (P3-3 Task 3): installing a dispatch now requires an open
+    ``Database.mutate`` transaction — the door the aliased-import clobber
+    came through.  The view-coherence claim under test is unchanged."""
     db = Database()
     row = db.row("f", 2, create=True)
     fn = lambda: None  # noqa: E731
-    row.dispatch_fn = fn
+    with db.mutate("f", 2, author="test", kind="recompile"):
+        row.dispatch_fn = fn
     assert db.get_dispatch("f", 2) is fn
 
 
@@ -210,7 +214,8 @@ def test_invalidate_clears_dispatch_fn_only():
     row = db.row("f", 2, create=True)
     fn = lambda: None  # noqa: E731
     lazy = lambda: "recompiled"  # noqa: E731
-    row.dispatch_fn = fn
+    with db.mutate("f", 2, author="test", kind="recompile"):
+        row.dispatch_fn = fn
     row.lazy_recompile = lazy
     row.invalidate()
     assert row.dispatch_fn is None
@@ -426,7 +431,8 @@ def test_class_writes_land_in_the_database():
     p._bind_row(db, "p", 1)
     fn = lambda *a: iter([])  # noqa: E731
     lazy = lambda: fn  # noqa: E731
-    p._dispatch_fn = fn
+    with p._mutate("test", "recompile"):        # the gate, P3-3 Task 3
+        p._dispatch_fn = fn
     p._lazy_recompile = lazy
     p._signature = ("a",)
     p._locked = True
@@ -550,7 +556,8 @@ def test_bare_make_predicate_is_a_working_predicate_with_no_database():
     assert cls._clauses == [c]
 
     fn = lambda *a: iter([])  # noqa: E731
-    cls._dispatch_fn = fn
+    with cls._mutate("test", "recompile"):      # the gate, P3-3 Task 3
+        cls._dispatch_fn = fn
     assert cls._get_dispatch() is fn
     assert cls._get_dispatch(1) is fn
     cls._lock()
@@ -817,7 +824,8 @@ def test_instance_reads_of_all_seven_are_live_through_the_class():
     db.assertz(c)                                   # via the Database
     fn = lambda *a: iter([])                        # noqa: E731
     lazy = lambda: fn                               # noqa: E731
-    cls._dispatch_fn = fn                           # via the class
+    with cls._mutate("test", "recompile"):          # via the class, gated
+        cls._dispatch_fn = fn
     cls._lazy_recompile = lazy
     cls._signature = ("x",)
     cls._locked = True
@@ -917,30 +925,31 @@ def test_define_predicate_mints_through_db_assertz():
     assert "self.db.assertz(" in source
 
 
-# ── F3: db.assertz is now a COMPLETE static-lock bypass ─────────────────────
+# ── F3: db.assertz is gated like every other channel ───────────────────────
 
 
-def test_low_level_db_assertz_now_bypasses_the_static_lock_completely(
+def test_low_level_db_assertz_is_refused_on_a_locked_static_predicate(
     tmp_path, monkeypatch
 ):
-    """DELIBERATE, ANSWER-CHANGING, and NOT the end state.
+    """FLIPPED by P3-3 Task 3, as Task 2 said it would be.
 
-    ``Database._pred_cls_for`` used to return ``None`` for a LOCKED class, so
-    a low-level ``db.assertz`` reached ``db._clauses`` but not the class —
-    solve() dispatched through the class and kept answering the old clause
-    set. The lock was therefore a PARTIAL bypass guard at this door. With the
-    class reading the row, ``db.assertz`` on a locked static predicate now
-    changes the answers: ``[1]`` becomes ``[1, 2]``.
+    Task 2 pinned the opposite of this: ``Database._pred_cls_for`` used to
+    return ``None`` for a LOCKED class, so a low-level ``db.assertz`` reached
+    ``db._clauses`` but not the class, and solve() kept answering the old
+    clause set — a PARTIAL bypass guard, there by accident of the dual store.
+    With the class reading the row, that accident was gone and ``db.assertz``
+    on a locked static predicate CHANGED THE ANSWERS: ``[1]`` became
+    ``[1, 2]``.
 
-    Every lock ENFORCEMENT point is untouched — ``PredicateMeta._assertz/
-    _asserta/_retract`` raise ``RuntimeError`` and the ``assertz/1``-family
-    builtins raise ``permission_error``, both before touching anything — and
-    ``Database.assertz`` itself never had a lock check of its own. What is
-    gone is the accidental partial cover the dual store provided.
+    The mutation gate closes it.  ``Database.assertz`` is a channel like any
+    other now: it asks the one policy ("may this author write this row"), and
+    a runtime author writing a locked, owned row is refused — with the same
+    diagnostic the other three channels raise, from the same place.
 
-    Task 3's mutation gate (``Database.mutate``: "checks lock/permission once,
-    stamps provenance per-write") is where this door gets closed; carried
-    forward in task-2-inversions.md under "Deliberate semantic changes"."""
+    See ``.superpowers/sdd/p33-state-relocation/task-2-inversions.md``,
+    "Fix round 1 — carry-forward for Task 3"."""
+    from clausal.logic.exceptions import LogicException
+
     module, db, _ = _load_pfn_module(
         tmp_path, monkeypatch, "f3_locked_bypass",
         """
@@ -953,15 +962,15 @@ def test_low_level_db_assertz_now_bypasses_the_static_lock_completely(
     assert cls._locked is True, "step 7 must have locked it, or this pins nothing"
     assert _one_arg_answers(module, "f3_static") == [1]
 
-    db.assertz(Clause(head=cls(2), body=[]))
+    with pytest.raises(LogicException) as exc_info:
+        db.assertz(Clause(head=cls(2), body=[]))
+    assert "may not write f3_static/1" in str(exc_info.value.term.args[1])
 
-    assert len(cls._clauses) == 2, "the locked class sees the clause now"
-    assert cls._dispatch_fn is None, "and its dispatch was invalidated"
-    assert _one_arg_answers(module, "f3_static") == [1, 2], (
-        "ANSWER-CHANGING: this is the bypass, pinned so Task 3's gate has a "
-        "test to flip"
+    assert len(cls._clauses) == 1, "nothing was written"
+    assert _one_arg_answers(module, "f3_static") == [1], (
+        "the answers did not move — this is the door Task 2 left open"
     )
-    # The enforcement doors are still shut.
+    # The enforcement doors the dual store never covered are still shut.
     with pytest.raises(RuntimeError):
         cls._assertz(Clause(head=cls(3), body=[]))
 

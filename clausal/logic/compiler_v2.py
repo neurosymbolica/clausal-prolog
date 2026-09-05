@@ -15,19 +15,24 @@ compilation, tabling wraps, and locking in a single pass.
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import sys
 import warnings
 from typing import Any
 
 from clausal.atom_diagnostics import truth_literal_hint_lines
-from clausal.logic.database import Module as LogicModule, Clause, head_key
+from clausal.logic.database import (
+    Module as LogicModule, Clause, head_key,
+    WRITE_LOAD_CLAUSES, WRITE_LOAD_DISPATCH,
+)
+from clausal.logic.exceptions import LogicException
 from clausal.logic.compiler import (
     compile_predicate_trampoline,
     compile_predicate_shallow,
 )
 from clausal.logic.predicate import (
-    PredicateMeta, make_predicate, module_source_path, record_clause_source,
+    PredicateMeta, make_predicate, record_clause_source,
     term_field_names_of_class,
 )
 from clausal.pythonic_ast.nodes import (
@@ -150,18 +155,20 @@ def compile_module(
     #    NameError on undeclared names instead of minting.
     _process_bare_atom_refs(module_items, module_dict, module_name)
 
-    # ── Step 3c: refuse to overwrite an imported predicate's clauses ─────
-    #    Must run BEFORE step 4, which mutates the shared class in place: a
-    #    refusal that fired halfway through the loop would leave the other
-    #    module with a partly-clobbered clause list, which is the very fault
-    #    it exists to prevent.
-    _reject_redefinition_of_imported_predicates(
-        predicate_nodes, module_items, module_dict, module_name)
+    # ── Step 3c: resolve each imported name to the CLASS it bound ────────
+    #    Names only, no policy: ``origins`` maps every spelling an
+    #    ``-import_from`` introduces (the alias AND the class's own functor)
+    #    to the class itself.  The REFUSAL that used to live here is the
+    #    mutation gate's now (P3-3 Task 3) — one policy, asked by every
+    #    channel — and this is what hands the gate the shared class whose row
+    #    a write would land on when ``module_dict.get(functor)`` cannot find
+    #    it (identity todo instance 3, the aliased import).
+    origins = _import_from_origins(module_items, module_dict)
+    author = db.load_author()
 
     # ── Step 4: assertz all clauses ───────────────────────────────────────
     pending: dict[tuple[str, int], PredicateMeta | None] = {}
     for pred_node in predicate_nodes:
-        logic_module.define_predicate(pred_node)
         functor, arity = head_key(pred_node.head)
         key = (functor, arity)
 
@@ -176,20 +183,27 @@ def compile_module(
         # is a snapshot and the write is what the row's contract names as the
         # deliberate clause-list minting site.
         pred_cls = module_dict.get(functor)
-        if isinstance(pred_cls, PredicateMeta):
-            db_clauses = db.clauses_for(functor, arity)
-            pred_cls._bind_row(db, functor, arity)
-            # ``_ensure_clauses``, not a plain ``_clauses`` read: a read mints
-            # nothing (P3-3 Task 2 fix round 1), and this IS the sanctioned
-            # clause-install site — the slice-assign below has to land in the
-            # Database, not in an unminted per-row list.
-            pred_cls._ensure_clauses()[:] = db_clauses
-            record_clause_source(pred_cls, module_name, module_dict)
-            if pred_cls._signature is None:
-                pred_cls._signature = pred_cls._fields
-            pending[key] = pred_cls
-        else:
-            pending[key] = None
+        if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = None
+        with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
+                        pred_cls if pred_cls is not None
+                        else _imported_class(origins, functor),
+                        origins, module_name, module_dict):
+            logic_module.define_predicate(pred_node)
+            if pred_cls is not None:
+                db_clauses = db.clauses_for(functor, arity)
+                pred_cls._bind_row(db, functor, arity)
+                # ``_ensure_clauses``, not a plain ``_clauses`` read: a read
+                # mints nothing (P3-3 Task 2 fix round 1), and this IS the
+                # sanctioned clause-install site — the slice-assign below has
+                # to land in the Database, not in an unminted per-row list.
+                pred_cls._ensure_clauses()[:] = db_clauses
+                record_clause_source(pred_cls, module_name, module_dict)
+                if pred_cls._signature is None:
+                    pred_cls._signature = pred_cls._fields
+                pending[key] = pred_cls
+            else:
+                pending[key] = None
 
     # ── Step 4a: seed pending from -dynamic specs (A12-F005) ─────────────
     #    A declared-but-clause-less dynamic predicate must still compile to
@@ -241,18 +255,27 @@ def compile_module(
     check_stratification(db, module_name)
 
     # ── Step 5: Compile each predicate ───────────────────────────────────
+    #    Through the gate as well as step 4 (P3-3 Task 3): the dispatch is the
+    #    channel the aliased-import clobber actually travelled — the clause
+    #    list was guarded and the dispatch was not, so the damage was
+    #    invisible to a clause count.  One policy, asked again for the write
+    #    that lands the compiled function.
     for (functor, arity), pred_cls in pending.items():
         clauses = db.clauses_for(functor, arity)
-        if db.is_shallow(functor, arity):
-            compile_predicate_shallow(
-                functor, arity, clauses, db,
-                globals_=module_dict, pred_cls=pred_cls,
-            )
-        else:
-            compile_predicate_trampoline(
-                functor, arity, clauses, db,
-                globals_=module_dict, pred_cls=pred_cls,
-            )
+        with _load_gate(db, functor, arity, author, WRITE_LOAD_DISPATCH,
+                        pred_cls if pred_cls is not None
+                        else _imported_class(origins, functor),
+                        origins, module_name, module_dict):
+            if db.is_shallow(functor, arity):
+                compile_predicate_shallow(
+                    functor, arity, clauses, db,
+                    globals_=module_dict, pred_cls=pred_cls,
+                )
+            else:
+                compile_predicate_trampoline(
+                    functor, arity, clauses, db,
+                    globals_=module_dict, pred_cls=pred_cls,
+                )
 
     # ── Step 6: Wrap tabled predicates ───────────────────────────────────
     #    Step 5 already installed the wrapper (``compiler._install`` is the
@@ -269,9 +292,12 @@ def compile_module(
             wrapped = ensure_tabled_wrapper(db, functor, arity, original_fn)
             if wrapped is original_fn:
                 continue
-            if pred_cls is not None:
-                pred_cls._dispatch_fn = wrapped
-            db.set_dispatch(functor, arity, wrapped)
+            with db.mutate(functor, arity, author=author,
+                           kind=WRITE_LOAD_DISPATCH, detail="table-wrap",
+                           through=pred_cls):
+                if pred_cls is not None:
+                    pred_cls._dispatch_fn = wrapped
+                db.set_dispatch(functor, arity, wrapped)
 
     # ── Step 6b: Meta-interpreter specialization ────────────────────────
     #    Runs after all predicates are compiled so source programs can be
@@ -499,11 +525,16 @@ def _import_from_origins(module_items: list, module_dict: dict) -> dict:
     Indexed under BOTH names an aliased import gives a predicate.  ``alias(f,
     G)`` binds the exporter's class under ``G``, but the class keeps its own
     functor ``f``, and a clause head compiles to the CLASS's functor — so
-    ``head_key`` hands step 3c ``f`` while the file only ever mentions ``G``.
-    Indexing the alias alone let the aliased spelling walk straight past the
-    refusal and clobber the exporter through step 5's dispatch assignment,
-    with the clause list left intact so the damage was invisible to a clause
-    count (found by review, 2026-08-25).
+    ``head_key`` hands the load channel ``f`` while the file only ever
+    mentions ``G``.  Indexing the alias alone let the aliased spelling walk
+    straight past the refusal and clobber the exporter through step 5's
+    dispatch assignment, with the clause list left intact so the damage was
+    invisible to a clause count (found by review, 2026-08-25).
+
+    This is a RESOLVER, not a guard (P3-3 Task 3): it answers "which class
+    does this head name reach", and the mutation gate answers "may this load
+    write it".  It is the one place the identity todo's "resolve a head to its
+    class once" is done for the load channel.
     """
     origins: dict[str, tuple[str, Any]] = {}
     for item in module_items:
@@ -520,70 +551,88 @@ def _import_from_origins(module_items: list, module_dict: dict) -> dict:
     return origins
 
 
-def _reject_redefinition_of_imported_predicates(
-    predicate_nodes: list, module_items: list, module_dict: dict,
-    module_name: str,
-) -> None:
-    """Refuse a clause for an ``-import_from``'d predicate that another module
-    has already supplied clauses for.
+_LOAD_SITES = {
+    WRITE_LOAD_CLAUSES: "compile_module step 4",
+    WRITE_LOAD_DISPATCH: "compile_module step 5",
+}
 
-    ``-import_from`` binds the exporter's predicate CLASS, and step 4 writes
-    this module's clauses straight onto it.  Whatever was there was silently
-    overwritten — for the other module's own queries too
-    (``todo/done/imported-functor-clause-list-replaced-not-extended.md``).
 
-    Extending instead is not a fix that can be made correct here: the clause
-    list is not what answers a goal.  Step 5 compiles ONE dispatch function
-    from ONE clause list against ONE ``globals_`` (``globals_=module_dict``),
-    so a merged list would mean compiling the other module's clause bodies —
-    written against its ``-private`` atoms and its imports — in this module's
-    scope.  A merged clause list with an unmerged dispatch function trades a
-    visible bug for an invisible one.
+def _imported_class(origins: dict, functor: str) -> "PredicateMeta | None":
+    """The class an ``-import_from`` bound for *functor*, or ``None``.
 
-    Two shapes are deliberately NOT refused:
-
-    * a **clause-free** import.  That is a declaration — a bare vocabulary
-      atom, or a signature whose implementer lives downstream — and supplying
-      its clauses is an established idiom in downstream rulebase corpora.
-      Nothing is destroyed, so nothing is refused.
-    * a **reload of the same file**.  Ownership is keyed on the source path,
-      so a file that reaches step 4 twice in one process (dotted import plus
-      ``load_clausal_module``, or a straight re-load) re-runs an assignment
-      that is idempotent.  Keying it on the module *name* instead is what made
-      the previous attempt at this refuse a file beside itself
-      (``todo/done/imported-clause-refusal-misattributes-ownership.md``).
+    Used to hand the mutation gate the shared class a write would land on
+    when ``module_dict.get(functor)`` finds nothing — which is exactly the
+    ALIASED import (identity todo instance 3): the class is in the module
+    dict under its alias, so the functor a clause head compiles to reaches
+    nothing, and the write went unexamined while step 5 replaced the shared
+    dispatch anyway.
     """
-    origins = _import_from_origins(module_items, module_dict)
-    if not origins:
-        return
-    here = module_source_path(module_dict)
-    checked: set[str] = set()
-    for pred_node in predicate_nodes:
-        functor, arity = head_key(pred_node.head)
-        if functor in checked or functor not in origins:
-            continue
-        checked.add(functor)
-        exporter_name, bound_cls = origins[functor]
-        # Under an alias the class is NOT in module_dict under its own functor
-        # — the import bound it under the alias — so fall back to the class the
-        # import itself bound.
-        pred_cls = module_dict.get(functor)
-        if not isinstance(pred_cls, PredicateMeta):
-            pred_cls = bound_cls
-        if not isinstance(pred_cls, PredicateMeta) or not pred_cls._clauses:
-            continue
-        source = getattr(pred_cls, "_clauses_source", None)
-        if source is not None and here is not None and source[1] == here:
-            # Our own clauses, from an earlier compile of this same file.
-            # Re-running step 4's assignment is idempotent.
-            continue
-        from clausal.import_diagnostics import (  # noqa: PLC0415
-            describe_imported_predicate_redefinition,
-        )
-        raise SyntaxError(describe_imported_predicate_redefinition(
-            functor, arity, module_name, exporter_name, pred_cls,
-            exporter_module=module_dict.get(exporter_name),
-        ))
+    origin = origins.get(functor)
+    if origin is None:
+        return None
+    bound = origin[1]
+    return bound if isinstance(bound, PredicateMeta) else None
+
+
+@contextlib.contextmanager
+def _load_gate(db, functor: str, arity: int, author: str, kind: str,
+               pred_cls, origins: dict, module_name: str, module_dict: dict):
+    """Open the mutation gate for a load-time write, translating a refusal
+    into this channel's ``SyntaxError``.
+
+    The POLICY is the gate's — this channel keeps none of its own (P3-3 Task
+    3; the pre-pass that used to sit at step 3c is deleted).  What survives
+    here is the DIAGNOSTIC: "you cannot write this" alone leaves the author
+    with a rule and nowhere to put it, so the gate's refusal line is wrapped
+    in ``describe_imported_predicate_redefinition``'s account of what is
+    about to be lost, who wrote it, and where the clause could legitimately
+    go.  The gate line rides along at the end, so all four channels say the
+    same thing about the same policy.
+
+    ``-import_from`` binds the exporter's predicate CLASS, and the write
+    would land on it: extending instead is not a fix that can be made
+    correct here, because ONE dispatch is compiled from ONE clause list
+    against ONE ``globals_``, so a merged list would compile the other
+    module's clause bodies — written against its ``-private`` atoms and its
+    imports — in this module's scope.
+    """
+    # ``detail`` names the SITE, not the module: it leads the refusal line
+    # ("compile_module step 4: <path> may not write f/1: ...") and lands in
+    # the row's write stamp, where the author already carries the file.
+    ctx = db.mutate(functor, arity, author=author, kind=kind,
+                    detail=_LOAD_SITES.get(kind, kind), through=pred_cls)
+    try:
+        row = ctx.__enter__()
+    except LogicException as exc:
+        raise _redefinition_error(
+            exc, functor, arity, pred_cls, origins, module_name, module_dict,
+        ) from None
+    try:
+        yield row
+    except BaseException as exc:  # noqa: BLE001 — re-raised below
+        if not ctx.__exit__(type(exc), exc, exc.__traceback__):
+            raise
+    else:
+        ctx.__exit__(None, None, None)
+
+
+def _redefinition_error(exc, functor: str, arity: int, pred_cls,
+                        origins: dict, module_name: str,
+                        module_dict: dict) -> SyntaxError:
+    """The load channel's surface exception for a gate refusal."""
+    gate_line = str(exc.term.args[1])
+    origin = origins.get(functor)
+    if origin is None or not isinstance(pred_cls, PredicateMeta):
+        return SyntaxError(gate_line)
+    exporter_name = origin[0]
+    from clausal.import_diagnostics import (  # noqa: PLC0415
+        describe_imported_predicate_redefinition,
+    )
+    described = describe_imported_predicate_redefinition(
+        functor, arity, module_name, exporter_name, pred_cls,
+        exporter_module=module_dict.get(exporter_name),
+    )
+    return SyntaxError(f"{described}\n  {gate_line}")
 
 
 def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) -> None:

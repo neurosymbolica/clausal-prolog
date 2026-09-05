@@ -2099,10 +2099,27 @@ def _install(
         # without ever going through a load (a bare-query compile, a
         # specialization target, a runtime recompile after assertz), and is a
         # no-op whenever the class is already on this row.
+        #
+        # P3-3 Task 3: THROUGH THE GATE.  ``pred_cls._dispatch_fn`` is the
+        # second door onto the same state — gating ``Database.mutate`` alone
+        # would leave the very channel the aliased-import clobber came through
+        # wide open — so the install runs inside a transaction.  When this is
+        # itself part of a load or a runtime assert the transaction is already
+        # open and this one nests into it, inheriting its authorization and
+        # its stamp; standalone (a bare-query compile) it opens its own, as a
+        # ``recompile``, which the policy never refuses.
         if db is not None:
-            pred_cls._bind_row(db, functor, arity)
-        pred_cls._dispatch_fn = fn
-        if lazy_recompile is not None:
-            pred_cls._lazy_recompile = lazy_recompile
+            ctx = db.mutate(functor, arity, author=db.load_author(),
+                            kind="recompile", detail="install",
+                            through=pred_cls)
+        else:
+            ctx = pred_cls._mutate(
+                f"compile:{functor}/{arity}", "recompile", "install")
+        with ctx:
+            if db is not None:
+                pred_cls._bind_row(db, functor, arity)
+            pred_cls._dispatch_fn = fn
+            if lazy_recompile is not None:
+                pred_cls._lazy_recompile = lazy_recompile
     return fn
 

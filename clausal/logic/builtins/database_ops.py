@@ -107,13 +107,26 @@ def _reject_cell_head(term_val: Any, context: str) -> None:
     ))
 
 
-def _find_pred_cls(functor: str, module_dict: "dict | None") -> "Any":
-    """Return the PredicateMeta class for functor from module_dict, or None."""
+def _find_pred_cls(functor: str, arity: int,
+                   module_dict: "dict | None") -> "Any":
+    """Return the PredicateMeta class for ``functor/arity`` from
+    *module_dict*, or None.
+
+    ARITY-CHECKED (P3-3 Task 3, identity todo instance 3): ``module_dict``
+    holds one class per NAME, so a ``p/1`` assert used to hand ``p/3``'s class
+    to the lock check and to the recompile — and ``compiler._install`` would
+    then re-bind that class onto ``p/1``'s row, moving a predicate the assert
+    never mentioned.  A name that is bound at another arity resolves to no
+    class here; the gate still sees the write, because it is asked about the
+    ROW.
+    """
     from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
     if module_dict is None:
         return None
     candidate = module_dict.get(functor)
-    return candidate if isinstance(candidate, PredicateMeta) else None
+    if not isinstance(candidate, PredicateMeta):
+        return None
+    return candidate if len(candidate._fields) == arity else None
 
 
 # ── assertz / retract ──────────────────────────────────────────────────────────
@@ -139,20 +152,23 @@ def _assertz_factory(db):
             return
         clause = _build_clause(term_val, "assertz/1")
         functor, arity = head_key(clause.head)
-        pred_cls = _find_pred_cls(functor, module_dict)
-        if pred_cls is not None and pred_cls._locked:
-            # A09-F006 (decision A09-D002 a): raise a typed permission_error,
-            # not RuntimeError — the drive loop treats RuntimeError as
-            # generator exhaustion and silently swallows it. LogicException
-            # routes correctly and is catchable by catch/3.
-            raise LogicException(permission_error(
-                "modify", "static_procedure",
-                Compound("/", (functor, arity)), "assertz/1"))
-        # db.assertz appends to the row pred_cls reads and clears its dispatch.
-        db.assertz(clause)
-        clauses = db.clauses_for(functor, arity)
-        compile_predicate_trampoline(functor, arity, clauses, db,
-                                     globals_=module_dict, pred_cls=pred_cls)
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
+        # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
+        # here is the gate's policy now — one question, "may this author write
+        # this row", asked identically by all four channels — and it still
+        # raises a typed permission_error rather than a RuntimeError, which
+        # the drive loop would treat as generator exhaustion and swallow
+        # (A09-F006 / decision A09-D002 a).  ``through=pred_cls`` is what
+        # carries the check onto an -import_from'd predicate: the clause goes
+        # into THIS module's row, but a shared class makes the exporter's row
+        # part of the write's blast radius.
+        with db.mutate(functor, arity, author=db.runtime_author(),
+                       kind="assert", detail="assertz/1", through=pred_cls):
+            db.assertz(clause)
+            clauses = db.clauses_for(functor, arity)
+            compile_predicate_trampoline(functor, arity, clauses, db,
+                                         globals_=module_dict,
+                                         pred_cls=pred_cls)
         yield None
 
     return assertz__1
@@ -175,17 +191,15 @@ def _asserta_factory(db):
             return
         clause = _build_clause(term_val, "asserta/1")
         functor, arity = head_key(clause.head)
-        pred_cls = _find_pred_cls(functor, module_dict)
-        if pred_cls is not None and pred_cls._locked:
-            # A09-F006: typed permission_error (see assertz/1 above).
-            raise LogicException(permission_error(
-                "modify", "static_procedure",
-                Compound("/", (functor, arity)), "asserta/1"))
-        # db.asserta prepends to the row pred_cls reads and clears its dispatch.
-        db.asserta(clause)
-        clauses = db.clauses_for(functor, arity)
-        compile_predicate_trampoline(functor, arity, clauses, db,
-                                     globals_=module_dict, pred_cls=pred_cls)
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
+        # Through the gate; see assertz/1 above.
+        with db.mutate(functor, arity, author=db.runtime_author(),
+                       kind="assert", detail="asserta/1", through=pred_cls):
+            db.asserta(clause)
+            clauses = db.clauses_for(functor, arity)
+            compile_predicate_trampoline(functor, arity, clauses, db,
+                                         globals_=module_dict,
+                                         pred_cls=pred_cls)
         yield None
 
     return asserta__1
@@ -217,14 +231,43 @@ def _retract_factory(db):
         clause_list = db._clauses.get((functor, arity))
         if clause_list is None:
             return
-        pred_cls = _find_pred_cls(functor, module_dict)
-        if pred_cls is not None and pred_cls._locked:
-            # A09-F006: typed permission_error (see assertz/1 above).
-            raise LogicException(permission_error(
-                "modify", "static_procedure",
-                Compound("/", (functor, arity)), "retract/1"))
-        # Find first clause whose head unifies with term_val (and whose
-        # Is-body goals are consistent with that unification).
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
+        # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
+        # here is the gate's policy now, and its exit is what invalidates the
+        # dispatch when the last clause goes (the recompile below is skipped
+        # then, and the predicate would otherwise keep dispatching to the
+        # function compiled from the clause it just lost).  The transaction
+        # closes BEFORE the yield: leaving it open across a solution the
+        # caller may abandon would leak an open transaction and skip that
+        # invalidation.
+        with db.mutate(functor, arity, author=db.runtime_author(),
+                       kind="retract", detail="retract/1", through=pred_cls):
+            removed = _remove_first_match(term_val, clause_list)
+            if removed is not None:
+                clauses = db.clauses_for(functor, arity)
+                if clauses:
+                    compile_predicate_trampoline(
+                        functor, arity, clauses, db,
+                        globals_=module_dict, pred_cls=pred_cls)
+        if removed is None:
+            return
+        # A09-F008 (decision A09-D003 a): bind the pattern on the REAL
+        # trail so the retracted clause's argument values escape with the
+        # solution (ISO/SWI "retract by pattern"). The clause is already
+        # removed, so binding its template vars is safe; normal
+        # backtracking undoes these bindings via the engine trail.
+        from clausal.terms import Unify as _Unify  # avoid top-level cycle
+        structural_unify(term_val, removed.head, trail)
+        for goal in removed.body:
+            if isinstance(goal, _Unify):
+                structural_unify(deref(goal.left), deref(goal.right), trail)
+        yield None
+        return  # retract is not backtrackable
+
+    def _remove_first_match(term_val, clause_list):
+        """Delete and return the first clause whose head unifies with
+        *term_val* (and whose ``Unify`` body goals are consistent with that
+        unification), or ``None`` when none matches."""
         from clausal.terms import Unify as _Unify  # avoid top-level cycle
         for i, clause in enumerate(clause_list):
             tmp_trail = Trail()
@@ -252,40 +295,8 @@ def _retract_factory(db):
             # Found a matching clause — remove it.
             tmp_trail.undo(mark)  # clean up temporary bindings
             del clause_list[i]
-            # P3-3 Task 2: no second clause store to sync — a bound class
-            # reads THIS list.  What the deleted identity-match loop also did,
-            # and what still has to happen, is invalidate the compiled
-            # dispatch: the recompile below is skipped when the last clause
-            # goes, and without this the predicate would keep dispatching to
-            # the function compiled from the clause it just lost.  Invalidating
-            # the ROW (rather than only the class, as before) also clears
-            # ``db._dispatch`` for the same key, so ``db.get_dispatch`` and
-            # ``pred_cls._get_dispatch`` can no longer disagree about it.
-            # Guarded on an EXISTING ``_dispatch`` entry, exactly as
-            # ``Database.assertz``/``asserta``/``retract`` guard theirs: the
-            # unconditional form would write ``_dispatch[key] = None`` for a
-            # never-compiled predicate, which flips ``db.row(..., create=
-            # False)`` from ``None`` to a row for a key nothing has ever
-            # touched.
-            if (functor, arity) in db._dispatch:
-                row = db.row(functor, arity)
-                if row is not None:
-                    row.invalidate()
-            clauses = db.clauses_for(functor, arity)
-            if clauses:
-                compile_predicate_trampoline(functor, arity, clauses, db,
-                                             globals_=module_dict, pred_cls=pred_cls)
-            # A09-F008 (decision A09-D003 a): bind the pattern on the REAL
-            # trail so the retracted clause's argument values escape with the
-            # solution (ISO/SWI "retract by pattern"). The clause is already
-            # removed, so binding its template vars is safe; normal
-            # backtracking undoes these bindings via the engine trail.
-            structural_unify(term_val, clause.head, trail)
-            for goal in clause.body:
-                if isinstance(goal, _Unify):
-                    structural_unify(deref(goal.left), deref(goal.right), trail)
-            yield None
-            return  # retract is not backtrackable
+            return clause
+        return None
 
     return retract__1
 

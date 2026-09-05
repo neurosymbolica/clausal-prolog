@@ -258,12 +258,19 @@ def test_F005_assertz_rule(fix):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _assert_static_procedure_error(ei, context):
-    """The term is error(permission_error(modify, static_procedure, F/A), Ctx)."""
+    """The term is error(permission_error(modify, static_procedure, F/A), Ctx).
+
+    REWORDED for P3-3 Task 3: the refusal comes from the ONE mutation gate
+    now, so the context still LEADS with the calling builtin — which is what
+    a reader uses it for — and then says who was refused, which row, and why.
+    Equality became ``startswith`` for that reason; the ISO term itself is
+    unchanged.
+    """
     inner = ei.value.term.args[0]
     assert getattr(inner, "functor", None) == "permission_error"
     assert inner.args[0] == "modify"
     assert inner.args[1] == "static_procedure"
-    assert ei.value.term.args[1] == context
+    assert str(ei.value.term.args[1]).startswith(context)
 
 
 def test_F006_assertz_locked_raises(locked_mod):

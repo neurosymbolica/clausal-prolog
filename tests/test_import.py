@@ -266,7 +266,13 @@ def test_runtime_assertz_adds_clause():
     # from the module namespace (it was created by _make_functor_class_ast).
     edge_cls = type(logic_mod.db.clauses_for("Edge", 2)[0].head)
     new_head = edge_cls(arg_0=3, arg_1=4)
-    logic_mod.db.assertz(Clause(head=new_head, body=[]))
+    # P3-3 Task 3: ``Edge/2`` is a locked static predicate, and the
+    # mutation gate refuses an anonymous runtime write to one -- that
+    # low-level door used to be the one channel a static procedure could
+    # be changed through.  This test IS the owning load adding to its own
+    # predicate, so it says so.
+    logic_mod.db.assertz(Clause(head=new_head, body=[]),
+                         author=logic_mod.db.load_author())
     # Lazy recompile kicks in on next get_dispatch() call.
     dispatch2 = logic_mod.db.get_dispatch("Edge", 2)
     results = _run_dispatch(dispatch2, 3, 4, Trail())

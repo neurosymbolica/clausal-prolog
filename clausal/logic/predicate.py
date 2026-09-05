@@ -17,6 +17,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import os
 import re
@@ -115,10 +116,12 @@ def module_source_path(module_dict_or_module):
 def record_clause_source(pred_cls, module_name: str, module_dict: dict) -> None:
     """Note whose load wrote ``pred_cls._clauses``.
 
-    Called at every site that assigns the clause list wholesale (here and the
-    two deferred paths in ``clausal.import_hook``).  Step 3c reads it back to
-    tell a module reloading its own clauses from a module about to destroy
-    another's.
+    Called at the one site that assigns the clause list wholesale
+    (``compiler_v2`` step 4; the two deferred paths in
+    ``clausal.import_hook`` this used to name went with the v1 pipeline).
+    The mutation gate's ownership policy reads it back — it is what tells a
+    module reloading its own clauses from a module about to destroy
+    another's, and it is keyed on the source PATH for that reason.
     """
     pred_cls._clauses_source = (module_name, module_source_path(module_dict))
 
@@ -984,41 +987,77 @@ class PredicateMeta(type):
 
     # ── Clause management ─────────────────────────────────────────────────
 
+    def _mutate(cls, author: str, kind: str, detail: Any = None):
+        """Class-side spelling of the mutation gate (``Database.mutate``).
+
+        The class-side spelling exists because a ``PredicateMeta`` knows which
+        row it faces but not which ``(db, functor, arity)`` that is — an alias
+        binds a class under a name that is not its own — and because the class
+        itself belongs in the write's blast radius: it is passed as *through*,
+        so a write made via a SHARED (``-import_from``'d) class is asked about
+        the row that class currently reads, not only the one this Database
+        holds.
+        """
+        row = cls._row or cls._detached_row()
+        return row.mutate(author, kind, detail, through=cls)
+
+    def _runtime_author(cls) -> str:
+        """``runtime-assert:<module>`` — who a runtime assert/retract made
+        through this class is.  Per WRITE, not per load: the module that
+        asserts a clause is recorded as its author even when another module
+        compiled the predicate (the mutation-gate todo's ``assertz``
+        attribution defect)."""
+        from clausal.logic.database import RUNTIME_AUTHOR_PREFIX  # noqa: PLC0415
+        return f"{RUNTIME_AUTHOR_PREFIX}{cls.__module__}"
+
+    @contextlib.contextmanager
+    def _gated(cls, kind: str, detail: Any = None):
+        """:meth:`_mutate` with the gate's ENTRY refusal translated to
+        ``RuntimeError``.
+
+        The exception CLASS is this channel's, pinned by callers since long
+        before the gate — the drive loop treats a ``RuntimeError`` from a
+        generator as exhaustion, and several tests read it — but the TEXT is
+        the gate's, unedited, because the policy that produced it lives in
+        exactly one place (P3-3 Task 3).  Only the refusal raised by
+        ``__enter__`` is translated; a ``LogicException`` raised by the body
+        is the caller's and passes through untouched.
+        """
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        ctx = cls._mutate(cls._runtime_author(), kind, detail)
+        try:
+            row = ctx.__enter__()
+        except LogicException as exc:
+            raise RuntimeError(str(exc.term.args[1])) from None
+        try:
+            yield row
+        except BaseException as exc:  # noqa: BLE001 — re-raised below
+            if not ctx.__exit__(type(exc), exc, exc.__traceback__):
+                raise
+        else:
+            ctx.__exit__(None, None, None)
+
     def _assertz(cls, clause: Any) -> None:
-        """append clause at end; invalidate compiled dispatch."""
-        if cls._locked:
-            raise RuntimeError(
-                f"Predicate {cls.__name__}/{cls._arity} is locked. "
-                "Use dynamic() to allow runtime assertion."
-            )
-        cls._ensure_clauses().append(clause)
-        cls._dispatch_fn = None
+        """append clause at end; the gate invalidates the compiled dispatch."""
+        with cls._gated("assert", "_assertz") as row:
+            row.ensure_clauses().append(clause)
 
     def _asserta(cls, clause: Any) -> None:
-        """Prepend clause at front; invalidate compiled dispatch."""
-        if cls._locked:
-            raise RuntimeError(
-                f"Predicate {cls.__name__}/{cls._arity} is locked. "
-                "Use dynamic() to allow runtime assertion."
-            )
-        cls._ensure_clauses().insert(0, clause)
-        cls._dispatch_fn = None
+        """Prepend clause at front; the gate invalidates the compiled dispatch."""
+        with cls._gated("assert", "_asserta") as row:
+            row.ensure_clauses().insert(0, clause)
 
     def _retract(cls, head: Any) -> bool:
         """Remove first clause whose head equals head (structural equality).
 
         Returns True if a clause was removed, False if none matched.
         """
-        if cls._locked:
-            raise RuntimeError(
-                f"Predicate {cls.__name__}/{cls._arity} is locked. "
-                "Use dynamic() to allow runtime retraction."
-            )
-        for i, clause in enumerate(cls._clauses):
-            if clause.head == head:
-                del cls._clauses[i]
-                cls._dispatch_fn = None
-                return True
+        with cls._gated("retract", "_retract") as row:
+            clauses = row.clauses
+            for i, clause in enumerate(clauses):
+                if clause.head == head:
+                    del clauses[i]
+                    return True
         return False
 
     # ── Dispatch ──────────────────────────────────────────────────────────
@@ -1075,6 +1114,12 @@ class PredicateMeta(type):
                 # predicate dispatching raw.
                 installed = dispatch.get(key)
                 if installed is None:
+                    # Written to the backing dict rather than through the
+                    # gate (P3-3 Task 3): this is the once-per-goal path, and
+                    # what it stores is the row's OWN recompiled function —
+                    # a ``recompile``, which the policy never refuses.  There
+                    # is no authorship question to ask and no budget here to
+                    # ask one.
                     dispatch[key] = fn
                 else:
                     fn = installed

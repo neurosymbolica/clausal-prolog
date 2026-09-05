@@ -181,7 +181,8 @@ class TestClauseManagement:
 
     def test_assertz_clears_dispatch(self):
         # nv
-        pred_a._dispatch_fn = lambda: None
+        with pred_a._mutate("test", "recompile"):   # the gate, P3-3 Task 3
+            pred_a._dispatch_fn = lambda: None
         pred_a._assertz(Clause(head=pred_a(x=1), body=[]))
         assert pred_a._dispatch_fn is None
 
@@ -204,7 +205,8 @@ class TestClauseManagement:
         # nv
         h = pred_a(x=1)
         pred_a._assertz(Clause(head=h, body=[]))
-        pred_a._dispatch_fn = lambda: None
+        with pred_a._mutate("test", "recompile"):   # the gate, P3-3 Task 3
+            pred_a._dispatch_fn = lambda: None
         pred_a._retract(h)
         assert pred_a._dispatch_fn is None
 
@@ -226,7 +228,8 @@ class TestDispatch:
     def test_get_dispatch_returns_fn(self):
         # nv
         fn = lambda *a: iter([])
-        pred_b._dispatch_fn = fn
+        with pred_b._mutate("test", "recompile"):   # the gate, P3-3 Task 3
+            pred_b._dispatch_fn = fn
         assert pred_b._get_dispatch() is fn
 
     def test_get_dispatch_lazy_recompile(self):
@@ -250,7 +253,8 @@ class TestDispatch:
             calls.append(1)
             return lambda *a: iter([])
 
-        pred_b._dispatch_fn = lambda *a: iter([])
+        with pred_b._mutate("test", "recompile"):   # the gate, P3-3 Task 3
+            pred_b._dispatch_fn = lambda *a: iter([])
         pred_b._lazy_recompile = recompile
         pred_b._assertz(Clause(head=pred_b(x=1), body=[]))
         assert pred_b._dispatch_fn is None
@@ -356,7 +360,8 @@ class TestClassRepr:
 
     def test_repr_compiled(self):
         # nv
-        fib._dispatch_fn = lambda: None
+        with fib._mutate("test", "recompile"):      # the gate, P3-3 Task 3
+            fib._dispatch_fn = lambda: None
         r = repr(fib)
         assert "compiled" in r
         fib._dispatch_fn = None

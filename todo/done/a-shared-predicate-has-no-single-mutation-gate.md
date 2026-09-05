@@ -44,3 +44,34 @@ Whatever the mechanism, provenance must be per-write, not per-load, so
 - The `assertz` attribution gap closed, or explicitly waived with its reason.
 
 Related: [[predicate-identity-is-keyed-on-spelling-not-on-the-class]]
+
+## Resolution (2026-09-05)
+
+**CLOSED** by P3-3 Task 3, the mutation gate: `Database.mutate(functor, arity,
+author=..., kind=...)` (`clausal/logic/database.py`) is a write transaction on
+a `PredRow`; `write_refusal` beside it is the ONE policy — "may this author
+write this row" — and `refusal_error` the ONE refusal.  All four channels of
+the table above go through it:
+
+| channel | routed at | surface exception |
+|---|---|---|
+| `_clauses[:] = …` | `compiler_v2` step 4 | `SyntaxError` (gate text appended to the redefinition diagnostic) |
+| `_dispatch_fn` | `compiler_v2` step 5/6, `compiler._install`, `Database.set_dispatch` | `SyntaxError` at load; `RuntimeError` for a raw install outside a transaction |
+| `_signature`, `_clauses_source` | written inside step 4's transaction | as above |
+| `assertz` | `Database.assertz/asserta/retract`, `PredicateMeta._assertz/_asserta/_retract`, the `assertz/1` builtin family | `LogicException(permission_error(…))`; `RuntimeError` at the class surface |
+
+The second row is closed structurally, not by a check: installing a dispatch
+outside an open transaction RAISES, so a load cannot replace a shared
+predicate's dispatch on the quiet.  The `permission_error` on `Database.assertz`
+is new — that door had no lock check at all.
+
+Provenance is per WRITE: each transaction stamps `row.writes` with its author
+and kind, and a runtime assert writes as `runtime-assert:<module>` rather than
+inheriting the load's authorship, which closes the attribution gap this todo
+recorded.
+
+Tests: `tests/test_mutation_gate.py` (18, including one per channel refused
+from a non-owner with the same text, both dispatch doors, and the provenance
+pair), plus the flipped
+`tests/test_predrow.py::test_low_level_db_assertz_is_refused_on_a_locked_static_predicate`.
+See `.superpowers/sdd/p33-state-relocation/task-3-report.md`.

@@ -626,7 +626,8 @@ class TestLockedDispatchCaching:
         db.assertz(Clause(head=Compound("Bar", (v,)), body=[]))
         compile_predicate_trampoline("Bar", 1, db.clauses_for("Bar", 1), db)
         Bar._locked = True
-        Bar._dispatch_fn = db.get_dispatch("Bar", 1)
+        with Bar._mutate("test", "recompile"):      # the gate, P3-3 Task 3
+            Bar._dispatch_fn = db.get_dispatch("Bar", 1)
         return Bar
 
     def test_disp_key_in_globals_for_locked_callee(self):

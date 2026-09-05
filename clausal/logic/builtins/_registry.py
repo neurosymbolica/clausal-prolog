@@ -424,7 +424,13 @@ def _build_all_builtin_classes() -> None:
             cls = make_predicate(functor, list(fields))
             dispatch_fn = _BUILTINS.get((functor, arity))
             if dispatch_fn is not None:
-                cls._dispatch_fn = dispatch_fn
+                # Through the mutation gate (P3-3 Task 3): a dispatch install
+                # needs an open transaction, builtins included.  The row here
+                # is the class's own private one -- these classes are minted
+                # detached and never join a module Database -- so the write is
+                # unowned, permitted, and stamped to the registry.
+                with cls._mutate("builtin-registry", "recompile"):
+                    cls._dispatch_fn = dispatch_fn
             cls._locked = True
             _BUILTIN_CLASSES[functor] = cls
         else:
@@ -434,7 +440,8 @@ def _build_all_builtin_classes() -> None:
                 cls = make_predicate(f"{functor}", list(fields))
                 dispatch_fn = _BUILTINS.get((functor, arity))
                 if dispatch_fn is not None:
-                    cls._dispatch_fn = dispatch_fn
+                    with cls._mutate("builtin-registry", "recompile"):
+                        cls._dispatch_fn = dispatch_fn
                 cls._locked = True
                 wrapper._add(arity, cls, dispatch_fn)
             _BUILTIN_CLASSES[functor] = wrapper

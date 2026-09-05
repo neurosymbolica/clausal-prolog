@@ -534,7 +534,8 @@ class TestForeignSingleArgumentImplementor:
         # A PredicateMeta: the arity is forwarded and a disagreement refused.
         pair = make_predicate("arcm_routed", ["k", "v"])
         pair._clauses.append(Clause(head=pair(1, 2), body=[]))
-        pair._dispatch_fn = lambda *a: None
+        with pair._mutate("test", "recompile"):    # the gate, P3-3 Task 3
+            pair._dispatch_fn = lambda *a: None
         assert _dispatch_at(pair, 2) is pair._dispatch_fn
         with pytest.raises(PredicateArityMismatchError):
             _dispatch_at(pair, 3)

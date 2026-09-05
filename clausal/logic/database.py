@@ -8,6 +8,7 @@ Components:
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 from collections import namedtuple
 from typing import Any, Callable
@@ -15,10 +16,12 @@ from typing import Any, Callable
 from clausal.terms import And, Call, Compound, KWTerm, LoadName, PyThunk
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
 from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.exceptions import LogicException, permission_error
 from clausal.logic.predicate import (
     PredicateMeta,
     describe_term_identity_mismatch,
     is_term_instance,
+    module_source_path,
     term_field_names,
     term_field_dict,
 )
@@ -111,6 +114,12 @@ class PredRow:
     _unminted_clauses: "list | None" = dataclasses.field(
         default=None, repr=False, compare=False,
     )
+    # Open-transaction depth (P3-3 Task 3).  Non-zero while a
+    # ``Database.mutate`` transaction naming this row is in flight; the
+    # ``dispatch_fn`` setter refuses an install while it is 0, and a nested
+    # ``mutate`` on a row already in a transaction inherits that
+    # transaction's authorization instead of asking the policy again.
+    _txn: int = dataclasses.field(default=0, repr=False, compare=False)
 
     @property
     def clauses(self) -> list:
@@ -190,6 +199,34 @@ class PredRow:
 
     @dispatch_fn.setter
     def dispatch_fn(self, value: "Callable | None") -> None:
+        """INSTALLING a dispatch requires an open ``Database.mutate``
+        transaction (P3-3 Task 3); CLEARING one never does.
+
+        The aliased-import clobber (``adf95a31``) went through this channel
+        while the clause list was guarded: a second module replaced the shared
+        predicate's dispatch and the damage was invisible to a clause count.
+        Requiring the txn is what makes that shape impossible rather than
+        merely refused where somebody remembered to check — the gate has
+        already asked "may this author write this row" by the time control
+        gets here.
+
+        Writing ``None`` is not a clobber: it is invalidation, and a cleared
+        dispatch recompiles from the OWNER's clause list, so it can lose no
+        answers.  It routes to ``invalidate()`` — the one invalidation point —
+        which keeps every ``x._dispatch_fn = None`` spelling in the tree
+        working without a transaction.
+        """
+        if value is None:
+            self.invalidate()
+            return
+        if self._txn == 0:
+            functor, arity = self._key
+            raise RuntimeError(
+                f"dispatch install for {functor}/{arity} outside a mutation "
+                f"transaction (channel: PredRow.dispatch_fn) — write it "
+                f"inside Database.mutate({functor!r}, {arity}, author=..., "
+                f"kind=...)"
+            )
         self._db._dispatch[self._key] = value
 
     @property
@@ -223,20 +260,145 @@ class PredRow:
         """Clear the compiled dispatch function only; ``lazy_recompile`` is left
         intact so the next call can recompile through it.
 
-        This is the ONE invalidation point going forward (enforced by
-        convention this task; the Task 3 mutation gate makes it structural).
+        THE one invalidation point (P3-3 Task 3): the ``dispatch_fn`` setter
+        routes ``= None`` here, ``Database.mutate`` calls it on exit from a
+        transaction that changed the clause list, and the channels that used
+        to invalidate for themselves no longer do.  It writes the backing dict
+        directly — going back through the setter would recurse.
         """
-        self.dispatch_fn = None
+        self._db._dispatch[self._key] = None
 
     def record_write(self, author: str, kind: str, detail: Any = None) -> None:
         """Append a ``WriteStamp`` to ``writes``, keeping only the last 32.
 
-        Diagnostics, not history — nothing in this task calls this yet
-        (Task 3 wires ``Database.mutate`` provenance through it).
+        Diagnostics, not history.  ``Database.mutate`` calls this once per
+        authorized transaction, so provenance is per WRITE rather than per
+        load — the defect the mutation-gate todo names for ``assertz``, whose
+        clauses used to be attributed to whichever module last compiled the
+        predicate.
         """
         self.writes.append(WriteStamp(author, kind, detail))
         if len(self.writes) > _WRITES_CAP:
             del self.writes[: len(self.writes) - _WRITES_CAP]
+
+    def mutate(self, author: str, kind: str, detail: Any = None,
+               through: Any = None):
+        """Row-side spelling of :meth:`Database.mutate`, for callers that hold
+        a row (or a class bound to one) rather than a ``(functor, arity)``
+        pair.  Same gate, same policy — this only spares them reaching into
+        ``_db``/``_key`` to say what they already have."""
+        functor, arity = self._key
+        return self._db.mutate(
+            functor, arity, author=author, kind=kind, detail=detail,
+            through=through,
+        )
+
+
+# ── The mutation policy ────────────────────────────────────────────────────────
+#
+# ONE question — "may this author write this row" — asked in ONE place, by
+# every channel, through ``Database.mutate``.  Before P3-3 Task 3 there were
+# four channels onto a shared predicate and a guard in front of whichever one
+# a bug had last been found behind
+# (``todo/done/a-shared-predicate-has-no-single-mutation-gate.md``).
+#
+# An AUTHOR is a string identifying who is writing:
+#
+#   * a load writes as its module's canonical SOURCE PATH.  The path, never
+#     the module name: one file legitimately compiles under two names in one
+#     process (a dotted ``-import_from`` and ``clausal.testing.
+#     load_clausal_module``'s ``_clausal_test_*``), and keying ownership on
+#     the name made a file refuse to load beside itself
+#     (``todo/done/predicate-identity-is-keyed-on-spelling-not-on-the-class
+#     .md``, instance 1).  ``Database.load_author`` builds it.
+#   * a runtime assert/retract writes as ``runtime-assert:<module>``.
+#     ``Database.runtime_author`` builds it.
+#
+# A KIND says what sort of write it is; the policy branches on it, and it is
+# the only branch in here:
+
+WRITE_LOAD_CLAUSES = "load-clauses"
+WRITE_LOAD_DISPATCH = "load-dispatch"
+WRITE_ASSERT = "assert"
+WRITE_RETRACT = "retract"
+WRITE_RECOMPILE = "recompile"
+
+_LOAD_KINDS = frozenset((WRITE_LOAD_CLAUSES, WRITE_LOAD_DISPATCH))
+_RUNTIME_KINDS = frozenset((WRITE_ASSERT, WRITE_RETRACT))
+
+RUNTIME_AUTHOR_PREFIX = "runtime-assert:"
+
+
+def write_refusal(row: "PredRow", author: str, kind: str) -> "str | None":
+    """THE ownership policy.  Return why *author* may not write *row* with a
+    write of *kind*, or ``None`` when the write is permitted.
+
+    Three rules, in order:
+
+    1. **The owner may always write.**  ``row.source`` records the load that
+       supplied the clauses; a re-compile of that same file — under any module
+       name, from any channel — is that load writing its own predicate again.
+    2. **A runtime write is refused by the lock.**  ``assertz``/``retract``
+       against a LOCKED (static) procedure is the ISO refusal, unchanged in
+       meaning from the per-channel ``_locked`` checks this replaces; it now
+       covers the low-level ``Database.assertz`` door too, which the dual
+       store used to guard by accident (P3-3 Task 2, F3).
+    3. **A load may not overwrite somebody else's predicate.**  This is the
+       clause-clobber refusal: an ``-import_from`` SHARES the exporter's
+       class, so a clause written here would replace, not extend, for every
+       module that can reach it.  Narrowed exactly as the guard it replaces
+       was: a row nobody owns (``source is None`` — the clause-free vocabulary
+       export, whose implementer lives downstream) and an owned row with
+       nothing on it are both free to write.
+
+    ``WRITE_RECOMPILE`` is deliberately never refused: recompiling a dispatch
+    from the clause list the row already holds changes no answers and takes no
+    authorship.  What the dispatch channel has to refuse is a LOAD installing
+    its own dispatch onto another module's predicate — ``WRITE_LOAD_DISPATCH``,
+    rule 3, which is the aliased-import clobber (``adf95a31``).
+    """
+    owner = row.source[1] if row.source else None
+    if owner is not None and author == owner:
+        return None
+    if kind in _RUNTIME_KINDS:
+        if row.locked:
+            # "locked" is the word this refusal has always used for the
+            # static-procedure state, and callers match on it; the rest of
+            # the line is what the gate adds.
+            return ("it is a locked static procedure"
+                    + (f" owned by {owner}" if owner else "")
+                    + " — declare it -dynamic to assert against it")
+        return None
+    if kind in _LOAD_KINDS:
+        if owner is None:
+            return None
+        n = len(row.clauses)
+        if n:
+            return (f"its {n} clause{'' if n == 1 else 's'} "
+                    f"{'is' if n == 1 else 'are'} owned by {owner}")
+        if row.locked:
+            return f"it is a locked predicate owned by {owner}"
+    return None
+
+
+def refusal_error(functor: str, arity: int, author: str, kind: str,
+                  reason: str, channel: "str | None" = None) -> LogicException:
+    """The ONE refusal.  Every channel raises this exception or wraps it; no
+    channel keeps a diagnostic of its own.
+
+    The term is the ISO ``permission_error(modify, static_procedure, F/A)``
+    the ``assertz/1`` family already raised — unchanged, so ``catch/3``
+    programs still catch it — with the context extended to carry the author
+    and the row key, which is what makes one text usable from four channels.
+    It still LEADS with the channel (``assertz/1``, ``retract/1``, ...) where
+    the caller named one, because that is the part of the old context a
+    reader of the error was using to find the call.
+    """
+    return LogicException(permission_error(
+        "modify", "static_procedure", Compound("/", (functor, arity)),
+        f"{channel or kind}: {author} may not write {functor}/{arity}: "
+        f"{reason}",
+    ))
 
 
 # ── Database ───────────────────────────────────────────────────────────────────
@@ -290,7 +452,110 @@ class Database:
         self._rows[key] = new_row
         return new_row
 
-    def assertz(self, clause: Clause) -> None:
+    # ── The mutation gate ───────────────────────────────────────────────────
+
+    def module_name(self) -> str:
+        """This Database's module name, for authorship strings only.
+
+        ``module_dict`` is not always a module dict: a handful of callers
+        construct ``Database("some-name")``, so this reads defensively — an
+        author string is diagnostics, and must never be the thing that raises.
+        """
+        md = self.module_dict
+        if isinstance(md, dict):
+            return md.get("__name__") or "<anonymous>"
+        if isinstance(md, str):
+            return md
+        return "<detached>"
+
+    def load_author(self) -> str:
+        """Author string for a write this Database's own LOAD makes: the
+        canonical source path of its module, which is the identity ownership
+        is keyed on (never the module name — see the policy above)."""
+        md = self.module_dict
+        path = module_source_path(md) if isinstance(md, dict) else None
+        return path or f"load:{self.module_name()}"
+
+    def runtime_author(self) -> str:
+        """Author string for a runtime ``assertz``/``asserta``/``retract``
+        against this Database.  Distinct from :meth:`load_author` on purpose:
+        that distinction IS the per-write provenance the mutation-gate todo
+        asks for."""
+        return f"{RUNTIME_AUTHOR_PREFIX}{self.module_name()}"
+
+    @contextlib.contextmanager
+    def mutate(self, functor: str, arity: int, *, author: str, kind: str,
+               detail: Any = None, through: Any = None):
+        """THE mutation gate: open a write transaction on ``(functor, arity)``
+        and yield its row.  Every channel that mutates predicate state goes
+        through here.
+
+        On entry the ownership policy (:func:`write_refusal`) is asked once,
+        and a refusal raises :func:`refusal_error` — the one refusal, in the
+        one text, for all four channels.  On a clean exit the write is stamped
+        on the row (``author``, ``kind``, ``detail``), and if the clause list
+        changed while no new dispatch was installed, the row is invalidated
+        and any tabled answers abolished — so no channel keeps invalidation
+        code of its own.
+
+        *through* is a ``PredicateMeta`` this write will go through when that
+        class is not (yet) reading this row: an ``-import_from`` SHARES the
+        exporter's class, so writing "our" row through it lands on the
+        exporter's predicate for every module that can reach it.  Its current
+        row is therefore part of this write's blast radius and is asked the
+        same question.  This is also how the ALIASED import is caught, where
+        ``module_dict.get(functor)`` finds nothing (identity todo instance 3):
+        the resolver hands the class over, and the row answers.
+
+        Transactions nest.  A ``mutate`` naming a row that is already inside
+        one inherits that transaction's authorization and stamp — the gate
+        authorizes an operation, not a call — which is what lets the low-level
+        ``assertz`` keep its own default author for direct callers while a
+        load that goes through it is still recorded as the load.
+        """
+        target = self.row(functor, arity, create=True)
+        rows = [target]
+        if through is not None:
+            other = getattr(through, "_row", None)
+            if isinstance(other, PredRow) and other is not target:
+                rows.append(other)
+        opened = [r for r in rows if r._txn == 0]
+        for row in opened:
+            reason = write_refusal(row, author, kind)
+            if reason is not None:
+                raise refusal_error(
+                    *row._key, author, kind, reason,
+                    channel=detail if isinstance(detail, str) else None,
+                )
+        before = [(r, len(r.clauses), r.dispatch_fn) for r in opened]
+        for row in opened:
+            row._txn += 1
+        try:
+            yield target
+        finally:
+            for row in opened:
+                row._txn -= 1
+        for row, n_clauses, dispatch in before:
+            row.record_write(author, kind, detail)
+            if len(row.clauses) == n_clauses or row.dispatch_fn is not dispatch:
+                continue
+            # The clause list moved and nothing installed a replacement
+            # dispatch on the way out: the compiled function no longer matches
+            # the clauses it was compiled from.  This is the ONLY invalidation
+            # in the write paths now — the channels used to each carry their
+            # own copy of it.
+            db, key = row._db, row._key
+            if key in db._dispatch:
+                # Guarded on an EXISTING entry: writing ``_dispatch[key] =
+                # None`` for a never-compiled predicate would announce a
+                # dispatch slot nothing ever filled (pinned by
+                # ``test_retract_builtin_does_not_create_a_dispatch_entry_
+                # it_did_not_find``).
+                row.invalidate()
+            if key in db._tabled:
+                db.abolish_table(*key)
+
+    def assertz(self, clause: Clause, author: str | None = None) -> None:
         """Add clause at end of its predicate's clause list.
 
         P3-3 Task 2: there is no longer a second clause store to mirror onto.
@@ -300,58 +565,52 @@ class Database:
         (The deleted mirror was arity-BLIND: it looked the functor up in
         ``module_dict`` and appended a ``p/1`` clause onto whatever class named
         ``p`` happened to be bound, ``p/3`` included.)
+
+        P3-3 Task 3: this door is gated like the others.  *author* defaults to
+        :meth:`runtime_author`, so a legacy caller still produces a STAMPED
+        write rather than an anonymous one, and the static lock now holds here
+        too — before the gate, this was the one channel a locked predicate's
+        clauses could be changed through (P3-3 Task 2, F3).  Invalidation and
+        table abolition moved into the gate's exit; they are not repeated here.
         """
         functor, arity = head_key(clause.head)
-        key = (functor, arity)
-        row = self.row(functor, arity, create=True)
-        row.ensure_clauses().append(clause)
-        # Invalidate compiled dispatch so lazy recompile triggers on next use.
-        if key in self._dispatch:
-            row.invalidate()
-        # Auto-invalidate tabled answers when a tabled predicate changes.
-        if key in self._tabled:
-            self.abolish_table(functor, arity)
+        with self.mutate(functor, arity, author=author or self.runtime_author(),
+                         kind=WRITE_ASSERT, detail="assertz") as row:
+            row.ensure_clauses().append(clause)
 
-    def asserta(self, clause: Clause) -> None:
+    def asserta(self, clause: Clause, author: str | None = None) -> None:
         """Add clause at front of its predicate's clause list.
 
-        See ``assertz`` for why no class mirror is needed any more.
+        See ``assertz`` for why no class mirror is needed any more, and for
+        what the gate does with *author*.
         """
         functor, arity = head_key(clause.head)
-        key = (functor, arity)
-        row = self.row(functor, arity, create=True)
-        row.ensure_clauses().insert(0, clause)
-        # Invalidate compiled dispatch so lazy recompile triggers on next use.
-        if key in self._dispatch:
-            row.invalidate()
-        # Auto-invalidate tabled answers when a tabled predicate changes.
-        if key in self._tabled:
-            self.abolish_table(functor, arity)
+        with self.mutate(functor, arity, author=author or self.runtime_author(),
+                         kind=WRITE_ASSERT, detail="asserta") as row:
+            row.ensure_clauses().insert(0, clause)
 
-    def retract(self, head: Any) -> bool:
+    def retract(self, head: Any, author: str | None = None) -> bool:
         """Remove first clause whose head structurally equals head.
 
         Returns True if a clause was removed.
 
-        See ``assertz`` for why no class mirror is needed any more.
+        See ``assertz`` for why no class mirror is needed any more, and for
+        what the gate does with *author*.
         """
         functor, arity = head_key(head)
-        key = (functor, arity)
-        clause_list = self._clauses.get(key)
+        clause_list = self._clauses.get((functor, arity))
         if clause_list is None:
             return False
-        for i, clause in enumerate(clause_list):
-            if clause.head == head:
-                del clause_list[i]
-                # Invalidate compiled dispatch.
-                if key in self._dispatch:
-                    row = self.row(functor, arity)
-                    if row is not None:
-                        row.invalidate()
-                # Auto-invalidate tabled answers when a tabled predicate changes.
-                if key in self._tabled:
-                    self.abolish_table(functor, arity)
-                return True
+        if not any(clause.head == head for clause in clause_list):
+            # Nothing to remove: no write, so no transaction and no stamp.
+            return False
+        with self.mutate(functor, arity, author=author or self.runtime_author(),
+                         kind=WRITE_RETRACT, detail="retract") as row:
+            clauses = row.clauses
+            for i, clause in enumerate(clauses):
+                if clause.head == head:
+                    del clauses[i]
+                    return True
         return False
 
     def clauses_for(self, functor: str, arity: int) -> list[Clause]:
@@ -393,11 +652,22 @@ class Database:
         fn: Callable,
         lazy_recompile: Callable | None = None,
     ) -> None:
-        """Store the compiled dispatch function for (functor, arity)."""
+        """Store the compiled dispatch function for (functor, arity).
+
+        P3-3 Task 3: the db-side dispatch door, routed through the gate for
+        the same reason ``assertz`` is — so the write is stamped and lands
+        inside a transaction.  It opens one of its own only when it is not
+        already inside somebody's (``compiler._install`` and ``compiler_v2``
+        step 6 both call it from within theirs), and a ``WRITE_RECOMPILE`` is
+        never refused: installing a dispatch compiled from the row's own
+        clauses takes no authorship.
+        """
         key = (functor, arity)
-        self._dispatch[key] = fn
-        if lazy_recompile is not None:
-            self._lazy_recompile[key] = lazy_recompile
+        with self.mutate(functor, arity, author=self.load_author(),
+                         kind=WRITE_RECOMPILE, detail="set_dispatch") as row:
+            row.dispatch_fn = fn
+            if lazy_recompile is not None:
+                self._lazy_recompile[key] = lazy_recompile
 
     def get_dispatch(self, functor: str, arity: int) -> Callable | None:
         """Return the compiled dispatch function for (functor, arity), or None.
