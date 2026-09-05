@@ -503,3 +503,65 @@ class TestPredicateBuiltinsPoolSplit:
             getattr(deref(n), "__name__", deref(n)) for _ in _call(mod.ChkTag, n)
         ]
         assert results == ["tagged_"]
+
+    def test_synthetic_future_runtime_name_still_raises(self):
+        """Task 8 fix round 1 (Important, review-caught, RULING): the
+        distrust check must cover ANY ``runtime_builtins`` entry, not just
+        the ``simple_ast.__all__`` subset -- otherwise a FUTURE
+        ``INJECTED_RUNTIME_BUILTINS`` addition reproduces the identical
+        ``Add`` leak shape, undelivering the todo's "closes the whole
+        CLASS of bug" promise. Simulated here by injecting a synthetic
+        name directly into ``runtime_builtins`` (fixture-scoped, cleaned
+        up in ``finally``) and confirming a zero-declaration strict module
+        bare-referencing it still raises -- exactly the reviewer's probe."""
+        from clausal.import_hook import runtime_builtins
+
+        name = "P8SyntheticFutureRuntimeName"
+        sentinel = object()
+        assert name not in runtime_builtins  # sanity: genuinely novel
+        runtime_builtins[name] = sentinel
+        try:
+            with pytest.raises(NameError) as exc_info:
+                _load_inline_clausal(
+                    "_p8_synthetic_probe",
+                    "-module(p8_synthetic_probe, [Chk(X)])\n"
+                    f"Chk(X) <- (X == {name})\n",
+                )
+            msg = str(exc_info.value)
+            assert "strict_atoms" in msg
+            assert name in msg
+        finally:
+            del runtime_builtins[name]
+        # The pool must not have been polluted by the (failed) reference.
+        assert name not in predicate_builtins
+
+    def test_declared_atom_collision_does_not_break_unrelated_arithmetic(self):
+        """Task 8 fix round 1 (Finding 3): self-contained regression pinning
+        the seeding-order fix (``predicate_builtins`` first,
+        ``runtime_builtins`` layered on top and WINNING any collision).
+        Without that order, declaring a ``simple_ast.__all__``-colliding
+        spelling as an atom in one module clobbers every OTHER module's
+        ``module_dict`` entry for that name -- breaking that module's own
+        generated arithmetic, which unconditionally needs the real
+        ``simple_ast.Mult`` class to construct ``N * 2``. Previously this
+        protection existed only incidentally, via whatever file order the
+        full suite happened to run in."""
+        _load_inline_clausal(
+            "_p8_seedorder_owner",
+            "-module(p8_seedorder_owner, [P(X)])\n"
+            "-private([Mult])\n"
+            "P(Mult),\n",
+        )
+        assert predicate_builtins["Mult"] == "Mult"
+
+        mod = _load_inline_clausal(
+            "_p8_seedorder_arith",
+            "-module(p8_seedorder_arith, [Times(N, R)])\n"
+            "Times(N, R) <- (R == N * 2)\n",
+        )
+        from clausal.logic.solve import call as _call
+        from clausal.logic.variables import Var, deref
+
+        r = Var()
+        results = [deref(r) for _ in _call(mod.Times, 5, r)]
+        assert results == [10]

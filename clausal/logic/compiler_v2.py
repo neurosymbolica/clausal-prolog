@@ -948,13 +948,27 @@ def _process_bare_atom_refs(
     The fix generalizes the same identity discipline to this second shape:
     distrust an already-bound value that is identical to
     ``runtime_builtins``' entry for that name, unless THIS module's own
-    declared/imported vocabulary vouches for it — but ONLY for the
-    ``_SIMPLE_AST_NODE_NAMES`` subset (the ``simple_ast.__all__`` classes
-    specifically), not all of ``runtime_builtins``: the rest of that dict
-    (``INJECTED_RUNTIME_BUILTINS`` — ``Var``, ``Undefined``, ``Compound``,
-    ...) is a separate, pre-existing, deliberate design decision that those
-    names resolve bare in every module, strict or not, and is unrelated to
-    this todo.
+    declared/imported vocabulary vouches for it.
+
+    Task 8 fix round 1 (RULING, reviewer-caught): round 1 scoped this
+    distrust check to ``_SIMPLE_AST_NODE_NAMES`` (the ``simple_ast.__all__``
+    classes specifically), reasoning that the todo's repro was entirely
+    about that set and that ``INJECTED_RUNTIME_BUILTINS`` entries (``Var``,
+    ``Undefined``, ``Compound``, ...) were a separate, deliberate
+    resolve-everywhere design. The reviewer proved this left the todo's
+    "closes the whole CLASS of bug" promise undelivered: injecting a
+    SYNTHETIC name into ``runtime_builtins`` reproduced the identical
+    ``Add`` leak shape on an instance the narrow allowlist could not have
+    anticipated, because a future ``INJECTED_RUNTIME_BUILTINS`` addition
+    is by construction not in ``simple_ast.__all__``. The rule is now
+    distrust-ANY-``runtime_builtins``-entry, with the resolve-everywhere
+    exception moved to an explicit, reviewed allowlist —
+    ``import_hook.STRICTNESS_EXEMPT_RUNTIME_NAMES`` (currently just
+    ``Undefined``, with its one-line justification there) — so a future
+    runtime binding fails LOUD by default instead of leaking SILENT.
+    ``_SIMPLE_AST_NODE_NAMES`` is deleted: it is fully redundant under this
+    general rule (every ``simple_ast.__all__`` name is, correctly, not in
+    the exemption set).
 
     The collected set is naturally over-broad (it also contains predicate
     functor names and imported-utility names), but that over-collection is
@@ -974,7 +988,7 @@ def _process_bare_atom_refs(
     at package load time.
     """
     from clausal.import_hook import (
-        predicate_builtins, runtime_builtins, _SIMPLE_AST_NODE_NAMES,
+        predicate_builtins, runtime_builtins, STRICTNESS_EXEMPT_RUNTIME_NAMES,
     )
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
 
@@ -1022,35 +1036,37 @@ def _process_bare_atom_refs(
                     and predicate_builtins.get(name) is existing
                 )
                 # P3-1/P3-2 Task 8 (pool split): the SECOND leak shape a
-                # pre-seeded module_dict can carry is a ``simple_ast.__all__``
-                # node class (``Add``, ``Call``, ``Match``, ...) still
-                # sitting under this name, because every module's
-                # ``module_dict`` is seeded with the whole compilation-
-                # support namespace at exec start (see ``import_hook.py``'s
-                # pool-split comment). Same identity discipline as
-                # ``leaked_pool_atom``: this shape is real and generally
-                # useful (it is exactly what lets generated code construct
-                # ``Predicate(...)`` etc.), but it is NOT an atom
+                # pre-seeded module_dict can carry is ANY ``runtime_builtins``
+                # entry (a ``simple_ast.__all__`` node class -- ``Add``,
+                # ``Call``, ``Match``, ... -- or an ``INJECTED_RUNTIME_
+                # BUILTINS`` value) still sitting under this name, because
+                # every module's ``module_dict`` is seeded with the whole
+                # compilation-support namespace at exec start (see
+                # ``import_hook.py``'s pool-split comment). Same identity
+                # discipline as ``leaked_pool_atom``: this shape is real and
+                # generally useful (it is exactly what lets generated code
+                # construct ``Predicate(...)`` etc.), but it is NOT an atom
                 # declaration, so it must not stand in for one — a bare
                 # reference to ``Add`` with zero declarations must still
                 # raise. Closes
                 # todo/done/pythonic-ast-names-leak-into-strict-atom-namespace-2026-09-04.md.
                 #
-                # Scoped to ``_SIMPLE_AST_NODE_NAMES`` specifically, NOT all
-                # of ``runtime_builtins``: the rest of that dict
-                # (``INJECTED_RUNTIME_BUILTINS`` — ``Var``, ``Undefined``,
-                # ``Compound``, ...) is a SEPARATE, pre-existing, deliberate
-                # design decision that those names resolve bare in EVERY
-                # module, strict or not (see the ``Undefined`` note in
-                # ``import_hook.py``) — unrelated to this todo, and NOT to
-                # be disturbed by it.  A first attempt at this fix checked
-                # all of ``runtime_builtins`` and broke
-                # ``clausal/stdlib/kleene.clausal`` (a bare ``Undefined``
-                # reference, by design), cascading into every test that
-                # transitively loads it.
+                # Task 8 fix round 1 (RULING): distrust applies to the WHOLE
+                # of ``runtime_builtins``, not just ``simple_ast.__all__`` --
+                # round 1's narrower scoping left a future ``INJECTED_
+                # RUNTIME_BUILTINS`` addition free to leak the same way
+                # ``Add`` did (reviewer-proved via a synthetic injected
+                # name). The ONE explicit, reviewed exemption
+                # (``import_hook.STRICTNESS_EXEMPT_RUNTIME_NAMES`` --
+                # currently just ``Undefined``, the Kleene K3 truth value,
+                # which must resolve bare in every module by pre-existing
+                # design) carves out names that are deliberately meant to
+                # satisfy bare-atom resolution everywhere; anything NOT in
+                # that frozenset fails loud instead of leaking silent.
                 leaked_runtime_builtin = (
                     not leaked_pool_atom
-                    and name in _SIMPLE_AST_NODE_NAMES
+                    and name in runtime_builtins
+                    and name not in STRICTNESS_EXEMPT_RUNTIME_NAMES
                     and runtime_builtins[name] is existing
                 )
                 if (

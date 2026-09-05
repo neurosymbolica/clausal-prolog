@@ -129,19 +129,19 @@ def _make_intern_atom(module_dict, module_items, module_name):
                 and predicate_builtins.get(name) is existing
             )
             # Task 8 split: the OTHER leak shape a pre-seeded module_dict can
-            # carry is a ``simple_ast.__all__`` node class still sitting
-            # under this name -- e.g. ``{Add: 1}[Add]`` in a module with
-            # zero declarations.  Same discipline as leaked_pool_atom:
-            # distrust it unless THIS module's own declared/imported
-            # vocabulary vouches for the name.  Scoped to
-            # ``_SIMPLE_AST_NODE_NAMES`` specifically, NOT all of
-            # ``runtime_builtins`` -- the rest of that dict
-            # (``INJECTED_RUNTIME_BUILTINS``: ``Var``, ``Undefined``, ...)
-            # is deliberately exempt from strictness; see the module-level
-            # pool-split comment above.
+            # carry is a ``runtime_builtins`` entry still sitting under this
+            # name -- e.g. ``{Add: 1}[Add]`` in a module with zero
+            # declarations.  Same discipline as leaked_pool_atom: distrust
+            # it unless THIS module's own declared/imported vocabulary
+            # vouches for the name, OR the name is one of the explicit,
+            # reviewed exemptions in ``STRICTNESS_EXEMPT_RUNTIME_NAMES``
+            # (Task 8 fix round 1, RULING: the default is distrust-any-
+            # runtime-binding, not just ``simple_ast.__all__`` -- see that
+            # frozenset's docstring for why).
             leaked_runtime_builtin = (
                 not leaked_pool_atom
-                and name in _SIMPLE_AST_NODE_NAMES
+                and name in runtime_builtins
+                and name not in STRICTNESS_EXEMPT_RUNTIME_NAMES
                 and runtime_builtins[name] is existing
             )
             if not (leaked_pool_atom or leaked_runtime_builtin) or name in local_names:
@@ -282,21 +282,6 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
 # rebinds its own declared names, regardless of what seeding left there.
 runtime_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all__}
 
-# The subset of ``runtime_builtins`` the strictness check's "already
-# resolved" test must distrust (fix round 1, review-caught): ONLY the
-# ``simple_ast.__all__`` AST-node classes (``Add``, ``Call``, ``Match``,
-# ...) -- the todo's repro and observation are entirely about this set. The
-# REST of ``runtime_builtins`` (``INJECTED_RUNTIME_BUILTINS`` below: ``Var``,
-# ``Compound``, ``Undefined``, ...) is a SEPARATE, pre-existing, deliberate
-# design decision -- see the ``Undefined`` note a few lines down -- that
-# those specific names resolve bare in EVERY module, including
-# ``-strict_atoms`` ones, with NO declaration required.  That invariant
-# predates this todo, is unrelated to the leak it closes, and must not be
-# disturbed: a first attempt at this fix treated all of ``runtime_builtins``
-# as distrusted, which broke ``clausal/stdlib/kleene.clausal`` (a bare
-# ``Undefined`` reference, by design) and cascaded into every test that
-# transitively loads it.
-_SIMPLE_AST_NODE_NAMES = frozenset(simple_ast.__all__)
 # '$'-prefixed names cannot be typed as normal Python identifiers, so user code
 # cannot accidentally shadow them.  Do not remove the '$' prefix.
 # Note: $define_predicate and $assert_fact are set per-module in exec_module
@@ -324,6 +309,38 @@ _SIMPLE_AST_NODE_NAMES = frozenset(simple_ast.__all__)
 from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
 runtime_builtins.update(INJECTED_RUNTIME_BUILTINS)
 runtime_builtins["$unterminated_fact_error"] = _unterminated_fact_error
+
+# Task 8 fix round 1 (RULING, reviewer-caught): the strictness check's
+# "already resolved" test must distrust ANY ``runtime_builtins`` entry, not
+# just the ``simple_ast.__all__`` subset (fix round 1's ``_SIMPLE_AST_
+# NODE_NAMES``, now DELETED as redundant under this general rule) -- the
+# reviewer proved the narrower scoping left the todo's "closes the whole
+# CLASS of bug" promise undelivered by injecting a synthetic name into
+# ``runtime_builtins`` and watching a zero-declaration strict module
+# resolve it clean, the identical ``Add`` shape on an instance the narrow
+# allowlist could not have anticipated.  A FUTURE ``INJECTED_RUNTIME_
+# BUILTINS`` addition must fail LOUD (an undeclared-atom ``NameError``,
+# prompting whoever added it to consider whether it belongs here) rather
+# than leak SILENT into the atom vocabulary the way ``simple_ast.__all__``
+# names did.
+#
+# This frozenset is the ONE, explicit, reviewed escape hatch: every entry
+# is a deliberate decision that this specific runtime name may satisfy
+# bare-atom resolution in EVERY module, strict or not, with no declaration
+# required.  Adding a name here is a judgment call that needs its own
+# one-line justification, not a side effect of adding it to
+# ``INJECTED_RUNTIME_BUILTINS``.
+STRICTNESS_EXEMPT_RUNTIME_NAMES = frozenset({
+    # The Kleene (K3) third truth value.  Pre-existing, deliberate design
+    # (see the docstring note above): a real binding, not a minted atom,
+    # so it must resolve in every module including ``-strict_atoms`` ones
+    # with process-wide identity.  Task 8 fix round 1 (review-caught):
+    # narrowing the distrust check to ``simple_ast.__all__`` only (rather
+    # than exempting this name explicitly) broke ``clausal/stdlib/
+    # kleene.clausal`` (a bare ``Undefined`` reference), cascading into
+    # ~163 unrelated test failures across files that transitively load it.
+    "Undefined",
+})
 
 # The GLOBAL ATOM pool (§1b/R2) — see the module-level comment above.  Starts
 # empty; ``compiler_v2._process_declarations``/``_process_bare_atom_refs`` and

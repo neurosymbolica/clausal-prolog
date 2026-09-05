@@ -772,16 +772,29 @@ class TestGlobalAtom:
         class -- see
         todo/done/pythonic-ast-names-leak-into-strict-atom-namespace-2026-09-04.md.
         Seed the pool directly here instead, the way a real declaration or
-        an earlier ``global_atom/2`` call would."""
+        an earlier ``global_atom/2`` call would.
+
+        Task 8 fix round 1 (Finding 2, review-caught): the first rewrite
+        seeded the pool with ``predicate_builtins[name] = name`` -- the
+        IDENTICAL value a fresh mint would ALSO produce
+        (``setdefault(name, name)``), so the assertion passed identically
+        whether the implementation correctly returned the existing entry
+        OR blindly re-minted/overwrote it (the reviewer proved this by
+        substituting a blind-overwrite implementation and watching the
+        test stay green). The marker below is deliberately DISTINCT from
+        ``name`` so "don't overwrite an existing entry" is actually
+        exercised: a blind-overwrite bug would replace it with ``name``
+        itself and this test would then, correctly, fail."""
         # nv
         from clausal.import_hook import predicate_builtins
         name = "_test_global_atom_preseeded_xyz"
-        predicate_builtins.setdefault(name, name)
-        pre_existing = predicate_builtins[name]
+        marker = f"__preseeded_marker_for_{name}__"
+        predicate_builtins[name] = marker
         out = Var()
         results = _global_atom_call(name, out)
         assert len(results) == 1
-        assert results[0][1] is pre_existing
+        assert results[0][1] is marker
+        assert results[0][1] != name
 
     def test_guard_succeeds_when_atom_matches(self):
         """(+name, +atom) — succeeds iff atom IS the global class."""

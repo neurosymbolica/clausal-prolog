@@ -127,18 +127,38 @@ was fixed too) both gained a second "leaked" shape alongside Task 7's
 leaked-pool-atom check: an already-bound value that is identical to
 `runtime_builtins`'s own entry for that name is now distrusted the same
 way, unless the module's own declared/imported vocabulary
-(`_locally_declared_names`) vouches for it -- but this check is scoped to
-`_SIMPLE_AST_NODE_NAMES` (`frozenset(simple_ast.__all__)`), NOT all of
-`runtime_builtins`. Fix round 1 checked the whole dict and broke
-`clausal/stdlib/kleene.clausal`: it bare-references `Undefined` (the
-Kleene K3 truth value) with zero declarations, which is a SEPARATE,
-pre-existing, deliberate design decision (`import_hook.py`'s own comment:
-"`Undefined` ... resolves in every module including `-strict_atoms` ones
-with process-wide identity") that predates this todo and has nothing to
-do with the leak -- `Undefined`/`Var`/`Compound`/... come from
-`INJECTED_RUNTIME_BUILTINS`, not `simple_ast.__all__`, and the fix must
-distinguish the two. Caught by the Task 8 full-suite gate (163 new
-failures, all one root cause, all fixed by narrowing the check).
+(`_locally_declared_names`) vouches for it, OR the name is one of the
+explicit, reviewed exemptions in `import_hook.STRICTNESS_EXEMPT_RUNTIME_
+NAMES` (currently just `Undefined` -- the Kleene K3 truth value, a
+pre-existing, deliberate design decision that it resolves bare in every
+module, strict or not, unrelated to this todo).
+
+**Delivered contract**: the distrust check covers the WHOLE of
+`runtime_builtins` by default -- not just the `simple_ast.__all__` subset
+-- so a bare reference to ANY compilation-support name (a current
+`simple_ast` node class, or a FUTURE `INJECTED_RUNTIME_BUILTINS` addition)
+fails LOUD with the strict-atoms diagnostic unless it is either declared
+by the referencing module or explicitly exempted. This closes the todo's
+stated goal ("the whole CLASS of ... bug at once, not just this
+instance") precisely: fix round 1 scoped the check to `_SIMPLE_AST_NODE_
+NAMES` (`frozenset(simple_ast.__all__)`) instead, reasoning that was the
+todo's entire repro surface and that `INJECTED_RUNTIME_BUILTINS` entries
+were a separate exemption -- reviewer round 1 proved this left a gap by
+injecting a SYNTHETIC name into `runtime_builtins` and reproducing the
+identical `Add` leak on an instance the narrow allowlist could not have
+anticipated (a future runtime binding, by construction, is never in
+`simple_ast.__all__`). `_SIMPLE_AST_NODE_NAMES` is deleted -- fully
+redundant now that the default is distrust-everything-except-the-
+allowlist rather than distrust-only-this-allowlist.
+
+Fix round 1 (implementing the general rule the FIRST time, before the
+reviewer's ruling) checked the whole dict with NO exemption at all and
+broke `clausal/stdlib/kleene.clausal` (a bare `Undefined` reference),
+cascading into ~163 unrelated test failures across every file that
+transitively loads it -- caught by the Task 8 full-suite gate. That is
+exactly what `STRICTNESS_EXEMPT_RUNTIME_NAMES` now exists to prevent: one
+explicit, reviewed, documented allowlist entry per genuinely-deliberate
+resolve-everywhere name, rather than an ad hoc scope exclusion.
 
 The todo's own repro now raises `strict_atoms: undeclared atom 'Add' ...`;
 a module that *declares* the colliding spelling (`-private([Sub])`, e.g.)
@@ -152,11 +172,21 @@ data functors through `module_dict` directly rather than the shared pool
 cannot leak into, or be affected by, any other module.
 
 Tests: `tests/test_strict_atoms_default.py::TestPredicateBuiltinsPoolSplit`
-(6 tests -- todo repro, declare-and-unify control, both load orders,
-dict-key path, the §7.2 functor-collision answer, and an existing
-f-string/arith fixture regression check). Full suite: failed-name diff
-against `.superpowers/sdd/p32-cell-default-flip/baseline-failed-names.txt`
-is empty modulo the pre-existing solver-dependency/doc-snippet/C17-perf
-ledger and the newly-added test names. See
+(8 tests -- todo repro, declare-and-unify control, both load orders,
+dict-key path, the §7.2 functor-collision answer, an existing
+f-string/arith fixture regression check, the reviewer's synthetic-
+runtime-name probe (Finding 1), and a self-contained seeding-order pin
+(Finding 3: declaring `Mult` as an atom in one module must not break an
+unrelated module's own multiplication)). Plus
+`tests/test_term_inspection.py::TestGlobalAtom::
+test_existing_pre_seeded_returned`, rewritten (Finding 2) to seed the pool
+with a value distinct from a fresh mint's output, so "return the existing
+entry, don't overwrite it" is actually exercised (verified by temporarily
+reintroducing a blind-overwrite bug and confirming the test catches it).
+Full suite: failed-name diff against
+`.superpowers/sdd/p32-cell-default-flip/baseline-failed-names.txt` is
+empty modulo the pre-existing solver-dependency/doc-snippet/C17-perf
+ledger and the newly-added test names, on two consecutive runs with
+identical failure sets. See
 `.superpowers/sdd/p32-cell-default-flip/task-8-report.md` for full
 evidence.
