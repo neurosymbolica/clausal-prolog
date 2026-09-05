@@ -160,8 +160,16 @@ def _valid_functor_slot(slot0: Any) -> bool:
 
     *slot0* is read RAW by the caller (see ``_cell_shape`` below) -- this
     function never derefs.
+
+    EXACT type, not ``isinstance`` (Task 5 review fix round 1): matches
+    the exact-type convention the rest of the post-Task-4 cell machinery
+    already committed to (``arg_index._arg_to_index_key``,
+    ``_runtime_arg_key``/``_is_deeply_ground_walk``, and this task's own
+    brief-mandated ``_helpers._cell_functor``, which spells
+    ``type(term[0]) is str`` directly). No test in this suite constructs a
+    ``str`` subclass as a functor.
     """
-    return isinstance(slot0, str) or slot0 is TUPLE_TAG
+    return type(slot0) is str or slot0 is TUPLE_TAG
 
 
 def _cell_shape(x: Any) -> tuple[bool, Any]:
@@ -170,10 +178,13 @@ def _cell_shape(x: Any) -> tuple[bool, Any]:
     §1b/Task 5: NO deref, ever, on this recognition path -- the bridge's
     slot-0-Var (higher-order functor) support is deprecated precisely
     because it required one (see the module docstring). ``is_cell`` is
-    defined in terms of this; the funnel accessors in
-    ``clausal/logic/builtins/_helpers.py`` import this directly (rather
-    than calling ``is_cell`` and then re-inspecting slot 0 themselves) so
-    a single top-level accessor call inspects slot 0 exactly once.
+    defined in terms of this; several other modules import this directly
+    to test "is this cell-shaped" without a second read of slot 0 (see the
+    NOTE above ``__all__`` for the full, current list of importers) --
+    ``clausal/logic/builtins/_helpers.py``'s own ``_cell_functor`` is the
+    one exception, inlining an equivalent str-only check directly instead
+    of importing this, since it needs different "compound" semantics
+    (excluding ``TUPLE_TAG``).
     """
     if type(x) is not tuple or len(x) < 1:
         return False, None
@@ -413,6 +424,12 @@ def _try_intern(root: tuple) -> tuple[bool, Any]:
         if action == "finish":
             raw_functor = node[0]
             functor = deref(raw_functor)
+            # Dead post-§1b (Task 5 review, optional courtesy note): every
+            # `node` reaching this walk already passed `is_cell`, which now
+            # guarantees a str/TUPLE_TAG functor -- `is_var(functor)` can
+            # never be True here any more. Left in place rather than
+            # removed: harmless, and removing it is out of this task's
+            # scope (Task 4's interning walk, gated OFF by default).
             if is_var(functor):
                 result_of[node_id] = _NOT_GROUND
                 continue
@@ -459,6 +476,7 @@ def _try_intern(root: tuple) -> tuple[bool, Any]:
             stack.append(("finish", node))
             raw_functor = node[0]
             functor = deref(raw_functor)
+            # Dead post-§1b, same reasoning as the "finish" branch above.
             if is_var(functor):
                 continue  # "finish" will re-detect this cheaply and stop
             for a in node[1:]:

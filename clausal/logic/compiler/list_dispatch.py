@@ -16,9 +16,12 @@ module (``_carries_an_uninjected_head_literal``, the raw-cell gate in
 ``cells._cell_shape`` rather than re-spelling ``type(x) is tuple and
 (type(x[0]) is str or x[0] is TUPLE_TAG)`` locally — one home for the
 shape discipline, shared with ``head_match``'s live-cell branch and
-``globals_env._walk_head``'s cell branch. No behavior change: a Var
-functor is no longer part of the recognized domain at all (§1b), so this
-was always a pure str-or-``TUPLE_TAG`` test even before the fold.
+``globals_env._walk_head``'s cell branch. No behavior change: ``cells.
+_valid_functor_slot`` is EXACT-type (``type(slot0) is str``, review fix
+round 1 -- matches this module's own two ``type(term[0]) is str`` sites
+that predated the fold), so the consolidation is byte-for-byte equivalent
+to every one of this module's original spellings, not merely equivalent
+in the cases this suite happens to exercise.
 """
 
 from __future__ import annotations
