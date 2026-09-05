@@ -617,26 +617,89 @@ class _ClausalToProlog:
         return PModule(tuple(self._items))
 
     def _convert_stmt(self, stmt) -> PItem | list[PItem] | None:
-        """Convert a top-level statement to PItem(s)."""
+        """Convert a top-level statement to PItem(s).
+
+        FAIL-CLOSED NET: every exit path below either returns a PItem(s) it
+        produced, or calls ``_add_warning`` before returning None. There is
+        no bare ``return None`` left in this method — an unrecognized
+        top-level shape must never vanish silently (strict mode is the only
+        thing standing between a translation bug and a corpus that looks
+        clean while dropping clauses; see the 2026-09 rule-drop incident).
+        """
         if not isinstance(stmt, python_ast.Expr):
+            self._add_warning(
+                "unsupported top-level statement (not an expression): "
+                f"{type(stmt).__name__}"
+            )
             return None
 
         value = stmt.value
 
-        # -directive(...): unary minus on a call
-        if (isinstance(value, python_ast.UnaryOp)
-                and isinstance(value.op, python_ast.USub)
-                and isinstance(value.operand, python_ast.Call)
-                and isinstance(value.operand.func, python_ast.Name)):
-            return self._convert_directive(value.operand)
+        # -directive(...): unary minus on a call. Directives are a fully
+        # recognized construct that can legitimately emit nothing (a
+        # dialect-gated skip, e.g. GNU Prolog has no module system; or
+        # -private(...), which has no Prolog emission at all) — so they
+        # are dispatched here, before the fail-closed net below, and are
+        # exempt from its warning.
+        if isinstance(value, python_ast.UnaryOp) and isinstance(value.op, python_ast.USub):
+            operand = value.operand
+            if isinstance(operand, python_ast.Call) and isinstance(operand.func, python_ast.Name):
+                return self._convert_directive(operand)
+            # -strict_atoms / -implicit_atoms: a parenless, argument-less
+            # directive (UnaryOp(USub(Name)), not Call) — engine-only atom-
+            # resolution bookkeeping with no Prolog equivalent, same
+            # legitimately-silent category as -private(...) above. 523
+            # corpus sites (2026-09 rule-drop census) would otherwise all
+            # start refusing under strict once the fail-closed net below
+            # stopped exempting unrecognized UnaryOp shapes.
+            if isinstance(operand, python_ast.Name):
+                return self._convert_bare_directive(operand.id)
 
-        # Trailing-comma fact: Foo(1, 2),
-        if (isinstance(value, python_ast.Tuple)
-                and len(value.elts) == 1
-                and isinstance(value.elts[0], python_ast.Call)):
-            head = self._convert_head(value.elts[0])
-            return PClause(head)
+        # Trailing-comma statement(s): Foo(1, 2), or a comma-joined run of
+        # facts/rules sharing one Python statement: Foo(1, 2), Bar(x) <- (...),
+        # A 1-tuple is the common case (one fact, or — the bug this comment
+        # marks the fix for — one `<-` RULE, both followed by the ordinary
+        # fact-separator comma); a multi-element tuple is the same AST shape
+        # for several comma-joined statements on one line. Every element is
+        # dispatched through _convert_clause_value so a rule in ANY tuple
+        # position translates identically to an unwrapped rule.
+        if isinstance(value, python_ast.Tuple):
+            items: list[PItem] = []
+            for elt in value.elts:
+                item = self._convert_clause_value(elt)
+                if item is None:
+                    self._add_warning(
+                        "unsupported statement in comma group: "
+                        f"{python_ast.unparse(elt)}"
+                    )
+                    continue
+                if isinstance(item, list):
+                    items.extend(item)
+                else:
+                    items.append(item)
+            return items or None
 
+        item = self._convert_clause_value(value)
+        if item is not None:
+            return item
+
+        self._add_warning(
+            f"unsupported top-level statement: {python_ast.unparse(value)}"
+        )
+        return None
+
+    def _convert_clause_value(self, value) -> PItem | list[PItem] | None:
+        """Convert one fact/rule/DCG-rule expression.
+
+        Used both for a bare top-level statement and for each element of a
+        comma-joined statement tuple (see _convert_stmt) — the same
+        dispatch either way, so a rule's position relative to a trailing
+        comma or sibling statements never changes how it translates.
+
+        Returns None when *value* matches none of the recognized clause
+        shapes; the caller is responsible for warning in that case (this
+        method never emits nothing without a caller-visible signal).
+        """
         # Bare fact (no trailing comma): Foo(1, 2)
         if isinstance(value, python_ast.Call):
             head = self._convert_head(value)
@@ -650,6 +713,7 @@ class _ClausalToProlog:
                 head = self._convert_head(head_ast)
                 body = self._convert_expr(body_ast, goal_position=True)
                 return PClause(head, body)
+            return None
 
         # head >> body (DCG rule — RShift)
         if (isinstance(value, python_ast.BinOp)
@@ -671,6 +735,22 @@ class _ClausalToProlog:
         if depth > 0 or len(compare.ops) > 1:
             return None
         return compare.left, usub_node.operand
+
+    def _convert_bare_directive(self, name: str) -> PItem | list[PItem] | None:
+        """Convert a parenless, argument-less directive: ``-strict_atoms``.
+
+        These are clausal-engine-only bookkeeping (atom-resolution mode)
+        with no Prolog equivalent — always a legitimate no-op, not an
+        unrecognized shape, so this does NOT fall through to the
+        fail-closed net's warning. An actually-unknown bare directive
+        still warns below: only the names the engine itself recognizes
+        (clausal/reflection.py's StrictAtomsDeclaration / the mutually-
+        exclusive -implicit_atoms) are exempted.
+        """
+        if name in ("strict_atoms", "implicit_atoms"):
+            return None
+        self._add_warning(f"-{name}")
+        return None
 
     def _convert_directive(self, call: python_ast.Call) -> PItem | list[PItem] | None:
         """Convert a -directive(...) call."""
