@@ -130,6 +130,145 @@ class TestListing:
         assert "2 clause(s)" in output
 
 
+# ── Golden: byte-identical output for a class argument (P3-3 Task 8) ─────────
+#
+# Pinned at BASE (commit 4687fc18), before ``listing/1`` moved from a class-
+# reading (``val._clauses`` off a ``PredicateMeta``) builtin to a db-receiving
+# one that also accepts a bare str atom and a ``Name/Arity`` cell (P3-3 Task
+# 8's new (d)/(e) argument shapes). The class-argument path must keep
+# printing this EXACT text — not just "contains the right substrings" like
+# the tests above — across that migration.
+
+
+class TestListingClassArgumentGoldenOutput:
+    def test_multi_clause_class_output_is_byte_identical(self):
+        color._clauses = []
+        color._locked = False
+        color._assertz(Clause(color("red", "#ff0000"), []))
+        color._assertz(Clause(color("green", "#00ff00"), []))
+        color._assertz(Clause(color("blue", "#0000ff"), []))
+        output = _capture_listing(color)
+        assert output == (
+            "% color/2 — 3 clause(s)\n"
+            "color('red', '#ff0000').\n"
+            "color('green', '#00ff00').\n"
+            "color('blue', '#0000ff').\n"
+        )
+
+
+# ── str atom / Name-Arity indicator arguments (P3-3 Task 8, NEW) ─────────────
+
+
+def _run_listing(dispatch, pred):
+    """Drive an already-resolved ``listing/1`` dispatch fn and return stdout."""
+    trail = Trail()
+    buf = io.StringIO()
+    old = sys.stdout
+    sys.stdout = buf
+    try:
+        solutions(StepGenerator(dispatch, None, None, None, pred, trail))
+    finally:
+        sys.stdout = old
+    return buf.getvalue()
+
+
+def _db_with_fact(name, arity):
+    from clausal.logic.database import Database
+
+    db = Database()
+    head = Compound(name, tuple(Var() for _ in range(arity)))
+    db.assertz(Clause(head, []))
+    return db
+
+
+class TestListingStrAtomArgument:
+    """(d): a bare str atom names a predicate; ``db.row(name, 0)`` backs it."""
+
+    def test_str_atom_lists_the_zero_arity_predicate_by_name(self):
+        db = _db_with_fact("greet", 0)
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        output = _run_listing(dispatch, "greet")
+        assert "greet/0" in output
+        assert "1 clause(s)" in output
+
+    def test_str_atom_with_no_db_raises_type_error(self):
+        dispatch = get_builtin_dispatch("listing", 1, None)
+        with pytest.raises(LogicException):
+            _run_listing(dispatch, "greet")
+
+    def test_str_atom_naming_an_absent_predicate_raises_existence_error(self):
+        from clausal.logic.database import Database
+
+        db = Database()
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(dispatch, "no_such_predicate")
+        err = exc_info.value.term
+        # error(existence_error(procedure, Compound("/", (name, arity))), _)
+        assert isinstance(err, Compound) and err.functor == "error"
+        inner = err.args[0]
+        assert isinstance(inner, Compound) and inner.functor == "existence_error"
+        assert inner.args[0] == "procedure"
+        indicator = inner.args[1]
+        assert isinstance(indicator, Compound) and indicator.functor == "/"
+        assert indicator.args == ("no_such_predicate", 0)
+
+
+class TestListingNameArityIndicatorArgument:
+    """(e): a ``Name/Arity`` indicator, either the default cell shape a
+    user-written ``foo/2`` compiles to, or the engine-internal ``Compound``
+    shape other builtins in this package build."""
+
+    def test_name_arity_cell_lists_the_predicate(self):
+        db = _db_with_fact("pt", 2)
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        output = _run_listing(dispatch, ("/", "pt", 2))
+        assert "pt/2" in output
+        assert "1 clause(s)" in output
+
+    def test_name_arity_compound_lists_the_predicate(self):
+        db = _db_with_fact("pt", 2)
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        output = _run_listing(dispatch, Compound("/", ("pt", 2)))
+        assert "pt/2" in output
+        assert "1 clause(s)" in output
+
+    def test_name_arity_cell_with_no_db_raises_type_error(self):
+        dispatch = get_builtin_dispatch("listing", 1, None)
+        with pytest.raises(LogicException):
+            _run_listing(dispatch, ("/", "pt", 2))
+
+    def test_name_arity_indicator_naming_an_absent_predicate_raises_existence_error(self):
+        from clausal.logic.database import Database
+
+        db = Database()
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(dispatch, ("/", "no_such_predicate", 3))
+        err = exc_info.value.term
+        assert isinstance(err, Compound) and err.functor == "error"
+        inner = err.args[0]
+        assert inner.functor == "existence_error"
+        indicator = inner.args[1]
+        assert indicator.args == ("no_such_predicate", 3)
+
+
+class TestListingSpecializedAliasByIndicator:
+    """P3-3 Task 7's ``-specialize`` alias (``SolveCountNatnum/2``, 3
+    clauses — Task 7's own review confirmed the row) listed through its
+    ``Name/Arity`` cell, exercising ``listing/1`` against a REAL module
+    database rather than a hand-built one."""
+
+    def test_specialize_natnum_alias_lists_via_name_arity_cell(self):
+        import tests.fixtures.specialize_natnum as specialize_natnum
+
+        db = specialize_natnum.__clausal_module__.db
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        output = _run_listing(dispatch, ("/", "SolveCountNatnum", 2))
+        assert "SolveCountNatnum/2" in output
+        assert "3 clause(s)" in output
+
+
 # ── _format_clause_head / Compound heads ─────────────────────────────────────
 #
 # functor_arity() (clausal/logic/builtins/_helpers.py) treats a Compound as a

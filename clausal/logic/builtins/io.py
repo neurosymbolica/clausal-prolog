@@ -8,11 +8,11 @@ import sys as _sys
 from clausal.logic.atoms import demangle_for_display, is_mangled
 from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.terms import term_str as _term_str, term_pformat as _term_pformat
+from clausal.terms import term_str as _term_str, term_pformat as _term_pformat, Compound
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, term_field_names_of_class
-from clausal.logic.exceptions import LogicException, type_error
+from clausal.logic.exceptions import LogicException, type_error, existence_error
 
-from clausal.logic.builtins._registry import _builtin, BuiltinPredicate
+from clausal.logic.builtins._registry import _builtin, _db_builtin, _DB_BUILTINS, BuiltinPredicate
 
 
 def _format_term_for_io(val):
@@ -184,40 +184,112 @@ def _format_clause(clause):
 
 # ── listing/1 ────────────────────────────────────────────────────────────────
 
-@_builtin("listing", 1)
-def _listing__1(pred, trail, k):
-    """listing(Pred) — print all clauses of a predicate to stdout.
 
-    Accepts a PredicateMeta class or instance (resolves to class).
+def _as_name_arity_indicator(val):
+    """Recognize *val* as a ``Name/Arity`` predicate indicator, either
+    representation: the CELL a user-written ``foo/2`` compiles to by default
+    since P3-2 (``('/', 'foo', 2)`` — see ``clausal/logic/cells.py``), or the
+    engine-internal ``Compound("/", (functor, arity))`` shape other builtins
+    in this package (``database_ops.py``) build and consume.
+
+    Returns ``(name, arity)`` or ``None`` if *val* is not one of those two
+    shapes with a str name and a non-bool int arity.
     """
-    val = deref(pred)
+    if type(val) is tuple and len(val) == 3 and val[0] == "/":
+        name, arity = val[1], val[2]
+    elif isinstance(val, Compound) and val.functor == "/" and len(val.args) == 2:
+        name, arity = val.args
+    else:
+        return None
+    if not isinstance(name, str) or not isinstance(arity, int) or isinstance(arity, bool):
+        return None
+    if arity < 0:
+        return None
+    return name, arity
 
-    # Accept an instance → resolve to its class
-    if is_term_instance(val):
-        val = type(val)
 
-    # Must be a PredicateMeta class
-    if not isinstance(val, PredicateMeta):
-        # Check if it's a BuiltinPredicate
-        if isinstance(val, BuiltinPredicate):
+@_db_builtin("listing", 1, fields=("pred",))
+def _make_listing__1(db):
+    """Factory for ``listing/1`` — captures *db* so a bare predicate-name str
+    or a ``Name/Arity`` indicator can be resolved to a row.
+
+    P3-3 Task 8: migrated off a bare class-only builtin.  The class/instance/
+    ``BuiltinPredicate`` argument shapes need no database at all — a
+    ``PredicateMeta``'s ``_clauses`` has read through its row since Task 2 —
+    so ``db=None`` (the db-less path ``get_builtin_dispatch("listing", 1,
+    None)`` and ``tests/test_listing.py`` exercise) keeps working for those
+    three exactly as before.  The two NEW shapes below (a bare str atom, a
+    ``Name/Arity`` indicator) genuinely need a database to resolve against,
+    and raise the pre-existing ``type_error`` when there isn't one.
+    """
+    def _listing__1(pred, trail, k):
+        """listing(Pred) — print all clauses of a predicate to stdout.
+
+        Accepts:
+          - a PredicateMeta class or instance (resolves to class)
+          - a BuiltinPredicate (prints the "% name/arity — builtin" line)
+          - a bare str atom naming a predicate (NEW, P3-3 Task 8)
+          - a ``Name/Arity`` indicator, cell or Compound (NEW, P3-3 Task 8)
+        """
+        val = deref(pred)
+
+        # Recognize a Name/Arity indicator (cell or Compound) BEFORE the
+        # generic term-instance resolution below: ``Compound`` is (perhaps
+        # surprisingly) a ``@dataclass``, so ``is_term_instance()`` would
+        # otherwise swallow a ``Compound("/", (name, arity))`` indicator and
+        # report it as a bare class with no fields of its own.
+        indicator = None if isinstance(val, str) else _as_name_arity_indicator(val)
+
+        # Accept an instance → resolve to its class
+        if indicator is None and not isinstance(val, str) and is_term_instance(val):
+            val = type(val)
+
+        if isinstance(val, PredicateMeta):
+            name = val.__name__
+            arity = len(term_field_names_of_class(val))
+            clauses = val._clauses
+        elif isinstance(val, BuiltinPredicate):
             name = val._functor
             arity = val._arity
             print(f"% {name}/{arity} — builtin")
             yield None
             return
-        raise LogicException(type_error("predicate", val, "listing/1"))
+        else:
+            if isinstance(val, str):
+                name, arity = val, 0
+            elif indicator is not None:
+                name, arity = indicator
+            else:
+                raise LogicException(type_error("predicate", val, "listing/1"))
+            if db is None:
+                raise LogicException(type_error("predicate", val, "listing/1"))
+            row = db.row(name, arity, create=False)
+            if row is None:
+                raise LogicException(existence_error(
+                    "procedure", Compound("/", (name, arity)), "listing/1",
+                ))
+            clauses = row.clauses
 
-    name = val.__name__
-    arity = len(term_field_names_of_class(val))
-    clauses = val._clauses
+        if not clauses:
+            print(f"% {name}/{arity} — no clauses")
+        else:
+            print(f"% {name}/{arity} — {len(clauses)} clause(s)")
+            for clause in clauses:
+                print(_format_clause(clause))
+        yield None
+    return _listing__1
 
-    if not clauses:
-        print(f"% {name}/{arity} — no clauses")
-    else:
-        print(f"% {name}/{arity} — {len(clauses)} clause(s)")
-        for clause in clauses:
-            print(_format_clause(clause))
-    yield None
+
+# ``_db_optional``: the db-less path (``get_builtin_dispatch("listing", 1,
+# None)``) unconditionally calls the stored factory with ``db=None`` already
+# (see ``get_builtin_dispatch``), so this mainly keeps
+# ``_stateless_dispatch``/``BuiltinPredicate._get_dispatch()`` consistent for
+# a ``listing`` reached through that path instead.  Set on the object
+# ACTUALLY stored in ``_DB_BUILTINS`` — the ``@_db_builtin`` decorator wraps
+# the factory with ``_simple_to_trampoline`` (``_wrap_db_factory``) and
+# returns the ORIGINAL, unwrapped function, so an attribute set on
+# ``_make_listing__1`` itself would not reach the stored callable.
+_DB_BUILTINS[("listing", 1)]._db_optional = True
 
 
 # ── portray_clause/1 ─────────────────────────────────────────────────────────
