@@ -1,0 +1,145 @@
+tests/fixtures/first_class_constraints.clausal::cpsat first-class arithmetic constraint
+tests/fixtures/first_class_constraints.clausal::cpsat first-class comparison constraint
+tests/fixtures/first_class_constraints.clausal::glop first-class constraint tuple
+tests/fixtures/first_class_constraints.clausal::glop first-class single constraint
+tests/fixtures/first_class_constraints.clausal::pysat first-class clause tuple
+tests/fixtures/first_class_constraints.clausal::pysat first-class single clause
+tests/fixtures/ortools_cpsat.clausal::cpsat 0-1 knapsack via maximize
+tests/fixtures/ortools_cpsat.clausal::cpsat 4-queens exactly 2 solutions
+tests/fixtures/ortools_cpsat.clausal::cpsat 4-queens has solutions
+tests/fixtures/ortools_cpsat.clausal::cpsat all_different 3 vars
+tests/fixtures/ortools_cpsat.clausal::cpsat all_different count is 6
+tests/fixtures/ortools_cpsat.clausal::cpsat all_different pigeonhole UNSAT
+tests/fixtures/ortools_cpsat.clausal::cpsat bool declares 0-1 variable
+tests/fixtures/ortools_cpsat.clausal::cpsat bool_or at least one true
+tests/fixtures/ortools_cpsat.clausal::cpsat check succeeds on SAT problem
+tests/fixtures/ortools_cpsat.clausal::cpsat difference constraint
+tests/fixtures/ortools_cpsat.clausal::cpsat exactly_one has 3 solutions
+tests/fixtures/ortools_cpsat.clausal::cpsat greater-or-equal
+tests/fixtures/ortools_cpsat.clausal::cpsat hint does not constrain
+tests/fixtures/ortools_cpsat.clausal::cpsat implication a=>b has 3 solutions
+tests/fixtures/ortools_cpsat.clausal::cpsat in_ contiguous domain
+tests/fixtures/ortools_cpsat.clausal::cpsat in_ sparse domain
+tests/fixtures/ortools_cpsat.clausal::cpsat less-than
+tests/fixtures/ortools_cpsat.clausal::cpsat maximize sum
+tests/fixtures/ortools_cpsat.clausal::cpsat minimize sum
+tests/fixtures/ortools_cpsat.clausal::cpsat not-equal
+tests/fixtures/ortools_cpsat.clausal::cpsat product with constant
+tests/fixtures/ortools_cpsat.clausal::cpsat simple UNSAT
+tests/fixtures/ortools_cpsat.clausal::cpsat solve binds integer
+tests/fixtures/ortools_cpsat.clausal::cpsat solve enumerates 5 values
+tests/fixtures/ortools_cpsat.clausal::cpsat sum constraint
+tests/fixtures/ortools_cpsat.clausal::cpsat sum exceeds domain UNSAT
+tests/fixtures/ortools_cpsat.clausal::cpsat table allowed 3 assignments
+tests/fixtures/ortools_cpsat.clausal::cpsat table restricts to allowed tuples
+tests/fixtures/ortools_graph.clausal::assignment 2x2
+tests/fixtures/ortools_graph.clausal::assignment 3x3 optimal
+tests/fixtures/ortools_graph.clausal::knapsack 0-1 classic
+tests/fixtures/ortools_graph.clausal::knapsack multidimensional positive
+tests/fixtures/ortools_graph.clausal::knapsack single item fits
+tests/fixtures/ortools_graph.clausal::max flow bottleneck
+tests/fixtures/ortools_graph.clausal::max flow diamond network
+tests/fixtures/ortools_graph.clausal::max flow single arc
+tests/fixtures/ortools_graph.clausal::min cost flow cheaper path
+tests/fixtures/ortools_graph.clausal::min cost flow single arc
+tests/fixtures/ortools_lp.clausal::diet problem cost is non-negative
+tests/fixtures/ortools_lp.clausal::diet problem has a solution
+tests/fixtures/ortools_lp.clausal::glop minimize 3x+5y s.t. x+y>=10
+tests/fixtures/ortools_lp.clausal::glop simple feasible
+tests/fixtures/ortools_lp.clausal::glop simple infeasible
+tests/fixtures/ortools_lp.clausal::lp solve binds variable values
+tests/fixtures/ortools_mip.clausal::cbc integer maximize 3x+5y s.t. x+y<=10
+tests/fixtures/ortools_routing.clausal::tsp 3 cities triangle
+tests/fixtures/ortools_routing.clausal::tsp 4 cities optimal tour
+tests/fixtures/ortools_routing.clausal::vrp 2 vehicles all customers served
+tests/fixtures/ortools_routing.clausal::vrptw 3 customers with time windows
+tests/fixtures/pysat_boolean.clausal::and 1 solution
+tests/fixtures/pysat_boolean.clausal::and forces both 1
+tests/fixtures/pysat_boolean.clausal::at_least 2 of 3: 4 solutions
+tests/fixtures/pysat_boolean.clausal::at_most 1 of 3: 4 solutions
+tests/fixtures/pysat_boolean.clausal::combined 2 solutions
+tests/fixtures/pysat_boolean.clausal::combined exactly-one 3 solutions
+tests/fixtures/pysat_boolean.clausal::combined forces Y=1
+tests/fixtures/pysat_boolean.clausal::count or
+tests/fixtures/pysat_boolean.clausal::count xor
+tests/fixtures/pysat_boolean.clausal::eq 0,0
+tests/fixtures/pysat_boolean.clausal::eq 1,1
+tests/fixtures/pysat_boolean.clausal::eq 2 solutions
+tests/fixtures/pysat_boolean.clausal::exactly 0: 1 solution
+tests/fixtures/pysat_boolean.clausal::exactly 0: both false
+tests/fixtures/pysat_boolean.clausal::exactly 2 of 3: 3 solutions
+tests/fixtures/pysat_boolean.clausal::neq 0,1
+tests/fixtures/pysat_boolean.clausal::neq 1,0
+tests/fixtures/pysat_boolean.clausal::neq 2 solutions
+tests/fixtures/pysat_boolean.clausal::not forces 0
+tests/fixtures/pysat_boolean.clausal::or 3 solutions
+tests/fixtures/pysat_boolean.clausal::or excludes 0,0
+tests/fixtures/pysat_boolean.clausal::pigeonhole 3-into-2 unsat
+tests/fixtures/pysat_boolean.clausal::triangle coloring 6 solutions
+tests/fixtures/pysat_boolean.clausal::unsat x and not x
+tests/fixtures/pysat_boolean.clausal::xor 2 solutions
+tests/fixtures/pysat_boolean.clausal::xor solution 0,1
+tests/fixtures/pysat_boolean.clausal::xor solution 1,0
+tests/fmt/test_corpus.py::test_the_corpus_is_not_empty
+tests/rewrite/test_corpus.py::test_the_corpus_is_not_empty
+tests/test_clportools.py
+tests/test_clportools_lp.py::TestLPInfrastructure::test_backtracking_retracts_constraints
+tests/test_clportools_lp.py::TestLPInfrastructure::test_scip_available
+tests/test_clportools_lp.py::TestLPInfrastructure::test_solver_mismatch
+tests/test_clportools_lp.py::TestLPInfrastructure::test_var_registration
+tests/test_clpsat.py::TestActivationLiterals::test_backtracking_retracts_clauses
+tests/test_clpsat.py::TestActivationLiterals::test_nested_backtracking
+tests/test_clpsat.py::TestActivationLiterals::test_three_levels_of_nesting
+tests/test_clpsat.py::TestBacktrackingStress::test_cardinality_backtracks
+tests/test_clpsat.py::TestBacktrackingStress::test_deep_backtracking_stress
+tests/test_clpsat.py::TestBasicClauses::test_binary_clause
+tests/test_clpsat.py::TestBasicClauses::test_contradictory_clauses_unsat
+tests/test_clpsat.py::TestBasicClauses::test_unit_clause_sat
+tests/test_clpsat.py::TestCardinalityEdgeCases::test_all_ground_false_at_least
+tests/test_clpsat.py::TestCardinalityEdgeCases::test_all_ground_true_at_most
+tests/test_clpsat.py::TestCardinalityEdgeCases::test_at_most_exceeds_var_count
+tests/test_clpsat.py::TestCardinalityEdgeCases::test_empty_list_at_least_one
+tests/test_clpsat.py::TestCardinalityEdgeCases::test_empty_list_at_least_zero
+tests/test_clpsat.py::TestCardinalityEdgeCases::test_empty_list_at_most
+tests/test_clpsat.py::TestCardinalityEdgeCases::test_empty_list_exactly_one
+tests/test_clpsat.py::TestCardinalityEdgeCases::test_empty_list_exactly_zero
+tests/test_clpsat.py::TestCardinalityEdgeCases::test_mixed_ground_and_vars
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_and_node_flattened
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_and_of_clauses_flattened
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_bare_variable_forces_true
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_constraint_block_with_list
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_deeply_nested_expression
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_empty_constraint_block
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_negated_variable_forces_false
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_nested_and_flattened
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_or_not_nodes_fast_path
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_single_element_tuple
+tests/test_clpsat.py::TestConstraintBlockEdgeCases::test_top_level_and_flattened
+tests/test_clpsat.py::TestErrorPaths::test_expr_to_literal_bad_int
+tests/test_clpsat.py::TestErrorPaths::test_label_bad_ground_value
+tests/test_clpsat.py::TestErrorPaths::test_label_unregistered_var
+tests/test_clpsat.py::TestErrorPaths::test_tseitin_unsupported_node
+tests/test_clpsat.py::TestLabelingInfrastructure::test_bindings_undone_after_labeling
+tests/test_clpsat.py::TestLabelingInfrastructure::test_ground_vars_skipped
+tests/test_clpsat.py::TestLabelingInfrastructure::test_nested_search
+tests/test_clpsat.py::TestLabelingRepeated::test_label_early_exit
+tests/test_clpsat.py::TestLabelingRepeated::test_label_early_exit_then_relabel
+tests/test_clpsat.py::TestLabelingRepeated::test_label_sat_twice
+tests/test_clpsat.py::TestLabelingRepeated::test_sat_count_twice
+tests/test_clpsat.py::TestSATState::test_solver_aliases
+tests/test_clpsat.py::TestSATState::test_solver_cleanup_on_gc
+tests/test_clpsat.py::TestSATState::test_solver_mismatch_raises
+tests/test_clpsat.py::TestSATState::test_state_created_on_demand
+tests/test_clpsat.py::TestSATState::test_state_reused
+tests/test_clpsat.py::TestSATState::test_unknown_solver_raises
+tests/test_clpsat.py::TestTseitinTransformation::test_and
+tests/test_clpsat.py::TestTseitinTransformation::test_eq
+tests/test_clpsat.py::TestTseitinTransformation::test_neq
+tests/test_clpsat.py::TestTseitinTransformation::test_not
+tests/test_clpsat.py::TestTseitinTransformation::test_or
+tests/test_clpsat.py::TestTseitinTransformation::test_xor
+tests/test_clpsat.py::TestVariableMapping::test_multiple_vars_distinct
+tests/test_clpsat.py::TestVariableMapping::test_var_attribute_stored
+tests/test_clpsat.py::TestVariableMapping::test_var_mapping_bidirectional
+tests/test_clpsat.py::TestVariableMapping::test_var_mapping_idempotent
+tests/test_doc_snippet_coverage.py::test_no_raw_untested_blocks

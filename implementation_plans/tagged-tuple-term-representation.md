@@ -182,6 +182,169 @@ What this replaces vs. preserves from the strict-atoms design (shipped 2026-07-2
 > **Next: P3-3** (state relocation + qualified goals) -- read
 > `implementation_plans/p33-state-relocation-handoff.md` first.
 
+> **STATUS 2026-09-06: P3-3 IMPLEMENTED** on branch `feat/p33-state-reloc`
+> (P3-3, `implementation_plans/p33-state-relocation.md` -- Tasks 0-10, plus a
+> Task 5b added mid-flight; committed execution record -- ledger, task reports,
+> bench transcript, failure-name artifacts -- in
+> `implementation_plans/p33-execution-record/`). Predicate state now lives in
+> the `Database`, every write to it goes through one gate, and the
+> compiled-dispatch seam is backend-pluggable. What shipped:
+>
+> - **Database authoritative (`PredRow`).** `Database.row(functor, arity,
+>   create=False) -> PredRow | None` is the single home of per-predicate state:
+>   `clauses`, `dispatch_fn`, `lazy_recompile`, `signature`, `dynamic`,
+>   `dynamic_arities`, `locked`, `source`, `backend`, `writes`. `PredicateMeta`
+>   keeps the seven historical attribute spellings, but they are read-through
+>   properties onto the row -- the class-side mirrors and `_pred_cls_for` are
+>   deleted. A class is pointed at its row by `PredicateMeta._bind_row(db,
+>   functor, arity, authorized=False)`; a `PredicateMeta` minted outside any
+>   load gets a private `_detached_row()`, so the frozen out-of-tree
+>   `make_predicate` duck type keeps working with no `Database` anywhere in the
+>   caller's world.
+> - **One mutation gate.** `Database.mutate(functor, arity, *, author, kind,
+>   detail=None, through=None)` is the only door onto predicate state: it asks
+>   the ownership policy (`write_refusal`) once, stamps a `WriteStamp(author,
+>   kind, detail)` on exit CLEAN OR NOT, and invalidates + abolishes the table
+>   for clause-writing kinds. Kinds: `WRITE_LOAD_CLAUSES`,
+>   `WRITE_LOAD_DISPATCH`, `WRITE_ASSERT`, `WRITE_RETRACT`, `WRITE_RECOMPILE`
+>   (never refused -- recompiling from the clause list the row already holds
+>   changes no answers). An author is a load's canonical SOURCE PATH
+>   (`Database.load_author`) or `runtime-assert:<module>`
+>   (`Database.runtime_author`) -- the path, never the module name, because one
+>   file legitimately compiles under two names in one process.
+>   `Database.refusal_for(...)` is the pure dry run that lets a load ask about
+>   every predicate it is going to write BEFORE it writes any of them, and
+>   `PredRow.invalidate()` is THE one invalidation point. Closes
+>   `todo/done/a-shared-predicate-has-no-single-mutation-gate.md` and
+>   `todo/done/predicate-identity-is-keyed-on-spelling-not-on-the-class.md`.
+> - **The backend seam** (the stencil-seam requirement, ruled binding on this
+>   phase). `Database.set_backend_chooser(fn: Callable[[PredRow], str] | None)`
+>   + `Database.register_backend(name, installer)` +
+>   `Database.backend_dispatch(functor, arity, fn)`, consumed at the compiler's
+>   one install choke point. Contract, in three sentences: one invalidation
+>   point (a backend hangs its caches off the row and lets `invalidate()` drive
+>   them); per-predicate choice at install time (`fn(row) -> str`, recorded on
+>   `row.backend`); a backend PRODUCES, it does not install (`installer(row,
+>   python_fn) -> Callable | None`, `None` = declines and falls back). `"python"`
+>   is the only in-tree backend and the default path costs one global read.
+> - **Cells as goals (R11).** A cell `("p", A)` and a bare atom `"p"` are goals
+>   everywhere a goal is taken: `solve/1`, `call/N` (moved into `_DB_BUILTINS`
+>   so it resolves against the CALLING module's dispatch table, then its
+>   namespace), the tabling entry, the query-cache key and templatizer, and the
+>   `assertz`/`asserta`/`retract` argument. One spelling for the shape check --
+>   `cells.compound_cell_shape(x) -> (is_compound_cell, functor)`, built on
+>   `_cell_shape` with `TUPLE_TAG` excluded. Control-construct cells (`,` `;`
+>   `->` `*->` `\+`) raise
+>   `type_error(callable_control_construct_unsupported, Cell)` at every goal
+>   surface -- deferred to the ISO-surface phase, not silently mis-run.
+> - **R10-REVISED -- qualified goals.** `solve.resolve_module(designator,
+>   calling_module=None, context="")` is the one answer to "which module does
+>   this name mean?", shared by the `(":", M, G)` cell (via
+>   `cells.resolve_qualified_goal_cell`), by `solve(goal, module=...)` and by
+>   `call/N`. Designators key `sys.modules` by dotted atom through a single
+>   registry; nested `":"` peels innermost-wins; the module switch happens in
+>   `_compile_as_query`, so every live qualified-goal entry funnels through one
+>   strip. The legacy dotted-`Call` walk inside `_tabled_entry_for_goal` is
+>   deliberately untouched this phase (convergence todo filed).
+> - **Specialization stops minting unbound classes.** All three
+>   `specialization.py` minting sites collapse into one `_install_specialized`
+>   under a single `Database.mutate(kind=WRITE_LOAD_CLAUSES,
+>   author="specialize:<load author>", through=pred_cls)`; every surviving
+>   `make_predicate(` there is row-bound.
+> - **Reflection/listing on `(module, name, arity)`.** `listing/1` became a
+>   `_db_builtin` over `(db, name, arity)`, accepting a class, an instance, a
+>   builtin, a bare atom, a `Name/Arity` cell, `Compound("/")` and the runtime
+>   `Div` operator node; an absent row is
+>   `existence_error(procedure, Compound("/"))`.
+>
+> Rulings recorded this phase (full text in the execution record's ledger; one
+> line each here):
+>
+> - **R10-REVISED** (module designators): one registry keyed by dotted atom into
+>   `sys.modules`; nested `":"` peels innermost-wins; the legacy dotted-`Call`
+>   walk stays as it is this phase.
+> - **R11** (cell-head assert): a cell head may be asserted only against a
+>   DECLARED-`-dynamic` predicate, while a `Compound` assert still creates its
+>   predicate -- an asymmetry taken deliberately (every str-first tuple IS a
+>   cell) and flagged for the ISO-surface phase.
+> - **`_bind_row` is a policed write**: an `-import_from`'d class stays on the
+>   OWNER's row, so an importer's `assertz` EXTENDS the owner's clause list --
+>   the pre-P3-3 shared-class semantics, which the read-through inversion had
+>   briefly regressed. Two callers may re-bind, each from inside a write the
+>   gate has already cleared.
+> - **Vivification is confined**: reading `row.clauses` mints nothing;
+>   `row.ensure_clauses()` (identity-preserving) is the one sanctioned promotion
+>   point, called only at the write/mint sites -- so a clause-less `-dynamic`
+>   predicate no longer reports itself defined merely for having been looked at.
+> - **The low-level door is gated too**: `Database.assertz`/`asserta` against a
+>   LOCKED static procedure now refuse as the class channel always did, and a
+>   no-op `retract/1` on a locked predicate fails silently rather than raising
+>   (mirrors `Database.retract`; revisit under the ISO driver).
+> - **An aliased `-import_from` without `-dynamic` now raises**
+>   `permission_error` where it used to move the owner's answers silently; the
+>   root cause -- an importer's step-7 lock reaching the owner -- is a filed
+>   todo, not a fix in this phase.
+> - **The `$disp_` bake reads the CLASS's bound row**, not `db.row(name, arity)`
+>   of the compiling module: the call site the key serves resolves to THIS
+>   class, so it is this class's row whose dispatch may be baked; and only a
+>   LOCKED row is ever baked, which is the whole staleness argument.
+> - **An atom applied as a functor is a compile-time refusal**, settled at the
+>   END of the module walk so declaration ORDER cannot falsely refuse a legal
+>   program; a name declared as BOTH a bare atom and a functor applies as the
+>   FUNCTOR; imported candidates are decided on `functor_signature_for`, the
+>   same registry, never a second truth.
+> - **Local arity-N beats an imported same-spelling ATOM** at the call site: an
+>   atom has no arity-N meaning, so there is nothing to disambiguate (ISO `f`
+>   and `f/2` are unrelated), and an arity-0 signature does not block the
+>   reroute.
+> - **A cell-head assert freezes its args and normalizes to the CLASS term**:
+>   the assert path derefs and freezes (ISO `assert/1` copies its argument)
+>   while `retract` keeps sharing; the stored head is the class term when a
+>   class is in scope, which is what makes `retract(("p", 1))` match a
+>   source-loaded clause. The class-term spelling `assertz(m.p(X))` still stores
+>   the live `Var` -- pre-existing, todo filed for the ISO-surface phase.
+> - **A cell head is refused by the low-level door**:
+>   `Database.assertz`/`asserta` raise `type_error(callable, Cell)` and store
+>   nothing -- that door previously accepted a cell head that compiled clean and
+>   then answered UNBOUND.
+> - **`call(M:G, Extra…)` is implemented, not refused**: the extras ride into
+>   the exporter's db. A bare control-construct ATOM under `call/N` raises like
+>   the cell spelling -- the resolver's contract distinguishes an absent name
+>   (silent failure) from a recognised-but-deferred shape (raise).
+> - **`make_atom(name)` returns the plain atom `str`**, closing the last
+>   deliberate P3-1 leftover: a public factory minting class atoms was a live
+>   mixed-representation path, and it had zero engine or `packages/` callers.
+> - **Specialization writes as `specialize:<load author>`**: provenance names
+>   WHICH load's specializer wrote the row. The direct (no-db) API keeps a
+>   per-call `Database` -- row-linked and stamped; there is no defining module
+>   to file it into.
+> - **`listing/1` accepts a runtime `Div` operator node** as a `Name/Arity`
+>   indicator: `/` in `.clausal` source is arithmetic `Div`, so the current
+>   surface has no other spelling for the ISO indicator.
+>
+> Deliberately carried risk: Task 2's read-through property costs the dispatch
+> hot path **+1 `dict.get` per goal** (~23 ns; measured identically again six
+> tasks later, so Tasks 3-8 added nothing further per read). Perf gate PASSED
+> (Task 9, interleaved alternating-order A/B vs branch base `1f86daf4`):
+> `bench_fib(25)` 1.0025 head/base, the macro's QUERY half 1.0010, and
+> `bench_struct_tabling(1500,3)` 1.0254 / 1.0194 / 1.0141 across three runs of
+> one driver -- all under the >1.03-fails bar, but a consistently POSITIVE
+> residue unexplained by any counted work (+701 calls on a 2.07 s run). **The 3%
+> headroom is therefore thin: the next change that adds hot-path cost must
+> instrument first** (cProfile call counts, query-half vs load-half split)
+> rather than trust the macro. The one authorized C lever remains available by
+> ruling and was not reached for. Full-suite reconciliation: name-diff EMPTY
+> against the pre-P3-3 baseline, reproduced twice; the accumulated inversion
+> ledger is empty.
+>
+> Still out of scope: class REMOVAL for predicates (read-through shells stay --
+> Phase 5 seam work), `packages/` migration, dict/set pair tagging (Phase 4),
+> the reader-surface migration (user-owned, R3), and stencil-v2 itself (its own
+> plan, which consumes the seam above).
+>
+> **Next: Phase 4** (dict/set pair tagging + atom/string audit) -- read
+> `implementation_plans/p34-dict-set-tagging-handoff.md` first.
+
 Settled in design discussion after the Phase 2 bridge merged; these bind the Phase 3 plan.
 
 **Functor domain contracts to `{str}`.** Clausal functors were always atoms; with atoms as

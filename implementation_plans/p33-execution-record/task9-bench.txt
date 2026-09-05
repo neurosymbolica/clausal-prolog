@@ -1,0 +1,267 @@
+P3-3 Task 9 — WHOLE-BRANCH perf gate  (marker: p33-state-reloc / task-9 / GATE)
+================================================================================
+
+Scope: the ENTIRE branch, base 1f86daf4 .. HEAD 022208ba (Tasks 1-8), not one
+task's slice.  `git diff --stat 1f86daf4..HEAD -- '*.c' '*.h'` is EMPTY — no C
+changed on this branch — so the A/B is a pure-Python swap over shared .so
+artifacts, exactly the method task2-bench.txt and task4-bench.txt used.
+
+
+Trees
+-----
+  base = /tmp/claude-1000/-workspace-clausal-bug-fix/ff7d2f98-4c36-4258-8937-
+         16070cf0f92f/scratchpad/p33t9-basetree
+         a byte copy of the worktree's clausal/ + benchmarks/ + tests/fixtures/
+         (the workload loads the fixture by relative path) with the EIGHTEEN
+         Python files `git diff --name-only 1f86daf4..HEAD -- 'clausal/*.py'`
+         lists reverted to BRANCH BASE 1f86daf4 via `git show 1f86daf4:<path>`:
+             clausal/logic/builtins/_registry.py
+             clausal/logic/builtins/database_ops.py
+             clausal/logic/builtins/higher_order.py
+             clausal/logic/builtins/inspection.py
+             clausal/logic/builtins/io.py
+             clausal/logic/cells.py
+             clausal/logic/compiler/arg_index.py
+             clausal/logic/compiler/globals_env.py
+             clausal/logic/compiler/list_dispatch.py
+             clausal/logic/compiler/predicate.py
+             clausal/logic/compiler_v2.py
+             clausal/logic/database.py
+             clausal/logic/predicate.py
+             clausal/logic/solve.py
+             clausal/logic/specialization.py
+             clausal/pythonic_ast/nodes.py
+             clausal/reflection.py
+             clausal/templating/term_rewriting.py
+         Same .so artifacts as the worktree (copied, not rebuilt).
+
+  head = /tmp/claude-1000/-workspace-clausal-bug-fix/ff7d2f98-4c36-4258-8937-
+         16070cf0f92f/scratchpad/p33t9-headtree
+         the SAME byte copy with no reverts.
+
+Why head is a copy and not the worktree itself (a change from Tasks 2/4).  The
+scratchpad sits on `overlay` and /workspace sits on `virtiofs`:
+
+    $ df -T /tmp/claude-1000 /workspace/clausal-bug-fix
+    overlay   overlay   ...  /
+    mount0    virtiofs  ...  /workspace
+
+bench_struct_tabling RELOADS the .clausal fixture inside the timed region
+(three times), so a base-on-overlay vs head-on-virtiofs A/B puts a filesystem
+difference inside the measurement and charges it to head.  Copying head to the
+same filesystem removes that confound.  Run A below keeps the old shape (head =
+the live worktree) as a cross-check; runs B and C are the same-filesystem
+instrument and are what the gate is read from.
+
+The two trees were then PROVEN to differ in exactly those 18 files and nothing
+else (scratchpad/t9bench/verify_trees.py, recursive byte compare, __pycache__
+excluded):
+
+    differing files: 18   (all 18 expected, none unexpected)
+    only in base: none    only in head: none
+    expected-but-identical (no-op reverts): none
+    TREES OK: True
+
+Every bench process asserts `clausal.__file__` — AND `benchmarks.workloads.
+__file__` — is under the tree it was told to measure BEFORE running any
+workload (the 70x-wrong precedent from Task 2's A/B; this venv has an INSTALLED
+clausal that a stray sys.path silently wins with), and echoes the resolved path
+on every raw result line.  Driver: interleaved, ALTERNATING ORDER (base-first
+on odd rounds, head-first on even), one FRESH process per sample.
+
+Gated statistic: the MEDIAN of the per-pair head/base RATIOS.  > 1.03 fails.
+(The median of medians is printed alongside as a cross-check; the two agree
+everywhere below.)
+
+Scripts: scratchpad/t9bench/{one.py, ab.py, split.py, absplit.py, micro.py,
+counts.py, verify_trees.py}; raw output in scratchpad/t9bench/*.txt.
+
+
+1. bench_struct_tabling(1500, 3) — mandated macro #1, run A, 10 pairs
+------------------------------------------------------------------------
+head = the live worktree (cross-shape; see "Trees" above).
+raw (seconds; tree path per line elided for width — see t9bench/st-runA.txt)
+
+  base   1.9853  2.0559  2.1075  2.0415  2.0247  2.0596  2.0433  2.0538
+         2.0450  2.0273
+  head   2.1114  2.1190  2.0863  2.1055  2.0895  2.0585  2.0615  2.0952
+         2.0743  2.1118
+
+  base   median 2.0442  min 1.9853  mean 2.0444  stdev 0.0309
+  head   median 2.0924  min 2.0585  mean 2.0913  stdev 0.0213
+  per-pair head/base ratios (sorted)
+         0.9899  0.9995  1.0089  1.0143  1.0202  1.0307  1.0313  1.0320
+         1.0417  1.0635
+
+  GATED  median ratio 1.0254  (+2.54%)   PASS   (median-of-medians 1.0236)
+
+
+2. bench_struct_tabling(1500, 3) — run B, 10 pairs, SAME-FILESYSTEM trees
+---------------------------------------------------------------------------
+raw (see t9bench/st-runB.txt)
+
+  base   2.0774  2.0627  2.0682  2.0314  2.0172  2.0574  2.0566  2.0537
+         2.0363  2.0311
+  head   2.1000  2.0519  2.0671  2.1046  2.0865  2.0664  2.1014  2.1152
+         2.0946  2.0656
+
+  base   median 2.0552  min 2.0172  mean 2.0492  stdev 0.0192
+  head   median 2.0905  min 2.0519  mean 2.0853  stdev 0.0211
+  per-pair head/base ratios (sorted)
+         0.9948  0.9995  1.0044  1.0109  1.0170  1.0218  1.0286  1.0299
+         1.0344  1.0360
+
+  GATED  median ratio 1.0194  (+1.94%)   PASS   (median-of-medians 1.0172)
+
+
+3. bench_struct_tabling(1500, 3) — run C, 10 pairs, SAME-FILESYSTEM trees
+---------------------------------------------------------------------------
+raw (see t9bench/st-runC.txt)
+
+  base   2.0303  2.0845  2.0468  2.0381  2.0472  2.0799  2.0645  2.0242
+         2.0305  2.0462
+  head   2.0671  2.0502  2.1360  2.0946  2.0677  2.0598  2.0776  2.0643
+         2.0760  2.0562
+
+  base   median 2.0465  min 2.0242  mean 2.0492  stdev 0.0208
+  head   median 2.0674  min 2.0502  mean 2.0749  stdev 0.0248
+  per-pair head/base ratios (sorted)
+         0.9835  0.9903  1.0049  1.0063  1.0100  1.0181  1.0198  1.0224
+         1.0277  1.0436
+
+  GATED  median ratio 1.0141  (+1.41%)   PASS   (median-of-medians 1.0102)
+
+Three runs of the identical driver on identical code: +2.54% / +1.94% /
++1.41%.  A 1.1-point spread with nothing changing between runs, on a bench
+whose base side alone carries a 0.019-0.031 s stdev (~1-1.5%).  All three are
+inside the >3% bar; sections 6 and 7 answer the question by counting work
+rather than timing it, and find nothing that could account for even the
+smallest of the three.
+
+
+4. bench_fib(25) — mandated macro #2, 10 pairs, SAME-FILESYSTEM trees
+------------------------------------------------------------------------
+The dispatch-densest macro in the workload set (~150 000 recursive calls, no
+memoisation), i.e. the one that would show a per-goal `_get_dispatch` cost if
+one were material.  raw (see t9bench/fib-runA.txt)
+
+  base   3.3623  3.3559  3.3666  3.3644  3.4294  3.3709  3.3602  3.3730
+         3.5079  3.4060
+  head   3.4615  3.4438  3.3448  3.3778  3.4623  3.3591  3.3633  3.4131
+         3.4923  3.3873
+
+  base   median 3.3687  min 3.3559  mean 3.3897  stdev 0.0476
+  head   median 3.4002  min 3.3448  mean 3.4105  stdev 0.0515
+  per-pair head/base ratios (sorted)
+         0.9935  0.9945  0.9956  0.9965  1.0009  1.0040  1.0096  1.0119
+         1.0262  1.0295
+
+  GATED  median ratio 1.0025  (+0.25%)   PASS   (median-of-medians 1.0093)
+
+
+5. Task 2 spot bench §2 re-run at head: LOAD half vs QUERY half, 10 pairs
+---------------------------------------------------------------------------
+The same workload with its two halves timed separately in one process
+(t9bench/split.py, driven by absplit.py; raw in t9bench/split-out.txt).  This
+is the bench that isolates the compile-time property reads from the per-goal
+dispatch path.
+
+  LOAD half (3 loads per sample)
+    base   0.0246  0.0281  0.0238  0.0244  0.0248  0.0247  0.0255  0.0233
+           0.0237  0.0258
+    head   0.0253  0.0234  0.0243  0.0240  0.0260  0.0267  0.0244  0.0310
+           0.0238  0.0246
+    base median 0.0246  min 0.0233
+    head median 0.0245  min 0.0234
+    median of per-pair ratios 1.0126  (+1.26%)
+
+    The two MEDIANS differ by 0.1 ms in head's FAVOUR on a 25 ms slice; the
+    per-pair ratio's +1.26% and the medians' -0.4% disagree in sign, which is
+    what a 25 ms measurement with a 3 ms outlier looks like.  Either way this
+    half is 1.2% of the 2.07 s macro.
+
+  QUERY half (3 x Nats(1500, _), first solution) — the gated dispatch path
+    base   2.0850  2.0100  2.0230  2.0492  2.0491  1.9846  2.0194  2.0011
+           2.0120  2.0581
+    head   2.0348  2.0350  2.0289  2.0342  2.1017  2.0131  2.0153  2.0347
+           2.0101  2.0268
+    base median 2.0212  min 1.9846
+    head median 2.0316  min 2.0101
+    median of per-pair ratios 1.0010  (+0.10%)
+
+  The half the branch is gated on is FLAT (+0.10%).  Note the arithmetic: the
+  query half is 98% of the macro and moves +0.10%, the load half is 1.2% of it
+  and moves at most +1.3% of itself — together they cannot produce sections
+  1-3's +1.4 to +2.5%.  That residue is the instrument, not the code.
+
+
+6. Task 2 spot bench §3 re-run at head: microbench of the relocated reads
+---------------------------------------------------------------------------
+min of 5 x timeit(number=200 000), 3 pairs, ALTERNATING (base-first, head-
+first, base-first), fresh process each, tree assertion on every one.
+Nanoseconds per read, on `Nats/2` from the same fixture.
+
+                            base                    head
+  pair 1 (base first)   81.0 / 101.1 / 20.6     101.0 / 123.4 / 87.9
+  pair 2 (head first)   80.2 / 102.0 / 21.0     103.7 / 126.6 / 91.2
+  pair 3 (base first)   80.3 / 100.5 / 20.0     104.9 / 131.4 / 89.4
+                        (_get_dispatch() / _get_dispatch(2) / _clauses)
+
+  median delta   cls._get_dispatch()    80.3 -> 103.7   +23 ns
+                 cls._get_dispatch(2)  101.1 -> 126.6   +26 ns
+                 cls._clauses           20.6 ->  89.4   +69 ns
+
+  These reproduce task2-bench.txt §3 (+24 / +26 / +75 ns) within the
+  microbench's own scatter.  The point for THIS gate is the delta between
+  those two measurements, taken six tasks apart: Tasks 3-8 (the mutation gate,
+  bake-in, cells-as-goals, qualified goals, specialization rows, listing/1)
+  added NOTHING further to the per-read cost.  The +23 ns on `_get_dispatch`
+  is the whole branch's per-goal price, unchanged since the inversion landed.
+  `_clauses` pays the metaclass property descriptor call and is a compile /
+  assert-path read, not a per-goal one.
+
+
+7. cProfile CALL COUNTS — decisive (counts do not drift with the machine)
+---------------------------------------------------------------------------
+t9bench/counts.py, after a bench_struct_tabling(200, 1) warm-up taken OUTSIDE
+the profile.
+
+  QUERY  (Nats(700, _), first solution)
+                              base       head      delta
+    total function calls     103269     103970      +701
+    primitive calls          100269     100970      +701
+    {method 'get' of dict}     2305       3006      +701
+
+  700 subgoals, +1 dict.get each — the row hop.  This is EXACTLY task2-
+  bench.txt §4's finding (+701 calls, +701 dict.get), which is the load-
+  bearing result of this section: six tasks of further work added ZERO calls
+  to the query path.  Priced at section 6's 23 ns, 701 x 23 ns = 16 us out of
+  a 2.07 s run = 0.0008% of the mandated macro.
+
+  LOAD  (10 x load_clausal_module(struct_tabling.clausal))
+                              base       head      delta
+    total function calls     320926     325256     +4330
+    primitive calls          308696     312906     +4210
+    {method 'get' of dict}     9250       9660      +410
+
+  +433 calls per module load — the mutation gate (Task 3) opening and closing
+  a transaction per predicate write, plus the bake-in and specialization row
+  work.  Compile time, once per predicate per load, never per goal, and
+  section 5 puts a price on all of it: the load half is 1.2% of the macro and
+  did not move outside its own noise.
+
+
+Verdict
+-------
+  bench_struct_tabling(1500, 3)   median ratio  1.0254 / 1.0194 / 1.0141
+  bench_fib(25)                   median ratio  1.0025
+  query half of the macro         median ratio  1.0010
+  load half of the macro          median ratio  1.0126  (1.2% of the macro)
+
+Worst gated statistic across every bench and every run: 1.0254 (+2.54%), on
+the cross-shape run A whose head tree sat on a different filesystem; the two
+same-filesystem runs are 1.0194 and 1.0141.  PASS — every measurement is
+inside the >3%-fails bar, and the branch's real cost, counted rather than
+timed, is +701 dict lookups on a 700-subgoal query (16 us) and +433 calls per
+module load.  No optimization warranted; the C lever is not needed and was not
+reached for.

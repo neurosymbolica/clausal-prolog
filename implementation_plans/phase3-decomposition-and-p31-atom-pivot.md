@@ -312,7 +312,33 @@ corpus fixtures become old-golden vs new-default regression anchors; C untouched
 
 </details>
 
-# P3-3 — State Relocation + Qualified Goals (outline; plan after P3-2)
+# P3-3 — State Relocation + Qualified Goals (DONE 2026-09-06; outline below kept for record)
+
+**DONE.** Full plan: `implementation_plans/p33-state-relocation.md` (Tasks 0-10,
+plus a Task 5b added mid-flight). Committed execution record — ledger, every task
+report, the perf-gate bench transcript, the failure-name artifacts:
+`implementation_plans/p33-execution-record/` (the working originals live in the
+git-ignored `.superpowers/sdd/p33-state-relocation/`). Status note + ruling
+summary: `implementation_plans/tagged-tuple-term-representation.md` §1b STATUS
+block. Memory: `tagged-tuple-term-design-parked` (P3-3 entry). Executed on branch
+`feat/p33-state-reloc`, 26 commits `d3cfe27a..022208ba` (base `1f86daf4`) plus the
+close-out doc commits. One-line summary: the `Database` became the authoritative
+home of predicate state (`PredRow`), every write to it goes through one gate
+(`Database.mutate` + `write_refusal` + per-write `WriteStamp` provenance), the
+compiled-dispatch seam became backend-pluggable for stencil-v2
+(`set_backend_chooser` / `register_backend` / one `PredRow.invalidate()`), cells
+and bare atoms became goals everywhere a goal is taken (R11) with the R10 qualified
+form `(":" , M, G)` + `solve(module=)` resolving through one `resolve_module`,
+specialization stopped minting unbound classes (`make_atom` now returns a `str`),
+and `listing/1` moved onto `(module, name, arity)`. Full-suite name-diff EMPTY
+(reproduced twice); perf gate PASSED with thin headroom (`bench_fib` 1.0025,
+`bench_struct_tabling` 1.0141-1.0254 against a >1.03-fails bar).
+**Next: Phase 4** — read `implementation_plans/p34-dict-set-tagging-handoff.md`
+first.
+
+<details>
+<summary>Original outline (plan after P3-2) — superseded by the executed plan
+above; kept for the historical record of what was scoped before execution</summary>
 
 Scope from recon (`database.py`, `predicate.py`, `compiler/predicate.py`,
 `globals_env.py`, `solve.py`, `specialization.py`, `tabling.py`): invert the sync
@@ -348,3 +374,5 @@ shape the seam so that rewrite is small instead of another bespoke adapter.
 Revival itself is out of P3-3's scope (own plan, after P3-3 — see
 `implementation_plans/stencil-v2-scoping-memo.md`); the requirement is scoping
 input only.
+
+</details>
