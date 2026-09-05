@@ -18,7 +18,7 @@ from clausal.logic.compiler.arg_index import (
     _INDEX_VAR,
     _INDEX_THRESHOLD,
 )
-from clausal.logic.predicate import PredicateMeta, make_atom
+from clausal.logic.predicate import PredicateMeta, make_atom, make_predicate
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
 from clausal.terms import Compound, Unify
@@ -269,11 +269,12 @@ class TestCellIndexKey:
         assert _runtime_arg_key(("Wrap", v)) is _INDEX_VAR
         # Nested one level deeper: the Var is inside an inner cell.
         assert _runtime_arg_key(("Item", "r", ("Met", v), "d")) is _INDEX_VAR
-        # NOTE: the class-instance (``is_term_instance``) analog of this gap
-        # is DELIBERATELY left unfixed (fix round 1, controller ruling): a
-        # pre-existing bug, not exercised by the cell repro that forced this
-        # gate, and the branch is exactly O(1) today -- see
-        # todo/first-arg-index-partially-ground-instance-keys-into-bucket-2026-09-05.md.
+        # P3-3 Task 4 fold-in: the class-instance (``is_term_instance``)
+        # analog of this gap, parked at P3-2 fix round 1 and wired here --
+        # the repro from
+        # todo/done/first-arg-index-partially-ground-instance-keys-into-bucket-2026-09-05.md.
+        Wrap = make_predicate("Wrap", ["sub"])
+        assert _runtime_arg_key(Wrap(sub=Var())) is _INDEX_VAR
 
     def test_a_fully_ground_cell_still_keys_normally(self):
         """Regression for the fix above: a cell with no unbound Var
@@ -282,6 +283,12 @@ class TestCellIndexKey:
         from clausal.logic.compiler.arg_index import _runtime_arg_key
         assert _runtime_arg_key(("Wrap", "direct")) == ("Wrap", 1)
         assert _runtime_arg_key(("Item", "r", ("Met", "direct"), "d")) == ("Item", 3)
+        Wrap = make_predicate("Wrap", ["sub"])
+        assert _runtime_arg_key(Wrap(sub="direct")) == ("Wrap", 1)
+        # ... and the gate is opt-out, exactly as it is for a cell: a
+        # predicate/position whose lifted arms carry no literal sub-value
+        # passes ``deep_gate=False`` and keeps the O(1) key.
+        assert _runtime_arg_key(Wrap(sub=Var()), deep_gate=False) == ("Wrap", 1)
 
 
 class TestImportedAtomIndexKey:

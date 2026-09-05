@@ -543,7 +543,7 @@ def _inject_resolved_targets(
     can be called with targets already gathered by ``_collect_globals_info``,
     avoiding a fourth clause traversal.
 
-    Phase 7: for each resolved target that is a locked ``PredicateMeta``,
+    Phase 7: for each resolved target whose ``PredRow`` is locked,
     additionally captures its dispatch function under ``_disp_{fname}_{arity}``
     in ``base_globals``.  Generated code can then reference the dispatch
     function directly instead of calling ``_get_dispatch()`` on every
@@ -558,15 +558,35 @@ def _inject_resolved_targets(
         and the call site would jump straight into it, past the arity check
         ``_get_dispatch`` exists to make.  Leaving the key unset costs that one
         call site the fast path and gains it a message that names the fault.
+
+        P3-3 Task 4: the two questions that decide the bake — "is this
+        predicate closed?" and "what is its dispatch?" — are asked of the
+        :class:`~clausal.logic.database.PredRow`, the single home of
+        predicate state since Task 2, rather than of class attributes that
+        forward there.  The row is the CLASS's own (``cls._row``), not
+        ``db.row(name, arity)``: the call site this key serves resolves to
+        THIS class, so it is this class's row whose dispatch may be baked
+        under the key.  A same-named predicate in the compiling module's own
+        Database is a different predicate, and baking its dispatch here would
+        silently redirect the call to it.
+
+        Only a LOCKED row is ever baked, and that is the whole staleness
+        argument: an unlocked row's dispatch may be replaced or cleared at
+        any moment, so ``row.invalidate()`` on one can never orphan a baked
+        reference — there is none to orphan.
         """
-        if (
+        if not (
             arity >= 0
             and isinstance(obj, PredicateMeta)
             and arity == obj._arity
-            and getattr(obj, "_locked", False)
-            and obj._dispatch_fn is not None
         ):
-            base_globals[_disp_key(name, arity)] = obj._dispatch_fn
+            return
+        row = obj._row
+        if row is None or not row.locked:
+            return
+        dispatch = row.dispatch_fn
+        if dispatch is not None:
+            base_globals[_disp_key(name, arity)] = dispatch
 
     for target_name, target_arity in targets:
         existing = base_globals.get(target_name)

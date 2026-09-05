@@ -125,3 +125,31 @@ is just not wired to this one key-side branch. That wiring -- add
 `deep_gate` to the `is_term_instance` branch's `return`, exactly
 parallel to the cell branch a few lines above it -- is the two-line
 follow-up this todo already named.
+
+## Resolution (2026-09-05, P3-3 Task 4)
+
+Done, as the two-line follow-up this todo named. `_runtime_arg_key`'s
+`is_term_instance` branch (`clausal/logic/compiler/arg_index.py`) now carries
+the same `deep_gate and not _is_deeply_ground(a)` condition the cell branch a
+few lines above it carries, so a partially-ground term INSTANCE keys
+`_INDEX_VAR` and reaches the un-indexed fallback's full `unify()` instead of a
+bucket whose arms it can never satisfy.
+
+The gate is the compile-time flag, not an unconditional walk: the O(term-size)
+cost the controller weighed against this fix at P3-2 fix round 1 is paid only
+for a predicate/position whose lifted arms actually carry a literal sub-value
+(`list_dispatch._lifted_head_arg_needs_deep_gate`, which already computed the
+flag for term instances — see this file's "Update, fix round 2" above). A
+position that needs no gate passes `deep_gate=False` and keeps the exactly-O(1)
+key, which is why the "no compensating capability for hot-path cost" objection
+no longer applies.
+
+The dropped coverage this todo recorded is restored, with the repro as the
+test: the third assertion in each of
+`tests/test_first_arg_index.py::TestCellIndexKey::
+test_a_cell_with_an_unbound_slot_is_unindexable` (the `Wrap(sub=Var())` →
+`_INDEX_VAR` repro, verbatim from "The bug" above) and
+`::test_a_fully_ground_cell_still_keys_normally` (`Wrap(sub="direct")` still
+keys `("Wrap", 1)`, plus `deep_gate=False` keeping the O(1) key). The P3-2
+driven-bucket tests are untouched and green; the 4-tuple plan shape
+`(pos, idx_dict, default_fn, deep_gate)` is unchanged.

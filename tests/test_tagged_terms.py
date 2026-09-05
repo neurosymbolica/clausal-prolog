@@ -905,6 +905,26 @@ class TestHeadPatterns:
         got = self._pattern((head_match.TUPLE_TAG, 1), globals_=g)
         assert got == "case [$cells.TUPLE_TAG, _ncap0]:"
 
+    def test_the_cells_namespace_is_injected_from_one_place(self):
+        """P3-3 Task 4: ``$cells`` was hand-copied into the trampoline and the
+        simple-strategy ``base_globals`` literals.  One entry in
+        ``INJECTED_RUNTIME_BUILTINS`` now feeds every compilation path, and it
+        needs NO ``STRICTNESS_EXEMPT_RUNTIME_NAMES`` entry: the ``$`` prefix
+        is not a legal identifier character, so no module -- strict or not --
+        can spell the name as a bare atom and reach the distrust check at all.
+        """
+        from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
+        from clausal.logic.cells import CELLS_NAMESPACE_KEY
+        from clausal.import_hook import STRICTNESS_EXEMPT_RUNTIME_NAMES
+        from clausal.logic import cells as cells_module
+
+        assert INJECTED_RUNTIME_BUILTINS[CELLS_NAMESPACE_KEY] is cells_module
+        assert CELLS_NAMESPACE_KEY not in STRICTNESS_EXEMPT_RUNTIME_NAMES
+        assert CELLS_NAMESPACE_KEY.startswith("$")
+        source = (pathlib.Path(__file__).resolve().parents[1]
+                  / "clausal" / "logic" / "compiler" / "predicate.py").read_text()
+        assert source.count("_CELLS_NAMESPACE_KEY: _cells_module") == 1
+
 
 class TestBucketPatternIntegration:
     """Cell-headed clauses through the REAL bucket-compilation path.

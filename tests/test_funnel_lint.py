@@ -296,7 +296,14 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # and ``refusal_for``, again all earlier).  ``head_key`` is byte-identical
     # across all six shifts -- only its line number moved; see
     # .superpowers/sdd/p33-state-relocation/task-3-report.md.
-    AllowEntry("clausal/logic/database.py", (1088, 1120),
+    # Range shifted 1088-1120 -> 1214-1246 by P3-3 task-4's backend seam
+    # (``DEFAULT_BACKEND``, ``_BACKEND_CHOOSER``/``_BACKEND_INSTALLERS`` and
+    # ``Database.set_backend_chooser``/``backend_chooser``/
+    # ``register_backend``/``backend_dispatch``, all earlier in the same
+    # file).  ``head_key`` is byte-identical across all seven shifts -- only
+    # its line number moved; see
+    # .superpowers/sdd/p33-state-relocation/task-4-report.md.
+    AllowEntry("clausal/logic/database.py", (1214, 1246),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list)"),
 

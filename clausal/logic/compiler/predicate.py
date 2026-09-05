@@ -312,6 +312,16 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "$deref": deref,
     "$unify": unify,
     "$ast": ast,
+    # The cells module itself, so a head pattern can name the tuple-DATA tag
+    # as the dotted value pattern ``$cells.TUPLE_TAG`` -- a bare name in a
+    # ``match`` pattern is a capture, not a value test.  See
+    # ``cells.CELLS_NAMESPACE_KEY`` for why the root is ``$cells`` and not
+    # ``builtins``.  P3-3 Task 4: was hand-copied into the trampoline and the
+    # simple-strategy ``base_globals`` literals; one entry here reaches both,
+    # and the bare-query path (whose globals derive from the module dict) with
+    # it -- so ``head_match``'s "emitted only when that entry is actually
+    # present" guard now degrades to the wildcard on strictly fewer paths.
+    _CELLS_NAMESPACE_KEY: _cells_module,
 }
 
 
@@ -866,13 +876,6 @@ def _compile_predicate_trampoline_impl(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
-        # The cells module itself, so a head pattern can name the
-        # tuple-DATA tag as the dotted value pattern
-        # ``$cells.TUPLE_TAG`` -- a bare name in a ``match`` pattern is
-        # a capture, not a value test.  See
-        # ``cells.CELLS_NAMESPACE_KEY`` for why the root is ``$cells``
-        # and not ``builtins``.
-        _CELLS_NAMESPACE_KEY: _cells_module,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn
@@ -1686,13 +1689,6 @@ def _compile_predicate_shallow_impl(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
-        # The cells module itself, so a head pattern can name the
-        # tuple-DATA tag as the dotted value pattern
-        # ``$cells.TUPLE_TAG`` -- a bare name in a ``match`` pattern is
-        # a capture, not a value test.  See
-        # ``cells.CELLS_NAMESPACE_KEY`` for why the root is ``$cells``
-        # and not ``builtins``.
-        _CELLS_NAMESPACE_KEY: _cells_module,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn_s
@@ -2074,8 +2070,22 @@ def _install(
     ``fn`` is returned so that callers whose own return value feeds
     ``_dispatch_fn`` (the ``_recompile_*`` closures) propagate the wrapper
     rather than the raw function they compiled.
+
+    P3-3 Task 4: being the single choke point is also what makes it the right
+    home for the BACKEND SEAM — ``db.backend_dispatch`` is consulted once,
+    here, before the tabling wrap, so an out-of-tree backend's dispatch
+    reaches the row through this same wrap/transaction/stamp path rather than
+    around it.  Default (``"python"``, nothing registered): ``fn`` unchanged.
     """
     from clausal.logic.tabling import ensure_tabled_wrapper  # noqa: PLC0415
+    if db is not None:
+        # P3-3 Task 4 — THE BACKEND SEAM.  The one point where something
+        # other than this compiler can own a predicate's dispatch; asked
+        # BEFORE the tabling wrap so a backend's dispatch is wrapped,
+        # transacted and stamped exactly as the Python one is.  With no
+        # chooser installed (the shipped state) this is one global read and
+        # ``fn`` comes back untouched.  See ``Database.set_backend_chooser``.
+        fn = db.backend_dispatch(functor, arity, fn)
     wrapped = ensure_tabled_wrapper(db, functor, arity, fn)
     if wrapped is not fn:
         # Installing a freshly compiled dispatch for a tabled predicate means

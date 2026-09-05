@@ -344,6 +344,19 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
         return (a.__name__, 0)
     if is_term_instance(a):
         cls = type(a)
+        # P3-3 Task 4 fold-in: the same gate the cell branch above carries,
+        # for the same reason and behind the same compile-time flag.  A term
+        # INSTANCE with an unbound field keys into a bucket whose arms embed
+        # the clause's own ground sub-values as equality-only ``MatchValue``
+        # patterns, which that caller can never satisfy — while the
+        # un-indexed fallback's full ``unify()`` would bind it.  Parked at
+        # P3-2 fix round 1 (key side only; the flag computation in
+        # ``list_dispatch._lifted_head_arg_needs_deep_gate`` already covered
+        # instances) and wired here — see
+        # ``todo/done/first-arg-index-partially-ground-instance-keys-into-
+        # bucket-2026-09-05.md``.
+        if deep_gate and not _is_deeply_ground(a):
+            return _INDEX_VAR
         return (cls.__name__, len(term_field_names(a)))
     return _INDEX_VAR
 

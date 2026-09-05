@@ -65,6 +65,12 @@ and a free-form detail. Diagnostics, not history — see ``PredRow.record_write`
 
 _WRITES_CAP = 32
 
+DEFAULT_BACKEND = "python"
+"""The in-tree dispatch backend: the Python compiler in
+``clausal/logic/compiler/``.  The only backend this repository ships — see
+:meth:`Database.set_backend_chooser` for the seam an out-of-tree one plugs
+into."""
+
 
 @dataclasses.dataclass(slots=True)
 class PredRow:
@@ -86,14 +92,19 @@ class PredRow:
     that's harmless precisely because every field is live — a cached row
     outliving a wipe just re-reads through it.
 
-    ``backend``, ``locked``, ``source`` and ``writes`` are new state that
-    nothing else reads or writes yet this task; they exist here only because
-    later tasks (Task 2 onward) consume this exact field set.
+    ``locked``, ``source`` and ``writes`` are new state that nothing else
+    reads or writes yet this task; they exist here only because later tasks
+    (Task 2 onward) consume this exact field set.
     """
 
     _db: "Database" = dataclasses.field(repr=False, compare=False)
     _key: "tuple[str, int]" = dataclasses.field(repr=False, compare=False)
-    backend: str = "python"
+    # Which backend compiled the dispatch this row currently holds (P3-3
+    # Task 4).  ``"python"`` — the in-tree compiler — unless a backend
+    # chooser said otherwise at install time; see
+    # ``Database.set_backend_chooser``.  Descriptive, not a request: it
+    # records what happened, and changing it by hand installs nothing.
+    backend: str = DEFAULT_BACKEND
     locked: bool = False
     source: "tuple[str, str] | None" = None
     writes: list = dataclasses.field(default_factory=list)
@@ -420,6 +431,16 @@ def refusal_error(functor: str, arity: int, author: str, kind: str,
     ))
 
 
+# ── The backend seam ───────────────────────────────────────────────────────────
+#
+# Process-wide, because the decision is per ROW and a row names its own
+# ``db``.  Both are empty/``None`` in this repository: ``"python"`` is the only
+# backend in tree.  See ``Database.set_backend_chooser`` for the contract.
+
+_BACKEND_CHOOSER: "Callable[[PredRow], str] | None" = None
+_BACKEND_INSTALLERS: dict[str, Callable] = {}
+
+
 # ── Database ───────────────────────────────────────────────────────────────────
 
 
@@ -470,6 +491,111 @@ class Database:
         new_row = PredRow(self, key)
         self._rows[key] = new_row
         return new_row
+
+    # ── The backend seam ────────────────────────────────────────────────────
+
+    @classmethod
+    def set_backend_chooser(cls, fn: "Callable[[PredRow], str] | None"):
+        """Install the per-predicate backend chooser; returns the previous one.
+
+        THE SEAM.  This is the single point at which something other than the
+        in-tree Python compiler can own a predicate's compiled dispatch, and
+        it exists so that the copy-and-patch JIT revival
+        (``implementation_plans/stencil-v2-scoping-memo.md``, "What rewrites"
+        → "The integration seam") has one hook to target instead of the ~1,196
+        LOC of ad-hoc backend selection the parked branch grew inside
+        ``compiler/predicate.py``.  That memo calls the parked seam a complete
+        rewrite rather than an adaptation; this is what it rewrites TO.
+
+        The contract, in three sentences:
+
+        1. **One invalidation point.**  A dispatch is dropped by
+           :meth:`PredRow.invalidate` and by nothing else, whatever compiled
+           it.  A backend that caches anything derived from a predicate's
+           clauses hangs that cache off the row and lets ``invalidate()``
+           drive it; it must not install its own invalidation channel, because
+           a second channel is exactly the shape the P3-3 mutation gate exists
+           to make impossible.
+        2. **Per-predicate choice, at install time.**  ``fn(row) -> str`` is
+           called once per dispatch install, with the ``PredRow`` about to
+           receive it — so the decision can read the predicate's clauses,
+           signature, tabled-ness, source module (``row.db``) or anything else
+           the row knows.  Its answer is recorded on ``row.backend``.
+        3. **Installation stays in one place.**  A backend does not install;
+           it PRODUCES.  ``fn`` returning ``"python"`` (the default) leaves the
+           install byte-for-byte as it was.  Any other name is looked up in
+           the registry (:meth:`register_backend`) and its installer is called
+           as ``installer(row, python_fn) -> Callable | None``: the callable it
+           returns is what gets installed, through the same transaction, the
+           same tabling wrapper and the same provenance stamp the Python
+           dispatch would have gone through.  Returning ``None`` means "not
+           mine" — a real backend cannot compile every predicate shape — and
+           falls back to the Python dispatch with ``row.backend`` left at
+           ``"python"``.
+
+        Process-wide rather than per-``Database``: the decision is made per
+        ROW, and a row names its own ``db``, so a chooser that wants
+        per-module policy reads ``row.db`` instead of needing an installation
+        per module.  Passing ``None`` restores the default (always
+        ``"python"``), which is also the state this repository ships in — no
+        backend is registered in-tree.
+        """
+        global _BACKEND_CHOOSER
+        previous = _BACKEND_CHOOSER
+        _BACKEND_CHOOSER = fn
+        return previous
+
+    @classmethod
+    def backend_chooser(cls) -> "Callable[[PredRow], str] | None":
+        """The installed backend chooser, or ``None`` when the default
+        (always ``"python"``) is in force."""
+        return _BACKEND_CHOOSER
+
+    @classmethod
+    def register_backend(cls, name: str, installer: Callable) -> None:
+        """Register ``installer`` under ``name`` for :meth:`set_backend_chooser`.
+
+        ``installer(row, python_fn)`` returns the dispatch callable to install
+        in place of ``python_fn``, or ``None`` to decline this predicate.
+        ``"python"`` is the in-tree backend and cannot be re-registered.
+        """
+        if name == DEFAULT_BACKEND:
+            raise ValueError(
+                f"{DEFAULT_BACKEND!r} is the in-tree backend and cannot be "
+                f"re-registered"
+            )
+        _BACKEND_INSTALLERS[name] = installer
+
+    def backend_dispatch(self, functor: str, arity: int,
+                         fn: Callable) -> Callable:
+        """Resolve ``functor/arity``'s backend and return the dispatch to install.
+
+        Called by the compiler's single install choke point
+        (``compiler/predicate.py::_install``) with the freshly compiled Python
+        dispatch.  With no chooser installed this returns ``fn`` untouched
+        without so much as looking a row up — the default path costs one
+        global read.
+        """
+        chooser = _BACKEND_CHOOSER
+        if chooser is None:
+            return fn
+        row = self.row(functor, arity, create=True)
+        backend = chooser(row) or DEFAULT_BACKEND
+        if backend != DEFAULT_BACKEND:
+            installer = _BACKEND_INSTALLERS.get(backend)
+            if installer is None:
+                raise LookupError(
+                    f"backend {backend!r} chosen for {functor}/{arity} is not "
+                    f"registered — call Database.register_backend({backend!r}, "
+                    f"installer) first"
+                )
+            replacement = installer(row, fn)
+            if replacement is not None:
+                row.backend = backend
+                return replacement
+            backend = DEFAULT_BACKEND  # the backend declined this predicate
+        row.backend = backend
+        return fn
 
     # ── The mutation gate ───────────────────────────────────────────────────
 

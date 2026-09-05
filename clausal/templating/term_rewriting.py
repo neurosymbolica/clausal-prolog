@@ -1276,6 +1276,27 @@ class TermTransformer(NodeTransformer):
                 f"value and cannot be called.  Read the value into a variable "
                 f"first, or use a qualified predicate name (mod.pred(...))."
             )
+        # P3-3 Task 4: an ATOM applied as a functor.  ``visit_Name``'s atom
+        # branch answers a declared atom with its ``str`` spelling, which in
+        # func position lowered to ``Call(func='bound2', ...)`` -- a shape
+        # every downstream ``isinstance(func, LoadName)`` branch skips, so the
+        # clause was present, indexed and unmatchable in a head and the AST
+        # node leaked into user data in a body, both SILENTLY.  Refuse it here,
+        # where the name is still attributable to its own line.
+        if isinstance(func_expr, Name) and (
+            func_expr.id in transformer._hidden_atoms
+            or func_expr.id in transformer.atoms
+        ):
+            lineno = getattr(func_expr, "lineno", None)
+            where = (f"{transformer._filename}:{lineno}"
+                     if transformer._filename else f"line {lineno}")
+            raise SyntaxError(
+                f"{where}: `{func_expr.id}` is declared as an atom (a bare "
+                f"name in -module, or -private/-hide) but is applied as a "
+                f"functor here.  Declare it with arguments in the -module "
+                f"functor list (e.g. `{func_expr.id}(X)`), or reference it "
+                f"bare as the atom it is."
+            )
         prev = transformer._suppress_bare_atom_collection
         transformer._suppress_bare_atom_collection = True
         try:

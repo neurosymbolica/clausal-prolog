@@ -52,3 +52,31 @@ this gap — only a missed optimization.
 - `tests/test_implicit_functors.py` — the OWA construction/matching test
   suite; a driven indexing test would belong alongside
   `tests/test_first_arg_index.py`.
+
+## Cheap-pass assessment (2026-09-05, P3-3 Task 4)
+
+Assessed while in the closure/lift code, per the Task 4 brief's "fix if
+≤ ~20 lines, else leave a dated note". **Not cheap — left open.**
+
+The gap is not one gate but two, and they have to agree:
+
+- **Lift side**, `list_dispatch._lift_clause_at_pos`: the refusal is
+  `cell_signature_for_name(lift_term.func.name, globals_) is None`, and
+  `terms_to_ast.cell_signature_for_name` returns `None` for an OWA-unknown
+  name precisely because neither `__clausal_functor_signatures__` nor a
+  resolved class names its fields. Lifting one would need a signature-free
+  path that builds the cell pattern from the call's own positional args
+  (keyword args have no slot layout to place into at all, so they would have
+  to stay refused) — a new branch through `head_to_match_pattern`, not a
+  condition on an existing one.
+- **Key side**, `arg_index._arg_to_index_key`'s `Call(LoadName)` branch: it
+  keys off the same resolution. A lift the key side does not match routes
+  callers to a bucket that holds no clauses — a WRONG-ANSWER shape, not a
+  missed optimization, which is what makes this too sharp for a cheap pass.
+
+Both would need their own driven (answer-level) tests alongside
+`tests/test_implicit_functors.py`, since the failure mode of getting it wrong
+is silent under-matching. Estimate well over the 20-line bar; the todo's
+own "why it's not fixed here" reasoning (OWA is default-off and an
+escape hatch for prototypes, and the fallback is correct-but-unindexed)
+stands unchanged.

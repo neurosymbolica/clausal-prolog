@@ -221,3 +221,36 @@ def test_dict_key_null_names_the_Undefined_literal():
             "_truth_literal_dictkey_null_test", "Row({null: 1}),\n"
         )
     assert "did you mean `Undefined`?" in str(exc_info.value)
+
+
+# ── An atom applied as a functor ───────────────────────────────────────────
+
+
+def test_an_atom_applied_as_a_functor_is_refused_at_load():
+    """P3-3 Task 4 (todo/done/atom-declared-name-applied-as-functor-is-silent):
+    post-P3-1 a ``-private`` atom is a ``str``, so ``bound2(G)`` in a clause
+    lowered to ``Call(func='bound2', ...)`` -- a shape every downstream
+    ``isinstance(func, LoadName)`` branch skips.  In a head the clause was
+    present, indexed and never matched (a "total" predicate silently losing a
+    case); in a body the compiler's own AST node escaped into user data.
+    Both are now a load-time error that names the remedy."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_inline_clausal(
+            "_t4_atom_as_functor_head",
+            "-module(t4_atom_as_functor_head, [C(X)])\n"
+            "-private([bound2])\n"
+            "C(bound2(G)) <- (G is 2)\n",
+        )
+    message = str(exc_info.value)
+    assert "bound2" in message and "atom" in message
+
+
+def test_an_atom_applied_as_a_functor_in_a_body_is_refused_too():
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_inline_clausal(
+            "_t4_atom_as_functor_body",
+            "-module(t4_atom_as_functor_body, [C(Y)])\n"
+            "-private([bound2])\n"
+            "C(Y) <- (Y is bound2(5))\n",
+        )
+    assert "bound2" in str(exc_info.value)
