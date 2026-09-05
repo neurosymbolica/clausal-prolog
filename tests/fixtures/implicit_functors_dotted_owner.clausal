@@ -1,0 +1,7 @@
+# Owner half of the P3-2 Task 6 fix-round-1 dotted-OWA regression pair
+# (tests/test_implicit_functors.py, TestDottedOwaGate). Declares a single
+# DATA functor (fields, no clauses) for an importer to reference dotted
+# (``-import_module`` + ``owner.wrap(...)``) -- the case the fix's dot-gate
+# must NOT disturb: a legitimately resolved dotted functor still emits the
+# base-spelling cell exactly as without ``-implicit_functors``.
+-module(implicit_functors_dotted_owner, [wrap(v)])

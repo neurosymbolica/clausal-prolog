@@ -1025,12 +1025,26 @@ def term_to_ast_expr(
                 missing=lambda: _call(_name("Var")),
             )
             return cell_literal_ast(_functor, _placed)
-        if _owa:
-            # No registry entry at all. OWA still defers to a PREDICATE
-            # binding -- a goal is not data, even in a flagged module -- so
-            # the binding question is asked the same way
-            # ``cell_signature_for_name`` asks it, just without requiring a
-            # signature to exist.
+        if _owa and "." not in fname:
+            # No registry entry at all, and *fname* is a PLAIN (dot-free)
+            # name -- OWA opens the flagged module's OWN functor vocabulary,
+            # not name resolution across a module boundary. A DOTTED
+            # reference that reaches here (``other.Wrap``) has already
+            # failed to resolve to a signature via
+            # ``cell_signature_for_name`` -- that is a missing import or a
+            # typo, not an OWA-advisory functor, and must stay a loud
+            # failure (the ``ast.Call`` fallback below, same as without the
+            # flag) rather than silently mint a cell tagged with the WHOLE
+            # dotted string, which violates R5's base-name-spelling
+            # invariant and can never unify with anything (fix round 1,
+            # Important finding — reviewer-confirmed live bug: a dotted
+            # OWA-unknown built ``('other.Wrap', ...)`` instead of either
+            # resolving or failing loudly).
+            #
+            # OWA still defers to a PREDICATE binding -- a goal is not
+            # data, even in a flagged module -- so the binding question is
+            # asked the same way ``cell_signature_for_name`` asks it, just
+            # without requiring a signature to exist.
             _resolved = _resolve_functor_binding(fname, _namespace) if _namespace else None
             _binding = _resolved[0] if _resolved is not None else None
             if not isinstance(_binding, PredicateMeta):

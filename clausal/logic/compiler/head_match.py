@@ -716,7 +716,7 @@ def head_to_match_pattern(
                         for a in term.args
                     ],
                 )
-        elif _owa:
+        elif _owa and "." not in term.func.name:
             # No registry entry and no resolvable term-shaped class: the
             # OWA-unknown case (P3-2 Task 6, R7). ``resolved``/``fields``
             # were already computed above -- this branch is reached only
@@ -724,6 +724,14 @@ def head_to_match_pattern(
             # here (a class with ``_fields`` already took the branch above),
             # but the check is kept explicit for the same reason Site A
             # keeps it: a goal is not data, even under OWA.
+            #
+            # The ``"." not in term.func.name`` gate mirrors Site A's
+            # identical guard (fix round 1, Important finding): a DOTTED
+            # head reference that reaches here has already failed to
+            # resolve to a signature or a term-shaped class -- a missing
+            # import or a typo, not an OWA-advisory functor -- and must
+            # fall through to the existing (loud) dead-pattern path rather
+            # than silently match on the whole dotted string.
             if not isinstance(resolved, PredicateMeta):
                 if term.kwargs:
                     raise SyntaxError(

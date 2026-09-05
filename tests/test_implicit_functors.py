@@ -28,6 +28,12 @@ Groups:
    today's errors), keyword-construction's compile error, the
    assert+query round trip (head-side symmetry), and strict-atoms
    orthogonality.
+3. ``TestDottedOwaGate`` -- fix round 1 (Important finding): a DOTTED OWA-
+   unknown reference (an unresolvable qualified name, e.g. a typo'd or
+   missing attribute on a real imported module) must NOT take the OWA cell
+   branch -- it falls through to the existing (loud) failure path, same
+   class and timing as without the flag. A legitimately resolved dotted
+   DATA functor is unaffected (regression guard).
 """
 
 from __future__ import annotations
@@ -305,3 +311,136 @@ class TestImplicitFunctors:
         x = Var()
         answers = [deref(x) for _t in call("p", x, module=lm)]
         assert answers == [("wibble", 1, 2)]
+
+
+# ── Fix round 1: dotted OWA-unknown references stay loud ────────────────────
+
+
+class TestDottedOwaGate:
+    """Fix round 1, Important finding (reviewer-confirmed live): a DOTTED
+    OWA-unknown reference (``other.NoSuchThing(1, 2)``) used to silently
+    build a cell tagged with the WHOLE dotted string -- violating R5's
+    base-name-spelling invariant, producing permanently-unmatchable dead
+    data, and converting a loud ``NameError`` into silent success.
+
+    Ruling: OWA opens the flagged module's OWN functor vocabulary; an
+    unresolvable DOTTED prefix is a name-resolution failure (missing import
+    or typo) that must stay loud, on both construction (Site A) and head
+    matching. Gate: the OWA branch only fires for a plain (dot-free) name.
+    """
+
+    def test_dotted_owa_unknown_construction_stays_a_query_time_nameerror(self):
+        """(a) The reviewer's exact repro: a dotted reference to a
+        nonexistent attribute on a REAL imported module, in a flagged
+        module's body, still raises ``NameError`` -- not a silently-built
+        cell tagged with the whole dotted string."""
+        mod = _load_inline(
+            "_if_dot_owa",
+            "-implicit_functors\n"
+            "-import_module(tests.fixtures.importable_utils)\n"
+            "-module(_if_dot_owa, [p(A)])\n"
+            "p(tests.fixtures.importable_utils.NoSuchThing(1, 2)),\n",
+        )
+        lm = _logic_module(mod)
+        x = Var()
+        with pytest.raises(
+            NameError,
+            match=r"tests\.fixtures\.importable_utils\.NoSuchThing",
+        ):
+            list(call("p", x, module=lm))
+
+    def test_dotted_owa_unknown_construction_matches_the_unflagged_error(self):
+        """Same source minus the flag: identical error CLASS, identical
+        MESSAGE, identical TIMING (raised when ``p/1`` is driven, not at
+        load) -- OWA changes nothing about this dotted, unresolvable case."""
+        flagged = _load_inline(
+            "_if_dot_owa_cmp_flag",
+            "-implicit_functors\n"
+            "-import_module(tests.fixtures.importable_utils)\n"
+            "-module(_if_dot_owa_cmp_flag, [p(A)])\n"
+            "p(tests.fixtures.importable_utils.NoSuchThing(1, 2)),\n",
+        )
+        plain = _load_inline(
+            "_if_dot_owa_cmp_plain",
+            "-import_module(tests.fixtures.importable_utils)\n"
+            "-module(_if_dot_owa_cmp_plain, [p(A)])\n"
+            "p(tests.fixtures.importable_utils.NoSuchThing(1, 2)),\n",
+        )
+        # Both LOAD cleanly -- the dotted reference is only diagnosed lazily,
+        # when the goal that references it actually runs (same as any other
+        # unresolved global in this compiler).
+        with pytest.raises(NameError) as flagged_exc:
+            list(call("p", Var(), module=_logic_module(flagged)))
+        with pytest.raises(NameError) as plain_exc:
+            list(call("p", Var(), module=_logic_module(plain)))
+        assert str(flagged_exc.value) == str(plain_exc.value)
+
+    def test_dotted_owa_unknown_head_reference_stays_a_query_time_nameerror(self):
+        """(c) Head-side twin of (a): a dotted reference to a nonexistent
+        attribute used as a clause HEAD pattern in a flagged module still
+        raises ``NameError`` at drive time, identical class/message to the
+        unflagged twin -- head_match's mirrored gate is exercised, not just
+        Site A's."""
+        flagged = _load_inline(
+            "_if_dot_owa_head_flag",
+            "-implicit_functors\n"
+            "-import_module(tests.fixtures.importable_utils)\n"
+            "-module(_if_dot_owa_head_flag, [unwrap(W, X)])\n"
+            "unwrap(tests.fixtures.importable_utils.NoSuchThing(X), X),\n",
+        )
+        plain = _load_inline(
+            "_if_dot_owa_head_plain",
+            "-import_module(tests.fixtures.importable_utils)\n"
+            "-module(_if_dot_owa_head_plain, [unwrap(W, X)])\n"
+            "unwrap(tests.fixtures.importable_utils.NoSuchThing(X), X),\n",
+        )
+        with pytest.raises(
+            NameError,
+            match=r"tests\.fixtures\.importable_utils\.NoSuchThing",
+        ) as flagged_exc:
+            list(call("unwrap", ("NoSuchThing", 9), Var(), module=_logic_module(flagged)))
+        with pytest.raises(NameError) as plain_exc:
+            list(call("unwrap", ("NoSuchThing", 9), Var(), module=_logic_module(plain)))
+        assert str(flagged_exc.value) == str(plain_exc.value)
+
+    def test_a_legitimately_imported_dotted_functor_is_unaffected_by_the_gate(self):
+        """(b) Regression guard: the dot-gate must not disturb the RESOLVED
+        path -- a dotted reference that DOES resolve to a declared data
+        functor (via ``-import_module``) still emits the base-spelling cell
+        under OWA, exactly as it does without the flag."""
+        mod = _load_inline(
+            "_if_dot_resolved",
+            "-implicit_functors\n"
+            "-import_module(tests.fixtures.implicit_functors_dotted_owner)\n"
+            "-module(_if_dot_resolved, [p(A)])\n"
+            "p(tests.fixtures.implicit_functors_dotted_owner.wrap(5)),\n",
+        )
+        src = capture_predicate_codegen("_if_dot_resolved", ["p"])
+        assert "('wrap', 5)" in src
+        lm = _logic_module(mod)
+        x = Var()
+        answers = [deref(x) for _t in call("p", x, module=lm)]
+        assert answers == [("wrap", 5)]
+
+    def test_a_legitimately_imported_dotted_functor_matches_the_unflagged_path(self):
+        """...and produces the IDENTICAL cell whether or not the importer
+        carries ``-implicit_functors`` -- the resolved-dotted-name path
+        (``cell_signature_for_name`` finding a real registry entry) does not
+        even reach the new OWA branches."""
+        flagged = _load_inline(
+            "_if_dot_resolved_cmp_flag",
+            "-implicit_functors\n"
+            "-import_module(tests.fixtures.implicit_functors_dotted_owner)\n"
+            "-module(_if_dot_resolved_cmp_flag, [p(A)])\n"
+            "p(tests.fixtures.implicit_functors_dotted_owner.wrap(5)),\n",
+        )
+        plain = _load_inline(
+            "_if_dot_resolved_cmp_plain",
+            "-import_module(tests.fixtures.implicit_functors_dotted_owner)\n"
+            "-module(_if_dot_resolved_cmp_plain, [p(A)])\n"
+            "p(tests.fixtures.implicit_functors_dotted_owner.wrap(5)),\n",
+        )
+        x1, x2 = Var(), Var()
+        flagged_answers = [deref(x1) for _t in call("p", x1, module=_logic_module(flagged))]
+        plain_answers = [deref(x2) for _t in call("p", x2, module=_logic_module(plain))]
+        assert flagged_answers == plain_answers == [("wrap", 5)]
