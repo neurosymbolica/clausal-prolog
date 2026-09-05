@@ -106,6 +106,75 @@ What this replaces vs. preserves from the strict-atoms design (shipped 2026-07-2
 
 ## 1b. Phase 3 rulings: functor domain + atom scope (recorded 2026-09-03, pre-Phase-3)
 
+> **STATUS 2026-09-05: CELLS UNCONDITIONAL (P3-2 IMPLEMENTED)** on branch
+> `feat/p32-cell-flip` (P3-2, `implementation_plans/p32-cell-default-flip.md` --
+> Tasks 0-10; ledger + task reports in
+> `.superpowers/sdd/p32-cell-default-flip/`). Compound construction and
+> matching compile to plain tagged tuples **in every module, unconditionally**
+> -- the `-tagged_terms` opt-in flag and its plumbing are deleted (see
+> `docs/directives.md` §"-tagged_terms (removed)"). Rulings recorded (full
+> text: task briefs/ledger; one line each here):
+> - **R5** (own-module cross-module gate deleted): cell emission no longer
+>   requires module ownership -- functors are global strs post-P3-1, so an
+>   imported functor gets the same cell emission as a locally-declared one.
+> - **R6 REVISED** (stop minting data-functor classes): a data functor binds
+>   its name to the interned functor **str** plus a
+>   `__clausal_functor_signatures__` registry entry
+>   (`functor_signature_for`/`cell_signature_for_name`,
+>   `_place_signature_slots`), never a generated class. Went further than
+>   planned: **instance-side cell emission was removed entirely** --
+>   `is_data_functor`/`cell_functor_for_instance` were created then deleted;
+>   every surviving `PredicateMeta` *instance* at runtime is Python-minted
+>   (`reflection.Goal`, `clpb.BoolEq`), never a `.clausal`-sourced data-functor
+>   instance.
+> - **R6b** (ISO `name/arity` predicate exports): a declaration-only export
+>   spelled `name/arity` (not `Name(A, B)`) is the *vocabulary-predicate*
+>   idiom -- it mints a `PredicateMeta` whose clauses live in a downstream
+>   module, distinguishing it from a bare declaration-only entry, which
+>   defaults to DATA under R6.
+> - **R7** (`-implicit_functors`, net-new, default OFF): a per-module OWA
+>   directive -- any functor at any written arity, declared or not,
+>   constructs/matches a cell; keyword construction still needs a real
+>   signature; dotted OWA-unknown references stay loud (fall through to the
+>   ordinary name-resolution failure, never silently cell-ified).
+> - **R8** (str-side charlist coalesce retires): `arg_index.py`'s compile-time
+>   str/char-list bucket-key coalescing is deleted, closing the first-arg-index
+>   str/list asymmetry todo; the bytes~codes model is untouched.
+> - **R9** (`-tagged_terms` deleted): the flag, its directive handler, and
+>   every gated call site are gone; writing `-tagged_terms` is now an
+>   unknown-directive `SyntaxError`.
+>
+> Slot-0 domain narrowed to **exact-type `{str, TUPLE_TAG}`**, deref removed
+> from recognition, six call sites consolidated onto one `cells.py` predicate
+> (Task 5). Slot-0 first-arg indexing is LIVE (Task 4; §3.1 below is DONE):
+> `_arg_to_index_key`/`_runtime_arg_key` key cells on slot 0, guarded by a
+> **compile-time-conditional "deep gate"** -- computed once per predicate/
+> position, it runs a bounded groundness walk only when a lifted clause
+> pattern actually carries a literal sub-value below the indexed root (zero
+> overhead in the common case; a miss routes to the safe full-scan fallback).
+> The **one authorized C change** (Task 2C; user ruling 2026-09-05 relaxed the
+> plan's no-C-changes constraint): `c_copy_term`/`c_collect_vars`/`c_is_ground`
+> (`_variables.c`) gained a `PyTuple_CheckExact` branch mirroring `do_walk`'s
+> existing tuple handling -- required because the flip's Python-only walkers
+> regressed copy/term_variables/ground ~3.4x on cell-heavy terms (would have
+> blown the perf gate); no other `.c` file touched.
+>
+> Perf outcome (Task 9, interleaved A/B vs branch base `5bcd66ec`):
+> `bench_fib` flat (~0.99x); `bench_struct_tabling` 0.606 head/base -- a 39%
+> win on the walker-heavy workload the Phase-2 measurement (B/A=0.561)
+> predicted. Gate PASSED. Full-suite reconciliation: EMPTY name-diff
+> (reproduced twice) vs the pre-P3-2 baseline, modulo the pre-existing
+> C17-perf flake (passed both runs).
+>
+> §6 hazard 2 (dict/set pairs as plain 2-tuples) is **RE-AFFIRMED as Phase 4**
+> scope -- P3-2 did not touch `dict_set.py`. §5a's TermProxy seam design is
+> **SUPERSEDED** by `implementation_plans/python-seam-classes-as-functors.md`
+> (classes-as-functors + dispatch-entry instance conversion) as the intended
+> seam answer -- its own plan, timing user-decided.
+>
+> **Next: P3-3** (state relocation + qualified goals) -- read
+> `implementation_plans/p33-state-relocation-handoff.md` first.
+
 Settled in design discussion after the Phase 2 bridge merged; these bind the Phase 3 plan.
 
 **Functor domain contracts to `{str}`.** Clausal functors were always atoms; with atoms as
@@ -280,7 +349,9 @@ Context that bounds the win:
 
 1. **First-arg indexing**: `_runtime_arg_key` (`arg_index.py:157-165`) currently drops tuples;
    slot 0 becomes the index key. Str functor keys are ideal dict keys. Unbound-Var/exotic tags
-   index as `_INDEX_VAR` (correct fallback).
+   index as `_INDEX_VAR` (correct fallback). **DONE (P3-2 Task 4, 2026-09-05)** — see the §1b
+   STATUS note above for the compile-time-conditional deep-gate that guards the one
+   miss-hazard (a lifted literal sub-pattern below the indexed root).
 2. **Tabling keys**: `_normalize_for_key`'s `("__tuple__", ...)`/`(functor-name, ...)` scheme
    (`tabling.py:396-438` + C twin) — the representation is now *already* that key, str functor
    included. Non-hashable exotic tags need the existing unhashable fallback.
@@ -419,6 +490,11 @@ workload — bench_tabling is broken two ways; see todo/bench-tabling-overflow-o
 
 ## 5a. Seam design: TermProxy (resolves open question 1)
 
+> **SUPERSEDED (2026-09-05, P3-2 close-out):** `implementation_plans/python-seam-classes-as-functors.md`
+> (classes-as-functors + dispatch-entry instance conversion) is now the intended seam answer;
+> that design's own plan and timing are user-decided. This section is kept for its prototype
+> and reasoning, not as the live plan.
+
 Instead of eagerly converting answer terms back to Python objects at the seam, hand back a
 **lazy proxy over a snapshot**. Prototyped and verified 2026-09-03
 (`implementation_plans/proto_termproxy.py`, runnable); every load-bearing mechanism demonstrated.
@@ -468,6 +544,8 @@ Instead of eagerly converting answer terms back to Python objects at the seam, h
    tuples; `clausal-provenance/engine.py` (getattr + `cls(**{...})`, ~10 sites) is heaviest.
 2. **Dict/set pairs** are plain 2-tuples today (`dict_set.py:69-80`) → become `(tuple, k, v)`.
    Migrate, don't exempt. 19 `.clausal` stdlib/corpus files to audit for destructuring.
+   **RE-AFFIRMED as Phase 4 (2026-09-05)** — P3-2 did not touch `dict_set.py`; do not migrate
+   these until Phase 4.
 3. **Off-by-one + C-twin lock-step**: `do_walk` rebuild (`_variables.c:1747`,
    `PyObject_Call(cls, kwargs)` → `PyTuple_New`), `_tabling_core.c`, `_constraints_dif.c`
    (17 term-aware sites), `_clpfd_core.c` (5). Drift is silent corruption, not errors.

@@ -191,6 +191,75 @@ not carry both (doing so is a compile error).
 
 The REPL uses this mode implicitly so interactive queries keep auto-minting.
 
+### -implicit_functors
+
+**Problem**: Construction checking is on by default (see
+[Data functors vs predicates](#data-functors-vs-predicates)): a keyword-free
+reference to an undeclared functor is a runtime `NameError`, and an over-arity
+reference to a declared functor's signature is a compile-time `SyntaxError`
+naming `functor/arity`. Some modules — prototypes, meta-programming, code that
+builds ad hoc structured data — want Prolog's traditional open-world
+construction back: any functor, at any written arity, declared or not, just
+builds a cell.
+
+`-implicit_functors` is a **file-level opt-in marker** that takes no arguments
+(bare `-implicit_functors` or `-implicit_functors()`). With it present, a
+module's own functor construction and head matching apply the open-world (OWA)
+rule instead of the checked-signature placement rule: any functor reference —
+declared or not — at any written arity compiles to a cell (or matches one, on
+a clause head). The identical rule applies on the head side, so a flagged
+module's own clause heads pattern-match the cells its own bodies build.
+
+```clausal
+-implicit_functors
+-module(scratch, [p(A)])
+
+p(wibble(1, 2)),
+```
+
+`wibble/2` has no declared signature anywhere; under the flag, `wibble(1, 2)`
+still compiles to the cell `("wibble", 1, 2)` instead of raising. The identical
+source without the directive is a runtime `NameError` naming `wibble` when the
+goal that references it actually runs.
+
+**Advisory, not backfilled.** A functor that IS declared, referenced at a
+different written arity, is also advisory under the flag: `point/2` declared,
+referenced as `point(10, 20, 30)`, builds `("point", 10, 20, 30)` at the arity
+actually written; a short reference (`point(1)`) builds `("point", 1)` rather
+than backfilling the missing slot with a fresh `Var()` the way the
+unconditional (unflagged) placement rule does. Without the flag, an over-arity
+reference to a declared functor is a compile-time `SyntaxError` naming
+`point/2`.
+
+**Keyword construction is unaffected.** The flag only makes keyword-*free*
+(positional) construction advisory. A keyword reference (`point(x=1, y=2)`)
+still needs a real registered signature to place its named slots against — an
+OWA-unknown functor referenced by keyword (`wobble(x=1)`) is still a
+compile-time `SyntaxError` naming the missing signature, flag or no flag, and a
+declared functor's unknown field name is still rejected the same way.
+
+**Predicates are unaffected.** A functor with clauses in the file is a
+predicate, not data — calling it compiles to a goal (class/dispatch emission)
+exactly as without the flag; OWA only concerns functor *construction*.
+
+**Dotted references stay loud.** An unresolvable dotted reference
+(`other.NoSuchThing(1, 2)` — a typo or a missing import) is a name-resolution
+failure, not a functor-vocabulary question: it raises the ordinary `NameError`
+under the flag exactly as without it. OWA opens the flagged module's own local
+functor vocabulary; it does not suppress qualified-name resolution failures. A
+dotted reference that *does* resolve to a real data functor is unaffected
+either way.
+
+**Orthogonal to atom resolution.** `-implicit_functors` concerns functor
+*construction* arity/declaredness; it says nothing about bare (0-arity) atom
+references, which are governed independently by
+[`-strict_atoms`](#-strict_atoms)/[`-implicit_atoms`](#-implicit_atoms). A
+module may carry `-implicit_functors` together with `-strict_atoms`: functor
+construction is advisory while bare atom references still require declaration.
+
+**Scope**: per-file only, like `-implicit_atoms` — it does not propagate to
+imported modules.
+
 ### -hide
 
 **Problem**: Atoms are global by spelling — any module can write `red` and reach the same atom every other module declaring `red` reaches. That is almost always what you want (see [Import System](import.md#atoms-are-global-by-spelling)), but a module occasionally needs a truly private symbol: an internal sentinel or tag value that other modules must not be able to spell, read, or accidentally collide with.

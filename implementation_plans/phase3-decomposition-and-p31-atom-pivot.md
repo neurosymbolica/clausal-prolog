@@ -259,7 +259,28 @@ updated for `-hide`; memory + final report with the reconciled-inversion list.
 
 ---
 
-# P3-2 — Cell Default Flip (outline; plan after P3-1 merges)
+# P3-2 — Cell Default Flip (DONE 2026-09-05; outline below kept for record)
+
+**DONE.** Full plan: `implementation_plans/p32-cell-default-flip.md` (Tasks 0-10).
+Ledger + task reports: `.superpowers/sdd/p32-cell-default-flip/`. Status note +
+ruling summary: `implementation_plans/tagged-tuple-term-representation.md` §1b
+STATUS block. Memory: `tagged-tuple-term-design-parked` (P3-2 COMPLETE entry).
+Executed on branch `feat/p32-cell-flip`, 28 commits `ef10baa4..aac9895a` plus the
+close-out doc commits. One-line summary: cells became the unconditional compiled
+representation in every module (the `-tagged_terms` flag deleted); both
+load-bearing gaps the bridge documented were closed (head-pattern reachability via
+`_lift_clause_at_pos`/`_walk_head` cell branches; cross-module exchange via R5's
+own-module-gate deletion); slot-0 first-arg indexing shipped with a compile-time
+deep-gate; instance-side cell emission was removed entirely (a deviation past the
+outline below — R6 REVISED); `-implicit_functors` shipped as the net-new
+per-module OWA directive (R7), default off; one authorized C change (Task 2C,
+`_variables.c` tuple branches in `c_copy_term`/`c_collect_vars`/`c_is_ground`);
+perf gate passed (`bench_struct_tabling` 0.606 head/base, `bench_fib` flat).
+**Next: P3-3** — read `implementation_plans/p33-state-relocation-handoff.md` first.
+
+<details>
+<summary>Original outline (plan after P3-1 merges) — superseded by the executed
+plan above; kept for the historical record of what was scoped before execution</summary>
 
 Scope from recon (`terms_to_ast.py`, `head_match.py`, `arg_index.py`,
 `list_dispatch.py`, `cells.py`, `_helpers.py`):
@@ -281,6 +302,8 @@ generating pure-data functor classes, keep predicate classes until P3-3); parity
 corpus fixtures become old-golden vs new-default regression anchors; C untouched
 (cells ride existing tuple branches — Phase 2 proved it).
 
+</details>
+
 # P3-3 — State Relocation + Qualified Goals (outline; plan after P3-2)
 
 Scope from recon (`database.py`, `predicate.py`, `compiler/predicate.py`,
@@ -299,3 +322,21 @@ specialization stops minting classes (`make_predicate`/`make_atom` callers at
 `specialization.py:277,1313,1671` register Database rows instead); reflection/listing
 surfaces (`reflection.py`, `inspection.py`, `compiler_v2.py`) migrate to
 `(module, name, arity)` lookups.
+
+**Full hand-off (recon crown jewels, process discipline, parked todos that fold in
+naturally): read `implementation_plans/p33-state-relocation-handoff.md` before
+planning P3-3** (added at P3-2 close-out, 2026-09-05).
+
+**Stencil-seam planning input (ruled 2026-09-05, ratified as binding on this
+outline):** the Database/dispatch redesign above must keep the dispatch seam
+**backend-pluggable**, with **one invalidation point** and a **per-predicate
+backend-choice hook** — not just a single-backend read-through. This is not
+speculative: `implementation_plans/copy-patch-cells-assessment-2026-09-05.md`
+found the parked copy-and-patch stencil JIT's own integration seam
+(`compiler/predicate.py` stencil-backend selection, `_dispatch_fn` swap) is the
+one piece of that ~67.5k-line branch that cannot be revived by re-extraction —
+it must be rewritten against whatever P3-3 builds, so P3-3 is the one chance to
+shape the seam so that rewrite is small instead of another bespoke adapter.
+Revival itself is out of P3-3's scope (own plan, after P3-3 — see
+`implementation_plans/stencil-v2-scoping-memo.md`); the requirement is scoping
+input only.
