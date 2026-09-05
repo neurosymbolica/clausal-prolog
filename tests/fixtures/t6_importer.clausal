@@ -21,3 +21,4 @@ DottedP(X) <- tests.fixtures.t6_exporter.p(X)
 CallHost1(G) <- call(G),
 CallHost2(G, A) <- call(G, A),
 CallHost3(G, A, B) <- call(G, A, B),
+CallHost4(G, A, B, C) <- call(G, A, B, C),

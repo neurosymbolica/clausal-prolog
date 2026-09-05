@@ -47,12 +47,27 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     ``call((",", A, B))`` and ``call(",", A, B)`` — behave identically
     (P3-3 Task 5 fix round 1, F4).
 
-    A module-QUALIFIED folded goal ``(":", M, G)`` is resolved rather than
+    A module-QUALIFIED folded goal ``(":", M, G, ...)`` is resolved rather than
     looked up (P3-3 Task 6, replacing Task 5's stub): *M* names the module
     whose database answers, so the whole resolution restarts against THAT db —
     dispatch table first, then that module's namespace — and the calling db is
     not consulted at all.  That is the module-locality rule: an exporter's
     ``p/1`` answers a qualified call even when the caller defines its own.
+
+    The fold puts ``call/N``'s extras AFTER ``M`` and ``G``, so on this path a
+    folded ``:``/N for any N ≥ 2 is "M:G with N-2 extras still to fold": slots
+    1 and 2 are the qualification and everything past them belongs to the
+    INNER goal, giving ``call(M:p, X)`` → ``M:p(X)`` and ``call(M:pair(11), B)``
+    → ``M:pair(11, B)`` (SWI's ``call(M:G, X) ≡ M:call(G, X)``).  That is
+    narrower than it looks: ``:``/N≥3 is the qualified form HERE and nowhere
+    else — on the lowering paths (``solve._term_to_goal``,
+    ``solve._templatize_query_goal``) only ``:``/2 is, because no fold has run
+    there and ``(":", A, B, C)`` written as a goal really is a ``:``/3 call.
+    What Task 5 fix round 1 F5 pinned — that the two LOWERING guards agree —
+    is untouched; what F4 pinned — that everything after the fold is decided
+    on the folded goal, so ``call((":", M, G), X)`` and ``call(":", M, G, X)``
+    behave identically — is what makes this arm arity-general rather than
+    ``== 2``.
 
     Returns ``None`` — which the caller turns into a silent failure, the
     behaviour every non-callable goal has had — when the goal is not a cell or
@@ -77,19 +92,22 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     else:
         return None
     call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]
-    # The goal as the fold leaves it — the term the two special routes below
-    # both decide on, and the culprit they both name.
+    # The goal as the fold leaves it — the term both special routes below are
+    # decided on (F4), and the culprit the control-construct refusal names.
     folded = (functor,) + tuple(call_args)
-    if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) == 2:
+    if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) >= 2:
+        # Slots 1 and 2 are the qualification; everything past them is an
+        # extra the fold has not placed yet, and it belongs to the INNER goal.
         target, inner = resolve_qualified_goal_cell(
-            folded, context, _calling_module(db))
+            (QUALIFIED_GOAL_FUNCTOR, call_args[0], call_args[1]),
+            context, _calling_module(db))
         # One level only: the resolver unwraps nesting itself, so ``inner`` is
         # never another ``:``/2 and this recursion cannot repeat.  It restarts
-        # the WHOLE resolution — including the control-construct refusal, so
-        # ``call(M:(A, B))`` is refused exactly like ``call((A, B))`` — with no
-        # extras left to fold, since the fold that produced ``folded`` already
-        # consumed them.
-        return _resolve_named_goal(target.db, inner, (), context)
+        # the WHOLE resolution — the control-construct refusal included, so
+        # ``call(M:(A, B))`` is refused exactly like ``call((A, B))`` — with
+        # the leftover extras handed on to fold onto the inner goal there.
+        return _resolve_named_goal(
+            target.db, inner, tuple(call_args[2:]), context)
     # No arity condition (F3): ``call((",",))`` is as much a control construct
     # in goal position as ``call((",", A, B))``, and it used to fail silently
     # here while ``solve((",",), m)`` raised.

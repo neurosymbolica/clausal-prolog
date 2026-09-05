@@ -365,12 +365,21 @@ class TestDeferredCellGoalForms:
         assert [deref(X) for _ in pcall(
             "cg1", (":", "cellgoals", ("p", X)), module=_lm(mod))] == [1, 2]
 
-    def test_only_colon_slash_2_is_the_qualified_form(self, mod):
-        """``(":", A, B, C)`` is an ordinary ``:``/3 call.  Both goal paths
+    def test_only_colon_slash_2_is_the_qualified_form_on_the_lowering_paths(
+            self, mod):
+        """``(":", A, B, C)`` is an ordinary ``:``/3 call.  Both LOWERING paths
         must agree on that: ``_term_to_goal``'s guard has always been
         ``len == 3``, and ``_templatize_query_goal``'s was arity-blind.
-        Fix round 1, F5 — still the rule now that ``:``/2 resolves rather than
-        being refused."""
+        Task 5 fix round 1, F5 — still the rule now that ``:``/2 resolves
+        rather than being refused.
+
+        SCOPE (narrowed by P3-3 Task 6 fix round 1, ruling R-A): "only ``:``/2"
+        is a statement about these two functions, which lower a goal TERM as
+        written.  ``call/N`` is not a lowering path — its fold has already
+        moved the extras in, so there a folded ``:``/N≥2 is ``M:G`` with N-2
+        extras still to place (``call(M:p, X)`` → ``M:p(X)``).  That is Task 5
+        F4's rule, not an exception to F5: the two are consistent because
+        nothing folds anything here."""
         from clausal.logic.solve import _templatize_query_goal, _term_to_goal
         from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
 

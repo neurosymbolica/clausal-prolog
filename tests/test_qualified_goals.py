@@ -64,8 +64,8 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import (
     _tabled_entry_for_goal, call as pcall, query_wfs, resolve_module, solve,
 )
-from clausal.logic.variables import Trail, Var, deref
-from clausal.terms import Compound
+from clausal.logic.variables import Trail, Var, deref, unify
+from clausal.terms import Compound, Undefined
 
 
 EXPORTER = "tests.fixtures.t6_exporter"
@@ -149,13 +149,26 @@ class TestResolveModule:
             resolve_module(V, None)
         assert deref(V) is V
 
-    def test_resolution_never_imports(self):
-        """Lookup-only: an importable but unimported module does NOT resolve."""
+    def test_resolution_never_imports(self, monkeypatch):
+        """Lookup-only: an importable but unimported module does NOT resolve.
+
+        ``monkeypatch.delitem`` rather than ``sys.modules.pop`` so the entry is
+        put back for whatever runs next (fix round 1, F7)."""
         name = "tests.fixtures.t6_lib"
-        sys.modules.pop(name, None)
+        monkeypatch.delitem(sys.modules, name, raising=False)
         with pytest.raises(LogicException):
             resolve_module(name, None)
         assert name not in sys.modules
+
+    def test_the_culprit_is_the_dereferenced_designator(self, mods):
+        """A ``M`` slot is routinely a Var bound to the real designator;
+        reporting the Var names the plumbing, not the fault (F6)."""
+        V = Var()
+        unify(V, 7, Trail())
+        with pytest.raises(LogicException) as exc_info:
+            resolve_module(V, None)
+        inner, _context = _error_term(exc_info.value)
+        assert inner == Compound("existence_error", ("module", "7"))
 
 
 # ── the qualified goal in solve() ──────────────────────────────────────────
@@ -260,6 +273,41 @@ class TestNestedQualification:
         inner, _context = _error_term(exc_info.value)
         assert inner == Compound("existence_error", ("module", "'t6_nope'"))
 
+    def test_a_cyclic_qualification_terminates_with_an_error(self, mods):
+        """``V`` bound to ``(":", M, V)`` has no innermost goal.  ``unify``
+        builds cyclic terms and nothing forbids them, so the peel loop is
+        BOUNDED rather than trusting the term to bottom out (fix round 1, F5).
+        The assertion is simply that it raises — reaching it at all is the
+        pin, since the unbounded loop hung."""
+        V = Var()
+        cyclic = (":", EXPORTER, V)
+        unify(V, cyclic, Trail())
+        with pytest.raises(LogicException) as exc_info:
+            list(solve(cyclic, mods.importer))
+        inner, context = _error_term(exc_info.value)
+        assert inner.functor == "existence_error"
+        assert inner.args[0] == "module"
+        assert "cyclic" in context
+
+    def test_a_qualification_nested_past_the_cap_is_refused(self, mods):
+        from clausal.logic.cells import MAX_QUALIFICATION_DEPTH
+        goal = ("p", Var())
+        for _ in range(MAX_QUALIFICATION_DEPTH + 1):
+            goal = (":", EXPORTER, goal)
+        with pytest.raises(LogicException) as exc_info:
+            list(solve(goal, mods.importer))
+        assert _error_term(exc_info.value)[0].args[0] == "module"
+
+    def test_a_qualification_at_the_cap_still_answers(self, mods):
+        """The bound is a guard, not a new limit on legitimate nesting: the
+        cap is the deepest chain that WORKS, one shy of the refusal above."""
+        from clausal.logic.cells import MAX_QUALIFICATION_DEPTH
+        X = Var()
+        goal = ("p", X)
+        for _ in range(MAX_QUALIFICATION_DEPTH):
+            goal = (":", EXPORTER, goal)
+        assert [deref(X) for _ in solve(goal, mods.importer)] == [11, 12]
+
 
 class TestQualifiedDottedParity:
     """The cell spelling and the dotted call-node spelling are one feature."""
@@ -313,12 +361,20 @@ class TestSolveModuleDesignator:
 
     def test_an_unqualified_cell_goal_without_a_module_names_the_gap(self):
         """Cells never reach ``_infer_module`` — the gap is reported, not guessed."""
-        goal = ("p", Var())
+        Q = Var()
+        goal = ("p", Q)
         with pytest.raises(LogicException) as exc_info:
             list(solve(goal))
         inner, context = _error_term(exc_info.value)
-        assert inner == Compound("existence_error", ("module", goal))
+        # The culprit is the REPR, not the live cell (fix round 1, F4): the
+        # cell holds the caller's Var, so a catch/3 pattern unifying with the
+        # culprit would alias it.
+        assert inner == Compound("existence_error", ("module", repr(goal)))
+        assert isinstance(inner.args[1], str)
         assert "module=" in context and "qualify" in context
+        # ...and unifying with it therefore leaves the user's Var alone.
+        unify(("p", Var()), inner.args[1], Trail())
+        assert deref(Q) is Q
 
     def test_a_class_term_goal_without_a_module_still_infers(self, mods):
         """``_infer_module``'s legacy customers are untouched."""
@@ -400,13 +456,51 @@ class TestQualifiedCallN:
         assert list(pcall("CallHost1", (":", EXPORTER, ("nosuch", Var())),
                           module=mods.importer)) == []
 
-    def test_the_folded_colon_slash_3_form_is_not_the_qualified_one(
+    def test_call_over_a_qualified_cell_with_extras_dispatches_in_the_exporting_db(
             self, mods):
-        """``call((":", M, G), X)`` folds to ``:``/3, which is an ordinary
-        call — unchanged from Task 5 (fix round 1, F5: only ``:``/2 is the
-        qualified form, on every path)."""
-        assert list(pcall("CallHost2", (":", EXPORTER, ("p", Var())), Var(),
-                          module=mods.importer)) == []
+        """``call(M:G, X)`` is ``M:call(G, X)`` — the extras fold onto the
+        INNER goal, not onto the ``:`` cell.
+
+        This is the arm that used to fold to a ``:``/3 lookup and fail
+        silently (P3-3 Task 6 fix round 1, ruling R-A)."""
+        X = Var()
+        assert [deref(X) for _ in pcall(
+            "CallHost2", (":", EXPORTER, "p"), X,
+            module=mods.importer)] == [11, 12]
+        B = Var()
+        assert [deref(B) for _ in pcall(
+            "CallHost2", (":", EXPORTER, ("pair", 11)), B,
+            module=mods.importer)] == [12]
+
+    def test_the_atom_spelling_with_extras_agrees(self, mods):
+        """F4 again, at the arity the extras make up: ``call(":", M, G, X)``
+        folds to the same goal as ``call((":", M, G), X)``."""
+        X, Y = Var(), Var()
+        by_cell = [deref(X) for _ in pcall(
+            "CallHost2", (":", EXPORTER, ("pair", 11)), X,
+            module=mods.importer)]
+        by_atom = [deref(Y) for _ in pcall(
+            "CallHost4", ":", EXPORTER, ("pair", 11), Y,
+            module=mods.importer)]
+        assert by_cell == by_atom == [12]
+
+    def test_the_extras_form_does_not_see_the_callers_predicate(self, mods):
+        """Locality holds once the extras have folded, too."""
+        X = Var()
+        assert [deref(X) for _ in pcall(
+            "CallHost2", (":", EXPORTER, "p"), X,
+            module=mods.importer)] == [11, 12]
+        Y = Var()
+        assert [deref(Y) for _ in pcall(
+            "CallHost2", "p", Y, module=mods.importer)] == [1, 2]
+
+    def test_an_unresolvable_module_with_extras_still_raises(self, mods):
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("CallHost2", (":", "t6_nope", "p"), Var(),
+                       module=mods.importer))
+        inner, context = _error_term(exc_info.value)
+        assert inner == Compound("existence_error", ("module", "'t6_nope'"))
+        assert "call/2" in context
 
 
 # ── the tabling entry follows the qualification ────────────────────────────
@@ -452,6 +546,79 @@ class TestQualifiedTabling:
         assert [r["x"] for r in rows] == [21, 22]
         assert all(r["_truth"] is True and r["_delays"] == frozenset()
                    for r in rows)
+
+
+# ── query_wfs resolves its module ONCE, like solve ─────────────────────────
+
+
+WFS_UNDEF = "tests.fixtures.t6_wfs_undefined"
+
+
+@pytest.fixture
+def undef():
+    """A module whose tabled ``Win/1`` is WFS-*Undefined* for every answer.
+
+    ``wfs_win.clausal`` is the suite's canonical symmetric win cycle; it is
+    loaded here under a dotted name so the same goal can be asked with a str
+    designator, with a Module, and through a qualification.
+    """
+    return _load_module(WFS_UNDEF, _fixture_path("wfs_win.clausal"))
+
+
+class TestQueryWfsModuleResolution:
+    """P3-3 Task 6 fix round 1, F1 and F2.
+
+    ``query_wfs`` asks two questions — "what answers?" (``solve``) and "what
+    are their truth values?" (``_tabled_entry_for_goal``) — and both have to be
+    asked of the SAME module.  Passing the raw ``module`` argument to both let
+    them disagree, and the disagreement was silent: the truth annotation, not
+    the answer list, was what came out wrong.
+    """
+
+    def _truths(self, goal, module, X):
+        rows = query_wfs(goal, {"x": X}, module)
+        return [(r["x"], r["_truth"]) for r in rows]
+
+    def test_a_str_designator_does_not_crash_the_entry_lookup(self, undef):
+        """F1: the goal ran, then the annotation pass raised an uncaught
+        TypeError out of ``_coerce_module("dotted.name")``."""
+        lm = undef.__dict__["$module"]
+        X, Y = Var(), Var()
+        assert (self._truths(("Win", X), WFS_UNDEF, X)
+                == self._truths(("Win", Y), lm, Y))
+
+    def test_the_str_designator_reports_the_real_truth_values(self, undef):
+        X = Var()
+        rows = self._truths(("Win", X), WFS_UNDEF, X)
+        assert len(rows) == 2
+        assert all(t is Undefined for _v, t in rows)
+
+    def test_a_qualified_goal_without_a_module_keeps_its_truth_values(
+            self, undef):
+        """F2: ``_tabled_entry_for_goal`` bailed on ``module=None``, and
+        ``query_wfs`` defaults an unlocated row to ``True`` — so every
+        Undefined answer of a moduleless qualified goal read as True."""
+        lm = undef.__dict__["$module"]
+        X, Y = Var(), Var()
+        moduleless = self._truths((":", WFS_UNDEF, ("Win", X)), None, X)
+        with_module = self._truths(("Win", Y), lm, Y)
+        assert moduleless == with_module
+        assert len(moduleless) == 2
+        assert all(t is Undefined for _v, t in moduleless)
+
+    def test_a_qualified_goal_with_a_foreign_caller_keeps_its_truth_values(
+            self, undef, mods):
+        """The same, asked from a module that has never heard of the exporter."""
+        X = Var()
+        rows = self._truths((":", WFS_UNDEF, ("Win", X)), mods.importer, X)
+        assert len(rows) == 2
+        assert all(t is Undefined for _v, t in rows)
+
+    def test_the_delays_survive_the_resolution_too(self, undef):
+        X = Var()
+        rows = query_wfs((":", WFS_UNDEF, ("Win", X)), {"x": X}, None)
+        assert all(r["_delays"] for r in rows), (
+            "an Undefined answer carries a non-empty delay set")
 
 
 # ── the lowering surface itself ────────────────────────────────────────────

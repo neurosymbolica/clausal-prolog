@@ -97,6 +97,7 @@ __all__ = [
     "CELL_GOAL_CONTROL_FUNCTORS",
     "refuse_control_construct_cell",
     "QUALIFIED_GOAL_FUNCTOR",
+    "MAX_QUALIFICATION_DEPTH",
     "resolve_qualified_goal_cell",
 ]
 # NOTE: `_cell_shape` is intentionally NOT in __all__ (internal helper) but
@@ -361,6 +362,12 @@ def refuse_control_construct_cell(cell: Any, functor: Any, context: str) -> None
 # the arity-2 cell ``(":", M, G)``.
 QUALIFIED_GOAL_FUNCTOR = ":"
 
+# How many ``:`` layers ``resolve_qualified_goal_cell`` will peel before it
+# gives up.  ISO's ``m1:m2:G`` is two; anything approaching this many is a
+# runtime-built term, and a CYCLIC one (``V`` bound to ``(":", m, V)``) has no
+# bottom at all -- see the ``else`` arm of that function's loop.
+MAX_QUALIFICATION_DEPTH = 64
+
 
 def resolve_qualified_goal_cell(
     cell: Any, context: str, calling_module: Any = None,
@@ -407,7 +414,9 @@ def resolve_qualified_goal_cell(
     :param calling_module: the module the qualification was written in, if
                            known -- reported in the diagnostic.
     :raises LogicException: ``existence_error(module, <designator repr'd>)``
-                           when a designator in the chain names no module.
+                           when a designator in the chain names no module, or
+                           when the chain is cyclic / deeper than
+                           ``MAX_QUALIFICATION_DEPTH``.
     """
     from clausal.logic.solve import resolve_module  # noqa: PLC0415 -- see the
     from clausal.logic.variables import deref       # note in
@@ -417,13 +426,30 @@ def resolve_qualified_goal_cell(
 
     module = None
     goal = cell
-    while True:
+    for _ in range(MAX_QUALIFICATION_DEPTH + 1):
         ok, functor = compound_cell_shape(goal)
         if not (ok and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
             break
         module = resolve_module(deref(goal[1]), calling_module, context)
         calling_module = module
         goal = deref(goal[2])
+    else:
+        # The peel ran out of turns.  A term is CYCLIC (``V`` bound to
+        # ``(":", m, V)`` -- unify builds those, nothing forbids them) or is
+        # qualified past any plausible intent; either way there is no
+        # innermost module to report, so the goal names none (P3-3 Task 6 fix
+        # round 1, F5).  A bounded loop rather than an occurs check: the
+        # bound is cheap, needs no bookkeeping, and the diagnostic is the same
+        # "this does not name a module" the caller already handles.
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, existence_error,
+        )
+        raise LogicException(existence_error(
+            "module", repr(cell),
+            f"{context}: the module-qualified goal is nested more than "
+            f"{MAX_QUALIFICATION_DEPTH} deep, or is cyclic — there is no "
+            f"innermost goal to run and so no module that answers",
+        ))
     if type(goal) is str:
         goal = (goal,)
     return module, goal

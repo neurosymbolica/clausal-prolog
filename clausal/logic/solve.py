@@ -614,16 +614,24 @@ def resolve_module(designator: Any, calling_module: Any = None,
     absolute, per the R10 chain above) -- it names the asking module in the
     diagnostic, and it is the hook a future alias/short-name chain would use.
     """
-    target = deref(designator)
+    # The culprit is the DEREFERENCED designator, not the term the caller
+    # handed over: ``M`` in a ``(":", M, G)`` cell is routinely a Var bound to
+    # the real designator, and reporting ``AttVar(_4=7)`` names the plumbing
+    # rather than the fault (P3-3 Task 6 fix round 1, F6).  It stays the
+    # designator even when the ``sys.modules`` hit below replaces *target*:
+    # a str that resolved to a module object and then failed to coerce is
+    # still a fault about the name the caller wrote.
+    culprit = deref(designator)
+    target = culprit
     if isinstance(target, str):
         found = sys.modules.get(target)
         if found is None:
-            _no_such_module(designator, calling_module, context)
+            _no_such_module(culprit, calling_module, context)
         target = found
     try:
         return _coerce_module(target)
     except TypeError as exc:
-        _no_such_module(designator, calling_module, context, cause=exc)
+        _no_such_module(culprit, calling_module, context, cause=exc)
 
 
 def _no_such_module(designator, calling_module, context: str, cause=None):
@@ -647,20 +655,28 @@ def _no_such_module(designator, calling_module, context: str, cause=None):
     raise exc
 
 
-def _module_for_moduleless_solve(goal) -> Module:
-    """Pick the module for a ``solve(goal)`` called without ``module=``.
+def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:
+    """Pick the goal and module for a ``solve(goal)`` called without ``module=``.
+
+    Returns ``(goal, module)``.  The goal comes back STRIPPED of a top-level
+    qualification when that is where the module came from, so the caller can
+    hand both on and nothing resolves the same designator twice (P3-3 Task 6
+    fix round 1, F8).  Resolving twice was not merely wasteful: the second
+    resolution ran with the exporter as the calling module, so a diagnostic
+    from it named the module that ANSWERS as the one that ASKED.
 
     Three cases, in the order they are asked:
 
       - a module-QUALIFIED cell goal carries its own answer.  ``(":", M, G)``
         names the module that answers, so ``module=`` is redundant rather than
-        missing and the goal runs.
+        missing and the goal runs.  There is no calling module to report, and
+        ``None`` is passed as one rather than a guess.
       - any other CELL goal has no module at all, and none can be guessed:
         a cell is a plain tuple, so there is no defining class to walk back to
         (which is what ``_infer_module`` does) and the tuple's functor is a
         bare name that any number of modules may define.  Guessing here is
         exactly the module-locality bug this task exists to prevent, so the
-        gap is REPORTED: ``existence_error(module, <the cell>)``.
+        gap is REPORTED.
       - anything else keeps the legacy behaviour: ``_infer_module`` walks the
         goal for class-instance terms, and its failure is the same ``TypeError``
         it has always raised.
@@ -668,13 +684,16 @@ def _module_for_moduleless_solve(goal) -> Module:
     is_cell_goal, functor = compound_cell_shape(goal)
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3:
-            target, _inner = resolve_qualified_goal_cell(goal, "solve/1")
-            return target
+            return _strip_module_qualification(goal, None)
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, existence_error,
         )
         raise LogicException(existence_error(
-            "module", goal,
+            # The REPR, not the goal (P3-3 Task 6 fix round 1, F4): the live
+            # cell holds the caller's Vars, so a ``catch/3`` pattern unifying
+            # with the culprit would alias them.  Same rule as
+            # ``resolve_module``'s culprit — an error term is a ground atom.
+            "module", repr(goal),
             f"solve/1: the unqualified cell goal {functor}/{len(goal) - 1} has "
             f"no calling module — pass module= (the module whose database "
             f"answers), or qualify the goal as (':', M, Goal).  A cell names a "
@@ -687,7 +706,26 @@ def _module_for_moduleless_solve(goal) -> Module:
             "Cannot infer module from goal. Pass the module explicitly, e.g.:\n"
             "  solve(goal, my_module)"
         )
-    return module
+    return goal, module
+
+
+def _resolved_goal_and_module(goal, module, context: str):
+    """The shared entry resolution: ``(stripped goal, resolved Module)``.
+
+    P3-3 Task 6 fix round 1 (F1, F2).  ``solve`` and ``query_wfs`` both have to
+    answer "which module?" and both have to answer it the SAME way, because
+    ``query_wfs`` asks a second question afterwards — which table entry holds
+    this goal's truth values — of ``_tabled_entry_for_goal``, and that lookup
+    must be made against the module the goal actually RAN against.  Before this
+    round ``query_wfs`` passed its raw ``module`` argument to both, so a str
+    designator crashed the entry lookup with an uncaught ``TypeError`` after
+    the goal had already run (F1), and ``module=None`` with a qualified goal
+    made the lookup bail and report every WFS-``Undefined`` answer as ``True``
+    (F2).  One resolution, one answer, handed to both.
+    """
+    if module is None:
+        return _module_for_moduleless_solve(goal)
+    return _strip_module_qualification(goal, resolve_module(module, None, context))
 
 
 def _strip_module_qualification(goal, module):
@@ -872,10 +910,7 @@ def solve(
     ------
     Trail after each solution (bindings are live on the trail).
     """
-    if module is None:
-        module = _module_for_moduleless_solve(goal)
-    else:
-        module = resolve_module(module, None, "solve/2")
+    goal, module = _resolved_goal_and_module(goal, module, "solve/2")
     if trail is None:
         trail = Trail()
 
@@ -976,9 +1011,22 @@ def query_wfs(
     so a caller can report *which* pair is unresolved, not just that
     something is.
 
+    *module* takes the same designators ``solve`` takes — a Module, an imported
+    .clausal module, its dotted name as a str, or None — and means the same
+    thing, because it is resolved by the same chain before either the solve or
+    the table lookup sees it.
+
     Returns a list (not iterator) since WFS resolution requires completing
     all SLG computation before truth values are determined.
     """
+    # Resolve the module ONCE, here, and hand the same answer to both the
+    # solve below and the entry lookup further down (P3-3 Task 6 fix round 1,
+    # F1/F2 — see ``_resolved_goal_and_module``).  Passing the raw argument to
+    # both let them disagree: the entry lookup does not accept a str
+    # designator, and it bails outright on ``module=None``, which silently
+    # turned every Undefined answer of a qualified goal into True.
+    goal, module = _resolved_goal_and_module(goal, module, "query_wfs/3")
+
     results = []
     for _ in solve(goal, module, trail):
         results.append({name: _deref_walk(var) for name, var in variables.items()})
