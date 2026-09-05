@@ -9,6 +9,7 @@ Components:
 from __future__ import annotations
 
 import dataclasses
+from collections import namedtuple
 from typing import Any, Callable
 
 from clausal.terms import And, Call, Compound, KWTerm, LoadName, PyThunk
@@ -51,6 +52,101 @@ class Clause:
         return not self.body
 
 
+# ── PredRow ────────────────────────────────────────────────────────────────────
+
+
+WriteStamp = namedtuple("WriteStamp", "author kind detail")
+"""One provenance record on ``PredRow.writes``: who wrote, what kind of write,
+and a free-form detail. Diagnostics, not history — see ``PredRow.record_write``.
+"""
+
+_WRITES_CAP = 32
+
+
+@dataclasses.dataclass
+class PredRow:
+    """Per-``(functor, arity)`` predicate state, minted by ``Database.row()``.
+
+    P3-3 Task 1 (additive; zero behavior change): this is a THIN READ-THROUGH
+    facade over the Database's existing storage, not a second parallel store.
+    ``clauses`` holds a direct reference to the SAME list object the legacy
+    ``_clauses[key]`` entry uses (mutating one is visible via the other).
+    ``dispatch_fn``, ``lazy_recompile``, ``signature`` and ``dynamic`` are
+    properties that read/write straight through to the Database's existing
+    ``_dispatch``/``_lazy_recompile``/``_signatures``/``_dynamic`` containers,
+    so the legacy public methods (``assertz``, ``set_dispatch``,
+    ``register_signature``, ``mark_dynamic``, ...) keep operating exactly as
+    before — untouched by this task — while a row and the legacy dicts always
+    agree.
+
+    ``backend``, ``locked``, ``source`` and ``writes`` are new state that
+    nothing else reads or writes yet this task; they exist here only because
+    later tasks (Task 2 onward) consume this exact field set.
+    """
+
+    _db: "Database" = dataclasses.field(repr=False, compare=False)
+    _key: "tuple[str, int]" = dataclasses.field(repr=False, compare=False)
+    clauses: list = dataclasses.field(default_factory=list)
+    backend: str = "python"
+    locked: bool = False
+    source: "tuple[str, str] | None" = None
+    writes: list = dataclasses.field(default_factory=list)
+
+    @property
+    def dispatch_fn(self) -> "Callable | None":
+        return self._db._dispatch.get(self._key)
+
+    @dispatch_fn.setter
+    def dispatch_fn(self, value: "Callable | None") -> None:
+        self._db._dispatch[self._key] = value
+
+    @property
+    def lazy_recompile(self) -> "Callable | None":
+        return self._db._lazy_recompile.get(self._key)
+
+    @lazy_recompile.setter
+    def lazy_recompile(self, value: "Callable | None") -> None:
+        self._db._lazy_recompile[self._key] = value
+
+    @property
+    def signature(self) -> "tuple[str, ...] | None":
+        return self._db._signatures.get(self._key)
+
+    @signature.setter
+    def signature(self, value: "tuple[str, ...] | None") -> None:
+        self._db._signatures[self._key] = value
+
+    @property
+    def dynamic(self) -> bool:
+        return self._key in self._db._dynamic
+
+    @dynamic.setter
+    def dynamic(self, value: bool) -> None:
+        if value:
+            self._db._dynamic.add(self._key)
+        else:
+            self._db._dynamic.discard(self._key)
+
+    def invalidate(self) -> None:
+        """Clear the compiled dispatch function only; ``lazy_recompile`` is left
+        intact so the next call can recompile through it.
+
+        This is the ONE invalidation point going forward (enforced by
+        convention this task; the Task 3 mutation gate makes it structural).
+        """
+        self.dispatch_fn = None
+
+    def record_write(self, author: str, kind: str, detail: Any = None) -> None:
+        """Append a ``WriteStamp`` to ``writes``, keeping only the last 32.
+
+        Diagnostics, not history — nothing in this task calls this yet
+        (Task 3 wires ``Database.mutate`` provenance through it).
+        """
+        self.writes.append(WriteStamp(author, kind, detail))
+        if len(self.writes) > _WRITES_CAP:
+            del self.writes[: len(self.writes) - _WRITES_CAP]
+
+
 # ── Database ───────────────────────────────────────────────────────────────────
 
 
@@ -67,7 +163,37 @@ class Database:
         self._tabled: set[tuple[str, int]] = set()
         self._shallow: set[tuple[str, int]] = set()
         self._table_store: dict = {}
+        self._rows: dict[tuple[str, int], PredRow] = {}
         self.module_dict: dict | None = module_dict
+
+    def row(self, functor: str, arity: int, create: bool = False) -> "PredRow | None":
+        """Return the ``PredRow`` for ``(functor, arity)``, or ``None``.
+
+        Rows are cached: repeated calls for the same key return the SAME
+        object. A predicate reached only through legacy paths (``assertz``,
+        ``set_dispatch``, ``register_signature``, ``mark_dynamic``) is still
+        "known" and discoverable with ``create=False`` — the Database is the
+        authoritative store regardless of which door state came in through.
+        With ``create=False`` an unknown predicate returns ``None``; with
+        ``create=True`` a row is minted (and cached) even for a brand-new key.
+        """
+        key = (functor, arity)
+        existing = self._rows.get(key)
+        if existing is not None:
+            return existing
+        known = (
+            key in self._clauses
+            or key in self._dispatch
+            or key in self._lazy_recompile
+            or key in self._signatures
+            or key in self._dynamic
+        )
+        if not known and not create:
+            return None
+        clauses = self._clauses.setdefault(key, [])
+        new_row = PredRow(self, key, clauses=clauses)
+        self._rows[key] = new_row
+        return new_row
 
     def _pred_cls_for(self, functor: str) -> Any:
         """Return the unlocked PredicateMeta class for *functor*, or None.
@@ -623,5 +749,7 @@ __all__ = [
     "Clause",
     "Database",
     "Module",
+    "PredRow",
+    "WriteStamp",
     "head_key",
 ]

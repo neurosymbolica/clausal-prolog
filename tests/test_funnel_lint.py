@@ -276,7 +276,11 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # ``_is_structural_head_value`` earlier in the same file (a mechanical
     # line-count shift, not a semantic change -- see
     # .superpowers/sdd/p32-cell-default-flip/task-3-report.md).
-    AllowEntry("clausal/logic/database.py", (541, 573),
+    # Range shifted 541-573 -> 668-700 by P3-3 task-1's additive PredRow
+    # class + Database.row() inserted earlier in the same file (again a
+    # mechanical line-count shift, not a semantic change -- see
+    # .superpowers/sdd/p33-state-relocation/task-1-report.md).
+    AllowEntry("clausal/logic/database.py", (668, 700),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list)"),
 
