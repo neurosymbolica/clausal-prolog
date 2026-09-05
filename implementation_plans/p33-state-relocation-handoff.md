@@ -35,7 +35,7 @@ branch that might still change under review.
 
 ## User rulings in force (carried into P3-3)
 
-- **R1–R9** (P3-1/P3-2): SEP=U+E000; `atom(X)` true for every str; Phase 3 runs on the
+- **R1–R9** (P3-1/P3-2): SEP=US 0x1F (R1-revised, user-ratified 2026-09-05 — supersedes the original U+E000); `atom(X)` true for every str; Phase 3 runs on the
   existing Python-syntax pipeline (reader-surface migration is a later, user-owned phase);
   own-module cross-module gate deleted; data-functor classes stop minting (instance-side
   cell emission removed ENTIRELY — every surviving `PredicateMeta` instance at runtime is
