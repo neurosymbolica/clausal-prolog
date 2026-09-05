@@ -1196,9 +1196,11 @@ still wrong** — the failure mode this ladder exists to remove.
 - accepts a **`meta_modes`** kwarg alongside `module_path` / `module_signatures`:
   `{module_path: {(name, arity): (per-argument modes, ...)}}`, `None` meaning "not a
   meta position". It is looked up under `module_path` **exactly as passed**, and
-  unioned **per argument** with the local detection. Where both speak and disagree,
-  the body-local mode wins: it is direct evidence from the clauses being emitted.
-  Only predicates the module actually defines are declared.
+  unioned **per argument** with the local detection, under the single resolution rule
+  of A-2: a position with one candidate mode gets that **integer**; a position whose
+  sources disagree — local-vs-supplied included, neither wins — gets **`:`**; a
+  position with no goal evidence gets **`?`**. Only predicates the module actually
+  defines are declared.
 - The **cross-module fixpoint** lives in the exporter's pass 1
   (`tools/iso_export/export.py`, `collect_meta_modes`), beside `collect_signatures`
   and built the same way: it already translates every module in the domain+kit
