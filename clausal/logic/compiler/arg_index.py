@@ -61,8 +61,13 @@ def _bytelist_to_bytes_or_none(seq) -> bytes | None:
     return bytes(seq)
 
 
-def _arg_to_index_key(arg: Any) -> Any:
+def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
     """Compile-time: convert a head argument to its index key.
+
+    *env* is the compile-time namespace the reference is being compiled
+    against — ``base_globals`` at every real call site (see the callers in
+    ``.predicate``).  It is used ONLY by the bare-name branch below; every
+    other branch is unaffected by it.
 
     Returns a hashable key for indexable terms:
     - Scalars (int, float, str, bytes, bool, None) → the value itself
@@ -110,19 +115,42 @@ def _arg_to_index_key(arg: Any) -> Any:
     if isinstance(arg, Call) and isinstance(arg.func, LoadName):
         basename = arg.func.name.rsplit(".", 1)[-1]
         return (basename, len(arg.args))
-    # Bare name reference (``LoadName('Red')`` / ``LoadAttr(mod, 'Red')``) — a
-    # 0-arity atom used as a value, e.g. the RHS of the ``Unify`` body goal that
-    # a keyword-atom fact ``Color(C=Red)`` compiles to.  Key as ``(name, 0)`` so
-    # the bucket matches the runtime ``(atom.__name__, 0)`` key that
-    # :func:`_runtime_arg_key` emits when the atom resolves to a PredicateMeta.
-    # Must run BEFORE ``is_term_instance`` — LoadName/LoadAttr are themselves
+    # Bare/dotted name reference (``LoadName('Red')`` / ``LoadName('pkg.mod.Red')``
+    # / ``LoadAttr(mod, 'Red')``) — a 0-arity reference used as a value, e.g. the
+    # RHS of the ``Unify`` body goal that a keyword-atom fact ``Color(C=Red)``
+    # compiles to, or a cross-module atom hoisted out of a rule head by
+    # ``_normalize_structural_head_args``.
+    #
+    # R2 (P3-1) made an atom its own spelling — a plain ``str`` — rather than a
+    # ``PredicateMeta`` class, so the compile-time key can no longer be GUESSED
+    # from the reference's spelling (``(dotted.rsplit('.', 1)[-1], 0)``, the
+    # pre-pivot convention): that shape only matches the runtime key
+    # :func:`_runtime_arg_key` still emits for an actual ``PredicateMeta``
+    # instance, never for a plain interned ``str`` (whose runtime key is the
+    # string itself), a ``-hide``-mangled atom (whose runtime key is the
+    # mangled ``module\x1fname`` spelling, not the bare tail), or a dotted
+    # reference to a non-atom value (e.g. ``py.sympy.inf``, where keying the
+    # tail ``'inf'`` would relocate the same bug).
+    #
+    # The fix: RESOLVE the reference against *env* (the compile-time
+    # ``base_globals`` the caller threads in — the same dict
+    # ``globals_env._inject_resolved_targets`` already populates with
+    # ``'pkg.schema.aa' -> 'aa'`` for a cross-module atom, or the mangled
+    # string for a ``-hide``-mangled one) and key the RESOLVED VALUE through
+    # :func:`_runtime_arg_key` — the SAME function a real runtime argument of
+    # that value goes through, so the two paths cannot disagree.
+    #
+    # Unresolvable (no *env*, or the name isn't in it) → ``_INDEX_VAR``: a
+    # full scan is always correct, whereas guessing a key is not. Must run
+    # BEFORE ``is_term_instance`` — LoadName/LoadAttr are themselves
     # dataclasses and would otherwise key as ``('LoadName', 2)``, which no
-    # runtime value ever matches (leaving ground callers with no bucket and an
-    # empty default set → spurious "no solutions").
+    # runtime value ever matches.
     if isinstance(arg, (LoadName, LoadAttr)):
         dotted = _dotted_name_from_loadattr(arg)
-        if dotted is not None:
-            return (dotted.rsplit(".", 1)[-1], 0)
+        if dotted is None:
+            return _INDEX_VAR
+        if env is not None and dotted in env:
+            return _runtime_arg_key(env[dotted])
         return _INDEX_VAR
     # PredicateMeta atom (zero-arity predicate class used as a value). Keyed as
     # ``(name, 0)`` so atom-headed clauses are indexable again — the string→
@@ -488,11 +516,17 @@ def _make_call_site_bucket_trampoline(bucket_fn, dispatch_fn, done,
     return call_site_fn
 
 
-def _extract_arg_key(clause: Clause, pos: int, arity: int) -> Any:
+def _extract_arg_key(
+    clause: Clause, pos: int, arity: int, env: "dict | None" = None,
+) -> Any:
     """Extract the indexing key for a clause's argument at position *pos*.
 
     Returns a hashable key (scalar or ``(functor, arity)`` tuple) for
     indexable clauses, or ``_INDEX_VAR`` for variable/non-indexable args.
+
+    *env* is threaded straight through to :func:`_arg_to_index_key` so a
+    hoisted cross-module atom reference (``LoadName``/``LoadAttr``) can be
+    resolved to its runtime value instead of guessed at from its spelling.
     """
     if arity == 0 or pos >= arity:
         return _INDEX_VAR
@@ -514,7 +548,7 @@ def _extract_arg_key(clause: Clause, pos: int, arity: int) -> Any:
     else:
         return _INDEX_VAR
     # Direct ground term (scalar or compound) — Phase 9a extends to compounds.
-    key = _arg_to_index_key(arg)
+    key = _arg_to_index_key(arg, env)
     if key is not _INDEX_VAR:
         return key
     # Var + Unify pattern (from _normalize_dataclass_fact).
@@ -523,28 +557,31 @@ def _extract_arg_key(clause: Clause, pos: int, arity: int) -> Any:
         for goal in clause.body:
             if isinstance(goal, Unify):
                 if goal.left is arg:
-                    k = _arg_to_index_key(goal.right)
+                    k = _arg_to_index_key(goal.right, env)
                     if k is not _INDEX_VAR:
                         return k
                 elif goal.right is arg:
-                    k = _arg_to_index_key(goal.left)
+                    k = _arg_to_index_key(goal.left, env)
                     if k is not _INDEX_VAR:
                         return k
         return _INDEX_VAR
     return _INDEX_VAR
 
 
-def _extract_first_arg_key(clause: Clause, arity: int) -> Any:
+def _extract_first_arg_key(
+    clause: Clause, arity: int, env: "dict | None" = None,
+) -> Any:
     """Extract the indexing key for a clause's first argument.
 
     Convenience wrapper around :func:`_extract_arg_key` for position 0.
     """
-    return _extract_arg_key(clause, 0, arity)
+    return _extract_arg_key(clause, 0, arity, env)
 
 
 def _build_arg_index(
     clauses: list[Clause], arity: int, pos: int,
     threshold: int = _INDEX_THRESHOLD,
+    env: "dict | None" = None,
 ) -> dict | None:
     """partition clauses into buckets keyed on argument *pos*.
 
@@ -561,7 +598,7 @@ def _build_arg_index(
     """
     if arity == 0 or pos >= arity or len(clauses) < threshold:
         return None
-    keys = [_extract_arg_key(c, pos, arity) for c in clauses]
+    keys = [_extract_arg_key(c, pos, arity, env) for c in clauses]
     default_indices = [i for i, k in enumerate(keys) if k is _INDEX_VAR]
     specific_indices = [i for i, k in enumerate(keys) if k is not _INDEX_VAR]
     if not specific_indices:
@@ -585,16 +622,18 @@ def _build_arg_index(
 
 def _build_first_arg_index(
     clauses: list[Clause], arity: int, threshold: int = _INDEX_THRESHOLD,
+    env: "dict | None" = None,
 ) -> dict | None:
     """partition clauses into first-arg buckets.
 
     Convenience wrapper around :func:`_build_arg_index` for position 0.
     """
-    return _build_arg_index(clauses, arity, 0, threshold)
+    return _build_arg_index(clauses, arity, 0, threshold, env)
 
 
 def _analyze_index_positions(
     clauses: list[Clause], arity: int, threshold: int = _INDEX_THRESHOLD,
+    env: "dict | None" = None,
 ) -> list[tuple[int, dict]]:
     """Find argument positions suitable for indexing, sorted by selectivity.
 
@@ -606,7 +645,7 @@ def _analyze_index_positions(
         return []
     results = []
     for pos in range(arity):
-        idx = _build_arg_index(clauses, arity, pos, threshold)
+        idx = _build_arg_index(clauses, arity, pos, threshold, env)
         if idx is not None:
             results.append((pos, idx))
     # Sort by selectivity: most distinct keys first
@@ -620,6 +659,7 @@ def _analyze_index_positions(
 def _build_joint_arg_index(
     clauses: list[Clause], arity: int, pos_i: int, pos_j: int,
     threshold: int = _INDEX_THRESHOLD,
+    env: "dict | None" = None,
 ) -> dict | None:
     """Build a flat joint index keyed on ``(key_i, key_j)`` tuples.
 
@@ -637,8 +677,8 @@ def _build_joint_arg_index(
         return None
     keys = []
     for c in clauses:
-        ki = _extract_arg_key(c, pos_i, arity)
-        kj = _extract_arg_key(c, pos_j, arity)
+        ki = _extract_arg_key(c, pos_i, arity, env)
+        kj = _extract_arg_key(c, pos_j, arity, env)
         if ki is not _INDEX_VAR and kj is not _INDEX_VAR:
             keys.append((ki, kj))
         else:
@@ -667,6 +707,7 @@ def _analyze_joint_index_positions(
     clauses: list[Clause], arity: int,
     single_indexes: list[tuple[int, dict]],
     min_gain: float = 1.5,
+    env: "dict | None" = None,
 ) -> tuple[int, int, dict] | None:
     """Find the best ``(pos_i, pos_j)`` pair for joint indexing.
 
@@ -684,7 +725,8 @@ def _analyze_joint_index_positions(
     for pos in range(arity):
         if pos == best_single_pos:
             continue
-        joint = _build_joint_arg_index(clauses, arity, best_single_pos, pos)
+        joint = _build_joint_arg_index(
+            clauses, arity, best_single_pos, pos, env=env)
         if joint is None:
             continue
         if joint["n_distinct"] > best_joint_distinct:
@@ -860,6 +902,7 @@ def _build_secondary_index(
     clauses: list[Clause], arity: int, pos_i: int, pos_j: int,
     threshold: int = _INDEX_THRESHOLD,
     secondary_threshold: int = 2,
+    env: "dict | None" = None,
 ) -> dict | None:
     """Build a two-level hierarchical index: level-0 on *pos_i*, level-1 on *pos_j*.
 
@@ -878,13 +921,13 @@ def _build_secondary_index(
 
     or ``None`` if the primary index is not viable.
     """
-    primary = _build_arg_index(clauses, arity, pos_i, threshold)
+    primary = _build_arg_index(clauses, arity, pos_i, threshold, env)
     if primary is None:
         return None
     level0: dict[Any, tuple] = {}
     for ki, bucket in primary["buckets"].items():
         secondary = _build_arg_index(bucket, arity, pos_j,
-                                     threshold=secondary_threshold)
+                                     threshold=secondary_threshold, env=env)
         if secondary is not None:
             # level-1 default: all clauses in this level-0 bucket.
             # Using bucket (= secondary["all"]) rather than secondary["defaults"]

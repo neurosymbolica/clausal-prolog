@@ -1,0 +1,6 @@
+# Package re-export hop: -import_from(pkg.schema, [...]) inside a package's
+# own __init__.clausal binds the atoms into the PACKAGE's namespace, so
+# ``-import_from(tests.fixtures.atom_index_pkg, [aa, bb, cc, dd])`` (from a
+# THIRD module) resolves them via this package, not the schema submodule
+# directly -- the diagnosis's own two-import-hop mini/ shape.
+-import_from(tests.fixtures.atom_index_pkg.schema, [aa, bb, cc, dd])

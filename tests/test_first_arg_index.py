@@ -119,16 +119,43 @@ class TestExtractFirstArgKey:
 
     def test_atom_reference_key_from_unify(self):
         """A keyword-atom fact (``Color(C=Red)``) compiles to a Var head with a
-        ``Unify(field_var, LoadName('Red'))`` body.  The extracted key must be the
-        0-arity atom key ``('Red', 0)`` — matching the runtime ``PredicateMeta``
-        key — not the compound-term key ``('LoadName', 2)`` for the reference node.
+        ``Unify(field_var, LoadName('Red'))`` body.  When ``Red`` resolves (via
+        the threaded compile-time *env*) to a ``PredicateMeta`` atom, the
+        extracted key must be the 0-arity atom key ``('Red', 0)`` — matching
+        the runtime ``PredicateMeta`` key emitted by ``_runtime_arg_key`` —
+        not the compound-term key ``('LoadName', 2)`` for the reference node
+        itself.
+
+        P3-1 atom-pivot hotfix (arg_index.py's LoadName/LoadAttr branch):
+        this key can no longer be GUESSED from the reference's bare spelling
+        — see ``TestImportedAtomIndexKey`` below for the post-pivot atom
+        (plain ``str``) case this regression is actually about.  This test
+        keeps its original ``PredicateMeta``-atom scenario (``make_atom``),
+        now resolved through *env* instead of guessed at.
         """
         # nv — regression for map_coloring private-atom-fact indexing bug
+        from clausal.terms import LoadName
+        red = make_atom("Red")
+        v = Var()
+        c = Clause(head=Compound("Color", (v,)),
+                   body=[Unify(left=v, right=LoadName(name="Red"))])
+        assert _extract_first_arg_key(c, 1, env={"Red": red}) == ("Red", 0)
+
+    def test_atom_reference_key_from_unify_unresolvable_without_env(self):
+        """Without a compile-time *env* (or when the name isn't in it), the
+        reference cannot be resolved to a runtime value, so the key must be
+        ``_INDEX_VAR`` (a full clause scan — always correct) rather than a
+        GUESS at what the reference denotes.  This is the P3-1 atom-pivot
+        hotfix's default-safety property: an un-threaded caller degrades to
+        unindexed dispatch instead of reproducing the pre-fix bug.
+        """
         from clausal.terms import LoadName
         v = Var()
         c = Clause(head=Compound("Color", (v,)),
                    body=[Unify(left=v, right=LoadName(name="Red"))])
-        assert _extract_first_arg_key(c, 1) == ("Red", 0)
+        assert _extract_first_arg_key(c, 1) is _INDEX_VAR
+        assert _extract_first_arg_key(c, 1, env=None) is _INDEX_VAR
+        assert _extract_first_arg_key(c, 1, env={}) is _INDEX_VAR
 
 
 class TestCellIndexKey:
@@ -255,6 +282,116 @@ class TestCellIndexKey:
         from clausal.logic.compiler.arg_index import _runtime_arg_key
         assert _runtime_arg_key(("Wrap", "direct")) == ("Wrap", 1)
         assert _runtime_arg_key(("Item", "r", ("Met", "direct"), "d")) == ("Item", 3)
+
+
+class TestImportedAtomIndexKey:
+    """P3-1 atom-pivot hotfix: ``_arg_to_index_key``'s LoadName/LoadAttr
+    branch resolves the reference against a compile-time *env* and keys
+    the RESOLVED VALUE through ``_runtime_arg_key`` — the same function a
+    live runtime argument of that value goes through — instead of guessing
+    a key from the reference's spelling (the pre-pivot ``(name, 0)``
+    PredicateMeta-class convention, wrong for a post-pivot atom, which is
+    its own ``str`` spelling).
+
+    End-to-end (real cross-module ``.clausal`` fixtures, real dispatch)
+    coverage lives in ``tests/test_imported_atom_head_index.py``; these are
+    the unit-level key-agreement checks — including the missing table row
+    (a bare imported-atom head arg) whose absence is why P3-2 Task 4's own
+    key-agreement table didn't catch this bug.
+    """
+
+    def test_key_agreement_row_bare_imported_atom(self):
+        """THE MISSING ROW: a bare imported-atom head arg.  Compile-time key
+        (with *env* resolving the reference to the atom's plain ``str``) must
+        equal the runtime key for that same resolved atom.  Pre-fix, the
+        compile-time side guessed ``(name.rsplit('.', 1)[-1], 0)`` here —
+        the exact mismatch that dropped 633 corpus tests.
+        """
+        from clausal.logic.compiler.arg_index import (
+            _arg_to_index_key, _runtime_arg_key,
+        )
+        from clausal.terms import LoadName
+        # The import machinery rewrites a bare imported reference into ONE
+        # dotted ast.Name id (a single global lookup) -- see
+        # terms_to_ast._resolve_functor_binding's docstring.
+        ref = LoadName(name="pkg.schema.aa")
+        env = {"pkg.schema.aa": "aa"}
+        compile_key = _arg_to_index_key(ref, env)
+        runtime_key = _runtime_arg_key("aa")
+        assert compile_key == runtime_key == "aa"
+
+    def test_key_agreement_row_dotted_loadattr_chain(self):
+        """Item 2: the same agreement for a genuine ``LoadAttr`` chain (a
+        literal ``mod.attr`` reference written in source), not just the
+        single-dotted-``LoadName`` form the import machinery produces for a
+        bare imported name.
+        """
+        from clausal.logic.compiler.arg_index import (
+            _arg_to_index_key, _runtime_arg_key,
+        )
+        from clausal.terms import LoadName, LoadAttr
+        ref = LoadAttr(object=LoadName(name="schema"), attr="aa")
+        env = {"schema.aa": "aa"}
+        compile_key = _arg_to_index_key(ref, env)
+        runtime_key = _runtime_arg_key("aa")
+        assert compile_key == runtime_key == "aa"
+
+    def test_key_agreement_row_hide_mangled_atom(self):
+        """Item 3: a ``-hide``-mangled atom keys as the MANGLED string on
+        both sides -- not the bare tail.  The pre-fix formula
+        (``dotted.rsplit('.', 1)[-1], 0)``) is wrong here in a second way:
+        a mangled spelling (``module\x1fname``) contains no ``.``, so
+        ``rsplit('.', 1)[-1]`` returns the whole mangled string UNCHANGED,
+        giving the tuple key ``(mangled, 0)`` -- still a mismatch against
+        the runtime key, which is the mangled string itself (an atom keys
+        as its own spelling, mangled or not).
+        """
+        from clausal.logic.compiler.arg_index import (
+            _arg_to_index_key, _runtime_arg_key, _INDEX_VAR,
+        )
+        from clausal.terms import LoadName
+        mangled = "hidden_owner\x1fhidden_aa"
+        ref = LoadName(name=mangled)
+        env = {mangled: mangled}
+        compile_key = _arg_to_index_key(ref, env)
+        runtime_key = _runtime_arg_key(mangled)
+        assert compile_key == runtime_key == mangled
+        # The old formula's shape, for contrast -- must NOT be what we get.
+        old_wrong_key = (mangled.rsplit(".", 1)[-1], 0)
+        assert old_wrong_key == (mangled, 0)  # sanity: no '.' to split on
+        assert compile_key != old_wrong_key
+        assert compile_key is not _INDEX_VAR
+
+    def test_unresolvable_dotted_name_is_index_var(self):
+        """Item 4: a dotted reference *env* doesn't know about (name absent,
+        or *env* itself is ``None``) must key ``_INDEX_VAR`` -- never a
+        guess.  This is always safe: ``_INDEX_VAR`` clauses become the
+        bucket-set's DEFAULTS, merged into every bucket, so a caller still
+        reaches the clause via the un-indexed fallback's ``unify()``.
+        """
+        from clausal.logic.compiler.arg_index import (
+            _arg_to_index_key, _INDEX_VAR, _build_arg_index, _extract_arg_key,
+        )
+        from clausal.terms import LoadName
+        ref = LoadName(name="py.sympy.inf")
+        assert _arg_to_index_key(ref, None) is _INDEX_VAR
+        assert _arg_to_index_key(ref, {}) is _INDEX_VAR
+        assert _arg_to_index_key(ref, {"some.other.name": "x"}) is _INDEX_VAR
+
+        # End-to-end within the indexer: 4+ clauses whose head arg all
+        # resolve to _INDEX_VAR must not build a (mis-)indexed bucket set at
+        # all -- _build_arg_index reports "no specific clauses" (None), the
+        # correct signal to fall back to full-scan dispatch.
+        clauses = []
+        for i in range(4):
+            v = Var()
+            clauses.append(Clause(
+                head=Compound("f", (v, "tag")),
+                body=[Unify(left=v, right=LoadName(name=f"py.sympy.const{i}"))],
+            ))
+        for c in clauses:
+            assert _extract_arg_key(c, 0, 2, env={}) is _INDEX_VAR
+        assert _build_arg_index(clauses, 2, 0, env={}) is None
 
 
 class TestGroundnessWalkCompleteness:
@@ -1227,3 +1364,79 @@ class TestAtomInListHead:
         last_args = [r[3] for r in results]
         assert ["usd", 50000] in last_args
         assert ["usd", 100000] in last_args
+
+
+class TestNonAtomNestedInCellHeadArgUnreachable:
+    """Pin CURRENT (broken, PRE-EXISTING) behavior: a non-atom value nested
+    inside a data-functor/cell head argument is unreachable through the
+    bucket that argument's OWN position indexes into, when dispatch is
+    forced through that position specifically.
+
+    See todo/imported-non-atom-constant-head-args-unreachable-2026-09-05.md
+    for the full mechanism. PRE-DATES the imported-atom index-key hotfix
+    (fix/imported-atom-index-key, 2026-09-05) -- verified by reproducing
+    the identical result against the pre-fix engine; this hotfix's diff
+    never touches ``head_match.py`` or the ``Call(LoadName)`` cell branch
+    this lives in. NOT a regression.
+
+    A TOP-LEVEL (non-nested) scalar reference is NOT affected --
+    ``list_dispatch._lift_clause_at_pos`` unconditionally refuses to lift a
+    bare ``LoadName``/``LoadAttr`` at the indexed position itself, so the
+    head stays a Var and the body ``Unify`` resolves it correctly at
+    runtime regardless of type. Only a reference NESTED inside an already-
+    lifted cell/compound field reaches ``head_match.head_to_match_pattern``'s
+    ``LoadName``/``LoadAttr`` branch, which only builds a real ``MatchValue``
+    pattern for a ``str`` resolution -- anything else falls through to the
+    dead ``is_term_instance`` fallback.
+
+    This is a PIN of current behavior, not an endorsement: when the fix
+    lands (extend the MatchValue branch to the full literal-safe type set,
+    or refuse the lift for a non-literal-safe resolution), invert this
+    assertion consciously.
+    """
+
+    def test_nested_non_atom_reference_unreachable_when_position_forced(self):
+        from clausal.terms import Call, LoadName
+        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+
+        clauses = []
+        for i, val in zip((1, 2, 3, 4), (100, 200, 300, 400)):
+            n_var, l_var = Var(), Var()
+            wrap_call = Call(
+                func=LoadName(name="Wrap"),
+                args=(LoadName(name=f"c.CONST{i}"),),
+                kwargs=(),
+            )
+            clauses.append(Clause(
+                head=Compound("level", (n_var, l_var)),
+                body=[
+                    Unify(left=n_var, right=i),
+                    Unify(left=l_var, right=wrap_call),
+                ],
+            ))
+
+        globals_ = {f"c.CONST{i}": v for i, v in zip((1, 2, 3, 4), (100, 200, 300, 400))}
+        globals_["Wrap"] = "Wrap"
+        globals_[FUNCTOR_SIGNATURES_KEY] = {"Wrap": ("x",)}
+
+        fn = compile_predicate_trampoline("level", 2, clauses, None, globals_=globals_)
+
+        # Both args ground: dispatch picks the MORE selective position-0
+        # index (4 distinct int keys) over position-1's single-key cell
+        # bucket, so the broken nested pattern is never exercised here --
+        # this direction is (and must stay) correct.
+        results = _trampoline_solutions(fn, [3, ("Wrap", 300)])
+        assert len(results) == 1
+
+        # Position 0 unbound: no info there, so dispatch is forced through
+        # position 1's ('Wrap', 1) bucket -- the ONLY index available.
+        # CURRENT (broken) behavior: 0 solutions. Correct behavior (once
+        # the todo's fix lands) would be 1, binding the Var to 3.
+        v = Var()
+        results = _trampoline_solutions(fn, [v, ("Wrap", 300)])
+        assert results == [], (
+            "if this now finds a solution, the head_match non-str gap "
+            "(todo/imported-non-atom-constant-head-args-unreachable-"
+            "2026-09-05.md) has been fixed -- invert this assertion and "
+            "close the todo"
+        )
