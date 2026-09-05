@@ -15,12 +15,39 @@ rulings, recorded 2026-09-03/04):
     Printing: the writer renders the human form (``m.my_atom``); the
     runtime str keeps ⟨SEP⟩."
 
-Ruling R1 fixes ⟨SEP⟩ at **U+E000** (the first Unicode private-use
+Ruling R1 originally fixed ⟨SEP⟩ at U+E000 (the first Unicode private-use
 codepoint) — not NUL, which renders invisibly and confuses debuggers/
 terminals; U+E000 renders visibly (typically as a placeholder glyph) and is
-outside every legitimate identifier/graphic-token class.  This module is
-the SINGLE SOURCE OF TRUTH for that codepoint: every other consumer
-(``clausal/templating/term_rewriting.py``'s ``-hide`` handling and
+outside every legitimate identifier/graphic-token class.
+
+R1-revised (user-ratified 2026-09-05, proposed during P3-2 close-out)
+supersedes that choice: ⟨SEP⟩ is now **US, 0x1F** (the ASCII "Unit
+Separator" control character), for four reasons recorded at proposal time
+(``todo/done/r1-revised-separator-us-0x1f-2026-09-05.md``):
+
+  * No C-string hazard: unlike NUL, 0x1F is an ordinary byte to every C
+    twin — nothing terminates early on it.
+  * CPython storage (the strongest argument): a single U+E000 anywhere in
+    a str forces the WHOLE string into UCS-2 (2 bytes/char) representation
+    and off the compact-ASCII comparison/hash fast paths; 0x1F keeps
+    ASCII module/name atoms in Latin-1 (1 byte/char) storage. This halves
+    mangled-atom memory, not just the separator's own footprint.
+  * Byte-clean interop: 0x1F travels in-band to non-Unicode Prologs (e.g.
+    GNU Prolog) without a wider encoding; a structural (module, name)
+    codec at foreign boundaries becomes an option rather than a necessity
+    on some paths.
+  * Accepted trade-offs (a wash, not a regression): the collision profile
+    shifts from PUA-in-data (icon fonts embedding U+E000) to
+    US-in-data (delimited-record pipelines using 0x1F as a field
+    separator) — both remain the same documented out-of-warranty forgery
+    class (see ``demangle``/``is_mangled`` below). Debugger visibility
+    worsens (0x1F is an invisible control character, unlike U+E000's
+    visible placeholder glyph); this is mitigated by writer demangling
+    (``demangle_for_display``) being the actual display path — raw
+    mangled strs are not meant to be eyeballed.
+
+This module is the SINGLE SOURCE OF TRUTH for the separator: every other
+consumer (``clausal/templating/term_rewriting.py``'s ``-hide`` handling and
 ``visit_Name`` substitution, the reified-term renderers) imports
 ``HIDDEN_SEP``/``mangle``/``is_mangled``/``demangle*`` from here rather than
 hardcoding the codepoint.
@@ -28,24 +55,26 @@ hardcoding the codepoint.
 The toklex reserved class (``clausal/tools/toklex/specs/clausal.toklex.pl``,
 ``class(reserved, [...])``) is a SEPARATE, textual copy of the same
 codepoint — the surface reader is a standalone Prolog-DCG-driven spec file,
-not Python, so it cannot import this module.  R1 requires the two to name
-the identical codepoint; keep them in lockstep by hand (see the toklex
-spec's own comment for the cross-reference back to this module).
+not Python, so it cannot import this module.  R1(-revised) requires the two
+to name the identical codepoint; keep them in lockstep by hand (see the
+toklex spec's own comment for the cross-reference back to this module).
 """
 
 from __future__ import annotations
 
 import sys
 
-#: The reserved private-use codepoint separating a mangled atom's owning
-#: module name from its bare spelling (design doc §1b, ruling R1).  The
-#: Clausal surface reader refuses this codepoint inside any atom token —
-#: quoted or not — so a hidden atom's mangled spelling cannot be typed by
-#: hand in ordinary source; only the compiler (this module's ``mangle``,
-#: called from the owning module's own ``-hide`` handling) and out-of-
-#: warranty runtime forgery (``atom_chars/2`` et al. building the str from
-#: individual characters — §1b, documented, not blocked) can produce it.
-HIDDEN_SEP = ""
+#: The reserved codepoint separating a mangled atom's owning module name
+#: from its bare spelling (design doc §1b, ruling R1-revised, 2026-09-05:
+#: US, 0x1F — see the module docstring above for the full rationale and
+#: for R1's original U+E000 choice this supersedes).  The Clausal surface
+#: reader refuses this codepoint inside any atom token — quoted or not —
+#: so a hidden atom's mangled spelling cannot be typed by hand in ordinary
+#: source; only the compiler (this module's ``mangle``, called from the
+#: owning module's own ``-hide`` handling) and out-of-warranty runtime
+#: forgery (``atom_chars/2`` et al. building the str from individual
+#: characters — §1b, documented, not blocked) can produce it.
+HIDDEN_SEP = "\x1f"
 
 
 def mangle(module_name: str, atom: str) -> str:

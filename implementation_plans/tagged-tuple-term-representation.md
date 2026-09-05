@@ -80,6 +80,13 @@ by `PredicateMeta` — with plain Python tuples under a **uniform tagged-cell di
 > reproduced on two consecutive runs. Perf (interleaved A/B, base `523ae9ef` vs
 > branch head): `bench_fib` -6.0%, `bench_struct_tabling` -5.3% -- both faster,
 > no regression.
+>
+> **R1-revised (user-ratified 2026-09-05):** the `-hide` mangling separator
+> is now US, 0x1F, superseding this note's U+E000 (see
+> `todo/done/r1-revised-separator-us-0x1f-2026-09-05.md` and
+> `clausal/logic/atoms.py`'s `HIDDEN_SEP` docstring for the full rationale:
+> no C-string hazard, CPython Latin-1 storage for ASCII mangled atoms, and
+> byte-clean interop with non-Unicode Prologs).
 
 Standard-Prolog / Ciao model: **predicate names are module-local; atom/functor names in data
 are shared globally** (Ciao module-system docs, Cabeza & Hermenegildo 1999/2000). Atoms lower
@@ -229,7 +236,10 @@ tokenizes AS `['a','b','c']`, each char an atom (runtime shape post-R2: a list o
 str~list rule is needed or reinstated. `b"..."` is a bytes/codes literal denoting a
 LIST OF INTS (the codes model whose bytes~list unification P3-1 deliberately kept);
 `b'...'` (a "byte atom") is meaningless and rejected. Quoted atoms still refuse the
-⟨SEP⟩ codepoint U+E000 (R1), quoted or not. Whether Python `bytes` objects keep
+⟨SEP⟩ codepoint U+E000 (R1), quoted or not. [**R1-revised (user-ratified
+2026-09-05):** ⟨SEP⟩ is now US, 0x1F, not U+E000 — see
+`todo/done/r1-revised-separator-us-0x1f-2026-09-05.md`; the refusal rule
+itself is unchanged in shape.] Whether Python `bytes` objects keep
 unifying with int lists once `b"..."` denotes the list directly is a surface-phase
 question, parked — same shape as the retired str~list bridge, NOT a Phase 3 concern.
 

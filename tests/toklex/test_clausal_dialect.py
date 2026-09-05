@@ -20,10 +20,11 @@ def test_directive_surface_tokens():
 
 
 def test_reserved_codepoint_rejected_everywhere():
-    # R1 (P3-1 atom-pivot plan): the reserved ⟨SEP⟩ codepoint is U+E000,
-    # matching clausal.toklex.pl's `reserved` class and
-    # clausal.logic.atoms.HIDDEN_SEP — was the U+0001 placeholder pre-R1.
-    for src in ["ab ", "'ab' ", '"ab" ', "% cc\na "]:
+    # R1-revised (user-ratified 2026-09-05): the reserved ⟨SEP⟩
+    # codepoint is US, 0x1F, matching clausal.toklex.pl's `reserved` class
+    # and clausal.logic.atoms.HIDDEN_SEP — was U+E000 under R1, and the
+    # U+0001 placeholder before that.
+    for src in ["ab ", "'ab' ", '"ab" ', "% cc\na "]:
         kinds = [t.kind for t in lex(src)]
         assert "error" in kinds, src
 

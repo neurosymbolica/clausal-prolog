@@ -5014,9 +5014,10 @@ class EmbedTransformer(NodeTransformer):
 
         Compiler-renames each listed atom into a reader-unwritable,
         module-scoped spelling (``clausal.logic.atoms.mangle`` — a single
-        ``HIDDEN_SEP`` = U+E000 codepoint the surface reader refuses inside
-        any atom token, R1).  Every reference to the atom WITHIN the
-        owning module compiles to the identical mangled ``Constant``
+        ``HIDDEN_SEP`` = US (0x1F) codepoint the surface reader refuses
+        inside any atom token, R1-revised, 2026-09-05; was U+E000 under
+        R1).  Every reference to the atom WITHIN the owning module
+        compiles to the identical mangled ``Constant``
         (``visit_Name``'s atom branch, extended for this directive), so
         such references unify with each other exactly as an ordinary
         global atom's references do; a bare same-spelling reference in a

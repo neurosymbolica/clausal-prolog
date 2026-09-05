@@ -4,13 +4,15 @@
 % Deltas applied to the ISO base (see iso.toklex.pl for everything else,
 % copied verbatim below):
 %
-%   1. class(reserved, ['\xe000\']) — U+E000, the first Unicode private-use
-%      codepoint, ruled as ⟨SEP⟩ by R1 (P3-1 atom-pivot plan,
+%   1. class(reserved, ['\x1f\']) — US (0x1F), ruled as ⟨SEP⟩ by
+%      R1-revised (user-ratified 2026-09-05,
+%      todo/done/r1-revised-separator-us-0x1f-2026-09-05.md), superseding
+%      R1's original U+E000 choice (P3-1 atom-pivot plan,
 %      implementation_plans/phase3-decomposition-and-p31-atom-pivot.md;
 %      design doc §1b — "a character the Clausal reader refuses inside any
-%      atom token, QUOTED OR NOT"). Not NUL: NUL renders invisibly and
-%      confuses debuggers/terminals, while U+E000 renders visibly. This is
-%      the codepoint ``clausal.logic.atoms.HIDDEN_SEP`` names on the Python
+%      atom token, QUOTED OR NOT"). Not NUL: NUL is a C-string terminator
+%      hazard; 0x1F is an ordinary byte to every C twin. This is the
+%      codepoint ``clausal.logic.atoms.HIDDEN_SEP`` names on the Python
 %      side (single source of truth there; this spec file is a standalone
 %      Prolog-DCG source that cannot import it, so keep the two literals in
 %      lockstep by hand — see that module's own docstring for the
@@ -73,8 +75,9 @@ class(bslash,    ['\\']).
 class(nl,        ['\n']).
 class(sign,      ['+', '-']).
 
-% ⟨SEP⟩ reserved codepoint (§9/R1): U+E000 — see the header comment above.
-class(reserved,  ['\xe000\']).
+% ⟨SEP⟩ reserved codepoint (§9/R1-revised, 2026-09-05): US, 0x1F — was
+% U+E000 under R1; see the header comment above.
+class(reserved,  ['\x1f\']).
 
 % `escape` (unlooped, combined octal/hex/simple form) is kept ONLY for
 % char_code's `0'\...` construct, where the driver's ordinary longest-match

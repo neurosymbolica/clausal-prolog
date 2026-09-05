@@ -38,3 +38,13 @@ fixtures outside tests/).
 
 Covering: test_hide_directive + toklex dialect suite; full-suite name-diff
 empty (mangling is display+identity internal; no semantics change).
+
+## Resolution (2026-09-05)
+
+Implemented on branch `feat/r1-sep-0x1f`: `HIDDEN_SEP` in
+`clausal/logic/atoms.py` flipped from U+E000 to `"\x1f"` (US); the toklex
+`reserved` class, `docs/directives.md`, and the covering tests
+(`tests/test_hide_directive.py`, `tests/toklex/test_clausal_dialect.py`)
+updated in lockstep. `reflection.py` and `term_rewriting.py` already
+consumed the constant (no hardcoded literal in the former; a doc-comment
+literal fixed in the latter). Full-suite name-diff empty vs. main.

@@ -31,6 +31,14 @@ Phase 3's scope list is ~9 workstreams across compiler, runtime, C, and tests
   C strings is a footgun for every C twin that ever touches a mangled functor, and PUA
   renders visibly in debuggers. One-line change to `clausal.toklex.pl`'s `reserved`
   class (currently the U+0001 placeholder) rides in Task 6.
+  **R1-revised (user-ratified 2026-09-05):** ⟨SEP⟩ is now US, 0x1F, not U+E000 —
+  proposed during P3-2 close-out once no mangled atom had persisted anywhere
+  outside `tests/`. See `todo/done/r1-revised-separator-us-0x1f-2026-09-05.md`
+  for the full rationale (no C-string hazard vs. NUL either way; CPython keeps
+  ASCII mangled atoms in compact Latin-1 storage instead of being forced to
+  UCS-2 by a single U+E000; byte-clean interop with non-Unicode Prologs) and
+  the accepted trade-offs (collision profile shifts from PUA-in-data to
+  US-in-data; debugger visibility worsens, mitigated by writer demangling).
 - **R2 (atom/1 semantics): `atom(X)` becomes true for every `str`** (the §5 collapse,
   made concrete): `atom/1` and `string/1` end up co-extensional for strings;
   `string/1` is retained as a compatibility alias with its deprecation/`atomic`

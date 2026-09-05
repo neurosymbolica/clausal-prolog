@@ -2,7 +2,8 @@
 
 Design authority: ``implementation_plans/tagged-tuple-term-representation.md``
 §1a (atoms global by spelling; ``-hide`` is the opt-in module-local escape
-hatch) and §1b (the Phase 3 rulings — R1 fixes the mangling separator at
+hatch) and §1b (the Phase 3 rulings — R1-revised, user-ratified 2026-09-05,
+fixes the mangling separator at US (0x1F), superseding R1's original
 U+E000; the guarantee is uniqueness + analysis soundness, NOT runtime
 security).  See ``clausal/logic/atoms.py`` for the mangling helpers and
 ``clausal/templating/term_rewriting.py``'s ``_handle_hide_directive``/
@@ -80,16 +81,18 @@ def _load_inline_clausal(name: str, source: str):
 
 
 class TestMangleHelpers:
-    def test_hidden_sep_is_u_plus_e000(self):
+    def test_hidden_sep_is_us_0x1f(self):
         """Numeric lockstep pin (fix round): a drift in
         clausal/logic/atoms.py's HIDDEN_SEP value must fail a TEST, not
-        just go unnoticed in documentation.  R1 fixes this at U+E000 --
-        clausal/tools/toklex/specs/clausal.toklex.pl's `reserved` class
-        (`class(reserved, ['\xe000\'])`) is a SEPARATE textual copy of the
-        SAME codepoint that this module cannot import into (see both
-        modules' own docstrings) -- the two must be kept in lockstep by
-        hand, and this assertion is the tripwire on the Python side."""
-        assert ord(HIDDEN_SEP) == 0xE000
+        just go unnoticed in documentation.  R1-revised (user-ratified
+        2026-09-05) fixes this at US (0x1F), superseding R1's original
+        U+E000 choice -- clausal/tools/toklex/specs/clausal.toklex.pl's
+        `reserved` class (`class(reserved, ['\x1f\'])`) is a SEPARATE
+        textual copy of the SAME codepoint that this module cannot import
+        into (see both modules' own docstrings) -- the two must be kept in
+        lockstep by hand, and this assertion is the tripwire on the Python
+        side."""
+        assert ord(HIDDEN_SEP) == 0x1F
 
     def test_mangle_embeds_hidden_sep(self):
         mangled = mangle("m", "foo")
