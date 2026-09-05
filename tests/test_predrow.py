@@ -300,3 +300,386 @@ def test_row_clauses_first_read_lazily_vivifies_is_defined():
     assert db.is_defined("f", 2) is False
     _ = row.clauses  # first read of the property
     assert db.is_defined("f", 2) is True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P3-3 Task 2 — THE INVERSION: PredicateMeta state is a read-through onto the
+# row; the Database's class-mirror blocks and arity-blind `_pred_cls_for` die.
+# ══════════════════════════════════════════════════════════════════════════════
+
+from clausal.logic.predicate import PredicateMeta, make_predicate  # noqa: E402
+
+
+# ── the class reads THROUGH the row ─────────────────────────────────────────
+
+
+def test_bound_class_clauses_is_the_database_row_list_itself():
+    """The whole point of the inversion: one list, not two that must be kept
+    in step. Before Task 2 ``cls._clauses`` was a private per-class list and
+    ``Database.assertz`` had to mirror every append onto it."""
+    db = Database()
+    p = make_predicate("p", ["a"])
+    p._bind_row(db, "p", 1)
+    assert p._clauses is db._clauses[("p", 1)]
+    assert p._clauses is db.row("p", 1).clauses
+
+
+def test_db_assertz_is_visible_through_the_bound_class_without_a_mirror():
+    db = Database()
+    p = make_predicate("p", ["a"])
+    p._bind_row(db, "p", 1)
+    c = _clause("p", 1)
+    db.assertz(c)
+    assert p._clauses == [c]
+    assert p._clauses is db._clauses[("p", 1)]
+
+
+def test_db_asserta_and_retract_are_visible_through_the_bound_class():
+    db = Database()
+    p = make_predicate("p", ["a"])
+    p._bind_row(db, "p", 1)
+    first, second = _clause("p", 1), _clause("p", 2)
+    db.assertz(first)
+    db.asserta(second)
+    assert p._clauses == [second, first]
+    assert db.retract(second.head) is True
+    assert p._clauses == [first]
+
+
+def test_db_mutation_invalidates_the_dispatch_the_class_reads():
+    db = Database()
+    p = make_predicate("p", ["a"])
+    p._bind_row(db, "p", 1)
+    db.set_dispatch("p", 1, lambda *a: iter([]))
+    assert p._dispatch_fn is not None
+    db.assertz(_clause("p", 1))
+    assert p._dispatch_fn is None
+    assert db._dispatch[("p", 1)] is None
+
+
+def test_class_writes_land_in_the_database():
+    """Every relocated attribute, in the write direction."""
+    db = Database()
+    p = make_predicate("p", ["a"])
+    p._bind_row(db, "p", 1)
+    fn = lambda *a: iter([])  # noqa: E731
+    lazy = lambda: fn  # noqa: E731
+    p._dispatch_fn = fn
+    p._lazy_recompile = lazy
+    p._signature = ("a",)
+    p._locked = True
+    p._clauses_source = ("m", "/tmp/m.clausal")
+    p._dynamic_arities = {1}
+    row = db.row("p", 1)
+    assert db._dispatch[("p", 1)] is fn
+    assert db._lazy_recompile[("p", 1)] is lazy
+    assert db.signature_for("p", 1) == ("a",)
+    assert row.locked is True
+    assert row.source == ("m", "/tmp/m.clausal")
+    assert row.dynamic_arities == {1}
+
+
+def test_clauses_wholesale_rebind_goes_through_the_row():
+    """``cls._clauses = []`` (the reset spelling several tests use) replaces the
+    Database's entry rather than orphaning the class onto a private list."""
+    db = Database()
+    p = make_predicate("p", ["a"])
+    p._bind_row(db, "p", 1)
+    db.assertz(_clause("p", 1))
+    fresh = []
+    p._clauses = fresh
+    assert db._clauses[("p", 1)] is fresh
+    assert p._clauses is fresh
+    assert db.clauses_for("p", 1) == []
+
+
+def test_get_dispatch_recompiles_through_the_rows_lazy_callback():
+    db = Database()
+    p = make_predicate("p", ["a"])
+    p._bind_row(db, "p", 1)
+    fn = lambda *a: iter([])  # noqa: E731
+    calls = []
+
+    def lazy():
+        calls.append(1)
+        db._dispatch[("p", 1)] = fn
+        return fn
+
+    db.set_dispatch("p", 1, fn, lazy_recompile=lazy)
+    db.assertz(_clause("p", 1))          # clears dispatch, keeps lazy
+    assert db._dispatch[("p", 1)] is None
+    assert p._get_dispatch() is fn
+    assert calls == [1]
+
+
+def test_get_dispatch_prefers_what_install_stored_over_the_callbacks_return():
+    """The tabled-wrapper invariant: ``_install`` puts the SLG wrapper on the
+    row, so whatever the recompile callback happens to return loses."""
+    db = Database()
+    p = make_predicate("p", ["a"])
+    p._bind_row(db, "p", 1)
+    raw = lambda *a: iter([])      # noqa: E731
+    wrapped = lambda *a: iter([])  # noqa: E731
+
+    def lazy():
+        db._dispatch[("p", 1)] = wrapped   # what _install stores
+        return raw                          # what the compile returned
+
+    db.set_dispatch("p", 1, None, lazy_recompile=lazy)
+    assert p._get_dispatch() is wrapped
+
+
+def test_get_dispatch_without_clauses_or_lazy_still_raises():
+    p = make_predicate("lonely", ["a"])
+    with pytest.raises(NotImplementedError):
+        p._get_dispatch()
+
+
+# ── the arity-blind mirror is gone (identity todo instance 3) ───────────────
+
+
+def test_assertz_no_longer_appends_onto_an_arity_mismatched_class():
+    """``_pred_cls_for`` looked the functor up in ``module_dict`` and ignored
+    arity entirely, so a ``p/1`` assertz appended its clause onto a class that
+    was ``p/3``. There is no second store to miss now: the row for ``p/1`` is
+    the only place the clause goes, and the ``p/3`` class reads ``p/3``'s row."""
+    p3 = make_predicate("p", ["a", "b", "c"])
+    db = Database(module_dict={"p": p3})
+    p3._bind_row(db, "p", 3)
+    db.assertz(_clause("p", 1))
+    assert p3._clauses == []
+    assert db.clauses_for("p", 1) == [_clause("p", 1)]
+
+
+def test_retract_no_longer_reaches_into_an_arity_mismatched_class():
+    p3 = make_predicate("p", ["a", "b", "c"])
+    db = Database(module_dict={"p": p3})
+    p3._bind_row(db, "p", 3)
+    keep = _clause("p", 9, 9, 9)
+    db.assertz(keep)
+    db.assertz(_clause("p", 1))
+    assert db.retract(_clause("p", 1).head) is True
+    assert p3._clauses == [keep]
+
+
+def test_database_no_longer_has_pred_cls_for():
+    assert not hasattr(Database, "_pred_cls_for")
+
+
+# ── detached compatibility mode: no Database anywhere ───────────────────────
+
+
+def test_bare_make_predicate_is_a_working_predicate_with_no_database():
+    """The out-of-tree contract (~22 external ``_get_dispatch`` implementors,
+    ``clausal.reflection``, ``clpb``, the builtin registry): a class minted by
+    a bare ``make_predicate`` must append clauses, take a dispatch and answer
+    ``_get_dispatch()`` with no Database in sight."""
+    cls = make_predicate("Detached", ["x"])
+    assert cls._clauses == []
+    assert cls._dispatch_fn is None
+    assert cls._lazy_recompile is None
+    assert cls._signature is None
+    assert cls._locked is False
+    assert cls._clauses_source is None
+    assert cls._dynamic_arities is None
+
+    c = Clause(head=cls(1), body=[])
+    cls._clauses.append(c)
+    assert cls._clauses == [c]
+
+    fn = lambda *a: iter([])  # noqa: E731
+    cls._dispatch_fn = fn
+    assert cls._get_dispatch() is fn
+    assert cls._get_dispatch(1) is fn
+    cls._lock()
+    assert cls._locked is True
+    cls._unlock()
+    assert cls._locked is False
+
+
+def test_detached_classes_of_the_same_name_and_arity_do_not_share_state():
+    """Each detached class gets its OWN private row — the builtin registry
+    mints several same-named classes (one per arity) in one process."""
+    a = make_predicate("dup", ["x"])
+    b = make_predicate("dup", ["x"])
+    a._clauses.append("A")
+    assert b._clauses == []
+    a._locked = True
+    assert b._locked is False
+    assert a._row is not b._row
+
+
+def test_detached_row_is_private_and_lazy():
+    cls = make_predicate("Lazy", ["x"])
+    assert cls._row is None, "no row until some predicate state is touched"
+    _ = cls._clauses
+    assert isinstance(cls._row, PredRow)
+    assert cls._row._db is not None
+    assert cls._row._key == ("Lazy", 1)
+
+
+def test_predicate_meta_mutators_work_detached_and_respect_the_lock():
+    cls = make_predicate("Mut", ["x"])
+    c1, c2 = Clause(head=cls(1), body=[]), Clause(head=cls(2), body=[])
+    cls._assertz(c1)
+    cls._asserta(c2)
+    assert cls._clauses == [c2, c1]
+    assert cls._retract(c2.head) is True
+    assert cls._clauses == [c1]
+    cls._lock()
+    with pytest.raises(RuntimeError):
+        cls._assertz(c2)
+    with pytest.raises(RuntimeError):
+        cls._asserta(c2)
+    with pytest.raises(RuntimeError):
+        cls._retract(c1.head)
+
+
+# ── _bind_row: rebinding carries the per-CLASS state ────────────────────────
+
+
+def test_bind_row_is_idempotent():
+    db = Database()
+    cls = make_predicate("p", ["a"])
+    cls._bind_row(db, "p", 1)
+    row = cls._row
+    cls._bind_row(db, "p", 1)
+    assert cls._row is row
+
+
+def test_bind_row_uses_the_passed_functor_not_the_class_name():
+    """An aliased ``-import_from`` binds a class under a name that is not its
+    own; the clauses live under the name the CLAUSE HEADS use."""
+    db = Database()
+    cls = make_predicate("original", ["a"])
+    cls._bind_row(db, "alias", 1)
+    assert cls._row._key == ("alias", 1)
+    db.assertz(_clause("alias", 1))
+    assert len(cls._clauses) == 1
+
+
+def test_rebinding_carries_dynamic_arities_locked_and_source():
+    """These three were per-CLASS slots before the inversion, so they travel
+    with the class when it is re-bound (a clause-free import getting clauses
+    downstream, a file compiled twice, a name defined at two arities)."""
+    db1, db2 = Database(), Database()
+    cls = make_predicate("p", ["a"])
+    cls._bind_row(db1, "p", 1)
+    cls._dynamic_arities = {1}
+    cls._locked = True
+    cls._clauses_source = ("m1", "/tmp/m1.clausal")
+    cls._bind_row(db2, "p", 3)
+    assert cls._dynamic_arities == {1}
+    assert cls._locked is True
+    assert cls._clauses_source == ("m1", "/tmp/m1.clausal")
+    # ... and the union, not a replacement, when the target has its own.
+    cls._dynamic_arities = {3}
+    cls._bind_row(db1, "p", 1)
+    assert cls._dynamic_arities == {1, 3}
+
+
+def test_rebinding_leaves_the_old_rows_clauses_where_they_were():
+    db1, db2 = Database(), Database()
+    cls = make_predicate("p", ["a"])
+    cls._bind_row(db1, "p", 1)
+    db1.assertz(_clause("p", 1))
+    cls._bind_row(db2, "p", 1)
+    assert cls._clauses == []
+    assert db1.clauses_for("p", 1) == [_clause("p", 1)]
+
+
+# ── _dynamic_arities keeps its None-vs-set semantics (row-LOCAL, not derived)
+
+
+def test_dynamic_arities_is_row_local_and_independent_of_row_dynamic():
+    """``row.dynamic`` is a per-(f, a) boolean; ``_dynamic_arities`` is a
+    per-NAME set whose None-vs-set and size-1-vs-larger distinctions both
+    decide ``_declared_arity``. Deriving one from the other would be lossy, so
+    the set stays its own row field."""
+    db = Database()
+    cls = make_predicate("p", ["a"])
+    cls._bind_row(db, "p", 1)
+    db.mark_dynamic("p", 1)
+    assert db.row("p", 1).dynamic is True
+    assert cls._dynamic_arities is None, "declared-at is not the same question"
+    cls._dynamic_arities = set()
+    assert cls._dynamic_arities == set()
+    assert cls._dynamic_arities is not None, "empty set != never stamped"
+
+
+# ── _predicate_functor_names must agree with Database truth ─────────────────
+#
+# Step 3 asks "will this declared name have clauses?" from the CLAUSE NODES,
+# before step 4 attaches anything, and the answer decides the binding shape:
+# a predicate keeps its ``PredicateMeta`` class, a data functor is unbound to
+# its interned spelling so its terms compile to cells (R6).  A divergence
+# between that answer and what the Database ends up holding silently flips
+# goal-vs-data-cell emission, with no error anywhere — so it is pinned here,
+# one case each way, against the row-backed truth the inversion installs.
+
+
+def _load_pfn_module(tmp_path, monkeypatch, name, source):
+    import textwrap
+    import clausal.logic.compiler_v2 as cv2
+    from clausal.import_hook import _load_module
+
+    captured = {}
+    orig = cv2._predicate_functor_names
+
+    def spy(predicate_nodes, module_items):
+        result = orig(predicate_nodes, module_items)
+        captured["names"] = set(result)
+        return result
+
+    monkeypatch.setattr(cv2, "_predicate_functor_names", spy)
+    path = tmp_path / f"{name}.clausal"
+    path.write_text(textwrap.dedent(source).lstrip())
+    module = _load_module(name, str(path))
+    assert "names" in captured, "the spy never fired — the anchor moved"
+    return module, getattr(module, "$module").db, captured["names"]
+
+
+_PFN_SOURCE = """
+    -module(pfn_sync_mod, [pfn_greeting/1, pfn_point(X, Y)])
+
+    pfn_greeting(N) <- (N == 1)
+
+    pfn_origin(P) <- (P == pfn_point(0, 0))
+"""
+
+
+def test_predicate_functor_names_says_predicate_and_the_database_agrees(
+    tmp_path, monkeypatch
+):
+    """A declared name WITH clauses: step 3 calls it a predicate, and the
+    Database really does hold a row with those clauses."""
+    module, db, names = _load_pfn_module(
+        tmp_path, monkeypatch, "pfn_sync_mod", _PFN_SOURCE
+    )
+    assert "pfn_greeting" in names
+    row = db.row("pfn_greeting", 1)
+    assert row is not None, "step 3 called it a predicate; the db has no row"
+    assert len(row.clauses) == 1
+    # ... and the binding shape that answer produced is the class, reading
+    # through that very row.
+    cls = getattr(module, "pfn_greeting")
+    assert isinstance(cls, PredicateMeta)
+    assert cls._row is row
+    assert cls._clauses is row.clauses
+
+
+def test_predicate_functor_names_says_data_and_the_database_agrees(
+    tmp_path, monkeypatch
+):
+    """A declared functor with NO clauses: step 3 calls it data, and the
+    Database really does hold nothing for it at any arity."""
+    module, db, names = _load_pfn_module(
+        tmp_path, monkeypatch, "pfn_sync_data", _PFN_SOURCE
+    )
+    assert "pfn_point" not in names
+    assert db.row("pfn_point", 2) is None
+    assert not [k for k in db._clauses if k[0] == "pfn_point"]
+    # ... and the binding shape that answer produced is the interned spelling,
+    # which is what makes ``pfn_point(0, 0)`` compile to a cell.
+    assert getattr(module, "pfn_point") == "pfn_point"
+    assert not isinstance(getattr(module, "pfn_point"), PredicateMeta)

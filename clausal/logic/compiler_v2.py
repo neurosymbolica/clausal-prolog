@@ -165,10 +165,20 @@ def compile_module(
         functor, arity = head_key(pred_node.head)
         key = (functor, arity)
 
-        # Sync to PredicateMeta class.
+        # Bind the PredicateMeta class to this predicate's Database ROW
+        # (P3-3 Task 2).  This is the one place a class becomes the compiled
+        # face of a stored predicate at load: after it, ``pred_cls._clauses``
+        # IS ``db._clauses[key]`` and ``pred_cls._signature`` IS
+        # ``db._signatures[key]``, so there is no second store for a later
+        # ``assertz`` to leave stale — and no arity-blind mirror needed to
+        # keep one in step.  The slice-assign below is consequently a
+        # self-copy in the ordinary case; it is kept because ``clauses_for``
+        # is a snapshot and the write is what the row's contract names as the
+        # deliberate clause-list minting site.
         pred_cls = module_dict.get(functor)
         if isinstance(pred_cls, PredicateMeta):
             db_clauses = db.clauses_for(functor, arity)
+            pred_cls._bind_row(db, functor, arity)
             pred_cls._clauses[:] = db_clauses
             record_clause_source(pred_cls, module_name, module_dict)
             if pred_cls._signature is None:
@@ -204,6 +214,11 @@ def compile_module(
                     isinstance(pred_cls, PredicateMeta)
                     and len(pred_cls._fields) == arity
                 ):
+                    # Same binding as step 4 (P3-3 Task 2): a declared-but-
+                    # clause-less dynamic predicate is exactly the shape whose
+                    # first clause arrives by runtime assertz, so its class
+                    # must already be reading the row that assertz appends to.
+                    pred_cls._bind_row(db, functor, arity)
                     if pred_cls._signature is None:
                         pred_cls._signature = pred_cls._fields
                     pending[key] = pred_cls

@@ -564,7 +564,12 @@ class PredicateMeta(type):
     needed.
 
     It also adds predicate dispatch machinery:
-      _clauses, _dispatch_fn, _lazy_recompile, _signature, _locked
+      _clauses, _dispatch_fn, _lazy_recompile, _signature, _locked,
+      _clauses_source, _dynamic_arities
+    all of which are READ-THROUGH PROPERTIES onto one
+    :class:`~clausal.logic.database.PredRow` held in ``cls._row`` (P3-3
+    Task 2) — the Database's row for this predicate once the class is bound
+    into a module, a private detached row otherwise.
     """
 
     def __new__(
@@ -633,29 +638,27 @@ class PredicateMeta(type):
 
     def __init__(cls, name: str, bases: tuple, namespace: dict, **kwargs: Any) -> None:
         super().__init__(name, bases, namespace, **kwargs)
-        # Predicate machinery — per-class, not inherited
-        cls._clauses: list = []
-        # ``(module_name, source_path)`` of the load that last wrote
-        # ``_clauses``, or ``None`` while the class has none.  An
-        # ``-import_from`` SHARES this class across modules, so "whose clauses
-        # are these" is the only thing separating a module reloading its own
-        # work from a second module quietly overwriting someone else's — see
-        # ``compiler_v2._reject_redefinition_of_imported_predicates``.  The
-        # source PATH is the identity that matters, not the module name: one
-        # file legitimately compiles under two names in one process (a dotted
-        # import and ``clausal.testing.load_clausal_module``).
-        cls._clauses_source: tuple[str, str] | None = None
-        cls._dispatch_fn: Callable | None = None
-        cls._lazy_recompile: Callable | None = None
-        cls._signature: tuple[str, ...] | None = None
-        cls._locked: bool = False  # starts unlocked; lock after module load
-        # Arities this name was DECLARED at (``-dynamic(f/N)``), stamped by
-        # compiler_v2 at load.  ``None`` everywhere else.  A declaration is
-        # the one arity source that cannot be a stale inference — unlike
-        # ``_fields`` (stale on the re-minted vocabulary atom) and unlike an
-        # empty ``_clauses`` (which says nothing) — so ``_refuse_call_at``
-        # may consult it when, and only when, the clause list is empty.
-        cls._dynamic_arities: set[int] | None = None
+        # Predicate machinery — per-class, not inherited.
+        #
+        # P3-3 Task 2 (THE INVERSION): none of it lives on the class any more.
+        # ``_clauses``, ``_clauses_source``, ``_dispatch_fn``,
+        # ``_lazy_recompile``, ``_signature``, ``_locked`` and
+        # ``_dynamic_arities`` are now read-through PROPERTIES (defined on this
+        # metaclass, just below) onto ONE ``PredRow`` — the Database's
+        # per-``(functor, arity)`` row.  ``_row`` is the single slot that used
+        # to be seven, so every read and write keeps its old
+        # last-writer-wins-on-one-class shape; what changes is WHERE the value
+        # lands, and that a bound class and its Database can no longer disagree.
+        #
+        # ``None`` until first use.  A class the compiler binds into a module
+        # gets the owning Database's row (``_bind_row``); a class minted with
+        # no Database anywhere — bare ``make_predicate`` from Python, the
+        # out-of-tree pattern, ``clausal.reflection``, ``clpb``, the builtin
+        # registry — lazily gets a PRIVATE DETACHED row over a private
+        # Database of its own (``_detached_row``).  That is the compatibility
+        # mode: the duck type (``_clauses`` append, ``_get_dispatch()``,
+        # ``_locked``) behaves exactly as before with no Database in sight.
+        cls._row = None
         # The Database of the module that declared this predicate ``-table``,
         # stamped by ``Database.mark_tabled`` at load.  ``None`` everywhere
         # else.  Tabledness is recorded in the OWNING module's per-module db;
@@ -668,6 +671,169 @@ class PredicateMeta(type):
         # are tabled stays the home db's answer (``is_tabled``); the class
         # carries only the pointer.
         cls._tabled_home_db = None  # Database | None
+
+    # ── Predicate state: read-throughs onto the Database row ──────────────
+    #
+    # P3-3 Task 2.  Each of these WAS a plain per-class attribute set in
+    # ``__init__`` above; each is now a property over ``cls._row``.  The
+    # storage moved; the semantics did not — one slot per class, last writer
+    # wins, ``None``/``False``/``[]`` defaults unchanged — so every existing
+    # reader and writer (``cls._clauses.append(...)``,
+    # ``cls._clauses[:] = ...``, ``cls._dispatch_fn = fn``, ``cls._locked``,
+    # ``getattr(cls, "_clauses_source", None)``, the tests that reset a class
+    # with ``cls._clauses = []``) keeps working verbatim.
+
+    def _detached_row(cls):
+        """Mint and cache this class's PRIVATE row — the compatibility mode.
+
+        A ``PredicateMeta`` minted outside a ``.clausal`` load has no Database
+        to be a row OF, and must still behave like a predicate: append to
+        ``_clauses``, get a ``_dispatch_fn``, answer ``_get_dispatch()``.  It
+        gets a ``PredRow`` over a private single-predicate ``Database`` nobody
+        else can reach, so all seven attributes keep their old semantics with
+        no Database anywhere in the caller's world.  ``_bind_row`` later
+        replaces it if the class is compiled into a module.
+
+        Lazy (not minted in ``__init__``) for two reasons: ``database.py``
+        imports ``predicate.py``, so eager construction would need a
+        module-level cycle; and a class whose predicate state is never touched
+        — a pure term/data class — never pays for one.
+        """
+        row = cls._row
+        if row is not None:
+            return row
+        from clausal.logic.database import Database  # noqa: PLC0415
+        # ``getattr``, not ``cls._fields``: a bare
+        # ``class X(metaclass=PredicateMeta): pass`` declares none, and
+        # reading its ``_clauses`` used to be a plain attribute read that
+        # could not fail.  The key is private to this row's private Database,
+        # so an arity of 0 there costs nothing.
+        fields = getattr(cls, "_fields", ()) or ()
+        row = Database().row(cls.__name__, len(fields), create=True)
+        cls._row = row
+        return row
+
+    def _bind_row(cls, db, functor: str, arity: int) -> None:
+        """Point this class's state at *db*'s row for ``(functor, arity)``.
+
+        Called at the sites that make a class the compiled face of a stored
+        predicate: ``compiler_v2`` step 4 (clauses attached), step 4a (a
+        clause-less ``-dynamic`` declaration) and ``compiler._install`` (a
+        dispatch installed).  After it, ``cls._clauses`` IS
+        ``db._clauses[(functor, arity)]``, so ``db.assertz`` needs no mirror.
+
+        *functor* is passed rather than read off ``cls.__name__`` because an
+        aliased ``-import_from`` binds a class under a name that is not its
+        own, and the clauses live under the name the CLAUSE HEADS use.
+
+        Re-binding a class that already has a row is legitimate and expected:
+        a clause-free imported declaration getting its clauses downstream, a
+        file re-compiled in one process, a name defined at two arities.  The
+        old row keeps its own contents (it is the Database's, not the class's);
+        three pieces of state that were per-CLASS rather than per-key before
+        this task travel with the class so the move stays lossless —
+        ``dynamic_arities`` (unioned: it is a set ACROSS arities by
+        construction), ``locked`` (or-ed: locking was one-way on the class,
+        never undone by a later module), and ``source`` (only when the target
+        has none; step 4 re-stamps it immediately after binding anyway).
+        """
+        new_row = db.row(functor, arity, create=True)
+        old_row = cls._row
+        if old_row is new_row:
+            return
+        if old_row is not None:
+            old_declared = old_row.dynamic_arities
+            if old_declared:
+                if new_row.dynamic_arities is None:
+                    new_row.dynamic_arities = set(old_declared)
+                else:
+                    new_row.dynamic_arities |= old_declared
+            if old_row.locked:
+                new_row.locked = True
+            if new_row.source is None:
+                new_row.source = old_row.source
+        cls._row = new_row
+
+    @property
+    def _clauses(cls) -> list:
+        return (cls._row or cls._detached_row()).clauses
+
+    @_clauses.setter
+    def _clauses(cls, value: list) -> None:
+        (cls._row or cls._detached_row()).clauses = value
+
+    @property
+    def _clauses_source(cls) -> "tuple[str, str] | None":
+        """``(module_name, source_path)`` of the load that last wrote
+        ``_clauses``, or ``None`` while the class has none.  An
+        ``-import_from`` SHARES this class across modules, so "whose clauses
+        are these" is the only thing separating a module reloading its own
+        work from a second module quietly overwriting someone else's — see
+        ``compiler_v2._reject_redefinition_of_imported_predicates``.  The
+        source PATH is the identity that matters, not the module name: one
+        file legitimately compiles under two names in one process (a dotted
+        import and ``clausal.testing.load_clausal_module``).
+        """
+        return (cls._row or cls._detached_row()).source
+
+    @_clauses_source.setter
+    def _clauses_source(cls, value: "tuple[str, str] | None") -> None:
+        (cls._row or cls._detached_row()).source = value
+
+    @property
+    def _dispatch_fn(cls) -> "Callable | None":
+        return (cls._row or cls._detached_row()).dispatch_fn
+
+    @_dispatch_fn.setter
+    def _dispatch_fn(cls, value: "Callable | None") -> None:
+        (cls._row or cls._detached_row()).dispatch_fn = value
+
+    @property
+    def _lazy_recompile(cls) -> "Callable | None":
+        return (cls._row or cls._detached_row()).lazy_recompile
+
+    @_lazy_recompile.setter
+    def _lazy_recompile(cls, value: "Callable | None") -> None:
+        (cls._row or cls._detached_row()).lazy_recompile = value
+
+    @property
+    def _signature(cls) -> "tuple[str, ...] | None":
+        return (cls._row or cls._detached_row()).signature
+
+    @_signature.setter
+    def _signature(cls, value: "tuple[str, ...] | None") -> None:
+        (cls._row or cls._detached_row()).signature = value
+
+    @property
+    def _locked(cls) -> bool:
+        """Runtime-mutation lock.  Set by ``_lock`` after a module load
+        completes; read by ``_assertz``/``_asserta``/``_retract`` and by the
+        ``assertz/1``-family builtins before they touch the clause list."""
+        return (cls._row or cls._detached_row()).locked
+
+    @_locked.setter
+    def _locked(cls, value: bool) -> None:
+        (cls._row or cls._detached_row()).locked = value
+
+    @property
+    def _dynamic_arities(cls) -> "set[int] | None":
+        """Arities this NAME was DECLARED at (``-dynamic(f/N)``), stamped by
+        compiler_v2 at load.  ``None`` everywhere else.  A declaration is
+        the one arity source that cannot be a stale inference — unlike
+        ``_fields`` (stale on the re-minted vocabulary atom) and unlike an
+        empty ``_clauses`` (which says nothing) — so ``_refuse_call_at``
+        may consult it when, and only when, the clause list is empty.
+
+        Row-LOCAL storage, deliberately NOT derived from ``row.dynamic``
+        (P3-3 Task 2): ``dynamic`` is a per-``(f, a)`` boolean and this is a
+        per-NAME set whose ``None``-vs-set and size-1-vs-larger distinctions
+        both decide behavior in ``_declared_arity``.  Deriving would be lossy.
+        """
+        return (cls._row or cls._detached_row()).dynamic_arities
+
+    @_dynamic_arities.setter
+    def _dynamic_arities(cls, value: "set[int] | None") -> None:
+        (cls._row or cls._detached_row()).dynamic_arities = value
 
     # ── Term construction ─────────────────────────────────────────────────
 
@@ -797,24 +963,44 @@ class PredicateMeta(type):
         # goal invocation.
         if arity is not None and arity != len(cls._fields):
             cls._refuse_call_at(arity)
-        if cls._dispatch_fn is None:
-            if cls._lazy_recompile is not None:
-                fn = cls._lazy_recompile()
+        # P3-3 Task 2: the state is the Database row's now.  Read the row's
+        # backing dicts DIRECTLY rather than through the ``_dispatch_fn`` /
+        # ``_lazy_recompile`` properties — this is the once-per-goal-invocation
+        # path, and three property calls where there used to be two plain
+        # attribute lookups is exactly the overhead the phase must not add.
+        # The logic below is the same three-step it always was: use the
+        # installed dispatch; else recompile through the lazy callback and
+        # prefer whatever ``_install`` stored over what the callback returned;
+        # else refuse.
+        row = cls._row
+        if row is None:
+            row = cls._detached_row()
+        db = row._db
+        key = row._key
+        dispatch = db._dispatch
+        fn = dispatch.get(key)
+        if fn is None:
+            lazy = db._lazy_recompile.get(key)
+            if lazy is not None:
+                fn = lazy()
                 # A recompile installs through ``compiler._install``, which is
                 # where a ``-table``d predicate gets its SLG wrapper back and a
                 # ``-shallow`` one gets its trampoline adapter.  Whatever
-                # ``_install`` put on the class therefore outranks the function
+                # ``_install`` put on the row therefore outranks the function
                 # the recompile happened to hand back: assigning the return
                 # value blind is how an ``assertz`` used to leave a tabled
                 # predicate dispatching raw.
-                if cls._dispatch_fn is None:
-                    cls._dispatch_fn = fn
+                installed = dispatch.get(key)
+                if installed is None:
+                    dispatch[key] = fn
+                else:
+                    fn = installed
             else:
                 raise NotImplementedError(
                     f"Predicate {cls.__name__}/{cls._arity} has no compiled "
                     "dispatch function. The compiler must be run first."
                 )
-        return cls._dispatch_fn
+        return fn
 
     def _clause_arity(cls, accept: int | None = None) -> int | None:
         """The one arity every clause head of *cls* has, or ``None``.

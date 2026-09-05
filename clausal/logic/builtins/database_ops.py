@@ -148,7 +148,7 @@ def _assertz_factory(db):
             raise LogicException(permission_error(
                 "modify", "static_procedure",
                 Compound("/", (functor, arity)), "assertz/1"))
-        # db.assertz syncs pred_cls._clauses and clears its dispatch.
+        # db.assertz appends to the row pred_cls reads and clears its dispatch.
         db.assertz(clause)
         clauses = db.clauses_for(functor, arity)
         compile_predicate_trampoline(functor, arity, clauses, db,
@@ -181,7 +181,7 @@ def _asserta_factory(db):
             raise LogicException(permission_error(
                 "modify", "static_procedure",
                 Compound("/", (functor, arity)), "asserta/1"))
-        # db.asserta syncs pred_cls._clauses and clears its dispatch.
+        # db.asserta prepends to the row pred_cls reads and clears its dispatch.
         db.asserta(clause)
         clauses = db.clauses_for(functor, arity)
         compile_predicate_trampoline(functor, arity, clauses, db,
@@ -252,13 +252,18 @@ def _retract_factory(db):
             # Found a matching clause — remove it.
             tmp_trail.undo(mark)  # clean up temporary bindings
             del clause_list[i]
-            # Sync removal to pred_cls if available (match by identity).
-            if pred_cls is not None:
-                for j, pcls_clause in enumerate(pred_cls._clauses):
-                    if pcls_clause is clause:
-                        del pred_cls._clauses[j]
-                        pred_cls._dispatch_fn = None
-                        break
+            # P3-3 Task 2: no second clause store to sync — a bound class
+            # reads THIS list.  What the deleted identity-match loop also did,
+            # and what still has to happen, is invalidate the compiled
+            # dispatch: the recompile below is skipped when the last clause
+            # goes, and without this the predicate would keep dispatching to
+            # the function compiled from the clause it just lost.  Invalidating
+            # the ROW (rather than only the class, as before) also clears
+            # ``db._dispatch`` for the same key, so ``db.get_dispatch`` and
+            # ``pred_cls._get_dispatch`` can no longer disagree about it.
+            row = db.row(functor, arity)
+            if row is not None:
+                row.invalidate()
             clauses = db.clauses_for(functor, arity)
             if clauses:
                 compile_predicate_trampoline(functor, arity, clauses, db,

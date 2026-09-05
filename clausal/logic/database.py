@@ -63,7 +63,7 @@ and a free-form detail. Diagnostics, not history — see ``PredRow.record_write`
 _WRITES_CAP = 32
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class PredRow:
     """Per-``(functor, arity)`` predicate state, minted by ``Database.row()``.
 
@@ -94,6 +94,15 @@ class PredRow:
     locked: bool = False
     source: "tuple[str, str] | None" = None
     writes: list = dataclasses.field(default_factory=list)
+    # Arities the NAME was DECLARED at (``-dynamic(f/N)``).  Row-LOCAL, not
+    # derived from ``dynamic`` (P3-3 Task 2): ``dynamic`` is per-``(f, a)``
+    # and answers "is THIS key dynamic", while ``_dynamic_arities`` is a
+    # per-NAME set whose two load-bearing distinctions — ``None`` ("nothing
+    # was declared") vs a set, and a set of size 1 vs >1 — cannot be
+    # reconstructed from one key's boolean.  See ``PredicateMeta.
+    # _declared_arity``, which declines on ``None``, declines on
+    # ``len(...) != 1``, and reports the single element otherwise.
+    dynamic_arities: "set[int] | None" = None
 
     @property
     def clauses(self) -> list:
@@ -111,6 +120,18 @@ class PredRow:
         minting site for clause lists going forward.
         """
         return self._db._clauses.setdefault(self._key, [])
+
+    @clauses.setter
+    def clauses(self, value: list) -> None:
+        """Replace the clause list wholesale with *value* — the caller's list
+        object itself, not a copy, so an alias the caller keeps stays live.
+
+        Exists for the one legacy spelling that rebinds rather than mutates
+        (``pred_cls._clauses = []``, used by several tests to reset a class
+        between cases). Every in-tree production write is an in-place mutation
+        of the list the getter hands back.
+        """
+        self._db._clauses[self._key] = value
 
     @property
     def dispatch_fn(self) -> "Callable | None":
@@ -218,59 +239,40 @@ class Database:
         self._rows[key] = new_row
         return new_row
 
-    def _pred_cls_for(self, functor: str) -> Any:
-        """Return the unlocked PredicateMeta class for *functor*, or None.
-
-        ``solve()`` (and compiled inter-predicate calls) resolve a predicate
-        through its PredicateMeta class — a clause store that runs in parallel
-        with ``self._clauses``.  Mutating only the DB store leaves the class
-        stale, so the low-level assertz/asserta/retract below must mirror the
-        change onto the class.  Locked (static) predicates are skipped so the
-        low-level API does not silently bypass the runtime-mutation lock; only
-        dynamic predicates — the ones that may legitimately change at runtime —
-        are synced.
-        """
-        md = self.module_dict
-        if md is None:
-            return None
-        from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
-        cand = md.get(functor)
-        if isinstance(cand, PredicateMeta) and not cand._locked:
-            return cand
-        return None
-
     def assertz(self, clause: Clause) -> None:
-        """Add clause at end of its predicate's clause list."""
+        """Add clause at end of its predicate's clause list.
+
+        P3-3 Task 2: there is no longer a second clause store to mirror onto.
+        A ``PredicateMeta`` class bound to this predicate reads its ``_clauses``
+        THROUGH ``self.row(functor, arity)`` — the very list appended to here —
+        so the class sees the new clause by construction, at the right arity.
+        (The deleted mirror was arity-BLIND: it looked the functor up in
+        ``module_dict`` and appended a ``p/1`` clause onto whatever class named
+        ``p`` happened to be bound, ``p/3`` included.)
+        """
         functor, arity = head_key(clause.head)
         key = (functor, arity)
-        self._clauses.setdefault(key, []).append(clause)
+        row = self.row(functor, arity, create=True)
+        row.clauses.append(clause)
         # Invalidate compiled dispatch so lazy recompile triggers on next use.
         if key in self._dispatch:
-            self._dispatch[key] = None
-        # Keep the predicate class (which solve() dispatches through) in sync.
-        pred_cls = self._pred_cls_for(functor)
-        if pred_cls is not None:
-            pred_cls._clauses.append(clause)
-            pred_cls._dispatch_fn = None
+            row.invalidate()
         # Auto-invalidate tabled answers when a tabled predicate changes.
         if key in self._tabled:
             self.abolish_table(functor, arity)
 
     def asserta(self, clause: Clause) -> None:
-        """Add clause at front of its predicate's clause list."""
+        """Add clause at front of its predicate's clause list.
+
+        See ``assertz`` for why no class mirror is needed any more.
+        """
         functor, arity = head_key(clause.head)
         key = (functor, arity)
-        if key not in self._clauses:
-            self._clauses[key] = []
-        self._clauses[key].insert(0, clause)
+        row = self.row(functor, arity, create=True)
+        row.clauses.insert(0, clause)
         # Invalidate compiled dispatch so lazy recompile triggers on next use.
         if key in self._dispatch:
-            self._dispatch[key] = None
-        # Keep the predicate class (which solve() dispatches through) in sync.
-        pred_cls = self._pred_cls_for(functor)
-        if pred_cls is not None:
-            pred_cls._clauses.insert(0, clause)
-            pred_cls._dispatch_fn = None
+            row.invalidate()
         # Auto-invalidate tabled answers when a tabled predicate changes.
         if key in self._tabled:
             self.abolish_table(functor, arity)
@@ -279,26 +281,22 @@ class Database:
         """Remove first clause whose head structurally equals head.
 
         Returns True if a clause was removed.
+
+        See ``assertz`` for why no class mirror is needed any more.
         """
         functor, arity = head_key(head)
         key = (functor, arity)
-        if key not in self._clauses:
+        clause_list = self._clauses.get(key)
+        if clause_list is None:
             return False
-        for i, clause in enumerate(self._clauses[key]):
+        for i, clause in enumerate(clause_list):
             if clause.head == head:
-                del self._clauses[key][i]
+                del clause_list[i]
                 # Invalidate compiled dispatch.
                 if key in self._dispatch:
-                    self._dispatch[key] = None
-                # Keep the predicate class (which solve() dispatches through) in
-                # sync: remove the same clause object by identity.
-                pred_cls = self._pred_cls_for(functor)
-                if pred_cls is not None:
-                    for j, pcls_clause in enumerate(pred_cls._clauses):
-                        if pcls_clause is clause:
-                            del pred_cls._clauses[j]
-                            pred_cls._dispatch_fn = None
-                            break
+                    row = self.row(functor, arity)
+                    if row is not None:
+                        row.invalidate()
                 # Auto-invalidate tabled answers when a tabled predicate changes.
                 if key in self._tabled:
                     self.abolish_table(functor, arity)

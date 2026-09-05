@@ -2092,6 +2092,15 @@ def _install(
     if db is not None:
         db.set_dispatch(functor, arity, fn, lazy_recompile=lazy_recompile)
     if pred_cls is not None and isinstance(pred_cls, PredicateMeta):
+        # P3-3 Task 2: bind first, then write THROUGH the class properties —
+        # one spelling, unchanged from before, now landing in the Database row
+        # rather than in a parallel per-class slot.  Binding here as well as at
+        # ``compiler_v2`` step 4 covers the paths that install a dispatch
+        # without ever going through a load (a bare-query compile, a
+        # specialization target, a runtime recompile after assertz), and is a
+        # no-op whenever the class is already on this row.
+        if db is not None:
+            pred_cls._bind_row(db, functor, arity)
         pred_cls._dispatch_fn = fn
         if lazy_recompile is not None:
             pred_cls._lazy_recompile = lazy_recompile
