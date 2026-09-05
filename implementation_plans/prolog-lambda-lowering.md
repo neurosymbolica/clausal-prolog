@@ -1333,7 +1333,16 @@ it can run; that is step B.
 
 ---
 
-## 11. Capture semantics (proposed 2026-09-05, AWAITING OPERATOR RATIFICATION)
+## 11. Capture semantics (RATIFIED by the operator, 2026-09-06)
+
+> **RATIFIED 2026-09-06.** Lambda capture is **capture-by-value / copy-at-call**
+> (bound capture flows its value in; unbound capture is fresh per call) — kept as
+> the engine already implements it. **Free-sets are NOT adopted**: sharing lives in
+> clause scope, applied-freshly in the lambda, and output is an argument — see the
+> "Should free-sets exist at all?" subsection for the binding argument. The advisory
+> capture lint (`todo/lambda-implicit-capture-advisory-lint.md`) proceeds; the
+> free-set syntax question is retired (nothing to give syntax to). Reopen only if a
+> `free`-shaped need surfaces that output-as-argument provably cannot serve.
 
 The designer raised, and this section records for ratification, what an
 implicitly-captured variable *means* at runtime. Nothing here is settled until
