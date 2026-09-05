@@ -44,7 +44,6 @@ from clausal.logic.predicate import (
     PredicateMeta,
     is_atom,
     is_term_instance,
-    make_atom,
     make_predicate,
     term_field_dict,
     term_field_names,
@@ -73,7 +72,7 @@ from clausal.pythonic_ast.nodes import Add
 # naive "sort the fields" implementation would silently pass while an
 # order-sensitive one would not.
 bar = make_predicate("bar", ["b", "a"])
-foo_atom = make_atom("foo")
+foo_atom = make_predicate("foo", [])
 
 
 class NotADataclass:
@@ -216,7 +215,7 @@ class TestFunctorArity:
             bar(b=1, a=2),
             foo_atom,
             Add(left=1, right=2),
-            make_atom("baz"),
+            make_predicate("baz", []),
             make_predicate("qux", ["x", "y", "z"])(x=1, y=2, z=3),
         ],
         ids=[

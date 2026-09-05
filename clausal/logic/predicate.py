@@ -698,9 +698,12 @@ class PredicateMeta(type):
         # longer mints one for a plain atom, but a 0-arity PREDICATE
         # declared with explicit call syntax — ``-module(m, [p()])``, as
         # opposed to the bare-Name atom syntax ``-module(m, [p])`` — still
-        # legitimately mints one, and ``make_atom``/``make_predicate(n, [])``
-        # remain a general-purpose, still-tested construction API. This
-        # zero-field fast path stays permanently, not just transitionally.)
+        # legitimately mints one, and ``make_predicate(n, [])`` remains a
+        # general-purpose, still-tested construction API for that shape
+        # (``make_atom`` is NOT: P3-3 Task 7 made it return the atom str,
+        # since a public factory minting a class atom was the one door left
+        # for a class atom to enter a program that has none). This zero-field
+        # fast path stays permanently, not just transitionally.)
 
         # Where this class was registered, for the field-name mismatch
         # diagnostic.  Frame 1 is the .clausal module body running the
@@ -1605,15 +1608,25 @@ def make_predicate(name: str, fields: list[str]) -> "PredicateMeta":
     return PredicateMeta(name, (), {"_fields": tuple(fields)})
 
 
-def make_atom(name: str) -> "PredicateMeta":
-    """Create a zero-arity PredicateMeta atom.
+def make_atom(name: str) -> str:
+    """Return the atom *name* — the plain ``str``.
 
-    The returned class IS the atom value: ``a = make_atom("a"); a() is a``.
-    Each call creates a NEW class — call once and reuse the result.
+    An atom IS a ``str`` since the P3-1 pivot (§1b/R2), so this hands back
+    ``name`` itself and there is nothing to intern: two calls with the same
+    spelling give the same atom because two equal strings ARE the same atom.
 
-    equivalent to ``make_predicate(name, [])``.
+    It kept minting a zero-arity ``PredicateMeta`` until P3-3 Task 7.  That
+    made it the one door left in the public API through which a CLASS atom
+    could enter a program that has none anywhere else — a live
+    mixed-representation path, and the shape every accessor since the pivot
+    has had to dual-accept.  The function stays for API continuity (it is
+    exported, and out-of-tree callers spell an atom with it); what it returns
+    changed.
+
+    A zero-arity PREDICATE class — the thing a bare ``p()`` declaration mints,
+    which is a procedure and not an atom — is ``make_predicate(name, [])``.
     """
-    return make_predicate(name, [])
+    return name
 
 
 __all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "is_atom",

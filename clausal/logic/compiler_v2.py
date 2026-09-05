@@ -848,12 +848,22 @@ def _refuse_untablable_target(
         is_pred = False
 
     if functor in specialize_aliases:
+        # P3-3 Task 7 retired the reason this refusal used to give -- "-specialize
+        # compiles it against a database of its own that no -table directive
+        # reaches" -- because that database is gone: a specialized predicate is
+        # now a row in THIS one, installed through the mutation gate at step 6b.
+        # The refusal is KEPT (Task 7 relocates state; it does not get to lift a
+        # refusal on an unmeasured guess) and its reason narrowed to what is
+        # still true: the specializer compiles and installs the alias's dispatch
+        # itself, at a later step than this directive's wrapper.  Lifting it is a
+        # follow-up, and starts by verifying that a tabled -specialize alias
+        # really tables.
         raise SyntaxError(
             f"-table({functor}/{arity}): {functor} is a -specialize alias, and "
-            f"-specialize compiles it against a database of its own that no "
-            f"-table directive reaches — the directive would have no effect.  "
-            f"Table the meta-interpreter or the object predicate instead, or "
-            f"drop the directive."
+            f"-table is not supported on one — the specializer compiles and "
+            f"installs the alias's dispatch itself, after this directive's "
+            f"wrapper.  Table the meta-interpreter or the object predicate "
+            f"instead, or drop the directive."
         )
 
     if is_pred and cls._clauses:
@@ -999,20 +1009,27 @@ def _run_specialization(
             target_cls = None
 
         # Run the specializer (deep unfolding if depth > 0, CPD if cpd=True).
+        #
+        # P3-3 Task 7: ``db=db`` is what makes the specialized predicate THIS
+        # module's predicate.  The specializer used to build a Database of its
+        # own and drop it, so ``db.row(item.new_name, ...)`` stayed ``None``
+        # and the only handle on the predicate was the class in
+        # ``module_dict``; the row it now gets is registered, signed and
+        # gate-stamped here beside the module's own predicates.
         if item.cpd:
             specialized_cls = specialize_mi_cpd(
                 pattern, program_data, item.new_name, module_dict,
-                pred_cls=target_cls, max_depth=item.depth or 10,
+                pred_cls=target_cls, max_depth=item.depth or 10, db=db,
             )
         elif item.depth > 0:
             specialized_cls = specialize_mi_deep(
                 pattern, program_data, item.new_name, module_dict,
-                pred_cls=target_cls, max_depth=item.depth,
+                pred_cls=target_cls, max_depth=item.depth, db=db,
             )
         else:
             specialized_cls = specialize_mi(
                 pattern, program_data, item.new_name, module_dict,
-                pred_cls=target_cls,
+                pred_cls=target_cls, db=db,
             )
 
         # The specialized predicate is already compiled and installed

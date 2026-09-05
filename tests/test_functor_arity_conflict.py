@@ -30,7 +30,6 @@ from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
     ClausalTermConstructionError,
     PredicateMeta,
-    make_atom,
     make_predicate,
 )
 from clausal.logic.solve import call
@@ -83,7 +82,7 @@ class TestPositionalOverflowRaises:
 
     def test_overflow_on_a_zero_arity_class_names_the_shadowing_cause(self):
         """An atom called with arguments is Phenomenon A — say so."""
-        atom = make_atom("fac_bare_atom")
+        atom = make_predicate("fac_bare_atom", [])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             atom(1, 2)
         msg = str(exc_info.value)
@@ -109,7 +108,7 @@ class TestPositionalOverflowRaises:
         assert term.left == 1 and term.right == 2
 
     def test_zero_arity_no_args_still_returns_the_class_itself(self):
-        atom = make_atom("fac_identity")
+        atom = make_predicate("fac_identity", [])
         assert atom() is atom
 
 

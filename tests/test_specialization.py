@@ -1848,3 +1848,163 @@ class TestCpdTermination:
             pattern, _make_even_odd_program(), "SolveTerm4", max_depth=20,
         )
         assert len(cpd._clauses) > 0
+
+
+# ── P3-3 Task 7: the specialized predicate is a Database ROW ─────────────────
+
+
+class TestSpecializedPredicateIsARow:
+    """P3-3 Task 7.  ``specialize_mi`` used to ``make_predicate`` a
+    free-floating class and compile it against a ``Database`` it threw away,
+    so the specialized predicate existed only as class attributes.  It is now
+    a row: registered, signed, gate-stamped and dispatched through a
+    ``Database`` — the caller's when it passes one, the specialization's own
+    otherwise — and the returned class READS that row.
+    """
+
+    def test_row_registered_in_the_callers_db(self, mi_module):
+        from clausal.logic.database import Database
+
+        db = Database(module_dict={"__name__": "t7_caller"})
+        pattern = analyze_mi(mi_module.Solve)
+        pred_cls = specialize_mi(
+            pattern, _make_natnum_program(), "T7RowNatnum", db=db,
+        )
+        row = db.row("T7RowNatnum", 1)
+        assert row is not None
+        assert pred_cls._row is row
+        assert row.detached is False
+
+    def test_signature_registered_in_the_callers_db(self, mi_module):
+        from clausal.logic.database import Database
+
+        db = Database(module_dict={"__name__": "t7_sig"})
+        pattern = analyze_mi(mi_module.SolveCount)
+        specialize_mi(
+            pattern, _make_natnum_program(), "T7SigNatnum", db=db,
+        )
+        assert db.signature_for("T7SigNatnum", 2) == ("GOALS", "COUNT")
+
+    def test_clauses_and_dispatch_land_in_the_callers_db(self, mi_module):
+        from clausal.logic.database import Database
+
+        db = Database(module_dict={"__name__": "t7_clauses"})
+        pattern = analyze_mi(mi_module.Solve)
+        pred_cls = specialize_mi(
+            pattern, _make_natnum_program(), "T7ClausesNatnum", db=db,
+        )
+        assert len(db.clauses_for("T7ClausesNatnum", 1)) == 3
+        assert db.get_dispatch("T7ClausesNatnum", 1) is pred_cls._get_dispatch()
+
+    def test_write_is_gate_stamped(self, mi_module):
+        from clausal.logic.database import Database, WRITE_LOAD_CLAUSES
+        from clausal.logic.specialization import SPECIALIZE_AUTHOR_PREFIX
+
+        db = Database(module_dict={"__name__": "t7_stamp"})
+        pattern = analyze_mi(mi_module.Solve)
+        specialize_mi(
+            pattern, _make_natnum_program(), "T7StampNatnum", db=db,
+        )
+        row = db.row("T7StampNatnum", 1)
+        stamps = [w for w in row.writes
+                  if w.author.startswith(SPECIALIZE_AUTHOR_PREFIX)]
+        assert stamps
+        assert any(w.kind == WRITE_LOAD_CLAUSES for w in stamps)
+        assert row.source is not None
+        assert row.source[1] == stamps[0].author
+
+    def test_respecialization_by_the_same_author_is_permitted(self, mi_module):
+        """The first write claims ownership FOR the specialization author, so
+        specializing the same name into the same database again is that
+        author writing its own predicate — rule 1 of the ownership policy."""
+        from clausal.logic.database import Database
+
+        db = Database(module_dict={"__name__": "t7_again"})
+        pattern = analyze_mi(mi_module.Solve)
+        specialize_mi(pattern, _make_natnum_program(), "T7AgainNatnum", db=db)
+        pred_cls = specialize_mi(
+            pattern, _make_natnum_program(), "T7AgainNatnum", db=db,
+        )
+        assert len(db.clauses_for("T7AgainNatnum", 1)) == 3
+        assert pred_cls._row is db.row("T7AgainNatnum", 1)
+
+    def test_no_db_still_row_linked(self, mi_module):
+        """With no database anywhere in the caller's world there is no defining
+        module, so the specialization keeps a Database of its own — but the
+        class READS its row, and the predicate is registered there rather than
+        living in class attributes."""
+        pattern = analyze_mi(mi_module.Solve)
+        pred_cls = specialize_mi(
+            pattern, _make_natnum_program(), "T7NoDbNatnum",
+        )
+        row = pred_cls._row
+        assert row is not None
+        assert row.detached is False
+        assert row.db.row("T7NoDbNatnum", 1) is row
+        assert row.db.get_dispatch("T7NoDbNatnum", 1) is pred_cls._get_dispatch()
+
+    def test_deep_and_cpd_register_rows_too(self, mi_module):
+        from clausal.logic.database import Database
+        from clausal.logic.specialization import specialize_mi_deep
+
+        db = Database(module_dict={"__name__": "t7_variants"})
+        pattern = analyze_mi(mi_module.Solve)
+        deep = specialize_mi_deep(
+            pattern, _make_natnum_program(), "T7DeepNatnum", db=db, max_depth=3,
+        )
+        cpd = specialize_mi_cpd(
+            pattern, _make_natnum_program(), "T7CpdNatnum", db=db, max_depth=3,
+        )
+        assert deep._row is db.row("T7DeepNatnum", 1)
+        assert cpd._row is db.row("T7CpdNatnum", 1)
+        assert db.get_dispatch("T7DeepNatnum", 1) is not None
+        assert db.get_dispatch("T7CpdNatnum", 1) is not None
+
+    def test_specialized_answers_are_unchanged(self, mi_module):
+        from clausal.logic.database import Database
+        from clausal.logic.solve import call
+
+        db = Database(module_dict={"__name__": "t7_answers"})
+        pattern = analyze_mi(mi_module.SolveCount)
+        pred_cls = specialize_mi(
+            pattern, _make_natnum_program(), "T7AnswerNatnum", db=db,
+        )
+        assert sum(1 for _ in call(
+            pred_cls, [["natnum", ["s", ["s", 0]]]], 3,
+        )) == 1
+
+    def test_specialized_calls_specialized_through_the_shared_db(self, mi_module):
+        """Two specializations into ONE database, the second's object program
+        naming the first: the generated body goal resolves through the row the
+        first specialization registered, and answers correctly.
+
+        Before P3-3 Task 7 each ``specialize_mi`` call built a Database of its
+        own, so "the same database" was not a thing two specializations could
+        share and the only link between them was the module dict entry.
+        """
+        from clausal.logic.database import Database
+        from clausal.logic.solve import call
+        from clausal.logic.variables import Var
+
+        db = Database(module_dict={"__name__": "t7_chain"})
+        module_dict = db.module_dict
+        pattern = analyze_mi(mi_module.Solve)
+
+        inner = specialize_mi(
+            pattern, _make_natnum_program(), "T7Inner", module_dict, db=db,
+        )
+        y = Var()
+        outer = specialize_mi(
+            pattern, [[["wrap", y], [["T7Inner", [["natnum", y]]]]]],
+            "T7Outer", module_dict, db=db,
+        )
+
+        assert inner._row is db.row("T7Inner", 1)
+        assert outer._row is db.row("T7Outer", 1)
+        assert inner._row.db is outer._row.db
+        # The callee is reached through its row's dispatch, not a private one.
+        assert module_dict["T7Inner"] is inner
+        assert inner._get_dispatch() is db.get_dispatch("T7Inner", 1)
+
+        assert sum(1 for _ in call(outer, [["wrap", ["s", 0]]])) == 1
+        assert sum(1 for _ in call(outer, [["wrap", "a"]])) == 0

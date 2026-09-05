@@ -600,3 +600,107 @@ class TestCpdPipeline:
         items = [i for i in t._module_items if isinstance(i, SI)]
         assert len(items) == 1
         assert items[0].cpd is False
+
+
+# ── P3-3 Task 7: the specialized predicate is a ROW in the module's db ───────
+
+
+def _module_db(mod):
+    """The Database of a loaded .clausal module."""
+    return mod.__clausal_module__.db
+
+
+class TestSpecializedPredicateIsARow:
+    """P3-3 Task 7.  ``-specialize`` used to mint a free-floating predicate
+    class and compile it against a throwaway ``Database`` the module's own
+    database never heard of: ``db.row("SolveCountNatnum", 2)`` was ``None``
+    while the class answered queries out of a store nobody could reach.  The
+    specialized predicate is now a row in the DEFINING module's database,
+    installed through the Task-3 write gate.
+    """
+
+    def test_row_exists_in_module_db(self, specialize_natnum):
+        db = _module_db(specialize_natnum)
+        assert db.row("SolveCountNatnum", 2) is not None
+
+    def test_class_reads_the_module_row(self, specialize_natnum):
+        db = _module_db(specialize_natnum)
+        cls = specialize_natnum.SolveCountNatnum
+        assert cls._row is db.row("SolveCountNatnum", 2)
+        assert cls._row.detached is False
+
+    def test_signature_registered(self, specialize_natnum):
+        db = _module_db(specialize_natnum)
+        assert db.signature_for("SolveCountNatnum", 2) == ("GOALS", "COUNT")
+
+    def test_clauses_visible_in_module_db(self, specialize_natnum):
+        db = _module_db(specialize_natnum)
+        assert db.is_defined("SolveCountNatnum", 2)
+        assert len(db.clauses_for("SolveCountNatnum", 2)) == 3
+
+    def test_dispatch_installed_on_the_module_row(self, specialize_natnum):
+        db = _module_db(specialize_natnum)
+        cls = specialize_natnum.SolveCountNatnum
+        fn = db.get_dispatch("SolveCountNatnum", 2)
+        assert fn is not None
+        assert fn is cls._get_dispatch()
+
+    def test_write_is_gate_stamped_with_the_specialization_author(
+        self, specialize_natnum,
+    ):
+        from clausal.logic.database import WRITE_LOAD_CLAUSES
+        from clausal.logic.specialization import SPECIALIZE_AUTHOR_PREFIX
+
+        db = _module_db(specialize_natnum)
+        row = db.row("SolveCountNatnum", 2)
+        stamps = [w for w in row.writes
+                  if w.author.startswith(SPECIALIZE_AUTHOR_PREFIX)]
+        assert stamps, f"no specialization write on the row: {row.writes}"
+        assert any(w.kind == WRITE_LOAD_CLAUSES for w in stamps)
+
+    def test_first_write_claims_ownership_for_that_author(
+        self, specialize_natnum,
+    ):
+        from clausal.logic.specialization import SPECIALIZE_AUTHOR_PREFIX
+
+        db = _module_db(specialize_natnum)
+        row = db.row("SolveCountNatnum", 2)
+        assert row.source is not None
+        assert row.source[1].startswith(SPECIALIZE_AUTHOR_PREFIX)
+
+    def test_deep_and_shallow_share_one_module_db(self, specialize_deep):
+        db = _module_db(specialize_deep)
+        for name, arity in (("ShallowNatnum", 1), ("DeepNatnum", 1),
+                            ("DeepCountNatnum", 2)):
+            row = db.row(name, arity)
+            assert row is not None, f"{name}/{arity} missing from the module db"
+            assert getattr(specialize_deep, name)._row is row
+
+    def test_specialized_calls_specialized_through_row_dispatch(
+        self, specialize_deep,
+    ):
+        """A specialized clause body calls a specialized predicate — the
+        recursive call the unfolder emits — and the compiled dispatch reaches
+        it through the module database's row, not through a private store.
+        """
+        db = _module_db(specialize_deep)
+        cls = specialize_deep.DeepCountNatnum
+        fn = db.get_dispatch("DeepCountNatnum", 2)
+        assert fn is not None
+        target = fn.__globals__.get("DeepCountNatnum")
+        assert target is cls
+        assert target._row is db.row("DeepCountNatnum", 2)
+        assert target._get_dispatch() is fn
+
+    def test_sibling_specializations_are_the_row_linked_classes(
+        self, specialize_deep,
+    ):
+        """The compile namespace a specialized predicate is lowered against
+        names this module's OTHER specialized predicates, and each of those
+        names is the class reading the module database's row for it."""
+        db = _module_db(specialize_deep)
+        fn = db.get_dispatch("DeepNatnum", 1)
+        for name, arity in (("ShallowNatnum", 1), ("DeepCountNatnum", 2)):
+            sibling = fn.__globals__.get(name)
+            assert sibling is getattr(specialize_deep, name)
+            assert sibling._row is db.row(name, arity)

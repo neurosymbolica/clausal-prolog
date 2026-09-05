@@ -29,7 +29,7 @@ import textwrap
 import pytest
 
 from clausal.logic.database import Clause
-from clausal.logic.predicate import make_atom, make_predicate
+from clausal.logic.predicate import make_predicate
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 from clausal.predicate_diagnostics import (
@@ -665,7 +665,7 @@ class TestDynamicDeclaredArity:
         (roborev job 9).  ``_fields`` acts only as a VETO here, never as
         the arity source, so the stale-``_fields`` hazard cannot return.
         """
-        atom = make_atom("arcm_dynatom")         # authored at /0
+        atom = make_predicate("arcm_dynatom", [])         # authored at /0
         atom._dynamic_arities = {3}              # declared at /3
         atom._refuse_call_at(1)                  # must not raise
         pair = make_predicate("arcm_dynpair2", ["k", "v"])
@@ -765,12 +765,12 @@ def _stale_predicate(name, n_clauses):
     (split in two by the P3-1 Task 2 fix round 1 ruling -- see
     ``task-2-report.md``; this helper's hand-built stale-arity shape is
     orthogonal to that ruling, since it builds a live ``PredicateMeta`` atom
-    directly via ``make_atom``, never a str).
+    directly via ``make_predicate(name, [])``, never a str).
     Built by hand here so the clause count can be a fact table's, and so no
     shared fixture class is mutated.
     """
     pair = make_predicate(name + "_pair", ["k", "v"])
-    stale = make_atom(name)
+    stale = make_predicate(name, [])
     stale._clauses.extend(_CountingClause(pair(i, i)) for i in range(n_clauses))
     assert stale._arity == 0          # stale, permanently
     return stale
@@ -821,7 +821,7 @@ class TestClauseListChangesAreObeyed:
     def test_assertz_of_another_arity_flips_the_decision(self):
         pair = make_predicate("arcm_dyn_pair", ["k", "v"])
         one = make_predicate("arcm_dyn_one", ["k"])
-        moving = make_atom("arcm_dyn")
+        moving = make_predicate("arcm_dyn", [])
 
         moving._assertz(Clause(head=pair(1, 2), body=[]))
         moving._refuse_call_at(2)                    # /2 heads: accepted
@@ -836,7 +836,7 @@ class TestClauseListChangesAreObeyed:
 
     def test_retracting_the_last_clause_stops_refusing(self):
         pair = make_predicate("arcm_empty_pair", ["k", "v"])
-        moving = make_atom("arcm_empty")
+        moving = make_predicate("arcm_empty", [])
         moving._assertz(Clause(head=pair(1, 2), body=[]))
         with pytest.raises(PredicateArityMismatchError):
             moving._refuse_call_at(1)
@@ -949,7 +949,7 @@ class TestCompoundHead:
 
     def test_str_functor(self):
         from clausal.terms import Compound
-        pred = make_atom("arcm_compound")
+        pred = make_predicate("arcm_compound", [])
         pred._clauses.append(Clause(head=Compound("arcm_compound", (1, 2)),
                                     body=[]))
         assert pred._clause_arity() == 2
@@ -960,7 +960,7 @@ class TestCompoundHead:
     def test_var_functor(self):
         from clausal.logic.variables import Var
         from clausal.terms import Compound
-        pred = make_atom("arcm_compound_var")
+        pred = make_predicate("arcm_compound_var", [])
         pred._clauses.append(Clause(head=Compound(Var(), (1, 2, 3)), body=[]))
         assert pred._clause_arity() == 3
         pred._refuse_call_at(3)          # agrees: nothing refused
@@ -970,14 +970,14 @@ class TestAHeadShapeNobodyAnticipated:
     """Undefined arity means *nothing is refused*, never *something is raised*."""
 
     def test_an_unreadable_head_refuses_nothing(self):
-        junk = make_atom("arcm_junk")
+        junk = make_predicate("arcm_junk", [])
         junk._clauses.append(Clause(head=object(), body=[]))
         assert junk._clause_arity() is None
         junk._refuse_call_at(3)          # must not raise at all
 
     def test_one_unreadable_head_makes_the_whole_arity_unknown(self):
         pair = make_predicate("arcm_mixed_pair", ["k", "v"])
-        mixed = make_atom("arcm_mixed")
+        mixed = make_predicate("arcm_mixed", [])
         mixed._clauses.append(Clause(head=pair(1, 2), body=[]))
         mixed._clauses.append(Clause(head=object(), body=[]))
         assert mixed._clause_arity() is None
@@ -994,7 +994,7 @@ class TestAHeadShapeNobodyAnticipated:
             def head(self):
                 raise RuntimeError("a diagnostic must survive this")
 
-        boom = make_atom("arcm_boom")
+        boom = make_predicate("arcm_boom", [])
         boom._clauses.append(Exploding())
         boom._refuse_call_at(2)
 

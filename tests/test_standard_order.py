@@ -182,29 +182,30 @@ class TestAtomKeyCollapse:
     Pre-pivot, a str and a same-spelled zero-arity declared-class atom got
     DIFFERENT keys (``(_ORD_ATOM, name, 0)`` vs. ``(_ORD_ATOM, name, 1)``) so
     ties broke str-first.  Post-pivot (§1b/R2: a str IS the atom), there is
-    one shape: ``(_ORD_ATOM, name)``.  ``make_atom`` still legitimately
-    produces a zero-arity ``PredicateMeta`` class (a general-purpose test/
-    infra helper, and the same class shape a bare 0-arity PREDICATE
-    declared with call syntax -- ``-module(m, [p()])`` -- mints for real;
-    the Task 7 sweep confirmed this is not a retireable pre-pivot
-    straggler), so it must key IDENTICALLY to the same-spelled str, not
-    merely adjacently.
+    one shape: ``(_ORD_ATOM, name)``.  ``make_predicate(name, [])`` still
+    legitimately produces a zero-arity ``PredicateMeta`` class (a
+    general-purpose test/infra helper, and the same class shape a bare
+    0-arity PREDICATE declared with call syntax -- ``-module(m, [p()])``
+    -- mints for real; the P3-1 Task 7 sweep confirmed this is not a
+    retireable pre-pivot straggler, and P3-3 Task 7 moved the spelling off
+    ``make_atom``, which now returns the atom str), so it must key
+    IDENTICALLY to the same-spelled str, not merely adjacently.
     """
 
     def test_str_atom_key_shape_has_no_discriminator(self):
         assert _standard_order_key("work") == (_ORD_ATOM, "work")
 
     def test_class_atom_key_matches_same_spelled_str_key(self):
-        from clausal.logic.predicate import make_atom
+        from clausal.logic.predicate import make_predicate
 
-        atom_cls = make_atom("work")
+        atom_cls = make_predicate("work", [])
         assert _standard_order_key(atom_cls) == _standard_order_key("work")
         assert _standard_order_key(atom_cls) == (_ORD_ATOM, "work")
 
     def test_same_spelled_str_and_class_atom_sort_adjacent_equal(self):
-        from clausal.logic.predicate import make_atom
+        from clausal.logic.predicate import make_predicate
 
-        atom_cls = make_atom("work")
+        atom_cls = make_predicate("work", [])
         # Neither is ordered strictly before the other by the key.
         ordered = _key_sorted(["work", atom_cls])
         assert {_standard_order_key(x) for x in ordered} == {(_ORD_ATOM, "work")}

@@ -514,33 +514,35 @@ class TestAtomIdentity:
 
 
 class TestMakeAtom:
-    def test_returns_predicate_meta(self):
+    """P3-3 Task 7: ``make_atom(name)`` returns the plain atom ``str``.
+
+    An atom has been a ``str`` since the P3-1 pivot, and a public factory
+    still minting a zero-arity ``PredicateMeta`` was the one door left in the
+    public API through which a class atom could enter a program that has none
+    anywhere else — a live mixed-representation path.  ``make_atom`` stays for
+    API continuity and hands back the atom itself; ``make_predicate(name, [])``
+    is how a caller asks for a /0 PREDICATE class.
+    """
+
+    def test_returns_the_atom_str(self):
         # nv
         from clausal.logic.predicate import make_atom
         a = make_atom("a")
-        assert isinstance(a, PredicateMeta)
-        assert a._fields == ()
-        assert a._arity == 0
+        assert type(a) is str
+        assert a == "a"
+        assert not isinstance(a, PredicateMeta)
 
-    def test_call_returns_self(self):
+    def test_repeated_calls_agree(self):
         # nv
         from clausal.logic.predicate import make_atom
-        a = make_atom("a")
-        assert a() is a
-
-    def test_different_calls_different_identity(self):
-        # nv
-        from clausal.logic.predicate import make_atom
-        a1 = make_atom("a")
-        a2 = make_atom("a")
-        assert a1 is not a2
+        assert make_atom("a") == make_atom("a")
 
     def test_hashable(self):
         # nv
         from clausal.logic.predicate import make_atom
         a = make_atom("a")
         d = {a: 42}
-        assert d[a()] == 42
+        assert d["a"] == 42
 
     def test_unify(self):
         # nv
@@ -551,5 +553,15 @@ class TestMakeAtom:
         trail = Trail()
         x = Var()
         assert unify(x, a, trail)
-        assert deref(x) is a
+        assert deref(x) == "a"
         assert not unify(a, b, trail)
+
+    def test_zero_arity_predicate_class_comes_from_make_predicate(self):
+        """The behaviour ``make_atom`` used to provide, at its new address."""
+        # nv
+        from clausal.logic.predicate import make_predicate
+        a = make_predicate("a", [])
+        assert isinstance(a, PredicateMeta)
+        assert a._fields == ()
+        assert a._arity == 0
+        assert a() is a

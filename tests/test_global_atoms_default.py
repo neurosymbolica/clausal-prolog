@@ -31,7 +31,7 @@ import pytest
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal import Var
 from clausal.import_hook import _load_module, predicate_builtins
-from clausal.logic.predicate import PredicateMeta, is_atom, is_atom_value, make_atom, make_predicate
+from clausal.logic.predicate import PredicateMeta, is_atom, is_atom_value, make_predicate
 from clausal.logic.variables import Trail, deref, unify
 from clausal.logic.solve import call
 from clausal.logic.builtins._helpers import functor_arity
@@ -440,7 +440,7 @@ class TestStrAtomAcceptance:
     def test_atom_still_true_for_zero_field_class(self):
         # Transitional dual-accept: the class route keeps working until
         # Task 2/3 retire atom-minting.
-        atom_cls = make_atom("tsaa_class_atom")
+        atom_cls = make_predicate("tsaa_class_atom", [])
         mod = _atoms_mod("tsaa_atom_class")
         assert _succeeds("atom", atom_cls, mod=mod)
 
@@ -477,7 +477,7 @@ class TestIsAtomValueHelper:
         assert is_atom_value("") is True
 
     def test_true_for_zero_field_class(self):
-        atom_cls = make_atom("tiav_class_atom")
+        atom_cls = make_predicate("tiav_class_atom", [])
         assert is_atom_value(atom_cls) is True
         # and the pre-existing is_atom agrees on this shape
         assert is_atom(atom_cls) is True
@@ -514,7 +514,7 @@ class TestFunctorArityStrAtom:
         assert functor_arity("") == ("", 0)
 
     def test_functor_arity_matches_zero_field_class_shape(self):
-        atom_cls = make_atom("tfasa_class_atom")
+        atom_cls = make_predicate("tfasa_class_atom", [])
         assert functor_arity(atom_cls) == (atom_cls, 0)
         assert functor_arity("tfasa_class_atom")[1] == functor_arity(atom_cls)[1] == 0
 

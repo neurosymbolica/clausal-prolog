@@ -10,9 +10,10 @@ Two entry points:
         Inspect the clauses of a PredicateMeta MI and return a structured
         description of its pattern (base case, recursive case, style, etc.).
 
-    specialize_mi(pattern, object_program, new_name, module_dict) → PredicateMeta
+    specialize_mi(pattern, object_program, new_name, module_dict, db=...)
         Unfold the MI with respect to the object program and produce a new
-        compiled predicate with the given name.
+        compiled predicate with the given name, registered as a ROW in the
+        defining module's Database (P3-3 Task 7).
 """
 
 from __future__ import annotations
@@ -240,6 +241,130 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
 # ── Unfolder ──────────────────────────────────────────────────────────────────
 
 
+# The author string a specialization writes under.  Third alongside
+# ``Database.load_author`` (a module's own load, spelled as its source path)
+# and ``Database.runtime_author`` (``runtime-assert:<module>``): a
+# specialization is neither.  It is derived from the load author rather than
+# being a bare constant so the stamp still says WHICH load's specializer wrote
+# the row -- an author string is provenance, and "specialization" alone names
+# no one -- and so that re-running the same module's specializer writes as the
+# same author and is permitted by rule 1 of the ownership policy.
+SPECIALIZE_AUTHOR_PREFIX = "specialize:"
+
+
+def _specialization_author(db: "Database") -> str:
+    """The author a specialization's writes to *db* are stamped with."""
+    return f"{SPECIALIZE_AUTHOR_PREFIX}{db.load_author()}"
+
+
+def _defining_db(db: "Database | None",
+                 module_dict: dict | None) -> "Database":
+    """The Database the specialized predicate is a row OF.
+
+    P3-3 Task 7.  A specialized predicate is a predicate: it belongs in the
+    database of the module that defines it, which is the module whose
+    namespace it is installed into.  ``compiler_v2._run_specialization`` holds
+    that database and hands it over, so a ``-specialize`` target now lands
+    beside the module's own predicates instead of in a ``Database`` the
+    specializer built and dropped on the floor.
+
+    The direct Python API (``specialize_mi`` called from a test or a script
+    with a pattern, a program and a name) has no module and therefore no
+    defining module database.  It keeps a Database of its own -- one per
+    specialization call, over the caller's ``module_dict`` when there is one --
+    and that is NOT the free-floating shape this task removed: the returned
+    class READS that database's row, so the predicate is registered, signed,
+    stamped and dispatched out of a real row rather than out of class
+    attributes, and the database is reachable from the handle the caller holds
+    (``pred_cls._row.db``).  A single process-wide "specialization module"
+    database would be the free-floating shape wearing a name, and is
+    deliberately not what happens here.
+    """
+    if db is not None:
+        return db
+    from clausal.logic.database import Database
+    return Database(module_dict=module_dict)
+
+
+def _install_specialized(
+    pred_cls: PredicateMeta,
+    new_name: str,
+    fields: list[str],
+    clauses: list,
+    db: "Database",
+    module_dict: dict | None,
+    solve_goal_name: str | None = None,
+    goal_map: dict | None = None,
+) -> PredicateMeta:
+    """Install a specialized predicate as a ROW in *db*, through the gate.
+
+    P3-3 Task 7, and the single copy of what the three ``specialize_mi*``
+    entry points each used to spell for themselves.  Before it, all three
+    minted a class with ``make_predicate``, built a throwaway
+    ``Database(module_dict=module_dict)``, asserted the clauses into it and
+    left the module's own database not knowing the predicate existed:
+    ``db.row(new_name, arity)`` answered ``None`` while the class answered
+    queries out of a store nothing else could reach.  That is also the
+    database the ``-table`` refusal for a ``-specialize`` alias used to name
+    (``compiler_v2._refuse_untablable_target``).
+
+    What happens here, in one transaction:
+
+    * the class is BOUND to *db*'s row for ``(new_name, arity)`` -- so
+      ``pred_cls._clauses`` IS ``db._clauses[key]`` from this point, and the
+      mirror-the-clauses-onto-the-class dance the old block needed (a
+      ``module_dict`` write so ``db.assertz`` could resolve through it, plus a
+      ``pred_cls._assertz`` fallback when there was no ``module_dict``) is
+      gone with the second store it existed to keep in step;
+    * the clause list is written and the keyword signature registered;
+    * the row's ``source`` is claimed for the specialization author when
+      nobody owns it yet, which is what makes a LATER write by the same author
+      (re-running the specializer over the same name and database) permitted
+      by rule 1 rather than refused as a clause clobber by rule 3;
+    * the dispatch is compiled and installed, nested inside this transaction,
+      so the exit does not invalidate what the compile just installed.
+
+    ``through=pred_cls`` puts the class's CURRENT row in the write's blast
+    radius: a ``pred_cls`` handed in from outside may already be somebody
+    else's predicate, and binding it here would hand them these clauses.  The
+    gate asks about that row too, and only a bind it has cleared is
+    ``authorized``.
+    """
+    from clausal.logic.compiler import compile_predicate_trampoline
+    from clausal.logic.database import WRITE_LOAD_CLAUSES
+
+    arity = len(fields)
+    author = _specialization_author(db)
+
+    globals_ = module_dict if module_dict is not None else {}
+    globals_[new_name] = pred_cls
+
+    # Residual goal dispatcher, if the object program left goals this
+    # specialization cannot unfold.  Resolved by NAME out of the compile
+    # namespace, exactly as before.
+    if solve_goal_name is not None:
+        globals_[solve_goal_name] = _make_solve_goal_predicate(
+            solve_goal_name, goal_map, module_dict,
+        )
+
+    with db.mutate(new_name, arity, author=author, kind=WRITE_LOAD_CLAUSES,
+                   detail="specialize", through=pred_cls) as row:
+        pred_cls._bind_row(db, new_name, arity, authorized=True)
+        # ``_ensure_clauses``, not a plain read: a read mints nothing (P3-3
+        # Task 2 fix round 1) and this IS the clause-install site, so the
+        # write has to land where ``db.clauses_for``/``is_defined`` can see it.
+        pred_cls._ensure_clauses()[:] = clauses
+        db.register_signature(new_name, arity, tuple(fields))
+        if row.source is None:
+            row.source = (db.module_name(), author)
+        compile_predicate_trampoline(
+            new_name, arity, clauses, db,
+            globals_=globals_, pred_cls=pred_cls,
+        )
+
+    return pred_cls
+
+
 def specialize_mi(
     pattern: MIPattern,
     object_program: list,
@@ -247,6 +372,7 @@ def specialize_mi(
     module_dict: dict | None = None,
     pred_cls: PredicateMeta | None = None,
     goal_map: dict | None = None,
+    db: "Database | None" = None,
 ) -> PredicateMeta:
     """Specialize an MI with respect to an object program.
 
@@ -266,6 +392,11 @@ def specialize_mi(
     pred_cls : PredicateMeta, optional
         Pre-existing predicate class to use instead of creating a new one.
         Used by the pipeline to reuse a class pre-registered at Step 1c.
+    db : Database, optional
+        The DEFINING module's database — where the specialized predicate is
+        registered as a row (P3-3 Task 7).  ``compiler_v2`` passes the module
+        it is compiling.  Without one there is no defining module and the
+        specialization keeps a database of its own; see ``_defining_db``.
 
     Returns
     -------
@@ -289,37 +420,13 @@ def specialize_mi(
         catchall = _make_residual_clause(pattern, pred_cls, solve_goal_name)
         clauses.append(catchall)
 
-    # Install clauses and compile.
-    from clausal.logic.database import Database
-    from clausal.logic.compiler import compile_predicate_trampoline
-
-    db = Database(module_dict=module_dict)
-    # Register the specialized class so db.assertz mirrors clauses onto it
-    # (it dispatches through the class); fall back to an explicit class sync
-    # when no module dict is available for db.assertz to resolve through.
-    if db.module_dict is not None:
-        db.module_dict[new_name] = pred_cls
-    for clause in clauses:
-        db.assertz(clause)
-        if db.module_dict is None:
-            pred_cls._assertz(clause)
-
-    globals_ = module_dict or {}
-    globals_[new_name] = pred_cls
-
-    # Inject residual goal dispatcher if needed.
-    if has_residual:
-        solve_goal_pred = _make_solve_goal_predicate(
-            solve_goal_name, goal_map, module_dict,
-        )
-        globals_[solve_goal_name] = solve_goal_pred
-
-    compile_predicate_trampoline(
-        new_name, len(fields), clauses, db,
-        globals_=globals_, pred_cls=pred_cls,
+    # Install as a row in the defining module's database, through the gate.
+    return _install_specialized(
+        pred_cls, new_name, fields, clauses,
+        _defining_db(db, module_dict), module_dict,
+        solve_goal_name=solve_goal_name if has_residual else None,
+        goal_map=goal_map,
     )
-
-    return pred_cls
 
 
 def _specialized_fields(pattern: MIPattern) -> list[str]:
@@ -1279,6 +1386,7 @@ def specialize_mi_deep(
     pred_cls: PredicateMeta | None = None,
     goal_map: dict | None = None,
     max_depth: int = 10,
+    db: "Database | None" = None,
 ) -> PredicateMeta:
     """Specialize an MI with depth-bounded unfolding.
 
@@ -1302,6 +1410,8 @@ def specialize_mi_deep(
         Custom goal handlers for residual dispatch.
     max_depth : int
         Maximum unfolding depth (default 10).
+    db : Database, optional
+        The DEFINING module's database (P3-3 Task 7); see ``specialize_mi``.
 
     Returns
     -------
@@ -1334,36 +1444,13 @@ def specialize_mi_deep(
         catchall = _make_residual_clause(pattern, pred_cls, solve_goal_name)
         clauses.append(catchall)
 
-    # Install and compile.
-    from clausal.logic.database import Database
-    from clausal.logic.compiler import compile_predicate_trampoline
-
-    db = Database(module_dict=module_dict)
-    # Register the specialized class so db.assertz mirrors clauses onto it
-    # (it dispatches through the class); fall back to an explicit class sync
-    # when no module dict is available for db.assertz to resolve through.
-    if db.module_dict is not None:
-        db.module_dict[new_name] = pred_cls
-    for clause in clauses:
-        db.assertz(clause)
-        if db.module_dict is None:
-            pred_cls._assertz(clause)
-
-    globals_ = module_dict or {}
-    globals_[new_name] = pred_cls
-
-    if has_residual:
-        solve_goal_pred = _make_solve_goal_predicate(
-            solve_goal_name, goal_map, module_dict,
-        )
-        globals_[solve_goal_name] = solve_goal_pred
-
-    compile_predicate_trampoline(
-        new_name, len(fields), clauses, db,
-        globals_=globals_, pred_cls=pred_cls,
+    # Install as a row in the defining module's database, through the gate.
+    return _install_specialized(
+        pred_cls, new_name, fields, clauses,
+        _defining_db(db, module_dict), module_dict,
+        solve_goal_name=solve_goal_name if has_residual else None,
+        goal_map=goal_map,
     )
-
-    return pred_cls
 
 
 def _build_object_index(object_program: list) -> dict[str, list]:
@@ -1634,6 +1721,7 @@ def specialize_mi_cpd(
     pred_cls: PredicateMeta | None = None,
     goal_map: dict | None = None,
     max_depth: int = 10,
+    db: "Database | None" = None,
 ) -> PredicateMeta:
     """Specialize an MI with conjunctive partial deduction (deforestation).
 
@@ -1660,6 +1748,8 @@ def specialize_mi_cpd(
         Custom goal handlers for residual dispatch.
     max_depth : int
         Maximum deforestation depth (default 10).
+    db : Database, optional
+        The DEFINING module's database (P3-3 Task 7); see ``specialize_mi``.
 
     Returns
     -------
@@ -1690,36 +1780,13 @@ def specialize_mi_cpd(
         catchall = _make_residual_clause(pattern, pred_cls, solve_goal_name)
         deforested.append(catchall)
 
-    # Install and compile.
-    from clausal.logic.database import Database
-    from clausal.logic.compiler import compile_predicate_trampoline
-
-    db = Database(module_dict=module_dict)
-    # Register the specialized class so db.assertz mirrors clauses onto it
-    # (it dispatches through the class); fall back to an explicit class sync
-    # when no module dict is available for db.assertz to resolve through.
-    if db.module_dict is not None:
-        db.module_dict[new_name] = pred_cls
-    for clause in deforested:
-        db.assertz(clause)
-        if db.module_dict is None:
-            pred_cls._assertz(clause)
-
-    globals_ = module_dict or {}
-    globals_[new_name] = pred_cls
-
-    if has_residual:
-        solve_goal_pred = _make_solve_goal_predicate(
-            solve_goal_name, goal_map, module_dict,
-        )
-        globals_[solve_goal_name] = solve_goal_pred
-
-    compile_predicate_trampoline(
-        new_name, len(fields), deforested, db,
-        globals_=globals_, pred_cls=pred_cls,
+    # Install as a row in the defining module's database, through the gate.
+    return _install_specialized(
+        pred_cls, new_name, fields, deforested,
+        _defining_db(db, module_dict), module_dict,
+        solve_goal_name=solve_goal_name if has_residual else None,
+        goal_map=goal_map,
     )
-
-    return pred_cls
 
 
 class ConjunctionMemoTable:

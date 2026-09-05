@@ -508,8 +508,9 @@ def _global_atom__2(name, atom, trail, k):
         Name in the dict (i.e. Atom is genuinely the registered global, not
         a module-local namesake); unify Name with that name.  Atom is
         ordinarily the interned str itself; a 0-arity ``PredicateMeta``
-        (``make_atom``'s pre-pivot shape) is still accepted for anything
-        that manually installs one.
+        (what ``make_predicate(name, [])`` builds, and what ``make_atom``
+        built before P3-3 Task 7 made it return the str) is still accepted
+        for anything that manually installs one.
       (-Name, -Atom): enumerate.  Yield one solution per registered atom —
         an interned str (key == value, the P3-1 shape) or a legacy 0-arity
         PredicateMeta.  Order not guaranteed.

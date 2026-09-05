@@ -855,7 +855,7 @@ class TestGlobalAtom:
 
         P3-1 atom pivot (§1b/R2): a registered atom is the interned str
         (self-mapped: key == value), not a PredicateMeta -- see Task 7 work
-        item 4. A legacy 0-arity PredicateMeta (``make_atom``'s pre-pivot
+        item 4. A legacy 0-arity PredicateMeta (``make_predicate(n, [])``'s
         shape) is still accepted by the reader if anything installs one
         manually, so the enumerate assertion below allows either shape.
         """

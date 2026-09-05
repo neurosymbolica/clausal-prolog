@@ -18,7 +18,7 @@ from clausal.logic.compiler.arg_index import (
     _INDEX_VAR,
     _INDEX_THRESHOLD,
 )
-from clausal.logic.predicate import PredicateMeta, make_atom, make_predicate
+from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
 from clausal.terms import Compound, Unify
@@ -130,12 +130,13 @@ class TestExtractFirstArgKey:
         this key can no longer be GUESSED from the reference's bare spelling
         — see ``TestImportedAtomIndexKey`` below for the post-pivot atom
         (plain ``str``) case this regression is actually about.  This test
-        keeps its original ``PredicateMeta``-atom scenario (``make_atom``),
-        now resolved through *env* instead of guessed at.
+        keeps its original ``PredicateMeta``-atom scenario
+        (``make_predicate(name, [])``, which is where P3-3 Task 7 moved that
+        spelling), now resolved through *env* instead of guessed at.
         """
         # nv — regression for map_coloring private-atom-fact indexing bug
         from clausal.terms import LoadName
-        red = make_atom("Red")
+        red = make_predicate("Red", [])
         v = Var()
         c = Clause(head=Compound("Color", (v,)),
                    body=[Unify(left=v, right=LoadName(name="Red"))])
@@ -1329,12 +1330,12 @@ class TestAtomInListHead:
         back as the plain str ``'usd'``, not the ``usd`` class object.
         """
         # nv
-        usd = make_atom("usd")
-        non_o_a = make_atom("non_o_a")
-        non_o_x = make_atom("non_o_x")
-        ltr = make_atom("ltr")
-        smart_t = make_atom("smart_t")
-        unrestricted = make_atom("unrestricted")
+        usd = make_predicate("usd", [])
+        non_o_a = make_predicate("non_o_a", [])
+        non_o_x = make_predicate("non_o_x", [])
+        ltr = make_predicate("ltr", [])
+        smart_t = make_predicate("smart_t", [])
+        unrestricted = make_predicate("unrestricted", [])
 
         db = Database()
         clauses = [
