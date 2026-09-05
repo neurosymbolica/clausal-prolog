@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import sys
 from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
@@ -48,6 +49,7 @@ from .terms_to_ast import (
     _is_opaque_head_literal, headlit_global_key,
     cell_signature_for_name, _place_signature_slots,
     _dotted_name_from_loadattr,
+    _implicit_functors_active,
 )
 # Runtime helpers (``_head_list_unify_input`` / ``_head_list_unify_output``
 # / ``_head_multi_star_error``) are referenced by name string in the AST
@@ -657,6 +659,7 @@ def head_to_match_pattern(
         # and the MatchClass fallback beside it cannot disagree about what
         # ``term.func.name`` means.
         _sig = cell_signature_for_name(term.func.name, globals_)
+        _owa = _implicit_functors_active(globals_)
         if _sig is None:
             resolved = _resolve_loadname(term.func.name, globals_)
             fields = _resolved_field_names(resolved)
@@ -687,6 +690,16 @@ def head_to_match_pattern(
                     )
                     for kw in (term.kwargs or [])
                 ]
+                if _owa and not _keywords:
+                    # P3-2 Task 6 (R7), head-side symmetry: OWA makes a
+                    # declared signature advisory for a keyword-free head
+                    # reference too -- match the cell at the WRITTEN arity
+                    # rather than placing/backfilling against the declared
+                    # field list, so a flagged module's clause heads
+                    # pattern-match the cells its own bodies build at any
+                    # arity (see the identical branch in
+                    # ``terms_to_ast.term_to_ast_expr``'s construction site).
+                    return _cell_match_pattern(_functor, _positional)
                 _placed = _place_signature_slots(
                     _cell_fields, _positional, _keywords,
                     functor=_functor,
@@ -703,6 +716,32 @@ def head_to_match_pattern(
                         for a in term.args
                     ],
                 )
+        elif _owa:
+            # No registry entry and no resolvable term-shaped class: the
+            # OWA-unknown case (P3-2 Task 6, R7). ``resolved``/``fields``
+            # were already computed above -- this branch is reached only
+            # when both came back empty. A PREDICATE reference never lands
+            # here (a class with ``_fields`` already took the branch above),
+            # but the check is kept explicit for the same reason Site A
+            # keeps it: a goal is not data, even under OWA.
+            if not isinstance(resolved, PredicateMeta):
+                if term.kwargs:
+                    raise SyntaxError(
+                        f"functor {term.func.name!r} has no declared "
+                        f"signature: -implicit_functors makes keyword-free "
+                        f"head matching of any functor/arity advisory, but "
+                        f"keyword placement for {term.func.name!r} still "
+                        f"requires a declared signature to place its named "
+                        f"slots against"
+                    )
+                _positional = [
+                    head_to_match_pattern(
+                        a, var_context, dup_guards, list_guards,
+                        _list_reg_ids, globals_=globals_,
+                    )
+                    for a in term.args
+                ]
+                return _cell_match_pattern(sys.intern(term.func.name), _positional)
 
     # Bare name reference (``LoadName``/``LoadAttr``) reached ANYWHERE a head
     # pattern is being built for it -- most commonly a nested ATOM argument

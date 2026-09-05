@@ -42,7 +42,7 @@ from clausal.logic.predicate import (
     term_field_names, term_field_names_of_class,
 )
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
-from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG
 
 from ._ast_helpers import _name, _call, _attr
 from ._vars import _var_python_name
@@ -202,6 +202,19 @@ def lowering_globals() -> "dict | None":
     with its own namespace, because that is what it pushed.
     """
     return _LOWERING_SCOPE_STACK[-1] if _LOWERING_SCOPE_STACK else None
+
+
+def _implicit_functors_active(namespace: "dict | None") -> bool:
+    """True if *namespace* opted into open-world (OWA) functor construction
+    via ``-implicit_functors`` (P3-2 Task 6, user ruling R7).
+
+    ``namespace`` is typically :func:`lowering_globals`'s answer -- the SAME
+    dict a Site A/head-match call site already resolved the functor name
+    against, so the flag check agrees with whatever module the reference is
+    actually being compiled in. See ``clausal.logic.cells.
+    IMPLICIT_FUNCTORS_FLAG``.
+    """
+    return namespace is not None and bool(namespace.get(IMPLICIT_FUNCTORS_FLAG))
 
 
 # (The class-shaped data-functor gate that used to live here --
@@ -990,8 +1003,20 @@ def term_to_ast_expr(
         # reference now builds a cell too instead of falling back to class
         # emission.
         _sig = cell_signature_for_name(fname)
+        _namespace = lowering_globals()
+        _owa = _implicit_functors_active(_namespace)
         if _sig is not None:
             _functor, _fields = _sig
+            if _owa and not kw_exprs:
+                # P3-2 Task 6 (R7): under OWA a declared signature is
+                # advisory for keyword-free construction -- build the cell
+                # at the WRITTEN arity, whatever it is, rather than placing
+                # positional args against the declared field list (which
+                # would either over-arity-error or pad a short call with
+                # backfilled Vars the caller never asked for). Keyword
+                # construction is unaffected -- it still places by field
+                # name below, flag or no flag.
+                return cell_literal_ast(_functor, arg_exprs)
             _placed = _place_signature_slots(
                 _fields,
                 arg_exprs,
@@ -1000,6 +1025,24 @@ def term_to_ast_expr(
                 missing=lambda: _call(_name("Var")),
             )
             return cell_literal_ast(_functor, _placed)
+        if _owa:
+            # No registry entry at all. OWA still defers to a PREDICATE
+            # binding -- a goal is not data, even in a flagged module -- so
+            # the binding question is asked the same way
+            # ``cell_signature_for_name`` asks it, just without requiring a
+            # signature to exist.
+            _resolved = _resolve_functor_binding(fname, _namespace) if _namespace else None
+            _binding = _resolved[0] if _resolved is not None else None
+            if not isinstance(_binding, PredicateMeta):
+                if kw_exprs:
+                    raise SyntaxError(
+                        f"functor {fname!r} has no declared signature: "
+                        f"-implicit_functors makes keyword-free construction "
+                        f"of any functor/arity advisory, but keyword "
+                        f"placement for {fname!r} still requires a declared "
+                        f"signature to place its named slots against"
+                    )
+                return cell_literal_ast(sys.intern(fname), arg_exprs)
         return ast.Call(
             func=_name(fname),
             args=arg_exprs,

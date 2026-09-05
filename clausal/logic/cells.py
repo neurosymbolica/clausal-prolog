@@ -75,6 +75,7 @@ from clausal.logic.variables import deref, is_var
 
 __all__ = [
     "FUNCTOR_SIGNATURES_KEY",
+    "IMPLICIT_FUNCTORS_FLAG",
     "CELLS_NAMESPACE_KEY",
     "TUPLE_TAG",
     "make_cell",
@@ -136,6 +137,37 @@ TUPLE_TAG = tuple
 # registry becomes the sole source of truth for a functor's declared field
 # names.
 FUNCTOR_SIGNATURES_KEY = "__clausal_functor_signatures__"
+
+
+# The module-namespace key marking a module as opted into OPEN-WORLD functor
+# construction (P3-2 Task 6, user ruling R7): ``-implicit_functors`` compiles
+# to a module-level ``__clausal_implicit_functors__ = True`` assignment, the
+# same "flag survives the ``.pyc``-cached load path" shape
+# ``TAGGED_TERMS_FLAG`` used before the Phase 2 bridge's flag machinery was
+# deleted (P3-2 Task 2, THE FLIP) -- an assignment rather than a
+# ``module_items`` entry, because an assignment is part of the cached
+# bytecode and therefore cannot go missing on the cached path, whereas a
+# module item is recovered separately when a module loads from its ``.pyc``.
+#
+# Construction checking is ON by default everywhere (``FUNCTOR_SIGNATURES_KEY``
+# governs it): a keyword-free reference to an undeclared functor is a runtime
+# ``NameError`` and an over-arity reference to a declared one is a
+# compile-time ``SyntaxError`` (see
+# ``clausal.logic.compiler.terms_to_ast.cell_signature_for_name`` /
+# ``_place_signature_slots``).  A module carrying this flag opts OUT of both
+# checks for keyword-free construction only: ``clausal.logic.compiler.
+# terms_to_ast.term_to_ast_expr`` and ``clausal.logic.compiler.head_match.
+# head_to_match_pattern`` both consult it (via ``terms_to_ast.
+# lowering_globals()``) to build a cell of ANY functor at ANY WRITTEN arity,
+# declared signature or not -- signatures become advisory, not a keyhole, for
+# every plain (keyword-free) reference in a flagged module.  Keyword
+# construction/matching still needs a real signature to place its named
+# slots against, flag or no flag -- the flag opens functor VOCABULARY, not
+# the keyword-placement contract.  Orthogonal to ``-strict_atoms`` /
+# ``-implicit_atoms``: this flag says nothing about bare (0-arity) ATOM
+# references, which keep whatever declaredness discipline those directives
+# already govern.
+IMPLICIT_FUNCTORS_FLAG = "__clausal_implicit_functors__"
 
 
 # The key under which a compiled predicate's ``base_globals`` holds THIS

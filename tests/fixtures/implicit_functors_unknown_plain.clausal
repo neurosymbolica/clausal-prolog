@@ -1,0 +1,14 @@
+# P3-2 Task 6 (R7): -implicit_functors OWA fixture pair, "unknown functor"
+# half -- UNFLAGGED twin.  Byte-identical to
+# implicit_functors_unknown_owa.clausal except this file carries no
+# directive: default (construction-checked) behaviour reigns, so driving
+# ``p/1`` reaches the undeclared ``wibble`` reference as a plain Python call
+# to an unbound global and raises ``NameError`` -- today's default-off pin.
+-module(implicit_functors_unknown_plain, [
+    p(A),
+    unwrap(W, X, Y),
+])
+
+p(wibble(1, 2)),
+
+unwrap(wibble(X, Y), X, Y),

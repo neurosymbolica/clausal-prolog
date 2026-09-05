@@ -29,7 +29,7 @@ from clausal.logic.atoms import mangle
 # The module-namespace key the ``-module``/``-private`` rewrite emits a
 # functor-signature registry under.  Single source of truth lives with the
 # cell primitives that registry feeds.
-from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG
 
 load = Load()
 store = Store()
@@ -4774,13 +4774,15 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_allow_singletons_directive(args, expr_stmt)
         if name == "constants":
             return transformer._handle_constants_directive(args, expr_stmt)
+        if name == "implicit_functors":
+            return transformer._handle_implicit_functors_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
             f"(known directives: -module, -private, -hide, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
             f"-strict_atoms, -implicit_atoms, -allow_singletons, "
-            f"-constants)"
+            f"-constants, -implicit_functors)"
         )
 
     def _declare_predicate_export(transformer, spec, entry_node, expr_stmt,
@@ -5149,6 +5151,72 @@ class EmbedTransformer(NodeTransformer):
             )
         transformer._module_items.append(ImplicitAtomsItem())
         return replace(Pass(), expr_stmt)
+
+    def _handle_implicit_functors_directive(transformer, args, expr_stmt):
+        """Process ``-implicit_functors`` — P3-2 Task 6, user ruling R7.
+
+        Marker directive — no arguments.  Accepts the bare form
+        ``-implicit_functors`` and the parenthesised ``-implicit_functors()``.
+
+        Opts THIS file into open-world (OWA) functor construction: a
+        keyword-free reference to ANY functor at ANY arity — declared or
+        not, at its declared arity or not — compiles to a cell literal
+        instead of the default-ON checks (``NameError`` for an undeclared
+        functor, compile-time ``SyntaxError`` for an over-arity reference to
+        a declared one; see
+        ``clausal.logic.compiler.terms_to_ast.cell_signature_for_name``).
+        Declared signatures in a flagged module become advisory for that
+        shape of reference — §1 of
+        ``implementation_plans/tagged-tuple-term-representation.md``: "any
+        arity/functor constructs a cell".
+
+        WHAT THE FLAG DOES NOT COVER:
+
+        - **Keyword construction/matching still needs a real signature.**
+          ``wibble(x=1)`` for an undeclared (or OWA-unknown-arity) ``wibble``
+          is a compile-time error naming the functor and requiring a
+          signature for keyword placement — there is no field-name list to
+          place a keyword against otherwise. A functor WITH a matching
+          registry signature still places keywords exactly as it does
+          without the flag.
+        - **A PREDICATE reference is unaffected.**  A name bound to a
+          ``PredicateMeta`` class (a functor with clauses) keeps class/goal
+          emission even under OWA — calling it is a goal, not data; see
+          ``clausal.logic.compiler.terms_to_ast.cell_signature_for_name``'s
+          own binding-shape rule, which this flag layers on top of rather
+          than replaces.
+        - **Atoms stay outside this flag's scope.**  A bare 0-arity
+          reference is governed by ``-strict_atoms``/``-implicit_atoms``
+          exclusively; this directive opens functor CONSTRUCTION, not atom
+          vocabulary, and the two mechanisms compose independently (a
+          flagged module can still be ``-strict_atoms`` and reject an
+          undeclared bare atom).
+        - **Head-side symmetry.**  The identical OWA rule applies to clause
+          HEADS (``clausal.logic.compiler.head_match.head_to_match_pattern``'s
+          ``Call(LoadName)`` branch), so a flagged module's clause heads
+          over an unknown/advisory-arity functor pattern-match the cells its
+          own bodies build — construction and matching answer alike, the
+          phase's standing principle.
+
+        Compiles to a module-level ``__clausal_implicit_functors__ = True``
+        assignment (an ``Assign``, not a ``module_items`` entry) so the flag
+        survives the ``.pyc``-cached load path — the compiler entrypoints
+        read it back off the module namespace they are handed as
+        ``globals_``/``lowering_globals()``.  See
+        ``clausal.logic.cells.IMPLICIT_FUNCTORS_FLAG``.
+        """
+        if args:
+            raise SyntaxError(
+                "-implicit_functors takes no arguments: use bare "
+                "`-implicit_functors` or `-implicit_functors()`"
+            )
+        return replace(
+            Assign(
+                targets=[Name(id=IMPLICIT_FUNCTORS_FLAG, ctx=store)],
+                value=Constant(value=True),
+            ),
+            expr_stmt,
+        )
 
     def _handle_allow_singletons_directive(transformer, args, expr_stmt):
         """Process ``-allow_singletons`` directive.
