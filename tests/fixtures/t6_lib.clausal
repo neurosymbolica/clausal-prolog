@@ -1,0 +1,8 @@
+# Third module for the P3-3 Task 6 qualified-goal tests: t6_exporter
+# ``-import_from``s ``libp/1`` from here, so a goal qualified with the EXPORTER
+# resolves through the exporter's NAMESPACE (the imported class) rather than
+# through its own dispatch table — the ``_namespace_dispatch`` route.
+-module(t6_lib, [libp(X)])
+
+libp(31),
+libp(32),

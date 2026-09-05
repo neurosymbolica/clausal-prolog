@@ -47,17 +47,25 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     ``call((",", A, B))`` and ``call(",", A, B)`` — behave identically
     (P3-3 Task 5 fix round 1, F4).
 
+    A module-QUALIFIED folded goal ``(":", M, G)`` is resolved rather than
+    looked up (P3-3 Task 6, replacing Task 5's stub): *M* names the module
+    whose database answers, so the whole resolution restarts against THAT db —
+    dispatch table first, then that module's namespace — and the calling db is
+    not consulted at all.  That is the module-locality rule: an exporter's
+    ``p/1`` answers a qualified call even when the caller defines its own.
+
     Returns ``None`` — which the caller turns into a silent failure, the
     behaviour every non-callable goal has had — when the goal is not a cell or
     atom, when no db was threaded, or when the named predicate does not exist.
     That last case is deliberate: the translator session's pinned §4.2 contract
     is that a non-callable goal FAILS rather than raising, and a name that
     resolves to nothing is exactly the same non-goal it was before this task.
+    A resolvable module does not change it: ``call(M:nosuch(X))`` fails.
 
-    Raises only for the two shapes that are DEFERRED rather than absent: the
-    module-qualified ``(":", M, G)`` (P3-3 Task 6) and the control constructs
-    (the ISO-surface phase).  Those raise even when *db* is None, so the
-    diagnostic never depends on how the builtin was reached.
+    Raises for an unresolvable module designator (P3-3 Task 6) and for the
+    control constructs (deferred to the ISO-surface phase).  Both raise even
+    when *db* is None, so the diagnostic never depends on how the builtin was
+    reached.
     """
     is_cell, functor = compound_cell_shape(goal_val)
     if is_cell:
@@ -69,11 +77,19 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     else:
         return None
     call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]
-    # The goal as the fold leaves it — the term the two deferred routes below
+    # The goal as the fold leaves it — the term the two special routes below
     # both decide on, and the culprit they both name.
     folded = (functor,) + tuple(call_args)
     if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) == 2:
-        resolve_qualified_goal_cell(folded, context)
+        target, inner = resolve_qualified_goal_cell(
+            folded, context, _calling_module(db))
+        # One level only: the resolver unwraps nesting itself, so ``inner`` is
+        # never another ``:``/2 and this recursion cannot repeat.  It restarts
+        # the WHOLE resolution — including the control-construct refusal, so
+        # ``call(M:(A, B))`` is refused exactly like ``call((A, B))`` — with no
+        # extras left to fold, since the fold that produced ``folded`` already
+        # consumed them.
+        return _resolve_named_goal(target.db, inner, (), context)
     # No arity condition (F3): ``call((",",))`` is as much a control construct
     # in goal position as ``call((",", A, B))``, and it used to fail silently
     # here while ``solve((",",), m)`` raised.
@@ -88,6 +104,21 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     if dispatch is None:
         return None
     return dispatch, call_args
+
+
+def _calling_module(db):
+    """The :class:`Module` whose database is *db*, when it can be named.
+
+    P3-3 Task 6.  Only the diagnostic needs it (``resolve_module`` reports the
+    module that asked), and there is no back-pointer from a ``Database`` to
+    its ``Module`` — but the import hook binds the module object into the
+    module dict under ``$module``, which is the same handle the test suite and
+    the transformed source both use.  ``None`` for a db built without one.
+    """
+    module_dict = getattr(db, "module_dict", None)
+    if module_dict is None:
+        return None
+    return module_dict.get("$module")
 
 
 def _namespace_dispatch(db, functor, arity):

@@ -19,11 +19,15 @@ these tests pin:
   - the query cache keys a cell goal structurally, so equal cell goals share
     one compiled query.
 
-Two cell-goal shapes are DEFERRED with a diagnostic rather than supported, and
-each is pinned here so the deferral is visible and its replacement is a
-test-visible event: the module-qualified ``(":", M, G)`` (P3-3 Task 6 supplies
-the resolver -- see ``cells.resolve_qualified_goal_cell``) and the control
-constructs ``,`` ``;`` ``->`` ``\\+`` (the ISO-surface phase -- see
+Two cell-goal shapes were DEFERRED by Task 5 with a diagnostic rather than
+supported, and each is pinned here so the deferral is visible and its
+replacement is a test-visible event.  One of the two has since been replaced:
+the module-qualified ``(":", M, G)`` now RESOLVES (P3-3 Task 6 supplied
+``resolve_module``; ``cells.resolve_qualified_goal_cell`` kept its name and
+gained a return), and the pins below record that change rather than the old
+refusal — the semantics themselves belong to
+``tests/test_qualified_goals.py``.  The control constructs ``,`` ``;`` ``->``
+``\\+`` are still deferred to the ISO-surface phase (see
 ``cells.refuse_control_construct_cell``).
 """
 
@@ -233,22 +237,39 @@ class TestCallNOverCells:
         assert _error_term(exc_info.value)[0].args[0] == (
             "callable_control_construct_unsupported")
 
-    def test_the_atom_spelling_of_a_qualified_goal_hits_the_same_stub(
+    def test_the_atom_spelling_of_a_qualified_goal_folds_the_same_way(
             self, mod):
         """``call(":", M, G)`` folds to the same goal as ``call((":", M, G))``
-        and must get the same refusal; it used to bypass the stub and fall to
-        a ``:``/2 dispatch lookup that found nothing.  Fix round 1, F4."""
+        and must behave identically; it used to bypass the qualified route and
+        fall to a ``:``/2 dispatch lookup that found nothing.  Fix round 1, F4.
+
+        P3-3 Task 6 replaced the shared refusal with a shared RESOLUTION, so
+        the pin is now that both spellings ANSWER alike (they used to raise
+        alike).  ``tests/test_qualified_goals.py`` owns the qualified-goal
+        semantics; what stays pinned here is that the fold makes one goal of
+        the two spellings."""
+        lm = _lm(mod)
+        X, Y = Var(), Var()
+        by_atom = [deref(X) for _ in pcall(
+            "cg3", ":", "cellgoals", ("p", X), module=lm)]
+        by_cell = [deref(Y) for _ in pcall(
+            "cg1", (":", "cellgoals", ("p", Y)), module=lm)]
+        assert by_atom == by_cell == [1, 2]
+
+    def test_both_spellings_of_an_unresolvable_qualified_goal_raise_alike(
+            self, mod):
+        """The other half of F4's pin: the two spellings share the DIAGNOSTIC
+        too, and only the context differs (call/3 vs call/1)."""
         lm = _lm(mod)
         errors = []
-        for goal_args in ((":", "cellgoals", ("p", 1)), ((":", "cellgoals", ("p", 1)),)):
+        for goal_args in ((":", "nosuchmodule", ("p", 1)),
+                          ((":", "nosuchmodule", ("p", 1)),)):
             with pytest.raises(LogicException) as exc_info:
                 list(pcall("cg" + str(len(goal_args)), *goal_args, module=lm))
             errors.append(_error_term(exc_info.value))
-        # Same error TERM from both spellings; only the context differs, and
-        # it names the surface (call/3 vs call/1), which is correct.
         assert errors[0][0] == errors[1][0] == Compound(
-            "existence_error", ("procedure", Compound("/", (":", 2))))
-        assert "cellgoals" in errors[0][1] and "cellgoals" in errors[1][1]
+            "existence_error", ("module", "'nosuchmodule'"))
+        assert "call/3" in errors[0][1] and "call/1" in errors[1][1]
 
     def test_the_atom_spelling_of_a_control_construct_hits_the_same_refusal(
             self, mod):
@@ -318,26 +339,38 @@ class TestDeferredCellGoalForms:
         _inner, context = _error_term(exc_info.value)
         assert "And" in context and "clause body" in context
 
-    def test_a_qualified_goal_cell_is_refused_by_the_task_6_stub(self, mod):
+    def test_a_qualified_goal_cell_now_resolves_instead_of_being_refused(
+            self, mod):
+        """Task 5 deferred ``(":", M, G)`` with an ``existence_error`` naming
+        the stub; P3-3 Task 6 supplied the resolver, so a RESOLVABLE module
+        answers.  The semantics live in ``tests/test_qualified_goals.py``;
+        this is the deferral's replacement made test-visible, as Task 5
+        promised it would be."""
+        X = Var()
+        assert [deref(X)
+                for _ in solve((":", "cellgoals", ("p", X)),
+                               _lm(mod))] == [1, 2]
+
+    def test_an_unresolvable_qualified_goal_cell_is_an_existence_error(
+            self, mod):
         with pytest.raises(LogicException) as exc_info:
-            list(solve((":", "cellgoals", ("p", 1)), _lm(mod)))
+            list(solve((":", "nosuchmodule", ("p", 1)), _lm(mod)))
         inner, context = _error_term(exc_info.value)
         assert inner == Compound(
-            "existence_error", ("procedure", Compound("/", (":", 2))))
-        assert "resolve_qualified_goal_cell" in context, (
-            "the stub must name itself so Task 6's replacement is findable")
+            "existence_error", ("module", "'nosuchmodule'"))
+        assert "sys.modules" in context
 
-    def test_a_qualified_goal_cell_is_refused_by_call_too(self, mod):
-        with pytest.raises(LogicException) as exc_info:
-            list(pcall("cg1", (":", "cellgoals", ("p", 1)), module=_lm(mod)))
-        inner, _context = _error_term(exc_info.value)
-        assert inner.args[0] == "procedure"
+    def test_a_qualified_goal_cell_resolves_through_call_too(self, mod):
+        X = Var()
+        assert [deref(X) for _ in pcall(
+            "cg1", (":", "cellgoals", ("p", X)), module=_lm(mod))] == [1, 2]
 
-    def test_only_colon_slash_2_is_the_deferred_qualified_form(self, mod):
+    def test_only_colon_slash_2_is_the_qualified_form(self, mod):
         """``(":", A, B, C)`` is an ordinary ``:``/3 call.  Both goal paths
         must agree on that: ``_term_to_goal``'s guard has always been
         ``len == 3``, and ``_templatize_query_goal``'s was arity-blind.
-        Fix round 1, F5."""
+        Fix round 1, F5 — still the rule now that ``:``/2 resolves rather than
+        being refused."""
         from clausal.logic.solve import _templatize_query_goal, _term_to_goal
         from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
 
@@ -349,17 +382,23 @@ class TestDeferredCellGoalForms:
         template, params = _templatize_query_goal(goal)
         assert len(params) == 3
         assert template[0] == ":" and [v for _pv, v in params] == [1, 2, 3]
-        # while :/2 stays deferred on both.
+        # while :/2 is the qualified form on both: the templatizer leaves it
+        # for the strip in _compile_as_query, and the lowering resolves it.
         assert _templatize_query_goal((":", "m", ("g",)))[1] == []
         with pytest.raises(LogicException):
-            _term_to_goal((":", "m", ("g",)))
+            _term_to_goal((":", "m", ("g",)))  # 'm' names no module
 
-    def test_the_stub_is_the_one_task_6_replaces(self):
-        """Named so the hand-off is a symbol, not a grep."""
+    def test_the_stub_became_the_resolver(self, mod):
+        """Named so the hand-off is a symbol, not a grep.  Task 6 replaced the
+        body: the same function now returns ``(module, inner_goal)`` and only
+        raises when a designator names no module."""
         from clausal.logic import cells
         assert callable(cells.resolve_qualified_goal_cell)
         with pytest.raises(LogicException):
             cells.resolve_qualified_goal_cell((":", "m", ("g",)), "ctx")
+        module, inner = cells.resolve_qualified_goal_cell(
+            (":", "cellgoals", ("p", 1)), "ctx")
+        assert module.name == "cellgoals" and inner == ("p", 1)
 
 
 # ── assertz / asserta / retract with a cell ────────────────────────────────

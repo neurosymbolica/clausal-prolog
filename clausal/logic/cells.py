@@ -362,36 +362,71 @@ def refuse_control_construct_cell(cell: Any, functor: Any, context: str) -> None
 QUALIFIED_GOAL_FUNCTOR = ":"
 
 
-def resolve_qualified_goal_cell(cell: Any, context: str) -> Any:
+def resolve_qualified_goal_cell(
+    cell: Any, context: str, calling_module: Any = None,
+) -> tuple:
     """Resolve the module-qualified goal cell ``(":", M, G)`` to ``(module, G)``.
 
-    STUB (P3-3 Task 5).  Task 6 of the state-relocation plan provides
-    ``resolve_module`` and REPLACES THIS FUNCTION BODY; until then every
-    qualified goal is refused with a typed ``existence_error`` naming the
-    form, so Task 5's goal surfaces can land the branch (and be gated) without
-    waiting on Task 6, and no caller has to learn a new call shape when the
-    real resolver arrives.
+    P3-3 Task 6 (R10) -- this replaces Task 5's stub, which raised an
+    ``existence_error`` naming itself so the hand-off would be a symbol rather
+    than a grep.  The two callers -- ``solve``'s query path (via
+    ``_strip_module_qualification`` and ``_term_to_goal``) and
+    ``higher_order._resolve_named_goal`` for the ``call/N`` family -- keep the
+    call shape they already had; only the return is new.
 
-    The two callers -- ``solve._term_to_goal`` and ``higher_order``'s
-    ``call/N`` family -- already route ``(":", M, G)`` here, so Task 6's whole
-    integration is this body: resolve *M* to a module, then hand back the
-    module and the inner goal *G* for the caller to lower against.
+    Returns ``(module, inner_goal)``: the :class:`~clausal.logic.database.
+    Module` whose database ANSWERS, and the goal to run against it.  The
+    caller decides what to do with the module -- ``solve`` compiles the inner
+    goal against it, ``call/N`` dispatches in its ``db`` -- which is why this
+    function resolves and unwraps but never runs anything.
 
-    :param cell:    the ``(":", M, G)`` cell.
-    :param context: the calling surface's indicator, for the error's context.
-    :raises LogicException: always, until Task 6.
+    NESTING is innermost-wins, ISO's reading of ``m1:m2:G``: the loop below
+    peels one qualification per turn, so the LAST module it resolves is the
+    one returned.  Every designator in the chain is resolved on the way down,
+    though, so an unresolvable OUTER module raises even when the inner one
+    would have answered -- ``m1:m2:G`` names two modules and both have to
+    exist.  Each layer's designator is resolved with the layer above it as the
+    calling module, which is what the diagnostic reports asked it.
+
+    A bare ``str`` inner goal is the zero-arity cell it names: ``M:k`` is
+    ``M:k()``, because a ``str`` IS an atom (P3-1 §1b/R2) and an atom in goal
+    position names a predicate of the arity its arguments make up -- here,
+    none.  Normalising it here is what lets the qualified form spell a /0 goal
+    that the unqualified top-level cell path cannot yet spell (see
+    ``todo/bare-zero-arity-predicate-body-goal-does-not-compile``).
+
+    Any other inner goal shape (a ``Compound``, a class-term instance, an
+    already-lowered goal node) is handed back UNCHANGED -- deciding what is
+    callable is the caller's job, and each caller already has that rule.
+
+    :param cell:           the ``(":", M, G)`` cell.  Callers guard the shape
+                           (``:``/2 exactly); anything else comes straight back
+                           as ``(None, cell)``.
+    :param context:        the calling surface's indicator, for the error's
+                           context.
+    :param calling_module: the module the qualification was written in, if
+                           known -- reported in the diagnostic.
+    :raises LogicException: ``existence_error(module, <designator repr'd>)``
+                           when a designator in the chain names no module.
     """
-    from clausal.logic.exceptions import (  # noqa: PLC0415 -- see the note in
-        LogicException, existence_error,   # refuse_control_construct_cell
-    )
-    from clausal.terms import Compound  # noqa: PLC0415
+    from clausal.logic.solve import resolve_module  # noqa: PLC0415 -- see the
+    from clausal.logic.variables import deref       # note in
+    #                            refuse_control_construct_cell: importing
+    #     ``clausal.logic.solve`` at module scope would close a cycle through
+    #     ``clausal.terms``.
 
-    raise LogicException(existence_error(
-        "procedure", Compound("/", (QUALIFIED_GOAL_FUNCTOR, 2)),
-        f"{context}: the module-qualified goal {cell[1]!r}:{cell[2]!r} cannot "
-        f"be resolved yet — `:`/2 goal resolution lands with the module "
-        f"resolver in P3-3 Task 6 (see cells.resolve_qualified_goal_cell)",
-    ))
+    module = None
+    goal = cell
+    while True:
+        ok, functor = compound_cell_shape(goal)
+        if not (ok and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
+            break
+        module = resolve_module(deref(goal[1]), calling_module, context)
+        calling_module = module
+        goal = deref(goal[2])
+    if type(goal) is str:
+        goal = (goal,)
+    return module, goal
 
 
 def make_cell(functor: Any, *args: Any) -> tuple:

@@ -10,7 +10,9 @@ call(functor, *args, module, trail=None)         → Iterator[Trail]
 The ``module`` argument is optional for ``solve``, ``once``, and ``query``:
 when omitted, the module is inferred from the PredicateMeta classes in the
 goal term.  You can also pass an imported ``.clausal`` Python module directly
-(e.g. ``import hello; solve(greeting(X), hello)``).
+(e.g. ``import hello; solve(greeting(X), hello)``), or its dotted name as a
+str (``solve(("greeting", X), "hello")``) — see ``resolve_module``, which is
+also what the module-qualified goal ``(":", M, G)`` resolves *M* with.
 
 Design
 ------
@@ -36,6 +38,7 @@ from __future__ import annotations
 
 import datetime as _datetime
 import sys
+import types as _types
 from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
@@ -185,10 +188,20 @@ def _term_to_goal(term: Any) -> Any:
     ``AstCall(LoadName("f"), [a, b])`` — the identical node a ``Compound`` goal
     produces, which is what makes a cell goal and a class-term goal share
     compiled code and answer alike.  Two cell functors are not ordinary calls
-    and are handled before that: the module-qualified form ``(":", M, G)``
-    (deferred to Task 6's resolver) and the control constructs (deferred to the
-    ISO-surface phase) — see ``cells.resolve_qualified_goal_cell`` and
+    and are handled before that: the module-qualified form ``(":", M, G)``,
+    which lowers to the INNER goal's node (P3-3 Task 6), and the control
+    constructs (deferred to the ISO-surface phase) — see
+    ``cells.resolve_qualified_goal_cell`` and
     ``cells.refuse_control_construct_cell``.
+
+    A qualified goal's module SWITCH is not made here — this function lowers a
+    term to a node and has no say in which database the node compiles against.
+    ``_strip_module_qualification`` makes it, in ``_compile_as_query``, before
+    this function is reached, so on the query path the qualification is
+    already gone by the time it arrives.  The branch below is what keeps the
+    lowering total for a direct caller (and keeps the designator validated
+    wherever the term is lowered): it resolves, which is what raises on an
+    unresolvable module, then lowers the inner goal.
 
     Simple_ast nodes and other goal forms pass through unchanged.
     """
@@ -209,7 +222,8 @@ def _term_to_goal(term: Any) -> Any:
     is_cell_goal, functor = compound_cell_shape(term)
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(term) == 3:
-            resolve_qualified_goal_cell(term, "solve/1")
+            _module, inner = resolve_qualified_goal_cell(term, "solve/1")
+            return _term_to_goal(inner)
         refuse_control_construct_cell(term, functor, "solve/1")
         return AstCall(
             func=LoadName(name=functor), args=list(term[1:]), kwargs=[],
@@ -405,17 +419,23 @@ def _templatize_query_goal(goal: Any):
     is_cell_goal, cell_f = compound_cell_shape(goal)
     if is_cell_goal and (
         # ARITY-MATCHED to ``_term_to_goal``'s own guard (P3-3 Task 5 fix
-        # round 1, F5): only ``:``/2 is the deferred qualified form, so
+        # round 1, F5): only ``:``/2 is the qualified form, so
         # ``(":", A, B, C)`` is an ordinary ``:``/3 call and templatizes like
         # any other. The two guards disagreeing meant one path treated it as
-        # deferred and the other as ordinary.
+        # special and the other as ordinary.
         (cell_f == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3)
         or cell_f in CELL_GOAL_CONTROL_FUNCTORS
     ):
-        # The two deferred forms (Task 6's `:`/2, the ISO phase's control
-        # constructs) are refused by ``_term_to_goal`` a few lines later.
-        # Leave them alone so the refusal quotes the goal the caller wrote
-        # rather than a template with fresh Vars in it.
+        # Neither of these two is an ordinary predicate call, so neither has
+        # top-level arguments to parameterize.  A control construct is refused
+        # by ``_term_to_goal`` a few lines later, and leaving it alone is what
+        # makes the refusal quote the goal the caller wrote rather than a
+        # template with fresh Vars in it.  A ``:``/2 goal is already GONE by
+        # the time a query reaches here — ``_compile_as_query`` strips the
+        # qualification before calling this function (P3-3 Task 6), and the
+        # inner goal it hands over templatizes on the branch below like any
+        # other cell.  What remains here is the direct caller, for whom
+        # "M:G has no arguments of its own" is simply true.
         return goal, []
     if is_cell_goal:
         params = []
@@ -446,7 +466,13 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     when module.module_dict is available, it is merged into the compiled
     function's globals so that predicate names resolve from the module namespace
     (Phase 5: cross-predicate resolution without _db string lookup).
+
+    A module-QUALIFIED cell goal ``(":", M, G)`` switches *module* to *M* here
+    (P3-3 Task 6) before anything else looks at either — see
+    ``_strip_module_qualification`` for why this is the right point.
     """
+    goal, module = _strip_module_qualification(goal, module)
+
     # Parameterize ground top-level args so distinct values reuse one compiled
     # query.  The returned param_pairs are bound to their values (on the trail)
     # by the caller before driving the search.
@@ -471,7 +497,6 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     if cache_key is not None and cache_key in _query_cache:
         cached_fn, cached_code, cached_var_names = _query_cache[cache_key]
         # Map new Var objects to the names the cached code expects
-        import types as _types
         new_globals = dict(cached_fn.__globals__)
         for old_name, new_var in zip(cached_var_names, vars_in_goal):
             new_globals[old_name] = new_var
@@ -550,11 +575,157 @@ def _coerce_module(module) -> Module:
     )
 
 
+def resolve_module(designator: Any, calling_module: Any = None,
+                   context: str = "") -> Module:
+    """Resolve a module DESIGNATOR to the :class:`Module` whose database answers.
+
+    P3-3 Task 6 (R10).  This is the one place that answers "which module does
+    this name mean?" for the module-qualified goal ``(":", M, G)`` and for
+    ``solve``'s ``module=`` argument, so the two cannot drift apart on what a
+    designator is.
+
+    The chain, in order:
+
+      - a ``str`` is a DOTTED PYTHON MODULE NAME, looked up in ``sys.modules``
+        -- which is exactly where ``clausal/import_hook.py`` registers every
+        ``.clausal`` module it loads (``_load_module`` and the finder both
+        write ``sys.modules[fullname]``), so the spelling a designator uses is
+        the spelling an ``import`` would use.  The result is then coerced like
+        any module object.
+      - everything else goes straight to :func:`_coerce_module`, which is the
+        pre-existing chain and stays the only copy of it: a ``Module`` is
+        itself, an imported ``.clausal`` module yields its
+        ``__clausal_module__``, and any other module namespace is wrapped.
+
+    LOOKUP ONLY.  Resolution never imports -- no ``importlib.import_module``,
+    no side effect on ``sys.modules``.  A module that is merely *importable*
+    does not resolve, because a goal is not an import statement and running
+    one must not execute a module body.
+
+    Anything the chain refuses -- an ``int``, a cell, an unbound ``Var``, a
+    ``str`` that misses in ``sys.modules`` -- raises
+    ``LogicException(existence_error(module, <designator repr'd>))``.  The
+    culprit is the REPR rather than the designator itself so that the error
+    term is always a ground atom: an unbound-``Var`` designator must not end
+    up as a culprit that unifies with whatever pattern a ``catch/3`` offers.
+
+    *calling_module* is the module the designator was written in, when the
+    caller knows it.  It does not participate in resolution (a designator is
+    absolute, per the R10 chain above) -- it names the asking module in the
+    diagnostic, and it is the hook a future alias/short-name chain would use.
+    """
+    target = deref(designator)
+    if isinstance(target, str):
+        found = sys.modules.get(target)
+        if found is None:
+            _no_such_module(designator, calling_module, context)
+        target = found
+    try:
+        return _coerce_module(target)
+    except TypeError as exc:
+        _no_such_module(designator, calling_module, context, cause=exc)
+
+
+def _no_such_module(designator, calling_module, context: str, cause=None):
+    """Raise ``existence_error(module, repr(designator))``.  Never returns."""
+    from clausal.logic.exceptions import (  # noqa: PLC0415 -- clausal.logic.
+        LogicException, existence_error,    # exceptions imports clausal.terms,
+    )                                       # which imports this module's kin
+    asker = ""
+    if calling_module is not None:
+        asker = f" (asked from {getattr(calling_module, 'name', calling_module)!r})"
+    prefix = f"{context}: " if context else ""
+    exc = LogicException(existence_error(
+        "module", repr(designator),
+        f"{prefix}{designator!r} does not name a module{asker} — a module "
+        f"designator is a dotted Python module name already present in "
+        f"sys.modules (resolution is lookup-only and never imports), a "
+        f"clausal Module, or an imported .clausal module object",
+    ))
+    if cause is not None:
+        raise exc from cause
+    raise exc
+
+
+def _module_for_moduleless_solve(goal) -> Module:
+    """Pick the module for a ``solve(goal)`` called without ``module=``.
+
+    Three cases, in the order they are asked:
+
+      - a module-QUALIFIED cell goal carries its own answer.  ``(":", M, G)``
+        names the module that answers, so ``module=`` is redundant rather than
+        missing and the goal runs.
+      - any other CELL goal has no module at all, and none can be guessed:
+        a cell is a plain tuple, so there is no defining class to walk back to
+        (which is what ``_infer_module`` does) and the tuple's functor is a
+        bare name that any number of modules may define.  Guessing here is
+        exactly the module-locality bug this task exists to prevent, so the
+        gap is REPORTED: ``existence_error(module, <the cell>)``.
+      - anything else keeps the legacy behaviour: ``_infer_module`` walks the
+        goal for class-instance terms, and its failure is the same ``TypeError``
+        it has always raised.
+    """
+    is_cell_goal, functor = compound_cell_shape(goal)
+    if is_cell_goal:
+        if functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3:
+            target, _inner = resolve_qualified_goal_cell(goal, "solve/1")
+            return target
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, existence_error,
+        )
+        raise LogicException(existence_error(
+            "module", goal,
+            f"solve/1: the unqualified cell goal {functor}/{len(goal) - 1} has "
+            f"no calling module — pass module= (the module whose database "
+            f"answers), or qualify the goal as (':', M, Goal).  A cell names a "
+            f"predicate but carries no module of its own, so there is nothing "
+            f"here to infer one from",
+        ))
+    module = _infer_module(goal)
+    if module is None:
+        raise TypeError(
+            "Cannot infer module from goal. Pass the module explicitly, e.g.:\n"
+            "  solve(goal, my_module)"
+        )
+    return module
+
+
+def _strip_module_qualification(goal, module):
+    """Peel a top-level ``(":", M, G)`` off *goal*, returning ``(G, M's Module)``.
+
+    P3-3 Task 6.  This is where a qualified goal becomes a module SWITCH: the
+    inner goal is compiled against — and cached under — the EXPORTING module,
+    which is what makes ``solve((":", e, ("p", X)), module=i)`` answer *e*'s
+    ``p/1`` while ``solve(("p", X), module=i)`` answers *i*'s.
+
+    Doing it here, before ``_templatize_query_goal`` and ``_goal_cache_key``,
+    is deliberate: from that point on a qualified goal IS an ordinary cell
+    goal against another module, so it templatizes like one (ground arguments
+    parameterize, distinct values share a compiled query) and its cache key is
+    the ordinary ``(structural_key, id(module))`` with the RESOLVED module's
+    id — which is the module the compiled artifact actually depends on.
+
+    Non-qualified goals come back untouched.
+    """
+    is_cell_goal, functor = compound_cell_shape(goal)
+    if not (is_cell_goal
+            and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
+        return goal, module
+    target, inner = resolve_qualified_goal_cell(goal, "solve/1", module)
+    return inner, target
+
+
 def _infer_module(goal) -> Module | None:
     """Try to find a Module from PredicateMeta classes in the goal term.
 
     Walks the goal tree looking for term instances whose type was defined in an
     imported .clausal module.  Returns the first Module found, or None.
+
+    LEGACY CUSTOMERS ONLY (P3-3 Task 6).  A CELL goal never reaches here: a
+    cell is a plain tuple with a bare-name functor, so there is no defining
+    class to walk back to and any number of modules may define that name.
+    ``_module_for_moduleless_solve`` refuses it with an ``existence_error``
+    naming the gap instead of guessing — see the module-locality rule R10.
     """
     import sys
     from clausal.logic.predicate import PredicateMeta
@@ -689,8 +860,12 @@ def solve(
     Parameters
     ----------
     goal:    goal term
-    module:  Module, imported .clausal Python module, or None (auto-inferred
-             from predicate classes in the goal)
+    module:  a module DESIGNATOR — a clausal Module, an imported .clausal
+             Python module, or (P3-3 Task 6) the dotted name of one as a str —
+             or None.  None means: a module-qualified cell goal names its own
+             module; any other cell goal is an error naming the gap; anything
+             else is auto-inferred from the predicate classes in the goal.
+             See ``resolve_module`` and ``_module_for_moduleless_solve``.
     trail:   optional Trail; a fresh one is created if not provided
 
     Yields
@@ -698,14 +873,9 @@ def solve(
     Trail after each solution (bindings are live on the trail).
     """
     if module is None:
-        module = _infer_module(goal)
-        if module is None:
-            raise TypeError(
-                "Cannot infer module from goal. Pass the module explicitly, e.g.:\n"
-                "  solve(goal, my_module)"
-            )
+        module = _module_for_moduleless_solve(goal)
     else:
-        module = _coerce_module(module)
+        module = resolve_module(module, None, "solve/2")
     if trail is None:
         trail = Trail()
 
@@ -870,12 +1040,39 @@ def _tabled_entry_for_goal(goal, module, trail):
     ``Call(LoadAttr(LoadName(mod), pred))``, whose table lives in the
     EXPORTING module's db. Keyword arguments are normalized positionally
     via the owning db's registered signature, mirroring the tabled-NAF
-    compiler seam."""
+    compiler seam.
+
+    P3-3 Task 6 adds the two CELL shapes ``solve()`` accepts: the plain cell
+    ``("p", A)`` (invisible here before — it fell to the final ``else`` and
+    every cell goal read as non-tabled), and the module-qualified
+    ``(":", M, G)``, resolved through ``resolve_module`` so the entry is
+    looked up in the EXPORTING module's db — the same rule the dotted
+    ``LoadAttr`` path below already follows, reached by the new resolver
+    rather than by that path's caller-dict walk.  The two are deliberately
+    NOT converged here: the legacy walk stays pinned as R10 records, and
+    the convergence is a filed follow-up."""
     if module is None:
         return None, None
     mod = _coerce_module(module)
     kwargs = []
-    if isinstance(goal, Compound):
+    is_cell_goal, cell_functor = compound_cell_shape(goal)
+    if (is_cell_goal
+            and cell_functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
+        # Resolve the qualification, then fall through to the cell branch with
+        # the EXPORTING module in hand.  A designator that does not resolve is
+        # not this function's error to raise: it is asked AFTER solve() has
+        # already run the goal, so solve() has raised it already; here the
+        # honest answer for a goal that names no module is "no table".
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        try:
+            mod, goal = resolve_qualified_goal_cell(goal, "query_wfs/2", mod)
+        except LogicException:
+            return None, None
+        is_cell_goal, cell_functor = compound_cell_shape(goal)
+    if is_cell_goal:
+        functor = cell_functor
+        goal_args = list(goal[1:])
+    elif isinstance(goal, Compound):
         functor = deref(goal.functor)
         if not isinstance(functor, str):
             return None, None
@@ -973,5 +1170,6 @@ __all__ = [
     "query",
     "query_wfs",
     "once",
+    "resolve_module",
     "_deref_walk",
 ]

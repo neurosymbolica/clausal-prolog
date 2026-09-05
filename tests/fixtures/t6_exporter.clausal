@@ -1,0 +1,27 @@
+# Exporter fixture for the P3-3 Task 6 qualified-goal tests.
+#
+# Every predicate here except ``ready/0`` and ``libp/1`` is deliberately
+# spelled the SAME as one in t6_importer.clausal and answers DIFFERENT values,
+# so "which module answered" is readable straight off the answers:
+#
+#   p/1     the module-locality pin (11, 12 here; 1, 2 in the importer)
+#   tp/1    the same, TABLED, so a qualified goal's table can be located
+#   home/1  a witness naming the module that answered
+#   pair/2  the locality pin at a second arity
+#   ready/0 the zero-argument goal a bare-str inner goal names
+#   libp/1  imported from t6_lib — reached only through the namespace route
+-module(t6_exporter, [p(X), tp(X), home(W), pair(A, B), ready(), libp(X)])
+-import_from(tests.fixtures.t6_lib, [libp])
+-table(tp/1)
+
+p(11),
+p(12),
+
+tp(21),
+tp(22),
+
+home("exporter"),
+
+pair(11, 12),
+
+ready() <- p(11)
