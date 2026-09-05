@@ -1,0 +1,13 @@
+# Task 5b sub-shape 2: the owner DECLARES ``t5b_kfact`` as an atom in its
+# -module list AND writes an explicit 0-arity fact for it, so post-pivot the
+# name binds to a PredicateMeta class here.  ``t5b_kplain`` is the control:
+# declared, no /0 clause, so it binds its own spelling.
+-module(t5b_dual_owner, [t5b_kfact, t5b_kplain, t5b_prof(P),
+                         t5b_read_fact(P, V), t5b_owner_read(V)])
+
+t5b_kfact,
+
+t5b_prof({t5b_kfact: 1, t5b_kplain: 2}),
+
+t5b_read_fact(P, V) <- get(P, t5b_kfact, V),
+t5b_owner_read(V) <- (t5b_prof(P), t5b_read_fact(P, V)),

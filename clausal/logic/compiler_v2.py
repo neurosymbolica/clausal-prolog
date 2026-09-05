@@ -26,6 +26,7 @@ from clausal.logic.database import (
     Module as LogicModule, Clause, head_key,
     WRITE_LOAD_CLAUSES, WRITE_LOAD_DISPATCH,
 )
+from clausal.logic.cells import DECLARED_ATOMS_KEY
 from clausal.logic.exceptions import LogicException
 from clausal.logic.compiler import (
     compile_predicate_trampoline,
@@ -166,6 +167,15 @@ def compile_module(
     #    turns an unresolvable reference into a runtime ``TypeError`` with no
     #    file or line on it.
     _check_atoms_applied_as_functors(module_items, module_dict)
+
+    # ── Step 3b-ter: route an imported ATOM's APPLIED form to the local row ─
+    #    P3-3 Task 5b, sub-shape 1.  Same phase and same reason as 3b-bis:
+    #    "is the imported name a functor?" is the OWNER's fact and is first
+    #    answerable here.  A local arity-N definition wins over an imported
+    #    same-spelling atom, so the call site is re-pointed off the import
+    #    remap and onto the local name BEFORE step 4 compiles the bodies.
+    _route_imported_atom_calls_to_local(
+        module_items, predicate_nodes, module_dict)
 
     # ── Step 3c: resolve each imported name to the CLASS it bound ────────
     #    Names only, no policy: ``origins`` maps every spelling an
@@ -450,6 +460,47 @@ def _resolve_module(module_path: str):
         return importlib.import_module(module_path)
 
 
+def _imported_reference(mod, orig_name: str, value):
+    """What the importer's DOTTED key for *orig_name* should hold.
+
+    P3-3 Task 5b, sub-shape 2.  The dotted key is the one the ``-import_from``
+    remap emits for every reference to the imported spelling
+    (``term_rewriting``'s ``_import_remap``), so it is a REFERENCE to the
+    name, not the module attribute — and for a name the owner DECLARED as an
+    atom the reference means the atom, whatever else the owner also holds
+    under that spelling.
+
+    Post-pivot a declared atom binds its own interned spelling, so the two
+    normally coincide.  They come apart for exactly one shape: the owner
+    declares the name in its ``-module``/``-private`` list AND writes 0-arity
+    clauses for it, so the clause block's ``PredicateMeta`` wins the binding
+    (``_process_declarations``' don't-clobber guard).  The owner's own
+    lowering still answers such a reference with the str — its ``-module``
+    list is in front of it — and the importer used to answer with the CLASS,
+    so a dict key written by the owner and read by the importer silently
+    missed.  ``DECLARED_ATOMS_KEY`` is what lets the importer answer the way
+    the owner does.
+
+    The declaration is the authority, not the presence of /0 clauses: a name
+    with 0-arity clauses that the owner never declared as an atom is a
+    predicate, and stays the class.  A DUAL declaration (``-module(m, [dual,
+    dual(G)])``) is a functor too — its class carries fields — so only a
+    zero-field class is answered with the spelling.
+
+    The module ATTRIBUTE (``mod.name`` from Python, and this file's own bare
+    local binding) is untouched: it keeps the predicate class, so ``call/N``
+    and ``assertz`` still find the /0 predicate through the namespace (see
+    ``higher_order._namespace_dispatch`` → ``database_ops._find_pred_cls``).
+    """
+    if not isinstance(value, PredicateMeta) or value._fields:
+        return value
+    declared = getattr(mod, "__dict__", {}).get(DECLARED_ATOMS_KEY)
+    if not declared or orig_name not in declared:
+        return value
+    from clausal.import_hook import predicate_builtins  # noqa: PLC0415
+    return predicate_builtins.setdefault(orig_name, orig_name)
+
+
 def _process_imports(module_items: list, module_dict: dict) -> None:
     """Execute import directives, populating module_dict."""
     for item in module_items:
@@ -463,12 +514,14 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
                     # Also store under the dotted key ("module.OrigName") so
                     # that _inject_call_targets can resolve it when the compiler
                     # emits LoadName(name="module.OrigName") for remapped imports.
-                    module_dict[f"{item.module}.{orig_name}"] = value
+                    module_dict[f"{item.module}.{orig_name}"] = (
+                        _imported_reference(mod, orig_name, value))
                 else:
                     value = getattr(mod, name_spec)
                     module_dict[name_spec] = value
                     # Dotted key for compiler resolution (e.g. "py.sympy.inf").
-                    module_dict[f"{item.module}.{name_spec}"] = value
+                    module_dict[f"{item.module}.{name_spec}"] = (
+                        _imported_reference(mod, name_spec, value))
             # Also store the module object under the user-facing name so
             # that dotted-name resolution (e.g. ``uuid.Uuid4``) works in
             # the compiler's _inject_call_targets.
@@ -1056,6 +1109,144 @@ def _check_atoms_applied_as_functors(
                 raise SyntaxError(message)
 
 
+def _local_functor_arities(
+    module_items: list, predicate_nodes: list,
+) -> dict[str, set[int]]:
+    """``{name: {arity, ...}}`` for every functor signature this FILE fixes.
+
+    The same two facts ``term_rewriting._settle_atom_functor_sites`` reads --
+    a clause head, or a ``-module``/``-private`` functor entry -- plus the
+    ISO ``name/arity`` export spelling, which declares a predicate with no
+    field list.  Read from the clause NODES rather than from ``module_dict``
+    on purpose: an ``-import_from`` of the same spelling overwrites the
+    module binding (``_process_imports``), so the binding cannot answer
+    "does this file define ``name/N``" and the clause set can.
+    """
+    arities: dict[str, set[int]] = {}
+    for pred_node in predicate_nodes:
+        functor, arity = head_key(pred_node.head)
+        arities.setdefault(functor, set()).add(arity)
+    for item in module_items:
+        if isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
+            entries = (item.exports if isinstance(item, ModuleDeclItem)
+                       else item.items)
+            for entry in entries:
+                if isinstance(entry, tuple):
+                    arities.setdefault(entry[0], set()).add(len(entry[1]))
+        elif isinstance(item, DirectiveItem) and item.name == "predicate_export":
+            for functor, arity in item.specs:
+                arities.setdefault(functor, set()).add(arity)
+    return arities
+
+
+def _local_call_reroutes(
+    module_items: list, predicate_nodes: list, module_dict: dict,
+) -> dict[tuple[str, int], str]:
+    """``{(dotted key, arity): local name}`` for call sites that mean LOCAL.
+
+    P3-3 Task 5b, sub-shape 1.  Resolution is keyed on ``(name, arity)``: an
+    imported ATOM has no arity-N meaning (ISO treats ``f`` and ``f/2`` as
+    unrelated objects), so a local arity-N definition of the same spelling is
+    what an applied ``f(...)`` in this file means -- nothing is ambiguous and
+    nothing is shadowed.
+
+    Three conditions, exactly the ruling's:
+
+    (a) the name is one an ``-import_from`` remapped (this walks the same
+        ``ImportFromItem``s ``term_rewriting._import_remap`` was built from,
+        and rebuilds the identical dotted key);
+    (b) this file establishes a functor signature for ``(name, N)`` itself --
+        see ``_local_functor_arities``;
+    (c) the imported binding carries NO functor signature.  That is the
+        OWNER's fact, asked of the owner's namespace with the same
+        ``functor_signature_for`` ``_check_atoms_applied_as_functors`` uses,
+        so an imported FUNCTOR of arity N colliding with a local arity-N
+        definition stays the genuine collision it is (unchanged by this
+        pass, refused by the mutation gate at load as it was before).
+
+    An EMPTY signature -- a zero-arity predicate class, the sub-shape-2
+    shape where the owner declared an atom and also gave it /0 clauses --
+    counts as no functor signature here: arity 0 is not arity N, and the
+    ruling's whole point is that the two are unrelated.
+    """
+    from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
+        functor_signature_for,
+    )
+    local_arities = _local_functor_arities(module_items, predicate_nodes)
+    if not local_arities:
+        return {}
+    reroutes: dict[tuple[str, int], str] = {}
+    for item in module_items:
+        if not isinstance(item, ImportFromItem):
+            continue
+        owner_ns = getattr(module_dict.get(item.module), "__dict__", None)
+        if owner_ns is None:
+            continue
+        for name_spec in item.names:
+            if isinstance(name_spec, tuple):
+                orig_name, local_name = name_spec
+            else:
+                orig_name = local_name = name_spec
+            arities = local_arities.get(local_name)
+            if not arities:
+                continue                                    # (b) fails
+            if functor_signature_for(orig_name, owner_ns):
+                continue                                    # (c) fails
+            dotted = f"{item.module}.{orig_name}"            # (a)
+            for arity in arities:
+                if arity > 0:
+                    reroutes[(dotted, arity)] = local_name
+    return reroutes
+
+
+def _route_imported_atom_calls_to_local(
+    module_items: list, predicate_nodes: list, module_dict: dict,
+) -> None:
+    """Re-point qualifying call sites from the import remap to the local name.
+
+    P3-3 Task 5b, sub-shape 1.  ``term_rewriting`` cannot decide this at
+    rewrite time: condition (c) is the OWNER's fact and the owner has not
+    executed yet, exactly as for the atom-applied-as-a-functor check above.
+    So the rewrite emits the remap optimistically and the decision is settled
+    here, on the clause nodes, before clause compilation turns the reference
+    into a dispatch.
+
+    Only the FUNC of a body ``Call`` is re-pointed, and only the func: a bare
+    reference to the same spelling in DATA position keeps the dotted key and
+    therefore keeps answering with the imported atom -- which is what gives
+    the two positions different globals keys, the thing a binding-level fix
+    could not do.
+    """
+    reroutes = _local_call_reroutes(module_items, predicate_nodes, module_dict)
+    if not reroutes:
+        return
+    from clausal.pythonic_ast.nodes import (  # noqa: PLC0415
+        Call as CallNode, LoadName as LoadNameNode, Node as AstNode,
+    )
+
+    def _walk(obj) -> None:
+        if isinstance(obj, AstNode):
+            if (
+                isinstance(obj, CallNode)
+                and isinstance(obj.func, LoadNameNode)
+                and not obj.kwargs
+            ):
+                local = reroutes.get((obj.func.name, len(obj.args)))
+                if local is not None:
+                    obj.func = LoadNameNode(
+                        name=local, position=obj.func.position)
+            for child in obj.children():
+                _walk(child)
+        elif isinstance(obj, (list, tuple)):
+            for element in obj:
+                _walk(element)
+
+    for pred_node in predicate_nodes:
+        body = getattr(pred_node, "body", None)
+        if body is not None and body is not True:
+            _walk(body)
+
+
 def _process_bare_atom_refs(
     module_items: list,
     module_dict: dict,
@@ -1391,6 +1582,17 @@ def _process_declarations(module_items: list, module_dict: dict,
     for item in module_items:
         if isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
             exports = item.exports if isinstance(item, ModuleDeclItem) else item.items
+            # P3-3 Task 5b: record the atom DECLARATIONS themselves, before
+            # the binding loop below decides what each name binds to.  The
+            # binding cannot be read back as the declaration once a 0-arity
+            # clause block has won the name (the guard below), and an
+            # ``-import_from``ing module needs the declaration, not the
+            # binding -- see ``_imported_reference`` and
+            # ``cells.DECLARED_ATOMS_KEY``.
+            declared_atoms = {e for e in exports if isinstance(e, str)}
+            if declared_atoms:
+                module_dict.setdefault(DECLARED_ATOMS_KEY, set()).update(
+                    declared_atoms)
             for entry in exports:
                 if isinstance(entry, str):
                     # Atom: bind the spelling, mint nothing -- UNLESS a

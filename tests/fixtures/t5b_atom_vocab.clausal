@@ -1,0 +1,6 @@
+# Task 5b: a vocabulary module exporting ``t5b_slot`` as a bare 0-arity ATOM
+# (declared, no clauses anywhere, so it carries no functor signature at any
+# arity) alongside a genuine predicate ``t5b_other/1``.
+-module(t5b_atom_vocab, [t5b_slot, t5b_other(X)])
+
+t5b_other(1),

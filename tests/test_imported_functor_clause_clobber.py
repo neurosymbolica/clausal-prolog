@@ -217,14 +217,17 @@ class TestOneFileLoadedTwiceUnderTwoNames:
         left for a dotted owner-path reference to land on (that was a quirk
         of class re-minting, never a contract -- see
         ``tests/test_functor_import_ordering.py::TestZeroArityAtomThenPredicate``
-        for the same split on the single-load-route sibling). In EACH load
-        route independently: the re-defined predicate is fully registered
-        and callable by its bare LOCAL name (ownership keyed on source, not
-        name, still holds); the dotted owner-path call
-        (``impord_atp_lookup``'s body, via ``-import_from``'s dotted remap)
-        still finds the OWNER's plain str atom and raises the same clean,
-        positioned ``LogicException``/``existence_error("procedure", ...)``
-        -- never a raw ``AttributeError``, and never load-route-dependent.
+        for the same split on the single-load-route sibling).  P3-3 Task 5b
+        (controller ruling, 2026-09-06) then supplied the routing that ruling
+        deferred: resolution is keyed on ``(name, arity)``, so the APPLIED
+        form of the imported atom is this file's own ``impord_qd/2``.
+
+        In EACH load route independently: the re-defined predicate is fully
+        registered and callable by its bare LOCAL name (ownership keyed on
+        source, not name, still holds), and the remapped call in
+        ``impord_atp_lookup``'s body answers from the same local row -- the
+        property under test being that the two routes agree, whatever the
+        answer is.
         """
         dotted = _load_module(
             "tests.fixtures.impord_atom_then_pred",
@@ -243,14 +246,11 @@ class TestOneFileLoadedTwiceUnderTwoNames:
             assert results == [("a", 1), ("b", 2)]
 
             k2, v2 = Var(), Var()
-            with pytest.raises(LogicException) as exc_info:
-                list(call("impord_atp_lookup", k2, v2, module=lm))
-            term = exc_info.value.term
-            indicator = term.args[0].args[1]
-            assert str(term.args[0].args[0]) == "procedure"
-            assert indicator.functor == "/"
-            assert indicator.args == ("impord_qd", 2)
-            assert "not callable at arity 2" in term.args[1]
+            lookup = sorted(
+                (walk(deref(k2)), walk(deref(v2)))
+                for _ in call("impord_atp_lookup", k2, v2, module=lm)
+            )
+            assert lookup == [("a", 1), ("b", 2)]
 
 
 class TestRuntimeAssertzIsAlreadySafe:

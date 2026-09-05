@@ -1,0 +1,10 @@
+# clausal: no-collect
+# Task 5b negative pin: imported FUNCTOR of arity 2 + local arity-2 clauses of
+# the same name.  A genuine collision -- out of scope for Task 5b, whose
+# behaviour is pinned exactly as it stands.
+-module(t5b_functor_clash, [t5b_clash_go(K, V)])
+-import_from(tests.fixtures.t5b_functor_vocab, [t5b_pair])
+
+t5b_pair(2, 8),
+
+t5b_clash_go(K, V) <- t5b_pair(K, V),

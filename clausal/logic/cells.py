@@ -155,6 +155,28 @@ TUPLE_TAG = tuple
 FUNCTOR_SIGNATURES_KEY = "__clausal_functor_signatures__"
 
 
+# The module-namespace key recording every spelling this file DECLARED as a
+# bare 0-arity ATOM (a name with no parentheses in its ``-module``/
+# ``-private`` list).  P3-3 Task 5b.
+#
+# Post-pivot a declaration alone binds the interned spelling, so "declared as
+# an atom" is usually readable straight off the binding -- but not when the
+# file ALSO writes 0-arity clauses for the name: the clause block mints a
+# real ``PredicateMeta`` and the declaration must not clobber it (see
+# ``compiler_v2._process_declarations``), so the binding then says
+# "predicate" and the atom-ness is lost.  The owning file's own lowering
+# still knows (its ``-module`` list is right there in the source); an
+# ``-import_from``ing file does not, and used to receive the CLASS as the
+# value of a data reference -- a dict key that silently missed the str key
+# every other module writes.  This registry is what the import edge reads to
+# answer the question the way the owner would.
+#
+# Written by ``compiler_v2._process_declarations`` (both ``-module`` and
+# ``-private`` bare entries; the list is a DECLARATION record, not an export
+# list) and read by ``compiler_v2._process_imports``.
+DECLARED_ATOMS_KEY = "__clausal_declared_atoms__"
+
+
 # The module-namespace key marking a module as opted into OPEN-WORLD functor
 # construction (P3-2 Task 6, user ruling R7): ``-implicit_functors`` compiles
 # to a module-level ``__clausal_implicit_functors__ = True`` assignment, the

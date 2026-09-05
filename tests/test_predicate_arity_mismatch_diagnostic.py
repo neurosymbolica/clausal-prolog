@@ -414,26 +414,27 @@ class TestTermConstructionUnaffected:
         )
         assert results == [("a", 1), ("b", 2)]
 
-    def test_atom_vocabulary_then_predicate_dotted_path_raises_cleanly(self):
-        """(b) half of the same shape: the dotted owner-path reference to
-        ``impord_qd`` (``impord_atp_lookup``'s body, via ``-import_from``'s
-        dotted remap) still finds the OWNER's plain str atom -- calling it
-        must raise a clean, positioned LogicException/existence_error, never
-        a raw AttributeError."""
-        from clausal.logic.exceptions import LogicException
+    def test_atom_vocabulary_then_predicate_applied_form_answers(self):
+        """(b) half of the same shape: ``impord_atp_lookup``'s body applies
+        ``impord_qd`` at arity 2.
 
+        P3-3 Task 5b (controller ruling, 2026-09-06) SUPERSEDES the P3-1 Task
+        2 half this used to pin (a clean ``existence_error`` on the owner's
+        str atom).  Resolution is keyed on ``(name, arity)``: the imported
+        atom has no arity-2 meaning, this file defines ``impord_qd/2``, so
+        the applied form is the LOCAL predicate and the goal answers.  The
+        deferred "routing to the local predicate is P3-3's job" that ruling
+        recorded is this.
+        """
         use = load_clausal_module(
             os.path.join(FIXTURES, "impord_atom_then_pred.clausal"))
         lm = use.__dict__["$module"]
         k, v = Var(), Var()
-        with pytest.raises(LogicException) as exc_info:
-            list(call("impord_atp_lookup", k, v, module=lm))
-        term = exc_info.value.term
-        indicator = term.args[0].args[1]
-        assert str(term.args[0].args[0]) == "procedure"
-        assert indicator.functor == "/"
-        assert indicator.args == ("impord_qd", 2)
-        assert "not callable at arity 2" in term.args[1]
+        results = sorted(
+            (walk(deref(k)), walk(deref(v)))
+            for _ in call("impord_atp_lookup", k, v, module=lm)
+        )
+        assert results == [("a", 1), ("b", 2)]
 
 
 class TestCorrectCallsUnaffected:

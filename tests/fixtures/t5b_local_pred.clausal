@@ -1,0 +1,20 @@
+# Task 5b sub-shape 1: import the 0-arity ATOM ``t5b_slot`` and ALSO define a
+# local ``t5b_slot/2`` predicate.  The applied form must reach the LOCAL row;
+# the bare form stays the imported atom.  The first call site sits ABOVE the
+# clauses on purpose (the local functor is established later in the file).
+-module(t5b_local_pred, [t5b_go(V), t5b_all(K, V), t5b_head_data(A),
+                         t5b_body_data(D), t5b_other_call(X)])
+-private([t5b_a, t5b_b])
+-import_from(tests.fixtures.t5b_atom_vocab, [t5b_slot, t5b_other])
+
+t5b_go(V) <- t5b_slot(t5b_a, V),
+
+t5b_slot(t5b_a, 2),
+t5b_slot(t5b_b, 3),
+
+t5b_pick(X, X),
+
+t5b_all(K, V) <- t5b_slot(K, V),
+t5b_head_data(t5b_slot),
+t5b_body_data(D) <- t5b_pick(t5b_slot, D),
+t5b_other_call(X) <- t5b_other(X),

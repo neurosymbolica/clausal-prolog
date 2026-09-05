@@ -199,14 +199,19 @@ class TestZeroArityAtomThenPredicate:
     clause-head class block re-minted a class that a DOTTED owner-path
     reference (``tests.fixtures.impord_atomvocab.impord_qd``) also happened
     to reach — a quirk of class re-minting, never a contract. Post-pivot
-    (§1b/R2, atoms are plain strs, no class to re-mint), the split is:
+    (§1b/R2, atoms are plain strs, no class to re-mint), the split was:
     (a) the re-defined predicate IS registered in the importing module's own
     database and fully callable by its bare LOCAL name; (b) a reference that
-    goes through the dotted OWNER path still finds the owner's atom (a str,
-    never redefined there) and calling it is a genuine error — but a clean,
-    positioned ``LogicException``/``existence_error``, never a raw
-    ``AttributeError``. Routing a qualified goal to the local predicate
-    instead is P3-3's qualified-goal design, not this ruling's job.
+    goes through the dotted OWNER path found the owner's atom and calling it
+    was a genuine error. That ruling deferred "routing a qualified goal to
+    the local predicate" to P3-3's qualified-goal design.
+
+    P3-3 Task 5b (controller ruling, 2026-09-06) is that routing, and it
+    SUPERSEDES half (b): resolution is keyed on ``(name, arity)``, an atom
+    has no arity-N meaning (ISO treats ``f`` and ``f/2`` as unrelated
+    objects), so the APPLIED form reaches this file's own ``impord_qd/2``.
+    Half (a) is unchanged, and the BARE form still means the imported atom —
+    the two positions get different globals keys, which is the whole point.
     """
 
     def test_local_name_call_reaches_the_redefined_predicate(self):
@@ -224,31 +229,26 @@ class TestZeroArityAtomThenPredicate:
         )
         assert results == [("a", 1), ("b", 2)]
 
-    def test_dotted_owner_path_call_raises_a_clean_existence_error(self):
-        """(b) ``impord_atp_lookup`` calls ``impord_qd`` via the dotted
-        owner-qualified path (``-import_from`` remaps a body call to the
-        FULL dotted name so local code can't accidentally clobber the
-        import) — the owner never redefines ``impord_qd`` as a predicate, so
-        that path still finds the plain str atom. Calling it must raise a
-        clean, positioned LogicException/existence_error("procedure", ...),
-        never a raw AttributeError."""
-        from clausal.logic.exceptions import LogicException
+    def test_the_applied_form_reaches_the_local_predicate(self):
+        """(b), as P3-3 Task 5b re-decides it: ``impord_atp_lookup``'s body
+        applies ``impord_qd`` at arity 2.  ``-import_from`` remapped that call
+        to the FULL dotted name, and the owner never defines ``impord_qd`` as
+        a functor at any arity — so the remap named an ATOM, which has no
+        arity-2 meaning, while this file's own ``impord_qd/2`` does.  The
+        local row answers.
 
+        See ``tests/test_import_arity_resolution.py`` for the dedicated
+        Task 5b pins, including the negative one (an imported FUNCTOR of
+        arity N colliding with local arity-N clauses is untouched)."""
         _load_fixture("impord_atomvocab")
         use = _load_fixture("impord_atom_then_pred")
         lm = use.__dict__["$module"]
         k, v = Var(), Var()
-        with pytest.raises(LogicException) as exc_info:
-            list(call("impord_atp_lookup", k, v, module=lm))
-        term = exc_info.value.term
-        indicator = term.args[0].args[1]
-        assert str(term.args[0].args[0]) == "procedure"
-        assert indicator.functor == "/"
-        assert indicator.args == ("impord_qd", 2)
-        msg = term.args[1]
-        assert "impord_qd" in msg
-        assert "not callable at arity 2" in msg
-        assert "data reference" in msg
+        results = sorted(
+            (walk(deref(k)), walk(deref(v)))
+            for _ in call("impord_atp_lookup", k, v, module=lm)
+        )
+        assert results == [("a", 1), ("b", 2)]
 
 
 class TestGenuineArityDisagreementStillRaises:

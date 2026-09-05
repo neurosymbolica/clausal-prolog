@@ -531,6 +531,31 @@ def _inject_call_targets(
             base_globals[target_name] = _DbDispatchAdapter(db, target_name, target_arity)
 
 
+def _atom_shadows_row(binding, db, name: str, arity: int) -> bool:
+    """True when a ``str`` module binding is hiding this db's own ``name/arity``.
+
+    P3-3 Task 5b.  Post-pivot an ATOM is a plain ``str`` (§1b/R2), so a module
+    binding of that shape is DATA and can never be a call target: reaching it
+    from a call site raises ``existence_error`` out of ``predicate.
+    _dispatch_at``'s str branch.  When the very database being compiled
+    defines ``name/arity``, the call site means THAT predicate -- resolution
+    is keyed on ``(name, arity)`` and an atom has no arity-N meaning -- so the
+    str loses and the db adapter answers.
+
+    Narrow on both axes: only a ``str`` binding (every other shape, callable
+    or not, is trusted exactly as before), and only when the row is really
+    there (``row``, not ``get_dispatch``, so asking compiles nothing).  A
+    call on an atom that names no local predicate keeps its existing,
+    positioned diagnostic.
+    """
+    return (
+        type(binding) is str
+        and db is not None
+        and arity >= 0
+        and db.row(name, arity) is not None
+    )
+
+
 def _inject_resolved_targets(
     targets: set[tuple[str, int]],
     base_globals: dict,
@@ -588,6 +613,12 @@ def _inject_resolved_targets(
         if dispatch is not None:
             base_globals[_disp_key(name, arity)] = dispatch
 
+    # P3-3 Task 5b: the names this clause set APPLIES, as opposed to merely
+    # reads.  ``_collect_globals_info`` yields a dotted name twice for an
+    # applied reference -- once at its call arity and once at -1 for the
+    # ``LoadName`` inside the ``Call`` -- so "is this name ever called here"
+    # has to be asked of the whole target set, not of one target at a time.
+    called_names = {name for name, arity in targets if arity >= 0}
     for target_name, target_arity in targets:
         existing = base_globals.get(target_name)
         if existing is not None and hasattr(existing, "_get_dispatch"):
@@ -601,6 +632,32 @@ def _inject_resolved_targets(
                 _maybe_cache_dispatch(existing, target_name, target_arity)
             continue
         if "." in target_name:
+            # P3-3 Task 5b: for a DATA reference (arity -1) this module's OWN
+            # binding for the dotted key wins over the attribute walk below.
+            # ``-import_from`` writes that exact key (``compiler_v2.
+            # _process_imports``) and it is the key the import remap emits for
+            # every reference to the imported spelling, so it is where a
+            # decision about what that spelling MEANS here belongs -- an
+            # owner-declared atom that also carries /0 clauses binds the atom
+            # str there while the owner's own module attribute stays the
+            # predicate class.  The two agree for every other import, so this
+            # only re-orders a question that used to have one answer; a dotted
+            # reference the import machinery did NOT bind
+            # (``-import_module``'s ``graphs.Path``, ``py.sympy.inf``) is
+            # absent from this dict and falls through unchanged.
+            #
+            # A name that is also APPLIED in this predicate keeps the
+            # attribute — one globals key cannot hold two answers, and the
+            # applied form's own diagnostic (``PredicateMeta``'s "takes 0
+            # arguments, but this call passes 1") is the better one.  Deciding
+            # it from ``called_names`` rather than from whichever of the two
+            # targets the set happened to yield last is what makes that
+            # deterministic.
+            if target_arity < 0 and target_name not in called_names:
+                own = globals_.get(target_name) if globals_ else None
+                if own is not None:
+                    base_globals[target_name] = own
+                    continue
             parts = target_name.split(".")
             obj = globals_.get(parts[0]) if globals_ else None
             for part in parts[1:]:
@@ -631,7 +688,9 @@ def _inject_resolved_targets(
         if builtin is not None:
             _merge_builtin(base_globals, target_name, builtin)
             continue
-        if globals_ and target_name in globals_:
+        if globals_ and target_name in globals_ and not _atom_shadows_row(
+            globals_[target_name], db, target_name, target_arity
+        ):
             obj = globals_[target_name]
             base_globals[target_name] = obj
             _maybe_cache_dispatch(obj, target_name, target_arity)

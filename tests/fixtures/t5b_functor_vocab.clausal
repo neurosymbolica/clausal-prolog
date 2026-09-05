@@ -1,0 +1,5 @@
+# Task 5b negative pin: the owner exports ``t5b_pair`` as a FUNCTOR of arity 2
+# (a real predicate with a signature), not as an atom.
+-module(t5b_functor_vocab, [t5b_pair(K, V)])
+
+t5b_pair(1, 9),

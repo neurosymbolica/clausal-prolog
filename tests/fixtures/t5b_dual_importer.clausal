@@ -1,0 +1,16 @@
+# Task 5b sub-shape 2: the importer reads the owner's dict by the imported
+# key.  In DATA position ``t5b_kfact`` must be the atom str (the key type the
+# owner's own lowering writes), in head and body alike; in GOAL position
+# ``call(t5b_kfact)`` must still run the owner's /0 predicate.
+-module(t5b_dual_importer, [t5b_iread_fact(V), t5b_iread_plain(V),
+                            t5b_iread_pass(V), t5b_icall, t5b_ikey(D, V),
+                            t5b_ihead(A)])
+-import_from(tests.fixtures.t5b_dual_owner, [t5b_kfact, t5b_kplain, t5b_prof,
+                                             t5b_read_fact])
+
+t5b_iread_fact(V) <- (t5b_prof(P), get(P, t5b_kfact, V)),
+t5b_iread_plain(V) <- (t5b_prof(P), get(P, t5b_kplain, V)),
+t5b_iread_pass(V) <- (t5b_prof(P), t5b_read_fact(P, V)),
+t5b_icall <- call(t5b_kfact),
+t5b_ikey(D, V) <- get(D, t5b_kfact, V),
+t5b_ihead(t5b_kfact),
