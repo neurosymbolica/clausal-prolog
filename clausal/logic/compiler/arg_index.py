@@ -272,7 +272,7 @@ def _is_deeply_ground_walk(val: Any, _budget: list[int]) -> bool:
     return True
 
 
-def _runtime_arg_key(a: Any) -> Any:
+def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
     """Runtime: extract the index key from a deref'd argument value.
 
     Mirrors :func:`_arg_to_index_key` for the runtime dispatch path.
@@ -296,9 +296,13 @@ def _runtime_arg_key(a: Any) -> Any:
     if type(a) is tuple and a:
         slot0 = a[0]
         if type(slot0) is str:
-            return (slot0, len(a) - 1) if _is_deeply_ground(a) else _INDEX_VAR
+            if deep_gate and not _is_deeply_ground(a):
+                return _INDEX_VAR
+            return (slot0, len(a) - 1)
         if slot0 is TUPLE_TAG:
-            return (TUPLE_TAG, len(a) - 1) if _is_deeply_ground(a) else _INDEX_VAR
+            if deep_gate and not _is_deeply_ground(a):
+                return _INDEX_VAR
+            return (TUPLE_TAG, len(a) - 1)
     if isinstance(a, (list, tuple)):
         b = _bytelist_to_bytes_or_none(a)
         if b is not None:
@@ -1043,7 +1047,7 @@ def _make_secondary_dispatch_trampoline(
     )
 
 
-def _make_indexed_dispatch_impl(all_fn, idx_dict, default_fn, *, arg_offset, tail_yield):
+def _make_indexed_dispatch_impl(all_fn, idx_dict, default_fn, *, arg_offset, tail_yield, deep_gate=False):
     """Shared indexed-dispatch builder.
 
     Routes on the first predicate argument (at ``args[arg_offset]``):
@@ -1067,7 +1071,7 @@ def _make_indexed_dispatch_impl(all_fn, idx_dict, default_fn, *, arg_offset, tai
         if is_var(_a0):
             yield from all_fn(*args)
         else:
-            _k = _runtime_arg_key(_a0)
+            _k = _runtime_arg_key(_a0, deep_gate)
             try:
                 _bfn = idx_dict.get(_k)
             except TypeError:
@@ -1083,47 +1087,65 @@ def _make_indexed_dispatch_impl(all_fn, idx_dict, default_fn, *, arg_offset, tai
     return dispatch
 
 
-def _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn):
+def _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn, deep_gate=False):
     """Build an indexed dispatch wrapper for simple/short-stack mode.
 
     Legacy V2-1 wrapper — indexes only on the first argument.
     Superseded by :func:`_make_groundness_dispatch_simple` for V2-2.
+
+    *deep_gate* (P3-2 Task 4 fix round 2): whether the runtime key
+    computation runs the bounded deep-groundness walk for a cell/tuple
+    argument -- see :func:`_runtime_arg_key`. Defaults to False: this
+    legacy wrapper is unused by the real compiler pipeline (dead code,
+    kept for the V2-1/V2-2 history), so there is no computed per-position
+    risk flag to thread through it from anywhere; False matches the
+    common (no lifted-literal-risk) case.
     """
     return _make_indexed_dispatch_impl(
         all_fn, idx_dict, default_fn,
         arg_offset=0,
         tail_yield=None,
+        deep_gate=deep_gate,
     )
 
 
-def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
+def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done, deep_gate=False):
     """Build an indexed dispatch wrapper for trampoline mode.
 
     Legacy V2-1 wrapper — indexes only on the first argument.
     Superseded by :func:`_make_groundness_dispatch_trampoline` for V2-2.
+    See :func:`_make_indexed_dispatch_simple` for *deep_gate*.
     """
     return _make_indexed_dispatch_impl(
         all_fn, idx_dict, default_fn,
         arg_offset=4,
         tail_yield=lambda args: (args[2], done),
+        deep_gate=deep_gate,
     )
 
 
 # ── V2-2: Groundness-keyed dispatch ─────────────────────────────────────────
 
 
-def _groundness_dispatch_body_single(args, pos, idx_dict, dflt_fn, fallback_fn):
+def _groundness_dispatch_body_single(args, pos, idx_dict, dflt_fn, fallback_fn,
+                                     deep_gate=True):
     """Yield from the appropriate bucket for a single-position groundness plan.
 
     If ``args[pos]`` is an unbound Var, fall back to the all-clauses
     scan.  Otherwise look up the bucket keyed on the arg's runtime
     value; missing or TypeError key means the default fn.
+
+    *deep_gate* (P3-2 Task 4 fix round 2): threaded straight to
+    :func:`_runtime_arg_key` -- computed once, at bucket-build time, by
+    ``list_dispatch._lifted_head_arg_needs_deep_gate`` over every lifted
+    clause at this position (see predicate.py). Defaults to True (safe)
+    for any direct caller that has not computed a real flag.
     """
     _a = deref(args[pos])
     if is_var(_a):
         yield from fallback_fn(*args)
         return
-    _k = _runtime_arg_key(_a)
+    _k = _runtime_arg_key(_a, deep_gate)
     if _k is _INDEX_VAR:
         # A02-F001: a non-var arg whose index key is uncomputable (partial
         # char/code-list, empty list, SegList, Decimal, …) must scan ALL
@@ -1146,7 +1168,9 @@ def _groundness_dispatch_body_single(args, pos, idx_dict, dflt_fn, fallback_fn):
 def _groundness_dispatch_body_multi(args, plans, fallback_fn, arg_offset):
     """Yield from the first plan whose position has a ground argument.
 
-    ``plans`` is a list of ``(pos, idx_dict, default_fn)`` sorted by
+    ``plans`` is a list of ``(pos, idx_dict, default_fn, deep_gate)``
+    4-tuples (P3-2 Task 4 fix round 2 added the trailing ``deep_gate``
+    -- see :func:`_groundness_dispatch_body_single`), sorted by
     selectivity.  Each position is checked in order; the first ground
     arg triggers its index lookup and short-circuits.  If all positions
     are unbound Vars, fall back to the all-clauses scan.
@@ -1156,10 +1180,10 @@ def _groundness_dispatch_body_multi(args, plans, fallback_fn, arg_offset):
     _fail, _catcher, arg0, …, trail)`` — skip four slots (this_generator +
     three continuations) to reach arg0.
     """
-    for _pos, _idx_dict, _dflt_fn in plans:
+    for _pos, _idx_dict, _dflt_fn, _deep_gate in plans:
         _a = deref(args[_pos + arg_offset])
         if not is_var(_a):
-            _k = _runtime_arg_key(_a)
+            _k = _runtime_arg_key(_a, _deep_gate)
             if _k is _INDEX_VAR:
                 # A02-F001: uncomputable key at this plan — try the NEXT
                 # plan (another position may index) before falling back.
@@ -1179,21 +1203,21 @@ def _groundness_dispatch_body_multi(args, plans, fallback_fn, arg_offset):
 def _make_groundness_dispatch_simple(plans, fallback_fn):
     """Build a groundness-keyed dispatch selector for simple/short-stack mode.
 
-    *plans* is a list of ``(pos, idx_dict, default_fn)`` tuples, sorted by
-    selectivity (most selective position first).  At call time the selector
-    checks each position's argument; the first ground argument triggers
-    index lookup on that position.  If no argument is ground, *fallback_fn*
-    (all clauses, linear scan) is used.
+    *plans* is a list of ``(pos, idx_dict, default_fn, deep_gate)``
+    4-tuples, sorted by selectivity (most selective position first). At
+    call time the selector checks each position's argument; the first
+    ground argument triggers index lookup on that position.  If no
+    argument is ground, *fallback_fn* (all clauses, linear scan) is used.
 
     A single-position plan gets a specialised fast path that skips the
     iteration.  See ``_groundness_dispatch_body_single`` /
     ``_groundness_dispatch_body_multi`` for the shared bodies.
     """
     if len(plans) == 1:
-        pos, idx_dict, dflt_fn = plans[0]
+        pos, idx_dict, dflt_fn, deep_gate = plans[0]
         def dispatch(*args):
             yield from _groundness_dispatch_body_single(
-                args, pos, idx_dict, dflt_fn, fallback_fn,
+                args, pos, idx_dict, dflt_fn, fallback_fn, deep_gate,
             )
     else:
         def dispatch(*args):
@@ -1215,13 +1239,16 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
     (Phase 2 split-continuation) and emits a trailing
     ``yield (_fail, done)`` after search exhaustion.
 
+    *plans* is a list of ``(pos, idx_dict, default_fn, deep_gate)``
+    4-tuples -- see :func:`_make_groundness_dispatch_simple`.
+
     when *tro_state* is not None, the dispatch loops: after each bucket
     ``yield from`` completes, it checks ``tro_state[0]``.  If True, updates
     args from ``tro_state[1..N]`` and re-dispatches (potentially to a
     different bucket).
     """
     if len(plans) == 1:
-        pos, idx_dict, dflt_fn = plans[0]
+        pos, idx_dict, dflt_fn, deep_gate = plans[0]
         offset = pos + 4  # skip this_generator, _proceed, _fail, _catcher
         if tro_state is not None:
             def dispatch(*args):
@@ -1244,7 +1271,7 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                     if is_var(_a):
                         _bfn = fallback_fn
                     else:
-                        _k = _runtime_arg_key(_a)
+                        _k = _runtime_arg_key(_a, deep_gate)
                         if _k is _INDEX_VAR:
                             _bfn = fallback_fn
                         else:
@@ -1269,7 +1296,7 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
             def dispatch(*args):
                 _fail = args[2]
                 yield from _groundness_dispatch_body_single(
-                    args, offset, idx_dict, dflt_fn, fallback_fn,
+                    args, offset, idx_dict, dflt_fn, fallback_fn, deep_gate,
                 )
                 yield (_fail, done)
         dispatch.__name__ = fallback_fn.__name__
@@ -1284,10 +1311,10 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                 tro_state[0] = False
                 _current = args_list if args_list is not None else args
                 _bfn = None
-                for _pos, _idx_dict, _dflt_fn in plans:
+                for _pos, _idx_dict, _dflt_fn, _deep_gate in plans:
                     _a = deref(_current[_pos + 4])
                     if not is_var(_a):
-                        _k = _runtime_arg_key(_a)
+                        _k = _runtime_arg_key(_a, _deep_gate)
                         if _k is _INDEX_VAR:
                             # A02-F001: uncomputable key at this plan — try
                             # the NEXT plan (another position may index)

@@ -20,6 +20,7 @@ from clausal.terms import (
     Compound,
     Call, LoadName, LoadAttr,  # noqa: F401
     PyThunk, Unify,
+    DictTerm, SetTerm, KWTerm,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.predicate import is_term_instance, term_field_names, term_field_dict
@@ -348,6 +349,122 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
     # Remove the matched Unify from the body
     new_body = clause.body[:unify_idx] + clause.body[unify_idx + 1:]
     return Clause(head=new_head, body=new_body)
+
+
+def _nested_term_carries_a_literal(term):
+    """True if a compiled head_to_match_pattern for term (a value already
+    known to be BELOW some indexed root's functor/tag slot -- an element
+    of a cell, a Compound's arg, a Call's arg, a dict/set/instance
+    field, ...) would itself compile to a non-wildcard (literal-valued)
+    sub-pattern.
+
+    Recursive helper for :func:`_lifted_head_arg_needs_deep_gate` -- see
+    that function's docstring for the design rationale.  A bare Var (or
+    StarUnpack) is a pure capture: False.  A nested cell/Compound/Call
+    recurses the SAME way (its own functor/tag slot excluded); a bare
+    name reference (LoadName/LoadAttr, e.g. a nested imported atom
+    argument) or any other scalar/opaque leaf resolves to a MatchValue
+    and counts as a literal: True.  Conservative by construction.
+    """
+    if is_var(term):
+        return False
+    if isinstance(term, StarUnpack):
+        return False
+    if type(term) is tuple and term:
+        slot0 = term[0]
+        start = 1 if (type(slot0) is str or slot0 is TUPLE_TAG) else 0
+        return any(_nested_term_carries_a_literal(e) for e in term[start:])
+    if isinstance(term, Call) and isinstance(term.func, (LoadName, LoadAttr)):
+        return (
+            any(_nested_term_carries_a_literal(a) for a in term.args)
+            or any(_nested_term_carries_a_literal(kw.value)
+                   for kw in (term.kwargs or []))
+        )
+    if isinstance(term, (LoadName, LoadAttr)):
+        return True
+    if isinstance(term, Compound):
+        return any(_nested_term_carries_a_literal(a) for a in term.args)
+    if isinstance(term, list):
+        return any(_nested_term_carries_a_literal(e) for e in term)
+    if isinstance(term, DictTerm):
+        return any(_nested_term_carries_a_literal(v) for v in term.values())
+    if isinstance(term, KWTerm):
+        return any(_nested_term_carries_a_literal(v) for v in term.values())
+    if isinstance(term, SetTerm):
+        return bool(term.elements)
+    if is_term_instance(term):
+        return any(
+            _nested_term_carries_a_literal(getattr(term, n))
+            for n in term_field_names(term)
+        )
+    return True
+
+
+def _lifted_head_arg_needs_deep_gate(term):
+    """True if a compiled head_to_match_pattern for term -- a clause head
+    argument AFTER _lift_clause_at_pos has (possibly) replaced a Var with
+    a real value -- would contain a non-wildcard (literal-valued)
+    sub-pattern BELOW the indexed root own functor/tag slot.
+
+    P3-2 Task 4 fix round 2 (controller design ruling): bucket SELECTION
+    by shallow (functor, arity) is always correct for a partially-ground
+    caller -- its functor and arity are necessarily ground (that is what
+    selected the bucket), and no clause of a DIFFERENT functor/arity can
+    ever unify with it. The only miss-hazard is a bucket ARM whose lifted
+    pattern carries a literal SUB-value: a MatchValue there fails to
+    match where the caller own unbound Var -- reaching this bucket via
+    full unify() on the un-indexed fallback instead -- would have happily
+    bound. A bucket with NO such arm needs no runtime groundness check at
+    all: this function decides, ONCE PER BUCKET AT COMPILE TIME (never
+    per dispatch call), whether that risk exists, so
+    _runtime_arg_key's bounded walk (round 1) only has to run for the
+    predicate/position pairs that actually carry it.
+
+    Only a CELL, a compound reference (Call(LoadName)/Compound), or a
+    resolved term instance can EVER reach ``_runtime_arg_key``'s
+    deep-groundness-gated branch at all -- a bare scalar, atom
+    (LoadName/LoadAttr with no surrounding Call), or unlifted Var keys
+    through a wholly different, un-gated path (the PredicateMeta-atom
+    branch, or a plain scalar return) regardless of what this function
+    says, so those shapes are NOT recursed into as "the root" here: they
+    return False unconditionally, and it is only what is nested INSIDE a
+    cell/compound/instance -- checked by
+    :func:`_nested_term_carries_a_literal` -- that can trigger True.  This
+    is the fix for a round-2 self-test finding: an ATOM pad clause
+    (``Depth(Pad1, 0)``) lifted at position 0 must NOT turn the gate on
+    for a co-indexed CONS-cell clause at the same position just because a
+    bare atom reference is conservatively "a literal" in the nested
+    sense -- an atom has no sub-slots to be partially ground, so it is
+    not a root this function needs to examine.
+    """
+    if is_var(term):
+        return False
+    if type(term) is tuple and term and (
+        type(term[0]) is str or term[0] is TUPLE_TAG
+    ):
+        return any(_nested_term_carries_a_literal(e) for e in term[1:])
+    if isinstance(term, Call) and isinstance(term.func, (LoadName, LoadAttr)):
+        return (
+            any(_nested_term_carries_a_literal(a) for a in term.args)
+            or any(_nested_term_carries_a_literal(kw.value)
+                   for kw in (term.kwargs or []))
+        )
+    if isinstance(term, Compound):
+        return any(_nested_term_carries_a_literal(a) for a in term.args)
+    # A bare 0-arity atom reference (LoadName/LoadAttr with no surrounding
+    # Call): no sub-slots at all, so no partial-groundness risk -- must be
+    # excluded explicitly, BEFORE the is_term_instance catch-all below,
+    # which would otherwise duck-type match it (LoadName/LoadAttr are
+    # themselves dataclasses) and wrongly recurse into its own ``.name``
+    # field.
+    if isinstance(term, (LoadName, LoadAttr)):
+        return False
+    if is_term_instance(term):
+        return any(
+            _nested_term_carries_a_literal(getattr(term, n))
+            for n in term_field_names(term)
+        )
+    return False
 
 
 def _classify_list_key(arg: Any) -> str:

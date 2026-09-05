@@ -414,6 +414,231 @@ class TestGroundnessWalkCompleteness:
         )
 
 
+class TestDeepGateFlagComputation:
+    """Fix round 2 (controller design ruling): the deep-groundness gate
+    (round 1) becomes COMPILE-TIME CONDITIONAL.  Bucket SELECTION by
+    shallow ``(functor, arity)`` is always correct for a partially-ground
+    caller; the only miss-hazard is a bucket ARM whose LIFTED pattern
+    carries a literal sub-value.  ``list_dispatch.
+    _lifted_head_arg_needs_deep_gate`` decides that, ONCE, at bucket-build
+    time -- these tests pin the decision function itself before checking
+    that it is actually wired through the compiler (the classes below).
+    """
+
+    def test_a_bare_var_needs_no_gate(self):
+        """The lift was a no-op -- this clause keeps its body Unify,
+        which handles a partially-ground caller correctly via real
+        unify(); nothing to gate."""
+        from clausal.logic.compiler.list_dispatch import (
+            _lifted_head_arg_needs_deep_gate,
+        )
+        assert _lifted_head_arg_needs_deep_gate(Var()) is False
+
+    def test_a_bare_atom_needs_no_gate(self):
+        """A 0-arity atom reference (e.g. a lifted ``Pad1`` pad clause)
+        has no sub-slots at all -- no partial-groundness risk, and it
+        never even reaches ``_runtime_arg_key``'s cell-gated branch
+        (atoms key through the PredicateMeta branch instead). Regression:
+        an earlier version of this function duck-typed LoadName/LoadAttr
+        as ``is_term_instance`` and wrongly said True, which would have
+        turned the gate ON for every co-indexed cell bucket at the same
+        position as a pad atom fact -- exactly the shape
+        tests/fixtures/gate_microbench.clausal exercises."""
+        from clausal.logic.compiler.list_dispatch import (
+            _lifted_head_arg_needs_deep_gate,
+        )
+        from clausal.terms import LoadName, LoadAttr
+        assert _lifted_head_arg_needs_deep_gate(LoadName(name="Pad1")) is False
+        assert _lifted_head_arg_needs_deep_gate(
+            LoadAttr(object=LoadName(name="m"), attr="atom")
+        ) is False
+
+    def test_a_fresh_var_cell_needs_no_gate(self):
+        """``Wrap(SUB)`` with SUB a genuine fresh Var in the clause --
+        the compiled pattern captures SUB, it does not compare it -- no
+        literal anywhere below the functor tag."""
+        from clausal.logic.compiler.list_dispatch import (
+            _lifted_head_arg_needs_deep_gate,
+        )
+        assert _lifted_head_arg_needs_deep_gate(("Wrap", Var())) is False
+
+    def test_a_ground_cell_needs_the_gate(self):
+        """``Wrap(direct)`` -- a real value below the functor tag compiles
+        to a MatchValue: the exact hazard this round exists for."""
+        from clausal.logic.compiler.list_dispatch import (
+            _lifted_head_arg_needs_deep_gate,
+        )
+        assert _lifted_head_arg_needs_deep_gate(("Wrap", "direct")) is True
+
+    def test_call_loadname_fresh_var_arg_needs_no_gate(self):
+        """The source-shaped compound reference (``Call(LoadName, args)``)
+        with a fresh-Var argument -- the shape a genuine
+        ``Wrap(SUB)`` compiles to before any resolution."""
+        from clausal.logic.compiler.list_dispatch import (
+            _lifted_head_arg_needs_deep_gate,
+        )
+        from clausal.terms import Call, LoadName
+        v = Var()
+        term = Call(func=LoadName(name="Wrap"), args=[v], kwargs=[])
+        assert _lifted_head_arg_needs_deep_gate(term) is False
+
+    def test_call_loadname_atom_arg_needs_the_gate(self):
+        """``Wrap(direct)`` in its PRE-resolution ``Call(LoadName)`` shape
+        -- ``direct`` is a nested bare atom reference, which DOES count
+        as a literal once it is not the whole indexed value itself (the
+        asymmetry ``test_a_bare_atom_needs_no_gate`` pins at the top
+        level)."""
+        from clausal.logic.compiler.list_dispatch import (
+            _lifted_head_arg_needs_deep_gate,
+        )
+        from clausal.terms import Call, LoadName
+        term = Call(
+            func=LoadName(name="Wrap"),
+            args=[LoadName(name="direct")], kwargs=[],
+        )
+        assert _lifted_head_arg_needs_deep_gate(term) is True
+
+    def test_compound_fresh_var_arg_needs_no_gate(self):
+        from clausal.logic.compiler.list_dispatch import (
+            _lifted_head_arg_needs_deep_gate,
+        )
+        assert _lifted_head_arg_needs_deep_gate(
+            Compound("g", (Var(),))
+        ) is False
+
+    def test_compound_ground_arg_needs_the_gate(self):
+        """The pre-existing (not cell-specific) hazard: a lifted
+        ``Compound`` literal arg is exactly as risky as a lifted cell
+        literal arg -- the flag computation covers it the same way."""
+        from clausal.logic.compiler.list_dispatch import (
+            _lifted_head_arg_needs_deep_gate,
+        )
+        assert _lifted_head_arg_needs_deep_gate(
+            Compound("g", (1,))
+        ) is True
+
+    def test_term_instance_ground_field_needs_the_gate(self):
+        """Same pre-existing hazard, for a resolved term-INSTANCE literal
+        (``is_term_instance`` branch) rather than a ``Compound`` AST node
+        -- the reviewer's explicit ask: a lifted-literal INSTANCE bucket
+        must also set the flag."""
+        from clausal.logic.compiler.list_dispatch import (
+            _lifted_head_arg_needs_deep_gate,
+        )
+        from clausal.logic.predicate import make_predicate
+        Wrap = make_predicate("Wrap", ["sub"])
+        assert _lifted_head_arg_needs_deep_gate(Wrap(sub=1)) is True
+        assert _lifted_head_arg_needs_deep_gate(Wrap(sub=Var())) is False
+
+    def test_a_bare_scalar_needs_no_gate(self):
+        """A plain scalar head arg is never lifted into anything the
+        cell-gated branch of ``_runtime_arg_key`` even sees (it keys as
+        itself, a hashable value, via the ``_INDEXABLE_TYPES`` branch)."""
+        from clausal.logic.compiler.list_dispatch import (
+            _lifted_head_arg_needs_deep_gate,
+        )
+        assert _lifted_head_arg_needs_deep_gate(0) is False
+        assert _lifted_head_arg_needs_deep_gate("abc") is False
+
+
+class TestDeepGateWiredThroughCompiler:
+    """Fix round 2: the per-position flag is actually computed at
+    bucket-build time (predicate.py) and reaches the compiled dispatch
+    closure, not just the standalone decision function.
+    """
+
+    def _plans_for(self, functor, arity, db):
+        """Capture the ``plans`` list a real compile passes to
+        ``_make_groundness_dispatch_trampoline`` for *functor*/*arity*."""
+        import clausal.logic.compiler.arg_index as arg_index_mod
+        from clausal.logic.compiler import predicate as predicate_mod
+
+        captured = []
+        original = arg_index_mod._make_groundness_dispatch_trampoline
+
+        def spy(plans, *a, **kw):
+            captured.append(list(plans))
+            return original(plans, *a, **kw)
+
+        arg_index_mod._make_groundness_dispatch_trampoline = spy
+        predicate_mod._make_groundness_dispatch_trampoline = spy
+        try:
+            compile_predicate_trampoline(
+                functor, arity, db.clauses_for(functor, arity), db,
+                globals_={},
+            )
+        finally:
+            arg_index_mod._make_groundness_dispatch_trampoline = original
+            predicate_mod._make_groundness_dispatch_trampoline = original
+        assert captured, "the predicate did not build a groundness plan"
+        return captured[0]
+
+    def test_var_headed_recursion_position_flags_off(self):
+        """The gate_microbench shape, built directly via the Python API:
+        five clauses at position 0 (three atom pads + nil + a cons cell
+        with ONLY fresh Vars below its functor tag) -- none of them lifts
+        a literal, so the compiled plan's flag must be False."""
+        from clausal.logic.database import Clause, Database
+        from clausal.terms import Call, LoadName
+
+        db = Database()
+        for name in ("Pad1", "Pad2", "Pad3"):
+            db.assertz(Clause(
+                head=Compound("Depth", (Call(func=LoadName(name=name), args=[], kwargs=[]), 0)),
+                body=[True],
+            ))
+        db.assertz(Clause(head=Compound("Depth", ("nil", 0)), body=[True]))
+        h, t, n1 = Var(), Var(), Var()
+        db.assertz(Clause(
+            head=Compound("Depth", (("cons", h, t), Var())),
+            body=[Unify(left=Var(), right=n1)],
+        ))
+        plans = self._plans_for("Depth", 2, db)
+        pos0_plans = [pl for pl in plans if pl[0] == 0]
+        assert pos0_plans, plans
+        for pos, idx_dict, dflt_fn, deep_gate in pos0_plans:
+            assert deep_gate is False, (pos, deep_gate)
+
+    def test_lifted_literal_cell_position_flags_on(self):
+        """The Tagged/2 shape (a ground-atom cell fact) built directly:
+        one bucket's lifted clause carries a real value below its functor
+        tag -- the compiled plan's flag must be True."""
+        from clausal.logic.database import Clause, Database
+
+        db = Database()
+        for i in range(3):
+            db.assertz(Clause(head=Compound("Boxed", (i, "pad")), body=[True]))
+        db.assertz(Clause(
+            head=Compound("Boxed", (("Wrap", "direct"), "boxed")),
+            body=[True],
+        ))
+        plans = self._plans_for("Boxed", 2, db)
+        pos0_plans = [pl for pl in plans if pl[0] == 0]
+        assert pos0_plans, plans
+        assert any(deep_gate for _p, _i, _d, deep_gate in pos0_plans), plans
+
+    def test_lifted_literal_instance_position_flags_on(self):
+        """The reviewer's explicit ask: a lifted-literal INSTANCE bucket
+        (an ``is_term_instance`` value, not a raw cell tuple) also sets
+        the flag -- built via a real term-instance head, the way a
+        Python-side producer (R6) still constructs one."""
+        from clausal.logic.database import Clause, Database
+        from clausal.logic.predicate import make_predicate
+
+        Wrap = make_predicate("Wrap", ["sub"])
+        db = Database()
+        for i in range(3):
+            db.assertz(Clause(head=Compound("Boxed2", (i, "pad")), body=[True]))
+        db.assertz(Clause(
+            head=Compound("Boxed2", (Wrap(sub="direct"), "boxed")),
+            body=[True],
+        ))
+        plans = self._plans_for("Boxed2", 2, db)
+        pos0_plans = [pl for pl in plans if pl[0] == 0]
+        assert pos0_plans, plans
+        assert any(deep_gate for _p, _i, _d, deep_gate in pos0_plans), plans
+
+
 class TestLiftClauseAtPos:
     def test_does_not_lift_loadname_atom(self):
         """A ``LoadName`` atom reference must NOT be lifted into the head.

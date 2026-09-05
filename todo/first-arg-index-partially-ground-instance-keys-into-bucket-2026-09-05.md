@@ -97,3 +97,31 @@ listed in project memory: `clausal.reflection`, `clausal.logic.clpb`,
 O(term-size) cost to matter, since the controller's ruling weighed "no
 compensating capability" against "hot path cost" for THIS repo's actual
 usage, not in the abstract.
+
+## Update, fix round 2 (2026-09-05)
+
+The BUCKET-SIDE half of this hazard (a bucket ARM whose lifted pattern
+carries a literal sub-value, which is what actually makes a
+partially-ground caller's key dangerous to trust) is now covered
+uniformly for BOTH cells and term instances by
+`list_dispatch._lifted_head_arg_needs_deep_gate` (fix round 2's
+compile-time flag computation) -- see
+`tests/test_first_arg_index.py::TestDeepGateFlagComputation::
+test_term_instance_ground_field_needs_the_gate` and
+`::TestDeepGateWiredThroughCompiler::
+test_lifted_literal_instance_position_flags_on`. That flag decides
+whether `_runtime_arg_key`'s bounded walk runs AT ALL for a given
+predicate/position, for whichever key branch (cell OR
+`is_term_instance`) reaches it.
+
+What is still open, exactly as filed above: the KEY-SIDE
+`is_term_instance` branch in `_runtime_arg_key` (arg_index.py, near the
+end of the function) is UNCONDITIONAL -- it does not consult the flag at
+all, because it was reverted to its pre-round-1 shape rather than
+threaded. So a partially-ground term-INSTANCE caller still keys into a
+bucket without any check today; the flag machinery that WOULD gate it
+correctly (mirroring the cell branch exactly) exists and is tested, it
+is just not wired to this one key-side branch. That wiring -- add
+`deep_gate` to the `is_term_instance` branch's `return`, exactly
+parallel to the cell branch a few lines above it -- is the two-line
+follow-up this todo already named.

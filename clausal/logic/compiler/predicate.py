@@ -93,6 +93,7 @@ from .head_match import (
 from .list_dispatch import (
     _get_head_arg, _lift_clause_at_pos,
     _find_list_dispatch_pos, _build_list_dispatch_guard,
+    _lifted_head_arg_needs_deep_gate,
 )
 from .arg_index import (
     _INDEX_VAR, _INDEXABLE_TYPES, _INDEX_THRESHOLD, _JOINT_COVERAGE_THRESHOLD,
@@ -944,9 +945,19 @@ def _compile_predicate_trampoline_impl(
 
             fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
 
-            plans: list[tuple[int, dict, Callable]] = []
+            plans: list[tuple[int, dict, Callable, bool]] = []
             for pos, index in index_positions:
                 idx_dict: dict = {}
+                # P3-2 Task 4 fix round 2 (controller design ruling): a
+                # SINGLE per-position boolean, OR'd across every bucket's
+                # lifted clauses -- True the moment ANY lifted clause at
+                # this position carries a non-wildcard sub-pattern a
+                # partially-ground caller's own Var could fail to match.
+                # Threaded into the groundness-dispatch plan below so
+                # ``_runtime_arg_key``'s bounded walk (round 1) runs only
+                # for the predicate/position pairs that actually need it
+                # -- most carry none, and skip it entirely.
+                _pos_needs_deep_gate = False
                 for key, bucket_clauses in index["buckets"].items():
                     # Phase 8: lift the indexed-position body Unify into the
                     # head so that head_to_match_pattern emits a MatchValue/
@@ -958,6 +969,12 @@ def _compile_predicate_trampoline_impl(
                         _lift_clause_at_pos(cl, pos, base_globals)
                         for cl in bucket_clauses
                     ]
+                    for _lc in lifted_bucket:
+                        if _lifted_head_arg_needs_deep_gate(
+                            _get_head_arg(_lc, pos)
+                        ):
+                            _pos_needs_deep_gate = True
+                            break
                     # No extra globals update needed: any compound type that
                     # appears in the lifted head was already in the original
                     # clause body and collected by _collect_globals_info(clauses)
@@ -1010,7 +1027,7 @@ def _compile_predicate_trampoline_impl(
                 ctx_template=ctx_template,
             )
                 pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
-                plans.append((pos, idx_dict, pos_default_fn))
+                plans.append((pos, idx_dict, pos_default_fn, _pos_needs_deep_gate))
 
             # Phase 10a: single-position bucket dicts are exposed on the
             # predicate class (as call-site-safe wrappers) AFTER the final
@@ -1210,7 +1227,7 @@ def _compile_predicate_trampoline_impl(
                             tro_state=_tro_state_obj, arity=arity)
                         for key, bfn in idx_dict.items()
                     }
-                    for pos, idx_dict, _ in plans
+                    for pos, idx_dict, _, _ in plans
                 }
                 # Joint/hierarchical always assigned — a recompile that no
                 # longer selects the joint/secondary strategy must not leave
@@ -1708,7 +1725,7 @@ def _compile_predicate_shallow_impl(
 
             fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
 
-            plans: list[tuple[int, dict, Callable]] = []
+            plans: list[tuple[int, dict, Callable, bool]] = []
             for pos, index in index_positions:
                 idx_dict: dict = {}
                 for key, bucket_clauses in index["buckets"].items():
@@ -1727,7 +1744,15 @@ def _compile_predicate_shallow_impl(
                     pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
                 else:
                     pos_default_fn = _compile_always_fail(functor, arity)
-                plans.append((pos, idx_dict, pos_default_fn))
+                # P3-2 Task 4 fix round 2: shallow mode NEVER lifts a bucket
+                # clause's head (see the trampoline branch above, the only
+                # one that calls _lift_clause_at_pos) -- every structural
+                # head arg here is either its ORIGINAL ground literal or a
+                # hoisted Var + body Unify, so a bucket clause always
+                # resolves a partially-ground caller correctly via real
+                # unify(). No lifted literal risk is possible; the gate is
+                # unconditionally unneeded.
+                plans.append((pos, idx_dict, pos_default_fn, False))
 
             # Phase 9b/9c: attempt multi-argument indexing when arity ≥ 2.
             fn = None
