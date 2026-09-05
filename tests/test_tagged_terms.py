@@ -510,6 +510,134 @@ class TestHeadSignaturePlacement:
             self._pattern_for(self._kw_compound("point", 1, ["X"]))
 
 
+class TestPartialHeadReferenceIndexing:
+    """P3-2 whole-branch final review, F2: recorded as executable findings,
+    not fixed here (pre-existing, exposed-not-caused — see
+    ``todo/indexed-dispatch-drops-partial-head-references-2026-09-05.md``).
+
+    A clause head that references a declared data functor at LESS than its
+    full declared arity (``pt(1)`` — partial-positional; ``pt(y=2)`` —
+    keyword-only) is unreachable by any real caller once the predicate's
+    clause count crosses ``_INDEX_THRESHOLD``: ``head_match.
+    head_to_match_pattern``'s ``Call(LoadName)`` branch places the clause's
+    PATTERN against the functor's full DECLARED signature (``pt(1)`` ->
+    ``case ('pt', 1, _)``), but ``arg_index._arg_to_index_key``'s ``Call``
+    branch keys the BUCKET the clause is filed under by the WRITTEN arity
+    (``len(arg.args)`` -> ``('pt', 1)``) — and a real caller's value is
+    always the already-backfilled, full-arity cell (``('pt', 2)``), so the
+    bucket the caller probes is never the bucket the clause landed in.
+    Below the threshold there is no bucket at all, and the same clause
+    matches correctly via the unindexed linear scan's full ``unify()``.
+
+    One shared fixture module (``_load_inline``) declares ``pt(x, y)`` and
+    five discriminator predicates, mirroring ``kind/2``'s functor+arity
+    dispatch shape (a data-functor clause plus enough int-headed padding
+    clauses to separate the above/below-threshold pairs):
+
+    - ``probe_sat``      (6 clauses, above threshold): ``pt(1, 2)`` — full
+      declared arity written in the head. Correct today; pinned as a plain
+      regression test.
+    - ``probe_partial``  (6 clauses, above threshold): ``pt(1)``. BROKEN —
+      ``xfail(strict=True)``.
+    - ``probe_kw``       (6 clauses, above threshold): ``pt(y=2)``. BROKEN —
+      ``xfail(strict=True)``.
+    - ``probe_partial_below`` (2 clauses, below threshold): ``pt(1)``.
+      Correct — pins the unindexed floor the eventual fix must preserve.
+    - ``probe_kw_below``     (2 clauses, below threshold): ``pt(y=2)``.
+      Correct — same floor, keyword form.
+
+    Every query passes the FULL, already-backfilled cell a real caller
+    would always hold (construction-side placement backfills every omitted
+    slot before the value exists at runtime — see
+    ``TestSignatureConstruction``), so a passing result demonstrates actual
+    dispatch reachability, not an artefact of how the query was written.
+    """
+
+    _SRC = (
+        "-module(_tt_partial_head_idx, [\n"
+        "    pt(x, y),\n"
+        "    probe_sat(S, K),\n"
+        "    probe_partial(S, K),\n"
+        "    probe_kw(S, K),\n"
+        "    probe_partial_below(S, K),\n"
+        "    probe_kw_below(S, K),\n"
+        "])\n"
+        "\n"
+        'probe_sat(pt(1, 2), "hit"),\n'
+        'probe_sat(901, "n1"),\n'
+        'probe_sat(902, "n2"),\n'
+        'probe_sat(903, "n3"),\n'
+        'probe_sat(904, "n4"),\n'
+        'probe_sat(905, "n5"),\n'
+        "\n"
+        'probe_partial(pt(1), "hit"),\n'
+        'probe_partial(911, "n1"),\n'
+        'probe_partial(912, "n2"),\n'
+        'probe_partial(913, "n3"),\n'
+        'probe_partial(914, "n4"),\n'
+        'probe_partial(915, "n5"),\n'
+        "\n"
+        'probe_kw(pt(y=2), "hit"),\n'
+        'probe_kw(921, "n1"),\n'
+        'probe_kw(922, "n2"),\n'
+        'probe_kw(923, "n3"),\n'
+        'probe_kw(924, "n4"),\n'
+        'probe_kw(925, "n5"),\n'
+        "\n"
+        'probe_partial_below(pt(1), "hit"),\n'
+        'probe_partial_below(931, "n1"),\n'
+        "\n"
+        'probe_kw_below(pt(y=2), "hit"),\n'
+        'probe_kw_below(941, "n1"),\n'
+    )
+
+    @pytest.fixture(scope="class")
+    def lm(self):
+        mod = _load_inline("_tt_partial_head_idx", self._SRC)
+        return _logic_module(mod)
+
+    def _probe(self, lm, name, cell):
+        K = Var()
+        return [deref(K) for _t in call(name, cell, K, module=lm)]
+
+    def test_saturated_reference_above_threshold_dispatches(self, lm):
+        """Full declared arity written in the head: correct today."""
+        assert self._probe(lm, "probe_sat", ("pt", 1, 2)) == ["hit"]
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "indexed-dispatch-drops-partial-head-references-2026-09-05: "
+            "bucket keyed on WRITTEN arity ('pt', 1) from the raw head "
+            "Call, caller probes the DECLARED arity ('pt', 2) — no bucket "
+            "match, zero solutions."
+        ),
+    )
+    def test_partial_positional_reference_above_threshold_dispatches(self, lm):
+        assert self._probe(lm, "probe_partial", ("pt", 1, 9)) == ["hit"]
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "indexed-dispatch-drops-partial-head-references-2026-09-05: "
+            "keyword-only head reference keys ('pt', 0) positional args "
+            "written, caller probes ('pt', 2) — no bucket match, zero "
+            "solutions."
+        ),
+    )
+    def test_keyword_reference_above_threshold_dispatches(self, lm):
+        assert self._probe(lm, "probe_kw", ("pt", 7, 2)) == ["hit"]
+
+    def test_partial_positional_reference_below_threshold_dispatches(self, lm):
+        """Same clause shape, below ``_INDEX_THRESHOLD``: no bucket exists,
+        the unindexed linear scan's full ``unify()`` finds it correctly —
+        the regression floor the eventual fix must not narrow."""
+        assert self._probe(lm, "probe_partial_below", ("pt", 1, 9)) == ["hit"]
+
+    def test_keyword_reference_below_threshold_dispatches(self, lm):
+        assert self._probe(lm, "probe_kw_below", ("pt", 7, 2)) == ["hit"]
+
+
 class TestParity:
     """The fixture pair answers the same queries the same way.
 

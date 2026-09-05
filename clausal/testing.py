@@ -1609,7 +1609,7 @@ def _reify_value(value, depth: int = 0, path=None):
         return value
     if isinstance(value, list):
         return [_reify_value(v, depth + 1, path) for v in value]
-    if type(value) is tuple and value and isinstance(value[0], str):
+    if type(value) is tuple and value and type(value[0]) is str:
         # A CELL -- ``("cite", art52)``.  P3-2 Task 2 (THE FLIP): this is how
         # a compound term is represented, so it reifies as a ``Goal`` and
         # prints as ``cite(art52)``, exactly as the ``Compound`` branch below

@@ -504,49 +504,85 @@ def _build_predicate_trampoline_funcdef(
         _orig_bc = body_compiler
         _tro_m = tro_mode
         _tro_ctx = ctx_template
+        # F1 fix (P3-2 final review): the recompute below used to read
+        # AND write ``_ctx.clause_tro_plans`` / ``_ctx.clause_ir_cache``
+        # -- dicts owned by ``ctx_template``, which is SHARED across
+        # every bucket/default/fallback call to
+        # ``_build_predicate_trampoline_funcdef`` for this predicate
+        # (one ctx_template per predicate compile, many funcdef calls).
+        # ``clauses`` here, for a bucket, is ``lifted_bucket`` -- a
+        # fresh list built by the caller's per-(pos, key) loop
+        # (predicate.py's plan-building loop) with no other referent;
+        # once that bucket's funcdef is built the list is rebound on
+        # the next loop iteration and its ``Clause`` objects are freed.
+        # CPython recycles freed small-object addresses immediately, so
+        # a LATER bucket's lift can mint a brand-new ``Clause`` at the
+        # SAME id as an earlier, now-dead one. The old code's
+        # ``_ctx.clause_tro_plans.get(id(clause))`` ran BEFORE checking
+        # for a cache miss, so a recycled id produced a false HIT: the
+        # stale plan (and stale body IR) computed for the EARLIER,
+        # unrelated clause's body was silently reused for the new
+        # clause -- a miscompile the ``id(clause) in _tset`` guard
+        # cannot catch, since colliding clauses are in ``_tset`` by
+        # construction (each bucket builds its own ``_tset`` from its
+        # own ``clauses``).
+        #
+        # Fix: give the recompute its own cache, LOCAL to this one call
+        # of ``_build_predicate_trampoline_funcdef``. ``clauses`` (and
+        # therefore every clause this call's ``_tset`` can ever name) is
+        # kept alive by this call's own stack frame for the call's
+        # entire duration, so a dict that lives only as long as the
+        # call -- never touching the ctx_template-wide dicts -- cannot
+        # collide with a freed-and-recycled id from a sibling call.
+        # (Each clause is visited by ``body_compiler`` at most once per
+        # call today, so this cache mostly just documents that
+        # invariant; it costs nothing to keep it in case that changes.)
+        #
+        # Deliberately NOT staged into ``_ctx.clause_ir_cache``: that
+        # dict is read by ``_body_compiler`` (goal_shallow.py) as a
+        # pure optimisation (``body_ir if body_ir is not None else
+        # terms_to_goalop(goals, ctx.db)`` -- a cache miss just costs
+        # one redundant ``terms_to_goalop`` call, never a wrong
+        # answer). Writing the recomputed IR in there -- even
+        # temporarily, popped in a ``finally`` -- reopens the same
+        # hazard from the other direction: if THIS clause's id happens
+        # to already be a key (the lift-was-a-no-op case, where the
+        # post-lift object legitimately IS the pre-lift one the sweep
+        # already cached), an unconditional pop would evict a still-
+        # valid entry another consumer (e.g. the un-lifted fallback
+        # bucket) still expects to find. Simplest correct answer: skip
+        # the shared cache for the recompute path entirely and pay the
+        # rebuild.
+        _recompute_plans: dict = {}
 
         def _tro_aware_bc(clause, var_context,
-                          _tset=_tro_clause_set, _tm=_tro_m, _ctx=_tro_ctx):
+                          _tset=_tro_clause_set, _tm=_tro_m, _ctx=_tro_ctx,
+                          _plans=_recompute_plans):
             if id(clause) in _tset:
-                # Slice E6d-β: plan was built by ``_sweep_tro_eligible``;
-                # ``id(clause) in _tset`` implies ``plan.eligible`` is True.
-                #
-                # ``_tset`` is built (just above) from THIS function's own
-                # ``clauses`` param -- which, for a bucket, is
-                # ``lifted_bucket`` (predicate.py's plan-building loop),
-                # i.e. POST-``_lift_clause_at_pos``.  ``clause_tro_plans``
-                # was populated by ``_sweep_tro_eligible`` on the PRE-lift
-                # clause objects, keyed by their (different) id. The two
-                # agree whenever the lift was a no-op (same object, same
-                # id) but diverge whenever the lift actually rebuilds the
-                # clause (``Clause(head=new_head, body=new_body)`` is a NEW
-                # object) -- ``.get()`` below is what used to be a bare
-                # ``[...]`` lookup and raised ``KeyError`` the first time a
-                # TRO-eligible bucket clause was also lift-eligible. P3-2
-                # Task 4 (R8) is the first change to hit this: retiring the
-                # F095 str lift-skip makes str-headed clauses liftable, and
-                # some are TRO-eligible list-recursion bodies.
-                #
-                # Recomputing here (rather than reusing a plan keyed to the
-                # OLD body) is required, not just defensive: the lift can
-                # remove a redundant leading body ``Unify`` (the whole
-                # point of lifting), which shifts goal positions the
-                # PRE-lift plan recorded -- reusing it would misplace the
-                # tail-call split. Recompute against the clause's ACTUAL
-                # (post-lift) body, exactly as ``_sweep_tro_eligible`` does
-                # for the first pass, and cache it under the new id so a
-                # second reference (e.g. the default-bucket copy) doesn't
-                # redo the work.
-                _plan = _ctx.clause_tro_plans.get(id(clause))
+                # ``_tset`` names clauses that were TRO-eligible in the
+                # PRE-lift sweep (``_sweep_tro_eligible``, which keyed
+                # ``ctx_template.clause_tro_plans``/``clause_ir_cache``
+                # by the PRE-lift clause objects' ids). ``clauses`` here
+                # may be the POST-lift rebuild (``_lift_clause_at_pos``
+                # returns a NEW ``Clause`` when it actually rewrites the
+                # body), which has a different id from the pre-lift
+                # original the ctx_template dicts were keyed on -- so we
+                # cannot just read those dicts by ``id(clause)`` and
+                # expect a hit. Recompute against the clause's ACTUAL
+                # (post-lift) body: the lift can remove a redundant
+                # leading body ``Unify`` (the whole point of lifting),
+                # which shifts goal positions the PRE-lift plan
+                # recorded -- reusing it would misplace the tail-call
+                # split. Cache the plan in ``_plans`` (local to this
+                # call, see above) rather than the ctx_template dict.
+                _plan = _plans.get(id(clause))
                 if _plan is None:
                     from .terms_to_goalop import terms_to_goalop as _tro_ir
                     from .optimisations.tro import analyse as _tro_analyse_lazy
                     _body_ir = _tro_ir(clause.body, db=db)
                     _plan = _tro_analyse_lazy(
                         _body_ir, clause.head, functor, arity, db=db)
-                    _ctx.clause_tro_plans[id(clause)] = _plan
-                    if _ctx.clause_ir_cache is not None:
-                        _ctx.clause_ir_cache[id(clause)] = _body_ir
+                    _plans[id(clause)] = _plan
                 _prev_plan = _ctx.tro_plan
                 _prev_mode = _ctx.tro_mode
                 _ctx.tro_plan = _plan

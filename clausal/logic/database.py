@@ -472,8 +472,11 @@ def _is_structural_head_value(val: Any) -> bool:
     # this decision feeds; ``type(...) is tuple`` matches ``cells.is_cell``'s
     # own domain, so a tuple SUBCLASS stays opaque data (Task 2C's exact-type
     # ruling), and a plain data tuple ``(1, 2)`` is not structural either.
+    # ``type(val[0]) is str`` (not ``isinstance``) matches ``cells.
+    # _valid_functor_slot``'s own exact-type convention (a ``str`` subclass
+    # is deliberately excluded there too — see that function's docstring).
     if type(val) is tuple and val and (
-            isinstance(val[0], str) or val[0] is TUPLE_TAG):
+            type(val[0]) is str or val[0] is TUPLE_TAG):
         return True
     # A deferred Python expression (quantity/currency literal `5(m)`,
     # f-string, `++()` escape) in a head arg: nothing on the head-match path

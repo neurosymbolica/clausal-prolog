@@ -790,11 +790,18 @@ class TestGlobalAtom:
         name = "_test_global_atom_preseeded_xyz"
         marker = f"__preseeded_marker_for_{name}__"
         predicate_builtins[name] = marker
-        out = Var()
-        results = _global_atom_call(name, out)
-        assert len(results) == 1
-        assert results[0][1] is marker
-        assert results[0][1] != name
+        try:
+            out = Var()
+            results = _global_atom_call(name, out)
+            assert len(results) == 1
+            assert results[0][1] is marker
+            assert results[0][1] != name
+        finally:
+            # F4/M9 (P3-2 whole-branch final review): ``predicate_builtins``
+            # is process-global — without this the marker leaks into every
+            # later test in the process, including a legitimate mint of the
+            # same name by an unrelated test.
+            del predicate_builtins[name]
 
     def test_guard_succeeds_when_atom_matches(self):
         """(+name, +atom) — succeeds iff atom IS the global class."""

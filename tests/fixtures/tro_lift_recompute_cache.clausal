@@ -1,0 +1,25 @@
+# Fixture for F1 (P3-2 final review): the TRO recompute cache used to be
+# keyed by id(clause) on a dict SHARED across every bucket call for this
+# predicate compile (ctx_template.clause_tro_plans / clause_ir_cache).
+# Each bucket's lifted-clause list is a short-lived local that is freed
+# once its funcdef is built, so a later bucket's lift can recycle a freed
+# clause's address -- a stale cache hit would silently reuse a DIFFERENT
+# bucket's TRO plan/body IR.
+#
+# Two independent str-keyed buckets ("a" and "b") are each: (1) indexed
+# (first-arg str literal, >_INDEX_THRESHOLD clauses total via the padding
+# keys below), (2) TRO-eligible (tail-recursive), and (3) lift-eligible
+# (P3-2 Task 4/R8 retired the str half of the lift-skip, so the literal
+# key is lifted straight into the bucket's head pattern) -- exactly the
+# recompute path the fix targets. Compiling "a" then "b" back-to-back
+# gives the old bug its best chance: "a"'s lifted clauses are freed right
+# before "b"'s are built.
+-module(tro_lift_recompute_cache, [Cnt(K, N, X)])
+
+Cnt("a", N, X) <- (N > 0, M is N - 1, Cnt("a", M, X))
+Cnt("a", N, X) <- (X is N)
+Cnt("b", N, X) <- (N > 0, M is N - 1, Cnt("b", M, X))
+Cnt("b", N, X) <- (X is N)
+Cnt("c", N, X) <- (X is N)
+Cnt("d", N, X) <- (X is N)
+Cnt("e", N, X) <- (X is N)
