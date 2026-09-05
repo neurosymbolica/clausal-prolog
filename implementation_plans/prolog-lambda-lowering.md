@@ -1128,4 +1128,153 @@ without a corresponding `meta_predicate` declaration (§3.2 — it raises).
 
 ---
 
+## 10. Stage-1 mechanism (ruled 2026-09-05)
+
+§8's Stage 1 said *what* to emit and §3.3 proved *that* it works, but neither said how
+the translator decides **which** predicates get a directive, on **which** argument
+positions, with **what** mode. That gap was raised and the controller ruled it on
+2026-09-05. What follows is the ruling plus the measurements that drove it; it is the
+authority for the emission that now ships.
+
+### 10.1 Why body-local detection alone is not enough — measured
+
+A natural rule is "a predicate whose own clause bodies `call_goal` one of its
+parameters is a meta host". It is necessary and it is not sufficient, in two
+independent ways, both measured this session.
+
+**The Scryer half.** With the ultimate consumer correctly declared
+(`:- meta_predicate(eval_req(?, ?, 4, ?))` on `flib`), a library predicate that merely
+*forwards* its argument and never calls it still raises:
+
+```
+$ printf 'thread_nometa(C).\n' | scryer-prolog dq.pl
+   error(existence_error(procedure,local_req/4),local_req/4).
+```
+
+Adding `:- meta_predicate(failing_like(?, ?, 4, ?))` to that forwarding host — and
+changing nothing else — fixes it:
+
+```
+$ printf 'thread_meta(C).\n' | scryer-prolog dq2.pl
+   C = [item("r1",met,"s45")].
+```
+
+So **every predicate a meta-argument transits needs its own directive**, and the mode
+it needs is the *ultimate consumer's* — routinely in another file.
+
+**The population half.** A scan attributing all 390 lambda sites to their host and
+classifying each kit host by whether its own bodies apply a meta-caller to a head
+parameter (the scan reproduces §2.3's 390 sites / 39 hosts and its top-ten table
+row-for-row, which is its warrant):
+
+```
+sites at kit hosts with a body-local meta arg : 258   (66 %)
+sites at kit hosts that ONLY thread           : 116   (30 %)
+sites whose host is an engine builtin         :  16   (4 %, §5's companion)
+```
+
+The 116 sit at **13 threading hosts** — `plan_entry/8` (30), `find_mus/4` (22),
+`failing_ids/4` (20), `shrink_while/3` (9), `find_plan_once/7` (9), `assess/6` (7),
+`override_where/4` (4), `find_plans/8` (3), `optimal_plan/8` (3), `optimize/8` (3),
+`permitted_action/6` (2), `compliance_check/7` (2), `prop_missing_key_coverage/3` (2).
+`find_mus/4` and `failing_ids/4` reach their consumer (`formalize_lib`'s
+`eval_requirements/4`) across a **module boundary**, which a single-module translator
+cannot see: `convert_module` takes one module's AST and `_convert_import_from` never
+opens the imported file.
+
+Worse than a miss: `verified_flips/5` (18 sites) is body-locally detectable for its
+`DECIDE` argument but not for `APPLY`, which only the private helper `edit_flip/6`
+calls. A body-local rule emits a directive there that **loads, looks emitted, and is
+still wrong** — the failure mode this ladder exists to remove.
+
+### 10.2 The ruling
+
+**A-1 — mechanism: HYBRID, mirroring `module_signatures`.**
+
+- The translator does **body-local detection** (`collect_local_meta_modes`, over the
+  Prolog AST it is about to emit; base cases in `META_CALLER_SIGNATURES`), and
+- accepts a **`meta_modes`** kwarg alongside `module_path` / `module_signatures`:
+  `{module_path: {(name, arity): (per-argument modes, ...)}}`, `None` meaning "not a
+  meta position". It is looked up under `module_path` **exactly as passed**, and
+  unioned **per argument** with the local detection. Where both speak and disagree,
+  the body-local mode wins: it is direct evidence from the clauses being emitted.
+  Only predicates the module actually defines are declared.
+- The **cross-module fixpoint** lives in the exporter's pass 1
+  (`tools/iso_export/export.py`, `collect_meta_modes`), beside `collect_signatures`
+  and built the same way: it already translates every module in the domain+kit
+  universe, so it seeds each with its body-local evidence and propagates along
+  argument-passing edges to a fixpoint, resolving a called predicate to its real
+  defining module first (local, else whichever import defines it) so two unrelated
+  modules that both define `helper/3` cannot feed each other a mode.
+
+**A-2 — threading modes are per argument.** A threaded position inherits its ultimate
+call site's mode, and the two arguments of one host resolve independently. Modes
+accumulate as sets, so a position reachable with two different modes ends **ambiguous
+rather than arbitrarily decided by iteration order**. A position unresolved after the
+fixpoint — ambiguous, unreachable, or consumed outside the universe — gets **no
+annotation**: a bare reference consumed there fails loudly in Scryer at G3, which is
+accepted, whereas a guessed mode would module-qualify a term that may not be a goal.
+Step B respells only fully-moded chains.
+
+*The mode vocabulary Scryer honours*, probed this session (`cargo:0.10.0`) and pinned
+in `tests/test_prolog_meta_predicate.py`:
+
+| spelling | behaviour |
+|---|---|
+| integer `N` | honoured — qualifies; `N` is the count of arguments `call/N` appends |
+| `0` | honoured — a plain goal |
+| `:` | honoured — module-sensitive term |
+| `?`, `+`, `-` | valid syntax, **non-meta**: the argument is not qualified |
+| `*` | `syntax_error(invalid_meta_predicate_decl)` — must never be emitted |
+
+The emitter therefore uses exactly two spellings: an **integer** for a resolved meta
+position and **`?`** for every other. `:` is honoured but unneeded; `*` is a load error.
+
+**A-3 — acceptance is call-through, not text.** Three shapes, each consulting real
+translator output in real Scryer and CALLING a bare reference through it, each paired
+with a no-directive control that must raise: (i) a body-local host, (ii) a threading
+chain across two modules, (iii) a two-meta-argument host with both arguments
+exercised. The trunk suite adds a fourth: export a domain end to end, then call
+through the staged tree.
+
+**A-4 — placement.** Directives follow the `:- module` directive, alongside the
+`discontiguous` pass and before it, emitted in first-appearance order so output is
+byte-stable. A hand-written `:- meta_predicate` in source suppresses the generated one
+for that predicate.
+
+### 10.3 What the mechanism achieves, measured on the real kit
+
+Running the exporter's fixpoint over the real kit and corpus, all **34 kit-defined
+hosts** resolve at least one meta position — covering all **374** kit-hosted sites of
+the 390, **including all 116 at the 13 threading hosts** (zero under body-local
+alone). Spot values, each matching the host's own documented contract:
+
+```
+find_mus/4        -> (None, None, 4, None)      three hops, across a module boundary
+failing_ids/4     -> (None, None, 4, None)      across a module boundary
+verified_flips/5  -> (None, None, 3, 2, None)   APPLY and DECIDE, independently
+plan_entry/8      -> (None, 3, 5, 2, None, ...) ORACLE, ACTIONS, SATISFIERS
+actions_on_schema/4 -> (5, 2, None, None)
+```
+
+The remaining 16 sites pass their lambda to an engine builtin (`include/3`, `max_by/3`,
+`min_by/3`, `call_goal/N`) and are §5's companion work, in step B.
+
+Re-exporting five real domains with and without the fixpoint changes **nothing but
+added `:- meta_predicate` lines** — identical error sets, no other line added, none
+removed. For `th/visa`, body-local detection alone emits 3 directives in
+`formalize_lib.pl` and the fixpoint adds the 4th, `assess/6` — precisely the threading
+host.
+
+### 10.4 Still true after Stage 1
+
+Stage 1 does **not** by itself make any refused site translate: the 390 lambdas are
+still refused, exactly as §8 intends. What it removes is the trap §8's ordering names
+— that Stage 2's eta-respell would otherwise convert a refusal into a runtime
+`existence_error` while the ratchet counted the file clean. Scryer still has no
+`call_goal/N` (§5), so a staged kit library that calls one needs the companion before
+it can run; that is step B.
+
+---
+
 Awaiting operator review.
