@@ -533,9 +533,10 @@ class TestMakeAtom:
         assert not isinstance(a, PredicateMeta)
 
     def test_repeated_calls_agree(self):
+        """Same spelling, same atom — identity, since the atom IS the str."""
         # nv
         from clausal.logic.predicate import make_atom
-        assert make_atom("a") == make_atom("a")
+        assert make_atom("a") is make_atom("a")
 
     def test_hashable(self):
         # nv

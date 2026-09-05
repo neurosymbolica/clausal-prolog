@@ -151,16 +151,21 @@ red() is red        # True — zero-arity call returns the class itself
 isinstance(red, type)  # True — it's a class
 ```
 
-You can also create atoms dynamically:
+You can also create atoms dynamically. `make_atom` returns the atom itself —
+a plain `str`, because since the P3-1 atom pivot a `str` *is* the atom:
 
 ```python
-from clausal.logic.predicate import make_atom, is_atom
+from clausal.logic.predicate import make_atom, is_atom_value
 
-ok = make_atom("ok")
+ok = make_atom("ok")     # 'ok'
 err = make_atom("err")
-is_atom(ok)   # True
-ok() is ok    # True
+is_atom_value(ok)        # True
+ok == "ok"               # True — the atom is its own spelling
 ```
+
+If you specifically want a zero-arity `PredicateMeta` **class** — a 0-arity
+predicate, which is a procedure and not an atom — that is
+`make_predicate("ok", [])`, and `is_atom` is the check for that class shape.
 
 **Strings still work as data.** String literals like `"hello"` flow through
 unification as-is. The distinction is: declared atoms have identity (checked

@@ -1030,9 +1030,9 @@ Succeeds if `X` is bound (not an unbound `Var`).
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_1"
 ```
 Succeeds if `X` is a declared atom (a zero-arity PredicateMeta class).
-Atoms are created by `-private([red, blue])` or `-module(m, [red])` directives,
-or dynamically via `make_atom("name")`. Does not match plain strings — use
-`is_str/1` for those.
+Atoms are created by `-private([red, blue])` or `-module(m, [red])` directives.
+The zero-arity class shape can also be built dynamically with
+`make_predicate("name", [])`; `make_atom("name")` returns the plain atom `str`.
 
 ---
 

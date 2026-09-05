@@ -1931,8 +1931,18 @@ class TestSpecializedPredicateIsARow:
     def test_no_db_still_row_linked(self, mi_module):
         """With no database anywhere in the caller's world there is no defining
         module, so the specialization keeps a Database of its own — but the
-        class READS its row, and the predicate is registered there rather than
-        living in class attributes."""
+        class READS its row, and the predicate is registered there, gate-
+        stamped and owned, rather than living in class attributes.
+
+        This one passed BEFORE Task 7 as far as the row link goes, because
+        ``compiler._install`` already bound the class to the throwaway
+        database's row — which was the bug: the right mechanism against the
+        wrong database.  The write log and ``source`` are what it could not
+        show then, and are what make this the no-``db`` twin of
+        ``test_write_is_gate_stamped``."""
+        from clausal.logic.database import WRITE_LOAD_CLAUSES
+        from clausal.logic.specialization import SPECIALIZE_AUTHOR_PREFIX
+
         pattern = analyze_mi(mi_module.Solve)
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "T7NoDbNatnum",
@@ -1942,6 +1952,13 @@ class TestSpecializedPredicateIsARow:
         assert row.detached is False
         assert row.db.row("T7NoDbNatnum", 1) is row
         assert row.db.get_dispatch("T7NoDbNatnum", 1) is pred_cls._get_dispatch()
+        # One stamp for the whole specialization: the nested set_dispatch and
+        # dispatch-install transactions inherit this one (P3-3 Task 3).
+        assert len(row.writes) == 1
+        assert row.writes[0].kind == WRITE_LOAD_CLAUSES
+        assert row.writes[0].author.startswith(SPECIALIZE_AUTHOR_PREFIX)
+        assert row.source is not None
+        assert row.source[1] == row.writes[0].author
 
     def test_deep_and_cpd_register_rows_too(self, mi_module):
         from clausal.logic.database import Database
@@ -1975,12 +1992,22 @@ class TestSpecializedPredicateIsARow:
 
     def test_specialized_calls_specialized_through_the_shared_db(self, mi_module):
         """Two specializations into ONE database, the second's object program
-        naming the first: the generated body goal resolves through the row the
-        first specialization registered, and answers correctly.
+        naming the first — and the call reaches the first one's ROW.
 
-        Before P3-3 Task 7 each ``specialize_mi`` call built a Database of its
-        own, so "the same database" was not a thing two specializations could
-        share and the only link between them was the module dict entry.
+        NOT through a lowered body goal: the unfolder emits no code reference
+        to another alias, so ``T7Inner`` is not a name in ``T7Outer``'s
+        compiled globals at all.  It survives as a residual TERM, and the
+        catch-all clause hands it to ``_SolveGoal_T7Outer``, whose
+        ``module_dict.get(functor)`` → ``pred._get_dispatch()`` fallback
+        (``_make_solve_goal_predicate``, specialization.py:1234-1239) is the
+        one route by which one specialized predicate calls another.  That
+        ``_get_dispatch`` is what Task 7 moved: it used to read a class slot
+        backed by a Database the specializer had dropped, and now reads the
+        shared database's row.
+
+        Before Task 7 each ``specialize_mi`` call built a Database of its own,
+        so "the same database" was not a thing two specializations could
+        share; the only link between them was the module dict entry.
         """
         from clausal.logic.database import Database
         from clausal.logic.solve import call

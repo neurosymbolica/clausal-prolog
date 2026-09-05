@@ -323,7 +323,7 @@ Inside a logical term:
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms"
 ```
 
-An identifier that collides with a Python keyword or builtin (`not`, `is`, `max`) cannot be written as a bare atom. Quoting it — `'not'` — yields a **string**, not a declared atom (see [Atoms vs strings](#atoms-vs-strings-there-are-no-string-atoms)): it works as a symbolic *value*, but `atom/1` will not match it. If you need a true `PredicateMeta` atom, pick a non-colliding identifier (e.g. `not_`) or mint one dynamically with `make_atom("not")`.
+An identifier that collides with a Python keyword or builtin (`not`, `is`, `max`) cannot be written as a bare atom. Quoting it — `'not'` — yields a **string**, not a declared atom (see [Atoms vs strings](#atoms-vs-strings-there-are-no-string-atoms)): it works as a symbolic *value*, but `atom/1` will not match it. If you need a true `PredicateMeta` atom, pick a non-colliding identifier (e.g. `not_`) or mint the zero-arity class dynamically with `make_predicate("not", [])` (`make_atom("not")` returns the plain atom `str`).
 
 Every atom is reified at compile time as a zero-arity `PredicateMeta` class — atoms are first-class values you can pass around, store in dicts, and compare with `is`. Unification on atoms is class identity.
 

@@ -160,11 +160,14 @@ Results of string operations are plain strings (undeclared atoms).
 ### API
 
 ```python
-from clausal.logic.predicate import make_atom, is_atom
+from clausal.logic.predicate import make_atom, is_atom_value, make_predicate, is_atom
 
-red = make_atom("red")     # Create a declared atom dynamically
-is_atom(red)               # True
-red() is red               # True
+red = make_atom("red")           # The atom itself: the plain str 'red'
+is_atom_value(red)               # True
+
+Red = make_predicate("red", [])  # The zero-arity PredicateMeta CLASS
+is_atom(Red)                     # True
+Red() is Red                     # True
 ```
 
 ---

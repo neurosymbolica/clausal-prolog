@@ -1,0 +1,40 @@
+# clausal: no-collect
+#
+# Test fixture: a module that DEFINES MyAlias/1 itself and then names the same
+# spelling as a -specialize alias.
+#
+# P3-3 Task 7 made a -specialize target a ROW in this module's database,
+# written through the mutation gate under the specialization author.  Step 4
+# has already written MyAlias/1's own clause and stamped the row's `source`
+# with this load's author, so the specializer's WRITE_LOAD_CLAUSES is rule 3
+# of the ownership policy's clause-clobber case: a load may not overwrite
+# somebody else's predicate.  Loading this file must therefore be REFUSED.
+#
+# Before Task 7 it was not: the specializer compiled against a database of its
+# own and simply rebound the module-dict entry, so the module's own MyAlias/1
+# clause stayed in the database while every call resolved somewhere else.
+#
+# Carries `# clausal: no-collect` because the point of the file is that it
+# cannot be loaded; tests/test_specialization_pipeline.py imports it inside a
+# pytest.raises.
+#
+# MyAlias is declared with -private rather than left to the clause head so the
+# class registers the field name GOALS (a head's own arg spelling registers
+# `goals`), which is the name Solve declares and therefore the name the
+# specializer builds its heads with.  Without the declaration the load fails
+# earlier, on a field-name disagreement, and never reaches the gate.
+
+-import_from(clausal.examples.metainterpreters, [Solve])
+
+NatnumProgram(PROGRAM) <- (
+    PROGRAM is [
+        [["natnum", 0], []],
+        [["natnum", ["s", X]], [["natnum", X]]]
+    ]
+)
+
+-private([MyAlias(GOALS)])
+
+MyAlias(GOALS) <- (GOALS is [])
+
+-specialize(Solve, NatnumProgram, alias=MyAlias)

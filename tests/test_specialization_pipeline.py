@@ -692,12 +692,51 @@ class TestSpecializedPredicateIsARow:
         assert target._row is db.row("DeepCountNatnum", 2)
         assert target._get_dispatch() is fn
 
+    def test_specializing_onto_a_name_this_module_defines_is_refused(self):
+        """A module that writes MyAlias/1's clauses AND names MyAlias as a
+        -specialize alias is refused at load.
+
+        The row is the module's own by then (step 4 wrote the clause and
+        stamped ``source``), and the specializer writes as a different author,
+        so rule 3 of the ownership policy — a load may not overwrite somebody
+        else's predicate — refuses it.  Before P3-3 Task 7 there was nothing
+        to refuse: the specializer compiled against a database of its own and
+        rebound the module-dict entry, leaving the module's own clause in the
+        database with nothing resolving to it.
+
+        Pins Task 7's report concern 2, which is a NEW refusal.
+        """
+        from clausal.logic.exceptions import LogicException
+        from clausal.terms import Compound
+
+        with pytest.raises(LogicException) as exc:
+            import tests.fixtures.specialize_clobber  # noqa: F401
+
+        term = exc.value.term
+        assert term.functor == "error"
+        assert term.args[0] == Compound(
+            "permission_error",
+            ("modify", "static_procedure", Compound("/", ("MyAlias", 1))),
+        )
+        # The channel names the DIRECTIVE and the author names the
+        # specializer; they are no longer the same word (fix round 1, F3).
+        assert term.args[1].startswith("-specialize: specialize:")
+        assert "may not write MyAlias/1" in term.args[1]
+
     def test_sibling_specializations_are_the_row_linked_classes(
         self, specialize_deep,
     ):
-        """The compile namespace a specialized predicate is lowered against
-        names this module's OTHER specialized predicates, and each of those
-        names is the class reading the module database's row for it."""
+        """Every specialized name reachable from a specialized predicate's
+        compile namespace is the row-linked class.
+
+        Narrow on purpose: no clause of ``DeepNatnum`` calls a sibling — the
+        unfolder emits no alias-to-alias code reference — so this pins the
+        NAMESPACE, not a call.  The specialized predicate is lowered against
+        ``globals_``, which is the module dict, and what this shows is that
+        the entries it carries for the module's other specializations are the
+        classes bound to this database's rows rather than classes over a
+        database the specializer dropped.  Whichever of them a later compile
+        or a residual dispatch resolves, it lands on the row."""
         db = _module_db(specialize_deep)
         fn = db.get_dispatch("DeepNatnum", 1)
         for name, arity in (("ShallowNatnum", 1), ("DeepCountNatnum", 2)):

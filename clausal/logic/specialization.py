@@ -308,8 +308,12 @@ def _install_specialized(
     database the ``-table`` refusal for a ``-specialize`` alias used to name
     (``compiler_v2._refuse_untablable_target``).
 
-    What happens here, in one transaction:
+    What happens here, in one transaction -- ALL of it inside, so that a
+    refused write (the gate asks on entry) leaves the caller's namespace
+    untouched rather than holding an uninstalled class:
 
+    * the alias name, and the residual-goal dispatcher when there is one, are
+      bound in the compile namespace;
     * the class is BOUND to *db*'s row for ``(new_name, arity)`` -- so
       ``pred_cls._clauses`` IS ``db._clauses[key]`` from this point, and the
       mirror-the-clauses-onto-the-class dance the old block needed (a
@@ -329,26 +333,42 @@ def _install_specialized(
     else's predicate, and binding it here would hand them these clauses.  The
     gate asks about that row too, and only a bind it has cleared is
     ``authorized``.
+
+    ``detail="-specialize"`` names the DIRECTIVE, because ``detail`` is what
+    ``refusal_error`` leads the message with when it is a str -- the slot that
+    holds ``assertz/1`` and ``retract/1`` for the other channels.  Spelling it
+    ``"specialize"`` made the refusal read "specialize: specialize:<path> may
+    not write ..." (fix round 1, F3): the channel and the author prefix are
+    different facts and should not be the same word.
     """
     from clausal.logic.compiler import compile_predicate_trampoline
     from clausal.logic.database import WRITE_LOAD_CLAUSES
 
     arity = len(fields)
     author = _specialization_author(db)
-
     globals_ = module_dict if module_dict is not None else {}
-    globals_[new_name] = pred_cls
 
-    # Residual goal dispatcher, if the object program left goals this
-    # specialization cannot unfold.  Resolved by NAME out of the compile
-    # namespace, exactly as before.
-    if solve_goal_name is not None:
-        globals_[solve_goal_name] = _make_solve_goal_predicate(
-            solve_goal_name, goal_map, module_dict,
-        )
-
+    # EVERYTHING, the namespace writes included, inside the transaction (fix
+    # round 1, F5).  The gate asks the ownership policy on ENTRY, so a
+    # refusal fires before any of this runs: binding the alias name to the
+    # class first would leave the caller's module_dict holding a predicate
+    # that was never installed anywhere -- a detached class under a name the
+    # module cannot write, which is the free-floating shape this task exists
+    # to remove, re-created on the failure path.
     with db.mutate(new_name, arity, author=author, kind=WRITE_LOAD_CLAUSES,
-                   detail="specialize", through=pred_cls) as row:
+                   detail="-specialize", through=pred_cls) as row:
+        globals_[new_name] = pred_cls
+        # Residual goal dispatcher, if the object program left goals this
+        # specialization cannot unfold.  Resolved by NAME out of the compile
+        # namespace, exactly as before -- and it is also the ONE route by
+        # which one specialized predicate calls another, since the unfolder
+        # emits no alias-to-alias code reference: the goal survives as a term
+        # and ``_make_solve_goal_predicate``'s ``module_dict`` fallback takes
+        # it to the callee's ``_get_dispatch()``, hence to the callee's row.
+        if solve_goal_name is not None:
+            globals_[solve_goal_name] = _make_solve_goal_predicate(
+                solve_goal_name, goal_map, module_dict,
+            )
         pred_cls._bind_row(db, new_name, arity, authorized=True)
         # ``_ensure_clauses``, not a plain read: a read mints nothing (P3-3
         # Task 2 fix round 1) and this IS the clause-install site, so the

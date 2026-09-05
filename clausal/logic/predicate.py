@@ -815,8 +815,16 @@ class PredicateMeta(type):
         file re-compiled in one process, a name defined at two arities.  It is
         also how a shared predicate gets STOLEN, so it is policed: a class
         already reading another Database's real row is left where it is unless
-        the caller passes *authorized* -- which only ``compiler_v2`` step 4
-        does, for a write the mutation gate has just cleared.  See the body.
+        the caller passes *authorized*, which TWO callers do, each from inside
+        a write the mutation gate has just cleared: ``compiler_v2`` step 4's
+        clause install, and ``specialization._install_specialized`` (P3-3
+        Task 7), which makes a ``-specialize`` alias the compiled face of the
+        defining module's row.  The specialization one passes
+        ``through=pred_cls`` to its ``Database.mutate``, so the class's
+        CURRENT row is in that write's blast radius and the policy has already
+        refused the case this guard exists for -- an alias name that resolves
+        to somebody else's predicate -- before the bind is reached.  See the
+        body.
         The old row keeps its own contents (it is the Database's, not the class's);
         three pieces of state that were per-CLASS rather than per-key before
         this task travel with the class so the move stays lossless —
@@ -843,10 +851,13 @@ class PredicateMeta(type):
             # the clauses nobody can reach any more.  A recompile or a
             # dispatch install has no authorship to make that decision with
             # (its ``recompile`` kind is never refused, precisely because it
-            # is meant to change nothing), so it does not get to.  The one
-            # authorized re-bind is ``compiler_v2`` step 4's clause install,
-            # which the mutation gate has just cleared for this author --
-            # that is what keeps the clause-free vocabulary idiom working.
+            # is meant to change nothing), so it does not get to.  The
+            # authorized re-binds are ``compiler_v2`` step 4's clause install
+            # -- which is what keeps the clause-free vocabulary idiom working
+            # -- and ``specialization._install_specialized``'s alias install
+            # (P3-3 Task 7); both run inside a mutation-gate transaction
+            # already cleared for their author, and the second additionally
+            # names the class in that transaction's ``through=``.
             #
             # A class on its private DETACHED row is unbound, not bound
             # elsewhere, so its first real bind is always fine.
