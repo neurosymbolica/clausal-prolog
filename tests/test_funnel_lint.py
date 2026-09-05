@@ -284,7 +284,12 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # PredRow.clauses became a property with its own docstring, adding a
     # few more lines earlier in the same file) -- again mechanical, not
     # semantic; see task-1-report.md's fix-round-1 addendum.
-    AllowEntry("clausal/logic/database.py", (691, 723),
+    # Range shifted 691-723 -> 742-774 by P3-3 task-2's fix-round-1 (Finding
+    # 2: PredRow.clauses lost its setdefault and gained ensure_clauses() +
+    # the _unminted_clauses field, all earlier in the same file).  ``head_key``
+    # itself is byte-identical across all four shifts -- only its line number
+    # moved; see .superpowers/sdd/p33-state-relocation/task-2-report.md.
+    AllowEntry("clausal/logic/database.py", (742, 774),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list)"),
 

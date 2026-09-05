@@ -103,35 +103,86 @@ class PredRow:
     # _declared_arity``, which declines on ``None``, declines on
     # ``len(...) != 1``, and reports the single element otherwise.
     dynamic_arities: "set[int] | None" = None
+    # The list handed out by ``clauses`` while this predicate has NO entry in
+    # ``Database._clauses`` yet — an UNMINTED clause list.  ``None`` once the
+    # entry exists (``ensure_clauses`` promotes this exact object into the
+    # dict, so nothing appended to it before promotion is lost, and the
+    # setter clears it for the same reason).  See ``clauses``.
+    _unminted_clauses: "list | None" = dataclasses.field(
+        default=None, repr=False, compare=False,
+    )
 
     @property
     def clauses(self) -> list:
         """Clause list for this predicate — the SAME object as the legacy
-        ``Database._clauses[key]`` entry, always re-read live (never a
-        captured reference) so it self-heals across a wholesale dict wipe.
+        ``Database._clauses[key]`` entry whenever that entry exists, always
+        re-read live (never a captured reference) so it self-heals across a
+        wholesale dict wipe.
 
-        NOTE: merely READING this property lazily vivifies an empty
-        ``_clauses[key]`` entry if none exists yet (via ``setdefault``),
-        which flips ``Database.is_defined(functor, arity)`` False→True for a
-        predicate that otherwise only ever had dispatch/signature/dynamic
-        state. This is an intentional, narrow side effect of read access,
-        not of ``Database.row()`` itself (which does not touch ``_clauses``
-        at all) — Task 2's compile-install path is the real, deliberate
-        minting site for clause lists going forward.
+        READING THIS DOES NOT MINT (P3-3 Task 2 fix round 1). When the
+        Database has no entry for this key, the getter hands back a per-row
+        empty list and leaves ``Database._clauses`` untouched, so
+        ``is_defined(functor, arity)`` stays False. That matters because
+        Task 2 routed every ``PredicateMeta._clauses`` read through here: a
+        setdefault in the getter would have turned each of those reads —
+        ``__repr__``, ``_clause_arity``, ``_declared_arity``, the compiler's
+        own inspections — into a minting site, and a clause-less
+        ``-dynamic`` predicate would report itself defined merely for having
+        been looked at.
+
+        Minting stays where Task 1's contract put it: the explicit,
+        sanctioned mutation sites, all of which call ``ensure_clauses``
+        first — ``Database.assertz``/``asserta`` (and therefore
+        ``LogicModule.define_predicate``, which goes through them),
+        ``PredicateMeta._assertz``/``_asserta``, and ``compiler_v2`` step
+        4's clause install.
+
+        The unminted list is IDENTITY-PRESERVING: ``ensure_clauses`` promotes
+        that same object into the dict rather than a fresh one, so a caller
+        that read the list, appended to it, and only then triggered a mint
+        does not lose the append.
         """
-        return self._db._clauses.setdefault(self._key, [])
+        existing = self._db._clauses.get(self._key)
+        if existing is not None:
+            return existing
+        pending = self._unminted_clauses
+        if pending is None:
+            pending = self._unminted_clauses = []
+        return pending
 
     @clauses.setter
     def clauses(self, value: list) -> None:
         """Replace the clause list wholesale with *value* — the caller's list
         object itself, not a copy, so an alias the caller keeps stays live.
 
-        Exists for the one legacy spelling that rebinds rather than mutates
-        (``pred_cls._clauses = []``, used by several tests to reset a class
-        between cases). Every in-tree production write is an in-place mutation
-        of the list the getter hands back.
+        This one DOES mint: an explicit assignment is an explicit statement
+        that this predicate has a clause list. Exists for the legacy spelling
+        that rebinds rather than mutates (``pred_cls._clauses = []``, used by
+        several tests to reset a class between cases). Every in-tree
+        production write is an in-place mutation of the list the getter hands
+        back.
         """
         self._db._clauses[self._key] = value
+        self._unminted_clauses = None
+
+    def ensure_clauses(self) -> list:
+        """Mint this predicate's clause list in the Database and return it.
+
+        The ONE sanctioned promotion point (P3-3 Task 2 fix round 1): callers
+        that are about to MUTATE the clause list call this first, so the
+        mutation lands somewhere ``db.clauses_for``/``is_defined`` can see,
+        while a plain ``clauses`` READ mints nothing. Idempotent, and
+        identity-preserving — the list already handed out by ``clauses`` is
+        the object promoted, never a fresh one.
+        """
+        clauses = self._db._clauses.get(self._key)
+        if clauses is None:
+            clauses = self._unminted_clauses
+            if clauses is None:
+                clauses = []
+            self._db._clauses[self._key] = clauses
+        self._unminted_clauses = None
+        return clauses
 
     @property
     def dispatch_fn(self) -> "Callable | None":
@@ -253,7 +304,7 @@ class Database:
         functor, arity = head_key(clause.head)
         key = (functor, arity)
         row = self.row(functor, arity, create=True)
-        row.clauses.append(clause)
+        row.ensure_clauses().append(clause)
         # Invalidate compiled dispatch so lazy recompile triggers on next use.
         if key in self._dispatch:
             row.invalidate()
@@ -269,7 +320,7 @@ class Database:
         functor, arity = head_key(clause.head)
         key = (functor, arity)
         row = self.row(functor, arity, create=True)
-        row.clauses.insert(0, clause)
+        row.ensure_clauses().insert(0, clause)
         # Invalidate compiled dispatch so lazy recompile triggers on next use.
         if key in self._dispatch:
             row.invalidate()

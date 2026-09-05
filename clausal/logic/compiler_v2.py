@@ -179,7 +179,11 @@ def compile_module(
         if isinstance(pred_cls, PredicateMeta):
             db_clauses = db.clauses_for(functor, arity)
             pred_cls._bind_row(db, functor, arity)
-            pred_cls._clauses[:] = db_clauses
+            # ``_ensure_clauses``, not a plain ``_clauses`` read: a read mints
+            # nothing (P3-3 Task 2 fix round 1), and this IS the sanctioned
+            # clause-install site — the slice-assign below has to land in the
+            # Database, not in an unminted per-row list.
+            pred_cls._ensure_clauses()[:] = db_clauses
             record_clause_source(pred_cls, module_name, module_dict)
             if pred_cls._signature is None:
                 pred_cls._signature = pred_cls._fields

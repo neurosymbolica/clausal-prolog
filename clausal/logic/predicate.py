@@ -555,6 +555,66 @@ def _head_arity(head: Any) -> int | None:
         return None
 
 
+# The seven relocated predicate-state names (P3-3 Task 2).  Defined here
+# because two different descriptors have to serve them: the metaclass
+# properties on ``PredicateMeta`` (below), which answer ``cls._locked``, and
+# the plain class-level properties injected into every predicate class's
+# namespace (``_INSTANCE_STATE_PROPERTIES``), which answer
+# ``instance._locked``.
+_RELOCATED_STATE_NAMES = (
+    "_clauses",
+    "_clauses_source",
+    "_dispatch_fn",
+    "_lazy_recompile",
+    "_signature",
+    "_locked",
+    "_dynamic_arities",
+)
+
+
+def _make_instance_state_property(name: str) -> property:
+    """A read-only class-level property giving INSTANCES the class's state.
+
+    Before P3-3 Task 2 these seven were plain per-class attributes, so an
+    instance resolved them through the ordinary MRO walk —
+    ``some_term._locked`` found the class attribute and returned it.  Moving
+    them to METACLASS properties would have broken that silently: a metaclass
+    descriptor is consulted for ``cls.x``, never for ``instance.x``, and
+    ``__slots__`` leaves instances no ``__dict__`` to fall back on, so every
+    one of the seven would raise ``AttributeError`` on an instance where it
+    used to return a value.  Out-of-tree code reading ``instance._locked`` is
+    unguarded against that.
+
+    So each predicate class also carries a plain property of the same name,
+    which delegates to the class (and therefore to the row).  The two faces
+    coexist: ``type.__getattribute__`` finds the METACLASS property first for
+    ``cls.x``, and instance lookup finds THIS one for ``instance.x``.  Reads
+    are live — mutate through the class, see it through any instance.
+
+    Read-ONLY on purpose: ``instance._locked = True`` raised ``AttributeError``
+    before this task too (the name is not in ``__slots__`` and there is no
+    instance ``__dict__``), so a setter here would be a new capability, not a
+    restored one.
+    """
+    def _get(self):
+        return getattr(type(self), name)
+
+    _get.__name__ = name
+    return property(
+        _get,
+        doc=f"Live read-through to ``type(self).{name}`` (P3-3 Task 2).",
+    )
+
+
+_INSTANCE_STATE_PROPERTIES = {
+    name: _make_instance_state_property(name)
+    for name in _RELOCATED_STATE_NAMES
+}
+"""One shared property object per name — a property takes its instance at call
+time, so the same descriptor serves every predicate class and class creation
+allocates nothing."""
+
+
 class PredicateMeta(type):
     """Metaclass that turns a class with ``_fields`` into a predicate.
 
@@ -584,6 +644,19 @@ class PredicateMeta(type):
         # __slots__ for lightweight instances
         namespace["__slots__"] = fields
         namespace["__match_args__"] = fields
+
+        # P3-3 Task 2 fix round 1 — the INSTANCE face of the seven relocated
+        # state attributes.  Injected into the namespace (not assigned after
+        # class creation) for two reasons: ``cls.__dict__`` is a read-only
+        # mappingproxy, and a post-hoc ``setattr`` would be intercepted by the
+        # metaclass property of the same name and written to the ROW instead
+        # of the class.  A name that is also a FIELD is skipped — ``__slots__``
+        # has already claimed that slot descriptor, and declaring both is a
+        # ``ValueError`` at class creation (same rule the ``_clausal_new`` and
+        # ``_registered_at`` guards below follow).
+        for _state_name, _state_prop in _INSTANCE_STATE_PROPERTIES.items():
+            if _state_name not in fields:
+                namespace[_state_name] = _state_prop
 
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)
 
@@ -754,6 +827,16 @@ class PredicateMeta(type):
                 new_row.source = old_row.source
         cls._row = new_row
 
+    def _ensure_clauses(cls) -> list:
+        """Mint this class's clause list in its row's Database and return it.
+
+        The class-side spelling of ``PredRow.ensure_clauses`` — called by the
+        mutators below before they append/insert, because a plain ``_clauses``
+        READ deliberately mints nothing (P3-3 Task 2 fix round 1; see
+        ``PredRow.clauses``).
+        """
+        return (cls._row or cls._detached_row()).ensure_clauses()
+
     @property
     def _clauses(cls) -> list:
         return (cls._row or cls._detached_row()).clauses
@@ -908,7 +991,7 @@ class PredicateMeta(type):
                 f"Predicate {cls.__name__}/{cls._arity} is locked. "
                 "Use dynamic() to allow runtime assertion."
             )
-        cls._clauses.append(clause)
+        cls._ensure_clauses().append(clause)
         cls._dispatch_fn = None
 
     def _asserta(cls, clause: Any) -> None:
@@ -918,7 +1001,7 @@ class PredicateMeta(type):
                 f"Predicate {cls.__name__}/{cls._arity} is locked. "
                 "Use dynamic() to allow runtime assertion."
             )
-        cls._clauses.insert(0, clause)
+        cls._ensure_clauses().insert(0, clause)
         cls._dispatch_fn = None
 
     def _retract(cls, head: Any) -> bool:

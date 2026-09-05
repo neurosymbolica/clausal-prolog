@@ -261,9 +261,16 @@ def _retract_factory(db):
             # the ROW (rather than only the class, as before) also clears
             # ``db._dispatch`` for the same key, so ``db.get_dispatch`` and
             # ``pred_cls._get_dispatch`` can no longer disagree about it.
-            row = db.row(functor, arity)
-            if row is not None:
-                row.invalidate()
+            # Guarded on an EXISTING ``_dispatch`` entry, exactly as
+            # ``Database.assertz``/``asserta``/``retract`` guard theirs: the
+            # unconditional form would write ``_dispatch[key] = None`` for a
+            # never-compiled predicate, which flips ``db.row(..., create=
+            # False)`` from ``None`` to a row for a key nothing has ever
+            # touched.
+            if (functor, arity) in db._dispatch:
+                row = db.row(functor, arity)
+                if row is not None:
+                    row.invalidate()
             clauses = db.clauses_for(functor, arity)
             if clauses:
                 compile_predicate_trampoline(functor, arity, clauses, db,
