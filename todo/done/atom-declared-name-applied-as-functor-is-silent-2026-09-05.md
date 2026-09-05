@@ -133,10 +133,60 @@ of the offending declaration.
 So, precisely:
 
 * **Covered:** same-module declarations — `-module` bare entries, `-private`,
-  `-hide` — in head and body position, plus the dual-declared and
-  import-shadowed lowerings above.
+  `-hide` — in head and body position, plus the dual-declared lowering above.
+  An **import-shadowed** name is covered only when the imported name is a
+  FUNCTOR in its owner: that case lowers to the owner's dotted reference and
+  answers. When the imported name is an ATOM in its owner too, nothing
+  declares it with arguments anywhere and it is a located refusal — see the
+  fix-round-2 amendment below, which corrects this bullet's first wording.
 * **Not covered:** applying an atom imported from another module. Loud but
   unlocated; would need the importer to consult the OWNER's registry (the
   signature registry knows `verdict` has no functor signature) at the
   `-import_from` site or at the call site. Filed here rather than reopened,
   since the silent-failure class the todo names is closed.
+  **Superseded by fix round 2** — see below: this IS now covered, at compile
+  time, with file:line.
+
+## Fix round 2 amendment (2026-09-06) — the last two gaps
+
+**Declaration order no longer decides (review O1).** The round-1 check read
+the WALK-TIME functor set, so a functor established by a clause BELOW its
+first use was invisible and a legal program was refused:
+
+```
+-module(ordA, [dual, c(X)])
+c(X) <- dual(X),      # refused in round 1
+dual(1),              # the functor, one line later
+```
+
+The decision is now deferred: `_visit_call_func` records the candidate and
+emits the functor reference, and `EmbedTransformer.visit_Module` settles it
+once the whole file has been walked. Both statement orders load and answer.
+
+**The import bypass consults the OWNER (review O2).** Round 1 took the dotted
+bypass on `_import_remap` membership alone, so a name that is an atom in its
+owner TOO got the dotted lowering, loaded, and died at the first call with the
+unlocated `TypeError: 'str' object is not callable`. The deciding fact is
+whether the imported name carries a functor SIGNATURE — `-import_from` copies
+the owner's registry entry across under the local spelling for a functor and
+has nothing to copy for an atom — so the remaining candidates travel to
+`compiler_v2._check_atoms_applied_as_functors`, which runs after the module
+body (and therefore after the import and the signature copy) and raises the
+located message built at the call site.
+
+So the cross-module case listed as "not covered" above IS now covered, at
+compile time, naming the owner:
+
+```
+tests/fixtures/t4f2_import_atom_shadow.clausal:9: `verdict` is declared as an
+atom in `tests.fixtures.t4f2_owner_atom` and locally, but is applied as a
+functor here.  Nothing declares `verdict` with arguments: declare it as
+`verdict(X)` in `tests.fixtures.t4f2_owner_atom`'s -module functor list, or
+reference it bare as the atom it is.
+```
+
+Pinned end-to-end with real owner + importer fixtures
+(`tests/fixtures/t4f2_owner_functor.clausal`,
+`t4f2_owner_atom.clausal`, `t4f2_import_functor_shadow.clausal`,
+`t4f2_import_atom_shadow.clausal`) in
+`tests/test_atom_diagnostics.py`, both directions.

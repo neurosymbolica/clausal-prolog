@@ -36,6 +36,7 @@ from clausal.logic.predicate import (
     term_field_names_of_class,
 )
 from clausal.pythonic_ast.nodes import (
+    AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
     BareAtomRefs as BareAtomRefsItem,
     Directive as DirectiveItem,
     HideDeclaration as HideDeclItem,
@@ -154,6 +155,17 @@ def compile_module(
     #    Phase 3: if ``-strict_atoms`` is present in module_items, raise
     #    NameError on undeclared names instead of minting.
     _process_bare_atom_refs(module_items, module_dict, module_name)
+
+    # ── Step 3b-bis: settle the imported "atom applied as a functor" sites ─
+    #    P3-3 Task 4 fix round 2 (O2).  The rewrite could not tell whether an
+    #    ``-import_from``'d name is a functor: that is the OWNER's fact, and
+    #    the owner had not executed.  It has now — the module body ran before
+    #    ``compile_module`` was called, and the ``-import_from`` rewrite
+    #    copied the owner's functor signatures into this file's registry —
+    #    so the question is answerable here, and BEFORE clause compilation
+    #    turns an unresolvable reference into a runtime ``TypeError`` with no
+    #    file or line on it.
+    _check_atoms_applied_as_functors(module_items, module_dict)
 
     # ── Step 3c: resolve each imported name to the CLASS it bound ────────
     #    Names only, no policy: ``origins`` maps every spelling an
@@ -1013,6 +1025,35 @@ def _locally_declared_names(module_items: list) -> frozenset[str]:
         elif isinstance(item, ImportModuleItem):
             names.add(item.module.split(".")[0])
     return frozenset(names)
+
+
+def _check_atoms_applied_as_functors(
+    module_items: list,
+    module_dict: dict,
+) -> None:
+    """Raise for an ``-import_from``'d ATOM that was applied with arguments.
+
+    P3-3 Task 4 fix round 2 (O2).  ``term_rewriting`` bypasses its
+    atom-applied-as-a-functor refusal for an imported name, because an
+    imported FUNCTOR legitimately takes that shape and the rewrite cannot
+    tell the two apart.  The deciding fact is whether the name carries a
+    functor SIGNATURE — ``-import_from`` copies the owner's registry entry
+    across under the local spelling for a functor and has nothing to copy for
+    an atom — so ``functor_signature_for`` against this module's own
+    namespace answers it, with no second source of truth introduced.
+
+    The message was built at the call site, where its file and line are
+    known; this pass only decides whether to raise it.
+    """
+    for item in module_items:
+        if not isinstance(item, AtomAppliedAsFunctorItem):
+            continue
+        for name, message in item.sites:
+            from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
+                functor_signature_for,
+            )
+            if functor_signature_for(name, module_dict) is None:
+                raise SyntaxError(message)
 
 
 def _process_bare_atom_refs(

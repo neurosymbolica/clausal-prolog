@@ -1,0 +1,8 @@
+# Fixture for tests/test_atom_diagnostics.py (P3-3 Task 4 fix round 2, O2).
+# `wrapf` is an ATOM locally and a FUNCTOR in its owner: the applied form
+# must lower as the owner's functor (the dotted reference), and answer.
+-module(t4f2_import_functor_shadow, [c(X)])
+-private([wrapf])
+-import_from(tests.fixtures.t4f2_owner_functor, [wrapf])
+
+c(wrapf(1)),

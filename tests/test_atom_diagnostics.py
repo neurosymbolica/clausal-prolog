@@ -318,28 +318,118 @@ def test_an_atom_only_name_applied_as_a_functor_still_raises():
     assert "lonely" in str(exc_info.value)
 
 
+def _fixture_path(filename: str) -> str:
+    return os.path.join(os.path.dirname(__file__), "fixtures", filename)
+
+
 def test_an_imported_functor_shadowed_by_a_local_atom_decl_applies_as_the_functor():
-    """Fix round 1, the ``-import_from`` half of I-1.  An IMPORTED functor is
-    "declared as a functor" too, so a local ``-private`` of the same spelling
-    must not turn its applied form into the bare-``str`` lowering.  Pinned at
-    the AST level (the owner module need not exist for the rewrite): the func
-    position must be the DOTTED reference ``visit_Name``'s import-remap branch
-    would emit, which is what makes the call resolve.  Before this fix the same
-    source emitted ``Call(func='atomfn_wrap', …)``."""
-    import ast as _ast
-    import warnings as _warnings
+    """Fix round 1, the ``-import_from`` half of I-1, re-pinned end-to-end in
+    fix round 2 (O2): the round-1 version asserted on unparsed AST against a
+    module that does not exist, so it could not see what the owner declares.
+    Real owner + importer fixtures now: ``wrapf`` is a FUNCTOR in its owner
+    and an ATOM locally, so the applied form must lower as the owner's
+    functor and answer."""
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    from clausal.logic.builtins._helpers import functor_arity
 
-    from clausal.import_hook import EmbedTransformer
+    _load_module("tests.fixtures.t4f2_owner_functor",
+                 _fixture_path("t4f2_owner_functor.clausal"))
+    mod = _load_module("tests.fixtures.t4f2_import_functor_shadow",
+                       _fixture_path("t4f2_import_functor_shadow.clausal"))
+    x = Var()
+    answers = [deref(x) for _ in call(mod.c, x)]
+    assert len(answers) == 1
+    assert functor_arity(answers[0]) == ("wrapf", 1)
 
-    source = (
-        "-private([atomfn_wrap])\n"
-        "-import_from(other.mod, [atomfn_wrap])\n"
-        "C(atomfn_wrap(1)),\n"
+
+def test_an_imported_ATOM_shadowed_by_a_local_atom_decl_is_refused():
+    """Fix round 2, O2.  The round-1 import bypass fired on ``_import_remap``
+    membership alone, so a name that is an ATOM in its owner too got the
+    dotted lowering, loaded, and died at the first call with an unlocated
+    ``TypeError: 'str' object is not callable``.  The deciding fact is whether
+    the imported name carries a FUNCTOR SIGNATURE in the importer's own
+    registry (which ``-import_from`` copies across only for functors); no
+    signature means no functor anywhere, so the located refusal stands."""
+    from clausal.import_hook import _load_module
+
+    _load_module("tests.fixtures.t4f2_owner_atom",
+                 _fixture_path("t4f2_owner_atom.clausal"))
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_module("tests.fixtures.t4f2_import_atom_shadow",
+                     _fixture_path("t4f2_import_atom_shadow.clausal"))
+    message = str(exc_info.value)
+    assert "verdict" in message
+    assert "t4f2_import_atom_shadow.clausal:9" in message, message
+    assert "t4f2_owner_atom" in message, message
+
+
+def test_a_functor_established_AFTER_its_first_use_is_not_refused():
+    """Fix round 2, O1.  ``_seen_functors`` is the walk-time set, so a functor
+    established by a clause LATER in the file was invisible at the moment the
+    refusal fired -- the same program with the two statements swapped loaded
+    fine.  The decision is now made after the module walk is complete, so it
+    is order-independent."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+
+    mod = _load_inline_clausal(
+        "_t4f2_order_use_first",
+        "-module(t4f2_order_use_first, [dual, c(X)])\n"
+        "c(X) <- dual(X),\n"
+        "dual(1),\n",
     )
-    with _warnings.catch_warnings():
-        _warnings.filterwarnings("ignore", category=SyntaxWarning)
-        tree = _ast.parse(source)
-        EmbedTransformer().visit(tree)
-    rendered = _ast.unparse(_ast.fix_missing_locations(tree))
-    assert "LoadName(name='other.mod.atomfn_wrap'" in rendered
-    assert "func='atomfn_wrap'" not in rendered
+    x = Var()
+    assert [deref(x) for _ in call(mod.c, x)] == [1]
+
+
+def test_the_other_declaration_order_still_loads():
+    """The mirror of the above -- the functor established BEFORE its use --
+    was already accepted; pinned so the fix cannot regress it."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+
+    mod = _load_inline_clausal(
+        "_t4f2_order_decl_first",
+        "-module(t4f2_order_decl_first, [dual, c(X)])\n"
+        "dual(1),\n"
+        "c(X) <- dual(X),\n",
+    )
+    x = Var()
+    assert [deref(x) for _ in call(mod.c, x)] == [1]
+
+
+def test_an_atom_only_name_is_still_refused_wherever_it_appears():
+    """The refusal must survive the deferral: a name declared as an atom and
+    NOT as a functor anywhere in the file is still refused, with its own
+    file:line."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_inline_clausal(
+            "_t4f2_atom_only_deferred",
+            "-module(t4f2_atom_only_deferred, [solo, c(X)])\n"
+            "c(X) <- solo(X),\n",
+        )
+    message = str(exc_info.value)
+    assert "solo" in message
+    assert ":2" in message, message
+
+
+def test_a_hidden_atom_inside_a_lambda_body_keeps_its_mangled_spelling():
+    """Fix round 2, P1.  Round 1 threaded ``hidden_atoms``/``module_name``
+    into the arrow-lambda sub-transformer, which had been building its terms
+    without them -- so a ``-hide``-en atom written inside a lambda body
+    lowered to the PLAIN spelling and did not unify with the same atom
+    written at clause level.  Answer-level pin: the lambda-side atom and the
+    clause-level one must be the same term."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+
+    mod = _load_inline_clausal(
+        "_t4f2_hide_in_lambda",
+        "-module(t4f2_hide_in_lambda, [same(R)])\n"
+        "-hide([hsecret])\n"
+        "same(R) <- call_goal((V <- ((V == hsecret) and (R == 1))), hsecret)\n",
+    )
+    r = Var()
+    assert [deref(r) for _ in call(mod.same, r)] == [1]

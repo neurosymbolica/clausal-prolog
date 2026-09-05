@@ -1,0 +1,4 @@
+# Fixture for tests/test_atom_diagnostics.py (P3-3 Task 4 fix round 2, O2).
+# Declares wrapf/1 as a FUNCTOR, so an importer that also declares the same
+# spelling as a local atom must still lower `wrapf(1)` as the functor.
+-module(t4f2_owner_functor, [wrapf(G)])

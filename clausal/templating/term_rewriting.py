@@ -8,6 +8,7 @@ from .desugar import desugar_surface, dotted_attr_chain, is_dict_attr_access
 
 # Module-level item types for the pipeline-split ModuleAST.
 from clausal.pythonic_ast.nodes import (
+    AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
     BareAtomRefs as BareAtomRefsItem,
     Directive as DirectiveItem,
     EdcgAccDecl,
@@ -1170,6 +1171,34 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
     )
 
 
+def _atom_as_functor_message(name, filename, lineno, owner=None):
+    """The refusal for a declared ATOM applied with arguments.
+
+    One text, three raise sites (P3-3 Task 4 fix round 2): the ``-hide``-en
+    case decided during the walk, the local case decided by
+    ``EmbedTransformer.visit_Module`` once the walk is complete, and the
+    ``-import_from``'d case decided by ``compiler_v2.
+    _check_atoms_applied_as_functors`` once the owner has executed.  Built
+    where the call site's file and line are known, carried to whichever site
+    ends up raising it.
+    """
+    where = f"{filename}:{lineno}" if filename else f"line {lineno}"
+    if owner is not None:
+        return (
+            f"{where}: `{name}` is declared as an atom in `{owner}` and "
+            f"locally, but is applied as a functor here.  Nothing declares "
+            f"`{name}` with arguments: declare it as `{name}(X)` in "
+            f"`{owner}`'s -module functor list, or reference it bare as the "
+            f"atom it is."
+        )
+    return (
+        f"{where}: `{name}` is declared as an atom (a bare name in -module, "
+        f"or -private/-hide) but is applied as a functor here.  Declare it "
+        f"with arguments in the -module functor list (e.g. `{name}(X)`), or "
+        f"reference it bare as the atom it is."
+    )
+
+
 # ─── Term Transformer ─────────────────────────────────────────────────────────
 
 
@@ -1180,7 +1209,7 @@ class TermTransformer(NodeTransformer):
                  source_lines=None, bare_atom_refs=None,
                  logic_var_refs=None, constants=frozenset(), filename=None,
                  reify=False, hidden_atoms=frozenset(), module_name=None,
-                 declared_functors=None):
+                 declared_functors=None, atom_functor_sites=None):
         transformer.seen_vars = set()
         # Reflection models MORE than compiles: ``reify_source`` reuses this
         # transformer but must keep accepting shapes the compiler refuses —
@@ -1213,6 +1242,14 @@ class TermTransformer(NodeTransformer):
         # mistake).
         transformer._declared_functors = (
             declared_functors if declared_functors is not None else {})
+        # Fix round 2 (O1): the SHARED list ``EmbedTransformer.visit_Module``
+        # drains once the walk is over.  ``_declared_functors`` is the
+        # walk-time set, so "declared as an atom and NOT as a functor" cannot
+        # be answered while the walk is still running -- a functor can be
+        # established by a clause LATER in the file.  ``_visit_call_func``
+        # records candidates here instead of deciding on the spot.
+        transformer._atom_functor_sites = (
+            atom_functor_sites if atom_functor_sites is not None else [])
         transformer._module_name = module_name
         # -constants (Task 5): names bound to a ground value before any
         # clause statement executes. A plain Name reference to one embeds
@@ -1299,38 +1336,36 @@ class TermTransformer(NodeTransformer):
         # bare-``str`` lowering that was wrong, not the declaration), so the
         # atom branch is bypassed here and the functor reference emitted
         # directly -- ``visit_Name`` cannot do it, because its atom test runs
-        # before its import-remap and fallthrough branches.  The refusal is
-        # left for a name declared as an atom and NOT as a functor, which is
-        # the case the todo filed.  A ``-hide``-en name can never be
-        # dual-declared (``_register_functor`` refuses that collision head-on),
-        # so it always refuses.
+        # before its import-remap and fallthrough branches.
+        #
+        # Fix round 2 (O1/O2): "and NOT as a functor" is not answerable HERE.
+        # A functor can be established by a clause later in the file, and an
+        # ``-import_from``'d name is a functor only if its OWNER declared it
+        # so -- which this file cannot know until the owner has executed.  So
+        # the functor reference is emitted optimistically and the candidate
+        # recorded; ``visit_Module`` settles the local half once the walk is
+        # complete, and ``compiler_v2._check_atoms_applied_as_functors``
+        # settles the imported half against the signature registry.  A
+        # ``-hide``-en name is decided on the spot: it can never be
+        # dual-declared (``_register_functor`` refuses that collision
+        # head-on) and it can never be imported (the mangling is file-local).
         if isinstance(func_expr, Name) and (
             func_expr.id in transformer._hidden_atoms
             or func_expr.id in transformer.atoms
         ):
             identifier = func_expr.id
-            if identifier not in transformer._hidden_atoms:
-                # An imported functor is "declared as a functor" too, and its
-                # reference is the DOTTED remap ``visit_Name`` would emit.
-                dotted = transformer._import_remap.get(identifier)
-                if dotted is not None:
-                    return node_ast(
-                        "LoadName", func_expr,
-                        name=replace(Constant(value=dotted), func_expr))
-                if identifier in transformer._declared_functors:
-                    return node_ast(
-                        "LoadName", func_expr,
-                        name=replace(Constant(value=identifier), func_expr))
-            lineno = getattr(func_expr, "lineno", None)
-            where = (f"{transformer._filename}:{lineno}"
-                     if transformer._filename else f"line {lineno}")
-            raise SyntaxError(
-                f"{where}: `{identifier}` is declared as an atom (a bare "
-                f"name in -module, or -private/-hide) but is applied as a "
-                f"functor here.  Declare it with arguments in the -module "
-                f"functor list (e.g. `{identifier}(X)`), or reference it "
-                f"bare as the atom it is."
-            )
+            if identifier in transformer._hidden_atoms:
+                raise SyntaxError(_atom_as_functor_message(
+                    identifier, transformer._filename,
+                    getattr(func_expr, "lineno", None)))
+            # An imported functor is "declared as a functor" too, and its
+            # reference is the DOTTED remap ``visit_Name`` would emit.
+            dotted = transformer._import_remap.get(identifier)
+            transformer._atom_functor_sites.append(
+                (identifier, getattr(func_expr, "lineno", None), dotted))
+            return node_ast(
+                "LoadName", func_expr,
+                name=replace(Constant(value=dotted or identifier), func_expr))
         prev = transformer._suppress_bare_atom_collection
         transformer._suppress_bare_atom_collection = True
         try:
@@ -1696,6 +1731,7 @@ class TermTransformer(NodeTransformer):
             hidden_atoms=transformer._hidden_atoms,
             module_name=transformer._module_name,
             declared_functors=transformer._declared_functors,
+            atom_functor_sites=transformer._atom_functor_sites,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
         # Shared object (not a copy): occurrences inside the lambda body
@@ -3756,6 +3792,10 @@ class EmbedTransformer(NodeTransformer):
         # ``compiler_v2._process_bare_atom_refs`` consumes for auto-minting
         # (Phase 2 of GLOBAL_ATOMS_DEFAULT.md).
         transformer._bare_atom_refs: set[str] = set()
+        # Fix round 2 (O1/O2): ``(name, lineno, dotted_or_None)`` per call
+        # site where a declared ATOM was applied with arguments.  Drained by
+        # ``visit_Module``; see ``TermTransformer._visit_call_func``.
+        transformer._atom_functor_sites: list = []
         # name -> lineno of the first place a TermTransformer read that name as
         # a logic variable.  See _check_var_shaped_predicate_names.
         transformer._logic_var_refs: dict[str, int] = {}
@@ -4215,6 +4255,7 @@ class EmbedTransformer(NodeTransformer):
             hidden_atoms=transformer._hidden_atoms,
             module_name=transformer._module_name,
             declared_functors=transformer._seen_functors,
+            atom_functor_sites=transformer._atom_functor_sites,
         )
 
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
@@ -4380,6 +4421,7 @@ class EmbedTransformer(NodeTransformer):
         """
         result = transformer.generic_visit(module)
         transformer._check_var_shaped_predicate_names()
+        transformer._settle_atom_functor_sites()
         if transformer._bare_atom_refs:
             transformer._module_items.append(
                 BareAtomRefsItem(names=frozenset(transformer._bare_atom_refs))
@@ -4390,6 +4432,36 @@ class EmbedTransformer(NodeTransformer):
         ):
             transformer._module_items.append(ImplicitAtomsItem())
         return result
+
+    def _settle_atom_functor_sites(transformer):
+        """Decide every deferred "atom applied as a functor" candidate.
+
+        Called from ``visit_Module`` once the walk is complete, which is the
+        first moment ``_seen_functors`` holds every functor the FILE
+        establishes -- including one whose only declaration is a clause
+        BELOW the call site (fix round 2, O1: reading the walk-time set made
+        the answer depend on statement order).
+
+        A name that reached a functor declaration is simply accepted.  A name
+        that did not, and is not imported, is refused here.  An imported one
+        cannot be decided yet -- whether it is a functor is the OWNER's fact,
+        and the owner has not executed -- so it travels to
+        ``compiler_v2._check_atoms_applied_as_functors`` as a module item,
+        carrying the message this site would have raised.
+        """
+        deferred = []
+        for name, lineno, dotted in transformer._atom_functor_sites:
+            if name in transformer._seen_functors:
+                continue
+            if dotted is None:
+                raise SyntaxError(_atom_as_functor_message(
+                    name, transformer._filename, lineno))
+            owner = dotted.rsplit(".", 1)[0]
+            deferred.append((name, _atom_as_functor_message(
+                name, transformer._filename, lineno, owner=owner)))
+        if deferred:
+            transformer._module_items.append(
+                AtomAppliedAsFunctorItem(sites=tuple(deferred)))
 
     def visit_FunctionDef(transformer, node):
         if is_template_func(node):

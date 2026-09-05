@@ -1,0 +1,4 @@
+# Fixture for tests/test_atom_diagnostics.py (P3-3 Task 4 fix round 2, O2).
+# Declares verdict as an ATOM (no functor anywhere), so an importer applying
+# it with arguments must be refused at compile time, with file:line.
+-module(t4f2_owner_atom, [verdict])

@@ -1,0 +1,9 @@
+# clausal: no-collect
+# Fixture for tests/test_atom_diagnostics.py (P3-3 Task 4 fix round 2, O2).
+# `verdict` is an ATOM here AND an atom in its owner -- nothing declares it
+# as a functor anywhere, so applying it must be REFUSED at load, located.
+-module(t4f2_import_atom_shadow, [c(X)])
+-private([verdict])
+-import_from(tests.fixtures.t4f2_owner_atom, [verdict])
+
+c(verdict(1)),

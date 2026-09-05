@@ -1162,6 +1162,29 @@ class BareAtomRefs(Node):
     """
     names: frozenset = field(default_factory=frozenset)
 
+
+@node_class
+class AtomAppliedAsFunctor(Node):
+    """Module item: call sites where a declared ATOM was applied with
+    arguments and the decision could not be made during the rewrite walk.
+
+    P3-3 Task 4 fix round 2.  ``TermTransformer._visit_call_func`` refuses a
+    name declared as an atom and NOT as a functor, but "and not as a functor"
+    is only knowable once the whole file has been walked (a functor can be
+    established by a LATER clause) and, for an ``-import_from``'d name, only
+    once the OWNER module has executed and copied its functor signatures into
+    this file's registry.  ``EmbedTransformer.visit_Module`` settles the
+    first half and emits this item for what is left; ``compiler_v2.
+    _check_atoms_applied_as_functors`` settles the second, after the module
+    body has run.
+
+    Each entry is a ``(name, message)`` pair: the message is built at the
+    rewrite, where the call site's file and line are known, and raised
+    verbatim if no functor signature turns up for the name.
+    """
+    sites: tuple = ()
+
+
 @node_class
 class SpecializeDirective(Node):
     """Module-level -specialize(MI, Source, as=Name) directive."""
