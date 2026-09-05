@@ -186,8 +186,19 @@ class TestQualifiedCalls:
     """
 
     def test_inject_dotted_call_target(self):
-        """_inject_call_targets resolves dotted names from globals."""
-        from clausal.logic.compiler.globals_env import _inject_call_targets
+        """The live target-resolution loop resolves dotted names from globals.
+
+        P3-3 Task 5b fix round 1 (review finding F3): this used to drive
+        ``_inject_call_targets``, the clause-taking twin that Phase 6 left
+        behind and that had no production call sites -- so the assertion held
+        while saying nothing about the compiler.  It now drives the pair the
+        compiler actually runs (``_collect_globals_info`` to gather the
+        targets, ``_inject_resolved_targets`` to resolve them), which is the
+        same two calls ``compiler/predicate.py`` makes.
+        """
+        from clausal.logic.compiler.globals_env import (
+            _collect_globals_info, _inject_resolved_targets,
+        )
         from clausal.logic.database import Clause
 
         # Create a mock module with a predicate class
@@ -212,7 +223,8 @@ class TestQualifiedCalls:
         clauses = [Clause(head=None, body=[body_goal])]
 
         base_globals = {}
-        _inject_call_targets(clauses, base_globals, None, globals_)
+        _, _, targets = _collect_globals_info(clauses)
+        _inject_resolved_targets(targets, base_globals, None, globals_)
 
         # The dotted name should be in base_globals
         assert "utils.Helper" in base_globals
@@ -220,9 +232,6 @@ class TestQualifiedCalls:
 
     def test_dotted_name_dispatch(self):
         """Compiled code can dispatch via dotted globals key."""
-        from clausal.logic.compiler.globals_env import _inject_call_targets
-        from clausal.logic.database import Clause
-
         mod = _load_fixture("importable_utils.clausal",
                             "tests.fixtures.importable_utils")
         helper_cls = mod.Helper

@@ -5716,7 +5716,7 @@ class EmbedTransformer(NodeTransformer):
 
         Emits a Python ``from dotted.module import Pred1, Pred2 as Local``
         statement.  The imported names land in module globals where the
-        compiler's ``_inject_call_targets`` picks them up.
+        compiler's ``_inject_resolved_targets`` picks them up.
 
         Also emits a runtime copy of the imported names' functor-signature
         registry entries into this file's own registry (see
@@ -5869,7 +5869,7 @@ class EmbedTransformer(NodeTransformer):
 
         Emits a Python ``import dotted.module`` statement.  The module object
         lands in globals; qualified calls like ``mod.Pred(X_)`` are resolved
-        at compile time via ``_inject_call_targets``.
+        at compile time via ``_inject_resolved_targets``.
         """
         if len(args) < 1:
             raise SyntaxError(

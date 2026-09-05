@@ -83,7 +83,7 @@ from .terms_to_goalop import BareGoalVariableError, BareGoalUndefinedError
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup,
     _findall_copy_row, _disp_key,
-    _merge_builtin, _inject_call_targets, _inject_resolved_targets,
+    _merge_builtin, _inject_resolved_targets,
     _collect_globals_info, _preallocate_body_vars,
 )
 from .head_match import (

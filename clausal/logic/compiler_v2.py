@@ -512,7 +512,7 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
                     value = getattr(mod, orig_name)
                     module_dict[local_name] = value
                     # Also store under the dotted key ("module.OrigName") so
-                    # that _inject_call_targets can resolve it when the compiler
+                    # that _inject_resolved_targets can resolve it when the compiler
                     # emits LoadName(name="module.OrigName") for remapped imports.
                     module_dict[f"{item.module}.{orig_name}"] = (
                         _imported_reference(mod, orig_name, value))
@@ -524,7 +524,7 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
                         _imported_reference(mod, name_spec, value))
             # Also store the module object under the user-facing name so
             # that dotted-name resolution (e.g. ``uuid.Uuid4``) works in
-            # the compiler's _inject_call_targets.
+            # the compiler's _inject_resolved_targets.
             module_dict[item.module] = mod
         elif isinstance(item, ImportModuleItem):
             mod = _resolve_module(item.module)
@@ -1164,11 +1164,25 @@ def _local_call_reroutes(
         definition stays the genuine collision it is (unchanged by this
         pass, refused by the mutation gate at load as it was before).
 
-    An EMPTY signature -- a zero-arity predicate class, the sub-shape-2
-    shape where the owner declared an atom and also gave it /0 clauses --
-    counts as no functor signature here: arity 0 is not arity N, and the
-    ruling's whole point is that the two are unrelated.
+    An EMPTY signature -- a zero-arity predicate class -- counts as no
+    functor signature here: ``k/0`` and ``k/N`` are unrelated objects, so
+    arity 0 is not a functor meaning AT ARITY N and there is nothing for it
+    to block.  Fix round 1 (review): the difference is unobservable today.
+    The shape it would decide -- a dual-declared /0 name in the owner plus
+    ``k/N`` clauses in the importer -- never loads either way, because the
+    owner owns ``k`` and the mutation gate refuses the importer's clauses
+    (``_refuse_foreign_writes``); the only reachable route is a clause-free
+    ``-private([k(A, B)])``, where blocking and not blocking agree.  Written
+    this way because it is what the ruling means, not because a test
+    separates the two.
     """
+    if not any(isinstance(item, ImportFromItem) for item in module_items):
+        # Fix round 1 (review, F2): the overwhelming majority of modules
+        # ``-import_from`` nothing at all, and for those the whole pass is a
+        # walk over every clause head and module item to build a table
+        # nothing will read.  Condition (a) is the cheapest of the three and
+        # gates the other two, so it is asked first.
+        return {}
     from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
         functor_signature_for,
     )

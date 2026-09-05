@@ -453,82 +453,17 @@ def _merge_builtin(base_globals: dict, name: str, builtin) -> None:
         base_globals[name] = builtin
 
 
-def _inject_call_targets(
-    clauses: list[Clause],
-    base_globals: dict,
-    db: "Database | None",
-    globals_: dict | None,
-) -> None:
-    """Inject predicate class references into base_globals for body call targets.
-
-    For each Call(LoadName(name=fname)) in clause bodies:
-    - If fname is already in base_globals (e.g. utility functions), skip.
-    - If fname is in globals_ (module dict), inject it directly.
-    - If fname is a builtin, inject a BuiltinPredicate adapter.
-    - Otherwise, skip (predicate must be resolved at runtime or is missing).
-    """
-    call_targets = _collect_call_targets(clauses)
-    for target_name, target_arity in call_targets:
-        existing = base_globals.get(target_name)
-        if existing is not None and hasattr(existing, "_get_dispatch"):
-            # Already resolved — but if it's a BuiltinPredicate and a
-            # different arity is needed, merge rather than skip.
-            if isinstance(existing, BuiltinPredicate):
-                builtin = get_builtin_predicate(target_name, target_arity, db)
-                if builtin is not None and builtin._arity != existing._arity:
-                    existing._merge(builtin)
-            continue
-        # Qualified (dotted) call targets: resolve via attribute traversal
-        # from module globals.  The dotted string is used directly as a
-        # globals key (e.g. "graphs.Path") — no mangling needed.
-        if "." in target_name:
-            parts = target_name.split(".")
-            obj = globals_.get(parts[0]) if globals_ else None
-            for part in parts[1:]:
-                if obj is None:
-                    break
-                obj = getattr(obj, part, None)
-            if obj is not None and hasattr(obj, "_get_dispatch"):
-                base_globals[target_name] = obj
-                continue
-            # Plain callable or value (e.g. term constructor sin/cos, or
-            # constant inf/pi from py.sympy): inject directly so it
-            # can be referenced in compiled term expressions.
-            if obj is not None:
-                base_globals[target_name] = obj
-                continue
-            # For -import_from remapped names (e.g.
-            # "tests.fixtures.utils.Helper"), resolve via sys.modules.
-            # The dotted key is "module.path.PredName"; the module is
-            # "module.path" and the attr is "PredName".
-            mod_path = ".".join(parts[:-1])
-            attr_name = parts[-1]
-            mod_obj = _sys.modules.get(mod_path)
-            if mod_obj is not None:
-                resolved = getattr(mod_obj, attr_name, None)
-                if resolved is not None and hasattr(resolved, "_get_dispatch"):
-                    base_globals[target_name] = resolved
-                    continue
-            # Check globals_ directly — handles non-predicate values stored
-            # under dotted keys by _process_imports (e.g. "py.sympy.inf").
-            if globals_ and target_name in globals_:
-                base_globals[target_name] = globals_[target_name]
-                continue
-            # Check builtins for dotted keys (e.g. "re.findall").
-            builtin = get_builtin_predicate(target_name, target_arity, db)
-            if builtin is not None:
-                _merge_builtin(base_globals, target_name, builtin)
-            continue
-        # Builtins take priority over any non-predicate name already in globals.
-        builtin = get_builtin_predicate(target_name, target_arity, db)
-        if builtin is not None:
-            _merge_builtin(base_globals, target_name, builtin)
-            continue
-        # User-defined predicate from module globals (cross-module calls).
-        if globals_ and target_name in globals_:
-            base_globals[target_name] = globals_[target_name]
-        elif db is not None:
-            base_globals[target_name] = _DbDispatchAdapter(db, target_name, target_arity)
+# ``_inject_call_targets`` -- the clause-taking twin of
+# ``_inject_resolved_targets``, left behind when Phase 6 extracted the
+# resolution loop out of it -- is DELETED (P3-3 Task 5b fix round 1, review
+# finding F3).  It had no production call sites (only an unused import in
+# ``compiler/predicate.py``), so it was exercised by nothing but two
+# compiler-level tests, and Task 5b made it a DIVERGED copy rather than a
+# merely redundant one: the live loop grew the dotted-key data precedence and
+# the ``_atom_shadows_row`` rule and this one did not, so anything read off it
+# would have been wrong about what the compiler does.  ``_collect_call_targets``
+# above stays -- ``tests/test_compiler_optimizations.py`` uses it as the parity
+# oracle for ``_collect_globals_info``'s combined walk.
 
 
 def _atom_shadows_row(binding, db, name: str, arity: int) -> bool:
@@ -564,7 +499,8 @@ def _inject_resolved_targets(
 ) -> None:
     """Resolve pre-collected call targets into base_globals.
 
-    Phase 6: the resolution loop from ``_inject_call_targets`` extracted so it
+    Phase 6: the resolution loop extracted from the clause-taking
+    ``_inject_call_targets`` (deleted -- see the note above) so it
     can be called with targets already gathered by ``_collect_globals_info``,
     avoiding a fourth clause traversal.
 
