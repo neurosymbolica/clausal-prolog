@@ -1487,4 +1487,74 @@ one made visible, not the safe thing.
    the line between "liftable today" and "refuse pending analysis" on the export
    side.
 
+### Should free-sets exist at all? (2026-09-06) — recommendation: NO
+
+The designer, uneasy that free-sets feel extra-logical, asked whether bindings
+can escape a copying boundary some other way, and whether there is an argument
+against allowing the escape at all. There is, and it is strong; this subsection
+supersedes the "if `free()` is adopted" recommendations above (which stand only
+as *how* one would, not *whether* one should).
+
+**Every mechanical alternative is MORE extra-logical than free-sets.** The
+Prolog-ecosystem ways to get a binding out of a copied closure — global
+variables (`nb_setval`/`b_setval`), `assert`/`retract`, destructive `setarg` —
+are each further from the logical reading than an explicit shared logic variable,
+and none is ISO-portable in spirit. That free-sets are the *cleanest of a bad
+lot* is itself the tell: the escape need should be designed away, not mechanized.
+
+**The relational answer: output is an argument, not an escaped binding.** Every
+genuine case that seems to want escape is better served by making the result a
+parameter of the higher-order relation:
+
+- accumulation → thread it through the HOF's own params (`foldl`'s `Acc0/Acc`),
+  not through a capture;
+- "return the first match" → the HOF binds a `Result` *argument*; the closure only
+  tests, via its own params;
+- collect many → `findall/bagof` already return a list argument.
+
+Under this discipline copy-by-value is *complete*: nothing needs to escape,
+because outputs flow through relation arguments into the caller's clause.
+
+**The deeper point — sharing already lives in clause scope.** Variables in a
+clause body share by default; that is what a clause body is *for*. A lambda is
+the tool for the other thing — a reusable, copy-per-application closure. You never
+need a lambda to *also* share, because when you want sharing you simply do not
+reach for a lambda: you write the goals inline in the enclosing clause, where they
+share naturally. free-sets try to make one construct do both jobs, which is
+exactly why they read as extra-logical — they are. Keep the two jobs separate:
+**lambda = copy-by-value, always; want sharing = use the clause you are already
+in.**
+
+**Four reasons to leave free-sets out:**
+
+1. *Unnecessary* — output-as-argument + clause-scope-sharing cover every real
+   need (no counterexample survives: generators/memoization/effects are
+   tabling/`assert`/effect-goals, not lambda captures).
+2. *Footgun* — a shared unbound capture is silently severed by `copy_term`-based
+   HOFs (`findall`/`bagof`), the classic wrong-answer trap.
+3. *Breaks a universal invariant* — without free-sets, EVERY lambda is
+   copy-by-value: referentially transparent, order-independent, copy-safe. That
+   invariant is worth more as a universal law than free-sets are as a feature;
+   adding them makes every lambda site "check for a free-set" for tools,
+   reviewers, and the exporter.
+4. *Non-ISO-exportable* — copy-by-value lambdas export totally and cleanly (eta →
+   atom, positional/closure → aux predicate over captured *values*). A free-set
+   lambda needs true cross-copy sharing reproduced in ISO, i.e. globals/mutable
+   refs — non-portable — or an export refusal, making it a two-tier feature that
+   cannot appear in exportable code anyway. That cuts directly against the
+   ISO-compatibility goal this whole document serves.
+
+**Steelman and its resolution.** Coroutining / CLP genuinely rely on shared logic
+variables across goals (attributed vars, residual `dif`/constraints) — but those
+are clause-scope shared variables in a conjunction, NOT lambda captures, and are
+always allowed. And deep result-threading can be verbose — but the fix is a
+better HOF signature, not a capture escape. Both reduce to the same rule: sharing
+is a property of the clause, applied-freshly is a property of the lambda; keep
+them distinct and free-sets have nothing left to do.
+
+**Recommendation:** do not add free-sets. Keep lambdas purely copy-by-value
+(already the engine's behavior). If a `free`-shaped need ever surfaces that
+output-as-argument genuinely cannot serve, revisit — but treat its appearance as
+a signal to fix a HOF's signature first.
+
 Awaiting operator review.
