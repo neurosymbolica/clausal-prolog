@@ -48,7 +48,7 @@ def _normalize_fact_clause(term: Any):
     return Clause(head=term, body=[])
 
 
-def _build_clause(term_val: Any, context: str) -> "Any":
+def _build_clause(term_val: Any, context: str, db, module_dict) -> "Any":
     """Build a Clause from a runtime term passed to assertz/asserta.
 
     *context* is the calling builtin's indicator ("assertz/1" or
@@ -69,42 +69,117 @@ def _build_clause(term_val: Any, context: str) -> "Any":
     if isinstance(term_val, _Predicate):
         raise LogicException(
             permission_error("assert", "rule", term_val.head, context))
-    _reject_cell_head(term_val, context)
+    term_val = _check_cell_head_permission(term_val, context, db, module_dict)
     return _normalize_fact_clause(term_val)
 
 
-def _reject_cell_head(term_val: Any, context: str) -> None:
-    """Refuse a CELL head with the ISO error, not an internal ``TypeError``.
+def _check_cell_head_permission(term_val: Any, context: str, db,
+                                module_dict: "dict | None") -> Any:
+    """Decide whether a CELL may be asserted/retracted, and return the term to
+    use as the clause head/pattern.  Non-cells are returned unchanged.
 
-    P3-2 Task 2 (THE FLIP): a functor declared with fields but given no
-    clauses is DATA (R6), so ``f(7)`` written anywhere in that module is the
-    cell ``("f", 7)`` -- including the argument handed to ``assertz/1``.
-    Nothing downstream understands a cell as a clause head, and the failure
-    used to surface as ``head_key``'s internal
-    ``TypeError: Cannot extract (functor, arity) from head term: ('f', 7)``,
-    which names neither the mistake nor its remedy.  Pre-flip the same
-    program raised ``permission_error(modify, static_procedure, f/1)``,
-    because the head was an instance of a clause-free class.
+    P3-2 Task 2 (THE FLIP) put a blanket ``permission_error`` here, because a
+    functor declared with fields but given no clauses is DATA (R6), so ``f(7)``
+    written anywhere in that module is the cell ``("f", 7)`` -- including the
+    argument handed to ``assertz/1`` -- and nothing downstream understood a
+    cell as a clause head.  P3-3 Task 5 (R11) is where the cell becomes a
+    legitimate assert argument, so the blanket refusal becomes a THREE-WAY
+    decision on the target row:
 
-    Asserting INTO a cell-headed predicate is P3-3's business, not this
-    task's; what belongs here is the diagnostic.  So the ISO error is
-    restored verbatim, with the remedy named: declare the predicate
-    ``-dynamic``, which keeps it a class and makes the assert legal.
+    ====================  ==================================================
+    row.dynamic           proceed -- the cell is normalized (below) and the
+                          write goes through the ordinary gate
+    static: a row that    ``permission_error(modify, static_procedure, f/N)``
+    is not dynamic, OR    -- the P3-2 refusal, kept verbatim in substance for
+    a name DECLARED with  the case it describes (the data functor), widened
+    N fields in this      only in wording for a static procedure that does
+    module                have clauses
+    neither               ``existence_error(procedure, f/N)``
+    ====================  ==================================================
+
+    A declared-with-fields functor has no Database ROW at all until something
+    gives it clauses -- being data is precisely having none -- so the row
+    lookup alone would call the P3-2 case unknown and hand back an
+    existence_error where the whole point of that refusal is to say "this name
+    is data; declare it -dynamic".  ``functor_signature_for`` is the funnel
+    that answers "is this name declared here, and with how many fields", and
+    it is what keeps the two refusals on the right side of the line.
+
+    The genuinely-unknown case is an error rather than assertz's usual "create
+    the predicate" because a cell is INDISTINGUISHABLE from a str-headed data
+    tuple -- THE DISCIPLINE, in ``clausal/logic/cells.py``'s module docstring:
+    every str-first runtime tuple IS a cell, ``("hello", 1)`` included.  So
+    ``assertz(T)`` on a T that happens to be one would otherwise silently mint
+    a predicate the program never declared.  Requiring an existing declaration
+    is what keeps a plain data tuple from creating state.
+
+    NORMALIZATION.  A cell is a SPELLING of a term, so it must produce the
+    same clause the same term spelled any other way produces.  When the target
+    is a class predicate (the ``-dynamic`` case, overwhelmingly), the head is
+    that class's instance -- so the clause list stays homogeneous, first-arg
+    indexing sees the shape it sees for every other clause, and a later
+    ``retract`` by cell pattern can unify with a clause loaded from source.
+    With no class (a Compound-headed predicate, a bare ``Database()``) it is a
+    ``Compound``, which is exactly what ``assertz(Compound(...))`` builds
+    today.  Either way ``_normalize_fact_clause`` does the rest, and the ARG
+    OBJECTS are shared with the caller's cell, so bindings made against the
+    normalized term reach the caller's variables.
     """
-    from clausal.logic.cells import TUPLE_TAG, _cell_shape
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    from clausal.logic.exceptions import existence_error  # noqa: PLC0415
 
-    ok, functor = _cell_shape(term_val)
-    if not ok or functor is TUPLE_TAG or not isinstance(functor, str):
-        return
+    ok, functor = compound_cell_shape(term_val)
+    if not ok:
+        return term_val
     arity = len(term_val) - 1
+    args = tuple(term_val[1:])
+    pred_cls = _find_pred_cls(functor, arity, module_dict, None)
+    if pred_cls is not None:
+        # The CANONICAL name is the class's, not the spelling the cell used:
+        # an ``-import_from`` alias binds the exporter's class under the local
+        # name, and the row lives under the exporter's (see ``_find_pred_cls``).
+        functor = pred_cls.__name__
+    home = _home_db(db, pred_cls)
+    row = home.row(functor, arity) if home is not None else None
+    if row is not None and row.dynamic:
+        if pred_cls is not None:
+            return pred_cls(*args)
+        return Compound(functor, args)
+    if row is None and not _declared_with_fields(module_dict, functor, arity):
+        raise LogicException(existence_error(
+            "procedure", Compound("/", (functor, arity)),
+            f"{context}: no predicate {functor}/{arity} is known here, and a "
+            f"cell argument does not create one — a cell is indistinguishable "
+            f"from a plain data tuple, so the target must already be declared "
+            f"-dynamic({functor}/{arity})",
+        ))
     raise LogicException(permission_error(
         "modify", "static_procedure",
         Compound("/", (functor, arity)),
-        f"{context}: {functor}/{arity} is a data functor (declared with "
-        f"fields and given no clauses), so its terms compile to cells and "
-        f"it has no clause list to add to — declare it -dynamic to assert "
-        f"against it",
+        f"{context}: {functor}/{arity} "
+        + ("is a static procedure" if row is not None and row.clauses else
+           "is a data functor (declared with fields and given no clauses), "
+           "so its terms compile to cells and it has no clause list")
+        + f" — declare it -dynamic({functor}/{arity}) to modify it at runtime",
     ))
+
+
+def _declared_with_fields(module_dict: "dict | None", functor: str,
+                          arity: int) -> bool:
+    """True if *functor* is declared in this module with exactly *arity*
+    fields -- i.e. it is a DATA functor here, not an unknown name.
+
+    Reads the module's ``__clausal_functor_signatures__`` registry through
+    ``functor_signature_for``, the funnel the compiler's own cell placers use,
+    so ``-import_from``'d spellings answer too.
+    """
+    if module_dict is None:
+        return False
+    from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
+        functor_signature_for,
+    )
+    fields = functor_signature_for(functor, module_dict)
+    return fields is not None and len(fields) == arity
 
 
 def _find_pred_cls(functor: str, arity: int,
@@ -214,7 +289,7 @@ def _assertz_factory(db):
         term_val = deref(term)
         if is_var(term_val):
             return
-        clause = _build_clause(term_val, "assertz/1")
+        clause = _build_clause(term_val, "assertz/1", db, module_dict)
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict, term_val)
         # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
@@ -255,7 +330,7 @@ def _asserta_factory(db):
         term_val = deref(term)
         if is_var(term_val):
             return
-        clause = _build_clause(term_val, "asserta/1")
+        clause = _build_clause(term_val, "asserta/1", db, module_dict)
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict, term_val)
         # Through the gate; see assertz/1 above.
@@ -292,6 +367,13 @@ def _retract_factory(db):
         term_val = deref(term)
         if is_var(term_val):
             return
+        # A CELL pattern goes through the SAME gate as the assert doors (P3-3
+        # Task 5, R11) and comes back normalized to the shape the clause list
+        # actually holds -- without that, ``_first_match_index`` would compare
+        # a tuple against a class-term head and never match, so a legal
+        # ``retract(("p", 1))`` would silently fail instead of retracting.
+        term_val = _check_cell_head_permission(term_val, "retract/1", db,
+                                               module_dict)
         try:
             functor, arity = head_key(term_val)
         except TypeError:

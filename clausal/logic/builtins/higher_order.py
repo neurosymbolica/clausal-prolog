@@ -10,44 +10,129 @@ from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result
 from clausal.logic.builtins._helpers import _standard_order_key
 
+from clausal.logic.cells import (
+    CELL_GOAL_CONTROL_FUNCTORS,
+    QUALIFIED_GOAL_FUNCTOR,
+    compound_cell_shape,
+    refuse_control_construct_cell,
+    resolve_qualified_goal_cell,
+)
+
 from clausal.logic.builtins._registry import (
     _trampoline_builtin, _ensure_trampoline_dispatch,
-    _BUILTINS, _BUILTIN_FIELDS,
+    _DB_BUILTINS, _BUILTIN_FIELDS,
 )
 
 
 # ── call_goal/1,2,3 — invoke a goal closure (V2-9 lambdas) ──────────────────
 
 
-def _make_call_goal_trampoline(extra_n: int):
-    """Generate a native trampoline call_goal builtin for *extra_n* extra args."""
-    def _call_goal_n(this_generator, _proceed, _fail, _catcher, *args):
-        # args = (goal, extra1, ..., extraN, trail)
-        goal_val = deref(args[0])
-        if callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
-            # extra_n is exactly what the goal will be called with.
-            dispatch = _ensure_trampoline_dispatch(goal_val, extra_n)
-            derefed = [deref(a) for a in args[1:extra_n + 1]]
+def _resolve_named_goal(db, goal_val, extra_args, context):
+    """Resolve a goal named by a CELL or a bare ATOM to ``(dispatch, args)``.
+
+    P3-3 Task 5 (R11).  ``call_goal``'s pre-existing route is a goal OBJECT —
+    a predicate class, a lambda closure, anything answering ``_get_dispatch``.
+    A cell ``("p", A)`` and a bare atom ``"p"`` are neither: they NAME a
+    predicate, so the name has to be looked up, and the only correct place to
+    look it up is the CALLING module's database (which is why the call/N family
+    became db-receiving — see ``_make_call_goal_factory``).
+
+    ISO argument folding: ``call(f(A), B)`` is the goal ``f(A, B)``, so the
+    cell's own arguments come first and call/N's extras follow; a bare atom
+    contributes none, giving ``call(p, X)`` → ``p/1``.
+
+    Returns ``None`` — which the caller turns into a silent failure, the
+    behaviour every non-callable goal has had — when the goal is not a cell or
+    atom, when no db was threaded, or when the named predicate does not exist.
+    That last case is deliberate: the translator session's pinned §4.2 contract
+    is that a non-callable goal FAILS rather than raising, and a name that
+    resolves to nothing is exactly the same non-goal it was before this task.
+
+    Raises only for the two shapes that are DEFERRED rather than absent: the
+    module-qualified ``(":", M, G)`` (P3-3 Task 6) and the control constructs
+    (the ISO-surface phase).  Those raise even when *db* is None, so the
+    diagnostic never depends on how the builtin was reached.
+    """
+    is_cell, functor = compound_cell_shape(goal_val)
+    if is_cell:
+        goal_args = list(goal_val[1:])
+    elif type(goal_val) is str:
+        # A str IS an atom (P3-1 §1b/R2), so a bare atom goal is a zero-arity
+        # predicate name; with extras it names the arity they make up.
+        functor, goal_args = goal_val, []
+    else:
+        return None
+    if is_cell and functor == QUALIFIED_GOAL_FUNCTOR and len(goal_val) == 3:
+        resolve_qualified_goal_cell(goal_val, context)
+    call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]
+    if functor in CELL_GOAL_CONTROL_FUNCTORS and call_args:
+        # Refuse on the goal as folding leaves it, so ``call(",", A, B)`` and
+        # ``call((",", A, B))`` get the same message about the same term.
+        refuse_control_construct_cell(
+            (functor,) + tuple(call_args), functor, context)
+    if db is None:
+        return None
+    dispatch = db.get_dispatch(functor, len(call_args))
+    if dispatch is None:
+        return None
+    return dispatch, call_args
+
+
+def _make_call_goal_factory(extra_n: int):
+    """Generate the db-receiving call_goal factory for *extra_n* extra args.
+
+    DB-RECEIVING as of P3-3 Task 5: the product is still a native
+    trampoline-protocol function of exactly the same arity and shape, but it is
+    now built per-database so a cell/atom goal can be resolved against the
+    caller's namespace.  Registered straight into ``_DB_BUILTINS`` (whose
+    contract is ``fn(db) -> trampoline dispatch fn``) rather than through the
+    ``@_db_builtin`` decorator, because that decorator wraps its product with
+    ``_simple_to_trampoline`` and call_goal is already trampoline-native.
+
+    ``_db_optional`` marks the factory as tolerating ``db=None`` — it then
+    behaves exactly as the pre-Task-5 stateless builtin did, minus the name
+    resolution it has no database to do.  ``_registry._stateless_dispatch``
+    reads that flag on the paths that have no db to offer (the builtin CLASS
+    table, and a ``BuiltinPredicate`` built without one).
+    """
+    def factory(db):
+        def _call_goal_n(this_generator, _proceed, _fail, _catcher, *args):
+            # args = (goal, extra1, ..., extraN, trail)
+            goal_val = deref(args[0])
             trail = args[extra_n + 1]
-            sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *derefed, trail)
-            _st = yield (sg, None)
-            while _st is not DONE:
-                yield (_proceed, None)
+            dispatch = None
+            if callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
+                # extra_n is exactly what the goal will be called with.
+                dispatch = _ensure_trampoline_dispatch(goal_val, extra_n)
+                call_args = [deref(a) for a in args[1:extra_n + 1]]
+            else:
+                resolved = _resolve_named_goal(
+                    db, goal_val, args[1:extra_n + 1], f"call/{extra_n + 1}")
+                if resolved is not None:
+                    dispatch, call_args = resolved
+            if dispatch is not None:
+                sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *call_args, trail)
                 _st = yield (sg, None)
-        yield (_fail, DONE)
-    return _call_goal_n
+                while _st is not DONE:
+                    yield (_proceed, None)
+                    _st = yield (sg, None)
+            yield (_fail, DONE)
+        return _call_goal_n
+
+    factory._db_optional = True
+    return factory
 
 
 for _n in range(0, 8):  # extra_n=0..7 → arity 1..8
     _cg_arity = _n + 1
-    _BUILTINS[("call_goal", _cg_arity)] = _make_call_goal_trampoline(_n)
+    _DB_BUILTINS[("call_goal", _cg_arity)] = _make_call_goal_factory(_n)
     _BUILTIN_FIELDS[("call_goal", _cg_arity)] = ("goal",) + tuple(f"a{i}" for i in range(_n))
 
 # call/1..8 — aliases: call(Goal, A1, ...) = call_goal(Goal, A1, ...)
 for _n in range(1, 9):
     _key = ("call_goal", _n)
-    if _key in _BUILTINS:
-        _BUILTINS[("call", _n)] = _BUILTINS[_key]
+    if _key in _DB_BUILTINS:
+        _DB_BUILTINS[("call", _n)] = _DB_BUILTINS[_key]
         _BUILTIN_FIELDS[("call", _n)] = _BUILTIN_FIELDS[_key]
 
 del _n, _cg_arity, _key  # clean up loop variables

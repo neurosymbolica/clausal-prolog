@@ -44,6 +44,13 @@ from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
+from clausal.logic.cells import (
+    CELL_GOAL_CONTROL_FUNCTORS,
+    QUALIFIED_GOAL_FUNCTOR,
+    compound_cell_shape,
+    refuse_control_construct_cell,
+    resolve_qualified_goal_cell,
+)
 from clausal.terms import Compound, Undefined
 from clausal.terms import (
     Call as _ReifiedCall,
@@ -173,6 +180,16 @@ def _term_to_goal(term: Any) -> Any:
     When the user writes ``solve(greeting(N := Var()))``, ``greeting(N)``
     produces a PredicateMeta *instance* (a runtime term), not a simple_ast
     ``Call`` node.  The compiler expects goal nodes, so we convert here.
+    A CELL goal ``("f", a, b)`` lowers the same way (P3-3 Task 5, R11): slot 0
+    names the predicate, the rest are its arguments, so it becomes
+    ``AstCall(LoadName("f"), [a, b])`` — the identical node a ``Compound`` goal
+    produces, which is what makes a cell goal and a class-term goal share
+    compiled code and answer alike.  Two cell functors are not ordinary calls
+    and are handled before that: the module-qualified form ``(":", M, G)``
+    (deferred to Task 6's resolver) and the control constructs (deferred to the
+    ISO-surface phase) — see ``cells.resolve_qualified_goal_cell`` and
+    ``cells.refuse_control_construct_cell``.
+
     Simple_ast nodes and other goal forms pass through unchanged.
     """
     from clausal.logic.predicate import PredicateMeta
@@ -188,6 +205,14 @@ def _term_to_goal(term: Any) -> Any:
             func=LoadName(name=term.functor),
             args=list(term.args),
             kwargs=[],
+        )
+    is_cell_goal, functor = compound_cell_shape(term)
+    if is_cell_goal:
+        if functor == QUALIFIED_GOAL_FUNCTOR and len(term) == 3:
+            resolve_qualified_goal_cell(term, "solve/1")
+        refuse_control_construct_cell(term, functor, "solve/1")
+        return AstCall(
+            func=LoadName(name=functor), args=list(term[1:]), kwargs=[],
         )
     return term
 
@@ -219,7 +244,15 @@ def _structural_key(term: Any, var_index: dict) -> tuple:
         so ``p(V, V)`` (aliased) and ``p(V, W)`` (distinct) get different keys;
       - ground leaves become ``('lit', type, value)`` — keying on the value, which
         is what distinguishes ``p(1, V)`` from ``p(2, V)``;
-      - compound/predicate/sequence terms recurse structurally.
+      - compound/predicate/sequence terms recurse structurally;
+      - a CELL gets its own ``('cell', functor, args)`` tag rather than falling
+        into the ``('seq', tuple, ...)`` branch below (P3-3 Task 5).  A cell in
+        GOAL position compiles to a CALL, while the equal-shaped tuple in
+        argument position is baked as tuple DATA — two different compiled
+        artifacts, so they get two different tags rather than one that reads
+        "a tuple of N+1 elements" for both.  (There is no live collision to
+        repair: ``_goal_cache_key`` admits only goal shapes, and a data tuple
+        is never a top-level goal.  The tag is what keeps that true.)
 
     Raises :class:`_Uncacheable` if a ground leaf is unhashable (e.g. a list,
     dict, or ndarray argument), in which case the caller skips caching entirely
@@ -242,6 +275,10 @@ def _structural_key(term: Any, var_index: dict) -> tuple:
         return ("cmp", t.functor,
                 tuple(_structural_key(a, var_index) for a in t.args))
     if isinstance(t, (list, tuple)):
+        is_cell, functor = compound_cell_shape(t)
+        if is_cell:
+            return ("cell", functor,
+                    tuple(_structural_key(x, var_index) for x in t[1:]))
         return ("seq", type(t),
                 tuple(_structural_key(x, var_index) for x in t))
     try:
@@ -255,10 +292,18 @@ def _goal_cache_key(goal: Any, module: Module):
     """Structural, value-sensitive cache key for a top-level query goal.
 
     Returns ``None`` (caching disabled for this goal) when the goal is neither a
-    predicate term nor a Compound, or when it contains an unhashable ground leaf.
+    predicate term, a Compound, nor a CELL, or when it contains an unhashable
+    ground leaf.
+
+    Cells were previously in the "neither" bucket and so were uncached
+    outright; they are hashable tuples with the same structural discipline as
+    a Compound, and ``_structural_key`` gives them their own ``('cell', ...)``
+    tag, so a cell goal caches like any other predicate call (P3-3 Task 5).
     """
     from clausal.logic.predicate import PredicateMeta
-    if not (isinstance(type(goal), PredicateMeta) or isinstance(goal, Compound)):
+    if not (isinstance(type(goal), PredicateMeta)
+            or isinstance(goal, Compound)
+            or compound_cell_shape(goal)[0]):
         return None
     try:
         return (_structural_key(goal, {}), id(module))
@@ -351,6 +396,34 @@ def _templatize_query_goal(goal: Any):
         if not params:
             return goal, []
         return Compound(goal.functor, tuple(new_args)), params
+
+    # A CELL goal parameterizes exactly like a Compound one (P3-3 Task 5): the
+    # goal's own arguments are slots 1.. and slot 0 is the functor, which is
+    # never a parameter.  Without this branch every distinct ground argument
+    # compiled its own query — a cell goal is a predicate call, and it gets the
+    # same value-independent compiled query a Compound call gets.
+    is_cell_goal, cell_f = compound_cell_shape(goal)
+    if is_cell_goal and (cell_f == QUALIFIED_GOAL_FUNCTOR
+                         or cell_f in CELL_GOAL_CONTROL_FUNCTORS):
+        # The two deferred forms (Task 6's `:`/2, the ISO phase's control
+        # constructs) are refused by ``_term_to_goal`` a few lines later.
+        # Leave them alone so the refusal quotes the goal the caller wrote
+        # rather than a template with fresh Vars in it.
+        return goal, []
+    if is_cell_goal:
+        params = []
+        new_args = []
+        for a in goal[1:]:
+            gv = _ground_value(a)
+            if gv is None:
+                new_args.append(a)
+            else:
+                pv = Var()
+                params.append((pv, gv))
+                new_args.append(pv)
+        if not params:
+            return goal, []
+        return (goal[0],) + tuple(new_args), params
 
     return goal, []
 

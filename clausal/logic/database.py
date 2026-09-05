@@ -15,11 +15,12 @@ from typing import Any, Callable
 
 from clausal.terms import And, Call, Compound, KWTerm, LoadName, PyThunk
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
-from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.cells import TUPLE_TAG, compound_cell_shape
 from clausal.logic.exceptions import (
     LogicException,
     existence_error,
     permission_error,
+    type_error,
 )
 from clausal.logic.predicate import (
     PredicateMeta,
@@ -784,7 +785,7 @@ class Database:
         clauses could be changed through (P3-3 Task 2, F3).  Invalidation and
         table abolition moved into the gate's exit; they are not repeated here.
         """
-        functor, arity = head_key(clause.head)
+        functor, arity = _stored_head_key(clause.head, "assertz")
         with self.mutate(functor, arity, author=author or self.runtime_author(),
                          kind=WRITE_ASSERT, detail="assertz") as row:
             row.ensure_clauses().append(clause)
@@ -795,7 +796,7 @@ class Database:
         See ``assertz`` for why no class mirror is needed any more, and for
         what the gate does with *author*.
         """
-        functor, arity = head_key(clause.head)
+        functor, arity = _stored_head_key(clause.head, "asserta")
         with self.mutate(functor, arity, author=author or self.runtime_author(),
                          kind=WRITE_ASSERT, detail="asserta") as row:
             row.ensure_clauses().insert(0, clause)
@@ -1227,6 +1228,7 @@ def head_key(head: Any) -> tuple[str, int]:
     - Compound(functor, args)              → (functor, len(args))
     - Call(func=LoadName(name), args)      → (name, len(args))
     - functor dataclass instance           → (type.__name__, len(fields))
+    - cell ``("f", a, b)``                 → ("f", len(cell) - 1)
     """
     if isinstance(head, Compound):
         f = head.functor
@@ -1246,11 +1248,52 @@ def head_key(head: Any) -> tuple[str, int]:
     # Zero-arity PredicateMeta class: the class IS the atom
     if isinstance(head, PredicateMeta) and not head._fields:
         return head.__name__, 0
+    # A CELL names its predicate in slot 0 (P3-3 Task 5, R11).  Last, because
+    # every branch above is a cheaper and far commoner shape and this one only
+    # fires for a tuple.  A ``TUPLE_TAG`` cell and a slot-0-Var tuple are DATA,
+    # not a predicate head, and keep the TypeError below -- which is exactly
+    # what ``compound_cell_shape`` excludes.
+    is_cell_head, cell_functor_name = compound_cell_shape(head)
+    if is_cell_head:
+        return cell_functor_name, len(head) - 1
     raise TypeError(
         f"Cannot extract (functor, arity) from head term: {head!r}\n"
-        "Expected Compound, Call(LoadName(...), ...), or a functor dataclass instance."
+        "Expected Compound, Call(LoadName(...), ...), a functor dataclass "
+        "instance, or a cell ('f', a, b)."
         + describe_term_identity_mismatch(head)
     )
+
+
+def _stored_head_key(head: Any, channel: str) -> tuple[str, int]:
+    """``head_key``, but refusing a CELL head on the way into the clause store.
+
+    ``head_key`` reads a cell's ``(functor, arity)`` since P3-3 Task 5, because
+    the assert/retract builtins have to ask that question about the raw TERM a
+    caller handed them, before deciding what to do with it.  STORING a
+    cell-headed clause is a different matter: no lowering path understands one
+    as a head (``head_match`` and ``list_dispatch._get_head_arg`` both read a
+    ``Compound`` or a class term), so the clause compiles to a predicate that
+    answers with its argument UNBOUND instead of failing or raising -- a wrong
+    answer, silently, which is worse than the ``TypeError`` this door used to
+    give before ``head_key`` learned about cells.
+
+    So the low-level door refuses, and names the door that does the right
+    thing: ``assertz/1`` normalizes a cell to the class term or ``Compound``
+    the store understands (see
+    ``builtins/database_ops._check_cell_head_permission``), which is what a
+    caller with a cell in hand actually wants.
+    """
+    is_cell_head, functor = compound_cell_shape(head)
+    if is_cell_head:
+        raise LogicException(type_error(
+            "callable", head,
+            f"Database.{channel}: {functor}/{len(head) - 1} was given a CELL "
+            f"as a clause head; no lowering path reads a cell as a head, so "
+            f"storing it would compile a predicate that answers wrongly — "
+            f"assert it through the assertz/1 builtin, which normalizes the "
+            f"cell to the clause head this store understands",
+        ))
+    return head_key(head)
 
 
 def _extract_param_names(head: Any) -> tuple[str, ...] | None:

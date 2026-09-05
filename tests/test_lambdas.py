@@ -271,10 +271,15 @@ class TestLambdaRuntime:
     def test_call_goal_1_with_zero_arg_lambda(self):
         """call_goal/1 calls a zero-arg goal closure."""
         # nv
-        from clausal.logic.builtins import _BUILTINS
+        # P3-3 Task 5: call_goal/N is a DB-receiving builtin now (it
+        # resolves a cell/atom goal NAME against the caller's db), so it
+        # lives in _DB_BUILTINS.  ``_stateless_dispatch`` is the registry's
+        # db-less door — for call_goal it hands back exactly the function
+        # _BUILTINS used to hold, which is what these closure tests drive.
+        from clausal.logic.builtins._registry import _stateless_dispatch
 
         trail = Trail()
-        fn = _BUILTINS[("call_goal", 1)]
+        fn = _stateless_dispatch("call_goal", 1)
 
         # Create a simple closure that succeeds once
         def my_goal(trail, k):
@@ -287,7 +292,12 @@ class TestLambdaRuntime:
     def test_call_goal_2_with_one_arg_lambda(self):
         """call_goal/2 passes an extra arg to the closure."""
         # nv
-        from clausal.logic.builtins import _BUILTINS
+        # P3-3 Task 5: call_goal/N is a DB-receiving builtin now (it
+        # resolves a cell/atom goal NAME against the caller's db), so it
+        # lives in _DB_BUILTINS.  ``_stateless_dispatch`` is the registry's
+        # db-less door — for call_goal it hands back exactly the function
+        # _BUILTINS used to hold, which is what these closure tests drive.
+        from clausal.logic.builtins._registry import _stateless_dispatch
 
         trail = Trail()
         result_var = Var()
@@ -297,7 +307,7 @@ class TestLambdaRuntime:
                 yield None
             return; yield
 
-        fn = _BUILTINS[("call_goal", 2)]
+        fn = _stateless_dispatch("call_goal", 2)
         results = list(_run_dispatch(fn, my_goal, 42, trail))
         assert len(results) == 1
         assert deref(result_var) == 42
@@ -305,7 +315,12 @@ class TestLambdaRuntime:
     def test_call_goal_3_with_two_arg_lambda(self):
         """call_goal/3 passes two extra args to the closure."""
         # nv
-        from clausal.logic.builtins import _BUILTINS
+        # P3-3 Task 5: call_goal/N is a DB-receiving builtin now (it
+        # resolves a cell/atom goal NAME against the caller's db), so it
+        # lives in _DB_BUILTINS.  ``_stateless_dispatch`` is the registry's
+        # db-less door — for call_goal it hands back exactly the function
+        # _BUILTINS used to hold, which is what these closure tests drive.
+        from clausal.logic.builtins._registry import _stateless_dispatch
 
         trail = Trail()
         result_var = Var()
@@ -315,7 +330,7 @@ class TestLambdaRuntime:
                 yield None
             return; yield
 
-        fn = _BUILTINS[("call_goal", 3)]
+        fn = _stateless_dispatch("call_goal", 3)
         results = list(_run_dispatch(fn, my_goal, 3, 4, trail))
         assert len(results) == 1
         assert deref(result_var) == 7
@@ -323,21 +338,31 @@ class TestLambdaRuntime:
     def test_call_goal_with_failing_lambda(self):
         """call_goal with a failing closure produces no solutions."""
         # nv
-        from clausal.logic.builtins import _BUILTINS
+        # P3-3 Task 5: call_goal/N is a DB-receiving builtin now (it
+        # resolves a cell/atom goal NAME against the caller's db), so it
+        # lives in _DB_BUILTINS.  ``_stateless_dispatch`` is the registry's
+        # db-less door — for call_goal it hands back exactly the function
+        # _BUILTINS used to hold, which is what these closure tests drive.
+        from clausal.logic.builtins._registry import _stateless_dispatch
 
         trail = Trail()
 
         def failing_goal(trail, k):
             return; yield
 
-        fn = _BUILTINS[("call_goal", 1)]
+        fn = _stateless_dispatch("call_goal", 1)
         results = list(_run_dispatch(fn, failing_goal, trail))
         assert len(results) == 0
 
     def test_call_goal_with_multi_solution_lambda(self):
         """call_goal with a closure that yields multiple solutions."""
         # nv
-        from clausal.logic.builtins import _BUILTINS
+        # P3-3 Task 5: call_goal/N is a DB-receiving builtin now (it
+        # resolves a cell/atom goal NAME against the caller's db), so it
+        # lives in _DB_BUILTINS.  ``_stateless_dispatch`` is the registry's
+        # db-less door — for call_goal it hands back exactly the function
+        # _BUILTINS used to hold, which is what these closure tests drive.
+        from clausal.logic.builtins._registry import _stateless_dispatch
 
         trail = Trail()
         result_var = Var()
@@ -350,7 +375,7 @@ class TestLambdaRuntime:
                 trail.undo(mark)
             return; yield
 
-        fn = _BUILTINS[("call_goal", 2)]
+        fn = _stateless_dispatch("call_goal", 2)
         results = list(_run_dispatch(fn, multi_goal, result_var, trail))
         assert len(results) == 3
 

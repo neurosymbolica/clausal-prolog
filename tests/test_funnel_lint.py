@@ -305,9 +305,19 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # (M-2: the unregistered-backend refusal moved onto the engine's error
     # family, widening the ``clausal.logic.exceptions`` import and the raise);
     # see .superpowers/sdd/p33-state-relocation/task-4-report.md.
-    AllowEntry("clausal/logic/database.py", (1223, 1255),
+    # Range 1223-1255 -> 1224-1264 by P3-3 task-5 (R11), which is the FIRST
+    # change to ``head_key`` itself rather than a line-count shift under it:
+    # the function gained a CELL branch (``compound_cell_shape`` -> ``(f, N)``)
+    # so a cell can name a predicate head, plus the matching docstring and
+    # TypeError-message lines; the START moved by one because that task also
+    # widened the ``clausal.logic.exceptions`` import (``type_error``, for
+    # ``_stored_head_key`` just below).  The atom_bypass line this entry exists
+    # for is untouched.  See
+    # .superpowers/sdd/p33-state-relocation/task-5-report.md.
+    AllowEntry("clausal/logic/database.py", (1224, 1264),
                "task-2 instruction: head_key is the canonical pair function, "
-               "left as-is this phase (plan Task 2 file list)"),
+               "left as-is this phase (plan Task 2 file list); task-5 (R11) "
+               "added its cell branch"),
 
     # ── Pre-existing site found by this lint, outside the Phase 1 site
     #    inventory (never named in the plan or any Task 1-3 file list).

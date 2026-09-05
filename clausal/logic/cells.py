@@ -93,6 +93,11 @@ __all__ = [
     "clear_intern_table",
     "is_intern_enabled",
     "set_intern_enabled",
+    "compound_cell_shape",
+    "CELL_GOAL_CONTROL_FUNCTORS",
+    "refuse_control_construct_cell",
+    "QUALIFIED_GOAL_FUNCTOR",
+    "resolve_qualified_goal_cell",
 ]
 # NOTE: `_cell_shape` is intentionally NOT in __all__ (internal helper) but
 # IS imported directly by other modules that need to test "is this
@@ -105,11 +110,17 @@ __all__ = [
 #   - clausal/logic/builtins/_helpers.py (the funnel -- inlines the str-only
 #     compound check directly, see `_cell_functor`, since it additionally
 #     needs to exclude TUPLE_TAG from "compound")
-#   - clausal/logic/builtins/database_ops.py (`_reject_cell_head`)
 #   - clausal/logic/compiler/head_match.py (the live-cell branch)
 #   - clausal/logic/compiler/globals_env.py (`_walk_head`'s cell branch)
 #   - clausal/logic/compiler/list_dispatch.py (the head-literal/deep-gate
 #     helpers)
+#   - `compound_cell_shape` below -- the P3-3 Task 5 narrowing (str functor
+#     only) that database.head_key, solve._term_to_goal/_structural_key/
+#     _templatize_query_goal, builtins/higher_order's call/N family and
+#     builtins/database_ops' assert/retract gate all share.  Those five call
+#     `compound_cell_shape`, NOT `_cell_shape` directly, so the
+#     "is this cell-shaped AND does it name a predicate" question has one
+#     spelling too.
 # See _cell_shape's docstring.
 
 
@@ -227,6 +238,123 @@ def _cell_shape(x: Any) -> tuple[bool, Any]:
         return False, None
     slot0 = x[0]
     return _valid_functor_slot(slot0), slot0
+
+
+def compound_cell_shape(x: Any) -> tuple[bool, Any]:
+    """Return ``(is_compound_cell, functor)`` -- ``_cell_shape`` narrowed to
+    the cells that can name a PREDICATE.
+
+    A ``TUPLE_TAG`` cell is tuple DATA: it has no functor name, so it is
+    never a goal, never a clause head, and never an ``assertz`` argument.
+    Everything ``_cell_shape`` accepts that is not ``TUPLE_TAG`` is a ``str``
+    functor (see ``_valid_functor_slot``), so this is exactly "a cell with a
+    str functor", read RAW, with no second look at slot 0.
+
+    THE ONE SPELLING for P3-3's goal/head surfaces (Task 5, R11):
+    ``database.head_key``, ``solve._term_to_goal``/``_structural_key``/
+    ``_templatize_query_goal``, ``higher_order``'s ``call/N`` family and
+    ``database_ops``'s assert/retract gate all ask this question and all ask
+    it here, built ON ``_cell_shape`` rather than re-spelling it.
+    ``builtins/_helpers._cell_functor`` is the funnel's own equivalent and
+    stays separate for the reason recorded above ``__all__``: the funnel
+    inlines its slot-0 check rather than importing one.
+    """
+    ok, functor = _cell_shape(x)
+    if ok and functor is not TUPLE_TAG:
+        return True, functor
+    return False, None
+
+
+# The control-construct functors an ISO term can spell (``','(A, B)`` is the
+# conjunction as a TERM, which under cells is ``(",", A, B)``).  DEFERRED in
+# cell-GOAL position this phase -- see ``refuse_control_construct_cell``.
+CELL_GOAL_CONTROL_FUNCTORS = frozenset({",", ";", "->", "\\+"})
+
+# The compile-time node each one lowers to, named in the refusal so the
+# message points at the form that DOES work.
+_CONTROL_CONSTRUCT_NODES = {
+    ",": "And", ";": "Or", "->": "if-then (Or of And)", "\\+": "Not",
+}
+
+
+def refuse_control_construct_cell(cell: Any, functor: Any, context: str) -> None:
+    """Refuse a control-construct functor in cell-GOAL position (P3-3 Task 5).
+
+    ISO's conjunction-as-a-term is ``','(A, B)``, which under the cell
+    representation is the ordinary cell ``(",", A, B)``; the same goes for
+    ``;``, ``->`` and ``\\+``.  Calling one means running a control construct
+    the engine only ever lowers at COMPILE time -- the adaptor surface never
+    produces these as terms (a conjunction written in a clause body becomes an
+    ``And`` node), so only a runtime-built term can reach a goal position
+    spelling one.
+
+    Supporting them is a real feature (a runtime goal-tree interpreter), not a
+    branch: it needs cut/barrier semantics, a delimited-control story for
+    ``->``, and a decision about ``\\+``'s NAF database -- all of which the
+    ISO-surface phase owns.  Until then the diagnostic names the functor and
+    the compile-time form, instead of the goal quietly failing (which is what
+    ``call((",", A, B))`` did before this task) or an internal
+    ``NotImplementedError`` from ``terms_to_goalop``.
+
+    Raises ``LogicException(type_error(callable_control_construct_unsupported,
+    Cell))``; returns None for every other functor.  The culprit is the cell
+    itself -- a plain tuple, so it round-trips through unification and
+    ``copy_term`` and can be matched by a ``catch/3`` pattern.
+    """
+    if functor not in CELL_GOAL_CONTROL_FUNCTORS:
+        return
+    # Local import, and it has to be: ``clausal.terms`` imports THIS module
+    # for ``TUPLE_TAG`` and ``clausal.logic.exceptions`` imports
+    # ``clausal.terms``, so a module-level import here would close the cycle.
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, type_error,
+    )
+    node = _CONTROL_CONSTRUCT_NODES[functor]
+    raise LogicException(type_error(
+        "callable_control_construct_unsupported", cell,
+        f"{context}: {functor}/{len(cell) - 1} is a control construct, and a "
+        f"control construct built as a TERM is not callable yet — write it in "
+        f"the clause body instead, where `{functor}` compiles to a {node} "
+        f"node (deferred to the ISO-surface phase; see "
+        f"clausal/logic/cells.py refuse_control_construct_cell)",
+    ))
+
+
+# The functor of the module-QUALIFIED goal form ``M:G``, which under cells is
+# the arity-2 cell ``(":", M, G)``.
+QUALIFIED_GOAL_FUNCTOR = ":"
+
+
+def resolve_qualified_goal_cell(cell: Any, context: str) -> Any:
+    """Resolve the module-qualified goal cell ``(":", M, G)`` to ``(module, G)``.
+
+    STUB (P3-3 Task 5).  Task 6 of the state-relocation plan provides
+    ``resolve_module`` and REPLACES THIS FUNCTION BODY; until then every
+    qualified goal is refused with a typed ``existence_error`` naming the
+    form, so Task 5's goal surfaces can land the branch (and be gated) without
+    waiting on Task 6, and no caller has to learn a new call shape when the
+    real resolver arrives.
+
+    The two callers -- ``solve._term_to_goal`` and ``higher_order``'s
+    ``call/N`` family -- already route ``(":", M, G)`` here, so Task 6's whole
+    integration is this body: resolve *M* to a module, then hand back the
+    module and the inner goal *G* for the caller to lower against.
+
+    :param cell:    the ``(":", M, G)`` cell.
+    :param context: the calling surface's indicator, for the error's context.
+    :raises LogicException: always, until Task 6.
+    """
+    from clausal.logic.exceptions import (  # noqa: PLC0415 -- see the note in
+        LogicException, existence_error,   # refuse_control_construct_cell
+    )
+    from clausal.terms import Compound  # noqa: PLC0415
+
+    raise LogicException(existence_error(
+        "procedure", Compound("/", (QUALIFIED_GOAL_FUNCTOR, 2)),
+        f"{context}: the module-qualified goal {cell[1]!r}:{cell[2]!r} cannot "
+        f"be resolved yet — `:`/2 goal resolution lands with the module "
+        f"resolver in P3-3 Task 6 (see cells.resolve_qualified_goal_cell)",
+    ))
 
 
 def make_cell(functor: Any, *args: Any) -> tuple:

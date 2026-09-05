@@ -1,0 +1,514 @@
+"""P3-3 Task 5 (R11): a CELL is usable as a goal and as an assert/retract argument.
+
+Before this task a cell -- the tagged tuple ``("f", a, b)`` that every data
+functor's terms compile to since the P3-2 flip -- was a term the engine could
+build and unify but could not *run*: ``solve(("p", X))`` raised
+``NotImplementedError`` out of ``terms_to_goalop``, ``call(("p", X))`` failed
+silently, and ``assertz(("p", 1))`` was refused outright with a
+``permission_error`` whose message described the P3-2 diagnostic rather than a
+policy.  R11 makes the cell a first-class spelling of a goal, which is what
+these tests pin:
+
+  - ``database.head_key`` reads a cell's ``(functor, arity)``;
+  - ``solve._term_to_goal`` lowers a cell goal to the SAME ``Call`` node a
+    Compound or class-term goal lowers to, so the three answer alike;
+  - the ``call/N`` family resolves a cell (and a bare atom) NAME against the
+    calling module's database, folding its own extra arguments on ISO-style;
+  - ``assertz``/``asserta``/``retract`` take a cell, gated three ways on the
+    target row (dynamic / static / unknown);
+  - the query cache keys a cell goal structurally, so equal cell goals share
+    one compiled query.
+
+Two cell-goal shapes are DEFERRED with a diagnostic rather than supported, and
+each is pinned here so the deferral is visible and its replacement is a
+test-visible event: the module-qualified ``(":", M, G)`` (P3-3 Task 6 supplies
+the resolver -- see ``cells.resolve_qualified_goal_cell``) and the control
+constructs ``,`` ``;`` ``->`` ``\\+`` (the ISO-surface phase -- see
+``cells.refuse_control_construct_cell``).
+"""
+
+from __future__ import annotations
+
+import textwrap
+
+import pytest
+
+import clausal.import_hook  # noqa: F401 — installs the meta-path finder
+from clausal.import_hook import _load_module
+from clausal.logic.database import Database, head_key
+from clausal.logic.exceptions import LogicException
+from clausal.logic.solve import call as pcall, solve
+from clausal.logic.variables import Var, deref
+from clausal.terms import Compound
+
+
+def _write_module(tmp_path, name: str, source: str):
+    path = tmp_path / f"{name}.clausal"
+    path.write_text(textwrap.dedent(source).lstrip())
+    return _load_module(name, str(path))
+
+
+def _lm(module):
+    return module.__dict__["$module"]
+
+
+def _error_term(exc: LogicException):
+    """``(inner_error_term, context_message)`` from a raised LogicException."""
+    return exc.term.args[0], exc.term.args[1]
+
+
+@pytest.fixture
+def mod(tmp_path):
+    """One module with a dynamic predicate, a static one and two call/N hosts."""
+    return _write_module(tmp_path, "cellgoals", """
+        -dynamic(p/1)
+        -dynamic(pair/2)
+
+        p(1),
+        p(2),
+
+        stat(9),
+
+        q(X) <- p(X),
+
+        cg1(G) <- call(G),
+        cg2(G, A) <- call(G, A),
+        cg3(G, A, B) <- call(G, A, B),
+    """)
+
+
+# ── head_key ───────────────────────────────────────────────────────────────
+
+
+class TestHeadKeyCellBranch:
+    def test_a_cell_reads_its_functor_and_arity(self):
+        assert head_key(("p", 1)) == ("p", 1)
+        assert head_key(("pair", 1, 2)) == ("pair", 2)
+
+    def test_a_zero_arity_cell_reads_as_arity_zero(self):
+        assert head_key(("p",)) == ("p", 0)
+
+    def test_a_tuple_tag_cell_is_data_and_still_raises(self):
+        """``(tuple, 1, 2)`` is tuple DATA -- it names no predicate."""
+        with pytest.raises(TypeError):
+            head_key((tuple, 1, 2))
+
+    def test_a_var_slot0_tuple_is_data_and_still_raises(self):
+        with pytest.raises(TypeError):
+            head_key((Var(), 1))
+
+    def test_an_empty_tuple_still_raises(self):
+        with pytest.raises(TypeError):
+            head_key(())
+
+
+# ── cells as goals ─────────────────────────────────────────────────────────
+
+
+class TestCellAsGoal:
+    def test_var_carrying_cell_goal_enumerates(self, mod):
+        X = Var()
+        assert [deref(X) for _ in solve(("p", X), _lm(mod))] == [1, 2]
+
+    def test_a_cell_goal_answers_what_the_class_term_goal_answers(self, mod):
+        X, Y = Var(), Var()
+        by_class = [deref(X) for _ in solve(mod.p(X), _lm(mod))]
+        by_cell = [deref(Y) for _ in solve(("p", Y), _lm(mod))]
+        assert by_cell == by_class == [1, 2]
+
+    def test_a_ground_cell_goal_succeeds_and_fails_by_value(self, mod):
+        assert len(list(solve(("p", 2), _lm(mod)))) == 1
+        assert list(solve(("p", 5), _lm(mod))) == []
+
+    def test_a_cell_goal_reaches_a_rule_not_only_facts(self, mod):
+        X = Var()
+        assert [deref(X) for _ in solve(("q", X), _lm(mod))] == [1, 2]
+
+    def test_a_cell_goal_lowers_to_the_same_node_a_compound_goal_does(self):
+        from clausal.logic.solve import _term_to_goal
+        v = Var()
+        from_cell = _term_to_goal(("p", v))
+        from_compound = _term_to_goal(Compound("p", (v,)))
+        assert from_cell == from_compound
+
+
+# ── call/N over cells and atoms ────────────────────────────────────────────
+
+
+class TestCallNOverCells:
+    def test_call_1_over_a_cell(self, mod):
+        X = Var()
+        assert [deref(X) for _ in pcall("cg1", ("p", X), module=_lm(mod))] == [1, 2]
+
+    def test_call_2_folds_its_extra_arg_onto_a_zero_arity_cell(self, mod):
+        """ISO: ``call(f, B)`` is the goal ``f(B)``."""
+        X = Var()
+        assert [deref(X) for _ in pcall("cg2", ("p",), X, module=_lm(mod))] == [1, 2]
+
+    def test_call_2_folds_its_extra_arg_onto_a_one_arity_cell(self, mod):
+        """``call(pair(1), Y)`` is the goal ``pair(1, Y)``."""
+        lm = _lm(mod)
+        list(pcall("assertz", ("pair", 1, "a"), module=lm))
+        list(pcall("assertz", ("pair", 1, "b"), module=lm))
+        Y = Var()
+        assert [deref(Y) for _ in pcall("cg2", ("pair", 1), Y, module=lm)] == ["a", "b"]
+
+    def test_call_3_folds_both_extra_args(self, mod):
+        lm = _lm(mod)
+        list(pcall("assertz", ("pair", 3, 4), module=lm))
+        assert len(list(pcall("cg3", ("pair",), 3, 4, module=lm))) == 1
+        assert list(pcall("cg3", ("pair",), 3, 5, module=lm)) == []
+
+    def test_a_bare_atom_goal_resolves_with_the_extra_args(self, mod):
+        """A str IS an atom (P3-1), so ``call(p, X)`` is the goal ``p(X)``."""
+        X = Var()
+        assert [deref(X) for _ in pcall("cg2", "p", X, module=_lm(mod))] == [1, 2]
+
+    def test_a_non_cell_non_callable_goal_still_fails_silently(self, mod):
+        """The translator session's pinned §4.2 contract, unchanged."""
+        assert list(pcall("cg1", 42, module=_lm(mod))) == []
+        assert list(pcall("cg1", 3.5, module=_lm(mod))) == []
+        assert list(pcall("cg1", [1, 2], module=_lm(mod))) == []
+
+    def test_a_tuple_tag_data_cell_goal_fails_silently(self, mod):
+        assert list(pcall("cg1", (tuple, 1, 2), module=_lm(mod))) == []
+
+    def test_an_unknown_cell_goal_fails_silently(self, mod):
+        """An absent predicate is not an error here — same as any non-goal."""
+        assert list(pcall("cg1", ("no_such_pred", 1), module=_lm(mod))) == []
+
+    def test_call_over_a_predicate_class_is_untouched(self, mod):
+        """The pre-existing route — a goal OBJECT answering ``_get_dispatch``
+        — is reached before any name resolution and is unchanged."""
+        X = Var()
+        assert [deref(X) for _ in pcall("cg2", mod.p, X, module=_lm(mod))] == [1, 2]
+
+    def test_a_runtime_built_class_TERM_goal_still_fails_silently(self, mod):
+        """KNOWN ASYMMETRY, deliberately not widened by this task: ``call(G)``
+        resolves a cell and an atom by NAME, but a class-term INSTANCE built at
+        runtime is neither callable nor ``_get_dispatch``-bearing (that
+        protocol lives on the metaclass, so only the CLASS answers it), and
+        still fails silently.  Since the P3-2 flip which of the two a caller
+        gets depends on whether the functor has clauses, so the two spellings
+        of the same goal do not behave alike.  Widening it is a behaviour
+        change outside R11's scope — see
+        todo/call-n-does-not-resolve-a-runtime-built-class-term-goal-2026-09-06.md."""
+        X = Var()
+        assert list(pcall("cg1", mod.p(X), module=_lm(mod))) == []
+
+    def test_the_call_family_is_registered_db_receiving(self):
+        """call/N moved from _BUILTINS to _DB_BUILTINS so it can resolve a
+        NAME against the caller's database; the arity set is unchanged."""
+        from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
+        for n in range(1, 9):
+            assert ("call", n) in _DB_BUILTINS
+            assert ("call_goal", n) in _DB_BUILTINS
+            assert ("call", n) not in _BUILTINS
+            assert ("call_goal", n) not in _BUILTINS
+
+    def test_the_db_less_call_dispatch_still_invokes_a_goal_object(self, mod):
+        """``factory(None)`` is call/N's pre-Task-5 self: no name resolution,
+        everything else intact.  This is the path ``_BUILTIN_CLASSES`` and a
+        ``BuiltinPredicate`` built without a db take."""
+        from clausal.logic.builtins._registry import _stateless_dispatch
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        call_2 = _stateless_dispatch("call", 2)
+        call_1 = _stateless_dispatch("call", 1)
+        assert call_2 is not None and call_1 is not None
+        X = Var()
+        answers = [deref(X)
+                   for _ in _drive_trampoline(call_2, Trail(), mod.p, X)]
+        assert answers == [1, 2]
+        # ...and with no db there is no name to resolve, so a cell fails.
+        Y = Var()
+        assert list(_drive_trampoline(call_1, Trail(), ("p", Y))) == []
+
+
+# ── the two deferred cell-goal forms ───────────────────────────────────────
+
+
+class TestDeferredCellGoalForms:
+    @pytest.mark.parametrize("functor", [",", ";", "->", "\\+"])
+    def test_a_control_construct_cell_goal_is_refused_by_solve(self, mod, functor):
+        cell = (functor, ("p", 1), ("p", 2))
+        with pytest.raises(LogicException) as exc_info:
+            list(solve(cell, _lm(mod)))
+        inner, context = _error_term(exc_info.value)
+        assert inner == Compound(
+            "type_error", ("callable_control_construct_unsupported", cell))
+        assert f"{functor}/2 is a control construct" in context
+
+    def test_a_control_construct_cell_goal_is_refused_by_call(self, mod):
+        cell = (",", ("p", 1), ("p", 2))
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("cg1", cell, module=_lm(mod)))
+        inner, context = _error_term(exc_info.value)
+        assert inner.functor == "type_error"
+        assert inner.args[0] == "callable_control_construct_unsupported"
+        assert "call/1" in context
+
+    def test_the_refusal_names_the_compile_time_form(self, mod):
+        with pytest.raises(LogicException) as exc_info:
+            list(solve((",", ("p", 1), ("p", 2)), _lm(mod)))
+        _inner, context = _error_term(exc_info.value)
+        assert "And" in context and "clause body" in context
+
+    def test_a_qualified_goal_cell_is_refused_by_the_task_6_stub(self, mod):
+        with pytest.raises(LogicException) as exc_info:
+            list(solve((":", "cellgoals", ("p", 1)), _lm(mod)))
+        inner, context = _error_term(exc_info.value)
+        assert inner == Compound(
+            "existence_error", ("procedure", Compound("/", (":", 2))))
+        assert "resolve_qualified_goal_cell" in context, (
+            "the stub must name itself so Task 6's replacement is findable")
+
+    def test_a_qualified_goal_cell_is_refused_by_call_too(self, mod):
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("cg1", (":", "cellgoals", ("p", 1)), module=_lm(mod)))
+        inner, _context = _error_term(exc_info.value)
+        assert inner.args[0] == "procedure"
+
+    def test_the_stub_is_the_one_task_6_replaces(self):
+        """Named so the hand-off is a symbol, not a grep."""
+        from clausal.logic import cells
+        assert callable(cells.resolve_qualified_goal_cell)
+        with pytest.raises(LogicException):
+            cells.resolve_qualified_goal_cell((":", "m", ("g",)), "ctx")
+
+
+# ── assertz / asserta / retract with a cell ────────────────────────────────
+
+
+class TestCellAssertRetract:
+    def test_a_cell_asserted_into_a_dynamic_predicate_is_queryable_both_ways(
+            self, mod):
+        lm = _lm(mod)
+        list(pcall("assertz", ("p", 7), module=lm))
+        X = Var()
+        by_cell = [deref(X) for _ in solve(("p", X), lm)]
+        Y = Var()
+        by_class = [deref(Y) for _ in solve(mod.p(Y), lm)]
+        Z = Var()
+        by_call_node = [deref(Z) for _ in pcall("p", Z, module=lm)]
+        assert by_cell == by_class == by_call_node == [1, 2, 7]
+
+    def test_asserta_puts_the_cell_first(self, mod):
+        lm = _lm(mod)
+        list(pcall("asserta", ("p", 0), module=lm))
+        X = Var()
+        assert [deref(X) for _ in solve(("p", X), lm)] == [0, 1, 2]
+
+    def test_the_asserted_clause_has_the_shape_the_source_clauses_have(self, mod):
+        """A cell is a SPELLING of the term, so it must not leave a foreign
+        clause shape behind: with a class in scope the head is that class's
+        instance, exactly as ``assertz(p(7))`` written in source produces."""
+        lm = _lm(mod)
+        list(pcall("assertz", ("p", 7), module=lm))
+        head = lm.db.clauses_for("p", 1)[-1].head
+        assert type(head) is mod.p
+
+    def test_a_cell_retract_removes_a_cell_asserted_clause(self, mod):
+        lm = _lm(mod)
+        list(pcall("assertz", ("p", 7), module=lm))
+        assert len(list(pcall("retract", ("p", 7), module=lm))) == 1
+        X = Var()
+        assert [deref(X) for _ in solve(("p", X), lm)] == [1, 2]
+
+    def test_a_cell_retract_removes_a_clause_loaded_from_source(self, mod):
+        """The cross-representation case: the clause head is a class term and
+        the pattern is a cell.  It matches because the cell normalizes to that
+        class's instance before the search."""
+        lm = _lm(mod)
+        assert len(list(pcall("retract", ("p", 1), module=lm))) == 1
+        X = Var()
+        assert [deref(X) for _ in solve(("p", X), lm)] == [2]
+
+    def test_a_cell_retract_binds_the_patterns_variables(self, mod):
+        lm = _lm(mod)
+        X = Var()
+        assert len(list(pcall("retract", ("p", X), module=lm))) == 1
+        assert deref(X) == 1
+
+    def test_a_cell_retract_that_matches_nothing_fails_without_writing(self, mod):
+        lm = _lm(mod)
+        before = list(lm.db.clauses_for("p", 1))
+        assert list(pcall("retract", ("p", 99), module=lm)) == []
+        assert lm.db.clauses_for("p", 1) == before
+
+    def test_a_cell_assert_against_a_static_predicate_is_a_permission_error(
+            self, mod):
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("assertz", ("stat", 3), module=_lm(mod)))
+        inner, context = _error_term(exc_info.value)
+        assert inner == Compound(
+            "permission_error",
+            ("modify", "static_procedure", Compound("/", ("stat", 1))))
+        assert "assertz/1" in context and "-dynamic(stat/1)" in context
+
+    def test_a_cell_assert_against_an_unknown_predicate_is_an_existence_error(
+            self, mod):
+        """Not assertz's usual "create the predicate": a cell is
+        indistinguishable from a str-headed data tuple, so an undeclared
+        target must not silently become state."""
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("assertz", ("nope", 3), module=_lm(mod)))
+        inner, context = _error_term(exc_info.value)
+        assert inner == Compound(
+            "existence_error", ("procedure", Compound("/", ("nope", 1))))
+        assert "does not create one" in context
+
+    def test_a_cell_assert_against_a_declared_data_functor_is_a_permission_error(
+            self, tmp_path):
+        """A data functor -- declared with fields, given no clauses -- has no
+        Database ROW at all, so the row lookup alone would call it unknown.
+        The declaration is what puts it on the static side of the line, and
+        the P3-2 diagnostic (which names ``-dynamic`` as the remedy) is what
+        it gets.  Also pinned from the .clausal surface by
+        tests/test_exceptions.py::TestAssertzAgainstADataFunctor."""
+        m = _write_module(tmp_path, "cellgoals_data", """
+            -module(cellgoals_data, [d(A), go(X)])
+
+            go(X) <- assertz(d(X)),
+        """)
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("go", 7, module=_lm(m)))
+        inner, context = _error_term(exc_info.value)
+        assert inner == Compound(
+            "permission_error",
+            ("modify", "static_procedure", Compound("/", ("d", 1))))
+        assert "data functor" in context and "-dynamic(d/1)" in context
+
+    def test_the_declaration_check_is_arity_checked(self, tmp_path):
+        """``d`` is declared at arity 1; a runtime-built cell naming ``d/2``
+        is not that declaration, so it is genuinely unknown.  (The cell is
+        built here rather than written as ``d(X, Y)`` in source, which the
+        compiler rejects at load with its own arity SyntaxError.)"""
+        m = _write_module(tmp_path, "cellgoals_data2", """
+            -module(cellgoals_data2, [d(A), go(X)])
+
+            go(X) <- assertz(d(X)),
+        """)
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("assertz", ("d", 7, 8), module=_lm(m)))
+        inner, _context = _error_term(exc_info.value)
+        assert inner == Compound(
+            "existence_error", ("procedure", Compound("/", ("d", 2))))
+        # ...while arity 1, the declared one, is the permission_error.
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("assertz", ("d", 7), module=_lm(m)))
+        assert _error_term(exc_info.value)[0].functor == "permission_error"
+
+    def test_a_cell_retract_follows_the_same_gate(self, mod):
+        lm = _lm(mod)
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("retract", ("stat", 9), module=lm))
+        inner, context = _error_term(exc_info.value)
+        assert inner.functor == "permission_error"
+        assert "retract/1" in context
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("retract", ("nope", 3), module=lm))
+        assert _error_term(exc_info.value)[0].functor == "existence_error"
+
+    def test_a_non_cell_assert_is_untouched_by_the_gate(self, mod):
+        """A Compound assert still creates its predicate, as it always has."""
+        lm = _lm(mod)
+        list(pcall("assertz", Compound("fresh", (1,)), module=lm))
+        X = Var()
+        assert [deref(X) for _ in pcall("fresh", X, module=lm)] == [1]
+
+    def test_a_cell_assert_into_a_classless_dynamic_row_uses_a_compound_head(self):
+        """No class in scope (a bare Database) — the head is the Compound
+        ``assertz(Compound(...))`` would have built."""
+        db = Database()
+        db.mark_dynamic("r", 1)
+        from clausal.logic.builtins import get_builtin_dispatch
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        dispatch = get_builtin_dispatch("assertz", 1, db)
+        list(_drive_trampoline(dispatch, Trail(), ("r", 5)))
+        head = db.clauses_for("r", 1)[-1].head
+        assert isinstance(head, Compound) and head.functor == "r"
+
+
+class TestTheLowLevelDoorRefusesACellHead:
+    """``head_key`` reads a cell so the assert builtins can ask about the raw
+    term; STORING a cell-headed clause is a different matter and stays shut.
+
+    Without the guard the clause compiles — and answers with its argument
+    UNBOUND, because no lowering path reads a cell as a head. A silent wrong
+    answer is worse than the ``TypeError`` this door gave before ``head_key``
+    learned about cells, so the door refuses and names ``assertz/1``.
+    """
+
+    def test_database_assertz_refuses_a_cell_head(self):
+        from clausal.logic.database import Clause
+        db = Database()
+        with pytest.raises(LogicException) as exc_info:
+            db.assertz(Clause(head=("p", 1), body=[]))
+        inner, context = _error_term(exc_info.value)
+        assert inner == Compound("type_error", ("callable", ("p", 1)))
+        assert "Database.assertz" in context and "assertz/1" in context
+        assert db.clauses_for("p", 1) == [], "and it stored nothing"
+
+    def test_database_asserta_refuses_a_cell_head(self):
+        from clausal.logic.database import Clause
+        db = Database()
+        with pytest.raises(LogicException) as exc_info:
+            db.asserta(Clause(head=("p", 1), body=[]))
+        assert "Database.asserta" in _error_term(exc_info.value)[1]
+
+    def test_a_tuple_tag_head_keeps_the_old_typeerror(self):
+        from clausal.logic.database import Clause
+        db = Database()
+        with pytest.raises(TypeError):
+            db.assertz(Clause(head=(tuple, 1), body=[]))
+
+    def test_the_builtin_door_is_the_one_that_works(self, mod):
+        """The refusal points somewhere real: the same cell through
+        ``assertz/1`` lands, because that door normalizes it first."""
+        lm = _lm(mod)
+        list(pcall("assertz", ("p", 7), module=lm))
+        X = Var()
+        assert 7 in [deref(X) for _ in solve(("p", X), lm)]
+
+
+# ── the query cache ────────────────────────────────────────────────────────
+
+
+class TestCellGoalQueryCache:
+    def test_two_structurally_equal_cell_goals_share_compiled_code(self, mod):
+        from clausal.logic.solve import _query_cache
+        lm = _lm(mod)
+        X = Var()
+        list(solve(("p", X), lm))
+        size = len(_query_cache)
+        assert size > 0, "a cell goal must be cacheable at all"
+        Y = Var()
+        list(solve(("p", Y), lm))
+        assert len(_query_cache) == size
+
+    def test_distinct_ground_cell_goals_share_one_compiled_query(self, mod):
+        """``_templatize_query_goal`` parameterizes a cell's ground args, so
+        the compiled query is value-independent."""
+        from clausal.logic.solve import _query_cache
+        lm = _lm(mod)
+        list(solve(("p", 11), lm))
+        size = len(_query_cache)
+        for value in (12, 13, 14):
+            list(solve(("p", value), lm))
+        assert len(_query_cache) == size
+
+    def test_a_cell_goal_keys_under_its_own_tag_not_the_sequence_tag(self):
+        from clausal.logic.solve import _structural_key
+        assert _structural_key(("p", 1), {})[0] == "cell"
+        assert _structural_key([1, 2], {})[0] == "seq"
+        assert _structural_key((tuple, 1, 2), {})[0] == "seq"
+
+    def test_different_cell_functors_do_not_share_a_key(self):
+        from clausal.logic.solve import _structural_key
+        assert _structural_key(("p", 1), {}) != _structural_key(("q", 1), {})
+
+    def test_an_unhashable_arg_still_disables_caching(self, mod):
+        from clausal.logic.solve import _goal_cache_key
+        assert _goal_cache_key(("p", {1: 2}), _lm(mod)) is None

@@ -52,6 +52,33 @@ _DB_BUILTINS: dict[tuple[str, int], Callable] = {}
 _BUILTIN_FIELDS: dict[tuple[str, int], tuple[str, ...]] = {}
 
 
+def _stateless_dispatch(functor: str, arity: int) -> "Callable | None":
+    """The dispatch function for ``(functor, arity)`` on a path with NO db.
+
+    ``_BUILTINS`` entries are db-free by construction and answer directly. A
+    ``_DB_BUILTINS`` factory normally cannot (``assertz`` without a database is
+    not a working assertz, and the caller is better off with the
+    ``NotImplementedError`` than with a closure that raises ``AttributeError``
+    on first use), so it answers ``None`` — unless the factory carries
+    ``_db_optional``, which says the factory produces a correct, if reduced,
+    dispatch for ``db=None``.
+
+    Exactly one family sets that flag today: ``call_goal``/``call`` (P3-3 Task
+    5), which became db-receiving only to resolve a cell/atom goal NAME against
+    the caller's database. Everything it did before — invoking a goal OBJECT —
+    needs no db at all, so ``factory(None)`` is its pre-Task-5 self, and the
+    db-less paths (the ``_BUILTIN_CLASSES`` table, a ``BuiltinPredicate`` built
+    without a db) keep working exactly as they did.
+    """
+    fn = _BUILTINS.get((functor, arity))
+    if fn is not None:
+        return fn
+    factory = _DB_BUILTINS.get((functor, arity))
+    if factory is not None and getattr(factory, "_db_optional", False):
+        return factory(None)
+    return None
+
+
 def _extract_fields_simple(fn: Callable) -> tuple[str, ...]:
     """Extract field names from a simple-mode builtin (strip trail, k)."""
     params = list(inspect.signature(fn).parameters)
@@ -272,6 +299,11 @@ class BuiltinPredicate:
             if self._factory is not None and self._db is not None:
                 self._dispatch_fn = self._factory(self._db)
             else:
+                # No db: a ``_db_optional`` factory still answers (P3-3 Task
+                # 5) — see ``_stateless_dispatch``.
+                self._dispatch_fn = _stateless_dispatch(
+                    self._functor, self._arity)
+            if self._dispatch_fn is None:
                 raise NotImplementedError(
                     f"Builtin {self._functor}/{self._arity} has no dispatch function"
                 )
@@ -298,12 +330,20 @@ class BuiltinPredicate:
             # Add our own arity to the map.
             if self._dispatch_fn is not None:
                 self._arity_map[self._arity] = self._dispatch_fn
-            elif self._factory is not None and self._db is not None:
-                self._arity_map[self._arity] = self._factory(self._db)
+            else:
+                fn = (self._factory(self._db)
+                      if self._factory is not None and self._db is not None
+                      else _stateless_dispatch(self._functor, self._arity))
+                if fn is not None:
+                    self._arity_map[self._arity] = fn
         if other._dispatch_fn is not None:
             self._arity_map[other._arity] = other._dispatch_fn
-        elif other._factory is not None and other._db is not None:
-            self._arity_map[other._arity] = other._factory(other._db)
+        else:
+            fn = (other._factory(other._db)
+                  if other._factory is not None and other._db is not None
+                  else _stateless_dispatch(other._functor, other._arity))
+            if fn is not None:
+                self._arity_map[other._arity] = fn
 
     def __repr__(self) -> str:
         if self._arity_map:
@@ -422,7 +462,7 @@ def _build_all_builtin_classes() -> None:
             arity = arities[0]
             fields = _BUILTIN_FIELDS[(functor, arity)]
             cls = make_predicate(functor, list(fields))
-            dispatch_fn = _BUILTINS.get((functor, arity))
+            dispatch_fn = _stateless_dispatch(functor, arity)
             if dispatch_fn is not None:
                 # Through the mutation gate (P3-3 Task 3): a dispatch install
                 # needs an open transaction, builtins included.  The row here
@@ -438,7 +478,7 @@ def _build_all_builtin_classes() -> None:
             for arity in sorted(arities):
                 fields = _BUILTIN_FIELDS[(functor, arity)]
                 cls = make_predicate(f"{functor}", list(fields))
-                dispatch_fn = _BUILTINS.get((functor, arity))
+                dispatch_fn = _stateless_dispatch(functor, arity)
                 if dispatch_fn is not None:
                     with cls._mutate("builtin-registry", "recompile"):
                         cls._dispatch_fn = dispatch_fn

@@ -59,12 +59,17 @@ def _get_head_arg(clause: Clause, pos: int) -> Any:
     """Return the argument at position *pos* from the clause head (or None).
 
     No cell branch, deliberately (P3-2 Task 3, plan claim verified rather than
-    assumed): this reads the HEAD TERM, and in P3-2 a head is still a predicate
-    instance or a ``Compound`` — never a cell.  ``database.head_key`` raises on
-    a tuple head and ``database_ops._reject_cell_head`` turns an ``assertz`` of
-    one into ``permission_error(modify, static_procedure, f/N)``, so no cell
-    can reach here as a *head*.  Cell head ARGUMENTS are a different question
-    and are handled by the callers below.  Cell heads are P3-3.
+    assumed; RE-VERIFIED for P3-3 Task 5): this reads the HEAD TERM, and a
+    stored head is still a predicate instance or a ``Compound`` — never a cell.
+
+    Task 5 (R11) made a cell a legal ``assertz`` ARGUMENT, which is a different
+    thing: ``database_ops._check_cell_head_permission`` normalizes it to the
+    class term or ``Compound`` before the clause is built, so what lands in the
+    store is a shape this function reads.  The low-level door stays shut —
+    ``database._stored_head_key`` refuses a cell-headed ``Clause`` outright,
+    naming this absence as the reason (a cell head would compile to a predicate
+    that answers with its argument unbound).  Cell head ARGUMENTS are a
+    different question again and are handled by the callers below.
     """
     head = clause.head
     if isinstance(head, Compound):
