@@ -39,11 +39,16 @@ import subprocess
 import pytest
 
 from clausal.tools.clausal_to_prolog import (
+    GOAL_TRANSPARENT,
     META_CALLER_SIGNATURES,
+    MODE_MODULE_SENSITIVE,
+    _existing_meta_predicate_indicators,
     clausal_source_to_prolog,
     clausal_source_to_prolog_ast,
     collect_local_meta_modes,
+    goal_subterms,
 )
+from clausal.tools.prolog_ast import PAtom, PCompound, PDirective, PNumber
 
 SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 
@@ -95,8 +100,17 @@ def _scryer(tmp_path, files: dict[str, str], entry: str, query: str) -> str:
 #   ?, +, -    -> valid syntax, NON-meta: the argument is NOT qualified
 #   *          -> syntax_error(invalid_meta_predicate_decl) -- must never be emitted
 #
-# The translator therefore emits exactly two spellings: an integer for a meta position
-# and `?` for every other position. `:` is honoured but unneeded; `*` is a load error.
+# READ THIS TABLE NARROWLY. Every row below is a host whose argument is called at ONE
+# arity, and there it is true that any integer works. It does NOT follow that the
+# integer's value is ignored in general -- TestAmbiguousPositionContract measures mode
+# `N` resolving the argument against `name/N` in the CALLER's module, which only shows
+# up when the same name exists at several arities. Generalising this table beyond
+# single-arity hosts is exactly the error that produced the `?, +, -` rows looking like
+# limitations rather than the correct non-meta behaviour they are.
+#
+# The translator emits three spellings: an integer for a position with one call arity,
+# `:` for a goal position called at several, and `?` for a non-meta position. `*` is a
+# load error and is never emitted.
 
 @requires_scryer
 @pytest.mark.parametrize("mode,qualifies", [
@@ -200,7 +214,21 @@ def test_meta_caller_table_is_keyed_by_functor_and_arity():
     """The base-case table: (functor, arity) -> (goal argument index, appended count)."""
     assert META_CALLER_SIGNATURES[("call_goal", 3)] == (0, 2)
     assert META_CALLER_SIGNATURES[("call", 3)] == (0, 2)
-    assert META_CALLER_SIGNATURES[("include", 3)] == (0, 1)
+
+
+@pytest.mark.parametrize("functor,arity", [
+    ("include", 3), ("exclude", 3), ("max_by", 3), ("min_by", 3),
+])
+def test_the_table_carries_nothing_speculative(functor, arity):
+    """No kit host reaches these, and they are plausible DATA constructors.
+
+    An earlier draft carried them on the reasoning that a host reaching one *would*
+    be a meta host. In a legal corpus `include(...)`, `max_by(...)` and friends are
+    at least as likely to be ordinary terms, and a wrong annotation on a data
+    position corrupts it silently (see TestDataPositionFence). Step B re-adds
+    include/3 when the companion exists and something consumes it.
+    """
+    assert (functor, arity) not in META_CALLER_SIGNATURES
 
 
 def test_meta_call_under_a_goal_transparent_wrapper_is_found():
@@ -419,3 +447,249 @@ go(R) <- vflips(base, bump, edit, verdict, R)
         assert ":- meta_predicate(vflips(?, ?, ?, 2, ?))." in vlib, vlib
         answer = _scryer(tmp_path, {"vlib.pl": vlib, "dq3.pl": dq}, "dq3.pl", "go(R).")
         assert "existence_error" in answer, answer
+
+
+# ── E. The goal-position fence ──────────────────────────────────────────────────
+
+class TestDataPositionFence:
+    """Evidence is read from GOAL positions only -- never from a term that merely
+    LOOKS like a meta-call.
+
+    `test_the_hazard_is_real` is the reason this fence exists and is measured, not
+    assumed: it hand-writes the annotation the unfenced scan would have produced and
+    shows Scryer silently corrupting a data argument. The other cases show the
+    translator does not produce it.
+    """
+
+    @requires_scryer
+    def test_the_hazard_is_real(self, tmp_path):
+        """A mode on a DATA position corrupts the term, silently and with no error.
+
+        `keep/2` just unifies its two arguments. Annotate argument 1 as a goal and
+        Scryer module-qualifies it at the call site, so a caller that passed `foo`
+        gets back `hazard_user:foo` -- and `R == foo` then FAILS with no error
+        anywhere. Loud failure is acceptable (controller A-2); this is the quiet kind.
+        """
+        lib = (":- module(hazard_lib, [keep/2]).\n"
+               ":- meta_predicate(keep(1, ?)).\n"
+               "keep(D, D).\n")
+        user = (":- module(hazard_user, [probe/1, same/0]).\n"
+                ":- use_module('hazard_lib', [keep/2]).\n"
+                "probe(R) :- keep(foo, R).\n"
+                "same :- keep(foo, R), R == foo.\n")
+        files = {"hazard_lib.pl": lib, "hazard_user.pl": user}
+        assert _scryer(tmp_path, files, "hazard_user.pl", "probe(R).") == \
+            "R = hazard_user:foo."
+        assert _scryer(tmp_path, files, "hazard_user.pl", "same.") == "false."
+
+    def test_a_term_that_merely_looks_like_a_meta_call_is_not_evidence(self):
+        """The `mk` shape: the clause BUILDS `call_goal(D, X)`, it never calls it."""
+        src = "mk(D, X, T) <- (T is call_goal(D, X))\n"
+        assert collect_local_meta_modes(
+            clausal_source_to_prolog_ast(src, strict=True)) == {}
+        assert "meta_predicate" not in clausal_source_to_prolog(src, strict=True)
+
+    def test_a_locally_built_closure_does_not_annotate_its_captured_parameter(self):
+        """`D` is captured INSIDE the goal term; the goal is not `D` itself."""
+        src = "host(D, X, Y) <- call_goal(closure_over(D), X, Y)\n"
+        assert collect_local_meta_modes(
+            clausal_source_to_prolog_ast(src, strict=True)) == {}
+        assert "meta_predicate" not in clausal_source_to_prolog(src, strict=True)
+
+    def test_a_real_meta_call_under_a_data_term_is_still_not_reached(self):
+        """Depth does not rescue it: the fence stops at the first non-combinator."""
+        src = "mk(D, T) <- (T is wrapper(once(call_goal(D, x))))\n"
+        assert collect_local_meta_modes(
+            clausal_source_to_prolog_ast(src, strict=True)) == {}
+
+    def test_goal_subterms_descends_combinators_and_stops_at_data(self):
+        goal = PCompound(",", (
+            PCompound("once", (PCompound("reached", (PAtom("a"),)),)),
+            PCompound("=", (PAtom("t"), PCompound("not_reached", (PAtom("b"),)))),
+        ))
+        functors = {n.functor for n in goal_subterms(goal) if isinstance(n, PCompound)}
+        assert "reached" in functors
+        assert "not_reached" not in functors
+
+    def test_every_goal_transparent_entry_indexes_a_real_argument(self):
+        for (functor, arity), indexes in GOAL_TRANSPARENT.items():
+            assert indexes, f"{functor}/{arity} lists no goal argument"
+            assert max(indexes) < arity, f"{functor}/{arity} indexes past its arity"
+
+
+# ── F. The ambiguous-position contract (controller ruling 2026-09-05) ───────────
+
+class TestAmbiguousPositionContract:
+    """ONE contract, shared by local detection, the supplied map and the fixpoint:
+
+      * a position with a SINGLE call arity   -> that integer;
+      * a position that IS a goal but is called at SEVERAL arities -> `:`;
+      * a position with NO goal evidence      -> `?`, never a guess.
+
+    The ruling reached here assumed Scryer ignores the integer's value, which would
+    have allowed any candidate (it proposed the maximum). It does not:
+    `test_the_mode_integer_pins_the_callers_arity` measures mode `N` resolving the
+    argument against `name/N` in the CALLER's module, so the maximum silently drops
+    every other chain, and `0` is not a safe stand-in either. `:` is the only
+    spelling correct in every row, so it implements the ruling's intent -- "every
+    chain then works" -- with the mechanism that actually holds.
+    """
+
+    AMBIGUOUS = ("two(PRED, OUT) <- call_goal(PRED, a, OUT)\n"
+                 "two(PRED, OUT) <- call_goal(PRED, a, b, OUT)\n")
+
+    @requires_scryer
+    @pytest.mark.parametrize("mode,expected", [
+        ("2", "L = [short]."),          # pins p/2: the 3-appended clause is lost
+        ("3", "L = [long]."),           # pins p/3: the 2-appended clause is lost
+        (":", "L = [short,long]."),     # qualifies without pinning: both survive
+    ])
+    def test_the_mode_integer_pins_the_callers_arity(self, tmp_path, mode, expected):
+        """The measurement the contract turns on. A host calling its argument at two
+        arities, against a caller that defines the name at both."""
+        lib = (f":- module(amb, [two/2]).\n"
+               f":- meta_predicate(two({mode}, ?)).\n"
+               f"two(Pred, Out) :- call(Pred, a, Out).\n"
+               f"two(Pred, Out) :- call(Pred, a, b, Out).\n")
+        user = (":- module(ambq, [go/1]).\n"
+                ":- use_module('amb', [two/2]).\n"
+                "p(a, short).\n"
+                "p(a, b, long).\n"
+                "go(R) :- two(p, R).\n")
+        answer = _scryer(tmp_path, {"amb.pl": lib, "ambq.pl": user}, "ambq.pl",
+                         "findall(R, go(R), L).")
+        assert answer == expected, answer
+
+    @requires_scryer
+    def test_zero_is_not_a_safe_stand_in(self, tmp_path):
+        """`0` only looks safe until the caller defines the name at arity 0.
+
+        It then binds the meta-argument to `p/0` and the caller gets back UNBOUND
+        variables -- no error, wrong answers. This is why the ambiguous mode is `:`
+        and not `0`.
+        """
+        lib = (":- module(amb, [two/2]).\n"
+               ":- meta_predicate(two(0, ?)).\n"
+               "two(Pred, Out) :- call(Pred, a, Out).\n"
+               "two(Pred, Out) :- call(Pred, a, b, Out).\n")
+        user = (":- module(ambq, [go/1]).\n"
+                ":- use_module('amb', [two/2]).\n"
+                "p.\n"
+                "p(a, short).\n"
+                "p(a, b, long).\n"
+                "go(R) :- two(p, R).\n")
+        answer = _scryer(tmp_path, {"amb.pl": lib, "ambq.pl": user}, "ambq.pl",
+                         "findall(R, go(R), L).")
+        assert "short" not in answer and "long" not in answer, answer
+
+    @requires_scryer
+    def test_colon_qualifies_a_bare_reference_for_call_n_consumption(self, tmp_path):
+        """`:` is LOAD-BEARING here, so it is pinned directly and not by implication.
+
+        The whole ambiguous-position contract rests on `:` doing the one job the
+        directive exists for: making a BARE predicate reference from the caller's
+        module resolve when the callee reaches it through `call/N`. Asserted here
+        against a real binding, with a `?` control on the identical layout that must
+        raise -- so this cannot go green on a Scryer that resolves bare atoms anyway.
+        """
+        def lib(mode):
+            return (f":- module(collib, [host/4]).\n"
+                    f":- meta_predicate(host(?, ?, {mode}, ?)).\n"
+                    f"host(A, B, G, R) :- call(G, A, B, R).\n")
+        user = (":- module(coluser, [go/1]).\n"
+                ":- use_module('collib', [host/4]).\n"
+                "local(1, 2, three).\n"
+                "go(R) :- host(1, 2, local, R).\n")
+
+        answer = _scryer(tmp_path, {"collib.pl": lib(":"), "coluser.pl": user},
+                         "coluser.pl", "go(R).")
+        assert answer == "R = three.", answer
+
+        control = _scryer(tmp_path, {"collib.pl": lib("?"), "coluser.pl": user},
+                          "coluser.pl", "go(R).")
+        assert "existence_error" in control, control
+
+    def test_conflicting_local_arities_become_module_sensitive(self):
+        assert collect_local_meta_modes(
+            clausal_source_to_prolog_ast(self.AMBIGUOUS, strict=True)) == {
+            ("two", 2): {0: MODE_MODULE_SENSITIVE}}
+        assert ":- meta_predicate(two(:, ?))." in clausal_source_to_prolog(
+            self.AMBIGUOUS, strict=True)
+
+    def test_a_single_call_arity_still_emits_the_precise_integer(self):
+        assert ":- meta_predicate(host(?, ?, 3, ?))." in clausal_source_to_prolog(
+            _BODY_LOCAL_LIB, strict=True)
+
+    def test_local_and_supplied_disagreeing_become_module_sensitive(self):
+        """Neither source wins -- the shipped behaviour must equal the documented one."""
+        out = clausal_source_to_prolog(
+            _BODY_LOCAL_LIB, strict=True, module_path="mlib",
+            meta_modes={"mlib": {("host", 4): (None, None, 5, None)}})
+        assert ":- meta_predicate(host(?, ?, :, ?))." in out
+
+    def test_local_and_supplied_agreeing_keep_the_integer(self):
+        out = clausal_source_to_prolog(
+            _BODY_LOCAL_LIB, strict=True, module_path="mlib",
+            meta_modes={"mlib": {("host", 4): (None, None, 3, None)}})
+        assert ":- meta_predicate(host(?, ?, 3, ?))." in out
+
+    def test_a_supplied_module_sensitive_mode_is_emitted_as_is(self):
+        out = clausal_source_to_prolog(
+            _THREADING_LIB, strict=True, module_path="qc",
+            module_signatures={"flib": {("eval_req", 4)}},
+            meta_modes={"qc": {("failing_like", 4): (
+                None, None, MODE_MODULE_SENSITIVE, None)}})
+        assert ":- meta_predicate(failing_like(?, ?, :, ?))." in out
+
+    @requires_scryer
+    def test_the_emitted_module_sensitive_directive_calls_through_at_both_arities(
+            self, tmp_path):
+        """End to end on translator output: BOTH chains must resolve."""
+        lib = clausal_source_to_prolog(
+            "-module(amb, [\n    two(PRED, OUT),\n])\n\n" + self.AMBIGUOUS,
+            strict=True) + CALL_GOAL_SHIM
+        assert ":- meta_predicate(two(:, ?))." in lib
+        dq = clausal_source_to_prolog(
+            "-module(ambq, [\n    go(R),\n])\n"
+            "-import_from(amb, [two(PRED, OUT)])\n\n"
+            "p(a, short)\n"
+            "p(a, b, long)\n\n"
+            "go(R) <- two(p, R)\n", strict=True)
+        answer = _scryer(tmp_path, {"amb.pl": lib, "ambq.pl": dq}, "ambq.pl",
+                         "findall(R, go(R), L).")
+        assert answer == "L = [short,long].", answer
+
+
+# ── G. Hand-written directives suppress the generated one (controller A-4) ───────
+
+def test_a_hand_written_directive_suppresses_the_generated_one():
+    src = "-meta_predicate(host(0))\n\nhost(G) <- call_goal(G)\n"
+    out = clausal_source_to_prolog(src, strict=True)
+    assert out.count("meta_predicate") == 1
+    assert ":- meta_predicate(host(0))." in out
+
+
+def test_the_conjunction_spelling_suppresses_every_predicate_it_names():
+    """ISO allows one directive to carry a comma-separated list of specs."""
+    src = ("-meta_predicate((host(0), other(0)))\n\n"
+           "host(G) <- call_goal(G)\n"
+           "other(G) <- call_goal(G)\n")
+    out = clausal_source_to_prolog(src, strict=True)
+    assert out.count("meta_predicate") == 1
+
+
+def test_existing_indicators_read_both_spellings():
+    single = PDirective(PCompound("meta_predicate", (
+        PCompound("foo", (PNumber(0), PAtom("?"))),)))
+    assert _existing_meta_predicate_indicators(single) == {("foo", 2)}
+
+    conjunction = PDirective(PCompound("meta_predicate", (
+        PCompound(",", (
+            PCompound("foo", (PNumber(0), PAtom("?"))),
+            PCompound(",", (
+                PCompound("bar", (PAtom("?"),)),
+                PCompound("baz", (PNumber(2), PAtom("?"), PAtom("?"))),
+            )),
+        )),)))
+    assert _existing_meta_predicate_indicators(conjunction) == {
+        ("foo", 2), ("bar", 1), ("baz", 3)}

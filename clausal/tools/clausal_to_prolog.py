@@ -15,6 +15,7 @@ from __future__ import annotations
 import ast as python_ast
 import posixpath
 import re
+from typing import Iterator
 
 from clausal.tools.prolog_ast import (
     PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
@@ -450,27 +451,36 @@ class _ClausalToProlog:
                                    defined: set[tuple[str, int]]) -> list[PDirective]:
         """Build the `:- meta_predicate` directives for this module.
 
-        Per-argument union of two sources. Where both speak for one position they
-        are expected to agree; if they do not, the BODY-LOCAL mode wins, because it
-        is direct evidence read off the very clauses being emitted, whereas the
-        supplied map is an inference about a chain. A position neither source
-        resolves is emitted as `?` -- NOT as a guess. That is deliberate: an
-        under-annotated position fails loudly in Scryer (existence_error at the call
-        site), whereas a wrong mode would module-qualify a term that may not be a
-        goal at all. Emitted in first-appearance order, like the discontiguous pass,
-        so the output is byte-stable across runs.
+        Per-argument union of two sources, under ONE contract shared with
+        :func:`collect_local_meta_modes` and the exporter's fixpoint: a position with
+        ANY goal evidence is annotated -- with its call arity when that is
+        single-valued, else with :data:`MODE_MODULE_SENSITIVE` -- and a position with
+        NO goal evidence is emitted as `?`, never guessed. Two sources that disagree
+        make the position module-sensitive rather than letting either win, which is
+        what makes the shipped behaviour equal the documented one: an earlier draft
+        used `setdefault` here, and body-local evidence quietly reinstated a position
+        the fixpoint had deliberately left alone.
+
+        `?` is the LOUD outcome: a bare reference consumed at an unannotated position
+        raises existence_error at the call site. A guessed mode is the quiet one, and
+        would module-qualify a term that may not be a goal at all.
+
+        Emitted in first-appearance order, like the discontiguous pass, so the output
+        is byte-stable across runs.
         """
         local = collect_local_meta_modes(PModule(tuple(self._items)))
         supplied = (self.meta_modes or {}).get(self.module_path or "", {})
 
-        merged: dict[tuple[str, int], dict[int, int]] = {
+        merged: dict[tuple[str, int], dict[int, int | str]] = {
             key: dict(positions) for key, positions in local.items()
         }
         for key, modes in supplied.items():
             slot = merged.setdefault(key, {})
             for index, mode in enumerate(modes):
-                if mode is not None:
-                    slot.setdefault(index, mode)   # local evidence wins
+                if mode is None:
+                    continue
+                previous = slot.get(index, mode)
+                slot[index] = mode if previous == mode else MODE_MODULE_SENSITIVE
 
         already = set()
         for item in self._items:
@@ -483,7 +493,7 @@ class _ClausalToProlog:
             if not positions or arity == 0 or key in already or key not in defined:
                 continue
             args = tuple(
-                PNumber(positions[index]) if index in positions else PAtom("?")
+                _mode_term(positions[index]) if index in positions else PAtom("?")
                 for index in range(arity)
             )
             directives.append(
@@ -1842,50 +1852,136 @@ def _run_key(item: PItem) -> tuple[str, int] | None:
 #: The appended count IS the mode Scryer wants: ``call_goal(G, A, B, C)`` applies G
 #: to three arguments, so G's position is mode ``3`` (§3.3, measured).
 #:
-#: `call_goal/N` is the kit's whole higher-order protocol and, measured over the kit
-#: this session, the ONLY entry here that fires on a real host today. `call/N` is
-#: registered in the engine as an alias of the same trampolines
-#: (``clausal/logic/builtins/higher_order.py:46-50``) and is included for that
-#: reason; the four list HOFs are the engine builtins the design note's §5 names as
-#: absent from Scryer's ``library(lists)`` and destined for the `clausal_hof`
-#: companion, so a host that reaches one is a meta host whether or not the kit does
-#: so today. Nothing here is speculative about ARGUMENT POSITION: every one of them
-#: takes its goal first.
+#: `call_goal/N` is the kit's whole higher-order protocol and, measured over the kit,
+#: the only meta-caller a real host reaches. `call/N` is registered in the engine as
+#: an alias of the same trampolines
+#: (``clausal/logic/builtins/higher_order.py:46-50``) and is here for that reason.
+#:
+#: NOTHING SPECULATIVE BELONGS IN THIS TABLE. An earlier draft carried `include/3`,
+#: `exclude/3`, `max_by/3` and `min_by/3` on the reasoning that a host reaching one
+#: *would* be a meta host. They were removed: no kit host reaches any of them, and
+#: they are exactly the shapes a legal corpus is most likely to use as ordinary data
+#: constructors, so carrying them bought nothing and risked annotating a data
+#: position. Step B re-adds `include/3` when the `clausal_hof` companion exists and
+#: something actually consumes it.
 META_CALLER_SIGNATURES: dict[tuple[str, int], tuple[int, int]] = {
     **{("call_goal", n): (0, n - 1) for n in range(1, 9)},
     **{("call", n): (0, n - 1) for n in range(1, 9)},
-    ("include", 3): (0, 1),
-    ("exclude", 3): (0, 1),
-    ("max_by", 3): (0, 2),
-    ("min_by", 3): (0, 2),
 }
 
+#: The mode for a position that IS a goal but whose call arity is not single-valued.
+#: ISO's "module-sensitive term": Scryer qualifies the argument at the call site
+#: WITHOUT binding it to a name/arity. See :func:`collect_local_meta_modes` for why an
+#: integer cannot be used there, and why ``0`` is not a safe stand-in either.
+MODE_MODULE_SENSITIVE = ":"
+
 #: What a caller may hand the translator as *meta_modes*: a module path, then each of
-#: that module's predicates, then one mode per argument (``None`` = not a meta
-#: position). Mirrors *module_signatures*' shape and is keyed the same way.
-MetaModeMap = dict[str, dict[tuple[str, int], tuple[int | None, ...]]]
+#: that module's predicates, then one mode per argument -- an ``int`` for a goal called
+#: at that fixed arity, :data:`MODE_MODULE_SENSITIVE` for a goal whose call arity
+#: varies, ``None`` for a position that is not a meta position at all. Mirrors
+#: *module_signatures*' shape and is keyed the same way.
+MetaModeMap = dict[str, dict[tuple[str, int], tuple[int | str | None, ...]]]
+
+#: Goal combinators, as ``(functor, arity) -> indexes of the arguments that are GOALS``.
+#: Used to walk a clause body through goal positions only. Everything absent from this
+#: table is a leaf as far as the walk is concerned: it is itself a goal, but its
+#: arguments are DATA and are never descended into.
+GOAL_TRANSPARENT: dict[tuple[str, int], tuple[int, ...]] = {
+    (",", 2): (0, 1),
+    (";", 2): (0, 1),
+    ("->", 2): (0, 1),
+    ("*->", 2): (0, 1),
+    ("\\+", 1): (0,),
+    ("not", 1): (0,),
+    ("once", 1): (0,),
+    ("ignore", 1): (0,),
+    ("call", 1): (0,),
+    ("forall", 2): (0, 1),
+    ("catch", 3): (0, 2),
+    ("findall", 3): (1,),
+    ("findall", 4): (1,),
+    ("bagof", 3): (1,),
+    ("setof", 3): (1,),
+    ("aggregate_all", 3): (1,),
+    ("^", 2): (1,),
+}
 
 
-def collect_local_meta_modes(pmodule: PModule) -> dict[tuple[str, int], dict[int, int]]:
+def goal_subterms(body: PTerm) -> Iterator[PTerm]:
+    """Yield the goals of a clause *body*, and ONLY the goals.
+
+    Descends through the goal combinators of :data:`GOAL_TRANSPARENT` -- so a goal
+    under ``once/1``, in a ``findall/3`` goal argument, or in either branch of a
+    ``;/2`` is reached -- and stops at everything else: a plain compound is yielded
+    as a goal, but its arguments are DATA and are not walked.
+
+    THIS IS A CORRECTNESS FENCE, NOT AN OPTIMISATION. A blanket ``subterms`` walk
+    cannot tell a meta-call from a term that merely LOOKS like one, so a clause that
+    only BUILDS such a term --
+
+        mk(D, X, Y, T) <- unify(T, include(D, X, Y))
+
+    -- would have ``D`` read as a meta position, and the emitted directive would make
+    Scryer module-qualify an ordinary data argument at every call site. Measured
+    consequence: the caller gets back ``user_m:foo`` where it passed ``foo``, so a
+    later ``X == foo`` FAILS, silently and with no error anywhere. That is precisely
+    the class of silent wrongness this ladder exists to remove, so the walk is
+    fenced at the source rather than filtered afterwards.
+    """
+    stack = [body]
+    while stack:
+        node = stack.pop()
+        yield node
+        if not isinstance(node, PCompound):
+            continue
+        for index in GOAL_TRANSPARENT.get((node.functor, len(node.args)), ()):
+            if index < len(node.args):
+                stack.append(node.args[index])
+
+
+def collect_local_meta_modes(pmodule: PModule) -> dict[tuple[str, int], dict[int, int | str]]:
     """Meta positions provable from *pmodule*'s own clause bodies.
 
-    A predicate has a meta position at argument *i* when one of its clauses applies
-    a known meta-caller (:data:`META_CALLER_SIGNATURES`) to the variable sitting at
-    head position *i*. The search is over every subterm of the body, so a goal
-    wrapped in ``once/1``, ``findall/3`` or any other goal-transparent construct is
-    still found -- that is the real ``verified_flips/5`` spelling.
+    A predicate has a meta position at argument *i* when one of its clauses applies a
+    known meta-caller (:data:`META_CALLER_SIGNATURES`) to the variable sitting at head
+    position *i*. The search runs over :func:`goal_subterms`, i.e. over GOAL POSITIONS
+    ONLY -- a term that merely looks like a meta-call, sitting in an argument of some
+    other goal, is data and is never read as evidence.
 
     Returns ``{(name, arity): {argument index: mode}}``. This is a LOWER BOUND, and
     deliberately so: a host that only threads its argument onward has no body-local
     evidence at all, and guessing one would be worse than the loud failure. Measured
-    over the kit this session, the bound covers the hosts of 258 of the 390 lambda
-    sites; the other 116 sit at threading hosts and are the exporter fixpoint's job.
+    over the kit, the bound covers the hosts of 258 of the 390 lambda sites; the other
+    116 sit at threading hosts and are the exporter fixpoint's job.
 
-    A position two clauses disagree about is dropped rather than resolved, for the
-    same reason: a wrong mode qualifies a term that may not be a goal.
+    THE AMBIGUOUS-POSITION CONTRACT (controller ruling of 2026-09-05, implemented with
+    the mechanism the ruling's premise got wrong -- see below). When two clauses call
+    the same argument with DIFFERENT arities the position is still, beyond doubt, a
+    goal; only the integer is in question. It is annotated
+    :data:`MODE_MODULE_SENSITIVE` (``:``), which qualifies the argument without binding
+    an arity, so EVERY chain works. ``?`` stays reserved for positions with NO goal
+    evidence at all.
+
+    WHY NOT THE MAXIMUM, AND WHY NOT ``0``. The ruling assumed Scryer reads the integer
+    as merely "meta"/"not meta" and ignores its value, which would have made any
+    candidate safe. Measured, it does not: **mode ``N`` resolves the argument against
+    ``name/N`` in the CALLER's module.** With a caller defining both ``p/2`` and
+    ``p/3``, and a host calling its argument at both arities:
+
+        mode 2 -> [short]        only the 2-appended clause resolves
+        mode 3 -> [long]         only the 3-appended clause resolves
+        mode 0 -> [short,long]   ... but only because no p/0 exists
+        mode : -> [short,long]
+
+    so the maximum candidate silently drops the other chain. ``0`` looks like a safe
+    stand-in until the caller happens to define ``p/0``, at which point the argument
+    binds to that and the caller gets back unbound variables -- no error, wrong
+    answers. ``:`` is the only spelling right in all four rows.
+
+    Where a position DOES have a single call arity the integer is emitted: it is the
+    most precise annotation and is what §3.3's verified probe uses.
     """
-    found: dict[tuple[str, int], dict[int, int]] = {}
-    conflicted: dict[tuple[str, int], set[int]] = {}
+    found: dict[tuple[str, int], dict[int, int | str]] = {}
     for item in pmodule.items:
         if not isinstance(item, PClause) or item.body is None:
             continue
@@ -1899,7 +1995,7 @@ def collect_local_meta_modes(pmodule: PModule) -> dict[tuple[str, int], dict[int
                 position.setdefault(arg.name, index)
         if not position:
             continue
-        for node in subterms(item.body):
+        for node in goal_subterms(item.body):
             if not isinstance(node, PCompound):
                 continue
             signature = META_CALLER_SIGNATURES.get((node.functor, len(node.args)))
@@ -1913,28 +2009,43 @@ def collect_local_meta_modes(pmodule: PModule) -> dict[tuple[str, int], dict[int
             if index is None:
                 continue
             slot = found.setdefault(key, {})
-            if slot.setdefault(index, appended) != appended:
-                conflicted.setdefault(key, set()).add(index)
-    for key, indexes in conflicted.items():
-        for index in indexes:
-            found[key].pop(index, None)
-        if not found[key]:
-            found.pop(key)
+            previous = slot.get(index, appended)
+            slot[index] = appended if previous == appended else MODE_MODULE_SENSITIVE
     return found
 
 
+def _mode_term(mode: int | str) -> PTerm:
+    """One argument of a meta_predicate spec: an integer arity, or ``:``."""
+    return PNumber(mode) if isinstance(mode, int) else PAtom(mode)
+
+
 def _existing_meta_predicate_indicators(item: PItem) -> set[tuple[str, int]]:
-    """(name, arity) already declared by a hand-written :- meta_predicate directive."""
+    """(name, arity) already declared by a hand-written :- meta_predicate directive.
+
+    Both spellings count. ISO allows one directive to carry a COMMA-SEPARATED list of
+    specs -- ``:- meta_predicate(foo(0, ?), bar(?, 2)).`` parses as a single ``,``/2
+    argument -- and a hand-written directive in either spelling must suppress the
+    generated one for every predicate it names, or the emitted file ends up carrying
+    two directives for the same predicate.
+    """
     if not isinstance(item, PDirective):
         return set()
     body = item.body
     if not (isinstance(body, PCompound) and body.functor == "meta_predicate"
             and len(body.args) == 1):
         return set()
-    spec = body.args[0]
-    if isinstance(spec, PCompound):
-        return {(spec.functor, len(spec.args))}
-    return set()
+
+    found: set[tuple[str, int]] = set()
+    pending = [body.args[0]]
+    while pending:
+        spec = pending.pop()
+        if not isinstance(spec, PCompound):
+            continue
+        if spec.functor == "," and len(spec.args) == 2:
+            pending.extend(spec.args)
+            continue
+        found.add((spec.functor, len(spec.args)))
+    return found
 
 
 def _is_module_directive(item: PItem) -> bool:
