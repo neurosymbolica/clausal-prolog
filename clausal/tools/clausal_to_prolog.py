@@ -635,48 +635,54 @@ class _ClausalToProlog:
 
         value = stmt.value
 
-        # -directive(...): unary minus on a call. Directives are a fully
-        # recognized construct that can legitimately emit nothing (a
-        # dialect-gated skip, e.g. GNU Prolog has no module system; or
-        # -private(...), which has no Prolog emission at all) — so they
-        # are dispatched here, before the fail-closed net below, and are
-        # exempt from its warning.
-        if isinstance(value, python_ast.UnaryOp) and isinstance(value.op, python_ast.USub):
-            operand = value.operand
-            if isinstance(operand, python_ast.Call) and isinstance(operand.func, python_ast.Name):
-                return self._convert_directive(operand)
-            # -strict_atoms / -implicit_atoms: a parenless, argument-less
-            # directive (UnaryOp(USub(Name)), not Call) — engine-only atom-
-            # resolution bookkeeping with no Prolog equivalent, same
-            # legitimately-silent category as -private(...) above. 523
-            # corpus sites (2026-09 rule-drop census) would otherwise all
-            # start refusing under strict once the fail-closed net below
-            # stopped exempting unrecognized UnaryOp shapes.
-            if isinstance(operand, python_ast.Name):
-                return self._convert_bare_directive(operand.id)
+        # -directive(...): unary minus on a call, or the bare -name form.
+        # Directives are a fully recognized construct that can legitimately
+        # emit nothing (a dialect-gated skip, e.g. GNU Prolog has no module
+        # system; or -private(...), which has no Prolog emission at all) —
+        # so they are dispatched via _try_convert_directive, exempt from
+        # the fail-closed net's warning, both here AND inside a
+        # comma-joined statement tuple below (a directive's translation
+        # does not depend on whether a trailing comma put it next to
+        # sibling statements — same uniformity argument as
+        # _convert_clause_value).
+        handled, item = self._try_convert_directive(value)
+        if handled:
+            return item
 
         # Trailing-comma statement(s): Foo(1, 2), or a comma-joined run of
-        # facts/rules sharing one Python statement: Foo(1, 2), Bar(x) <- (...),
+        # facts/rules/directives sharing one Python statement:
+        # Foo(1, 2), Bar(x) <- (...), -dynamic(baz/1),
         # A 1-tuple is the common case (one fact, or — the bug this comment
         # marks the fix for — one `<-` RULE, both followed by the ordinary
         # fact-separator comma); a multi-element tuple is the same AST shape
         # for several comma-joined statements on one line. Every element is
-        # dispatched through _convert_clause_value so a rule in ANY tuple
-        # position translates identically to an unwrapped rule.
+        # dispatched through _try_convert_directive then _convert_clause_value
+        # so a rule (or directive) in ANY tuple position translates
+        # identically to an unwrapped one.
         if isinstance(value, python_ast.Tuple):
+            if not value.elts:
+                # `()` as a bare statement -- Expr(Tuple([])). Not a fact,
+                # not a rule, not anything: previously fell straight
+                # through to `return items or None` with an empty list,
+                # silently. There is no legitimate empty-tuple statement.
+                self._add_warning("empty tuple statement: ()")
+                return None
             items: list[PItem] = []
             for elt in value.elts:
-                item = self._convert_clause_value(elt)
-                if item is None:
-                    self._add_warning(
-                        "unsupported statement in comma group: "
-                        f"{python_ast.unparse(elt)}"
-                    )
+                elt_handled, elt_item = self._try_convert_directive(elt)
+                if not elt_handled:
+                    elt_item = self._convert_clause_value(elt)
+                if elt_item is None:
+                    if not elt_handled:
+                        self._add_warning(
+                            "unsupported statement in comma group: "
+                            f"{python_ast.unparse(elt)}"
+                        )
                     continue
-                if isinstance(item, list):
-                    items.extend(item)
+                if isinstance(elt_item, list):
+                    items.extend(elt_item)
                 else:
-                    items.append(item)
+                    items.append(elt_item)
             return items or None
 
         item = self._convert_clause_value(value)
@@ -687,6 +693,34 @@ class _ClausalToProlog:
             f"unsupported top-level statement: {python_ast.unparse(value)}"
         )
         return None
+
+    def _try_convert_directive(self, value) -> tuple[bool, PItem | list[PItem] | None]:
+        """Recognize and dispatch a `-directive(...)` / bare `-name` shape.
+
+        Returns ``(True, item)`` when *value* IS a directive shape (`item`
+        may legitimately be ``None`` — a dialect-gated skip, ``-private``,
+        ``-strict_atoms`` — none of that is a fail-closed-net violation),
+        or ``(False, None)`` when *value* is not a directive at all, in
+        which case the caller must try ``_convert_clause_value`` and warn
+        if THAT also fails to recognize it. Shared by ``_convert_stmt``'s
+        bare-statement case and its comma-joined-tuple case so a directive
+        translates the same whether or not it shares a Python statement
+        with sibling facts/rules.
+        """
+        if isinstance(value, python_ast.UnaryOp) and isinstance(value.op, python_ast.USub):
+            operand = value.operand
+            if isinstance(operand, python_ast.Call) and isinstance(operand.func, python_ast.Name):
+                return True, self._convert_directive(operand)
+            # -strict_atoms / -implicit_atoms: a parenless, argument-less
+            # directive (UnaryOp(USub(Name)), not Call) — engine-only atom-
+            # resolution bookkeeping with no Prolog equivalent, same
+            # legitimately-silent category as -private(...) above. 523
+            # corpus sites (2026-09 rule-drop census) would otherwise all
+            # start refusing under strict once the fail-closed net below
+            # stopped exempting unrecognized UnaryOp shapes.
+            if isinstance(operand, python_ast.Name):
+                return True, self._convert_bare_directive(operand.id)
+        return False, None
 
     def _convert_clause_value(self, value) -> PItem | list[PItem] | None:
         """Convert one fact/rule/DCG-rule expression.
@@ -704,6 +738,16 @@ class _ClausalToProlog:
         if isinstance(value, python_ast.Call):
             head = self._convert_head(value)
             return PClause(head)
+
+        # Bare 0-arity fact with no parens at all: foo, / foo -- the engine
+        # compiles this to Clause(head=foo, body=[True]) (a real fact, not
+        # a reference), and the corpus uses it deliberately (e.g.
+        # "explicit facts for conformance" for profile-key atoms later
+        # used only as data elsewhere) -- same PAtom the parenthesized
+        # 0-arg spelling already produces via _convert_head.
+        if isinstance(value, python_ast.Name):
+            functor = resolve_name(value.id, self.dialect)
+            return PClause(PAtom(functor))
 
         # head <- body (Compare with Lt followed by USub)
         if isinstance(value, python_ast.Compare):
@@ -957,13 +1001,36 @@ class _ClausalToProlog:
             )
         return PDirective(PCompound("use_module", (prolog_mod,)))
 
-    def _convert_meta_directive(self, name: str, call: python_ast.Call) -> PDirective | list:
-        """Convert -dynamic(pred/arity), -table(...), -discontiguous(...)."""
+    def _convert_meta_directive(self, name: str, call: python_ast.Call) -> PDirective | list | PComment | None:
+        """Convert -dynamic(pred/arity), -table(...), -discontiguous(...).
+
+        Any argument _convert_pred_spec cannot parse is warned (fail-closed
+        net) and dropped from the emitted spec list -- but if EVERY
+        argument drops out this way (or there were no arguments at all),
+        the directive must not be emitted at all: `:- dynamic([]).` /
+        `:- dynamic.` is a different, MALFORMED directive (declares
+        nothing dynamic), not a faithful partial translation, and strict
+        mode must not wave it through as clean.
+        """
         specs = []
+        any_dropped = False
         for arg in call.args:
             spec = self._convert_pred_spec(arg)
-            if spec is not None:
-                specs.append(spec)
+            if spec is None:
+                self._add_warning(
+                    f"-{name}(...) predicate spec: {python_ast.unparse(arg)}"
+                )
+                any_dropped = True
+                continue
+            specs.append(spec)
+
+        if not specs:
+            if not any_dropped:
+                # -name() with no arguments at all -- nothing to warn per-
+                # spec above, but emitting an empty directive still
+                # changes its meaning, so it gets its own warning here.
+                self._add_warning(f"-{name}() with no predicate arguments")
+            return None
 
         if len(specs) == 1:
             directive = PDirective(PCompound(name, (specs[0],)))
@@ -986,11 +1053,22 @@ class _ClausalToProlog:
         return directive
 
     def _convert_pred_spec(self, node) -> PTerm | None:
-        """Convert a predicate specification like Foo(X, Y) to foo/2."""
+        """Convert a predicate specification: Foo(X, Y) -> foo/2, the bare
+        atom Foo -> foo, or the Name/Arity spelling Foo/2 (a BinOp Div at
+        Python-AST level -- standard predicate-indicator syntax, e.g.
+        `-dynamic(vacuous_property/1)`) -> foo/2 directly."""
         if isinstance(node, python_ast.Call) and isinstance(node.func, python_ast.Name):
             functor = resolve_name(node.func.id, self.dialect)
             arity = len(node.args)
             return PCompound("/", (PAtom(functor), PNumber(arity)))
+        if (isinstance(node, python_ast.BinOp)
+                and isinstance(node.op, python_ast.Div)
+                and isinstance(node.left, python_ast.Name)
+                and isinstance(node.right, python_ast.Constant)
+                and isinstance(node.right.value, int)
+                and not isinstance(node.right.value, bool)):
+            functor = resolve_name(node.left.id, self.dialect)
+            return PCompound("/", (PAtom(functor), PNumber(node.right.value)))
         if isinstance(node, python_ast.Name):
             functor = resolve_name(node.id, self.dialect)
             return PAtom(functor)

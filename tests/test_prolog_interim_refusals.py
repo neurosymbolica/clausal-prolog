@@ -245,22 +245,50 @@ class TestArrowSpacingDiscrimination:
 
 # ── The kit witness: the RED fixture named by the decision ─────────────
 
-class TestKitWitness:
+KIT_QUERY_COMBINATORS_PRE_MIGRATION = (
+    pathlib.Path(__file__).parent / "fixtures"
+    / "kit_query_combinators_pre_migration.clausal"
+)
 
-    def test_kit_query_combinators_refuses_under_strict(self):
+
+class TestKitWitness:
+    """The live kit file this class originally witnessed against has since
+    been migrated to strict-clean (clausify-executor-train commit
+    76afe6d, "kit: hand-lift the last 10 class-(c) `<-` closures"). Two
+    tests, two different responses to that drift:
+
+    * ``test_kit_query_combinators_is_strict_clean`` (previously
+      ``test_kit_query_combinators_refuses_under_strict`` — renamed
+      because asserting refusal under a name that now means "asserts no
+      refusal" would be self-contradictory) re-points at the LIVE file
+      and pins its NEW status: strict-clean. This is a real, current
+      cross-repo fact worth pinning — if kit's query_combinators.clausal
+      ever regresses to refusing again, this goes red.
+    * ``test_kit_witness_names_the_construct`` needs an actual refusal to
+      assert the construct-naming shape against, which the live file no
+      longer has. Re-pointed at a FROZEN in-repo fixture (a vendored
+      snapshot of the pre-migration source, see the fixture file's own
+      header) instead of being deleted — this also starts fixing the
+      cross-repo-witness fragility itself: a test that reads a live file
+      from a sibling repo has its pass/fail depend on that repo's
+      current state, not on anything this translator controls.
+    """
+
+    def test_kit_query_combinators_is_strict_clean(self):
         src = KIT_QUERY_COMBINATORS.read_text()
-        msgs = _refusals(src)
-        assert msgs, "kit witness must now refuse"
-        lambda_msgs = [m for m in msgs if "`<-` lambda in term position" in m]
-        member_msgs = [m for m in msgs
-                       if "negated membership" in m]
-        # Three `<-` lambda sites (changed_deltas :165, without_id :224,
-        # parameter_at :393). The file's two negated-membership sites were
-        # respelled to not_member/2 by the kit migration (executor-train
-        # 1587802), so membership refusals are now zero.
-        assert len(lambda_msgs) == 3, msgs
-        assert len(member_msgs) == 0, msgs
+        assert _refusals(src) == [], (
+            "kit/query_combinators.clausal is expected to be "
+            "strict-translate clean as of clausify-executor-train "
+            "commit 76afe6d -- if this fails, either the live file "
+            "regressed or the translator broke something that used "
+            "to translate"
+        )
 
     def test_kit_witness_names_the_construct(self):
-        msgs = _refusals(KIT_QUERY_COMBINATORS.read_text())
-        assert any("include" in m or "D < -" in m for m in msgs), msgs
+        """Frozen fixture, not the live file (see class docstring) — pins
+        the `<-`-lambda-in-term-position refusal MESSAGE SHAPE against a
+        source snapshot that is guaranteed to still contain it."""
+        msgs = _refusals(KIT_QUERY_COMBINATORS_PRE_MIGRATION.read_text())
+        assert len(msgs) == 3, msgs
+        assert all("`<-` lambda in term position" in m for m in msgs), msgs
+        assert any("D < -" in m for m in msgs), msgs

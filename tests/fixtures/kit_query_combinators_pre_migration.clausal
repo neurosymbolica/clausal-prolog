@@ -1,0 +1,706 @@
+# ── FROZEN FIXTURE — DO NOT SYNC WITH THE LIVE FILE ─────────────────────
+#
+# Vendored snapshot of /workspace/clausify-executor-train/kit/query_combinators.clausal
+# as of git commit 76afe6d8870937b9cf266ceb640b4c668ec5b181's PARENT (commit
+# 1587802, "kit: migrate every refused negated-membership site"), in the
+# clausify-executor-train repo -- i.e. AFTER the negated-membership
+# migration but BEFORE the "hand-lift the last 10 class-(c) `<-` closures"
+# commit (76afe6d) that made the live file strict-translate clean.
+#
+# tests/test_prolog_interim_refusals.py's TestKitWitness class originally
+# asserted the LIVE kit file refuses under strict (3 `<-`-lambda-in-term-
+# position sites: changed_deltas, without_id, parameter_at). The live file
+# has since been migrated to strict-clean (76afe6d), so that assertion
+# went stale -- reading a live file from a sibling repo means the test's
+# pass/fail depends on that repo's current state, not on anything this
+# repo's translator controls (the cross-repo-witness fragility this
+# fixture starts fixing). This frozen copy pins the ORIGINAL defect shape
+# permanently, independent of kit's ongoing migration.
+#
+# Recovered via: git -C /workspace/clausify-executor-train show 76afe6d^:kit/query_combinators.clausal
+#
+# ─────────────────────────────────────────────────────────────────────────
+# =====================================================================
+# kit.query_combinators  --  Reusable QUERY-COMBINATOR library
+#
+# Generic, domain-agnostic Clausal predicates that compose the existing
+# checklist/verdict engine (kit.formalize_lib: assess/6, eval_requirements/4,
+# item/3, the "met"/unmet(R)/unknown([..]) status vocabulary) with the
+# Clausal builtins (max_by, between, sum_list, findall, include) into the
+# handful of capability combinators that ~15 regulatory query types reduce
+# to. Each combinator is:
+#   - cut-free / relational (disjoint guards + once/1 escape hatch only),
+#   - outputs bound IN THE BODY,
+#   - parameterised by the DOMAIN's requirement/oracle/compute closure,
+#     passed as a DIRECT argument (a closure cannot be stored in a var or
+#     nested in a compound -- it loses its callable arity), then invoked
+#     via call_goal. The closure resolves its body in the DOMAIN module
+#     (lexical scope), which is how a generic library reaches domain
+#     clauses across the module boundary -- the same idiom as the kit
+#     planner (kit.planner_lib) and assess/6 itself.
+#
+# The library adds ZERO domain logic: no thresholds, no citations, no
+# label vocabulary of its own. The rulebase (via REQ_PRED) stays the
+# single source of truth.
+#
+# Run the demonstration suite (proves the Tier-1 wrappers) from
+# /workspace/clausify:
+#   source /workspace/clausal/venv/bin/activate
+#   python -m clausal.testing kit/query_combinators_tests.clausal
+#
+# --------------------------------------------------------------------
+# COMBINATOR INDEX (which query types each one unlocks)
+# --------------------------------------------------------------------
+#  diff_checklists/3   #05 comparison, #16 what-if, #22 diff, #19 rule-impact
+#  find_mus/4          #09 minimal-cause, #10 contradiction, #18 edge-case
+#  enumerate_assess/5  #04 enumeration, #17 profile-generation, #14 obligation
+#  flip_scan/4         #06 threshold, #24 sensitivity (cliff location)
+#  parameter_at/4      #01 factual-lookup, #06 threshold (boundary fact)
+#  aggregate_over/3    #25 aggregation, #20 coverage (count form)
+#  failing_ids/4       the find_mus preamble (unmet/unknown ids of a profile)
+#  not_met/1           structural "status is failing" test (not atom(S))
+#  override_key/4      dict-override primitive ({**DICT, KEY: VALUE})
+#  what_if/5           #16 what-if (override one key, re-run the decision)
+#  what_if2/6          #16 what-if, TWO-OUTPUT decision (class + citation)
+#  what_if_all/4       #16 multi-override variant ([KEY, VALUE] pair list)
+#  what_if_deltas/5    #16+#22 what_if composed with diff_checklists
+#  override_nth/4      LIST-override primitive (1-based positional, fail-closed)
+#  override_where/4    LIST-override primitive (first MATCH-closure hit)
+#  what_if_nth/5       #16 what-if, LIST dual (override_nth + re-decide)
+#  shrink_while/3      #09 minimal-cause, polarity-free deletion shrink
+#  verified_flips/5    #08 counterfactual (verified single-edit flip set)
+#  verified_flips_to/6 #08 targeted variant (flips reaching one TARGET)
+#
+# MODULE-IDENTITY ROBUSTNESS: diff_checklists reads checklist rows
+# STRUCTURALLY (functor/3 + arg/3, arity-only) -- it never unifies against
+# kit.formalize_lib's `item` functor, so it accepts item/3 checklists built
+# by ANY module identity (kit.formalize_lib OR a bare formalize_lib import,
+# the corpus norm). Same principle as planner_lib's lift_item3/find_item3.
+# =====================================================================
+
+-import_from(kit.formalize_lib, [
+    assess, eval_requirements, labels, assessment,
+    item, unmet, unknown, not_member
+])
+
+-private([delta(REQ_ID, STATUS_A, STATUS_B), flip(EDIT, DECISION)])
+
+-module(query_combinators, [
+    diff_checklists(CL_A, CL_B, DELTAS),
+    changed_deltas(DELTAS, CHANGED),
+    find_mus(FAILING_IDS, PROFILE, REQ_PRED, MUS),
+    enumerate_assess(MEMBERS, REQ_PRED, PROFILE_OF, STATUS_FILTER, RESULTS),
+    flip_scan(LO, HI, PROBE, BOUNDARY),
+    bisect_flip(LO, HI, PROBE, BOUNDARY),
+    parameter_at(ENTRIES, QUERY_DATE, VALUE, CITE),
+    aggregate_over(MEMBERS, COMPUTE, TOTAL),
+    diff_sets(LIST_A, LIST_B, ONLY_A, ONLY_B, SHARED),
+    failing_ids(REQ_IDS, PROFILE, REQ_PRED, FAILING),
+    not_met(STATUS),
+    override_key(DICT, KEY, VALUE, NEW_DICT),
+    what_if(PROFILE, KEY, VALUE, DECIDE, RESULT),
+    what_if2(PROFILE, KEY, VALUE, DECIDE, OUT1, OUT2),
+    what_if_all(PROFILE, OVERRIDES, DECIDE, RESULT),
+    what_if_deltas(PROFILE, KEY, VALUE, CHECKLIST_OF, CHANGED),
+    override_nth(LIST, N, VALUE, NEW_LIST),
+    override_where(LIST, MATCH, VALUE, NEW_LIST),
+    what_if_nth(LIST, N, VALUE, DECIDE, RESULT),
+    shrink_while(ITEMS, HOLDS, CORE),
+    verified_flips(PROFILE, EDITS, APPLY, DECIDE, FLIPS),
+    verified_flips_to(PROFILE, EDITS, APPLY, DECIDE, TARGET, FLIPS),
+    # public delta/flip vocabulary (shared functor identity for importers)
+    delta(REQ_ID, STATUS_A, STATUS_B),
+    flip(EDIT, DECISION)
+])
+
+
+# =====================================================================
+# 1. diff_checklists/3  --  zip two assessment checklists by req-id
+# =====================================================================
+# Powers #05 comparison (diff two profiles/options), #16 what-if, #22 diff,
+# #19 rule-impact.  Keyed (not positional) join over the union of req-ids:
+# robust to differently-ordered or non-aligned checklists (an option whose
+# requirement set is a superset of the other's).  A req-id absent from one
+# side is reported with STATUS "absent".  Output is a sorted list of
+# delta(REQ_ID, STATUS_A, STATUS_B).
+#
+# IDENTITY-ROBUST: rows are read via item_fields/3 (structural, arity-only),
+# so the input checklists may be built by ANY module's item/3 -- a domain can
+# pass its own X_checklist/2 output directly (bare-formalize_lib items), no
+# kit re-evaluation workaround needed.  Status comparison in changed_deltas
+# is unaffected: it is ground-term equality between the two checklists.
+
+diff_checklists(CL_A, CL_B, DELTAS) <- (
+    checklist_ids(CL_A, IDS_A),
+    checklist_ids(CL_B, IDS_B),
+    append(IDS_A, IDS_B, IDS_RAW),
+    sort(IDS_RAW, IDS),
+    deltas_for_ids(IDS, CL_A, CL_B, DELTAS)
+)
+
+# item_fields/3 -- structural read of one checklist row: any arity-3 compound
+# is an item; arg 1 is the req-id, arg 2 the status.  NEVER names
+# formalize_lib's item functor (functor/3 + arg/3 only), so it parses item/3
+# rows regardless of which formalize_lib module identity built them -- the
+# same decompose-based principle as planner_lib's lift_item3/find_item3.
+# Enumerates rows on backtracking (ID unbound) or filters by unification
+# (ID bound).
+item_fields(CL, ID, STATUS) <- (
+    in_(ITEM, CL),
+    functor(ITEM, _, 3),
+    arg(1, ITEM, ID),
+    arg(2, ITEM, STATUS)
+)
+
+checklist_ids([], []),
+checklist_ids([ITEM, *TAIL], [ID, *REST]) <- (
+    functor(ITEM, _, 3),
+    arg(1, ITEM, ID),
+    checklist_ids(TAIL, REST)
+)
+
+deltas_for_ids([], _, _, []),
+deltas_for_ids([ID, *IDS], CL_A, CL_B, [DELTA, *DELTAS]) <- (
+    status_in(CL_A, ID, STATUS_A),
+    status_in(CL_B, ID, STATUS_B),
+    DELTA is delta(ID, STATUS_A, STATUS_B),
+    deltas_for_ids(IDS, CL_A, CL_B, DELTAS)
+)
+
+# status_in/3: STATUS of ID in the checklist, or "absent" if not present.
+# Disjoint guards (membership vs its negation) keep it cut-free; the
+# positive arm is wrapped in once so a checklist is read deterministically.
+# Reads rows structurally via item_fields/3 (identity-robust, see above).
+status_in(CL, ID, STATUS) <- (
+    once(item_fields(CL, ID, S)),
+    STATUS is S
+)
+status_in(CL, ID, STATUS) <- (
+    not item_fields(CL, ID, _),
+    STATUS is "absent"
+)
+
+# changed_deltas/2: keep only the deltas whose two statuses differ.
+# Convenience for "what changed?" callers (#05/#22); include tests each
+# delta once (committed choice) which is correct here -- statuses are ground.
+changed_deltas(DELTAS, CHANGED) <- (
+    include((D <- (
+        D is delta(_, SA, SB),
+        SA is not SB)), DELTAS, CHANGED
+    )
+)
+
+
+# =====================================================================
+# 2. find_mus/4  --  deletion-based minimal-unsatisfiable-subset (SHRINK)
+# =====================================================================
+# Powers #09 minimal-cause, #10 contradiction, #18 edge-case.  Given the
+# FAILING_IDS (the unmet requirement ids from a checklist) and the domain's
+# REQ_PRED, returns MUS: a minimal subset of requirements that, assessed
+# alone, still contains an unmet item (still "forces invalid").  O(|FAILING|)
+# oracle calls (Liffiton & Sakallah 2007 deletion SHRINK).
+#
+# Label-agnostic: "unsatisfiable" is tested structurally (any compound status,
+# via item_fields/not_met) over the checklist rather than a domain-specific
+# label, so the combinator needs no labels and is module-identity-robust.
+# MODE: FAILING_IDS, PROFILE, REQ_PRED must be ground (the not/1 over the
+# oracle is sound only over a ground goal).
+#
+# POLARITY ASSUMPTION (query-coverage sweep, 2026-07-21): "unsatisfiable" ==
+# "the checklist contains a not_met (compound) status".  This is the standard
+# eligibility polarity (a met/unmet/unknown conjunction where any unmet blocks
+# the verdict), and the MUS is then the smallest still-blocking core.  It does
+# NOT hold for two shapes the sweep hit, where find_mus is N-A, not merely
+# degenerate:
+#   - OBLIGATION-surfacing checklists where `unmet` means "duty not triggered"
+#     (a FAVOURABLE reading) -- the polarity is inverted (reach_registration).
+#   - present/absent KLEENE checklists whose failing rows carry ATOM statuses
+#     ("present"/"absent"), invisible to not_met/1's "compound = failing" test
+#     -- failing_ids returns [] so there is nothing to shrink (mar_insider).
+# Both are one-requirement-grade cases; the singleton-degenerate warning below
+# is a THIRD, separate case (a genuine but 1-element unsat set).
+
+find_mus(FAILING_IDS, PROFILE, REQ_PRED, MUS) <- (
+    shrink(FAILING_IDS, FAILING_IDS, PROFILE, REQ_PRED, MUS)
+)
+
+# shrink(TO_TRY, CANDIDATE, PROFILE, REQ_PRED, MUS):
+#   walk TO_TRY; for each ID, test CANDIDATE without ID. If still unsat,
+#   ID is not load-bearing -> drop it (recurse on the smaller candidate).
+#   Otherwise ID is load-bearing -> keep it. CANDIDATE at fixpoint is the MUS.
+shrink([], MUS, _, _, MUS),
+shrink([ID, *REST], CANDIDATE, PROFILE, REQ_PRED, MUS) <- (
+    without_id(CANDIDATE, ID, WITHOUT),
+    subset_unsat(WITHOUT, PROFILE, REQ_PRED),
+    shrink(REST, WITHOUT, PROFILE, REQ_PRED, MUS)
+)
+shrink([ID, *REST], CANDIDATE, PROFILE, REQ_PRED, MUS) <- (
+    without_id(CANDIDATE, ID, WITHOUT),
+    not subset_unsat(WITHOUT, PROFILE, REQ_PRED),
+    shrink(REST, CANDIDATE, PROFILE, REQ_PRED, MUS)
+)
+
+# without_id/3: CANDIDATE minus ID (keep elements that differ; is not = dif,
+# correct for the string/atom ids these requirement keys are).
+without_id(CANDIDATE, ID, WITHOUT) <- (
+    include((X <- (X is not ID)), CANDIDATE, WITHOUT)
+)
+
+# subset_unsat/3: does SUBSET, assessed alone, still contain a FAILING item?
+# "failing" is read structurally (item_fields/3 + not_met/1, i.e. any compound
+# status) -- the SAME identity-free test failing_ids uses -- NOT has_unmet,
+# which names the `unmet(_)` functor and so (a) never unifies with a status
+# built by a different module identity (corpus domains import bare
+# `formalize_lib`; this module imports `kit.formalize_lib`) and (b) ignores
+# `unknown(_)`. Either gap made subset_unsat always-false, so shrink never
+# removed an id and MUS degenerated to the full failing set. eval_requirements
+# is deterministic; once/1 makes the test semidet so shrink yields a single MUS.
+subset_unsat(SUBSET, PROFILE, REQ_PRED) <- (
+    eval_requirements(SUBSET, PROFILE, REQ_PRED, CHECKLIST),
+    once((item_fields(CHECKLIST, _, ST), not_met(ST)))
+)
+
+# ---------------------------------------------------------------------
+# 2b. failing_ids/4 + not_met/1  --  the find_mus PREAMBLE, hoisted
+# ---------------------------------------------------------------------
+# Every find_mus adopter needs the same preamble: "which of my requirement
+# ids does this profile fail?".  Hoisted here (from th/visa, the first
+# adopter) so domains import it instead of re-defining it.
+#
+# failing_ids(REQ_IDS, PROFILE, REQ_PRED, FAILING): the unmet/unknown
+# requirement ids for PROFILE over REQ_IDS, in REQ_IDS order.  unknown (a
+# missing determinant) counts as failing: it is not yet satisfied.  Evaluates
+# via kit eval_requirements and reads the rows structurally (item_fields/3),
+# so there is NO module-identity issue; FAILING feeds find_mus directly.
+
+failing_ids(REQ_IDS, PROFILE, REQ_PRED, FAILING) <- (
+    eval_requirements(REQ_IDS, PROFILE, REQ_PRED, CL),
+    findall(FID, (item_fields(CL, FID, ST), not_met(ST)), FAILING)
+)
+
+# not_met/1 -- structural, identity-free: the ONLY atomic status is `met`;
+# every compound status (unmet(_)/unknown(_)) is a failing requirement.
+# Testing `not atom` (rather than naming the functors) sidesteps the
+# cross-module atom identity question entirely -- same trick as the
+# planner's lift_status.
+not_met(STATUS) <- (not atom(STATUS))
+
+
+# =====================================================================
+# 3. enumerate_assess/5  --  assess a member set, filter by decision
+# =====================================================================
+# Powers #04 enumeration, #17 profile-generation, #14 obligation-surfacing.
+# For each MEMBER, the domain's PROFILE_OF closure supplies that member's
+# (REQ_IDS, PROFILE, LABELS); assess/6 produces a decision; results whose
+# decision unifies with STATUS_FILTER are kept.  Passing STATUS_FILTER as a
+# bound decision (e.g. "eligible") filters; passing an unbound var keeps all.
+# RESULTS is a list of assessment(MEMBER, DECISION, CHECKLIST).
+#
+#   PROFILE_OF : (MEMBER, REQ_IDS, PROFILE, LABELS) <- domain_profile(...)
+#   REQ_PRED   : (ID, P, S, C) <- requirement(ID, P, S, C)
+
+enumerate_assess(MEMBERS, REQ_PRED, PROFILE_OF, STATUS_FILTER, RESULTS) <- (
+    findall(
+        assessment(MEMBER, DECISION, CHECKLIST),
+        ( in_(MEMBER, MEMBERS),
+          call_goal(PROFILE_OF, MEMBER, REQ_IDS, PROFILE, LABELS),
+          assess(MEMBER, REQ_IDS, PROFILE, REQ_PRED, LABELS,
+                 assessment(MEMBER, DECISION, CHECKLIST)),
+          DECISION is STATUS_FILTER ),
+        RESULTS
+    )
+)
+
+
+# =====================================================================
+# 4. flip_scan/4  --  find the integer value where a verdict flips
+# =====================================================================
+# Powers #06 threshold (cliff location) and #24 sensitivity.  Sweeps the
+# integer range [LO, HI] (integer-CENT arithmetic -- no float drift) and
+# returns BOUNDARY: the first value at which the probe's verdict differs
+# from the previous value's verdict.  PROBE is the domain's verdict closure
+# (X, VERDICT); VERDICT is any ground term (e.g. "eligible"/"ineligible").
+# No findall over the whole range: a forward scan with disjoint guards, so
+# it stops at the first flip and stays cut-free.  Fails if no flip in range.
+
+flip_scan(LO, HI, PROBE, BOUNDARY) <- (
+    call_goal(PROBE, LO, V0),
+    scan_from(LO, HI, V0, PROBE, BOUNDARY)
+)
+
+scan_from(X, HI, V_PREV, PROBE, BOUNDARY) <- (
+    X < HI,
+    X1 == X + 1,
+    call_goal(PROBE, X1, V1),
+    flip_step(X1, V_PREV, V1, HI, PROBE, BOUNDARY)
+)
+
+# flip_step: at X1 the verdict either changed (-> BOUNDARY = X1) or held
+# (-> keep scanning). Disjoint guards (dif vs its negation), no cut.
+flip_step(X1, V_PREV, V1, _, _, X1) <- (V_PREV is not V1)
+flip_step(X1, V_PREV, V1, HI, PROBE, BOUNDARY) <- (
+    not (V_PREV is not V1),
+    scan_from(X1, HI, V1, PROBE, BOUNDARY)
+)
+
+
+# =====================================================================
+# 4b. bisect_flip/4  --  O(log range) MONOTONE drop-in for flip_scan
+# =====================================================================
+# Same contract as flip_scan (PROBE is a (X, VERDICT) closure; BOUNDARY is
+# the least X in [LO, HI] whose verdict differs from the verdict at LO) but
+# ASSUMES the verdict is MONOTONE in X: constant on [LO, B-1], a different
+# constant on [B, HI] (a single flip).  Binary search -- ~log2(HI-LO) probes
+# vs flip_scan's linear O(HI-LO) sweep, which is intractable on monetary /
+# scaled-integer ranges (the query-coverage sweep found crr/clp/reach domains
+# reading closed-form boundaries by hand because flip_scan could not be run).
+# Fails when the verdict at HI equals the verdict at LO (no flip in range).
+# Cut-free (disjoint guards), integer arithmetic (no float drift).
+bisect_flip(LO, HI, PROBE, BOUNDARY) <- (
+    call_goal(PROBE, LO, V_LO),
+    call_goal(PROBE, HI, V_HI),
+    V_LO is not V_HI,
+    bisect_between(LO, HI, V_LO, PROBE, BOUNDARY)
+)
+
+# Invariant: verdict(LO) == V_LO and verdict(HI) is not V_LO.
+bisect_between(LO, HI, _, _, HI) <- (HI == LO + 1)
+bisect_between(LO, HI, V_LO, PROBE, BOUNDARY) <- (
+    HI > LO + 1,
+    MID == (LO + HI) // 2,
+    call_goal(PROBE, MID, V_MID),
+    bisect_pick(LO, MID, HI, V_LO, V_MID, PROBE, BOUNDARY)
+)
+# V_MID == V_LO -> flip is in [MID, HI]; else the flip is in [LO, MID].
+bisect_pick(_, MID, HI, V_LO, V_MID, PROBE, BOUNDARY) <- (
+    not (V_MID is not V_LO),
+    bisect_between(MID, HI, V_LO, PROBE, BOUNDARY)
+)
+bisect_pick(LO, MID, _, V_LO, V_MID, PROBE, BOUNDARY) <- (
+    V_MID is not V_LO,
+    bisect_between(LO, MID, V_LO, PROBE, BOUNDARY)
+)
+
+
+# =====================================================================
+# 4c. diff_sets/5  --  set algebra over two lists (only_a, only_b, shared)
+# =====================================================================
+# Powers #05 comparison / #14 obligation-surfacing on the obligation domains
+# whose verdict is a SET of duties (gpsr, amlr_cdd each re-invented this).
+# Splits LIST_A and LIST_B into ONLY_A (in A, not B), ONLY_B (in B, not A)
+# and SHARED (in both).  All three outputs are sorted + deduplicated via
+# sort/2, so inputs may be unordered or carry duplicates.
+diff_sets(LIST_A, LIST_B, ONLY_A, ONLY_B, SHARED) <- (
+    findall(X, (X in LIST_A, not_member(X, LIST_B)), OA0), sort(OA0, ONLY_A),
+    findall(X, (X in LIST_B, not_member(X, LIST_A)), OB0), sort(OB0, ONLY_B),
+    findall(X, (X in LIST_A, X in LIST_B), SH0), sort(SH0, SHARED)
+)
+
+
+# =====================================================================
+# 5. parameter_at/4  --  most-recent date-keyed entry at or before a date
+# =====================================================================
+# Powers #01 factual-lookup and #06 threshold (boundary-fact form).
+# ENTRIES is a list of [DATE, VALUE, CITE] triples (DATE an ORDINAL integer
+# key, e.g. YYYYMMDD -- integer-keyed so <= / max_by are exact, no string or
+# float ordering ambiguity).  Returns the VALUE and CITE of the entry with
+# the largest DATE that is <= QUERY_DATE.  Fails (no solution) when no entry
+# is effective yet -- the open-world "rulebase is silent" signal (#01).
+
+parameter_at(ENTRIES, QUERY_DATE, VALUE, CITE) <- (
+    findall([D, V, C],
+            ( in_([D, V, C], ENTRIES), D <= QUERY_DATE ),
+            CANDIDATES),
+    CANDIDATES is not [],
+    max_by(((E, K) <- (
+        E is [D2, _, _],
+        K is D2)), CANDIDATES, [_, VALUE, CITE]
+    )
+)
+
+
+# =====================================================================
+# 6. aggregate_over/3  --  integer sum over a domain computation
+# =====================================================================
+# Powers #25 aggregation (and #20 coverage in its count form).  Folds the
+# domain's COMPUTE closure (MEMBER, VALUE) over MEMBERS and returns the
+# integer TOTAL via sum_list (integer-cent accumulator -- round only at the
+# boundary, never per member).  once/1 keeps each member contributing
+# exactly one value even if COMPUTE has overlapping clauses.
+
+aggregate_over(MEMBERS, COMPUTE, TOTAL) <- (
+    findall(V,
+            ( in_(MEMBER, MEMBERS), once(call_goal(COMPUTE, MEMBER, V)) ),
+            VALUES),
+    sum_list(VALUES, TOTAL)
+)
+
+
+# =====================================================================
+# 7. override_key/4 + what_if/5 (+ what_if_all/4, what_if_deltas/5)
+# =====================================================================
+# Powers #16 what-if.  Generalizes the hand-rolled "override one profile
+# key, re-run the decision" pattern the query-coverage sweep found in six
+# domains (crr_own_funds_what_if, casp_what_if, mica_asset_what_if,
+# gpsr_what_if, cdd_what_if, blue_card_what_if).  Unblocked by clausal
+# bafc1ead/70c74416: `{**DICT, KEY: VALUE}` with a call-time-bound
+# variable KEY now defers construction correctly, so the override can
+# live HERE, behind a call boundary, instead of being open-coded in
+# every domain.
+#
+# DICT-NATIVE: PROFILE must be a DictTerm (the corpus norm for these
+# domains).  KEY and VALUE must be ground at call time.  The override is
+# FUNCTIONAL (a new dict; the input is untouched) and an absent KEY is
+# ADDED -- the {**...} splat semantics.  NOTE the kit does NOT guard KEY
+# against a profile-key schema (it has no domain vocabulary); domains
+# keep their `world_key_schema(KEYS), KEY in KEYS` guard in front of the
+# call to avoid the dict-mode key-typo trap ("nothing changed" from a
+# silently minted garbage key).
+
+override_key(DICT, KEY, VALUE, NEW_DICT) <- (
+    NEW_DICT is {**DICT, KEY: VALUE}
+)
+
+# what_if(PROFILE, KEY, VALUE, DECIDE, RESULT): override KEY -> VALUE,
+# then run the domain's decision closure on the modified profile.
+# DECIDE is a (PROFILE, RESULT) closure invoked via call_goal (the
+# flip_scan PROBE idiom).  RESULT-SHAPE-AGNOSTIC: RESULT is whatever the
+# domain decision yields (a decision atom, a classification, a duty
+# list, a checklist, ...).
+what_if(PROFILE, KEY, VALUE, DECIDE, RESULT) <- (
+    override_key(PROFILE, KEY, VALUE, HYP),
+    call_goal(DECIDE, HYP, RESULT)
+)
+
+# what_if2(PROFILE, KEY, VALUE, DECIDE, OUT1, OUT2): the TWO-OUTPUT dual
+# of what_if/5.  DECIDE is a (PROFILE, OUT1, OUT2) closure -- so a native
+# multi-output decision predicate (the recurring "classification + its
+# headline citation" shape: classify_mica_asset(HYPO, CLASS, CIT),
+# classify_acute_toxicity(HYPO, CATEGORY, CIT), ...) binds DIRECTLY, with
+# no packing into a pair term.  what_if/5 is result-shape-agnostic in its
+# SINGLE slot, so a domain whose decision has two outputs previously had
+# to fold them into one term and unpack at the call site (the ergonomic
+# friction the mica_asset/vat/blue_card adoption pass flagged); this form
+# removes it -- the two decision outputs are separate closure slots
+# invoked via call_goal's native multi-arg support.  For >2 outputs, a
+# domain still packs (or a what_if3 is added when one genuinely needs it).
+what_if2(PROFILE, KEY, VALUE, DECIDE, OUT1, OUT2) <- (
+    override_key(PROFILE, KEY, VALUE, HYP),
+    call_goal(DECIDE, HYP, OUT1, OUT2)
+)
+
+# what_if_all(PROFILE, OVERRIDES, DECIDE, RESULT): the multi-override
+# form.  OVERRIDES is a list of [KEY, VALUE] pairs folded left-to-right
+# through override_key (a later pair for the same KEY wins); [] decides
+# the original profile unchanged.
+what_if_all(PROFILE, OVERRIDES, DECIDE, RESULT) <- (
+    apply_overrides(OVERRIDES, PROFILE, HYP),
+    call_goal(DECIDE, HYP, RESULT)
+)
+
+apply_overrides([], PROFILE, PROFILE),
+apply_overrides([[KEY, VALUE], *REST], PROFILE, OUT) <- (
+    override_key(PROFILE, KEY, VALUE, MID),
+    apply_overrides(REST, MID, OUT)
+)
+
+# what_if_deltas(PROFILE, KEY, VALUE, CHECKLIST_OF, CHANGED): the
+# diff-returning convenience -- what_if composed with diff_checklists +
+# changed_deltas.  CHECKLIST_OF is a (PROFILE, CHECKLIST) closure whose
+# output is an item/3-shaped list (read structurally; any module's
+# arity-3 rows work).  CHANGED is the changed-status rows only, as
+# delta(REQ_ID, STATUS_A, STATUS_B) in the kit's public delta
+# vocabulary.  A domain wanting the new DECISION as well calls what_if
+# with its decision closure alongside this (the hand-rolled 5-arg
+# X_what_if(P, K, V, DECISION, CHANGED) shape is exactly those two
+# calls).
+what_if_deltas(PROFILE, KEY, VALUE, CHECKLIST_OF, CHANGED) <- (
+    call_goal(CHECKLIST_OF, PROFILE, CL_A),
+    what_if(PROFILE, KEY, VALUE, CHECKLIST_OF, CL_B),
+    diff_checklists(CL_A, CL_B, DELTAS),
+    changed_deltas(DELTAS, CHANGED)
+)
+
+
+# =====================================================================
+# 8. override_nth/4 + override_where/4 + what_if_nth/5  --  #16, LIST dual
+# =====================================================================
+# (Kit-gap wave 2, 2026-07-22.)  The LIST-profile duals of override_key /
+# what_if: four query-coverage domains carry list-shaped profiles (a party
+# list, a positions list, a holdings-edge list, a grants list) on which the
+# dict-native what_if/5 family cannot run, so each hand-rolled its own
+# positional or matching override (eumr_jurisdiction_turnover
+# override_party, emir_nfc_clearing nfc_what_if_position,
+# amlr_bo_chain bo_chain_set_holding, de_minimis_cumulation).
+#
+# BOTH overrides are FUNCTIONAL (the input list is untouched) and
+# FAIL-CLOSED -- the list analogue of the dict world_key_schema key-typo
+# guard: a hypothetical about a non-existent position must not silently
+# no-op (the "nothing changed" trap has no silent channel here).
+#
+# override_nth(LIST, N, VALUE, NEW_LIST): NEW_LIST is LIST with the Nth
+# element (1-based) replaced by VALUE.  Fails when N is out of range
+# (N < 1, N > length; no add-at-end -- appending is ordinary list
+# construction, not an override).  All-var heads + disjoint arithmetic
+# guards, cut-free, deterministic (the eumr override_party skeleton).
+override_nth([_, *T], N, VALUE, [VALUE, *T]) <- (N == 1)
+override_nth([H, *T], N, VALUE, [H, *T2]) <- (
+    N > 1,
+    N1 == N - 1,
+    override_nth(T, N1, VALUE, T2)
+)
+
+# override_where(LIST, MATCH, VALUE, NEW_LIST): NEW_LIST is LIST with the
+# FIRST element the MATCH closure (a one-arg (E <- goal) test) selects
+# replaced by VALUE; later matches (duplicate parallel entries) are left
+# contributing -- the amlr_bo_chain bo_chain_set_holding semantics.
+# Fails when no element matches (fail-closed, see above).  MATCH is
+# semidet-ized via matches_elem/once, so an over-general MATCH cannot
+# make the override nondeterministic.
+override_where([H, *T], MATCH, VALUE, [VALUE, *T]) <- (
+    matches_elem(MATCH, H)
+)
+override_where([H, *T], MATCH, VALUE, [H, *T2]) <- (
+    not matches_elem(MATCH, H),
+    override_where(T, MATCH, VALUE, T2)
+)
+
+# matches_elem/2 (private): one deterministic MATCH probe -- a call
+# boundary so the negation above ranges over a plain goal.
+matches_elem(MATCH, X) <- (once(call_goal(MATCH, X)))
+
+# what_if_nth(LIST, N, VALUE, DECIDE, RESULT): override the Nth element,
+# then re-run the domain's decision closure on the modified list -- the
+# LIST dual of what_if/5.  DECIDE is a (LIST, RESULT) closure invoked via
+# call_goal; RESULT-SHAPE-AGNOSTIC (whatever the decision yields).
+# Inherits override_nth's fail-closed out-of-range behaviour.  A domain
+# whose list elements are themselves structured (eumr's [WW, EU, MS]
+# party triples) rebuilds the element first and passes it as VALUE.
+what_if_nth(LIST, N, VALUE, DECIDE, RESULT) <- (
+    override_nth(LIST, N, VALUE, NEW_LIST),
+    call_goal(DECIDE, NEW_LIST, RESULT)
+)
+
+
+# =====================================================================
+# 9. shrink_while/3  --  polarity-free deletion shrink (minimal core)
+# =====================================================================
+# (Kit-gap wave 2, 2026-07-22.)  shrink_while(ITEMS, HOLDS, CORE): CORE is
+# a deletion-minimal subset of ITEMS for which the HOLDS closure (a
+# one-arg (SUBSET <- goal) test) STILL succeeds: HOLDS(CORE) succeeds and
+# HOLDS fails on CORE minus any single element.  Same O(|ITEMS|)-probe
+# deletion SHRINK as find_mus, but the PROPERTY BEING PRESERVED is the
+# caller's closure, so the POLARITY lives entirely in the caller:
+#   - HOLDS = "subset still UNSAT / still blocks the verdict"
+#       -> the find_mus reading (minimal unsatisfiable core);
+#   - HOLDS = "subset still QUALIFIES / still carries the verdict"
+#       -> the support-core dual (amlr_bo_chain bo_chain_minimal_support),
+#         which find_mus's fixed not_met polarity cannot express -- the
+#         third polarity case of find_mus's POLARITY ASSUMPTION header.
+# find_mus/4 is the checklist-specialised instance (HOLDS fixed to
+# "eval_requirements leaves a not_met row") and is NOT changed by this.
+#
+# FAIL-CLOSED: fails when HOLDS fails on the FULL ITEMS -- "a minimal
+# subset still holding" presupposes the whole set holds (the
+# bo_chain_minimal_support "fails for a non-qualifying person" contract).
+# Deletion is OCCURRENCE-wise (drop_first_occ), so duplicate items are
+# distinct deletion candidates (parallel edges).  Deterministic (disjoint
+# guards; HOLDS semidet-ized via once); CORE keeps the original order;
+# deletion SHRINK yields a MINIMAL core, not necessarily a
+# minimum-cardinality one.  MODE: ITEMS ground (the not/1 over the HOLDS
+# probe is sound only over a ground goal).
+shrink_while(ITEMS, HOLDS, CORE) <- (
+    subset_holds(ITEMS, HOLDS),
+    shrink_keep(ITEMS, ITEMS, HOLDS, CORE)
+)
+
+# shrink_keep(TO_TRY, CANDIDATE, HOLDS, CORE): walk the original item
+# occurrences; drop each from CANDIDATE iff HOLDS survives without it.
+# CANDIDATE at fixpoint is the minimal core (the find_mus shrink walk).
+shrink_keep([], CORE, _, CORE),
+shrink_keep([X, *REST], CANDIDATE, HOLDS, CORE) <- (
+    drop_first_occ(CANDIDATE, X, WITHOUT),
+    subset_holds(WITHOUT, HOLDS),
+    shrink_keep(REST, WITHOUT, HOLDS, CORE)
+)
+shrink_keep([X, *REST], CANDIDATE, HOLDS, CORE) <- (
+    drop_first_occ(CANDIDATE, X, WITHOUT),
+    not subset_holds(WITHOUT, HOLDS),
+    shrink_keep(REST, CANDIDATE, HOLDS, CORE)
+)
+
+# subset_holds/2 (private): one deterministic HOLDS probe -- a call
+# boundary so the negation above ranges over a plain goal (the same
+# closure-through-negation idiom as find_mus's subset_unsat).
+subset_holds(SUBSET, HOLDS) <- (once(call_goal(HOLDS, SUBSET)))
+
+# drop_first_occ/3 (private): CANDIDATE minus the FIRST occurrence of X
+# (occurrence-wise removal -- duplicates are distinct candidates, unlike
+# find_mus's without_id which removes all equal ids).
+drop_first_occ([H, *T], X, T) <- (H is X)
+drop_first_occ([H, *T], X, [H, *T2]) <- (
+    not (H is X),
+    drop_first_occ(T, X, T2)
+)
+
+
+# =====================================================================
+# 10. verified_flips/5 + verified_flips_to/6  --  #08 verified flip set
+# =====================================================================
+# (Kit-gap wave 2, 2026-07-22.)  The common core of the three hand-rolled
+# flip enumerators (mar_insider_flips, mar_manipulation_flips,
+# ai_act_flips): enumerate candidate single edits, apply each to the
+# profile, RE-RUN the decision, and keep exactly those whose application
+# VERIFIABLY changes the decision -- derived, never asserted.
+#
+#   verified_flips(PROFILE, EDITS, APPLY, DECIDE, FLIPS)
+#     EDITS  : list of ground edit descriptors -- the DOMAIN's vocabulary
+#              (set_false(K), drop_element(E), establish_exception(L, KS),
+#              ...); enumeration of the candidates stays domain-side, the
+#              verify-and-filter core lives here.
+#     APPLY  : (EDIT, P_IN, P_OUT) closure applying one edit.  An edit
+#              APPLY cannot apply contributes nothing (it is not a
+#              verified flip); make APPLY total over EDITS to avoid
+#              silent skips.
+#     DECIDE : (P, DECISION) closure, semidet-ized via once (the
+#              hand-rolled sites all once/1 their decision layer).
+#     FLIPS  : flip(EDIT, NEW_DECISION) rows in EDITS order, in the kit's
+#              public flip/2 vocabulary -- each edit tagged with the
+#              decision it verifiably produces (the mar_manipulation /
+#              ai_act flip(EDIT, NEW_CLASS) shape).
+#
+# FAIL-CLOSED on an undecidable baseline: fails when DECIDE fails on
+# PROFILE (no baseline to flip from).  The hand-rolled sites also GATE on
+# a specific baseline (e.g. only a prohibited profile has flips) -- that
+# gate is domain policy and stays in front of the call.  PROFILE is
+# shape-agnostic (dict, list, graph): only APPLY and DECIDE touch it.
+#
+# verified_flips_to/6 is the TARGETED variant (the mar_insider_flips
+# shape, which keeps only edits reaching is_permitted): a flip qualifies
+# iff its new decision both differs from the baseline AND unifies with
+# TARGET.  TARGET == baseline therefore yields [] (a no-op is not a flip).
+verified_flips(PROFILE, EDITS, APPLY, DECIDE, FLIPS) <- (
+    once(call_goal(DECIDE, PROFILE, BASELINE)),
+    findall(F,
+            edit_flip(EDITS, PROFILE, APPLY, DECIDE, BASELINE, F),
+            FLIPS)
+)
+
+verified_flips_to(PROFILE, EDITS, APPLY, DECIDE, TARGET, FLIPS) <- (
+    once(call_goal(DECIDE, PROFILE, BASELINE)),
+    findall(F,
+            ( edit_flip(EDITS, PROFILE, APPLY, DECIDE, BASELINE, F),
+              F is flip(_, TARGET) ),
+            FLIPS)
+)
+
+# edit_flip/6 (private): one verified flip -- apply EDIT, re-decide,
+# succeed iff the decision changed from BASELINE.  Nondeterministic over
+# EDITS (driven by the findall above); each probe is deterministic
+# (once over APPLY and DECIDE).
+edit_flip(EDITS, PROFILE, APPLY, DECIDE, BASELINE, flip(EDIT, NEW)) <- (
+    in_(EDIT, EDITS),
+    once(call_goal(APPLY, EDIT, PROFILE, HYP)),
+    once(call_goal(DECIDE, HYP, NEW)),
+    NEW is not BASELINE
+)
