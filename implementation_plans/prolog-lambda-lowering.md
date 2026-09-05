@@ -1209,26 +1209,73 @@ still wrong** — the failure mode this ladder exists to remove.
 
 **A-2 — threading modes are per argument.** A threaded position inherits its ultimate
 call site's mode, and the two arguments of one host resolve independently. Modes
-accumulate as sets, so a position reachable with two different modes ends **ambiguous
-rather than arbitrarily decided by iteration order**. A position unresolved after the
-fixpoint — ambiguous, unreachable, or consumed outside the universe — gets **no
-annotation**: a bare reference consumed there fails loudly in Scryer at G3, which is
-accepted, whereas a guessed mode would module-qualify a term that may not be a goal.
-Step B respells only fully-moded chains.
+accumulate as **sets**, so the outcome never depends on iteration order.
 
-*The mode vocabulary Scryer honours*, probed this session (`cargo:0.10.0`) and pinned
-in `tests/test_prolog_meta_predicate.py`:
+*The mode vocabulary Scryer honours*, probed (`cargo:0.10.0`) and pinned in
+`tests/test_prolog_meta_predicate.py`:
 
 | spelling | behaviour |
 |---|---|
-| integer `N` | honoured — qualifies; `N` is the count of arguments `call/N` appends |
-| `0` | honoured — a plain goal |
-| `:` | honoured — module-sensitive term |
+| integer `N` | honoured — qualifies, **and resolves the argument against `name/N` in the caller's module** |
+| `0` | honoured — the `N = 0` case of the above, with the same arity-pinning |
+| `:` | honoured — qualifies **without** asserting any arity |
 | `?`, `+`, `-` | valid syntax, **non-meta**: the argument is not qualified |
 | `*` | `syntax_error(invalid_meta_predicate_decl)` — must never be emitted |
 
-The emitter therefore uses exactly two spellings: an **integer** for a resolved meta
-position and **`?`** for every other. `:` is honoured but unneeded; `*` is a load error.
+**The arity-pinning row is the correction that decided the contract, and it overturns
+this note's first reading of its own probe.** The original probe used hosts whose
+argument is called at exactly ONE arity; there every integer works, and it was
+tempting to conclude the integer's value is ignored. It is not — the effect is
+invisible until the caller's module defines the same name at more than one arity. With
+a caller defining both `p/2` and `p/3`, and a host calling its argument at both:
+
+```
+mode 2 -> L = [short]        only the 2-appended clause resolves
+mode 3 -> L = [long]         only the 3-appended clause resolves
+mode 0 -> L = [short,long]   ... but only because no p/0 exists
+mode : -> L = [short,long]
+```
+
+and adding a `p/0` fact to that caller makes **mode `0` bind to it and hand the caller
+back unbound variables** — no error, wrong answers. So neither "pick any candidate"
+nor "fall back to `0`" is safe.
+
+*The contract, as shipped:*
+
+| candidate modes for a position | emitted | why |
+|---|---|---|
+| exactly one | that **integer** | most precise; the spelling §3.3's verified probe uses |
+| more than one | **`:`** | it *is* a goal, but its call arity varies, and any integer would drop every other chain |
+| none | **`?`** | no goal evidence; a bare reference consumed there raises `existence_error` at G3 — loud, and accepted |
+
+`?` is the loud outcome and is reserved for genuine non-evidence; `:` is what makes an
+ambiguous-but-certain goal position work at *every* arity. Step B respells only chains
+that are annotated.
+
+**A-2b — evidence is read from GOAL POSITIONS ONLY.** Both scans — the translator's
+body-local detection and the exporter's threading edges — walk a clause body through
+the goal combinators (`,`, `;`, `->`, `\+`, `once/1`, `findall/3`'s goal argument,
+`catch/3`, …) and stop at everything else: a plain compound is a goal, but its
+arguments are data. Without that fence a clause that merely *builds* a term shaped
+like a meta-call —
+
+```
+mk(D, X, Y, T) <- (T is host(D, X, Y))
+```
+
+— gives `D` a mode, and the emitted directive makes Scryer module-qualify an ordinary
+data argument at every call site. Measured: the caller passes `foo`, gets back
+`m:foo`, and a later `X == foo` **fails with no error anywhere**. Latent in the corpus
+today (every live hit is goal-position) and unguardable after the fact, so it is fenced
+at the source.
+
+For the same reason `META_CALLER_SIGNATURES` carries **only what a real host reaches** —
+`call_goal/N` and its engine alias `call/N`. An earlier draft also listed `include/3`,
+`exclude/3`, `max_by/3` and `min_by/3` on the reasoning that a host reaching one *would*
+be a meta host; they were dropped, because no kit host reaches any of them and they are
+exactly the shapes a legal corpus is most likely to use as ordinary data constructors.
+Step B re-adds `include/3` when the `clausal_hof` companion exists and something
+consumes it. Removing them changed no measured figure.
 
 **A-3 — acceptance is call-through, not text.** Three shapes, each consulting real
 translator output in real Scryer and CALLING a bare reference through it, each paired
@@ -1265,6 +1312,13 @@ added `:- meta_predicate` lines** — identical error sets, no other line added,
 removed. For `th/visa`, body-local detection alone emits 3 directives in
 `formalize_lib.pl` and the fixpoint adds the 4th, `assess/6` — precisely the threading
 host.
+
+Both measurements in this section are re-runnable rather than transcribed:
+`python -m tools.iso_export.meta_modes_audit` (trunk) regenerates the host table and
+the collateral diff. Its census reproduces §2.3's 390 sites / 39 hosts by
+construction, which is what licenses reading the rest of its output. The hermetic
+form of the same question — does every threading host resolve? — is pinned against a
+committed fixture universe in `tools/iso_export/tests/test_meta_modes.py`.
 
 ### 10.4 Still true after Stage 1
 
