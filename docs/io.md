@@ -229,11 +229,24 @@ Test("concat all") <- (
 # List all clauses for a predicate:
 debug_fib <- listing(fib)
 
+# Also accepted: a bare predicate-name atom (0-arity only), or a
+# Name/Arity indicator naming any arity:
+debug_greet <- listing("greet")
+debug_fib2 <- listing(fib/2)
+
 # Pretty-print a complex term:
 show_deep(TERM) <- portray_clause(TERM)
 ```
 
-`listing` accepts a predicate class or instance. It prints a header with clause count, then each clause in `head <- (body).` format.
+`listing` accepts, in any of these shapes: a `PredicateMeta` class or
+instance; a builtin predicate (prints a `"% name/arity — builtin"` line); a
+bare str atom naming a 0-arity predicate; or a `Name/Arity` indicator naming
+a predicate at any arity (either the default `foo/2`-style cell, or the
+engine's `Compound("/", (Name, Arity))` shape). For the last two, an
+unknown `name/arity` raises `existence_error(procedure, Name/Arity)` — a
+predicate nobody ever declared is not the same as one with an empty clause
+list, which instead prints `"% name/arity — no clauses"`. It prints a
+header with clause count, then each clause in `head <- (body).` format.
 
 ---
 
@@ -269,7 +282,7 @@ print(f"Bound: {v}")     # hello
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_io.py` (43 tests) and `tests/test_listing.py` (13 tests).
+    Tests are in `tests/test_io.py` (43 tests) and `tests/test_listing.py` (27 tests).
 
     - **Var display**: `__str__`, `__format__`, bound/unbound, nested
     - **write/writeln/print_term**: atoms, numbers, strings, compounds, lists, vars
