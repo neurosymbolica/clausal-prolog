@@ -1633,21 +1633,40 @@ class _ClausalToProlog:
         - X != Y → X \\== Y (structural) / X =\\= Y+1 (arithmetic operand)
 
         *goal_position* gates the `is`-RHS dict-splat → `attrs_put/3` lowering
-        (see `_convert_is_rhs_splat`): that rewrite produces a goal, which is
-        only valid Prolog when the `is` comparison is itself executed as a
-        goal (the whole clause body, or a body conjunct). Reached in a
-        nested/argument position (e.g. `q(X is {**D, k: v})`, an argument to
-        `q`), `attrs_put(...)` would sit there as an inert, never-called data
-        term — silently wrong output. So when *goal_position* is False, the
-        splat still falls through to the generic dict-splat warning path.
+        (see `_convert_is_rhs_splat`) AND the dict-subscript →
+        `profile_get_strict/3` lowering (see `_convert_is_subscript`): both
+        rewrites produce a goal, which is only valid Prolog when the `is`
+        comparison is itself executed as a goal (the whole clause body, or a
+        body conjunct). Reached in a nested/argument position (e.g.
+        `q(X is {**D, k: v})` or `q(P[k])`, an argument to `q`),
+        `attrs_put(...)`/`profile_get_strict(...)` would sit there as an
+        inert, never-called data term — silently wrong output. So when
+        *goal_position* is False, both stay on the generic untranslatable
+        warning path.
 
-        `attrs_put/3` is an ISO-export staging predicate — it does not exist
-        under SWI dict semantics, so the lowering also requires
-        `not self.dialect.has_dicts`. Under a `has_dicts` dialect the splat
-        instead falls through to the plain `X = Dict` unify, where
-        `_convert_dict`'s SWI branch renders the splat's `**D` entry as a
-        `_=D` pair inside `dict_create/3` (pre-existing behavior, unchanged
-        by this gate).
+        `attrs_put/3` and `profile_get_strict/3` are ISO-export staging
+        predicates — neither exists under SWI dict semantics, so both
+        lowerings also require `not self.dialect.has_dicts`. Under a
+        `has_dicts` dialect the splat instead falls through to the plain
+        `X = Dict` unify, where `_convert_dict`'s SWI branch renders the
+        splat's `**D` entry as a `_=D` pair inside `dict_create/3`
+        (pre-existing behavior, unchanged by this gate); a subscript under a
+        `has_dicts` dialect falls through unchanged too (no SWI-native
+        subscript lowering is implemented — out of scope here, same as
+        before this change).
+
+        `profile_get_strict/3` (companion-defined in
+        tools/iso_export/companion/clausal_profiles.pl, trunk repo) mirrors
+        the engine's strict, throw-on-missing-key subscript-read semantics
+        exactly (`clausal/logic/runtime/dict_ops.py:_subscript`) — it is
+        deliberately NOT `profile_get/3`, which is the dialect's rename
+        target for the engine's soft, fail-on-missing `get/3` builtin
+        (`prolog_dialect.py`'s `"get": {"iso": "profile_get"}`) and has the
+        OPPOSITE missing-key behavior. Reusing `profile_get` here would
+        silently turn "profile is missing a required field" into "clause
+        fails" in every exported program — probed and rejected, see
+        `_convert_is_subscript`'s docstring and
+        .superpowers/sdd/2026-09-05-class-M/c-pre-report.md (trunk repo).
         """
         # A `<-` lambda reaching term position is untranslatable (2026-09-03).
         # Checked before any Lt lowering, and on the chained path too.
@@ -1683,6 +1702,13 @@ class _ClausalToProlog:
                     node.left, node.comparators[0])
                 if splat_goal is not None:
                     return splat_goal
+
+            if (goal_position and not self.dialect.has_dicts
+                    and isinstance(op, python_ast.Is)):
+                subscript_goal = self._convert_is_subscript(
+                    node.left, node.comparators[0])
+                if subscript_goal is not None:
+                    return subscript_goal
 
             left = self._convert_expr(node.left)
             right = self._convert_expr(node.comparators[0])
@@ -1865,6 +1891,71 @@ class _ClausalToProlog:
         splat_target = self._convert_expr(values[0])
         attr_list = self._dict_attr_list(keys[1:], values[1:])
         return PCompound("attrs_put", (splat_target, PList(attr_list), left))
+
+    def _convert_is_subscript(self, left_node, right_node) -> PTerm | None:
+        """Lower a goal-position ``is`` comparison with a dict-subscript on
+        EITHER side to ``profile_get_strict(Profile, Key, Value)``.
+
+        ``is``/2 is symmetric in Clausal (``_convert_compare`` just converts
+        both sides and unifies them), and the corpus actually uses both
+        spellings: ``V is P[K]`` (the shape named in the C-pre brief) and
+        ``P[K] is V`` (three real sites in
+        eu/procurement/exclusion_grounds/queries.clausal, e.g.
+        ``PROFILE[grounds] is GROUND_LIST``). Whichever side is the
+        Subscript becomes ``profile_get_strict``'s first two arguments; the
+        other side becomes its third.
+
+        Returns ``None`` — falling through to the generic untranslatable
+        path, exactly like :meth:`_convert_is_rhs_splat` — for every shape
+        this does NOT cover:
+
+        - neither side is a Subscript (an ordinary ``is``, unrelated to this
+          lowering);
+        - the Subscript's own base is itself a Subscript (chained, ``P[a][b]``)
+          or a Call result (``f()[a]``) — no corpus consumer for either
+          (census: clausify-domains, 850 files, 41 subscript sites, 0
+          chained, 0 call-based), so these refuse rather than inventing
+          semantics for an unwitnessed shape; falling through re-converts
+          the Subscript via the generic ``_convert_expr`` path, which has no
+          Subscript case and so warns/strict-raises, same as before this
+          lowering existed.
+
+        ``profile_get_strict/3`` is a NEW companion-defined staging
+        predicate (tools/iso_export/companion/clausal_profiles.pl, trunk
+        repo) — deliberately not ``profile_get/3``. ``profile_get/3`` is the
+        dialect's rename target for the engine's ``get/3`` builtin
+        (``prolog_dialect.py``'s ``"get": {"iso": "profile_get"}``), which
+        FAILS on a missing key by design
+        (``clausal/logic/builtins/dict_set.py``'s ``_get__3`` docstring).
+        The engine's strict subscript read instead RAISES a catchable
+        ``existence_error(dict_key, Key)`` on a missing key
+        (``clausal/logic/runtime/dict_ops.py:_subscript``, pinned by
+        ``tests/test_dict_set_compiler.py::test_subscript_missing_throws``).
+        Lowering the strict read to the soft-fail predicate was probed and
+        rejected (.superpowers/sdd/2026-09-05-class-M/c-pre-report.md, trunk
+        repo, "BLOCKED" section) — it would silently turn "profile is
+        missing a required field" into "clause fails" in every exported
+        program. ``profile_get_strict/3`` exists so the exported program's
+        missing-key behavior matches the live engine's instead.
+        """
+        if isinstance(left_node, python_ast.Subscript):
+            subscript_node, value_node = left_node, right_node
+        elif isinstance(right_node, python_ast.Subscript):
+            subscript_node, value_node = right_node, left_node
+        else:
+            return None  # neither side is a subscript — not this lowering
+
+        base = subscript_node.value
+        if isinstance(base, (python_ast.Subscript, python_ast.Call)):
+            return None  # chained / subscript-on-call-result — refuse
+
+        profile = self._convert_expr(base)
+        key_node = subscript_node.slice
+        if isinstance(key_node, python_ast.Index):  # pre-3.9 AST compat
+            key_node = key_node.value
+        key = self._convert_expr(key_node)
+        value = self._convert_expr(value_node)
+        return PCompound("profile_get_strict", (profile, key, value))
 
     def _convert_dict(self, node: python_ast.Dict) -> PTerm:
         """Convert dict literal: SWI dict, or key-sorted attribute-list (ISO)."""
