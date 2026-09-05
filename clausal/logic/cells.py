@@ -1,8 +1,13 @@
-"""Tagged cells: the Phase 2 bridge's plain-tuple term representation.
+"""Tagged cells: the unconditional plain-tuple compiled term representation.
+
+Every compound term compiles to a cell (P3-2, the cell-default flip) -- there
+is no opt-in flag left to spell. (History: this module started as the Phase 2
+bridge's opt-in representation, Task 1 of
+``docs/superpowers/plans/2026-09-03-phase2-bridge.md``; P3-2 deleted the
+``-tagged_terms`` flag that gated it.)
 
 Spec: ``implementation_plans/tagged-tuple-term-representation.md`` (design
-§1, optimisations §3c); this module is Task 1 of
-``docs/superpowers/plans/2026-09-03-phase2-bridge.md``.
+§1, optimisations §3c).
 
 A *cell* is a plain Python ``tuple`` whose slot 0 identifies its shape:
 

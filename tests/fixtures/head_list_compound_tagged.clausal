@@ -1,17 +1,22 @@
-# Parity fixture (TAGGED / cell half) for the Phase 2 bridge's
-# ``-tagged_terms`` experiment -- Task 3 parity corpus.
+# Parity fixture (cell half) for the Phase 2 bridge's now-removed
+# ``-tagged_terms`` experiment -- originally the Task 3 parity corpus.
 #
 # Identical to head_list_compound.clausal (list/tuple data mixing: declared
 # compound functors nested INSIDE list literals, in both head and body
-# position) apart from the added directive.  item2/1, pair/2, c/1 and d/1
-# are declared data functors with no clauses, so every saturated
-# construction of one -- including as an argument nested inside a list, as
-# in ``ev_plain([item2(S)])`` -- lowers to a cell literal in this flagged
-# module.  Per Task 2's ``TestHeadPatternReachability`` finding, a compound
-# written in ``.clausal`` source (head or body) never reaches a compiled
-# MATCH pattern; a head compound stays a plain arg capture coupled to a body
-# ``Unify`` goal built from the cell literal, so the coupling this fixture
-# exists to regression-test is unaffected by the flag.
+# position) apart from the module name -- P3-2 made cells the unconditional
+# compiled representation, so both halves compile the same way now, kept as
+# an old-vs-new regression anchor.  item2/1, pair/2, c/1 and d/1 are
+# declared data functors with no clauses, so every saturated construction
+# of one -- including as an argument nested inside a list, as in
+# ``ev_plain([item2(S)])`` -- lowers to a cell literal.  Every predicate
+# below has exactly one clause, well under the arg-index threshold, so each
+# stays on the ``_normalize_structural_head_args`` hoist path (P3-2 Task 2):
+# a head compound is a plain arg capture coupled to a body ``Unify`` goal
+# built from the cell literal.  (P3-2 Task 3 later taught the arg-index
+# bucket-lift, above that threshold, to rebuild a head compound into a real
+# MATCH pattern instead -- not exercised here, since nothing in this file
+# crosses the threshold; that coupling has its own coverage in
+# tests/test_tagged_terms.py::TestHeadPatternReachability.)
 #
 # Self-contained: every functor it constructs or matches is declared here.
 -private([item2(S), pair(A, B), c(X), d(Y)])

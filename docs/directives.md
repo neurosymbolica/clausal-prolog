@@ -250,6 +250,16 @@ functor vocabulary; it does not suppress qualified-name resolution failures. A
 dotted reference that *does* resolve to a real data functor is unaffected
 either way.
 
+**A [`-constants`](#-constants) RHS stays checked.** A functor call inside a
+structured constant's right-hand side is not covered by the flag: it must
+name a functor already declared (or imported) above the `-constants`
+directive regardless of `-implicit_functors`, or compilation raises a
+`SyntaxError` naming the fix (declare it with `-module`/`-private`/
+`-dynamic` before `-constants`, or import it). `-constants` compiles its RHS
+before any predicate body runs and needs the same functor known at that
+earlier point either way — OWA construction elsewhere in the module does
+not reach back and relax this check.
+
 **Orthogonal to atom resolution.** `-implicit_functors` concerns functor
 *construction* arity/declaredness; it says nothing about bare (0-arity) atom
 references, which are governed independently by
@@ -560,7 +570,7 @@ cells before and compile to cells now. What DID change for every other file is
 that its compound data is cells too, which mostly matters at the Python
 boundary: `mod.point` is the functor's spelling rather than a constructor, and
 a term of it is the tuple `("point", 1, 2)`. See
-[Data functors vs predicates](#data-functors-vs-predicates) below.
+[Data functors vs predicates](#data-functors-vs-predicates) above.
 
 ---
 
