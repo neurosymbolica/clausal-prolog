@@ -944,7 +944,7 @@ def _compile_predicate_trampoline_impl(
         # test_bucket_refs_ir_parallel.py``, D6c parity).
         pass
         # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
-        index_positions = _analyze_index_positions(clauses, arity)
+        index_positions = _analyze_index_positions(clauses, arity, env=base_globals)
         if index_positions:
             # TRO: detect tail-recursive clauses (same check as non-indexed path).
             # Gated on the strategy's ``supports_tro`` flag — see
@@ -1077,14 +1077,14 @@ def _compile_predicate_trampoline_impl(
             fn = None
             if arity >= 2:
                 joint_result = _analyze_joint_index_positions(
-                    clauses, arity, index_positions)
+                    clauses, arity, index_positions, env=base_globals)
                 if joint_result is not None:
                     pos_i, pos_j, joint_info = joint_result
                     coverage = joint_info["coverage"]
                     if coverage < _JOINT_COVERAGE_THRESHOLD:
                         # Phase 9c — secondary (hierarchical) dispatch.
                         sec = _build_secondary_index(
-                            clauses, arity, pos_i, pos_j)
+                            clauses, arity, pos_i, pos_j, env=base_globals)
                         if sec is not None:
                             level0_compiled: dict = {}
                             for ki, (l1_buckets, l1_defaults) in \
@@ -1752,7 +1752,7 @@ def _compile_predicate_shallow_impl(
     _CURRENT_SHALLOW_BASE_GLOBALS = base_globals
     try:
         # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
-        index_positions = _analyze_index_positions(clauses, arity)
+        index_positions = _analyze_index_positions(clauses, arity, env=base_globals)
         if index_positions:
             # Compile fallback (all clauses, for when no arg is ground)
             fallback_def = _build_predicate_funcdef(
@@ -1794,14 +1794,14 @@ def _compile_predicate_shallow_impl(
             fn = None
             if arity >= 2:
                 joint_result = _analyze_joint_index_positions(
-                    clauses, arity, index_positions)
+                    clauses, arity, index_positions, env=base_globals)
                 if joint_result is not None:
                     pos_i, pos_j, joint_info = joint_result
                     coverage = joint_info["coverage"]
                     if coverage < _JOINT_COVERAGE_THRESHOLD:
                         # Phase 9c — secondary (hierarchical) dispatch.
                         sec = _build_secondary_index(
-                            clauses, arity, pos_i, pos_j)
+                            clauses, arity, pos_i, pos_j, env=base_globals)
                         if sec is not None:
                             level0_compiled: dict = {}
                             for ki, (l1_buckets, l1_defaults) in \

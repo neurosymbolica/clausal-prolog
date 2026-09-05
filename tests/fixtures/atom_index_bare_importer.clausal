@@ -1,0 +1,26 @@
+# Fixture for tests/test_imported_atom_head_index.py.
+#
+# Imports atoms aa/bb/cc/dd BARE (``-import_from``) and uses each as a
+# rule-head argument on a >= 4-clause predicate (Level/2 -- 4 meets
+# arg_index._INDEX_THRESHOLD, so the first-argument indexer engages).
+#
+# Regression shape for the P3-1 atom-pivot's missed call-site: a bare
+# imported-atom reference compiles to a single dotted ``LoadName``
+# (e.g. ``LoadName('tests.fixtures.atom_index_owner.aa')``), hoisted into a
+# body ``Unify`` by ``database.py::_normalize_structural_head_args``.
+# Pre-fix, ``arg_index._arg_to_index_key`` keyed that reference as
+# ``('aa', 0)`` (the pre-pivot PredicateMeta-class convention) while the
+# runtime caller's plain string ``'aa'`` keys as itself -- bucket mismatch,
+# zero solutions for every ground call.
+-import_from(tests.fixtures.atom_index_owner, [aa, bb, cc, dd])
+-module(atom_index_bare_importer, [level(N, L), src(N)])
+
+src(1),
+src(2),
+src(3),
+src(4),
+
+level(N, aa) <- (src(N), N == 1)
+level(N, bb) <- (src(N), N == 2)
+level(N, cc) <- (src(N), N == 3)
+level(N, dd) <- (src(N), N == 4)
