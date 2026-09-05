@@ -902,8 +902,10 @@ def _process_bare_atom_refs(
       never leaks cross-module the way a plain atom str does (see below),
       so trusting ``module_dict`` for this shape is safe;
     * an already-bound object that is NOT the process-pool's exact
-      self-mapped atom str for this name — a genuine Python import (Step
-      0) or any other legitimately-bound value is trusted as before;
+      self-mapped atom str for this name AND NOT the exact
+      ``runtime_builtins`` entry for this name (P3-2 Task 8) — a genuine
+      Python import (Step 0) or any other legitimately-bound value is
+      trusted as before;
     * THIS module's own declared/imported vocabulary — see
       ``_locally_declared_names`` (P3-1 Task 7 fix round 1: -module,
       -private, -hide, -import_from, -import_module);
@@ -933,6 +935,27 @@ def _process_bare_atom_refs(
     writes the pool, but only at query RUNTIME, long after this
     compile-time check — irrelevant here by construction.
 
+    P3-2 Task 8 (pool split; closes todo/done/pythonic-ast-names-leak-into-
+    strict-atom-namespace-2026-09-04.md): the Task 7 fix above narrowed the
+    "trust it" default to exclude ONE leaked shape (a plain, self-mapped
+    atom str from ``predicate_builtins``) but left a SECOND, differently-
+    shaped leak open — ``module_dict`` is ALSO pre-seeded at exec start with
+    ``runtime_builtins`` (see ``import_hook.py``'s pool-split comment), so a
+    bare reference to an internal name like ``Add``/``Call``/``Match`` (a
+    ``simple_ast.__all__`` node class) fell into the same "anything else,
+    trust it" bucket Task 7 deliberately preserved for genuine classes and
+    imports — a real class object, just not one THIS module ever declared.
+    The fix generalizes the same identity discipline to this second shape:
+    distrust an already-bound value that is identical to
+    ``runtime_builtins``' entry for that name, unless THIS module's own
+    declared/imported vocabulary vouches for it — but ONLY for the
+    ``_SIMPLE_AST_NODE_NAMES`` subset (the ``simple_ast.__all__`` classes
+    specifically), not all of ``runtime_builtins``: the rest of that dict
+    (``INJECTED_RUNTIME_BUILTINS`` — ``Var``, ``Undefined``, ``Compound``,
+    ...) is a separate, pre-existing, deliberate design decision that those
+    names resolve bare in every module, strict or not, and is unrelated to
+    this todo.
+
     The collected set is naturally over-broad (it also contains predicate
     functor names and imported-utility names), but that over-collection is
     harmless: the skip rules above filter out every case except the
@@ -950,7 +973,9 @@ def _process_bare_atom_refs(
     transitively on this package, so a top-level import would create a cycle
     at package load time.
     """
-    from clausal.import_hook import predicate_builtins
+    from clausal.import_hook import (
+        predicate_builtins, runtime_builtins, _SIMPLE_AST_NODE_NAMES,
+    )
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
 
     builtin_names = {name for (name, _arity) in _BUILTINS}
@@ -996,7 +1021,42 @@ def _process_bare_atom_refs(
                     and existing == name
                     and predicate_builtins.get(name) is existing
                 )
-                if not leaked_pool_atom or name in local_names:
+                # P3-1/P3-2 Task 8 (pool split): the SECOND leak shape a
+                # pre-seeded module_dict can carry is a ``simple_ast.__all__``
+                # node class (``Add``, ``Call``, ``Match``, ...) still
+                # sitting under this name, because every module's
+                # ``module_dict`` is seeded with the whole compilation-
+                # support namespace at exec start (see ``import_hook.py``'s
+                # pool-split comment). Same identity discipline as
+                # ``leaked_pool_atom``: this shape is real and generally
+                # useful (it is exactly what lets generated code construct
+                # ``Predicate(...)`` etc.), but it is NOT an atom
+                # declaration, so it must not stand in for one — a bare
+                # reference to ``Add`` with zero declarations must still
+                # raise. Closes
+                # todo/done/pythonic-ast-names-leak-into-strict-atom-namespace-2026-09-04.md.
+                #
+                # Scoped to ``_SIMPLE_AST_NODE_NAMES`` specifically, NOT all
+                # of ``runtime_builtins``: the rest of that dict
+                # (``INJECTED_RUNTIME_BUILTINS`` — ``Var``, ``Undefined``,
+                # ``Compound``, ...) is a SEPARATE, pre-existing, deliberate
+                # design decision that those names resolve bare in EVERY
+                # module, strict or not (see the ``Undefined`` note in
+                # ``import_hook.py``) — unrelated to this todo, and NOT to
+                # be disturbed by it.  A first attempt at this fix checked
+                # all of ``runtime_builtins`` and broke
+                # ``clausal/stdlib/kleene.clausal`` (a bare ``Undefined``
+                # reference, by design), cascading into every test that
+                # transitively loads it.
+                leaked_runtime_builtin = (
+                    not leaked_pool_atom
+                    and name in _SIMPLE_AST_NODE_NAMES
+                    and runtime_builtins[name] is existing
+                )
+                if (
+                    not (leaked_pool_atom or leaked_runtime_builtin)
+                    or name in local_names
+                ):
                     continue
             if name in local_names:
                 # This module's own declared/imported vocabulary — no

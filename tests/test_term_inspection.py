@@ -759,13 +759,27 @@ class TestGlobalAtom:
         assert r1[0][1] is r2[0][1]
 
     def test_existing_pre_seeded_returned(self):
-        """(+name, -atom) for a pre-seeded entry (e.g. Var) returns that value."""
+        """(+name, -atom) for an entry the pool already carries (e.g. minted
+        by an earlier -private/-module declaration, or a prior
+        ``global_atom/2`` call) returns THAT value rather than re-minting.
+
+        P3-2 Task 8 (pool split): this used to use ``Var`` as the
+        "pre-seeded" example, relying on the exact conflation that todo
+        closed -- ``Var`` is a ``runtime_builtins`` (``INJECTED_RUNTIME_
+        BUILTINS``) entry, not an atom, and ``predicate_builtins`` starts
+        EMPTY post-split, so ``global_atom("Var", X)`` now correctly MINTS
+        "Var" as a fresh atom string instead of returning the runtime
+        class -- see
+        todo/done/pythonic-ast-names-leak-into-strict-atom-namespace-2026-09-04.md.
+        Seed the pool directly here instead, the way a real declaration or
+        an earlier ``global_atom/2`` call would."""
         # nv
         from clausal.import_hook import predicate_builtins
-        # 'Var' is pre-seeded in predicate_builtins as the Var class.
-        pre_existing = predicate_builtins["Var"]
+        name = "_test_global_atom_preseeded_xyz"
+        predicate_builtins.setdefault(name, name)
+        pre_existing = predicate_builtins[name]
         out = Var()
-        results = _global_atom_call("Var", out)
+        results = _global_atom_call(name, out)
         assert len(results) == 1
         assert results[0][1] is pre_existing
 

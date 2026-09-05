@@ -245,7 +245,7 @@ from .tro import (  # noqa: E402,F401
 # ``is_term_instance`` runtime type referenced as ``Cls(...)`` — e.g. ``Quantity``,
 # a ``PyThunk``/``FStringThunk`` wrapper, or a CLP(B) ``BoolEq``/``BoolImpl``.
 # Inside a *module clause* these names resolve because the module namespace has
-# been seeded with ``predicate_builtins`` (see clausal/import_hook.py).  A *bare
+# been seeded with ``runtime_builtins`` (see clausal/import_hook.py).  A *bare
 # query*, however, derives its compiled globals only from ``module.module_dict``
 # (clausal/logic/solve.py::_compile_as_query), which need not carry those
 # injections — so a name that compiles fine in a module clause could raise a
@@ -255,8 +255,8 @@ from .tro import (  # noqa: E402,F401
 # it, so a future injected runtime binding cannot silently regress the query
 # path.
 #
-# CRITERION — what belongs here (and why NOT the full ``predicate_builtins``):
-# ``predicate_builtins`` also maps ALL of ``simple_ast.__all__`` (``Call``,
+# CRITERION — what belongs here (and why NOT the full ``runtime_builtins``):
+# ``runtime_builtins`` also maps ALL of ``simple_ast.__all__`` (``Call``,
 # ``Module``, ``If``, ``For``, ``Lt`` … plus ``assertz``/``dump``/``simplify`` …)
 # under their PUBLIC names.  Seeding those into base_globals would *reserve* them,
 # so a user predicate ``call/1`` or ``module/2`` etc. would be shadowed — the

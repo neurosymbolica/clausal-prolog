@@ -15,9 +15,10 @@ import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 import clausal.logic.compiler_v2 as _compiler_v2
-from clausal.import_hook import _load_module, predicate_builtins
+from clausal.import_hook import _load_module, predicate_builtins, runtime_builtins
 from clausal.logic.compiler_v2 import ClausalStrictAtomsDeprecationWarning
 from clausal.logic.predicate import PredicateMeta
+from clausal.pythonic_ast import nodes as simple_ast
 from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
 from clausal.templating.term_rewriting import EmbedTransformer
 
@@ -329,3 +330,176 @@ class TestDeclarednessIsPerModuleNotProcessWide:
             "P(X) <- (X == {t7leakd_ctrl_atom: 1}[t7leakd_ctrl_atom])\n",
         )
         assert mod.P is not None
+
+
+class TestPredicateBuiltinsPoolSplit:
+    """P3-2 Task 8: ``predicate_builtins``/``runtime_builtins`` pool split.
+
+    Closes ``todo/done/pythonic-ast-names-leak-into-strict-atom-namespace-
+    2026-09-04.md``: ``import_hook.py`` used to seed every
+    ``clausal.pythonic_ast.nodes.__all__`` class object (``Add``, ``Call``,
+    ``Match``, ...) into the SAME process-wide ``predicate_builtins`` dict
+    that backs the §1b/R2 global atom pool -- so a bare reference to one of
+    these internal AST-node names resolved as a declared atom in a strict
+    module with ZERO declarations, no other file needing to run first
+    (unlike the P3-1 Task 7 leak, this one needed no prior module at all --
+    the seed happens at process bootstrap).  The fix splits the one dict
+    into two: ``runtime_builtins`` (the compilation-support namespace,
+    still fully seeded into every module and still NOT atom-visible) and
+    ``predicate_builtins`` (the atom pool, now genuinely empty until an
+    atom is declared/accepted).  A unique ``simple_ast.__all__`` name is
+    used per test below so no test's declaration can leak into another's
+    (mirrors this file's own "unique name per test" discipline).
+    """
+
+    def test_todo_repro_undeclared_simple_ast_name_raises(self):
+        """The todo's own repro, verbatim: a strict module with zero atom
+        declarations, referencing ``Add`` bare in a clause body, must raise
+        the strict-atoms diagnostic -- not silently resolve to
+        ``clausal.pythonic_ast.nodes.Add``."""
+        assert "Add" not in predicate_builtins
+        assert runtime_builtins["Add"] is simple_ast.Add
+        with pytest.raises(NameError) as exc_info:
+            _load_inline_clausal(
+                "_p8_pool_leak_probe",
+                "-module(pool_leak_probe, [Chk(X)])\n"
+                "Chk(X) <- (X == Add)\n",
+            )
+        msg = str(exc_info.value)
+        assert "strict_atoms" in msg
+        assert "Add" in msg
+        # The pool must not have been polluted by the (failed) reference.
+        assert "Add" not in predicate_builtins
+
+    def test_declaring_the_colliding_name_as_atom_compiles_and_unifies_globally(
+        self,
+    ):
+        """A module that DECLARES the colliding spelling as an atom still
+        compiles, and the atom unifies globally (§1b/R2, unchanged) -- the
+        split closes the LEAK, not legitimate declared use.  Two
+        independent modules privately declaring the same spelling get the
+        identical str object back from the shared atom pool."""
+        mod_a = _load_inline_clausal(
+            "_p8_sub_a",
+            "-module(p8_sub_a, [P(X)])\n"
+            "-private([Sub])\n"
+            "P(Sub),\n",
+        )
+        assert isinstance(mod_a.Sub, str) and mod_a.Sub == "Sub"
+        assert mod_a.Sub is not simple_ast.Sub
+        assert predicate_builtins["Sub"] is mod_a.Sub
+        # runtime_builtins is untouched by the declaration.
+        assert runtime_builtins["Sub"] is simple_ast.Sub
+
+        mod_b = _load_inline_clausal(
+            "_p8_sub_b",
+            "-module(p8_sub_b, [Q(X)])\n"
+            "-private([Sub])\n"
+            "Q(Sub),\n",
+        )
+        assert mod_b.Sub is mod_a.Sub  # global identity by spelling
+
+    def test_simple_ast_name_raises_regardless_of_load_order(self):
+        """Same pattern as ``TestDeclarednessIsPerModuleNotProcessWide``:
+        an undeclared reference raises BEFORE anything has declared the
+        spelling (proving the leak needs no earlier module at all -- the
+        todo's point), a legitimate declaration then succeeds, and a THIRD,
+        still-undeclared module fails AFTER the pool carries the spelling
+        -- proving per-module declaredness, not first-loader-wins."""
+        with pytest.raises(NameError):
+            _load_inline_clausal(
+                "_p8_mult_before",
+                "-module(p8_mult_before, [Q(X)])\n"
+                "Q(X) <- (X == Mult)\n",
+            )
+        mod_owner = _load_inline_clausal(
+            "_p8_mult_owner",
+            "-module(p8_mult_owner, [P(X)])\n"
+            "-private([Mult])\n"
+            "P(Mult),\n",
+        )
+        assert isinstance(mod_owner.Mult, str)
+
+        with pytest.raises(NameError) as exc_info:
+            _load_inline_clausal(
+                "_p8_mult_after",
+                "-module(p8_mult_after, [R(X)])\n"
+                "R(X) <- (X == Mult)\n",
+            )
+        msg = str(exc_info.value)
+        assert "strict_atoms" in msg
+        assert "Mult" in msg
+
+    def test_dict_key_path_also_rejects_simple_ast_name(self):
+        """``import_hook._make_intern_atom`` (the dict-key path) counterpart:
+        the same leak shape existed there too (``{Div: 1}[Div]`` resolved
+        via the runtime class), so the split's identity check was applied
+        to both consumers, not just ``_process_bare_atom_refs``."""
+        assert "Div" not in predicate_builtins
+        with pytest.raises(NameError) as exc_info:
+            _load_inline_clausal(
+                "_p8_div_dictkey",
+                "-module(p8_div_dictkey, [Q(X)])\n"
+                "Q(X) <- (X == {Div: 1}[Div])\n",
+            )
+        msg = str(exc_info.value)
+        assert "strict_atoms" in msg
+        assert "Div" in msg
+        assert "dict key" in msg
+        assert "Div" not in predicate_builtins
+
+    def test_functor_declaration_shadows_simple_ast_name_locally(self):
+        """§7.2 answer (P3-2 Task 2 report, carried into Task 8's scope): a
+        module-local, field-carrying functor declaration whose spelling
+        collides with a ``simple_ast.__all__`` name (``Call``) ALWAYS wins
+        over the runtime-support binding, in THAT module's own namespace
+        only -- exactly the same "declared wins locally" rule the bare-atom
+        branch follows, and consistent with P3-2 Task 2's deliberate choice
+        to bind a declared data functor's spelling through module_dict
+        ONLY, never through the shared predicate_builtins pool (so this
+        local shadowing cannot leak into, or be affected by, any other
+        module's namespace)."""
+        mod = _load_inline_clausal(
+            "_p8_call_functor",
+            "-module(p8_call_functor, [Call(x, y)])\n"
+            "Result(V) <- (V is Call(1, 2))\n",
+        )
+        from clausal.logic.solve import call as _call
+        from clausal.logic.variables import Var, deref, walk
+
+        v = Var()
+        results = [walk(deref(v)) for _ in _call(mod.Result, v)]
+        assert results == [("Call", 1, 2)]
+        # Locally shadowed to the plain interned spelling (P3-2 Task 2,
+        # R6 revised) -- no longer the runtime class in THIS module.
+        assert mod.Call == "Call"
+        assert mod.Call is not simple_ast.Call
+        # ...but never routed through the shared atom pool (Task 2,
+        # deliberate) and the runtime pool itself is untouched -- purely a
+        # per-module rebinding, so every OTHER module still sees the real
+        # simple_ast.Call class under that name.
+        assert "Call" not in predicate_builtins
+        assert runtime_builtins["Call"] is simple_ast.Call
+
+    def test_generated_code_fixture_with_fstrings_and_arith_still_loads(self):
+        """Regression: every clause's generated code constructs a bare
+        ``Predicate(head=..., body=...)`` at module-exec time
+        (EmbedTransformer's rewrite) -- a ``simple_ast`` name that must
+        still resolve via ``runtime_builtins`` post-split.
+        ``quantity_head_literal.clausal`` is an existing, already
+        suite-covered fixture (``tests/test_quantity_head_literal.py``)
+        combining an f-string clause head (``Tagd(f"v{0}", tagged_)``)
+        with arithmetic/quantity clause bodies."""
+        from clausal.logic.solve import call as _call
+        from clausal.logic.variables import Var, deref
+
+        path = os.path.join(
+            os.path.dirname(__file__), "clausal_modules",
+            "quantity_head_literal.clausal",
+        )
+        mod = _load_module("_p8_qty_fixture_regress", path)
+        n = Var()
+        results = [
+            getattr(deref(n), "__name__", deref(n)) for _ in _call(mod.ChkTag, n)
+        ]
+        assert results == ["tagged_"]

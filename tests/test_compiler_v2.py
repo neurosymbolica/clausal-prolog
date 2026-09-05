@@ -19,6 +19,7 @@ from clausal.import_hook import (
     _load_module,
     _fact_to_predicate_node,
     predicate_builtins,
+    runtime_builtins,
 )
 from clausal.logic.compiler_v2 import compile_module
 from clausal.logic.database import Module as LogicModule, head_key
@@ -47,7 +48,12 @@ def _load_via_v2(path: str, mod_name: str):
 
     module_items = transformer._module_items
     module_dict = {"__name__": mod_name, "__file__": path}
+    # P3-2 Task 8: mirrors import_hook.py's exec_module seeding order --
+    # the atom pool first, runtime_builtins (compilation-support namespace)
+    # layered on top and winning any collision (see import_hook.py's
+    # pool-split comment for why).
     module_dict.update(predicate_builtins)
+    module_dict.update(runtime_builtins)
 
     # Collect Predicate nodes by executing bytecode.
     predicate_nodes = []

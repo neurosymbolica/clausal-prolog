@@ -128,7 +128,23 @@ def _make_intern_atom(module_dict, module_items, module_name):
                 and existing == name
                 and predicate_builtins.get(name) is existing
             )
-            if not leaked_pool_atom or name in local_names:
+            # Task 8 split: the OTHER leak shape a pre-seeded module_dict can
+            # carry is a ``simple_ast.__all__`` node class still sitting
+            # under this name -- e.g. ``{Add: 1}[Add]`` in a module with
+            # zero declarations.  Same discipline as leaked_pool_atom:
+            # distrust it unless THIS module's own declared/imported
+            # vocabulary vouches for the name.  Scoped to
+            # ``_SIMPLE_AST_NODE_NAMES`` specifically, NOT all of
+            # ``runtime_builtins`` -- the rest of that dict
+            # (``INJECTED_RUNTIME_BUILTINS``: ``Var``, ``Undefined``, ...)
+            # is deliberately exempt from strictness; see the module-level
+            # pool-split comment above.
+            leaked_runtime_builtin = (
+                not leaked_pool_atom
+                and name in _SIMPLE_AST_NODE_NAMES
+                and runtime_builtins[name] is existing
+            )
+            if not (leaked_pool_atom or leaked_runtime_builtin) or name in local_names:
                 return existing
         elif name in local_names:
             # Declared/imported by this module but not yet reflected in
@@ -218,8 +234,69 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
 
 
 # ── Builtins injected into every predicate module ────────────────────────────
+#
+# P3-1/P3-2 Task 8 (pool split; closes
+# todo/done/pythonic-ast-names-leak-into-strict-atom-namespace-2026-09-04.md):
+# this used to be a SINGLE dict, seeded at process bootstrap with every
+# ``simple_ast.__all__`` class object and then grown at runtime with every
+# legitimately declared/auto-accepted ATOM.  Because both jobs shared one
+# dict, an internal AST-node class name (``Add``, ``Call``, ``Match``, ...)
+# was indistinguishable from a declared atom to the strictness check
+# (``compiler_v2._process_bare_atom_refs``/``_process_declarations``,
+# ``_make_intern_atom`` below) — a bare reference to ``Add`` in a strict
+# module with ZERO declarations compiled clean.  The fix splits the one job
+# from the other into two dicts:
+#
+# ``runtime_builtins`` — the compilation-support namespace every generated
+#   module needs bound in its own exec-time namespace (EmbedTransformer's
+#   rewrite emits bare ``Predicate(head=…, body=…)`` calls, for example) or
+#   at query-compile time (``INJECTED_RUNTIME_BUILTINS``, below).  NOT an
+#   atom vocabulary — never consulted by the strictness check.
+#
+# ``predicate_builtins`` — the §1b/R2 GLOBAL ATOM pool ONLY.  Starts EMPTY
+#   at process bootstrap; grows only via a legitimate atom declaration
+#   (-module/-private, ``_process_declarations``), auto-accept
+#   (-implicit_atoms, ``_process_bare_atom_refs``/``$intern_atom``), or
+#   ``global_atom/2``'s mint-on-demand.  This is the dict the strictness
+#   check's "already resolved" test consults.
+#
+# Module-exec seeding (``exec_module`` below) applies BOTH — generated code
+# still needs the runtime names — with ``predicate_builtins`` seeded FIRST
+# and ``runtime_builtins`` layered on top, WINNING any collision.  This is
+# the opposite of ``clausal/logic/compiler/predicate.py``'s
+# ``base_globals`` precedence (there, a module's own ALREADY-RESOLVED
+# globals safely win over the static runtime defaults, because
+# ``_process_declarations``/``_process_bare_atom_refs`` have already run
+# by that point) — here, seeding runs BEFORE those passes, against the
+# RAW, unfiltered, process-wide atom pool.  If an atom pool entry were
+# allowed to win here, a name collision with a ``simple_ast.__all__`` class
+# (an atom legitimately declared as ``Sub`` in one module, say) would
+# clobber EVERY OTHER, unrelated module's ``module_dict["Sub"]`` with a
+# plain str — breaking that module's own generated code, which
+# unconditionally needs the real class to construct its clause bodies
+# (arithmetic/comparison/call nodes compile to bare ``Sub(...)``/``Call(...)``
+# constructor references — see the fixture regression this order fixes,
+# ``tests/fixtures/tagged_shapes.clausal``).  A module that DOES want to
+# declare that spelling as its own atom still gets it correctly:
+# ``_process_declarations`` runs AFTER this seeding and unconditionally
+# rebinds its own declared names, regardless of what seeding left there.
+runtime_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all__}
 
-predicate_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all__}
+# The subset of ``runtime_builtins`` the strictness check's "already
+# resolved" test must distrust (fix round 1, review-caught): ONLY the
+# ``simple_ast.__all__`` AST-node classes (``Add``, ``Call``, ``Match``,
+# ...) -- the todo's repro and observation are entirely about this set. The
+# REST of ``runtime_builtins`` (``INJECTED_RUNTIME_BUILTINS`` below: ``Var``,
+# ``Compound``, ``Undefined``, ...) is a SEPARATE, pre-existing, deliberate
+# design decision -- see the ``Undefined`` note a few lines down -- that
+# those specific names resolve bare in EVERY module, including
+# ``-strict_atoms`` ones, with NO declaration required.  That invariant
+# predates this todo, is unrelated to the leak it closes, and must not be
+# disturbed: a first attempt at this fix treated all of ``runtime_builtins``
+# as distrusted, which broke ``clausal/stdlib/kleene.clausal`` (a bare
+# ``Undefined`` reference, by design) and cascaded into every test that
+# transitively loads it.
+_SIMPLE_AST_NODE_NAMES = frozenset(simple_ast.__all__)
 # '$'-prefixed names cannot be typed as normal Python identifiers, so user code
 # cannot accidentally shadow them.  Do not remove the '$' prefix.
 # Note: $define_predicate and $assert_fact are set per-module in exec_module
@@ -245,8 +322,13 @@ predicate_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__a
 # third truth value, a real binding (not a minted atom) so it resolves in every
 # module including ``-strict_atoms`` ones with process-wide identity.
 from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
-predicate_builtins.update(INJECTED_RUNTIME_BUILTINS)
-predicate_builtins["$unterminated_fact_error"] = _unterminated_fact_error
+runtime_builtins.update(INJECTED_RUNTIME_BUILTINS)
+runtime_builtins["$unterminated_fact_error"] = _unterminated_fact_error
+
+# The GLOBAL ATOM pool (§1b/R2) — see the module-level comment above.  Starts
+# empty; ``compiler_v2._process_declarations``/``_process_bare_atom_refs`` and
+# ``_make_intern_atom`` below are its only writers.
+predicate_builtins: dict = {}
 
 
 def _preseed_py_submodules(module_items) -> None:
@@ -459,7 +541,14 @@ class PredicateLoader(_ClausalSourceLoader):
         sys.modules[module.__name__] = module
         self._register_canonical(module)
         module_dict = module.__dict__
+        # Task 8 split: predicate_builtins (the atom pool) FIRST,
+        # runtime_builtins (compilation-support names every generated
+        # module needs) layered on top and WINNING any collision -- see
+        # the pool-split comment above for why this order, not the
+        # opposite, is required (a colliding atom declared elsewhere must
+        # not break THIS module's own generated-code construction).
         module_dict.update(predicate_builtins)
+        module_dict.update(runtime_builtins)
 
         _run_v2_pipeline(self, module, module_dict, filename,
                          self._recover_module_items)
@@ -520,7 +609,14 @@ class PrologLoader(_ClausalSourceLoader):
         sys.modules[module.__name__] = module
         self._register_canonical(module)
         module_dict = module.__dict__
+        # Task 8 split: predicate_builtins (the atom pool) FIRST,
+        # runtime_builtins (compilation-support names every generated
+        # module needs) layered on top and WINNING any collision -- see
+        # the pool-split comment above for why this order, not the
+        # opposite, is required (a colliding atom declared elsewhere must
+        # not break THIS module's own generated-code construction).
         module_dict.update(predicate_builtins)
+        module_dict.update(runtime_builtins)
         _run_v2_pipeline(self, module, module_dict, filename,
                          self._recover_module_items)
 
@@ -783,16 +879,15 @@ sys.meta_path[:] = [PredicateFinder(), PrologFinder(), ModulesFinder(), *sys.met
 
 # ── IPython integration ───────────────────────────────────────────────────────
 
-_simple_ast_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all__}
-# '$'-prefixed names cannot be typed as normal Python identifiers, so user code
-# cannot accidentally shadow them.  Do not remove the '$' prefix.
+# Task 8 split: IPython was already independent of the growing atom pool
+# (this dict is a one-shot snapshot at import time, never re-read), so it
+# copies ``runtime_builtins`` directly rather than recomputing the same
+# simple_ast.__all__ + INJECTED_RUNTIME_BUILTINS merge a second time.
 # Inject the runtime types so that functor class code (which calls Var()) and
-# compiled goals work in IPython cells.  Same single source of truth as
-# ``predicate_builtins`` above (INJECTED_RUNTIME_BUILTINS): $ast, PredicateMeta,
-# Var/Compound/DictTerm/SetTerm, Trail, PyThunk/FStringThunk, Quantity, Undefined,
+# compiled goals work in IPython cells: $ast, PredicateMeta, Var/Compound/
+# DictTerm/SetTerm, Trail, PyThunk/FStringThunk, Quantity, Undefined,
 # BoolEq/BoolImpl, and the $-prefixed engine helpers ($walk/$deref/$unify).
-_simple_ast_builtins.update(INJECTED_RUNTIME_BUILTINS)
-_simple_ast_builtins["$unterminated_fact_error"] = _unterminated_fact_error
+_simple_ast_builtins = dict(runtime_builtins)
 # in_ IPython there is no per-session logic module, so '$assert_fact' collects
 # facts in a shared list.  For module-backed predicate files, exec_module
 # overrides this with a module-specific closure.

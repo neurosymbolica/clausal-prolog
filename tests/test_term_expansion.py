@@ -24,6 +24,7 @@ from clausal.import_hook import (
     _fact_to_predicate_node,
     _load_module,
     predicate_builtins,
+    runtime_builtins,
 )
 from clausal.logic.compiler_v2 import compile_module
 from clausal.logic.database import Module as LogicModule, head_key
@@ -50,7 +51,11 @@ def _parse_and_collect(source: str):
 
     module_items = transformer._module_items
     module_dict = {"__name__": "_test_expansion"}
+    # P3-2 Task 8: mirrors import_hook.py's exec_module seeding order --
+    # the atom pool first, runtime_builtins layered on top and winning any
+    # collision.
     module_dict.update(predicate_builtins)
+    module_dict.update(runtime_builtins)
 
     predicate_nodes = []
     dummy_lm = LogicModule("_test_expansion_", module_dict=module_dict)

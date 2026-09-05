@@ -88,3 +88,75 @@ was first seeded with `simple_ast.__all__`, well before P3-1. Low real-world
 impact (the colliding names are internal AST-node class names, unlikely to
 be typed as an ordinary atom spelling by accident), but worth fixing before
 relying on strict-atoms as a hard guarantee rather than a typo-catcher.
+
+## Resolution (2026-09-05, P3-2 Task 8)
+
+Fixed via fix direction 1, the architectural split. `import_hook.py`'s one
+process-wide dict is now two:
+
+- `runtime_builtins` -- the compilation-support namespace (every
+  `simple_ast.__all__` node class plus `INJECTED_RUNTIME_BUILTINS`).  Still
+  seeded into every module's `module_dict` at exec start (generated code's
+  bare `Predicate(head=..., body=...)` construction, among others, needs
+  it), but NEVER consulted by the strictness check.
+- `predicate_builtins` -- the §1b/R2 global ATOM pool, and *only* that.
+  Starts empty at process bootstrap; grows solely via a legitimate
+  declaration (`-module`/`-private`), auto-accept (`-implicit_atoms`), or
+  `global_atom/2`'s mint-on-demand.
+
+Module-exec seeding applies both, `predicate_builtins` (the atom pool)
+FIRST and `runtime_builtins` layered on top, WINNING any collision --
+fix round 1 tried the opposite order (by analogy with
+`clausal/logic/compiler/predicate.py`'s `base_globals`, where a module's
+own already-resolved globals safely win over the static runtime defaults)
+and broke `tests/fixtures/tagged_shapes.clausal`: seeding runs BEFORE
+`_process_declarations`/`_process_bare_atom_refs`, against the RAW,
+unfiltered pool, so an atom legitimately declared as `Sub` in one module
+clobbered every OTHER module's `module_dict["Sub"]` with a plain str --
+breaking that module's own generated code, which unconditionally needs
+the real `simple_ast.Sub` class to construct arithmetic in its clause
+bodies (`N1 == N - 1` compiles to a bare `Sub(...)` constructor
+reference). A module that DOES want to declare that spelling still gets
+it correctly: `_process_declarations` runs after seeding and
+unconditionally rebinds its own declared names regardless of what
+seeding left there.
+
+`compiler_v2._process_bare_atom_refs` and `import_hook._make_intern_atom`
+(the dict-key path had the identical leak shape, e.g. `{Add: 1}[Add]`, and
+was fixed too) both gained a second "leaked" shape alongside Task 7's
+leaked-pool-atom check: an already-bound value that is identical to
+`runtime_builtins`'s own entry for that name is now distrusted the same
+way, unless the module's own declared/imported vocabulary
+(`_locally_declared_names`) vouches for it -- but this check is scoped to
+`_SIMPLE_AST_NODE_NAMES` (`frozenset(simple_ast.__all__)`), NOT all of
+`runtime_builtins`. Fix round 1 checked the whole dict and broke
+`clausal/stdlib/kleene.clausal`: it bare-references `Undefined` (the
+Kleene K3 truth value) with zero declarations, which is a SEPARATE,
+pre-existing, deliberate design decision (`import_hook.py`'s own comment:
+"`Undefined` ... resolves in every module including `-strict_atoms` ones
+with process-wide identity") that predates this todo and has nothing to
+do with the leak -- `Undefined`/`Var`/`Compound`/... come from
+`INJECTED_RUNTIME_BUILTINS`, not `simple_ast.__all__`, and the fix must
+distinguish the two. Caught by the Task 8 full-suite gate (163 new
+failures, all one root cause, all fixed by narrowing the check).
+
+The todo's own repro now raises `strict_atoms: undeclared atom 'Add' ...`;
+a module that *declares* the colliding spelling (`-private([Sub])`, e.g.)
+still compiles and unifies globally, unchanged. §7.2's open question (a
+declared *data functor* colliding with a `simple_ast.__all__` name, e.g.
+`-module(m, [Call(x, y)])`) resolves the same way a bare-atom declaration
+does: the local declaration always wins, in that module's own namespace
+only -- `_process_declarations`'s tuple-entry branch was already binding
+data functors through `module_dict` directly rather than the shared pool
+(P3-2 Task 2, deliberate), so this shadowing is inherently local and
+cannot leak into, or be affected by, any other module.
+
+Tests: `tests/test_strict_atoms_default.py::TestPredicateBuiltinsPoolSplit`
+(6 tests -- todo repro, declare-and-unify control, both load orders,
+dict-key path, the §7.2 functor-collision answer, and an existing
+f-string/arith fixture regression check). Full suite: failed-name diff
+against `.superpowers/sdd/p32-cell-default-flip/baseline-failed-names.txt`
+is empty modulo the pre-existing solver-dependency/doc-snippet/C17-perf
+ledger and the newly-added test names. See
+`.superpowers/sdd/p32-cell-default-flip/task-8-report.md` for full
+evidence.
