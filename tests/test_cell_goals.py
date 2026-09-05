@@ -63,6 +63,8 @@ def mod(tmp_path):
     return _write_module(tmp_path, "cellgoals", """
         -dynamic(p/1)
         -dynamic(pair/2)
+        -dynamic(seen/1)
+        -dynamic(seenc/1)
 
         p(1),
         p(2),
@@ -196,6 +198,68 @@ class TestCallNOverCells:
         X = Var()
         assert list(pcall("cg1", mod.p(X), module=_lm(mod))) == []
 
+    def test_an_imported_predicate_answers_call_as_it_answers_solve(
+            self, tmp_path):
+        """``db.get_dispatch`` is the dispatch table plus the builtin registry
+        — it does NOT read the module dict, and an ``-import_from``'d
+        predicate lives on the OWNER's row, reachable only through the class
+        the import bound here.  So ``solve`` answered and ``call`` failed
+        silently, for the same goal.  Fix round 1, F2."""
+        _write_module(tmp_path, "cg_lib", """
+            -module(cg_lib, [lp(A)])
+            -dynamic(lp/1)
+
+            lp(1),
+            lp(2),
+        """)
+        importer = _write_module(tmp_path, "cg_imp", """
+            -import_from(cg_lib, [lp])
+
+            host(G) <- call(G),
+        """)
+        lm = _lm(importer)
+        Y, Z = Var(), Var()
+        by_solve = [deref(Y) for _ in solve(("lp", Y), lm)]
+        by_call = [deref(Z) for _ in pcall("host", ("lp", Z), module=lm)]
+        assert by_solve == [1, 2]
+        assert by_call == by_solve
+
+    def test_a_zero_argument_control_cell_is_refused_not_silently_failed(
+            self, mod):
+        """``call((",",))`` used to fall past the arity-guarded refusal and
+        fail silently while ``solve((",",), m)`` raised.  Fix round 1, F3."""
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("cg1", (",",), module=_lm(mod)))
+        assert _error_term(exc_info.value)[0].args[0] == (
+            "callable_control_construct_unsupported")
+
+    def test_the_atom_spelling_of_a_qualified_goal_hits_the_same_stub(
+            self, mod):
+        """``call(":", M, G)`` folds to the same goal as ``call((":", M, G))``
+        and must get the same refusal; it used to bypass the stub and fall to
+        a ``:``/2 dispatch lookup that found nothing.  Fix round 1, F4."""
+        lm = _lm(mod)
+        errors = []
+        for goal_args in ((":", "cellgoals", ("p", 1)), ((":", "cellgoals", ("p", 1)),)):
+            with pytest.raises(LogicException) as exc_info:
+                list(pcall("cg" + str(len(goal_args)), *goal_args, module=lm))
+            errors.append(_error_term(exc_info.value))
+        # Same error TERM from both spellings; only the context differs, and
+        # it names the surface (call/3 vs call/1), which is correct.
+        assert errors[0][0] == errors[1][0] == Compound(
+            "existence_error", ("procedure", Compound("/", (":", 2))))
+        assert "cellgoals" in errors[0][1] and "cellgoals" in errors[1][1]
+
+    def test_the_atom_spelling_of_a_control_construct_hits_the_same_refusal(
+            self, mod):
+        """Same folding, the other deferred route."""
+        lm = _lm(mod)
+        with pytest.raises(LogicException) as a:
+            list(pcall("cg3", ",", ("p", 1), ("p", 2), module=lm))
+        with pytest.raises(LogicException) as b:
+            list(pcall("cg1", (",", ("p", 1), ("p", 2)), module=lm))
+        assert _error_term(a.value)[0] == _error_term(b.value)[0]
+
     def test_the_call_family_is_registered_db_receiving(self):
         """call/N moved from _BUILTINS to _DB_BUILTINS so it can resolve a
         NAME against the caller's database; the arity set is unchanged."""
@@ -229,7 +293,7 @@ class TestCallNOverCells:
 
 
 class TestDeferredCellGoalForms:
-    @pytest.mark.parametrize("functor", [",", ";", "->", "\\+"])
+    @pytest.mark.parametrize("functor", [",", ";", "->", "*->", "\\+"])
     def test_a_control_construct_cell_goal_is_refused_by_solve(self, mod, functor):
         cell = (functor, ("p", 1), ("p", 2))
         with pytest.raises(LogicException) as exc_info:
@@ -269,6 +333,27 @@ class TestDeferredCellGoalForms:
         inner, _context = _error_term(exc_info.value)
         assert inner.args[0] == "procedure"
 
+    def test_only_colon_slash_2_is_the_deferred_qualified_form(self, mod):
+        """``(":", A, B, C)`` is an ordinary ``:``/3 call.  Both goal paths
+        must agree on that: ``_term_to_goal``'s guard has always been
+        ``len == 3``, and ``_templatize_query_goal``'s was arity-blind.
+        Fix round 1, F5."""
+        from clausal.logic.solve import _templatize_query_goal, _term_to_goal
+        from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
+
+        goal = (":", 1, 2, 3)
+        # the lowering path treats it as an ordinary call...
+        assert _term_to_goal(goal) == AstCall(
+            func=LoadName(name=":"), args=[1, 2, 3], kwargs=[])
+        # ...and so does the templatizer: three ground args, three params.
+        template, params = _templatize_query_goal(goal)
+        assert len(params) == 3
+        assert template[0] == ":" and [v for _pv, v in params] == [1, 2, 3]
+        # while :/2 stays deferred on both.
+        assert _templatize_query_goal((":", "m", ("g",)))[1] == []
+        with pytest.raises(LogicException):
+            _term_to_goal((":", "m", ("g",)))
+
     def test_the_stub_is_the_one_task_6_replaces(self):
         """Named so the hand-off is a symbol, not a grep."""
         from clausal.logic import cells
@@ -307,6 +392,44 @@ class TestCellAssertRetract:
         list(pcall("assertz", ("p", 7), module=lm))
         head = lm.db.clauses_for("p", 1)[-1].head
         assert type(head) is mod.p
+
+    def test_collect_by_assert_over_a_cell_stores_one_clause_per_solution(
+            self, mod):
+        """The collect-by-assert idiom: drive a goal, assert one fact per
+        solution.  The stored head must hold the VALUE the variable had at
+        assert time, not the variable — otherwise every clause reads back as
+        whatever it was bound to last.  Fix round 1, F1."""
+        lm = _lm(mod)
+        X = Var()
+        for _ in solve(("p", X), lm):
+            list(pcall("assertz", ("seen", X), module=lm))
+        Y = Var()
+        assert [deref(Y) for _ in solve(("seen", Y), lm)] == [1, 2]
+
+    def test_the_cell_spelling_agrees_with_the_compound_spelling(self, mod):
+        """The Compound path has always frozen (``_normalize_fact_clause``
+        rebuilds a bound argument as a fresh Var + Unify); the cell path now
+        agrees with it, which is the point of the fix."""
+        lm = _lm(mod)
+        X = Var()
+        for _ in solve(("p", X), lm):
+            list(pcall("assertz", Compound("seenc", (X,)), module=lm))
+        Z = Var()
+        for _ in solve(("p", Z), lm):
+            list(pcall("assertz", ("seen", Z), module=lm))
+        Y, W = Var(), Var()
+        by_compound = [deref(Y) for _ in solve(("seenc", Y), lm)]
+        by_cell = [deref(W) for _ in solve(("seen", W), lm)]
+        assert by_cell == by_compound == [1, 2]
+
+    def test_the_freeze_is_on_the_assert_path_only(self, mod):
+        """``retract`` must keep SHARING the caller's variables — binding them
+        is how a retracted clause's values escape with the solution — so the
+        freeze lives in ``_build_clause``, not in the shared gate."""
+        lm = _lm(mod)
+        X = Var()
+        assert len(list(pcall("retract", ("p", X), module=lm))) == 1
+        assert deref(X) == 1
 
     def test_a_cell_retract_removes_a_cell_asserted_clause(self, mod):
         lm = _lm(mod)

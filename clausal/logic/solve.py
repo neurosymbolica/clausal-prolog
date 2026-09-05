@@ -403,8 +403,15 @@ def _templatize_query_goal(goal: Any):
     # compiled its own query — a cell goal is a predicate call, and it gets the
     # same value-independent compiled query a Compound call gets.
     is_cell_goal, cell_f = compound_cell_shape(goal)
-    if is_cell_goal and (cell_f == QUALIFIED_GOAL_FUNCTOR
-                         or cell_f in CELL_GOAL_CONTROL_FUNCTORS):
+    if is_cell_goal and (
+        # ARITY-MATCHED to ``_term_to_goal``'s own guard (P3-3 Task 5 fix
+        # round 1, F5): only ``:``/2 is the deferred qualified form, so
+        # ``(":", A, B, C)`` is an ordinary ``:``/3 call and templatizes like
+        # any other. The two guards disagreeing meant one path treated it as
+        # deferred and the other as ordinary.
+        (cell_f == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3)
+        or cell_f in CELL_GOAL_CONTROL_FUNCTORS
+    ):
         # The two deferred forms (Task 6's `:`/2, the ISO phase's control
         # constructs) are refused by ``_term_to_goal`` a few lines later.
         # Leave them alone so the refusal quotes the goal the caller wrote

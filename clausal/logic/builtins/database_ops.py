@@ -6,7 +6,9 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.logic.predicate import PredicateMeta, is_term_instance
+from clausal.logic.predicate import (
+    PredicateMeta, is_term_instance, term_field_names,
+)
 from clausal.terms import Compound
 from clausal.logic.exceptions import LogicException, permission_error
 
@@ -63,14 +65,58 @@ def _build_clause(term_val: Any, context: str, db, module_dict) -> "Any":
     *before* that failure surfaced, poisoning every later query of the
     predicate. Rejecting here, before ``db.assertz``, keeps the existing
     clauses queryable. See docs/database_ops.md (A09-F026).
+
+    A CELL argument is FROZEN here (P3-3 Task 5 fix round 1, F1) -- see
+    ``_freeze_asserted_head_args``.  Only on this path: ``retract`` calls the
+    gate directly and must keep SHARING the caller's variables, since binding
+    them is how a retracted clause's values escape with the solution.
     """
     from clausal.terms import Predicate as _Predicate
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
 
     if isinstance(term_val, _Predicate):
         raise LogicException(
             permission_error("assert", "rule", term_val.head, context))
+    was_cell, _cell_functor = compound_cell_shape(term_val)
     term_val = _check_cell_head_permission(term_val, context, db, module_dict)
+    if was_cell:
+        term_val = _freeze_asserted_head_args(term_val)
     return _normalize_fact_clause(term_val)
+
+
+def _freeze_asserted_head_args(head: Any) -> Any:
+    """Rebuild *head* with each argument DEREFERENCED, so the stored clause
+    holds the value a variable had at assert time rather than the variable.
+
+    P3-3 Task 5 fix round 1 (F1).  The gate normalizes a cell by handing its
+    slots straight to the class constructor or to ``Compound``, and
+    ``_normalize_fact_clause`` passes a class term through untouched -- so the
+    stored head held the CALLER'S LIVE ``Var``.  The collect-by-assert idiom
+    then stored one clause per solution, all of them the same variable::
+
+        for _ in solve(("src", X), m):     # src(1), src(2)
+            assertz(("seen", X))
+        # seen(X) answered [2, 2], not [1, 2]
+
+    The ``Compound`` path never had that shape because
+    ``_normalize_fact_clause`` derefs each argument and rebuilds a bound one as
+    a fresh ``Var`` plus a ``Unify`` body goal.  This is that same freeze, one
+    step earlier, so the class-term head gets it too: a SHALLOW ``deref``,
+    deliberately matching what that machinery does rather than a deep walk.
+
+    An UNBOUND argument still comes through as the caller's ``Var`` -- again
+    matching the ``Compound`` path, which keeps an unbound argument live.  That
+    residual, and the identical defect in the class-term spelling
+    ``assertz(m.seen(X))`` (ruled out of scope for this round), are recorded in
+    ``todo/assert-stores-live-vars-for-class-term-and-cell-spellings-2026-09-06.md``;
+    ISO ``assert/1`` copies its argument outright, which is the eventual fix.
+    """
+    if isinstance(head, Compound):
+        return Compound(head.functor, tuple(deref(a) for a in head.args))
+    if is_term_instance(head):
+        return type(head)(*[deref(getattr(head, f))
+                            for f in term_field_names(head)])
+    return head
 
 
 def _check_cell_head_permission(term_val: Any, context: str, db,
@@ -101,9 +147,10 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
     gives it clauses -- being data is precisely having none -- so the row
     lookup alone would call the P3-2 case unknown and hand back an
     existence_error where the whole point of that refusal is to say "this name
-    is data; declare it -dynamic".  ``functor_signature_for`` is the funnel
-    that answers "is this name declared here, and with how many fields", and
-    it is what keeps the two refusals on the right side of the line.
+    is data; declare it -dynamic".  ``_declared_here_at_arity`` answers "does
+    this module declare that name at that arity", which -- asked ONLY after
+    the row lookup has come back None, as it is here -- is the same question,
+    and it is what keeps the two refusals on the right side of the line.
 
     The genuinely-unknown case is an error rather than assertz's usual "create
     the predicate" because a cell is INDISTINGUISHABLE from a str-headed data
@@ -145,7 +192,7 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
         if pred_cls is not None:
             return pred_cls(*args)
         return Compound(functor, args)
-    if row is None and not _declared_with_fields(module_dict, functor, arity):
+    if row is None and not _declared_here_at_arity(module_dict, functor, arity):
         raise LogicException(existence_error(
             "procedure", Compound("/", (functor, arity)),
             f"{context}: no predicate {functor}/{arity} is known here, and a "
@@ -164,10 +211,24 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
     ))
 
 
-def _declared_with_fields(module_dict: "dict | None", functor: str,
-                          arity: int) -> bool:
-    """True if *functor* is declared in this module with exactly *arity*
-    fields -- i.e. it is a DATA functor here, not an unknown name.
+def _declared_here_at_arity(module_dict: "dict | None", functor: str,
+                            arity: int) -> bool:
+    """True if *functor* is DECLARED in this module with exactly *arity*
+    fields -- whatever it then turned out to be.
+
+    RENAMED from ``_declared_with_fields`` in P3-3 Task 5 fix round 1 (F7),
+    because the old name promised a data/predicate distinction this does not
+    make: a ``-dynamic`` predicate, a static one and a data functor declared
+    with the same field count all answer True here.  What it actually answers
+    is "does this module declare that name at that arity".
+
+    That is exactly the right question at its ONE call site, and only because
+    of the ordering there: it is consulted after ``home.row(functor, arity)``
+    came back ``None``.  A declared name with no row has no clauses, no
+    dispatch, no signature and no ``-dynamic`` mark in the Database, which is
+    what being a DATA functor consists of -- so at that point "declared here"
+    and "is a data functor here" coincide, and the P3-2 diagnostic is the
+    right one.  Move the call above the row lookup and that stops being true.
 
     Reads the module's ``__clausal_functor_signatures__`` registry through
     ``functor_signature_for``, the funnel the compiler's own cell placers use,

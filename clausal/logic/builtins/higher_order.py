@@ -34,12 +34,18 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     a predicate class, a lambda closure, anything answering ``_get_dispatch``.
     A cell ``("p", A)`` and a bare atom ``"p"`` are neither: they NAME a
     predicate, so the name has to be looked up, and the only correct place to
-    look it up is the CALLING module's database (which is why the call/N family
-    became db-receiving — see ``_make_call_goal_factory``).
+    look it up is the CALLING module (which is why the call/N family became
+    db-receiving — see ``_make_call_goal_factory``).  Two lookups, in the order
+    ``solve`` uses: the db's own dispatch table (which also covers the builtin
+    registry), then the module NAMESPACE — see ``_namespace_dispatch``.
 
     ISO argument folding: ``call(f(A), B)`` is the goal ``f(A, B)``, so the
     cell's own arguments come first and call/N's extras follow; a bare atom
-    contributes none, giving ``call(p, X)`` → ``p/1``.
+    contributes none, giving ``call(p, X)`` → ``p/1``.  Everything after the
+    fold is decided on the FOLDED goal, so the cell spelling and the atom
+    spelling of one goal — ``call((":", M, G))`` and ``call(":", M, G)``,
+    ``call((",", A, B))`` and ``call(",", A, B)`` — behave identically
+    (P3-3 Task 5 fix round 1, F4).
 
     Returns ``None`` — which the caller turns into a silent failure, the
     behaviour every non-callable goal has had — when the goal is not a cell or
@@ -62,20 +68,63 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         functor, goal_args = goal_val, []
     else:
         return None
-    if is_cell and functor == QUALIFIED_GOAL_FUNCTOR and len(goal_val) == 3:
-        resolve_qualified_goal_cell(goal_val, context)
     call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]
-    if functor in CELL_GOAL_CONTROL_FUNCTORS and call_args:
-        # Refuse on the goal as folding leaves it, so ``call(",", A, B)`` and
-        # ``call((",", A, B))`` get the same message about the same term.
-        refuse_control_construct_cell(
-            (functor,) + tuple(call_args), functor, context)
+    # The goal as the fold leaves it — the term the two deferred routes below
+    # both decide on, and the culprit they both name.
+    folded = (functor,) + tuple(call_args)
+    if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) == 2:
+        resolve_qualified_goal_cell(folded, context)
+    # No arity condition (F3): ``call((",",))`` is as much a control construct
+    # in goal position as ``call((",", A, B))``, and it used to fail silently
+    # here while ``solve((",",), m)`` raised.
+    if functor in CELL_GOAL_CONTROL_FUNCTORS:
+        refuse_control_construct_cell(folded, functor, context)
     if db is None:
         return None
-    dispatch = db.get_dispatch(functor, len(call_args))
+    arity = len(call_args)
+    dispatch = db.get_dispatch(functor, arity)
+    if dispatch is None:
+        dispatch = _namespace_dispatch(db, functor, arity)
     if dispatch is None:
         return None
     return dispatch, call_args
+
+
+def _namespace_dispatch(db, functor, arity):
+    """Second lookup for a named goal: the calling module's NAMESPACE.
+
+    P3-3 Task 5 fix round 1 (F2).  ``db.get_dispatch`` reads the db's own
+    dispatch table and falls back to the builtin registry — it does NOT read
+    the module dict, and an ``-import_from``'d predicate lives on the OWNER's
+    row, reachable from here only through the class the import bound into this
+    module's namespace.  So ``solve(("lp", Z), importer)`` answered while
+    ``call(("lp", Z))`` from the same module failed silently, for the same
+    goal.
+
+    Resolved the way ``database_ops`` resolves an assert's target, reusing its
+    two helpers rather than growing a second copy of the rule:
+    ``_find_pred_cls`` (arity-checked, so a name bound at another arity does
+    not answer) then ``_home_db``, which is the row a shared class actually
+    reads.  The row is keyed on the CLASS's name, not on the local spelling —
+    an ``-import_from`` alias binds the exporter's class under a different
+    name — so the home lookup uses ``pred_cls.__name__``.
+
+    Returns ``None`` (→ silent failure, unchanged) when the name is not in the
+    namespace at that arity.
+    """
+    from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
+        _find_pred_cls, _home_db,
+    )
+    module_dict = getattr(db, "module_dict", None)
+    if module_dict is None:
+        return None
+    pred_cls = _find_pred_cls(functor, arity, module_dict)
+    if pred_cls is None:
+        return None
+    home = _home_db(db, pred_cls)
+    if home is db and pred_cls.__name__ == functor:
+        return None  # the lookup that already came back empty
+    return home.get_dispatch(pred_cls.__name__, arity)
 
 
 def _make_call_goal_factory(extra_n: int):

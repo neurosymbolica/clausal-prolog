@@ -268,12 +268,28 @@ def compound_cell_shape(x: Any) -> tuple[bool, Any]:
 # The control-construct functors an ISO term can spell (``','(A, B)`` is the
 # conjunction as a TERM, which under cells is ``(",", A, B)``).  DEFERRED in
 # cell-GOAL position this phase -- see ``refuse_control_construct_cell``.
-CELL_GOAL_CONTROL_FUNCTORS = frozenset({",", ";", "->", "\\+"})
+#
+# ``*->`` (soft cut) is in the set on the P3-3 Task 5 fix-round-1 ruling: it is
+# a control construct in every Prolog that has it, and the fact that this
+# engine has no compile-time form for it yet is a reason to give the SAME
+# diagnostic, not a reason to let it fall through to an ordinary ``*->``/2
+# lookup and fail silently.
+CELL_GOAL_CONTROL_FUNCTORS = frozenset({",", ";", "->", "*->", "\\+"})
 
-# The compile-time node each one lowers to, named in the refusal so the
-# message points at the form that DOES work.
-_CONTROL_CONSTRUCT_NODES = {
-    ",": "And", ";": "Or", "->": "if-then (Or of And)", "\\+": "Not",
+# What to tell the user instead, per functor -- the whole remedy clause, not
+# just a node name, because ``*->`` has no compile-time form to point at.
+_CONTROL_CONSTRUCT_REMEDY = {
+    ",": "write the conjunction in the clause body, where `,` compiles to an "
+         "And node",
+    ";": "write the disjunction in the clause body, where `;` compiles to an "
+         "Or node",
+    "->": "write the if-then in the clause body, where `->` compiles to an Or "
+          "of And nodes",
+    "\\+": "write the negation in the clause body, where `\\+` compiles to a "
+           "Not node",
+    "*->": "there is no compile-time `*->` on the adaptor surface either — "
+           "soft cut arrives with the ISO surface, and this refusal is what "
+           "keeps it from looking like an ordinary missing predicate",
 }
 
 
@@ -282,7 +298,7 @@ def refuse_control_construct_cell(cell: Any, functor: Any, context: str) -> None
 
     ISO's conjunction-as-a-term is ``','(A, B)``, which under the cell
     representation is the ordinary cell ``(",", A, B)``; the same goes for
-    ``;``, ``->`` and ``\\+``.  Calling one means running a control construct
+    ``;``, ``->``, ``*->`` and ``\\+``.  Calling one means running a control construct
     the engine only ever lowers at COMPILE time -- the adaptor surface never
     produces these as terms (a conjunction written in a clause body becomes an
     ``And`` node), so only a runtime-built term can reach a goal position
@@ -309,14 +325,13 @@ def refuse_control_construct_cell(cell: Any, functor: Any, context: str) -> None
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, type_error,
     )
-    node = _CONTROL_CONSTRUCT_NODES[functor]
+    remedy = _CONTROL_CONSTRUCT_REMEDY[functor]
     raise LogicException(type_error(
         "callable_control_construct_unsupported", cell,
         f"{context}: {functor}/{len(cell) - 1} is a control construct, and a "
-        f"control construct built as a TERM is not callable yet — write it in "
-        f"the clause body instead, where `{functor}` compiles to a {node} "
-        f"node (deferred to the ISO-surface phase; see "
-        f"clausal/logic/cells.py refuse_control_construct_cell)",
+        f"control construct built as a TERM is not callable yet — {remedy} "
+        f"(deferred to the ISO-surface phase; see clausal/logic/cells.py "
+        f"refuse_control_construct_cell)",
     ))
 
 
