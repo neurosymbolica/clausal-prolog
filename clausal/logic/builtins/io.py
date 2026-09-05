@@ -6,6 +6,7 @@ from __future__ import annotations
 import sys as _sys
 
 from clausal.logic.atoms import demangle_for_display, is_mangled
+from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import term_str as _term_str, term_pformat as _term_pformat
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, term_field_names_of_class
@@ -27,14 +28,20 @@ def _format_term_for_io(val):
     """
     if isinstance(val, str):
         return demangle_for_display(val) if is_mangled(val) else val
-    if type(val) is tuple and val and isinstance(deref(val[0]), str):
-        # A CELL -- ``("pt", 1, 2)``.  P3-2 Task 2 (THE FLIP) makes this how
-        # every compound term is represented, and ``str()`` on one is the
-        # Python tuple repr, so ``write(pt(1, 2))`` printed
-        # ``('pt', 1, 2)``.  ``term_str`` renders it as the term
-        # (``clausal/terms.py``'s cell branch); only this shape is routed
-        # there, so every other value keeps the exact ``str()`` rendering
-        # write/1 has always produced.
+    if type(val) is tuple and val and (type(val[0]) is str or val[0] is TUPLE_TAG):
+        # A CELL -- ``("pt", 1, 2)`` (or a tuple-DATA cell, ``(tuple, ...)``).
+        # P3-2 Task 2 (THE FLIP) makes this how every compound term is
+        # represented, and ``str()`` on one is the Python tuple repr, so
+        # ``write(pt(1, 2))`` printed ``('pt', 1, 2)``.  ``term_str`` renders
+        # it as the term (``clausal/terms.py``'s cell branches); only this
+        # shape is routed there, so every other value keeps the exact
+        # ``str()`` rendering write/1 has always produced.
+        #
+        # Slot 0 read RAW -- no deref (P3-2 Task 5/Task 7 review): a
+        # slot-0-Var tuple is not a legal cell any more (see
+        # ``clausal/logic/cells.py``'s module docstring) and falls through
+        # to the ordinary ``str()`` rendering below, same as any other
+        # non-str, non-``TUPLE_TAG`` slot 0.
         return _term_str(val)
     return str(val)
 
@@ -139,6 +146,15 @@ def _format_clause_term(val):
         return "[" + ", ".join(_format_clause_term(e) for e in val) + "]"
     if is_term_instance(val):
         return _format_clause_head(val)
+    if type(val) is tuple and val and (type(val[0]) is str or val[0] is TUPLE_TAG):
+        # A CELL (or tuple-DATA cell) nested in a clause argument -- ``str()``
+        # on a plain tuple is the Python repr, so an argument like
+        # ``("pt", 1, 2)`` printed ``('pt', 1, 2)`` in ``listing/1`` output
+        # instead of ``pt(1, 2)``.  ``term_str`` renders it as the term
+        # (``clausal/terms.py``'s cell branches); Compound already gets this
+        # for free via its own ``__str__``, which is why only this shape
+        # needs routing here.
+        return _term_str(val)
     return str(val)
 
 

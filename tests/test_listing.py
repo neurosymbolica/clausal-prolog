@@ -157,6 +157,36 @@ class TestFormatClauseHeadCompound:
         assert "(1, 2)" in result
 
 
+# ── Cell-valued clause arguments (P3-2 Task 7) ────────────────────────────────
+#
+# ``_format_clause_term`` fell to plain ``str(val)`` for any value it did not
+# specially recognize -- correct for a ``Compound`` (which has its own
+# ``__str__``) but wrong for a CELL, a plain tuple with no custom ``__str__``,
+# so ``str()`` on it is the Python tuple repr: an argument like
+# ``("rgb", 255, 0, 0)`` printed ``('rgb', 255, 0, 0)`` in listing/1 output
+# instead of ``rgb(255, 0, 0)``.
+
+class TestCellValuedClauseArgument:
+    def test_format_clause_term_renders_a_cell_as_a_term(self):
+        from clausal.logic.builtins.io import _format_clause_term
+
+        assert _format_clause_term(("rgb", 255, 0, 0)) == "rgb(255, 0, 0)"
+
+    def test_format_clause_term_renders_a_tuple_data_cell_as_a_plain_tuple(self):
+        from clausal.logic.builtins.io import _format_clause_term
+        from clausal.logic.cells import TUPLE_TAG
+
+        assert _format_clause_term((TUPLE_TAG, 1, 2)) == "(1, 2)"
+
+    def test_listing_prints_a_cell_valued_field_as_a_term_not_a_repr(self):
+        color._clauses = []
+        color._locked = False
+        color._assertz(Clause(color("red", ("rgb", 255, 0, 0)), []))
+        output = _capture_listing(color)
+        assert "rgb(255, 0, 0)" in output
+        assert "('rgb'" not in output
+
+
 # ── portray_clause/1 ─────────────────────────────────────────────────────────
 
 class TestPortrayClause:

@@ -19,6 +19,7 @@ from clausal.terms import (
     list_to_cons,
     cons_to_list,
     term_str,
+    term_pformat,
     Var,
     # goal/operator nodes used in term_str tests
     Unify as Is, And, Or, Not,
@@ -385,3 +386,105 @@ class TestTermStr:
         ]:
             s = term_str(NodeClass(left=1, right=2))
             assert expected in s, f"{NodeClass.__name__}: expected {expected!r} in {s!r}"
+
+
+class TestCellTermStr:
+    """P3-2 Task 7: cells (the tagged-tuple compound representation,
+    ``clausal/logic/cells.py``) rendered by ``term_str``.
+
+    Byte-parity requirement (the plan): ``term_str(("point", 1, 2))`` must
+    equal the class-era rendering byte-for-byte with styling OFF -- the
+    literal recorded string from ``TestTermStr::test_compound`` above,
+    ``"foo(1, 2)"``'s sibling for a ``point`` functor.
+    """
+
+    def test_cell_matches_the_class_era_rendering_byte_for_byte(self):
+        # The class-era anchor: term_str(Compound("point", (1, 2))) would
+        # have printed exactly this (see TestTermStr.test_compound's
+        # "foo(1, 2)" for the same shape with a different functor name).
+        assert term_str(("point", 1, 2)) == "point(1, 2)"
+        assert term_str(("point", 1, 2)) == term_str(Compound("point", (1, 2)))
+
+    def test_nested_cells(self):
+        assert term_str(("pt", 1, ("q", 2))) == "pt(1, q(2))"
+
+    def test_tuple_data_cell_renders_as_a_plain_tuple(self):
+        from clausal.logic.cells import TUPLE_TAG
+
+        assert term_str((TUPLE_TAG, 1, 2)) == "(1, 2)"
+
+    def test_tuple_data_cell_with_no_elements_renders_empty_parens(self):
+        from clausal.logic.cells import TUPLE_TAG
+
+        assert term_str((TUPLE_TAG,)) == "()"
+
+    def test_hidden_atom_functor_renders_the_human_form(self):
+        """A ``-hide``-mangled functor renders as ``module.name(...)`` --
+        the same display substitution the plain-str branch already gives a
+        mangled ATOM (P3-1 Task 6, design doc section 1b) -- reused here
+        WITHOUT quoting, since a functor position is never quoted."""
+        from clausal.logic.atoms import mangle
+
+        mangled = mangle("mymod", "secret")
+        assert term_str((mangled, 1, 2)) == "mymod.secret(1, 2)"
+
+    def test_bound_var_functor_tuple_is_not_a_compound(self):
+        """Task 5/Task 7 review ruling: cell recognition reads slot 0 RAW,
+        never dereffed.  BEFORE this fix, ``term_str``'s cell branch tested
+        ``isinstance(deref(t[0]), str)``, so a tuple whose slot 0 was a
+        logic Var *bound* to a str rendered as a compound (``point(1, 2)``)
+        -- disagreeing with ``_helpers._cell_functor``'s exact-type,
+        raw-slot-0 recognition used everywhere else.  AFTER this fix, the
+        same tuple is NOT a cell (a Var, bound or not, is never a legal
+        slot 0 -- see ``clausal/logic/cells.py``'s module docstring) and
+        keeps the ordinary (non-compound) tuple rendering."""
+        from clausal.logic.variables import Trail, unify
+
+        v = Var()
+        trail = Trail()
+        assert unify(v, "point", trail)
+        t = (v, 1, 2)
+        s = term_str(t)
+        assert "point(1, 2)" not in s
+        assert not s.startswith("point(")
+
+
+class TestCellTermPformat:
+    """P3-2 Task 7: ``term_pformat`` smoke tests -- a wide cell used to fall
+    through every isinstance branch straight to ``return flat``, so it never
+    got the indented multi-line form a wide ``Compound`` gets."""
+
+    def test_short_cell_stays_flat(self):
+        assert term_pformat(("pt", 1, 2), width=80) == "pt(1, 2)"
+
+    def test_wide_cell_gets_the_compound_equivalent_multiline_form(self):
+        wide = ("bigfunctor",) + tuple(range(1, 20))
+        compound_equivalent = Compound("bigfunctor", tuple(range(1, 20)))
+        cell_result = term_pformat(wide, width=20)
+        compound_result = term_pformat(compound_equivalent, width=20)
+        assert "\n" in cell_result
+        assert cell_result.startswith("bigfunctor(\n")
+        assert cell_result.rstrip().endswith(")")
+        # identical multi-line shape to the Compound it replaced -- same
+        # functor, same args, same indentation
+        assert cell_result == compound_result
+
+    def test_zero_arg_cell_stays_flat_like_zero_arg_compound(self):
+        # A str-functor cell always has slot 0, so "zero args" means a
+        # 1-tuple; matches Compound's `if not t.args: return flat` guard.
+        assert term_pformat(("atom_like",), width=1) == "atom_like()"
+
+    def test_wide_tuple_data_cell_gets_multiline_form(self):
+        from clausal.logic.cells import TUPLE_TAG
+
+        wide = (TUPLE_TAG,) + tuple(range(1, 20))
+        result = term_pformat(wide, width=20)
+        assert "\n" in result
+        assert result.startswith("(\n")
+        assert result.rstrip().endswith(")")
+
+    def test_empty_tuple_data_cell_stays_flat(self):
+        from clausal.logic.cells import TUPLE_TAG
+
+        assert term_pformat((TUPLE_TAG,), width=1) == "()"
+

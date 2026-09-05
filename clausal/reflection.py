@@ -49,6 +49,7 @@ import ast
 import dataclasses
 import warnings
 
+from clausal.logic.cells import TUPLE_TAG as _CELL_TUPLE_TAG
 from clausal.logic.predicate import make_predicate
 from clausal.logic.variables import deref, is_var
 from clausal.pythonic_ast import nodes as simple_ast
@@ -591,6 +592,34 @@ class _ClauseRenderer:
         if isinstance(value, list):
             return ast.List(
                 elts=[self.term(item) for item in value], ctx=ast.Load()
+            )
+        if type(value) is tuple and value and type(value[0]) is str:
+            # A str-functor CELL (P3-2 Task 7) -- the tagged-tuple runtime
+            # representation of a plain compound term, e.g. built by
+            # ``op_node/3``'s NEW argument or ``replace_subterm/4``'s
+            # rebuilt RESULT.  Without this branch it fell into the plain
+            # ``ast.Tuple`` case below and rendered as a Python tuple
+            # literal (``(point, 1, 2)``) instead of the term it is
+            # (``point(1, 2)``).  Slot 0 read RAW, no deref -- the same
+            # recognition rule every other cell site uses (see
+            # ``clausal/logic/cells.py``); a hidden (``-hide``) atom
+            # functor gets the same human-form substitution the ``Atom``
+            # case above gives a hidden atom NAME.
+            from clausal.logic.atoms import demangle_for_display
+            return ast.Call(
+                func=self._name_ast(demangle_for_display(value[0])),
+                args=[self.term(item) for item in value[1:]],
+                keywords=[],
+            )
+        if type(value) is tuple and value and value[0] is _CELL_TUPLE_TAG:
+            # A tuple-DATA cell (``(tuple, e1, e2)``) -- plain tuple DATA,
+            # not a compound (Task 5's ``TUPLE_TAG`` convention).  Renders
+            # as the ordinary tuple literal it stands for; without this the
+            # generic ``isinstance(value, tuple)`` case below tried to
+            # render the ``TUPLE_TAG`` marker itself (the ``tuple`` type
+            # object, in slot 0) and raised ``RenderError``.
+            return ast.Tuple(
+                elts=[self.term(item) for item in value[1:]], ctx=ast.Load()
             )
         if isinstance(value, tuple):
             return ast.Tuple(

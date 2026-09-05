@@ -29,7 +29,7 @@ import pathlib
 
 import pytest
 
-from clausal.logic.variables import Var, deref, is_var
+from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.solve import call
 
 from tests.tagged_terms_support import (
@@ -2029,6 +2029,35 @@ class TestCellsAtTheBuiltinSurface:
         # Tuple DATA and an unbound functor slot are NOT compounds: they keep
         # the ordinary tuple rendering rather than inventing a functor.
         assert term_str((1, 2)).startswith("(")
+
+
+class TestCellWriterSurfaceFixRound(TestCellsAtTheBuiltinSurface):
+    """P3-2 Task 7 fix-round additions: ``_format_term_for_io`` also gets a
+    ``TUPLE_TAG`` branch and the deref-removal Task 5/Task 7 review ruled in
+    (slot 0 read RAW, no ``deref`` -- a bound-Var-functor tuple is not a
+    legal cell any more, see ``clausal/logic/cells.py``'s module docstring).
+    Subclasses the builtin-surface fixture class for its ``_module``/
+    ``_nsol`` helpers."""
+
+    def test_write_1_renders_a_tuple_data_cell_as_a_plain_tuple(self, capsys):
+        from clausal.logic.cells import TUPLE_TAG
+
+        list(call("write", (TUPLE_TAG, 1, 2), module=self._module()))
+        assert capsys.readouterr().out == "(1, 2)"
+
+    def test_write_1_does_not_treat_a_bound_var_functor_tuple_as_a_cell(self, capsys):
+        """BEFORE this fix ``_format_term_for_io`` tested
+        ``isinstance(deref(val[0]), str)``, so a tuple whose slot 0 was a
+        Var bound to a str routed through ``term_str`` and printed as a
+        compound.  AFTER: slot 0 read raw, so it keeps ordinary ``str()``
+        rendering (the Python tuple repr, since a Var has no cell-shaped
+        display of its own)."""
+        v = Var()
+        trail = Trail()
+        assert unify(v, "pt", trail)
+        list(call("write", (v, 1, 2), module=self._module()))
+        out = capsys.readouterr().out
+        assert "pt(1, 2)" not in out
 
 
 class TestCallableAndTheTupleDataEdge:

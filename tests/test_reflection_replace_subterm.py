@@ -122,6 +122,54 @@ class TestOtherTermKinds:
         assert len(results) == 4
 
 
+class TestCellFunctorProtection:
+    """P3-2 Task 7: a str-functor CELL gets the same ``Compound``-equivalent
+    treatment in ``_rewrites`` -- functor protected, only args are
+    rewrite/walk targets -- closing an asymmetry the generic tuple branch
+    otherwise left open (a cell's slot 0 was independently rewritable, which
+    could silently corrupt its shape; ``Compound.functor`` never was)."""
+
+    def _results(self, term, old, new):
+        from clausal.modules import reflection as refl
+
+        result = Var()
+        out = []
+        for _ in call(refl.replace_subterm, term, old, new, result):
+            out.append(deref(result))
+        return out
+
+    def test_args_are_rewritten_position_preservingly(self):
+        term = ("outer", ("g", 1), ("g", 2))
+        results = self._results(term, 1, "ONE")
+        assert results == [("outer", ("g", "ONE"), ("g", 2))]
+
+    def test_functor_is_not_an_independent_rewrite_target(self):
+        # Before this fix the generic tuple branch iterated every slot
+        # including slot 0, so a cell's own functor string ("g") could be
+        # matched and replaced like any other subterm -- corrupting the
+        # cell's shape.  A Compound's `.functor` was never reachable this
+        # way; the cell now matches that.
+        assert self._results(("g", 1), "g", "CHANGED") == []
+
+    def test_whole_cell_can_still_be_the_occurrence(self):
+        # The pre-order root check is untouched: OLD unifying the WHOLE
+        # cell (not just a slot inside it) still rewrites it.
+        term = ("g", 1)
+        assert self._results(term, term, ("h", 2)) == [("h", 2)]
+
+    def test_tuple_data_cell_keeps_the_generic_every_slot_walk(self):
+        # A TUPLE_TAG cell has no functor to protect -- it is plain tuple
+        # DATA -- so it correctly falls through to the generic tuple branch,
+        # which treats every slot (including slot 0, the TUPLE_TAG marker
+        # itself) as an ordinary element. Rewriting slot 0 here is an
+        # existing, out-of-scope edge case -- not exercised, just confirmed
+        # the tuple-DATA branch still fires for the elements.
+        from clausal.logic.cells import TUPLE_TAG
+
+        term = (TUPLE_TAG, 1, 2)
+        assert self._results(term, 1, "ONE") == [(TUPLE_TAG, "ONE", 2)]
+
+
 class TestNonGroundTermSemantics:
     """A var nested inside a *matched* subterm binds (unification), for a
     non-ground TERM — documented behavior; the intended input is ground."""

@@ -285,10 +285,13 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    Not migrated this phase; see
     #    todo/funnel-term-str-locale-atom-bypass-not-migrated-2026-09-03.md ──
     #    Range shifted 2355-2457 -> 2373-2475 by P3-2 task-2's cell branch in
-    #    ``term_str`` earlier in the same function (a mechanical line-count
-    #    shift, not a semantic change -- see
-    #    .superpowers/sdd/p32-cell-default-flip/task-2-report.md).
-    AllowEntry("clausal/terms.py", (2373, 2475),
+    #    ``term_str`` earlier in the same function, then -> 2391-2493 by
+    #    P3-2 task-7's deref-removal + TUPLE_TAG-display additions to that
+    #    same cell branch and the new ``TUPLE_TAG`` import line (mechanical
+    #    line-count shifts, not semantic changes -- see
+    #    .superpowers/sdd/p32-cell-default-flip/task-2-report.md and
+    #    task-7-report.md).
+    AllowEntry("clausal/terms.py", (2391, 2493),
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),

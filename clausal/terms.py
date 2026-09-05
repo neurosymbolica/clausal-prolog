@@ -24,6 +24,7 @@ from types import MappingProxyType
 from typing import Any, Optional
 
 from .logic.atoms import demangle_for_display, is_mangled
+from .logic.cells import TUPLE_TAG
 from .logic.variables import Var, deref
 
 # Re-export operator/expression classes already defined in pythonic_ast.
@@ -2396,25 +2397,42 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
         return ob + ", ".join(term_str(e, style, _bd + 1) for e in t) + cb
     if isinstance(t, Var):
         return _c(style.anon_var, 'var', style)
-    if type(t) is tuple and t and isinstance(deref(t[0]), str):
+    if type(t) is tuple and t and type(t[0]) is str:
         # A CELL -- ``("pt", 1, 2)``.  P3-2 Task 2 (THE FLIP) makes this how
         # every compound term is represented, so the reader must see
         # ``pt(1, 2)``, the term they wrote, not a Python tuple repr.
         # Rendered exactly like the ``Compound`` branch below (same locale
         # name, same rainbow brackets), which is the shape it replaced.
         #
-        # Slot 0 is dereferenced once: a cell whose functor slot was an
-        # unbound Var that unify has since bound renders under the bound
-        # spelling, same rule ``_helpers._cell_functor`` applies.  A
-        # non-str slot 0 (tuple DATA, or an unbound functor Var) is NOT a
-        # compound and falls through to the ordinary tuple rendering below.
-        functor = deref(t[0])
+        # Slot 0 is read RAW -- no deref -- exactly ``_helpers._cell_functor``'s
+        # rule (P3-2 Task 5/Task 7 review): a bound-Var functor is not a legal
+        # cell slot 0 any more (the higher-order slot-0-Var cell is deprecated,
+        # see ``clausal/logic/cells.py``'s module docstring), so a tuple whose
+        # slot 0 is a Var -- bound or not -- is NOT a compound here and falls
+        # through to the ordinary (non-cell) rendering below, same as any
+        # other non-str, non-``TUPLE_TAG`` slot 0.
+        functor = t[0]
+        # P3-1 Task 6 (-hide, design doc section 1b): the functor gets the
+        # same mangled-atom display substitution as the str branch above --
+        # WITHOUT the quoting, since a functor position is never quoted.
+        display_functor = demangle_for_display(functor) if is_mangled(functor) else functor
         args = t[1:]
-        functor_s = _c(_locale_name(functor, style, len(args)), 'atom', style)
+        functor_s = _c(_locale_name(display_functor, style, len(args)), 'atom', style)
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
         return functor_s + ob + ", ".join(
             term_str(a, style, _bd + 1) for a in args) + cb
+    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+        # A tuple-DATA cell -- ``(tuple, e1, e2)`` -- represents plain tuple
+        # data, not a compound (P3-2 Task 5's ``TUPLE_TAG`` convention).  It
+        # renders as the ordinary tuple display it stands for: ``(e1, e2)``,
+        # brackets through ``_c(...)`` like the list branch above;
+        # ``(TUPLE_TAG,)`` (no elements) renders as ``()``.
+        elems = t[1:]
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
+        return ob + ", ".join(
+            term_str(e, style, _bd + 1) for e in elems) + cb
     if isinstance(t, Compound):
         functor = deref(t.functor)  # A01-F003: bound functor Var renders as its value, not anon
         functor_raw = _locale_name(functor, style, len(t.args)) if isinstance(functor, str) else term_str(functor, style, _bd)
@@ -2550,6 +2568,33 @@ def term_pformat(
         items = [_r(a) for a in t.args]
         return functor_s + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
+    if type(t) is tuple and t and type(t[0]) is str:
+        # A str-functor CELL -- the Compound-equivalent multi-line treatment
+        # (P3-2 Task 7): a wide cell used to fall through every isinstance
+        # branch above straight to ``return flat``, so a long ``pt(1, 2)``
+        # never got the indented form a wide ``Compound`` gets.  Slot 0 read
+        # RAW, no deref, matching every other cell recognition site (Task 5).
+        args = t[1:]
+        if not args:
+            return flat
+        functor_s = _c(t[0], 'atom', style)
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
+        items = [_r(a) for a in args]
+        return functor_s + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
+
+    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+        # A tuple-DATA cell -- same multi-line treatment as the list branch
+        # above, since this is what it displays as (``TUPLE_TAG`` itself
+        # never appears in the rendering).
+        elems = t[1:]
+        if not elems:
+            return flat
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
+        items = [_r(e) for e in elems]
+        return ob + "\n" + ipad + _join(items) + "\n" + pad + cb
+
     if isinstance(t, KWTerm):
         functor_s = _c(t.functor, 'atom', style)
         ob = _c('(', 'bracket', style, _bd)
@@ -2673,6 +2718,22 @@ def term_html(t: Any, _bd: int = 0) -> str:
         cb = _html_c(')', 'bracket', _bd)
         args_str = ", ".join(term_html(a, _bd + 1) for a in t.args)
         return functor_s + ob + args_str + cb
+    if type(t) is tuple and t and type(t[0]) is str:
+        # A str-functor CELL -- the ``Compound`` branch above's exact
+        # counterpart (P3-2 Task 7); without this a cell fell through to the
+        # ``esc(repr(t))`` tail, leaking the Python tuple repr into Jupyter
+        # output.  Slot 0 read RAW, no deref (Task 5's rule).
+        functor_s = _html_c(esc(t[0]), 'atom')
+        ob = _html_c('(', 'bracket', _bd)
+        cb = _html_c(')', 'bracket', _bd)
+        args_str = ", ".join(term_html(a, _bd + 1) for a in t[1:])
+        return functor_s + ob + args_str + cb
+    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+        # A tuple-DATA cell -- plain tuple display, brackets only.
+        ob = _html_c('(', 'bracket', _bd)
+        cb = _html_c(')', 'bracket', _bd)
+        args_str = ", ".join(term_html(e, _bd + 1) for e in t[1:])
+        return ob + args_str + cb
     if isinstance(t, KWTerm):
         functor_s = _html_c(esc(t.functor), 'atom')
         ob = _html_c('(', 'bracket', _bd)

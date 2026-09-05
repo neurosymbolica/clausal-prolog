@@ -196,6 +196,30 @@ class TestWrite:
         out = _capture_stdout("write", 1, Compound("f", (1, 2)), t)
         assert "f" in out
 
+    def test_write_tuple_data_cell(self):
+        """P3-2 Task 7: ``_format_term_for_io`` grew a ``TUPLE_TAG`` branch
+        alongside the str-functor cell branch -- a tuple-DATA cell renders
+        as the plain tuple it displays, not the Python tuple repr with the
+        ``TUPLE_TAG`` marker leaked into slot 0."""
+        from clausal.logic.cells import TUPLE_TAG
+
+        t = Trail()
+        out = _capture_stdout("write", 1, (TUPLE_TAG, 1, 2), t)
+        assert out == "(1, 2)"
+
+    def test_write_does_not_treat_a_bound_var_functor_tuple_as_a_cell(self):
+        """Task 5/Task 7 review ruling: cell recognition reads slot 0 RAW.
+        BEFORE this fix ``_format_term_for_io`` tested
+        ``isinstance(deref(val[0]), str)``, so a tuple whose slot 0 was a
+        Var *bound* to a str routed through ``term_str`` and printed as a
+        compound.  AFTER: it keeps the ordinary ``str()`` (Python tuple
+        repr) rendering, same as any other non-str, non-``TUPLE_TAG`` slot 0."""
+        v = Var()
+        t = Trail()
+        unify(v, "pt", t)
+        out = _capture_stdout("write", 1, (v, 1, 2), t)
+        assert "pt(1, 2)" not in out
+
     def test_write_no_newline(self):
         # nv
         t = Trail()
@@ -387,6 +411,19 @@ class TestWriteToString:
         vals = solutions(StepGenerator(dispatch, None, None, None, v, result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["world"]
+
+    def test_tuple_data_cell(self):
+        """P3-2 Task 7: routed through the same ``TUPLE_TAG``-aware
+        ``_format_term_for_io`` branch ``write/1`` uses."""
+        from clausal.logic.cells import TUPLE_TAG
+
+        result = Var()
+        t = Trail()
+        dispatch = get_builtin_dispatch("write_to_string", 2, None)
+        vals = solutions(
+            StepGenerator(dispatch, None, None, None, (TUPLE_TAG, "a", "b"), result, t),
+            snapshot=lambda: deref(result))
+        assert vals == ["('a', 'b')"]
 
     def test_fstring(self):
         # nv

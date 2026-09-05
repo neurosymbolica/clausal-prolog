@@ -861,3 +861,50 @@ class TestCorruptionGuards:
             render_source(Goal("Weird", [Atom("has space")], []))
         with pytest.raises(RenderError):
             render_source(Atom("__clausal_lambda_arrow__"))
+
+
+class TestRawCellRendering:
+    """P3-2 Task 7: a raw runtime CELL (the tagged-tuple compound
+    representation, ``clausal/logic/cells.py``) reaching the renderer --
+    e.g. via ``op_node/3``'s construct mode or ``replace_subterm/4``'s
+    rebuilt RESULT, both of which can hold/rebuild a raw tuple that was
+    never through ``reify_source`` -- must render as the term it is, not a
+    Python tuple literal (which is what the generic ``isinstance(value,
+    tuple)`` case rendered it as before this branch existed, and what a
+    ``TUPLE_TAG`` cell raised ``RenderError`` trying to render, since the
+    ``TUPLE_TAG`` marker itself -- the ``tuple`` type object -- has no
+    ``term()`` case of its own)."""
+
+    def test_str_functor_cell_renders_as_a_call(self):
+        assert render_source(("point", 1, 2)) == "point(1, 2)"
+
+    def test_nested_cell_renders(self):
+        assert render_source(("pt", 1, ("q", 2))) == "pt(1, q(2))"
+
+    def test_zero_arg_str_functor_cell_renders_bare(self):
+        assert render_source(("atom_like",)) == "atom_like()"
+
+    def test_tuple_data_cell_renders_as_a_plain_tuple(self):
+        from clausal.logic.cells import TUPLE_TAG
+
+        assert render_source((TUPLE_TAG, 1, 2)) == "(1, 2)"
+
+    def test_hidden_atom_functor_renders_the_human_form(self):
+        """P3-1 Task 6 (-hide, §1b): reused WITHOUT quoting for a functor
+        position, matching the ``Atom`` case's NAME substitution."""
+        from clausal.logic.atoms import mangle
+
+        mangled = mangle("mymod", "secret")
+        assert render_source((mangled, 1)) == "mymod.secret(1)"
+
+    def test_rendered_cell_round_trips_through_reify_ast(self):
+        """render -> reify: the rendered ``ast.Call`` node reifies back to
+        the equivalent ``Goal`` a matcher would build from ``point(1, 2)``
+        written as source -- the practical round-trip, since a raw runtime
+        cell and the static-reification vocabulary (``Goal``) are different
+        representations of the same call by design (see the module
+        docstring: "Goal ... a predicate call *and* any compound term")."""
+        from clausal.reflection import reify_ast
+
+        node = render_ast(("point", 1, 2))
+        assert reify_ast(node) == Goal("point", [1, 2], [])

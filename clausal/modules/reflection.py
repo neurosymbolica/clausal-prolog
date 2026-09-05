@@ -312,7 +312,11 @@ def _rewrites(term, old, new, trail):
     what reified ``goals``/``args`` hold).  For raw ``Compound``/``KWTerm`` the
     two diverge: this walk descends args/values position-preservingly (needed to
     rewrite ordinary compounds), whereas ``_subterms`` exposes their raw
-    fields — so don't rely on cross-walk agreement off the reified domain.
+    fields — so don't rely on cross-walk agreement off the reified domain.  A
+    str-functor CELL (P3-2 Task 7) diverges from ``_subterms`` the same way:
+    this walk treats it like ``Compound`` (functor protected, only args are
+    rewrite targets), whereas ``_subterms`` still walks it as a generic tuple
+    (functor included) — off the reified domain, same caveat.
 
     Only the spine from the root to the rewritten position is rebuilt; every
     off-path subterm is reused *by reference*, so structure and variable
@@ -340,6 +344,23 @@ def _rewrites(term, old, new, trail):
         for i, elem in enumerate(term):
             for rewritten in _rewrites(elem, old, new, trail):
                 yield term[:i] + [rewritten] + term[i + 1:]
+    elif type(term) is tuple and term and type(term[0]) is str:
+        # A str-functor CELL (P3-2 Task 7) -- without this branch the
+        # generic tuple case below iterated every slot INCLUDING slot 0
+        # (the functor), so a rewrite could replace a cell's functor with
+        # an arbitrary value and silently corrupt its shape -- an asymmetry
+        # with the ``Compound`` case right below, which only ever rewrites
+        # ``.args``, never ``.functor``.  This mirrors that: only the args
+        # are walk/rewrite targets, the functor is carried through as-is.
+        # Slot 0 read RAW, no deref (Task 5's cell-recognition rule); a
+        # ``TUPLE_TAG`` tuple-DATA cell and a plain (non-cell) tuple have no
+        # functor to protect and correctly fall through to the generic
+        # tuple branch below.
+        functor = term[0]
+        args = term[1:]
+        for i, arg in enumerate(args):
+            for rewritten in _rewrites(arg, old, new, trail):
+                yield (functor,) + args[:i] + (rewritten,) + args[i + 1:]
     elif isinstance(term, tuple):
         for i, elem in enumerate(term):
             for rewritten in _rewrites(elem, old, new, trail):

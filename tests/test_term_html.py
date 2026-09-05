@@ -94,6 +94,31 @@ def test_term_html_compound():
     assert "2" in result
 
 
+# ── Cells (P3-2 Task 7) ────────────────────────────────────────────────────────
+
+def test_term_html_str_functor_cell():
+    """A str-functor CELL used to fall through every branch to the
+    ``esc(repr(t))`` tail, leaking the Python tuple repr into Jupyter
+    output -- it must render the same way Compound does."""
+    # nv
+    from clausal.terms import Compound
+    result = term_html(("foo", 1, 2))
+    assert result == term_html(Compound("foo", (1, 2)))
+    assert 'class="clausal-atom"' in result
+    assert "foo" in result
+    assert "&#x27;" not in result  # no leaked repr quoting (html-escaped ')
+
+
+def test_term_html_tuple_data_cell():
+    """A tuple-DATA cell (``TUPLE_TAG``) renders as the plain tuple it
+    displays -- the ``TUPLE_TAG`` marker itself never appears."""
+    # nv
+    from clausal.logic.cells import TUPLE_TAG
+    result = term_html((TUPLE_TAG, 1, 2))
+    assert "tuple" not in result
+    assert "1" in result and "2" in result
+
+
 # ── term_pformat_html ────────────────────────────────────────────────────────
 
 def test_term_pformat_html_short():
@@ -110,6 +135,17 @@ def test_term_pformat_html_long():
     long_list = list(range(50))
     result = term_pformat_html(long_list, width=20)
     assert "<pre>" in result
+
+
+def test_term_pformat_html_long_cell():
+    """A wide cell gets the same <pre> wrapping as any other wide term (it
+    used to raise/render as a Python tuple repr before term_html's cell
+    branch existed)."""
+    # nv
+    wide = ("bigfunctor",) + tuple(range(20))
+    result = term_pformat_html(wide, width=20)
+    assert "<pre>" in result
+    assert "bigfunctor" in result
 
 
 # ── JUPYTER_CSS ──────────────────────────────────────────────────────────────
