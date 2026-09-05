@@ -1333,4 +1333,83 @@ it can run; that is step B.
 
 ---
 
+## 11. Capture semantics (proposed 2026-09-05, AWAITING OPERATOR RATIFICATION)
+
+The designer raised, and this section records for ratification, what an
+implicitly-captured variable *means* at runtime. Nothing here is settled until
+the operator rules and an engine probe confirms the engine agrees; the export
+consequences below are conditional on that.
+
+### The proposal
+
+A `<-` lambda shares its enclosing clause's scope. Parameters (the head tuple)
+are explicit and fresh per call. For a **capture** — a body variable that also
+appears in the enclosing clause — the proposed rule is **capture-by-value at
+call time**:
+
+- **bound capture** → its value flows into the lambda (structurally: the bound
+  parts of the term flow in, unbound sub-parts become fresh — i.e. the
+  `copy_term/2` rule, not a binary ground/unground test; a capture bound to
+  `f(A, _)` flows `f(A, Fresh)`).
+- **unbound capture** → each call gets a **fresh** unbound variable; the lambda
+  does not bind the enclosing variable, and successive calls do not see each
+  other's bindings.
+
+The motivating argument (the designer's) is decisive and correct: if an unbound
+capture were truly shared and the lambda is applied many times, the first call's
+binding would stick and later calls would be silently constrained by it — "which
+call gets the value?" has no good answer, so the safe answer is *none*: no
+unbound sharing.
+
+### Where this lands in the Prolog design space
+
+This is exactly `library(yall)`'s **default** (`copy_term` the lambda per call)
+and the complement of its `Free/` marker (which opts back into true sharing).
+`library(lambda)` draws the same line with `\`/`+\`. The designer reached
+yall's default from first principles rather than from the library — a strong
+signal the rule is the right one. The one capability it forgoes is
+**bind-and-return-through-a-capture** (the accumulator / shared-logic-variable
+idiom) — which is precisely what `Free/` exists to allow, and which the corpus
+does not use (its closures are passed to HOFs, never used as inline partial
+goals that contribute bindings back).
+
+### One refinement to the designer's two rules
+
+The designer stated two principles: (A) "same identifier = shared", and (B)
+"unbound capture → fresh per call". For a **bound** capture these agree. For an
+**unbound** capture they conflict — (A) says share the variable, (B) says do
+not. (B) is the intended resolution, and it reframes (A): capture shares the
+**value**, not the **variable**. Restated as one rule: *a capture flows its
+value in; an unbound capture has no value to flow, so it contributes a fresh
+variable each call.* That is capture-by-value / copy-at-call, and it is
+internally consistent where the two-principle phrasing is not.
+
+### Export consequences (why this is good news)
+
+Capture-by-value makes the export trivially ISO-safe: `copy_term/2`, `call/N`
+and `=../2` are all ISO, so a class-c lift can substitute a ground capture
+(the common case) or `copy_term` a partially-bound one per call, with no
+true-sharing machinery. It also means the lifting sketch in §5 (captured
+free vars → leading aux arguments) is only correct for **ground** captures
+(where sharing and copy coincide); for an unbound capture called multiply,
+lifting-by-shared-argument would implement *sharing*, the opposite of this
+proposal, so a lift of that shape must `copy_term` per call or be refused.
+
+**Today there is no export risk either way:** the export refuses every case
+where the two semantics are observable — unbound captures live only in class-b
+(constant/positional, refused) and class-c (refused pending the refactor); every
+class-a site (Phase C) captures nothing, and the corpus's class-b/c captures are
+ground constants or ground query inputs, where sharing and copy are identical.
+
+### Open items before ratification
+
+1. **Probe the engine.** Does the engine's meta-call (`call_goal`) currently
+   copy the closure per call (capture-by-value) or share unbound captures? An
+   unbound-capture-called-twice fixture answers it in minutes. The export must
+   match whatever is ratified; if the engine shares today and the ruling is
+   value, that is an engine change, not just a doc.
+2. **The advisory lint** (`todo/lambda-implicit-capture-advisory-lint.md`) is
+   well-defined only once this section is ratified — the capture/body-local
+   partition it reports is this section's partition.
+
 Awaiting operator review.
