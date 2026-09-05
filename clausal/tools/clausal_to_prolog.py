@@ -19,7 +19,7 @@ import re
 from clausal.tools.prolog_ast import (
     PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
     PClause, PDCGRule, PDirective, PComment, PModule,
-    PTerm, PItem, PrologVisitor, PrologTransformer,
+    PTerm, PItem, PrologVisitor, PrologTransformer, subterms,
 )
 from clausal.tools.prolog_operators import OperatorTable
 # The engine's canonical `<-` detection primitives. The lambda arrow `<-` and
@@ -405,6 +405,7 @@ class _ClausalToProlog:
     def __init__(self, dialect: Dialect, strict: bool = False, *,
                  module_path: str | None = None,
                  module_signatures: dict[str, set[tuple[str, int]]] | None = None,
+                 meta_modes: MetaModeMap | None = None,
                  source_lines: list[str] | None = None):
         self.dialect = dialect
         self.strict = strict
@@ -422,6 +423,13 @@ class _ClausalToProlog:
         # by module_export_signature. When set, import lists are narrowed to
         # names the target really exports.
         self.module_signatures = module_signatures
+        # module_path -> {(name, arity): per-argument modes}. Supplies the meta
+        # positions that this module's own text cannot show -- a THREADING host,
+        # whose argument is only ever called further down the chain, often in
+        # another module (the `find_mus/4` / `failing_ids/4` shape). Computed by
+        # the exporter's cross-module fixpoint and keyed by exactly the
+        # `module_path` string the exporter hands this translation.
+        self.meta_modes = meta_modes
         self._items: list[PItem] = []
         self._warnings: list[str] = []
         self._all_warnings: list[str] = []
@@ -437,6 +445,50 @@ class _ClausalToProlog:
         # reads only this statement's own AST, never other clauses.
         self._current_stmt: python_ast.stmt | None = None
         self._provable_lists: set[str] | None = None
+
+    def _meta_predicate_directives(self, seen_order: list[tuple[str, int]],
+                                   defined: set[tuple[str, int]]) -> list[PDirective]:
+        """Build the `:- meta_predicate` directives for this module.
+
+        Per-argument union of two sources. Where both speak for one position they
+        are expected to agree; if they do not, the BODY-LOCAL mode wins, because it
+        is direct evidence read off the very clauses being emitted, whereas the
+        supplied map is an inference about a chain. A position neither source
+        resolves is emitted as `?` -- NOT as a guess. That is deliberate: an
+        under-annotated position fails loudly in Scryer (existence_error at the call
+        site), whereas a wrong mode would module-qualify a term that may not be a
+        goal at all. Emitted in first-appearance order, like the discontiguous pass,
+        so the output is byte-stable across runs.
+        """
+        local = collect_local_meta_modes(PModule(tuple(self._items)))
+        supplied = (self.meta_modes or {}).get(self.module_path or "", {})
+
+        merged: dict[tuple[str, int], dict[int, int]] = {
+            key: dict(positions) for key, positions in local.items()
+        }
+        for key, modes in supplied.items():
+            slot = merged.setdefault(key, {})
+            for index, mode in enumerate(modes):
+                if mode is not None:
+                    slot.setdefault(index, mode)   # local evidence wins
+
+        already = set()
+        for item in self._items:
+            already |= _existing_meta_predicate_indicators(item)
+
+        directives: list[PDirective] = []
+        for name, arity in seen_order:
+            key = (name, arity)
+            positions = merged.get(key)
+            if not positions or arity == 0 or key in already or key not in defined:
+                continue
+            args = tuple(
+                PNumber(positions[index]) if index in positions else PAtom("?")
+                for index in range(arity)
+            )
+            directives.append(
+                PDirective(PCompound("meta_predicate", (PCompound(name, args),))))
+        return directives
 
     def _prolog_var_name(self, name: str) -> str:
         """Map a clausal variable to a unique Prolog name within the clause."""
@@ -527,17 +579,27 @@ class _ClausalToProlog:
             if (name, arity) in interrupted and (name, arity) not in existing_discontiguous
         ]
 
+        # (3) emit :- meta_predicate(Name(Mode, ...)) for every locally-defined
+        # predicate with a known meta position. Scryer resolves a meta-call in the
+        # CALLEE's module, so a bare predicate reference handed to a higher-order
+        # predicate raises existence_error without this -- even same-module (the
+        # design note's §3.2/§3.3, both measured in Scryer). Two sources, unioned
+        # per argument: body-local evidence read off the clauses being emitted, and
+        # the caller-supplied map for positions no single module can see.
+        meta_directives = self._meta_predicate_directives(seen_order, defined)
+
         rewritten: list[PItem] = []
         module_seen = False
         for item in self._items:
             if _is_module_directive(item):
                 rewritten.append(_filter_module_exports(item, defined))
+                rewritten.extend(meta_directives)
                 rewritten.extend(discontiguous_directives)
                 module_seen = True
             else:
                 rewritten.append(item)
         if not module_seen:
-            rewritten = discontiguous_directives + rewritten
+            rewritten = meta_directives + discontiguous_directives + rewritten
         self._items = rewritten
 
         if self.strict and self._all_warnings:
@@ -1775,6 +1837,106 @@ def _run_key(item: PItem) -> tuple[str, int] | None:
     return _dcg_head_key(item)
 
 
+#: Meta-callers the body-local detector recognises, as
+#: ``(functor, arity) -> (index of the goal argument, arguments appended to it)``.
+#: The appended count IS the mode Scryer wants: ``call_goal(G, A, B, C)`` applies G
+#: to three arguments, so G's position is mode ``3`` (§3.3, measured).
+#:
+#: `call_goal/N` is the kit's whole higher-order protocol and, measured over the kit
+#: this session, the ONLY entry here that fires on a real host today. `call/N` is
+#: registered in the engine as an alias of the same trampolines
+#: (``clausal/logic/builtins/higher_order.py:46-50``) and is included for that
+#: reason; the four list HOFs are the engine builtins the design note's §5 names as
+#: absent from Scryer's ``library(lists)`` and destined for the `clausal_hof`
+#: companion, so a host that reaches one is a meta host whether or not the kit does
+#: so today. Nothing here is speculative about ARGUMENT POSITION: every one of them
+#: takes its goal first.
+META_CALLER_SIGNATURES: dict[tuple[str, int], tuple[int, int]] = {
+    **{("call_goal", n): (0, n - 1) for n in range(1, 9)},
+    **{("call", n): (0, n - 1) for n in range(1, 9)},
+    ("include", 3): (0, 1),
+    ("exclude", 3): (0, 1),
+    ("max_by", 3): (0, 2),
+    ("min_by", 3): (0, 2),
+}
+
+#: What a caller may hand the translator as *meta_modes*: a module path, then each of
+#: that module's predicates, then one mode per argument (``None`` = not a meta
+#: position). Mirrors *module_signatures*' shape and is keyed the same way.
+MetaModeMap = dict[str, dict[tuple[str, int], tuple[int | None, ...]]]
+
+
+def collect_local_meta_modes(pmodule: PModule) -> dict[tuple[str, int], dict[int, int]]:
+    """Meta positions provable from *pmodule*'s own clause bodies.
+
+    A predicate has a meta position at argument *i* when one of its clauses applies
+    a known meta-caller (:data:`META_CALLER_SIGNATURES`) to the variable sitting at
+    head position *i*. The search is over every subterm of the body, so a goal
+    wrapped in ``once/1``, ``findall/3`` or any other goal-transparent construct is
+    still found -- that is the real ``verified_flips/5`` spelling.
+
+    Returns ``{(name, arity): {argument index: mode}}``. This is a LOWER BOUND, and
+    deliberately so: a host that only threads its argument onward has no body-local
+    evidence at all, and guessing one would be worse than the loud failure. Measured
+    over the kit this session, the bound covers the hosts of 258 of the 390 lambda
+    sites; the other 116 sit at threading hosts and are the exporter fixpoint's job.
+
+    A position two clauses disagree about is dropped rather than resolved, for the
+    same reason: a wrong mode qualifies a term that may not be a goal.
+    """
+    found: dict[tuple[str, int], dict[int, int]] = {}
+    conflicted: dict[tuple[str, int], set[int]] = {}
+    for item in pmodule.items:
+        if not isinstance(item, PClause) or item.body is None:
+            continue
+        head = item.head
+        if not isinstance(head, PCompound):
+            continue
+        key = (head.functor, len(head.args))
+        position: dict[str, int] = {}
+        for index, arg in enumerate(head.args):
+            if isinstance(arg, PVar) and arg.name != "_":
+                position.setdefault(arg.name, index)
+        if not position:
+            continue
+        for node in subterms(item.body):
+            if not isinstance(node, PCompound):
+                continue
+            signature = META_CALLER_SIGNATURES.get((node.functor, len(node.args)))
+            if signature is None:
+                continue
+            goal_index, appended = signature
+            goal = node.args[goal_index]
+            if not isinstance(goal, PVar):
+                continue
+            index = position.get(goal.name)
+            if index is None:
+                continue
+            slot = found.setdefault(key, {})
+            if slot.setdefault(index, appended) != appended:
+                conflicted.setdefault(key, set()).add(index)
+    for key, indexes in conflicted.items():
+        for index in indexes:
+            found[key].pop(index, None)
+        if not found[key]:
+            found.pop(key)
+    return found
+
+
+def _existing_meta_predicate_indicators(item: PItem) -> set[tuple[str, int]]:
+    """(name, arity) already declared by a hand-written :- meta_predicate directive."""
+    if not isinstance(item, PDirective):
+        return set()
+    body = item.body
+    if not (isinstance(body, PCompound) and body.functor == "meta_predicate"
+            and len(body.args) == 1):
+        return set()
+    spec = body.args[0]
+    if isinstance(spec, PCompound):
+        return {(spec.functor, len(spec.args))}
+    return set()
+
+
 def _is_module_directive(item: PItem) -> bool:
     """True if *item* is a ``:- module(Name, Exports).`` directive."""
     return (
@@ -1852,6 +2014,7 @@ def clausal_source_to_prolog_ast(source: str, *,
                                   strict: bool = False,
                                   module_path: str | None = None,
                                   module_signatures: dict[str, set[tuple[str, int]]] | None = None,
+                                  meta_modes: MetaModeMap | None = None,
                                   ) -> PModule:
     """Parse .clausal source text and return a Prolog AST (PModule).
 
@@ -1873,6 +2036,12 @@ def clausal_source_to_prolog_ast(source: str, *,
     import lists are narrowed to ``Name/Arity`` pairs the target really
     exports; when omitted alongside *module_path*, the import list is dropped
     entirely (``:- use_module('path').``).
+
+    *meta_modes* supplies ``:- meta_predicate`` argument modes this module's own
+    text cannot show -- see :data:`MetaModeMap`. It is looked up under
+    *module_path* exactly as passed, and unioned per argument with the body-local
+    detection of :func:`collect_local_meta_modes`. Only predicates this module
+    actually defines are declared.
     """
     if dialect is None:
         dialect = Dialect.iso()
@@ -1880,6 +2049,7 @@ def clausal_source_to_prolog_ast(source: str, *,
     converter = _ClausalToProlog(dialect, strict=strict,
                                  module_path=module_path,
                                  module_signatures=module_signatures,
+                                 meta_modes=meta_modes,
                                  source_lines=source.splitlines())
     return converter.convert_module(tree)
 
@@ -1889,6 +2059,7 @@ def clausal_source_to_prolog(source: str, *,
                               strict: bool = False,
                               module_path: str | None = None,
                               module_signatures: dict[str, set[tuple[str, int]]] | None = None,
+                              meta_modes: MetaModeMap | None = None,
                               ) -> str:
     """Translate .clausal source text to Prolog source text.
 
@@ -1905,7 +2076,8 @@ def clausal_source_to_prolog(source: str, *,
         dialect = Dialect.iso()
     pmodule = clausal_source_to_prolog_ast(source, dialect=dialect, strict=strict,
                                            module_path=module_path,
-                                           module_signatures=module_signatures)
+                                           module_signatures=module_signatures,
+                                           meta_modes=meta_modes)
     return emit_module(pmodule, dialect.operator_table)
 
 
