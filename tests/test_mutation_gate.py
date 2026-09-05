@@ -444,3 +444,121 @@ def test_an_imported_dynamic_predicate_is_asserted_ON_ITS_OWNER():
         "and the stamp names the module that asserted, not the one that "
         "compiled the predicate"
     )
+
+
+def test_an_assert_through_a_shared_class_keeps_the_owners_namespace():
+    """The recompile an assert triggers uses the OWNER's module globals.
+
+    Fix round 1 resolved a runtime write through an ``-import_from``'d class
+    to the owner's row (``_home_db``) but kept passing the ASSERTING module's
+    globals to the recompile, so the owner's whole clause list was re-lowered
+    against the importer's namespace and installed on the owner's row: a rule
+    body calling ``shared_helper`` started resolving the IMPORTER's
+    ``shared_helper``, and the owner's own answers silently changed
+    (``['owner_value']`` became ``['user_value', 9]``).
+
+    The clause list belongs to the home database, so the namespace its bodies
+    are compiled in has to be the home database's too."""
+    owner = _load_fixture("gate_shared_owner")
+    user = _load_fixture("gate_shared_user")
+
+    assert _answers(owner, "sp") == ["owner_value"]
+    assert _answers(user, "shared_helper") == ["user_value"]
+
+    next(call("gsu_add", 9, module=user.__dict__["$module"]), None)
+
+    assert _answers(owner, "sp") == ["owner_value", 9], (
+        "the owner's rule still resolves the OWNER's shared_helper"
+    )
+    assert _answers(owner, "shared_helper") == ["owner_value"]
+    assert _answers(user, "shared_helper") == ["user_value"], (
+        "and the importer's own helper is untouched"
+    )
+
+
+_NOOP_RETRACT_SRC = """
+-dynamic(np/1)
+-table(np/1)
+-module({name}, [np/1, nr_drop(X)])
+
+np(1),
+np(2),
+
+nr_drop(X) <- retract(np(X))
+"""
+
+
+def test_a_noop_retract_is_not_a_write(tmp_path):
+    """``retract/1`` that matches nothing opens no transaction.
+
+    Fix round 1 moved invalidation into the gate's unwind, keyed on the write
+    KIND — but the ``retract/1`` builtin opened its transaction BEFORE the
+    search, so a retract that matched nothing still dropped the compiled
+    dispatch, abolished the tabled answers and stamped a write that never
+    happened.  ``Database.retract`` has always pre-checked and opened no
+    transaction; the two retract doors have to agree."""
+    module = _write_module(tmp_path, "gate_noop_retract", _NOOP_RETRACT_SRC.format(
+        name="gate_noop_retract"))
+    lm = module.__dict__["$module"]
+    db = lm.db
+    row = db.row("np", 1)
+
+    assert sorted(_answers(module, "np")) == [1, 2]
+    dispatch_before = row.dispatch_fn
+    assert dispatch_before is not None
+    tables_before = len(db.table_store)
+    assert tables_before == 1
+    writes_before = list(row.writes)
+
+    next(call("nr_drop", 99, module=lm), None)
+
+    assert row.dispatch_fn is dispatch_before, "no match, so no invalidation"
+    assert len(db.table_store) == tables_before, "and the table survives"
+    assert list(row.writes) == writes_before, "and nothing is stamped"
+    assert len(row.clauses) == 2
+
+    # A retract that DOES match still goes through the gate.
+    next(call("nr_drop", 1, module=lm), None)
+    assert len(row.clauses) == 1, "the clause is gone"
+    assert row.dispatch_fn is not dispatch_before, (
+        "a real retract replaces the dispatch compiled from the old clause list"
+    )
+    assert len(db.table_store) == 0, "and abolishes the stale tabled answers"
+    assert [s.kind for s in row.writes[len(writes_before):]] == ["retract"]
+    assert sorted(_answers(module, "np")) == [2]
+
+
+def test_an_aliased_import_asserts_ON_ITS_OWNER():
+    """A write through an ALIASED ``-import_from`` lands on the owner's row.
+
+    ``-import_from(m, [alias(bo_p, AliasS)])`` binds the exporter's class
+    under ``AliasS``, so the assert's canonical functor (``bo_p``, the
+    class's own name) resolves to no class by NAME in the importer's dict —
+    or, when the importer also declares ``-dynamic(bo_p/1)``, to a local
+    shadow class that is not the predicate the goal named.  Either way the
+    clause used to land somewhere other than the row the shared class reads,
+    while ``compiler._install`` still wrote the dispatch onto that shared
+    class — so the owner's answers moved and its clauses did not.
+
+    The goal's term IS an instance of the class the spelling is bound to, so
+    that is what names the predicate."""
+    owner = _load_fixture("gate_alias_owner")
+    user = _load_fixture("gate_alias_user")
+    owner_db = _db_of(owner)
+    cls = owner.bo_p
+    owner_row = owner_db.row("bo_p", 1)
+    assert cls._row is owner_row
+    assert user.__dict__["AliasS"] is cls, "the alias binds the exporter's class"
+
+    assert _answers(owner, "bo_p") == [1]
+
+    next(call("ga_add", 5, module=user.__dict__["$module"]), None)
+
+    assert _answers(owner, "bo_p") == [1, 5], "the owner keeps its clause and sees the new one"
+    assert _answers(user, "AliasS") == [1, 5], "and so does the importer"
+    assert cls._row is owner_row, "the shared class did not move"
+    assert len(owner_row.clauses) == 2
+    runtime = [s for s in owner_row.writes
+               if s.author.startswith("runtime-assert:")]
+    assert runtime, f"the assert stamped nothing on the owner: {owner_row.writes}"
+    assert "gate_alias_user" in runtime[-1].author

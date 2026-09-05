@@ -1,0 +1,8 @@
+# Owner of a -dynamic predicate that a downstream module imports under an
+# ALIAS.  gate_alias_user asserts through the alias spelling; the clause must
+# land on the predicate this module owns -- the row its class is bound to --
+# and not move this module's answers.
+-dynamic(bo_p/1)
+-module(gate_alias_owner, [bo_p/1])
+
+bo_p(1),

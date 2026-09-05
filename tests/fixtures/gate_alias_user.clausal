@@ -1,0 +1,8 @@
+# Asserts against an -import_from'd -dynamic predicate reached under an ALIAS,
+# the one spelling ``module_dict.get(functor)`` cannot resolve.  See
+# gate_alias_owner.
+-dynamic(bo_p/1)
+-module(gate_alias_user, [ga_add(X)])
+-import_from(tests.fixtures.gate_alias_owner, [alias(bo_p, AliasS)])
+
+ga_add(X) <- assertz(AliasS(X))

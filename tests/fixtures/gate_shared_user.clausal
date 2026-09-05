@@ -1,0 +1,10 @@
+# Asserts against an -import_from'd -dynamic RULE predicate while defining a
+# same-named helper of its own.  See gate_shared_owner.
+-dynamic(sp/1)
+-module(gate_shared_user, [gsu_add(X), shared_helper/1])
+-import_from(tests.fixtures.gate_shared_owner, [sp])
+-private([user_value])
+
+shared_helper(user_value),
+
+gsu_add(X) <- assertz(sp(X))

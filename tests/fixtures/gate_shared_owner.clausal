@@ -1,0 +1,12 @@
+# Owner of a -dynamic predicate whose clause is a RULE, so its body has to be
+# resolved in a namespace.  gate_shared_user imports sp and asserts against it
+# while defining its OWN shared_helper: the owner's rule must keep resolving
+# the owner's helper, which it only does if the recompile the assert triggers
+# uses the owner's module globals rather than the asserting module's.
+-dynamic(sp/1)
+-module(gate_shared_owner, [sp/1])
+-private([owner_value])
+
+sp(X) <- (shared_helper(X))
+
+shared_helper(owner_value),

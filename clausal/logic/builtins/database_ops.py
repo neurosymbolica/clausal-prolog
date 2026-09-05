@@ -108,9 +108,8 @@ def _reject_cell_head(term_val: Any, context: str) -> None:
 
 
 def _find_pred_cls(functor: str, arity: int,
-                   module_dict: "dict | None") -> "Any":
-    """Return the PredicateMeta class for ``functor/arity`` from
-    *module_dict*, or None.
+                   module_dict: "dict | None", head: "Any" = None) -> "Any":
+    """Return the PredicateMeta class the goal named, or None.
 
     ARITY-CHECKED (P3-3 Task 3, identity todo instance 3): ``module_dict``
     holds one class per NAME, so a ``p/1`` assert used to hand ``p/3``'s class
@@ -119,14 +118,35 @@ def _find_pred_cls(functor: str, arity: int,
     never mentioned.  A name that is bound at another arity resolves to no
     class here; the gate still sees the write, because it is asked about the
     ROW.
+
+    IDENTITY-RESOLVED (P3-3 Task 3 fix round 2, the same todo instance): the
+    canonical *functor* is the CLASS's name, which is not always the spelling
+    the goal used.  ``-import_from(m, [alias(bo_p, AliasS)])`` binds the
+    exporter's class under ``AliasS`` only, so ``module_dict[functor]`` finds
+    either nothing or — when the importer also declares ``-dynamic(bo_p/1)``
+    — a local shadow class that is not the predicate the goal named.  The
+    goal's own term settles it: ``AliasS(5)`` is an INSTANCE of the exporter's
+    class, so *head*'s type is the predicate, whatever it is spelled here.
+    Accepted only when that class is reachable from this module dict under
+    some spelling, so a term that merely passed through this module cannot
+    redirect the write to a predicate the module cannot see.
     """
     from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
     if module_dict is None:
         return None
     candidate = module_dict.get(functor)
-    if not isinstance(candidate, PredicateMeta):
-        return None
-    return candidate if len(candidate._fields) == arity else None
+    named = (candidate if isinstance(candidate, PredicateMeta)
+             and len(candidate._fields) == arity else None)
+    own = type(head)
+    if (
+        named is not own
+        and isinstance(own, PredicateMeta)
+        and own.__name__ == functor
+        and len(own._fields) == arity
+        and any(v is own for v in module_dict.values())
+    ):
+        return own
+    return named
 
 
 def _home_db(db, pred_cls) -> "Any":
@@ -148,6 +168,29 @@ def _home_db(db, pred_cls) -> "Any":
     if row is None or row.detached:
         return db
     return row.db
+
+
+def _home_globals(db, module_dict: "dict | None", home) -> "dict | None":
+    """The module globals to recompile *home*'s clause list against.
+
+    The clause list belongs to the home database, so the namespace its clause
+    BODIES resolve in has to be the home database's too (P3-3 Task 3 fix
+    round 2).  Handing the recompile the ASSERTING module's globals instead
+    re-lowers the owner's whole predicate against a namespace it was never
+    written in and installs the result on the owner's row: a rule body calling
+    a helper the importer happens to redefine starts answering from the
+    importer's helper, and the owner's own answers change without anything
+    having been written to them.
+
+    Only the cross-database case differs; when the write lands in *db* itself
+    this is the caller's ``module_dict``, unchanged.  A home database with no
+    module dict of its own (a bare ``Database()``) keeps the caller's, which
+    is the only namespace on offer.
+    """
+    if home is db:
+        return module_dict
+    home_dict = getattr(home, "module_dict", None)
+    return home_dict if isinstance(home_dict, dict) else module_dict
 
 
 # ── assertz / retract ──────────────────────────────────────────────────────────
@@ -173,7 +216,7 @@ def _assertz_factory(db):
             return
         clause = _build_clause(term_val, "assertz/1")
         functor, arity = head_key(clause.head)
-        pred_cls = _find_pred_cls(functor, arity, module_dict)
+        pred_cls = _find_pred_cls(functor, arity, module_dict, term_val)
         # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
         # here is the gate's policy now — one question, "may this author write
         # this row", asked identically by all four channels — and it still
@@ -184,12 +227,13 @@ def _assertz_factory(db):
         # into THIS module's row, but a shared class makes the exporter's row
         # part of the write's blast radius.
         home = _home_db(db, pred_cls)
+        home_globals = _home_globals(db, module_dict, home)
         with home.mutate(functor, arity, author=db.runtime_author(),
                          kind="assert", detail="assertz/1", through=pred_cls):
             home.assertz(clause)
             clauses = home.clauses_for(functor, arity)
             compile_predicate_trampoline(functor, arity, clauses, home,
-                                         globals_=module_dict,
+                                         globals_=home_globals,
                                          pred_cls=pred_cls)
         yield None
 
@@ -213,15 +257,16 @@ def _asserta_factory(db):
             return
         clause = _build_clause(term_val, "asserta/1")
         functor, arity = head_key(clause.head)
-        pred_cls = _find_pred_cls(functor, arity, module_dict)
+        pred_cls = _find_pred_cls(functor, arity, module_dict, term_val)
         # Through the gate; see assertz/1 above.
         home = _home_db(db, pred_cls)
+        home_globals = _home_globals(db, module_dict, home)
         with home.mutate(functor, arity, author=db.runtime_author(),
                          kind="assert", detail="asserta/1", through=pred_cls):
             home.asserta(clause)
             clauses = home.clauses_for(functor, arity)
             compile_predicate_trampoline(functor, arity, clauses, home,
-                                         globals_=module_dict,
+                                         globals_=home_globals,
                                          pred_cls=pred_cls)
         yield None
 
@@ -251,10 +296,20 @@ def _retract_factory(db):
             functor, arity = head_key(term_val)
         except TypeError:
             return
-        pred_cls = _find_pred_cls(functor, arity, module_dict)
+        pred_cls = _find_pred_cls(functor, arity, module_dict, term_val)
         home = _home_db(db, pred_cls)
         clause_list = home._clauses.get((functor, arity))
         if clause_list is None:
+            return
+        # SEARCH FIRST, THEN OPEN THE TRANSACTION (P3-3 Task 3 fix round 2).
+        # A retract that matches nothing is not a write, and the gate's exit
+        # invalidates on the KIND rather than on what the body did — so
+        # opening a transaction around the search made a failed retract drop
+        # the compiled dispatch, abolish the tabled answers and stamp a write
+        # that never happened.  ``Database.retract`` has always pre-checked
+        # for a match and opened no transaction; both retract doors agree.
+        index = _first_match_index(term_val, clause_list)
+        if index < 0:
             return
         # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
         # here is the gate's policy now, and its exit is what invalidates the
@@ -265,19 +320,18 @@ def _retract_factory(db):
         # caller may abandon would leak an open transaction.  ``home`` is the
         # row the CLASS reads (see ``_home_db``): a predicate reached through
         # an -import_from is one predicate, so a retract through it removes
-        # from the owner's clause list, the one both modules see.
+        # from the owner's clause list, the one both modules see — and the
+        # recompile runs in THAT database's namespace (see ``_home_globals``).
+        home_globals = _home_globals(db, module_dict, home)
         with home.mutate(functor, arity, author=db.runtime_author(),
                          kind="retract", detail="retract/1",
                          through=pred_cls):
-            removed = _remove_first_match(term_val, clause_list)
-            if removed is not None:
-                clauses = home.clauses_for(functor, arity)
-                if clauses:
-                    compile_predicate_trampoline(
-                        functor, arity, clauses, home,
-                        globals_=module_dict, pred_cls=pred_cls)
-        if removed is None:
-            return
+            removed = clause_list.pop(index)
+            clauses = home.clauses_for(functor, arity)
+            if clauses:
+                compile_predicate_trampoline(
+                    functor, arity, clauses, home,
+                    globals_=home_globals, pred_cls=pred_cls)
         # A09-F008 (decision A09-D003 a): bind the pattern on the REAL
         # trail so the retracted clause's argument values escape with the
         # solution (ISO/SWI "retract by pattern"). The clause is already
@@ -291,10 +345,14 @@ def _retract_factory(db):
         yield None
         return  # retract is not backtrackable
 
-    def _remove_first_match(term_val, clause_list):
-        """Delete and return the first clause whose head unifies with
-        *term_val* (and whose ``Unify`` body goals are consistent with that
-        unification), or ``None`` when none matches."""
+    def _first_match_index(term_val, clause_list):
+        """Index of the first clause whose head unifies with *term_val* (and
+        whose ``Unify`` body goals are consistent with that unification), or
+        ``-1`` when none matches.
+
+        A pure SEARCH: it removes nothing, so the caller can ask before it
+        decides whether there is a write to open a transaction for (P3-3
+        Task 3 fix round 2).  Leaves no bindings behind either way."""
         from clausal.terms import Unify as _Unify  # avoid top-level cycle
         for i, clause in enumerate(clause_list):
             tmp_trail = Trail()
@@ -319,11 +377,10 @@ def _retract_factory(db):
             if not body_ok:
                 tmp_trail.undo(mark)  # undo head bindings before next iteration
                 continue
-            # Found a matching clause — remove it.
+            # Found a matching clause.
             tmp_trail.undo(mark)  # clean up temporary bindings
-            del clause_list[i]
-            return clause
-        return None
+            return i
+        return -1
 
     return retract__1
 
