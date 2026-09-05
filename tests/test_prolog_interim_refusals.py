@@ -254,10 +254,12 @@ class TestKitWitness:
         lambda_msgs = [m for m in msgs if "`<-` lambda in term position" in m]
         member_msgs = [m for m in msgs
                        if "negated membership" in m]
-        # :165 and :224 are the include/3 sites named in the decision, plus a
-        # third `<-` lambda the sweep found in the same file.
+        # Three `<-` lambda sites (changed_deltas :165, without_id :224,
+        # parameter_at :393). The file's two negated-membership sites were
+        # respelled to not_member/2 by the kit migration (executor-train
+        # 1587802), so membership refusals are now zero.
         assert len(lambda_msgs) == 3, msgs
-        assert len(member_msgs) == 2, msgs
+        assert len(member_msgs) == 0, msgs
 
     def test_kit_witness_names_the_construct(self):
         msgs = _refusals(KIT_QUERY_COMBINATORS.read_text())
