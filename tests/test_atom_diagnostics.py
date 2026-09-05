@@ -433,3 +433,35 @@ def test_a_hidden_atom_inside_a_lambda_body_keeps_its_mangled_spelling():
     )
     r = Var()
     assert [deref(r) for _ in call(mod.same, r)] == [1]
+
+
+def test_the_deferred_item_never_reaches_reflection_output():
+    """Fix round 3, R1.  The deferred candidate list is a compile-time
+    worklist, and for a LEGAL file (an imported functor shadowed by a local
+    atom declaration) it stays in ``module_items`` for good -- so
+    ``reify_source`` rendered it as a ``ModuleDirective`` named
+    ``AtomAppliedAsFunctor`` carrying an absolute path and a would-be error
+    message.  ``BareAtomRefs`` is skipped for exactly this reason; so is
+    this.  The fixture is loaded as well as reified, so the pin cannot pass
+    by the item having quietly stopped being emitted."""
+    from clausal.reflection import reify_source, ModuleDirective
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    from clausal.logic.builtins._helpers import functor_arity
+
+    path = _fixture_path("t4f2_import_functor_shadow.clausal")
+    with open(path, encoding="utf-8") as fh:
+        source = fh.read()
+    items = reify_source(source)
+    leaked = [d for d in items
+              if isinstance(d, ModuleDirective)
+              and d.name == "AtomAppliedAsFunctor"]
+    assert not leaked, leaked
+
+    _load_module("tests.fixtures.t4f2_owner_functor",
+                 _fixture_path("t4f2_owner_functor.clausal"))
+    mod = _load_module("tests.fixtures.t4f2_import_functor_shadow", path)
+    x = Var()
+    answers = [deref(x) for _ in call(mod.c, x)]
+    assert [functor_arity(a) for a in answers] == [("wrapf", 1)]

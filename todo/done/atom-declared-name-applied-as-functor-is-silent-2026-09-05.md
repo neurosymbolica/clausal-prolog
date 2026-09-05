@@ -145,7 +145,9 @@ So, precisely:
   `-import_from` site or at the call site. Filed here rather than reopened,
   since the silent-failure class the todo names is closed.
   **Superseded by fix round 2** — see below: this IS now covered, at compile
-  time, with file:line.
+  time, with file:line, *when the file is loaded as a module*. Still NOT
+  covered on the IPython/interactive entry path, which never reaches the pass
+  that settles it — see the fix round 3 note at the end of this file.
 
 ## Fix round 2 amendment (2026-09-06) — the last two gaps
 
@@ -190,3 +192,32 @@ Pinned end-to-end with real owner + importer fixtures
 `t4f2_owner_atom.clausal`, `t4f2_import_functor_shadow.clausal`,
 `t4f2_import_atom_shadow.clausal`) in
 `tests/test_atom_diagnostics.py`, both directions.
+
+## Fix round 3 note (2026-09-06) — one more entry path the imported half misses
+
+Filed by the round-3 review; **no fix now**, recorded so nobody reads the
+round-2 amendment as "closed everywhere".
+
+The IPython/interactive entry path (`clausal/import_hook.py`,
+`_FreshEmbedTransformer.visit`, ~1047-1051) runs a fresh `EmbedTransformer`
+over each cell and returns the rewritten tree. It never reads
+`_module_items` and never calls `compile_module`, so
+`compiler_v2._check_atoms_applied_as_functors` — the pass that settles the
+IMPORTED half of this check — does not run for an interactive cell.
+
+Consequence, in a notebook/REPL session only:
+
+```
+-private([x])
+-import_from(m, [x])
+x(1)                  # still the unlocated runtime TypeError
+```
+
+The LOCAL half does fire there, because `EmbedTransformer.visit_Module`
+raises during the rewrite the cell itself performs — so a cell applying a
+plain `-private` atom that no clause declares as a functor is refused with
+its line, exactly as in a file. Only the imported case is missed.
+
+Fixing it means giving the interactive path somewhere to settle deferred
+items after the cell's imports have run, which is a change to how the
+interactive path works rather than to this check.

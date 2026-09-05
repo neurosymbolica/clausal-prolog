@@ -1009,7 +1009,14 @@ _DIRECTIVE_NAMES = {
     "EdcgPredDecl": "edcg_pred",
 }
 
-_SKIPPED_ITEMS = {"BareAtomRefs"}
+# Compile-time WORKLISTS, not declarations: they carry no source the author
+# wrote, and reifying one leaks internals into a rendering of a perfectly
+# legal file -- ``AtomAppliedAsFunctor`` would surface an absolute path and
+# a would-be error message for an importer that merely shadows an imported
+# functor with a local atom declaration.  ``_reify_module_item`` falls
+# through to a generic ``ModuleDirective`` for anything not listed here, so
+# a new worklist item has to be added deliberately.
+_SKIPPED_ITEMS = {"BareAtomRefs", "AtomAppliedAsFunctor"}
 
 
 def _plain_data(value):
