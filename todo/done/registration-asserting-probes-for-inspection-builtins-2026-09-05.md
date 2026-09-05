@@ -72,3 +72,13 @@ For each of the seven names, write (or extend an existing) test that:
 - Wherever `term_variables/2`, `copy_term/2`, `=../2`, `functor/3`, `arg/3`,
   `numbervars/3`, `dif/2` are implemented/tested — grep each name; they are
   spread across `clausal/logic/builtins/inspection.py` and related modules.
+
+## Done
+
+Done at P3-3 Task 8, commit 37af492f. Registration-asserting probes for all
+seven names added in `tests/test_inspection_registration_probes.py`: each
+resolves the name through `_BUILTINS`/`_DB_BUILTINS` first, then compares a
+cell-shaped input against its `Compound` twin side by side. `=..` itself is
+confirmed unregistered; the registered spelling is `unpack/2`
+(`clausal/logic/builtins/inspection.py::_univ__2`) and that is the name the
+probe drives.
