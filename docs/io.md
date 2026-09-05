@@ -230,7 +230,9 @@ Test("concat all") <- (
 debug_fib <- listing(fib)
 
 # Also accepted: a bare predicate-name atom (0-arity only), or a
-# Name/Arity indicator naming any arity:
+# Name/Arity indicator naming any arity -- `fib/2` here is `/`, the
+# arithmetic operator, applied to a predicate reference and an int; it is
+# NOT data (see the paragraph below):
 debug_greet <- listing("greet")
 debug_fib2 <- listing(fib/2)
 
@@ -241,8 +243,13 @@ show_deep(TERM) <- portray_clause(TERM)
 `listing` accepts, in any of these shapes: a `PredicateMeta` class or
 instance; a builtin predicate (prints a `"% name/arity — builtin"` line); a
 bare str atom naming a 0-arity predicate; or a `Name/Arity` indicator naming
-a predicate at any arity (either the default `foo/2`-style cell, or the
-engine's `Compound("/", (Name, Arity))` shape). For the last two, an
+a predicate at any arity. The indicator has three representations: the
+cell `('/', Name, Arity)` and the engine's `Compound("/", (Name, Arity))`
+(both reachable from Python/engine callers that already hold the name and
+arity as data), and — what a user-written `foo/2` actually compiles to in
+`.clausal` source, as in the `debug_fib2` example above — a runtime `Div`
+node, since `/` is the arithmetic operator and a structural (non-`is`) use
+of it stays a reified operator term rather than data. For the last two, an
 unknown `name/arity` raises `existence_error(procedure, Name/Arity)` — a
 predicate nobody ever declared is not the same as one with an empty clause
 list, which instead prints `"% name/arity — no clauses"`. It prints a
@@ -282,7 +289,7 @@ print(f"Bound: {v}")     # hello
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_io.py` (43 tests) and `tests/test_listing.py` (27 tests).
+    Tests are in `tests/test_io.py` (43 tests) and `tests/test_listing.py` (36 tests).
 
     - **Var display**: `__str__`, `__format__`, bound/unbound, nested
     - **write/writeln/print_term**: atoms, numbers, strings, compounds, lists, vars

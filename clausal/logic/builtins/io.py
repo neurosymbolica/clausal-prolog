@@ -8,7 +8,7 @@ import sys as _sys
 from clausal.logic.atoms import demangle_for_display, is_mangled
 from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.terms import term_str as _term_str, term_pformat as _term_pformat, Compound
+from clausal.terms import term_str as _term_str, term_pformat as _term_pformat, Compound, Div
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, term_field_names_of_class
 from clausal.logic.exceptions import LogicException, type_error, existence_error
 
@@ -186,19 +186,54 @@ def _format_clause(clause):
 
 
 def _as_name_arity_indicator(val):
-    """Recognize *val* as a ``Name/Arity`` predicate indicator, either
-    representation: the CELL a user-written ``foo/2`` compiles to by default
-    since P3-2 (``('/', 'foo', 2)`` — see ``clausal/logic/cells.py``), or the
-    engine-internal ``Compound("/", (functor, arity))`` shape other builtins
-    in this package (``database_ops.py``) build and consume.
+    """Recognize *val* as a ``Name/Arity`` predicate indicator, in any of
+    three representations:
 
-    Returns ``(name, arity)`` or ``None`` if *val* is not one of those two
-    shapes with a str name and a non-bool int arity.
+    - the CELL shape ``('/', 'foo', 2)`` (see ``clausal/logic/cells.py``) —
+      reachable from Python/engine callers that build the indicator as
+      plain data directly (e.g. a caller that already has the name and
+      arity in hand and constructs the tuple itself); NOT what a
+      user-written ``foo/2`` compiles to in ``.clausal`` source today (see
+      the ``Div`` case below) — corrected in P3-3 Task 8 fix round 1 (F1)
+      after the earlier docs claimed otherwise;
+    - the engine-internal ``Compound("/", (functor, arity))`` shape other
+      builtins in this package (``database_ops.py``) build and consume;
+    - a runtime ``Div`` node (``clausal.pythonic_ast.nodes.Div``, re-exported
+      from ``clausal.terms``) — what a user-written ``Fib/2`` ACTUALLY
+      compiles to in today's surface: ``/`` is the arithmetic operator, so a
+      structural (non-``is``) use of it stays reified as ``Div(left=...,
+      right=...)`` rather than a cell (operator nodes are structural terms,
+      matched/constructed, not evaluated — see ``BinOp.__unify__``'s
+      docstring).  Probed directly (P3-3 Task 8 fix round 1, F1):
+      ``Fib/2`` compiles to ``Div(left=<the Fib PredicateMeta class>,
+      right=2)`` when ``Fib`` is a declared predicate in scope, or
+      ``Div(left='some_str', right=2)`` when the left operand is a string
+      literal; ``3/2`` (no predicate-denoting operand) compiles to
+      ``Div(left=3, right=2)`` unchanged, which is exactly the shape this
+      function must REJECT — a bare numeric ``/`` is not a predicate
+      indicator, and ``left`` failing the ``PredicateMeta``-or-``str`` check
+      below is what tells the two apart.  This is a sound discriminator, not
+      a guess: it only recognizes the indicator shape when ``left`` denotes
+      a NAME (a class or a string) and ``right`` is a plain int, so it can
+      never misread a genuine arithmetic ``Div`` whose left operand is a
+      number.  ``.left``/``.right`` are dereffed before the type checks —
+      the same access pattern ``arith_to_ast_expr`` uses for a ``Div`` node
+      reached through ``is/2`` (``clausal/logic/compiler/terms_to_ast.py``
+      ``deref(term.left)`` / ``deref(term.right)``) — since either slot may
+      hold a trail-bound Var.
+
+    Returns ``(name, arity)`` or ``None`` if *val* is not one of those three
+    shapes with a name that is a str (or a ``PredicateMeta`` class, reduced
+    to its ``__name__``) and a non-bool int arity.
     """
     if type(val) is tuple and len(val) == 3 and val[0] == "/":
-        name, arity = val[1], val[2]
+        name, arity = deref(val[1]), deref(val[2])
     elif isinstance(val, Compound) and val.functor == "/" and len(val.args) == 2:
-        name, arity = val.args
+        name, arity = deref(val.args[0]), deref(val.args[1])
+    elif isinstance(val, Div):
+        name, arity = deref(val.left), deref(val.right)
+        if isinstance(name, PredicateMeta):
+            name = name.__name__
     else:
         return None
     if not isinstance(name, str) or not isinstance(arity, int) or isinstance(arity, bool):
@@ -229,19 +264,41 @@ def _make_listing__1(db):
           - a PredicateMeta class or instance (resolves to class)
           - a BuiltinPredicate (prints the "% name/arity — builtin" line)
           - a bare str atom naming a predicate (NEW, P3-3 Task 8)
-          - a ``Name/Arity`` indicator, cell or Compound (NEW, P3-3 Task 8)
+          - a ``Name/Arity`` indicator (NEW, P3-3 Task 8): the cell
+            ``('/', name, arity)``, the engine's ``Compound("/", (name,
+            arity))``, or -- what a user-written ``Fib/2`` actually
+            compiles to in today's surface, since ``/`` is arithmetic and
+            a structural (non-``is``) use of it stays a reified operator
+            term -- a runtime ``Div`` node whose (dereffed) left operand is
+            a ``PredicateMeta`` class or a str and whose right operand is a
+            non-bool int.
         """
         val = deref(pred)
 
-        # Recognize a Name/Arity indicator (cell or Compound) BEFORE the
-        # generic term-instance resolution below: ``Compound`` is (perhaps
-        # surprisingly) a ``@dataclass``, so ``is_term_instance()`` would
-        # otherwise swallow a ``Compound("/", (name, arity))`` indicator and
-        # report it as a bare class with no fields of its own.
+        # Recognize a Name/Arity indicator (cell, Compound, or a runtime
+        # Div node) BEFORE the generic term-instance resolution below:
+        # Compound and Div are both (perhaps surprisingly) @dataclass, so
+        # is_term_instance() would otherwise swallow an indicator-shaped
+        # value -- whether or not it turns out to be a WELL-FORMED
+        # indicator -- and either treat it as a bare class with no fields
+        # of its own, or (for an ill-formed Div like 3/2, a genuine
+        # arithmetic expression) report the wrong culprit in the resulting
+        # type_error (the Div CLASS instead of the actual Div instance).
+        # Gating on the TYPE, not on whether _as_name_arity_indicator
+        # actually parsed it, keeps the raised error's culprit the real
+        # value in both the well-formed and the rejected case.
+        is_indicator_shaped = (
+            type(val) is tuple and len(val) == 3 and val[0] == "/"
+        ) or isinstance(val, (Compound, Div))
         indicator = None if isinstance(val, str) else _as_name_arity_indicator(val)
 
         # Accept an instance → resolve to its class
-        if indicator is None and not isinstance(val, str) and is_term_instance(val):
+        if (
+            indicator is None
+            and not isinstance(val, str)
+            and not is_indicator_shaped
+            and is_term_instance(val)
+        ):
             val = type(val)
 
         if isinstance(val, PredicateMeta):
@@ -280,15 +337,25 @@ def _make_listing__1(db):
     return _listing__1
 
 
-# ``_db_optional``: the db-less path (``get_builtin_dispatch("listing", 1,
-# None)``) unconditionally calls the stored factory with ``db=None`` already
-# (see ``get_builtin_dispatch``), so this mainly keeps
-# ``_stateless_dispatch``/``BuiltinPredicate._get_dispatch()`` consistent for
-# a ``listing`` reached through that path instead.  Set on the object
-# ACTUALLY stored in ``_DB_BUILTINS`` — the ``@_db_builtin`` decorator wraps
-# the factory with ``_simple_to_trampoline`` (``_wrap_db_factory``) and
-# returns the ORIGINAL, unwrapped function, so an attribute set on
-# ``_make_listing__1`` itself would not reach the stored callable.
+# ``_db_optional`` is LOAD-BEARING, not a consistency nicety (P3-3 Task 8
+# fix round 1, F3): ``_build_all_builtin_classes()`` calls
+# ``_stateless_dispatch("listing", 1)`` at import time to populate
+# ``_BUILTIN_CLASSES["listing"]``. Without this flag, ``_stateless_dispatch``
+# finds the ``listing`` factory in ``_DB_BUILTINS``, sees no ``_db_optional``,
+# and returns ``None`` -- leaving ``_BUILTIN_CLASSES["listing"]._dispatch_fn``
+# unset (verified: deleting the flag and rebuilding the class table produces
+# exactly that ``None``). At BASE ``listing`` lived in ``_BUILTINS``, which
+# ``_stateless_dispatch`` answers unconditionally, so this line is what keeps
+# that pre-existing, always-worked path working post-migration, not merely a
+# nicety for some other caller. Pinned by
+# ``TestListingBuiltinClassHasDispatch`` in ``tests/test_listing.py``, so the
+# line cannot be deleted silently.
+#
+# Set on the object ACTUALLY stored in ``_DB_BUILTINS`` — the ``@_db_builtin``
+# decorator wraps the factory with ``_simple_to_trampoline``
+# (``_wrap_db_factory``) and returns the ORIGINAL, unwrapped function, so an
+# attribute set on ``_make_listing__1`` itself would not reach the stored
+# callable.
 _DB_BUILTINS[("listing", 1)]._db_optional = True
 
 

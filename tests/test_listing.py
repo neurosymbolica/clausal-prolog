@@ -215,9 +215,12 @@ class TestListingStrAtomArgument:
 
 
 class TestListingNameArityIndicatorArgument:
-    """(e): a ``Name/Arity`` indicator, either the default cell shape a
-    user-written ``foo/2`` compiles to, or the engine-internal ``Compound``
-    shape other builtins in this package build."""
+    """(e): a ``Name/Arity`` indicator — the CELL shape ``('/', name,
+    arity)``, or the engine-internal ``Compound`` shape other builtins in
+    this package build. (A user-written ``foo/2`` in ``.clausal`` source
+    compiles to neither of these: ``/`` is arithmetic, so it stays a
+    runtime ``Div`` node — see ``TestListingDivIndicatorArgument`` below,
+    P3-3 Task 8 fix round 1 F1.)"""
 
     def test_name_arity_cell_lists_the_predicate(self):
         db = _db_with_fact("pt", 2)
@@ -252,6 +255,151 @@ class TestListingNameArityIndicatorArgument:
         indicator = inner.args[1]
         assert indicator.args == ("no_such_predicate", 3)
 
+    def test_name_arity_cell_with_bound_vars_in_the_slots_lists_the_predicate(self):
+        """P3-3 Task 8 fix round 1 (F2): the name/arity slots are ordinary
+        term slots that may hold a trail-bound Var -- unlike slot 0 of a
+        str-functor cell, which the rest of the codebase's discipline reads
+        RAW by design. ``('/', N, A)`` with ``N``/``A`` bound on the trail
+        must resolve exactly like the ground cell."""
+        db = _db_with_fact("pt", 2)
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        trail = Trail()
+        name_v, arity_v = Var(), Var()
+        assert unify(name_v, "pt", trail)
+        assert unify(arity_v, 2, trail)
+        buf = io.StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        try:
+            solutions(StepGenerator(
+                dispatch, None, None, None, ("/", name_v, arity_v), trail,
+            ))
+        finally:
+            sys.stdout = old
+        output = buf.getvalue()
+        assert "pt/2" in output
+        assert "1 clause(s)" in output
+
+    def test_name_arity_compound_with_bound_vars_in_the_slots_lists_the_predicate(self):
+        db = _db_with_fact("pt", 2)
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        trail = Trail()
+        name_v, arity_v = Var(), Var()
+        assert unify(name_v, "pt", trail)
+        assert unify(arity_v, 2, trail)
+        buf = io.StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        try:
+            solutions(StepGenerator(
+                dispatch, None, None, None,
+                Compound("/", (name_v, arity_v)), trail,
+            ))
+        finally:
+            sys.stdout = old
+        output = buf.getvalue()
+        assert "pt/2" in output
+        assert "1 clause(s)" in output
+
+
+class TestListingDivIndicatorArgument:
+    """(f), P3-3 Task 8 fix round 1 (F1): a runtime ``Div`` node
+    (``clausal.pythonic_ast.nodes.Div``) is what a user-written ``foo/2``
+    ACTUALLY compiles to in ``.clausal`` source today -- ``/`` is the
+    arithmetic operator, so a structural (non-``is``) use of it stays a
+    reified operator term rather than a cell or a ``Compound``. The earlier
+    round's docs/comments claimed ``foo/2`` compiled to the cell; it does
+    not, and this class + ``tests/fixtures/listing_div_indicator.clausal``
+    pin what actually happens, byte-identically, plus the rejection case."""
+
+    def test_div_of_a_str_name_and_int_lists_the_predicate(self):
+        """The runtime shape ``Div(left=<str>, right=int)`` -- what
+        ``"pt" / 2`` compiles to when the left operand is a string literal
+        rather than a resolved predicate class (see
+        ``test_div_of_a_predicate_class_lists_the_predicate`` below for the
+        class-left shape)."""
+        from clausal.terms import Div
+
+        db = _db_with_fact("pt", 2)
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        output = _run_listing(dispatch, Div(left="pt", right=2))
+        assert "pt/2" in output
+        assert "1 clause(s)" in output
+
+    def test_div_of_a_predicate_class_lists_the_predicate(self):
+        """The runtime shape ``Div(left=<PredicateMeta class>, right=int)``
+        -- what ``fib/2`` compiles to when ``fib`` is a declared predicate
+        in the calling module (probed and reproduced directly here without
+        compiling a module; the end-to-end compiled case is pinned by
+        ``test_div_end_to_end_matches_class_form_byte_identically``)."""
+        from clausal.terms import Div
+        from clausal.logic.predicate import make_predicate
+
+        db = _db_with_fact("qr", 1)
+        cls = make_predicate("qr", ["x"])
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        output = _run_listing(dispatch, Div(left=cls, right=1))
+        assert "qr/1" in output
+        assert "1 clause(s)" in output
+
+    def test_div_end_to_end_matches_class_form_byte_identically(self):
+        """Compile a real ``.clausal`` module and drive ``listing(fib/2)``
+        (the doc's exact form) against it -- output must be byte-identical
+        to ``listing(fib)`` (the class form) for the SAME predicate."""
+        import io as _io
+        import sys as _sys
+        import tests.fixtures.listing_div_indicator as mod
+        from clausal.logic.database import Module
+        from clausal.logic.solve import call
+
+        db = mod.__clausal_module__.db
+        m = Module("_t8_div_e2e", db=db)
+
+        def _capture(name):
+            buf = _io.StringIO()
+            saved = _sys.stdout
+            _sys.stdout = buf
+            try:
+                list(call(name, module=m))
+            finally:
+                _sys.stdout = saved
+            return buf.getvalue()
+
+        out_class = _capture("DebugFibByClass")
+        out_indicator = _capture("DebugFibByIndicator")
+        assert out_indicator == out_class
+        assert "fib/2" in out_class
+        assert "3 clause(s)" in out_class
+
+    def test_div_with_a_plain_int_left_operand_raises_type_error(self):
+        """``3/2`` -- no predicate-denoting operand -- is genuine
+        arithmetic, not an indicator, and must still raise ``type_error``
+        exactly as an unrecognized shape always has."""
+        from clausal.terms import Div
+
+        dispatch = get_builtin_dispatch("listing", 1, None)
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(dispatch, Div(left=3, right=2))
+        err = exc_info.value.term
+        assert isinstance(err, Compound) and err.functor == "error"
+        inner = err.args[0]
+        assert inner.functor == "type_error"
+        # The culprit is the actual Div INSTANCE, not (as an earlier,
+        # buggy ordering produced) the Div CLASS -- see the
+        # is_indicator_shaped gate in io.py.
+        culprit = inner.args[1]
+        assert isinstance(culprit, Div)
+        assert culprit.left == 3 and culprit.right == 2
+
+    def test_div_with_a_non_int_right_operand_raises_type_error(self):
+        """``fib/"oops"`` -- a predicate-denoting left operand but a
+        non-int right operand -- is not a valid arity and must raise."""
+        from clausal.terms import Div
+
+        dispatch = get_builtin_dispatch("listing", 1, None)
+        with pytest.raises(LogicException):
+            _run_listing(dispatch, Div(left="fib", right="oops"))
+
 
 class TestListingSpecializedAliasByIndicator:
     """P3-3 Task 7's ``-specialize`` alias (``SolveCountNatnum/2``, 3
@@ -267,6 +415,31 @@ class TestListingSpecializedAliasByIndicator:
         output = _run_listing(dispatch, ("/", "SolveCountNatnum", 2))
         assert "SolveCountNatnum/2" in output
         assert "3 clause(s)" in output
+
+
+class TestListingBuiltinClassHasDispatch:
+    """P3-3 Task 8 fix round 1 (F3): ``_db_optional`` on the ``listing``
+    factory is LOAD-BEARING, not a consistency nicety --
+    ``_build_all_builtin_classes()`` (called once at
+    ``clausal.logic.builtins`` import time) calls
+    ``_stateless_dispatch("listing", 1)`` to populate
+    ``_BUILTIN_CLASSES["listing"]._dispatch_fn``; without the flag that
+    call returns ``None`` and the builtin CLASS (as opposed to the
+    ``get_builtin_dispatch`` path the rest of this file drives) is left with
+    no dispatch at all -- a regression from BASE, where ``listing`` lived in
+    ``_BUILTINS`` and ``_stateless_dispatch`` answered it unconditionally.
+    Pinning this so the ``_db_optional`` line cannot be deleted silently."""
+
+    def test_builtin_class_has_a_dispatch_fn(self):
+        from clausal.logic.builtins._registry import _BUILTIN_CLASSES
+
+        cls = _BUILTIN_CLASSES["listing"]
+        assert cls._dispatch_fn is not None
+
+    def test_stateless_dispatch_answers_for_listing(self):
+        from clausal.logic.builtins._registry import _stateless_dispatch
+
+        assert _stateless_dispatch("listing", 1) is not None
 
 
 # ── _format_clause_head / Compound heads ─────────────────────────────────────

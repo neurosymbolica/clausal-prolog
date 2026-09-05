@@ -53,24 +53,41 @@ def _goal(functor, *args):
     return Call(func=LoadName(name=functor), args=list(args), kwargs=[])
 
 
-def _solutions(g):
+def _drive(g):
+    """Assert *g*'s functor/arity is actually registered, THEN return a
+    fresh ``(module, trail, solutions-iterator)`` driving it.
+
+    P3-3 Task 8 fix round 1 (F5): every probe helper below funnels through
+    this single choke point so the registration assertion cannot be left
+    off a probe by construction — the ``callable_`` incident's whole lesson
+    is that a comparison which never actually registered the check can look
+    healthy while proving nothing. Standing this up as ONE driving helper
+    (rather than a per-test-method sibling call) is stronger than the
+    original per-class ``test_X_is_registered`` methods, which stay in
+    place as explicit, individually-readable pins but are no longer the
+    only thing standing between a probe and a silently-unregistered name.
+    """
+    _assert_registered(g.func.name, len(g.args))
     mod = _fresh_module()
     trail = Trail()
-    return list(solve(g, mod, trail))
+    return mod, trail, solve(g, mod, trail)
+
+
+def _solutions(g):
+    _mod, _trail, it = _drive(g)
+    return list(it)
 
 
 def _sol_var(g, var):
     """Deref *var* after each solution of *g*."""
-    mod = _fresh_module()
-    trail = Trail()
-    return [deref(var) for _ in solve(g, mod, trail)]
+    _mod, _trail, it = _drive(g)
+    return [deref(var) for _ in it]
 
 
 def _sol_vars(g, *variables):
     """Deref every var in *variables*, as a tuple, after each solution of *g*."""
-    mod = _fresh_module()
-    trail = Trail()
-    return [tuple(deref(v) for v in variables) for _ in solve(g, mod, trail)]
+    _mod, _trail, it = _drive(g)
+    return [tuple(deref(v) for v in variables) for _ in it]
 
 
 # ── functor/3 ──────────────────────────────────────────────────────────────────
@@ -179,19 +196,19 @@ class TestNumberVars3RegistrationAndCellParity:
     def test_numbering_a_cells_vars_matches_numbering_a_compounds_vars(self):
         v1, v2 = Var(), Var()
         end_c = Var()
-        mod = _fresh_module()
-        trail = Trail()
+        _mod, _trail, it = _drive(_goal("numbervars", ("pt", v1, v2), 0, end_c))
         labels_c = None
-        for _ in solve(_goal("numbervars", ("pt", v1, v2), 0, end_c), mod, trail):
+        for _ in it:
             labels_c = (deref(v1), deref(v2), deref(end_c))
         assert labels_c is not None
 
         w1, w2 = Var(), Var()
         end_p = Var()
-        mod2 = _fresh_module()
-        trail2 = Trail()
+        _mod2, _trail2, it2 = _drive(
+            _goal("numbervars", Compound("pt", (w1, w2)), 0, end_p)
+        )
         labels_p = None
-        for _ in solve(_goal("numbervars", Compound("pt", (w1, w2)), 0, end_p), mod2, trail2):
+        for _ in it2:
             labels_p = (deref(w1), deref(w2), deref(end_p))
         assert labels_p is not None
 

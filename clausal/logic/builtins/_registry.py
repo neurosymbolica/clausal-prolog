@@ -63,12 +63,22 @@ def _stateless_dispatch(functor: str, arity: int) -> "Callable | None":
     ``_db_optional``, which says the factory produces a correct, if reduced,
     dispatch for ``db=None``.
 
-    Exactly one family sets that flag today: ``call_goal``/``call`` (P3-3 Task
-    5), which became db-receiving only to resolve a cell/atom goal NAME against
-    the caller's database. Everything it did before — invoking a goal OBJECT —
-    needs no db at all, so ``factory(None)`` is its pre-Task-5 self, and the
-    db-less paths (the ``_BUILTIN_CLASSES`` table, a ``BuiltinPredicate`` built
-    without a db) keep working exactly as they did.
+    Two families set that flag today:
+
+    - ``call_goal``/``call`` (P3-3 Task 5), which became db-receiving only to
+      resolve a cell/atom goal NAME against the caller's database. Everything
+      it did before — invoking a goal OBJECT — needs no db at all, so
+      ``factory(None)`` is its pre-Task-5 self, and the db-less paths (the
+      ``_BUILTIN_CLASSES`` table, a ``BuiltinPredicate`` built without a db)
+      keep working exactly as they did.
+    - ``listing`` (P3-3 Task 8), which became db-receiving to resolve a bare
+      str atom or a ``Name/Arity`` indicator against the caller's database.
+      Its other three argument shapes (a ``PredicateMeta`` class or instance,
+      a ``BuiltinPredicate``) need no db at all, so ``factory(None)`` is its
+      pre-Task-8 self and the same db-less paths keep working — see
+      ``clausal/logic/builtins/io.py``'s ``_db_optional`` comment, which is
+      LOAD-BEARING there: ``_build_all_builtin_classes()`` calls this very
+      function at import time to populate ``_BUILTIN_CLASSES["listing"]``.
     """
     fn = _BUILTINS.get((functor, arity))
     if fn is not None:
