@@ -630,20 +630,25 @@ def test_bind_row_uses_the_passed_functor_not_the_class_name():
 def test_rebinding_carries_dynamic_arities_locked_and_source():
     """These three were per-CLASS slots before the inversion, so they travel
     with the class when it is re-bound (a clause-free import getting clauses
-    downstream, a file compiled twice, a name defined at two arities)."""
+    downstream, a file compiled twice, a name defined at two arities).
+
+    ``authorized=True`` because a cross-database re-bind is policed from P3-3
+    Task 3 fix round 1 — it MOVES predicate identity, so only the clause
+    install the mutation gate has cleared may do it. This test stands in for
+    that site; what it pins is the carry-over, which is unchanged."""
     db1, db2 = Database(), Database()
     cls = make_predicate("p", ["a"])
     cls._bind_row(db1, "p", 1)
     cls._dynamic_arities = {1}
     cls._locked = True
     cls._clauses_source = ("m1", "/tmp/m1.clausal")
-    cls._bind_row(db2, "p", 3)
+    cls._bind_row(db2, "p", 3, authorized=True)
     assert cls._dynamic_arities == {1}
     assert cls._locked is True
     assert cls._clauses_source == ("m1", "/tmp/m1.clausal")
     # ... and the union, not a replacement, when the target has its own.
     cls._dynamic_arities = {3}
-    cls._bind_row(db1, "p", 1)
+    cls._bind_row(db1, "p", 1, authorized=True)
     assert cls._dynamic_arities == {1, 3}
 
 
@@ -652,9 +657,29 @@ def test_rebinding_leaves_the_old_rows_clauses_where_they_were():
     cls = make_predicate("p", ["a"])
     cls._bind_row(db1, "p", 1)
     db1.assertz(_clause("p", 1))
-    cls._bind_row(db2, "p", 1)
+    cls._bind_row(db2, "p", 1, authorized=True)   # policed; see above
     assert cls._clauses == []
     assert db1.clauses_for("p", 1) == [_clause("p", 1)]
+
+
+def test_an_unauthorized_rebind_leaves_the_class_where_it_is():
+    """The police itself: a recompile or a dispatch install may not move a
+    class off another database's row (P3-3 Task 3 fix round 1). A class on
+    its private DETACHED row is unbound, not foreign, so its first bind is
+    always allowed."""
+    db1, db2 = Database(), Database()
+    cls = make_predicate("p", ["a"])
+    cls._bind_row(db1, "p", 1)                    # first bind: detached -> db1
+    db1.assertz(_clause("p", 1))
+
+    cls._bind_row(db2, "p", 1)                    # unauthorized: refused
+    assert cls._row is db1.row("p", 1)
+    assert cls._clauses == [_clause("p", 1)]
+
+    # Re-binding WITHIN the same database is not a move and stays open (a
+    # name defined at two arities).
+    cls._bind_row(db1, "p", 3)
+    assert cls._row is db1.row("p", 3)
 
 
 # ── _dynamic_arities keeps its None-vs-set semantics (row-LOCAL, not derived)

@@ -291,10 +291,12 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # moved; see .superpowers/sdd/p33-state-relocation/task-2-report.md.
     # Range shifted 742-774 -> 1011-1043 by P3-3 task-3's mutation gate (the
     # write policy, ``refusal_error``, ``Database.mutate`` and the author
-    # helpers, all earlier in the same file).  ``head_key`` is byte-identical
-    # across all five shifts -- only its line number moved; see
+    # helpers, all earlier in the same file), then -> 1088-1120 by its fix
+    # round 1 (``PredRow.db``/``key``/``detached``, ``Database._write_rows``
+    # and ``refusal_for``, again all earlier).  ``head_key`` is byte-identical
+    # across all six shifts -- only its line number moved; see
     # .superpowers/sdd/p33-state-relocation/task-3-report.md.
-    AllowEntry("clausal/logic/database.py", (1011, 1043),
+    AllowEntry("clausal/logic/database.py", (1088, 1120),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list)"),
 

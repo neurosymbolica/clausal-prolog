@@ -92,3 +92,14 @@ Tests: `tests/test_mutation_gate.py` (the three alias scenarios pinned as
 named), plus `tests/test_imported_functor_clause_clobber.py`, unchanged and
 still green through the gate.  See
 `.superpowers/sdd/p33-state-relocation/task-3-report.md`.
+
+### Correction (fix round 1, 2026-09-05)
+
+Instance 2's shape had one more live case than the note above claimed: the
+class OBJECT itself was being moved between databases by writes that had no
+authorship to make that decision with (`compiler._install`'s re-bind, and an
+importer's `-dynamic` declaration), which handed a shared predicate's identity
+to whichever module last recompiled it. `PredicateMeta._bind_row` is policed
+now; see the correction note in
+`a-shared-predicate-has-no-single-mutation-gate.md` and
+`test_an_imported_dynamic_predicate_is_asserted_ON_ITS_OWNER`.

@@ -786,10 +786,15 @@ class PredicateMeta(type):
         # so an arity of 0 there costs nothing.
         fields = getattr(cls, "_fields", ()) or ()
         row = Database().row(cls.__name__, len(fields), create=True)
+        # Marked so ``_bind_row`` can tell "not bound to anything" from "bound
+        # to another module's predicate": the first is free to move, the
+        # second is policed (P3-3 Task 3 fix round 1).
+        row.detached = True
         cls._row = row
         return row
 
-    def _bind_row(cls, db, functor: str, arity: int) -> None:
+    def _bind_row(cls, db, functor: str, arity: int,
+                  authorized: bool = False) -> None:
         """Point this class's state at *db*'s row for ``(functor, arity)``.
 
         Called at the sites that make a class the compiled face of a stored
@@ -804,8 +809,12 @@ class PredicateMeta(type):
 
         Re-binding a class that already has a row is legitimate and expected:
         a clause-free imported declaration getting its clauses downstream, a
-        file re-compiled in one process, a name defined at two arities.  The
-        old row keeps its own contents (it is the Database's, not the class's);
+        file re-compiled in one process, a name defined at two arities.  It is
+        also how a shared predicate gets STOLEN, so it is policed: a class
+        already reading another Database's real row is left where it is unless
+        the caller passes *authorized* -- which only ``compiler_v2`` step 4
+        does, for a write the mutation gate has just cleared.  See the body.
+        The old row keeps its own contents (it is the Database's, not the class's);
         three pieces of state that were per-CLASS rather than per-key before
         this task travel with the class so the move stays lossless —
         ``dynamic_arities`` (unioned: it is a set ACROSS arities by
@@ -816,6 +825,28 @@ class PredicateMeta(type):
         new_row = db.row(functor, arity, create=True)
         old_row = cls._row
         if old_row is new_row:
+            return
+        if (
+            old_row is not None
+            and not old_row.detached
+            and old_row.db is not db
+            and not authorized
+        ):
+            # POLICED (P3-3 Task 3 fix round 1).  Re-binding is a write that
+            # MOVES predicate identity: the class is what a goal resolves
+            # through, so re-pointing an ``-import_from``'d class at the
+            # importer's row hands the importer's clause list to the OWNER's
+            # own queries -- silently, and with the owner's row left holding
+            # the clauses nobody can reach any more.  A recompile or a
+            # dispatch install has no authorship to make that decision with
+            # (its ``recompile`` kind is never refused, precisely because it
+            # is meant to change nothing), so it does not get to.  The one
+            # authorized re-bind is ``compiler_v2`` step 4's clause install,
+            # which the mutation gate has just cleared for this author --
+            # that is what keeps the clause-free vocabulary idiom working.
+            #
+            # A class on its private DETACHED row is unbound, not bound
+            # elsewhere, so its first real bind is always fine.
             return
         if old_row is not None:
             old_declared = old_row.dynamic_arities

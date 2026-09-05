@@ -329,3 +329,118 @@ def test_alias_scenario_3_a_second_implementer_of_a_vocabulary_is_refused():
     assert "may not write impclob_verdict/2" in msg
     assert "impclob_implements" in msg
     assert _answers(use, "impclob_check") == ["ok"]
+
+
+# ── Fix round 1: the gate's own hygiene ────────────────────────────────────
+
+
+def test_a_refused_load_writes_nothing_at_all():
+    """The property the deleted step-3c pre-pass carried, restored on the gate.
+
+    Step 3c ran BEFORE the write loop expressly so that "a refusal that fired
+    halfway through the loop would leave the other module with a partly-
+    clobbered clause list".  Consulting the gate per predicate INSIDE the loop
+    dropped that: ``gate_rival`` implements ``gv_free`` (legal — clause-free
+    vocabulary) before it redefines ``gv_owned`` (refused), so the exporter's
+    shared ``gv_free`` class was left holding the failed load's clause, with
+    its ``_clauses_source`` naming a module that never finished loading.
+
+    The gate's policy is pure, so the load now runs it over every key it is
+    about to write BEFORE writing any of them."""
+    vocab = _load_fixture("gate_vocab")
+    assert len(vocab.gv_free._clauses) == 0, "the vocabulary starts clause-free"
+
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_fixture("gate_rival")
+    assert "may not write gv_owned/1" in str(exc_info.value)
+
+    assert len(vocab.gv_free._clauses) == 0, (
+        "the LEGAL earlier write must not have landed either — the refusal "
+        "is for the load, not for one predicate of it"
+    )
+    assert vocab.gv_free._clauses_source is None, (
+        "and the exporter's class must not be attributed to a module that "
+        "failed to load"
+    )
+    assert len(vocab.gv_owned._clauses) == 1
+
+
+def test_a_raise_inside_a_transaction_still_invalidates_and_stamps():
+    """State hygiene is owed however the transaction ends.
+
+    A body that appends a clause and then raises used to leave the row holding
+    the new clause with the dispatch compiled from the old one — stale, and
+    unstamped.  Reachable through ``assertz/1``, whose recompile runs inside
+    the transaction and can raise."""
+    db = Database()
+    db.assertz(_clause("boom", 1))
+    fn = lambda *a: iter(())  # noqa: E731
+    with db.mutate("boom", 1, author="me", kind="recompile") as row:
+        row.dispatch_fn = fn
+    assert db.row("boom", 1).dispatch_fn is fn
+
+    with pytest.raises(ValueError):
+        with db.mutate("boom", 1, author="me", kind="assert",
+                       detail="assertz") as row:
+            row.ensure_clauses().append(_clause("boom", 2))
+            raise ValueError("mid-write")
+
+    row = db.row("boom", 1)
+    assert row.dispatch_fn is None, "the stale dispatch must be gone"
+    assert row.writes[-1].author == "me"
+    assert "failed" in str(row.writes[-1].detail), (
+        f"the failed write must be stamped as one: {row.writes[-1]}"
+    )
+
+
+def test_a_same_length_clause_edit_still_invalidates():
+    """Change detection may not be a length comparison: one transaction that
+    removes a clause and adds another leaves the count alone and the compiled
+    dispatch just as stale."""
+    db = Database()
+    db.assertz(_clause("swap", 1))
+    fn = lambda *a: iter(())  # noqa: E731
+    with db.mutate("swap", 1, author="me", kind="recompile") as row:
+        row.dispatch_fn = fn
+
+    with db.mutate("swap", 1, author="me", kind="assert") as row:
+        clauses = row.ensure_clauses()
+        del clauses[0]
+        clauses.append(_clause("swap", 2))
+
+    assert db.row("swap", 1).dispatch_fn is None
+
+
+def test_an_imported_dynamic_predicate_is_asserted_ON_ITS_OWNER():
+    """A runtime assert through a SHARED class writes the owner's clause list.
+
+    ``-import_from`` shares one predicate deliberately.  P3-3 Task 2 made
+    ``compiler._install`` re-bind the class on every recompile, so an
+    importer's ``assertz`` moved the shared class onto the IMPORTER's row:
+    the owner's own query then answered from the importer's clause list
+    (``[1]`` became ``[2]``) while the owner's row still held its clause.
+
+    The pre-P3-3 semantics — one shared class, one clause list, both modules
+    seeing every clause — are restored by resolving the write to the row the
+    class is bound to, and by refusing to re-bind an already-bound class onto
+    another database's row from a recompile."""
+    owner = _load_fixture("gate_dyn_owner")
+    user = _load_fixture("gate_dyn_user")
+    owner_db = _db_of(owner)
+    cls = owner.gd_p
+    owner_row = owner_db.row("gd_p", 1)
+    assert cls._row is owner_row
+
+    next(call("gd_add", 2, module=user.__dict__["$module"]), None)
+
+    assert sorted(_answers(owner, "gd_p")) == [1, 2], "the owner sees it"
+    assert sorted(_answers(user, "gd_p")) == [1, 2], "and so does the importer"
+    assert cls._row is owner_row, "the shared class did not move"
+    assert len(owner_row.clauses) == 2
+    runtime = [s for s in owner_row.writes
+               if s.author.startswith("runtime-assert:")]
+    assert runtime, f"the assert stamped nothing on the owner: {owner_row.writes}"
+    assert "gate_dyn_user" in runtime[-1].author, (
+        "and the stamp names the module that asserted, not the one that "
+        "compiled the predicate"
+    )

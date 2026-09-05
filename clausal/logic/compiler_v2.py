@@ -166,6 +166,18 @@ def compile_module(
     origins = _import_from_origins(module_items, module_dict)
     author = db.load_author()
 
+    # ── Step 3d: ask the gate about EVERY clause this load will write ────
+    #    A dry run over the whole predicate set, before the write loop below
+    #    touches anything.  The pre-pass this replaced ran here for exactly
+    #    this reason: a refusal fired partway through the write loop leaves
+    #    the module it was protecting holding the earlier, LEGAL writes of a
+    #    load that then failed -- a shared class implementing one export and
+    #    attributed to a module that never finished loading.  The policy is
+    #    pure (``Database.refusal_for`` mints nothing and opens no
+    #    transaction), so asking twice is free and asking early is honest.
+    _refuse_foreign_writes(db, predicate_nodes, module_dict, origins, author,
+                           module_name)
+
     # ── Step 4: assertz all clauses ───────────────────────────────────────
     pending: dict[tuple[str, int], PredicateMeta | None] = {}
     for pred_node in predicate_nodes:
@@ -192,7 +204,12 @@ def compile_module(
             logic_module.define_predicate(pred_node)
             if pred_cls is not None:
                 db_clauses = db.clauses_for(functor, arity)
-                pred_cls._bind_row(db, functor, arity)
+                # ``authorized``: this is the ONE bind the mutation gate has
+                # just cleared for this author, so it may move a shared class
+                # onto this module's row (the clause-free vocabulary idiom).
+                # Every other bind is policed -- see ``PredicateMeta.
+                # _bind_row``.
+                pred_cls._bind_row(db, functor, arity, authorized=True)
                 # ``_ensure_clauses``, not a plain ``_clauses`` read: a read
                 # mints nothing (P3-3 Task 2 fix round 1), and this IS the
                 # sanctioned clause-install site — the slice-assign below has
@@ -232,11 +249,23 @@ def compile_module(
                     isinstance(pred_cls, PredicateMeta)
                     and len(pred_cls._fields) == arity
                 ):
+                    if _belongs_elsewhere(pred_cls, db):
+                        # A ``-dynamic`` declaration for a predicate this
+                        # module IMPORTED (P3-3 Task 3 fix round 1).  The
+                        # declaration is legitimate — it is how a module says
+                        # "I intend to assert against this" — but the
+                        # predicate is not ours to bind or to compile: doing
+                        # either would hand the owner's shared class this
+                        # module's (empty) clause list and its always-fail
+                        # trampoline.  The mark on this database is enough;
+                        # asserts resolve through the class to the owner's
+                        # row.
+                        continue
                     # Same binding as step 4 (P3-3 Task 2): a declared-but-
                     # clause-less dynamic predicate is exactly the shape whose
                     # first clause arrives by runtime assertz, so its class
                     # must already be reading the row that assertz appends to.
-                    pred_cls._bind_row(db, functor, arity)
+                    pred_cls._bind_row(db, functor, arity, authorized=True)
                     if pred_cls._signature is None:
                         pred_cls._signature = pred_cls._fields
                     pending[key] = pred_cls
@@ -549,6 +578,45 @@ def _import_from_origins(module_items: list, module_dict: dict) -> dict:
             if bound is not None and bound.__name__ != local:
                 origins.setdefault(bound.__name__, (item.module, bound))
     return origins
+
+
+def _belongs_elsewhere(pred_cls, db) -> bool:
+    """True when *pred_cls* already reads another Database's real row — i.e.
+    it is somebody else's predicate, reached here through an
+    ``-import_from``.  A class on its private detached row is unbound, not
+    foreign."""
+    row = getattr(pred_cls, "_row", None)
+    return row is not None and not row.detached and row.db is not db
+
+
+def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
+                           origins: dict, author: str,
+                           module_name: str) -> None:
+    """Refuse the LOAD, before it writes anything, if the gate would refuse
+    any one of the predicates it is about to write.
+
+    One question per ``(functor, arity)``, asked of the same rows the write
+    itself would touch (``Database.refusal_for`` shares its blast-radius
+    definition with ``Database.mutate``).  See step 3d.
+    """
+    checked: set[tuple[str, int]] = set()
+    for pred_node in predicate_nodes:
+        functor, arity = head_key(pred_node.head)
+        if (functor, arity) in checked:
+            continue
+        checked.add((functor, arity))
+        pred_cls = module_dict.get(functor)
+        if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = _imported_class(origins, functor)
+        exc = db.refusal_for(
+            functor, arity, author=author, kind=WRITE_LOAD_CLAUSES,
+            detail=_LOAD_SITES[WRITE_LOAD_CLAUSES], through=pred_cls,
+        )
+        if exc is not None:
+            raise _redefinition_error(
+                exc, functor, arity, pred_cls, origins, module_name,
+                module_dict,
+            )
 
 
 _LOAD_SITES = {

@@ -2080,13 +2080,13 @@ def _install(
     if wrapped is not fn:
         # Installing a freshly compiled dispatch for a tabled predicate means
         # the clause set its cached answers were derived from is gone, so the
-        # table is stale by construction.  ``Database.assertz``/``retract``
-        # abolish it themselves, but the ``retract/1`` builtin deletes straight
-        # out of ``db._clauses`` and never calls them, and
-        # ``PredicateMeta._assertz``/``_retract`` only clear the dispatch — both
-        # then recompile through here.  Before the wrapper survived a recompile
-        # this went unnoticed: the raw dispatch consulted no table, so a stale
-        # entry could not be read back.
+        # table is stale by construction.  Since P3-3 Task 3 every clause
+        # write runs inside a ``Database.mutate`` transaction whose exit
+        # abolishes the table, so this is belt-and-braces for the compile
+        # paths that reach here without one (a bare-query compile, a
+        # specialization target).  Before the wrapper survived a recompile it
+        # went unnoticed either way: the raw dispatch consulted no table, so a
+        # stale entry could not be read back.
         db.abolish_table(functor, arity)
         fn = wrapped
     if db is not None:

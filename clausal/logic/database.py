@@ -120,6 +120,22 @@ class PredRow:
     # ``mutate`` on a row already in a transaction inherits that
     # transaction's authorization instead of asking the policy again.
     _txn: int = dataclasses.field(default=0, repr=False, compare=False)
+    # True for the PRIVATE row a ``PredicateMeta`` mints for itself outside
+    # any module load (``PredicateMeta._detached_row``).  A detached row is
+    # nobody's predicate, so a class sitting on one may be bound onto a real
+    # Database's row freely; a class on a REAL row may not be moved off it by
+    # an unauthorized write (see ``PredicateMeta._bind_row``).
+    detached: bool = False
+
+    @property
+    def db(self) -> "Database":
+        """The Database this row belongs to."""
+        return self._db
+
+    @property
+    def key(self) -> "tuple[str, int]":
+        """This row's ``(functor, arity)``."""
+        return self._key
 
     @property
     def clauses(self) -> list:
@@ -325,6 +341,9 @@ WRITE_RECOMPILE = "recompile"
 
 _LOAD_KINDS = frozenset((WRITE_LOAD_CLAUSES, WRITE_LOAD_DISPATCH))
 _RUNTIME_KINDS = frozenset((WRITE_ASSERT, WRITE_RETRACT))
+# Kinds whose transaction can leave the compiled dispatch out of step with the
+# clause list, and which therefore invalidate on the way out.
+_CLAUSE_KINDS = frozenset((WRITE_LOAD_CLAUSES, WRITE_ASSERT, WRITE_RETRACT))
 
 RUNTIME_AUTHOR_PREFIX = "runtime-assert:"
 
@@ -483,6 +502,51 @@ class Database:
         asks for."""
         return f"{RUNTIME_AUTHOR_PREFIX}{self.module_name()}"
 
+    def _write_rows(self, functor: str, arity: int, through: Any = None,
+                    create: bool = True) -> "list[PredRow]":
+        """Every row in the blast radius of a write to ``(functor, arity)``
+        made *through* an optional ``PredicateMeta``.
+
+        One definition, used by both :meth:`mutate` and :meth:`refusal_for`,
+        so a dry run cannot ask about a different set of rows than the write
+        would touch.
+        """
+        rows = []
+        target = self.row(functor, arity, create=create)
+        if target is not None:
+            rows.append(target)
+        if through is not None:
+            other = getattr(through, "_row", None)
+            if isinstance(other, PredRow) and all(r is not other for r in rows):
+                rows.append(other)
+        return rows
+
+    def refusal_for(self, functor: str, arity: int, *, author: str, kind: str,
+                    detail: Any = None,
+                    through: Any = None) -> "LogicException | None":
+        """Ask the policy WITHOUT opening a transaction: the exception
+        :meth:`mutate` would raise, or ``None`` if the write is permitted.
+
+        The policy is pure, which is what makes a dry run meaningful — and
+        what lets a LOAD ask about every predicate it is going to write
+        BEFORE it writes any of them.  Without that, a refusal fired partway
+        through the write loop leaves the module it was protecting holding
+        the earlier, legal writes of a load that never finished (the ordering
+        property the deleted step-3c pre-pass carried).
+
+        Mints nothing: rows are looked up with ``create=False``.
+        """
+        for row in self._write_rows(functor, arity, through, create=False):
+            if row._txn:
+                continue
+            reason = write_refusal(row, author, kind)
+            if reason is not None:
+                return refusal_error(
+                    *row.key, author, kind, reason,
+                    channel=detail if isinstance(detail, str) else None,
+                )
+        return None
+
     @contextlib.contextmanager
     def mutate(self, functor: str, arity: int, *, author: str, kind: str,
                detail: Any = None, through: Any = None):
@@ -492,11 +556,16 @@ class Database:
 
         On entry the ownership policy (:func:`write_refusal`) is asked once,
         and a refusal raises :func:`refusal_error` — the one refusal, in the
-        one text, for all four channels.  On a clean exit the write is stamped
-        on the row (``author``, ``kind``, ``detail``), and if the clause list
-        changed while no new dispatch was installed, the row is invalidated
-        and any tabled answers abolished — so no channel keeps invalidation
-        code of its own.
+        one text, for all four channels.  On exit — CLEAN OR NOT — the write is
+        stamped on the row (``author``, ``kind``, ``detail``, the detail
+        marked ``(failed)`` when the body raised), and a transaction of a
+        clause-writing kind invalidates the row and abolishes its table
+        unless it installed a dispatch of its own on the way out.  Both
+        belong in the unwind rather than on the happy path: a body that
+        appends a clause and then raises leaves the clause behind, and a
+        dispatch compiled from the clause list before it is stale however
+        the transaction ended.  No channel keeps invalidation code of its
+        own.
 
         *through* is a ``PredicateMeta`` this write will go through when that
         class is not (yet) reading this row: an ``-import_from`` SHARES the
@@ -514,46 +583,53 @@ class Database:
         load that goes through it is still recorded as the load.
         """
         target = self.row(functor, arity, create=True)
-        rows = [target]
-        if through is not None:
-            other = getattr(through, "_row", None)
-            if isinstance(other, PredRow) and other is not target:
-                rows.append(other)
-        opened = [r for r in rows if r._txn == 0]
+        opened = [row for row in self._write_rows(functor, arity, through)
+                  if row._txn == 0]
         for row in opened:
             reason = write_refusal(row, author, kind)
             if reason is not None:
                 raise refusal_error(
-                    *row._key, author, kind, reason,
+                    *row.key, author, kind, reason,
                     channel=detail if isinstance(detail, str) else None,
                 )
-        before = [(r, len(r.clauses), r.dispatch_fn) for r in opened]
+        before = [(row, row.dispatch_fn) for row in opened]
         for row in opened:
             row._txn += 1
+        failed = False
         try:
             yield target
+        except BaseException:
+            failed = True
+            raise
         finally:
             for row in opened:
                 row._txn -= 1
-        for row, n_clauses, dispatch in before:
-            row.record_write(author, kind, detail)
-            if len(row.clauses) == n_clauses or row.dispatch_fn is not dispatch:
-                continue
-            # The clause list moved and nothing installed a replacement
-            # dispatch on the way out: the compiled function no longer matches
-            # the clauses it was compiled from.  This is the ONLY invalidation
-            # in the write paths now — the channels used to each carry their
-            # own copy of it.
-            db, key = row._db, row._key
-            if key in db._dispatch:
-                # Guarded on an EXISTING entry: writing ``_dispatch[key] =
-                # None`` for a never-compiled predicate would announce a
-                # dispatch slot nothing ever filled (pinned by
-                # ``test_retract_builtin_does_not_create_a_dispatch_entry_
-                # it_did_not_find``).
-                row.invalidate()
-            if key in db._tabled:
-                db.abolish_table(*key)
+            stamp = f"{detail} (failed)" if failed else detail
+            for row, dispatch in before:
+                row.record_write(author, kind, stamp)
+                if kind not in _CLAUSE_KINDS or row.dispatch_fn is not dispatch:
+                    # Not a clause write, or this transaction installed a
+                    # dispatch of its own on the way out (the assert channels
+                    # recompile inside their transaction) — nothing is stale.
+                    continue
+                # Unconditional for a clause-writing kind, rather than
+                # conditional on a clause-COUNT change: one transaction that
+                # removes a clause and adds another leaves the count alone and
+                # the compiled dispatch just as stale, and detecting the
+                # difference honestly would mean copying the clause list on
+                # every assertz.  Recompilation is lazy, so invalidating a
+                # transaction that turned out to write nothing costs one
+                # recompile.
+                db, key = row.db, row.key
+                if key in db._dispatch:
+                    # Guarded on an EXISTING entry: writing ``_dispatch[key] =
+                    # None`` for a never-compiled predicate would announce a
+                    # dispatch slot nothing ever filled (pinned by
+                    # ``test_retract_builtin_does_not_create_a_dispatch_entry_
+                    # it_did_not_find``).
+                    row.invalidate()
+                if key in db._tabled:
+                    db.abolish_table(*key)
 
     def assertz(self, clause: Clause, author: str | None = None) -> None:
         """Add clause at end of its predicate's clause list.

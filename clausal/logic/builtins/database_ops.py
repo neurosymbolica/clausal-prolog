@@ -129,6 +129,27 @@ def _find_pred_cls(functor: str, arity: int,
     return candidate if len(candidate._fields) == arity else None
 
 
+def _home_db(db, pred_cls) -> "Any":
+    """The Database whose row a write through *pred_cls* must land in.
+
+    A predicate reached through an ``-import_from`` is ONE predicate: the
+    class is shared deliberately, and it reads the OWNER's row.  A runtime
+    assert made through it therefore belongs in that row -- write it into the
+    asserting module's own database instead and the two modules end up with
+    two clause lists behind one class, which is the shape that made an
+    importer's ``assertz`` change the owner's answers while the owner's row
+    still held its own clauses (P3-3 Task 3 fix round 1).
+
+    Falls back to *db* when there is no class, or when the class is still on
+    its private detached row -- that row is nobody's predicate, and writing
+    there would hide the clause from the module database entirely.
+    """
+    row = getattr(pred_cls, "_row", None) if pred_cls is not None else None
+    if row is None or row.detached:
+        return db
+    return row.db
+
+
 # ── assertz / retract ──────────────────────────────────────────────────────────
 
 
@@ -162,11 +183,12 @@ def _assertz_factory(db):
         # carries the check onto an -import_from'd predicate: the clause goes
         # into THIS module's row, but a shared class makes the exporter's row
         # part of the write's blast radius.
-        with db.mutate(functor, arity, author=db.runtime_author(),
-                       kind="assert", detail="assertz/1", through=pred_cls):
-            db.assertz(clause)
-            clauses = db.clauses_for(functor, arity)
-            compile_predicate_trampoline(functor, arity, clauses, db,
+        home = _home_db(db, pred_cls)
+        with home.mutate(functor, arity, author=db.runtime_author(),
+                         kind="assert", detail="assertz/1", through=pred_cls):
+            home.assertz(clause)
+            clauses = home.clauses_for(functor, arity)
+            compile_predicate_trampoline(functor, arity, clauses, home,
                                          globals_=module_dict,
                                          pred_cls=pred_cls)
         yield None
@@ -193,11 +215,12 @@ def _asserta_factory(db):
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict)
         # Through the gate; see assertz/1 above.
-        with db.mutate(functor, arity, author=db.runtime_author(),
-                       kind="assert", detail="asserta/1", through=pred_cls):
-            db.asserta(clause)
-            clauses = db.clauses_for(functor, arity)
-            compile_predicate_trampoline(functor, arity, clauses, db,
+        home = _home_db(db, pred_cls)
+        with home.mutate(functor, arity, author=db.runtime_author(),
+                         kind="assert", detail="asserta/1", through=pred_cls):
+            home.asserta(clause)
+            clauses = home.clauses_for(functor, arity)
+            compile_predicate_trampoline(functor, arity, clauses, home,
                                          globals_=module_dict,
                                          pred_cls=pred_cls)
         yield None
@@ -228,26 +251,30 @@ def _retract_factory(db):
             functor, arity = head_key(term_val)
         except TypeError:
             return
-        clause_list = db._clauses.get((functor, arity))
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
+        home = _home_db(db, pred_cls)
+        clause_list = home._clauses.get((functor, arity))
         if clause_list is None:
             return
-        pred_cls = _find_pred_cls(functor, arity, module_dict)
         # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
         # here is the gate's policy now, and its exit is what invalidates the
         # dispatch when the last clause goes (the recompile below is skipped
         # then, and the predicate would otherwise keep dispatching to the
         # function compiled from the clause it just lost).  The transaction
         # closes BEFORE the yield: leaving it open across a solution the
-        # caller may abandon would leak an open transaction and skip that
-        # invalidation.
-        with db.mutate(functor, arity, author=db.runtime_author(),
-                       kind="retract", detail="retract/1", through=pred_cls):
+        # caller may abandon would leak an open transaction.  ``home`` is the
+        # row the CLASS reads (see ``_home_db``): a predicate reached through
+        # an -import_from is one predicate, so a retract through it removes
+        # from the owner's clause list, the one both modules see.
+        with home.mutate(functor, arity, author=db.runtime_author(),
+                         kind="retract", detail="retract/1",
+                         through=pred_cls):
             removed = _remove_first_match(term_val, clause_list)
             if removed is not None:
-                clauses = db.clauses_for(functor, arity)
+                clauses = home.clauses_for(functor, arity)
                 if clauses:
                     compile_predicate_trampoline(
-                        functor, arity, clauses, db,
+                        functor, arity, clauses, home,
                         globals_=module_dict, pred_cls=pred_cls)
         if removed is None:
             return

@@ -1,0 +1,8 @@
+# Owner of a -dynamic predicate that a downstream module asserts against.
+# gate_dyn_user imports gd_p and calls assertz(gd_p(2)); the clause must land
+# on the predicate this module owns -- one shared class, one clause list --
+# rather than on a private copy in the importer's database.
+-dynamic(gd_p/1)
+-module(gate_dyn_owner, [gd_p/1])
+
+gd_p(1),

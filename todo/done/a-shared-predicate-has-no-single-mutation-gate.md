@@ -75,3 +75,30 @@ from a non-owner with the same text, both dispatch doors, and the provenance
 pair), plus the flipped
 `tests/test_predrow.py::test_low_level_db_assertz_is_refused_on_a_locked_static_predicate`.
 See `.superpowers/sdd/p33-state-relocation/task-3-report.md`.
+
+### Correction (fix round 1, 2026-09-05)
+
+The first closure note above claimed more than the code did. Review found
+three holes, all now fixed and pinned in `tests/test_mutation_gate.py`:
+
+* **A refused load could still write.** The gate was consulted inside the
+  write loop, so a load that legally implemented one export and then tried to
+  redefine another left the first write behind on the exporter's shared class.
+  The policy is pure, so the load now dry-runs it over every predicate it is
+  about to write (`Database.refusal_for`, `compiler_v2` step 3d) BEFORE
+  writing any — the ordering property the deleted step-3c pre-pass carried.
+* **A transaction that raised skipped the gate's exit**, leaving a written
+  clause with a dispatch compiled from the old list and no stamp; and change
+  detection was a clause COUNT, which one remove-plus-add transaction slips
+  past. Stamping and invalidation moved into the unwind, and a clause-writing
+  kind now invalidates unconditionally.
+* **`recompile` was never refused — and it was the write that MOVED predicate
+  identity.** `compiler._install` re-bound the class on every recompile, so an
+  importer's `assertz` against a shared `-dynamic` predicate moved that class
+  onto the importer's row: the OWNER's own query then answered from the
+  importer's clause list. `PredicateMeta._bind_row` is policed now — a class
+  already reading another Database's real row is not moved by a recompile, an
+  install, or an importer's `-dynamic` declaration; only the clause install
+  the gate has just cleared may move it — and the runtime-assert channels
+  resolve to the row the class is bound to. One shared class, one clause list,
+  both modules seeing every clause: the pre-P3-3 semantics, restored.

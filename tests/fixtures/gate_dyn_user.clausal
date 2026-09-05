@@ -1,0 +1,6 @@
+# Asserts against an -import_from'd -dynamic predicate.  See gate_dyn_owner.
+-dynamic(gd_p/1)
+-module(gate_dyn_user, [gd_add(X)])
+-import_from(tests.fixtures.gate_dyn_owner, [gd_p])
+
+gd_add(X) <- assertz(gd_p(X))
