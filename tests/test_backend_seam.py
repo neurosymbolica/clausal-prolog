@@ -27,6 +27,7 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.logic.database import Database
+from clausal.logic.exceptions import LogicException
 from clausal.logic.compiler.globals_env import _disp_key, _inject_resolved_targets
 from clausal.logic.compiler.predicate import _install
 from clausal.logic.predicate import make_predicate
@@ -215,10 +216,20 @@ class TestBackendSeam:
         assert db.row("p", 1).backend == "python"
 
     def test_an_unregistered_backend_name_is_loud(self, clean_backend_seam):
+        """Fix round 1 (M-2): through the ENGINE's error family, like every
+        other refusal in database.py — an ISO ``existence_error(backend, …)``
+        carried by a ``LogicException``, so ``catch/3`` can see it and the
+        message is not a stray Python builtin."""
         Database.set_backend_chooser(lambda row: "no-such-backend")
         db = _fresh_db()
-        with pytest.raises(LookupError) as exc:
+        with pytest.raises(LogicException) as exc:
             _install(db, "p", 1, _dummy_dispatch)
+        term = exc.value.term
+        assert term.functor == "error"
+        inner = term.args[0]
+        assert inner.functor == "existence_error"
+        assert inner.args[0] == "backend"
+        assert inner.args[1] == "no-such-backend"
         assert "no-such-backend" in str(exc.value)
         assert "p/1" in str(exc.value)
 

@@ -301,9 +301,11 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # ``Database.set_backend_chooser``/``backend_chooser``/
     # ``register_backend``/``backend_dispatch``, all earlier in the same
     # file).  ``head_key`` is byte-identical across all seven shifts -- only
-    # its line number moved; see
-    # .superpowers/sdd/p33-state-relocation/task-4-report.md.
-    AllowEntry("clausal/logic/database.py", (1214, 1246),
+    # its line number moved, then -> 1223-1255 by that task's fix round 1
+    # (M-2: the unregistered-backend refusal moved onto the engine's error
+    # family, widening the ``clausal.logic.exceptions`` import and the raise);
+    # see .superpowers/sdd/p33-state-relocation/task-4-report.md.
+    AllowEntry("clausal/logic/database.py", (1223, 1255),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list)"),
 

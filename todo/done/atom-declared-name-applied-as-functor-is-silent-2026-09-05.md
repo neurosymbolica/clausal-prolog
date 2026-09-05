@@ -84,3 +84,59 @@ module-level `__clausal_implicit_functors__` the COMPILER reads — so threading
 it into `TermTransformer` is a larger change than the cheap pass allowed, and
 raising is strictly better than the silent behaviour either way. Whoever wants
 that lowering has a loud error pointing at the exact site to start from.
+
+## Fix round 1 amendment (2026-09-05) — scope of the closure, stated exactly
+
+Two corrections to the Resolution above, both from the Task 4 review.
+
+**1. A dual-declared name applies as the FUNCTOR (review I-1).** The first cut
+refused on atom-set membership alone, which broke a legal and live
+configuration:
+
+```
+-module(c2, [dual, dual(G), c(X)])   # 'dual' declared as BOTH atom and functor
+dual(1),
+c(X) <- dual(X),                     # refused, prescribing the declaration line 1 has
+```
+
+`_visit_call_func` now bypasses the atom branch for a name that is also
+declared as a functor — locally (the EmbedTransformer's live `_seen_functors`,
+threaded into `TermTransformer` as `_declared_functors`) or by `-import_from`
+(`_import_remap`, emitting the DOTTED reference) — and emits the functor
+reference `visit_Name` cannot reach, because its atom test runs before its
+import-remap and fallthrough branches. The refusal is left for a name declared
+as an atom and NOT as a functor. A `-hide`-en name can never be dual-declared
+(`_register_functor` refuses that collision head-on), so it always refuses.
+
+The `-import_from` half fixes a second live instance of this same silent bug:
+`-private([wrap])` + `-import_from(owner, [wrap])` + `c(wrap(1))` emitted
+`Call(func='wrap', …)` before and emits `LoadName(name='owner.wrap')` now
+(verified against the branch base `dd0a8ad2`).
+
+**2. What is NOT closed (review M-1).** The todo's headline CROSS-MODULE case
+is still open:
+
+```
+owner:     -module(owner, [verdict, …])          # 'verdict' is an atom here
+importer:  -import_from(owner, [verdict])
+           c(verdict(1)),
+```
+
+The importer's own atom set does not contain `verdict` (an `-import_from`
+records the name in `_import_remap`/`_imported_functors`, never in `_atoms`),
+so this check cannot see it. The importer LOADS and fails at the first call
+with `TypeError: 'str' object is not callable` raised from `<template>` —
+verified on this branch after the fix. That is LOUD, so it is out of the silent
+class this todo was filed for, but it is unlocated: no file, no line, no name
+of the offending declaration.
+
+So, precisely:
+
+* **Covered:** same-module declarations — `-module` bare entries, `-private`,
+  `-hide` — in head and body position, plus the dual-declared and
+  import-shadowed lowerings above.
+* **Not covered:** applying an atom imported from another module. Loud but
+  unlocated; would need the importer to consult the OWNER's registry (the
+  signature registry knows `verdict` has no functor signature) at the
+  `-import_from` site or at the call site. Filed here rather than reopened,
+  since the silent-failure class the todo names is closed.

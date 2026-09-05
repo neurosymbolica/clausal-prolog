@@ -16,7 +16,11 @@ from typing import Any, Callable
 from clausal.terms import And, Call, Compound, KWTerm, LoadName, PyThunk
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
 from clausal.logic.cells import TUPLE_TAG
-from clausal.logic.exceptions import LogicException, permission_error
+from clausal.logic.exceptions import (
+    LogicException,
+    existence_error,
+    permission_error,
+)
 from clausal.logic.predicate import (
     PredicateMeta,
     describe_term_identity_mismatch,
@@ -584,11 +588,16 @@ class Database:
         if backend != DEFAULT_BACKEND:
             installer = _BACKEND_INSTALLERS.get(backend)
             if installer is None:
-                raise LookupError(
-                    f"backend {backend!r} chosen for {functor}/{arity} is not "
-                    f"registered — call Database.register_backend({backend!r}, "
-                    f"installer) first"
-                )
+                # Through the engine's error family, like every other refusal
+                # in this file (P3-3 Task 4 fix round 1): an ISO
+                # ``existence_error(backend, Name)`` a ``catch/3`` can see,
+                # not a stray Python builtin.
+                raise LogicException(existence_error(
+                    "backend", backend,
+                    f"backend_dispatch: backend {backend!r} chosen for "
+                    f"{functor}/{arity} is not registered — call "
+                    f"Database.register_backend({backend!r}, installer) first",
+                ))
             replacement = installer(row, fn)
             if replacement is not None:
                 row.backend = backend

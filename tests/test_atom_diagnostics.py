@@ -254,3 +254,92 @@ def test_an_atom_applied_as_a_functor_in_a_body_is_refused_too():
             "C(Y) <- (Y is bound2(5))\n",
         )
     assert "bound2" in str(exc_info.value)
+
+
+def test_a_name_declared_as_BOTH_atom_and_functor_applies_as_the_functor():
+    """Fix round 1, I-1.  ``-module(c2, [dual, dual(G), c(X)])`` declares the
+    same spelling as a 0-arity atom AND as a 1-ary functor -- a legal, live
+    configuration: ``dual/1`` answers.  The applied form must lower as the
+    FUNCTOR, so the refusal above (which reads only the atom set) must not
+    fire, and the remedy it prescribes must not be the declaration the module
+    already carries.  The previous bare-``str`` lowering was the bug here, not
+    the dual declaration."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+
+    mod = _load_inline_clausal(
+        "_t4f1_dual_declared",
+        "-module(t4f1_dual_declared, [dual, dual(G), c(X)])\n"
+        "dual(1),\n"
+        "c(X) <- dual(X),\n",
+    )
+    x = Var()
+    assert [deref(x) for _ in call(mod.c, x)] == [1]
+
+
+def test_a_dual_declared_name_nested_in_a_head_arg_builds_the_functor_term():
+    """The other half of I-1: nested in a head argument, the dual-declared
+    name must build the functor's own term, not leak a ``Call`` AST node the
+    way the pre-fix silent lowering did (``c(dual(1))`` answered
+    ``Call(func='dual', args=[1], kwargs=[])``)."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    from clausal.pythonic_ast.nodes import Call as CallNode
+    from clausal.logic.builtins._helpers import functor_arity
+
+    mod = _load_inline_clausal(
+        "_t4f1_dual_nested",
+        "-module(t4f1_dual_nested, [dual, dual(G), c(X)])\n"
+        "dual(1),\n"
+        "c(dual(1)),\n",
+    )
+    x = Var()
+    answers = [deref(x) for _ in call(mod.c, x)]
+    assert len(answers) == 1
+    assert not isinstance(answers[0], CallNode), (
+        f"compiler AST node leaked into user data: {answers[0]!r}")
+    # The functor's own term, whichever representation the declaration gave
+    # it -- a dual declaration keeps ``dual`` bound to its minted class, so
+    # this is a class instance rather than a cell.  What matters is that it
+    # is the ``dual/1`` term and not a compiler node.
+    assert functor_arity(answers[0]) == ("dual", 1)
+
+
+def test_an_atom_only_name_applied_as_a_functor_still_raises():
+    """The refusal keeps firing for a name declared as an atom and NOT as a
+    functor -- the case the todo filed."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_inline_clausal(
+            "_t4f1_atom_only",
+            "-module(t4f1_atom_only, [C(X)])\n"
+            "-private([lonely])\n"
+            "C(lonely(G)) <- (G is 2)\n",
+        )
+    assert "lonely" in str(exc_info.value)
+
+
+def test_an_imported_functor_shadowed_by_a_local_atom_decl_applies_as_the_functor():
+    """Fix round 1, the ``-import_from`` half of I-1.  An IMPORTED functor is
+    "declared as a functor" too, so a local ``-private`` of the same spelling
+    must not turn its applied form into the bare-``str`` lowering.  Pinned at
+    the AST level (the owner module need not exist for the rewrite): the func
+    position must be the DOTTED reference ``visit_Name``'s import-remap branch
+    would emit, which is what makes the call resolve.  Before this fix the same
+    source emitted ``Call(func='atomfn_wrap', …)``."""
+    import ast as _ast
+    import warnings as _warnings
+
+    from clausal.import_hook import EmbedTransformer
+
+    source = (
+        "-private([atomfn_wrap])\n"
+        "-import_from(other.mod, [atomfn_wrap])\n"
+        "C(atomfn_wrap(1)),\n"
+    )
+    with _warnings.catch_warnings():
+        _warnings.filterwarnings("ignore", category=SyntaxWarning)
+        tree = _ast.parse(source)
+        EmbedTransformer().visit(tree)
+    rendered = _ast.unparse(_ast.fix_missing_locations(tree))
+    assert "LoadName(name='other.mod.atomfn_wrap'" in rendered
+    assert "func='atomfn_wrap'" not in rendered

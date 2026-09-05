@@ -1179,7 +1179,8 @@ class TermTransformer(NodeTransformer):
     def __init__(transformer, atoms=frozenset(), import_remap=None,
                  source_lines=None, bare_atom_refs=None,
                  logic_var_refs=None, constants=frozenset(), filename=None,
-                 reify=False, hidden_atoms=frozenset(), module_name=None):
+                 reify=False, hidden_atoms=frozenset(), module_name=None,
+                 declared_functors=None):
         transformer.seen_vars = set()
         # Reflection models MORE than compiles: ``reify_source`` reuses this
         # transformer but must keep accepting shapes the compiler refuses —
@@ -1203,6 +1204,15 @@ class TermTransformer(NodeTransformer):
         # BEFORE the general ``atoms`` membership check so a hidden name
         # substitutes the mangled ``Constant`` instead of the plain one.
         transformer._hidden_atoms = hidden_atoms
+        # P3-3 Task 4 fix round 1 (I-1): the EmbedTransformer's LIVE
+        # ``_seen_functors`` dict (functor name -> field names), not a copy --
+        # a functor registered later in the file is visible here the moment it
+        # is registered.  Read by ``_visit_call_func`` only, to tell a name
+        # declared as an atom AND as a functor (whose applied form is the
+        # FUNCTOR) from one declared as an atom alone (whose applied form is a
+        # mistake).
+        transformer._declared_functors = (
+            declared_functors if declared_functors is not None else {})
         transformer._module_name = module_name
         # -constants (Task 5): names bound to a ground value before any
         # clause statement executes. A plain Name reference to one embeds
@@ -1281,20 +1291,44 @@ class TermTransformer(NodeTransformer):
         # func position lowered to ``Call(func='bound2', ...)`` -- a shape
         # every downstream ``isinstance(func, LoadName)`` branch skips, so the
         # clause was present, indexed and unmatchable in a head and the AST
-        # node leaked into user data in a body, both SILENTLY.  Refuse it here,
-        # where the name is still attributable to its own line.
+        # node leaked into user data in a body, both SILENTLY.
+        #
+        # Fix round 1 (I-1): a spelling can be declared as BOTH -- ``-module(m,
+        # [dual, dual(G)])`` is legal and live, and its ``dual/1`` answers.
+        # For a dual-declared name the APPLIED form is the FUNCTOR (it is the
+        # bare-``str`` lowering that was wrong, not the declaration), so the
+        # atom branch is bypassed here and the functor reference emitted
+        # directly -- ``visit_Name`` cannot do it, because its atom test runs
+        # before its import-remap and fallthrough branches.  The refusal is
+        # left for a name declared as an atom and NOT as a functor, which is
+        # the case the todo filed.  A ``-hide``-en name can never be
+        # dual-declared (``_register_functor`` refuses that collision head-on),
+        # so it always refuses.
         if isinstance(func_expr, Name) and (
             func_expr.id in transformer._hidden_atoms
             or func_expr.id in transformer.atoms
         ):
+            identifier = func_expr.id
+            if identifier not in transformer._hidden_atoms:
+                # An imported functor is "declared as a functor" too, and its
+                # reference is the DOTTED remap ``visit_Name`` would emit.
+                dotted = transformer._import_remap.get(identifier)
+                if dotted is not None:
+                    return node_ast(
+                        "LoadName", func_expr,
+                        name=replace(Constant(value=dotted), func_expr))
+                if identifier in transformer._declared_functors:
+                    return node_ast(
+                        "LoadName", func_expr,
+                        name=replace(Constant(value=identifier), func_expr))
             lineno = getattr(func_expr, "lineno", None)
             where = (f"{transformer._filename}:{lineno}"
                      if transformer._filename else f"line {lineno}")
             raise SyntaxError(
-                f"{where}: `{func_expr.id}` is declared as an atom (a bare "
+                f"{where}: `{identifier}` is declared as an atom (a bare "
                 f"name in -module, or -private/-hide) but is applied as a "
                 f"functor here.  Declare it with arguments in the -module "
-                f"functor list (e.g. `{func_expr.id}(X)`), or reference it "
+                f"functor list (e.g. `{identifier}(X)`), or reference it "
                 f"bare as the atom it is."
             )
         prev = transformer._suppress_bare_atom_collection
@@ -1659,6 +1693,9 @@ class TermTransformer(NodeTransformer):
             constants=transformer.constants,
             filename=transformer._filename,
             reify=transformer._reify,
+            hidden_atoms=transformer._hidden_atoms,
+            module_name=transformer._module_name,
+            declared_functors=transformer._declared_functors,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
         # Shared object (not a copy): occurrences inside the lambda body
@@ -4177,6 +4214,7 @@ class EmbedTransformer(NodeTransformer):
             reify=transformer._reify,
             hidden_atoms=transformer._hidden_atoms,
             module_name=transformer._module_name,
+            declared_functors=transformer._seen_functors,
         )
 
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
