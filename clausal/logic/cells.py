@@ -12,13 +12,27 @@ A *cell* is a plain Python ``tuple`` whose slot 0 identifies its shape:
     Python tuple as term data without slot 0 colliding with a real user
     value (a plain data tuple's own slot 0 could be anything; tagging with
     the ``tuple`` type itself sidesteps that).
-  - an unbound ``Var`` -> ``(X, a, b)``   a higher-order / not-yet-resolved
-    functor slot; unifies against a same-shape cell and binds ``X`` to the
-    other cell's functor (see ``tests/test_cells.py``, and the
-    higher-order guard test in particular).
 
 Nothing else may occupy slot 0 -- ``make_cell`` enforces this; ``is_cell``
 recognizes it.
+
+Phase 3 Task 5 (§1b, ``implementation_plans/tagged-tuple-term-representation.md``):
+an unbound-``Var`` functor slot -- the bridge's higher-order/not-yet-resolved
+cell, ``(X, a, b)`` -- is DEPRECATED and no longer part of this domain.
+It caused the bridge's one Critical (a cell built with a Var functor
+vanished from recognition the instant ``unify`` bound that functor, because
+recognition dereferenced slot 0 and the bound value could be anything),
+imposed a permanent deref on every recognition site, and permitted category
+instability (``(F, 1)`` flipping from compound to tuple-data if ``F`` binds
+to the ``tuple`` type). Higher-order metaprogramming over cells routes
+through ``functor/3`` / ``=../2`` / ``call/N`` instead (P3-3; ISO's own
+trade-off). A tuple whose slot 0 is a Var (bound or not) is therefore not a
+cell at all -- it falls through to plain-tuple handling everywhere, the
+same as a tuple tagged with an ``int`` or any other non-str, non-``tuple``
+value. ``make_cell`` raises ``TypeError`` for a Var functor same as any
+other invalid one; every recognition site (``is_cell``, the funnel
+accessors, ``head_match``, the head walker, the list-dispatch gates) reads
+slot 0 RAW -- no deref, ever, on this path.
 
 BRIDGE-ENTRY RULING (ledgered in the Phase 2 bridge plan's Global
 Constraints): ``is_cell`` does NOT require ``sys.intern``'d functors --
@@ -31,16 +45,18 @@ convenience only (fewer distinct string objects, marginally faster
 compares in practice) -- ``is_cell`` and every accessor here accept ANY
 ``str`` in slot 0, interned or not.
 
-KNOWN AMBIGUITY (accepted, not solved, per the same ruling): a plain user
-tuple whose slot 0 happens to be a ``str`` -- e.g. ``("hello", 1)`` meant
-as ordinary tuple data, not a cell -- is indistinguishable from a cell by
-shape alone. This bridge stage accepts that ambiguity rather than solving
-it: ``is_cell`` answers ``True`` for such a tuple, and the funnel
-accessors in ``clausal/logic/builtins/_helpers.py`` therefore treat it as
-a cell too. Callers that need a real disambiguation between "cell" and
-"plain tuple that happens to start with a str" must gate on something
-other than shape -- an explicit call site, or a compile-time signature --
-not on ``is_cell`` alone.
+THE DISCIPLINE (formerly documented here as an accepted "known ambiguity",
+now the rule per §1b's slot-0 narrowing): every runtime tuple IS a cell --
+a plain user tuple whose slot 0 happens to be a ``str`` -- e.g. ``("hello",
+1)`` meant as ordinary tuple data, not a compound -- is a str-functor cell
+by shape, full stop, and ``is_cell``/the funnel accessors in
+``clausal/logic/builtins/_helpers.py`` treat it as one. There is no
+narrower "is this REALLY a cell" test to fall back on; a caller that needs
+"plain tuple data, not a compound" must use the ``TUPLE_TAG``-tagged form
+(``make_tuple_cell``) rather than a bare str-first tuple. The residual
+untagged shapes this bridge stage still has -- ``dict``/``set`` pairs, which
+carry no slot-0 tag at all -- are Phase 4's business (pair migration,
+per the plan's roadmap), not this module's.
 
 Cells ride the *existing* C unify/walk tuple branches unchanged (they are
 just tuples): this module adds no C code and no new representation
@@ -73,9 +89,22 @@ __all__ = [
     "set_intern_enabled",
 ]
 # NOTE: `_cell_shape` is intentionally NOT in __all__ (internal helper) but
-# IS imported directly by clausal/logic/builtins/_helpers.py -- the same
-# "leading-underscore, cross-module funnel helper" convention that module
-# already uses for _functor_name/_arity/etc. See _cell_shape's docstring.
+# IS imported directly by other modules that need to test "is this
+# cell-shaped" without a second read of slot 0 -- the same
+# "leading-underscore, cross-module funnel helper" convention that
+# `_helpers.py` already uses for _functor_name/_arity/etc. Importers, all
+# routing raw slot-0 checks through this ONE predicate rather than
+# re-spelling "type(x) is tuple and (type(x[0]) is str or x[0] is
+# TUPLE_TAG)" locally (P3-2 Task 5 carry-forward consolidation):
+#   - clausal/logic/builtins/_helpers.py (the funnel -- inlines the str-only
+#     compound check directly, see `_cell_functor`, since it additionally
+#     needs to exclude TUPLE_TAG from "compound")
+#   - clausal/logic/builtins/database_ops.py (`_reject_cell_head`)
+#   - clausal/logic/compiler/head_match.py (the live-cell branch)
+#   - clausal/logic/compiler/globals_env.py (`_walk_head`'s cell branch)
+#   - clausal/logic/compiler/list_dispatch.py (the head-literal/deep-gate
+#     helpers)
+# See _cell_shape's docstring.
 
 
 # The tag used in slot 0 for a "tuple as term data" cell: ``(tuple, e1,
@@ -123,37 +152,33 @@ FUNCTOR_SIGNATURES_KEY = "__clausal_functor_signatures__"
 CELLS_NAMESPACE_KEY = "$cells"
 
 
-def _valid_functor_slot(resolved_slot0: Any) -> bool:
-    """True if *resolved_slot0* is a legal cell slot-0 value (the
-    bridge-entry ruling).
+def _valid_functor_slot(slot0: Any) -> bool:
+    """True if *slot0* is a legal cell slot-0 value (the bridge-entry
+    ruling, narrowed by §1b/Task 5): a ``str`` functor or the ``tuple``
+    type object. Nothing else -- a Var functor is DEPRECATED (see the
+    module docstring) and no longer legal here.
 
-    *resolved_slot0* must already be dereferenced by the caller (see
-    ``_cell_shape`` below) -- this function does not deref, so it can be
-    reused without paying for a second deref of the same value.
+    *slot0* is read RAW by the caller (see ``_cell_shape`` below) -- this
+    function never derefs.
     """
-    return isinstance(resolved_slot0, str) or resolved_slot0 is TUPLE_TAG or is_var(resolved_slot0)
+    return isinstance(slot0, str) or slot0 is TUPLE_TAG
 
 
 def _cell_shape(x: Any) -> tuple[bool, Any]:
-    """Return ``(is_cell, resolved_slot0)`` for *x*.
+    """Return ``(is_cell, slot0)`` for *x*, reading slot 0 RAW.
 
-    Dereferences slot 0 EXACTLY ONCE (review fix, finding #1: a cell's
-    slot 0 must be inspected post-deref, not raw -- a cell built with an
-    unbound Var functor that has since been bound by ``unify`` must not
-    vanish from cell recognition just because its functor slot resolved).
-    ``is_cell`` is defined in terms of this; the funnel accessors in
+    §1b/Task 5: NO deref, ever, on this recognition path -- the bridge's
+    slot-0-Var (higher-order functor) support is deprecated precisely
+    because it required one (see the module docstring). ``is_cell`` is
+    defined in terms of this; the funnel accessors in
     ``clausal/logic/builtins/_helpers.py`` import this directly (rather
-    than calling ``is_cell`` and then re-deref'ing slot 0 themselves) so a
-    single top-level accessor call never dereferences slot 0 twice.
-
-    For an unbound Var, ``deref`` is a no-op (returns the Var itself); for
-    a bound Var, it returns the walked-to value. Either way this is one
-    (cheap, C-implemented) call.
+    than calling ``is_cell`` and then re-inspecting slot 0 themselves) so
+    a single top-level accessor call inspects slot 0 exactly once.
     """
     if type(x) is not tuple or len(x) < 1:
         return False, None
-    resolved = deref(x[0])
-    return _valid_functor_slot(resolved), resolved
+    slot0 = x[0]
+    return _valid_functor_slot(slot0), slot0
 
 
 def make_cell(functor: Any, *args: Any) -> tuple:
@@ -166,22 +191,24 @@ def make_cell(functor: Any, *args: Any) -> tuple:
         require this, ``make_cell`` does it only to make repeated
         same-functor cells cheaper to compare/store).
       - ``TUPLE_TAG`` (the ``tuple`` type object) -- for tuple-as-data cells.
-      - an unbound ``Var`` -- a higher-order / not-yet-resolved functor slot.
 
-    Anything else (``int``, a class other than ``tuple``, ``None``, ...)
-    raises ``TypeError``.
+    Anything else (``int``, a class other than ``tuple``, ``None``, an
+    unbound or bound ``Var``, ...) raises ``TypeError``. A ``Var`` functor
+    is DEPRECATED per §1b (see the module docstring) -- it is no longer a
+    legal slot-0 value, regardless of whether it is bound: higher-order
+    metaprogramming over cells routes through ``functor/3`` / ``=../2`` /
+    ``call/N`` instead (P3-3).
     """
     if isinstance(functor, str):
         functor = sys.intern(functor)
     elif functor is TUPLE_TAG:
         pass
-    elif is_var(functor):
-        pass
     else:
         raise TypeError(
-            "make_cell: functor must be a str, the `tuple` type object "
-            f"(TUPLE_TAG), or an unbound Var; got {functor!r} "
-            f"({type(functor).__name__})"
+            "make_cell: functor must be a str or the `tuple` type object "
+            f"(TUPLE_TAG); got {functor!r} ({type(functor).__name__}) -- "
+            "a Var functor is deprecated (§1b), use functor/3 or =../2 for "
+            "higher-order construction over cells"
         )
     return (functor, *args)
 
@@ -202,28 +229,30 @@ def is_cell(x: Any) -> bool:
     A cell is a non-empty ``tuple`` (exactly ``type(x) is tuple`` -- a
     ``tuple`` subclass, e.g. a namedtuple, is deliberately excluded; term
     instances in this engine are dataclasses / ``PredicateMeta`` instances,
-    never tuple subclasses, so this cannot collide with them) whose
-    DEREFERENCED slot 0 is a ``str``, the ``tuple`` type object, or an
-    unbound ``Var`` -- a cell built with an unbound Var functor that has
-    since been bound (by ``unify``) is still a cell, recognized by its
-    slot 0's current, walked-to value (review fix, finding #1).
+    never tuple subclasses, so this cannot collide with them) whose slot 0,
+    read RAW (no deref -- §1b/Task 5), is a ``str`` or the ``tuple`` type
+    object. A Var functor -- bound or not -- is DEPRECATED (see the module
+    docstring) and is no longer cell-shaped at all: a tuple built with one
+    falls through to plain-tuple handling everywhere, the same as any
+    other non-str, non-``tuple`` tag.
 
-    This is a SHAPE-only test -- see the module docstring's KNOWN
-    AMBIGUITY note: a plain user tuple like ``("hello", 1)`` also answers
-    ``True`` here. That is accepted for this bridge stage, not a bug.
+    This is a SHAPE-only test -- see the module docstring's THE DISCIPLINE
+    note: a plain user tuple like ``("hello", 1)`` also answers ``True``
+    here. That is the rule for this bridge stage, not a bug.
     """
     return _cell_shape(x)[0]
 
 
 def cell_functor(c: tuple) -> Any:
-    """Return the functor slot (slot 0) of cell *c*, dereferenced.
+    """Return the functor slot (slot 0) of cell *c*, read RAW.
 
-    An unbound-Var functor slot derefs to itself (returned as the Var);
-    a bound one derefs to its walked-to value (review fix, finding #1).
-    No shape validation -- callers that don't already know *c* is
-    cell-shaped should check ``is_cell(c)`` first.
+    §1b/Task 5: no deref -- a legally-constructed cell's slot 0 is always
+    already a ``str`` or the ``tuple`` type object (``make_cell`` enforces
+    this; a Var functor is deprecated and never reaches here). No shape
+    validation -- callers that don't already know *c* is cell-shaped
+    should check ``is_cell(c)`` first.
     """
-    return deref(c[0])
+    return c[0]
 
 
 def cell_args(c: tuple) -> tuple:

@@ -8,6 +8,17 @@ list-guard checks for those positions (``_build_list_dispatch_guard``).
 ``_lift_clause_at_pos`` rewrites a clause so the given position is a
 wildcard capture whose structure is checked at runtime instead of in
 the match pattern — used together with ``_build_list_dispatch_guard``.
+
+P3-2 Task 5 carry-forward consolidation: every raw cell-shape test in this
+module (``_carries_an_uninjected_head_literal``, the raw-cell gate in
+``_lift_clause_at_pos``, ``_nested_term_carries_a_literal``,
+``_lifted_head_arg_needs_deep_gate``) routes through
+``cells._cell_shape`` rather than re-spelling ``type(x) is tuple and
+(type(x[0]) is str or x[0] is TUPLE_TAG)`` locally — one home for the
+shape discipline, shared with ``head_match``'s live-cell branch and
+``globals_env._walk_head``'s cell branch. No behavior change: a Var
+functor is no longer part of the recognized domain at all (§1b), so this
+was always a pure str-or-``TUPLE_TAG`` test even before the fold.
 """
 
 from __future__ import annotations
@@ -34,7 +45,7 @@ from .head_match import (
 from .terms_to_ast import (  # noqa: F401
     term_to_ast_expr, cell_signature_for_name, _is_opaque_head_literal,
 )
-from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.cells import _cell_shape
 from .arg_index import _bytelist_to_bytes_or_none
 
 
@@ -104,8 +115,7 @@ def _carries_an_uninjected_head_literal(term: Any) -> bool:
         return any(_carries_an_uninjected_head_literal(a) for a in term.args)
     if isinstance(term, list):
         return any(_carries_an_uninjected_head_literal(e) for e in term)
-    if type(term) is tuple and term and (
-            isinstance(term[0], str) or term[0] is TUPLE_TAG):
+    if _cell_shape(term)[0]:
         return any(_carries_an_uninjected_head_literal(e) for e in term[1:])
     return _is_opaque_head_literal(term)
 
@@ -330,8 +340,7 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
     # cell-valued position builds no buckets at all and nothing calls the
     # lift on one.  It goes live the moment a producer or Task 4 changes
     # that, which is why the gate is here now instead of in a todo.
-    if type(lift_term) is tuple and lift_term and (
-            isinstance(lift_term[0], str) or lift_term[0] is TUPLE_TAG):
+    if _cell_shape(lift_term)[0]:
         if _carries_an_uninjected_head_literal(lift_term):
             return clause
 
@@ -371,8 +380,8 @@ def _nested_term_carries_a_literal(term):
     if isinstance(term, StarUnpack):
         return False
     if type(term) is tuple and term:
-        slot0 = term[0]
-        start = 1 if (type(slot0) is str or slot0 is TUPLE_TAG) else 0
+        is_cell, _slot0 = _cell_shape(term)
+        start = 1 if is_cell else 0
         return any(_nested_term_carries_a_literal(e) for e in term[start:])
     if isinstance(term, Call) and isinstance(term.func, (LoadName, LoadAttr)):
         return (
@@ -439,9 +448,7 @@ def _lifted_head_arg_needs_deep_gate(term):
     """
     if is_var(term):
         return False
-    if type(term) is tuple and term and (
-        type(term[0]) is str or term[0] is TUPLE_TAG
-    ):
+    if _cell_shape(term)[0]:
         return any(_nested_term_carries_a_literal(e) for e in term[1:])
     if isinstance(term, Call) and isinstance(term.func, (LoadName, LoadAttr)):
         return (

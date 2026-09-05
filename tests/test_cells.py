@@ -15,8 +15,13 @@ Three groups:
   - ``TestCellUnificationBoundary`` — guard tests proving cells unify
     through the REAL ``unify`` from ``clausal.logic.variables`` (the
     existing C tuple branch), not a reimplementation: same-shape
-    str-functor cells bind, mismatched functor/tag/arity fails, and the
-    higher-order slot-0-Var case binds the functor itself.
+    str-functor cells bind, mismatched functor/tag/arity fails. P3-2 Task
+    5 (§1b): the former higher-order slot-0-Var case (a cell's functor
+    slot binding via ordinary element-wise tuple unify) is retained here
+    ONLY as a raw-tuple-unify property — ``make_cell`` itself now rejects
+    a Var functor, and the resulting tuple, once built by hand, is no
+    longer recognized as a cell by anything (see
+    ``test_higher_order_slot0_var_unifies_but_is_no_longer_recognized_as_a_cell``).
   - ``TestConsRuleBoundaryDeferral`` — documents (does not fix) the
     Phase-3-deferred interaction between a str functor and the engine's
     str~char-list cons-rule unification path.
@@ -77,12 +82,17 @@ class TestCellPrimitives:
         assert c == (tuple, 1, 2, 3)
         assert c == make_tuple_cell(1, 2, 3)
 
-    def test_make_cell_var_functor(self):
-        # nv
+    def test_make_cell_rejects_unbound_var_functor(self):
+        # INVERTED (P3-2 Task 5, §1b): the bridge's higher-order slot-0-Var
+        # functor is DEPRECATED — it caused the bridge's one Critical
+        # (recognition vanished the instant the functor bound), imposed a
+        # deref on every recognition, and permitted category instability.
+        # ``make_cell`` now rejects a Var functor same as any other invalid
+        # one. (Formerly ``test_make_cell_var_functor``, asserting
+        # ``make_cell(v, 1, 2) == (v, 1, 2)``.)
         v = Var()
-        c = make_cell(v, 1, 2)
-        assert c == (v, 1, 2)
-        assert c[0] is v
+        with pytest.raises(TypeError):
+            make_cell(v, 1, 2)
 
     def test_make_cell_rejects_int_functor(self):
         # nv — slot-0 ruling enforcement
@@ -107,20 +117,29 @@ class TestCellPrimitives:
         with pytest.raises(TypeError):
             make_cell(3.14)
 
-    def test_make_cell_rejects_bound_var_is_still_accepted(self):
-        # nv — is_var derefs first; a Var that IS bound derefs to its
-        # binding, so a "Var" that resolves to e.g. a str is accepted (it
-        # derefs to a legal slot-0 shape via the str branch's own check on
-        # the bound value)... but a Var bound to an int does NOT satisfy
-        # is_var (derefs to an int) and is not itself str/TUPLE_TAG, so it
-        # is correctly rejected. Documents is_var's deref-first contract
-        # rather than asserting new behavior.
+    def test_make_cell_rejects_bound_var_functor_regardless_of_binding(self):
+        # INVERTED (P3-2 Task 5, §1b): ``make_cell`` no longer derefs or
+        # special-cases a Var functor at all — a Var is rejected whether
+        # unbound OR bound, and regardless of what it is bound to (even a
+        # value that would itself be a legal slot-0 shape, e.g. a str).
+        # (Formerly ``test_make_cell_rejects_bound_var_is_still_accepted``,
+        # which documented ``is_var``'s deref-first contract for a
+        # bound-to-int Var; that contract is no longer relevant here since
+        # make_cell never calls ``is_var`` on the functor any more.)
         v = Var()
         trail = Trail()
         unify(v, 42, trail)
         assert is_var(v) is False  # bound to a non-var: no longer "a Var"
         with pytest.raises(TypeError):
             make_cell(v, 1, 2)
+
+        # Even a Var bound to a LEGAL slot-0 shape (a str) is still
+        # rejected: make_cell inspects the functor object itself, never
+        # its walked-to value.
+        f = Var()
+        unify(f, "point", trail)
+        with pytest.raises(TypeError):
+            make_cell(f, 1, 2)
 
     def test_make_tuple_cell(self):
         # nv
@@ -142,9 +161,16 @@ class TestCellPrimitives:
         # boundary) is still a legal (if empty) tuple-DATA cell.
         assert is_cell((tuple,)) is True
 
-    def test_is_cell_true_for_var_functor(self):
-        # nv
-        assert is_cell((Var(), 1, 2)) is True
+    def test_is_cell_false_for_var_functor(self):
+        # INVERTED (P3-2 Task 5, §1b): a Var-functor tuple is no longer
+        # cell-shaped at all — it falls through to plain-tuple handling
+        # everywhere, unbound or bound, same as any other non-str,
+        # non-``tuple`` slot-0 tag. (Formerly
+        # ``test_is_cell_true_for_var_functor``, asserting ``True``.)
+        assert is_cell((Var(), 1, 2)) is False
+        bound = Var()
+        unify(bound, "point", Trail())
+        assert is_cell((bound, 1, 2)) is False
 
     def test_is_cell_false_for_empty_tuple(self):
         # nv — len >= 1 required
@@ -197,10 +223,14 @@ class TestCellPrimitives:
         assert cell_args(c) == ()
         assert cell_arity(c) == 0
 
-    def test_known_ambiguity_plain_str_tuple_is_a_cell_by_shape(self):
-        # nv — documented, accepted ambiguity: a plain tuple that happens
-        # to start with a str is indistinguishable from a cell by is_cell
-        # alone. Not a bug; see cells.py's module docstring.
+    def test_the_discipline_plain_str_tuple_is_a_cell_by_shape(self):
+        # RE-WORDED (P3-2 Task 5, §1b), same assertion: what was
+        # documented as an accepted "known ambiguity" (a plain tuple that
+        # happens to start with a str is indistinguishable from a cell by
+        # is_cell alone) is now THE DISCIPLINE per the slot-0 narrowing —
+        # every runtime tuple whose slot 0 is a str IS a cell, full stop.
+        # See cells.py's module docstring. (Formerly
+        # ``test_known_ambiguity_plain_str_tuple_is_a_cell_by_shape``.)
         plain_user_tuple = ("hello", 1)
         assert is_cell(plain_user_tuple) is True
 
@@ -245,40 +275,51 @@ class TestCellUnificationBoundary:
         assert unify(make_tuple_cell(x, 2), make_tuple_cell(1, 2), trail) is True
         assert deref(x) == 1
 
-    def test_higher_order_slot0_var_binds_to_other_cells_functor(self):
-        # nv — unify((F, 1), ("f", 1)) binds F="f". The higher-order case:
-        # a cell whose functor slot is itself an unbound Var unifies
-        # element-wise (slot 0 included) against a same-shape cell, which
-        # binds the Var to the concrete functor string.
+    def test_higher_order_slot0_var_unifies_but_is_no_longer_recognized_as_a_cell(self):
+        # INVERTED (P3-2 Task 5, §1b): the bridge's higher-order cell
+        # (a Var-functor slot that unify binds element-wise, same as any
+        # other tuple slot) is DEPRECATED. ``make_cell`` no longer builds
+        # one at all (see ``TestCellPrimitives::
+        # test_make_cell_rejects_unbound_var_functor``), so this test now
+        # builds the raw tuple directly, bypassing ``make_cell``, to prove
+        # the underlying property this test always cared about first: raw
+        # tuple unify (the existing C tuple branch) does not care whether
+        # slot 0 is a legal cell tag — it unifies element-wise regardless,
+        # binding the Var to the peer's functor string exactly as before.
         #
-        # Review fix (reviewer finding #1): the cell must NOT vanish from
-        # the recognition surface once its functor slot resolves. Before
-        # this fix, is_cell/cell_functor/the funnel accessors inspected
-        # slot 0 RAW (never deref'd), so c1's slot 0 was still the bound
-        # Var *object*, not its "f" value — is_cell(c1) flipped to False
-        # and _functor_name(c1) returned None the instant the bind
-        # succeeded, contradicting the unify this test itself just proved.
+        # What INVERTS is the recognition half. Formerly (review fix,
+        # finding #1): the cell must NOT vanish from the recognition
+        # surface once its functor slot resolves, because every accessor
+        # dereferenced slot 0. Now there is no such promise to keep — a
+        # slot-0-Var tuple is never a cell, bound or not, because
+        # recognition reads slot 0 RAW (no deref, anywhere, per §1b) — so
+        # c1 falls through to plain-tuple handling both before AND after
+        # the bind, uniformly.
         f = Var()
         trail = Trail()
-        c1 = make_cell(f, 1)
+        c1 = (f, 1)  # NOT built via make_cell -- see above
         c2 = make_cell("f", 1)
         assert unify(c1, c2, trail) is True
         assert deref(f) == "f"
-        # c1's tuple slot 0 is still the (now-bound) Var object -- these
-        # assertions require every recognition path to deref it.
-        assert is_cell(c1) is True
-        assert cell_functor(c1) == "f"
-        assert _functor_name(c1) == "f"
-        assert _is_compound(c1) is True
-        assert _arity(c1) == 1
+        # c1's tuple slot 0 is still the (now-bound) Var object -- every
+        # recognition path reads it RAW and answers "not a cell" both
+        # before and after the bind.
+        assert is_cell(c1) is False
+        assert _functor_name(c1) is None
+        assert _is_compound(c1) is False
+        assert _arity(c1) is None
 
-    def test_higher_order_slot0_var_mismatched_arity_fails(self):
-        # nv — the Var-functor slot doesn't rescue an arity mismatch; tuple
-        # unify checks length before/independently of binding slot 0.
+    def test_higher_order_slot0_var_functor_no_longer_constructible(self):
+        # INVERTED (P3-2 Task 5, §1b): the arity-mismatch scenario this
+        # test used to probe (``unify((F, 1), ("f", 1, 2))`` failing on
+        # length before slot 0 matters) required building a higher-order
+        # cell via ``make_cell`` — no longer possible, since ``make_cell``
+        # rejects a Var functor outright regardless of the intended arity.
+        # (Formerly ``test_higher_order_slot0_var_mismatched_arity_fails``.)
         f = Var()
-        trail = Trail()
-        assert unify(make_cell(f, 1), make_cell("f", 1, 2), trail) is False
-        assert is_var(f)  # nothing bound on failure
+        with pytest.raises(TypeError):
+            make_cell(f, 1)
+        assert is_var(f)  # nothing bound; make_cell raised before any unify
 
     def test_mismatched_args_fail_after_functor_matches(self):
         # nv — same functor, mismatched trailing arg
@@ -388,11 +429,21 @@ class TestInternCell:
         result = intern_cell(c)
         assert result is c
 
-    def test_non_ground_functor_slot_returned_unchanged(self):
-        # nv -- an unbound Var IN THE FUNCTOR SLOT also disqualifies (the
-        # higher-order cell case): no Var.__hash__ call, no caching.
+    def test_var_functor_tuple_is_not_a_cell_so_never_reaches_the_intern_walk(self):
+        # INVERTED (P3-2 Task 5, §1b): the higher-order cell case this test
+        # used to probe (an unbound Var in the functor slot disqualifying
+        # interning via the groundness walk) can no longer be built through
+        # ``make_cell`` at all. Built raw instead: the point now is that
+        # ``intern_cell`` short-circuits on ``is_cell(c)`` BEFORE the
+        # groundness walk (``_try_intern``) ever runs — a Var-functor tuple
+        # is not a cell, so it "never reaches ``intern_cell``'s [real, table
+        # touching] work" the same way a plain scalar or class term
+        # instance never does (see
+        # ``test_non_cell_passes_through_unchanged_and_untouched`` above).
+        # (Formerly ``test_non_ground_functor_slot_returned_unchanged``.)
         F = Var()
-        c = make_cell(F, 1, 2)
+        c = (F, 1, 2)  # NOT built via make_cell -- see above
+        assert is_cell(c) is False
         result = intern_cell(c)
         assert result is c
 

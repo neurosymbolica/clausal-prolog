@@ -35,7 +35,7 @@ from clausal.pythonic_ast.nodes import (
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, term_field_names_of_class, PredicateMeta,
 )
-from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY
+from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape
 
 from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -818,11 +818,18 @@ def head_to_match_pattern(
     #   (``database._is_structural_head_value``), not from the pattern — for
     #   cells and Compounds alike.
     #
-    # Slot 0 is read RAW, not deref'd: a bound-Var functor is not a shape this
-    # can decide, and it falls through to the wildcard the var-functor
-    # ``Compound`` branch also returns.  ``type(...) is tuple`` matches
-    # ``cells.is_cell``'s own domain — a tuple SUBCLASS (a namedtuple) is
-    # opaque data, not a cell (the exact-type ruling of Task 2C).
+    # Slot 0 is read RAW, via ``cells._cell_shape`` — no deref. §1b (P3-2
+    # Task 5): the bridge's higher-order Var-functor cell is deprecated
+    # precisely because recognizing it required a deref, so this was never
+    # a shape this branch could decide anyway; a slot-0-Var tuple now falls
+    # through to the wildcard the var-functor ``Compound`` branch also
+    # returns, uniformly with ``is_cell``'s own (equally raw) domain.
+    # ``_cell_shape``'s own ``type(x) is tuple`` matches ``cells.is_cell``'s
+    # domain — a tuple SUBCLASS (a namedtuple) is opaque data, not a cell
+    # (the exact-type ruling of Task 2C). Task 5 carry-forward: this is one
+    # of three sites folded onto ``_cell_shape`` as the shared cell-shape
+    # predicate (see cells.py's NOTE above ``_cell_shape``); the other two
+    # are ``globals_env._walk_head`` and ``list_dispatch``'s gate helpers.
     #
     # The tag test comes FIRST and the slots are recursed into only inside a
     # branch that RETURNS.  Recursing before deciding leaks: the recursion
@@ -833,8 +840,8 @@ def head_to_match_pattern(
     # pattern binds -- ``NameError: name '_ncap1' is not defined`` on the
     # first caller that reaches it.  Every early return in this cascade owns
     # its own recursion for the same reason.
-    if type(term) is tuple and term:
-        _tag = term[0]
+    _is_cell, _tag = _cell_shape(term)
+    if _is_cell:
         if isinstance(_tag, str):
             return _cell_match_pattern(_tag, [
                 head_to_match_pattern(a, var_context, dup_guards, list_guards,

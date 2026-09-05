@@ -311,46 +311,44 @@ except ImportError:
 # ``is_cell``-gated branch in FRONT of it is purely additive: nothing that
 # isn't cell-shaped can reach the new code at all.
 #
-# Per the task brief: only cells with a STR or unbound-Var functor are
-# treated as compound/decomposable, same as a Compound term. A
-# ``(tuple, ...)`` cell (``cells.TUPLE_TAG`` in slot 0) is tuple DATA, not
-# a compound — it is deliberately left to fall through to the same "not a
-# recognized shape" answer a plain tuple gets.
+# Per §1b (P3-2 Task 5): only a cell with a STR functor is treated as
+# compound/decomposable, same as a Compound term. A ``(tuple, ...)`` cell
+# (``cells.TUPLE_TAG`` in slot 0) is tuple DATA, not a compound — it is
+# deliberately left to fall through to the same "not a recognized shape"
+# answer a plain tuple gets. The bridge's unbound-Var-functor cell (a
+# higher-order, not-yet-resolved functor slot) is DEPRECATED per §1b — it
+# caused the bridge's one Critical, imposed a deref on every recognition,
+# and permitted category instability; see ``clausal/logic/cells.py``'s
+# module docstring for the full ruling. A slot-0-Var tuple is therefore
+# not cell-shaped at all any more and falls through to plain-tuple
+# handling here, same as any other non-str, non-``tuple`` tag.
 #
-# KNOWN AMBIGUITY (accepted, not solved — see ``clausal/logic/cells.py``'s
-# module docstring for the full ruling): a plain user tuple whose slot 0
-# happens to be a str (e.g. ``("hello", 1)``) is indistinguishable from a
-# str-functor cell by shape, and the branch below — gated on cell-shape
-# alone, as the plan requires — DOES change its accessor behavior (e.g.
-# ``_functor_name`` used to answer None for it, now answers ``"hello"``).
-# That is the documented bridge-stage tradeoff; pinned by a running test
+# THE DISCIPLINE (formerly documented here as an accepted "known
+# ambiguity" — see ``clausal/logic/cells.py``'s module docstring for the
+# full ruling): a plain user tuple whose slot 0 happens to be a str (e.g.
+# ``("hello", 1)``) is a str-functor cell by shape, full stop, and the
+# branch below treats it as one (e.g. ``_functor_name`` answers
+# ``"hello"`` for it). Pinned by a running test
 # (``tests/test_funnel_accessors.py::TestCellFunnelAwareness::
-# test_known_ambiguity_plain_str_tuple_pinned_by_running_assertions``).
+# test_the_discipline_plain_str_tuple_pinned_by_running_assertions``).
 #
-# Review fix (finding #1): slot 0 must be inspected DEREFERENCED, not raw
-# — a cell built with an unbound-Var functor that ``unify`` has since
-# bound must not vanish from recognition just because its functor slot
-# resolved. ``cells._cell_shape(term)`` derefs slot 0 exactly once and
-# hands back both "is this cell-shaped at all" and the resolved value;
-# ``_cell_functor`` below layers on "and is it COMPOUND" (str/Var, not
-# ``TUPLE_TAG``) without a second deref, and every accessor calls
-# ``_cell_functor`` exactly once — one deref of slot 0 per top-level
-# accessor call, never two.
-
-from clausal.logic.cells import TUPLE_TAG as _CELL_TUPLE_TAG, _cell_shape
-
+# §1b/Task 5: slot 0 is inspected RAW, never dereferenced — a legally
+# constructed cell's slot 0 is always already a str or ``TUPLE_TAG``
+# (``make_cell`` enforces this), so there is nothing to walk to.
+# ``_cell_functor`` below is the funnel's single top-level cell-shape
+# check — every accessor calls it exactly once per term, at most one
+# ``type()``/attribute read of slot 0 per accessor call.
 
 def _cell_functor(term: Any) -> tuple[bool, Any]:
-    """Return ``(is_compound_cell, resolved_functor)`` for *term*.
+    """Return ``(is_compound_cell, functor)`` for *term*, read RAW.
 
-    ``is_compound_cell`` is True only for a str or unbound-Var functor —
-    a ``(tuple, ...)`` tuple-DATA cell (resolved slot 0 is
-    ``cells.TUPLE_TAG``) is explicitly NOT compound, per the task brief.
-    Dereferences slot 0 at most once (via ``cells._cell_shape``).
+    ``is_compound_cell`` is True only for a str functor — a
+    ``(tuple, ...)`` tuple-DATA cell and a slot-0-Var tuple (deprecated,
+    §1b) are both explicitly NOT compound. No deref: compound iff
+    ``type(term) is tuple and term and type(term[0]) is str``.
     """
-    ok, f = _cell_shape(term)
-    if ok and f is not _CELL_TUPLE_TAG:
-        return True, f
+    if type(term) is tuple and term and type(term[0]) is str:
+        return True, term[0]
     return False, None
 
 
@@ -443,19 +441,17 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
     through ``functor_arity`` first.
 
     Phase 2 bridge Task 1: a str-functor cell resolves to ``(functor,
-    arity)`` same as a Compound. A ``(tuple, ...)`` tuple-DATA cell or an
-    unbound-Var-functor cell resolves to None — deliberately narrower here
-    than the composed ``_functor_name``/``_arity`` pair (which DOES resolve
-    a Var-functor cell's arity), mirroring the existing
-    Compound-with-Var-functor precedent above. Uses ``_cell_functor``
-    (single deref of slot 0, review fix finding #1) rather than inspecting
-    ``term[0]`` raw.
+    arity)`` same as a Compound. A ``(tuple, ...)`` tuple-DATA cell
+    resolves to None. P3-2 Task 5 (§1b): the bridge's unbound-Var-functor
+    cell is deprecated and no longer cell-shaped at all — a slot-0-Var
+    tuple now falls through this whole function the same as any other
+    plain tuple, resolving to None. ``_cell_functor`` is True only for a
+    str functor, so ``f`` is always a str once ``is_compound_cell`` is
+    True; no further check is needed.
     """
     is_compound_cell, f = _cell_functor(term)
     if is_compound_cell:
-        if isinstance(f, str):
-            return (f, len(term) - 1)
-        return None
+        return (f, len(term) - 1)
     if isinstance(term, Compound):
         if not isinstance(term.functor, str):
             return None

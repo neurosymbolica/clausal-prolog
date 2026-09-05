@@ -186,6 +186,52 @@ class TestAddAnswerCellInterning:
         assert e1.answers[0][0] == 99 == e2.answers[0][0]
         assert e1.answers[0][1] is e2.answers[0][1]
 
+    def test_a_ground_cell_answer_still_tables(self):
+        # nv (P3-2 Task 5 regression): the §1b slot-0 narrowing (Var
+        # functors deprecated) does not touch str/TUPLE_TAG cells at all --
+        # a ground str-functor cell answer still dedups and interns exactly
+        # as before. Guards against a narrowing regression accidentally
+        # widening ``is_cell``'s exclusions past Var functors.
+        from clausal.logic.cells import make_cell, set_intern_enabled
+
+        set_intern_enabled(True)
+        e1 = TableEntry()
+        e2 = TableEntry()
+        c1 = make_cell("cons", 1, "nil")
+        c2 = make_cell("cons", 1, "nil")
+        assert c1 is not c2
+
+        assert e1.add_answer((c1,)) == 0
+        assert e2.add_answer((c2,)) == 0
+        assert e1.answers[0][0] is e2.answers[0][0]  # interned to one object
+
+    def test_a_var_functor_tuple_answer_no_longer_reaches_intern_cell(self):
+        # nv (P3-2 Task 5, §1b): a Var-functor tuple is DEPRECATED as a
+        # cell -- ``is_cell`` now reads slot 0 raw and answers False for
+        # it, so ``add_answer``'s ``intern_cell(a) if is_cell(a) else a``
+        # gate takes the "else" branch: the tuple is passed straight
+        # through UNTOUCHED, the same as any other non-cell value (a class
+        # term, scalar, ...). It never reaches ``intern_cell`` -- and
+        # because ``intern_cell`` itself now also short-circuits on
+        # ``is_cell`` before touching the table (see
+        # ``tests/test_cells.py::TestInternCell::
+        # test_var_functor_tuple_is_not_a_cell_so_never_reaches_the_intern_walk``),
+        # this is true from either direction: the gate here never calls
+        # it, and it would have been a no-op even if it had.
+        from clausal.logic.cells import (
+            is_cell, is_intern_enabled, set_intern_enabled,
+        )
+
+        set_intern_enabled(True)
+        f = Var()
+        c1 = (f, 1, 2)  # a raw tuple -- NOT built via make_cell, not a cell
+        assert is_cell(c1) is False
+        e = TableEntry()
+
+        assert e.add_answer((c1,)) == 0
+        assert e.answers[0][0] is c1  # untouched -- never passed to intern_cell
+        assert is_intern_enabled() is True  # sanity: the switch really was on
+
 
 # ── Unit tests: key computation ───────────────────────────────────────────────
 

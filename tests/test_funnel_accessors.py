@@ -536,13 +536,20 @@ class TestPlainTupleAccessorRegression:
 class TestCellFunnelAwareness:
     """The additive cell branch in ``_helpers.py``'s funnel accessors.
 
-    KNOWN AMBIGUITY (documented, accepted, not a bug — see
-    ``clausal/logic/cells.py``): a plain user tuple whose slot 0 happens to
-    be a str (e.g. ``("hello", 1)``) is indistinguishable from a
-    str-functor cell by shape, and its accessor behavior DOES change here
-    (``_functor_name`` used to answer None for it; now answers ``"hello"``,
-    same as any other str-functor cell). That change is the documented
-    bridge-stage tradeoff, not something these tests pin against.
+    THE DISCIPLINE (see ``clausal/logic/cells.py``'s module docstring —
+    formerly documented here, and there, as an accepted "known ambiguity"):
+    a plain user tuple whose slot 0 happens to be a str (e.g. ``("hello",
+    1)``) IS a str-functor cell by shape, full stop, and its accessor
+    behavior reflects that (``_functor_name`` answers ``"hello"`` for it,
+    same as any other str-functor cell).
+
+    P3-2 Task 5 (§1b): the bridge's unbound-Var-functor cell (a
+    higher-order, not-yet-resolved functor slot) is DEPRECATED — it caused
+    the bridge's one Critical, imposed a deref on every recognition, and
+    permitted category instability. A slot-0-Var tuple is no longer
+    cell-shaped at all: the ``test_var_functor_tuple_*`` tests below build
+    it as a raw tuple (``make_cell`` now rejects a Var functor) and pin
+    that it falls through to plain-tuple handling everywhere.
     """
 
     def test_str_functor_cell_functor_name_and_arity(self):
@@ -607,48 +614,66 @@ class TestCellFunnelAwareness:
         assert _args_list(c) == []
         assert functor_arity(c) is None
 
-    def test_var_functor_cell_functor_name_returns_the_var(self):
-        # nv — task brief: "slot0-Var cells: _functor_name returns the Var"
+    def test_var_functor_tuple_functor_name_is_none(self):
+        # INVERTED (P3-2 Task 5, §1b): the bridge's higher-order slot-0-Var
+        # cell is DEPRECATED — ``make_cell`` now rejects a Var functor
+        # outright (see ``tests/test_cells.py``), so this builds the raw
+        # tuple directly. A slot-0-Var tuple is no longer cell-shaped at
+        # all: it falls through to the same plain-tuple answer any other
+        # non-str, non-``tuple`` tag gets. (Formerly
+        # ``test_var_functor_cell_functor_name_returns_the_var``, asserting
+        # ``_functor_name(c) is v``.)
         v = Var()
-        c = make_cell(v, 1, 2)
-        assert _functor_name(c) is v
+        c = (v, 1, 2)  # NOT built via make_cell -- see above
+        assert _functor_name(c) is None
 
-    def test_var_functor_cell_is_compound(self):
-        # nv — task brief: "_is_compound True"
+    def test_var_functor_tuple_is_not_compound(self):
+        # INVERTED (P3-2 Task 5, §1b). (Formerly
+        # ``test_var_functor_cell_is_compound``, asserting ``True``.)
         v = Var()
-        c = make_cell(v, 1, 2)
-        assert _is_compound(c) is True
+        c = (v, 1, 2)
+        assert _is_compound(c) is False
 
-    def test_var_functor_cell_arity_and_args_still_resolve(self):
-        # nv — arity/args are positional, independent of the (as yet
-        # unresolved) functor identity.
+    def test_var_functor_tuple_arity_and_args_no_longer_resolve(self):
+        # INVERTED (P3-2 Task 5, §1b): arity/args used to be positional and
+        # independent of the (as yet unresolved) functor identity because
+        # the cell branch decomposed the tuple regardless of what slot 0
+        # was. Now the tuple isn't recognized as a cell at all, so it gets
+        # the plain-tuple answer across the board. (Formerly
+        # ``test_var_functor_cell_arity_and_args_still_resolve``.)
         v = Var()
-        c = make_cell(v, 1, 2)
-        assert _arity(c) == 2
-        assert _args_list(c) == [1, 2]
-        assert _nth_arg(c, 1) == 1
+        c = (v, 1, 2)
+        assert _arity(c) is None
+        assert _args_list(c) == []
+        with pytest.raises(IndexError):
+            _nth_arg(c, 1)
 
-    def test_var_functor_cell_functor_arity_is_none(self):
-        # nv — task brief: "functor_arity None" for slot0-Var cells. This
-        # mirrors the existing Compound-with-Var-functor precedent in
-        # TestFunctorArity.test_compound_with_var_functor_is_none:
-        # functor_arity only promises a result for a RESOLVED (str) functor.
+    def test_var_functor_tuple_functor_arity_is_none(self):
+        # nv, still None -- but for a different reason now. Formerly
+        # (``test_var_functor_cell_functor_arity_is_none``): None because
+        # functor_arity only resolves a RESOLVED (str) functor, mirroring
+        # the Compound-with-Var-functor precedent, even though the composed
+        # ``_functor_name``/``_arity`` pair DID resolve arity for this
+        # shape. P3-2 Task 5 (§1b): None now because the tuple isn't a cell
+        # at all any more, and the composed pair agrees (both None) —
+        # there is no longer a divergence here to document.
         v = Var()
-        c = make_cell(v, 1, 2)
+        c = (v, 1, 2)  # NOT built via make_cell -- see above
         assert functor_arity(c) is None
-        assert (_functor_name(c), _arity(c)) == (v, 2)
+        assert (_functor_name(c), _arity(c)) == (None, None)
 
-    def test_known_ambiguity_plain_str_tuple_pinned_by_running_assertions(self):
-        # nv — review fix (finding #2): the KNOWN AMBIGUITY documented in
-        # this class's docstring and in clausal/logic/cells.py (BRIDGE-ENTRY
-        # RULING #2 in the ledger: the plain-user-tuple-with-str-slot0
-        # ambiguity is accepted, not solved) must be pinned by RUNNING
-        # assertions, not prose alone. ("hello", 1) is ordinary tuple data
-        # by intent but is_cell-shaped by accident (slot 0 is a str) — every
-        # funnel accessor therefore treats it exactly like a str-functor
-        # cell. This is the accepted bridge-period tradeoff, asserted here
-        # so a future change to that tradeoff shows up as a failing test,
-        # not a silent behavior drift.
+    def test_the_discipline_plain_str_tuple_pinned_by_running_assertions(self):
+        # RE-WORDED (P3-2 Task 5, §1b), same assertions: what this class's
+        # docstring and ``clausal/logic/cells.py``'s module docstring used
+        # to document as an accepted "known ambiguity" (BRIDGE-ENTRY RULING
+        # #2 in the ledger) is now THE DISCIPLINE per the slot-0 narrowing:
+        # every runtime tuple whose slot 0 is a str IS a cell, full stop —
+        # ``("hello", 1)`` is a str-functor cell by shape, and every funnel
+        # accessor treats it exactly like any other one. Pinned by RUNNING
+        # assertions, not prose alone, so a future change to this rule
+        # shows up as a failing test, not a silent behavior drift.
+        # (Formerly
+        # ``test_known_ambiguity_plain_str_tuple_pinned_by_running_assertions``.)
         plain_user_tuple = ("hello", 1)
         assert _functor_name(plain_user_tuple) == "hello"
         assert _arity(plain_user_tuple) == 1

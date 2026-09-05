@@ -1565,11 +1565,28 @@ class TestCellHeadGuardLeaks:
         """The T3-to-T5 window shape the pre-flight scan predicted would
         reach the capture-and-unify guard.  It does -- and before the fix it
         crashed there, because the leaked scalar guards ran right after the
-        headlit guard passed, so only a MATCHING caller reached them."""
+        headlit guard passed, so only a MATCHING caller reached them.
+
+        WINDOW CLOSED (P3-2 Task 5, §1b): this test's END-TO-END ANSWER is
+        UNCHANGED by Task 5 -- ``head_to_match_pattern`` already read slot 0
+        RAW (never dereferenced), so a bound-Var-functor cell already fell
+        to this same opaque-literal capture-and-unify guard pre-Task-5. What
+        WAS a "window" is that ``is_cell``/the funnel accessors disagreed
+        with the compiler here: pre-Task-5 they answered True (after a
+        deref) for this exact tuple, even though the compiler could never
+        structurally decide it. Task 5 retires the Var-functor cell outright
+        -- ``is_cell`` now also reads slot 0 raw, so it answers False here
+        too, closing the window: EVERY recognition site (compiler and
+        funnel alike) now agrees this shape was never a cell. The runtime
+        answer below is the same answer it was before -- what changed is
+        that it is no longer an accident of two disagreeing definitions.
+        """
+        from clausal.logic.cells import is_cell
         from clausal.logic.variables import Trail, unify
 
         bound = Var()
         unify(bound, "pt", Trail())
+        assert is_cell((bound, 1, 2)) is False  # closes the T3-to-T5 window
         m = self._module((bound, 1, 2))
         assert self._ask(m, ("pt", 1, 2)) == ["yes", "catchall"]
         assert self._ask(m, 42) == ["catchall"]
@@ -2051,14 +2068,26 @@ class TestCallableAndTheTupleDataEdge:
                 == self._nsol(
                     "callable_", _python_minted("pt", ("a", "b"), 1, 2)))
 
-    def test_a_var_functor_cell_is_callable_like_its_compound_twin(self):
-        """``_is_compound`` counts an unbound-Var functor as compound, and so
-        does ``Compound`` — the two must agree here too."""
+    def test_a_var_functor_tuple_is_no_longer_callable_unlike_its_compound_twin(self):
+        """INVERTED (P3-2 Task 5, §1b): the bridge's higher-order
+        Var-functor CELL is DEPRECATED — a slot-0-Var tuple is no longer
+        cell-shaped at all (``_is_compound`` no longer counts it), so it is
+        not ``callable_``. ``Compound`` is a wholly separate representation
+        untouched by this narrowing — a ``Compound`` with a Var functor is
+        still compound/callable via its own (unrelated) branch, same as
+        before. The two representations DIVERGE here now, which is the
+        point: §1b routes higher-order metaprogramming over CELLS through
+        ``functor/3``/``=../2``/``call/N`` instead, not through a
+        Var-functor cell reaching this callable check.
+
+        (Formerly ``test_a_var_functor_cell_is_callable_like_its_compound_
+        twin``, asserting both answered 1.)
+        """
         from clausal.terms import Compound
 
         v = Var()
-        assert (self._nsol("callable_", (v, 1, 2))
-                == self._nsol("callable_", Compound(v, (1, 2))) == 1)
+        assert self._nsol("callable_", (v, 1, 2)) == 0
+        assert self._nsol("callable_", Compound(v, (1, 2))) == 1
 
     def test_a_zero_arity_cell_is_callable_like_its_compound_twin(self):
         """``callable_`` yields for a 0-arity Compound, so its cell branch

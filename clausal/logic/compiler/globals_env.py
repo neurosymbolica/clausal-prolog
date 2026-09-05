@@ -31,7 +31,7 @@ from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
 )
 
-from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.cells import _cell_shape
 
 from ._ast_helpers import _name, _call, _assign
 from ._vars import _var_python_name, _collect_vars
@@ -349,8 +349,7 @@ def _collect_globals_info(
             cls = _record_term_type(types, term)
             for name in term_field_names(term):
                 _walk_head(getattr(term, name))
-        elif type(term) is tuple and term and (
-                isinstance(term[0], str) or term[0] is TUPLE_TAG):
+        elif _cell_shape(term)[0]:
             # A CELL.  P3-2 Task 3 fix round 1: this walker and
             # ``head_match``'s live-cell branch have to agree about what a
             # cell IS, and they did not.  The walker treated a ground cell as
@@ -363,17 +362,30 @@ def _collect_globals_info(
             # answered correctly — that asymmetry WAS the bug).
             #
             # So: recurse into the slots, mirroring the ``Compound`` branch
-            # above, on exactly the tags ``head_match``'s branch claims (str
-            # or ``TUPLE_TAG``, slot 0 read raw).
+            # above, on exactly what ``head_match``'s branch claims (§1b/Task
+            # 5: str functor or ``TUPLE_TAG``, slot 0 read raw — this ``elif``
+            # is one of three sites folded onto ``cells._cell_shape`` as the
+            # shared cell-shape predicate, per the Task 5 carry-forward
+            # consolidation; the other two are ``head_match``'s live-cell
+            # branch and ``list_dispatch``'s gate helpers).
             for e in term[1:]:
                 _walk_head(e)
-            # ... AND keep the whole-cell entry, because two shapes still
-            # reach the opaque-literal capture below rather than the cell
+            # ... AND keep the whole-cell entry, because one shape still
+            # reaches the opaque-literal capture below rather than the cell
             # pattern: a ``TUPLE_TAG`` cell compiled where ``$cells`` was not
-            # injected, and a cell whose functor slot is a BOUND Var (read
-            # raw, so head_match cannot see a str there — the T3-to-T5
-            # window).  An unused entry costs one dict slot; a missing one is
-            # a NameError, so both are injected rather than guessed between.
+            # injected.  (Pre-Task-5, a cell whose functor slot was a BOUND
+            # Var was a second such shape — read raw, so head_match could not
+            # see a str there even though ``is_cell`` answered True for it
+            # after a deref: the "T3-to-T5 window".  Task 5 closes that
+            # window by retiring the Var-functor cell outright: ``is_cell``
+            # now also reads slot 0 raw, so a bound-Var-functor tuple is not
+            # a cell ANYWHERE, this ``elif`` included — it takes the
+            # ``_is_opaque_head_literal`` branch below like any other plain
+            # tuple, uniformly with every other recognition site.  See
+            # ``tests/test_tagged_terms.py::TestCellHeadGuardLeaks::
+            # test_a_bound_var_functor_cell_head_arg_does_not_crash``.)  An
+            # unused entry costs one dict slot; a missing one is a
+            # NameError, so it is injected rather than guessed about.
             if _is_opaque_head_literal(term):
                 types[headlit_global_key(term)] = term
         elif _is_opaque_head_literal(term):
