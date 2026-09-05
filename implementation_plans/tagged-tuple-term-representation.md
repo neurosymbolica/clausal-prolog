@@ -456,8 +456,8 @@ workload — bench_tabling is broken two ways; see todo/bench-tabling-overflow-o
 
 - **Atom/string collapse.** `red` IS `"red"`: `atom/1` vs `string/1` merge (or `atom/1`
   becomes a lint-level notion), `{foo: 1}` and `{"foo": 1}` become the same dict, and the
-  clausify-domains string→atom profile-key migration (R8 allowlist etc.) becomes semantically
-  moot. Standard order changes observably (atoms currently sort via the compound branch;
+  downstream string→atom profile-key migrations (allowlist-based and similar) become
+  semantically moot. Standard order changes observably (atoms currently sort via the compound branch;
   they'd sort as strings) — affects `sort/2`, `setof`, existing golden outputs.
   [CORRECTION 2026-09-04, P3-1 Task 8 close-out: this claim was already STALE when
   written -- the atom/string standard-order collapse actually landed earlier, in
