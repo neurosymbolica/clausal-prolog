@@ -49,3 +49,13 @@ stencil-v2 profiling, not before.
 **Interaction with current work:** none for P3-2; for P3-3, the same
 backend-pluggable dispatch seam ruled in for stencils serves an arena
 experiment identically. No new requirement.
+
+## Resolution (author, 2026-09-05)
+
+Question closed by the author: "if we want speed from a WAM (the only real
+reason), then we plug into Scryer or whatever, and we can already do that,
+so there is nothing more to do or say." — the existing Scryer embedding
+(used by the copy-patch work as an external oracle) already makes WAM-class
+execution purchasable through the seam, without building or becoming one.
+WAM is off the table; the stencil-v2 + evidence-gated arena path above
+stands as the in-house performance trajectory.
