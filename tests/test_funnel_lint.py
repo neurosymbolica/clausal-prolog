@@ -280,7 +280,11 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # class + Database.row() inserted earlier in the same file (again a
     # mechanical line-count shift, not a semantic change -- see
     # .superpowers/sdd/p33-state-relocation/task-1-report.md).
-    AllowEntry("clausal/logic/database.py", (668, 700),
+    # Range shifted 668-700 -> 691-723 by task-1's fix-round-1 (Finding 1:
+    # PredRow.clauses became a property with its own docstring, adding a
+    # few more lines earlier in the same file) -- again mechanical, not
+    # semantic; see task-1-report.md's fix-round-1 addendum.
+    AllowEntry("clausal/logic/database.py", (691, 723),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list)"),
 

@@ -192,6 +192,43 @@ def test_invalidate_visible_through_legacy_get_dispatch_dict():
     assert db._dispatch[("f", 2)] is None
 
 
+# ── Finding 1 (fix round 1): self-healing across a wholesale dict wipe ─────
+
+
+def test_row_self_heals_across_wholesale_backing_dict_wipe():
+    """``clauses`` is a live property, not a captured reference, so a
+    wholesale wipe of the backing dicts (an existing pattern in this
+    codebase: tests/test_search.py:472-474 does
+    ``db._clauses.clear(); db._dispatch.clear(); db._lazy_recompile.clear()``)
+    does not leave a cached PredRow pointing at an orphaned list or a stale
+    dispatch value — the next access re-aliases whatever the dict holds."""
+    db = Database()
+    row = db.row("f", 2, create=True)
+    c1 = _clause("f", 1, 2)
+    db.assertz(c1)
+    fn = lambda: None  # noqa: E731
+    db.set_dispatch("f", 2, fn)
+    assert row.clauses == [c1]
+    assert row.dispatch_fn is fn
+
+    # The exact wholesale-wipe pattern already used elsewhere in the suite.
+    db._clauses.clear()
+    db._dispatch.clear()
+    db._lazy_recompile.clear()
+
+    # The cached PredRow object persists (Database._rows is never
+    # invalidated) but every field is a live read-through, so it re-aliases
+    # the fresh (now-empty) entries rather than holding a stale copy.
+    assert row.clauses is db._clauses[("f", 2)]
+    assert row.clauses == []
+    assert row.dispatch_fn is None
+
+    # And a subsequent legacy assertz is visible through the row again.
+    c2 = _clause("f", 3, 4)
+    db.assertz(c2)
+    assert row.clauses == [c2]
+
+
 # ── PredRow defaults for new (not-yet-wired) fields ─────────────────────────
 
 
@@ -229,3 +266,37 @@ def test_row_writes_capped_at_32():
     assert len(row.writes) == 32
     # Oldest entries dropped; last 32 (details 8..39) survive in order.
     assert [w.detail for w in row.writes] == list(range(8, 40))
+
+
+# ── Finding 2 (fix round 1): row() minting must not flip is_defined() ──────
+
+
+def test_row_create_false_on_dispatch_only_predicate_does_not_flip_is_defined():
+    """Minting a row (even via the auto-vivify create=False path) from a
+    predicate that only ever had dispatch/signature/dynamic state must NOT
+    eagerly create a ``_clauses`` entry — that would silently flip
+    ``Database.is_defined()`` False->True as a side effect of merely calling
+    ``db.row()``."""
+    db = Database()
+    fn = lambda: None  # noqa: E731
+    db.set_dispatch("f", 2, fn)
+    assert db.is_defined("f", 2) is False
+    row = db.row("f", 2, create=False)
+    assert row is not None
+    assert db.is_defined("f", 2) is False
+
+
+def test_row_clauses_first_read_lazily_vivifies_is_defined():
+    """Reading ``row.clauses`` is the (intentional, narrow, documented) point
+    where the empty ``_clauses`` entry is created — pinned here as expected
+    behavior, not a regression. Task 2's compile-install path is the real,
+    deliberate minting site for clause lists going forward; this is just the
+    mechanical consequence of ``clauses`` being a live setdefault-backed
+    property (see PredRow.clauses's docstring and task-1-report.md)."""
+    db = Database()
+    fn = lambda: None  # noqa: E731
+    db.set_dispatch("f", 2, fn)
+    row = db.row("f", 2, create=False)
+    assert db.is_defined("f", 2) is False
+    _ = row.clauses  # first read of the property
+    assert db.is_defined("f", 2) is True

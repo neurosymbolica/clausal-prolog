@@ -69,15 +69,19 @@ class PredRow:
 
     P3-3 Task 1 (additive; zero behavior change): this is a THIN READ-THROUGH
     facade over the Database's existing storage, not a second parallel store.
-    ``clauses`` holds a direct reference to the SAME list object the legacy
-    ``_clauses[key]`` entry uses (mutating one is visible via the other).
-    ``dispatch_fn``, ``lazy_recompile``, ``signature`` and ``dynamic`` are
-    properties that read/write straight through to the Database's existing
-    ``_dispatch``/``_lazy_recompile``/``_signatures``/``_dynamic`` containers,
-    so the legacy public methods (``assertz``, ``set_dispatch``,
-    ``register_signature``, ``mark_dynamic``, ...) keep operating exactly as
-    before — untouched by this task — while a row and the legacy dicts always
-    agree.
+    ``clauses``, ``dispatch_fn``, ``lazy_recompile``, ``signature`` and
+    ``dynamic`` are ALL properties that read/write straight through to the
+    Database's existing ``_clauses``/``_dispatch``/``_lazy_recompile``/
+    ``_signatures``/``_dynamic`` containers, so the legacy public methods
+    (``assertz``, ``set_dispatch``, ``register_signature``, ``mark_dynamic``,
+    ...) keep operating exactly as before — untouched by this task — while a
+    row and the legacy dicts always agree, and a row SELF-HEALS across a
+    wholesale backing-dict wipe (e.g. the existing ``db._clauses.clear()``
+    pattern in tests/test_search.py:472-474): the next access re-aliases
+    whatever the dict holds at that moment instead of a stale captured
+    reference. The ``_rows`` cache on ``Database`` is never invalidated, but
+    that's harmless precisely because every field is live — a cached row
+    outliving a wipe just re-reads through it.
 
     ``backend``, ``locked``, ``source`` and ``writes`` are new state that
     nothing else reads or writes yet this task; they exist here only because
@@ -86,11 +90,27 @@ class PredRow:
 
     _db: "Database" = dataclasses.field(repr=False, compare=False)
     _key: "tuple[str, int]" = dataclasses.field(repr=False, compare=False)
-    clauses: list = dataclasses.field(default_factory=list)
     backend: str = "python"
     locked: bool = False
     source: "tuple[str, str] | None" = None
     writes: list = dataclasses.field(default_factory=list)
+
+    @property
+    def clauses(self) -> list:
+        """Clause list for this predicate — the SAME object as the legacy
+        ``Database._clauses[key]`` entry, always re-read live (never a
+        captured reference) so it self-heals across a wholesale dict wipe.
+
+        NOTE: merely READING this property lazily vivifies an empty
+        ``_clauses[key]`` entry if none exists yet (via ``setdefault``),
+        which flips ``Database.is_defined(functor, arity)`` False→True for a
+        predicate that otherwise only ever had dispatch/signature/dynamic
+        state. This is an intentional, narrow side effect of read access,
+        not of ``Database.row()`` itself (which does not touch ``_clauses``
+        at all) — Task 2's compile-install path is the real, deliberate
+        minting site for clause lists going forward.
+        """
+        return self._db._clauses.setdefault(self._key, [])
 
     @property
     def dispatch_fn(self) -> "Callable | None":
@@ -190,8 +210,11 @@ class Database:
         )
         if not known and not create:
             return None
-        clauses = self._clauses.setdefault(key, [])
-        new_row = PredRow(self, key, clauses=clauses)
+        # NOTE: deliberately does NOT touch ``_clauses`` here (Finding 2) —
+        # minting a row from a dispatch/signature/dynamic-only predicate must
+        # not flip ``is_defined()`` False→True. Clause-list vivification is
+        # deferred to first access of the ``clauses`` property.
+        new_row = PredRow(self, key)
         self._rows[key] = new_row
         return new_row
 
