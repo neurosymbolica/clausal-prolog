@@ -8,6 +8,7 @@ from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import (
     PredicateMeta, is_atom, is_atom_value, is_term_instance, term_field_names,
 )
+from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
 from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
@@ -155,6 +156,13 @@ def _atomic__1(x, trail, k):
     if isinstance(x_val, (Compound, KWTerm, list, SegList, SegString, SegBytes)):
         return
     if is_term_instance(x_val):
+        return
+    # Stage A (2026-09-06-atoms-as-cells-strings, Task 2): a 1-tuple cell
+    # atom ("foo",) is atomic beside today's str atom — checked via the
+    # public atom API (dual-accept: str or the arity-0 cell) so a plain
+    # data tuple like (1, 2) still falls off the end below unrecognized.
+    if _term_is_atom(x_val):
+        yield None
         return
     # Atomic primitives. ``bool`` is-a ``int`` in Python — that's fine
     # for ``atomic``, but ``number/1`` continues to exclude it.
@@ -345,12 +353,15 @@ def _check_type(type_name: str, term) -> bool:
         return isinstance(term, float)
     elif type_name == "number":
         return isinstance(term, (int, float)) and not isinstance(term, bool)
-    elif type_name in ("atom", "string", "str"):
-        if isinstance(term, str):
-            return True
-        if is_atom(term):
-            return True
-        return False
+    elif type_name == "atom":
+        # Stage A: is_atom_value already dual-accepts a str and the arity-0
+        # cell atom via the widened clausal.logic.atoms.is_atom (Task 2
+        # controller ruling) — same call the atom/1 builtin makes.
+        return is_atom_value(term)
+    elif type_name in ("string", "str"):
+        return isinstance(term, str) or (
+            isinstance(term, SegString) and _is_ground(term)
+        )
     elif type_name == "list":
         # F016 (A09): align with is_list/1 — under strings-as-lists a str is
         # a char list and a bytes is a code list, and a ground Seg* walks to
@@ -366,11 +377,19 @@ def _check_type(type_name: str, term) -> bool:
             or is_term_instance(term)
             or (isinstance(term, type) and hasattr(term, '_get_dispatch'))
             or hasattr(term, '_get_dispatch')
+            # Stage A: a cell is compound (any arity, incl. 0) exactly as
+            # the callable_/1 builtin's own _is_compound branch treats it.
+            or _is_compound(term)
         )
     elif type_name == "dict":
         from clausal.terms import DictTerm
         return isinstance(term, DictTerm)
     elif type_name == "compound":
+        # Stage A: the funnel's shared definition — a cell counts as
+        # compound only above arity 0, matching the compound/1 builtin's
+        # own cell branch (P3-2 Task 2, THE FLIP).
+        if _is_compound(term) and (_arity(term) or 0) > 0:
+            return True
         if isinstance(term, Compound) and len(term.args) > 0:
             return True
         if isinstance(term, KWTerm) and len(term) > 0:
@@ -399,7 +418,12 @@ def _must_be__2(type_name, term, trail, k):
     # domain_error(type, Type) (the TYPE is wrong, not the term).
     if is_var(type_val):
         raise LogicException(instantiation_error("must_be/2"))
-    if not isinstance(type_val, str):
+    if _term_is_atom(type_val):
+        # Stage A: Type may arrive as today's str atom (Plan 0) or as the
+        # arity-0 cell atom ("atom",) — read either through its spelling.
+        # Stage B deletes the plain isinstance(str) arm below.
+        type_val = _spelling(type_val)
+    elif not isinstance(type_val, str):
         raise LogicException(type_error("atom", type_val, "must_be/2"))
     if type_val not in _KNOWN_TYPES:
         raise LogicException(domain_error("type", type_val, "must_be/2"))
@@ -426,7 +450,10 @@ def _can_be__2(type_name, term, trail, k):
     # A09-F028: same Type-validation as must_be/2.
     if is_var(type_val):
         raise LogicException(instantiation_error("can_be/2"))
-    if not isinstance(type_val, str):
+    if _term_is_atom(type_val):
+        # Stage A: same Type-spelling widening as must_be/2 above.
+        type_val = _spelling(type_val)
+    elif not isinstance(type_val, str):
         raise LogicException(type_error("atom", type_val, "can_be/2"))
     if type_val not in _KNOWN_TYPES:
         raise LogicException(domain_error("type", type_val, "can_be/2"))

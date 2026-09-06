@@ -47,3 +47,8 @@ def test_repr_probe_plan0_str():
     # Plan 0: today's representation. Stage B replaces this test with the
     # cell probe (see Task 12).
     assert mint("foo") == "foo"
+
+
+def test_stage_a_dual_acceptance_of_the_cell_atom():
+    assert is_atom(("foo",)) and spelling(("foo",)) == "foo" and is_char_atom(("a",))
+    assert not is_atom(("foo", 1)) and not is_atom(())

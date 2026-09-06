@@ -153,15 +153,24 @@ def mint(spelling: str):
 def is_atom(term) -> bool:
     """True iff *term* is an atom (the TERM test; a zero-field predicate class
     is not an atom — see ``predicate.is_atom_value`` for the value-level
-    widening that still admits one)."""
-    return type(term) is str
+    widening that still admits one).
+
+    Stage A dual-acceptance (2026-09-06-atoms-as-cells-strings, controller
+    ruling on Task 2): today's ``str`` atom AND the arity-0 cell
+    ``("bar",)`` the Stage B flip will make canonical are both atoms here.
+    Task 11 narrows this to the cell only."""
+    return type(term) is str or (
+        type(term) is tuple and len(term) == 1 and type(term[0]) is str
+    )
 
 
 def spelling(atom) -> str:
     """The spelling of *atom*; ``TypeError`` for a non-atom."""
-    if not is_atom(atom):
-        raise TypeError(f"not an atom: {atom!r}")
-    return atom
+    if type(atom) is str:
+        return atom
+    if is_atom(atom):
+        return atom[0]
+    raise TypeError(f"not an atom: {atom!r}")
 
 
 def char_atom(ch: str):
