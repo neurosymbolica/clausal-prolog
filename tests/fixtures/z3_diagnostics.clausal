@@ -25,14 +25,17 @@ Test("sat has no core") <- (
 
 # ── Satisfiability ──────────────────────────────────────────────────────────
 
+# THE FLIP (spec §6.4): the status is a NAME, so it is an ATOM — single-quoted
+# for the same reason as the constraint names above.
+
 Test("satisfiability sat") <- (
     z3.integer(1 <= X <= 10),
-    z3.satisfiability("sat"),
+    z3.satisfiability('sat'),
 )  # nv
 
 Test("satisfiability unsat") <- (
     z3.integer((X >= 10, X <= 5)),
-    z3.satisfiability("unsat"),
+    z3.satisfiability('unsat'),
 )  # nv
 
 # ── Model inspection ────────────────────────────────────────────────────────

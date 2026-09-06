@@ -26,8 +26,23 @@ _subprocess = _import_stdlib("subprocess")
 _time = _import_stdlib("time")
 
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import DictTerm
+
+
+# The keys of the ``process_create`` result dict, minted once.
+#
+# Spec §6.8: a dict written in source has ATOM keys, and an atom key is
+# distinct from the string of the same spelling, so a result dict built with
+# plain ``str`` keys is unreadable by the syntax the docs show -- ``R.stdout``
+# looks up ``("stdout",)`` and raises ``existence_error(dict_key, stdout)``,
+# and ``get(R, stdout, V)`` fails silently.  The keys a wrapper emits for
+# source to consume are therefore atoms, exactly as ``py.json``'s parsed
+# object keys are (§9.2).  The VALUES stay text (§9.4).
+_EXIT_CODE = mint("exit_code")
+_STDOUT = mint("stdout")
+_STDERR = mint("stderr")
 
 
 def _env_text(val) -> str:
@@ -144,7 +159,11 @@ def _shell_output_3(command, output, error, trail, k):
 
 
 def _process_create_3(program, args, result_var, trail, k):
-    """process_create/3: run a program with argument list (no shell)."""
+    """process_create/3: run a program with argument list (no shell).
+
+    Result is a ``DictTerm`` keyed by the ATOMS ``exit_code``, ``stdout``
+    and ``stderr`` (spec §6.8), so ``R.stdout`` reads it.
+    """
     program = _cmd_text(deref(program), "process_create/3")
     args = deref(args)
     if program is None:
@@ -157,9 +176,9 @@ def _process_create_3(program, args, result_var, trail, k):
     except (OSError, FileNotFoundError):
         return
     result_dict = DictTerm({
-        "exit_code": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        _EXIT_CODE: result.returncode,
+        _STDOUT: result.stdout,
+        _STDERR: result.stderr,
     })
     if unify(result_var, result_dict, trail):
         yield None
@@ -170,6 +189,8 @@ def _process_create_4(program, args, options, result_var, trail, k):
 
     The options are read under either spelling of each option name (see
     ``modules.py.option``): a dict written in source has ATOM keys (§6.8).
+    The Result dict is keyed by the ATOMS ``exit_code``/``stdout``/``stderr``
+    for the same reason.
     """
     program = _cmd_text(deref(program), "process_create/4")
     args = deref(args)
@@ -233,9 +254,9 @@ def _process_create_4(program, args, options, result_var, trail, k):
         return
 
     result_dict = DictTerm({
-        "exit_code": result.returncode,
-        "stdout": result.stdout or "",
-        "stderr": result.stderr or "",
+        _EXIT_CODE: result.returncode,
+        _STDOUT: result.stdout or "",
+        _STDERR: result.stderr or "",
     })
     if unify(result_var, result_dict, trail):
         yield None

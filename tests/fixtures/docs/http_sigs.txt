@@ -30,8 +30,8 @@ decode("hello%20world", S) # S = "hello world"
 
 --8<-- [start:url_parse_examples]
 parse("https://example.com:8080/path?q=1#frag", PARTS)
-# PARTS = {"scheme": "https", "host": "example.com", "port": 8080,
-#           "path": "/path", "query": "q=1", "fragment": "frag"}
+# PARTS = {scheme: "https", host: "example.com", port: 8080,
+#          path: "/path", query: "q=1", fragment: "frag"}   # atom keys
 
 join({"scheme": "https", "host": "example.com", "path": "/api"}, URL)
 # URL = "https://example.com/api"

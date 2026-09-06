@@ -6,6 +6,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.csv import (
     parse, parse_row, parse_records, generate, generate_records,
@@ -135,13 +136,16 @@ class TestParseRecords:
         csv_text = "name,age\nalice,30\nbob,25"
         sols, trail = simple_solutions(_parse_records_3, csv_text, headers, records)
         assert len(sols) == 1
-        assert deref(headers) == ["name", "age"]
+        # Task 12c: a header cell names a column, so it is an ATOM — both as
+        # the record key (§6.8) and in the Headers answer, which names the
+        # same columns.  The VALUES stay strings (CSV coerces nothing).
+        assert deref(headers) == [mint("name"), mint("age")]
         recs = deref(records)
         assert len(recs) == 2
         assert isinstance(recs[0], DictTerm)
-        assert recs[0].data["name"] == "alice"
-        assert recs[0].data["age"] == "30"
-        assert recs[1].data["name"] == "bob"
+        assert recs[0].data[mint("name")] == "alice"
+        assert recs[0].data[mint("age")] == "30"
+        assert recs[1].data[mint("name")] == "bob"
 
     def test_headers_only(self):
         # nv
@@ -149,7 +153,7 @@ class TestParseRecords:
         csv_text = "name,age"
         sols, trail = simple_solutions(_parse_records_3, csv_text, headers, records)
         assert len(sols) == 1
-        assert deref(headers) == ["name", "age"]
+        assert deref(headers) == [mint("name"), mint("age")]
         assert deref(records) == []
 
     def test_empty_fails(self):
@@ -287,10 +291,57 @@ class TestReadRecords:
         recs = deref(records)
         assert len(recs) == 2
         assert isinstance(recs[0], DictTerm)
-        assert recs[0].data["name"] == "alice"
-        assert recs[1].data["age"] == "25"
+        assert recs[0].data[mint("name")] == "alice"
+        assert recs[1].data[mint("age")] == "25"
 
     def test_nonexistent_fails(self):
         # nv
         sols, _ = simple_solutions(_read_records_2, "/nonexistent/file.csv", Var())
         assert len(sols) == 0
+
+
+# ── Task 12c: header cells are ATOMS on the way out (§6.8, §9.2) ────────
+
+
+class TestRecordKeysAreAtoms:
+    """A CSV header cell is DATA, and §9.2's precedent — ``py.json`` mints
+    parsed object keys — governs data-derived keys too.  Without it
+    ``R.name`` (which looks up ``("name",)``) missed every record and
+    ``get(R, name, V)`` failed silently."""
+
+    def test_generate_records_reads_back_what_parse_records_answered(self):
+        """The documented round trip has to close: ``generate_records/3`` is
+        the inverse of ``parse_records/3``, so it reads atom headers and atom
+        record keys — and would otherwise write ``('name',)`` as a column."""
+        # nv
+        headers, records = Var(), Var()
+        sols, _ = simple_solutions(
+            _parse_records_3, "name,age\nalice,30\n", headers, records)
+        assert len(sols) == 1
+        out = Var()
+        sols, _ = simple_solutions(
+            _generate_records_3, deref(headers), deref(records), out)
+        assert len(sols) == 1
+        assert deref(out) == "name,age\r\nalice,30\r\n"
+
+    def test_a_python_built_str_keyed_record_still_generates(self):
+        """The other side stays open: a ``DictTerm`` built in Python has
+        ``str`` keys, and both denote the same column name (§9.4)."""
+        # nv
+        out = Var()
+        sols, _ = simple_solutions(
+            _generate_records_3, ["name"], [DictTerm({"name": "alice"})], out)
+        assert len(sols) == 1
+        assert deref(out) == "name\r\nalice\r\n"
+
+    def test_an_overlong_row_keeps_the_dictreader_restkey(self):
+        """``csv.DictReader`` files a too-long row's overflow under the key
+        ``None``; that is not a header cell and is not minted."""
+        # nv
+        headers, records = Var(), Var()
+        sols, _ = simple_solutions(
+            _parse_records_3, "name\nalice,30\n", headers, records)
+        assert len(sols) == 1
+        data = deref(records)[0].data
+        assert data[mint("name")] == "alice"
+        assert data[None] == ["30"]

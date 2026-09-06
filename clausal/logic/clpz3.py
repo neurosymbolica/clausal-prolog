@@ -1980,15 +1980,23 @@ def z3_minimal_unsat_core(core_var: Any, trail: Trail) -> bool:
 
 
 def z3_is_sat(result_var: Any, trail: Trail) -> bool:
-    """Check satisfiability, unifying *result_var* with ``"sat"``,
-    ``"unsat"``, or ``"unknown"``."""
+    """Check satisfiability, unifying *result_var* with the ATOM ``sat``,
+    ``unsat``, or ``unknown``.
+
+    A status is a NAME, not text (spec §6.4: names go in as atoms and come
+    out as atoms), so the answer is minted.  Binding the plain ``str`` made
+    the obvious source-level test — ``z3.satisfiability(R), R == sat`` —
+    fail silently, because after THE FLIP a ``str`` is a STRING and a string
+    never unifies with the atom of the same spelling (§6.8's distinction, at
+    the term level).
+    """
     state = get_z3_state(trail)
     r = state.solver.check()
     if r == _z3.sat:
-        return unify(result_var, "sat", trail)
+        return unify(result_var, mint("sat"), trail)
     elif r == _z3.unsat:
-        return unify(result_var, "unsat", trail)
-    return unify(result_var, "unknown", trail)
+        return unify(result_var, mint("unsat"), trail)
+    return unify(result_var, mint("unknown"), trail)
 
 
 def z3_disentailed(constraint_expr: Any, trail: Trail) -> bool:

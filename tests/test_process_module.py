@@ -164,8 +164,10 @@ class TestProcessCreate3:
         assert len(sols) == 1
         r = deref(result)
         assert isinstance(r, DictTerm)
-        assert r.data["exit_code"] == 0
-        assert "hello" in r.data["stdout"]
+        # Task 12c: a result dict built for SOURCE has atom keys (§6.8) —
+        # ``R.stdout`` looks up ``("stdout",)``.
+        assert r.data[mint("exit_code")] == 0
+        assert "hello" in r.data[mint("stdout")]
 
     def test_nonexistent_program_fails(self):
         # nv
@@ -192,7 +194,7 @@ class TestProcessCreate3:
         )
         assert len(sols) == 1
         r = deref(result)
-        assert r.data["exit_code"] == 0
+        assert r.data[mint("exit_code")] == 0
 
 
 # ── process_create/4 ──────────────────────────────────────────────────
@@ -208,7 +210,7 @@ class TestProcessCreate4:
         )
         assert len(sols) == 1
         r = deref(result)
-        assert str(tmp_path) in r.data["stdout"]
+        assert str(tmp_path) in r.data[mint("stdout")]
 
     def test_with_timeout(self):
         # nv
@@ -229,7 +231,7 @@ class TestProcessCreate4:
         )
         assert len(sols) == 1
         r = deref(result)
-        assert r.data["stdout"] == "hello from stdin"
+        assert r.data[mint("stdout")] == "hello from stdin"
 
     def test_trampoline(self):
         # nv
@@ -240,7 +242,7 @@ class TestProcessCreate4:
         )
         assert len(sols) == 1
         r = deref(result)
-        assert "trampoline" in r.data["stdout"]
+        assert "trampoline" in r.data[mint("stdout")]
 
 
 # ── sleep/1 ──────────────────────────────────────────────────────────
@@ -305,11 +307,10 @@ class TestAtomArguments:
             result)
         assert len(sols) == 1
         # ``str(("t12b",))`` would have echoed the tuple repr.
-        # The ``str`` key here pins a RESIDUAL, not the contract: the result
-        # dict is still emitted with str keys, so ``R.stdout`` from source
-        # (which looks up the atom ``("stdout",)``, §6.8) finds nothing.  It
-        # moves to atom keys in the result-dict emission sweep.
-        assert deref(result).data["stdout"].strip() == "t12b args"
+        # Task 12c closed the residual this line used to pin: the result dict
+        # is emitted with ATOM keys, so ``R.stdout`` from source (which looks
+        # up ``("stdout",)``, §6.8) now finds it.
+        assert deref(result).data[mint("stdout")].strip() == "t12b args"
 
     def test_process_create_reads_an_atom_keyed_options_dict(self, tmp_path):
         # nv
@@ -318,8 +319,7 @@ class TestAtomArguments:
         sols, _ = simple_solutions(
             _process_create_4, mint("pwd"), [], opts, result)
         assert len(sols) == 1
-        # str key: the result-dict residual again — see above.
-        assert str(tmp_path) in deref(result).data["stdout"]
+        assert str(tmp_path) in deref(result).data[mint("stdout")]
 
     def test_process_create_accepts_an_atom_input(self):
         # nv
@@ -328,5 +328,35 @@ class TestAtomArguments:
         sols, _ = simple_solutions(
             _process_create_4, mint("cat"), [], opts, result)
         assert len(sols) == 1
-        # str key: the result-dict residual again — see above.
-        assert deref(result).data["stdout"] == "t12b stdin"
+        assert deref(result).data[mint("stdout")] == "t12b stdin"
+
+
+# ── Task 12c: the result dict is keyed by ATOMS (spec §6.8) ─────────────
+
+
+class TestResultDictKeysAreAtoms:
+    """``process_create/3,4`` answers a dict for SOURCE to read.
+
+    Spec §6.8 keeps an atom key distinct from the string of the same
+    spelling, so a ``str``-keyed result was unreadable by the syntax the
+    docs show: ``R.stdout`` raised ``existence_error(dict_key, stdout)``
+    and ``get(R, stdout, V)`` failed silently.
+    """
+
+    def test_process_create_3_keys(self):
+        # nv
+        result = Var()
+        sols, _ = simple_solutions(_process_create_3, "echo", ["k"], result)
+        assert len(sols) == 1
+        # The whole key set, not just the one the reads above touch.
+        assert set(deref(result).data) == {
+            mint("exit_code"), mint("stdout"), mint("stderr")}
+
+    def test_process_create_4_keys(self):
+        # nv
+        result = Var()
+        sols, _ = simple_solutions(
+            _process_create_4, "echo", ["k"], DictTerm({}), result)
+        assert len(sols) == 1
+        assert set(deref(result).data) == {
+            mint("exit_code"), mint("stdout"), mint("stderr")}

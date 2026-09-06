@@ -268,12 +268,15 @@ class TestUrlParse:
         assert len(sols) == 1
         result = deref(p)
         assert isinstance(result, DictTerm)
-        assert result.data["scheme"] == "https"
-        assert result.data["host"] == "example.com"
-        assert result.data["port"] == 8080
-        assert result.data["path"] == "/path"
-        assert result.data["query"] == "q=1"
-        assert result.data["fragment"] == "frag"
+        # Task 12c: the parts dict is built for SOURCE, so its keys are
+        # ATOMS (§6.8) — ``P.scheme`` looks up ``("scheme",)``.  The values
+        # stay text (§9.4).
+        assert result.data[mint("scheme")] == "https"
+        assert result.data[mint("host")] == "example.com"
+        assert result.data[mint("port")] == 8080
+        assert result.data[mint("path")] == "/path"
+        assert result.data[mint("query")] == "q=1"
+        assert result.data[mint("fragment")] == "frag"
 
     def test_parse_simple_url(self):
         # nv
@@ -281,8 +284,8 @@ class TestUrlParse:
         sols, _ = simple_solutions(_parse_2, "http://example.com", p)
         assert len(sols) == 1
         result = deref(p)
-        assert result.data["scheme"] == "http"
-        assert result.data["host"] == "example.com"
+        assert result.data[mint("scheme")] == "http"
+        assert result.data[mint("host")] == "example.com"
 
     def test_unbound_fails(self):
         # nv
@@ -326,6 +329,50 @@ class TestUrlJoin:
         # nv
         sols, _ = simple_solutions(_join_2, Var(), Var())
         assert len(sols) == 0
+
+
+# ── Task 12c: the URL parts dict is keyed by ATOMS (spec §6.8) ──────────
+
+
+class TestUrlPartsKeysAreAtoms:
+    """``parse/2`` builds the parts dict and ``join/2`` consumes one, so both
+    halves have to agree on what a key is.  While ``parse`` emitted ``str``
+    keys, ``P.scheme`` raised ``existence_error(dict_key, scheme)`` and a
+    source-written parts dict (atom keys, §6.8) joined to an empty URL —
+    silently, because every part defaulted to ``""``."""
+
+    def test_parse_emits_exactly_the_atom_key_set(self):
+        # nv
+        p = Var()
+        sols, _ = simple_solutions(_parse_2, "https://example.com/x", p)
+        assert len(sols) == 1
+        assert set(deref(p).data) == {
+            mint("scheme"), mint("host"), mint("port"),
+            mint("path"), mint("query"), mint("fragment")}
+
+    def test_join_reads_an_atom_keyed_dict_with_atom_values(self):
+        # nv
+        parts = DictTerm({
+            mint("scheme"): mint("https"),
+            mint("host"): mint("example.com"),
+            mint("port"): 8080,
+            mint("path"): mint("/api"),
+        })
+        url = Var()
+        sols, _ = simple_solutions(_join_2, parts, url)
+        assert len(sols) == 1
+        # ``str(("https",))`` would have spliced a tuple repr into the URL.
+        assert deref(url) == "https://example.com:8080/api"
+
+    def test_parse_join_round_trip(self):
+        # nv
+        p, url = Var(), Var()
+        sols, _ = simple_solutions(
+            _parse_2, "https://example.com:8080/path?q=1#frag", p)
+        assert len(sols) == 1
+        sols, _ = simple_solutions(_join_2, deref(p), url)
+        assert len(sols) == 1
+        assert deref(url) == "https://example.com:8080/path?q=1#frag"
 
 
 # ── Task 12b: atoms in the text and option positions (spec §9.4) ─────────

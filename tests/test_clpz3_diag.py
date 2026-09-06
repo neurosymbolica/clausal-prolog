@@ -204,7 +204,8 @@ class TestIsSat:
         in_z3(x, 1, 10, trail)
         r = Var()
         assert z3_is_sat(r, trail)
-        assert deref(r) == "sat"
+        # Task 12c: a status is a NAME (§6.4), so the answer is the atom.
+        assert deref(r) == mint("sat")
 
     def test_unsat(self):
         # nv
@@ -214,7 +215,7 @@ class TestIsSat:
         z3_eq(x, 10, trail)
         r = Var()
         assert z3_is_sat(r, trail)
-        assert deref(r) == "unsat"
+        assert deref(r) == mint("unsat")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

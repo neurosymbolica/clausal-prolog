@@ -15,12 +15,32 @@ from clausal.modules.py import (
     _import_stdlib,
     expect_type,
     note_rejected_call,
+    option,
     simple_to_trampoline,
+    to_text,
 )
 _urllib_parse = _import_stdlib("urllib.parse")
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import deref, is_var, unify
 from clausal.terms import DictTerm
+
+
+# ── Helpers ─────────────────────────────────────────────────────────────
+
+
+def _part_text(val) -> str:
+    """The ``str`` a URL part denotes.
+
+    Text is a string or an ATOM, and both convert to the same ``str``
+    (spec §9.4).  ``str()`` on the arity-0 cell ``("https",)`` would splice
+    its Python tuple repr into the URL, so the coercion routes through
+    ``to_text``; a part that is not text keeps the old ``str`` fallback --
+    this position never promised a type contract.
+    """
+    v = deref(val)
+    text = to_text(v)
+    return text if text is not None else str(v)
 
 
 # ── Predicate implementations ────────────────────────────────────────────
@@ -47,7 +67,14 @@ def _decode_2(encoded, string, trail, k):
 
 
 def _parse_2(url, parts, trail, k):
-    """parse/2: parse(Url, Parts) — parse URL into DictTerm."""
+    """parse/2: parse(Url, Parts) — parse URL into DictTerm.
+
+    Parts is keyed by the ATOMS ``scheme``/``host``/``port``/``path``/
+    ``query``/``fragment`` (spec §6.8: a dict written in source has atom
+    keys, and an atom key is distinct from the string of the same spelling),
+    so ``P.scheme`` reads it and ``join/2`` consumes it unchanged.  The
+    VALUES stay text (§9.4).
+    """
     u = deref(url)
     if not expect_type(u, str, "parse/2", arg=1):
         return
@@ -61,29 +88,36 @@ def _parse_2(url, parts, trail, k):
         note_rejected_call("parse/2", exc)
         return
     result = DictTerm({
-        "scheme": parsed.scheme,
-        "host": parsed.hostname or "",
-        "port": port if port is not None else 0,
-        "path": parsed.path,
-        "query": parsed.query,
-        "fragment": parsed.fragment,
+        mint("scheme"): parsed.scheme,
+        mint("host"): parsed.hostname or "",
+        mint("port"): port if port is not None else 0,
+        mint("path"): parsed.path,
+        mint("query"): parsed.query,
+        mint("fragment"): parsed.fragment,
     })
     if unify(parts, result, trail):
         yield None
 
 
 def _join_2(parts, url, trail, k):
-    """join/2: join(Parts, Url) — assemble URL from DictTerm parts."""
+    """join/2: join(Parts, Url) — assemble URL from DictTerm parts.
+
+    The parts are read under either spelling of each name (see
+    ``modules.py.option``): what ``parse/2`` answers — and what a program
+    writes — has ATOM keys (§6.8), while a Python-built ``DictTerm`` in a
+    test has ``str`` keys, and the documented ``parse``/``join`` round trip
+    has to close over both.
+    """
     p = deref(parts)
     if not expect_type(p, DictTerm, "join/2", arg=1):
         return
     d = p.data
-    scheme = str(deref(d.get("scheme", "")))
-    host = str(deref(d.get("host", "")))
-    port = deref(d.get("port", 0))
-    path = str(deref(d.get("path", "")))
-    query = str(deref(d.get("query", "")))
-    fragment = str(deref(d.get("fragment", "")))
+    scheme = _part_text(option(d, "scheme", ""))
+    host = _part_text(option(d, "host", ""))
+    port = deref(option(d, "port", 0))
+    path = _part_text(option(d, "path", ""))
+    query = _part_text(option(d, "query", ""))
+    fragment = _part_text(option(d, "fragment", ""))
 
     # Build netloc
     if port and port != 0:

@@ -46,7 +46,7 @@ parse_line(LINE, FIELDS) <- parse_row(LINE, FIELDS)
 
 ### parse_records/3
 
-`parse_records(String, Headers, Records)` — parse CSV with the first row as headers. Each record is a `DictTerm` with header keys.
+`parse_records(String, Headers, Records)` — parse CSV with the first row as headers. Each record is a `DictTerm` keyed by the header **atoms**, and `Headers` is the list of those same atoms, so `RECORD.name` and `get(RECORD, name, V)` both read a column. Values stay strings.
 
 ```clausal
 -import_from(py.csv, [parse_records])
@@ -65,7 +65,7 @@ parse_and_get_name(CSV_TEXT, NAME) <- (
 
 ### generate_records/3
 
-`generate_records(Headers, Records, String)` — serialize DictTerm records with a header row.
+`generate_records(Headers, Records, String)` — serialize DictTerm records with a header row. The inverse of `parse_records/3`: it accepts the atom headers and atom record keys that predicate answers, and plain strings just as well.
 
 ### read_file/2
 
@@ -73,7 +73,7 @@ parse_and_get_name(CSV_TEXT, NAME) <- (
 
 ### read_records/2
 
-`read_records(Path, Records)` — read a CSV file with headers, returning a list of DictTerms.
+`read_records(Path, Records)` — read a CSV file with headers, returning a list of DictTerms keyed by the header atoms.
 
 ```clausal
 load_data(RECORDS) <- read_records("data.csv", RECORDS)

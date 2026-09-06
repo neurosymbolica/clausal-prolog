@@ -57,7 +57,7 @@ compile_and_check(CMD, OUT, ERR) <- shell_output(CMD, OUT, ERR)
 
 ### process_create/3
 
-`process_create(Program, Args, Result)` — run a program with an argument list (no shell). Result is a [`DictTerm`](dicts_sets.md) with keys `exit_code`, `stdout`, `stderr`.
+`process_create(Program, Args, Result)` — run a program with an argument list (no shell). Result is a [`DictTerm`](dicts_sets.md) keyed by the atoms `exit_code`, `stdout`, `stderr` — read it with `RESULT.stdout` or `get(RESULT, stdout, OUT)`.
 
 ```clausal
 run_python(CODE, RESULT) <- process_create("python3", ["-c", CODE], RESULT)
@@ -69,10 +69,10 @@ run_python(CODE, RESULT) <- process_create("python3", ["-c", CODE], RESULT)
 
 | Key | Type | Description |
 |---|---|---|
-| `"cwd"` | string | Working directory for the subprocess |
-| `"timeout"` | number | Timeout in seconds (fails on expiry) |
-| `"input"` | string | String to send to stdin |
-| `"env"` | DictTerm | Extra environment variables (merged with current env) |
+| `cwd` | string | Working directory for the subprocess |
+| `timeout` | number | Timeout in seconds (fails on expiry) |
+| `input` | string | String to send to stdin |
+| `env` | DictTerm | Extra environment variables (merged with current env) |
 
 ```clausal
 run_in_dir(DIR, RESULT) <- process_create(

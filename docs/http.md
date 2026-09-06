@@ -109,8 +109,9 @@ encode uses `safe=""` — all special characters are encoded.
 
 ### parse / join
 
-`parse` returns a DictTerm with keys: `scheme`, `host`, `port`, `path`, `query`,
-`fragment`. Port is an integer (0 if not specified).
+`parse` returns a DictTerm keyed by the atoms `scheme`, `host`, `port`, `path`,
+`query`, `fragment` — so `PARTS.scheme` reads a part, and `join` consumes the
+same dict unchanged. Port is an integer (0 if not specified).
 
 ```clausal
 --8<-- "tests/fixtures/docs/http_sigs.txt:url_parse_examples"

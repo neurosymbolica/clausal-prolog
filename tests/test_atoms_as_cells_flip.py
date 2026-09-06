@@ -927,3 +927,112 @@ def test_bulk_attributes_round_trip_through_atom_keys():
     assert attrs.data == {mint("t12b_a"): 1, mint("t12b_b"): 2}
     # The round trip closes: what came out goes back in.
     assert list(_put_attrs__2(dst, attrs, trail, None)) == [None]
+
+
+# ── Task 12c: the result-dict KEY EMISSION sweep ─────────────────────────────
+#
+# Task 12b fixed how a wrapper READS a dict written in source (§2a of its
+# report).  The mirror half was left open and recorded as its residual 1: a
+# wrapper that BUILDS a dict for source to consume still keyed it with plain
+# ``str``.  Spec §6.8 makes atom and string keys distinct, so ``R.stdout`` on
+# such a result raises ``existence_error(dict_key, stdout)`` and
+# ``get(R, stdout, V)`` fails silently — the answer was unreadable by the very
+# syntax the docs show.  §9.2 already rules the JSON half (object keys →
+# atoms); these rows extend that reading to every wrapper result dict, and to
+# the NAME positions a status answer occupies (§6.4).
+
+
+def test_process_create_answers_an_atom_keyed_result_dict():
+    """``process_create/3,4`` answers ``{exit_code, stdout, stderr}``; a
+    source program reads it with ``R.stdout``, which looks up ``("stdout",)``."""
+    mod = _load_inline_clausal(
+        "_t12c_process",
+        "-import_from(py.process, [process_create])\n"
+        "-private([exit_code, stdout, stderr, input])\n"
+        "run3(OUT, CODE) <- (process_create(\"echo\", [\"t12c\"], R), "
+        "OUT is R.stdout, CODE is R.exit_code),\n"
+        "run4(OUT) <- (process_create(\"cat\", [], {input: \"t12c stdin\"}, R), "
+        "OUT is R.stdout),\n"
+        "err3(ERR) <- (process_create(\"cat\", [\"/nonexistent/t12c\"], R), "
+        "ERR is R.stderr),\n"
+    )
+    OUT, CODE = Var(), Var()
+    (out, code), = _answers(("run3", OUT, CODE), mod, OUT, CODE)
+    assert out.strip() == "t12c" and code == 0
+    OUT = Var()
+    assert _answers(("run4", OUT), mod, OUT) == [("t12c stdin",)]
+    ERR = Var()
+    (err,), = _answers(("err3", ERR), mod, ERR)
+    assert "t12c" in err
+
+
+def test_url_parse_answers_an_atom_keyed_dict_that_join_reads_back():
+    """``py.url.parse/2`` builds the parts dict and ``join/2`` consumes one:
+    both halves have to agree on what a key is, or the documented round trip
+    silently produces an empty URL."""
+    mod = _load_inline_clausal(
+        "_t12c_url",
+        "-double_quotes(chars)\n"
+        "-import_from(py.url, [parse, join])\n"
+        "-private([scheme, host, port, path])\n"
+        "scheme_of(S) <- (parse(\"https://example.com:8080/p?q=1\", P), "
+        "S is P.scheme),\n"
+        "port_of(N) <- (parse(\"https://example.com:8080/p?q=1\", P), "
+        "N is P.port),\n"
+        "round_trip(U) <- (parse(\"https://example.com:8080/p?q=1\", P), "
+        "join(P, U)),\n"
+    )
+    S, N, U = Var(), Var(), Var()
+    # The VALUE stays text (§9.4); only the KEY is an atom.
+    assert _answers(("scheme_of", S), mod, S) == [("https",)]
+    assert _answers(("port_of", N), mod, N) == [(8080,)]
+    assert _answers(("round_trip", U), mod, U) == [
+        ("https://example.com:8080/p?q=1",)]
+
+
+def test_csv_records_answer_atom_keyed_dicts_and_atom_headers():
+    """A CSV header cell is DATA, and §9.2's precedent (JSON object keys →
+    atoms) governs data-derived keys too.  The ``Headers`` answer names the
+    same columns, so it mints as well — otherwise ``member(H, Headers),
+    get(R, H, V)`` fails against the wrapper's own records."""
+    mod = _load_inline_clausal(
+        "_t12c_csv",
+        "-double_quotes(chars)\n"
+        "-import_from(py.csv, [parse_records, generate_records])\n"
+        "-private([name, age])\n"
+        "first_name(N) <- (parse_records(\"name,age\\nalice,30\\n\", _, RS), "
+        "RS is [R, *_], N is R.name),\n"
+        "headers(H) <- (parse_records(\"name,age\\nalice,30\\n\", H, _)),\n"
+        "by_header(V) <- (parse_records(\"name,age\\nalice,30\\n\", H, RS), "
+        "H is [K, *_], RS is [R, *_], get(R, K, V)),\n"
+        "regenerated(S) <- (parse_records(\"name,age\\nalice,30\\n\", H, RS), "
+        "generate_records(H, RS, S)),\n"
+    )
+    N, H, V, S = Var(), Var(), Var(), Var()
+    assert _answers(("first_name", N), mod, N) == [("alice",)]
+    assert _answers(("headers", H), mod, H) == [([mint("name"), mint("age")],)]
+    assert _answers(("by_header", V), mod, V) == [("alice",)]
+    # The round trip closes: what parse_records answered, generate_records
+    # writes back out — atom headers and atom record keys included.
+    assert _answers(("regenerated", S), mod, S) == [("name,age\r\nalice,30\r\n",)]
+
+
+def test_z3_satisfiability_answers_an_atom():
+    """``z3.satisfiability(R)`` answers a status NAME (§6.4), not text."""
+    pytest.importorskip("z3")
+    from clausal.logic.clpz3 import in_z3, z3_eq, z3_is_sat
+
+    trail = Trail()
+    x = Var()
+    assert in_z3(x, 1, 10, trail)
+    r = Var()
+    assert z3_is_sat(r, trail)
+    assert deref(r) == mint("sat")
+
+    trail = Trail()
+    y = Var()
+    assert in_z3(y, 1, 5, trail)
+    assert z3_eq(y, 10, trail)
+    r = Var()
+    assert z3_is_sat(r, trail)
+    assert deref(r) == mint("unsat")

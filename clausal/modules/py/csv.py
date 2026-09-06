@@ -13,7 +13,8 @@ Or via module import::
 Type mapping
 ------------
 - CSV rows  → Python ``list`` of ``str``
-- CSV with headers → ``list`` of ``DictTerm`` (one per record)
+- CSV with headers → ``list`` of ``DictTerm`` (one per record), keyed by the
+  header cell ATOMS (spec §6.8/§9.2), so ``R.name`` reads a record
 - All values are strings — no automatic type coercion.
 
 Use ``++int(X)`` or ``number_chars`` for conversion if needed.
@@ -34,11 +35,42 @@ _csv = _import_stdlib("csv")
 
 import io
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import DictTerm
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
+
+
+def _field_key(name):
+    """The record-dict key a CSV header cell denotes: the ATOM of its text.
+
+    A header cell is DATA, and §9.2 already rules the data-derived case for
+    the only other place the engine builds a dict out of parsed input:
+    ``py.json``'s object keys are minted.  The same reading applies here,
+    and it is what makes the answer readable — spec §6.8 keeps an atom key
+    distinct from the string of the same spelling, so ``R.name`` (which
+    looks up ``("name",)``) found nothing in a ``str``-keyed record and
+    ``get(R, name, V)`` failed silently.
+
+    ``csv.DictReader`` uses ``None`` as the key for the overflow fields of a
+    too-long row (its ``restkey``); that is not a header cell and is left
+    exactly as it is.
+    """
+    return mint(name) if type(name) is str else name
+
+
+def _field_text(val) -> str:
+    """The ``str`` a header cell or record value denotes on the way OUT.
+
+    Text is a string or an ATOM, and both convert to the same ``str``
+    (spec §9.4) -- including the atom keys ``parse_records/3`` now answers,
+    which ``generate_records/3`` has to write back as plain column names.
+    """
+    v = deref(val)
+    text = to_text(v)
+    return text if text is not None else str(v)
 
 
 def _deref_row(row):
@@ -84,7 +116,13 @@ def _parse_2(string, rows, trail, k):
 
 
 def _parse_records_3(string, headers, records, trail, k):
-    """parse_records/3: parse CSV with headers → list of DictTerms."""
+    """parse_records/3: parse CSV with headers → list of DictTerms.
+
+    Each record is keyed by the header cell's ATOM, and Headers answers the
+    same atoms: they name the same columns, so ``member(H, Headers),
+    get(R, H, V)`` has to reach the wrapper's own records.  The VALUES stay
+    strings — CSV does no type coercion.
+    """
     string = deref(string)
     if not expect_type(string, str, "parse_records/3", arg=1):
         return
@@ -92,9 +130,12 @@ def _parse_records_3(string, headers, records, trail, k):
     header_list = reader.fieldnames
     if header_list is None:
         return
-    record_list = [DictTerm(dict(row)) for row in reader]
+    record_list = [
+        DictTerm({_field_key(k): v for k, v in row.items()}) for row in reader
+    ]
     mark = trail.mark()
-    if unify(headers, list(header_list), trail) and unify(records, record_list, trail):
+    if (unify(headers, [_field_key(h) for h in header_list], trail)
+            and unify(records, record_list, trail)):
         yield None
     else:
         trail.undo(mark)
@@ -127,14 +168,19 @@ def _generate_2(rows, string, trail, k):
 
 
 def _generate_records_3(headers, records, string, trail, k):
-    """generate_records/3: serialize DictTerm records with header row."""
+    """generate_records/3: serialize DictTerm records with header row.
+
+    The inverse of ``parse_records/3``, so it reads the ATOM headers and
+    atom record keys that predicate answers — and a plain-``str`` header or
+    key just as well, since both denote the same column name (§9.4).
+    """
     headers, records = deref(headers), deref(records)
     if not expect_type(headers, list, "generate_records/3", arg=1):
         return
     if not expect_type(records, list, "generate_records/3", arg=2):
         return
     try:
-        header_strs = [str(deref(h)) for h in headers]
+        header_strs = [_field_text(h) for h in headers]
         buf = io.StringIO()
         writer = _csv.DictWriter(buf, fieldnames=header_strs)
         writer.writeheader()
@@ -147,7 +193,8 @@ def _generate_records_3(headers, records, string, trail, k):
                     "where a list of DictTerm records is required (argument 2)",
                 )
                 return
-            row_dict = {k: str(deref(v)) for k, v in record.data.items()}
+            row_dict = {_field_text(k): _field_text(v)
+                        for k, v in record.data.items()}
             writer.writerow(row_dict)
         result = buf.getvalue()
     except (TypeError, ValueError) as exc:
@@ -173,14 +220,20 @@ def _read_file_2(path, rows, trail, k):
 
 
 def _read_records_2(path, records, trail, k):
-    """read_records/2: read CSV file with headers → list of DictTerms."""
+    """read_records/2: read CSV file with headers → list of DictTerms.
+
+    Records are keyed by the header cells' ATOMS, as ``parse_records/3``.
+    """
     path = deref(path)
     if not expect_type(path, str, "read_records/2", arg=1):
         return
     try:
         with open(path, "r", encoding="utf-8", newline="") as f:
             reader = _csv.DictReader(f)
-            result = [DictTerm(dict(row)) for row in reader]
+            result = [
+                DictTerm({_field_key(k): v for k, v in row.items()})
+                for row in reader
+            ]
     except OSError:
         return
     if unify(records, result, trail):
