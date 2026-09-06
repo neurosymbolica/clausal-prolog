@@ -331,9 +331,11 @@ on strings because they are lists: `append("ab", "cd", X)` → `X = "abcd"`
 
 ### 6.7 Writers
 
-Three writers, as ISO/Scryer: `write/1` (and `writeln/1`, `print_term/1`,
-`write_to_string/2`, `term_to_string/2`, `term_str` — the display family),
-`writeq/1` (quoted, `double_quotes`-aware), and `write_canonical/1`
+Three writers, as ISO/Scryer: `write/1` (and `writeln/1`,
+`write_to_string/2` — the text family), `writeq/1` (quoted,
+`double_quotes`-aware; `print_term/1`, `term_to_string/2` and `term_str`
+are this family — they exist to show structure, as they do today), and
+`write_canonical/1`
 (quoted, ignores operators AND the `double_quotes` flag: every list — a
 string included — prints as the `'.'/2` structure it denotes). Scryer,
 verified by the operator 2026-09-06:
@@ -342,7 +344,7 @@ The representation stays a `str` (R-S2); the writer makes it *look like*
 the cons structure, exactly as the funnel already answers
 `functor("hello", '.', 2)` and `arg(2, "hello", "ello")` (§6.4).
 
-| Term | `write` / `term_str(quoted=False)` | `writeq` / `term_str` | `write_canonical` |
+| Term | `write` / `term_str(quoted=False)` | `writeq` / `print_term` / `term_str` | `write_canonical` |
 |---|---|---|---|
 | `("foo",)` | `foo` | `foo` | `foo` |
 | `("foo bar",)` | `foo bar` | `'foo bar'` (ISO 6.4.2 quoting: bare iff a solo, graphic, or lowercase-initial identifier token) | `'foo bar'` |
