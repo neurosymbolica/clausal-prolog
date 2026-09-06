@@ -19,9 +19,12 @@ from fractions import Fraction
 
 import pytest
 
-from clausal.logic.builtins._helpers import _ORD_ATOM, _standard_order_key
+from clausal.logic.builtins._helpers import (
+    _ORD_ATOM, _ORD_COMPOUND, _standard_order_key,
+)
 from clausal.logic.builtins.lists import _sort__2, _msort__2
 from clausal.logic.compiler.globals_env import _set_of_sort_dedup
+from clausal.logic.solve import solve
 from clausal.logic.trampoline import DONE
 from clausal.logic.variables import Var, Trail, deref
 from clausal.terms import Compound, DictTerm, KWTerm, SetTerm
@@ -283,3 +286,43 @@ def test_msort_of_domain_local_compounds_end_to_end():
     # answers are cells.  The ORDER is what this test is about and it is
     # unchanged.
     assert got == [[("pt", 1, 2), ("pt", 1, 9), ("pt", 1, 15)]]
+
+
+# ── P3-3 Task 3: cells in standard order — atoms in the atom band ────────
+
+
+class TestCellStandardOrder:
+    """A cell atom (arity 0, spec §5.1) keys IDENTICALLY to its str spelling
+    (§6.5) -- a str atom and a cell atom are one atom in the order.  A cell
+    of arity > 0 keys in the compound band, arity first (ISO 7.2.1), never
+    as a sequence.
+    """
+
+    def test_cell_atom_keys_in_atom_band(self):
+        assert _standard_order_key(("bar",)) == (_ORD_ATOM, "bar")
+        assert _standard_order_key(("bar",)) == _standard_order_key("bar")
+
+    def test_cell_keys_in_compound_band_arity_first(self):
+        k = _standard_order_key(("f", 1, 2))
+        assert k[0] == _ORD_COMPOUND and k[1] == 2 and k[2] == (0, "f")
+        assert _standard_order_key(("f", 1, 2)) < _standard_order_key(("a", 1, 2, 3))
+        assert _standard_order_key(("f", 1, 2)) > _standard_order_key([1, 2, 3])
+        assert _standard_order_key(("f", 1)) != _standard_order_key(["f", 1])
+
+    def test_msort_orders_number_atom_list_cell(self):   # §13 row 16 (Stage A form)
+        # A cell goal requires a module (``_module_for_moduleless_solve``
+        # raises ``existence_error`` for a moduleless cell goal) -- same
+        # convention as ``tests/test_cell_goals.py``/``test_atoms_as_cells.py``:
+        # a trivial loaded module supplies the module context; only the
+        # ``msort`` builtin is exercised.  ``deref`` runs INSIDE the
+        # ``solve`` iteration (as ``test_cell_goals.py`` does), not after
+        # ``list()`` has exhausted the generator -- ``solve`` undoes its
+        # trail bindings once the generator is exhausted, same as any other
+        # backtracking choice point.
+        mod = _load_inline_clausal("_standard_order_cell_msort_probe", "z0,\n")
+        lm = mod.__dict__["$module"]
+        out = Var()
+        answers = [deref(out)
+                   for _ in solve(("msort", [("f", "x"), [1], ("b",), 1], out), lm)]
+        assert len(answers) == 1
+        assert answers[0] == [1, ("b",), [1], ("f", "x")]

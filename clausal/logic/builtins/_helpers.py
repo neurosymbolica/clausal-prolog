@@ -14,6 +14,7 @@ from typing import Any
 
 from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import is_atom, is_atom_value, is_term_instance, term_field_names
+from clausal.logic.cells import TUPLE_TAG
 from clausal.terms import (
     Compound, KWTerm, DictTerm, SetTerm,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
@@ -560,8 +561,13 @@ def _standard_order_key(term: Any) -> tuple:
     """Sort key implementing the standard order of terms.
 
     Total over every value a term can hold, so ``sorted(xs, key=...)`` never
-    raises.  Recurses through compounds, lists, dicts and sets, dereferencing
-    as it goes, so nested numbers compare *numerically* rather than as strings.
+    raises.  Recurses through compounds, lists, dicts, sets and cells,
+    dereferencing as it goes, so nested numbers compare *numerically* rather
+    than as strings.  A cell (spec §5.1) is NOT a sequence: an arity-0 cell
+    is an atom and keys with the atom band identically to its str spelling
+    (§6.5); an arity>0 cell -- ``str``-tagged or ``TUPLE_TAG``-tagged --
+    keys in the compound band, arity first (ISO 7.2.1).  Lists and plain
+    ``tuple``s that are not cells still key in the sequence band.
     """
     term = deref(term)
     if is_var(term):
@@ -593,6 +599,18 @@ def _standard_order_key(term: Any) -> tuple:
         return (_ORD_ATOM, term.__name__)
     if isinstance(term, bytes):
         return (_ORD_BYTES, term)
+    if type(term) is tuple and term and type(term[0]) is str:
+        # A cell (spec §5.1).  Arity 0 is an atom (spec §6.5): same key as
+        # the str spelling so a str atom and a cell atom are one atom in the
+        # order.  Arity > 0 keys like ``Compound`` — arity first, then name
+        # (ISO 7.2.1), positional flavour — never as a sequence.
+        if len(term) == 1:
+            return (_ORD_ATOM, term[0])
+        return (_ORD_COMPOUND, len(term) - 1, (0, term[0]), _CF_POSITIONAL,
+                tuple(_standard_order_key(a) for a in term[1:]))
+    if type(term) is tuple and term and term[0] is TUPLE_TAG:
+        return (_ORD_COMPOUND, len(term) - 1, (1, ""), _CF_POSITIONAL,
+                tuple(_standard_order_key(a) for a in term[1:]))
     if isinstance(term, (list, tuple)):
         return (_ORD_SEQ, tuple(_standard_order_key(e) for e in term))
     if isinstance(term, Compound):
