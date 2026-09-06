@@ -86,12 +86,62 @@ from fractions import Fraction
 from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.predicate import PredicateMeta
 
-__all__ = ["_CONST_SET_TYPES", "_const_set", "_cset_atom"]
+__all__ = [
+    "_CONST_SET_TYPES", "_const_set", "_cset_atom", "_AtomSpellings",
+]
 
 #: The shape half of the eligibility test — see the module docstring.  Bound
 #: into generated code as ``$cset_atom`` and ORed onto the class test, so a
 #: non-tuple left operand never pays for the call.
 _cset_atom = _term_is_atom
+
+
+class _AtomSpellings(frozenset):
+    """A const-set holding SPELLINGS (``str``) rather than atom cells.
+
+    ``_const_set`` returns one of these when EVERY element of the constant
+    list is an atom, which is the overwhelmingly common shape (``ACTION in
+    [acquire, dispose, amend, cancel]``).  The subclass is the signal: the
+    generated code asks ``set.__class__ is $ATOM_SET`` and, when it is, looks
+    up ``elem[0]`` — the spelling — instead of the atom cell.
+
+    How much this is worth, measured rather than assumed: the cached-str-hash
+    argument that motivates it is **almost entirely wrong on CPython 3.13**.
+    ``hash(("a0",))`` times at 28.9 ns against ``hash("a0")``'s 27.8 ns — a
+    1-tuple's hash is a couple of arithmetic ops over the (cached) hash of
+    slot 0, so there is no field-read-versus-recompute gap to win.  Nor is
+    the lookup itself cheaper: ``spelling in _AtomSpellings`` measured 30.9 ns
+    against ``cell in frozenset``'s 28.0 ns, the subclass costing a little on
+    the set path.
+
+    What the mode is actually worth is the GUARD it enables.  Knowing every
+    element is an atom lets the guard collapse from "a whitelisted type or an
+    atom" to "an atom", which the emitted code can then spell out inline
+    (``_lower_goalop_shared._is_atom_inline``) instead of calling
+    ``$cset_atom`` — and that Python-level call was 67 ns of a ~110 ns fast
+    path.  Guard plus lookup: 108 ns keying on cells with the call, 90.9 ns
+    keying on spellings with the test inlined.  The set contents are along
+    for the ride; the call being gone is the win.
+
+    Why it needs a distinct type rather than always storing spellings: a
+    spelling is indistinguishable from a STRING, and after the flip a string
+    is a term in its own right that must NOT unify with the atom of the same
+    text.  A MIXED list — ``[a, "a", 1, None]`` — therefore keeps the plain
+    ``frozenset`` holding atom cells, where the atom and the string sit in it
+    as the two different terms they are.  Collapsing them would make
+    ``"a" in [a, "a"]`` answer twice-over-one-element.
+
+    In atom-spellings mode the generated guard narrows from "whitelisted type
+    or an atom" to "an atom": a non-atom left operand cannot unify with any
+    element of an all-atom list, so it takes the scan (which fails), and no
+    ``str`` operand ever gets to test itself against a spelling.
+
+    ``__contains__`` is deliberately NOT overridden — that would put back the
+    Python-level call this exists to remove.  The unwrapping lives in the
+    emitted code instead.
+    """
+
+    __slots__ = ()
 
 
 #: Types for which ``hash``/``__eq__`` provably answer the same question as
@@ -119,13 +169,24 @@ def _const_set(elements):
     """
     if type(elements) is not list or len(elements) < 2:
         return False
+    all_atoms = True
     for element in elements:
-        if element.__class__ not in _CONST_SET_TYPES and not _cset_atom(element):
+        if _cset_atom(element):
+            continue
+        all_atoms = False
+        if element.__class__ not in _CONST_SET_TYPES:
             return False
-    try:
-        as_set = frozenset(elements)
-    except TypeError:
-        return False
+    if all_atoms:
+        # Every element is an atom, so nothing in the set can collide with a
+        # string of the same text — key on the spelling and let CPython's
+        # cached str hash do the work.  Duplicate atoms are duplicate
+        # spellings, so the count check below still catches them.
+        as_set = _AtomSpellings([e[0] for e in elements])
+    else:
+        try:
+            as_set = frozenset(elements)
+        except TypeError:
+            return False
     # Duplicates would each yield their own solution under the scan.
     if len(as_set) != len(elements):
         return False

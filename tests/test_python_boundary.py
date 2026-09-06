@@ -1,4 +1,11 @@
-"""Spec §9.1: one outbound conversion for py.* wrappers and ++ thunks."""
+"""Spec §9.1: the outbound conversions — deep for py.*, top-level for ++.
+
+One deep ``to_python`` is what every ``py.*`` wrapper crosses its arguments
+with.  The ``++``/f-string thunk path takes ``unwrap_atom`` instead — §9.1's
+pre-stated fallback, applied 2026-09-07 after Task 14's interleaved A/B put
+``bench_thunk_atoms`` at B/A = 1.074 against the 3 % bar.  Both halves are
+pinned here, including that they are DIFFERENT.
+"""
 
 from clausal.modules.py._helpers import to_python
 from clausal.logic.atoms import mint
@@ -66,21 +73,42 @@ def test_compiler_has_no_module_level_edge_into_modules_py():
     assert out.stdout.strip() == "False", out.stderr
 
 
-def test_thunk_argument_is_converted():
-    # a ++ thunk receiving an atom sees its spelling (Plan 0: same object; the
-    # assertion pins the ROUTE — the compiled body must call $to_python)
+def test_thunk_argument_takes_the_top_level_unwrap_not_the_deep_walk():
+    # The ROUTE, pinned in the emitted AST: a ++ thunk argument lowers to
+    # $unwrap_atom (spec §9.1's fallback, applied 2026-09-07 on Task 14's
+    # perf gate), NOT to the deep $to_python the py.* wrappers get.
     import ast
     from clausal.logic.compiler.terms_to_ast import term_to_ast_expr
     from clausal.terms import PyThunk
     from clausal.logic.variables import Var
     v = Var()
-    expr = term_to_ast_expr(PyThunk(lambda x: x, [v]), {})
-    assert "$to_python" in ast.dump(expr)
+    dumped = ast.dump(term_to_ast_expr(PyThunk(lambda x: x, [v]), {}))
+    assert "$unwrap_atom" in dumped
+    assert "$to_python" not in dumped
 
 
-def test_to_python_is_injected_as_a_runtime_builtin():
+def test_unwrap_atom_takes_a_top_level_atom_and_nothing_deeper():
+    from clausal.logic.to_python import unwrap_atom
+    from clausal.logic.variables import Var
+    assert unwrap_atom(mint("bar")) == "bar"
+    assert type(unwrap_atom(mint("bar"))) is str
+    # A container crosses RAW — this is the whole content of the fallback.
+    nested = [mint("a"), ("f", mint("b"))]
+    assert unwrap_atom(nested) is nested
+    d = DictTerm({mint("k"): mint("v")})
+    assert unwrap_atom(d) is d
+    # …and the deep conversion is still one import away, for code that wants it
+    assert to_python(nested) == ["a", ("f", "b")]
+    assert to_python(d) == {"k": "v"}
+
+
+def test_both_conversions_are_injected_as_runtime_builtins():
     from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
+    from clausal.logic.to_python import unwrap_atom
+    # The deep one stays bound (the py.* wrappers' conversion, and generated
+    # code may still reach it by name); the thunk path gets the shallow one.
     assert INJECTED_RUNTIME_BUILTINS["$to_python"] is to_python
+    assert INJECTED_RUNTIME_BUILTINS["$unwrap_atom"] is unwrap_atom
 
 
 def test_a_cell_atom_reaches_a_thunk_as_its_spelling(tmp_path):

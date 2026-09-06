@@ -54,8 +54,11 @@ add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 
 ## Crossing the boundary: atoms out, strings back
 
-There is **one** outbound conversion, `clausal.logic.to_python.to_python`, and
-every `py.*` wrapper and every `++`/f-string thunk argument goes through it:
+There are **two** outbound conversions, and which one a boundary gets is a
+decided trade rather than an accident.
+
+`clausal.logic.to_python.to_python` is the **deep** one, and every `py.*`
+wrapper argument goes through it:
 
 | Term | What the Python callee sees |
 |---|---|
@@ -66,6 +69,28 @@ every `py.*` wrapper and every `++`/f-string thunk argument goes through it:
 | list `[bar, 1]` | `['bar', 1]` |
 | `DictTerm` / dict | a `dict`, **keys converted too** — an atom key becomes a `str` key |
 | anything else | itself |
+
+`clausal.logic.to_python.unwrap_atom` is the **top-level** one, and it is what
+a `++` escape or an f-string argument gets: it unwraps an atom **argument** to
+its spelling and hands everything else over as it stands.
+
+| Term at a `++` / f-string argument | What the Python expression sees |
+|---|---|
+| atom `bar` (the cell `("bar",)`) | the `str` `'bar'` — its spelling |
+| anything else, **including containers** | itself, unconverted |
+
+So a nested atom crosses **raw**: `++len(L)` on `L = [bar, baz]` sees
+`[('bar',), ('baz',)]`, not `['bar', 'baz']`, and a `DictTerm` argument arrives
+as a `DictTerm`. When you want the deep conversion at a `++`, ask for it by
+name — `from clausal.modules.py._helpers import to_python` in the Python module
+you are escaping into, and call it on the argument there.
+
+Why the asymmetry: a `py.*` call crosses a bounded argument list into a
+foreign library that cannot read engine terms at all, and pays for the walk
+once. A `++` escape is inline in a clause body, runs in the inner loop, and is
+written by someone who can see exactly what they are passing — and the walk
+cost 7.4 % of a `++`-heavy benchmark against a 3 % bar (the design's §9.1
+recorded this fallback in advance; it was applied 2026-09-07 on the measurement).
 
 Inbound is deliberately **not** symmetric: a Python `str` coming back is a
 **string**, never the atom that went out. So
@@ -129,11 +154,12 @@ my_module.bar                     # ('bar',)
   object keys — are keyed by **atoms**, which is what makes `R.stdout` and
   `get(R, stdout, V)` work.
 
-!!! note "Interpolated containers render as Python"
-    Because the thunk path converts, `f"{D}"` on a dict `D = {a: 1}` renders
-    Python's `{'a': 1}` (the atom key as its spelling), not the engine's
-    `{a: 1}`. Ask for the engine's rendering explicitly when you want it:
-    `term_to_string(D, S)`, then interpolate `S`.
+!!! note "Interpolated containers are terms, not converted Python"
+    The thunk path unwraps a **top-level** atom only, so an interpolated
+    container reaches `format()` as the engine term it is — `f"{D}"` on a dict
+    `D = {a: 1}` renders that `DictTerm`'s own `__format__`/`repr`, with the
+    key still the cell `('a',)`. For a rendering you control, ask for one:
+    `term_to_string(D, S)` (or `print_term/1`), then interpolate `S`.
 
 ---
 

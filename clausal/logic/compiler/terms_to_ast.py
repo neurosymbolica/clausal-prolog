@@ -1191,13 +1191,19 @@ def term_to_ast_expr(
     # PyThunk: deferred Python expression via lambda wrapper.
     # Used for f-strings in .clausal files and ++() Python escapes.
     # The thunk stores a callable (lambda) and a list of Var objects.
-    # The compiler emits: thunk.fn($to_python(local0), $to_python(local1), ...)
+    # The compiler emits:
+    #     thunk.fn($unwrap_atom(local0), $unwrap_atom(local1), ...)
     #
-    # $to_python — not $deref — is the ONE outbound term → Python conversion
-    # (spec 2026-09-06-atoms-as-cells-strings §9.1): a ++ escape and an
-    # f-string see an atom as its spelling, exactly as a py.* wrapper call
-    # does.  It subsumes $deref (it derefs first), so this is a widening of
-    # the old single-level deref, not a replacement of it.
+    # $unwrap_atom — not $deref, and NOT the deep $to_python the py.* wrappers
+    # get — is spec 2026-09-06-atoms-as-cells-strings §9.1's stated fallback,
+    # applied 2026-09-07 on Task 14's perf gate (bench_thunk_atoms measured
+    # B/A = 1.074 against the 3% bar with the deep walk here; the top-level
+    # unwrap recovered 8.2% and landed within 0.9% of this arm's pre-flip
+    # $deref).  It derefs and unwraps a TOP-LEVEL atom to its spelling, so it
+    # still fixes what the flip broke — a str method called on what used to be
+    # a str and is now the 1-tuple ("hello",) — while a container argument
+    # crosses raw, exactly as the old single-level $deref left it.  So it is
+    # still a widening of $deref, just a one-level one.
     if isinstance(term, PyThunk):
         # Reference to the thunk's .fn stored in compiled function globals.
         # Use a unique name to avoid collisions.
@@ -1206,13 +1212,13 @@ def term_to_ast_expr(
         for var_obj in term.var_objects:
             vid = var_obj._id
             if vid in var_context:
-                arg_exprs.append(_call(_name("$to_python"), _name(var_context[vid])))
+                arg_exprs.append(_call(_name("$unwrap_atom"), _name(var_context[vid])))
             else:
                 # Body-only var — allocate and convert
                 vname = _var_python_name(var_obj)
                 var_context[vid] = vname
                 arg_exprs.append(_call(
-                    _name("$to_python"),
+                    _name("$unwrap_atom"),
                     ast.NamedExpr(
                         target=ast.Name(id=vname, ctx=ast.Store()),
                         value=_call(_name("Var")),

@@ -1,16 +1,22 @@
-"""The ONE outbound term → Python conversion.
+"""The outbound term → Python conversions — one deep, one top-level.
 
 Spec: ``docs/superpowers/specs/2026-09-06-atoms-as-cells-strings-design.md``
-§9.1.  Before this module there were four independent term↔Python crossings;
-``to_python`` is the single outbound one, shared by
+§9.1.  Before this module there were four independent term↔Python crossings.
+Two remain, and which one a boundary gets is a decided trade, not an
+accident:
 
-  * every ``py.*`` library wrapper (``clausal/modules/py/_helpers.py``
-    re-exports it, and keeps the historical name ``_deep_deref`` as an alias
-    for the in-tree callers and the out-of-tree wrapper distributions), and
-  * the ``PyThunk`` argument path — ``++`` escapes and f-strings — which the
-    compiler lowers to the injected runtime name ``$to_python``
+  * :func:`to_python` — the DEEP conversion, used by every ``py.*`` library
+    wrapper (``clausal/modules/py/_helpers.py`` re-exports it, and keeps the
+    historical name ``_deep_deref`` as an alias for the in-tree callers and
+    the out-of-tree wrapper distributions).  A foreign library cannot read
+    engine terms, so its arguments are converted all the way down.
+  * :func:`unwrap_atom` — a TOP-LEVEL atom only, used by the ``PyThunk``
+    argument path (``++`` escapes and f-strings), which the compiler lowers
+    to the injected runtime name ``$unwrap_atom``
     (``clausal/logic/compiler/terms_to_ast.py``,
     ``INJECTED_RUNTIME_BUILTINS`` in ``clausal/logic/compiler/predicate.py``).
+    This is §9.1's pre-stated fallback, applied 2026-09-07 on Task 14's
+    measurement — see :func:`unwrap_atom` for the numbers and the trade.
 
 It lives under ``clausal/logic/`` rather than with the wrappers precisely so
 that the compiler can bind it: ``clausal.logic`` must not grow a module-level
@@ -30,7 +36,7 @@ from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spel
 from clausal.logic.variables import deref, walk
 from clausal.terms import DictTerm, SegString
 
-__all__ = ["to_python"]
+__all__ = ["to_python", "unwrap_atom"]
 
 
 def to_python(val):
@@ -56,21 +62,17 @@ def to_python(val):
     attribute access (``.init`` / ``.update`` on optax's
     ``GradientTransformation``, etc.) survives a round-trip.
 
-    What this changes for ``f"…"`` and ``++`` (Task 8 carry-forward)
-    ----------------------------------------------------------------
-    The thunk argument path lowers to ``$to_python`` (see the module
-    docstring), so a CONTAINER interpolated into an f-string or read inside a
-    ``++`` escape crosses as the plain Python container -- a ``DictTerm``
-    arrives as a ``dict``, a ``SegList``/``SegString`` as the ``list``/``str``
-    it walks to, a cell as a ``tuple`` -- and is therefore rendered by
-    PYTHON's ``repr``/``format``, not by the engine's ``term_str``.  Concretely
-    ``f"{D}"`` on ``D = {a: 1}`` renders ``{'a': 1}`` (Python dict syntax,
-    the atom key as its spelling) rather than the engine's ``{a: 1}``.  That
-    is the whole point of the single outbound conversion -- a foreign callee
-    sees Python values, never engine term objects -- but it is a visible
-    change in interpolated TEXT, so it is spelled out here.  Code that wants
-    the engine's rendering asks for it: ``term_to_string(D, S)`` (or
-    ``print_term/1``), then interpolate ``S``.
+    NOT the ``f"…"`` / ``++`` path
+    ------------------------------
+    The thunk argument path lowers to ``$unwrap_atom``, not to this function
+    (§9.1's fallback, applied on Task 14's measurement -- see
+    :func:`unwrap_atom`).  So a CONTAINER interpolated into an f-string or
+    read inside a ``++`` escape crosses RAW: a ``DictTerm`` arrives as a
+    ``DictTerm``, a cell as the cell, a nested atom as ``("bar",)``.  Code at
+    a thunk that wants Python values all the way down calls this function by
+    name (``from clausal.modules.py._helpers import to_python``); code that
+    wants the engine's rendering asks for it with ``term_to_string(D, S)``
+    (or ``print_term/1``) and interpolates ``S``.
     """
     # A str is a STRING (spec §5.1) whose Python form is itself, and it can
     # never be a bound Var, so it needs neither the deref nor the atom
@@ -104,3 +106,33 @@ def to_python(val):
     if isinstance(val, dict):
         return {to_python(k): to_python(v) for k, v in val.items()}
     return val
+
+
+def unwrap_atom(val):
+    """The THUNK-path outbound conversion: a TOP-LEVEL atom only.
+
+    Spec §9.1's stated fallback, **applied 2026-09-07** after Task 14's
+    interleaved A/B put ``bench_thunk_atoms`` at B/A = 1.074 against the
+    3 % bar — the one item §9.1 predicted would register.  Rebinding the
+    thunk argument path from :func:`to_python` to this function recovered
+    8.2 % of that benchmark and landed within 0.9 % of the pre-flip
+    single-level ``$deref`` lowering.
+
+    So ``++`` escapes and f-strings unwrap an atom ARGUMENT to its spelling
+    -- the case the flip actually broke, where the old ``$deref`` handed a
+    ``str`` method a 1-tuple -- and hand everything else over exactly as the
+    old lowering did.  A CONTAINER therefore crosses raw: a nested atom
+    inside a list, tuple or dict argument arrives as the cell ``("bar",)``,
+    not as ``"bar"``, and a ``DictTerm``/``SegList`` arrives as itself.  Code
+    that wants the deep conversion asks for it by name -- ``to_python`` is
+    exported from ``clausal.modules.py._helpers`` (also as ``_deep_deref``)
+    and is what every ``py.*`` wrapper still uses.
+
+    The asymmetry is deliberate and is the whole content of the fallback: a
+    ``py.*`` call crosses a bounded argument list into a foreign library that
+    cannot read engine terms, and pays for the walk once; a ``++`` escape is
+    inline in a clause body, runs in the inner loop, and is written by
+    someone who can see exactly what they are passing.
+    """
+    val = deref(val)
+    return _atom_spelling(val) if _term_is_atom(val) else val

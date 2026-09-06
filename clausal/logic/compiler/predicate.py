@@ -65,17 +65,21 @@ from clausal.logic.runtime.tramp_call import (  # noqa: F401
 )
 from clausal.logic.runtime.dict_ops import _subscript, _splat_data, _dict_key  # noqa: F401
 from clausal.logic.runtime.const_set import (  # noqa: F401
+    _AtomSpellings,
     _const_set,
     _CONST_SET_TYPES,
     _cset_atom,
 )
-# The outbound term → Python conversion the PyThunk lowering emits as
-# ``$to_python`` (spec 2026-09-06-atoms-as-cells-strings §9.1).  It is a core
-# module, NOT ``clausal.modules.py._helpers`` (which re-exports it for the
+# The outbound term → Python conversions (spec
+# 2026-09-06-atoms-as-cells-strings §9.1).  A core module, NOT
+# ``clausal.modules.py._helpers`` (which re-exports ``to_python`` for the
 # ``py.*`` wrappers): ``clausal.logic`` must not grow a module-level import
 # edge into ``clausal.modules``.  Its own imports — clausal.terms,
 # clausal.logic.atoms, clausal.logic.variables — are already pulled in above.
-from clausal.logic.to_python import to_python as _to_python_fn  # noqa: F401
+from clausal.logic.to_python import (  # noqa: F401
+    to_python as _to_python_fn,
+    unwrap_atom as _unwrap_atom_fn,
+)
 from clausal.logic.atoms import mint as _mint  # noqa: F401
 from clausal.logic.runtime._seg_helpers import (  # noqa: F401
     seq_getitem as _seq_getitem,
@@ -331,13 +335,18 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # the target directly and so compared a head literal against a 1-char
     # ``str`` — a one-element STRING after THE FLIP, not a char.
     "$seq_getitem": _seq_getitem,
-    # The ONE outbound term → Python conversion (spec
-    # 2026-09-06-atoms-as-cells-strings §9.1).  Emitted by the PyThunk
-    # lowering in terms_to_ast, so ``++`` escapes and f-strings convert their
-    # arguments exactly as a ``py.*`` wrapper call does (atom → spelling,
-    # DictTerm → dict with converted keys, tuples preserved).  It derefs
-    # first, so it is a strict widening of ``$deref`` on that path.
+    # The two outbound term → Python conversions (spec
+    # 2026-09-06-atoms-as-cells-strings §9.1).  The PyThunk lowering in
+    # terms_to_ast emits ``$unwrap_atom`` — §9.1's fallback, applied on Task
+    # 14's perf gate — so a ``++`` escape and an f-string unwrap a TOP-LEVEL
+    # atom argument to its spelling and hand a container over raw.  The deep
+    # ``$to_python`` (atom → spelling at every depth, DictTerm → dict with
+    # converted keys, tuples preserved) is what the ``py.*`` wrappers call;
+    # it stays bound here because generated code may still reach it and
+    # because the binding is what ``test_python_boundary`` pins.  Both deref
+    # first, so both are widenings of ``$deref``.
     "$to_python": _to_python_fn,
+    "$unwrap_atom": _unwrap_atom_fn,
     # The canonical atom constructor (spec §6.1).  Referenced by the
     # declaration-site statement ``term_rewriting._make_atom_str_assign_ast``
     # generates for ``-module``/``-private``: ``foo = $mint('foo')`` binds the
@@ -898,6 +907,12 @@ def _compile_predicate_trampoline_impl(
         "$const_set": _const_set,
         "$CSET_TYPES": _CONST_SET_TYPES,
         "$cset_atom": _cset_atom,
+        "$ATOM_SET": _AtomSpellings,
+        # ``$``-prefixed bindings of the two builtins the inlined atom-shape
+        # test in ``_lower_goalop_shared._is_atom_inline`` compares against,
+        # so a user predicate named ``tuple`` or ``str`` cannot shadow them.
+        "$tuple": tuple,
+        "$str": str,
         "$subscript": _subscript,
         "$splat_data": _splat_data,
         "$dict_key": _dict_key,
@@ -1712,6 +1727,12 @@ def _compile_predicate_shallow_impl(
         "$const_set": _const_set,
         "$CSET_TYPES": _CONST_SET_TYPES,
         "$cset_atom": _cset_atom,
+        "$ATOM_SET": _AtomSpellings,
+        # ``$``-prefixed bindings of the two builtins the inlined atom-shape
+        # test in ``_lower_goalop_shared._is_atom_inline`` compares against,
+        # so a user predicate named ``tuple`` or ``str`` cannot shadow them.
+        "$tuple": tuple,
+        "$str": str,
         "$subscript": _subscript,
         "$splat_data": _splat_data,
         "$dict_key": _dict_key,

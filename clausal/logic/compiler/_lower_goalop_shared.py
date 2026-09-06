@@ -162,7 +162,8 @@ def _const_set_prologue(ctx: CompilationContext, elem, collection):
     """Emit the memo-cell load and the left-operand deref, or return ``None``.
 
     ``None`` means "not eligible" — the caller then emits the plain scan
-    exactly as before.  Otherwise returns ``(stmts, set_local, elem_local)``
+    exactly as before.  Otherwise returns
+    ``(stmts, set_local, mode_local, elem_local)``
     where *stmts* leave ``set_local`` holding either the frozenset or
     ``False`` (ineligible, decided once at first execution by
     ``$const_set``) and ``elem_local`` holding the dereferenced left operand.
@@ -181,6 +182,7 @@ def _const_set_prologue(ctx: CompilationContext, elem, collection):
     ctx.base_globals[cell_name] = [None]
 
     set_local = ctx.fresh("_cset")
+    mode_local = ctx.fresh("_cmod")
     elem_local = ctx.fresh("_cel")
 
     def _cell_slot(store: bool) -> ast.expr:
@@ -206,6 +208,9 @@ def _const_set_prologue(ctx: CompilationContext, elem, collection):
                 [_name(set_local, ast.Store()), _cell_slot(store=True)], build,
             )],
         ),
+        # Which kind of set this callsite got, decided once per call rather
+        # than twice: the guard and the key both read it.
+        _assign(mode_local, _spellings_mode(set_local)),
         _assign(
             elem_local,
             _call(
@@ -214,7 +219,7 @@ def _const_set_prologue(ctx: CompilationContext, elem, collection):
             ),
         ),
     ]
-    return stmts, set_local, elem_local
+    return stmts, set_local, mode_local, elem_local
 
 
 def _assign_multi(targets: list[ast.expr], value: ast.expr) -> ast.stmt:
@@ -222,8 +227,95 @@ def _assign_multi(targets: list[ast.expr], value: ast.expr) -> ast.stmt:
     return _locate(ast.Assign(targets=targets, value=value))
 
 
-def _const_set_guard(set_local: str, elem_local: str) -> ast.expr:
-    """``set_local and (elem.__class__ in $CSET_TYPES or $cset_atom(elem))``.
+def _spellings_mode(set_local: str) -> ast.expr:
+    """``set_local.__class__ is $ATOM_SET`` — is this an all-atom callsite?
+
+    ``$const_set`` answers an ``_AtomSpellings`` (a ``frozenset`` subclass)
+    when every element of the constant list is an atom, and a plain
+    ``frozenset`` otherwise.  The mode is only knowable at RUNTIME: the
+    elements are usually ``LoadName`` reads of module globals, whose values
+    the compiler does not have.  So both arms are emitted, and the prologue
+    evaluates this once into a local that the guard and the key both read.
+    """
+    return _locate(ast.Compare(
+        left=_locate(ast.Attribute(
+            value=_name(set_local), attr="__class__", ctx=ast.Load(),
+        )),
+        ops=[ast.Is()],
+        comparators=[_name("$ATOM_SET")],
+    ))
+
+
+def _is_atom_inline(elem_local: str) -> ast.expr:
+    """``elem.__class__ is $tuple and len(elem) == 1 and elem[0].__class__ is
+    $str`` — ``atoms.is_atom`` spelled out in the emitted code.
+
+    Inline rather than the ``$cset_atom`` call this replaces on the hot arm,
+    on measurement: the call is 67 ns of a ~110 ns fast path (2 M-iteration
+    ``timeit``, this box), which is most of what the membership goal costs
+    post-flip.  Every conjunct is load-bearing:
+
+    * ``len(elem) == 1`` — without it the compound cell ``("f", 1)`` would
+      look up its FUNCTOR in a spellings set and hit for any atom named
+      ``f``;
+    * ``elem[0].__class__ is $str`` — without it ``([1],)`` would reach
+      ``hash`` and raise ``TypeError`` inside a membership test.
+
+    ``elem_local`` is a plain local Name (the prologue's ``$deref`` result),
+    so repeating it costs nothing and has no side effect.
+    """
+    return _locate(ast.BoolOp(op=ast.And(), values=[
+        _locate(ast.Compare(
+            left=_locate(ast.Attribute(
+                value=_name(elem_local), attr="__class__", ctx=ast.Load(),
+            )),
+            ops=[ast.Is()],
+            comparators=[_name("$tuple")],
+        )),
+        _locate(ast.Compare(
+            left=_call(_name("len"), _name(elem_local)),
+            ops=[ast.Eq()],
+            comparators=[_locate(ast.Constant(value=1))],
+        )),
+        _locate(ast.Compare(
+            left=_locate(ast.Attribute(
+                value=_locate(ast.Subscript(
+                    value=_name(elem_local),
+                    slice=_locate(ast.Constant(value=0)),
+                    ctx=ast.Load(),
+                )),
+                attr="__class__", ctx=ast.Load(),
+            )),
+            ops=[ast.Is()],
+            comparators=[_name("$str")],
+        )),
+    ]))
+
+
+def _const_set_lookup(set_local: str, mode_local: str, elem_local: str) -> ast.expr:
+    """``(elem[0] if <spellings mode> else elem) in set_local``.
+
+    In spellings mode the guard has already established that the left operand
+    is an atom, so slot 0 exists and is its spelling.  In mixed mode the set
+    holds whole terms and the operand is looked up as it stands.
+    """
+    return _locate(ast.Compare(
+        left=_locate(ast.IfExp(
+            test=_name(mode_local),
+            body=_locate(ast.Subscript(
+                value=_name(elem_local),
+                slice=_locate(ast.Constant(value=0)),
+                ctx=ast.Load(),
+            )),
+            orelse=_name(elem_local),
+        )),
+        ops=[ast.In()],
+        comparators=[_name(set_local)],
+    ))
+
+
+def _const_set_guard(set_local: str, mode_local: str, elem_local: str) -> ast.expr:
+    """``set_local and (<the operand may be looked up in this set>)``.
 
     The first conjunct rejects a callsite ``$const_set`` refused.  The second
     rejects a left operand — an unbound Var, a compound term, a list — whose
@@ -231,30 +323,44 @@ def _const_set_guard(set_local: str, elem_local: str) -> ast.expr:
     is not hashable at all.  Either way the scan runs instead; for an unbound
     Var that is what preserves list-order enumeration.
 
-    An ATOM is eligible but cannot be spelled as a type: after the
-    atoms-as-cells flip it is the arity-0 cell ``("bar",)``, and admitting
-    ``tuple`` wholesale would admit compound cells, whose ``==`` is not their
-    ``unify()`` (see ``runtime/const_set``'s module docstring).  Hence the
-    ``or``: ``$cset_atom`` is the arity-0-cell shape test, and Python's
-    short-circuit means a left operand that already passed the class test —
-    an int, a str — never pays for the call.
+    What "may be looked up" means depends on what the set holds:
 
-    The call was measured against an inlined ``__class__ is tuple and
-    len(...) == 1 and ...`` expansion of the same test: no difference outside
-    noise on the membership micro-benchmark, so the readable form stands.
+    * **all-atom callsite** (``$const_set`` answered an ``_AtomSpellings``,
+      which holds spellings): the operand must be an ATOM, full stop.  Any
+      other term — a ``str`` above all — could otherwise test itself against
+      a spelling and answer a hit for a term that does not unify with any
+      element.  Everything else takes the scan, which is always correct and,
+      against an all-atom list, fails on the first comparison.
+    * **mixed callsite** (a plain ``frozenset`` of whole terms): a whitelisted
+      type OR an atom, as before.  An ATOM cannot be spelled as a type — after
+      the flip it is the arity-0 cell ``("bar",)``, and admitting ``tuple``
+      wholesale would admit compound cells, whose ``==`` is not their
+      ``unify()`` (see ``runtime/const_set``'s module docstring) — so
+      ``$cset_atom`` tests the shape, ``or``-ed so that an operand which
+      already passed the class test never pays for the call.  The mixed arm
+      keeps the call: it runs only after the class test has already missed,
+      which for a mixed list is the uncommon case.
+
+    The all-atom arm spells the shape test out inline instead — see
+    :func:`_is_atom_inline` for the measurement that says why.
     """
+    mixed = _locate(ast.BoolOp(op=ast.Or(), values=[
+        _locate(ast.Compare(
+            left=_locate(ast.Attribute(
+                value=_name(elem_local), attr="__class__", ctx=ast.Load(),
+            )),
+            ops=[ast.In()],
+            comparators=[_name("$CSET_TYPES")],
+        )),
+        _call(_name("$cset_atom"), _name(elem_local)),
+    ]))
     return _locate(ast.BoolOp(op=ast.And(), values=[
         _name(set_local),
-        _locate(ast.BoolOp(op=ast.Or(), values=[
-            _locate(ast.Compare(
-                left=_locate(ast.Attribute(
-                    value=_name(elem_local), attr="__class__", ctx=ast.Load(),
-                )),
-                ops=[ast.In()],
-                comparators=[_name("$CSET_TYPES")],
-            )),
-            _call(_name("$cset_atom"), _name(elem_local)),
-        ])),
+        _locate(ast.IfExp(
+            test=_name(mode_local),
+            body=_is_atom_inline(elem_local),
+            orelse=mixed,
+        )),
     ]))
 
 
@@ -458,16 +564,12 @@ def _lower_shared_body(
                 # the list, so the continuation is emitted once.  Branching
                 # around it would double the code size of every membership
                 # goal and square it for nested ones.
-                prologue, set_local, elem_local = fast
+                prologue, set_local, mode_local, elem_local = fast
                 iter_local = ctx.fresh("_cit")
                 prologue.append(ast.If(
-                    test=_const_set_guard(set_local, elem_local),
+                    test=_const_set_guard(set_local, mode_local, elem_local),
                     body=[_assign(iter_local, _locate(ast.IfExp(
-                        test=_locate(ast.Compare(
-                            left=_name(elem_local),
-                            ops=[ast.In()],
-                            comparators=[_name(set_local)],
-                        )),
+                        test=_const_set_lookup(set_local, mode_local, elem_local),
                         # The left operand is ground here, so yielding it in
                         # place of the matching element is indistinguishable:
                         # the loop's unify() then succeeds by identity and
@@ -532,15 +634,13 @@ def _lower_shared_body(
             # ``not in`` already tests the flag *outside* the loop, so here
             # the fast path can set the flag directly — no continuation to
             # duplicate.
-            prologue, set_local, elem_local = fast
+            prologue, set_local, mode_local, elem_local = fast
             return prologue + [
                 ast.If(
-                    test=_const_set_guard(set_local, elem_local),
-                    body=[_assign(found_flag, _locate(ast.Compare(
-                        left=_name(elem_local),
-                        ops=[ast.In()],
-                        comparators=[_name(set_local)],
-                    )))],
+                    test=_const_set_guard(set_local, mode_local, elem_local),
+                    body=[_assign(found_flag,
+                                  _const_set_lookup(set_local, mode_local,
+                                                    elem_local))],
                     orelse=scan,
                 ),
                 test_flag,

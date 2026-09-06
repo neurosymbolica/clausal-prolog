@@ -510,6 +510,15 @@ that use `++`, the thunk path unwraps a **top-level** atom only and the
 difference is documented — that fallback is the only alternative on the
 table.
 
+**Fallback applied 2026-09-07**, on Task 14's measurement: `bench_thunk_atoms`
+came in at B/A = 1.074 against the 3 % bar, and the top-level unwrap
+(`$to_python` → `$unwrap_atom` = `spelling(x) if is_atom(x) else x`, after
+deref, on thunk arguments only) recovered 8.2 % — within 0.9 % of the pre-flip
+single-level `$deref` lowering. The `py.*` wrappers keep the deep
+`to_python`; the trade is recorded in `docs/python_integration.md`, so a
+nested atom inside a list or dict argument to `++` now crosses raw as
+`("bar",)`.
+
 ### 9.2 JSON (`modules/py/json.py`, the only JSON site)
 
 - parse: object keys → atoms (`mint`); string values → strings; numbers,

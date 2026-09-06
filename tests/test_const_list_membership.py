@@ -37,6 +37,7 @@ from clausal.logic.compiler.compile_ctx import (
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.logic.runtime.const_set import (
+    _AtomSpellings,
     _const_set,
     _CONST_SET_TYPES,
     _cset_atom,
@@ -67,6 +68,10 @@ atoms4(X) <- (X in [a, b, c, d])
 strings4(X) <- (X in ["acquire", "dispose", "amend", "cancel"])
 notin4(X) <- (X not in [a, b, c, d])
 mixed(X) <- (X in [a, "a", 1, None])
+# genuinely mixed KINDS.  ``mixed`` above is not one any more: under the
+# default -double_quotes(atom) its "a" is the atom a, so the list holds a
+# duplicate and $const_set refuses the callsite outright.
+mixed_kinds(X) <- (X in [a, 1, None])
 
 # ── unhashable / off-whitelist / non-constant right operands keep the scan
 tuples(X) <- (X in [(1, 2), (3, 4)])
@@ -332,11 +337,28 @@ class TestConstSetBuilder:
     def test_accepts_distinct_scalars(self):
         assert _const_set([1, 2, 3]) == frozenset({1, 2, 3})
 
-    def test_accepts_atoms(self):
+    def test_an_all_atom_list_builds_a_set_of_SPELLINGS(self):
         """An atom is the arity-0 cell ``("a",)``, whose ``==``/``hash`` are
-        1-tuple ones and whose ``unify()`` is exactly that equality."""
-        assert _const_set([mint("a"), mint("b")]) == frozenset(
-            {mint("a"), mint("b")})
+        1-tuple ones and whose ``unify()`` is exactly that equality — so it is
+        eligible.  When EVERY element is an atom the set is keyed on the
+        spelling instead of the cell: CPython caches a str's hash and not a
+        tuple's, so the lookup reads a field where it used to recompute."""
+        built = _const_set([mint("a"), mint("b")])
+        assert built.__class__ is _AtomSpellings
+        assert built == frozenset({"a", "b"})
+        assert all(type(x) is str for x in built)
+
+    def test_a_mixed_list_keeps_whole_terms(self):
+        """The spellings trick is only safe when nothing in the list can
+        collide with a spelling.  A STRING is exactly that collision — after
+        the flip ``"a"`` and ``a`` are different terms that must not unify —
+        so a list holding both keeps the atom CELL in the set."""
+        built = _const_set([mint("a"), "a", 1, None])
+        assert built.__class__ is frozenset
+        assert built == frozenset({mint("a"), "a", 1, None})
+
+    def test_duplicate_atoms_are_caught_through_their_spellings(self):
+        assert _const_set([mint("a"), mint("a"), mint("b")]) is False
 
     def test_refuses_compound_cells(self):
         """``tuple`` must NOT be whitelisted wholesale: a cell of arity >= 1
@@ -407,9 +429,40 @@ def test_the_atom_fast_path_actually_fires():
     cell = cells[0]
 
     assert list(call("atoms4", mint("a"), module=mod))          # one solution
-    assert fn.__globals__[cell][0] == frozenset(
-        {mint("a"), mint("b"), mint("c"), mint("d")}
-    ), "the atom membership callsite fell back to the scan"
+    built = fn.__globals__[cell][0]
+    assert built is not False, "the atom membership callsite fell back to the scan"
+    assert built.__class__ is _AtomSpellings
+    assert built == frozenset({"a", "b", "c", "d"})
+
+
+def test_a_string_operand_cannot_match_a_spellings_set(build):
+    """The one way the spellings mode could be unsound, executed on BOTH
+    builds: the set holds ``"a"`` because ``a`` is an atom, and the left
+    operand here is the STRING ``"a"`` — a different term, which must not
+    unify with the atom and so must answer no solutions.  The generated guard
+    is what keeps it out: in spellings mode a non-atom operand takes the
+    scan.  Its char-list spelling is the same term as the string, and must
+    answer the same."""
+    assert _solutions(build, "atoms4", "a") == []
+    assert _solutions(build, "atoms4", [mint("a")]) == []
+    assert _solutions(build, "atoms4", mint("a")) == [(mint("a"),)]
+
+
+def test_a_mixed_callsite_fires_too_and_keeps_whole_terms():
+    """The other half of the mode split, at a real callsite: ``mixed(X)`` is
+    ``X in [a, 1, None]``, not all atoms, so the memo cell holds a plain
+    frozenset of whole terms — the atom stays in it as the CELL, which is what
+    keeps it distinguishable from the string of the same text."""
+    pymod, mod = _ON
+    fn = pymod.mixed_kinds._get_dispatch()
+    cells = [k for k in fn.__globals__ if k.startswith("$cset_")
+             and k != "$cset_atom"]
+    assert len(cells) == 1, cells
+
+    assert list(call("mixed_kinds", mint("a"), module=mod))
+    built = fn.__globals__[cells[0]][0]
+    assert built.__class__ is frozenset
+    assert mint("a") in built and "a" not in built
 
 
 def test_const_set_is_a_registered_optimisation():
