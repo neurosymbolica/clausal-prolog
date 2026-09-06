@@ -748,26 +748,26 @@ class TestAttributeBuiltinsRegression:
     def test_put_get_del_roundtrip(self):
         t = Trail()
         v = Var()
-        assert list(_put_attr__3(v, "color", "red", t, [])) == [None]
+        assert list(_put_attr__3(v, mint("color"), "red", t, [])) == [None]
         out = Var()
-        assert list(_get_attr__3(v, "color", out, t, [])) == [None]
+        assert list(_get_attr__3(v, mint("color"), out, t, [])) == [None]
         assert deref(out) == "red"
-        assert list(_del_attr__2(v, "color", t, [])) == [None]
+        assert list(_del_attr__2(v, mint("color"), t, [])) == [None]
         out2 = Var()
-        assert list(_get_attr__3(v, "color", out2, t, [])) == []
+        assert list(_get_attr__3(v, mint("color"), out2, t, [])) == []
 
     def test_put_attr_rejects_bad_modes(self):
         t = Trail()
-        assert list(_put_attr__3(1, "k", 2, t, [])) == []          # non-var
+        assert list(_put_attr__3(1, mint("k"), 2, t, [])) == []    # non-var
         assert list(_put_attr__3(Var(), Var(), 2, t, [])) == []    # unbound key
-        assert list(_put_attr__3(Var(), 5, 2, t, [])) == []        # non-str key
+        assert list(_put_attr__3(Var(), 5, 2, t, [])) == []        # non-atom key
 
     def test_get_attr_fails_on_bound_or_missing(self):
         t = Trail()
         v = Var()
         unify(v, 3, t)
-        assert list(_get_attr__3(v, "k", Var(), t, [])) == []
-        assert list(_get_attr__3(Var(), "k", Var(), t, [])) == []
+        assert list(_get_attr__3(v, mint("k"), Var(), t, [])) == []
+        assert list(_get_attr__3(Var(), mint("k"), Var(), t, [])) == []
 
     def test_attvar_check(self):
         t = Trail()
@@ -776,21 +776,23 @@ class TestAttributeBuiltinsRegression:
         put_attr(v, "k", 1, t)
         assert list(_is_att_var__1(v, t, [])) == [None]
         # deleting the only attr → attvar/1 fails again
-        list(_del_attr__2(v, "k", t, []))
+        list(_del_attr__2(v, mint("k"), t, []))
         assert list(_is_att_var__1(v, t, [])) == []
 
     def test_get_attrs_put_attrs_roundtrip(self):
         t = Trail()
         v = Var()
-        assert list(_put_attrs__2(v, DictTerm({"a": 1, "b": 2}), t, [])) == [None]
+        assert list(_put_attrs__2(v, DictTerm({mint("a"): 1, mint("b"): 2}), t, [])) == [None]
         out = Var()
         list(_get_attrs__2(v, out, t, []))
-        assert deref(out).data == {"a": 1, "b": 2}
+        assert deref(out).data == {mint("a"): 1, mint("b"): 2}
 
-    def test_put_attrs_non_str_key_fails(self):
+    def test_put_attrs_non_atom_key_fails(self):
+        # THE FLIP (spec §6.4): a Key is an ATOM; an int is neither an atom
+        # nor a string, so it still FAILS rather than raising.
         t = Trail()
         v = Var()
-        assert list(_put_attrs__2(v, DictTerm({"a": 1, 2: "bad"}), t, [])) == []
+        assert list(_put_attrs__2(v, DictTerm({mint("a"): 1, 2: "bad"}), t, [])) == []
         # earlier puts are trailed, so an enclosing choice point undoes them
 
     def test_attr_backtracking(self):

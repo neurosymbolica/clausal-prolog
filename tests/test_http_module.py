@@ -326,3 +326,61 @@ class TestUrlJoin:
         # nv
         sols, _ = simple_solutions(_join_2, Var(), Var())
         assert len(sols) == 0
+
+
+# ── Task 12b: atoms in the text and option positions (spec §9.4) ─────────
+
+
+class TestAtomArguments:
+    """A wrapper that takes text accepts a string OR an ATOM (spec §9.4).
+
+    ``py.http`` was migrated onto ``to_text`` for header names and values
+    only; the URL, the method and the whole ``request/3`` options dict still
+    gated on ``isinstance(x, str)`` / looked options up under ``str`` keys.
+    A source-written ``get("http://…", B)`` is an ATOM in the default
+    ``-double_quotes(atom)`` mode, and a source-written options dict has
+    ATOM keys (§6.8), so both silently failed.
+    """
+
+    @patch("clausal.modules.py.http._urlopen")
+    def test_get_accepts_an_atom_url(self, mock_urlopen):
+        # nv
+        mock_urlopen.return_value = _mock_response(b"hello")
+        body = Var()
+        sols, _ = simple_solutions(_get_2, mint("http://example.com"), body)
+        assert len(sols) == 1
+        assert deref(body) == "hello"
+        # The URL reached urllib as text, not as a tuple repr.
+        req = mock_urlopen.call_args[0][0]
+        assert req.full_url == "http://example.com"
+
+    @patch("clausal.modules.py.http._urlopen")
+    def test_request_reads_an_atom_keyed_options_dict(self, mock_urlopen):
+        # nv
+        mock_urlopen.return_value = _mock_response(b"ok")
+        status, body = Var(), Var()
+        opts = DictTerm({
+            mint("url"): mint("http://example.com/a"),
+            mint("method"): mint("POST"),
+            mint("headers"): DictTerm({mint("X-Tag"): mint("t12b")}),
+            mint("data"): mint("payload"),
+            mint("timeout"): 5,
+        })
+        sols, _ = simple_solutions(_request_3, opts, status, body)
+        assert len(sols) == 1
+        assert deref(body) == "ok"
+        req = mock_urlopen.call_args[0][0]
+        assert req.full_url == "http://example.com/a"
+        assert req.get_method() == "POST"
+        assert req.data == b"payload"
+        assert req.get_header("X-tag") == "t12b"
+
+    @patch("clausal.modules.py.http._urlopen")
+    def test_post_accepts_an_atom_body(self, mock_urlopen):
+        # nv
+        mock_urlopen.return_value = _mock_response(b"ok")
+        body = Var()
+        sols, _ = simple_solutions(
+            _post_3, mint("http://example.com"), mint("payload"), body)
+        assert len(sols) == 1
+        assert mock_urlopen.call_args[0][0].data == b"payload"

@@ -147,15 +147,16 @@ def _uuid_str_2(u, s, trail, k):
     """uuid_str/2: bidirectional — UUID ↔ hyphenated string.
 
     If U is ground UUID: decompose → S = str(U).
-    If S is ground string: construct → U = uuid.UUID(S).
+    If S is ground TEXT (a string or an ATOM, spec §9.4): construct →
+    U = uuid.UUID(S).
     """
     u, s = deref(u), deref(s)
     if isinstance(u, _uuid.UUID):
         if unify(s, str(u), trail):
             yield None
-    elif isinstance(s, str) and not is_var(s):
+    elif (s_text := to_text(s)) is not None:
         try:
-            val = _uuid.UUID(s)
+            val = _uuid.UUID(s_text)
         except (ValueError, AttributeError) as exc:
             note_rejected_call("uuid_str/2", exc)
             return
@@ -171,15 +172,16 @@ def _uuid_hex_2(u, h, trail, k):
     """uuid_hex/2: bidirectional — UUID ↔ 32-char hex string.
 
     If U is ground UUID: decompose → H = U.hex.
-    If H is ground string: construct → U = uuid.UUID(hex=H).
+    If H is ground TEXT (a string or an ATOM, spec §9.4): construct →
+    U = uuid.UUID(hex=H).
     """
     u, h = deref(u), deref(h)
     if isinstance(u, _uuid.UUID):
         if unify(h, u.hex, trail):
             yield None
-    elif isinstance(h, str) and not is_var(h):
+    elif (h_text := to_text(h)) is not None:
         try:
-            val = _uuid.UUID(hex=h)
+            val = _uuid.UUID(hex=h_text)
         except (ValueError, AttributeError) as exc:
             note_rejected_call("uuid_hex/2", exc)
             return
@@ -195,15 +197,16 @@ def _uuid_urn_2(u, urn, trail, k):
     """uuid_urn/2: bidirectional — UUID ↔ URN string.
 
     If U is ground UUID: decompose → Urn = U.urn.
-    If Urn is ground string: construct → U from URN.
+    If Urn is ground TEXT (a string or an ATOM, spec §9.4): construct →
+    U from URN.
     """
     u, urn = deref(u), deref(urn)
     if isinstance(u, _uuid.UUID):
         if unify(urn, u.urn, trail):
             yield None
-    elif isinstance(urn, str) and not is_var(urn):
+    elif (urn_text := to_text(urn)) is not None:
         try:
-            val = _uuid.UUID(urn)
+            val = _uuid.UUID(urn_text)
         except (ValueError, AttributeError) as exc:
             note_rejected_call("uuid_urn/2", exc)
             return

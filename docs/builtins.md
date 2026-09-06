@@ -732,13 +732,13 @@ Reflect the registered parameter name list for the predicate `FunctorName/Arity`
 
 Attributed variables carry key-value metadata that survives through unification. This is the mechanism that powers CLP(ℤ), CLP(B), CLP(ℝ), dif/2, and units constraints internally. These predicates expose the API so users can build custom constraint solvers.
 
-Attribute keys are strings. Attribute values can be any term. All mutations are trailed (undone on backtracking).
+Attribute keys are **atoms** — `put_attr(X, my_key, V)`, or `'my key'` when the name needs quoting. A string key raises `type_error(atom, Key)`. Attribute values can be any term. All mutations are trailed (undone on backtracking).
 
 ### `put_attr/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:put_attr_3"
 ```
-Attach attribute `Value` under string `Key` to an unbound variable. Overwrites any existing value for that key. Trailed.
+Attach attribute `Value` under the atom `Key` to an unbound variable. Overwrites any existing value for that key. Trailed.
 
 ---
 
@@ -762,7 +762,7 @@ Remove the attribute under `Key`. Succeeds even if no attribute existed (no-op).
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:get_attrs_2"
 ```
-Unify `Attrs` with a `DictTerm` containing all attributes on `Var`. Empty `DictTerm` if no attributes.
+Unify `Attrs` with a `DictTerm` containing all attributes on `Var`, keyed by the same atoms `put_attr/3` takes. Empty `DictTerm` if no attributes.
 
 ---
 

@@ -568,3 +568,41 @@ class TestFixtureIntegration:
         # nv
         assert _succeeds("Test", name, module=self.module), \
             f"Test({name!r}) failed"
+
+
+# ── Task 12b: atoms in the text positions (spec §9.4) ────────────────────
+
+
+class TestAtomArguments:
+    """A wrapper that takes text accepts a string OR an ATOM (spec §9.4).
+
+    ``py.uuid`` was migrated onto ``to_text`` for the ``uuid_v3``/``uuid_v5``
+    namespace alias and name only; the CONSTRUCT direction of
+    ``uuid_str/2``, ``uuid_hex/2`` and ``uuid_urn/2`` still gated on
+    ``isinstance(x, str)``, so a source-written UUID literal — an atom in the
+    default ``-double_quotes(atom)`` mode — silently failed.
+    """
+
+    def test_uuid5_accepts_an_atom_namespace_and_name(self):
+        # nv
+        from clausal.logic.atoms import mint
+        atom_u, str_u = Var(), Var()
+        assert len(simple_solutions(
+            _uuid5_3, mint("dns"), mint("example.com"), atom_u)[0]) == 1
+        simple_solutions(_uuid5_3, "dns", "example.com", str_u)
+        # The atom crossed as its spelling: same UUID as the string form.
+        assert deref(atom_u) == deref(str_u)
+
+    @pytest.mark.parametrize("fn,text_of", [
+        (_uuid_str_2, str),
+        (_uuid_hex_2, lambda u: u.hex),
+        (_uuid_urn_2, lambda u: u.urn),
+    ])
+    def test_construct_from_an_atom(self, fn, text_of):
+        # nv
+        from clausal.logic.atoms import mint
+        original = uuid.uuid4()
+        out = Var()
+        results, _ = simple_solutions(fn, out, mint(text_of(original)))
+        assert len(results) == 1
+        assert deref(out) == original

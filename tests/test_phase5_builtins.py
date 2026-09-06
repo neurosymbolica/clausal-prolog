@@ -792,38 +792,38 @@ class TestSum:
     def test_ground_eq(self):
         """sum_([1, 2, 3], #=, 6) succeeds."""
         # nv
-        goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], "#=", 6], kwargs=[])
+        goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], mint("#="), 6], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_ground_eq_fails(self):
         """sum_([1, 2, 3], #=, 7) fails."""
         # nv
-        goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], "#=", 7], kwargs=[])
+        goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], mint("#="), 7], kwargs=[])
         assert solutions(goal) == []
 
     def test_ground_lt(self):
         """sum_([1, 2, 3], #<, 10) succeeds."""
         # nv
-        goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], "#<", 10], kwargs=[])
+        goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], mint("#<"), 10], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_ground_lt_fails(self):
         """sum_([1, 2, 3], #<, 5) fails."""
         # nv
-        goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], "#<", 5], kwargs=[])
+        goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], mint("#<"), 5], kwargs=[])
         assert solutions(goal) == []
 
     def test_empty_list(self):
         """sum_([], #=, 0) succeeds."""
         # nv
-        goal = Call(func=LoadName(name="sum_"), args=[[], "#=", 0], kwargs=[])
+        goal = Call(func=LoadName(name="sum_"), args=[[], mint("#="), 0], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_unify_value(self):
         """sum_([1, 2, 3], #=, V) with V unbound → V = 6."""
         # nv
         v = Var()
-        goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], "#=", v], kwargs=[])
+        goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], mint("#="), v], kwargs=[])
         result = sol_var(goal, v)
         assert result == [6]
 
@@ -833,19 +833,19 @@ class TestScalarProduct:
         """scalar_product([2, 3], [4, 5], #=, 23) succeeds (2*4 + 3*5 = 23)."""
         # nv
         goal = Call(func=LoadName(name="scalar_product"),
-                    args=[[2, 3], [4, 5], "#=", 23], kwargs=[])
+                    args=[[2, 3], [4, 5], mint("#="), 23], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_ground_fails(self):
         # nv
         goal = Call(func=LoadName(name="scalar_product"),
-                    args=[[2, 3], [4, 5], "#=", 10], kwargs=[])
+                    args=[[2, 3], [4, 5], mint("#="), 10], kwargs=[])
         assert solutions(goal) == []
 
     def test_mismatched_lengths_fails(self):
         # nv
         goal = Call(func=LoadName(name="scalar_product"),
-                    args=[[1, 2, 3], [4, 5], "#=", 0], kwargs=[])
+                    args=[[1, 2, 3], [4, 5], mint("#="), 0], kwargs=[])
         assert solutions(goal) == []
 
 
@@ -1001,7 +1001,7 @@ class TestSumConstraint:
         x, y, t = Var(), Var(), Var()
         in_domain(x, 1, 5, trail)
         in_domain(y, 1, 5, trail)
-        assert list(fd_sum([x, y], "#=", t, trail))
+        assert list(fd_sum([x, y], mint("#="), t, trail))
         st = get_attr(t, FD_KEY)
         assert domain_min(st.domain) == 2
         assert domain_max(st.domain) == 10
@@ -1013,7 +1013,7 @@ class TestSumConstraint:
         x, y = Var(), Var()
         in_domain(x, 1, 5, trail)
         in_domain(y, 1, 5, trail)
-        assert list(fd_sum([x, y], "#=", 10, trail))
+        assert list(fd_sum([x, y], mint("#="), 10, trail))
         # Propagation fully determines both variables to the unique solution
         assert deref(x) == 5
         assert deref(y) == 5
@@ -1025,7 +1025,7 @@ class TestSumConstraint:
         x, y = Var(), Var()
         in_domain(x, 1, 3, trail)
         in_domain(y, 1, 3, trail)
-        assert not list(fd_sum([x, y], "#=", 10, trail))
+        assert not list(fd_sum([x, y], mint("#="), 10, trail))
 
     def test_sum_lt_narrows(self):
         """X in [1,5], Y in [1,5]: sum_([X,Y], #<, 5) → each max ≤ 3."""
@@ -1034,7 +1034,7 @@ class TestSumConstraint:
         x, y = Var(), Var()
         in_domain(x, 1, 5, trail)
         in_domain(y, 1, 5, trail)
-        assert list(fd_sum([x, y], "#<", 5, trail))
+        assert list(fd_sum([x, y], mint("#<"), 5, trail))
         sx = get_attr(x, FD_KEY)
         sy = get_attr(y, FD_KEY)
         assert domain_max(sx.domain) <= 3
@@ -1047,7 +1047,7 @@ class TestSumConstraint:
         x, y = Var(), Var()
         in_domain(x, 1, 5, trail)
         in_domain(y, 1, 5, trail)
-        assert list(fd_sum([x, y], "#=", 7, trail))
+        assert list(fd_sum([x, y], mint("#="), 7, trail))
         results = []
         for _ in label([x, y], trail):
             results.append((deref(x), deref(y)))
@@ -1059,7 +1059,7 @@ class TestSumConstraint:
         # nv
         trail = fresh_trail()
         v = Var()
-        assert list(fd_sum([1, 2, 3], "#=", v, trail))
+        assert list(fd_sum([1, 2, 3], mint("#="), v, trail))
         assert deref(v) == 6
 
     def test_sum_ground_vars_unbound_value_lt(self):
@@ -1068,7 +1068,7 @@ class TestSumConstraint:
         trail = fresh_trail()
         v = Var()
         in_domain(v, 1, 20, trail)
-        assert list(fd_sum([1, 2, 3], "#<", v, trail))
+        assert list(fd_sum([1, 2, 3], mint("#<"), v, trail))
         sv = get_attr(v, FD_KEY)
         assert domain_min(sv.domain) == 7
 
@@ -1081,7 +1081,7 @@ class TestScalarProductConstraint:
         x, y, t = Var(), Var(), Var()
         in_domain(x, 1, 5, trail)
         in_domain(y, 1, 5, trail)
-        assert list(fd_scalar_product([2, 3], [x, y], "#=", t, trail))
+        assert list(fd_scalar_product([2, 3], [x, y], mint("#="), t, trail))
         st = get_attr(t, FD_KEY)
         assert domain_min(st.domain) == 5
         assert domain_max(st.domain) == 25
@@ -1093,7 +1093,7 @@ class TestScalarProductConstraint:
         x, y = Var(), Var()
         in_domain(x, 1, 5, trail)
         in_domain(y, 1, 5, trail)
-        assert list(fd_scalar_product([2, 3], [x, y], "#=", 12, trail))
+        assert list(fd_scalar_product([2, 3], [x, y], mint("#="), 12, trail))
         # Propagation fully determines the unique integer solution in [1,5]
         xv, yv = deref(x), deref(y)
         assert 2 * xv + 3 * yv == 12
@@ -1106,7 +1106,7 @@ class TestScalarProductConstraint:
         x, y = Var(), Var()
         in_domain(x, 1, 5, trail)
         in_domain(y, 1, 5, trail)
-        assert list(fd_scalar_product([2, -1], [x, y], "#=", 5, trail))
+        assert list(fd_scalar_product([2, -1], [x, y], mint("#="), 5, trail))
         sx = get_attr(x, FD_KEY)
         assert domain_min(sx.domain) >= 3
 
@@ -1117,7 +1117,7 @@ class TestScalarProductConstraint:
         x, y = Var(), Var()
         in_domain(x, 1, 3, trail)
         in_domain(y, 1, 3, trail)
-        assert not list(fd_scalar_product([1, 1], [x, y], "#=", 10, trail))
+        assert not list(fd_scalar_product([1, 1], [x, y], mint("#="), 10, trail))
 
 
 class TestElementConstraint:

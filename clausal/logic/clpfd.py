@@ -32,6 +32,7 @@ from collections import deque
 from fractions import Fraction
 from typing import Any
 
+from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.variables import (
     Var,
     Trail,
@@ -2284,8 +2285,38 @@ _FD_OPS = {
 }
 
 
+def _op_spelling(op, context):
+    """The SPELLING of an operator ATOM (``#=``, ``#<``, ``<``, …), or None.
+
+    Spec §6.4: an operator name is an ATOM.  ``#=`` cannot be written bare in
+    the surface (``#`` opens a comment), so source spells it ``"#="`` — which
+    in the default ``-double_quotes(atom)`` mode is the atom ``("#=",)``.
+    Before THE FLIP (2026-09-06-atoms-as-cells-strings) this library gated on
+    ``isinstance(op, str)``, which after the flip matches a STRING and nothing
+    a source program can write, so every source-written call failed silently.
+
+    - an atom → its spelling, which is what ``_FD_OPS`` and
+      ``_op_to_binary_constraint`` key on;
+    - a plain ``str`` → ``type_error(atom, …)``: a string is not a name, and
+      a silent failure is exactly what hid this bug;
+    - anything else (an unbound Var, a number, a compound) → ``None``, and
+      the caller fails as it has always failed on a malformed operator.
+    """
+    if is_atom(op):
+        return spelling(op)
+    if type(op) is str:
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, type_error,
+        )
+        raise LogicException(type_error("atom", op, context))
+    return None
+
+
 def _op_to_binary_constraint(op_str, lhs, rhs):
-    """Return the appropriate binary Constraint for lhs OP rhs, or None."""
+    """Return the appropriate binary Constraint for lhs OP rhs, or None.
+
+    *op_str* is an operator SPELLING (see :func:`_op_spelling`), not a term.
+    """
     op_str = op_str.removeprefix("#")
     if op_str == "<":
         return LtConstraint(lhs, rhs)
@@ -2309,7 +2340,10 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
     op_str = deref(op_str)
     value = deref(value)
 
-    if not isinstance(vars_list, list) or not isinstance(op_str, str):
+    if not isinstance(vars_list, list):
+        return
+    op_str = _op_spelling(op_str, "sum_/3")
+    if op_str is None:
         return
     op_fn = _FD_OPS.get(op_str)
     if op_fn is None:
@@ -2371,7 +2405,8 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
         return
     if len(coeffs) != len(vars_list):
         return
-    if not isinstance(op_str, str):
+    op_str = _op_spelling(op_str, "scalar_product/4")
+    if op_str is None:
         return
     op_fn = _FD_OPS.get(op_str)
     if op_fn is None:
@@ -2820,7 +2855,8 @@ class TuplesInConstraint(Constraint):
 class ZcompareConstraint(Constraint):
     """zcompare(Order, X, Y) — reified three-way comparison.
 
-    Order is unified with '<', '=', or '>' depending on X vs Y.
+    Order is unified with the ATOM ``<``, ``=`` or ``>`` depending on X vs Y
+    (spec §6.4: the ISO order names are atoms, not strings).
     """
     __slots__ = ('order', 'x', 'y')
 
@@ -2828,7 +2864,7 @@ class ZcompareConstraint(Constraint):
         self.order = order
         self.x = x
         self.y = y
-        # Only track FD vars (x, y), not the order var (which is bound to a string)
+        # Only track FD vars (x, y), not the order var (which is bound to an atom)
         vars_ = []
         _collect_vars_from(x, vars_)
         _collect_vars_from(y, vars_)
@@ -2847,7 +2883,14 @@ class ZcompareConstraint(Constraint):
         x_lo, x_hi = domain_min(xd), domain_max(xd)
         y_lo, y_hi = domain_min(yd), domain_max(yd)
 
-        if isinstance(order, str):
+        # Order is an ATOM when ground (§6.4).  A STRING here can only come
+        # from a later ``unify(Order, "<")``, which binds the order var to a
+        # term that is not an order name at all: the constraint is then
+        # unsatisfiable and fails through the tail below, rather than raising
+        # out of the middle of a wake-up hook.  ``zcompare/3`` itself, the
+        # position a program actually writes, raises.
+        if is_atom(order):
+            order = spelling(order)
             # Order is ground — enforce the relation
             if order == '<':
                 if is_var(x):
@@ -2898,14 +2941,14 @@ class ZcompareConstraint(Constraint):
         elif is_var(order):
             # Aliased operands: X vs X is always equal (A06-F012b).
             if x is y:
-                return unify(order, '=', trail)
+                return unify(order, mint('='), trail)
             # Determine order from domains
             if x_hi < y_lo:
-                return unify(order, '<', trail)
+                return unify(order, mint('<'), trail)
             elif x_lo > y_hi:
-                return unify(order, '>', trail)
+                return unify(order, mint('>'), trail)
             elif x_lo == x_hi and y_lo == y_hi and x_lo == y_lo:
-                return unify(order, '=', trail)
+                return unify(order, mint('='), trail)
             # Otherwise undetermined — keep constraint
             return True
         else:
@@ -3024,9 +3067,9 @@ def tuples_in(tuples_list, relation, trail: Trail) -> bool:
 
 
 # Wake-up attr key for the zcompare order variable.  The order var is bound
-# to a STRING atom ('<' / '=' / '>'), not an int, so the FD hook is the wrong
-# vehicle; this lightweight key re-runs the pending ZcompareConstraint(s) when
-# the order var is later ground (A06-F012a).
+# to an ORDER ATOM (``<`` / ``=`` / ``>``), not an int, so the FD hook is the
+# wrong vehicle; this lightweight key re-runs the pending
+# ZcompareConstraint(s) when the order var is later ground (A06-F012a).
 ZCMP_KEY = "zcompare_wakeup"
 
 
@@ -3035,7 +3078,7 @@ def _zcompare_hook(attr_value, bound_to, trail: Trail) -> bool:
 
     *attr_value* is the list of ZcompareConstraint objects waiting on this
     order var.  Hooks run after the binding is committed, so each
-    constraint's propagate() sees the now-ground order atom.
+    constraint's propagate() sees the now-ground order ATOM.
     """
     bound_to = deref(bound_to)
     if is_var(bound_to):
@@ -3057,7 +3100,9 @@ register_attr_hook(ZCMP_KEY, _zcompare_hook)
 def zcompare(order, x, y, trail: Trail) -> bool:
     """Post zcompare/3 constraint.
 
-    *order* will be unified with '<', '=', or '>' based on x vs y.
+    *order* is the ORDER ATOM ``<``, ``=`` or ``>`` (spec §6.4) — read by
+    spelling when it is ground, minted when this posts the answer.  A plain
+    ``str`` is a STRING, not a name, and raises ``type_error(atom, …)``.
     """
     order = deref(order)
     x = deref(x)
@@ -3070,32 +3115,33 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     # If both x and y are ground, just determine the order directly
     if isinstance(x, int) and isinstance(y, int):
         if x < y:
-            return unify(order, '<', trail)
+            return unify(order, mint('<'), trail)
         elif x > y:
-            return unify(order, '>', trail)
+            return unify(order, mint('>'), trail)
         else:
-            return unify(order, '=', trail)
+            return unify(order, mint('='), trail)
 
     # If order is ground, use it to constrain x and y
-    if isinstance(order, str):
-        if order == '<':
+    order_name = _op_spelling(order, "zcompare/3")
+    if order_name is not None:
+        if order_name == '<':
             return fd_lt(x, y, trail)
-        elif order == '>':
+        elif order_name == '>':
             return fd_gt(x, y, trail)
-        elif order == '=':
+        elif order_name == '=':
             return fd_eq(x, y, trail)
         else:
             return False
 
     # General case: post constraint (order is a Var, x/y may be vars)
-    # Don't put FD on order — it will be bound to a string atom
+    # Don't put FD on order — it will be bound to an order ATOM
     constraint = ZcompareConstraint(order, x, y)
     # Attach constraint only to FD vars (x and y), not order
     for v in constraint.vars:
         v = deref(v)
         if is_var(v) and v is not deref(order):
             _add_constraint(v, constraint, trail)
-    # Attach a string-binding wake-up to the order var so that binding it
+    # Attach an atom-binding wake-up to the order var so that binding it
     # AFTER posting re-fires the constraint and narrows x/y (A06-F012a).
     od = deref(order)
     if is_var(od):

@@ -7,6 +7,7 @@ import threading
 
 import pytest
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 
@@ -328,3 +329,44 @@ class TestTcpTrampoline:
         assert deref(data) == "trampoline test"
 
         trampoline_solutions(close, s)
+
+
+# ── Task 12b: atoms in the text positions (spec §9.4) ────────────────────
+
+
+class TestAtomArguments:
+    """A wrapper that takes text accepts a string OR an ATOM (spec §9.4).
+
+    ``py.tcp`` was never migrated onto ``to_text``: the host of
+    ``connect/3``/``listen/3`` and the payload of ``send/2`` gated on
+    ``isinstance(x, str)``, so a source-written ``connect('127.0.0.1', P, S)``
+    — an atom in the default ``-double_quotes(atom)`` mode — failed silently.
+    """
+
+    def test_connect_and_send_accept_atoms(self, echo_server):
+        # nv
+        host, port = echo_server
+        sock = Var()
+        sols, _ = simple_solutions(_connect_3, mint(host), port, sock)
+        assert len(sols) == 1
+        s = deref(sock)
+
+        sols, _ = simple_solutions(_send_2, s, mint("t12b atom payload"))
+        assert len(sols) == 1
+
+        data = Var()
+        sols, _ = simple_solutions(_receive_2, s, data)
+        assert len(sols) == 1
+        # The atom crossed as its spelling, never as a tuple repr.
+        assert deref(data) == "t12b atom payload"
+        simple_solutions(_close_1, s)
+
+    def test_listen_accepts_an_atom_host(self):
+        # nv
+        server = Var()
+        sols, _ = simple_solutions(_listen_3, mint("127.0.0.1"), 0, server)
+        assert len(sols) == 1
+        try:
+            assert deref(server).getsockname()[0] == "127.0.0.1"
+        finally:
+            simple_solutions(_close_1, deref(server))

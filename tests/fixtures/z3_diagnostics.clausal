@@ -4,18 +4,22 @@
 
 # ── Named constraints and unsat core ────────────────────────────────────────
 
+# THE FLIP (spec §6.4): a constraint's Name is a NAME, so it is an ATOM —
+# single-quoted here because this file is in `-double_quotes(chars)` mode,
+# where "x_high" would be a STRING and z3.named/2 refuses it.  The core comes
+# back as the same atoms.
 Test("unsat core finds conflict") <- (
     z3.integer((1 <= X <= 10)),
-    z3.named(X > 8, "x_high"),
-    z3.named(X < 3, "x_low"),
+    z3.named(X > 8, 'x_high'),
+    z3.named(X < 3, 'x_low'),
     z3.unsatisfiable_core(CORE),
-    in_("x_high", CORE),
-    in_("x_low", CORE),
+    in_('x_high', CORE),
+    in_('x_low', CORE),
 )  # nv
 
 Test("sat has no core") <- (
     z3.integer((1 <= X <= 10)),
-    z3.named(X > 5, "x_big"),
+    z3.named(X > 5, 'x_big'),
     not(z3.unsatisfiable_core(_)),
 )  # nv
 

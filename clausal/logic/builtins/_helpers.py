@@ -34,18 +34,16 @@ def _functor_name_py(term: Any) -> Any:
     ``"[]"`` the nil atom). Bytes mirror that as the codes model (§1b:
     the codes model is untouched by the str~list cons-rule retirement).
 
-    P3-1 §1b/R2 (SUPERSEDED, kept as the fallback's own reading): strs
-    were RETIRED from cons-cell decomposition — a str was always an atom
-    (runtime str = atom), so it was its own functor name with arity 0,
-    the empty string keeping the ISO nil-atom spelling ``"[]"``.
-
-    THE FLIP (atoms-as-cells/strings §6.4) SHADOWS the ``str`` reading
-    below: a ``str`` is a STRING now and answers what its char list
-    answers, and the wrapper of the same name further down this file
-    takes every ``str`` before it can reach here.  The P3-1 reading is
-    kept verbatim because this function is the Python FALLBACK for the C
-    accessor of the same name, whose own ``str`` arm is likewise
-    shadowed; the twins are retired together or not at all.
+    Strings follow the SAME cons-cell semantics as of THE FLIP
+    (atoms-as-cells/strings §6.4): a ``str`` is a STRING — the list of its
+    char atoms — so it answers what that list answers.  P3-1 §1b/R2 had
+    RETIRED strs from cons-cell decomposition (a str was always an atom,
+    hence its own functor name with arity 0); Task 12b retired that reading
+    from this fallback and from its C twin ``_functor_name`` in
+    ``variables/_variables.c`` in one move, so the two agree even when the
+    accessor is called directly rather than through the funnel wrapper of
+    the same name further down this file.  The empty string keeps the ISO
+    nil-atom spelling ``"[]"``, as the empty list does.
     """
     if isinstance(term, Compound):
         return term.functor if isinstance(term.functor, str) else None
@@ -56,7 +54,7 @@ def _functor_name_py(term: Any) -> Any:
     if isinstance(term, list):
         return "[]" if len(term) == 0 else "."
     if isinstance(term, str):
-        return "[]" if len(term) == 0 else term
+        return "[]" if len(term) == 0 else "."
     if isinstance(term, bytes):
         return "[]" if len(term) == 0 else "."
     if isinstance(term, (bool, int, float)) or term is None:
@@ -75,17 +73,15 @@ def _arity_py(term: Any) -> int | None:
     (head + tail), empty has arity 0 (the nil atom). Bytes mirror that
     as the codes model (untouched by §1b).
 
-    P3-1 §1b/R2 (SUPERSEDED, kept as the fallback's own reading): strs
-    were RETIRED from cons-cell decomposition — a str was always atomic
-    (arity 0), whether empty or not.
-
-    THE FLIP (atoms-as-cells/strings §6.4) SHADOWS the ``str`` reading
-    below: a ``str`` is a STRING now and answers what its char list
-    answers, and the wrapper of the same name further down this file
-    takes every ``str`` before it can reach here.  The P3-1 reading is
-    kept verbatim because this function is the Python FALLBACK for the C
-    accessor of the same name, whose own ``str`` arm is likewise
-    shadowed; the twins are retired together or not at all.
+    Strings follow the SAME cons-cell semantics as of THE FLIP
+    (atoms-as-cells/strings §6.4): a ``str`` is a STRING — the list of its
+    char atoms — so a non-empty one has arity 2 and the empty one arity 0.
+    P3-1 §1b/R2 had RETIRED strs from cons-cell decomposition (a str was
+    always atomic, arity 0, empty or not); Task 12b retired that reading
+    from this fallback and from its C twin ``_arity`` in
+    ``variables/_variables.c`` in one move, so the two agree even when the
+    accessor is called directly rather than through the funnel wrapper of
+    the same name further down this file.
     """
     if isinstance(term, Compound):
         return len(term.args)
@@ -96,7 +92,7 @@ def _arity_py(term: Any) -> int | None:
     if isinstance(term, list):
         return 0 if len(term) == 0 else 2
     if isinstance(term, str):
-        return 0
+        return 0 if len(term) == 0 else 2
     if isinstance(term, bytes):
         return 0 if len(term) == 0 else 2
     if isinstance(term, (bool, int, float)) or term is None:

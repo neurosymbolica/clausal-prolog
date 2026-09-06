@@ -24,6 +24,7 @@ from fractions import Fraction
 import pytest
 
 from clausal.import_hook import _load_module
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, is_var, unify, get_attr, put_attr
 from clausal.logic import clpfd
 from clausal.logic.clpfd import (
@@ -716,7 +717,7 @@ class TestSumOpStrings:
             t = Trail()
             x, y = Var(), Var()
             in_domain([x, y], 1, 5, t)
-            assert sum(1 for _ in fd_sum([x, y], op, 6, t)) == 1, op
+            assert sum(1 for _ in fd_sum([x, y], mint(op), 6, t)) == 1, op
 
     @pytest.mark.xfail(strict=False, reason="A06-F011: Python-style op strings "
                        "('<=', '==', '!=') — the language's own operator spelling — "
@@ -726,21 +727,21 @@ class TestSumOpStrings:
             t = Trail()
             x, y = Var(), Var()
             in_domain([x, y], 1, 5, t)
-            assert sum(1 for _ in fd_sum([x, y], op, 6, t)) == 1, op
+            assert sum(1 for _ in fd_sum([x, y], mint(op), 6, t)) == 1, op
 
     def test_sum_eq_narrows_and_labels(self):
         t = Trail()
         x, y = Var(), Var()
         in_domain(x, 8, 9, t)
         in_domain(y, 1, 9, t)
-        assert sum(1 for _ in fd_sum([x, y], "#=", 10, t)) == 1
+        assert sum(1 for _ in fd_sum([x, y], mint("#="), 10, t)) == 1
         assert dom(y) == ((1, 2),)
 
     def test_scalar_product_solutions(self):
         t = Trail()
         x, y = Var(), Var()
         in_domain([x, y], 0, 10, t)
-        n = sum(1 for _ in fd_scalar_product([2, 3], [x, y], "#=", 6, t))
+        n = sum(1 for _ in fd_scalar_product([2, 3], [x, y], mint("#="), 6, t))
         assert n == 1
         assert label_set([x, y], t) == {(0, 2), (3, 0)}
 
@@ -756,13 +757,13 @@ class TestZcompare:
         assert zcompare(o, x, y, t)
         assert unify(x, 2, t)
         assert unify(y, 4, t)
-        assert deref(o) == "<"
+        assert deref(o) == mint("<")
 
     def test_ground_order_constrains(self):
         t = Trail()
         x, y = Var(), Var()
         in_domain([x, y], 1, 5, t)
-        assert zcompare("<", x, y, t)
+        assert zcompare(mint("<"), x, y, t)
         assert dom(x) == ((1, 4),)
         assert dom(y) == ((2, 5),)
 
@@ -771,7 +772,7 @@ class TestZcompare:
         o, x, y = Var(), Var(), Var()
         in_domain([x, y], 1, 5, t)
         assert zcompare(o, x, y, t)
-        assert unify(o, "<", t)
+        assert unify(o, mint("<"), t)
         assert dom(x) == ((1, 4),)
 
     def test_binding_order_var_sound_after_labeling(self):
@@ -780,7 +781,7 @@ class TestZcompare:
         o, x, y = Var(), Var(), Var()
         in_domain([x, y], 1, 5, t)
         zcompare(o, x, y, t)
-        assert unify(o, "<", t)
+        assert unify(o, mint("<"), t)
         sols = label_set([x, y], t)
         assert sols == {(a, b) for a in range(1, 6) for b in range(1, 6) if a < b}
 
@@ -789,7 +790,7 @@ class TestZcompare:
         o, x = Var(), Var()
         in_domain(x, 1, 5, t)
         assert zcompare(o, x, x, t)
-        assert deref(o) == "="
+        assert deref(o) == mint("=")
 
 
 # ── A06-F013: global_cardinality var counts never propagate ──────────────────
@@ -828,7 +829,7 @@ class TestGlobalCardinality:
 class TestTypeHoles:
     def test_sum_over_strings_rejected(self):
         t = Trail()
-        assert sum(1 for _ in fd_sum(["a", "b"], "#=", 5, t)) == 0
+        assert sum(1 for _ in fd_sum(["a", "b"], mint("#="), 5, t)) == 0
 
     def test_plus_strings_rejected(self):
         from clausal.logic._arithmetic_core import arith_plus

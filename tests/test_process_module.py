@@ -6,6 +6,7 @@ import time
 
 import pytest
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.process import (
     shell, shell_output, process_create, sleep,
@@ -268,3 +269,58 @@ class TestSleep:
         # nv
         sols, _ = trampoline_solutions(sleep, 0.01)
         assert len(sols) == 1
+
+
+# ── Task 12b: atoms in the text and option positions (spec §9.4) ─────────
+
+
+class TestAtomArguments:
+    """A wrapper that takes text accepts a string OR an ATOM (spec §9.4).
+
+    ``py.process`` was migrated onto ``to_text`` for env names/values only;
+    the command, the program, its argument list and the ``cwd``/``input``
+    options still gated on ``isinstance(x, str)``, and the options dict was
+    read under ``str`` keys.  Source writes atoms in every one of those
+    positions (§6.8 for the dict keys), so they silently failed — or, for
+    the argument list, went to the shell as a Python tuple repr.
+    """
+
+    def test_shell_accepts_an_atom_command(self):
+        # nv
+        assert len(simple_solutions(_shell_1, mint("true"))[0]) == 1
+        assert len(simple_solutions(_shell_1, mint("false"))[0]) == 0
+
+    def test_shell_output_accepts_an_atom_command(self):
+        # nv
+        out = Var()
+        sols, _ = simple_solutions(_shell_output_2, mint("echo t12b"), out)
+        assert len(sols) == 1
+        assert deref(out).strip() == "t12b"
+
+    def test_process_create_accepts_atom_program_and_args(self):
+        # nv
+        result = Var()
+        sols, _ = simple_solutions(
+            _process_create_3, mint("echo"), [mint("t12b"), mint("args")],
+            result)
+        assert len(sols) == 1
+        # ``str(("t12b",))`` would have echoed the tuple repr.
+        assert deref(result).data["stdout"].strip() == "t12b args"
+
+    def test_process_create_reads_an_atom_keyed_options_dict(self, tmp_path):
+        # nv
+        result = Var()
+        opts = DictTerm({mint("cwd"): mint(str(tmp_path))})
+        sols, _ = simple_solutions(
+            _process_create_4, mint("pwd"), [], opts, result)
+        assert len(sols) == 1
+        assert str(tmp_path) in deref(result).data["stdout"]
+
+    def test_process_create_accepts_an_atom_input(self):
+        # nv
+        result = Var()
+        opts = DictTerm({mint("input"): mint("t12b stdin")})
+        sols, _ = simple_solutions(
+            _process_create_4, mint("cat"), [], opts, result)
+        assert len(sols) == 1
+        assert deref(result).data["stdout"] == "t12b stdin"

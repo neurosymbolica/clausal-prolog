@@ -205,6 +205,40 @@ def to_text(val):
     return None
 
 
+_OPTION_MISSING = object()
+
+
+def option(mapping, name, default=None):
+    """The value an options dict holds under the option *name*, or *default*.
+
+    Spec §6.8: a dict literal written in source has ATOM keys —
+    ``{url: "…"}`` compiles its key through ``mint``, and ``D.url`` looks up
+    ``("url",)``.  A dict built on the PYTHON side (``DictTerm({"url": …})``
+    in a test, or a JSON object before §9.2 mints it) has ``str`` keys.  A
+    wrapper's option table has to read both, or a source-written options dict
+    silently reads as empty and the predicate fails with no diagnosis.
+
+    The atom is tried first, because that is what a program actually writes;
+    the ``str`` spelling is the Python-side fallback.  *name* is the plain
+    spelling — callers never build the key themselves.
+    """
+    from clausal.logic.atoms import mint  # noqa: PLC0415
+    got = mapping.get(mint(name), _OPTION_MISSING)
+    if got is _OPTION_MISSING:
+        got = mapping.get(name, _OPTION_MISSING)
+    return default if got is _OPTION_MISSING else got
+
+
+def has_option(mapping, name) -> bool:
+    """Whether an options dict carries *name* under either spelling.
+
+    The companion to :func:`option` for the ``"x" in opts`` shape, where a
+    missing key and a key holding ``None`` must stay distinguishable.
+    """
+    from clausal.logic.atoms import mint  # noqa: PLC0415
+    return mint(name) in mapping or name in mapping
+
+
 def to_bytes(val):
     """Convert text (a string or an ATOM, spec §9.4) or bytes to bytes, else None."""
     if isinstance(val, bytes):

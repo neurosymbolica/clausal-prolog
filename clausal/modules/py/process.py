@@ -17,6 +17,8 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
+    has_option,
+    option,
     simple_to_trampoline,
     to_text,
 )
@@ -44,14 +46,47 @@ def _env_text(val) -> str:
     return text if text is not None else str(val)
 
 
+def _cmd_text(val, pred, arg=1):
+    """The ``str`` a command, program or argument denotes, or ``None``.
+
+    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and
+    both convert to the same ``str`` -- so ``shell('true')`` written in a
+    ``.clausal`` file works exactly as ``shell("true")`` does under
+    ``-double_quotes(chars)``.  THE FLIP (2026-09-06-atoms-as-cells-strings)
+    made the bare ``isinstance(command, str)`` guards below reject every
+    source-written command, silently, and made ``str(deref(a))`` on an
+    argument hand the SHELL a Python tuple repr.  Routed through ``to_text``.
+
+    A bound value that is not text keeps this module's existing behaviour --
+    a recorded type-mismatch note and a clean failure, not a raise.
+    """
+    text = to_text(val)
+    if text is not None:
+        return text
+    expect_type(val, str, pred, arg=arg)  # records the note; always False here
+    return None
+
+
+def _arg_text(val) -> str:
+    """The ``str`` one element of a program's argument list denotes.
+
+    A number is spelled the way ``str`` spells it, as it always was; text --
+    a string or an ATOM (spec §9.4) -- crosses through ``to_text``, so a
+    source-written ``process_create(echo, [hello], R)`` passes ``hello`` and
+    not the Python tuple repr ``"('hello',)"``.  Anything else keeps the old
+    ``str`` fallback: this position never promised a type contract.
+    """
+    text = to_text(val)
+    return text if text is not None else str(val)
+
 
 # ── Predicates ──────────────────────────────────────────────────────────
 
 
 def _shell_1(command, trail, k):
     """shell/1: run shell command. Succeeds if exit code is 0."""
-    command = deref(command)
-    if not expect_type(command, str, "shell/1", arg=1):
+    command = _cmd_text(deref(command), "shell/1")
+    if command is None:
         return
     try:
         result = _subprocess.run(command, shell=True)
@@ -63,8 +98,8 @@ def _shell_1(command, trail, k):
 
 def _shell_2(command, exit_code, trail, k):
     """shell/2: run shell command, unify ExitCode with the exit code."""
-    command = deref(command)
-    if not expect_type(command, str, "shell/2", arg=1):
+    command = _cmd_text(deref(command), "shell/2")
+    if command is None:
         return
     try:
         result = _subprocess.run(command, shell=True)
@@ -76,8 +111,8 @@ def _shell_2(command, exit_code, trail, k):
 
 def _shell_output_2(command, output, trail, k):
     """shell_output/2: run shell command, capture stdout. Fails on non-zero exit."""
-    command = deref(command)
-    if not expect_type(command, str, "shell_output/2", arg=1):
+    command = _cmd_text(deref(command), "shell_output/2")
+    if command is None:
         return
     try:
         result = _subprocess.run(
@@ -93,8 +128,8 @@ def _shell_output_2(command, output, trail, k):
 
 def _shell_output_3(command, output, error, trail, k):
     """shell_output/3: run shell command, capture stdout and stderr. Fails on non-zero exit."""
-    command = deref(command)
-    if not expect_type(command, str, "shell_output/3", arg=1):
+    command = _cmd_text(deref(command), "shell_output/3")
+    if command is None:
         return
     try:
         result = _subprocess.run(
@@ -110,13 +145,13 @@ def _shell_output_3(command, output, error, trail, k):
 
 def _process_create_3(program, args, result_var, trail, k):
     """process_create/3: run a program with argument list (no shell)."""
-    program = deref(program)
+    program = _cmd_text(deref(program), "process_create/3")
     args = deref(args)
-    if not expect_type(program, str, "process_create/3", arg=1):
+    if program is None:
         return
     if not expect_type(args, list, "process_create/3", arg=2):
         return
-    cmd = [program] + [str(deref(a)) for a in args]
+    cmd = [program] + [_arg_text(deref(a)) for a in args]
     try:
         result = _subprocess.run(cmd, capture_output=True, text=True)
     except (OSError, FileNotFoundError):
@@ -131,18 +166,22 @@ def _process_create_3(program, args, result_var, trail, k):
 
 
 def _process_create_4(program, args, options, result_var, trail, k):
-    """process_create/4: run a program with options DictTerm."""
-    program = deref(program)
+    """process_create/4: run a program with options DictTerm.
+
+    The options are read under either spelling of each option name (see
+    ``modules.py.option``): a dict written in source has ATOM keys (§6.8).
+    """
+    program = _cmd_text(deref(program), "process_create/4")
     args = deref(args)
     options = deref(options)
-    if not expect_type(program, str, "process_create/4", arg=1):
+    if program is None:
         return
     if not expect_type(args, list, "process_create/4", arg=2):
         return
     if is_var(options):
         return
 
-    cmd = [program] + [str(deref(a)) for a in args]
+    cmd = [program] + [_arg_text(deref(a)) for a in args]
 
     # Extract options
     run_kwargs: dict = {"capture_output": True, "text": True}
@@ -155,26 +194,26 @@ def _process_create_4(program, args, options, result_var, trail, k):
                     expected="dict", arg=3)
         return
 
-    if "cwd" in opts_data:
-        cwd = deref(opts_data["cwd"])
-        if isinstance(cwd, str):
+    if has_option(opts_data, "cwd"):
+        cwd = to_text(deref(option(opts_data, "cwd")))
+        if cwd is not None:
             run_kwargs["cwd"] = cwd
 
-    if "timeout" in opts_data:
-        timeout = deref(opts_data["timeout"])
+    if has_option(opts_data, "timeout"):
+        timeout = deref(option(opts_data, "timeout"))
         if isinstance(timeout, (int, float)):
             run_kwargs["timeout"] = float(timeout)
 
-    if "input" in opts_data:
-        input_str = deref(opts_data["input"])
-        if isinstance(input_str, str):
+    if has_option(opts_data, "input"):
+        input_str = to_text(deref(option(opts_data, "input")))
+        if input_str is not None:
             run_kwargs["input"] = input_str
             run_kwargs.pop("capture_output", None)
             run_kwargs["stdout"] = _subprocess.PIPE
             run_kwargs["stderr"] = _subprocess.PIPE
 
-    if "env" in opts_data:
-        env_val = deref(opts_data["env"])
+    if has_option(opts_data, "env"):
+        env_val = deref(option(opts_data, "env"))
         if isinstance(env_val, DictTerm):
             import os as _os_mod
             merged = dict(_os_mod.environ)

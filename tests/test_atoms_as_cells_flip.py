@@ -21,7 +21,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import char_atom, mint
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve, _deref_walk
-from clausal.logic.variables import Trail, Var, unify
+from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.terms import term_canonical, term_str
 
 
@@ -789,3 +789,131 @@ def test_the_class_test_pin_actually_bites(tmp_path):
     }
     # ...and the clean file, which uses BOTH names correctly, is not reported.
     assert "clean.py" not in {_offender_name(f) for f in found}
+
+
+# ── Task 12b: the flip-gap sweep — the sites the flip's sweep did not reach ──
+#
+# Task 12's census turned up families of site that still read a plain ``str``
+# as a NAME.  Unlike the Stage A arms above they were the ONLY arm, so the
+# suite was green on the wrong side: a source-written atom — which is what
+# every one of these positions actually receives now — failed silently or was
+# rendered as a Python tuple repr.  Each family below reads the ATOM and
+# refuses the string (§6.4), or crosses text through ``to_text`` (§9.4).
+
+
+def test_sum_and_scalar_product_read_the_operator_as_an_atom():
+    """``sum_/3`` and ``scalar_product/4`` take an ISO operator ATOM.
+
+    ``#=`` cannot be written bare in the surface (``#`` opens a comment), so
+    source spells it ``"#="``, which in the default ``-double_quotes(atom)``
+    mode is the atom ``("#=",)``.  ``clpfd`` gated on ``isinstance(op, str)``,
+    so every source-written call failed silently.
+    """
+    mod = _load_inline_clausal(
+        "_t12b_clpfd",
+        's_eq(N) <- sum_([1, 2, 3], "#=", N),\n'
+        's_lt() <- sum_([1, 2, 3], "#<", 10),\n'
+        's_lt_fails() <- sum_([1, 2, 3], "#<", 5),\n'
+        'sp(N) <- scalar_product([2, 3], [4, 5], "#=", N),\n',
+    )
+    N = Var()
+    assert _answers(("s_eq", N), mod, N) == [(6,)]
+    assert len(list(solve(("s_lt",), mod))) == 1
+    assert list(solve(("s_lt_fails",), mod)) == []
+    assert _answers(("sp", N), mod, N) == [(23,)]
+
+
+def test_sum_and_scalar_product_refuse_a_string_operator(builtins_mod):
+    """A STRING in the operator position is not a name (§6.4) — and silence
+    is what hid this whole family, so it is a refusal, not a failure."""
+    for goal in (("sum_", [1, 2, 3], "#=", 6),
+                 ("scalar_product", [2, 3], [4, 5], "#=", 23)):
+        with pytest.raises(LogicException) as exc:
+            list(solve(goal, builtins_mod))
+        formal = _formal(exc)
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("atom")
+        assert formal.args[1] == "#="
+
+
+def test_zcompare_binds_an_atom_and_reads_one():
+    """``zcompare/3``'s Order is the ISO order atom ``<``/``=``/``>``.  It
+    bound the plain ``str`` ``'<'`` — a STRING after THE FLIP — so a source
+    program could never compare the answer against the atom it wrote."""
+    from clausal.logic.clpfd import (
+        FD_KEY, domain_max, domain_min, in_domain, zcompare,
+    )
+    from clausal.logic.variables import get_attr as _get_attr
+
+    for x, y, expected in ((1, 5, "<"), (5, 1, ">"), (3, 3, "=")):
+        trail = Trail()
+        order = Var()
+        assert zcompare(order, x, y, trail)
+        assert deref(order) == mint(expected)
+
+    # A ground ATOM order narrows the operands…
+    trail = Trail()
+    a, b = Var(), Var()
+    assert in_domain([a, b], 1, 5, trail)
+    assert zcompare(mint("<"), a, b, trail)
+    assert domain_max(_get_attr(a, FD_KEY).domain) <= 4
+    assert domain_min(_get_attr(b, FD_KEY).domain) >= 2
+    # …and a STRING order is refused rather than read as the spelling.
+    with pytest.raises(LogicException) as exc:
+        zcompare("<", Var(), Var(), Trail())
+    formal = _formal(exc)
+    assert formal.functor == "type_error"
+    assert formal.args[0] == mint("atom")
+    assert formal.args[1] == "<"
+
+
+def test_attribute_keys_are_atoms():
+    """``put_attr/3``/``get_attr/3``/``del_attr/2`` gated the Key on
+    ``isinstance(key, str)``, so a source-written key — an atom — silently
+    failed.  Keys are atoms, stored by their spelling."""
+    mod = _load_inline_clausal(
+        "_t12b_attrs",
+        "-private([t12b_key])\n"
+        "roundtrip(OUT) <- (put_attr(X, t12b_key, 7), "
+        "get_attr(X, t12b_key, OUT)),\n"
+        "attached() <- (put_attr(X, t12b_key, 7), attvar(X)),\n"
+        "deleted() <- (put_attr(X, t12b_key, 7), del_attr(X, t12b_key), "
+        "not (attvar(X))),\n"
+    )
+    OUT = Var()
+    assert _answers(("roundtrip", OUT), mod, OUT) == [(7,)]
+    assert len(list(solve(("attached",), mod))) == 1
+    assert len(list(solve(("deleted",), mod))) == 1
+
+
+def test_a_string_attribute_key_is_refused(builtins_mod):
+    """A string is not a name, here as everywhere else (§6.4)."""
+    for goal in (("put_attr", Var(), "t12b_str_key", 1),
+                 ("get_attr", Var(), "t12b_str_key", Var()),
+                 ("del_attr", Var(), "t12b_str_key"),
+                 ("put_attrs", Var(), {"t12b_str_key": 1})):
+        with pytest.raises(LogicException) as exc:
+            list(solve(goal, builtins_mod))
+        formal = _formal(exc)
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("atom")
+        assert formal.args[1] == "t12b_str_key"
+
+
+def test_bulk_attributes_round_trip_through_atom_keys():
+    """``get_attrs/2`` hands the key half of each pair back, so it mints —
+    otherwise ``get_attrs(V, D), put_attrs(W, D)`` would build a dict
+    ``put_attrs/2`` then refuses."""
+    from clausal.logic.builtins.attributes import _get_attrs__2, _put_attrs__2
+    from clausal.terms import DictTerm
+
+    trail = Trail()
+    src, dst, out = Var(), Var(), Var()
+    assert list(_put_attrs__2(
+        src, DictTerm({mint("t12b_a"): 1, mint("t12b_b"): 2}), trail, None,
+    )) == [None]
+    assert list(_get_attrs__2(src, out, trail, None)) == [None]
+    attrs = deref(out)
+    assert attrs.data == {mint("t12b_a"): 1, mint("t12b_b"): 2}
+    # The round trip closes: what came out goes back in.
+    assert list(_put_attrs__2(dst, attrs, trail, None)) == [None]

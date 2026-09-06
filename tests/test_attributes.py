@@ -4,10 +4,17 @@ from __future__ import annotations
 
 import pytest
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import (
     Var, Trail, deref, is_var, unify,
     put_attr, get_attr, del_attr, register_attr_hook, unregister_attr_hook,
 )
+
+# THE FLIP (spec §6.4): an attribute Key is a NAME, so the four Key-taking
+# BUILTINS (put_attr/3, get_attr/3, del_attr/2, put_attrs/2) speak ATOMS.
+# The low-level ``clausal.logic.variables`` functions used throughout this
+# file take the STORAGE key, which is the atom's spelling — a plain ``str``
+# there is deliberate, not a leftover.
 from clausal.terms import Compound, DictTerm
 from clausal.logic.builtins.attributes import (
     _put_attr__3, _get_attr__3, _del_attr__2,
@@ -38,14 +45,14 @@ class TestPutAttr:
     def test_basic(self):
         # nv
         v = Var()
-        sols, trail = simple(_put_attr__3, v, "color", "red")
+        sols, trail = simple(_put_attr__3, v, mint("color"), "red")
         assert len(sols) == 1
         assert get_attr(v, "color") == "red"
 
     def test_bound_var_fails(self):
         """put_attr on a bound term fails."""
         # nv
-        sols, _ = simple(_put_attr__3, 42, "key", "val")
+        sols, _ = simple(_put_attr__3, 42, mint("key"), "val")
         assert len(sols) == 0
 
     def test_unbound_key_fails(self):
@@ -62,9 +69,9 @@ class TestPutAttr:
         # nv
         v = Var()
         trail = Trail()
-        list(_put_attr__3(v, "k", "old", trail, None))
+        list(_put_attr__3(v, mint("k"), "old", trail, None))
         assert get_attr(v, "k") == "old"
-        list(_put_attr__3(v, "k", "new", trail, None))
+        list(_put_attr__3(v, mint("k"), "new", trail, None))
         assert get_attr(v, "k") == "new"
 
     def test_backtrack_undoes(self):
@@ -72,7 +79,7 @@ class TestPutAttr:
         v = Var()
         trail = Trail()
         mark = trail.mark()
-        list(_put_attr__3(v, "k", 42, trail, None))
+        list(_put_attr__3(v, mint("k"), 42, trail, None))
         assert get_attr(v, "k") == 42
         trail.undo(mark)
         assert get_attr(v, "k") is None
@@ -88,18 +95,18 @@ class TestGetAttr:
         trail = Trail()
         put_attr(v, "color", "blue", trail)
         val = Var()
-        results = [deref(val) for _ in _get_attr__3(v, "color", val, trail, None)]
+        results = [deref(val) for _ in _get_attr__3(v, mint("color"), val, trail, None)]
         assert results == ["blue"]
 
     def test_missing_key_fails(self):
         # nv
         v = Var()
-        sols, _ = simple(_get_attr__3, v, "nonexistent", Var())
+        sols, _ = simple(_get_attr__3, v, mint("nonexistent"), Var())
         assert len(sols) == 0
 
     def test_non_var_fails(self):
         # nv
-        sols, _ = simple(_get_attr__3, 42, "key", Var())
+        sols, _ = simple(_get_attr__3, 42, mint("key"), Var())
         assert len(sols) == 0
 
     def test_unify_check(self):
@@ -109,10 +116,10 @@ class TestGetAttr:
         trail = Trail()
         put_attr(v, "n", 42, trail)
         # Correct value
-        sols_ok = list(_get_attr__3(v, "n", 42, trail, None))
+        sols_ok = list(_get_attr__3(v, mint("n"), 42, trail, None))
         assert len(sols_ok) == 1
         # Wrong value
-        sols_bad = list(_get_attr__3(v, "n", 99, trail, None))
+        sols_bad = list(_get_attr__3(v, mint("n"), 99, trail, None))
         assert len(sols_bad) == 0
 
     def test_after_delete_fails(self):
@@ -121,7 +128,7 @@ class TestGetAttr:
         trail = Trail()
         put_attr(v, "k", "val", trail)
         del_attr(v, "k", trail)
-        sols = list(_get_attr__3(v, "k", Var(), trail, None))
+        sols = list(_get_attr__3(v, mint("k"), Var(), trail, None))
         assert len(sols) == 0
 
 
@@ -134,7 +141,7 @@ class TestDelAttr:
         v = Var()
         trail = Trail()
         put_attr(v, "k", 1, trail)
-        sols = list(_del_attr__2(v, "k", trail, None))
+        sols = list(_del_attr__2(v, mint("k"), trail, None))
         assert len(sols) == 1
         assert get_attr(v, "k") is None
 
@@ -142,7 +149,7 @@ class TestDelAttr:
         """Deleting non-existent attr is a no-op, succeeds."""
         # nv
         v = Var()
-        sols, _ = simple(_del_attr__2, v, "nope")
+        sols, _ = simple(_del_attr__2, v, mint("nope"))
         assert len(sols) == 1
 
     def test_backtrack_undoes(self):
@@ -151,7 +158,7 @@ class TestDelAttr:
         trail = Trail()
         put_attr(v, "k", 42, trail)
         mark = trail.mark()
-        list(_del_attr__2(v, "k", trail, None))
+        list(_del_attr__2(v, mint("k"), trail, None))
         assert get_attr(v, "k") is None
         trail.undo(mark)
         assert get_attr(v, "k") == 42
@@ -172,8 +179,10 @@ class TestGetAttrs:
         assert len(results) == 1
         dt = results[0]
         assert isinstance(dt, DictTerm)
-        assert dt.data["a"] == 1
-        assert dt.data["b"] == 2
+        # The keys come back as ATOMS — the term surface of the spellings
+        # they are stored under (§6.4/§6.8).
+        assert dt.data[mint("a")] == 1
+        assert dt.data[mint("b")] == 2
 
     def test_no_attrs(self):
         # nv
@@ -198,7 +207,7 @@ class TestPutAttrs:
     def test_dict_term(self):
         # nv
         v = Var()
-        dt = DictTerm({"x": 10, "y": 20})
+        dt = DictTerm({mint("x"): 10, mint("y"): 20})
         sols, trail = simple(_put_attrs__2, v, dt)
         assert len(sols) == 1
         assert get_attr(v, "x") == 10
@@ -319,7 +328,7 @@ class TestIntegration:
         trail = Trail()
         in_domain(v, 1, 10, trail)
         # Now add a user attr
-        list(_put_attr__3(v, "my_tag", "hello", trail, None))
+        list(_put_attr__3(v, mint("my_tag"), "hello", trail, None))
         # Both should be present
         assert get_attr(v, "fd") is not None
         assert get_attr(v, "my_tag") == "hello"
@@ -374,11 +383,13 @@ class TestIntegration:
         # nv
         v = Var()
         trail = Trail()
-        dt_in = DictTerm({"x": 10, "y": "hello"})
+        dt_in = DictTerm({mint("x"): 10, mint("y"): "hello"})
         list(_put_attrs__2(v, dt_in, trail, None))
         dt_out = Var()
         results = [deref(dt_out) for _ in _get_attrs__2(v, dt_out, trail, None)]
         assert len(results) == 1
         assert isinstance(results[0], DictTerm)
-        assert results[0].data["x"] == 10
-        assert results[0].data["y"] == "hello"
+        assert results[0].data[mint("x")] == 10
+        assert results[0].data[mint("y")] == "hello"
+        # The round trip closes: what came out goes straight back in.
+        assert list(_put_attrs__2(Var(), results[0], trail, None)) == [None]

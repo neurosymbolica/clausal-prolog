@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import pytest
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, unify, is_var, get_attr
 from clausal.logic.clpfd import (
     FD_KEY,
@@ -312,29 +313,33 @@ class TestTuplesIn:
 
 
 class TestZcompare:
+    # THE FLIP (spec §6.4): the ISO order names ``<``/``=``/``>`` are ATOMS,
+    # so ``zcompare/3`` binds and reads ``mint("<")``, not the plain str
+    # ``'<'`` (which is a STRING after the flip, and is refused).
+
     def test_ground_less(self):
-        """zcompare(Order, 1, 5) -> Order = '<'."""
+        """zcompare(Order, 1, 5) -> Order = the atom <."""
         # nv
         trail = fresh_trail()
         order = Var()
         assert zcompare(order, 1, 5, trail)
-        assert deref(order) == '<'
+        assert deref(order) == mint('<')
 
     def test_ground_greater(self):
-        """zcompare(Order, 5, 1) -> Order = '>'."""
+        """zcompare(Order, 5, 1) -> Order = the atom >."""
         # nv
         trail = fresh_trail()
         order = Var()
         assert zcompare(order, 5, 1, trail)
-        assert deref(order) == '>'
+        assert deref(order) == mint('>')
 
     def test_ground_equal(self):
-        """zcompare(Order, 3, 3) -> Order = '='."""
+        """zcompare(Order, 3, 3) -> Order = the atom =."""
         # nv
         trail = fresh_trail()
         order = Var()
         assert zcompare(order, 3, 3, trail)
-        assert deref(order) == '='
+        assert deref(order) == mint('=')
 
     def test_var_determined_by_domains(self):
         """When domains don't overlap, order is determined."""
@@ -344,15 +349,15 @@ class TestZcompare:
         assert in_domain(x, 1, 3, trail)
         assert in_domain(y, 5, 8, trail)
         assert zcompare(order, x, y, trail)
-        assert deref(order) == '<'
+        assert deref(order) == mint('<')
 
     def test_order_ground_constrains_vars(self):
-        """zcompare('<', X, Y) constrains X < Y."""
+        """zcompare(<, X, Y) constrains X < Y."""
         # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 5, trail)
-        assert zcompare('<', x, y, trail)
+        assert zcompare(mint('<'), x, y, trail)
         sx = get_attr(x, FD_KEY)
         sy = get_attr(y, FD_KEY)
         if sx is not None:

@@ -94,14 +94,17 @@ Test("assertz/retract exist") <- (
 
 # ── Attributed Variables ─────────────────────────────────────────────────────
 
+# THE FLIP (spec §6.4): an attribute Key is a NAME, so it is an ATOM —
+# single-quoted here because this file is in `-double_quotes(chars)` mode,
+# where "my_key" would be a STRING and put_attr/3 refuses it.
 Test("put_attr/get_attr exist") <- (
-    put_attr(V, "my_key", 42),
-    get_attr(V, "my_key", VAL),
+    put_attr(V, 'my_key', 42),
+    get_attr(V, 'my_key', VAL),
     VAL == 42
 )  # nv
 
 Test("attvar exists") <- (
-    put_attr(V, "k", 1),
+    put_attr(V, 'k', 1),
     attvar(V)
 )  # nv
 

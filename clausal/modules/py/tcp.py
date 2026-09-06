@@ -15,10 +15,36 @@ from clausal.modules.py import (
     _import_stdlib,
     expect_type,
     simple_to_trampoline,
+    to_bytes,
+    to_text,
 )
 _socket = _import_stdlib("socket")
 
 from clausal.logic.variables import deref, is_var, unify
+
+
+# ── Internal helpers ─────────────────────────────────────────────────────
+
+
+def _host_text(val, pred):
+    """The ``str`` a Host argument denotes, or ``None`` (note recorded).
+
+    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and
+    both convert to the same ``str`` -- so ``connect('127.0.0.1', P, S)``
+    written in a ``.clausal`` file works exactly as the string form does.
+    THE FLIP (2026-09-06-atoms-as-cells-strings) made the bare
+    ``isinstance(host, str)`` guard below reject every source-written host,
+    silently: an atom is the arity-0 cell ``("127.0.0.1",)``.  Routed through
+    ``to_text``, never ``str()``, which would hand ``socket`` a tuple repr.
+
+    A bound value that is not text keeps this module's existing behaviour --
+    a recorded type-mismatch note and a clean failure, not a raise.
+    """
+    text = to_text(val)
+    if text is not None:
+        return text
+    expect_type(val, str, pred, arg=1)   # records the note; always False here
+    return None
 
 
 # ── Predicate implementations ────────────────────────────────────────────
@@ -26,9 +52,9 @@ from clausal.logic.variables import deref, is_var, unify
 
 def _connect_3(host, port, sock_out, trail, k):
     """connect/3: connect(Host, Port, Socket) — connect to TCP server."""
-    host_d = deref(host)
+    host_d = _host_text(deref(host), "connect/3")
     port_d = deref(port)
-    if not expect_type(host_d, str, "connect/3", arg=1):
+    if host_d is None:
         return
     if not expect_type(port_d, int, "connect/3", arg=2):
         return
@@ -43,9 +69,9 @@ def _connect_3(host, port, sock_out, trail, k):
 
 def _listen_3(host, port, server_out, trail, k):
     """listen/3: listen(Host, Port, ServerSocket) — create listening socket."""
-    host_d = deref(host)
+    host_d = _host_text(deref(host), "listen/3")
     port_d = deref(port)
-    if not expect_type(host_d, str, "listen/3", arg=1):
+    if host_d is None:
         return
     if not expect_type(port_d, int, "listen/3", arg=2):
         return
@@ -74,18 +100,20 @@ def _accept_2(server_sock, client_out, trail, k):
 
 
 def _send_2(sock, data, trail, k):
-    """send/2: send(Socket, Data) — send string (UTF-8) or bytes via sendall."""
+    """send/2: send(Socket, Data) — send text (UTF-8) or bytes via sendall.
+
+    Spec §9.4: the payload is TEXT, so a string or an ATOM both cross as the
+    same ``str`` — ``to_bytes`` is the funnel for exactly that (it answers
+    ``None`` for a term that is neither text nor bytes).
+    """
     sock_d = deref(sock)
     data_d = deref(data)
     if not expect_type(sock_d, _socket.socket, "send/2", arg=1):
         return
     if is_var(data_d):
         return
-    if isinstance(data_d, str):
-        data_bytes = data_d.encode("utf-8")
-    elif isinstance(data_d, bytes):
-        data_bytes = data_d
-    else:
+    data_bytes = to_bytes(data_d)
+    if data_bytes is None:
         expect_type(data_d, (str, bytes), "send/2",
                     expected="str or bytes", arg=2)
         return

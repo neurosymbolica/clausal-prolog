@@ -9,6 +9,7 @@ import pytest
 
 z3 = pytest.importorskip("z3")
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.clpz3 import (
     in_z3, z3_eq, z3_le, z3_ge, z3_check, label_z3,
@@ -30,7 +31,7 @@ class TestNamedConstraints:
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
-        assert z3_named(Gt(left=x, right=5), "x_big", trail)
+        assert z3_named(Gt(left=x, right=5), mint("x_big"), trail)
 
     def test_named_and_unsat_core(self):
         """x > 5 AND x < 3 is unsat — core includes both."""
@@ -38,20 +39,20 @@ class TestNamedConstraints:
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
-        z3_named(Gt(left=x, right=5), "x_big", trail)
-        z3_named(Lt(left=x, right=3), "x_small", trail)
+        z3_named(Gt(left=x, right=5), mint("x_big"), trail)
+        z3_named(Lt(left=x, right=3), mint("x_small"), trail)
         core = Var()
         assert z3_unsat_core(core, trail)
         names = deref(core)
-        assert "x_big" in names
-        assert "x_small" in names
+        assert mint("x_big") in names
+        assert mint("x_small") in names
 
     def test_satisfiable_no_core(self):
         # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
-        z3_named(Gt(left=x, right=5), "x_big", trail)
+        z3_named(Gt(left=x, right=5), mint("x_big"), trail)
         core = Var()
         assert not z3_unsat_core(core, trail)
 
@@ -62,11 +63,13 @@ class TestNamedConstraints:
         in_z3(x, 1, 10, trail)
 
         mark = trail.mark()
-        z3_named(Gt(left=x, right=5), "x_big", trail)
+        z3_named(Gt(left=x, right=5), mint("x_big"), trail)
         trail.undo(mark)
 
         state = get_z3_state(trail)
         named = getattr(state, '_named_constraints', {})
+        # The registry is keyed by the atom's SPELLING (§6.4): a plain str
+        # here is the internal storage key, not a term.
         assert "x_big" not in named
 
     def test_three_constraints_two_conflict(self):
@@ -75,14 +78,14 @@ class TestNamedConstraints:
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
-        z3_named(Gt(left=x, right=5), "a", trail)
-        z3_named(Lt(left=x, right=3), "b", trail)
-        z3_named(GtE(left=x, right=1), "c", trail)  # always true (domain)
+        z3_named(Gt(left=x, right=5), mint("a"), trail)
+        z3_named(Lt(left=x, right=3), mint("b"), trail)
+        z3_named(GtE(left=x, right=1), mint("c"), trail)  # always true (domain)
         core = Var()
         assert z3_unsat_core(core, trail)
         names = deref(core)
-        assert "a" in names
-        assert "b" in names
+        assert mint("a") in names
+        assert mint("b") in names
 
     def test_no_named_unsat(self):
         """Unsat with no named constraints returns empty core."""
@@ -96,29 +99,81 @@ class TestNamedConstraints:
         assert deref(core) == []
 
 
+class TestNamedConstraintNamesAreAtoms:
+    """THE FLIP (2026-09-06-atoms-as-cells-strings §6.4): a constraint's Name
+    is a NAME, so it is an ATOM.  ``z3_named`` coerced anything non-``str``
+    with ``str(name)``, which post-flip renders ``("x_big",)`` as the Python
+    tuple REPR ``"('x_big',)"`` — the indicator, the ``_named_constraints``
+    key and every core answer carried the repr.
+    """
+
+    def test_atom_name_is_stored_and_returned_by_spelling(self):
+        # nv
+        trail = Trail()
+        x = Var()
+        in_z3(x, 1, 10, trail)
+        assert z3_named(Gt(left=x, right=5), mint("x_big"), trail)
+        assert z3_named(Lt(left=x, right=3), mint("x_small"), trail)
+
+        state = get_z3_state(trail)
+        assert set(state._named_constraints) == {"x_big", "x_small"}
+
+        core = Var()
+        assert z3_unsat_core(core, trail)
+        # Atoms in, atoms out (§6.4) — the answer is comparable to what the
+        # program wrote, which a repr or a bare spelling would not be.
+        assert deref(core) == [mint("x_big"), mint("x_small")]
+
+    def test_minimal_core_answers_atoms_too(self):
+        # nv
+        trail = Trail()
+        x = Var()
+        in_z3(x, 1, 10, trail)
+        z3_named(Gt(left=x, right=5), mint("a"), trail)
+        z3_named(Lt(left=x, right=3), mint("b"), trail)
+        z3_named(GtE(left=x, right=1), mint("c"), trail)  # redundant
+        core = Var()
+        assert z3_minimal_unsat_core(core, trail)
+        assert deref(core) == [mint("a"), mint("b")]
+
+    def test_a_string_name_is_refused(self):
+        # nv
+        from clausal.logic.exceptions import LogicException
+
+        trail = Trail()
+        x = Var()
+        in_z3(x, 1, 10, trail)
+        with pytest.raises(LogicException) as exc:
+            z3_named(Gt(left=x, right=5), "x_big", trail)
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("atom")
+        assert formal.args[1] == "x_big"
+
+
 class TestMinimalUnsatCore:
     def test_minimal_core_strips_redundant(self):
         # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
-        z3_named(Gt(left=x, right=5), "a", trail)
-        z3_named(Lt(left=x, right=3), "b", trail)
-        z3_named(GtE(left=x, right=1), "c", trail)  # redundant
+        z3_named(Gt(left=x, right=5), mint("a"), trail)
+        z3_named(Lt(left=x, right=3), mint("b"), trail)
+        z3_named(GtE(left=x, right=1), mint("c"), trail)  # redundant
         core = Var()
         assert z3_minimal_unsat_core(core, trail)
         names = deref(core)
-        assert "a" in names
-        assert "b" in names
+        assert mint("a") in names
+        assert mint("b") in names
         # "c" should NOT be in minimal core
-        assert "c" not in names
+        assert mint("c") not in names
 
     def test_satisfiable_returns_false(self):
         # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
-        z3_named(Gt(left=x, right=5), "a", trail)
+        z3_named(Gt(left=x, right=5), mint("a"), trail)
         core = Var()
         assert not z3_minimal_unsat_core(core, trail)
 
@@ -376,9 +431,9 @@ class TestDebugWorkflow:
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 10, trail)
-        z3_named(Gt(left=x, right=8), "x_high", trail)
-        z3_named(Lt(left=y, right=3), "y_low", trail)
-        z3_named(ArithEq(left=x, right=y), "x_eq_y", trail)
+        z3_named(Gt(left=x, right=8), mint("x_high"), trail)
+        z3_named(Lt(left=y, right=3), mint("y_low"), trail)
+        z3_named(ArithEq(left=x, right=y), mint("x_eq_y"), trail)
 
         # x > 8 AND y < 3 AND x == y is unsat
         core = Var()

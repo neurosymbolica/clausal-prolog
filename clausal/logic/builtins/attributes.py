@@ -16,7 +16,53 @@ from clausal.terms import (
     VarSeg,
 )
 
+from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.builtins._registry import _builtin
+
+
+# ── The Key funnel ─────────────────────────────────────────────────────────
+
+
+def _storage_key(key, context):
+    """The dict key an attribute *Key* argument denotes, or ``None``.
+
+    Spec §6.4: an attribute key is a NAME, so it is an ATOM — a
+    source-written ``put_attr(X, mykey, V)`` hands ``("mykey",)`` here after
+    THE FLIP (2026-09-06-atoms-as-cells-strings).  These four builtins gated
+    on ``isinstance(key, str)``, which post-flip matches a STRING and nothing
+    a program can write, so every source-written call failed silently.
+
+    The key is stored by its **spelling**, which is the decision this funnel
+    exists to make once for all of ``put_attr/3``, ``get_attr/3``,
+    ``del_attr/2`` and ``put_attrs/2``:
+
+    * it is the namespace the engine's own attributes already occupy —
+      ``clpfd``'s ``FD_KEY = "fd"``, ``dif``, ``clpb``, ``freeze``, ``units``
+      and the ``register_attr_hook`` registry are all plain ``str`` — so a
+      source-written key and a library key of the same name are the SAME
+      attribute, as they are in SWI, rather than two invisible namespaces;
+    * ``capi_put_attr``/``capi_get_attr`` in ``variables/_variables.c`` take
+      the key object as given (it is only ever a dict key and a hook-registry
+      lookup), so spelling storage needs no C change at all.
+
+    ``get_attrs/2`` mints the spellings back into atoms on the way out, so
+    the TERM surface is atoms in both directions.
+
+    An unbound key answers ``None`` and the caller FAILS — that is the mode
+    signal these predicates have always given.  A STRING key raises
+    ``type_error(atom, …)``: a string is not a name (§6.4), and a silent
+    failure is precisely what hid this bug.
+    """
+    if is_atom(key):
+        return spelling(key)
+    if is_var(key):
+        return None
+    if type(key) is str:
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, type_error,
+        )
+        raise LogicException(type_error("atom", key, context))
+    return None
 
 
 # ── Per-key operations ─────────────────────────────────────────────────────
@@ -26,13 +72,14 @@ from clausal.logic.builtins._registry import _builtin
 def _put_attr__3(var, key, value, trail, k):
     """put_attr(Var, Key, Value) — attach attribute under Key to Var.
 
-    Var must be an unbound variable. Key must be a ground string. Trailed.
+    Var must be an unbound variable. Key must be a ground ATOM (§6.4);
+    a string raises ``type_error(atom, …)``. Trailed.
     """
     var_d = deref(var)
-    key_d = deref(key)
     if not is_var(var_d):
         return
-    if is_var(key_d) or not isinstance(key_d, str):
+    key_d = _storage_key(deref(key), "put_attr/3")
+    if key_d is None:
         return
     put_attr(var_d, key_d, deref(value), trail)
     yield None
@@ -42,13 +89,14 @@ def _put_attr__3(var, key, value, trail, k):
 def _get_attr__3(var, key, value, trail, k):
     """get_attr(Var, Key, Value) — retrieve attribute under Key.
 
+    Key is an ATOM (§6.4); a string raises ``type_error(atom, …)``.
     Fails if Var has no attribute for Key, or if Var is not an unbound variable.
     """
     var_d = deref(var)
-    key_d = deref(key)
     if not is_var(var_d):
         return
-    if is_var(key_d) or not isinstance(key_d, str):
+    key_d = _storage_key(deref(key), "get_attr/3")
+    if key_d is None:
         return
     attr = get_attr(var_d, key_d)
     if attr is None:
@@ -61,13 +109,14 @@ def _get_attr__3(var, key, value, trail, k):
 def _del_attr__2(var, key, trail, k):
     """del_attr(Var, Key) — remove attribute under Key from Var.
 
+    Key is an ATOM (§6.4); a string raises ``type_error(atom, …)``.
     Succeeds even if no attribute existed (no-op). Trailed.
     """
     var_d = deref(var)
-    key_d = deref(key)
     if not is_var(var_d):
         return
-    if is_var(key_d) or not isinstance(key_d, str):
+    key_d = _storage_key(deref(key), "del_attr/2")
+    if key_d is None:
         return
     del_attr(var_d, key_d, trail)
     yield None
@@ -78,19 +127,28 @@ def _del_attr__2(var, key, trail, k):
 
 @_builtin("get_attrs", 2)
 def _get_attrs__2(var, attrs, trail, k):
-    """get_attrs(Var, Attrs) — unify Attrs with a DictTerm of all attributes on Var."""
+    """get_attrs(Var, Attrs) — unify Attrs with a DictTerm of all attributes on Var.
+
+    The keys come back as ATOMS (§6.4/§6.8): they are stored by spelling (see
+    :func:`_storage_key`), and handing the raw ``str`` back would put a STRING
+    in a name position — and build a dict ``put_attrs/2`` would then refuse,
+    breaking ``get_attrs(V, D), put_attrs(W, D)``.
+    """
     var_d = deref(var)
     if not is_var(var_d):
         return
     raw = var_d.attrs if hasattr(var_d, 'attrs') and var_d.attrs else {}
-    result = DictTerm(dict(raw))
+    result = DictTerm({mint(key): value for key, value in raw.items()})
     if unify(attrs, result, trail):
         yield None
 
 
 @_builtin("put_attrs", 2)
 def _put_attrs__2(var, attrs, trail, k):
-    """put_attrs(Var, Attrs) — set multiple attributes from a DictTerm."""
+    """put_attrs(Var, Attrs) — set multiple attributes from a DictTerm.
+
+    Each key is an ATOM, applied exactly as ``put_attr/3`` applies it.
+    """
     var_d = deref(var)
     attrs_d = deref(attrs)
     if not is_var(var_d):
@@ -102,9 +160,10 @@ def _put_attrs__2(var, attrs, trail, k):
     else:
         return
     for key, value in data.items():
-        if not isinstance(key, str):
+        key_d = _storage_key(deref(key), "put_attrs/2")
+        if key_d is None:
             return
-        put_attr(var_d, key, deref(value), trail)
+        put_attr(var_d, key_d, deref(value), trail)
     yield None
 
 

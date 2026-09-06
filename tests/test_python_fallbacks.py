@@ -139,11 +139,11 @@ class TestFunctorNameFallback:
         # nv
         # THE FLIP (2026-09-06-atoms-as-cells-strings §6.4) reversed
         # P3-1's retirement: a str is a STRING now — the list of its
-        # char atoms — so it decomposes as that list does.  The funnel
-        # WRAPPER answers; the pre-cell ``_py`` twin still carries the
-        # retired atom reading and is no longer reached for a str.
-        assert _functor_name("hello") == "."
-        assert _functor_name_py("hello") == "hello"
+        # char atoms — so it decomposes as that list does.  Task 12b
+        # retired the pre-cell "a str is its own functor" arm from the
+        # ``_py`` twin AND from the C accessor together, so all three
+        # answers agree even when the fallback is called directly.
+        assert _functor_name("hello") == _functor_name_py("hello") == "."
 
     def test_string_empty_nil(self):
         # nv
@@ -178,11 +178,10 @@ class TestArityFallback:
         # nv
         # THE FLIP (2026-09-06-atoms-as-cells-strings §6.4) reversed
         # P3-1's retirement: a str is a STRING now — the list of its
-        # char atoms — so it decomposes as that list does.  The funnel
-        # WRAPPER answers; the pre-cell ``_py`` twin still carries the
-        # retired atom reading and is no longer reached for a str.
-        assert _arity("hello") == 2
-        assert _arity_py("hello") == 0
+        # char atoms — so it decomposes as that list does.  Task 12b
+        # retired the pre-cell "a str is atomic" arm from the ``_py``
+        # twin AND from the C accessor together.
+        assert _arity("hello") == _arity_py("hello") == 2
 
     def test_string_empty_is_arity_zero(self):
         # nv — unaffected by the retirement (empty str was already 0).
@@ -460,6 +459,8 @@ try:
         _copy_term_impl as _c_copy_raw,
         _collect_vars_impl as _c_collect_raw,
         _is_ground as _c_is_ground_raw,
+        _functor_name as _c_functor_name_raw,
+        _arity as _c_arity_raw,
     )
     _HAVE_C = True
 except ImportError:  # pragma: no cover — pure-Python build
@@ -829,6 +830,47 @@ class TestCellIsGroundTwinParity:
             term = ("f", term)
         assert _is_ground_py(term) is False
         assert _c_is_ground_raw(term) is False
+
+
+@requires_c
+class TestStringDecompositionTwinParity:
+    """A ``str`` decomposes as its char LIST does — in all three answers.
+
+    Task 12 found the ``str`` arms of ``_functor_name_py``/``_arity_py`` and
+    of their C twins ``_functor_name``/``_arity`` still carrying P3-1's
+    retired reading ("a str IS an atom, so it is its own functor with arity
+    0").  The post-flip WRAPPER in ``builtins/_helpers.py`` answered
+    ``"."``/2 in front of them, so the arms were shadowed and the suite was
+    green — but calling the accessor directly, as any out-of-tree consumer
+    of the C module can, still got the pre-flip answer.  Task 12b retired
+    both halves in one move (the global constraint: Python and C twins
+    change together, with the parity tests run).
+
+    This is the case that fails if either half is retired alone.
+    """
+
+    @pytest.mark.parametrize("text,name,arity", [
+        ("hello", ".", 2),
+        ("a", ".", 2),
+        ("", "[]", 0),
+    ])
+    def test_c_and_python_agree_with_the_wrapper(self, text, name, arity):
+        # nv
+        assert _c_functor_name_raw(text) == _functor_name_py(text) == name
+        assert _c_arity_raw(text) == _arity_py(text) == arity
+        # …and the funnel wrapper, which is what the builtins call.
+        assert _functor_name(text) == name
+        assert _arity(text) == arity
+
+    def test_the_answer_is_the_char_list_s_answer(self):
+        """The reading itself, not just twin agreement: a string answers
+        exactly what the list of its char atoms answers (§6.4)."""
+        # nv
+        chars = [char_atom(c) for c in "hi"]
+        assert _c_functor_name_raw("hi") == _c_functor_name_raw(chars)
+        assert _c_arity_raw("hi") == _c_arity_raw(chars)
+        assert _c_functor_name_raw("") == _c_functor_name_raw([])
+        assert _c_arity_raw("") == _c_arity_raw([])
 
 
 class TestWrapperUsesTheCPathAgain:
