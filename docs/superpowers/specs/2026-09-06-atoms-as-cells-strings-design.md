@@ -92,6 +92,9 @@ Standing preferences applied throughout: design questions are recorded in
   `atomic([])` keep today's answers (false). Parked in §14.
 - **Numbers, bools, `None`, bytes, `Undefined`, `TUPLE_TAG` cells, dicts,
   sets, `Quantity`.** Unchanged.
+- **SWI-Prolog compatibility.** Not a target (operator, 2026-09-06): no
+  distinct `foo()` term, no SWI string type, no SWI-only builtins. The
+  references are ISO, Scryer and Trealla.
 - **Operator-aware printing.** `writeq(1+2)` prints `+(1, 2)` as `term_str`
   does today.
 
@@ -108,7 +111,7 @@ Standing preferences applied throughout: design questions are recorded in
 | char `a` | `("a",)` | an ordinary atom of length 1 |
 | codes `b"ab"` | `b"ab"` | unchanged (`bytes`-as-lists, the codes model) |
 | Python tuple data `("bar",)` | `("bar",)` | **the same term as the atom** — THE DISCIPLINE (`cells.py:53–64`, pinned by `tests/test_funnel_accessors.py::TestCellFunnelAwareness`) |
-| `foo()` in source | `("foo",)` | **the same term as `foo`**. ISO/Scryer have no zero-arity compound (`foo()` is a syntax error there); SWI 7+ makes `foo()` a distinct term (`foo() \= foo`). Clausal takes the ISO side: one term. |
+| `foo()` | — | **not a term form.** ISO, Scryer and Trealla have no zero-arity compound; `foo()` is a syntax error on the surface reader. On the Python surface `foo()` is only the 0-arity *predicate* call/head shape (`halt_in_callee()`), a procedure; the atom `("foo",)` is what names that procedure through `call/1`. Inside a `++` escape `foo()` is ordinary Python. (Operator, 2026-09-06: SWI's distinct `foo()` term is not a target.) |
 
 The discipline is unchanged and is what makes D free: a non-empty tuple
 whose slot 0 is a `str` is a cell by shape, full stop, and a 1-tuple is the
