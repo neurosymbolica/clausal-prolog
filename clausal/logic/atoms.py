@@ -94,14 +94,21 @@ def mangle(module_name: str, atom: str) -> str:
 
 
 def is_mangled(value) -> bool:
-    """True if *value* is a str carrying ``HIDDEN_SEP`` — i.e. is (or
-    forges, per §1b's documented-out-of-warranty allowance) a mangled
-    hidden-atom spelling.  False for any non-str."""
-    return isinstance(value, str) and HIDDEN_SEP in value
+    """True if *value* is an ATOM whose spelling carries ``HIDDEN_SEP`` — i.e.
+    is (or forges, per §1b's documented-out-of-warranty allowance) a mangled
+    hidden-atom spelling.  False for anything that is not an atom.
+
+    2026-09-06-atoms-as-cells-strings §5.3: the atom itself is accepted
+    beside its bare spelling, so a caller holding ``("m\\x1fbar",)`` need not
+    unwrap first.  Under Stage A's dual-accepting ``is_atom`` a plain ``str``
+    is still an atom, so this is a no-op widening today.
+    """
+    return is_atom(value) and HIDDEN_SEP in spelling(value)
 
 
-def demangle(value: str) -> tuple[str, str]:
-    """Split a mangled str back into ``(module_name, atom)``.
+def demangle(value) -> tuple[str, str]:
+    """Split a mangled atom (or its bare spelling) back into
+    ``(module_name, atom)``.
 
     Raises ``ValueError`` if *value* is not mangled (``is_mangled`` false).
     Splits on the FIRST ``HIDDEN_SEP`` occurrence: a genuine ``mangle()``
@@ -115,22 +122,23 @@ def demangle(value: str) -> tuple[str, str]:
     """
     if not is_mangled(value):
         raise ValueError(f"not a mangled atom: {value!r}")
-    module_name, _, atom = value.partition(HIDDEN_SEP)
+    module_name, _, atom = spelling(value).partition(HIDDEN_SEP)
     return module_name, atom
 
 
-def demangle_for_display(value: str) -> str:
+def demangle_for_display(value) -> str:
     """Human-readable qualified form for printing (§1b: "Printing: the
     writer renders the human form (``m.my_atom``); the runtime str keeps
     ⟨SEP⟩") — ``"module⟨SEP⟩name"`` becomes ``"module.name"``, matching how
     qualified predicate references already render (dotted chain).
 
-    Non-mangled input is returned unchanged, so every renderer's atom case
-    can call this unconditionally rather than branching on ``is_mangled``
-    itself first.
+    Non-mangled input is returned unchanged (an ATOM is answered with its
+    SPELLING — §5.3's unwrap; anything that is not an atom comes back as it
+    arrived), so every renderer's atom case can call this unconditionally
+    rather than branching on ``is_mangled`` itself first.
     """
     if not is_mangled(value):
-        return value
+        return spelling(value) if is_atom(value) else value
     module_name, atom = demangle(value)
     return f"{module_name}.{atom}"
 

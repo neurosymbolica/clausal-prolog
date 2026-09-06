@@ -32,6 +32,7 @@ from clausal.logic.builtins import (
 )
 
 from clausal.logic.cells import _cell_shape
+from clausal.logic.atoms import is_atom as _term_is_atom
 
 from ._ast_helpers import _name, _call, _assign
 from ._vars import _var_python_name, _collect_vars
@@ -467,24 +468,29 @@ def _merge_builtin(base_globals: dict, name: str, builtin) -> None:
 
 
 def _atom_shadows_row(binding, db, name: str, arity: int) -> bool:
-    """True when a ``str`` module binding is hiding this db's own ``name/arity``.
+    """True when an ATOM module binding is hiding this db's own ``name/arity``.
 
-    P3-3 Task 5b.  Post-pivot an ATOM is a plain ``str`` (§1b/R2), so a module
-    binding of that shape is DATA and can never be a call target: reaching it
+    P3-3 Task 5b.  An ATOM is DATA and can never be a call target: reaching it
     from a call site raises ``existence_error`` out of ``predicate.
-    _dispatch_at``'s str branch.  When the very database being compiled
+    _dispatch_at``'s atom branch.  When the very database being compiled
     defines ``name/arity``, the call site means THAT predicate -- resolution
     is keyed on ``(name, arity)`` and an atom has no arity-N meaning -- so the
-    str loses and the db adapter answers.
+    atom loses and the db adapter answers.
 
-    Narrow on both axes: only a ``str`` binding (every other shape, callable
+    Narrow on both axes: only an ATOM binding (every other shape, callable
     or not, is trusted exactly as before), and only when the row is really
     there (``row``, not ``get_dispatch``, so asking compiles nothing).  A
     call on an atom that names no local predicate keeps its existing,
     positioned diagnostic.
+
+    2026-09-06-atoms-as-cells-strings, Task 9: the shape question is asked of
+    ``atoms.is_atom`` -- the TERM test, which under Plan 0 is exactly the
+    ``type(binding) is str`` this replaces, and which at Stage B admits the
+    arity-0 cell.  Deliberately NOT ``predicate.is_atom_value``: that widens
+    to a zero-field ``PredicateMeta``, which IS a live call target here.
     """
     return (
-        type(binding) is str
+        _term_is_atom(binding)
         and db is not None
         and arity >= 0
         and db.row(name, arity) is not None

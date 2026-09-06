@@ -317,3 +317,73 @@ def test_seglist_str_tail_and_head_are_char_lists():
     assert tail[0] == 1 and all(is_char_atom(c) for c in tail[1:])
     head = ("ab" + SegList([ConcreteSeg([1])])).__walk__()
     assert head[-1] == 1 and all(is_char_atom(c) for c in head[:-1])
+
+
+# ── Task 9: compiler-side acceptors and the identity pins (spec §5.2, §5.3) ──
+
+
+def test_call_n_folds_cell_atom_goal(mod):
+    """§5.2 / §6.4: ``call/N`` folds a CELL atom goal exactly as it folds
+    today's str atom — ``call(atom, foo)`` is ``atom(foo)``.  Nothing in
+    ``higher_order._resolve_named_goal`` needed changing (an arity-0 cell
+    already answers ``compound_cell_shape``); this pins that it stays so."""
+    assert _true(("call", ("atom",), ("foo",)), mod)
+    # ... and the str atom goal keeps working beside it (Stage A additivity).
+    assert _true(("call", "atom", ("foo",)), mod)
+
+
+def test_is_mangled_accepts_atom():
+    """§5.3: ``is_mangled``/``demangle``/``demangle_for_display`` accept the
+    ATOM as well as the bare spelling."""
+    from clausal.logic.atoms import (
+        demangle, demangle_for_display, is_mangled, mangle,
+    )
+    a = mint(mangle("m", "bar"))
+    assert is_mangled(a)
+    assert demangle(a) == ("m", "bar")
+    assert demangle_for_display(a) == "m.bar"
+    # ``mint`` is a str under Plan 0, so drive the CELL shape explicitly too —
+    # otherwise this row only re-tests the bare spelling until Stage B.
+    cell = (mangle("m", "bar"),)
+    assert is_mangled(cell)
+    assert demangle(cell) == ("m", "bar")
+    assert demangle_for_display(cell) == "m.bar"
+    # A non-mangled atom is not mangled, and displays as its own spelling.
+    assert not is_mangled(mint("bar"))
+    assert not is_mangled(("bar",))
+    assert demangle_for_display(mint("bar")) == "bar"
+    assert demangle_for_display(("bar",)) == "bar"
+    # The bare-spelling calls are unchanged.
+    assert is_mangled(mangle("m", "bar"))
+    assert demangle_for_display(mangle("m", "bar")) == "m.bar"
+    # A non-atom is still not mangled, and demangle still refuses it.
+    assert not is_mangled(42)
+    assert not is_mangled(("m", "bar"))
+    with pytest.raises(ValueError):
+        demangle("bar")
+
+
+def test_functor_spelling_accepts_cell_atom():
+    """§5.2: a module binding that is a CELL atom answers with its spelling,
+    the same way today's str binding does (``terms_to_ast._functor_spelling``
+    — the declared-data-functor binding shape, R6)."""
+    from clausal.logic.compiler.terms_to_ast import _functor_spelling
+    assert _functor_spelling(("pt",), "local_pt") == "pt"
+    assert _functor_spelling("pt", "local_pt") == "pt"
+    assert _functor_spelling(None, "local_pt") == "local_pt"
+
+
+def test_atom_shadows_row_accepts_cell_atom():
+    """§5.2: ``globals_env._atom_shadows_row`` — an ATOM binding is DATA and
+    cannot be a call target, whether it is spelled as a str or as a cell."""
+    from clausal.logic.compiler.globals_env import _atom_shadows_row
+    from clausal.logic.database import Clause, Database
+    from clausal.terms import Compound
+
+    db = Database()
+    db.assertz(Clause(head=Compound("shade", (1,)), body=[True]))
+    assert _atom_shadows_row("shade", db, "shade", 1)
+    assert _atom_shadows_row(("shade",), db, "shade", 1)
+    # No such row → no shadowing; a non-atom binding is trusted as before.
+    assert not _atom_shadows_row(("shade",), db, "shade", 2)
+    assert not _atom_shadows_row(len, db, "shade", 1)

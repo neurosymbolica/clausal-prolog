@@ -1448,3 +1448,80 @@ class TestNonAtomNestedInCellHeadArgUnreachable:
             "2026-09-05.md) has been fixed -- invert this assertion and "
             "close the todo"
         )
+
+
+class TestCellAtomHeadReference:
+    """Stage A (2026-09-06-atoms-as-cells-strings, Task 9): a NESTED head
+    reference that resolves to a CELL atom ``("red",)`` builds a real match
+    pattern, the same way a ``str`` atom resolution already does.
+
+    Same driving shape as ``test_nested_non_atom_reference_unreachable_when_
+    position_forced`` above: only a reference nested inside an already-lifted
+    cell argument reaches ``head_match.head_to_match_pattern``'s
+    ``LoadName``/``LoadAttr`` branch, and only dispatch forced through that
+    argument's own position exercises the pattern it builds.  A cell atom
+    cannot be baked in as a bare ``ast.MatchValue`` (a ``match`` value pattern
+    takes literals and dotted attribute lookups only, never a tuple constant),
+    so the branch emits the cell SEQUENCE pattern ``case ('red',)`` instead.
+    """
+
+    def _clauses_and_globals(self, binding_of):
+        from clausal.terms import Call, LoadName
+
+        colours = ("red", "green", "blue", "amber")
+        clauses = []
+        for i, colour in enumerate(colours, start=1):
+            n_var, l_var = Var(), Var()
+            wrap_call = Call(
+                func=LoadName(name="Wrap"),
+                args=(LoadName(name=colour),),
+                kwargs=(),
+            )
+            clauses.append(Clause(
+                head=Compound("level", (n_var, l_var)),
+                body=[
+                    Unify(left=n_var, right=i),
+                    Unify(left=l_var, right=wrap_call),
+                ],
+            ))
+        globals_ = {c: binding_of(c) for c in colours}
+        globals_["Wrap"] = "Wrap"
+        return clauses, globals_
+
+    def test_nested_cell_atom_reference_matches_when_position_forced(self):
+        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+
+        # The Stage B binding shape for a declared atom: the arity-0 cell.
+        clauses, globals_ = self._clauses_and_globals(lambda c: (c,))
+        globals_[FUNCTOR_SIGNATURES_KEY] = {"Wrap": ("x",)}
+        fn = compile_predicate_trampoline(
+            "level", 2, clauses, None, globals_=globals_)
+
+        # Position 0 unbound: dispatch is forced through position 1's cell
+        # bucket, so the nested-reference pattern is what decides the match.
+        v = Var()
+        results = _trampoline_solutions(fn, [v, ("Wrap", ("blue",))])
+        assert results == [(3, ("Wrap", ("blue",)))]
+
+        # A cell atom no clause carries still fails.
+        v = Var()
+        assert _trampoline_solutions(fn, [v, ("Wrap", ("teal",))]) == []
+
+    def test_nested_str_atom_reference_still_matches(self):
+        """Stage A additivity: today's ``str`` atom binding keeps taking the
+        ``MatchValue`` path and keeps matching a ``str`` runtime value."""
+        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
+
+        clauses, globals_ = self._clauses_and_globals(lambda c: c)
+        globals_[FUNCTOR_SIGNATURES_KEY] = {"Wrap": ("x",)}
+        fn = compile_predicate_trampoline(
+            "level", 2, clauses, None, globals_=globals_)
+
+        v = Var()
+        results = _trampoline_solutions(fn, [v, ("Wrap", "blue")])
+        assert results == [(3, ("Wrap", "blue"))]
+
+        # ... and the CELL shape must NOT match a str-atom clause (Stage A
+        # keeps ``("blue",)`` and ``"blue"`` distinct — spec §6.2).
+        v = Var()
+        assert _trampoline_solutions(fn, [v, ("Wrap", ("blue",))]) == []

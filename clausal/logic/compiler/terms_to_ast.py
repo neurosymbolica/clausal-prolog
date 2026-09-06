@@ -41,6 +41,11 @@ from clausal.logic.predicate import (
     PredicateMeta, is_atom, is_term_instance,
     term_field_names, term_field_names_of_class,
 )
+from clausal.logic.atoms import (
+    is_atom as _term_is_atom,
+    mint as _mint_atom,
+    spelling as _atom_spelling,
+)
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
 from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG
 
@@ -387,10 +392,12 @@ def _functor_spelling(binding: Any, leaf: str) -> str:
     builds is tagged ``"pt"`` — matching the alias's local spelling instead
     would build a term the owner's clauses can never match.
 
-    A plain STR answers with itself, for exactly the same reason: post-flip a
-    declared data functor whose class was never minted binds the interned
-    spelling (``compiler_v2._process_declarations``), and an aliased import of
-    one binds the OWNER's spelling under the local name.
+    An ATOM answers with its SPELLING, for exactly the same reason: post-flip
+    a declared data functor whose class was never minted binds the minted atom
+    (``compiler_v2._process_declarations``), and an aliased import of one binds
+    the OWNER's spelling under the local name.  Read through the public atom
+    API (2026-09-06-atoms-as-cells-strings, Task 9) so the arity-0 cell
+    ``("pt",)`` answers alongside today's ``str`` binding.
 
     Anything else (nothing bound, some unrelated value) falls back to the
     leaf name — the only spelling available, and the right one whenever the
@@ -398,8 +405,8 @@ def _functor_spelling(binding: Any, leaf: str) -> str:
     """
     if isinstance(binding, type):
         return binding.__name__
-    if isinstance(binding, str):
-        return binding
+    if _term_is_atom(binding):
+        return _atom_spelling(binding)
     return leaf
 
 
@@ -1073,8 +1080,14 @@ def term_to_ast_expr(
     # by-identity special case any more (that machinery is deleted, §1b/R2)
     # — a plain-str atom and a live zero-field class of the same spelling
     # both lower to the identical ``ast.Constant``.
+    #
+    # 2026-09-06-atoms-as-cells-strings, Task 9: the constant is
+    # ``atoms.mint(term.__name__)`` — under Plan 0 byte-identical output, and
+    # at Stage B this becomes the arity-0 cell without a second edit here.
+    # ``ast.Constant`` takes the cell directly (a 1-tuple of a str folds into
+    # ``co_consts`` and is marshal-clean — spec §5.2).
     if is_atom(term):
-        return ast.Constant(value=term.__name__)
+        return ast.Constant(value=_mint_atom(term.__name__))
 
     if is_term_instance(term):
         cls = type(term)

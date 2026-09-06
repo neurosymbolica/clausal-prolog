@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import contextlib
 import importlib
-import sys
 import warnings
 from typing import Any
 
@@ -27,6 +26,11 @@ from clausal.logic.database import (
     WRITE_LOAD_CLAUSES, WRITE_LOAD_DISPATCH,
 )
 from clausal.logic.cells import DECLARED_ATOMS_KEY
+from clausal.logic.atoms import (
+    is_atom as _term_is_atom,
+    mint as _mint_atom,
+    spelling as _atom_spelling,
+)
 from clausal.logic.exceptions import LogicException
 from clausal.logic.compiler import (
     compile_predicate_trampoline,
@@ -54,6 +58,16 @@ from clausal.pythonic_ast.nodes import (
 # Sentinel distinguishing "not present" from a legitimately-bound None/False
 # in module_dict -- see _process_bare_atom_refs (P3-1 Task 7 fix round 1).
 _MISSING = object()
+
+
+def _spelling_or_self(value):
+    """*value*'s spelling if it is an ATOM, otherwise *value* unchanged.
+
+    Two lines rather than a shared helper (2026-09-06-atoms-as-cells-strings,
+    Task 9): the leaked-pool-atom shape test below is the only consumer here
+    and the same two lines live beside the sibling test in ``import_hook``.
+    """
+    return _atom_spelling(value) if _term_is_atom(value) else value
 
 _strict_atoms_deprecation_emitted = False
 
@@ -498,7 +512,7 @@ def _imported_reference(mod, orig_name: str, value):
     if not declared or orig_name not in declared:
         return value
     from clausal.import_hook import predicate_builtins  # noqa: PLC0415
-    return predicate_builtins.setdefault(orig_name, orig_name)
+    return predicate_builtins.setdefault(orig_name, _mint_atom(orig_name))
 
 
 def _process_imports(module_items: list, module_dict: dict) -> None:
@@ -1421,18 +1435,24 @@ def _process_bare_atom_refs(
         for name in item.names:
             existing = module_dict.get(name, _MISSING)
             if existing is not _MISSING:
-                # A leaked-pool-atom shape is a plain str equal to its own
-                # name that is STILL the identical object the process pool
+                # A leaked-pool-atom shape is an ATOM whose spelling is its
+                # own name and which is STILL EQUAL to what the process pool
                 # holds for that name right now — exactly what this
                 # function's own auto-mint branch below,
                 # ``_process_declarations``, and ``global_atom/2`` all
                 # install. Anything else already bound (a real
                 # PredicateMeta class, a Python import, any other object)
                 # is trusted unconditionally, same as before this fix.
+                #
+                # 2026-09-06-atoms-as-cells-strings §5.2: EQUALITY, not
+                # identity — ``mint`` returns an equal atom, never a promise
+                # of the same object (no process-wide atom table), and the
+                # shape is read through the public atom API so a cell atom
+                # ``("foo",)`` is recognised beside today's str.
                 leaked_pool_atom = (
-                    isinstance(existing, str)
-                    and existing == name
-                    and predicate_builtins.get(name) is existing
+                    _term_is_atom(existing)
+                    and _spelling_or_self(existing) == name
+                    and predicate_builtins.get(name) == existing
                 )
                 # P3-1/P3-2 Task 8 (pool split): the SECOND leak shape a
                 # pre-seeded module_dict can carry is ANY ``runtime_builtins``
@@ -1485,13 +1505,16 @@ def _process_bare_atom_refs(
             if effective_strict:
                 undeclared.append(name)
                 continue
-            # Accept the spelling — no class is minted (§1b/R2).  Shared via
+            # Accept the spelling — no class is minted (§1b/R2).  Recorded in
             # ``predicate_builtins`` (the same pool ``$intern_atom`` and
-            # ``_process_declarations`` use) purely so the SAME str object
-            # backs the name everywhere it is auto-accepted; a fresh literal
-            # would already compare equal, but sharing the object keeps
-            # today's ``mod.x is predicate_builtins["x"]``-shaped pins true.
-            module_dict[name] = predicate_builtins.setdefault(name, name)
+            # ``_process_declarations`` use), which is the strict-atoms
+            # VOCABULARY: the set of declared spellings mapped to their
+            # minted atoms.  The old identity-sharing rationale is gone with
+            # the ``is``-pins it existed for (2026-09-06-atoms-as-cells-
+            # strings §5.2) — atoms compare by ``==``, and ``mint`` makes no
+            # same-object promise.
+            module_dict[name] = predicate_builtins.setdefault(
+                name, _mint_atom(name))
 
     if undeclared:
         raise NameError(
@@ -1626,7 +1649,7 @@ def _process_declarations(module_items: list, module_dict: dict,
                     declared_atoms)
             for entry in exports:
                 if isinstance(entry, str):
-                    # Atom: bind the spelling, mint nothing -- UNLESS a
+                    # Atom: bind ``mint(entry)`` -- UNLESS a
                     # same-named real predicate already exists in
                     # module_dict (Phenomenon A: an in-file 0-arity fact
                     # statement or an N-arity clause re-minted a genuine
@@ -1634,13 +1657,13 @@ def _process_declarations(module_items: list, module_dict: dict,
                     # -private line, exec-time, via the guarded block in
                     # ``_make_functor_class_ast``/``_build_zero_arity_fact_
                     # statements``).  The predicate wins -- do not clobber
-                    # it back to a plain str; see
+                    # it back to a plain atom; see
                     # ``_make_atom_str_assign_ast``'s docstring for the
-                    # matching guard on the OTHER direction (a str must
+                    # matching guard on the OTHER direction (an atom must
                     # not clobber a real predicate either).
                     if not isinstance(module_dict.get(entry), PredicateMeta):
                         module_dict[entry] = predicate_builtins.setdefault(
-                            entry, entry
+                            entry, _mint_atom(entry)
                         )
                     continue
                 elif isinstance(entry, tuple):
@@ -1688,6 +1711,12 @@ def _process_declarations(module_items: list, module_dict: dict,
                 # ``tests/test_undefined_name_sibling_diagnostic.py`` green
                 # by accident when this went through the pool).  Cells
                 # compare slot 0 with ``==``, never ``is``, so a functor
-                # spelling needs no shared identity; ``sys.intern`` is kept
-                # for the cheap compares, not for identity.
-                module_dict[name] = sys.intern(name)
+                # spelling needs no shared identity.
+                #
+                # 2026-09-06-atoms-as-cells-strings §5.2: a declared functor's
+                # NAME used as a value IS the atom, so this binds
+                # ``atoms.mint(name)`` rather than a bare ``sys.intern``
+                # (``mint`` interns the spelling itself, so the cheap-compare
+                # property the old call was kept for survives).  ``mint`` is
+                # not the pool -- the comment above stays true.
+                module_dict[name] = _mint_atom(name)

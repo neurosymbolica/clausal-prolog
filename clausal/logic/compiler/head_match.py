@@ -784,8 +784,9 @@ def head_to_match_pattern(
     # never changes identity or content at runtime, so a compile-time
     # snapshot and a live global lookup are equivalent for it.
     #
-    # Only fires when the reference resolves to a plain ``str`` (an atom,
-    # R6: atoms are interned strings, not classes, post-pivot).  Anything
+    # Only fires when the reference resolves to an ATOM -- a plain ``str``
+    # (R6: atoms are interned strings, not classes, post-pivot) or the
+    # arity-0 cell the strings plan makes canonical at Stage B.  Anything
     # else -- unresolved, or resolved to a non-atom -- falls through to the
     # existing (safe, if incomplete) ``is_term_instance`` dead-pattern
     # fallback below: it never wrongly matches, it just never fires, exactly
@@ -794,6 +795,24 @@ def head_to_match_pattern(
     if isinstance(term, (LoadName, LoadAttr)):
         dotted = _dotted_name_from_loadattr(term)
         resolved = _resolve_loadname(dotted, globals_) if dotted else None
+        # 2026-09-06-atoms-as-cells-strings, Task 9: a reference that resolves
+        # to the arity-0 CELL atom ``("red",)`` gets the cell SEQUENCE pattern
+        # ``case ('red',)``, not a ``MatchValue`` -- a ``match`` value pattern
+        # takes literals and dotted attribute lookups only, and a tuple
+        # constant is neither (``compile()`` raises "patterns may only match
+        # literals and attribute lookups").
+        #
+        # The gate is the LITERAL cell shape, deliberately NOT ``atoms.
+        # is_atom``: under Stage A a plain ``str`` is still an atom, and a
+        # ``str`` resolved value must keep taking the ``MatchValue`` line
+        # below, because the RUNTIME value it has to match is that same
+        # ``str`` -- a cell pattern would never fire for it.  Task 11 (the
+        # Stage B flip, where a ``str`` stops being an atom) replaces this
+        # gate with ``_term_is_atom(resolved)`` / ``spelling(resolved)`` and
+        # deletes the ``MatchValue`` line.
+        if (type(resolved) is tuple and len(resolved) == 1
+                and type(resolved[0]) is str):
+            return _cell_match_pattern(resolved[0], [])
         if isinstance(resolved, str):
             return ast.MatchValue(value=ast.Constant(value=resolved))
 

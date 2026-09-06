@@ -45,7 +45,22 @@ from .logic.constants import (
     register_module_constant,
 )
 from .logic.variables import Var, Trail, unify, deref, walk
+from .logic.atoms import (
+    is_atom as _term_is_atom,
+    mint as _mint_atom,
+    spelling as _atom_spelling,
+)
 from .terms import Compound, KWTerm, DictTerm, SetTerm
+
+
+def _spelling_or_self(value):
+    """*value*'s spelling if it is an ATOM, otherwise *value* unchanged.
+
+    Two lines rather than a shared helper (2026-09-06-atoms-as-cells-strings,
+    Task 9): the leaked-pool-atom shape test below is the only consumer here
+    and the same two lines live beside the sibling test in ``compiler_v2``.
+    """
+    return _atom_spelling(value) if _term_is_atom(value) else value
 
 # ── Runtime support ──────────────────────────────────────────────────────────
 
@@ -74,13 +89,14 @@ def _make_intern_atom(module_dict, module_items, module_name):
     atom **at construction time**, because dict literals are built eagerly
     during ``exec`` — before the bare-atom auto-accept pass runs — so the key
     cannot rely on a later module-global binding.  Atoms are global by
-    spelling and mint no class any more (§1b/R2): the helper simply returns
-    the str itself, ``setdefault``-shared through the process-wide
-    ``predicate_builtins`` pool with ``compiler_v2._process_bare_atom_refs``/
-    ``_process_declarations`` purely so the identical str object backs the
-    name everywhere (a fresh literal would already compare equal — sharing
-    the object keeps ``{foo: 1}[foo]``-shaped pins that check ``is`` true
-    too).
+    spelling and mint no class any more (§1b/R2): the helper returns
+    ``atoms.mint(name)``, recorded in the process-wide ``predicate_builtins``
+    pool that ``compiler_v2._process_bare_atom_refs``/``_process_declarations``
+    also write.  That pool is the strict-atoms VOCABULARY — the set of
+    declared spellings mapped to their minted atoms — not an identity table:
+    2026-09-06-atoms-as-cells-strings §5.2 retires every ``is``-pin on an atom
+    in favour of ``==``, and ``mint`` makes no promise to return the same
+    object twice.
 
     Strict atom resolution is the default: an undeclared bare atom must NOT
     be silently accepted (that would pollute ``predicate_builtins`` and
@@ -103,8 +119,8 @@ def _make_intern_atom(module_dict, module_items, module_name):
     earlier-loaded module had declared (or auto-accepted) the same
     spelling.  Same defect, same fix, as ``compiler_v2._process_bare_atom_
     refs``: trust an already-bound value UNLESS it is specifically the
-    leaked-pool-atom shape (a plain str equal to its own name, still
-    identical to the pool's live entry) that THIS module's own declared/
+    leaked-pool-atom shape (an ATOM whose spelling is its own name, still
+    EQUAL to the pool's live entry) that THIS module's own declared/
     imported vocabulary (``compiler_v2._locally_declared_names``) does not
     vouch for.  ``global_atom/2``'s mint-on-demand mode also writes the
     pool, but only at query runtime -- irrelevant to this compile-time
@@ -123,10 +139,16 @@ def _make_intern_atom(module_dict, module_items, module_name):
     def _intern_atom(name):
         existing = module_dict.get(name)
         if existing is not None:
+            # 2026-09-06-atoms-as-cells-strings §5.2: the pin is EQUALITY,
+            # never identity — ``mint`` promises an equal atom, not the same
+            # object (there is no process-wide atom table), and a constant
+            # unmarshalled from a ``.pyc`` is never the minted instance.  The
+            # shape test reads the atom through the public API so a cell atom
+            # ``("foo",)`` is recognised beside today's str.
             leaked_pool_atom = (
-                isinstance(existing, str)
-                and existing == name
-                and predicate_builtins.get(name) is existing
+                _term_is_atom(existing)
+                and _spelling_or_self(existing) == name
+                and predicate_builtins.get(name) == existing
             )
             # Task 8 split: the OTHER leak shape a pre-seeded module_dict can
             # carry is a ``runtime_builtins`` entry still sitting under this
@@ -151,7 +173,7 @@ def _make_intern_atom(module_dict, module_items, module_name):
             # module_dict at this point in exec (e.g. a -module/-private
             # atom whose guarded assignment has not run yet).  Resolve it
             # the same way the auto-mint branch below would.
-            return predicate_builtins.setdefault(name, name)
+            return predicate_builtins.setdefault(name, _mint_atom(name))
         if strict:
             message = (
                 f"strict_atoms: undeclared atom {name!r} used as a dict key in "
@@ -163,7 +185,7 @@ def _make_intern_atom(module_dict, module_items, module_name):
             raise NameError(
                 "\n".join([message, *truth_literal_hint_lines([name])])
             )
-        return predicate_builtins.setdefault(name, name)
+        return predicate_builtins.setdefault(name, _mint_atom(name))
 
     return _intern_atom
 
