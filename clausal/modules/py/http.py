@@ -224,7 +224,7 @@ def _json_post_3(url, term_in, term_out, trail, k):
     if is_var(term_d):
         return
     try:
-        json_str = _json_mod.dumps(_clausal_to_python(term_d))
+        json_str = _json_mod.dumps(_clausal_to_python(term_d, "py.http.json_post/3"))
     except (ValueError, TypeError) as exc:
         # Ground terms only — a nested unbound Var is a mode signal, and
         # its exception text leaks internal type names.

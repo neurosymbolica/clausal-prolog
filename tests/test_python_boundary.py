@@ -22,9 +22,48 @@ def test_to_python_unwraps_a_cell_atom():
     assert to_python(DictTerm({("k",): ("v",)})) == {"k": "v"}
 
 
-def test_deep_deref_is_still_exported_as_an_alias():
+def test_to_python_walks_a_ground_segstring():
+    # §9.1: "string → str (a ground SegString walks first)".  ``deref``
+    # follows Var bindings only, so without the dedicated arm a SegString
+    # crosses out as the term object and a Python callee sees no text.
+    # NB the assertion must pin the TYPE: SegString.__eq__ compares equal to
+    # the str it walks to, so `to_python(seg) == "hello"` holds even with no
+    # conversion at all and would be a vacuous test.
+    from clausal.terms import SegString
+    out = to_python(SegString(["hel", "lo"]))
+    assert type(out) is str and out == "hello"
+    nested = to_python([SegString(["a", "b"])])
+    assert type(nested[0]) is str and nested == ["ab"]
+
+
+def test_to_python_leaves_a_non_ground_segstring_raw():
+    from clausal.logic.variables import Var
+    from clausal.terms import SegString, VarSeg
+    seg = SegString(["hel", VarSeg(Var())])
+    assert to_python(seg) is seg
+
+
+def test_to_python_lives_in_the_core_module_and_is_re_exported():
+    # The compiler binds this function as $to_python, so its home must be on
+    # the clausal.logic side: clausal.logic must not import clausal.modules.py
+    # at module level.  The py.* wrappers re-export it, alias included.
+    import clausal.logic.to_python as core
     from clausal.modules.py._helpers import _deep_deref
+    assert core.to_python is to_python
     assert _deep_deref is to_python
+
+
+def test_compiler_has_no_module_level_edge_into_modules_py():
+    # Importing the compiler entrypoint must not drag clausal.modules.py in.
+    import subprocess
+    import sys
+    code = (
+        "import sys; import clausal.logic.compiler.predicate; "
+        "print('clausal.modules.py' in sys.modules)"
+    )
+    out = subprocess.run([sys.executable, "-c", code],
+                         capture_output=True, text=True)
+    assert out.stdout.strip() == "False", out.stderr
 
 
 def test_thunk_argument_is_converted():

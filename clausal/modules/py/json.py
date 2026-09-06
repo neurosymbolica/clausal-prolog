@@ -25,8 +25,10 @@ the ``atoms`` vocabulary reaches every nested string value.
 
 Generating is the mirror: an atom becomes a JSON string (its spelling), a
 string becomes a JSON string, and a compound cell — which has no JSON
-counterpart — raises ``error(type_error(json_term, Cell), _)`` rather than
-a stdlib ``TypeError`` that the wrapper would swallow into a silent failure.
+counterpart — raises ``error(type_error(json_term, Cell), Context)`` rather
+than a stdlib ``TypeError`` that the wrapper would swallow into a silent
+failure.  Tuple shapes that are NOT compound cells (a ``TUPLE_TAG`` data
+cell, a plain non-cell tuple) still become JSON arrays.
 """
 
 from __future__ import annotations
@@ -44,9 +46,9 @@ _json = _import_stdlib("json")
 from typing import Any
 
 from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.exceptions import LogicException, domain_error, type_error
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.modules.py._helpers import to_python
 from clausal.terms import Compound, DictTerm
 
 
@@ -76,18 +78,33 @@ def _python_to_clausal(obj: Any, atoms: frozenset = frozenset()) -> Any:
     return obj
 
 
-def _clausal_to_python(term: Any) -> Any:
+def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
     """Convert a Clausal term into a plain Python object for json.dumps().
 
     An atom becomes its spelling (a ``str``, so it serialises as a JSON
-    string); DictTerm → dict with converted keys; lists recurse; Vars raise
-    TypeError (a mode situation the wrapper turns into a silent failure).
+    string); DictTerm → dict with converted KEYS AND VALUES; lists recurse;
+    Vars raise TypeError (a mode situation the wrapper turns into a silent
+    failure).
 
-    A compound cell has no JSON counterpart, so it raises a catchable
-    ``error(type_error(json_term, Cell), _)`` (spec §9.2) rather than the
-    stdlib ``TypeError`` the wrapper would swallow — a tuple used to
-    serialise as a JSON array by accident of ``json.dumps``'s tuple support,
-    which silently conflated ``point(1, 2)`` with ``[1, 2]``.
+    Only a **compound cell** — a tuple with a ``str`` functor in slot 0 and
+    arity >= 1, i.e. ``point(1, 2)`` — has no JSON counterpart, so it raises a
+    catchable ``error(type_error(json_term, Cell), Context)`` (spec §9.2)
+    rather than the stdlib ``TypeError`` the wrapper would swallow into a
+    silent failure.  It used to serialise as a JSON array by accident of
+    ``json.dumps``'s tuple support, silently conflating ``point(1, 2)`` with
+    ``[1, 2]``.  Every other tuple shape still becomes a JSON array with its
+    elements converted: a ``TUPLE_TAG`` data cell ``(tuple, e1, …)`` from its
+    DATA elements (the tag is representation, not content), and a plain
+    non-cell tuple ``(1, 2)`` from all of its own.
+
+    Keys go through this same converter, not through ``to_python``: a key is
+    as much a term as a value, and routing it elsewhere would hand
+    ``json.dumps`` a tuple key whose stdlib ``TypeError`` the wrapper
+    swallows into a silent failure with no note.
+
+    *context* names the calling predicate for the error term — this converter
+    serves ``generate/2``, ``pretty_generate/2``, ``write_file/2`` and
+    ``py.http.json_post/3``.
     """
     term = deref(term)
     if is_var(term):
@@ -96,15 +113,19 @@ def _clausal_to_python(term: Any) -> Any:
         return spelling(term)
     if isinstance(term, DictTerm):
         return {
-            to_python(k): _clausal_to_python(deref(v))
+            _clausal_to_python(k, context): _clausal_to_python(deref(v), context)
             for k, v in term.data.items()
         }
     if isinstance(term, list):
-        return [_clausal_to_python(deref(item)) for item in term]
+        return [_clausal_to_python(deref(item), context) for item in term]
     if type(term) is tuple:
-        raise LogicException(
-            type_error("json_term", term, "py.json.generate/2")
-        )
+        if term and type(term[0]) is str:
+            # A compound cell of arity >= 1 (an arity-0 cell is an atom and
+            # was taken by the is_atom branch above).
+            raise LogicException(type_error("json_term", term, context))
+        if term and term[0] is TUPLE_TAG:
+            return [_clausal_to_python(e, context) for e in term[1:]]
+        return [_clausal_to_python(e, context) for e in term]
     # int, float, bool, None — pass through
     return term
 
@@ -118,6 +139,12 @@ def _parse_options(options: Any) -> frozenset:
     The whole vocabulary is ``atoms(Spellings)`` (spec §9.2) — *Spellings* is
     a list of the texts that are to come back as atoms rather than strings.
     Anything else in the list is ``error(domain_error(json_option, Opt), _)``.
+
+    An element of *Spellings* may be an ATOM or a STRING, and both name the
+    same text.  Writing ``atoms(["red"])`` is the natural spelling, and at
+    Stage B (``"…"`` reads as a string) that list holds strings, not atoms —
+    demanding atoms there would make the option unwritable in the very
+    notation it exists to serve.
     """
     options = deref(options)
     if not isinstance(options, list):
@@ -139,11 +166,16 @@ def _parse_options(options: Any) -> frozenset:
             )
         for s in spellings:
             s = deref(s)
-            if not is_atom(s):
+            if is_atom(s):
+                atoms.add(spelling(s))
+            elif type(s) is str:
+                # Unreachable under Plan 0 (a str IS an atom to ``is_atom``);
+                # this is the arm that carries the option at Stage B.
+                atoms.add(s)
+            else:
                 raise LogicException(
                     domain_error("json_option", opt, "py.json.parse/3")
                 )
-            atoms.add(spelling(s))
     return frozenset(atoms)
 
 
@@ -208,7 +240,7 @@ def _generate_2(term, string, trail, k):
     if is_var(term):
         return
     try:
-        obj = _clausal_to_python(term)
+        obj = _clausal_to_python(term, "py.json.generate/2")
         result = _json.dumps(obj, ensure_ascii=False)
     except (TypeError, ValueError) as exc:
         if value_is_ground(term):
@@ -224,7 +256,7 @@ def _pretty_generate_2(term, string, trail, k):
     if is_var(term):
         return
     try:
-        obj = _clausal_to_python(term)
+        obj = _clausal_to_python(term, "py.json.pretty_generate/2")
         result = _json.dumps(obj, indent=2, ensure_ascii=False)
     except (TypeError, ValueError) as exc:
         if value_is_ground(term):
@@ -282,7 +314,7 @@ def _write_file_2(path, term, trail, k):
     if is_var(term):
         return
     try:
-        obj = _clausal_to_python(term)
+        obj = _clausal_to_python(term, "py.json.write_file/2")
         with open(path, "w", encoding="utf-8") as f:
             _json.dump(obj, f, ensure_ascii=False, indent=2)
     except (TypeError, ValueError) as exc:

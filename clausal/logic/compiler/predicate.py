@@ -66,12 +66,12 @@ from clausal.logic.runtime.tramp_call import (  # noqa: F401
 from clausal.logic.runtime.dict_ops import _subscript, _splat_data, _dict_key  # noqa: F401
 from clausal.logic.runtime.const_set import _const_set, _CONST_SET_TYPES  # noqa: F401
 # The outbound term → Python conversion the PyThunk lowering emits as
-# ``$to_python`` (spec 2026-09-06-atoms-as-cells-strings §9.1).  It lives with
-# the ``py.*`` wrappers because they are its other caller; the import is safe
-# at module level because ``clausal.modules.py`` pulls in only stdlib plus
-# ``clausal.logic.trampoline``, and ``_helpers`` defers ``clausal.terms`` to
-# call time — no path back into the compiler.
-from clausal.modules.py._helpers import to_python as _to_python_fn  # noqa: F401
+# ``$to_python`` (spec 2026-09-06-atoms-as-cells-strings §9.1).  It is a core
+# module, NOT ``clausal.modules.py._helpers`` (which re-exports it for the
+# ``py.*`` wrappers): ``clausal.logic`` must not grow a module-level import
+# edge into ``clausal.modules``.  Its own imports — clausal.terms,
+# clausal.logic.atoms, clausal.logic.variables — are already pulled in above.
+from clausal.logic.to_python import to_python as _to_python_fn  # noqa: F401
 
 from ._ast_helpers import (
     _name, _call, _assign, _assign_mark, _undo_stmt, _if,

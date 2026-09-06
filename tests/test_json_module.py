@@ -361,6 +361,17 @@ class TestFileIO:
 
 
 class TestParse3AtomsOption:
+    # NOTE on what these do and do not pin. Under Plan 0 an atom IS its
+    # spelling (``mint("red") == "red"``, and ``==`` is the semantics), so
+    # the "is it an atom or a string?" half of every assertion below is
+    # VACUOUS today: `d[mint("k")] == mint("red")` and `... == "red"` are the
+    # same claim. What they pin today is the ROUTE — that parse/3 exists,
+    # that the option is parsed and honoured, that the vocabulary reaches
+    # nested values, and that an unknown option is a domain_error. They
+    # start biting on the atom/string distinction at Stage B, when
+    # ``mint("red")`` becomes ``("red",)`` and stops comparing equal to the
+    # string; no rewrite is needed then, they simply become load-bearing.
+
     def test_json_parse_3_atoms_option_mints_listed_strings(self):
         t = Var()
         sols, _ = simple_solutions(
@@ -404,6 +415,26 @@ class TestParse3AtomsOption:
         assert len(sols) == 1
         assert deref(t)[mint("k")] == mint("red")
 
+    def test_parse_3_spellings_accepts_atoms_and_strings_alike(self):
+        # An element of Spellings may be an atom or a string, and both name
+        # the same text.  At Stage B, ``atoms(["red"])`` written in source is
+        # a list of STRINGS — demanding atoms there would make the option
+        # unwritable in the notation it exists to serve.
+        for element in (mint("red"), "red", ("red",)):
+            t = Var()
+            sols, _ = simple_solutions(
+                _parse_3, '{"k": "red"}', t, [("atoms", [element])]
+            )
+            assert len(sols) == 1
+            assert deref(t)[mint("k")] == mint("red")
+
+    def test_parse_3_rejects_a_non_text_spelling(self):
+        with pytest.raises(LogicException) as exc:
+            list(simple_solutions(
+                _parse_3, '{"k": 1}', Var(), [("atoms", [42])],
+            ))
+        assert exc.value.term.args[0].args[0] == mint("json_option")
+
 
 # ── generate/2 on a cell (spec §9.2: type_error, not a stdlib TypeError) ─
 
@@ -420,3 +451,52 @@ class TestGenerateRejectsCells:
 
     def test_generate_of_a_dict_with_atom_keys(self):
         assert _clausal_to_python(DictTerm({("k",): ("v",)})) == {"k": "v"}
+
+    def test_a_compound_cell_KEY_is_a_type_error_not_a_silent_failure(self):
+        # The key arm must go through the same converter as the value arm:
+        # routing keys through ``to_python`` would hand json.dumps a tuple
+        # key, whose stdlib TypeError the wrapper swallows into a plain
+        # failure with no note.
+        with pytest.raises(LogicException) as exc:
+            _clausal_to_python(DictTerm({("point", 1, 2): 1}))
+        assert exc.value.term.args[0].functor == "type_error"
+        assert exc.value.term.args[0].args[0] == mint("json_term")
+
+    def test_a_tuple_tag_data_cell_serialises_as_an_array(self):
+        # Only a str-functor cell of arity >= 1 is a json_term type_error.
+        # Tuple DATA is content, not a compound, and keeps its array reading.
+        from clausal.logic.cells import TUPLE_TAG, make_tuple_cell
+        cell = make_tuple_cell(1, ("red",))
+        assert cell[0] is TUPLE_TAG
+        assert _clausal_to_python(cell) == [1, "red"]
+
+    def test_a_plain_non_cell_tuple_serialises_as_an_array(self):
+        assert _clausal_to_python((1, 2)) == [1, 2]
+        assert _clausal_to_python(()) == []
+
+    def test_generate_2_emits_arrays_for_the_non_cell_tuple_shapes(self):
+        # End-to-end through the predicate, not just the converter.
+        from clausal.logic.cells import make_tuple_cell
+        s = Var()
+        sols, _ = simple_solutions(_generate_2, make_tuple_cell(1, 2), s)
+        assert len(sols) == 1
+        assert deref(s) == "[1, 2]"
+
+    def test_the_type_error_context_names_the_calling_predicate(self):
+        # One converter serves generate/2, pretty_generate/2, write_file/2
+        # and py.http.json_post/3; the error must say which one failed.
+        for context in ("py.json.generate/2", "py.json.pretty_generate/2",
+                        "py.json.write_file/2", "py.http.json_post/3"):
+            with pytest.raises(LogicException) as exc:
+                _clausal_to_python(("point", 1, 2), context)
+            assert exc.value.term.args[1] == context
+
+    def test_pretty_generate_and_write_file_carry_their_own_context(self, tmp_path):
+        with pytest.raises(LogicException) as exc:
+            list(_pretty_generate_2(("point", 1, 2), Var(), Trail(), None))
+        assert exc.value.term.args[1] == "py.json.pretty_generate/2"
+
+        path = str(tmp_path / "out.json")
+        with pytest.raises(LogicException) as exc:
+            list(_write_file_2(path, ("point", 1, 2), Trail(), None))
+        assert exc.value.term.args[1] == "py.json.write_file/2"
