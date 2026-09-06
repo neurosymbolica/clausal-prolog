@@ -38,7 +38,7 @@ from clausal.pythonic_ast.nodes import (
     SetLiteral as _SetLiteral_t,
 )
 from clausal.logic.predicate import (
-    PredicateMeta, is_atom, is_term_instance,
+    PredicateMeta, is_zero_field_class, is_term_instance,
     term_field_names, term_field_names_of_class,
 )
 from clausal.logic.atoms import (
@@ -151,10 +151,11 @@ class PredicateAsTermError(Exception):
 # ``atom_identity_expr()`` / ``$atom(<token>)`` — existed to stop a live
 # atom-CLASS object from being silently re-resolved onto a same-named
 # predicate in the callee namespace (see the retired
-# ``todo/query-template-rebinds-atom-dict-keys.md``). A plain str atom
-# lowers to an ``ast.Constant`` unconditionally (below, and in the
-# ``is_atom(term)`` branch further down) and is never looked up by name at
-# all, so the hazard this machinery guarded against cannot occur any more.)
+# ``todo/query-template-rebinds-atom-dict-keys.md``). An atom lowers to an
+# ``ast.Constant`` unconditionally (below, and in the
+# ``is_zero_field_class(term)`` branch further down) and is never looked up
+# by name at all, so the hazard this machinery guarded against cannot occur
+# any more.)
 
 
 # ── The compile scope: which namespace resolves a bare functor name ─────────
@@ -1086,7 +1087,7 @@ def term_to_ast_expr(
     # at Stage B this becomes the arity-0 cell without a second edit here.
     # ``ast.Constant`` takes the cell directly (a 1-tuple of a str folds into
     # ``co_consts`` and is marshal-clean — spec §5.2).
-    if is_atom(term):
+    if is_zero_field_class(term):
         return ast.Constant(value=_mint_atom(term.__name__))
 
     if is_term_instance(term):

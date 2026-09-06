@@ -157,7 +157,7 @@ class TestListingClassArgumentGoldenOutput:
         )
 
 
-# ── str atom / Name-Arity indicator arguments (P3-3 Task 8, NEW) ─────────────
+# ── atom / Name-Arity indicator arguments (P3-3 Task 8, NEW) ─────────────────
 
 
 def _run_listing(dispatch, pred):
@@ -182,22 +182,26 @@ def _db_with_fact(name, arity):
     return db
 
 
-class TestListingStrAtomArgument:
-    """(d): a bare str atom names a predicate; ``db.row(name, 0)`` backs it."""
+class TestListingAtomArgument:
+    """(d): an ATOM names a predicate; ``db.row(name, 0)`` backs it.
 
-    def test_str_atom_lists_the_zero_arity_predicate_by_name(self):
+    THE FLIP: the atom is the arity-0 cell ``("greet",)``; a plain ``str``
+    is a STRING and is refused (Task 12).
+    """
+
+    def test_atom_lists_the_zero_arity_predicate_by_name(self):
         db = _db_with_fact("greet", 0)
         dispatch = get_builtin_dispatch("listing", 1, db)
         output = _run_listing(dispatch, mint("greet"))
         assert "greet/0" in output
         assert "1 clause(s)" in output
 
-    def test_str_atom_with_no_db_raises_type_error(self):
+    def test_string_name_with_no_db_raises_type_error(self):
         dispatch = get_builtin_dispatch("listing", 1, None)
         with pytest.raises(LogicException):
             _run_listing(dispatch, "greet")
 
-    def test_str_atom_naming_an_absent_predicate_raises_existence_error(self):
+    def test_atom_naming_an_absent_predicate_raises_existence_error(self):
         from clausal.logic.database import Database
 
         db = Database()
@@ -229,21 +233,21 @@ class TestListingNameArityIndicatorArgument:
     def test_name_arity_cell_lists_the_predicate(self):
         db = _db_with_fact("pt", 2)
         dispatch = get_builtin_dispatch("listing", 1, db)
-        output = _run_listing(dispatch, ("/", "pt", 2))
+        output = _run_listing(dispatch, ("/", mint("pt"), 2))
         assert "pt/2" in output
         assert "1 clause(s)" in output
 
     def test_name_arity_compound_lists_the_predicate(self):
         db = _db_with_fact("pt", 2)
         dispatch = get_builtin_dispatch("listing", 1, db)
-        output = _run_listing(dispatch, Compound("/", ("pt", 2)))
+        output = _run_listing(dispatch, Compound("/", (mint("pt"), 2)))
         assert "pt/2" in output
         assert "1 clause(s)" in output
 
     def test_name_arity_cell_with_no_db_raises_type_error(self):
         dispatch = get_builtin_dispatch("listing", 1, None)
         with pytest.raises(LogicException):
-            _run_listing(dispatch, ("/", "pt", 2))
+            _run_listing(dispatch, ("/", mint("pt"), 2))
 
     def test_name_arity_indicator_naming_an_absent_predicate_raises_existence_error(self):
         from clausal.logic.database import Database
@@ -251,7 +255,7 @@ class TestListingNameArityIndicatorArgument:
         db = Database()
         dispatch = get_builtin_dispatch("listing", 1, db)
         with pytest.raises(LogicException) as exc_info:
-            _run_listing(dispatch, ("/", "no_such_predicate", 3))
+            _run_listing(dispatch, ("/", mint("no_such_predicate"), 3))
         err = exc_info.value.term
         assert isinstance(err, Compound) and err.functor == "error"
         inner = err.args[0]
@@ -269,7 +273,7 @@ class TestListingNameArityIndicatorArgument:
         dispatch = get_builtin_dispatch("listing", 1, db)
         trail = Trail()
         name_v, arity_v = Var(), Var()
-        assert unify(name_v, "pt", trail)
+        assert unify(name_v, mint("pt"), trail)
         assert unify(arity_v, 2, trail)
         buf = io.StringIO()
         old = sys.stdout
@@ -289,7 +293,7 @@ class TestListingNameArityIndicatorArgument:
         dispatch = get_builtin_dispatch("listing", 1, db)
         trail = Trail()
         name_v, arity_v = Var(), Var()
-        assert unify(name_v, "pt", trail)
+        assert unify(name_v, mint("pt"), trail)
         assert unify(arity_v, 2, trail)
         buf = io.StringIO()
         old = sys.stdout
@@ -316,17 +320,18 @@ class TestListingDivIndicatorArgument:
     not, and this class + ``tests/fixtures/listing_div_indicator.clausal``
     pin what actually happens, byte-identically, plus the rejection case."""
 
-    def test_div_of_a_str_name_and_int_lists_the_predicate(self):
-        """The runtime shape ``Div(left=<str>, right=int)`` -- what
-        ``"pt" / 2`` compiles to when the left operand is a string literal
-        rather than a resolved predicate class (see
+    def test_div_of_an_atom_name_and_int_lists_the_predicate(self):
+        """The runtime shape ``Div(left=<atom>, right=int)`` -- what
+        ``pt / 2`` compiles to when the left operand is a name that did NOT
+        resolve to a predicate class (see
         ``test_div_of_a_predicate_class_lists_the_predicate`` below for the
-        class-left shape)."""
+        class-left shape).  Task 12: the name half is an ATOM, so a plain
+        ``str`` there is a string and is refused."""
         from clausal.terms import Div
 
         db = _db_with_fact("pt", 2)
         dispatch = get_builtin_dispatch("listing", 1, db)
-        output = _run_listing(dispatch, Div(left="pt", right=2))
+        output = _run_listing(dispatch, Div(left=mint("pt"), right=2))
         assert "pt/2" in output
         assert "1 clause(s)" in output
 
@@ -396,13 +401,13 @@ class TestListingDivIndicatorArgument:
         assert culprit.left == 3 and culprit.right == 2
 
     def test_div_with_a_non_int_right_operand_raises_type_error(self):
-        """``fib/"oops"`` -- a predicate-denoting left operand but a
+        """``fib/"oops"`` -- a predicate-denoting (atom) left operand but a
         non-int right operand -- is not a valid arity and must raise."""
         from clausal.terms import Div
 
         dispatch = get_builtin_dispatch("listing", 1, None)
         with pytest.raises(LogicException):
-            _run_listing(dispatch, Div(left="fib", right="oops"))
+            _run_listing(dispatch, Div(left=mint("fib"), right="oops"))
 
 
 class TestListingAnImportedPredicateByIndicator:
@@ -488,7 +493,7 @@ class TestListingSpecializedAliasByIndicator:
 
         db = specialize_natnum.__clausal_module__.db
         dispatch = get_builtin_dispatch("listing", 1, db)
-        output = _run_listing(dispatch, ("/", "SolveCountNatnum", 2))
+        output = _run_listing(dispatch, ("/", mint("SolveCountNatnum"), 2))
         assert "SolveCountNatnum/2" in output
         assert "3 clause(s)" in output
 

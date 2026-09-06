@@ -259,24 +259,27 @@ def _as_name_arity_indicator(val):
       docstring).  Probed directly (P3-3 Task 8 fix round 1, F1):
       ``Fib/2`` compiles to ``Div(left=<the Fib PredicateMeta class>,
       right=2)`` when ``Fib`` is a declared predicate in scope, or
-      ``Div(left='some_str', right=2)`` when the left operand is a string
-      literal; ``3/2`` (no predicate-denoting operand) compiles to
+      ``Div(left=("fib",), right=2)`` when the left operand is an atom (a
+      bare name, or — in the default ``-double_quotes(atom)`` mode — a
+      ``"fib"`` literal); ``3/2`` (no predicate-denoting operand) compiles to
       ``Div(left=3, right=2)`` unchanged, which is exactly the shape this
       function must REJECT — a bare numeric ``/`` is not a predicate
-      indicator, and ``left`` failing the ``PredicateMeta``-or-``str`` check
+      indicator, and ``left`` failing the ``PredicateMeta``-or-ATOM check
       below is what tells the two apart.  This is a sound discriminator, not
       a guess: it only recognizes the indicator shape when ``left`` denotes
-      a NAME (a class or a string) and ``right`` is a plain int, so it can
+      a NAME (a class or an atom) and ``right`` is a plain int, so it can
       never misread a genuine arithmetic ``Div`` whose left operand is a
-      number.  ``.left``/``.right`` are dereffed before the type checks —
+      number or a string.  ``.left``/``.right`` are dereffed before the type checks —
       the same access pattern ``arith_to_ast_expr`` uses for a ``Div`` node
       reached through ``is/2`` (``clausal/logic/compiler/terms_to_ast.py``
       ``deref(term.left)`` / ``deref(term.right)``) — since either slot may
       hold a trail-bound Var.
 
-    Returns ``(name, arity, pred_cls)`` or ``None`` if *val* is not one of
-    those three shapes with a name that is a str (or a ``PredicateMeta``
-    class, reduced to its ``__name__``) and a non-bool int arity.
+    Returns ``(name, arity, pred_cls)`` — *name* the identifier SPELLING —
+    or ``None`` if *val* is not one of those three shapes with a name that is
+    an ATOM (or a ``PredicateMeta`` class, reduced to its ``__name__``) and a
+    non-bool int arity.  A plain ``str`` name is a STRING and answers
+    ``None`` (Task 12).
 
     *pred_cls* is the class itself when the left operand WAS one, and ``None``
     otherwise (final review M-a).  The name alone is not enough to find the
@@ -300,12 +303,18 @@ def _as_name_arity_indicator(val):
     elif _term_is_atom(name):
         # THE FLIP (spec §6.4): the name half of a predicate indicator is an
         # ATOM, so ``r30_foo/1`` written in source arrives as the arity-0
-        # cell ``("r30_foo",)``.  A plain ``str`` name is still accepted
-        # below: the engine's own indicator builders (``database_ops.py``'s
-        # ``Compound("/", (functor, arity))``) hold the SPELLING, which is a
-        # ``str`` and always was.
+        # cell ``("r30_foo",)``.
         name = spelling(name)
-    if not isinstance(name, str) or not isinstance(arity, int) or isinstance(arity, bool):
+    else:
+        # Task 12: the Stage A arm that also read a plain ``str`` as the name
+        # is deleted.  A ``str`` here is a STRING, not a name — the caller
+        # (``listing/1``) turns this ``None`` into ``type_error(predicate,
+        # …)``, the same refusal a bare string argument gets.  The engine's
+        # own indicator BUILDERS (``database_ops.py``'s ``Compound("/",
+        # (functor, arity))``) hold the spelling, but they build error terms;
+        # nothing feeds one back in here.
+        return None
+    if not isinstance(arity, int) or isinstance(arity, bool):
         return None
     if arity < 0:
         return None

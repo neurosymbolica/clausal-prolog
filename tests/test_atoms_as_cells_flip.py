@@ -527,3 +527,139 @@ def test_the_atom_pool_is_compared_by_equality_not_identity():
     for mod in (import_diagnostics, predicate_diagnostics):
         src = inspect.getsource(mod)
         assert "predicate_builtins.get(name) is value" not in src
+
+
+# ── Task 12: the Stage A dual-acceptance arms are retired ───────────────────
+#
+# Stage A kept a bare ``str`` working as an ATOM everywhere so the tree stayed
+# green while the cell shape was introduced.  After THE FLIP a ``str`` in one
+# of those positions is a STRING, and a string is not a name: each site below
+# takes the refusal a string takes everywhere else (§6.4), instead of silently
+# reading the spelling.
+
+
+def test_dispatch_at_refuses_a_string_goal():
+    """``predicate._dispatch_at`` accepted a bare ``str`` and built the
+    indicator from the spelling.  A string is not callable, and this funnel —
+    which the runtime meta-call paths reach — must give the same
+    ``type_error(callable, …)`` ``call/N`` and ``solve/1`` already give."""
+    from clausal.logic.predicate import _dispatch_at
+
+    with pytest.raises(LogicException) as exc:
+        _dispatch_at("t12_str_goal", 1)
+    formal = _formal(exc)
+    assert formal.functor == "type_error"
+    assert formal.args[0] == mint("callable")
+    assert formal.args[1] == "t12_str_goal"
+    # The ATOM of the same spelling keeps its clean, positioned
+    # existence_error — the arm this task leaves in place.
+    with pytest.raises(LogicException) as exc:
+        _dispatch_at(mint("t12_str_goal"), 1)
+    assert _formal(exc).functor == "existence_error"
+
+
+def test_translate_refuses_a_string_language(builtins_mod):
+    """``translate/3``'s *Lang* is an atom read by spelling (§6.4); the Stage A
+    arm that took a plain ``str`` as the locale name is gone."""
+    with pytest.raises(LogicException) as exc:
+        list(solve(("translate", "th", mint("hi"), Var()), builtins_mod))
+    formal = _formal(exc)
+    assert formal.functor == "type_error"
+    assert formal.args[0] == mint("atom")
+    assert formal.args[1] == "th"
+
+
+def test_listing_refuses_a_string_indicator_name(capsys):
+    """``io._as_name_arity_indicator`` accepted a plain ``str`` in the NAME
+    half of ``Name/Arity``.  The name half is an atom (§6.4); a string there
+    is ``type_error(predicate, …)``, the same refusal a bare string gets."""
+    from clausal.logic.builtins import get_builtin_dispatch
+    from clausal.logic.database import Clause, Database
+    from clausal.logic.trampoline import StepGenerator, solutions
+    from clausal.terms import Compound
+
+    db = Database()
+    db.assertz(Clause(Compound("t12_pt", (Var(), Var())), []))
+    dispatch = get_builtin_dispatch("listing", 1, db)
+
+    def _run(val):
+        return solutions(
+            StepGenerator(dispatch, None, None, None, val, Trail()))
+
+    # The ATOM name half lists the predicate…
+    assert len(list(_run(("/", mint("t12_pt"), 2)))) == 1
+    assert "t12_pt/2" in capsys.readouterr().out
+    # …and the STRING name half is refused, not read as the spelling.
+    for shape in (("/", "t12_pt", 2), Compound("/", ("t12_pt", 2))):
+        with pytest.raises(LogicException) as exc:
+            list(_run(shape))
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("predicate")
+
+
+def test_re_pattern_that_is_not_text_raises_type_error():
+    """``modules/py/re._compile_pattern`` handed ``re.compile`` the raw term
+    when ``to_text`` answered ``None``, so a compound pattern died with a raw
+    Python ``TypeError``.  It raises the documented ``type_error(text, …)``
+    now, consistently with ``py/sqlite._text``."""
+    from clausal.modules.py.re import _compile_pattern
+
+    with pytest.raises(LogicException) as exc:
+        _compile_pattern(("t12_pat", 1))
+    formal = _formal(exc)
+    assert formal.functor == "type_error"
+    assert formal.args[0] == mint("text")
+    assert formal.args[1] == ("t12_pat", 1)
+
+
+def test_vary_and_extend_refuse_a_malformed_field_key(builtins_mod):
+    """``keyword_ops._field_keys`` answered ``None`` for a key that is neither
+    an atom nor an identifier spelling, and both callers turned that into a
+    silent failure.  A malformed key is ``type_error(atom, Key, …)``."""
+    for goal_name in ("vary", "extend"):
+        with pytest.raises(LogicException) as exc:
+            list(solve((goal_name, {1: 2}, mint("t12_term"), Var()),
+                       builtins_mod))
+        formal = _formal(exc)
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("atom")
+        assert formal.args[1] == 1
+        assert f"{goal_name}/3" in exc.value.term.args[1]
+
+
+def test_the_zero_field_class_test_is_named_is_zero_field_class():
+    """``predicate.is_atom`` was the zero-field-CLASS test while
+    ``atoms.is_atom`` is the TERM test — one stem, two questions.  The class
+    test is ``is_zero_field_class`` now; ``is_atom`` survives in
+    ``predicate.py`` only as a deprecated alias for the C symbol, and no
+    Python module calls the class test under that name any more."""
+    import ast
+    import pathlib
+
+    from clausal.logic import predicate
+    from clausal.logic.atoms import is_atom as term_is_atom
+    from clausal.logic.predicate import make_predicate
+
+    assert predicate.is_zero_field_class is predicate.is_atom
+    assert predicate.is_zero_field_class(make_predicate("t12_zero", []))
+    assert not predicate.is_zero_field_class(mint("t12_zero"))
+    # The TERM test keeps the plain name.
+    assert term_is_atom(mint("t12_zero"))
+
+    definition = pathlib.Path(predicate.__file__).resolve()
+    root = definition.parent.parent
+    offenders = []
+    for path in root.rglob("*.py"):
+        if path.resolve() == definition:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if (node.module or "").split(".")[-2:] != ["logic", "predicate"]:
+                continue
+            for alias in node.names:
+                if alias.name == "is_atom":
+                    offenders.append(f"{path}:{node.lineno}")
+    assert offenders == []

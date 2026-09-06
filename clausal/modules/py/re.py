@@ -98,11 +98,22 @@ def _compile_pattern(pat: Any) -> "_re.Pattern":
     the default ``-double_quotes(atom)``, so the text funnel ``to_text`` is
     what turns it back into the ``str`` ``re`` wants -- never ``str()``,
     which would compile the tuple repr.
+
+    ``to_text`` answers ``None`` for anything that is not text (a compound, a
+    number, an unbound Var).  Handing that straight to ``re.compile`` died
+    with a raw Python ``TypeError`` -- the one failure mode a term-level
+    builtin must never produce -- so it is the documented
+    ``type_error(text, …)`` here, exactly as in ``py/sqlite._text``: a
+    pattern position is unambiguously text, so a non-text pattern is an
+    ill-typed call, not a mode signal.
     """
     if isinstance(pat, _re.Pattern):
         return pat
     text = to_text(pat)
-    return _re.compile(pat if text is None else text)
+    if text is None:
+        from clausal.logic.exceptions import LogicException, type_error
+        raise LogicException(type_error("text", pat, "py.re pattern"))
+    return _re.compile(text)
 
 
 def _groups_dict(m: "_re.Match") -> dict | tuple:

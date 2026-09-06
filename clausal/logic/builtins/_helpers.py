@@ -13,7 +13,9 @@ from numbers import Real as _Real
 from typing import Any
 
 from clausal.logic.variables import deref, is_var
-from clausal.logic.predicate import is_atom, is_atom_value, is_term_instance, term_field_names
+from clausal.logic.predicate import (
+    is_zero_field_class, is_atom_value, is_term_instance, term_field_names,
+)
 from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.atoms import char_atom
 from clausal.terms import (
@@ -32,12 +34,18 @@ def _functor_name_py(term: Any) -> Any:
     ``"[]"`` the nil atom). Bytes mirror that as the codes model (§1b:
     the codes model is untouched by the str~list cons-rule retirement).
 
-    P3-1 §1b/R2: strs are RETIRED from cons-cell decomposition — a str
-    is now always an atom (runtime str = atom), so it is its own functor
-    name with arity 0, exactly like any other atomic constant. (The
-    empty string keeps the ISO nil-atom spelling ``"[]"`` — the one str
-    value that legitimately reads as a list-shaped atom, matching the
-    empty-list case.)
+    P3-1 §1b/R2 (SUPERSEDED, kept as the fallback's own reading): strs
+    were RETIRED from cons-cell decomposition — a str was always an atom
+    (runtime str = atom), so it was its own functor name with arity 0,
+    the empty string keeping the ISO nil-atom spelling ``"[]"``.
+
+    THE FLIP (atoms-as-cells/strings §6.4) SHADOWS the ``str`` reading
+    below: a ``str`` is a STRING now and answers what its char list
+    answers, and the wrapper of the same name further down this file
+    takes every ``str`` before it can reach here.  The P3-1 reading is
+    kept verbatim because this function is the Python FALLBACK for the C
+    accessor of the same name, whose own ``str`` arm is likewise
+    shadowed; the twins are retired together or not at all.
     """
     if isinstance(term, Compound):
         return term.functor if isinstance(term.functor, str) else None
@@ -55,7 +63,7 @@ def _functor_name_py(term: Any) -> Any:
         # A09-F027: the atomic constant IS its own functor name (ISO:
         # functor(3, N, A) → N=3), so it roundtrips. repr(term) did not.
         return term
-    if is_atom(term):
+    if is_zero_field_class(term):
         return term
     return None
 
@@ -67,8 +75,17 @@ def _arity_py(term: Any) -> int | None:
     (head + tail), empty has arity 0 (the nil atom). Bytes mirror that
     as the codes model (untouched by §1b).
 
-    P3-1 §1b/R2: strs are RETIRED from cons-cell decomposition — a str
-    is always atomic (arity 0) now, whether empty or not.
+    P3-1 §1b/R2 (SUPERSEDED, kept as the fallback's own reading): strs
+    were RETIRED from cons-cell decomposition — a str was always atomic
+    (arity 0), whether empty or not.
+
+    THE FLIP (atoms-as-cells/strings §6.4) SHADOWS the ``str`` reading
+    below: a ``str`` is a STRING now and answers what its char list
+    answers, and the wrapper of the same name further down this file
+    takes every ``str`` before it can reach here.  The P3-1 reading is
+    kept verbatim because this function is the Python FALLBACK for the C
+    accessor of the same name, whose own ``str`` arm is likewise
+    shadowed; the twins are retired together or not at all.
     """
     if isinstance(term, Compound):
         return len(term.args)
@@ -84,7 +101,7 @@ def _arity_py(term: Any) -> int | None:
         return 0 if len(term) == 0 else 2
     if isinstance(term, (bool, int, float)) or term is None:
         return 0
-    if is_atom(term):
+    if is_zero_field_class(term):
         return 0
     return None
 
@@ -98,9 +115,17 @@ def _nth_arg_py(term: Any, n: int) -> Any:
       - n>=3 → IndexError (arity is 2)
     Bytes mirror that as the codes model (untouched by §1b).
 
-    P3-1 §1b/R2: strs are RETIRED from cons-cell decomposition — a str
-    is always atomic (arity 0) now, so every index raises IndexError
-    (falls through to the final ``raise IndexError`` below).
+    P3-1 §1b/R2 (SUPERSEDED, kept as the fallback's own reading): strs
+    were RETIRED from cons-cell decomposition — a str was always atomic
+    (arity 0), so every index raised IndexError.
+
+    THE FLIP (atoms-as-cells/strings §6.4) SHADOWS the ``str`` reading
+    below: a ``str`` is a STRING now and answers what its char list
+    answers, and the wrapper of the same name further down this file
+    takes every ``str`` before it can reach here.  The P3-1 reading is
+    kept verbatim because this function is the Python FALLBACK for the C
+    accessor of the same name, whose own ``str`` arm is likewise
+    shadowed; the twins are retired together or not at all.
     """
     if isinstance(term, Compound):
         if n < 1 or n > len(term.args):
@@ -138,9 +163,17 @@ def _args_list_py(term: Any) -> list:
     ``[head, tail]``; empty returns ``[]`` (the nil atom has no args).
     Bytes mirror that as the codes model (untouched by §1b).
 
-    P3-1 §1b/R2: strs are RETIRED from cons-cell decomposition — a str
-    is always atomic (arity 0) now, so it always answers ``[]`` (falls
-    through to the final ``return []`` below).
+    P3-1 §1b/R2 (SUPERSEDED, kept as the fallback's own reading): strs
+    were RETIRED from cons-cell decomposition — a str was always atomic
+    (arity 0), so it always answered ``[]``.
+
+    THE FLIP (atoms-as-cells/strings §6.4) SHADOWS the ``str`` reading
+    below: a ``str`` is a STRING now and answers what its char list
+    answers, and the wrapper of the same name further down this file
+    takes every ``str`` before it can reach here.  The P3-1 reading is
+    kept verbatim because this function is the Python FALLBACK for the C
+    accessor of the same name, whose own ``str`` arm is likewise
+    shadowed; the twins are retired together or not at all.
     """
     if isinstance(term, Compound):
         return list(term.args)
@@ -173,7 +206,7 @@ def _is_ground_py(term: Any) -> bool:
         return False
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
         return True
-    if is_atom(term):
+    if is_zero_field_class(term):
         return True
     if isinstance(term, list):
         return all(_is_ground_py(e) for e in term)
@@ -619,7 +652,7 @@ def _standard_order_key(term: Any) -> tuple:
         # That equality is what makes ``sort/2`` collapse the two spellings
         # of one term (dedup below is by key, not by ``==``).
         return (_ORD_SEQ, tuple((_ORD_ATOM, c) for c in term))
-    if is_atom(term):
+    if is_zero_field_class(term):
         # P3-1 Task 4 (standard-order collapse), status corrected by the
         # Task 7 sweep: NOT a transient pre-pivot straggler after all. The
         # compiler stopped minting atom-shaped classes in Task 2, and the

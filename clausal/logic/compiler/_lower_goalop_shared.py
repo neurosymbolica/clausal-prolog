@@ -55,7 +55,7 @@ from clausal.logic.compiler.terms_to_ast import (
     arith_to_ast_expr,
     term_to_ast_expr,
 )
-from clausal.logic.predicate import PredicateMeta, is_atom
+from clausal.logic.predicate import PredicateMeta, is_zero_field_class
 from clausal.logic.variables import deref, is_var
 from clausal.pythonic_ast.nodes import literal_value
 from clausal.terms import LoadName
@@ -113,9 +113,10 @@ def _is_const_element(term) -> bool:
     """True if *term* is a scalar literal, a zero-arity atom, or a global name.
 
     All three render to an expression whose value is fixed for the lifetime
-    of the compiled function — an ``ast.Constant`` (atoms are global-by-
-    spelling interned strs, §1b/R2) or a ``Name`` read from the function's
-    globals — which is what lets the frozenset be built once and memoised.
+    of the compiled function — an ``ast.Constant`` (an atom is the arity-0
+    cell ``("foo",)``, a constant the compiler may fold) or a ``Name`` read
+    from the function's globals — which is what lets the frozenset be built
+    once and memoised.
     A Var, a nested list/dict, a compound term, a call, a splat: all
     excluded.
     """
@@ -125,7 +126,7 @@ def _is_const_element(term) -> bool:
     if isinstance(term, LoadName):
         return True
     if isinstance(term, PredicateMeta):
-        return is_atom(term)
+        return is_zero_field_class(term)
     value = literal_value(term)
     return value is None or isinstance(value, _CONST_SET_LITERALS)
 

@@ -1424,27 +1424,36 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
     """
     if isinstance(obj, PredicateMeta):
         return obj._get_dispatch(arity)
-    if isinstance(obj, str) or (type(obj) is tuple and len(obj) == 1
-                                and type(obj[0]) is str):
+    if type(obj) is str:
+        # THE FLIP (spec §6.4): a ``str`` is a STRING, and a string is not
+        # callable.  The Stage A arm here also accepted a bare ``str`` and
+        # built the indicator out of its spelling, which silently read a
+        # string as a predicate NAME; it is deleted, and a string takes the
+        # ``type_error(callable, …)`` ``higher_order._resolve_named_goal``
+        # (``call/N``) and ``solve._term_to_goal`` (``solve/1``) already give.
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, type_error,
+        )
+        raise LogicException(type_error("callable", obj, "call/N"))
+    if type(obj) is tuple and len(obj) == 1 and type(obj[0]) is str:
         # P3-1 Task 2 fix round (controller ruling, 2026-09-04), carried
-        # through THE FLIP: a bare atom is the arity-0 CELL (a ``str`` is
-        # still accepted -- a spelling reached through an older resolution
-        # path), reached here whenever a goal resolves to a NAME that turned
-        # out to be data, not a predicate (a dotted cross-module reference to
-        # an atom, or any other resolution path that used to find a minted
-        # 0-arity class).  Pre-pivot this quirk of class re-minting sometimes
-        # silently reached a DIFFERENT module's re-minted class of the same
-        # name (see task-2-report.md's "resolved by fix round 1"); that was
-        # never a contract, so the ruling is: calling an atom as a goal,
-        # at any arity, through any resolution path, is a genuine error —
-        # but a clean, positioned one, never a raw AttributeError.  Do NOT
+        # through THE FLIP: a bare atom is the arity-0 CELL, reached here
+        # whenever a goal resolves to a NAME that turned out to be data, not
+        # a predicate (a dotted cross-module reference to an atom, or any
+        # other resolution path that used to find a minted 0-arity class).
+        # Pre-pivot this quirk of class re-minting sometimes silently reached
+        # a DIFFERENT module's re-minted class of the same name (see
+        # task-2-report.md's "resolved by fix round 1"); that was never a
+        # contract, so the ruling is: calling an atom as a goal, at any
+        # arity, through any resolution path, is a genuine error — but a
+        # clean, positioned one, never a raw AttributeError.  Do NOT
         # special-case dispatch-to-local-predicate here; that routing is
         # P3-3's qualified-goal design.
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, existence_error,
         )
         from clausal.terms import Compound  # noqa: PLC0415
-        name = obj if isinstance(obj, str) else obj[0]
+        name = obj[0]
         indicator = Compound("/", (name, arity))
         raise LogicException(
             existence_error(
@@ -1472,8 +1481,14 @@ def _is_term_instance_py(obj: Any) -> bool:
     return dataclasses.is_dataclass(obj)
 
 
-def _is_atom_py(obj: Any) -> bool:
-    """True if obj is a zero-arity PredicateMeta class (a declared atom)."""
+def _is_zero_field_class_py(obj: Any) -> bool:
+    """True if obj is a zero-arity PredicateMeta CLASS (a declared atom).
+
+    The CLASS test, not the term test: ``clausal.logic.atoms.is_atom`` is the
+    term test (the arity-0 cell).  Named for the question it asks since Task
+    12 of the atoms-as-cells design — the two used to share the stem
+    ``is_atom``, which is why several call sites asked the wrong one.
+    """
     return isinstance(obj, PredicateMeta) and not obj._fields
 
 
@@ -1533,7 +1548,7 @@ def term_field_dict(obj: Any) -> dict[str, Any]:
 # ── C-accelerated versions (with Python fallback) ────────────────────────────
 
 is_term_instance = _is_term_instance_py
-is_atom = _is_atom_py
+is_zero_field_class = _is_zero_field_class_py
 term_field_names = _term_field_names_py
 
 # Which ``PredicateMeta`` currently owns the accelerator's registration slot.
@@ -1568,7 +1583,10 @@ try:
         _register_predicate_meta,
         is_term_instance,
         term_field_names,
-        is_atom,
+        # The C extension registers the accelerator under the OLD name; the
+        # C symbol is deliberately left alone (Task 12), so the rename to
+        # the question it actually asks happens on import.
+        is_atom as is_zero_field_class,
     )
 except ImportError:
     pass
@@ -1580,8 +1598,18 @@ else:
         # Another copy of this package owns the slot. Keep the reference
         # implementations rather than invalidating that copy's live terms.
         is_term_instance = _is_term_instance_py
-        is_atom = _is_atom_py
+        is_zero_field_class = _is_zero_field_class_py
         term_field_names = _term_field_names_py
+
+
+# DEPRECATED alias, kept for ONE release (Task 12, atoms-as-cells/strings).
+# ``predicate.is_atom`` is the zero-field-CLASS test and always was; the TERM
+# test of the same name lives in ``clausal.logic.atoms``.  Every in-tree
+# caller now imports ``is_zero_field_class``; this name survives only because
+# the C extension registers its accelerator as ``is_atom`` and out-of-tree
+# code may still import it from here.  Delete it, not the C symbol, when the
+# release window closes.
+is_atom = is_zero_field_class
 
 
 def is_atom_value(obj: Any) -> bool:
@@ -1594,17 +1622,19 @@ def is_atom_value(obj: Any) -> bool:
     * ``clausal.logic.atoms.is_atom`` is the TERM test — after the flip
       (2026-09-06-atoms-as-cells-strings §6.1) exactly the 1-tuple whose
       slot 0 is a ``str``.  A plain ``str`` is a STRING and fails it.
-    * ``predicate.is_atom`` below is the CLASS test — "a zero-field
-      ``PredicateMeta`` class", the declared-atom form.  Several COMPILER
-      call sites (``terms_to_ast.py``, ``_lower_goalop_shared.py``) key off
-      that one to decide identity-lowering / bare-Name-reference behaviour,
-      so it must stay the narrow class question.
+    * ``predicate.is_zero_field_class`` above is the CLASS test — "a
+      zero-field ``PredicateMeta`` class", the declared-atom form.  Several
+      COMPILER call sites (``terms_to_ast.py``, ``_lower_goalop_shared.py``)
+      key off that one to decide identity-lowering / bare-Name-reference
+      behaviour, so it must stay the narrow class question.  Task 12 renamed
+      it out of the shared stem; ``is_atom`` now means the term test
+      everywhere except the deprecated alias below it.
 
     Runtime readers (``atom/1``, ``functor_arity``) want either shape and
     call THIS helper, never one of the two halves alone.
     """
     from clausal.logic.atoms import is_atom as _term_is_atom
-    return _term_is_atom(obj) or is_atom(obj)
+    return _term_is_atom(obj) or is_zero_field_class(obj)
 
 
 def _class_origin(cls: type) -> str:
@@ -1702,12 +1732,13 @@ def make_predicate(name: str, fields: list[str]) -> "PredicateMeta":
     return PredicateMeta(name, (), {"_fields": tuple(fields)})
 
 
-def make_atom(name: str) -> str:
-    """Return the atom *name* — the plain ``str``.
+def make_atom(name: str) -> tuple[str]:
+    """Return the atom *name* — the arity-0 cell ``(name,)``.
 
-    An atom IS a ``str`` since the P3-1 pivot (§1b/R2), so this hands back
-    ``name`` itself and there is nothing to intern: two calls with the same
-    spelling give the same atom because two equal strings ARE the same atom.
+    THE FLIP (2026-09-06-atoms-as-cells-strings §5.1): an atom is a 1-tuple
+    whose slot 0 is the interned spelling, and a plain ``str`` is a STRING.
+    Two calls with the same spelling give equal atoms; equality, never
+    identity, is the semantics (§5.2).
 
     It kept minting a zero-arity ``PredicateMeta`` until P3-3 Task 7.  That
     made it the one door left in the public API through which a CLASS atom
@@ -1727,7 +1758,12 @@ def make_atom(name: str) -> str:
     return mint(name)
 
 
-__all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "is_atom",
+__all__ = ["PredicateMeta", "_MISSING", "is_term_instance",
+           "is_zero_field_class",
+           # ``is_atom`` is the DEPRECATED alias of ``is_zero_field_class``
+           # (Task 12); exported for one release so out-of-tree importers do
+           # not break in the same commit that renames it.
+           "is_atom",
            "is_atom_value",
            "term_field_names", "term_field_names_of_class",
            "term_field_values", "term_field_dict",

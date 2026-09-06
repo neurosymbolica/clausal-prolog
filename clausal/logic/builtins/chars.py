@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import deref, is_var, unify
-from clausal.logic.predicate import is_atom
+from clausal.logic.predicate import is_zero_field_class
 from clausal.logic.atoms import (
     char_atom,
     is_atom as _term_is_atom,
@@ -68,7 +68,7 @@ def _atom_to_str(val: Any) -> str | None:
     """
     if _term_is_atom(val):
         return spelling(val)
-    if is_atom(val):
+    if is_zero_field_class(val):
         return val.__name__
     return None
 

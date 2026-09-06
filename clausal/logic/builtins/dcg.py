@@ -49,15 +49,16 @@ def _empty_remainder_like(list_val):
     """Return the type-correct "nothing left" sentinel for *list_val*.
 
     ``phrase/2``'s contract is "the rule must consume List entirely", i.e.
-    the final remaining-state var must unify with the EMPTY sequence. Before
-    P3-1 Task 5, hardcoding the Python list ``[]`` here worked for a str
-    ``List`` too because the (now-retired) C str~char-list cons rule made
-    ``unify("", [], trail)`` succeed as a degenerate case (both "empty").
-    Since §1b retires that rule, an empty str residue no longer unifies
-    with a bare ``[]`` (str unifies with str, lists with lists — including
-    the empty case, with no cross-type exception), so the sentinel must
-    match ``list_val``'s own type: ``""`` for a str input, ``b""`` for
-    bytes, ``[]`` otherwise.
+    the final remaining-state var must unify with the EMPTY sequence.
+
+    THE FLIP (atoms-as-cells/strings §6.2) reinstated the str~char-list
+    unification the P3-1 pivot had retired, so ``unify("", [], trail)``
+    succeeds again (as ``unify(b"", [], trail)`` always did) and a bare
+    ``[]`` would once more DO here.  The type-matched sentinel stays for the
+    reason R-S2 gives rather than for a unification failure: the residue
+    keeps the input's own REPRESENTATION — a string stays a string, a codes
+    sequence stays bytes — instead of swapping spelling halfway through a
+    parse and handing the caller a different-looking empty.
     """
     if isinstance(list_val, str):
         return ""

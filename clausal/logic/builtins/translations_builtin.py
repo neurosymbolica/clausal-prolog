@@ -16,7 +16,8 @@ from clausal.terms import term_str, TermStyle
 def _translate__3(lang, term, translated_string, trail, k):
     """translate(Lang, Term, String) — render *Term* as a string in *Lang*.
 
-    *Lang* must be ground (an atom or string naming the target language).
+    *Lang* must be ground: the ATOM naming the target language (a plain
+    ``str`` is a STRING and raises ``type_error(atom, …)`` — spec §6.4).
     *Term* must be ground (or partially ground — variables render as ``_``).
     *String* is unified with the resulting translated string.
     """
@@ -26,17 +27,23 @@ def _translate__3(lang, term, translated_string, trail, k):
     if is_var(lang_val):
         return  # language must be ground
 
-    # THE FLIP (spec §6.4): *Lang* is an ATOM read by SPELLING.  A plain
-    # ``str`` (a string) and a legacy atom CLASS are still accepted; anything
-    # else falls back to ``str()``, which is only reached for a shape that
-    # names no locale anyway.
+    # THE FLIP (spec §6.4): *Lang* is an ATOM read by SPELLING.  Task 12
+    # deleted the Stage A arm that also took a plain ``str`` as the locale
+    # name: a ``str`` is a STRING now, and a string in a name position is
+    # ``type_error(atom, …)``, the same refusal ``signature/3`` and the chars
+    # family give.  A legacy zero-field atom CLASS is still read by
+    # ``__name__`` (spec §4); anything else falls back to ``str()``, which is
+    # only reached for a shape that names no locale anyway.
     from clausal.logic.atoms import is_atom as _term_is_atom, spelling
-    lang_str = (
-        spelling(lang_val) if _term_is_atom(lang_val)
-        else lang_val if isinstance(lang_val, str)
-        else lang_val.__name__ if hasattr(lang_val, "__name__")
-        else str(lang_val)
-    )
+    if _term_is_atom(lang_val):
+        lang_str = spelling(lang_val)
+    elif isinstance(lang_val, str):
+        from clausal.logic.exceptions import LogicException, type_error
+        raise LogicException(type_error("atom", lang_val, "translate/3"))
+    elif hasattr(lang_val, "__name__"):
+        lang_str = lang_val.__name__
+    else:
+        lang_str = str(lang_val)
 
     style = TermStyle(locale=lang_str)
     result = term_str(term_val, style)

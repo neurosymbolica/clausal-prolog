@@ -199,7 +199,7 @@ class TestTranslateBuiltin:
         trail = Trail()
         result_var = Var()
         t = Compound("append", (1, 2, 3))
-        gen = _translate__3("th", t, result_var, trail, None)
+        gen = _translate__3(mint("th"), t, result_var, trail, None)
         sol = next(gen, "NO_SOLUTION")
         assert sol is None
         result = deref(result_var)
@@ -212,7 +212,7 @@ class TestTranslateBuiltin:
         trail = Trail()
         result_var = Var()
         t = Compound("append", (1, 2, 3))
-        gen = _translate__3("th", t, result_var, trail, None)
+        gen = _translate__3(mint("th"), t, result_var, trail, None)
         next(gen, None)
         result = deref(result_var)
         # Must be a string, not a Compound or PredicateMeta
@@ -249,7 +249,7 @@ class TestTranslateBuiltin:
         trail = Trail()
         result_var = Var()
         t = Compound("append", ("x", Compound("Member", ("a", "b")), []))
-        gen = _translate__3("th", t, result_var, trail, None)
+        gen = _translate__3(mint("th"), t, result_var, trail, None)
         next(gen, None)
         result = deref(result_var)
         assert "ต่อท้าย" in result

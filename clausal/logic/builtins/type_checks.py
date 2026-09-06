@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import (
-    PredicateMeta, is_atom, is_atom_value, is_term_instance, term_field_names,
+    PredicateMeta, is_zero_field_class, is_atom_value, is_term_instance,
+    term_field_names,
 )
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
 from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes
@@ -175,7 +176,7 @@ def _atomic__1(x, trail, k):
         yield None
         return
     # Zero-arity PredicateMeta class — a declared atom.
-    if is_atom(x_val):
+    if is_zero_field_class(x_val):
         yield None
 
 

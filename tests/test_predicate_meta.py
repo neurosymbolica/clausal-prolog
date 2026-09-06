@@ -493,14 +493,16 @@ class TestAtomIdentity:
         assert unify(x, red, trail)
         assert deref(x) is red
 
-    def test_is_atom_helper(self):
+    def test_is_zero_field_class_helper(self):
         # nv
-        from clausal.logic.predicate import is_atom
-        assert is_atom(red)
-        assert is_atom(blue)
-        assert not is_atom(fib)   # has fields
-        assert not is_atom("str")
-        assert not is_atom(42)
+        # Task 12 renamed the zero-field-CLASS test out of the ``is_atom``
+        # stem it shared with ``atoms.is_atom``, the TERM test.
+        from clausal.logic.predicate import is_zero_field_class
+        assert is_zero_field_class(red)
+        assert is_zero_field_class(blue)
+        assert not is_zero_field_class(fib)   # has fields
+        assert not is_zero_field_class("str")
+        assert not is_zero_field_class(42)
 
     def test_non_zero_arity_unchanged(self):
         """Predicates with fields still create instances as before."""

@@ -18,10 +18,10 @@ from clausal.terms import Compound, KWTerm
 
 from clausal.logic.predicate import (
     _is_term_instance_py,
-    _is_atom_py,
+    _is_zero_field_class_py,
     _term_field_names_py,
     is_term_instance,
-    is_atom,
+    is_zero_field_class,
     term_field_names,
 )
 
@@ -59,19 +59,21 @@ class TestIsTermInstanceFallback:
         assert _is_term_instance_py(Var()) == is_term_instance(Var()) == False
 
 
-class TestIsAtomFallback:
+class TestIsZeroFieldClassFallback:
+    """Task 12 renamed the zero-field-CLASS test; the C symbol stays
+    ``is_atom`` and is imported under the new name in ``predicate.py``."""
 
     def test_zero_arity(self):
         # nv
-        assert _is_atom_py(Atom) == is_atom(Atom) == True
+        assert _is_zero_field_class_py(Atom) == is_zero_field_class(Atom) == True
 
     def test_non_zero_arity(self):
         # nv
-        assert _is_atom_py(Pt) == is_atom(Pt) == False
+        assert _is_zero_field_class_py(Pt) == is_zero_field_class(Pt) == False
 
     def test_not_predicate_meta(self):
         # nv
-        assert _is_atom_py(int) == is_atom(int) == False
+        assert _is_zero_field_class_py(int) == is_zero_field_class(int) == False
 
 
 class TestTermFieldNamesFallback:

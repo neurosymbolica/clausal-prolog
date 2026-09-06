@@ -2428,13 +2428,16 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
         else
             return PyUnicode_FromString(".");
     }
-    /* Str — RETIRED cons-cell decomposition (P3-1 §1b/R2): a str is now
-     * always an atom (runtime str = atom), so it is its own functor name
-     * with arity 0, like any other atomic constant — not a "."/2 cons
-     * cell. The empty string keeps the ISO nil-atom spelling "[]" (same
-     * spelling the empty-list case above answers; ISO's [] is the nil
-     * atom regardless of which literal denotes it, and this is the one
-     * str value that legitimately reads as a list-shaped atom). */
+    /* Str — RETIRED cons-cell decomposition (P3-1 §1b/R2): a str was
+     * always an atom (runtime str = atom), so it was its own functor name
+     * with arity 0, the empty string keeping the ISO nil-atom spelling
+     * "[]".
+     * SUPERSEDED by THE FLIP (atoms-as-cells/strings §6.4): a str is a
+     * STRING and answers what its char list answers.  The Python
+     * wrapper in builtins/_helpers.py takes every str before this
+     * accessor is reached, so this arm is unreachable for a str and is
+     * kept only so the C accessor and its Python fallback
+     * (_functor_name_py and friends) stay twins. */
     if (PyUnicode_Check(term)) {
         if (PyUnicode_GET_LENGTH(term) == 0)
             return PyUnicode_FromString("[]");
@@ -2535,8 +2538,14 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
     if (PyList_Check(term)) {
         return PyLong_FromLong(PyList_GET_SIZE(term) == 0 ? 0 : 2);
     }
-    /* Str — RETIRED cons-cell decomposition (P3-1 §1b/R2): a str is
-     * always atomic (arity 0) now, whether empty or not. */
+    /* Str — RETIRED cons-cell decomposition (P3-1 §1b/R2): a str was
+     * always atomic (arity 0), whether empty or not.
+     * SUPERSEDED by THE FLIP (atoms-as-cells/strings §6.4): a str is a
+     * STRING and answers what its char list answers.  The Python
+     * wrapper in builtins/_helpers.py takes every str before this
+     * accessor is reached, so this arm is unreachable for a str and is
+     * kept only so the C accessor and its Python fallback
+     * (_functor_name_py and friends) stay twins. */
     if (PyUnicode_Check(term)) {
         return PyLong_FromLong(0);
     }
@@ -2684,10 +2693,16 @@ py_nth_arg(PyObject *Py_UNUSED(module), PyObject *args)
         }
         return raise_arg_index_error(n, term);
     }
-    /* Str: RETIRED cons-cell decomposition (P3-1 §1b/R2) — a str is
-     * always atomic (arity 0) now, so every index is out of range.
-     * Falls through to the bytes check (never matches) and the final
-     * ``raise_arg_index_error`` below. */
+    /* Str: RETIRED cons-cell decomposition (P3-1 §1b/R2) — a str was
+     * always atomic (arity 0), so every index was out of range: it falls
+     * through to the bytes check (never matches) and the final
+     * ``raise_arg_index_error`` below.
+     * SUPERSEDED by THE FLIP (atoms-as-cells/strings §6.4): a str is a
+     * STRING and answers what its char list answers.  The Python
+     * wrapper in builtins/_helpers.py takes every str before this
+     * accessor is reached, so this arm is unreachable for a str and is
+     * kept only so the C accessor and its Python fallback
+     * (_functor_name_py and friends) stay twins. */
     /* Bytes — codes-model cons-cell: n=1 → int head (b[0] is an int, no
      * fixed point), n=2 → bytes tail (type preserved). */
     if (PyBytes_Check(term)) {
@@ -2780,10 +2795,16 @@ py_args_list(PyObject *Py_UNUSED(module), PyObject *term)
         PyList_SET_ITEM(result, 1, tail);  /* steals tail's reference */
         return result;
     }
-    /* Str: RETIRED cons-cell decomposition (P3-1 §1b/R2) — a str is
-     * always atomic (arity 0) now, so it has no arguments. Falls through
+    /* Str: RETIRED cons-cell decomposition (P3-1 §1b/R2) — a str was
+     * always atomic (arity 0), so it had no arguments: it falls through
      * to the bytes check (never matches) and the final "empty list"
-     * default below. */
+     * default below.
+     * SUPERSEDED by THE FLIP (atoms-as-cells/strings §6.4): a str is a
+     * STRING and answers what its char list answers.  The Python
+     * wrapper in builtins/_helpers.py takes every str before this
+     * accessor is reached, so this arm is unreachable for a str and is
+     * kept only so the C accessor and its Python fallback
+     * (_functor_name_py and friends) stay twins. */
     /* Bytes — codes-model cons-cell: non-empty → [int_head, bytes_tail];
      * empty → []. Head is an int (no fixed point); tail preserves bytes. */
     if (PyBytes_Check(term)) {

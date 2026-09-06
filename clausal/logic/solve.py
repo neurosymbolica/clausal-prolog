@@ -354,7 +354,7 @@ def _templatize_query_goal(goal: Any):
     Composite/control/arithmetic goals are returned unchanged (``params`` empty);
     they keep the value-keyed cache as a correct fallback.
     """
-    from clausal.logic.predicate import PredicateMeta, is_atom
+    from clausal.logic.predicate import PredicateMeta, is_zero_field_class
 
     def _ground_value(val):
         """Return the scalar ground value to parameterize, or None to leave it.
@@ -385,7 +385,7 @@ def _templatize_query_goal(goal: Any):
         # cannot rebuild, so it keeps the structural fallback.
         if type(dv) in _DATETIME_QUERY_SCALARS:
             return dv
-        if is_atom(dv):
+        if is_zero_field_class(dv):
             return dv
         return None
 

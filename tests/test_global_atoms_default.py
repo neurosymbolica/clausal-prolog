@@ -32,7 +32,9 @@ from clausal.logic.atoms import mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal import Var
 from clausal.import_hook import _load_module, predicate_builtins
-from clausal.logic.predicate import PredicateMeta, is_atom, is_atom_value, make_predicate
+from clausal.logic.predicate import (
+    PredicateMeta, is_zero_field_class, is_atom_value, make_predicate,
+)
 from clausal.logic.variables import Trail, deref, unify
 from clausal.logic.solve import call
 from clausal.logic.builtins._helpers import functor_arity
@@ -470,8 +472,8 @@ class TestStrAtomAcceptance:
 
 class TestIsAtomValueHelper:
     """Unit checks for ``clausal.logic.predicate.is_atom_value`` -- the
-    runtime-reader-facing widening of ``is_atom`` that Task 1 introduces
-    (see the DECISION RULE in the task brief: ``is_atom`` itself is left
+    runtime-reader-facing widening of the class test that Task 1 introduces
+    (see the DECISION RULE in the task brief: the class test itself is left
     untouched because some compiler call sites key off "zero-field CLASS,
     not str" -- this new helper is what the runtime readers use instead)."""
 
@@ -488,8 +490,8 @@ class TestIsAtomValueHelper:
     def test_true_for_zero_field_class(self):
         atom_cls = make_predicate("tiav_class_atom", [])
         assert is_atom_value(atom_cls) is True
-        # and the pre-existing is_atom agrees on this shape
-        assert is_atom(atom_cls) is True
+        # and the pre-existing zero-field-CLASS test agrees on this shape
+        assert is_zero_field_class(atom_cls) is True
 
     def test_false_for_int_float_none_bytes(self):
         assert is_atom_value(42) is False

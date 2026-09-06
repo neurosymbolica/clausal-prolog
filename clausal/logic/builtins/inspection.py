@@ -6,10 +6,14 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.predicate import PredicateMeta, is_atom, is_term_instance, term_field_names
-# ``predicate.is_atom`` above is the zero-field-CLASS test; ``atoms.is_atom``
-# is the TERM test (spec §6.1) and the one the name position speaks.  They are
-# different questions, so the term test is bound to a distinct name here.
+from clausal.logic.predicate import (
+    PredicateMeta, is_zero_field_class, is_term_instance, term_field_names,
+)
+# ``predicate.is_zero_field_class`` above is the zero-field-CLASS test;
+# ``atoms.is_atom`` is the TERM test (spec §6.1) and the one the name position
+# speaks.  They are different questions; Task 12 gave the class test a name
+# that says which one it asks, so ``is_atom`` here is unambiguously the term
+# test.
 from clausal.logic.atoms import (
     char_atom,
     is_atom as _term_is_atom,
@@ -657,7 +661,7 @@ def _global_atom__2(name, atom, trail, k):
         # compatibility) a 0-arity PredicateMeta's __name__.
         if _term_is_atom(atom_val):
             cls_name = spelling(atom_val)
-        elif is_atom(atom_val):
+        elif is_zero_field_class(atom_val):
             cls_name = atom_val.__name__
         else:
             return
@@ -683,7 +687,7 @@ def _global_atom__2(name, atom, trail, k):
         if _term_is_atom(val):
             if spelling(val) != key:
                 continue
-        elif not is_atom(val):
+        elif not is_zero_field_class(val):
             continue
         mark = trail.mark()
         if unify(name, mint(key), trail) and unify(atom, val, trail):

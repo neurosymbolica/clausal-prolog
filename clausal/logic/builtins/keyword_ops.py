@@ -12,16 +12,22 @@ from clausal.terms import KWTerm, DictTerm
 from clausal.logic.builtins._registry import _builtin, _db_builtin
 
 
-def _field_keys(mapping):
+def _field_keys(mapping, context: str):
     """Normalise an overrides/additions dict to identifier-spelling keys.
 
     THE FLIP (spec §6.4): a field name written in source is an ATOM, so
     ``vary({x: V}, …)`` (and ``{"x": V}`` in the default double-quotes mode)
     arrives with the cell ``("x",)`` as its key.  KWTerm field names
     themselves stay identifier ``str``s (§6.4, last row), so the atom is read
-    through ``spelling`` here.  A plain ``str`` key — what the Python API and
-    a ``-double_quotes(chars)`` module hand over — is already the spelling.
-    Returns ``None`` if any key is neither.
+    through ``spelling`` here.  A plain ``str`` key — what the Python API
+    hands over — is already that identifier spelling and is taken as one.
+
+    A key that is neither raises ``type_error(atom, Key, *context*)`` (Task
+    12).  It used to answer ``None``, which both callers turned into a silent
+    FAILURE: ``vary({1: 2}, T, N)`` simply did not succeed, and a malformed
+    override read as "no such variation" instead of as the ill-typed call it
+    is.  ``signature/3`` in this module already raises for the same mistake
+    in its own name position.
     """
     out = {}
     for key, value in mapping.items():
@@ -29,7 +35,7 @@ def _field_keys(mapping):
         if is_atom(key):
             key = spelling(key)
         elif not isinstance(key, str):
-            return None
+            raise LogicException(type_error("atom", key, context))
         out[key] = value
     return out
 
@@ -50,9 +56,7 @@ def _vary__3(overrides, term, new_term, trail, k):
         overrides_val = overrides_val.data
     if not isinstance(overrides_val, dict):
         return
-    overrides_val = _field_keys(overrides_val)
-    if overrides_val is None:
-        return
+    overrides_val = _field_keys(overrides_val, "vary/3")
     if is_term_instance(term_val) and not isinstance(term_val, KWTerm):
         try:
             kwargs = term_field_dict(term_val)
@@ -89,9 +93,7 @@ def _extend__3(additions, term, new_term, trail, k):
         additions_val = additions_val.data
     if not isinstance(additions_val, dict):
         return
-    additions_val = _field_keys(additions_val)
-    if additions_val is None:
-        return
+    additions_val = _field_keys(additions_val, "extend/3")
     if isinstance(term_val, KWTerm):
         try:
             result = term_val.with_extensions(**additions_val)

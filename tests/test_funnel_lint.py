@@ -413,7 +413,8 @@ def test_migrated_tree_has_no_disallowed_funnel_bypass_patterns():
     violations = find_violations(_CLAUSAL_ROOT, repo_root=_REPO_ROOT)
     assert not violations, (
         "New (or un-allowlisted) funnel-bypass pattern(s) found -- either "
-        "migrate the site onto the funnel (predicate.is_atom / "
+        "migrate the site onto the funnel "
+        "(predicate.is_zero_field_class / "
         f"_helpers.functor_arity) or add a justified entry to ALLOWLIST in "
         f"this file, citing {_PLAN}:\n"
         + "\n".join(f"  {v}" for v in violations)
@@ -487,11 +488,11 @@ def _sneaky_functor(term):
 '''
 
 _CLEAN_SNIPPET = '''\
-from clausal.logic.predicate import is_atom
+from clausal.logic.predicate import is_zero_field_class
 from clausal.logic.builtins._helpers import functor_arity
 
 def _proper_is_atom(x):
-    return is_atom(x)
+    return is_zero_field_class(x)
 
 def _proper_functor(term):
     return functor_arity(term)
