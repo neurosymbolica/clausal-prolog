@@ -2700,12 +2700,16 @@ def _canonical_var(v) -> str:
 
 #: Operator node classes whose ISO functor name differs from the PYTHON
 #: surface spelling their ``op`` attribute carries.  ``mod`` is ISO 9.1.3's
-#: name for ``%``; the four comparison entries are the equivalences the node
-#: classes' own docstrings record (``pythonic_ast/nodes.py``: "Prolog
-#: ``=:=/2``", "Prolog ``=\\=/2``", "Prolog ``\\==/2``").  Every other
-#: operator's ``op`` string IS the functor's spelling, so it needs no entry.
+#: name for ``%``, and ``=<`` is ISO's spelling of ``<=`` (the same mapping
+#: ``builtins/constraints.py``'s ``op_map`` already uses); the three
+#: remaining comparison entries are the equivalences the node classes' own
+#: docstrings record (``pythonic_ast/nodes.py``: "Prolog ``=:=/2``",
+#: "Prolog ``=\\=/2``", "Prolog ``\\==/2``").  Every other operator's ``op``
+#: string IS the functor's spelling -- ``<``, ``>``, ``>=`` and structural
+#: ``==`` included -- so it needs no entry.
 _ISO_OP_FUNCTOR = {
     "Mod": "mod",
+    "LtE": "=<",
     "ArithEq": "=:=",
     "ArithNeq": "=\\=",
     "StructuralNeq": "\\==",

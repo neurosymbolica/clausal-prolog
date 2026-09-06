@@ -124,6 +124,26 @@ def test_term_canonical_has_no_operator_forms():
     assert term_canonical(Negate(operand=3)) == "-(3)"
 
 
+@pytest.mark.parametrize("node_name,functor", [
+    ("Lt", "<"),
+    ("Gt", ">"),
+    ("LtE", "=<"),          # ISO spells `<=` as `=<`
+    ("GtE", ">="),
+    ("StructuralEq", "=="),      # Prolog ==/2
+    ("StructuralNeq", "\\=="),   # Prolog \==/2
+    ("ArithEq", "=:="),          # Prolog =:=/2
+    ("ArithNeq", "=\\="),        # Prolog =\=/2
+])
+def test_term_canonical_comparison_functors(node_name, functor):
+    """Every comparison node prints as the ISO functor it denotes — the four
+    whose Python surface spelling differs (`<=`, `==`, `!=` twice over) and
+    the four that pass straight through."""
+    from clausal.pythonic_ast import nodes as simple_ast
+    from clausal.terms import term_canonical
+    node = getattr(simple_ast, node_name)(left=1, right=2)
+    assert term_canonical(node) == functor + "(1,2)"
+
+
 def test_term_canonical_numbers_variables_are_distinct():
     """§6.7: distinct variables print distinctly (``f(X,X,Y)`` is not
     ``f(_,_,_)``), which ISO/Scryer spell ``_N``."""
